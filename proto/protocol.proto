@@ -1,0 +1,102 @@
+syntax = "proto2";
+package proto;
+
+enum ValueType {
+  Nil      = 1;
+  String   = 2;
+  Integer  = 3;
+  Uinteger = 4;
+  Float    = 5;
+  Invaild  = 6;
+}
+
+message value {
+    required ValueType tt      = 1;
+    optional int64     vInt    = 2;
+    optional uint64    vUInt   = 3;
+    optional double    vFloat  = 4;
+    optional string    vString = 5;
+}
+
+message field {
+    optional string name  = 1;
+    optional value  v     = 2;
+}
+
+message ping_req {
+  optional int64 timestamp = 1; 
+}
+
+message ping_resp {
+  optional int64 timestamp = 2;
+}
+
+message del_req {
+    required int64  seqno   = 1;
+    optional int64  version = 2;
+    required string table   = 3;
+    required string key     = 4;
+}
+
+message del_resp {
+    required int64  seqno   = 1;
+    required int32  errCode = 2;
+}
+
+message set_req {
+    required int64  seqno   = 1;
+    optional int64  version = 2;    
+    required string table   = 3;
+    required string key     = 4;
+    repeated field  fields  = 5;
+}
+
+message set_resp {
+    required int64 seqno   = 1;
+    required int32 errCode = 2;
+    optional int64 version = 3; 
+}
+
+message get_req {
+   required int64  seqno   = 1;
+   required string table   = 2;
+   required string key     = 3;
+   repeated string fields  = 4;
+}
+
+message get_resp {
+   required int64  seqno   = 1;
+   required int32  errCode = 2;
+   optional int64  version = 3;    
+   repeated field  fields  = 4;
+}
+
+/*
+message atomic_increase_req {
+   required int64  seqno   = 1;
+   required string table   = 2;
+   required string key     = 3;
+   required field  field   = 4;  
+}
+
+message atomic_increase_resp {
+  required int64  seqno    = 1;  
+  required int32  errCode  = 2;
+  optional field  newValue = 3;
+}
+
+message cas_req {
+  required int64  seqno   = 1;
+  required string table   = 2;
+  required string key     = 3;
+  required field  new     = 4;
+  required field  old     = 5;  
+}
+
+message cas_resp {
+  required int64  seqno    = 1;  
+  required int32  errCode  = 2;
+  optional field  value    = 3;  
+} 
+*/
+
