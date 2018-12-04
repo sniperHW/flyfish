@@ -78,11 +78,9 @@ func (this *field) ToSqlStr() string {
 
 func (this *field) Equal(o *field) bool {
 	if nil == o {
-		fmt.Println("break1")
 		return false
 	}
 	if this.Tt() != o.Tt() {
-		fmt.Println("break2")
 		return false
 	}
 	if this.Tt() == message.ValueType_String {
@@ -93,10 +91,9 @@ func (this *field) Equal(o *field) bool {
 		r := this.value.(int64) == o.value.(int64)
 		fmt.Println(r)
 		return r		
-	} else if this.Tt() == message.ValueType_Integer {
+	} else if this.Tt() == message.ValueType_Uinteger {
 		return this.value.(uint64) == o.value.(uint64)
 	} else {
-		fmt.Println("break3")
 		return true
 	}
 }
