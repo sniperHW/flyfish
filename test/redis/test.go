@@ -21,7 +21,44 @@ func main() {
 		Addr:"localhost:6379",
 	})
 
-	fields := map[string]interface{}{}
+	keys := []string{"users1:huangwei:1"}
+	args := []interface{}{}
+	args = append(args,"age",41,42,"__version__",1537)
+
+
+const strCompareAndSet string = `
+	local v = redis.call('hmget',KEYS[1],ARGV[4],ARGV[1])
+	if (not v) or (not v[1]) or (not v[2]) then
+		return version
+	else
+
+		if tonumber(v[1]) ~= ARGV[5] - 1 then
+			return "err_version" .. v[1]
+		end
+
+		if 'number' == type(ARGV[2]) then
+			v[2] = tonumber(v)
+		end
+
+		if v[2] ~= ARGV[2] then
+			return v[2]
+		else
+			redis.call('hmset',KEYS[1],ARGV[1],ARGV[3],ARGV[4],ARGV[5])
+			return ARGV[3]
+		end
+	end
+`
+
+	cmd := cli.Eval(strCompareAndSet,keys,args...)
+
+	r,err1 := cmd.Result()
+
+	if nil != err1 {
+		fmt.Println(err1)
+	} else { 
+		fmt.Println(r,reflect.TypeOf(r).String(),err1)
+	}
+	/*fields := map[string]interface{}{}
 	fields["key"] = 127.98
  	cli.HMSet("test",fields)
 
@@ -32,7 +69,10 @@ func main() {
  	tt := reflect.TypeOf(result[0])
 	name := tt.String()
 
-	fmt.Println(name)
+	fmt.Println(name)*/
+
+
+
 
 
 	//asyn.SetRoutinePool(asyn.NewRoutinePool(100))

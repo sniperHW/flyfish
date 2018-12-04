@@ -25,13 +25,32 @@ var delAvaDelay time.Duration
 var id       int64
 
 
+func IncrBy(c *kclient.Client) {
+
+	incr := c.IncrBy("counter","test_counter","c",1)
+
+	//beg := time.Now()
+
+	incr.Exec(func(ret *kclient.Result) {
+
+		if ret.ErrCode != errcode.ERR_OK {
+			fmt.Println("set err:",ret.ErrCode)
+			kendynet.Debugln("set err:",ret.ErrCode)
+		} else {
+			fmt.Println("c:",ret.Fields["c"].GetInt())
+		}
+		//atomic.AddInt32(&setCount,1)
+		//Set(c)
+	})	
+}
+
 func Set(c *kclient.Client) {
 	fields := map[string]interface{}{}
 	fields["age"] = 37
 	fields["phone"] = strings.Repeat("a",1024)
 	fields["name"] = "sniperHW"
-	//key := fmt.Sprintf("%s:%d","huangwei",rand.Int()%50000)
-	key := fmt.Sprintf("%s:%d","huangwei",id%10000)//rand.Int()%1000000)
+	key := fmt.Sprintf("%s:%d","huangwei",rand.Int()%100000)
+	//key := fmt.Sprintf("%s:%d","huangwei",id%100000)//rand.Int()%1000000)
 	//key := "huangwei:44745"
 	id++
 	set := c.Set("users1",key,fields)
@@ -57,9 +76,51 @@ func Set(c *kclient.Client) {
 }
 
 
+func SetNx(c *kclient.Client) {
+	fields := map[string]interface{}{}
+	fields["age"] = 37
+	fields["phone"] = strings.Repeat("a",1024)
+	fields["name"] = "sniperHW"
+	key := "haokun:1"
+	set := c.SetNx("users1",key,fields)
+	set.Exec(func(ret *kclient.Result) {
+		fmt.Println(*ret)
+	})
+}
+
+func CompareAndSet(c *kclient.Client) {
+	
+	key := "huangwei:1"
+	compareAndSet := c.CompareAndSet("users1",key,"age",43,43)
+	compareAndSet.Exec(func(ret *kclient.Result) {
+		if ret.ErrCode == errcode.ERR_OK || ret.ErrCode == errcode.ERR_NOT_EQUAL {
+			fmt.Println(ret.Fields["age"])
+		} else {
+			fmt.Println(*ret)
+		}
+	})
+	
+}
+
+
+func CompareAndSetNx(c *kclient.Client) {
+	
+	key := "guagua:1"
+	compareAndSetNx := c.CompareAndSetNx("users1",key,"age",43,43)
+	compareAndSetNx.Exec(func(ret *kclient.Result) {
+		if ret.ErrCode == errcode.ERR_OK || ret.ErrCode == errcode.ERR_NOT_EQUAL {
+			fmt.Println(ret.Fields["age"])
+		} else {
+			fmt.Println(*ret)
+		}
+	})
+	
+}
+
+
 func Get(c *kclient.Client) {
 
-	key := fmt.Sprintf("%s:%d","huangwei",1)//rand.Int()%10000)
+	key := fmt.Sprintf("%s:%d","huangwei",rand.Int()%100000)
 	//key := fmt.Sprintf("%s:%d","huangwei",id%1000000)//rand.Int()%1000000)
 	id++
 	get := c.Get("users1",key,"name","age","phone")
@@ -68,7 +129,7 @@ func Get(c *kclient.Client) {
 
 	get.Exec(func(ret *kclient.Result) {
 
-		//fmt.Println(ret.Fields["phone"].GetString())
+		fmt.Println(ret.Fields["age"].GetInt())
 
 		if getAvaDelay == time.Duration(0) {
 			getAvaDelay = time.Now().Sub(beg)
@@ -131,14 +192,20 @@ func main() {
 
 	c := kclient.OpenClient("localhost:10012")//eventQueue)
 
-	Set(c)
+	//SetNx(c)
 
-/*	for i := 0; i < 100; i++ {
+	//Get(c)
+
+	CompareAndSetNx(c)
+
+	//IncrBy(c)
+
+	/*for i := 0; i < 100; i++ {
 		Set(c)
 	}
-*/
-	/*for i := 0; i < 200; i++ {
-		Set(c)
+	
+	for i := 0; i < 200; i++ {
+		Get(c)
 	}*/
 
 	/*for i := 0; i < 200; i++ {

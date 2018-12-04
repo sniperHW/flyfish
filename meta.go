@@ -79,6 +79,30 @@ func (this *table_meta) checkSet(fields []field) bool {
 	return true
 }
 
+func (this *table_meta) checkCompareAndSet(oldV *field,newV *field) bool {
+	var ok bool
+	var m  message.ValueType
+	m,ok = this.field_types[oldV.name]
+	if !ok {
+		return false
+	}
+
+	if oldV.Tt() != m {
+		return false
+	}
+
+	m,ok = this.field_types[newV.name]
+	if !ok {
+		return false
+	}
+
+	if newV.Tt() != m {
+		return false
+	}
+
+	return true	
+}
+
 func GetMetaByTable(table string) *table_meta {
 	meta,ok := table_metas[table]
 	if ok {

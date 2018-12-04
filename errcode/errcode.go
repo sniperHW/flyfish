@@ -15,4 +15,8 @@ const (
 	ERR_CLOSE                       = int32(11)
 	ERR_DISCONNECTED                = int32(12)
 	ERR_SQLERROR                    = int32(13)
+	ERR_LUA_SCRIPT                  = int32(14)
+	ERR_STALE_CACHE                 = int32(15)
+	ERR_KEY_EXIST                   = int32(16)
+	ERR_NOT_EQUAL                   = int32(17)
 )

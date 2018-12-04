@@ -10,7 +10,7 @@ import (
 
 var sql_once sync.Once
 
-var sqlLoadQueue  			[]*util.BlockQueue      //for get
+var sqlLoadQueue            *util.BlockQueue        //for get
 var sqlUpdateQueue 			[]*util.BlockQueue      //for set/del
 var writeBackKeys  			map[string]*writeBack   
 var writeBackEventQueue     *util.BlockQueue
@@ -43,11 +43,10 @@ func SQLInit(dbname string,user string,password string) bool {
 
 		writeBackKeys = map[string]*writeBack{}   
 		writeBackEventQueue = util.NewBlockQueueWithName("writeBackEventQueue",conf.WriteBackEventQueueSize)
- 
-		sqlLoadQueue = make([]*util.BlockQueue,conf.SqlLoadPoolSize)
+
+		sqlLoadQueue = util.NewBlockQueueWithName(fmt.Sprintf("sqlLoad"),conf.SqlEventQueueSize)
 		for i := 0; i < conf.SqlLoadPoolSize; i++ {
-			sqlLoadQueue[i] = util.NewBlockQueueWithName(fmt.Sprintf("sqlLoad:%d",i),conf.SqlEventQueueSize)
-			go sqlRoutine(sqlLoadQueue[i],newSqlLoader(conf.SqlLoadPipeLineSize,dbname,user,password))
+			go sqlRoutine(sqlLoadQueue,newSqlLoader(conf.SqlLoadPipeLineSize,dbname,user,password))
 		}	
 
 		sqlUpdateQueue = make([]*util.BlockQueue,conf.SqlUpdatePoolSize)

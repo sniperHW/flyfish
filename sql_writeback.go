@@ -18,7 +18,8 @@ const delTemplate = `delete from %s where __key__ in(%s);`
 
 type writeBackQueue struct {
 	head       *writeBack
-	tail       *writeBack      	
+	tail       *writeBack 
+	size        int     	
 }
 
 func (this *writeBackQueue) Push(w *writeBack) {
@@ -29,6 +30,7 @@ func (this *writeBackQueue) Push(w *writeBack) {
 		this.head = w
 		this.tail = w
 	}
+	this.size++
 }
 
 func (this *writeBackQueue) Pop() *writeBack {
@@ -40,6 +42,7 @@ func (this *writeBackQueue) Pop() *writeBack {
 		if this.head == nil {
 			this.tail = nil
 		}
+		this.size--
 		return head
 	}
 }
@@ -210,7 +213,7 @@ func (this *sqlUpdater) exec() {
 func pushSQLWriteBack(stm *cmdStm) {
 	if conf.WriteBackDelay > 0 {
 		//延迟回写
-		writeBackEventQueue.Add(stm)
+		writeBackEventQueue.AddWait(stm)
 	} else {
 		//直接回写
 		wb := &writeBack{
@@ -230,7 +233,7 @@ func pushSQLWriteBack(stm *cmdStm) {
 			}
 		}
 		hash := StringHash(stm.uniKey)
-		sqlUpdateQueue[hash%conf.SqlUpdatePoolSize].Add(wb)		
+		sqlUpdateQueue[hash%conf.SqlUpdatePoolSize].AddWait(wb)		
 	}
 }
 
@@ -245,7 +248,7 @@ func processWriteBackQueue(now int64) {
 			//投入执行
 			Debugln("pushSQLUpdate",wb.uniKey)
 			hash := StringHash(wb.uniKey)
-			sqlUpdateQueue[hash%conf.SqlUpdatePoolSize].Add(wb)
+			sqlUpdateQueue[hash%conf.SqlUpdatePoolSize].AddWait(wb)
 		}
 	}
 }

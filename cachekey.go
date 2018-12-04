@@ -42,15 +42,19 @@ func (this *cacheKey) SetIndex(idx uint32) {
 	this.idx = idx
 }*/
 
-func (this *cacheKey) SetMissing() {
+func (this *cacheKey) setMissing() {
 	Debugln("SetMissing key:",this.uniKey)
 	this.version = 0
 	this.status  = cache_missing 
 }
 
-func (this *cacheKey) SetOK(version int64) {
+func (this *cacheKey) setOK(version int64) {
 	this.version = version
 	this.status  = cache_ok
+}
+
+func (this *cacheKey) reset() {
+	this.status = cache_new
 }
 
 
@@ -58,7 +62,7 @@ func (this *cacheKey) SetOK(version int64) {
 UpdateLRU和newCacheKey只能再主消息循环中访问，所以tick不需要加锁保护
 */
 
-func (this *cacheKey) UpdateLRU() {
+func (this *cacheKey) updateLRU() {
 	tick++
 	//this.lastAccess = tick//time.Now()
 	//minHeap.Insert(this)	
@@ -92,7 +96,7 @@ func newCacheKey(table string,uniKey string) *cacheKey {
 func getCacheKey(table string,uniKey string) *cacheKey {
 	k,ok := cacheKeys[uniKey]
 	if ok {
-		k.UpdateLRU()
+		k.updateLRU()
 		return k
 	} else {
 		return newCacheKey(table,uniKey)

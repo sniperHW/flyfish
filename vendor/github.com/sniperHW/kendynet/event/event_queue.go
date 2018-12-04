@@ -32,6 +32,7 @@ func NewEventQueue(fullSize ...int) *EventQueue {
 	return r
 }
 
+
 func (this *EventQueue) Post(callback interface{},args ...interface{}) {
 	
 	e := element{}
@@ -50,6 +51,26 @@ func (this *EventQueue) Post(callback interface{},args ...interface{}) {
 		panic("invaild callback type")
 	}
 	this.eventQueue.Add(&e)
+}
+
+func (this *EventQueue) PostWait(callback interface{},args ...interface{}) {
+	
+	e := element{}
+
+	switch callback.(type) {
+	case func():
+		e.tt = tt_noargs
+		e.callback = callback
+		break
+	case func([]interface{}):
+		e.tt = tt_varargs
+		e.callback = callback
+		e.args = args
+		break
+	default:
+		panic("invaild callback type")
+	}
+	this.eventQueue.AddWait(&e)
 }
 
 func (this *EventQueue) Close() {

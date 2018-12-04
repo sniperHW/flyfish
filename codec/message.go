@@ -37,7 +37,21 @@ func init() {
 	pb.Register(&message.DelReq{},7)
 	pb.Register(&message.DelResp{},8)
 
-	//pb.Register(&message.AtomicIncreaseReq{},9)
-	//pb.Register(&message.AtomicIncreaseResp{},10)
+	pb.Register(&message.IncrbyReq{},9)
+	pb.Register(&message.IncrbyResp{},10)
+
+	pb.Register(&message.DecrbyReq{},11)
+	pb.Register(&message.DecrbyResp{},12)
+
+	pb.Register(&message.SetnxReq{},13)
+	pb.Register(&message.SetnxResp{},14)	
+
+	pb.Register(&message.CompareAndSetReq{},15)
+	pb.Register(&message.CompareAndSetResp{},16)
+
+	pb.Register(&message.CompareAndSetnxReq{},17)
+	pb.Register(&message.CompareAndSetnxResp{},18)
+
+	
 
 }

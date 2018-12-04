@@ -71,21 +71,49 @@ message get_resp {
    repeated field  fields  = 4;
 }
 
-/*
-message atomic_increase_req {
+message getall_req {
+  required int64  seqno   = 1;
+  required string table   = 2;
+  required string key     = 3;
+}
+
+message getall_resp {
+   required int64  seqno   = 1;
+   required int32  errCode = 2;
+   optional int64  version = 3;    
+   repeated field  fields  = 4;
+}
+
+
+message incrby_req {
    required int64  seqno   = 1;
    required string table   = 2;
    required string key     = 3;
    required field  field   = 4;  
 }
 
-message atomic_increase_resp {
+message incrby_resp {
   required int64  seqno    = 1;  
   required int32  errCode  = 2;
-  optional field  newValue = 3;
+  optional int64  version  = 3;
+  optional field  newValue = 4;
 }
 
-message cas_req {
+message decrby_req {
+  required int64  seqno   = 1;
+  required string table   = 2;
+  required string key     = 3;
+  required field  field   = 4;  
+}
+
+message decrby_resp {
+  required int64  seqno    = 1;  
+  required int32  errCode  = 2;
+  optional int64  version  = 3; 
+  optional field  newValue = 4;
+}
+
+message compare_and_set_req {
   required int64  seqno   = 1;
   required string table   = 2;
   required string key     = 3;
@@ -93,10 +121,38 @@ message cas_req {
   required field  old     = 5;  
 }
 
-message cas_resp {
+message compare_and_set_resp {
   required int64  seqno    = 1;  
   required int32  errCode  = 2;
-  optional field  value    = 3;  
-} 
-*/
+  optional int64  version  = 3;  
+  optional field  value    = 4;  
+}
+
+message compare_and_setnx_req {
+  required int64  seqno   = 1;
+  required string table   = 2;
+  required string key     = 3;
+  required field  new     = 4;
+  required field  old     = 5;  
+}
+
+message compare_and_setnx_resp {
+  required int64  seqno    = 1;  
+  required int32  errCode  = 2;
+  optional int64  version  = 3;  
+  optional field  value    = 4;  
+}
+
+message setnx_req {
+  required int64  seqno   = 1;    
+  required string table   = 2;
+  required string key     = 3;
+  repeated field  fields  = 4;
+}
+
+message setnx_resp {
+  required int64 seqno   = 1;
+  required int32 errCode = 2;
+  optional int64 version = 3; 
+}
 

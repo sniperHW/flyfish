@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
-	"flyfish/conf"
+	//"flyfish/conf"
 	"time"
 	"flyfish/errcode"
 )
@@ -160,9 +160,7 @@ func (this *sqlLoader) exec() {
 
 
 func pushSQLLoad(stm *cmdStm) {
-	//根据stm.unikey计算hash投递到单独的routine中处理
-	hash := StringHash(stm.uniKey)
-	sqlLoadQueue[hash%conf.SqlLoadPoolSize].Add(stm)
+	sqlLoadQueue.AddWait(stm)
 }
 
 

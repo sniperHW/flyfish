@@ -12,11 +12,20 @@ import(
 )
 
 const (
-	cmdNone = 0
-	cmdGet  = 1
-	cmdSet  = 2
-	cmdDel  = 3
+	cmdNone   			= 0
+	cmdGet    			= 1
+	cmdSet    			= 2
+	cmdSetNx  			= 3
+	cmdCompareAndSet 	= 4
+	cmdCompareAndSetNx  = 5
+	cmdDel    			= 6
+	cmdIncrBy 			= 7
+	cmdDecrBy 			= 8
 )
+
+func isSetCmd(cmd int) bool {
+	return cmd == cmdSet || cmd == cmdSetNx || cmd == cmdCompareAndSet || cmd == cmdCompareAndSetNx || cmd == cmdIncrBy || cmd == cmdDecrBy
+}
 
 var eventQueue *event.EventQueue
 
@@ -67,6 +76,31 @@ func (this *field) ToSqlStr() string {
 	return ""
 }
 
+func (this *field) Equal(o *field) bool {
+	if nil == o {
+		fmt.Println("break1")
+		return false
+	}
+	if this.Tt() != o.Tt() {
+		fmt.Println("break2")
+		return false
+	}
+	if this.Tt() == message.ValueType_String {
+		return this.value.(string) == o.value.(string)
+	} else if this.Tt() == message.ValueType_Float {
+		return this.value.(float64) == o.value.(float64)		
+	} else if this.Tt() == message.ValueType_Integer {
+		r := this.value.(int64) == o.value.(int64)
+		fmt.Println(r)
+		return r		
+	} else if this.Tt() == message.ValueType_Integer {
+		return this.value.(uint64) == o.value.(uint64)
+	} else {
+		fmt.Println("break3")
+		return true
+	}
+}
+
 
 //单条命令上下文
 type cmdContext struct {
@@ -79,6 +113,9 @@ type cmdContext struct {
 	version     *int64
 	ckey        *cacheKey	
 	fields      []field
+	//for compareAndSet/compareAndSetNx
+	oldV        field
+	newV        field
 }
 
 
@@ -110,15 +147,17 @@ type cmdStm struct {
 	table          string
 	uniKey         string
 	contexts       []*cmdContext           //本状态机关联的所有命令请求
-	fields         map[string]field        //所有命令的字段聚合     
+	fields         map[string]field        //所有命令的字段聚合    
 	errno          int32
 	ckey           *cacheKey
 	version        *int64
 	replyed        bool
-	//
-	//sqlType        int	
+	wantField      field
 	setRedisOnly   bool                    //操作只写入redis,返回后不需要执行sql回写
 	writeBackFlag  int                     //回写数据库类型
+	//for compareAndSet/compareAndSetNx
+	oldV           field
+	newV           field	
 }
 
 func (this *cmdStm) reply(errCode int32,fields map[string]field,version ...int64) {
@@ -165,6 +204,52 @@ func (this *keyCmdQueue) Pop() *cmdContext {
 func (this *keyCmdQueue) Head() *cmdContext {
 	return this.head
 }
+
+
+func (this *cacheKey) convertStr(fieldName string,value string) *field {
+	m,ok := this.meta.field_types[fieldName]
+	if !ok {
+		return nil
+	}
+
+	if m == message.ValueType_String {
+		return &field {
+			name : fieldName,
+			value : value,
+		}
+	} else if m == message.ValueType_Float {
+		f, err := strconv.ParseFloat(value, 64)
+		if nil != err {
+			return nil
+		}
+		return &field {
+			name : fieldName,
+			value : f,
+		}		
+	} else if m == message.ValueType_Integer {
+		i, err := strconv.ParseInt(value, 10, 64)
+		if nil != err {
+
+			return nil
+		}
+		return &field {
+			name : fieldName,
+			value : i,
+		}		
+	} else if m == message.ValueType_Uinteger {
+		i, err := strconv.ParseUint(value, 10, 64)
+		if nil != err {
+			return nil
+		}
+		return &field {
+			name : fieldName,
+			value : i,
+		}		
+	} else {
+		return nil
+	}
+}
+
 
 func (this *cacheKey) process() {
 	if this.locked {
@@ -236,7 +321,122 @@ func (this *cacheKey) process() {
 				break
 			}
 
-		} else {
+		} else if head.cmdType == cmdSetNx {
+			if !(stm.cmdType == cmdNone || stm.cmdType == cmdSetNx) {
+				break
+			}
+			cmdQueue.Pop()
+			if this.status == cache_ok {
+				head.reply(errcode.ERR_KEY_EXIST,nil)
+			} else {	
+				stm.cmdType = cmdSetNx
+				stm.contexts = append(stm.contexts,head)
+				
+				if this.status == cache_ok || this.status == cache_missing {
+					stm.fields["__version__"] = field {
+						name  : "__version__",
+						value : this.version + 1,
+					}
+					if this.status == cache_ok {
+						stm.writeBackFlag = write_back_update //数据存在执行update
+					} else {
+						stm.writeBackFlag = write_back_insert //数据不存在执行insert
+					}
+				}
+				
+				for _,v := range(head.fields) {
+					stm.fields[v.name] = v
+				}
+				break
+			}
+
+		} else if head.cmdType == cmdCompareAndSet {
+			if !(stm.cmdType == cmdNone || stm.cmdType == cmdCompareAndSet) {
+				break
+			}
+			cmdQueue.Pop()
+			if this.status == cache_missing {
+				head.reply(errcode.ERR_NOTFOUND,nil)
+			} else {	
+				stm.cmdType = cmdCompareAndSet
+				stm.contexts = append(stm.contexts,head)
+					
+				if this.status == cache_ok {
+					stm.fields["__version__"] = field {
+						name  : "__version__",
+						value : this.version + 1,
+					}
+					stm.writeBackFlag = write_back_update //数据存在执行update
+				}
+				stm.newV = head.newV
+				stm.oldV = head.oldV
+				break
+			}
+
+		} else if head.cmdType == cmdCompareAndSetNx {
+			if !(stm.cmdType == cmdNone || stm.cmdType == cmdCompareAndSetNx) {
+				break
+			}
+			cmdQueue.Pop()
+			stm.cmdType = cmdCompareAndSetNx
+			stm.contexts = append(stm.contexts,head)
+
+			if this.status == cache_ok || this.status == cache_missing {
+				stm.fields["__version__"] = field {
+					name  : "__version__",
+					value : this.version + 1,
+				}
+				if this.status == cache_ok {
+					stm.writeBackFlag = write_back_update //数据存在执行update
+				} else {
+					stm.writeBackFlag = write_back_insert //数据不存在执行insert
+				}
+			}
+
+			for _,v := range(head.fields) {
+				stm.fields[v.name] = v
+			}
+
+			stm.newV = head.newV
+			stm.oldV = head.oldV
+			break
+
+		}  else if head.cmdType == cmdIncrBy {
+			cmdQueue.Pop()
+
+			for _,v := range(head.fields) {
+				stm.wantField = v
+				break
+			}
+
+			if this.status == cache_ok || this.status == cache_missing {
+				stm.fields["__version__"] = field {
+					name  : "__version__",
+					value : this.version + 1,
+				}
+			}
+			stm.cmdType = cmdIncrBy
+			stm.contexts = append(stm.contexts,head)	
+			break
+		} else if head.cmdType == cmdDecrBy {
+			cmdQueue.Pop()
+
+			for _,v := range(head.fields) {
+				stm.wantField = v
+				break
+			}
+
+			if this.status == cache_ok || this.status == cache_missing {
+				stm.fields["__version__"] = field {
+					name  : "__version__",
+					value : this.version + 1,
+				}
+			}
+
+			stm.cmdType = cmdDecrBy
+			stm.contexts = append(stm.contexts,head)				
+			break
+		}  else {
 			if !(stm.cmdType == cmdNone || stm.cmdType == cmdDel) {
 				break
 			}
@@ -275,8 +475,8 @@ func (this *cacheKey) process() {
 func onSqlNotFound(stm *cmdStm) {
 	Debugln("onSqlNotFound key",stm.uniKey)
 	ckey := stm.ckey
-	ckey.SetMissing() //设置数据不存在标记
-	if stm.cmdType == cmdGet || stm.cmdType == cmdDel {
+	ckey.setMissing() //设置数据不存在标记
+	if stm.cmdType == cmdGet || stm.cmdType == cmdDel || stm.cmdType == cmdCompareAndSet {
 		stm.reply(errcode.ERR_NOTFOUND,nil)
 		ckey.locked = false
 		ckey.process()		
@@ -301,35 +501,69 @@ func onSqlExecError(stm *cmdStm) {
 	ckey.process()	
 }
 
-func onSqlLoadOK(stm *cmdStm) {
-	version := stm.fields["__version__"].value.(int64)
+func onSqlLoadOK(stm *cmdStm) { 
+	version := stm.fields["__version__"].value.(int64)//从数据库读取到的版本号
 	Debugln("onSqlLoadOK key",stm.uniKey,"version",version)
 	if stm.cmdType == cmdGet {
 		stm.setRedisOnly = true
 		pushRedis(stm)
-	} else if stm.cmdType == cmdSet {
-		if nil != stm.version && *stm.version != version {
+	} else if isSetCmd(stm.cmdType) {
+		if stm.cmdType == cmdCompareAndSet || stm.cmdType == cmdCompareAndSetNx {
+			dbV := stm.fields[stm.oldV.name]
+			fmt.Println(dbV,stm.oldV,dbV.Tt(),stm.oldV.Tt())
+			if !dbV.Equal(&stm.oldV) {
+				stm.fields[stm.oldV.name] = field{
+					name : stm.oldV.name,
+					value : dbV.value,
+				}
+				stm.reply(errcode.ERR_NOT_EQUAL,stm.fields)
+				stm.ckey.locked = false
+				stm.ckey.process()				
+			} else {
+				stm.version = new(int64)
+				*stm.version = version + 1
+				stm.fields["__version__"] = field {
+					name : "__version__",
+					value : *stm.version,
+				}
+				stm.fields[stm.oldV.name] = stm.newV
+				stm.writeBackFlag = write_back_update   //sql中存在,使用update回写
+				pushRedis(stm)	
+			}
+		} else if stm.cmdType == cmdSetNx {
+			stm.reply(errcode.ERR_KEY_EXIST,nil)
+			stm.ckey.locked = false
+			stm.ckey.process()
+		} else if stm.cmdType == cmdSet && nil != stm.version && *stm.version != version {
 			//版本号不对
 			stm.reply(errcode.ERR_VERSION,nil)
+			stm.ckey.locked = false
+			stm.ckey.process()
+		} else {
+			//变更需要将版本号+1
+			stm.version = new(int64)
+			*stm.version = version + 1
+			stm.fields["__version__"] = field {
+				name : "__version__",
+				value : *stm.version,
+			}
+			stm.writeBackFlag = write_back_update   //sql中存在,使用update回写
+			pushRedis(stm)
 		}
-		stm.version = new(int64)
-		*stm.version = version + 1
-		stm.writeBackFlag = write_back_update   //sql中存在,使用update回写
-		pushRedis(stm)
 	} else if stm.cmdType == cmdDel {
 		if nil != stm.version && *stm.version != version {
 			//版本号不对
 			stm.reply(errcode.ERR_VERSION,nil)
-			stm.setRedisOnly = true
-			pushRedis(stm)
 		} else {
-			stm.ckey.locked = false
-			stm.ckey.SetMissing()
+			stm.ckey.setMissing()
 			stm.writeBackFlag = write_back_delete
 			pushSQLWriteBack(stm)
 			stm.reply(errcode.ERR_OK,nil)
-			stm.ckey.process()
 		}
+		
+		stm.ckey.locked = false
+		stm.ckey.process()
+
 	} else {
 		//记录日志
 	}
@@ -352,36 +586,34 @@ func onRedisResp(stm *cmdStm) {
 		ckey.locked = false
 		if stm.errno == errcode.ERR_OK {
 			if stm.setRedisOnly {
-				ckey.SetOK(*stm.version)
-			} else if stm.cmdType == cmdSet {
-				ckey.SetOK(*stm.version)
+				ckey.setOK(*stm.version)
+			} else if isSetCmd(stm.cmdType) {
+				ckey.setOK(*stm.version)
 				//投递sql更新
 				pushSQLWriteBack(stm)	
 			} else if stm.cmdType == cmdDel {
-				ckey.SetMissing()
+				ckey.setMissing()
 				//投递sql删除请求
 				stm.writeBackFlag = write_back_delete
 				pushSQLWriteBack(stm)				
 			} 
-		} else if stm.errno == errcode.ERR_NOTFOUND {
-			//cachekey中存在,redis中不存在
-			ckey.SetMissing()
 		} else if stm.errno == errcode.ERR_VERSION {
 			//cachekey中记录的version与redis中的不一致
-			ckey.SetOK(*stm.version)
-		} 
-		Debugln("onRedisResp1 key:",stm.uniKey)
-		if stm.cmdType == cmdGet {
-			stm.reply(stm.errno,stm.fields,ckey.version)
-		} else {
-			stm.reply(stm.errno,nil,ckey.version)		
+			ckey.setOK(*stm.version)
+		} else if stm.errno == errcode.ERR_STALE_CACHE {
+			/*  redis中的数据与flyfish key不一致
+
+			 *  将ckey重置为cache_new，强制从数据库取值刷新redis
+			*/
+			ckey.reset()
 		}
+		stm.reply(stm.errno,stm.fields,ckey.version)
 		ckey.process()
 	})
 }
 
 func pushCmdContext(context *cmdContext) {
-	eventQueue.Post(func(){
+	eventQueue.PostWait(func(){
 
 		context.ckey = getCacheKey(context.table,context.uniKey)
 
@@ -394,8 +626,18 @@ func pushCmdContext(context *cmdContext) {
 			context.reply(errcode.ERR_INVAILD_FIELD,nil)
 			return
 		}
+
+		if (context.cmdType == cmdCompareAndSet || context.cmdType == cmdCompareAndSetNx) && !context.ckey.meta.checkCompareAndSet(&context.oldV,&context.newV) {
+			context.reply(errcode.ERR_INVAILD_FIELD,nil)
+			return			
+		}
 		
-		if context.cmdType == cmdSet && !context.ckey.meta.checkSet(context.fields) {
+		if (context.cmdType == cmdSet || context.cmdType == cmdSetNx) && !context.ckey.meta.checkSet(context.fields) {
+			context.reply(errcode.ERR_INVAILD_FIELD,nil)
+			return
+		}
+
+		if (context.cmdType == cmdIncrBy || context.cmdType == cmdDecrBy) && !context.ckey.meta.checkSet(context.fields) {
 			context.reply(errcode.ERR_INVAILD_FIELD,nil)
 			return
 		}
@@ -419,7 +661,7 @@ func init() {
 	go func(){
 		for {
 			time.Sleep(time.Second)
-			fmt.Println("keys:",len(cacheKeys),"writeBackKeys",len(writeBackKeys))
+			fmt.Println("keys:",len(cacheKeys),"writeBackKeys",len(writeBackKeys),"writeBackQueue_.size",writeBackQueue_.size)
 		}
 	}()
 

@@ -82,6 +82,11 @@ func init() {
 	register(&message.DelReq{},del)
 	register(&message.GetReq{},get)
 	register(&message.SetReq{},set)
+	register(&message.SetnxReq{},setNx)
+	register(&message.CompareAndSetReq{},compareAndSet)
+	register(&message.CompareAndSetnxReq{},compareAndSetNx)
 	register(&message.PingReq{},ping)
+	register(&message.IncrbyReq{},incrBy)
+	register(&message.DecrbyReq{},decrBy)
 }
 
