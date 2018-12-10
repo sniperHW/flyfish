@@ -10,16 +10,16 @@
 例如：
 sql中存在一个user表格有以下记录
 
-__key__        age        phone
-lili           10         123456
-bily           12         434443
-chuck          7          34343
+	__key__        age        phone
+	lili           10         123456
+	bily           12         434443
+	chuck          7          34343
 
 在redis中被映射为
 
-key=user:lili field:age = 10 field:phone = 123456
-key=user:bily field:age = 12 field:phone = 434443
-key=user:chuck filed:age = 7 field:phone = 34343
+	key=user:lili field:age = 10 field:phone = 123456
+	key=user:bily field:age = 12 field:phone = 434443
+	key=user:chuck filed:age = 7 field:phone = 34343
 
 ## redis缓存
 
