@@ -6,7 +6,7 @@ import(
 	"github.com/sniperHW/kendynet"
 	"reflect"
 	"github.com/golang/protobuf/proto"
-	message "flyfish/proto"
+	protocol "flyfish/proto"
 )
 
 type handler func(kendynet.StreamSession,*codec.Message)
@@ -67,8 +67,8 @@ func dispatch(session kendynet.StreamSession,msg *codec.Message) {
 
 
 func ping(session kendynet.StreamSession,msg *codec.Message) {
-	req  := msg.GetData().(*message.PingReq)
-	resp := &message.PingResp{
+	req  := msg.GetData().(*protocol.PingReq)
+	resp := &protocol.PingResp{
 		Timestamp : proto.Int64(req.GetTimestamp()),
 	}
 	session.Send(resp)
@@ -79,14 +79,14 @@ func init() {
 		handlers : map[string]handler{},
 	}
 
-	register(&message.DelReq{},del)
-	register(&message.GetReq{},get)
-	register(&message.SetReq{},set)
-	register(&message.SetnxReq{},setNx)
-	register(&message.CompareAndSetReq{},compareAndSet)
-	register(&message.CompareAndSetnxReq{},compareAndSetNx)
-	register(&message.PingReq{},ping)
-	register(&message.IncrbyReq{},incrBy)
-	register(&message.DecrbyReq{},decrBy)
+	register(&protocol.DelReq{},del)
+	register(&protocol.GetReq{},get)
+	register(&protocol.SetReq{},set)
+	register(&protocol.SetNxReq{},setNx)
+	register(&protocol.CompareAndSetReq{},compareAndSet)
+	register(&protocol.CompareAndSetNxReq{},compareAndSetNx)
+	register(&protocol.PingReq{},ping)
+	register(&protocol.IncrByReq{},incrBy)
+	register(&protocol.DecrByReq{},decrBy)
 }
 

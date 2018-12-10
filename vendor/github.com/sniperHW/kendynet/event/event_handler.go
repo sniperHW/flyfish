@@ -79,7 +79,7 @@ func (this *EventHandler) Register(event interface{},once bool,callback interfac
 		event    : event,
 	}
 
-	this.processQueue.Post(func() {
+	this.processQueue.PostNoWait(func() {
 		slot,ok := this.slots[event]
 		if !ok {
 			slot = &handlerSlot{
@@ -106,7 +106,7 @@ func (this *EventHandler) Remove(handle *Handle) bool {
 			return false
 		}
 		handle.status = status_remove
-		this.processQueue.Post(func() {
+		this.processQueue.PostNoWait(func() {
 			slot,ok := this.slots[handle.event]
 			if ok {
 				slot.remove(handle)
@@ -117,7 +117,7 @@ func (this *EventHandler) Remove(handle *Handle) bool {
 }
 
 func (this *EventHandler) Clear(event interface{}) {
-	this.processQueue.Post(func() {
+	this.processQueue.PostNoWait(func() {
 		slot,ok := this.slots[event]
 		if ok {
 			slot.clear()
@@ -127,7 +127,7 @@ func (this *EventHandler) Clear(event interface{}) {
 
 //触发事件
 func (this *EventHandler) Emit(event interface{},args ...interface{}) {
-	this.processQueue.Post(func() {
+	this.processQueue.PostNoWait(func() {
 		slot,ok := this.slots[event]
 		if ok {
 			slot.emit(args...)

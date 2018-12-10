@@ -4,22 +4,26 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
-	//"flyfish/conf"
+	protocol "flyfish/proto"
 	"time"
 	"flyfish/errcode"
 )
 
 const queryTemplate = `SELECT %s FROM %s where __key__ in(%s);`
 
+
+/*
+*一个要获取的集合    
+*/
 type sqlGet struct {
 	table string
 	meta  *table_meta	
 	keys  []string
-	stms  map[string]*cmdStm
+	ctxs  map[string]*processContext
 }
 
 type sqlLoader struct {
-	sqlGets   map[string]*sqlGet
+	sqlGets   map[string]*sqlGet    //要获取的结果集
 	count     int
 	max       int
 	db        *sql.DB
@@ -36,23 +40,25 @@ func newSqlLoader(max int,dbname string,user string,password string) *sqlLoader 
 
 func (this *sqlLoader) Reset() {
 	this.sqlGets = map[string]*sqlGet{}
-	this.count     = 0
+	this.count   = 0
 }
 
 func (this *sqlLoader) append(v interface{}) {
-	stm := v.(*cmdStm)
-	s,ok := this.sqlGets[stm.table]
+	ctx   := v.(*processContext)
+	table := ctx.getTable()
+	key   := ctx.getKey()
+	s,ok := this.sqlGets[table]
 	if !ok {
 		s = &sqlGet{
-			table : stm.table,
+			table : table,
 			keys  : []string{},
-			stms  : map[string]*cmdStm{},
-			meta  : GetMetaByTable(stm.table),
+			ctxs  : map[string]*processContext{},
+			meta  : getMetaByTable(table),
 		}
-		this.sqlGets[stm.table] = s
+		this.sqlGets[table] = s
 	}
-	s.keys = append(s.keys,fmt.Sprintf("'%s'",stm.key))
-	s.stms[stm.key] = stm
+	s.keys = append(s.keys,fmt.Sprintf("'%s'",key))
+	s.ctxs[key] = ctx
 	this.count++
 
 	if this.count >= this.max {
@@ -63,7 +69,7 @@ func (this *sqlLoader) append(v interface{}) {
 
 func (this *sqlLoader) onScanError() {
 	for _,v := range(this.sqlGets) {
-		for _,vv := range(v.stms) {
+		for _,vv := range(v.ctxs) {
 			onSqlExecError(vv)
 		}
 	}
@@ -94,7 +100,7 @@ func (this *sqlLoader) exec() {
 	if nil != err {
 		Errorln("sqlQueryer exec error:",err)
 		for _,v := range(this.sqlGets) {
-			for _,vv := range(v.stms) {
+			for _,vv := range(v.ctxs) {
 				onSqlExecError(vv)
 			}
 		}
@@ -116,6 +122,7 @@ func (this *sqlLoader) exec() {
 		field_names    := v.meta.queryMeta.field_names
 
 		for rows.Next() {
+			Debugln("rows.next")
 			err := rows.Scan(filed_receiver...)
 			if err	!= nil {
 				Errorln("rows.Scan err",err)
@@ -124,32 +131,22 @@ func (this *sqlLoader) exec() {
 				return
 			} else {
 				key := field_convter[0](filed_receiver[0]).(string)
-				stm := v.stms[key]
-				if nil != stm {
+				Debugln("key",key)
+				ctx := v.ctxs[key]
+				if nil != ctx {
 					//填充返回值
 					for i := 1 ; i < len(filed_receiver); i++ {
 						name := field_names[i]
-						setField := true
-						if stm.cmdType == cmdSet {
-							if _,ok := stm.fields[name];ok {
-								setField = false
-							}
-						}
-						if setField {
-							stm.fields[name] = field {
-								name  : name,
-								value : field_convter[i](filed_receiver[i]),
-							}							
-						}
+						ctx.fields[name] = protocol.PackField(name,field_convter[i](filed_receiver[i]))	
 					}
-					delete(v.stms,key)
+					delete(v.ctxs,key)
 					//返回给主循环
-					onSqlResp(stm,errcode.ERR_OK)
+					onSqlResp(ctx,errcode.ERR_OK)
 				}
 			}
 		}
 
-		for _,vv := range(v.stms) {
+		for _,vv := range(v.ctxs) {
 			//无结果
 			onSqlResp(vv,errcode.ERR_NOTFOUND)
 		}
@@ -157,10 +154,4 @@ func (this *sqlLoader) exec() {
 		rows.NextResultSet()
 	}	
 }
-
-
-func pushSQLLoad(stm *cmdStm) {
-	sqlLoadQueue.AddWait(stm)
-}
-
 

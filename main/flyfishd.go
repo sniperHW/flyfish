@@ -17,7 +17,7 @@ import(
 func main() {
 	//golog.DisableStdOut()
 	outLogger := golog.NewOutputLogger("log", "flyfish", 1024*1024*50)
-	flyfish.InitLogger(outLogger,golog.Level_Debug)
+	flyfish.InitLogger(outLogger,golog.Level_Info)
 	kendynet.InitLogger(outLogger,"flyfish")
 
 	/*f, _ := os.Create("profile_file")
@@ -26,11 +26,14 @@ func main() {
 	*/
 
 	metas := []string{
-		"users1@age:int,phone:string,name:string",
-		"counter@c:int",
+		"users1@age:int:0,phone:string:123,name:string:haha",
+		"counter@c:int:0",
 	}
 
-	flyfish.InitMeta(metas)
+	if !flyfish.InitMeta(metas) {
+		fmt.Println("InitMeta failed")
+		return
+	}
 	flyfish.RedisInit("127.0.0.1:6379","")
 	flyfish.SQLInit("test","sniper","802802")
 

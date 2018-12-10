@@ -24,26 +24,6 @@ var delAvaDelay time.Duration
 
 var id       int64
 
-
-func IncrBy(c *kclient.Client) {
-
-	incr := c.IncrBy("counter","test_counter","c",1)
-
-	//beg := time.Now()
-
-	incr.Exec(func(ret *kclient.Result) {
-
-		if ret.ErrCode != errcode.ERR_OK {
-			fmt.Println("set err:",ret.ErrCode)
-			kendynet.Debugln("set err:",ret.ErrCode)
-		} else {
-			fmt.Println("c:",ret.Fields["c"].GetInt())
-		}
-		//atomic.AddInt32(&setCount,1)
-		//Set(c)
-	})	
-}
-
 func Set(c *kclient.Client) {
 	fields := map[string]interface{}{}
 	fields["age"] = 37
@@ -76,48 +56,6 @@ func Set(c *kclient.Client) {
 }
 
 
-func SetNx(c *kclient.Client) {
-	fields := map[string]interface{}{}
-	fields["age"] = 37
-	fields["phone"] = strings.Repeat("a",1024)
-	fields["name"] = "sniperHW"
-	key := "haokun:1"
-	set := c.SetNx("users1",key,fields)
-	set.Exec(func(ret *kclient.Result) {
-		fmt.Println(*ret)
-	})
-}
-
-func CompareAndSet(c *kclient.Client) {
-	
-	key := "huangwei:1"
-	compareAndSet := c.CompareAndSet("users1",key,"age",43,43)
-	compareAndSet.Exec(func(ret *kclient.Result) {
-		if ret.ErrCode == errcode.ERR_OK || ret.ErrCode == errcode.ERR_NOT_EQUAL {
-			fmt.Println(ret.Fields["age"])
-		} else {
-			fmt.Println(*ret)
-		}
-	})
-	
-}
-
-
-func CompareAndSetNx(c *kclient.Client) {
-	
-	key := "guagua:1"
-	compareAndSetNx := c.CompareAndSetNx("users1",key,"age",43,43)
-	compareAndSetNx.Exec(func(ret *kclient.Result) {
-		if ret.ErrCode == errcode.ERR_OK || ret.ErrCode == errcode.ERR_NOT_EQUAL {
-			fmt.Println(ret.Fields["age"])
-		} else {
-			fmt.Println(*ret)
-		}
-	})
-	
-}
-
-
 func Get(c *kclient.Client) {
 
 	key := fmt.Sprintf("%s:%d","huangwei",rand.Int()%100000)
@@ -129,7 +67,7 @@ func Get(c *kclient.Client) {
 
 	get.Exec(func(ret *kclient.Result) {
 
-		fmt.Println(ret.Fields["age"].GetInt())
+		//fmt.Println(ret.Fields["age"].GetInt())
 
 		if getAvaDelay == time.Duration(0) {
 			getAvaDelay = time.Now().Sub(beg)
@@ -146,37 +84,8 @@ func Get(c *kclient.Client) {
 		}	
 
 		atomic.AddInt32(&getCount,1)
-		//Get(c)
+		Get(c)
 	})
-}
-
-func Del(c *kclient.Client) {
-	key := fmt.Sprintf("%s:%d","huangwei",rand.Int()%1000000)
-	//key := fmt.Sprintf("%s:%d","huangwei",id%1000000)//rand.Int()%1000000)
-	id++
-	del := c.Del("users1",key)
-
-	beg := time.Now()
-
-	del.Exec(func(ret *kclient.Result) {
-
-		if delAvaDelay == time.Duration(0) {
-			delAvaDelay = time.Now().Sub(beg)
-		} else {
-			delAvaDelay = (time.Now().Sub(beg) + delAvaDelay)/2
-		}
-
-		if ret.ErrCode != errcode.ERR_OK && ret.ErrCode != errcode.ERR_NOTFOUND {
-			fmt.Println("del err:",ret.ErrCode)
-		}
-
-		/*if ret.ErrCode == errcode.ERR_NOTFOUND {
-			fmt.Println("notfound",key)
-		}*/	
-
-		atomic.AddInt32(&delCount,1)
-		Del(c)
-	})	
 }
 
 func main() {
@@ -188,29 +97,15 @@ func main() {
 
 	id = 0
 
-	//eventQueue := event.NewEventQueue()
-
 	c := kclient.OpenClient("localhost:10012")//eventQueue)
 
-	//SetNx(c)
-
-	//Get(c)
-
-	CompareAndSetNx(c)
-
-	//IncrBy(c)
-
-	/*for i := 0; i < 100; i++ {
+	for i := 0; i < 100; i++ {
 		Set(c)
 	}
 	
 	for i := 0; i < 200; i++ {
 		Get(c)
-	}*/
-
-	/*for i := 0; i < 200; i++ {
-		Del(c)
-	}*/
+	}
 
 	go func(){
 		for {

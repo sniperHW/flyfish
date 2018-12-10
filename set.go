@@ -1,9 +1,10 @@
 package flyfish
 
+
 import (
 	"fmt"
 	codec "flyfish/codec"
-	message "flyfish/proto"
+	protocol "flyfish/proto"
 	"flyfish/errcode"
 	"github.com/sniperHW/kendynet"
 	"github.com/golang/protobuf/proto"
@@ -13,22 +14,53 @@ import (
 type SetReplyer struct {
 	seqno      int64
 	session    kendynet.StreamSession
-	context    *cmdContext
+	cmd        *command
 }
 
-func (this *SetReplyer) reply(errCode int32,fields map[string]field,version ...int64) {
-	resp := &message.SetResp{
-		Seqno : proto.Int64(this.seqno),
-		ErrCode : proto.Int32(errCode),
+func (this *SetReplyer) reply(errCode int32,fields map[string]*protocol.Field,version int64) {
+	var resp proto.Message
+	cmdType := this.cmd.cmdType
+
+	if cmdType == cmdSet {
+		r := &protocol.SetResp{
+			Seqno   : proto.Int64(this.seqno),
+			ErrCode : proto.Int32(errCode),
+			Version : proto.Int64(version),
+		}
+		resp = r
+	} else if cmdType == cmdSetNx {
+		r := &protocol.SetNxResp{
+			Seqno   : proto.Int64(this.seqno),
+			ErrCode : proto.Int32(errCode),
+			Version : proto.Int64(version),
+		}
+		resp = r		
+	} else if cmdType == cmdCompareAndSet {
+		r := &protocol.CompareAndSetResp{
+			Seqno   : proto.Int64(this.seqno),
+			ErrCode : proto.Int32(errCode),
+			Version : proto.Int64(version),
+		}
+		if nil != fields {
+			r.Value = fields[this.cmd.cns.oldV.GetName()]
+		}
+		resp = r			
+	} else if cmdType == cmdCompareAndSetNx {
+		r := &protocol.CompareAndSetNxResp{
+			Seqno   : proto.Int64(this.seqno),
+			ErrCode : proto.Int32(errCode),
+			Version : proto.Int64(version),
+		}
+		if nil != fields {
+			r.Value = fields[this.cmd.cns.oldV.GetName()]
+		}
+		resp = r	
+	} else {
+		Debugln("invaild cmdType",cmdType)
+		return
 	}
 
-	if len(version) > 0 {
-		resp.Version = proto.Int64(version[0])
-	}
-
-	Debugln("SetReply",this.context.uniKey,resp)
-
-	//Errorln("SetReply",this.context.uniKey)	
+	Debugln("reply set",resp)
 
 	err := this.session.Send(resp)
 	if nil != err {
@@ -40,30 +72,31 @@ func (this *SetReplyer) reply(errCode int32,fields map[string]field,version ...i
 
 func set(session kendynet.StreamSession,msg *codec.Message) {
 	
-	req := msg.GetData().(*message.SetReq)
+	req := msg.GetData().(*protocol.SetReq)
 
 	//Debugln("set",req,len(req.GetFields()))
 
 	errno := errcode.ERR_OK
 
 	if "" == req.GetTable() {
-		errno = errcode.ERR_CMD_MISSING_TABLE
+		errno = errcode.ERR_MISSING_TABLE
 	}
 
 	if "" == req.GetKey() {
-		errno = errcode.ERR_CMD_MISSING_KEY
+		errno = errcode.ERR_MISSING_KEY
 	}
 
 
 
 	if 0 == len(req.GetFields()) {
-		errno = errcode.ERR_CMD_MISSING_FIELDS
+		errno = errcode.ERR_MISSING_FIELDS
 	}
 
 	if 0 != errno {
-		resp := &message.SetResp {
+		resp := &protocol.SetResp {
 			Seqno : proto.Int64(req.GetSeqno()),
 			ErrCode : proto.Int32(errno),
+			Version : proto.Int64(-1),
 		}
 		err := session.Send(resp)
 		if nil != err {
@@ -73,86 +106,56 @@ func set(session kendynet.StreamSession,msg *codec.Message) {
 	}
 
 
-	context := &cmdContext{
+	cmd := &command{
 		cmdType   : cmdSet,
 		key       : req.GetKey(),
 		table     : req.GetTable(),
 		uniKey    : fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey()),
 		version   : req.Version,
-		fields    : []field{},
+		fields    : map[string]*protocol.Field{},
 	}
 
-	context.rpyer = &SetReplyer{
+	cmd.rpyer = &SetReplyer{
 		seqno : req.GetSeqno(),
 		session : session,
-		context : context,		
+		cmd : cmd,		
 	}
 
 	for _,v := range(req.GetFields()) {
-		context.fields = append(context.fields,field{
-			name  : v.GetName(),
-			value : message.UnpackField(v),
-		})
-	}	
-	pushCmdContext(context)
-}
-
-/////////////////////SetNxReplyer
-
-type SetNxReplyer struct {
-	seqno      int64
-	session    kendynet.StreamSession
-	context    *cmdContext
-}
-
-func (this *SetNxReplyer) reply(errCode int32,fields map[string]field,version ...int64) {
-	resp := &message.SetnxResp{
-		Seqno : proto.Int64(this.seqno),
-		ErrCode : proto.Int32(errCode),
+		cmd.fields[v.GetName()] = v
 	}
 
-	if len(version) > 0 {
-		resp.Version = proto.Int64(version[0])
-	}
-
-	Debugln("SetNxReply",this.context.uniKey,resp)
-
-	//Errorln("SetReply",this.context.uniKey)	
-
-	err := this.session.Send(resp)
-	if nil != err {
-		//记录日志
-	}
-
+	pushCommand(cmd)
 }
 
 
 func setNx(session kendynet.StreamSession,msg *codec.Message) {
 	
-	req := msg.GetData().(*message.SetnxReq)
+	req := msg.GetData().(*protocol.SetNxReq)
 
 	//Debugln("set",req,len(req.GetFields()))
 
 	errno := errcode.ERR_OK
 
 	if "" == req.GetTable() {
-		errno = errcode.ERR_CMD_MISSING_TABLE
+		errno = errcode.ERR_MISSING_TABLE
 	}
 
 	if "" == req.GetKey() {
-		errno = errcode.ERR_CMD_MISSING_KEY
+		errno = errcode.ERR_MISSING_KEY
 	}
 
 
 
 	if 0 == len(req.GetFields()) {
-		errno = errcode.ERR_CMD_MISSING_FIELDS
+		errno = errcode.ERR_MISSING_FIELDS
 	}
 
 	if 0 != errno {
-		resp := &message.SetnxResp {
+		resp := &protocol.SetNxResp {
 			Seqno : proto.Int64(req.GetSeqno()),
 			ErrCode : proto.Int32(errno),
+			Version : proto.Int64(-1),
 		}
 		err := session.Send(resp)
 		if nil != err {
@@ -162,86 +165,49 @@ func setNx(session kendynet.StreamSession,msg *codec.Message) {
 	}
 
 
-	context := &cmdContext{
+	cmd := &command{
 		cmdType   : cmdSetNx,
 		key       : req.GetKey(),
 		table     : req.GetTable(),
 		uniKey    : fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey()),
-		fields    : []field{},
+		fields    : map[string]*protocol.Field{},
 	}
 
-	context.rpyer = &SetNxReplyer{
+	cmd.rpyer = &SetReplyer{
 		seqno : req.GetSeqno(),
 		session : session,
-		context : context,
+		cmd : cmd,
 	}
 
 	for _,v := range(req.GetFields()) {
-		context.fields = append(context.fields,field{
-			name  : v.GetName(),
-			value : message.UnpackField(v),
-		})
-	}	
-	pushCmdContext(context)
-}
-
-/////////////CompareAndSetReplyer
-
-type CompareAndSetReplyer struct {
-	seqno      int64
-	session    kendynet.StreamSession
-	context    *cmdContext
-}
-
-func (this *CompareAndSetReplyer) reply(errCode int32,fields map[string]field,version ...int64) {
-	resp := &message.CompareAndSetResp{
-		Seqno : proto.Int64(this.seqno),
-		ErrCode : proto.Int32(errCode),
+		cmd.fields[v.GetName()] = v
 	}
 
-	if len(version) > 0 {
-		resp.Version = proto.Int64(version[0])
-	}
-
-	if errCode == errcode.ERR_OK || errCode == errcode.ERR_NOT_EQUAL {
-		f,ok := fields[this.context.newV.name]
-		if ok {
-			resp.Value = message.PackField(f.name,f.value)
-		} 
-	} 
-
-	Debugln("CompareAndSetReplyer",this.context.uniKey,resp,fields)
-
-	//Errorln("SetReply",this.context.uniKey)	
-
-	err := this.session.Send(resp)
-	if nil != err {
-		//记录日志
-	}
-
+	pushCommand(cmd)
 }
 
 
 func compareAndSet(session kendynet.StreamSession,msg *codec.Message) {
 	
-	req := msg.GetData().(*message.CompareAndSetReq)
+	req := msg.GetData().(*protocol.CompareAndSetReq)
 
 	//Debugln("set",req,len(req.GetFields()))
 
 	errno := errcode.ERR_OK
 
 	if "" == req.GetTable() {
-		errno = errcode.ERR_CMD_MISSING_TABLE
+		errno = errcode.ERR_MISSING_TABLE
 	}
 
 	if "" == req.GetKey() {
-		errno = errcode.ERR_CMD_MISSING_KEY
+		errno = errcode.ERR_MISSING_KEY
 	}
 
 	if 0 != errno {
-		resp := &message.CompareAndSetResp {
+		resp := &protocol.CompareAndSetResp {
 			Seqno : proto.Int64(req.GetSeqno()),
 			ErrCode : proto.Int32(errno),
+			Version : proto.Int64(-1),
 		}
 		err := session.Send(resp)
 		if nil != err {
@@ -250,94 +216,49 @@ func compareAndSet(session kendynet.StreamSession,msg *codec.Message) {
 		return
 	}
 
-	context := &cmdContext{
+	cmd := &command{
 		cmdType   : cmdCompareAndSet,
 		key       : req.GetKey(),
 		table     : req.GetTable(),
 		uniKey    : fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey()),
-		fields    : []field{},
-		oldV 	  : field {
-			name  : req.GetOld().GetName(),
-			value : message.UnpackField(req.GetOld()),
-		},
-		newV 	  : field {
-			name  : req.GetNew().GetName(),
-			value : message.UnpackField(req.GetNew()),
-		},		
+		fields    : map[string]*protocol.Field{},
+		cns       : &cnsSt{
+			oldV : req.GetOld(),
+			newV : req.GetNew(),
+		},	
 	}
 
-	context.rpyer = &CompareAndSetReplyer{
+	cmd.rpyer = &SetReplyer{
 		seqno : req.GetSeqno(),
 		session : session,
-		context : context,
+		cmd : cmd,
 	}
 
-	context.fields = append(context.fields,field{
-		name  : req.GetNew().GetName(),
-		value : message.UnpackField(req.GetNew()),
-	})
-
-	pushCmdContext(context)
-}
-
-
-/////////////////////CompareAndSetNxReplyer
-
-type CompareAndSetNxReplyer struct {
-	seqno      int64
-	session    kendynet.StreamSession
-	context    *cmdContext
-}
-
-func (this *CompareAndSetNxReplyer) reply(errCode int32,fields map[string]field,version ...int64) {
-	resp := &message.CompareAndSetnxResp{
-		Seqno : proto.Int64(this.seqno),
-		ErrCode : proto.Int32(errCode),
-	}
-
-	if len(version) > 0 {
-		resp.Version = proto.Int64(version[0])
-	}
-
-	if errCode == errcode.ERR_OK || errCode == errcode.ERR_NOT_EQUAL {
-		f,ok := fields[this.context.newV.name]
-		if ok {
-			resp.Value = message.PackField(f.name,f.value)
-		} 
-	} 
-
-	Debugln("CompareAndSetNxReplyer",this.context.uniKey,resp,fields)
-
-	//Errorln("SetReply",this.context.uniKey)	
-
-	err := this.session.Send(resp)
-	if nil != err {
-		//记录日志
-	}
-
+	pushCommand(cmd)
 }
 
 
 func compareAndSetNx(session kendynet.StreamSession,msg *codec.Message) {
 	
-	req := msg.GetData().(*message.CompareAndSetnxReq)
+	req := msg.GetData().(*protocol.CompareAndSetNxReq)
 
 	//Debugln("set",req,len(req.GetFields()))
 
 	errno := errcode.ERR_OK
 
 	if "" == req.GetTable() {
-		errno = errcode.ERR_CMD_MISSING_TABLE
+		errno = errcode.ERR_MISSING_TABLE
 	}
 
 	if "" == req.GetKey() {
-		errno = errcode.ERR_CMD_MISSING_KEY
+		errno = errcode.ERR_MISSING_KEY
 	}
 
 	if 0 != errno {
-		resp := &message.CompareAndSetnxResp {
+		resp := &protocol.CompareAndSetNxResp {
 			Seqno : proto.Int64(req.GetSeqno()),
 			ErrCode : proto.Int32(errno),
+			Version : proto.Int64(-1),
 		}
 		err := session.Send(resp)
 		if nil != err {
@@ -346,32 +267,23 @@ func compareAndSetNx(session kendynet.StreamSession,msg *codec.Message) {
 		return
 	}
 
-	context := &cmdContext{
+	cmd := &command{
 		cmdType   : cmdCompareAndSetNx,
 		key       : req.GetKey(),
 		table     : req.GetTable(),
 		uniKey    : fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey()),
-		fields    : []field{},
-		oldV 	  : field {
-			name  : req.GetOld().GetName(),
-			value : message.UnpackField(req.GetOld()),
-		},
-		newV 	  : field {
-			name  : req.GetNew().GetName(),
-			value : message.UnpackField(req.GetNew()),
-		},		
+		fields    : map[string]*protocol.Field{},
+		cns       : &cnsSt{
+			oldV : req.GetOld(),
+			newV : req.GetNew(),
+		},	
 	}
 
-	context.rpyer = &CompareAndSetNxReplyer{
+	cmd.rpyer = &SetReplyer{
 		seqno : req.GetSeqno(),
 		session : session,
-		context : context,
+		cmd : cmd,
 	}
 
-	context.fields = append(context.fields,field{
-		name  : req.GetNew().GetName(),
-		value : message.UnpackField(req.GetNew()),
-	})
-
-	pushCmdContext(context)
+	pushCommand(cmd)
 }

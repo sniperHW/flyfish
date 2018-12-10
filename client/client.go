@@ -7,7 +7,7 @@ import (
 	"github.com/sniperHW/kendynet/util"
 	"github.com/sniperHW/kendynet/event"
 	"github.com/sniperHW/kendynet/socket/stream_socket/tcp"
-	message "flyfish/proto"
+	protocol "flyfish/proto"
 	"github.com/golang/protobuf/proto"
 	"time"
 	"runtime"
@@ -112,7 +112,7 @@ func (this *Client) checkTimeout(now *time.Time) {
 
 func (this *Client) ping(now *time.Time) {
 	if nil != this.session && now.Unix() > this.nextPing {
-		req := &message.PingReq{
+		req := &protocol.PingReq{
 			Timestamp : proto.Int64(now.UnixNano()),
 		}
 		this.session.Send(req)		

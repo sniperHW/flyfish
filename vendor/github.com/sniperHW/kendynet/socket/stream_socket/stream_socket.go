@@ -158,8 +158,7 @@ func (this *StreamSocket) sendMessage(msg kendynet.Message) error {
 	} else if (this.flag&closed) > 0 || (this.flag&wclosed) > 0 {
 		return kendynet.ErrSocketClose
 	} else {
-		//this.flush()
-		if nil != this.sendQue.Add(msg) {
+		if nil != this.sendQue.AddNoWait(msg) {
 			return kendynet.ErrSocketClose
 		}
 	}
@@ -491,9 +490,9 @@ func (this *StreamSocket) Read(b []byte) (int, error) {
 }
 
 func (this *StreamSocket) SetRecvTimeout(timeout time.Duration) {
-	this.RecvTimeout = timeout * time.Millisecond
+	this.RecvTimeout = timeout
 }
 
 func (this *StreamSocket) SetSendTimeout(timeout time.Duration) {
-	this.SendTimeout = timeout * time.Millisecond
+	this.SendTimeout = timeout
 }

@@ -51,10 +51,10 @@
 			"revisionTime": "2018-08-15T09:05:44Z"
 		},
 		{
-			"checksumSHA1": "iOh5nq0kF9a2txPOhApsVuDcj6Y=",
+			"checksumSHA1": "Y2MOwzNZfl4NRNDbLCZa6sgx7O0=",
 			"path": "github.com/golang/protobuf/proto",
-			"revision": "93b26e6a70e37abb14f2f88194949312b0592a84",
-			"revisionTime": "2018-07-24T20:30:48Z"
+			"revision": "1d3f30b51784bec5aad268e59fd3c2fc1c2fe73f",
+			"revisionTime": "2018-11-28T19:23:52Z"
 		},
 		{
 			"checksumSHA1": "xxLSo5tKtXc7jGrR70yoEfza8Cw=",
@@ -69,40 +69,34 @@
 			"revisionTime": "2018-10-16T16:26:27Z"
 		},
 		{
-			"checksumSHA1": "8AlrFAUyIXkf8Jr1NkSDMZGEW9s=",
+			"checksumSHA1": "HoM8pCgmXE97+LoQcJA8g8DQ0Z8=",
 			"path": "github.com/sniperHW/kendynet",
-			"revision": "59bcf76d2f709ab116ef664a26fb1170927114ca",
-			"revisionTime": "2018-08-28T10:35:48Z"
+			"revision": "5f050e4d04367e82a48e0ff57f70950e36cbbcc3",
+			"revisionTime": "2018-12-10T02:06:24Z"
 		},
 		{
-			"checksumSHA1": "z6cPu2Ts0WQNySa5rlXsjYJ6vw4=",
+			"checksumSHA1": "dba3T9TqARVLoAL0njOOzJz+sME=",
 			"path": "github.com/sniperHW/kendynet/event",
-			"revision": "59bcf76d2f709ab116ef664a26fb1170927114ca",
-			"revisionTime": "2018-08-28T10:35:48Z"
+			"revision": "10f2ff4d3d8016d68ea5388499d8a5b4f7ffa466",
+			"revisionTime": "2018-12-10T02:37:43Z"
 		},
 		{
-			"checksumSHA1": "+ejw3wVXCYwzm3cm203ka8fwnts=",
+			"checksumSHA1": "hFzCzCnHSHnikHbwBQTj34AzA5Q=",
 			"path": "github.com/sniperHW/kendynet/golog",
-			"revision": "59bcf76d2f709ab116ef664a26fb1170927114ca",
-			"revisionTime": "2018-08-28T10:35:48Z"
+			"revision": "10f2ff4d3d8016d68ea5388499d8a5b4f7ffa466",
+			"revisionTime": "2018-12-10T02:37:43Z"
 		},
 		{
-			"checksumSHA1": "j+jDTIJnBpYYH5UTJnRsutz5ZyA=",
+			"checksumSHA1": "oYwIh/TRZ8Y34GkWs9Q/q5aSW4g=",
 			"path": "github.com/sniperHW/kendynet/socket/stream_socket",
-			"revision": "59bcf76d2f709ab116ef664a26fb1170927114ca",
-			"revisionTime": "2018-08-28T10:35:48Z"
+			"revision": "10f2ff4d3d8016d68ea5388499d8a5b4f7ffa466",
+			"revisionTime": "2018-12-10T02:37:43Z"
 		},
 		{
-			"checksumSHA1": "guNfA1wfd0AjpUf0qjo4TQ32Ymc=",
-			"path": "github.com/sniperHW/kendynet/socket/stream_socket/tcp",
-			"revision": "59bcf76d2f709ab116ef664a26fb1170927114ca",
-			"revisionTime": "2018-08-28T10:35:48Z"
-		},
-		{
-			"checksumSHA1": "9IAnaIOWVwqmJfcy7sK9NIzRbsQ=",
+			"checksumSHA1": "dJknU9aD7zLgpeEc3ej3uGlvJ5o=",
 			"path": "github.com/sniperHW/kendynet/util",
-			"revision": "59bcf76d2f709ab116ef664a26fb1170927114ca",
-			"revisionTime": "2018-08-28T10:35:48Z"
+			"revision": "10f2ff4d3d8016d68ea5388499d8a5b4f7ffa466",
+			"revisionTime": "2018-12-10T02:37:43Z"
 		}
 	],
 	"rootPath": "flyfish"

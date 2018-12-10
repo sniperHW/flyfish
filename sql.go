@@ -5,6 +5,7 @@ import (
 	"sync"
 	"github.com/sniperHW/kendynet/util"
 	"flyfish/conf"
+	protocol "flyfish/proto"
 	"time"
 )
 
@@ -12,9 +13,58 @@ var sql_once sync.Once
 
 var sqlLoadQueue            *util.BlockQueue        //for get
 var sqlUpdateQueue 			[]*util.BlockQueue      //for set/del
-var writeBackKeys  			map[string]*writeBack   
+var writeBackRecords  	    map[string]*record   
 var writeBackEventQueue     *util.BlockQueue
-var writeBackQueue_         writeBackQueue
+var pendingWB               pendingWriteBack
+
+func prepareRecord(ctx *processContext) *record {
+	uniKey := ctx.getUniKey()
+	wb := &record{
+		writeBackFlag : ctx.writeBackFlag,
+		key     : ctx.getKey(),
+		table   : ctx.getTable(),
+		uniKey  : uniKey,
+		ckey    : ctx.getCacheKey(),
+		fields  : map[string]*protocol.Field{}, 
+	}
+	if wb.writeBackFlag == write_back_insert || wb.writeBackFlag == write_back_update {
+		wb.fields = ctx.fields
+	}
+	return wb	
+}
+
+func pushSQLWriteBack(ctx *processContext) {
+	if conf.WriteBackDelay > 0 {
+		//延迟回写
+		writeBackEventQueue.Add(ctx)
+	} else {
+		//直接回写
+		uniKey := ctx.getUniKey()
+		hash := StringHash(uniKey)
+		sqlUpdateQueue[hash%conf.SqlUpdatePoolSize].Add(prepareRecord(ctx))		
+	}
+}
+
+func pushSQLWriteBackNoWait(ctx *processContext) {
+	if conf.WriteBackDelay > 0 {
+		//延迟回写
+		writeBackEventQueue.AddNoWait(ctx)
+	} else {
+		//直接回写
+		uniKey := ctx.getUniKey()
+		hash := StringHash(uniKey)
+		sqlUpdateQueue[hash%conf.SqlUpdatePoolSize].AddNoWait(prepareRecord(ctx))		
+	}	
+}
+
+func pushSQLLoad(ctx *processContext) {
+	Debugln("pushSQLLoad")
+	sqlLoadQueue.Add(ctx)
+}
+
+func pushSQLLoadNoWait(ctx *processContext) {
+	sqlLoadQueue.AddNoWait(ctx)
+}
 
 type sqlPipeliner interface {
 	append(v interface{})
@@ -41,7 +91,7 @@ func SqlClose() {
 func SQLInit(dbname string,user string,password string) bool {
 	sql_once.Do(func() {
 
-		writeBackKeys = map[string]*writeBack{}   
+		writeBackRecords = map[string]*record{}   
 		writeBackEventQueue = util.NewBlockQueueWithName("writeBackEventQueue",conf.WriteBackEventQueueSize)
 
 		sqlLoadQueue = util.NewBlockQueueWithName(fmt.Sprintf("sqlLoad"),conf.SqlEventQueueSize)

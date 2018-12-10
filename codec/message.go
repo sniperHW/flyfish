@@ -3,7 +3,7 @@ package codec
 import(
 	"github.com/golang/protobuf/proto"
 	"flyfish/codec/pb"
-	message "flyfish/proto"
+	protocol "flyfish/proto"
 )
 
 type Message struct {
@@ -25,33 +25,31 @@ func (this *Message) GetName() string {
 
 func init() {
 
-	pb.Register(&message.PingReq{},1)
-	pb.Register(&message.PingResp{},2)
+	pb.Register(&protocol.PingReq{},1)
+	pb.Register(&protocol.PingResp{},2)
 
-	pb.Register(&message.SetReq{},3)
-	pb.Register(&message.SetResp{},4)
+	pb.Register(&protocol.SetReq{},3)
+	pb.Register(&protocol.SetResp{},4)
 
-	pb.Register(&message.GetReq{},5)
-	pb.Register(&message.GetResp{},6)	
+	pb.Register(&protocol.GetReq{},5)
+	pb.Register(&protocol.GetResp{},6)	
 
-	pb.Register(&message.DelReq{},7)
-	pb.Register(&message.DelResp{},8)
+	pb.Register(&protocol.DelReq{},7)
+	pb.Register(&protocol.DelResp{},8)
 
-	pb.Register(&message.IncrbyReq{},9)
-	pb.Register(&message.IncrbyResp{},10)
+	pb.Register(&protocol.IncrByReq{},9)
+	pb.Register(&protocol.IncrByResp{},10)
 
-	pb.Register(&message.DecrbyReq{},11)
-	pb.Register(&message.DecrbyResp{},12)
+	pb.Register(&protocol.DecrByReq{},11)
+	pb.Register(&protocol.DecrByResp{},12)
 
-	pb.Register(&message.SetnxReq{},13)
-	pb.Register(&message.SetnxResp{},14)	
+	pb.Register(&protocol.SetNxReq{},13)
+	pb.Register(&protocol.SetNxResp{},14)	
 
-	pb.Register(&message.CompareAndSetReq{},15)
-	pb.Register(&message.CompareAndSetResp{},16)
+	pb.Register(&protocol.CompareAndSetReq{},15)
+	pb.Register(&protocol.CompareAndSetResp{},16)
 
-	pb.Register(&message.CompareAndSetnxReq{},17)
-	pb.Register(&message.CompareAndSetnxResp{},18)
-
-	
+	pb.Register(&protocol.CompareAndSetNxReq{},17)
+	pb.Register(&protocol.CompareAndSetNxResp{},18)
 
 }

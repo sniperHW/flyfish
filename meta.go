@@ -1,9 +1,10 @@
 package flyfish
 
 import (
-	message "flyfish/proto"
+	protocol "flyfish/proto"
 	"strings"
 	"sync"
+	"strconv"
 )
 
 var table_metas map[string]*table_meta
@@ -26,8 +27,8 @@ func convter_float(in interface{}) interface{} {
 
 //表查询元数据
 type query_meta struct {
-	field_names     []string                   //所有的字段名
-	field_receiver  []func()interface{}
+	field_names     []string                                      //所有的字段名
+	field_receiver  []func()interface{}                           //用于接收查询返回值
 	receiver_pool   sync.Pool
 	field_convter   []func(interface{})interface{}
 }
@@ -48,16 +49,41 @@ func (this *query_meta) getReceiver_() []interface{} {
 	return receiver
 }
 
+
+type field_meta struct {
+	name      string
+	tt        protocol.ValueType
+	defaultV  interface{}
+}
+
 //表的元数据
 type table_meta struct {
 	table       string 
-	field_types map[string]message.ValueType    //各字段类型
+	fieldMetas  map[string]field_meta
 	queryMeta	query_meta
 }
 
-func (this *table_meta) checkGet(fields []field) bool {
+/*
+func (this *table_meta) fillDefault(out *map[string]*protocol.Field) {
+	for _ ,v := range(this.fieldMetas) {
+		(*out)[v.name] = protocol.PackField(v.name,v.defaultV)
+	}
+}
+*/
+
+func (this *table_meta) getDefaultV(name string) interface{} {
+	m,ok := this.fieldMetas[name]
+	if !ok {
+		return nil
+	} else {
+		return m.defaultV
+	}
+}
+
+//检查要获取的字段是否符合表配置
+func (this *table_meta) checkGet(fields map[string]*protocol.Field) bool {
 	for _,v := range(fields) {
-		_,ok := this.field_types[v.name]
+		_,ok := this.fieldMetas[v.GetName()]
 		if !ok {
 			return false
 		}
@@ -65,45 +91,65 @@ func (this *table_meta) checkGet(fields []field) bool {
 	return true
 }
 
-func (this *table_meta) checkSet(fields []field) bool {
+
+func (this *table_meta) checkField(field *protocol.Field) bool {
+	m,ok := this.fieldMetas[field.GetName()]
+	if !ok {
+		return false
+	}
+
+	if field.GetType() != m.tt {
+		return false
+	}
+
+	return true
+
+}
+
+//检查要设置的字段是否符合表配置
+func (this *table_meta) checkSet(fields map[string]*protocol.Field) bool {
 	for _,v := range(fields) {
-		m,ok := this.field_types[v.name]
+		m,ok := this.fieldMetas[v.GetName()]
 		if !ok {
 			return false
 		}
 
-		if v.Tt() != m {
+		if v.GetType() != m.tt {
 			return false
 		} 
 	}
 	return true
 }
 
-func (this *table_meta) checkCompareAndSet(oldV *field,newV *field) bool {
-	var ok bool
-	var m  message.ValueType
-	m,ok = this.field_types[oldV.name]
+//检查要设置的新老值是否符合表配置
+func (this *table_meta) checkCompareAndSet(newV *protocol.Field,oldV *protocol.Field) bool {
+
+	if newV == nil || oldV == nil {
+		return false
+	}
+
+	if newV.GetType() != oldV.GetType() {
+		return false
+	}
+
+	if newV.GetName() != oldV.GetName() {
+		return false
+	}
+
+
+	m,ok := this.fieldMetas[oldV.GetName()]
 	if !ok {
 		return false
 	}
 
-	if oldV.Tt() != m {
+	if oldV.GetType() != m.tt {
 		return false
 	}
 
-	m,ok = this.field_types[newV.name]
-	if !ok {
-		return false
-	}
-
-	if newV.Tt() != m {
-		return false
-	}
-
-	return true	
+	return true
 }
 
-func GetMetaByTable(table string) *table_meta {
+func getMetaByTable(table string) *table_meta {
 	meta,ok := table_metas[table]
 	if ok {
 		return meta
@@ -112,54 +158,84 @@ func GetMetaByTable(table string) *table_meta {
 	}
 }
 
-//tablename@field1:type,field2:type,field3:type...
-func InitMeta(metas []string) bool {
+//tablename@field1:type:defaultValue,field2:type:defaultValue,field3:type:defaultValue...
+func InitMeta(def []string) bool {
 
-	getType := func(str string) message.ValueType {
+	getType := func(str string) protocol.ValueType {
 		if str == "int" {
-			return message.ValueType_Integer
+			return protocol.ValueType_int
 		} else if str == "uint" {
-			return message.ValueType_Uinteger			
+			return protocol.ValueType_uint			
 		} else if str == "float" {
-			return message.ValueType_Float			
+			return protocol.ValueType_float		
 		} else if str == "string" {
-			return message.ValueType_String			
+			return protocol.ValueType_string			
 		} else {
-			return message.ValueType_Invaild
+			return protocol.ValueType_invaild
 		}
 	}
 
-	getReceiver := func(tt message.ValueType) interface{} {
-		if tt == message.ValueType_Integer {
+	getReceiver := func(tt protocol.ValueType) interface{} {
+		if tt == protocol.ValueType_int {
 			return new(int64)
-		} else if tt == message.ValueType_Uinteger {
+		} else if tt == protocol.ValueType_uint {
 			return new(uint64)
-		} else if tt == message.ValueType_Float {
+		} else if tt == protocol.ValueType_float {
 			return new(float64)
-		} else if tt == message.ValueType_String {
+		} else if tt == protocol.ValueType_string {
 			return new(string)
 		} else {
 			return nil
 		}
 	}
 
-	getConvetor := func(tt message.ValueType) func(interface{})interface{} {
-		if tt == message.ValueType_Integer {
+	getConvetor := func(tt protocol.ValueType) func(interface{})interface{} {
+		if tt == protocol.ValueType_int {
 			return convter_int64
-		} else if tt == message.ValueType_Uinteger {
+		} else if tt == protocol.ValueType_uint {
 			return convter_uint64
-		} else if tt == message.ValueType_Float {
+		} else if tt == protocol.ValueType_float {
 			return convter_float
-		} else if tt == message.ValueType_String {
+		} else if tt == protocol.ValueType_string {
 			return convter_string
 		} else {
 			return nil
 		}		
+	}
+
+	getDefaultV := func(tt protocol.ValueType,v string) interface{} {
+		if tt == protocol.ValueType_string {
+			return v
+		} else if tt == protocol.ValueType_int {
+			i,err := strconv.ParseInt(v,10,64)
+			if nil != err {
+				return nil
+			} else {
+				return i
+			}
+		} else if tt == protocol.ValueType_uint {
+			u,err := strconv.ParseUint(v,10,64)
+			if nil != err {
+				return nil
+			} else {
+				return u
+			}
+		} else if tt == protocol.ValueType_float {
+			f,err := strconv.ParseFloat(v,64)
+			if nil != err {
+				return nil
+			} else {
+				return f
+			}
+		} else {
+			return nil
+		}
+		
 	} 
 
 	table_metas  = map[string]*table_meta{}
-	for _,meta := range(metas) {
-		t1 := strings.Split(meta,"@")
+	for _,l := range(def) {
+		t1 := strings.Split(l,"@")
 
 		if len(t1) != 2 {
 			return false
@@ -167,11 +243,11 @@ func InitMeta(metas []string) bool {
 
 		t_meta := &table_meta {
 			table  : t1[0],
-			field_types : map[string]message.ValueType{},
+			fieldMetas : map[string]field_meta{},
 			queryMeta : query_meta {
-				field_names : []string{},
+				field_names    : []string{},
 				field_receiver : []func()interface{}{},
-				field_convter : []func(interface{})interface{}{},
+				field_convter  : []func(interface{})interface{}{},
 			},
 		}
 		t_meta.queryMeta.receiver_pool = sync.Pool {
@@ -186,36 +262,57 @@ func InitMeta(metas []string) bool {
 			return false
 		}
 
+		//插入两个默认字段
 		t_meta.queryMeta.field_names = append(t_meta.queryMeta.field_names,"__key__")
 		t_meta.queryMeta.field_receiver = append(t_meta.queryMeta.field_receiver,func() interface{} {
-		 	return getReceiver(message.ValueType_String)
+		 	return getReceiver(protocol.ValueType_string)
 		})
-		t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter,getConvetor(message.ValueType_String))
+		t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter,getConvetor(protocol.ValueType_string))
 
 		t_meta.queryMeta.field_names = append(t_meta.queryMeta.field_names,"__version__")
 		t_meta.queryMeta.field_receiver = append(t_meta.queryMeta.field_receiver,func() interface{} {
-			return getReceiver(message.ValueType_Integer)
+			return getReceiver(protocol.ValueType_int)
 		})
-		t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter,getConvetor(message.ValueType_Integer))
+		t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter,getConvetor(protocol.ValueType_int))
 
+		//处理其它字段
 		for _,v := range(fields) {
 			field := strings.Split(v,":")
-			if len(field) != 2 {
+			if len(field) != 3 {
 				return false
 			}
 
 			name := field[0]
-			ftype := getType(field[1])
 
-			if ftype == message.ValueType_Invaild {
+			//字段名不允许以__开头
+			if strings.HasPrefix(name,"__") {
 				return false
 			}
 
-			t_meta.field_types[name] = ftype
+			ftype := getType(field[1])
+
+			if ftype == protocol.ValueType_invaild {
+				return false
+			}
+
+			defaultValue := getDefaultV(ftype,field[2])
+
+			if nil == defaultValue {
+				return false
+			}
+
+			t_meta.fieldMetas[name] = field_meta {
+				name : name,
+				tt   : ftype,
+				defaultV : defaultValue,
+			}
+
 			t_meta.queryMeta.field_names = append(t_meta.queryMeta.field_names,name)
+			
 			t_meta.queryMeta.field_receiver = append(t_meta.queryMeta.field_receiver,func() interface{} {
 			 	return getReceiver(ftype)
 			})
+			
 			t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter,getConvetor(ftype))			
 
 			table_metas[t1[0]] = t_meta

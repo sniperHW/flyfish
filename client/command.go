@@ -1,7 +1,7 @@
 package client
 
 import (
-	message "flyfish/proto"
+	protocol "flyfish/proto"
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet/util"
 	"flyfish/codec"
@@ -11,27 +11,27 @@ import (
 	"flyfish/errcode"
 )
 
-type Field message.Field
+type Field protocol.Field
 
 func (this *Field) IsNil() bool {
-	return (*message.Field)(this).IsNil()
+	return (*protocol.Field)(this).IsNil()
 }
 
 
 func (this *Field) GetString() string {
-	return (*message.Field)(this).GetString()
+	return (*protocol.Field)(this).GetString()
 }
 
 func (this *Field) GetUint() uint64 {
-	return (*message.Field)(this).GetUint()
+	return (*protocol.Field)(this).GetUint()
 }
 
 func (this *Field) GetInt() int64 {
-	return (*message.Field)(this).GetInt()
+	return (*protocol.Field)(this).GetInt()
 }
 
 func (this *Field) GetFloat() float64 {
-	return (*message.Field)(this).GetFloat()
+	return (*protocol.Field)(this).GetFloat()
 }
 
 
@@ -95,7 +95,7 @@ func (this *Client) Get(table,key string,fields ...string) *Cmd {
 		return nil
 	}
 
-	req := &message.GetReq{
+	req := &protocol.GetReq{
 		Seqno  : proto.Int64(atomic.AddInt64(&this.seqno,1)),
 		Table  : proto.String(table),
 		Key    : proto.String(key),
@@ -119,7 +119,7 @@ func (this *Client) Set(table,key string,fields map[string]interface{},version .
 		return nil
 	}
 
-	req := &message.SetReq{
+	req := &protocol.SetReq{
 		Seqno  : proto.Int64(atomic.AddInt64(&this.seqno,1)),
 		Table  : proto.String(table),
 		Key    : proto.String(key),
@@ -130,7 +130,7 @@ func (this *Client) Set(table,key string,fields map[string]interface{},version .
 	}
 
 	for k,v := range(fields) {
-		req.Fields = append(req.Fields,message.PackField(k,v))
+		req.Fields = append(req.Fields,protocol.PackField(k,v))
 	}
 
 	return &Cmd{
@@ -146,14 +146,14 @@ func (this *Client) SetNx(table,key string,fields map[string]interface{}) *Cmd {
 		return nil
 	}
 
-	req := &message.SetnxReq{
+	req := &protocol.SetNxReq{
 		Seqno  : proto.Int64(atomic.AddInt64(&this.seqno,1)),
 		Table  : proto.String(table),
 		Key    : proto.String(key),
 	}
 
 	for k,v := range(fields) {
-		req.Fields = append(req.Fields,message.PackField(k,v))
+		req.Fields = append(req.Fields,protocol.PackField(k,v))
 	}
 
 	return &Cmd{
@@ -170,12 +170,12 @@ func (this *Client) CompareAndSet(table,key,field string, oldV ,newV interface{}
 		return nil
 	}
 
-	req := &message.CompareAndSetReq{
+	req := &protocol.CompareAndSetReq{
 		Seqno  : proto.Int64(atomic.AddInt64(&this.seqno,1)),
 		Table  : proto.String(table),
 		Key    : proto.String(key),
-		New    : message.PackField(field,newV),
-		Old    : message.PackField(field,oldV),
+		New    : protocol.PackField(field,newV),
+		Old    : protocol.PackField(field,oldV),
 	}
 
 	return &Cmd{
@@ -192,12 +192,12 @@ func (this *Client) CompareAndSetNx(table,key,field string, oldV ,newV interface
 		return nil
 	}
 
-	req := &message.CompareAndSetnxReq{
+	req := &protocol.CompareAndSetNxReq{
 		Seqno  : proto.Int64(atomic.AddInt64(&this.seqno,1)),
 		Table  : proto.String(table),
 		Key    : proto.String(key),
-		New    : message.PackField(field,newV),
-		Old    : message.PackField(field,oldV),
+		New    : protocol.PackField(field,newV),
+		Old    : protocol.PackField(field,oldV),
 	}
 
 	return &Cmd{
@@ -209,7 +209,7 @@ func (this *Client) CompareAndSetNx(table,key,field string, oldV ,newV interface
 
 func (this *Client) Del(table,key string,version ...int64) *Cmd {
 
-	req := &message.DelReq{
+	req := &protocol.DelReq{
 		Seqno  : proto.Int64(atomic.AddInt64(&this.seqno,1)),
 		Table  : proto.String(table),
 		Key    : proto.String(key),
@@ -228,11 +228,11 @@ func (this *Client) Del(table,key string,version ...int64) *Cmd {
 }
 
 func (this *Client) IncrBy(table,key,field string,value int64) *Cmd {
-	req := &message.IncrbyReq {
+	req := &protocol.IncrByReq {
 		Seqno  : proto.Int64(atomic.AddInt64(&this.seqno,1)),
 		Table  : proto.String(table),
 		Key    : proto.String(key),
-		Field  : message.PackField(field,value),
+		Field  : protocol.PackField(field,value),
 	}
 
 	return &Cmd{
@@ -243,11 +243,11 @@ func (this *Client) IncrBy(table,key,field string,value int64) *Cmd {
 }
 
 func (this *Client) DecrBy(table,key,field string,value int64) *Cmd {
-	req := &message.DecrbyReq {
+	req := &protocol.DecrByReq {
 		Seqno  : proto.Int64(atomic.AddInt64(&this.seqno,1)),
 		Table  : proto.String(table),
 		Key    : proto.String(key),
-		Field  : message.PackField(field,value),
+		Field  : protocol.PackField(field,value),
 	}
 
 	return &Cmd{
@@ -257,7 +257,7 @@ func (this *Client) DecrBy(table,key,field string,value int64) *Cmd {
 	}	
 }
 
-func (this *Client) onGetResp(resp *message.GetResp) {
+func (this *Client) onGetResp(resp *protocol.GetResp) {
 	c := this.removeContext(resp.GetSeqno())
 	if nil != c {
 		c.result.ErrCode = resp.GetErrCode()
@@ -272,7 +272,7 @@ func (this *Client) onGetResp(resp *message.GetResp) {
 	}
 }
 
-func (this *Client) onSetResp(resp *message.SetResp) {
+func (this *Client) onSetResp(resp *protocol.SetResp) {
 	c := this.removeContext(resp.GetSeqno())
 	if nil != c {
 		c.result.ErrCode = resp.GetErrCode()
@@ -283,7 +283,7 @@ func (this *Client) onSetResp(resp *message.SetResp) {
 	}
 }
 
-func (this *Client) onSetNxResp(resp *message.SetnxResp) {
+func (this *Client) onSetNxResp(resp *protocol.SetNxResp) {
 	c := this.removeContext(resp.GetSeqno())
 	if nil != c {
 		c.result.ErrCode = resp.GetErrCode()
@@ -294,7 +294,7 @@ func (this *Client) onSetNxResp(resp *message.SetnxResp) {
 	}
 }
 
-func (this *Client) onCompareAndSetResp(resp *message.CompareAndSetResp) {
+func (this *Client) onCompareAndSetResp(resp *protocol.CompareAndSetResp) {
 	c := this.removeContext(resp.GetSeqno())
 	if nil != c {
 		c.result.ErrCode = resp.GetErrCode()
@@ -310,7 +310,7 @@ func (this *Client) onCompareAndSetResp(resp *message.CompareAndSetResp) {
 	}
 }
 
-func (this *Client) onCompareAndSetNxResp(resp *message.CompareAndSetnxResp) {
+func (this *Client) onCompareAndSetNxResp(resp *protocol.CompareAndSetNxResp) {
 	c := this.removeContext(resp.GetSeqno())
 	if nil != c {
 		c.result.ErrCode = resp.GetErrCode()
@@ -327,7 +327,7 @@ func (this *Client) onCompareAndSetNxResp(resp *message.CompareAndSetnxResp) {
 }
 
 
-func (this *Client) onDelResp(resp *message.DelResp) {
+func (this *Client) onDelResp(resp *protocol.DelResp) {
 	c := this.removeContext(resp.GetSeqno())
 	if nil != c {
 		c.result.ErrCode = resp.GetErrCode()
@@ -335,7 +335,7 @@ func (this *Client) onDelResp(resp *message.DelResp) {
 	}
 }
 
-func (this *Client) onIncrByResp(resp *message.IncrbyResp) {
+func (this *Client) onIncrByResp(resp *protocol.IncrByResp) {
 	c := this.removeContext(resp.GetSeqno())
 	if nil != c {
 		c.result.ErrCode = resp.GetErrCode()
@@ -348,7 +348,7 @@ func (this *Client) onIncrByResp(resp *message.IncrbyResp) {
 	}	
 }
 
-func (this *Client) onDecrByResp(resp *message.DecrbyResp) {
+func (this *Client) onDecrByResp(resp *protocol.DecrByResp) {
 	c := this.removeContext(resp.GetSeqno())
 	if nil != c {
 		c.result.ErrCode = resp.GetErrCode()
@@ -368,21 +368,21 @@ func (this *Client) onMessage(msg *codec.Message) {
 		if name == "*proto.PingResp" {
 			return
 		} else if name == "*proto.GetResp" {
-			this.onGetResp(msg.GetData().(*message.GetResp))
+			this.onGetResp(msg.GetData().(*protocol.GetResp))
 		} else if name == "*proto.SetResp" {
-			this.onSetResp(msg.GetData().(*message.SetResp))
-		} else if name == "*proto.SetnxResp" {
-			this.onSetNxResp(msg.GetData().(*message.SetnxResp))
+			this.onSetResp(msg.GetData().(*protocol.SetResp))
+		} else if name == "*proto.SetNxResp" {
+			this.onSetNxResp(msg.GetData().(*protocol.SetNxResp))
 		} else if name == "*proto.CompareAndSetResp" {
-			this.onCompareAndSetResp(msg.GetData().(*message.CompareAndSetResp))
-		} else if name == "*proto.CompareAndSetnxResp" {
-			this.onCompareAndSetNxResp(msg.GetData().(*message.CompareAndSetnxResp))
+			this.onCompareAndSetResp(msg.GetData().(*protocol.CompareAndSetResp))
+		} else if name == "*proto.CompareAndSetNxResp" {
+			this.onCompareAndSetNxResp(msg.GetData().(*protocol.CompareAndSetNxResp))
 		} else if name == "*proto.DelResp" {
-			this.onDelResp(msg.GetData().(*message.DelResp))
-		} else if name == "*proto.IncrbyResp" { 
-			this.onIncrByResp(msg.GetData().(*message.IncrbyResp))
-		} else if name == "*proto.DecrbyResp" { 
-			this.onDecrByResp(msg.GetData().(*message.DecrbyResp))
+			this.onDelResp(msg.GetData().(*protocol.DelResp))
+		} else if name == "*proto.IncrByResp" { 
+			this.onIncrByResp(msg.GetData().(*protocol.IncrByResp))
+		} else if name == "*proto.DecrByResp" { 
+			this.onDecrByResp(msg.GetData().(*protocol.DecrByResp))
 		}  else {
 
 		}

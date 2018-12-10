@@ -5,6 +5,8 @@ import (
 	//"time"
 	//"unsafe"
 	//"fmt"
+	protocol "flyfish/proto"
+	"strconv"
 )
 
 const (
@@ -27,7 +29,6 @@ type cacheKey struct {
 var cacheKeys map[string]*cacheKey
 //var minHeap *util.MinHeap
 var tick uint64  //每次访问+1假设每秒访问100万次，需要运行584942年才会回绕
-
 
 /*func (this *cacheKey) Less(o util.HeapElement) bool {
 	return this.lastAccess < o.(*cacheKey).lastAccess
@@ -57,7 +58,6 @@ func (this *cacheKey) reset() {
 	this.status = cache_new
 }
 
-
 /*
 UpdateLRU和newCacheKey只能再主消息循环中访问，所以tick不需要加锁保护
 */
@@ -70,7 +70,7 @@ func (this *cacheKey) updateLRU() {
 
 func newCacheKey(table string,uniKey string) *cacheKey {
 	
-	meta := GetMetaByTable(table)
+	meta := getMetaByTable(table)
 
 	if nil == meta {
 		Errorln("newCacheKey key:",uniKey," error,[missing table_meta]")
@@ -100,6 +100,37 @@ func getCacheKey(table string,uniKey string) *cacheKey {
 		return k
 	} else {
 		return newCacheKey(table,uniKey)
+	}
+}
+
+func (this *cacheKey) convertStr(fieldName string,value string) *protocol.Field {
+	m,ok := this.meta.fieldMetas[fieldName]
+	if !ok {
+		return nil
+	}
+
+	if m.tt == protocol.ValueType_string {
+		return protocol.PackField(fieldName,value)
+	} else if m.tt == protocol.ValueType_float {
+		f, err := strconv.ParseFloat(value, 64)
+		if nil != err {
+			return nil
+		}
+		return protocol.PackField(fieldName,f)		
+	} else if m.tt == protocol.ValueType_int {
+		i, err := strconv.ParseInt(value, 10, 64)
+		if nil != err {
+			return nil
+		}
+		return protocol.PackField(fieldName,i)			
+	} else if m.tt == protocol.ValueType_uint {
+		u, err := strconv.ParseUint(value, 10, 64)
+		if nil != err {
+			return nil
+		}
+		return protocol.PackField(fieldName,u)		
+	} else {
+		return nil
 	}
 }
 

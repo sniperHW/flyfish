@@ -22,7 +22,7 @@ type BlockQueue struct {
 }
 
 
-func (self *BlockQueue) Add(item interface{}) error {
+func (self *BlockQueue) AddNoWait(item interface{}) error {
 	self.listGuard.Lock()
 	if self.closed {
 		self.listGuard.Unlock()
@@ -41,7 +41,7 @@ func (self *BlockQueue) Add(item interface{}) error {
 }
 
 //如果队列满将会被阻塞
-func (self *BlockQueue) AddWait(item interface{}) error {
+func (self *BlockQueue) Add(item interface{}) error {
 	self.listGuard.Lock()
 	if self.closed {
 		self.listGuard.Unlock()

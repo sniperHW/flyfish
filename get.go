@@ -3,7 +3,7 @@ package flyfish
 import (
 	"fmt"
 	codec "flyfish/codec"
-	message "flyfish/proto"
+	protocol "flyfish/proto"
 	"flyfish/errcode"
 	"github.com/sniperHW/kendynet"
 	"github.com/golang/protobuf/proto"
@@ -12,94 +12,86 @@ import (
 type GetReplyer struct {
 	seqno      int64
 	session    kendynet.StreamSession
-	context    *cmdContext
+	cmd        *command
+	getAll     bool
 }
 
-func (this *GetReplyer) reply(errCode int32,fields map[string]field,version ...int64) {
-	resp := &message.GetResp{
-		Seqno : proto.Int64(this.seqno),
-		ErrCode : proto.Int32(errCode),
-	}
+func (this *GetReplyer) reply(errCode int32,fields map[string]*protocol.Field,version int64) {
 
-	if len(version) > 0 {
-		resp.Version = proto.Int64(version[0])
-	}
+	var resp proto.Message
 
-	if errcode.ERR_OK == errCode {
-		for _,field := range(this.context.fields) {
-			if v,ok := fields[field.name];ok {
-				resp.Fields = append(resp.Fields,message.PackField(field.name,v.value))	
+	if !this.getAll {
+
+		r := &protocol.GetResp{
+			Seqno : proto.Int64(this.seqno),
+			ErrCode : proto.Int32(errCode),
+			Version : proto.Int64(version),
+		}
+
+		if errcode.ERR_OK == errCode {
+			for _,field := range(this.cmd.fields) {
+				v := fields[field.GetName()]
+				if nil != v {
+					r.Fields = append(r.Fields,v)
+				}
 			}
 		}
-	}
+		Debugln("GetReply",this.cmd.uniKey,r)
+		resp = r
 
-	Debugln("GetReply",this.context.uniKey,resp)
+	} else{
+
+		r := &protocol.GetAllResp{
+			Seqno : proto.Int64(this.seqno),
+			ErrCode : proto.Int32(errCode),
+			Version : proto.Int64(version),
+		}
+
+		if errcode.ERR_OK == errCode {
+			for _,field := range(this.cmd.fields) {
+				v := fields[field.GetName()]
+				if nil != v {
+					r.Fields = append(r.Fields,v)
+				}
+			}
+		}
+		Debugln("GetAllReply",this.cmd.uniKey,r)
+		resp = r		
+
+	}
 
 	err := this.session.Send(resp)
 	if nil != err {
 		//记录日志
-		Debugln("send GetReply error",this.context.uniKey,resp,err)
-	}
-}
-
-
-type GetAllReplyer struct {
-	seqno      int64
-	session    kendynet.StreamSession
-	context    *cmdContext
-}
-
-func (this *GetAllReplyer) reply(errCode int32,fields map[string]field,version ...int64) {
-	resp := &message.GetallResp{
-		Seqno : proto.Int64(this.seqno),
-		ErrCode : proto.Int32(errCode),
-	}
-
-	if len(version) > 0 {
-		resp.Version = proto.Int64(version[0])
-	}
-
-	if errcode.ERR_OK == errCode {
-		for _,field := range(this.context.fields) {
-			if v,ok := fields[field.name];ok {
-				resp.Fields = append(resp.Fields,message.PackField(field.name,v.value))	
-			}
-		}
-	}
-
-	Debugln("GetAllReply",this.context.uniKey,resp)
-
-	err := this.session.Send(resp)
-	if nil != err {
-		//记录日志
-		Debugln("send GetAllReply error",this.context.uniKey,resp,err)
+		Debugln("send GetReply error",this.cmd.uniKey,resp,err)
 	}
 }
 
 func getAll(session kendynet.StreamSession,msg *codec.Message) {
-	req := msg.GetData().(*message.GetallReq)
+	req := msg.GetData().(*protocol.GetAllReq)
 	errno := errcode.ERR_OK
 
 	Debugln("getAll",req)
 
 	if "" == req.GetTable() {
-		errno = errcode.ERR_CMD_MISSING_TABLE
+		errno = errcode.ERR_MISSING_TABLE
 	}
 
 	if "" == req.GetKey() {
-		errno = errcode.ERR_CMD_MISSING_KEY
+		errno = errcode.ERR_MISSING_KEY
 	}	
 
-	meta := GetMetaByTable(req.GetTable())
+	meta := getMetaByTable(req.GetTable())
 
 	if nil == meta {
 		errno = errcode.ERR_INVAILD_TABLE
 	}
 
 	if errcode.ERR_OK != errno {
-		resp := &message.GetallResp{
+		resp := &protocol.GetAllResp{
 			Seqno : proto.Int64(req.GetSeqno()),
 			ErrCode : proto.Int32(errno),
+			Version : proto.Int64(-1),
 		}
 		err := session.Send(resp)
 		if nil != err {
@@ -108,46 +100,46 @@ func getAll(session kendynet.StreamSession,msg *codec.Message) {
 		return
 	}
 
-	context := &cmdContext{
+	cmd := &command{
 		cmdType   : cmdGet,
 		key       : req.GetKey(),
 		table     : req.GetTable(),
 		uniKey    : fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey()),
-		fields    : []field{},
+		fields    : map[string]*protocol.Field{},
 	}
 
-	context.rpyer = &GetAllReplyer{
+	cmd.rpyer = &GetReplyer{
 		seqno : req.GetSeqno(),
 		session : session,
-		context : context,		
+		cmd : cmd,
+		getAll : true,		
 	}
 
 	for _,name := range(meta.queryMeta.field_names) {
-		context.fields = append(context.fields,field{
-			name : name,
-		})		
+		cmd.fields[name] = protocol.PackField(name,nil)
 	}
-	pushCmdContext(context)
+	pushCommand(cmd)
 }
 
 func get(session kendynet.StreamSession,msg *codec.Message) {
-	req := msg.GetData().(*message.GetReq)
+	req := msg.GetData().(*protocol.GetReq)
 	errno := errcode.ERR_OK
 
 	Debugln("get",req)
 
 	if "" == req.GetTable() {
-		errno = errcode.ERR_CMD_MISSING_TABLE
+		errno = errcode.ERR_MISSING_TABLE
 	}
 
 	if "" == req.GetKey() {
-		errno = errcode.ERR_CMD_MISSING_KEY
+		errno = errcode.ERR_MISSING_KEY
 	}
 
 	if errcode.ERR_OK != errno {
-		resp := &message.GetResp{
+		resp := &protocol.GetResp{
 			Seqno : proto.Int64(req.GetSeqno()),
 			ErrCode : proto.Int32(errno),
+			Version : proto.Int64(-1),
 		}
 		err := session.Send(resp)
 		if nil != err {
@@ -156,27 +148,24 @@ func get(session kendynet.StreamSession,msg *codec.Message) {
 		return
 	}
 	
-	context := &cmdContext{
+	cmd := &command{
 		cmdType   : cmdGet,
 		key       : req.GetKey(),
 		table     : req.GetTable(),
 		uniKey    : fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey()),
-		fields    : []field{},
+		fields    : map[string]*protocol.Field{},
 	}
 
-	context.rpyer = &GetReplyer{
+	cmd.rpyer = &GetReplyer{
 		seqno : req.GetSeqno(),
 		session : session,
-		context : context,		
+		cmd : cmd,
+		getAll : false,		
 	}
 
-	for _,v := range(req.GetFields()) {
-		context.fields = append(context.fields,field{
-			name : v,
-		})
+	for _,name := range(req.GetFields()) {
+		cmd.fields[name] = protocol.PackField(name,nil) 
 	}
-	pushCmdContext(context)
+	pushCommand(cmd)
 }
-
-
 
