@@ -1,7 +1,8 @@
 package flyfish
 
 import (
-	"database/sql"
+	//"database/sql"
+	"github.com/jmoiron/sqlx"
 	"fmt"
 	"strings"
 	//"flyfish/conf"
@@ -74,7 +75,7 @@ type sqlUpdater struct {
 	updates   []string
 	count     int
 	max       int
-	db        *sql.DB	
+	db        *sqlx.DB	
 }
 
 func newSqlUpdater(max int,dbname string,user string,password string) *sqlUpdater {

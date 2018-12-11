@@ -1,7 +1,8 @@
 package flyfish
 
 import (
-	"database/sql"
+	//"database/sql"
+	"github.com/jmoiron/sqlx"
 	"fmt"
 	"strings"
 	protocol "flyfish/proto"
@@ -26,7 +27,7 @@ type sqlLoader struct {
 	sqlGets   map[string]*sqlGet    //要获取的结果集
 	count     int
 	max       int
-	db        *sql.DB
+	db        *sqlx.DB
 }
 
 func newSqlLoader(max int,dbname string,user string,password string) *sqlLoader {

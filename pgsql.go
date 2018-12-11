@@ -1,14 +1,15 @@
 package flyfish
 
 import (
-	"database/sql"
+	"github.com/jmoiron/sqlx"
+	//"database/sql"
 	//"database/sql/driver"
 	_ "github.com/lib/pq"
 	"fmt"
 	//"os"
 )
 
-func pgOpen(dbname string,user string,password string) (*sql.DB,error) {
+func pgOpen(dbname string,user string,password string) (*sqlx.DB,error) {
 	connStr := fmt.Sprintf("dbname=%s user=%s password=%s sslmode=disable",dbname,user,password)
-	return sql.Open("postgres", connStr)
+	return sqlx.Open("postgres", connStr)
 }
