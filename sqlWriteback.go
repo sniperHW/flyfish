@@ -199,12 +199,12 @@ func processWriteBackRecord(now int64) {
 		} else {
 			pendingWB.Pop()
 			delete(writeBackRecords,wb.uniKey)
-			/*if wb.writeBackFlag != write_back_none {
+			if wb.writeBackFlag != write_back_none {
 				//投入执行
 				Debugln("pushSQLUpdate",wb.uniKey)
 				hash := StringHash(wb.uniKey)
 				sqlUpdateQueue[hash%conf.SqlUpdatePoolSize].Add(wb)
-			}*/
+			}
 		}
 	}
 }
