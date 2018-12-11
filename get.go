@@ -116,8 +116,11 @@ func getAll(session kendynet.StreamSession,msg *codec.Message) {
 	}
 
 	for _,name := range(meta.queryMeta.field_names) {
-		cmd.fields[name] = protocol.PackField(name,nil)
+		if name != "__key__" && name != "__version__" {
+			cmd.fields[name] = protocol.PackField(name,nil)
+		}
 	}
+
 	pushCommand(cmd)
 }
 

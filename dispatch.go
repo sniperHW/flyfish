@@ -81,6 +81,7 @@ func init() {
 
 	register(&protocol.DelReq{},del)
 	register(&protocol.GetReq{},get)
+	register(&protocol.GetAllReq{},getAll)
 	register(&protocol.SetReq{},set)
 	register(&protocol.SetNxReq{},setNx)
 	register(&protocol.CompareAndSetReq{},compareAndSet)

@@ -110,7 +110,17 @@ func (this *Client) Get(table,key string,fields ...string) *Cmd {
 }
 
 func (this *Client) GetAll(table,key string) *Cmd {
-	return nil
+	req := &protocol.GetAllReq{
+		Seqno  : proto.Int64(atomic.AddInt64(&this.seqno,1)),
+		Table  : proto.String(table),
+		Key    : proto.String(key),
+	}
+	
+	return &Cmd{
+		client : this,
+		req    : req,
+		seqno  : req.GetSeqno(),
+	}
 }
 
 func (this *Client) Set(table,key string,fields map[string]interface{},version ...int64) *Cmd {
@@ -257,6 +267,21 @@ func (this *Client) DecrBy(table,key,field string,value int64) *Cmd {
 	}	
 }
 
+func (this *Client) onGetAllResp(resp *protocol.GetAllResp) {
+	c := this.removeContext(resp.GetSeqno())
+	if nil != c {
+		c.result.ErrCode = resp.GetErrCode()
+		c.result.Version = resp.GetVersion()
+		if 0 == c.result.ErrCode {
+			c.result.Fields = map[string]*Field{}
+			for _,v := range(resp.Fields) {
+				c.result.Fields[v.GetName()] = (*Field)(v)
+			}
+		}
+		this.doCallBack(c)
+	}	
+}
+
 func (this *Client) onGetResp(resp *protocol.GetResp) {
 	c := this.removeContext(resp.GetSeqno())
 	if nil != c {
@@ -369,6 +394,8 @@ func (this *Client) onMessage(msg *codec.Message) {
 			return
 		} else if name == "*proto.GetResp" {
 			this.onGetResp(msg.GetData().(*protocol.GetResp))
+		} else if name == "*proto.GetAllResp" {
+			this.onGetAllResp(msg.GetData().(*protocol.GetAllResp))
 		} else if name == "*proto.SetResp" {
 			this.onSetResp(msg.GetData().(*protocol.SetResp))
 		} else if name == "*proto.SetNxResp" {
