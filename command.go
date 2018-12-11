@@ -6,7 +6,6 @@ import(
 	//"strconv"
 	"fmt"
 	"time"
-	//"ff/conf"
 	"flyfish/errcode"
 )
 
@@ -106,7 +105,7 @@ func init() {
 	go func(){
 		for {
 			time.Sleep(time.Second)
-			fmt.Println("keys:",len(cacheKeys),"writeBackKeys",len(writeBackRecords),"writeBackQueue_.size",pendingWB.size)
+			fmt.Println("keys:",len(cacheKeys),"writeBackKeys",len(writeBackRecords),"writeBackQueue_.size",pendingWB.Len())
 		}
 	}()
 

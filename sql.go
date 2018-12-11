@@ -7,6 +7,7 @@ import (
 	"flyfish/conf"
 	protocol "flyfish/proto"
 	"time"
+	"container/list"
 )
 
 var sql_once sync.Once
@@ -15,7 +16,7 @@ var sqlLoadQueue            *util.BlockQueue        //for get
 var sqlUpdateQueue 			[]*util.BlockQueue      //for set/del
 var writeBackRecords  	    map[string]*record   
 var writeBackEventQueue     *util.BlockQueue
-var pendingWB               pendingWriteBack
+var pendingWB               *list.List//pendingWriteBack
 
 func prepareRecord(ctx *processContext) *record {
 	uniKey := ctx.getUniKey()
@@ -91,6 +92,7 @@ func SqlClose() {
 func SQLInit(dbname string,user string,password string) bool {
 	sql_once.Do(func() {
 
+		pendingWB = list.New()
 		writeBackRecords = map[string]*record{}   
 		writeBackEventQueue = util.NewBlockQueueWithName("writeBackEventQueue",conf.WriteBackEventQueueSize)
 

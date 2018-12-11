@@ -1,12 +1,7 @@
 package flyfish
 
 import(
-	//"github.com/sniperHW/kendynet/event"
 	protocol "flyfish/proto"
-	//"strconv"
-	//"fmt"
-	//"time"
-	//"ff/conf"
 	"flyfish/errcode"
 )
 

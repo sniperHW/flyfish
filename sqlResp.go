@@ -1,11 +1,6 @@
 package flyfish
 
 import (
-	//"fmt"
-	//"sync"
-	//"github.com/sniperHW/kendynet/util"
-	//"flyfish/conf"
-	//"time"
 	"flyfish/errcode"
 	protocol "flyfish/proto"
 )
@@ -15,7 +10,13 @@ func onSqlNotFound(ctx *processContext) {
 	Debugln("onSqlNotFound key",ctx.getUniKey())
 	cmdType := ctx.getCmdType()
 	if cmdType == cmdGet || cmdType == cmdDel || cmdType == cmdCompareAndSet {
-		ctx.reply(errcode.ERR_NOTFOUND,nil,-1)		
+		ctx.reply(errcode.ERR_NOTFOUND,nil,-1)
+		mainQueue.PostNoWait(func(){
+			ckey := ctx.getCacheKey()
+			ckey.setMissing()	
+			ckey.locked = false
+			ckey.process()
+		})
 	} else {
 		/*  set操作，数据库不存在的情况
 		*   先写入到redis,redis写入成功后回写sql(设置回写类型insert)
@@ -35,19 +36,10 @@ func onSqlNotFound(ctx *processContext) {
 		}
 		ctx.fields["__version__"] = protocol.PackField("__version__",1)
 		ctx.writeBackFlag = write_back_insert
+
 		ctx.redisFlag = redis_set
 		pushRedisNoWait(ctx)
 	}
-
-	mainQueue.PostNoWait(func(){
-		ckey := ctx.getCacheKey()
-		ckey.setMissing()	
-		if cmdType == cmdGet || cmdType == cmdDel || cmdType == cmdCompareAndSet {
-			ckey.locked = false
-			ckey.process()
-		}	
-	})
-
 }
 
 func onSqlExecError(ctx *processContext) {
@@ -71,14 +63,18 @@ func onSqlLoadOKGet(ctx *processContext) {
 func onSqlLoadOKSet(ctx *processContext) {
 	version := ctx.fields["__version__"].GetInt()
 	cmd := ctx.commands[0]
-	ckey := ctx.getCacheKey()
 	cmdType := cmd.cmdType
+	pushRedis := true
 	if cmdType == cmdSet {
 		if nil != cmd.version && *cmd.version != version {
+			pushRedis = false
 			//版本号不对
 			ctx.reply(errcode.ERR_VERSION,nil,version)
-			ckey.locked = false
-			ckey.process()
+			mainQueue.PostNoWait(func(){
+				ckey := ctx.getCacheKey()
+				ckey.locked = false
+				ckey.process()
+			})
 		} else {
 			//变更需要将版本号+1
 			for _,v := range(cmd.fields) {
@@ -86,8 +82,7 @@ func onSqlLoadOKSet(ctx *processContext) {
 			}
 			ctx.fields["__version__"] = protocol.PackField("__version__",version + 1)
 			ctx.writeBackFlag = write_back_update   //sql中存在,使用update回写
-			ctx.redisFlag = redis_set
-			pushRedisNoWait(ctx)			
+			ctx.redisFlag = redis_set			
 		}		
 	} else if cmdType == cmdCompareAndSet || cmdType == cmdCompareAndSetNx {
 		dbV := ctx.fields[cmd.cns.oldV.GetName()]
@@ -100,11 +95,9 @@ func onSqlLoadOKSet(ctx *processContext) {
 			ctx.writeBackFlag = write_back_update   //sql中存在,使用update回写
 			ctx.redisFlag = redis_set			
 		}
-		pushRedisNoWait(ctx)
 	} else if cmdType == cmdSetNx {
 		ctx.reply(errcode.ERR_KEY_EXIST,nil,version)
 		ctx.redisFlag = redis_set_only
-		pushRedisNoWait(ctx)
 	} else {
 		//cmdIncrBy/cmdDecrBy
 		var newV int64
@@ -117,30 +110,33 @@ func onSqlLoadOKSet(ctx *processContext) {
 		ctx.fields[cmd.incrDecr.GetName()].SetInt(newV)
 		ctx.fields["__version__"] = protocol.PackField("__version__",version + 1)
 		ctx.writeBackFlag = write_back_update   //sql中存在,使用update回写
-		ctx.redisFlag = redis_set
-		pushRedisNoWait(ctx)		
+		ctx.redisFlag = redis_set	
+	}
+
+	if pushRedis {
+		pushRedisNoWait(ctx)
 	}
 }
 
 func onSqlLoadOKDel(ctx *processContext) {
-	
+	var errCode int32
 	version := ctx.fields["__version__"].GetInt()
 	cmd := ctx.commands[0]
-	ok  := false
 	if nil != cmd.version && *cmd.version != version {
 		//版本号不对
-		ctx.reply(errcode.ERR_VERSION,nil,version)
+		errCode = errcode.ERR_VERSION
 	} else {
-		ok = true
 		ctx.writeBackFlag = write_back_delete
 		ctx.redisFlag = redis_del
 		pushSQLWriteBackNoWait(ctx)
-		ctx.reply(errcode.ERR_OK,nil,version)
+		errCode = errcode.ERR_OK
 	}
+
+	ctx.reply(errCode,nil,version)
 	
 	mainQueue.PostNoWait(func(){
 		ckey := ctx.getCacheKey()
-		if ok {
+		if errCode == errcode.ERR_OK {
 			ckey.setMissing()
 		}
 		ckey.locked = false

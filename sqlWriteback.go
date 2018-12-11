@@ -1,7 +1,6 @@
 package flyfish
 
 import (
-	//"database/sql"
 	"github.com/jmoiron/sqlx"
 	"fmt"
 	"strings"
@@ -17,41 +16,6 @@ const updateTemplate = `UPDATE %s SET %s where __key__ = '%s' ;`
 const insertTemplate = `INSERT INTO %s(%s) VALUES(%s);`
 
 const delTemplate = `delete from %s where __key__ in(%s);`
-
-type pendingWriteBack struct {
-	head       *record
-	tail       *record 
-	size       int     	
-}
-
-func (this *pendingWriteBack) Push(r *record) {
-	if nil != this.tail {
-		this.tail.next = r
-		this.tail = r
-	} else {
-		this.head = r
-		this.tail = r
-	}
-	this.size++
-}
-
-func (this *pendingWriteBack) Pop() *record {
-	if nil == this.head {
-		return nil
-	} else {
-		head := this.head
-		this.head = head.next
-		if this.head == nil {
-			this.tail = nil
-		}
-		this.size--
-		return head
-	}
-}
-
-func (this *pendingWriteBack) Head() *record {
-	return this.head
-}
 
 type record struct {
 	next           *record
@@ -192,21 +156,22 @@ func (this *sqlUpdater) exec() {
 
 
 func processWriteBackRecord(now int64) {
-	wb := pendingWB.Head()
-	for ; nil != wb; wb = pendingWB.Head() {
+	head := pendingWB.Front()
+	for ; nil != head; head = pendingWB.Front() {
+		wb := head.Value.(*record)
 		if wb.expired > now {
 			break
 		} else {
-			pendingWB.Pop()
+			pendingWB.Remove(head)
 			delete(writeBackRecords,wb.uniKey)
 			if wb.writeBackFlag != write_back_none {
 				//投入执行
 				Debugln("pushSQLUpdate",wb.uniKey)
 				hash := StringHash(wb.uniKey)
 				sqlUpdateQueue[hash%conf.SqlUpdatePoolSize].Add(wb)
-			}
+			}			
 		}
-	}
+	} 
 }
 
 
@@ -249,7 +214,7 @@ func addRecord(now int64,ctx *processContext) {
 				wb.fields[k] = v
 			}
 		}
-		pendingWB.Push(wb)
+		pendingWB.PushBack(wb)
 	} else {
 		//合并状态
 		if wb.writeBackFlag == write_back_insert {
@@ -329,8 +294,6 @@ func addRecord(now int64,ctx *processContext) {
 
 		}
 	}
-
-	//processWriteBackRecord(now)
 }
 
 func writeBackRoutine() {

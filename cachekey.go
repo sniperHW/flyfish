@@ -1,10 +1,6 @@
 package flyfish
 
 import (
-	//"github.com/sniperHW/kendynet/util"
-	//"time"
-	//"unsafe"
-	//"fmt"
 	protocol "flyfish/proto"
 	"strconv"
 )
