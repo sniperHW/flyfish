@@ -29,7 +29,7 @@ var recordPool = sync.Pool{
 }
 
 func recordGet() *record {
-	r := strPool.Get().(*record)
+	r := recordPool.Get().(*record)
 	r.next = nil
 	r.writeBackFlag = write_back_none
 	r.ckey = nil
