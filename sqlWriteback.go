@@ -7,6 +7,7 @@ import (
 	"flyfish/conf"
 	"time"
 	protocol "flyfish/proto"
+	"sync"
 )
 
 type record struct {
@@ -18,6 +19,26 @@ type record struct {
 	ckey           *cacheKey
 	fields         map[string]*protocol.Field        //所有命令的字段聚合
 	expired        int64
+}
+
+
+var recordPool = sync.Pool{
+	New: func() interface{} {
+		return &record{}
+	},
+}
+
+func recordGet() *record {
+	r := strPool.Get().(*record)
+	r.next = nil
+	r.writeBackFlag = write_back_none
+	r.ckey = nil
+	r.fields = nil
+	return r
+}
+
+func recordPut(r *record) {
+	recordPool.Put(r)
 }
 
 func (this *record) appendDel(s *str) int {
@@ -150,6 +171,9 @@ func (this *sqlUpdater) appendUpdate(wb *record) {
 
 func (this *sqlUpdater) append(v interface{}) {
 	wb :=  v.(*record) 
+	
+	defer recordPut(wb)
+
 	if wb.writeBackFlag == write_back_update {
 		this.appendUpdate(wb)
 	} else if wb.writeBackFlag == write_back_insert {
@@ -261,13 +285,21 @@ func addRecord(now int64,ctx *processContext) {
 	uniKey := ctx.getUniKey()
 	wb,ok := writeBackRecords[uniKey]
 	if !ok {
-		wb := &record{
+		/*wb := &record{
 			writeBackFlag : ctx.writeBackFlag,
 			key     : ctx.getKey(),
 			table   : ctx.getTable(),
 			uniKey  : uniKey,
 			ckey    : ctx.getCacheKey(),
-		}
+		}*/
+
+		wb = recordGet()
+		wb.writeBackFlag = ctx.writeBackFlag
+		wb.key = ctx.getKey()
+		wb.table = ctx.getTable()
+		wb.uniKey = uniKey
+		wb.ckey = ctx.getCacheKey()
+
 		writeBackRecords[uniKey] = wb
 		if wb.writeBackFlag == write_back_insert || wb.writeBackFlag == write_back_update {
 			wb.fields = map[string]*protocol.Field{}

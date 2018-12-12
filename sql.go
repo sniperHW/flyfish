@@ -5,7 +5,7 @@ import (
 	"sync"
 	"github.com/sniperHW/kendynet/util"
 	"flyfish/conf"
-	protocol "flyfish/proto"
+	//protocol "flyfish/proto"
 	"time"
 	"container/list"
 )
@@ -20,14 +20,22 @@ var pendingWB               *list.List//pendingWriteBack
 
 func prepareRecord(ctx *processContext) *record {
 	uniKey := ctx.getUniKey()
-	wb := &record{
+	/*wb := &record{
 		writeBackFlag : ctx.writeBackFlag,
 		key     : ctx.getKey(),
 		table   : ctx.getTable(),
 		uniKey  : uniKey,
 		ckey    : ctx.getCacheKey(),
-		fields  : map[string]*protocol.Field{}, 
-	}
+	}*/
+
+	wb := recordGet()
+	wb.writeBackFlag = ctx.writeBackFlag
+	wb.key = ctx.getKey()
+	wb.table = ctx.getTable()
+	wb.uniKey = uniKey
+	wb.ckey = ctx.getCacheKey()
+
+
 	if wb.writeBackFlag == write_back_insert || wb.writeBackFlag == write_back_update {
 		wb.fields = ctx.fields
 	}
