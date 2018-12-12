@@ -66,6 +66,7 @@ func (this *SetReplyer) reply(errCode int32,fields map[string]*protocol.Field,ve
 	if nil != err {
 		//记录日志
 	}
+	commandPut(this.cmd)
 
 }
 
@@ -106,14 +107,22 @@ func set(session kendynet.StreamSession,msg *codec.Message) {
 	}
 
 
-	cmd := &command{
+	cmd := commandGet()
+	cmd.cmdType = cmdSet
+	cmd.key = req.GetKey()
+	cmd.table = req.GetTable()
+	cmd.uniKey = fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey())
+	cmd.version = req.Version
+	cmd.fields = map[string]*protocol.Field{}
+
+	/*cmd := &command{
 		cmdType   : cmdSet,
 		key       : req.GetKey(),
 		table     : req.GetTable(),
 		uniKey    : fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey()),
 		version   : req.Version,
 		fields    : map[string]*protocol.Field{},
-	}
+	}*/
 
 	cmd.rpyer = &SetReplyer{
 		seqno : req.GetSeqno(),
@@ -165,13 +174,21 @@ func setNx(session kendynet.StreamSession,msg *codec.Message) {
 	}
 
 
-	cmd := &command{
+/*	cmd := &command{
 		cmdType   : cmdSetNx,
 		key       : req.GetKey(),
 		table     : req.GetTable(),
 		uniKey    : fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey()),
 		fields    : map[string]*protocol.Field{},
 	}
+*/
+
+	cmd := commandGet()
+	cmd.cmdType = cmdSetNx
+	cmd.key = req.GetKey()
+	cmd.table = req.GetTable()
+	cmd.uniKey = fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey())
+	cmd.fields = map[string]*protocol.Field{}	
 
 	cmd.rpyer = &SetReplyer{
 		seqno : req.GetSeqno(),
@@ -216,7 +233,7 @@ func compareAndSet(session kendynet.StreamSession,msg *codec.Message) {
 		return
 	}
 
-	cmd := &command{
+/*	cmd := &command{
 		cmdType   : cmdCompareAndSet,
 		key       : req.GetKey(),
 		table     : req.GetTable(),
@@ -227,6 +244,19 @@ func compareAndSet(session kendynet.StreamSession,msg *codec.Message) {
 			newV : req.GetNew(),
 		},	
 	}
+*/
+
+	cmd := commandGet()
+	cmd.cmdType = cmdCompareAndSet
+	cmd.key = req.GetKey()
+	cmd.table = req.GetTable()
+	cmd.uniKey = fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey())
+	cmd.fields = map[string]*protocol.Field{}
+	cmd.cns = &cnsSt{
+		oldV : req.GetOld(),
+		newV : req.GetNew(),
+	}	
+
 
 	cmd.rpyer = &SetReplyer{
 		seqno : req.GetSeqno(),
@@ -267,7 +297,18 @@ func compareAndSetNx(session kendynet.StreamSession,msg *codec.Message) {
 		return
 	}
 
-	cmd := &command{
+	cmd := commandGet()
+	cmd.cmdType = cmdCompareAndSetNx
+	cmd.key = req.GetKey()
+	cmd.table = req.GetTable()
+	cmd.uniKey = fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey())
+	cmd.fields = map[string]*protocol.Field{}
+	cmd.cns = &cnsSt{
+		oldV : req.GetOld(),
+		newV : req.GetNew(),
+	}	
+
+/*	cmd := &command{
 		cmdType   : cmdCompareAndSetNx,
 		key       : req.GetKey(),
 		table     : req.GetTable(),
@@ -278,7 +319,7 @@ func compareAndSetNx(session kendynet.StreamSession,msg *codec.Message) {
 			newV : req.GetNew(),
 		},	
 	}
-
+*/
 	cmd.rpyer = &SetReplyer{
 		seqno : req.GetSeqno(),
 		session : session,

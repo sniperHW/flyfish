@@ -41,6 +41,7 @@ func (this *IncrDecrByReplyer) reply(errCode int32,fields map[string]*protocol.F
 	if nil != err {
 		//记录日志
 	}
+	commandPool.Put(this.cmd)
 }
 
 func incrBy(session kendynet.StreamSession,msg *codec.Message) {
@@ -70,13 +71,21 @@ func incrBy(session kendynet.StreamSession,msg *codec.Message) {
 		return
 	}
 
-	cmd := &command{
+	cmd := commandGet()
+
+	cmd.cmdType = cmdIncrBy
+	cmd.key = req.GetKey()
+	cmd.table = req.GetTable()
+	cmd.uniKey = fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey())
+	cmd.incrDecr = req.GetField() 
+
+	/*&command{
 		cmdType   : cmdIncrBy,
 		key       : req.GetKey(),
 		table     : req.GetTable(),
 		uniKey    : fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey()),
 		incrDecr  : req.GetField(),
-	}
+	}*/
 
 
 	cmd.rpyer = &IncrDecrByReplyer{
@@ -117,13 +126,21 @@ func decrBy(session kendynet.StreamSession,msg *codec.Message) {
 	}
 
 
-	cmd := &command{
+	cmd := commandGet()
+
+	cmd.cmdType = cmdDecrBy
+	cmd.key = req.GetKey()
+	cmd.table = req.GetTable()
+	cmd.uniKey = fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey())
+	cmd.incrDecr = req.GetField() 
+
+	/*&command{
 		cmdType   : cmdDecrBy,
 		key       : req.GetKey(),
 		table     : req.GetTable(),
 		uniKey    : fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey()),
 		incrDecr  : req.GetField(),
-	}
+	}*/
 
 	cmd.rpyer = &IncrDecrByReplyer{
 		seqno : req.GetSeqno(),

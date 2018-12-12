@@ -11,7 +11,6 @@ import (
 )
 
 type record struct {
-	next           *record
 	writeBackFlag  int
 	key            string
 	table          string
@@ -30,7 +29,6 @@ var recordPool = sync.Pool{
 
 func recordGet() *record {
 	r := recordPool.Get().(*record)
-	r.next = nil
 	r.writeBackFlag = write_back_none
 	r.ckey = nil
 	r.fields = nil

@@ -3,7 +3,7 @@ package flyfish
 import(
 	"github.com/sniperHW/kendynet/event"
 	protocol "flyfish/proto"
-	//"strconv"
+	"sync"
 	"fmt"
 	"time"
 	"flyfish/errcode"
@@ -39,7 +39,6 @@ type cnsSt struct {
 
 //来自客户端的一条命令请求
 type command struct {
-	next        *command
 	cmdType     int
 	rpyer       replyer
 	table       string
@@ -50,6 +49,28 @@ type command struct {
 	fields      map[string]*protocol.Field             //for get/set
 	cns         *cnsSt                                 //for compareAndSet
 	incrDecr    *protocol.Field                        //for incr/decr 
+}
+
+var commandPool = sync.Pool{
+	New: func() interface{} {
+		return &command{}
+	},
+}
+
+func commandGet() *command {
+	c := commandPool.Get().(*command)
+	c.cmdType = cmdNone
+	c.rpyer = nil
+	c.version = nil
+	c.ckey = nil
+	c.fields = nil
+	c.cns = nil
+	c.incrDecr = nil
+	return c
+}
+
+func commandPut(c *command) {
+	commandPool.Put(c)
 }
 
 

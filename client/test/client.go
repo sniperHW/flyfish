@@ -99,13 +99,14 @@ func main() {
 
 	c := kclient.OpenClient("localhost:10012")//eventQueue)
 
-	/*for i := 0; i < 100; i++ {
+	for i := 0; i < 100; i++ {
 		Set(c)
-	}*/
+	}
 	
+	/*
 	for i := 0; i < 200; i++ {
 		Get(c)
-	}
+	}*/
 
 	go func(){
 		for {

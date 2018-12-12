@@ -28,6 +28,7 @@ func (this *DelReplyer) reply(errCode int32,fields map[string]*protocol.Field,ve
 	if nil != err {
 		//记录日志
 	}
+	commandPool.Put(this.cmd)
 }
 
 
@@ -61,13 +62,19 @@ func del(session kendynet.StreamSession,msg *codec.Message) {
 	}
 
 	
-	cmd := &command{
+	cmd := commandGet()
+	cmd.cmdType = cmdDel
+	cmd.key = req.GetKey()
+	cmd.table = req.GetTable()
+	cmd.uniKey = fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey())
+	cmd.version = req.Version 
+	/*&command{
 		cmdType   : cmdDel,
 		key       : req.GetKey(),
 		table     : req.GetTable(),
 		uniKey    : fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey()),
 		version   : req.Version,
-	}
+	}*/
 
 	cmd.rpyer = &DelReplyer{
 		seqno : req.GetSeqno(),

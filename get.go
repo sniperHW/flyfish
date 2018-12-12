@@ -65,6 +65,7 @@ func (this *GetReplyer) reply(errCode int32,fields map[string]*protocol.Field,ve
 		//记录日志
 		Debugln("send GetReply error",this.cmd.uniKey,resp,err)
 	}
+	commandPool.Put(this.cmd)
 }
 
 func getAll(session kendynet.StreamSession,msg *codec.Message) {
@@ -100,13 +101,20 @@ func getAll(session kendynet.StreamSession,msg *codec.Message) {
 		return
 	}
 
-	cmd := &command{
+	cmd := commandGet()
+	cmd.cmdType = cmdGet
+	cmd.key = req.GetKey()
+	cmd.table = req.GetTable()
+	cmd.uniKey = fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey())
+	cmd.fields = map[string]*protocol.Field{}
+
+	 /*&command{
 		cmdType   : cmdGet,
 		key       : req.GetKey(),
 		table     : req.GetTable(),
 		uniKey    : fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey()),
 		fields    : map[string]*protocol.Field{},
-	}
+	}*/
 
 	cmd.rpyer = &GetReplyer{
 		seqno : req.GetSeqno(),
@@ -151,13 +159,20 @@ func get(session kendynet.StreamSession,msg *codec.Message) {
 		return
 	}
 	
-	cmd := &command{
+	cmd := commandGet()
+	cmd.cmdType = cmdGet
+	cmd.key = req.GetKey()
+	cmd.table = req.GetTable()
+	cmd.uniKey = fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey())
+	cmd.fields = map[string]*protocol.Field{} 
+
+	/*&command{
 		cmdType   : cmdGet,
 		key       : req.GetKey(),
 		table     : req.GetTable(),
 		uniKey    : fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey()),
 		fields    : map[string]*protocol.Field{},
-	}
+	}*/
 
 	cmd.rpyer = &GetReplyer{
 		seqno : req.GetSeqno(),
