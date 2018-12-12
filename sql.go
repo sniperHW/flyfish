@@ -96,14 +96,14 @@ func SQLInit(dbname string,user string,password string) bool {
 		writeBackRecords = map[string]*record{}   
 		writeBackEventQueue = util.NewBlockQueueWithName("writeBackEventQueue",conf.WriteBackEventQueueSize)
 
-		sqlLoadQueue = util.NewBlockQueueWithName(fmt.Sprintf("sqlLoad"),conf.SqlEventQueueSize)
+		sqlLoadQueue = util.NewBlockQueueWithName(fmt.Sprintf("sqlLoad"),conf.SqlLoadEventQueueSize)
 		for i := 0; i < conf.SqlLoadPoolSize; i++ {
 			go sqlRoutine(sqlLoadQueue,newSqlLoader(conf.SqlLoadPipeLineSize,dbname,user,password))
 		}	
 
 		sqlUpdateQueue = make([]*util.BlockQueue,conf.SqlUpdatePoolSize)
 		for i := 0; i < conf.SqlUpdatePoolSize; i++ {
-			sqlUpdateQueue[i] = util.NewBlockQueueWithName(fmt.Sprintf("sqlUpdater:%d",i),conf.SqlEventQueueSize)
+			sqlUpdateQueue[i] = util.NewBlockQueueWithName(fmt.Sprintf("sqlUpdater:%d",i),conf.SqlUpdateEventQueueSize)
 			go sqlRoutine(sqlUpdateQueue[i],newSqlUpdater(conf.SqlUpdatePipeLineSize,dbname,user,password))
 		}
 

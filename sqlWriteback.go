@@ -35,11 +35,12 @@ type delSet struct {
 }
 
 type sqlUpdater struct {
-	delSets   map[string]*delSet
-	updates   []string
-	count     int
-	max       int
-	db        *sqlx.DB	
+	delSets        map[string]*delSet
+	updates        []string
+	updateStrSize  int
+	count          int
+	max            int
+	db             *sqlx.DB	
 }
 
 func newSqlUpdater(max int,dbname string,user string,password string) *sqlUpdater {
@@ -57,6 +58,7 @@ func (this *sqlUpdater) Reset() {
 	this.delSets = map[string]*delSet{}
 	this.updates = []string{}
 	this.count   = 0
+	this.updateStrSize = 0
 }
 
 
@@ -71,6 +73,7 @@ func (this *sqlUpdater) appendSet(wb *record) {
 			valuesStatement += ("," + sqlStr)
 		}
 		str := fmt.Sprintf(insertTemplate,wb.table,filedsStatement,valuesStatement)
+		this.updateStrSize += len(str)
 		this.updates = append(this.updates,str)
 
 	} else if wb.writeBackFlag == write_back_update {
@@ -86,6 +89,7 @@ func (this *sqlUpdater) appendSet(wb *record) {
 			}
 		}
 		str := fmt.Sprintf(updateTemplate,wb.table,setStatement,wb.key)
+		this.updateStrSize += len(str)		
 		this.updates = append(this.updates,str)
 	} else {
 		Errorln("invaild writeBackFlag",wb.writeBackFlag)
@@ -114,7 +118,7 @@ func (this *sqlUpdater) append(v interface{}) {
 		return
 	}
 	this.count++
-	if this.count >= this.max {
+	if this.count >= this.max || this.updateStrSize >= conf.MaxUpdateStringSize {
 		this.exec()
 	}
 }
@@ -138,7 +142,7 @@ func (this *sqlUpdater) exec() {
 
 	str += strings.Join(this.updates,"")
 
-	rows, err := this.db.Query(str)
+	_ , err := this.db.Exec(str)
 	
 	elapse := time.Now().Sub(beg)
 
@@ -149,8 +153,6 @@ func (this *sqlUpdater) exec() {
 	if nil != err {
 		Errorln("sqlUpdater exec error:",err,str)
 		fmt.Println("sqlUpdater exec error:",err,str)
-	} else {
-		rows.Close()
 	}
 }
 
