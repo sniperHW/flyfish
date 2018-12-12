@@ -3,6 +3,7 @@ package flyfish
 import (
 	protocol "flyfish/proto"
 	"strconv"
+	"container/list"
 )
 
 const (
@@ -18,7 +19,7 @@ type cacheKey struct {
 	version    int64
 	status     int    			
 	locked     bool    			//操作是否被锁定	
-	cmdQueue   keyCmdQueue
+	cmdQueue   *list.List
 	meta      *table_meta
 }
 
@@ -39,6 +40,16 @@ func (this *cacheKey) SetIndex(idx uint32) {
 	this.idx = idx
 }*/
 
+func (this *cacheKey) lock() {
+	if !this.locked {
+		this.locked = true
+	}
+}
+
+func (this *cacheKey) unlock() {
+	this.locked = false
+}
+
 func (this *cacheKey) setMissing() {
 	Debugln("SetMissing key:",this.uniKey)
 	this.version = 0
@@ -52,6 +63,10 @@ func (this *cacheKey) setOK(version int64) {
 
 func (this *cacheKey) reset() {
 	this.status = cache_new
+}
+
+func (this *cacheKey) pushCmd(cmd *command) {
+	this.cmdQueue.PushBack(cmd)
 }
 
 /*
@@ -80,6 +95,7 @@ func newCacheKey(table string,uniKey string) *cacheKey {
 		lastAccess : tick,
 		status     : cache_new,
 		meta       : meta,
+		cmdQueue   : list.New(),
 	}
 
 	Debugln("newCacheKey key:",uniKey)

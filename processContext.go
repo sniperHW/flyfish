@@ -255,16 +255,16 @@ func (this *cacheKey) processDel(ctx *processContext,cmd *command) bool {
 }
 
 func (this *cacheKey) process() {
-	if this.locked || this.cmdQueue.size == 0 {
+	if this.locked || this.cmdQueue.Len() == 0 {
 		return
 	} else {
 		Debugln("process",this.uniKey)
 	}
 
-	cmdQueue := &this.cmdQueue
-	cmd := cmdQueue.Head()
+	cmdQueue := this.cmdQueue
+	e := cmdQueue.Front()
 
-	if nil == cmd {
+	if nil == e {
 		Debugln("cmdQueue empty",this.uniKey)
 		return
 	}
@@ -276,21 +276,22 @@ func (this *cacheKey) process() {
 
 	lastCmdType := cmdNone
 
-	for ; nil != cmd; cmd = cmdQueue.Head() {
+	for ; nil != e; e = cmdQueue.Front() {
+		cmd := e.Value.(*command)
 		ok := false 
 		Debugln(cmd.cmdType,lastCmdType)
 		if cmd.cmdType == cmdGet {
 			if !(lastCmdType == cmdNone || lastCmdType == cmdGet) {
 				break
 			}
-			cmdQueue.Pop()
+			cmdQueue.Remove(e)
 			ok = this.processGet(ctx,cmd)
 			if ok {
 				lastCmdType = cmd.cmdType
 			}			
 		} else if lastCmdType == cmdNone {
 			Debugln("here",cmd.cmdType)
-			cmdQueue.Pop()
+			cmdQueue.Remove(e)
 			switch cmd.cmdType {
 			case cmdSet:
 				ok = this.processSet(ctx,cmd)				
@@ -333,7 +334,7 @@ func (this *cacheKey) process() {
 		return
 	}
 
-	this.locked = true
+	this.lock()
 
 	if this.status == cache_ok || this.status == cache_missing {
 		if lastCmdType == cmdGet {

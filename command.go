@@ -90,7 +90,7 @@ func pushCommand(cmd *command) {
 
 	mainQueue.Post(func(){
 		cmd.ckey = getCacheKey(cmd.table,cmd.uniKey)	
-		cmd.ckey.cmdQueue.Push(cmd)
+		cmd.ckey.pushCmd(cmd)
 		cmd.ckey.process()	
 	})
 }

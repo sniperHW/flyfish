@@ -14,7 +14,7 @@ func onSqlNotFound(ctx *processContext) {
 		mainQueue.PostNoWait(func(){
 			ckey := ctx.getCacheKey()
 			ckey.setMissing()	
-			ckey.locked = false
+			ckey.unlock()
 			ckey.process()
 		})
 	} else {
@@ -47,7 +47,7 @@ func onSqlExecError(ctx *processContext) {
 	ctx.reply(errcode.ERR_SQLERROR,nil,-1)
 	mainQueue.PostNoWait(func(){
 		ckey := ctx.getCacheKey()	
-		ckey.locked = false
+		ckey.unlock()
 		ckey.process()	
 	})
 }
@@ -72,7 +72,7 @@ func onSqlLoadOKSet(ctx *processContext) {
 			ctx.reply(errcode.ERR_VERSION,nil,version)
 			mainQueue.PostNoWait(func(){
 				ckey := ctx.getCacheKey()
-				ckey.locked = false
+				ckey.unlock()
 				ckey.process()
 			})
 		} else {
@@ -139,7 +139,7 @@ func onSqlLoadOKDel(ctx *processContext) {
 		if errCode == errcode.ERR_OK {
 			ckey.setMissing()
 		}
-		ckey.locked = false
+		ckey.unlock()
 		ckey.process()
 	})
 }

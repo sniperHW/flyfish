@@ -12,7 +12,7 @@ func onRedisResp(ctx *processContext) {
 
 	mainQueue.PostNoWait(func(){
 		ckey := ctx.getCacheKey()	
-		ckey.locked = false
+		ckey.unlock()
 		if ctx.errno == errcode.ERR_OK {
 			if ctx.redisFlag == redis_get || ctx.redisFlag == redis_set_only {
 				ckey.setOK(newVersion)
