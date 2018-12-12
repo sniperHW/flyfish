@@ -23,17 +23,6 @@ func SizeofPow2(size uint64) uint64 {
 	return size + 1
 }
 
-func GetPow2(size uint64) uint64 {
-	var pow2 uint64 = 0
-	if !IsPow2(size) {
-		size = (size << 1)
-	}
-	for size > 1 {
-		pow2++
-	}
-	return pow2
-}
-
 const (
 	MaxBuffSize uint64 = 0xFFFFFFFF
 )

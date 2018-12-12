@@ -40,6 +40,7 @@ func newSqlLoader(max int,dbname string,user string,password string) *sqlLoader 
 }
 
 func (this *sqlLoader) Reset() {
+
 	this.sqlGets = map[string]*sqlGet{}
 	this.count   = 0
 }
@@ -84,75 +85,66 @@ func (this *sqlLoader) exec() {
 
 	defer this.Reset()
 
-	str := ``
-	resultSets := []*sqlGet{}
 	for _,v := range(this.sqlGets) {
-		resultSets = append(resultSets,v)
-		str += fmt.Sprintf(queryTemplate,
+		str := fmt.Sprintf(queryTemplate,
 			strings.Join(v.meta.queryMeta.field_names,","),
 			v.table,
 			strings.Join(v.keys,","))
-	}
 
-	beg := time.Now()
+		beg := time.Now()
 
-	rows, err := this.db.Query(str)
+		rows, err := this.db.Query(str)
 
-	if nil != err {
-		Errorln("sqlQueryer exec error:",err)
-		for _,v := range(this.sqlGets) {
+		elapse := time.Now().Sub(beg)
+
+		if elapse/time.Millisecond > 500 {
+			Infoln("sqlQueryer long exec",elapse,this.count)
+		}
+
+		if nil != err {
+			Errorln("sqlQueryer exec error:",err)
 			for _,vv := range(v.ctxs) {
 				onSqlExecError(vv)
 			}
-		}
-		return
-	}
+		} else {
 
-	elapse := time.Now().Sub(beg)
+			filed_receiver := v.meta.queryMeta.getReceiver()
+			field_convter  := v.meta.queryMeta.field_convter
+			field_names    := v.meta.queryMeta.field_names
 
-	if elapse/time.Millisecond > 500 {
-		Infoln("sqlQueryer long exec",elapse,this.count)
-	}
-
-	defer rows.Close()
-
-	for _,v := range(resultSets) {
-
-		filed_receiver := v.meta.queryMeta.getReceiver()
-		field_convter  := v.meta.queryMeta.field_convter
-		field_names    := v.meta.queryMeta.field_names
-
-		for rows.Next() {
-			Debugln("rows.next")
-			err := rows.Scan(filed_receiver...)
-			if err	!= nil {
-				Errorln("rows.Scan err",err)
-				v.meta.queryMeta.putReceiver(filed_receiver)
-				this.onScanError()
-				return
-			} else {
-				key := field_convter[0](filed_receiver[0]).(string)
-				Debugln("key",key)
-				ctx := v.ctxs[key]
-				if nil != ctx {
-					//填充返回值
-					for i := 1 ; i < len(filed_receiver); i++ {
-						name := field_names[i]
-						ctx.fields[name] = protocol.PackField(name,field_convter[i](filed_receiver[i]))	
+			for rows.Next() {
+				Debugln("rows.next")
+				err := rows.Scan(filed_receiver...)
+				if err	!= nil {
+					Errorln("rows.Scan err",err)
+					v.meta.queryMeta.putReceiver(filed_receiver)
+					this.onScanError()
+					return
+				} else {
+					key := field_convter[0](filed_receiver[0]).(string)
+					Debugln("key",key)
+					ctx := v.ctxs[key]
+					if nil != ctx {
+						//填充返回值
+						for i := 1 ; i < len(filed_receiver); i++ {
+							name := field_names[i]
+							ctx.fields[name] = protocol.PackField(name,field_convter[i](filed_receiver[i]))	
+						}
+						delete(v.ctxs,key)
+						//返回给主循环
+						onSqlResp(ctx,errcode.ERR_OK)
 					}
-					delete(v.ctxs,key)
-					//返回给主循环
-					onSqlResp(ctx,errcode.ERR_OK)
 				}
 			}
+
+			for _,vv := range(v.ctxs) {
+				//无结果
+				onSqlResp(vv,errcode.ERR_NOTFOUND)
+			}
+			v.meta.queryMeta.putReceiver(filed_receiver)
 		}
 
-		for _,vv := range(v.ctxs) {
-			//无结果
-			onSqlResp(vv,errcode.ERR_NOTFOUND)
-		}
-		v.meta.queryMeta.putReceiver(filed_receiver)
-		rows.NextResultSet()
-	}	
+		rows.Close()
+	}
 }
 

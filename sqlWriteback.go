@@ -3,19 +3,11 @@ package flyfish
 import (
 	"github.com/jmoiron/sqlx"
 	"fmt"
-	"strings"
+	//"strings"
 	"flyfish/conf"
 	"time"
 	protocol "flyfish/proto"
 )
-
-const updateInsertTemplate = `INSERT INTO %s(%s) VALUES(%s) ON conflict(__key__)  DO UPDATE SET %s;`
-
-const updateTemplate = `UPDATE %s SET %s where __key__ = '%s' ;`
-
-const insertTemplate = `INSERT INTO %s(%s) VALUES(%s);`
-
-const delTemplate = `delete from %s where __key__ in(%s);`
 
 type record struct {
 	next           *record
@@ -28,15 +20,46 @@ type record struct {
 	expired        int64
 }
 
+func (this *record) appendDel(s *str) int {
 
-type delSet struct {
-	table string
-	keys  []string
+	oldLen := s.len
+
+	if s.len == 0 {
+		s.append("delete from ").append(this.table).append(" where __key__ in ('").append(this.key).append("'")
+	} else {
+		s.append(",'").append(this.key).append("'")
+	}
+	
+	return s.len - oldLen
+
+}
+
+func (this *record) appendInsert(s *str) int {
+
+	oldLen := s.len
+
+	if s.len == 0 {
+		s.append(this.ckey.meta.insertPrefix).append("('").append(this.key).append("',").append(this.fields["__version__"].ToSqlStr())
+		for _,name := range(this.ckey.meta.insertFieldOrder) {
+			s.append(",").append(this.fields[name].ToSqlStr())
+		}
+		s.append(")")
+	} else {
+		s.append(",('").append(this.key).append("',").append(this.fields["__version__"].ToSqlStr())
+		for _,name := range(this.ckey.meta.insertFieldOrder) {
+			s.append(",").append(this.fields[name].ToSqlStr())
+		}
+		s.append(")")
+	}
+
+	return s.len - oldLen
 }
 
 type sqlUpdater struct {
-	delSets        map[string]*delSet
-	updates        []string
+	delSets          map[string]*str
+	insertSets       map[string]*str
+	updates          *str
+
 	updateStrSize  int
 	count          int
 	max            int
@@ -45,8 +68,6 @@ type sqlUpdater struct {
 
 func newSqlUpdater(max int,dbname string,user string,password string) *sqlUpdater {
 	t := &sqlUpdater {
-		delSets : map[string]*delSet{},
-		updates : []string{},
 		max     : max,
 	}
 	t.db,_ = pgOpen(dbname,user,password)
@@ -55,63 +76,84 @@ func newSqlUpdater(max int,dbname string,user string,password string) *sqlUpdate
 }
 
 func (this *sqlUpdater) Reset() {
-	this.delSets = map[string]*delSet{}
-	this.updates = []string{}
+	
+	for _,v := range(this.delSets) {
+		strPut(v)
+	}
+	for _,v := range(this.insertSets) {
+		strPut(v)
+	}
+
+	if nil != this.updates {
+		strPut(this.updates)
+	}
+
+	this.delSets = nil
+	this.insertSets = nil
+	this.updates = nil
+
 	this.count   = 0
 	this.updateStrSize = 0
 }
 
-
-func (this *sqlUpdater) appendSet(wb *record) {
-
-	if wb.writeBackFlag == write_back_insert {
-		filedsStatement := "__key__"
-		valuesStatement := fmt.Sprintf("'%s'",wb.key)		
-		for _,v := range(wb.fields) {
-			sqlStr := v.ToSqlStr()
-			filedsStatement += ("," + v.GetName())
-			valuesStatement += ("," + sqlStr)
-		}
-		str := fmt.Sprintf(insertTemplate,wb.table,filedsStatement,valuesStatement)
-		this.updateStrSize += len(str)
-		this.updates = append(this.updates,str)
-
-	} else if wb.writeBackFlag == write_back_update {
-		setStatement    := ""
-		i := 0
-		for _,v := range(wb.fields) {
-			sqlStr := v.ToSqlStr()
-			if i == 0 {
-				i = 1
-				setStatement += fmt.Sprintf("%s = %s",v.GetName(),sqlStr)
-			} else {
-				setStatement += fmt.Sprintf(",%s = %s",v.GetName(),sqlStr)
-			}
-		}
-		str := fmt.Sprintf(updateTemplate,wb.table,setStatement,wb.key)
-		this.updateStrSize += len(str)		
-		this.updates = append(this.updates,str)
-	} else {
-		Errorln("invaild writeBackFlag",wb.writeBackFlag)
-	}	
-}
-
 func (this *sqlUpdater) appendDel(wb *record) {
+	
+	if nil == this.delSets {
+		this.delSets = map[string]*str{}
+	}
+
 	s,ok := this.delSets[wb.table]
 	if !ok {
-		s = &delSet{
-			table : wb.table,
-			keys  : []string{},
-		}
+		s = strGet()
 		this.delSets[wb.table] = s
 	}
-	s.keys = append(s.keys,fmt.Sprintf("'%s'",wb.key))
+	this.updateStrSize += wb.appendDel(s)
 }
+
+func (this *sqlUpdater) appendInsert(wb *record) {
+	
+	if nil == this.insertSets {
+		this.insertSets = map[string]*str{}
+	}
+
+	s,ok := this.insertSets[wb.table]
+	if !ok {
+		s = strGet()
+		this.insertSets[wb.table] = s
+	}
+	this.updateStrSize += wb.appendInsert(s)
+}
+
+func (this *sqlUpdater) appendUpdate(wb *record) {
+
+	if nil == this.updates {
+		this.updates = strGet()
+	}
+
+	//const updateTemplate = `UPDATE %s SET %s where __key__ = '%s' ;`
+	oldLen := this.updates.len
+	this.updates.append("UPDATE ").append(wb.table).append(" SET ")
+	i := 0
+	for _,v := range(wb.fields) {
+		sqlStr := v.ToSqlStr()
+		if i == 0 {
+			i = 1
+			this.updates.append(v.GetName()).append(" = ").append(sqlStr)
+		} else {
+			this.updates.append(",").append(v.GetName()).append(" = ").append(sqlStr)
+		}
+	}
+	this.updates.append(" where __key__ = '").append(wb.key).append("';")	
+	this.updateStrSize += (this.updates.len - oldLen)
+}
+
 
 func (this *sqlUpdater) append(v interface{}) {
 	wb :=  v.(*record) 
-	if wb.writeBackFlag == write_back_update || wb.writeBackFlag == write_back_insert {
-		this.appendSet(wb)
+	if wb.writeBackFlag == write_back_update {
+		this.appendUpdate(wb)
+	} else if wb.writeBackFlag == write_back_insert {
+		this.appendInsert(wb)
 	} else if wb.writeBackFlag == write_back_delete {
 		this.appendDel(wb)
 	} else {
@@ -132,18 +174,32 @@ func (this *sqlUpdater) exec() {
 
 	defer this.Reset()
 
-	str := ``
+	//str := ``
 
 	beg := time.Now()
 
-	for _,v := range(this.delSets) {
-		str += fmt.Sprintf(delTemplate,v.table,strings.Join(v.keys,","))
+	s := strGet()
+
+	if nil != this.delSets {
+		for _,v := range(this.delSets) {
+			s.append(v.toString()).append(");")
+		}
 	}
 
-	str += strings.Join(this.updates,"")
+	if nil != this.insertSets {
+		for _,v := range(this.insertSets) {
+			s.append(v.toString()).append(";")
+		}		
+	}
 
-	_ , err := this.db.Exec(str)
-	
+	if nil != this.updates {
+		s.append(this.updates.toString())
+	}
+
+	_ , err := this.db.Exec(s.toString())
+
+	//Errorln(s.toString())
+
 	elapse := time.Now().Sub(beg)
 
 	if elapse/time.Millisecond > 500 {
@@ -151,9 +207,12 @@ func (this *sqlUpdater) exec() {
 	}
 
 	if nil != err {
-		Errorln("sqlUpdater exec error:",err,str)
-		fmt.Println("sqlUpdater exec error:",err,str)
+		Errorln("sqlUpdater exec error:",err,s.toString())
+		fmt.Println("sqlUpdater exec error:",err,s.toString())
 	}
+
+	strPut(s)
+
 }
 
 

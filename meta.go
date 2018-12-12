@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 	"strconv"
+	"fmt"
 )
 
 var table_metas map[string]*table_meta
@@ -58,9 +59,11 @@ type field_meta struct {
 
 //表的元数据
 type table_meta struct {
-	table       string 
-	fieldMetas  map[string]field_meta
-	queryMeta	query_meta
+	table            string 
+	fieldMetas       map[string]field_meta
+	queryMeta	     query_meta
+	insertPrefix     string
+	insertFieldOrder []string
 }
 
 /*
@@ -244,6 +247,7 @@ func InitMeta(def []string) bool {
 		t_meta := &table_meta {
 			table  : t1[0],
 			fieldMetas : map[string]field_meta{},
+			insertFieldOrder : []string{},
 			queryMeta : query_meta {
 				field_names    : []string{},
 				field_receiver : []func()interface{}{},
@@ -275,6 +279,7 @@ func InitMeta(def []string) bool {
 		})
 		t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter,getConvetor(protocol.ValueType_int))
 
+		//fieldNames := []string{}
 		//处理其它字段
 		for _,v := range(fields) {
 			field := strings.Split(v,":")
@@ -307,6 +312,8 @@ func InitMeta(def []string) bool {
 				defaultV : defaultValue,
 			}
 
+			t_meta.insertFieldOrder = append(t_meta.insertFieldOrder,name)
+
 			t_meta.queryMeta.field_names = append(t_meta.queryMeta.field_names,name)
 			
 			t_meta.queryMeta.field_receiver = append(t_meta.queryMeta.field_receiver,func() interface{} {
@@ -317,6 +324,9 @@ func InitMeta(def []string) bool {
 
 			table_metas[t1[0]] = t_meta
 		}
+
+		t_meta.insertPrefix = fmt.Sprintf("INSERT INTO %s(__key__,__version__,%s) VALUES ",t_meta.table,strings.Join(t_meta.insertFieldOrder,","))
+
 	}
 
 	return true
