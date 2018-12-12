@@ -8,9 +8,9 @@ import(
 	"github.com/sniperHW/kendynet"
 )
 
-func Get(c *kclient.Client) {
+func Get(c *kclient.Client,i int) {
 
-	key := fmt.Sprintf("%s:%d","huangwei",1)//rand.Int()%100000)
+	key := fmt.Sprintf("%s:%d","huangwei",i)//rand.Int()%100000)
 	get := c.Get("users1",key,"name","age","phone")
 
 	get.Exec(func(ret *kclient.Result) {
@@ -31,7 +31,10 @@ func main() {
 
 	c := kclient.OpenClient("localhost:10012")//eventQueue)
 
-	Get(c)
+	Get(c,1)
+	Get(c,2)
+	Get(c,3)
+	Get(c,4)
 
 	//eventQueue.Run()
 

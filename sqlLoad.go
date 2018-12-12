@@ -1,26 +1,20 @@
 package flyfish
 
 import (
-	//"database/sql"
 	"github.com/jmoiron/sqlx"
-	"fmt"
-	"strings"
 	protocol "flyfish/proto"
 	"time"
 	"flyfish/errcode"
 )
 
-const queryTemplate = `SELECT %s FROM %s where __key__ in(%s);`
-
-
 /*
 *一个要获取的集合    
 */
 type sqlGet struct {
-	table string
-	meta  *table_meta	
-	keys  []string
-	ctxs  map[string]*processContext
+	table   string
+	meta    *table_meta
+	sqlStr  *str
+	ctxs    map[string]*processContext
 }
 
 type sqlLoader struct {
@@ -40,7 +34,6 @@ func newSqlLoader(max int,dbname string,user string,password string) *sqlLoader 
 }
 
 func (this *sqlLoader) Reset() {
-
 	this.sqlGets = map[string]*sqlGet{}
 	this.count   = 0
 }
@@ -53,13 +46,19 @@ func (this *sqlLoader) append(v interface{}) {
 	if !ok {
 		s = &sqlGet{
 			table : table,
-			keys  : []string{},
+			sqlStr : strGet(),
 			ctxs  : map[string]*processContext{},
 			meta  : getMetaByTable(table),
 		}
 		this.sqlGets[table] = s
 	}
-	s.keys = append(s.keys,fmt.Sprintf("'%s'",key))
+
+	if s.sqlStr.len == 0 {
+		s.sqlStr.append(s.meta.selectPrefix).append("'").append(key).append("'")
+	} else {
+		s.sqlStr.append(",'").append(key).append("'")
+	}
+	
 	s.ctxs[key] = ctx
 	this.count++
 
@@ -86,14 +85,15 @@ func (this *sqlLoader) exec() {
 	defer this.Reset()
 
 	for _,v := range(this.sqlGets) {
-		str := fmt.Sprintf(queryTemplate,
-			strings.Join(v.meta.queryMeta.field_names,","),
-			v.table,
-			strings.Join(v.keys,","))
+		v.sqlStr.append(");")
+		str := v.sqlStr.toString()
 
 		beg := time.Now()
 
 		rows, err := this.db.Query(str)
+
+		strPut(v.sqlStr)
+		v.sqlStr = nil
 
 		elapse := time.Now().Sub(beg)
 
@@ -113,7 +113,6 @@ func (this *sqlLoader) exec() {
 			field_names    := v.meta.queryMeta.field_names
 
 			for rows.Next() {
-				Debugln("rows.next")
 				err := rows.Scan(filed_receiver...)
 				if err	!= nil {
 					Errorln("rows.Scan err",err)
@@ -122,7 +121,6 @@ func (this *sqlLoader) exec() {
 					return
 				} else {
 					key := field_convter[0](filed_receiver[0]).(string)
-					Debugln("key",key)
 					ctx := v.ctxs[key]
 					if nil != ctx {
 						//填充返回值
