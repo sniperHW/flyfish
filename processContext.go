@@ -41,7 +41,7 @@ var processContextPool = sync.Pool{
 func processContextGet() *processContext {
 	p := processContextPool.Get().(*processContext)
 	p.commands = []*command{}
-	p.fields = nil
+	p.fields = map[string]*protocol.Field{}
 	p.errno = errcode.ERR_OK
 	p.replyed = false
 	p.writeBackFlag = write_back_none
