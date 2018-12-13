@@ -10,6 +10,7 @@ import (
 type Listener struct{
     listener    *net.TCPListener
     started      int32
+    closed       int32
 }
 
 func NewListener(nettype,service string) (*Listener,error) {
@@ -26,8 +27,10 @@ func NewListener(nettype,service string) (*Listener,error) {
 }
 
 func (this *Listener) Close() {
-    if nil != this.listener {
-        this.listener.Close()
+    if atomic.CompareAndSwapInt32(&this.closed,0,1) {
+        if nil != this.listener {
+            this.listener.Close()
+        }
     }
 }
 
@@ -45,9 +48,11 @@ func (this *Listener) Start(onNewClient func(kendynet.StreamSession)) error {
     for {
         conn, err := this.listener.Accept()
         if err != nil {
-            this.listener.Close()
-            return err
+            if atomic.LoadInt32(&this.closed) == 1 {
+                return nil
+            }
+        } else {
+            onNewClient(stream_socket.NewStreamSocket(conn))
         }
-        onNewClient(stream_socket.NewStreamSocket(conn))
     }
 }
