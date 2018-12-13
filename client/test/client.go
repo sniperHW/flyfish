@@ -98,18 +98,18 @@ func main() {
 	id = 0
 
 
-	services := []string{"localhost:10012","localhost:10013"}
+    services := []string{"127.0.0.1:10012","127.0.0.1:10013"}
 
 	c := kclient.OpenClient(services)//eventQueue)
 
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 200; i++ {
 		Set(c)
 	}
 	
-	/*
-	for i := 0; i < 200; i++ {
+	
+	for i := 0; i < 400; i++ {
 		Get(c)
-	}*/
+	}
 
 	go func(){
 		for {
