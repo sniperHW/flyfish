@@ -36,6 +36,10 @@ const (
 
 var enableStdOut bool = true
 
+func Str2loglevel(level string) Level {
+	return str2loglevel(level)
+}
+
 func str2loglevel(level string) Level {
 
 	switch level {

@@ -44,11 +44,11 @@ func RedisClose() {
 	
 }
 
-func RedisInit(Addr string,Password string) bool {
+func RedisInit(host string,port int,Password string) bool {
 	redis_once.Do(func() {
 		cli = redis.NewClient(&redis.Options{
-			Addr:     Addr,
-			Password: Password,
+			Addr : fmt.Sprintf("%s:%d",host,port),
+			Password : Password,
 		})
 
 		if nil != cli {

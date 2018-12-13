@@ -3,6 +3,12 @@
 	"ignore": "test",
 	"package": [
 		{
+			"checksumSHA1": "lqS0NXwKskDGDWUvP/aNmPKLW04=",
+			"path": "github.com/go-ini/ini",
+			"revision": "bda519ae5f4cbc60d391ff8610711627a08b86ae",
+			"revisionTime": "2018-04-20T15:00:25Z"
+		},
+		{
 			"checksumSHA1": "wCHDvNrgHFpd00v+QcuwJW+/pFQ=",
 			"path": "github.com/go-redis/redis",
 			"revision": "929bfb147cb4b9e1419eb14429072551bd1044ca",
@@ -115,6 +121,24 @@
 			"path": "github.com/sniperHW/kendynet/util",
 			"revision": "10f2ff4d3d8016d68ea5388499d8a5b4f7ffa466",
 			"revisionTime": "2018-12-10T02:37:43Z"
+		},
+		{
+			"checksumSHA1": "2TJV/f15/49inUOLH5hJK+nkRNw=",
+			"path": "github.com/ziutek/mymysql/godrv",
+			"revision": "6b05b0cf718f8ee11bc5e18fe78ea7cef0388dc6",
+			"revisionTime": "2018-08-27T08:56:28Z"
+		},
+		{
+			"checksumSHA1": "oRXWHvweXZQ99jtuUtYVvKv8oI0=",
+			"path": "github.com/ziutek/mymysql/mysql",
+			"revision": "6b05b0cf718f8ee11bc5e18fe78ea7cef0388dc6",
+			"revisionTime": "2018-08-27T08:56:28Z"
+		},
+		{
+			"checksumSHA1": "m3s+OrOHAMX0seOVfuDwt766BQE=",
+			"path": "github.com/ziutek/mymysql/native",
+			"revision": "6b05b0cf718f8ee11bc5e18fe78ea7cef0388dc6",
+			"revisionTime": "2018-08-27T08:56:28Z"
 		}
 	],
 	"rootPath": "flyfish"

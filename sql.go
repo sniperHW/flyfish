@@ -97,7 +97,7 @@ func SqlClose() {
 	
 }
 
-func SQLInit(dbname string,user string,password string) bool {
+func SQLInit(host string,port int,dbname string,user string,password string) bool {
 	sql_once.Do(func() {
 
 		pendingWB = list.New()
@@ -106,13 +106,13 @@ func SQLInit(dbname string,user string,password string) bool {
 
 		sqlLoadQueue = util.NewBlockQueueWithName(fmt.Sprintf("sqlLoad"),conf.SqlLoadEventQueueSize)
 		for i := 0; i < conf.SqlLoadPoolSize; i++ {
-			go sqlRoutine(sqlLoadQueue,newSqlLoader(conf.SqlLoadPipeLineSize,dbname,user,password))
+			go sqlRoutine(sqlLoadQueue,newSqlLoader(conf.SqlLoadPipeLineSize,host,port,dbname,user,password))
 		}	
 
 		sqlUpdateQueue = make([]*util.BlockQueue,conf.SqlUpdatePoolSize)
 		for i := 0; i < conf.SqlUpdatePoolSize; i++ {
 			sqlUpdateQueue[i] = util.NewBlockQueueWithName(fmt.Sprintf("sqlUpdater:%d",i),conf.SqlUpdateEventQueueSize)
-			go sqlRoutine(sqlUpdateQueue[i],newSqlUpdater(conf.SqlUpdatePipeLineSize,dbname,user,password))
+			go sqlRoutine(sqlUpdateQueue[i],newSqlUpdater(conf.SqlUpdatePipeLineSize,host,port,dbname,user,password))
 		}
 
 		go writeBackRoutine()

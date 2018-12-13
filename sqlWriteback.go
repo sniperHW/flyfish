@@ -85,11 +85,11 @@ type sqlUpdater struct {
 	db             *sqlx.DB	
 }
 
-func newSqlUpdater(max int,dbname string,user string,password string) *sqlUpdater {
+func newSqlUpdater(max int,host string, port int,dbname string,user string,password string) *sqlUpdater {
 	t := &sqlUpdater {
 		max     : max,
 	}
-	t.db,_ = pgOpen(dbname,user,password)
+	t.db,_ = pgOpen(host,port,dbname,user,password)
 
 	return t
 }
