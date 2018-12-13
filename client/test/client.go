@@ -97,7 +97,10 @@ func main() {
 
 	id = 0
 
-	c := kclient.OpenClient("localhost:10012")//eventQueue)
+
+	services := []string{"localhost:10012","localhost:10013"}
+
+	c := kclient.OpenClient(services)//eventQueue)
 
 	for i := 0; i < 100; i++ {
 		Set(c)

@@ -1,18 +1,10 @@
 package client
 
 import (
-	//protocol "flyfish/proto"
-	//"github.com/golang/protobuf/proto"
-	//"github.com/sniperHW/kendynet/util"
-	//"flyfish/codec"
 	"github.com/sniperHW/kendynet"
-	//"time"
-	//"sync/atomic"
 	"flyfish/errcode"
 	"runtime"
-	//"fmt"
 )
-
 
 type ResultSet struct {
 	ErrCode  int32
@@ -22,13 +14,12 @@ type ResultSet struct {
 type MGetCallBack func(*ResultSet)
 
 type MGetCmd struct {
-	client     *Client
+	c          *Client
 	cmds       map[string]*Cmd
 	resultSet  ResultSet
 	callback   MGetCallBack
 	respCount  int
 }
-
 
 func mGetPcall(cb MGetCallBack,r *ResultSet) {
 	defer func(){
@@ -56,41 +47,39 @@ func (this *MGetCmd) Exec(cb MGetCallBack) {
 	for k,v := range(this.cmds) {
 		key := k
 		v.Exec(func(r *Result){
-
-			if nil == this.callback {
-				return
-			}
-			if r.ErrCode == errcode.ERR_OK || r.ErrCode == errcode.ERR_NOTFOUND {
-
-				this.respCount++
-				if nil == this.resultSet.Results {
-					this.resultSet.Results = map[string]*Result{}
+			this.c.mGetQueue.PostNoWait(func() {
+				if nil == this.callback {
+					return
 				}
-				if r.ErrCode == errcode.ERR_OK { 
-					this.resultSet.Results[key] = r
+				if r.ErrCode == errcode.ERR_OK || r.ErrCode == errcode.ERR_NOTFOUND {
+
+					this.respCount++
+					if nil == this.resultSet.Results {
+						this.resultSet.Results = map[string]*Result{}
+					}
+					if r.ErrCode == errcode.ERR_OK { 
+						this.resultSet.Results[key] = r
+					} else {
+						this.resultSet.Results[key] = nil
+					}
+					if this.respCount == len(this.cmds) {
+						callback := this.callback
+						this.callback = nil
+						this.c.mGetDoCallBack(callback,&this.resultSet)
+					}
+
 				} else {
-					this.resultSet.Results[key] = nil
-				}
-				if this.respCount == len(this.cmds) {
 					callback := this.callback
 					this.callback = nil
-					this.client.mGetDoCallBack(callback,&this.resultSet)
+					this.resultSet.ErrCode = r.ErrCode
+					this.c.mGetDoCallBack(callback,&this.resultSet)
 				}
-
-			} else {
-				callback := this.callback
-				this.callback = nil
-				this.resultSet.ErrCode = r.ErrCode
-				this.client.mGetDoCallBack(callback,&this.resultSet)
-			}
+			})
 		})
 	}
 }
 
 
-/*
-*   任意一条指令返回失败都会导致整个mget失败
-*/
 func (this *Client) MGet(table string,keys []string,fields ...string) *MGetCmd {
 	l := len(keys)
 	if l == 0 {
@@ -101,10 +90,9 @@ func (this *Client) MGet(table string,keys []string,fields ...string) *MGetCmd {
 		return nil
 	}
 
-
 	cmd := &MGetCmd{
-		client : this,
-		cmds   : map[string]*Cmd{},
+		c    : this,
+		cmds : map[string]*Cmd{},
 	}
 
 	for _,key := range(keys) {
@@ -120,9 +108,7 @@ func (this *Client) MGet(table string,keys []string,fields ...string) *MGetCmd {
 
 
 /*
-*   任意一条指令返回失败都会导致整个mget失败
-*/
-func (this *Client) MGetAll(table string,keys []string) *MGetCmd {
+func (this *Conn) MGetAll(table string,keys []string) *MGetCmd {
 	l := len(keys)
 	if l == 0 {
 		return nil
@@ -134,7 +120,7 @@ func (this *Client) MGetAll(table string,keys []string) *MGetCmd {
 
 
 	cmd := &MGetCmd{
-		client : this,
+		conn   : this,
 		cmds   : map[string]*Cmd{},
 	}
 
@@ -147,4 +133,4 @@ func (this *Client) MGetAll(table string,keys []string) *MGetCmd {
 	}
 
 	return cmd
-}
+}*/

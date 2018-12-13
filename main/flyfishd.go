@@ -42,6 +42,7 @@ func main() {
 
 	outLogger := golog.NewOutputLogger(conf.LogDir, conf.LogPrefix, conf.MaxLogfileSize)
 	flyfish.InitLogger(outLogger,golog.Str2loglevel(conf.LogLevel))
+	kendynet.InitLogger(outLogger,conf.LogPrefix)
 
 	metas := []string{
 		"users1@age:int:0,phone:string:123,name:string:haha",

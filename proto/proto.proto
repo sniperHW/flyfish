@@ -184,9 +184,29 @@ message del_req {
 }
 
 message del_resp {
-    required int64  seqno   = 1;
-    required int32  errCode = 2;
+    required int64  seqno    = 1;
+    required int32  errCode  = 2;
     optional int64  version  = 3; 
+}
+
+
+message row {
+  repeated fields field   = 1;
+}
+
+
+message scan_req {
+  required int64  seqno   = 1;
+  optional int64  scaner  = 2;  
+  required string table   = 3;  
+  repeated fields string  = 4;
+}
+
+message scan_resp {
+  required int64  seqno    = 1;
+  required int32  errCode  = 2;
+  optional int64  scaner   = 3;
+  repeated row    rows     = 4;  
 }
 
 

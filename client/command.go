@@ -74,7 +74,7 @@ func (this *cmdContext) SetIndex(idx uint32) {
 }
 
 type Cmd struct {
-	client *Client
+	conn    *Conn
 	req     proto.Message
 	seqno   int64  
 }
@@ -85,11 +85,11 @@ func (this Cmd) Exec(cb CommandCallBack) {
 		callback : cb,
 		req      : this.req,
 	}
-	this.client.exec(context)
+	this.conn.exec(context)
 }
 
 
-func (this *Client) Get(table,key string,fields ...string) *Cmd {
+func (this *Conn) Get(table,key string,fields ...string) *Cmd {
 
 	if len(fields) == 0 {
 		return nil
@@ -103,13 +103,13 @@ func (this *Client) Get(table,key string,fields ...string) *Cmd {
 	}
 	
 	return &Cmd{
-		client : this,
+		conn   : this,
 		req    : req,
 		seqno  : req.GetSeqno(),
 	}	
 }
 
-func (this *Client) GetAll(table,key string) *Cmd {
+func (this *Conn) GetAll(table,key string) *Cmd {
 	req := &protocol.GetAllReq{
 		Seqno  : proto.Int64(atomic.AddInt64(&this.seqno,1)),
 		Table  : proto.String(table),
@@ -117,13 +117,13 @@ func (this *Client) GetAll(table,key string) *Cmd {
 	}
 	
 	return &Cmd{
-		client : this,
+		conn   : this,
 		req    : req,
 		seqno  : req.GetSeqno(),
 	}
 }
 
-func (this *Client) Set(table,key string,fields map[string]interface{},version ...int64) *Cmd {
+func (this *Conn) Set(table,key string,fields map[string]interface{},version ...int64) *Cmd {
 
 	if len(fields) == 0 {
 		return nil
@@ -144,14 +144,14 @@ func (this *Client) Set(table,key string,fields map[string]interface{},version .
 	}
 
 	return &Cmd{
-		client : this,
+		conn   : this,
 		req    : req,
 		seqno  : req.GetSeqno(),
 	}
 }
 
 //记录不存在时设置
-func (this *Client) SetNx(table,key string,fields map[string]interface{}) *Cmd {
+func (this *Conn) SetNx(table,key string,fields map[string]interface{}) *Cmd {
 	if len(fields) == 0 {
 		return nil
 	}
@@ -167,14 +167,14 @@ func (this *Client) SetNx(table,key string,fields map[string]interface{}) *Cmd {
 	}
 
 	return &Cmd{
-		client : this,
+		conn   : this,
 		req    : req,
 		seqno  : req.GetSeqno(),
 	}
 }
 
 //当记录的field == old时，将其设置为new,并返回field的实际值(如果filed != old,将返回filed的原值)
-func (this *Client) CompareAndSet(table,key,field string, oldV ,newV interface{}) *Cmd {
+func (this *Conn) CompareAndSet(table,key,field string, oldV ,newV interface{}) *Cmd {
 
 	if oldV == nil || newV == nil {
 		return nil
@@ -189,7 +189,7 @@ func (this *Client) CompareAndSet(table,key,field string, oldV ,newV interface{}
 	}
 
 	return &Cmd{
-		client : this,
+		conn   : this,
 		req    : req,
 		seqno  : req.GetSeqno(),
 	}		 
@@ -197,7 +197,7 @@ func (this *Client) CompareAndSet(table,key,field string, oldV ,newV interface{}
 } 
 
 //当记录不存在或记录的field == old时，将其设置为new.并返回field的实际值(如果记录存在且filed != old,将返回filed的原值)
-func (this *Client) CompareAndSetNx(table,key,field string, oldV ,newV interface{}) *Cmd {
+func (this *Conn) CompareAndSetNx(table,key,field string, oldV ,newV interface{}) *Cmd {
 	if oldV == nil || newV == nil {
 		return nil
 	}
@@ -211,13 +211,13 @@ func (this *Client) CompareAndSetNx(table,key,field string, oldV ,newV interface
 	}
 
 	return &Cmd{
-		client : this,
+		conn   : this,
 		req    : req,
 		seqno  : req.GetSeqno(),
 	}
 }
 
-func (this *Client) Del(table,key string,version ...int64) *Cmd {
+func (this *Conn) Del(table,key string,version ...int64) *Cmd {
 
 	req := &protocol.DelReq{
 		Seqno  : proto.Int64(atomic.AddInt64(&this.seqno,1)),
@@ -230,14 +230,14 @@ func (this *Client) Del(table,key string,version ...int64) *Cmd {
 	}
 
 	return &Cmd{
-		client : this,
+		conn   : this,
 		req    : req,
 		seqno  : req.GetSeqno(),
 	}
 
 }
 
-func (this *Client) IncrBy(table,key,field string,value int64) *Cmd {
+func (this *Conn) IncrBy(table,key,field string,value int64) *Cmd {
 	req := &protocol.IncrByReq {
 		Seqno  : proto.Int64(atomic.AddInt64(&this.seqno,1)),
 		Table  : proto.String(table),
@@ -246,13 +246,13 @@ func (this *Client) IncrBy(table,key,field string,value int64) *Cmd {
 	}
 
 	return &Cmd{
-		client : this,
+		conn   : this,
 		req    : req,
 		seqno  : req.GetSeqno(),
 	}	
 }
 
-func (this *Client) DecrBy(table,key,field string,value int64) *Cmd {
+func (this *Conn) DecrBy(table,key,field string,value int64) *Cmd {
 	req := &protocol.DecrByReq {
 		Seqno  : proto.Int64(atomic.AddInt64(&this.seqno,1)),
 		Table  : proto.String(table),
@@ -261,13 +261,13 @@ func (this *Client) DecrBy(table,key,field string,value int64) *Cmd {
 	}
 
 	return &Cmd{
-		client : this,
+		conn   : this,
 		req    : req,
 		seqno  : req.GetSeqno(),
 	}	
 }
 
-func (this *Client) onGetAllResp(resp *protocol.GetAllResp) {
+func (this *Conn) onGetAllResp(resp *protocol.GetAllResp) {
 	c := this.removeContext(resp.GetSeqno())
 	if nil != c {
 		c.result.ErrCode = resp.GetErrCode()
@@ -282,7 +282,7 @@ func (this *Client) onGetAllResp(resp *protocol.GetAllResp) {
 	}	
 }
 
-func (this *Client) onGetResp(resp *protocol.GetResp) {
+func (this *Conn) onGetResp(resp *protocol.GetResp) {
 	c := this.removeContext(resp.GetSeqno())
 	if nil != c {
 		c.result.ErrCode = resp.GetErrCode()
@@ -297,7 +297,7 @@ func (this *Client) onGetResp(resp *protocol.GetResp) {
 	}
 }
 
-func (this *Client) onSetResp(resp *protocol.SetResp) {
+func (this *Conn) onSetResp(resp *protocol.SetResp) {
 	c := this.removeContext(resp.GetSeqno())
 	if nil != c {
 		c.result.ErrCode = resp.GetErrCode()
@@ -308,7 +308,7 @@ func (this *Client) onSetResp(resp *protocol.SetResp) {
 	}
 }
 
-func (this *Client) onSetNxResp(resp *protocol.SetNxResp) {
+func (this *Conn) onSetNxResp(resp *protocol.SetNxResp) {
 	c := this.removeContext(resp.GetSeqno())
 	if nil != c {
 		c.result.ErrCode = resp.GetErrCode()
@@ -319,7 +319,7 @@ func (this *Client) onSetNxResp(resp *protocol.SetNxResp) {
 	}
 }
 
-func (this *Client) onCompareAndSetResp(resp *protocol.CompareAndSetResp) {
+func (this *Conn) onCompareAndSetResp(resp *protocol.CompareAndSetResp) {
 	c := this.removeContext(resp.GetSeqno())
 	if nil != c {
 		c.result.ErrCode = resp.GetErrCode()
@@ -335,7 +335,7 @@ func (this *Client) onCompareAndSetResp(resp *protocol.CompareAndSetResp) {
 	}
 }
 
-func (this *Client) onCompareAndSetNxResp(resp *protocol.CompareAndSetNxResp) {
+func (this *Conn) onCompareAndSetNxResp(resp *protocol.CompareAndSetNxResp) {
 	c := this.removeContext(resp.GetSeqno())
 	if nil != c {
 		c.result.ErrCode = resp.GetErrCode()
@@ -352,7 +352,7 @@ func (this *Client) onCompareAndSetNxResp(resp *protocol.CompareAndSetNxResp) {
 }
 
 
-func (this *Client) onDelResp(resp *protocol.DelResp) {
+func (this *Conn) onDelResp(resp *protocol.DelResp) {
 	c := this.removeContext(resp.GetSeqno())
 	if nil != c {
 		c.result.ErrCode = resp.GetErrCode()
@@ -360,7 +360,7 @@ func (this *Client) onDelResp(resp *protocol.DelResp) {
 	}
 }
 
-func (this *Client) onIncrByResp(resp *protocol.IncrByResp) {
+func (this *Conn) onIncrByResp(resp *protocol.IncrByResp) {
 	c := this.removeContext(resp.GetSeqno())
 	if nil != c {
 		c.result.ErrCode = resp.GetErrCode()
@@ -373,7 +373,7 @@ func (this *Client) onIncrByResp(resp *protocol.IncrByResp) {
 	}	
 }
 
-func (this *Client) onDecrByResp(resp *protocol.DecrByResp) {
+func (this *Conn) onDecrByResp(resp *protocol.DecrByResp) {
 	c := this.removeContext(resp.GetSeqno())
 	if nil != c {
 		c.result.ErrCode = resp.GetErrCode()
@@ -386,7 +386,7 @@ func (this *Client) onDecrByResp(resp *protocol.DecrByResp) {
 	}	
 }
 
-func (this *Client) onMessage(msg *codec.Message) {	
+func (this *Conn) onMessage(msg *codec.Message) {	
 	this.eventQueue.Post(func() {
 		name := msg.GetName()
 		//fmt.Println(name)
