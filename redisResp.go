@@ -16,6 +16,7 @@ func onRedisResp(ctx *processContext) {
 		if ctx.errno == errcode.ERR_OK {
 			if ctx.redisFlag == redis_get || ctx.redisFlag == redis_set_only {
 				ckey.setOK(newVersion)
+				processContextPut(ctx)
 			} else if ctx.redisFlag == redis_del {
 				ckey.setMissing()
 				//投递sql删除请求
@@ -29,6 +30,9 @@ func onRedisResp(ctx *processContext) {
 			 *  将ckey重置为cache_new，强制从数据库取值刷新redis
 			*/
 			ckey.reset()
+			processContextPut(ctx)
+		} else {
+			processContextPut(ctx)
 		}
 		ckey.process()
 	})

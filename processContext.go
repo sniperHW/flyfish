@@ -3,6 +3,7 @@ package flyfish
 import(
 	protocol "flyfish/proto"
 	"flyfish/errcode"
+	"sync"
 )
 
 const (
@@ -29,6 +30,30 @@ type processContext struct {
 	writeBackFlag  int                            //回写数据库类型
 	redisFlag      int	
 }
+
+
+var processContextPool = sync.Pool{
+	New: func() interface{} {
+		return &processContext{}
+	},
+}
+
+func processContextGet() *processContext {
+	p := processContextPool.Get().(*processContext)
+	p.commands = []*command{}
+	p.fields = nil
+	p.errno = errcode.ERR_OK
+	p.replyed = false
+	p.writeBackFlag = write_back_none
+	p.redisFlag = redis_none
+	return p
+}
+
+func processContextPut(p *processContext) {
+	processContextPool.Put(p)
+}
+
+
 
 func (this *processContext) getCmd() *command {
 	if len(this.commands) == 0 {
@@ -269,10 +294,12 @@ func (this *cacheKey) process() {
 		return
 	}
 
-	ctx := &processContext {
+	/*ctx := &processContext {
 		commands : []*command{},
 		fields   : map[string]*protocol.Field{},
-	}
+	}*/
+
+	ctx := processContextGet()
 
 	lastCmdType := cmdNone
 
@@ -330,6 +357,7 @@ func (this *cacheKey) process() {
 	}
 
 	if lastCmdType == cmdNone {
+		processContextPut(ctx)
 		Debugln("lastCmdType == cmdNone")
 		return
 	}

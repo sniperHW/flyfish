@@ -13,6 +13,7 @@ func onSqlNotFound(ctx *processContext) {
 		ctx.reply(errcode.ERR_NOTFOUND,nil,-1)
 		mainQueue.PostNoWait(func(){
 			ckey := ctx.getCacheKey()
+			processContextPut(ctx)
 			ckey.setMissing()	
 			ckey.unlock()
 			ckey.process()
@@ -46,7 +47,8 @@ func onSqlExecError(ctx *processContext) {
 	Debugln("onSqlExecError key",ctx.getUniKey())
 	ctx.reply(errcode.ERR_SQLERROR,nil,-1)
 	mainQueue.PostNoWait(func(){
-		ckey := ctx.getCacheKey()	
+		ckey := ctx.getCacheKey()
+		processContextPut(ctx)	
 		ckey.unlock()
 		ckey.process()	
 	})
@@ -72,6 +74,7 @@ func onSqlLoadOKSet(ctx *processContext) {
 			ctx.reply(errcode.ERR_VERSION,nil,version)
 			mainQueue.PostNoWait(func(){
 				ckey := ctx.getCacheKey()
+				processContextPut(ctx)
 				ckey.unlock()
 				ckey.process()
 			})
@@ -138,6 +141,8 @@ func onSqlLoadOKDel(ctx *processContext) {
 		ckey := ctx.getCacheKey()
 		if errCode == errcode.ERR_OK {
 			ckey.setMissing()
+		} else {
+			processContextPut(ctx)
 		}
 		ckey.unlock()
 		ckey.process()
