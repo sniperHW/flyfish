@@ -410,7 +410,9 @@ func (this *Conn) onMessage(msg *codec.Message) {
 			this.onIncrByResp(msg.GetData().(*protocol.IncrByResp))
 		} else if name == "*proto.DecrByResp" { 
 			this.onDecrByResp(msg.GetData().(*protocol.DecrByResp))
-		}  else {
+		} else if name == "*proto.ScanResp" {
+			//this.onScanResp(msg.GetData().(*protocol.ScanResp))
+		} else {
 
 		}
 	})

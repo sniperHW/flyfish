@@ -3,6 +3,7 @@ package main
 
 import(
 	"fmt"
+	"strings"
 )
 
 func isPow2(size int) bool {
@@ -92,6 +93,10 @@ func main() {
 	s.join(ss,",")
 	fmt.Println(s.toString())
 
+
+	v := strings.Split("1213:123213:",":")
+
+	fmt.Println(len(v),v[0],v[1],v[2])
 
 
 	/*s.append("hello")

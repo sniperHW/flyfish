@@ -19,7 +19,8 @@ const (
 	ERR_STALE_CACHE                 = int32(15) //缓存不一致
 	ERR_KEY_EXIST                   = int32(16) //key已经存在
 	ERR_NOT_EQUAL                   = int32(17) //指定的field值与要求的不相等
-	ERR_END                         = int32(18)
+	ERR_SCAN_END                    = int32(18)
+	ERR_END                         = int32(19)
 )
 
 
@@ -42,6 +43,7 @@ var err_str []string = []string{
 	"cache stale",
 	"key already exist",
 	"not equal",
+	"scan finish",	
 }
 
 func GetErrorStr(code int32) string {

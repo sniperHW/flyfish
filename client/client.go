@@ -78,6 +78,17 @@ func (this *Client) Get(table,key string,fields ...string) *Cmd {
 	return conn.Get(table,key,fields...)
 }
 
+
+func (this *Client) GetAll(table,key string) *Cmd {
+	var conn *Conn
+	if len(this.conns) == 1 {
+		conn = this.conns[0]
+	} else {
+		conn = this.conns[stringHash(key)%len(this.conns)]
+	}
+	return conn.GetAll(table,key)
+}
+
 func (this *Client) Set(table,key string,fields map[string]interface{},version ...int64) *Cmd {
 	var conn *Conn
 	if len(this.conns) == 1 {

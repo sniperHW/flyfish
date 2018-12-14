@@ -107,8 +107,8 @@ func (this *Client) MGet(table string,keys []string,fields ...string) *MGetCmd {
 }
 
 
-/*
-func (this *Conn) MGetAll(table string,keys []string) *MGetCmd {
+
+func (this *Client) MGetAll(table string,keys []string) *MGetCmd {
 	l := len(keys)
 	if l == 0 {
 		return nil
@@ -120,7 +120,7 @@ func (this *Conn) MGetAll(table string,keys []string) *MGetCmd {
 
 
 	cmd := &MGetCmd{
-		conn   : this,
+		c      : this,
 		cmds   : map[string]*Cmd{},
 	}
 
@@ -133,4 +133,4 @@ func (this *Conn) MGetAll(table string,keys []string) *MGetCmd {
 	}
 
 	return cmd
-}*/
+}

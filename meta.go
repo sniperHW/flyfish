@@ -34,6 +34,25 @@ type query_meta struct {
 	field_convter   []func(interface{})interface{}
 }
 
+func (this *query_meta) getReceiverByName(name string) interface{} {
+	for i := 0; i < len(this.field_names); i++ {
+		if this.field_names[i] == name {
+			return this.field_receiver[i]()
+		}
+	}
+	return nil
+}
+
+func (this *query_meta) getConvetorByName(name string) func(interface{})interface{} {
+	for i := 0; i < len(this.field_names); i++ {
+		if this.field_names[i] == name {
+			return this.field_convter[i]
+		}
+	}
+	return nil	
+}
+
+
 func (this *query_meta) getReceiver() []interface{} {
 	return this.receiver_pool.Get().([]interface{})
 }

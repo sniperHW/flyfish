@@ -191,22 +191,22 @@ message del_resp {
 
 
 message row {
-  repeated fields field   = 1;
+  repeated field fields   = 1;
 }
 
 
 message scan_req {
-  required int64  seqno   = 1;
-  optional int64  scaner  = 2;  
-  required string table   = 3;  
-  repeated fields string  = 4;
+  required int64  seqno   = 1;  
+  optional string table   = 2;  
+  repeated string fields  = 3;
+  optional int32  all     = 4;  //获取所有字段
+  optional int32  count   = 5;
 }
 
 message scan_resp {
   required int64  seqno    = 1;
-  required int32  errCode  = 2;
-  optional int64  scaner   = 3;
-  repeated row    rows     = 4;  
+  required int32  errCode  = 2;  
+  repeated row    rows     = 3;
 }
 
 

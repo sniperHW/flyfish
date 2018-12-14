@@ -56,4 +56,8 @@ func init() {
 	pb.Register(&protocol.CompareAndSetNxReq{},19)
 	pb.Register(&protocol.CompareAndSetNxResp{},20)
 
+	pb.Register(&protocol.ScanReq{},21)
+	pb.Register(&protocol.ScanResp{},22)
+
+
 }
