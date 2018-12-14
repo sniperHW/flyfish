@@ -37,15 +37,11 @@ func main() {
 	flyfish.InitLogger(outLogger,golog.Str2loglevel(conf.LogLevel))
 	kendynet.InitLogger(outLogger,conf.LogPrefix)
 
-	metas := []string{
-		"users1@age:int:0,phone:string:123,name:string:haha",
-		"counter@c:int:0",
-	}
-
-	if !flyfish.InitMeta(metas) {
-		fmt.Println("InitMeta failed")
+	if !flyfish.InitTableConfig() {
+		fmt.Println("InitTableConfig failed")
 		return
 	}
+
 	flyfish.RedisInit(conf.RedisHost,conf.RedisPort,conf.RedisPassword)
 	flyfish.SQLInit(conf.PgsqlHost, conf.PgsqlPort, conf.PgsqlDataBase, conf.PgsqlUser, conf.PgsqlPassword)
 
@@ -55,7 +51,7 @@ func main() {
 
 	err := flyfish.StartTcpServer("tcp",fmt.Sprintf("%s:%d",conf.ServiceHost,conf.ServicePort))
 	if nil == err {
-		fmt.Println("flyfish start ok")
+		fmt.Println("flyfish start:",fmt.Sprintf("%s:%d",conf.ServiceHost,conf.ServicePort))
 		c := make(chan os.Signal) 
 		signal.Notify(c, syscall.SIGINT) //监听指定信号
 		_ = <-c //阻塞直至有信号传入

@@ -21,16 +21,24 @@ var MaxPacketSize           = uint64(1024*1024*4)
 var WriteBackDelay          = int64(5)
 var MaxUpdateStringSize     = int(1024*1024*4)
 var StrInitCap              = int(1024*1024)
-var ServiceHost             = "localhost"
+var ServiceHost             = "127.0.0.1"
 var ServicePort             = 10012
-var RedisHost               = "locahost"
+var RedisHost               = "127.0.0.1"
 var RedisPort               = 6379
 var RedisPassword           = ""
-var PgsqlHost               = "localhost"
+var PgsqlHost               = "127.0.0.1"
 var PgsqlPort               = 5432
 var PgsqlUser               = "sniper"
 var PgsqlPassword           = "802802"
 var PgsqlDataBase           = "test"
+
+var ConfDbHost              = "127.0.0.1"
+var ConfDbPort              = 5432
+var ConfDbUser              = "sniper"
+var ConfDbPassword          = "802802"
+var ConfDataBase            = "test"
+
+
 var MaxLogfileSize          = int(1024*1024*100)
 var LogDir                  = "log"
 var LogPrefix               = "flyfish"
@@ -204,6 +212,31 @@ func redisPassword(v string) {
 }
 
 
+func confDbHost(v string) {
+	ConfDbHost = v
+}
+
+func confDbPort(v string) {
+	i, err := strconv.ParseInt(v, 10, 32)
+	if nil == err {
+		ConfDbPort = int(i)
+	}	
+}
+
+func confDbUser(v string) {
+	ConfDbUser = v
+}
+
+func confDbPassword(v string) {
+	ConfDbPassword = v
+}
+
+func confDataBase(v string) {
+	ConfDataBase = v
+}
+
+
+
 func pgsqlHost(v string) {
 	PgsqlHost = v
 }
@@ -288,6 +321,11 @@ func init() {
 	parser["PgsqlPassword"] = pgsqlPassword
 	parser["PgsqlDataBase"] = pgsqlDataBase
 
+	parser["ConfDbHost"] = confDbHost
+	parser["ConfDbPort"] = confDbPort	
+	parser["ConfDbUser"] = confDbUser
+	parser["ConfDbPassword"] = confDbPassword
+	parser["ConfDataBase"] = confDataBase
 
 	parser["MaxLogfileSize"] = maxLogfileSize
 	parser["LogDir"] = logDir	
