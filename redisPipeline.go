@@ -86,11 +86,17 @@ func (this *redisPipeliner) readGetResult(rcmd *redisCmd) {
 		rcmd.ctx.errno = errcode.ERR_REDIS
 	} else{
 		for kk,vv := range(r) {
+			if vv == nil {
+				rcmd.ctx.errno = errcode.ERR_STALE_CACHE
+				return
+			}
 			name := rcmd.fields[kk]
 			ckey := rcmd.ctx.getCacheKey()
 			f := ckey.convertStr(name,vv.(string))
 			if nil != f {
 				rcmd.ctx.fields[name] = f
+			} else {
+				Debugln("invaild value",name,vv.(string))
 			}
 		}
 	}	
