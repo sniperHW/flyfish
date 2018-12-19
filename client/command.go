@@ -121,6 +121,7 @@ func (this *Conn) Get(table,key string,fields ...string) *SliceCmd {
 		Table  : proto.String(table),
 		Key    : proto.String(key),
 		Fields : fields,
+		Timeout : proto.Int64(int64(requestTimeout)),
 	}
 	
 	return &SliceCmd{
@@ -135,6 +136,7 @@ func (this *Conn) GetAll(table,key string) *SliceCmd {
 		Seqno  : proto.Int64(atomic.AddInt64(&this.seqno,1)),
 		Table  : proto.String(table),
 		Key    : proto.String(key),
+		Timeout : proto.Int64(int64(requestTimeout)),
 	}
 	
 	return &SliceCmd{
@@ -154,6 +156,7 @@ func (this *Conn) Set(table,key string,fields map[string]interface{},version ...
 		Seqno  : proto.Int64(atomic.AddInt64(&this.seqno,1)),
 		Table  : proto.String(table),
 		Key    : proto.String(key),
+		Timeout : proto.Int64(int64(requestTimeout)),
 	}
 
 	if len(version) > 0 {
@@ -181,6 +184,7 @@ func (this *Conn) SetNx(table,key string,fields map[string]interface{}) *StatusC
 		Seqno  : proto.Int64(atomic.AddInt64(&this.seqno,1)),
 		Table  : proto.String(table),
 		Key    : proto.String(key),
+		Timeout : proto.Int64(int64(requestTimeout)),
 	}
 
 	for k,v := range(fields) {
@@ -207,6 +211,7 @@ func (this *Conn) CompareAndSet(table,key,field string, oldV ,newV interface{}) 
 		Key    : proto.String(key),
 		New    : protocol.PackField(field,newV),
 		Old    : protocol.PackField(field,oldV),
+		Timeout : proto.Int64(int64(requestTimeout)),
 	}
 
 	return &SliceCmd{
@@ -229,6 +234,7 @@ func (this *Conn) CompareAndSetNx(table,key,field string, oldV ,newV interface{}
 		Key    : proto.String(key),
 		New    : protocol.PackField(field,newV),
 		Old    : protocol.PackField(field,oldV),
+		Timeout : proto.Int64(int64(requestTimeout)),
 	}
 
 	return &SliceCmd{
@@ -244,6 +250,7 @@ func (this *Conn) Del(table,key string,version ...int64) *StatusCmd {
 		Seqno  : proto.Int64(atomic.AddInt64(&this.seqno,1)),
 		Table  : proto.String(table),
 		Key    : proto.String(key),
+		Timeout : proto.Int64(int64(requestTimeout)),
 	}
 
 	if len(version) > 0 {
@@ -264,6 +271,7 @@ func (this *Conn) IncrBy(table,key,field string,value int64) *SliceCmd {
 		Table  : proto.String(table),
 		Key    : proto.String(key),
 		Field  : protocol.PackField(field,value),
+		Timeout : proto.Int64(int64(requestTimeout)),
 	}
 
 	return &SliceCmd{
@@ -279,6 +287,7 @@ func (this *Conn) DecrBy(table,key,field string,value int64) *SliceCmd {
 		Table  : proto.String(table),
 		Key    : proto.String(key),
 		Field  : protocol.PackField(field,value),
+		Timeout : proto.Int64(int64(requestTimeout)),
 	}
 
 	return &SliceCmd{

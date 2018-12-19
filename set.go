@@ -8,6 +8,7 @@ import (
 	"flyfish/errcode"
 	"github.com/sniperHW/kendynet"
 	"github.com/golang/protobuf/proto"
+	"time"
 )
 
 ////////////SetReplyer
@@ -18,6 +19,12 @@ type SetReplyer struct {
 }
 
 func (this *SetReplyer) reply(errCode int32,fields map[string]*protocol.Field,version int64) {
+	
+	if time.Now().After(this.cmd.deadline) {
+		//已经超时
+		return
+	}
+
 	var resp proto.Message
 	cmdType := this.cmd.cmdType
 
@@ -113,6 +120,7 @@ func set(session kendynet.StreamSession,msg *codec.Message) {
 		uniKey    : fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey()),
 		version   : req.Version,
 		fields    : map[string]*protocol.Field{},
+		deadline  : time.Now().Add(time.Duration(req.GetTimeout())),
 	}
 
 	cmd.rpyer = &SetReplyer{
@@ -171,6 +179,7 @@ func setNx(session kendynet.StreamSession,msg *codec.Message) {
 		table     : req.GetTable(),
 		uniKey    : fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey()),
 		fields    : map[string]*protocol.Field{},
+		deadline  : time.Now().Add(time.Duration(req.GetTimeout())),
 	}
 
 	cmd.rpyer = &SetReplyer{
@@ -226,6 +235,7 @@ func compareAndSet(session kendynet.StreamSession,msg *codec.Message) {
 			oldV : req.GetOld(),
 			newV : req.GetNew(),
 		},	
+		deadline  : time.Now().Add(time.Duration(req.GetTimeout())),
 	}
 
 	cmd.rpyer = &SetReplyer{
@@ -277,6 +287,7 @@ func compareAndSetNx(session kendynet.StreamSession,msg *codec.Message) {
 			oldV : req.GetOld(),
 			newV : req.GetNew(),
 		},	
+		deadline  : time.Now().Add(time.Duration(req.GetTimeout())),
 	}
 
 	cmd.rpyer = &SetReplyer{

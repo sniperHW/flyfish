@@ -5,7 +5,7 @@ import(
 	protocol "flyfish/proto"
 	//"strconv"
 	//"fmt"
-	//"time"
+	"time"
 	"flyfish/errcode"
 )
 
@@ -50,6 +50,7 @@ type command struct {
 	fields      map[string]*protocol.Field             //for get/set
 	cns         *cnsSt                                 //for compareAndSet
 	incrDecr    *protocol.Field                        //for incr/decr 
+	deadline     time.Time
 }
 
 

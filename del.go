@@ -7,6 +7,7 @@ import (
 	"flyfish/errcode"
 	"github.com/sniperHW/kendynet"
 	"github.com/golang/protobuf/proto"
+	"time"
 )
 
 
@@ -17,6 +18,12 @@ type DelReplyer struct {
 }
 
 func (this *DelReplyer) reply(errCode int32,fields map[string]*protocol.Field,version int64) {
+	
+	if time.Now().After(this.cmd.deadline) {
+		//已经超时
+		return
+	}
+
 	resp := &protocol.DelResp{
 		Seqno : proto.Int64(this.seqno),
 		ErrCode : proto.Int32(errCode),
@@ -67,6 +74,7 @@ func del(session kendynet.StreamSession,msg *codec.Message) {
 		table     : req.GetTable(),
 		uniKey    : fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey()),
 		version   : req.Version,
+		deadline  : time.Now().Add(time.Duration(req.GetTimeout())),
 	}
 
 	cmd.rpyer = &DelReplyer{

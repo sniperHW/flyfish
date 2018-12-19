@@ -12,6 +12,7 @@ import(
 	"flyfish/conf"
 	"fmt"
 	"strings"	
+	"time"
 )
 
 type scaner struct {
@@ -146,17 +147,22 @@ func (this *scaner) next(req *protocol.ScanReq) {
 		ErrCode : proto.Int32(errcode.ERR_SCAN_END),
 	}
 
+	deadline := time.Now().Add(time.Duration(req.GetTimeout()))
+
 	count := req.GetCount()
 
 	if 0 == count {
 		count = 50
 	}
 
-
-
 	selectStr := fmt.Sprintf(selectTemplate,strings.Join(this.fields,","),this.table,count,this.offset)
 
 	rows, err := this.db.Query(selectStr)
+
+	if time.Now().After(deadline) {
+		//已经超时
+		return
+	}
 
 	Debugln("query ok")
 
@@ -201,6 +207,11 @@ func (this *scaner) next(req *protocol.ScanReq) {
 			resp.ErrCode = proto.Int32(errcode.ERR_OK)
 			break
 		}
+	}
+
+	if time.Now().After(deadline) {
+		//已经超时
+		return
 	}
 
 	this.session.Send(resp)

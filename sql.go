@@ -8,7 +8,6 @@ import (
 	//protocol "flyfish/proto"
 	"time"
 	"container/list"
-	"flyfish/errcode"
 )
 
 var sql_once sync.Once
@@ -17,7 +16,7 @@ var sqlLoadQueue            *util.BlockQueue        //for get
 var sqlUpdateQueue 			[]*util.BlockQueue      //for set/del
 var writeBackRecords  	    map[string]*record   
 var writeBackEventQueue     *util.BlockQueue
-var pendingWB               *list.List//pendingWriteBack
+var pendingWB               *list.List
 
 func prepareRecord(ctx *processContext) *record {
 	uniKey := ctx.getUniKey()
@@ -84,15 +83,10 @@ func pushSQLLoad(ctx *processContext) {
 
 		ckey.unlock()
 
-		ctx.reply(errcode.ERR_RETRY,nil,0)
-		
-		//通知所有请求稍后重试	
-		head := ckey.cmdQueue.Front()
-		for ; nil != head; head = ckey.cmdQueue.Front() {
-			cmd := head.Value.(*command)
-			cmd.reply(errcode.ERR_RETRY,nil,0)	
-			ckey.cmdQueue.Remove(head)
-		}
+		/*
+		*  丢弃所有命令，让客户端等待超时 
+		*/
+		ckey.clearCmd()
 
 		return
 	} else {

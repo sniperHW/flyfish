@@ -3,6 +3,7 @@ package flyfish
 import(
 	protocol "flyfish/proto"
 	"flyfish/errcode"
+	"time"
 )
 
 const (
@@ -278,56 +279,63 @@ func (this *cacheKey) process() {
 
 	lastCmdType := cmdNone
 
+	now := time.Now()
+
 	for ; nil != e; e = cmdQueue.Front() {
 		cmd := e.Value.(*command)
-		ok := false 
-		Debugln(cmd.cmdType,lastCmdType)
-		if cmd.cmdType == cmdGet {
-			if !(lastCmdType == cmdNone || lastCmdType == cmdGet) {
-				break
-			}
+		if now.After(cmd.deadline) {
+			//已经超时
 			cmdQueue.Remove(e)
-			ok = this.processGet(ctx,cmd)
-			if ok {
-				lastCmdType = cmd.cmdType
-			}			
-		} else if lastCmdType == cmdNone {
-			Debugln("here",cmd.cmdType)
-			cmdQueue.Remove(e)
-			switch cmd.cmdType {
-			case cmdSet:
-				ok = this.processSet(ctx,cmd)				
-				break
-			case cmdSetNx:
-				ok = this.processSetNx(ctx,cmd)
-				break
-			case cmdCompareAndSet:
-				ok = this.processCompareAndSet(ctx,cmd)
-				break
-			case cmdCompareAndSetNx:
-				ok = this.processCompareAndSetNx(ctx,cmd)
-				break
-			case cmdIncrBy:
-				ok = this.processIncrBy(ctx,cmd)
-				break
-			case cmdDecrBy:
-				ok = this.processDecrBy(ctx,cmd)
-				break
-			case cmdDel:
-				ok = this.processDel(ctx,cmd)
-				break
-			default:
-				//记录日志
-				break
-			}
-				
-			if ok {
-				lastCmdType = cmd.cmdType
-				break
-			}
-
 		} else {
-			break
+			ok := false 
+			Debugln(cmd.cmdType,lastCmdType)
+			if cmd.cmdType == cmdGet {
+				if !(lastCmdType == cmdNone || lastCmdType == cmdGet) {
+					break
+				}
+				cmdQueue.Remove(e)
+				ok = this.processGet(ctx,cmd)
+				if ok {
+					lastCmdType = cmd.cmdType
+				}			
+			} else if lastCmdType == cmdNone {
+				Debugln("here",cmd.cmdType)
+				cmdQueue.Remove(e)
+				switch cmd.cmdType {
+				case cmdSet:
+					ok = this.processSet(ctx,cmd)				
+					break
+				case cmdSetNx:
+					ok = this.processSetNx(ctx,cmd)
+					break
+				case cmdCompareAndSet:
+					ok = this.processCompareAndSet(ctx,cmd)
+					break
+				case cmdCompareAndSetNx:
+					ok = this.processCompareAndSetNx(ctx,cmd)
+					break
+				case cmdIncrBy:
+					ok = this.processIncrBy(ctx,cmd)
+					break
+				case cmdDecrBy:
+					ok = this.processDecrBy(ctx,cmd)
+					break
+				case cmdDel:
+					ok = this.processDel(ctx,cmd)
+					break
+				default:
+					//记录日志
+					break
+				}
+					
+				if ok {
+					lastCmdType = cmd.cmdType
+					break
+				}
+
+			} else {
+				break
+			}
 		}
 	}
 

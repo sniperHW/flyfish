@@ -60,6 +60,7 @@ func (this *Scaner) Next(count int32,cb func(*Scaner,*MutiResult)) error {
 
 	req := &protocol.ScanReq{
 		Seqno : proto.Int64(atomic.AddInt64(&this.conn.seqno,1)),
+		Timeout : proto.Int64(int64(requestTimeout)),
 	}
 	if atomic.CompareAndSwapInt32(&this.first,0,1) {
 		req.Table = proto.String(this.table)

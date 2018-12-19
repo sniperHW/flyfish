@@ -20,8 +20,7 @@ const (
 	ERR_KEY_EXIST                   = int32(16) //key已经存在
 	ERR_NOT_EQUAL                   = int32(17) //指定的field值与要求的不相等
 	ERR_SCAN_END                    = int32(18)
-	ERR_RETRY                       = int32(19)
-	ERR_END                         = int32(20)
+	ERR_END                         = int32(19)
 )
 
 
@@ -45,7 +44,6 @@ var err_str []string = []string{
 	"key already exist",
 	"not equal",
 	"scan finish",	
-	"retry",
 }
 
 func GetErrorStr(code int32) string {

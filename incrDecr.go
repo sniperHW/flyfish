@@ -7,6 +7,7 @@ import (
 	"flyfish/errcode"
 	"github.com/sniperHW/kendynet"
 	"github.com/golang/protobuf/proto"
+	"time"
 )
 
 
@@ -17,6 +18,12 @@ type IncrDecrByReplyer struct {
 }
 
 func (this *IncrDecrByReplyer) reply(errCode int32,fields map[string]*protocol.Field,version int64) {
+	
+	if time.Now().After(this.cmd.deadline) {
+		//已经超时
+		return
+	}
+
 	var resp proto.Message
 	cmdType := this.cmd.cmdType
 	if cmdType == cmdIncrBy {
@@ -76,6 +83,7 @@ func incrBy(session kendynet.StreamSession,msg *codec.Message) {
 		table     : req.GetTable(),
 		uniKey    : fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey()),
 		incrDecr  : req.GetField(),
+		deadline  : time.Now().Add(time.Duration(req.GetTimeout())),
 	}
 
 
@@ -123,6 +131,7 @@ func decrBy(session kendynet.StreamSession,msg *codec.Message) {
 		table     : req.GetTable(),
 		uniKey    : fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey()),
 		incrDecr  : req.GetField(),
+		deadline  : time.Now().Add(time.Duration(req.GetTimeout())),
 	}
 
 	cmd.rpyer = &IncrDecrByReplyer{

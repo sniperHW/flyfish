@@ -7,6 +7,7 @@ import (
 	"flyfish/errcode"
 	"github.com/sniperHW/kendynet"
 	"github.com/golang/protobuf/proto"
+	"time"
 )
 
 type GetReplyer struct {
@@ -17,6 +18,11 @@ type GetReplyer struct {
 }
 
 func (this *GetReplyer) reply(errCode int32,fields map[string]*protocol.Field,version int64) {
+
+	if time.Now().After(this.cmd.deadline) {
+		//已经超时
+		return
+	}
 
 	var resp proto.Message
 
@@ -106,6 +112,7 @@ func getAll(session kendynet.StreamSession,msg *codec.Message) {
 		table     : req.GetTable(),
 		uniKey    : fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey()),
 		fields    : map[string]*protocol.Field{},
+		deadline  : time.Now().Add(time.Duration(req.GetTimeout())),
 	}
 
 	cmd.rpyer = &GetReplyer{
@@ -157,6 +164,7 @@ func get(session kendynet.StreamSession,msg *codec.Message) {
 		table     : req.GetTable(),
 		uniKey    : fmt.Sprintf("%s:%s",req.GetTable(),req.GetKey()),
 		fields    : map[string]*protocol.Field{},
+		deadline  : time.Now().Add(time.Duration(req.GetTimeout())),
 	}
 
 	cmd.rpyer = &GetReplyer{
