@@ -7,10 +7,10 @@
 ## 系统结构
 
 	redis      pgsql
-		\      /
-		flyfishd
-		   |
-		 client
+	   \      /
+	   flyfishd
+	      |
+            client
 
 
 ## 数据存储
