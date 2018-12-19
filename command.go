@@ -4,8 +4,8 @@ import(
 	"github.com/sniperHW/kendynet/event"
 	protocol "flyfish/proto"
 	//"strconv"
-	"fmt"
-	"time"
+	//"fmt"
+	//"time"
 	"flyfish/errcode"
 )
 
@@ -102,12 +102,12 @@ func init() {
 		mainQueue.Run()
 	}()
 
-	go func(){
+	/*go func(){
 		for {
 			time.Sleep(time.Second)
 			fmt.Println("keys:",len(cacheKeys),"writeBackKeys",len(writeBackRecords),"writeBackQueue_.size",pendingWB.Len())
 		}
-	}()
+	}()*/
 
 }
 

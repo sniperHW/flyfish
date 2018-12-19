@@ -57,11 +57,13 @@ func (this *tcpListener) Start() error {
 		session.SetReceiver(codec.NewReceiver())
 		session.SetEncoder(codec.NewEncoder())
 		session.SetCloseCallBack(func(sess kendynet.StreamSession, reason string) {
+			fmt.Println("close callback")
 			onClose(sess, reason)
 		})
 		onNewClient(session)
 		session.Start(func(event *kendynet.Event) {
 			if event.EventType == kendynet.EventTypeError {
+				fmt.Println("on error")
 				event.Session.Close(event.Data.(error).Error(), 0)
 			} else {
 				msg := event.Data.(*codec.Message)

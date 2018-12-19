@@ -1,12 +1,14 @@
 package client
 
-/*
 import (
 	"github.com/sniperHW/kendynet"
+	"runtime"
 	"github.com/sniperHW/kendynet/event"
 	"flyfish/errcode"
-	"runtime"
+	protocol "flyfish/proto"
+	"github.com/golang/protobuf/proto"
 	"sync/atomic"
+	//"fmt"
 )
 
 type Scaner struct {
@@ -15,12 +17,12 @@ type Scaner struct {
 	table           string
 	fileds          []string
 	getAll          bool                   //获取所有字段
-	first           int32              
+	first           int32                      
 }
 
 //如果不传fields表示getAll
-func (this *Client) Scaner(table string,fileds string...) *Scaner {
-	s := &scaner{
+func (this *Client) Scaner(table string,fileds ...string) *Scaner {
+	s := &Scaner{
 		callbackQueue : this.callbackQueue,
 		table : table,
 		fileds : fileds,
@@ -32,14 +34,27 @@ func (this *Client) Scaner(table string,fileds string...) *Scaner {
 	return s
 }
 
-func (this *Scaner) Next(count int,callback func(*Scaner,*ResultSet)) {
+func (this *Scaner) wrapCb(cb func(*Scaner,*MutiResult)) func(*MutiResult) {
+	return func(r *MutiResult) {
+		defer func(){
+			if r := recover(); r != nil {
+				buf := make([]byte, 65535)
+				l := runtime.Stack(buf, false)
+				kendynet.Errorf("%v: %s\n", r, buf[:l])
+			}			
+		}()		
+		cb(this,r)
+	}
+}
+
+func (this *Scaner) Next(count int32,cb func(*Scaner,*MutiResult)) {
 
 	if count <= 0 {
 		count = 50
 	}
 
 	req := &protocol.ScanReq{
-		seqno : proto.Int64(atomic.AddInt64(&this.conn.seqno,1)),
+		Seqno : proto.Int64(atomic.AddInt64(&this.conn.seqno,1)),
 	}
 	if atomic.CompareAndSwapInt32(&this.first,0,1) {
 		req.Table = proto.String(this.table)
@@ -59,24 +74,53 @@ func (this *Scaner) Next(count int,callback func(*Scaner,*ResultSet)) {
 		}
 	}
 	req.Count = proto.Int32(count)
+
 	context := &cmdContext {
-		seqno    : this.seqno,
-		scanCB   : callback,
-		scaner   : this,
-		req      : this.req,
+		seqno : req.GetSeqno(),
+		cb : callback{
+				tt : cb_muti,
+				cb : this.wrapCb(cb),
+			},
+		req : req,
 	}
 	this.conn.exec(context)
 }
 
 func (this *Scaner) Close() {
-
+	this.conn.Close()
 }
 
 func (this *Conn) onScanResp(resp *protocol.ScanResp) {
 	c := this.removeContext(resp.GetSeqno())
 	if nil != c {	
+		ret := MutiResult{
+			ErrCode : resp.GetErrCode(),
+			Rows    : []*Row{},
+		}
+
+		if ret.ErrCode == errcode.ERR_OK {
+			for _,v := range(resp.GetRows()){
+				fields := v.GetFields()
+				r := &Row {
+					Fields : map[string]*Field{},
+				}
+
+				for _,field := range(fields) {
+					if field.GetName() == "__key__" {
+						r.Key = field.GetString()
+					} else if field.GetName() == "__version__" {
+						r.Version = field.GetInt()
+					} else {
+						r.Fields[field.GetName()] = (*Field)(field)
+					}
+				}
+
+				ret.Rows = append(ret.Rows,r)
+			}
+		}
+		this.doCallBack(c.cb,&ret)
 	}	
 }
-*/
+
 
 

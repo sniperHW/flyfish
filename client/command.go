@@ -9,7 +9,7 @@ import (
 	"time"
 	"sync/atomic"
 	"flyfish/errcode"
-	//"fmt"
+	"fmt"
 )
 
 type Field protocol.Field
@@ -109,28 +109,6 @@ func (this *SliceCmd) Exec(cb func(*SliceResult)) {
 	}
 	this.conn.exec(context)
 }
-
-/*
-type MutiCmd struct {
-	conn    *Conn
-	req     proto.Message
-	seqno   int64 	
-}
-
-
-func (this *MutiCmd) Exec(cb func(*MutiResult)) {
-	context := &cmdContext {
-		seqno : this.seqno,
-		cb : callback{
-				tt : cb_muti,
-				cb : cb,
-			},
-		req : this.req,
-	}
-	this.conn.exec(context)
-}
-*/
-
 
 func (this *Conn) Get(table,key string,fields ...string) *SliceCmd {
 
@@ -464,7 +442,7 @@ func (this *Conn) onDecrByResp(resp *protocol.DecrByResp) {
 func (this *Conn) onMessage(msg *codec.Message) {	
 	this.eventQueue.Post(func() {
 		name := msg.GetName()
-		//fmt.Println(name)
+		fmt.Println(name)
 		if name == "*proto.PingResp" {
 			return
 		} else if name == "*proto.GetResp" {
@@ -486,7 +464,8 @@ func (this *Conn) onMessage(msg *codec.Message) {
 		} else if name == "*proto.DecrByResp" { 
 			this.onDecrByResp(msg.GetData().(*protocol.DecrByResp))
 		} else if name == "*proto.ScanResp" {
-			//this.onScanResp(msg.GetData().(*protocol.ScanResp))
+			fmt.Println("onScanResp")
+			this.onScanResp(msg.GetData().(*protocol.ScanResp))
 		} else {
 
 		}

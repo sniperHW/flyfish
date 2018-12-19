@@ -53,16 +53,18 @@ func openConn(addr string,callbackQueue ...*event.EventQueue) *Conn {
 
 func (this *Conn) onClose() {
 	if nil != this.session {
+		fmt.Println("close")
 		this.session.Close("",0)
 		this.minheap.Clear()
 		this.eventQueue.Close()
 
 		for _,c := range(this.pendingSend) {
+			fmt.Println("close here")
 			if c.status != wait_remove {
 				this.doCallBack(c.cb,errcode.ERR_CLOSE)			
 			}
 		}
-
+		fmt.Println(this.waitResp)
 		for _,c := range(this.waitResp) {
 			this.doCallBack(c.cb,errcode.ERR_CLOSE)	
 		}				
@@ -96,7 +98,7 @@ func (this *Conn) checkTimeout(now *time.Time) {
 				if _,ok := this.waitResp[c.seqno];!ok{
 					kendynet.Infof("timeout cmdContext:%d not found\n",c.seqno)					
 				} else {
-					kendynet.Infof("timeout cmdContext:%d\n",c.seqno)
+					kendynet.Infof("timeout cmdContext:%d\n",c.seqno)	
 					delete(this.waitResp,c.seqno)
 					this.doCallBack(c.cb,errcode.ERR_TIMEOUT)	
 				}
@@ -207,6 +209,7 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 				this.sendReq(v)
 			}
 		}
+		this.pendingSend = []*cmdContext{}
 	})
 }
 

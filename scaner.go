@@ -26,7 +26,11 @@ type scaner struct {
 }
 
 func (this *scaner) close() {
+	Debugln("scaner close")
 	if atomic.CompareAndSwapInt32(&this.closed,0,1) {
+		
+		Debugln("scaner close ok")
+
 		if nil != this.db {
 			this.db.Close()
 		}
@@ -38,6 +42,8 @@ func (this *scaner) close() {
 }
 
 func (this *scaner) next(req *protocol.ScanReq) {
+
+	Debugln("next")
 
 	resp := &protocol.ScanResp{
 		Seqno : proto.Int64(req.GetSeqno()),
@@ -95,6 +101,8 @@ func scan(session kendynet.StreamSession,msg *codec.Message) {
 
 	req := msg.GetData().(*protocol.ScanReq)
 
+	Debugln("scan")
+
 	var s *scaner
 
 	if u == nil {
@@ -140,9 +148,9 @@ func scan(session kendynet.StreamSession,msg *codec.Message) {
 		}
 
 
-		s := &scaner{}
+		s = &scaner{}
 
-		selectTemplate := "select %s from %s"
+		selectTemplate := "select %s from %s order by __key__"
 
 		if 1 == req.GetAll() {
 			s.fields = meta.queryMeta.field_names
@@ -173,15 +181,21 @@ func scan(session kendynet.StreamSession,msg *codec.Message) {
 			return
 		}
 
+		Debugln("pgOpen ok")
+
 		selectStr := fmt.Sprintf(selectTemplate,strings.Join(s.fields,","),req.GetTable())
 
 		s.rows, err = s.db.Query(selectStr)
+
+		Debugln("query ok")
 
 		if nil != err {
 			resp.ErrCode =  proto.Int32(errcode.ERR_SQLERROR)
 			session.Send(resp)
 			session.Close("",1)			
 			return		
+		} else {
+			Debugln("query ok")
 		}
 
 		s.session = session
