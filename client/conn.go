@@ -53,18 +53,15 @@ func openConn(addr string,callbackQueue ...*event.EventQueue) *Conn {
 
 func (this *Conn) onClose() {
 	if nil != this.session {
-		fmt.Println("close")
 		this.session.Close("",0)
 		this.minheap.Clear()
 		this.eventQueue.Close()
 
 		for _,c := range(this.pendingSend) {
-			fmt.Println("close here")
 			if c.status != wait_remove {
 				this.doCallBack(c.cb,errcode.ERR_CLOSE)			
 			}
 		}
-		fmt.Println(this.waitResp)
 		for _,c := range(this.waitResp) {
 			this.doCallBack(c.cb,errcode.ERR_CLOSE)	
 		}				

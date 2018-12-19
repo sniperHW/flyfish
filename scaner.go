@@ -15,14 +15,15 @@ import(
 )
 
 type scaner struct {
-	db        *sqlx.DB
-	meta      *table_meta
-	rows      *sql.Rows
-	session   kendynet.StreamSession
+	db              *sqlx.DB
+	meta            *table_meta
+	session         kendynet.StreamSession
+	closed          int32
+	offset          int32
+	table           string
 	fields          []string
 	field_receiver  []interface{}
-	field_convter   []func(interface{})interface{}
-	closed    int32
+	field_convter   []func(interface{})interface{}	
 }
 
 func (this *scaner) close() {
@@ -40,60 +41,6 @@ func (this *scaner) close() {
 		}
 	}
 }
-
-func (this *scaner) next(req *protocol.ScanReq) {
-
-	Debugln("next")
-
-	resp := &protocol.ScanResp{
-		Seqno : proto.Int64(req.GetSeqno()),
-		ErrCode : proto.Int32(errcode.ERR_SCAN_END),
-	}
-
-	count := req.GetCount()
-
-	if 0 == count {
-		count = 50
-	}
-
-	for this.rows.Next() {
-		err := this.rows.Scan(this.field_receiver...)
-		if err != nil {
-			resp.ErrCode = proto.Int32(errcode.ERR_SQLERROR)
-			this.session.Send(resp)
-			this.session.Close("scan error",1)
-			Errorln("rows.Scan err",err)
-			return
-		}
-
-		if nil == resp.Rows {
-			resp.Rows = []*protocol.Row{} 
-		}
-
-		fields := []*protocol.Field{}
-		for i := 0; i < len(this.fields); i++ {
-			fields = append(fields,protocol.PackField(this.fields[i],this.field_convter[i](this.field_receiver[i])))
-		}
-
-		resp.Rows = append(resp.Rows,&protocol.Row{
-			Fields : fields,
-		})
-
-		count--
-
-		if 0 == count {
-			resp.ErrCode = proto.Int32(errcode.ERR_OK)
-			break
-		}
-	}
-
-	this.session.Send(resp)
-
-	if resp.GetErrCode() != errcode.ERR_OK {
-		this.session.Close("scan finish",1)
-	}
-}
-
 
 func scan(session kendynet.StreamSession,msg *codec.Message) {
 
@@ -148,9 +95,11 @@ func scan(session kendynet.StreamSession,msg *codec.Message) {
 		}
 
 
-		s = &scaner{}
+		s = &scaner{
+			table : req.GetTable(),
+		}
 
-		selectTemplate := "select %s from %s order by __key__"
+		//selectTemplate := "select %s from %s order by __key__;"
 
 		if 1 == req.GetAll() {
 			s.fields = meta.queryMeta.field_names
@@ -181,29 +130,84 @@ func scan(session kendynet.StreamSession,msg *codec.Message) {
 			return
 		}
 
-		Debugln("pgOpen ok")
-
-		selectStr := fmt.Sprintf(selectTemplate,strings.Join(s.fields,","),req.GetTable())
-
-		s.rows, err = s.db.Query(selectStr)
-
-		Debugln("query ok")
-
-		if nil != err {
-			resp.ErrCode =  proto.Int32(errcode.ERR_SQLERROR)
-			session.Send(resp)
-			session.Close("",1)			
-			return		
-		} else {
-			Debugln("query ok")
-		}
-
 		s.session = session
 		session.SetUserData(s)
+
 	} else {
 		s = u.(*scaner)
 	}
 
 	s.next(req)
 
+}
+
+func (this *scaner) next(req *protocol.ScanReq) {
+
+	resp := &protocol.ScanResp{
+		Seqno : proto.Int64(req.GetSeqno()),
+		ErrCode : proto.Int32(errcode.ERR_SCAN_END),
+	}
+
+	count := req.GetCount()
+
+	if 0 == count {
+		count = 50
+	}
+
+	selectTemplate := "select %s from %s order by __key__ limit %d offset %d;"
+
+	selectStr := fmt.Sprintf(selectTemplate,strings.Join(this.fields,","),this.table,count,this.offset)
+
+	rows, err := this.db.Query(selectStr)
+
+	Debugln("query ok")
+
+	if nil != err {
+		Errorln(selectStr,err)
+		resp.ErrCode =  proto.Int32(errcode.ERR_SQLERROR)
+		this.session.Send(resp)
+		this.session.Close("",1)			
+		return		
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		err := rows.Scan(this.field_receiver...)
+		if err != nil {
+			resp.ErrCode = proto.Int32(errcode.ERR_SQLERROR)
+			this.session.Send(resp)
+			this.session.Close("scan error",1)
+			Errorln("rows.Scan err",err)
+			return
+		}
+
+		this.offset++
+
+		if nil == resp.Rows {
+			resp.Rows = []*protocol.Row{} 
+		}
+
+		fields := []*protocol.Field{}
+		for i := 0; i < len(this.fields); i++ {
+			fields = append(fields,protocol.PackField(this.fields[i],this.field_convter[i](this.field_receiver[i])))
+		}
+
+		resp.Rows = append(resp.Rows,&protocol.Row{
+			Fields : fields,
+		})
+
+		count--
+
+		if 0 == count {
+			resp.ErrCode = proto.Int32(errcode.ERR_OK)
+			break
+		}
+	}
+
+	this.session.Send(resp)
+
+	if resp.GetErrCode() != errcode.ERR_OK {
+		this.session.Close("scan finish",1)
+	}	
 }

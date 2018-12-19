@@ -24,17 +24,26 @@ func Get(c *kclient.Client,i int) {
 }*/
 
 
+var c int32 = 0
+
+
 func scanCb(scaner *kclient.Scaner, ret *kclient.MutiResult) {
 
-	fmt.Println("scanCb",ret)
+	//fmt.Println("scanCb",ret)
 
 	if ret.ErrCode == errcode.ERR_OK {
 
 		for _,v := range(ret.Rows) {
 			fmt.Println(v.Key)
+			c++
 		}
 
-		scaner.Close()
+		if c > 100 {
+			scaner.Close()
+			return
+		}
+
+		scaner.Next(10,scanCb)
 
 
 	} else {
@@ -54,7 +63,7 @@ func main() {
 	services := []string{"127.0.0.1:10012"}
 	c := kclient.OpenClient(services)//eventQueue)
 
-	scaner := c.Scaner("users1")
+	scaner := c.Scaner("users1","age")
 
 	scaner.Next(10,scanCb)
 

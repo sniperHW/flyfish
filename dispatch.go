@@ -1,7 +1,7 @@
 package flyfish
 
 import(
-	"fmt"
+	//"fmt"
 	codec "flyfish/codec"
 	"github.com/sniperHW/kendynet"
 	"reflect"
@@ -42,7 +42,7 @@ func (this *dispatcher) Dispatch(session kendynet.StreamSession,msg *codec.Messa
 }
 
 func (this *dispatcher) OnClose(session kendynet.StreamSession,reason string) {
-	fmt.Printf("client close:%s\n",reason)
+	//fmt.Printf("client close:%s\n",reason)
 	u := session.GetUserData()
 	if nil != u {
 		u.(*scaner).close()

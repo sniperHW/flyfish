@@ -51,19 +51,19 @@ func (this *tcpListener) Start() error {
 	}
 	return this.l.Start(func(session kendynet.StreamSession) {
 
-		fmt.Println("new client")
+		//fmt.Println("new client")
 
 		//session.SetRecvTimeout(common.HeartBeat_Timeout * time.Second)
 		session.SetReceiver(codec.NewReceiver())
 		session.SetEncoder(codec.NewEncoder())
 		session.SetCloseCallBack(func(sess kendynet.StreamSession, reason string) {
-			fmt.Println("close callback")
+			//fmt.Println("close callback")
 			onClose(sess, reason)
 		})
 		onNewClient(session)
 		session.Start(func(event *kendynet.Event) {
 			if event.EventType == kendynet.EventTypeError {
-				fmt.Println("on error")
+				//fmt.Println("on error")
 				event.Session.Close(event.Data.(error).Error(), 0)
 			} else {
 				msg := event.Data.(*codec.Message)
@@ -89,7 +89,7 @@ func startServer(l listener) error {
 	go func() {
 		err := server.Start()
 		if nil != err {
-			kendynet.Errorf("server.Start() error:%s\n", err.Error())
+			Errorf("server.Start() error:%s\n", err.Error())
 		}
 	}()
 
