@@ -1,7 +1,7 @@
 package flyfish
 
 import(
-	"database/sql"
+	//"database/sql"
 	"github.com/jmoiron/sqlx"
 	protocol "flyfish/proto"
 	"github.com/golang/protobuf/proto"
@@ -34,10 +34,6 @@ func (this *scaner) close() {
 
 		if nil != this.db {
 			this.db.Close()
-		}
-
-		if nil != this.rows {
-			this.rows.Close()
 		}
 	}
 }

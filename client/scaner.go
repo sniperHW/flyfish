@@ -31,7 +31,7 @@ func (this *Client) Scaner(table string,fileds ...string) *Scaner {
 	if len(fileds) == 0 {
 		s.getAll = true
 	}
-	s.conn = openConn(this.services[0],this.callbackQueue)
+	s.conn = openConn(this,this.services[0])
 	return s
 }
 
@@ -127,7 +127,7 @@ func (this *Conn) onScanResp(resp *protocol.ScanResp) {
 				ret.Rows = append(ret.Rows,r)
 			}
 		}
-		this.doCallBack(c.cb,&ret)
+		this.c.doCallBack(c.cb,&ret)
 	}	
 }
 

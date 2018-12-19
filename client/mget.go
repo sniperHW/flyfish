@@ -2,9 +2,7 @@ package client
 
 
 import (
-	"github.com/sniperHW/kendynet"
 	"flyfish/errcode"
-	"runtime"
 )
 
 
@@ -14,28 +12,6 @@ type MGetCmd struct {
 	rows       []*Row
 	cb         func(*MutiResult)
 	respCount  int
-}
-
-
-func mGetPcall(cb func(*MutiResult),ret *MutiResult) {
-	defer func(){
-		if r := recover(); r != nil {
-			buf := make([]byte, 65535)
-			l := runtime.Stack(buf, false)
-			kendynet.Errorf("%v: %s\n", r, buf[:l])
-		}			
-	}()
-	cb(ret)		
-}
-
-func (this *Client) mGetDoCallBack(cb func(*MutiResult),ret *MutiResult) {
-	if nil != this.callbackQueue {
-		this.callbackQueue.Post(func(){
-			cb(ret)
-		})
-	} else {
-		mGetPcall(cb,ret)
-	}	
 }
 
 func (this *MGetCmd) Exec(cb func(*MutiResult)) {
@@ -69,20 +45,24 @@ func (this *MGetCmd) Exec(cb func(*MutiResult)) {
 					}
 
 					if this.respCount == len(this.cmds) {
-						cb := this.cb
+						cb := callback {
+							tt : cb_muti,
+							cb : this.cb,
+						}
 						this.cb = nil
-						this.c.mGetDoCallBack(cb,&MutiResult{
+						this.c.doCallBack(cb,&MutiResult{
 							ErrCode : errcode.ERR_OK,
 							Rows : this.rows,
 						})
 					}
 
 				} else {
-					cb := this.cb
+					cb := callback {
+						tt : cb_muti,
+						cb : this.cb,
+					}
 					this.cb = nil
-					this.c.mGetDoCallBack(cb,&MutiResult{
-						ErrCode : ret.ErrCode,
-					})
+					this.c.doCallBack(cb,ret.ErrCode)
 				}
 			})
 		})

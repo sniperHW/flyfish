@@ -3,14 +3,14 @@ package client
 import (
 	//"flyfish/codec"
 	//"flyfish/errcode"
-	//"github.com/sniperHW/kendynet"
+	"github.com/sniperHW/kendynet"
 	//"github.com/sniperHW/kendynet/util"
 	"github.com/sniperHW/kendynet/event"
 	//"github.com/sniperHW/kendynet/socket/stream_socket/tcp"
 	//protocol "flyfish/proto"
 	//"github.com/golang/protobuf/proto"
 	//"time"
-	//"runtime"
+	"runtime"
 	//"fmt"
 	//"sync/atomic"
 )
@@ -35,6 +35,42 @@ func stringHash(s string) (int) {
 	return int(hash)
 }
 
+func (this *Client) pcall(cb callback,a interface{}) {
+	defer func(){
+		if r := recover(); r != nil {
+			buf := make([]byte, 65535)
+			l := runtime.Stack(buf, false)
+			kendynet.Errorf("%v: %s\n", r, buf[:l])
+		}			
+	}()
+	switch a.(type) {
+	case int32:
+		cb.onError(a.(int32))
+		break
+	default:
+		cb.onResult(a)
+		break
+	}
+}
+
+
+func (this *Client) doCallBack(cb callback,a interface{}) {
+	if nil != this.callbackQueue {
+		this.callbackQueue.Post(func(){
+			switch a.(type) {
+			case int32:
+				cb.onError(a.(int32))
+				break
+			default:
+				cb.onResult(a)
+				break
+			}
+		})
+	} else {
+		this.pcall(cb,a)
+	}
+}
+
 func OpenClient(services []string,callbackQueue ...*event.EventQueue) *Client {
 	if nil == services || len(services) == 0 {
 		return nil
@@ -51,7 +87,7 @@ func OpenClient(services []string,callbackQueue ...*event.EventQueue) *Client {
 	}
 
 	for _,v := range(services) {
-		conn := openConn(v,callbackQueue...)
+		conn := openConn(c,v)
 		c.conns = append(c.conns,conn)
 		c.services = append(c.services,v)
 	}

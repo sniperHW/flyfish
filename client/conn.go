@@ -10,7 +10,7 @@ import (
 	protocol "flyfish/proto"
 	"github.com/golang/protobuf/proto"
 	"time"
-	"runtime"
+	//"runtime"
 	"fmt"
 	"sync/atomic"
 )
@@ -26,23 +26,20 @@ type Conn struct {
 	pendingSend    []*cmdContext           //等待发送的消息
 	waitResp       map[int64]*cmdContext   //等待响应的消息
 	eventQueue     *event.EventQueue       //此客户端的主处理队列
-	callbackQueue  *event.EventQueue       //响应回调的事件队列
 	dialing        bool
 	closed         int32
 	nextPing       int64
+	c              *Client
 }
 
-func openConn(addr string,callbackQueue ...*event.EventQueue) *Conn {
+func openConn(cli *Client,addr string) *Conn {
 	c := &Conn{
 		addr          : addr,
 		eventQueue    : event.NewEventQueue(),
 		waitResp      : map[int64]*cmdContext{},
 		minheap       : util.NewMinHeap(65535),
 		pendingSend   : []*cmdContext{},
-	}
-
-	if len(callbackQueue) > 0 {
-		c.callbackQueue = callbackQueue[0]
+		c             : cli,
 	}
 
 	c.startEventQueue()
@@ -59,11 +56,11 @@ func (this *Conn) onClose() {
 
 		for _,c := range(this.pendingSend) {
 			if c.status != wait_remove {
-				this.doCallBack(c.cb,errcode.ERR_CLOSE)			
+				this.c.doCallBack(c.cb,errcode.ERR_CLOSE)			
 			}
 		}
 		for _,c := range(this.waitResp) {
-			this.doCallBack(c.cb,errcode.ERR_CLOSE)	
+			this.c.doCallBack(c.cb,errcode.ERR_CLOSE)	
 		}				
 	}
 }
@@ -90,14 +87,14 @@ func (this *Conn) checkTimeout(now *time.Time) {
 			c := cc.(*cmdContext)
 			if c.status == wait_send {
 				c.status = wait_remove
-				this.doCallBack(c.cb,errcode.ERR_TIMEOUT)
+				this.c.doCallBack(c.cb,errcode.ERR_TIMEOUT)
 			} else {
 				if _,ok := this.waitResp[c.seqno];!ok{
 					kendynet.Infof("timeout cmdContext:%d not found\n",c.seqno)					
 				} else {
 					kendynet.Infof("timeout cmdContext:%d\n",c.seqno)	
 					delete(this.waitResp,c.seqno)
-					this.doCallBack(c.cb,errcode.ERR_TIMEOUT)	
+					this.c.doCallBack(c.cb,errcode.ERR_TIMEOUT)	
 				}
 			}
 		} else {
@@ -139,43 +136,6 @@ func (this *Conn) removeContext(seqno int64) *cmdContext {
 	}
 }
 
-func (this *Conn) pcall(cb callback,a interface{}) {
-	defer func(){
-		if r := recover(); r != nil {
-			buf := make([]byte, 65535)
-			l := runtime.Stack(buf, false)
-			kendynet.Errorf("%v: %s\n", r, buf[:l])
-		}			
-	}()
-	switch a.(type) {
-	case int32:
-		cb.onError(a.(int32))
-		break
-	default:
-		cb.onResult(a)
-		break
-	}
-}
-
-
-func (this *Conn) doCallBack(cb callback,a interface{}) {
-	if nil != this.callbackQueue {
-		this.callbackQueue.Post(func(){
-			switch a.(type) {
-			case int32:
-				cb.onError(a.(int32))
-				break
-			default:
-				cb.onResult(a)
-				break
-			}
-		})
-	} else {
-		this.pcall(cb,a)
-	}
-}
-
-
 
 func (this *Conn) onConnected(session kendynet.StreamSession) {
 	this.eventQueue.Post(func(){
@@ -216,7 +176,7 @@ func (this *Conn) onDisconnected() {
 		this.minheap.Clear()
 
 		for _,c := range(this.waitResp) {
-			this.doCallBack(c.cb,errcode.ERR_DISCONNECTED)
+			this.c.doCallBack(c.cb,errcode.ERR_DISCONNECTED)
 		}
 
 		this.dial()
@@ -255,14 +215,14 @@ func (this *Conn) sendReq(c *cmdContext) {
 	} else {
 		//记录日志
 		this.minheap.Remove(c)
-		this.doCallBack(c.cb,errcode.ERR_SEND)			
+		this.c.doCallBack(c.cb,errcode.ERR_SEND)			
 	}
 }
 
 func (this *Conn) exec(c *cmdContext) {
 
 	if atomic.LoadInt32(&this.closed) == 1 {
-		this.doCallBack(c.cb,errcode.ERR_CLOSE)
+		this.c.doCallBack(c.cb,errcode.ERR_CLOSE)
 		return
 	}
 

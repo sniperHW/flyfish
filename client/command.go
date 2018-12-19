@@ -303,7 +303,7 @@ func (this *Conn) onGetAllResp(resp *protocol.GetAllResp) {
 			}
 		}
 
-		this.doCallBack(c.cb,&ret)
+		this.c.doCallBack(c.cb,&ret)
 	}	
 }
 
@@ -322,7 +322,7 @@ func (this *Conn) onGetResp(resp *protocol.GetResp) {
 			}
 		}
 
-		this.doCallBack(c.cb,&ret)
+		this.c.doCallBack(c.cb,&ret)
 	}
 }
 
@@ -336,7 +336,7 @@ func (this *Conn) onSetResp(resp *protocol.SetResp) {
 			Version : resp.GetVersion(),
 		}			
 
-		this.doCallBack(c.cb,&ret)	
+		this.c.doCallBack(c.cb,&ret)	
 	}
 }
 
@@ -349,7 +349,7 @@ func (this *Conn) onSetNxResp(resp *protocol.SetNxResp) {
 			Version : resp.GetVersion(),
 		}			
 		
-		this.doCallBack(c.cb,&ret)	
+		this.c.doCallBack(c.cb,&ret)	
 	}
 }
 
@@ -367,7 +367,7 @@ func (this *Conn) onCompareAndSetResp(resp *protocol.CompareAndSetResp) {
 			ret.Fields[resp.GetValue().GetName()] = (*Field)(resp.GetValue())
 		}
 
-		this.doCallBack(c.cb,&ret)			
+		this.c.doCallBack(c.cb,&ret)			
 	}
 }
 
@@ -385,7 +385,7 @@ func (this *Conn) onCompareAndSetNxResp(resp *protocol.CompareAndSetNxResp) {
 			ret.Fields[resp.GetValue().GetName()] = (*Field)(resp.GetValue())
 		}
 
-		this.doCallBack(c.cb,&ret)			
+		this.c.doCallBack(c.cb,&ret)			
 	}
 }
 
@@ -399,7 +399,7 @@ func (this *Conn) onDelResp(resp *protocol.DelResp) {
 			Version : resp.GetVersion(),
 		}			
 		
-		this.doCallBack(c.cb,&ret)	
+		this.c.doCallBack(c.cb,&ret)	
 	}
 }
 
@@ -417,7 +417,7 @@ func (this *Conn) onIncrByResp(resp *protocol.IncrByResp) {
 			ret.Fields[resp.NewValue.GetName()] = (*Field)(resp.NewValue)
 		}	
 
-		this.doCallBack(c.cb,&ret)		
+		this.c.doCallBack(c.cb,&ret)		
 	}	
 }
 
@@ -435,7 +435,7 @@ func (this *Conn) onDecrByResp(resp *protocol.DecrByResp) {
 			ret.Fields[resp.NewValue.GetName()] = (*Field)(resp.NewValue)
 		}	
 
-		this.doCallBack(c.cb,&ret)	
+		this.c.doCallBack(c.cb,&ret)	
 	}	
 }
 
