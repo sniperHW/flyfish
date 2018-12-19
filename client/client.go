@@ -67,97 +67,53 @@ func (this *Client) startMGetQueue() {
 	}()	
 }
 
-
-func (this *Client) Get(table,key string,fields ...string) *Cmd {
+func (this *Client) selectConn(key string) *Conn {
 	var conn *Conn
 	if len(this.conns) == 1 {
 		conn = this.conns[0]
 	} else {
 		conn = this.conns[stringHash(key)%len(this.conns)]
 	}
-	return conn.Get(table,key,fields...)
+	return conn
 }
 
 
-func (this *Client) GetAll(table,key string) *Cmd {
-	var conn *Conn
-	if len(this.conns) == 1 {
-		conn = this.conns[0]
-	} else {
-		conn = this.conns[stringHash(key)%len(this.conns)]
-	}
-	return conn.GetAll(table,key)
-}
-
-func (this *Client) Set(table,key string,fields map[string]interface{},version ...int64) *Cmd {
-	var conn *Conn
-	if len(this.conns) == 1 {
-		conn = this.conns[0]
-	} else {
-		conn = this.conns[stringHash(key)%len(this.conns)]
-	}
-	return conn.Set(table,key,fields,version...)
-}
-
-func (this *Client) SetNx(table,key string,fields map[string]interface{}) *Cmd {
-	var conn *Conn
-	if len(this.conns) == 1 {
-		conn = this.conns[0]
-	} else {
-		conn = this.conns[stringHash(key)%len(this.conns)]
-	}
-	return conn.SetNx(table,key,fields)	
-}
-
-func (this *Client) CompareAndSet(table,key,field string, oldV ,newV interface{}) *Cmd {
-	var conn *Conn
-	if len(this.conns) == 1 {
-		conn = this.conns[0]
-	} else {
-		conn = this.conns[stringHash(key)%len(this.conns)]
-	}
-	return conn.CompareAndSet(table,key,field,oldV,newV)	
+func (this *Client) Get(table,key string,fields ...string) *SliceCmd {
+	return this.selectConn(key).Get(table,key,fields...)
 }
 
 
-func (this *Client) CompareAndSetNx(table,key,field string, oldV ,newV interface{}) *Cmd {
-	var conn *Conn
-	if len(this.conns) == 1 {
-		conn = this.conns[0]
-	} else {
-		conn = this.conns[stringHash(key)%len(this.conns)]
-	}
-	return conn.CompareAndSetNx(table,key,field,oldV,newV)	
+func (this *Client) GetAll(table,key string) *SliceCmd {
+	return this.selectConn(key).GetAll(table,key)
 }
 
-func (this *Client) Del(table,key string,version ...int64) *Cmd {
-	var conn *Conn
-	if len(this.conns) == 1 {
-		conn = this.conns[0]
-	} else {
-		conn = this.conns[stringHash(key)%len(this.conns)]
-	}
-	return conn.Del(table,key,version...)	
+func (this *Client) Set(table,key string,fields map[string]interface{},version ...int64) *StatusCmd {
+	return this.selectConn(key).Set(table,key,fields,version...)
 }
 
-func (this *Client) IncrBy(table,key,field string,value int64) *Cmd {
-	var conn *Conn
-	if len(this.conns) == 1 {
-		conn = this.conns[0]
-	} else {
-		conn = this.conns[stringHash(key)%len(this.conns)]
-	}
-	return conn.IncrBy(table,key,field,value)
+func (this *Client) SetNx(table,key string,fields map[string]interface{}) *StatusCmd {
+	return this.selectConn(key).SetNx(table,key,fields)	
 }
 
-func (this *Client) DecrBy(table,key,field string,value int64) *Cmd {
-	var conn *Conn
-	if len(this.conns) == 1 {
-		conn = this.conns[0]
-	} else {
-		conn = this.conns[stringHash(key)%len(this.conns)]
-	}
-	return conn.DecrBy(table,key,field,value)
+func (this *Client) CompareAndSet(table,key,field string, oldV ,newV interface{}) *SliceCmd {
+	return this.selectConn(key).CompareAndSet(table,key,field,oldV,newV)	
+}
+
+
+func (this *Client) CompareAndSetNx(table,key,field string, oldV ,newV interface{}) *SliceCmd {
+	return this.selectConn(key).CompareAndSetNx(table,key,field,oldV,newV)	
+}
+
+func (this *Client) Del(table,key string,version ...int64) *StatusCmd {
+	return this.selectConn(key).Del(table,key,version...)	
+}
+
+func (this *Client) IncrBy(table,key,field string,value int64) *SliceCmd {
+	return this.selectConn(key).IncrBy(table,key,field,value)
+}
+
+func (this *Client) DecrBy(table,key,field string,value int64) *SliceCmd {
+	return this.selectConn(key).DecrBy(table,key,field,value)
 }
 
 

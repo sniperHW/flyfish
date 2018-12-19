@@ -13,7 +13,7 @@ func Get(c *kclient.Client,i int) {
 	key := fmt.Sprintf("%s:%d","huangwei",i)//rand.Int()%100000)
 	get := c.Get("users1",key,"name","age","phone")
 
-	get.Exec(func(ret *kclient.Result) {
+	get.Exec(func(ret *kclient.SliceResult) {
 		if ret.ErrCode == errcode.ERR_OK {
 			fmt.Println("age",ret.Fields["age"].GetInt())
 		} else {
@@ -29,7 +29,8 @@ func main() {
 	outLogger := golog.NewOutputLogger("log", "flyfish get", 1024*1024*50)
 	kendynet.InitLogger(outLogger,"flyfish get")
 
-	c := kclient.OpenClient("localhost:10012")//eventQueue)
+	services := []string{"127.0.0.1:10012"}
+	c := kclient.OpenClient(services)//eventQueue)
 
 	Get(c,1)
 	Get(c,2)

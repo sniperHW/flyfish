@@ -5,10 +5,11 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet/util"
 	"flyfish/codec"
-	"github.com/sniperHW/kendynet"
+	//"github.com/sniperHW/kendynet"
 	"time"
 	"sync/atomic"
 	"flyfish/errcode"
+	//"fmt"
 )
 
 type Field protocol.Field
@@ -34,13 +35,6 @@ func (this *Field) GetFloat() float64 {
 	return (*protocol.Field)(this).GetFloat()
 }
 
-
-type Result struct {
-	ErrCode  int32
-	Fields   map[string]*Field
-	Version  int64
-}
-
 const (
 	wait_none   = 0
 	wait_send   = 1
@@ -48,17 +42,16 @@ const (
 	wait_remove = 3
 )
 
-type CommandCallBack func(*Result)
 
 type cmdContext struct {
 	seqno       int64
-	result      Result
 	deadline    time.Time
 	timestamp   int64
 	status      int 
-	callback    CommandCallBack
+	cb          callback
 	req         proto.Message
 	heapIdx     uint32
+	key         string
 }
 
 func (this *cmdContext) Less(o util.HeapElement) bool {
@@ -73,23 +66,73 @@ func (this *cmdContext) SetIndex(idx uint32) {
 	this.heapIdx = idx
 }
 
-type Cmd struct {
+func (this *cmdContext) onError(errCode int32) {
+	this.cb.onError(errCode)
+}
+
+func (this *cmdContext) onResult(r interface{}) {
+	this.cb.onResult(r)
+}
+
+type StatusCmd struct {
 	conn    *Conn
 	req     proto.Message
 	seqno   int64  
 }
 
-func (this Cmd) Exec(cb CommandCallBack) {
+func (this *StatusCmd) Exec(cb func(*StatusResult)) {
 	context := &cmdContext {
-		seqno    : this.seqno,
-		callback : cb,
-		req      : this.req,
+		seqno : this.seqno,
+		cb : callback{
+				tt : cb_status,
+				cb : cb,
+			},
+		req : this.req,
 	}
 	this.conn.exec(context)
 }
 
+type SliceCmd struct {
+	conn    *Conn
+	req     proto.Message
+	seqno   int64 	
+}
 
-func (this *Conn) Get(table,key string,fields ...string) *Cmd {
+func (this *SliceCmd) Exec(cb func(*SliceResult)) {
+	context := &cmdContext {
+		seqno : this.seqno,
+		cb : callback{
+				tt : cb_slice,
+				cb : cb,
+			},
+		req : this.req,
+	}
+	this.conn.exec(context)
+}
+
+/*
+type MutiCmd struct {
+	conn    *Conn
+	req     proto.Message
+	seqno   int64 	
+}
+
+
+func (this *MutiCmd) Exec(cb func(*MutiResult)) {
+	context := &cmdContext {
+		seqno : this.seqno,
+		cb : callback{
+				tt : cb_muti,
+				cb : cb,
+			},
+		req : this.req,
+	}
+	this.conn.exec(context)
+}
+*/
+
+
+func (this *Conn) Get(table,key string,fields ...string) *SliceCmd {
 
 	if len(fields) == 0 {
 		return nil
@@ -102,28 +145,28 @@ func (this *Conn) Get(table,key string,fields ...string) *Cmd {
 		Fields : fields,
 	}
 	
-	return &Cmd{
+	return &SliceCmd{
 		conn   : this,
 		req    : req,
 		seqno  : req.GetSeqno(),
 	}	
 }
 
-func (this *Conn) GetAll(table,key string) *Cmd {
+func (this *Conn) GetAll(table,key string) *SliceCmd {
 	req := &protocol.GetAllReq{
 		Seqno  : proto.Int64(atomic.AddInt64(&this.seqno,1)),
 		Table  : proto.String(table),
 		Key    : proto.String(key),
 	}
 	
-	return &Cmd{
+	return &SliceCmd{
 		conn   : this,
 		req    : req,
 		seqno  : req.GetSeqno(),
 	}
 }
 
-func (this *Conn) Set(table,key string,fields map[string]interface{},version ...int64) *Cmd {
+func (this *Conn) Set(table,key string,fields map[string]interface{},version ...int64) *StatusCmd {
 
 	if len(fields) == 0 {
 		return nil
@@ -143,7 +186,7 @@ func (this *Conn) Set(table,key string,fields map[string]interface{},version ...
 		req.Fields = append(req.Fields,protocol.PackField(k,v))
 	}
 
-	return &Cmd{
+	return &StatusCmd{
 		conn   : this,
 		req    : req,
 		seqno  : req.GetSeqno(),
@@ -151,7 +194,7 @@ func (this *Conn) Set(table,key string,fields map[string]interface{},version ...
 }
 
 //记录不存在时设置
-func (this *Conn) SetNx(table,key string,fields map[string]interface{}) *Cmd {
+func (this *Conn) SetNx(table,key string,fields map[string]interface{}) *StatusCmd {
 	if len(fields) == 0 {
 		return nil
 	}
@@ -166,7 +209,7 @@ func (this *Conn) SetNx(table,key string,fields map[string]interface{}) *Cmd {
 		req.Fields = append(req.Fields,protocol.PackField(k,v))
 	}
 
-	return &Cmd{
+	return &StatusCmd{
 		conn   : this,
 		req    : req,
 		seqno  : req.GetSeqno(),
@@ -174,7 +217,7 @@ func (this *Conn) SetNx(table,key string,fields map[string]interface{}) *Cmd {
 }
 
 //当记录的field == old时，将其设置为new,并返回field的实际值(如果filed != old,将返回filed的原值)
-func (this *Conn) CompareAndSet(table,key,field string, oldV ,newV interface{}) *Cmd {
+func (this *Conn) CompareAndSet(table,key,field string, oldV ,newV interface{}) *SliceCmd {
 
 	if oldV == nil || newV == nil {
 		return nil
@@ -188,7 +231,7 @@ func (this *Conn) CompareAndSet(table,key,field string, oldV ,newV interface{}) 
 		Old    : protocol.PackField(field,oldV),
 	}
 
-	return &Cmd{
+	return &SliceCmd{
 		conn   : this,
 		req    : req,
 		seqno  : req.GetSeqno(),
@@ -197,7 +240,7 @@ func (this *Conn) CompareAndSet(table,key,field string, oldV ,newV interface{}) 
 } 
 
 //当记录不存在或记录的field == old时，将其设置为new.并返回field的实际值(如果记录存在且filed != old,将返回filed的原值)
-func (this *Conn) CompareAndSetNx(table,key,field string, oldV ,newV interface{}) *Cmd {
+func (this *Conn) CompareAndSetNx(table,key,field string, oldV ,newV interface{}) *SliceCmd {
 	if oldV == nil || newV == nil {
 		return nil
 	}
@@ -210,14 +253,14 @@ func (this *Conn) CompareAndSetNx(table,key,field string, oldV ,newV interface{}
 		Old    : protocol.PackField(field,oldV),
 	}
 
-	return &Cmd{
+	return &SliceCmd{
 		conn   : this,
 		req    : req,
 		seqno  : req.GetSeqno(),
 	}
 }
 
-func (this *Conn) Del(table,key string,version ...int64) *Cmd {
+func (this *Conn) Del(table,key string,version ...int64) *StatusCmd {
 
 	req := &protocol.DelReq{
 		Seqno  : proto.Int64(atomic.AddInt64(&this.seqno,1)),
@@ -229,7 +272,7 @@ func (this *Conn) Del(table,key string,version ...int64) *Cmd {
 		req.Version = proto.Int64(version[0])
 	}
 
-	return &Cmd{
+	return &StatusCmd{
 		conn   : this,
 		req    : req,
 		seqno  : req.GetSeqno(),
@@ -237,7 +280,7 @@ func (this *Conn) Del(table,key string,version ...int64) *Cmd {
 
 }
 
-func (this *Conn) IncrBy(table,key,field string,value int64) *Cmd {
+func (this *Conn) IncrBy(table,key,field string,value int64) *SliceCmd {
 	req := &protocol.IncrByReq {
 		Seqno  : proto.Int64(atomic.AddInt64(&this.seqno,1)),
 		Table  : proto.String(table),
@@ -245,14 +288,14 @@ func (this *Conn) IncrBy(table,key,field string,value int64) *Cmd {
 		Field  : protocol.PackField(field,value),
 	}
 
-	return &Cmd{
+	return &SliceCmd{
 		conn   : this,
 		req    : req,
 		seqno  : req.GetSeqno(),
 	}	
 }
 
-func (this *Conn) DecrBy(table,key,field string,value int64) *Cmd {
+func (this *Conn) DecrBy(table,key,field string,value int64) *SliceCmd {
 	req := &protocol.DecrByReq {
 		Seqno  : proto.Int64(atomic.AddInt64(&this.seqno,1)),
 		Table  : proto.String(table),
@@ -260,7 +303,7 @@ func (this *Conn) DecrBy(table,key,field string,value int64) *Cmd {
 		Field  : protocol.PackField(field,value),
 	}
 
-	return &Cmd{
+	return &SliceCmd{
 		conn   : this,
 		req    : req,
 		seqno  : req.GetSeqno(),
@@ -270,84 +313,101 @@ func (this *Conn) DecrBy(table,key,field string,value int64) *Cmd {
 func (this *Conn) onGetAllResp(resp *protocol.GetAllResp) {
 	c := this.removeContext(resp.GetSeqno())
 	if nil != c {
-		c.result.ErrCode = resp.GetErrCode()
-		c.result.Version = resp.GetVersion()
-		if 0 == c.result.ErrCode {
-			c.result.Fields = map[string]*Field{}
+		ret := SliceResult{
+			ErrCode : resp.GetErrCode(),
+			Version : resp.GetVersion(),
+		}
+
+		if ret.ErrCode == errcode.ERR_OK {
+			ret.Fields = map[string]*Field{}
 			for _,v := range(resp.Fields) {
-				c.result.Fields[v.GetName()] = (*Field)(v)
+				ret.Fields[v.GetName()] = (*Field)(v)
 			}
 		}
-		this.doCallBack(c)
+
+		this.doCallBack(c.cb,&ret)
 	}	
 }
 
 func (this *Conn) onGetResp(resp *protocol.GetResp) {
 	c := this.removeContext(resp.GetSeqno())
 	if nil != c {
-		c.result.ErrCode = resp.GetErrCode()
-		c.result.Version = resp.GetVersion()
-		if 0 == c.result.ErrCode {
-			c.result.Fields = map[string]*Field{}
+		ret := SliceResult{
+			ErrCode : resp.GetErrCode(),
+			Version : resp.GetVersion(),
+		}
+
+		if ret.ErrCode == errcode.ERR_OK {
+			ret.Fields = map[string]*Field{}
 			for _,v := range(resp.Fields) {
-				c.result.Fields[v.GetName()] = (*Field)(v)
+				ret.Fields[v.GetName()] = (*Field)(v)
 			}
 		}
-		this.doCallBack(c)
+
+		this.doCallBack(c.cb,&ret)
 	}
 }
 
 func (this *Conn) onSetResp(resp *protocol.SetResp) {
+	//fmt.Println("onSetResp")
 	c := this.removeContext(resp.GetSeqno())
 	if nil != c {
-		c.result.ErrCode = resp.GetErrCode()
-		c.result.Version = resp.GetVersion()
-		this.doCallBack(c)	
-	} else {
-		kendynet.Debugln("onSetResp but missing waitResp")
+
+		ret := StatusResult{
+			ErrCode : resp.GetErrCode(),
+			Version : resp.GetVersion(),
+		}			
+
+		this.doCallBack(c.cb,&ret)	
 	}
 }
 
 func (this *Conn) onSetNxResp(resp *protocol.SetNxResp) {
 	c := this.removeContext(resp.GetSeqno())
 	if nil != c {
-		c.result.ErrCode = resp.GetErrCode()
-		c.result.Version = resp.GetVersion()		
-		this.doCallBack(c)	
-	} else {
-		kendynet.Debugln("onSetNxResp but missing waitResp")
+		
+		ret := StatusResult{
+			ErrCode : resp.GetErrCode(),
+			Version : resp.GetVersion(),
+		}			
+		
+		this.doCallBack(c.cb,&ret)	
 	}
 }
 
 func (this *Conn) onCompareAndSetResp(resp *protocol.CompareAndSetResp) {
 	c := this.removeContext(resp.GetSeqno())
 	if nil != c {
-		c.result.ErrCode = resp.GetErrCode()
-		c.result.Version = resp.GetVersion()
-		if c.result.ErrCode == errcode.ERR_OK || c.result.ErrCode == errcode.ERR_NOT_EQUAL {
-			c.result.Fields = map[string]*Field{}
-			c.result.Fields[resp.GetValue().GetName()] = (*Field)(resp.GetValue())
+
+		ret := SliceResult{
+			ErrCode : resp.GetErrCode(),
+			Version : resp.GetVersion(),
 		}
 
-		this.doCallBack(c)	
-	} else {
-		kendynet.Debugln("onCompareAndSetResp but missing waitResp")
+		if ret.ErrCode == errcode.ERR_OK || ret.ErrCode == errcode.ERR_NOT_EQUAL {
+			ret.Fields = map[string]*Field{}
+			ret.Fields[resp.GetValue().GetName()] = (*Field)(resp.GetValue())
+		}
+
+		this.doCallBack(c.cb,&ret)			
 	}
 }
 
 func (this *Conn) onCompareAndSetNxResp(resp *protocol.CompareAndSetNxResp) {
 	c := this.removeContext(resp.GetSeqno())
 	if nil != c {
-		c.result.ErrCode = resp.GetErrCode()
-		c.result.Version = resp.GetVersion()
-		if c.result.ErrCode == errcode.ERR_OK || c.result.ErrCode == errcode.ERR_NOT_EQUAL {
-			c.result.Fields = map[string]*Field{}
-			c.result.Fields[resp.GetValue().GetName()] = (*Field)(resp.GetValue())
+
+		ret := SliceResult{
+			ErrCode : resp.GetErrCode(),
+			Version : resp.GetVersion(),
 		}
 
-		this.doCallBack(c)	
-	} else {
-		kendynet.Debugln("onCompareAndSetnxResp but missing waitResp")
+		if ret.ErrCode == errcode.ERR_OK || ret.ErrCode == errcode.ERR_NOT_EQUAL {
+			ret.Fields = map[string]*Field{}
+			ret.Fields[resp.GetValue().GetName()] = (*Field)(resp.GetValue())
+		}
+
+		this.doCallBack(c.cb,&ret)			
 	}
 }
 
@@ -355,34 +415,49 @@ func (this *Conn) onCompareAndSetNxResp(resp *protocol.CompareAndSetNxResp) {
 func (this *Conn) onDelResp(resp *protocol.DelResp) {
 	c := this.removeContext(resp.GetSeqno())
 	if nil != c {
-		c.result.ErrCode = resp.GetErrCode()
-		this.doCallBack(c)		
+		
+		ret := StatusResult{
+			ErrCode : resp.GetErrCode(),
+			Version : resp.GetVersion(),
+		}			
+		
+		this.doCallBack(c.cb,&ret)	
 	}
 }
 
 func (this *Conn) onIncrByResp(resp *protocol.IncrByResp) {
 	c := this.removeContext(resp.GetSeqno())
 	if nil != c {
-		c.result.ErrCode = resp.GetErrCode()
-		c.result.Version = resp.GetVersion()		
-		if 0 == c.result.ErrCode {
-			c.result.Fields = map[string]*Field{}
-			c.result.Fields[resp.NewValue.GetName()] = (*Field)(resp.NewValue)
+
+		ret := SliceResult{
+			ErrCode : resp.GetErrCode(),
+			Version : resp.GetVersion(),
 		}
-		this.doCallBack(c)		
+
+		if errcode.ERR_OK == ret.ErrCode {
+			ret.Fields = map[string]*Field{}
+			ret.Fields[resp.NewValue.GetName()] = (*Field)(resp.NewValue)
+		}	
+
+		this.doCallBack(c.cb,&ret)		
 	}	
 }
 
 func (this *Conn) onDecrByResp(resp *protocol.DecrByResp) {
 	c := this.removeContext(resp.GetSeqno())
 	if nil != c {
-		c.result.ErrCode = resp.GetErrCode()
-		c.result.Version = resp.GetVersion()		
-		if 0 == c.result.ErrCode {
-			c.result.Fields = map[string]*Field{}
-			c.result.Fields[resp.NewValue.GetName()] = (*Field)(resp.NewValue)
+
+		ret := SliceResult{
+			ErrCode : resp.GetErrCode(),
+			Version : resp.GetVersion(),
 		}
-		this.doCallBack(c)		
+
+		if errcode.ERR_OK == ret.ErrCode {
+			ret.Fields = map[string]*Field{}
+			ret.Fields[resp.NewValue.GetName()] = (*Field)(resp.NewValue)
+		}	
+
+		this.doCallBack(c.cb,&ret)	
 	}	
 }
 

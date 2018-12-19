@@ -9,8 +9,8 @@ import(
 )
 
 func CompareAndSet(c *kclient.Client) {
-	set := c.CompareAndSet("counter","test_counter1","c",100,100)
-	set.Exec(func(ret *kclient.Result) {
+	set := c.CompareAndSet("counter","test_counter1","c",101,100)
+	set.Exec(func(ret *kclient.SliceResult) {
 
 		if ret.ErrCode != errcode.ERR_OK {
 			fmt.Println(errcode.GetErrorStr(ret.ErrCode),ret)
@@ -27,7 +27,8 @@ func main() {
 	outLogger := golog.NewOutputLogger("log", "flyfish get", 1024*1024*50)
 	kendynet.InitLogger(outLogger,"flyfish get")
 
-	c := kclient.OpenClient("localhost:10012")//eventQueue)
+	services := []string{"127.0.0.1:10012"}
+	c := kclient.OpenClient(services)//eventQueue)
 
 	CompareAndSet(c)
 

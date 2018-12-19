@@ -10,7 +10,7 @@ import(
 
 func IncrBy(c *kclient.Client) {
 	incr := c.IncrBy("counter","test_counter1","c",1)
-	incr.Exec(func(ret *kclient.Result) {
+	incr.Exec(func(ret *kclient.SliceResult) {
 
 		if ret.ErrCode != errcode.ERR_OK {
 			fmt.Println(errcode.GetErrorStr(ret.ErrCode))
@@ -26,8 +26,9 @@ func main() {
 	golog.DisableStdOut()
 	outLogger := golog.NewOutputLogger("log", "flyfish get", 1024*1024*50)
 	kendynet.InitLogger(outLogger,"flyfish get")
-
-	c := kclient.OpenClient("localhost:10012")//eventQueue)
+	
+	services := []string{"127.0.0.1:10012"}
+	c := kclient.OpenClient(services)//eventQueue)
 
 	IncrBy(c)
 

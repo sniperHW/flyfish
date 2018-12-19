@@ -17,7 +17,7 @@ func Set(c *kclient.Client,i int) {
 	key := fmt.Sprintf("%s:%d","huangwei",i)
 
 	set := c.Set("users1",key,fields)
-	set.Exec(func(ret *kclient.Result) {
+	set.Exec(func(ret *kclient.StatusResult) {
 
 		if ret.ErrCode != errcode.ERR_OK {
 			fmt.Println(errcode.GetErrorStr(ret.ErrCode))
@@ -30,16 +30,18 @@ func Set(c *kclient.Client,i int) {
 
 func main() {
 
-	golog.DisableStdOut()
+	//golog.DisableStdOut()
 	outLogger := golog.NewOutputLogger("log", "flyfish get", 1024*1024*50)
 	kendynet.InitLogger(outLogger,"flyfish get")
 
-	c := kclient.OpenClient("localhost:10012")//eventQueue)
+	services := []string{"127.0.0.1:10012"}
+
+	c := kclient.OpenClient(services)//eventQueue)
 
 	Set(c,1)
-	Set(c,2)
-	Set(c,3)
-	Set(c,4)
+	//Set(c,2)
+	//Set(c,3)
+	//Set(c,4)
 
 	//eventQueue.Run()
 

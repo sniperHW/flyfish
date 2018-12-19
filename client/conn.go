@@ -59,14 +59,12 @@ func (this *Conn) onClose() {
 
 		for _,c := range(this.pendingSend) {
 			if c.status != wait_remove {
-				c.result.ErrCode = errcode.ERR_CLOSE
-				this.doCallBack(c)			
+				this.doCallBack(c.cb,errcode.ERR_CLOSE)			
 			}
 		}
 
 		for _,c := range(this.waitResp) {
-			c.result.ErrCode = errcode.ERR_CLOSE
-			this.doCallBack(c)
+			this.doCallBack(c.cb,errcode.ERR_CLOSE)	
 		}				
 	}
 }
@@ -91,17 +89,16 @@ func (this *Conn) checkTimeout(now *time.Time) {
 		if cc != nil && now.After(cc.(*cmdContext).deadline) {
 			this.minheap.PopMin()
 			c := cc.(*cmdContext)
-			c.result.ErrCode = errcode.ERR_TIMEOUT
 			if c.status == wait_send {
 				c.status = wait_remove
-				this.doCallBack(c)
+				this.doCallBack(c.cb,errcode.ERR_TIMEOUT)
 			} else {
 				if _,ok := this.waitResp[c.seqno];!ok{
 					kendynet.Infof("timeout cmdContext:%d not found\n",c.seqno)					
 				} else {
 					kendynet.Infof("timeout cmdContext:%d\n",c.seqno)
 					delete(this.waitResp,c.seqno)
-					this.doCallBack(c)
+					this.doCallBack(c.cb,errcode.ERR_TIMEOUT)	
 				}
 			}
 		} else {
@@ -143,7 +140,7 @@ func (this *Conn) removeContext(seqno int64) *cmdContext {
 	}
 }
 
-func pcall(c *cmdContext) {
+func (this *Conn) pcall(cb callback,a interface{}) {
 	defer func(){
 		if r := recover(); r != nil {
 			buf := make([]byte, 65535)
@@ -151,21 +148,37 @@ func pcall(c *cmdContext) {
 			kendynet.Errorf("%v: %s\n", r, buf[:l])
 		}			
 	}()
-	c.callback(&c.result)		
+	switch a.(type) {
+	case int32:
+		cb.onError(a.(int32))
+		break
+	default:
+		cb.onResult(a)
+		break
+	}
 }
 
-func (this *Conn) doCallBack(c *cmdContext) {
+
+func (this *Conn) doCallBack(cb callback,a interface{}) {
 	if nil != this.callbackQueue {
 		this.callbackQueue.Post(func(){
-			c.callback(&c.result)
+			switch a.(type) {
+			case int32:
+				cb.onError(a.(int32))
+				break
+			default:
+				cb.onResult(a)
+				break
+			}
 		})
 	} else {
-		pcall(c)
-	}	
+		this.pcall(cb,a)
+	}
 }
 
+
+
 func (this *Conn) onConnected(session kendynet.StreamSession) {
-	fmt.Println("Conn onConnected")
 	this.eventQueue.Post(func(){
 		this.dialing  = false
 		this.session  = session
@@ -201,10 +214,11 @@ func (this *Conn) onDisconnected() {
 	this.eventQueue.Post(func(){
 		this.session = nil
 		this.minheap.Clear()
+
 		for _,c := range(this.waitResp) {
-			c.result.ErrCode = errcode.ERR_DISCONNECTED
-			this.doCallBack(c)
+			this.doCallBack(c.cb,errcode.ERR_DISCONNECTED)
 		}
+
 		this.dial()
 	})	
 }
@@ -241,18 +255,14 @@ func (this *Conn) sendReq(c *cmdContext) {
 	} else {
 		//记录日志
 		this.minheap.Remove(c)
-		c.result.ErrCode = errcode.ERR_SEND
-		this.doCallBack(c)
+		this.doCallBack(c.cb,errcode.ERR_SEND)			
 	}
 }
 
 func (this *Conn) exec(c *cmdContext) {
 
-	//fmt.Println("Client exec")
-
 	if atomic.LoadInt32(&this.closed) == 1 {
-		c.result.ErrCode = errcode.ERR_CLOSE
-		this.doCallBack(c)
+		this.doCallBack(c.cb,errcode.ERR_CLOSE)
 		return
 	}
 

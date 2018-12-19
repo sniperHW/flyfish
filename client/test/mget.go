@@ -14,13 +14,13 @@ func MGet(c *kclient.Client) {
 
 	mget := c.MGetAll("users1",keys)
 
-	mget.Exec(func(ret *kclient.ResultSet){
+	mget.Exec(func(ret *kclient.MutiResult){
 		if ret.ErrCode == errcode.ERR_OK {
-			for k,v := range(ret.Results) {
-				if nil != v {
-					fmt.Println("age",v.Fields["age"].GetInt())
+			for _,v := range(ret.Rows) {
+				if nil == v.Fields {
+					fmt.Println(v.Key,"not exist")
 				} else {
-					fmt.Println(k,"not exist")
+					fmt.Println("age",v.Fields["age"].GetInt())					
 				}
 			}
 		} else {
@@ -36,7 +36,8 @@ func main() {
 	outLogger := golog.NewOutputLogger("log", "flyfish get", 1024*1024*50)
 	kendynet.InitLogger(outLogger,"flyfish get")
 
-	c := kclient.OpenClient("localhost:10012")//eventQueue)
+	services := []string{"127.0.0.1:10012"}
+	c := kclient.OpenClient(services)//eventQueue)
 
 	MGet(c)
 
