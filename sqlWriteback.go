@@ -78,6 +78,7 @@ type sqlUpdater struct {
 	delSets          map[string]*str
 	insertSets       map[string]*str
 	updates          *str
+	keys             []*cacheKey
 
 	updateStrSize  int
 	count          int
@@ -88,6 +89,7 @@ type sqlUpdater struct {
 func newSqlUpdater(max int,host string, port int,dbname string,user string,password string) *sqlUpdater {
 	t := &sqlUpdater {
 		max     : max,
+		keys    : []*cacheKey{},
 	}
 	t.db,_ = pgOpen(host,port,dbname,user,password)
 
@@ -110,6 +112,7 @@ func (this *sqlUpdater) Reset() {
 	this.delSets = nil
 	this.insertSets = nil
 	this.updates = nil
+	this.keys = []*cacheKey{}
 
 	this.count   = 0
 	this.updateStrSize = 0
@@ -181,6 +184,7 @@ func (this *sqlUpdater) append(v interface{}) {
 	} else {
 		return
 	}
+	this.keys = append(this.keys,wb.ckey)
 	this.count++
 	if this.count >= this.max || this.updateStrSize >= conf.MaxUpdateStringSize {
 		this.exec()
@@ -234,6 +238,10 @@ func (this *sqlUpdater) exec() {
 	}
 
 	strPut(s)
+
+	for _,v := range(this.keys) {
+		v.clearWriteBack()
+	}
 
 }
 
@@ -393,6 +401,9 @@ func writeBackRoutine() {
 		now := time.Now().Unix()
 		for _,v := range(localList) {
 			switch v.(type) {
+			case notifyWB:
+				processWriteBackRecord(now + conf.WriteBackDelay + 1)
+				break
 			case *processContext:			
 				ctx := v.(*processContext)
 				addRecord(now,ctx)

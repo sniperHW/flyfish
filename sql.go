@@ -8,6 +8,7 @@ import (
 	//protocol "flyfish/proto"
 	"time"
 	"container/list"
+	"flyfish/errcode"
 )
 
 var sql_once sync.Once
@@ -20,14 +21,6 @@ var pendingWB               *list.List//pendingWriteBack
 
 func prepareRecord(ctx *processContext) *record {
 	uniKey := ctx.getUniKey()
-	/*wb := &record{
-		writeBackFlag : ctx.writeBackFlag,
-		key     : ctx.getKey(),
-		table   : ctx.getTable(),
-		uniKey  : uniKey,
-		ckey    : ctx.getCacheKey(),
-	}*/
-
 	wb := recordGet()
 	wb.writeBackFlag = ctx.writeBackFlag
 	wb.key = ctx.getKey()
@@ -42,7 +35,17 @@ func prepareRecord(ctx *processContext) *record {
 	return wb	
 }
 
+type notifyWB struct {}
+
+func notiForceWriteBack() {
+	if conf.WriteBackDelay > 0 {
+		writeBackEventQueue.Add(notifyWB{})
+	}
+}
+
 func pushSQLWriteBack(ctx *processContext) {
+	ckey := ctx.getCacheKey()
+	ckey.setWriteBack()
 	if conf.WriteBackDelay > 0 {
 		//延迟回写
 		writeBackEventQueue.Add(ctx)
@@ -55,6 +58,9 @@ func pushSQLWriteBack(ctx *processContext) {
 }
 
 func pushSQLWriteBackNoWait(ctx *processContext) {
+
+	ckey := ctx.getCacheKey()
+	ckey.setWriteBack()
 	if conf.WriteBackDelay > 0 {
 		//延迟回写
 		writeBackEventQueue.AddNoWait(ctx)
@@ -67,12 +73,31 @@ func pushSQLWriteBackNoWait(ctx *processContext) {
 }
 
 func pushSQLLoad(ctx *processContext) {
-	Debugln("pushSQLLoad")
-	sqlLoadQueue.Add(ctx)
-}
+	ckey := ctx.getCacheKey()
+	if ckey.isWriteBack() {
+		/*
+		*   如果记录正在等待回写，redis崩溃，导致重新从数据库载入数据，
+		*   此时回写尚未完成，如果允许读取将可能载入过期数据 
+		*/
+		//通告回写处理立即执行回写
+		notiForceWriteBack()
 
-func pushSQLLoadNoWait(ctx *processContext) {
-	sqlLoadQueue.AddNoWait(ctx)
+		ckey.unlock()
+
+		ctx.reply(errcode.ERR_RETRY,nil,0)
+		
+		//通知所有请求稍后重试	
+		head := ckey.cmdQueue.Front()
+		for ; nil != head; head = ckey.cmdQueue.Front() {
+			cmd := head.Value.(*command)
+			cmd.reply(errcode.ERR_RETRY,nil,0)	
+			ckey.cmdQueue.Remove(head)
+		}
+
+		return
+	} else {
+		sqlLoadQueue.Add(ctx)
+	}
 }
 
 type sqlPipeliner interface {

@@ -20,7 +20,7 @@ func onRedisResp(ctx *processContext) {
 			/*  redis中的数据与flyfish key不一致
 			 *  将ckey重置为cache_new，强制从数据库取值刷新redis
 			 */
-			ckey.reset()
+			ckey.reset()			
 			ctx.writeBackFlag = write_back_none //数据存在执行update
 			ctx.redisFlag     = redis_none
 			//到数据库加载

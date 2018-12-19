@@ -4,6 +4,7 @@ import (
 	protocol "flyfish/proto"
 	"strconv"
 	"container/list"
+	"sync/atomic"
 )
 
 const (
@@ -13,14 +14,15 @@ const (
 )
 
 type cacheKey struct {
-	uniKey     string
-	idx        uint32
-	lastAccess uint64 //time.Time
-	version    int64
-	status     int    			
-	locked     bool    			//操作是否被锁定	
-	cmdQueue   *list.List
-	meta      *table_meta
+	uniKey      string
+	idx         uint32
+	lastAccess  uint64              //time.Time
+	version     int64
+	status      int    			
+	locked      bool    			//操作是否被锁定	
+	cmdQueue    *list.List
+	meta        *table_meta
+	writeBacked int32               //正在回写
 }
 
 var cacheKeys map[string]*cacheKey
@@ -67,6 +69,22 @@ func (this *cacheKey) reset() {
 
 func (this *cacheKey) pushCmd(cmd *command) {
 	this.cmdQueue.PushBack(cmd)
+}
+
+func (this *cacheKey) clearCmd() {
+	this.cmdQueue = list.New()
+}
+
+func (this *cacheKey) setWriteBack() {
+	atomic.StoreInt32(&this.writeBacked,1)
+}
+
+func (this *cacheKey) clearWriteBack() {
+	atomic.StoreInt32(&this.writeBacked,0)	
+}
+
+func (this *cacheKey) isWriteBack() bool {
+	return atomic.LoadInt32(&this.writeBacked) == 1
 }
 
 /*
