@@ -137,6 +137,8 @@ func scan(session kendynet.StreamSession,msg *codec.Message) {
 
 }
 
+const selectTemplate string = "select %s from %s order by __key__ limit %d offset %d;"
+
 func (this *scaner) next(req *protocol.ScanReq) {
 
 	resp := &protocol.ScanResp{
@@ -150,7 +152,7 @@ func (this *scaner) next(req *protocol.ScanReq) {
 		count = 50
 	}
 
-	selectTemplate := "select %s from %s order by __key__ limit %d offset %d;"
+
 
 	selectStr := fmt.Sprintf(selectTemplate,strings.Join(this.fields,","),this.table,count,this.offset)
 
