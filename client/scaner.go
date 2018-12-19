@@ -8,7 +8,7 @@ import (
 	protocol "flyfish/proto"
 	"github.com/golang/protobuf/proto"
 	"sync/atomic"
-	//"fmt"
+	"fmt"
 )
 
 type Scaner struct {
@@ -18,6 +18,7 @@ type Scaner struct {
 	fileds          []string
 	getAll          bool                   //获取所有字段
 	first           int32                      
+	closed          int32
 }
 
 //如果不传fields表示getAll
@@ -47,7 +48,11 @@ func (this *Scaner) wrapCb(cb func(*Scaner,*MutiResult)) func(*MutiResult) {
 	}
 }
 
-func (this *Scaner) Next(count int32,cb func(*Scaner,*MutiResult)) {
+func (this *Scaner) Next(count int32,cb func(*Scaner,*MutiResult)) error {
+
+	if atomic.LoadInt32(&this.closed) == 1 {
+		return fmt.Errorf("closed")
+	}
 
 	if count <= 0 {
 		count = 50
@@ -84,10 +89,14 @@ func (this *Scaner) Next(count int32,cb func(*Scaner,*MutiResult)) {
 		req : req,
 	}
 	this.conn.exec(context)
+
+	return nil
 }
 
 func (this *Scaner) Close() {
-	this.conn.Close()
+	if atomic.CompareAndSwapInt32(&this.closed,0,1) {	
+		this.conn.Close()
+	}
 }
 
 func (this *Conn) onScanResp(resp *protocol.ScanResp) {
