@@ -89,11 +89,14 @@ func pushCommand(cmd *command) {
 		return
 	}
 
-	mainQueue.Post(func(){
-		cmd.ckey = getCacheKey(cmd.table,cmd.uniKey)	
-		cmd.ckey.pushCmd(cmd)
-		cmd.ckey.process()	
-	})
+	mainQueue.Post(processCmd,cmd)
+}
+
+func processCmd(cmds []interface{}) {
+	cmd := cmds[0].(*command)
+	cmd.ckey = getCacheKey(cmd.table,cmd.uniKey)	
+	cmd.ckey.pushCmd(cmd)
+	cmd.ckey.process()	
 }
 
 func init() {
