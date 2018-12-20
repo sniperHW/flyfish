@@ -37,7 +37,7 @@ func Set(c *kclient.Client) {
 
 	beg := time.Now()
 
-	set.Exec(func(ret *kclient.Result) {
+	set.Exec(func(ret *kclient.StatusResult) {
 
 		if setAvaDelay == time.Duration(0) {
 			setAvaDelay = time.Now().Sub(beg)
@@ -65,7 +65,7 @@ func Get(c *kclient.Client) {
 
 	beg := time.Now()
 
-	get.Exec(func(ret *kclient.Result) {
+	get.Exec(func(ret *kclient.SliceResult) {
 
 		//fmt.Println(ret.Fields["age"].GetInt())
 
@@ -98,7 +98,7 @@ func main() {
 	id = 0
 
 
-    services := []string{"127.0.0.1:10012","127.0.0.1:10013"}
+    services := []string{"127.0.0.1:10012"}//,"127.0.0.1:10013"}
 
 	c := kclient.OpenClient(services)//eventQueue)
 
@@ -107,9 +107,9 @@ func main() {
 	}
 	
 	
-	for i := 0; i < 400; i++ {
+	/*for i := 0; i < 400; i++ {
 		Get(c)
-	}
+	}*/
 
 	go func(){
 		for {
