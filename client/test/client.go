@@ -100,10 +100,11 @@ func main() {
 
     services := []string{"127.0.0.1:10012"}//,"127.0.0.1:10013"}
 
-	c := kclient.OpenClient(services)//eventQueue)
-
-	for i := 0; i < 200; i++ {
-		Set(c)
+    for j := 0; j < 4; j++ {
+		c := kclient.OpenClient(services)//eventQueue)
+		for i := 0; i < 200; i++ {
+			Get(c)
+		}
 	}
 	
 	
