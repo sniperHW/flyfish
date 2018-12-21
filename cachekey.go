@@ -170,7 +170,7 @@ func postKeyEvent(uniKey string,op interface{},args ...interface{}) {
 	getMgrByUnikey(uniKey).eventQueue.Post(op,args...)
 }
 
-func init() {
+func InitCacheKey() {
 	cacheGroup  = make([]*cacheKeyMgr,conf.CacheGroupSize)
 	for i:= 0; i < conf.CacheGroupSize; i++ {
 		eventQueue := event.NewEventQueue(conf.MainEventQueueSize)
