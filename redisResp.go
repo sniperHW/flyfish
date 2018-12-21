@@ -49,6 +49,5 @@ func onRedisResp(ctx *processContext) {
 		ctx.reply(ctx.errno,ctx.fields,newVersion)
 	}
 
-	mainQueue.PostNoWait(processRedisResp,ctx,newVersion)
-	
+	postKeyEventNoWait(ctx.getUniKey(),processRedisResp,ctx,newVersion)
 }

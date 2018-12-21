@@ -1,7 +1,7 @@
 package flyfish
 
 import(
-	"github.com/sniperHW/kendynet/event"
+	//"github.com/sniperHW/kendynet/event"
 	protocol "flyfish/proto"
 	//"strconv"
 	//"fmt"
@@ -21,7 +21,7 @@ const (
 	cmdDecrBy 			= 8
 )
 
-var mainQueue *event.EventQueue
+//var mainQueue *event.EventQueue
 
 func isSetCmd(cmd int) bool {
 	return cmd == cmdSet || cmd == cmdSetNx || cmd == cmdCompareAndSet || cmd == cmdCompareAndSetNx || cmd == cmdIncrBy || cmd == cmdDecrBy
@@ -89,7 +89,8 @@ func pushCommand(cmd *command) {
 		return
 	}
 
-	mainQueue.Post(processCmd,cmd)
+	postKeyEvent(cmd.uniKey,processCmd,cmd)
+
 }
 
 func processCmd(cmds []interface{}) {
@@ -99,6 +100,7 @@ func processCmd(cmds []interface{}) {
 	cmd.ckey.process()	
 }
 
+/*
 func init() {
 	mainQueue = event.NewEventQueue()
 
@@ -106,14 +108,14 @@ func init() {
 		mainQueue.Run()
 	}()
 
-	/*go func(){
+	go func(){
 		for {
 			time.Sleep(time.Second)
 			fmt.Println("keys:",len(cacheKeys),"writeBackKeys",len(writeBackRecords),"writeBackQueue_.size",pendingWB.Len())
 		}
-	}()*/
-
+	}()
 }
+*/
 
 
 

@@ -6,6 +6,7 @@ import(
 	"fmt"
 )
 
+var CacheGroupSize          = int(10)
 var RedisProcessPoolSize    = int(5)
 var SqlLoadPoolSize         = int(5)
 var SqlUpdatePoolSize       = int(10)
@@ -54,6 +55,13 @@ func ParseConfig(sec *ini.Section) {
 		if ok {
 			f(v.Value())
 		}	
+	}
+}
+
+func cacheGroupSize(v string) {
+	i, err := strconv.ParseInt(v, 10, 32)
+	if nil == err {
+		CacheGroupSize = int(i)
 	}
 }
 
@@ -291,6 +299,8 @@ func enableLogStdout(v string) {
 
 func init() {
 	parser = map[string]func(string){}
+
+	parser["CacheGroupSize"] = cacheGroupSize
 	parser["RedisProcessPoolSize"] = redisProcessPoolSize
 	parser["SqlLoadPoolSize"] = sqlLoadPoolSize	
 	parser["SqlUpdatePoolSize"] = sqlUpdatePoolSize

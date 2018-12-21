@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"container/list"
 	"sync/atomic"
+	"github.com/sniperHW/kendynet/event"
+	"flyfish/conf"
 )
 
 const (
@@ -16,7 +18,7 @@ const (
 type cacheKey struct {
 	uniKey      string
 	idx         uint32
-	lastAccess  uint64              //time.Time
+	//lastAccess  int64              //time.Time
 	version     int64
 	status      int    			
 	locked      bool    			//操作是否被锁定	
@@ -25,22 +27,14 @@ type cacheKey struct {
 	writeBacked int32               //正在回写
 }
 
-var cacheKeys map[string]*cacheKey
-//var minHeap *util.MinHeap
-var tick uint64  //每次访问+1假设每秒访问100万次，需要运行584942年才会回绕
+//var tick int64  //每次访问+1假设每秒访问100万次，需要运行584942年才会回绕
 
-/*func (this *cacheKey) Less(o util.HeapElement) bool {
-	return this.lastAccess < o.(*cacheKey).lastAccess
-	//return this.lastAccess.Before(o_.lastAccess)
+type cacheKeyMgr struct {
+	cacheKeys  map[string]*cacheKey
+    eventQueue *event.EventQueue
 }
 
-func (this *cacheKey) GetIndex() uint32 {
-	return this.idx
-}
-	
-func (this *cacheKey) SetIndex(idx uint32) {
-	this.idx = idx
-}*/
+var cacheGroup [] *cacheKeyMgr
 
 func (this *cacheKey) lock() {
 	if !this.locked {
@@ -92,9 +86,7 @@ UpdateLRU和newCacheKey只能再主消息循环中访问，所以tick不需要�
 */
 
 func (this *cacheKey) updateLRU() {
-	tick++
-	//this.lastAccess = tick//time.Now()
-	//minHeap.Insert(this)	
+	//atomic.AddInt64
 }
 
 func newCacheKey(table string,uniKey string) *cacheKey {
@@ -106,11 +98,8 @@ func newCacheKey(table string,uniKey string) *cacheKey {
 		return nil
 	}
 
-	tick++
-
 	k := &cacheKey {
 		uniKey     : uniKey,
-		lastAccess : tick,
 		status     : cache_new,
 		meta       : meta,
 		cmdQueue   : list.New(),
@@ -118,13 +107,16 @@ func newCacheKey(table string,uniKey string) *cacheKey {
 
 	Debugln("newCacheKey key:",uniKey)
 
-	cacheKeys[uniKey] = k
-	//minHeap.Insert(k)
+	mgr := getMgrByUnikey(uniKey)
+
+	mgr.cacheKeys[uniKey] = k
+	
 	return k
 }
 
 func getCacheKey(table string,uniKey string) *cacheKey {
-	k,ok := cacheKeys[uniKey]
+	mgr := getMgrByUnikey(uniKey)
+	k,ok := mgr.cacheKeys[uniKey]
 	if ok {
 		k.updateLRU()
 		return k
@@ -164,27 +156,30 @@ func (this *cacheKey) convertStr(fieldName string,value string) *protocol.Field 
 	}
 }
 
-/*
-func lruMinKey() *cacheKey {
-	min := minHeap.Min()
-	if nil == min {
-		return nil
-	} else {
-		return min.(*cacheKey)
-	}
+func getMgrByUnikey(uniKey string) *cacheKeyMgr {
+	hash := StringHash(uniKey)
+	return cacheGroup[hash%conf.CacheGroupSize]
 }
 
-func removeCacheKey(key *cacheKey) {
-	delete(cacheKeys,key.uniKey)
-	minHeap.Remove(key)
-}
-*/
-func clearCacheKey() {
-	cacheKeys = map[string]*cacheKey{}
-	//minHeap   = util.NewMinHeap(1000000)	
+
+func postKeyEventNoWait(uniKey string,op interface{},args ...interface{}) {
+	getMgrByUnikey(uniKey).eventQueue.PostNoWait(op,args...)
 }
 
+func postKeyEvent(uniKey string,op interface{},args ...interface{}) {
+	getMgrByUnikey(uniKey).eventQueue.Post(op,args...)
+}
 
 func init() {
-	clearCacheKey()
+	cacheGroup  = make([]*cacheKeyMgr,conf.CacheGroupSize)
+	for i:= 0; i < conf.CacheGroupSize; i++ {
+		eventQueue := event.NewEventQueue(conf.MainEventQueueSize)
+		cacheGroup[i] = &cacheKeyMgr {
+			cacheKeys  : map[string]*cacheKey{},
+			eventQueue : eventQueue, 
+		}
+		go func() {
+			eventQueue.Run()
+		}()
+	}
 }

@@ -17,7 +17,8 @@ func onSqlNotFound(ctx *processContext) {
 	cmdType := ctx.getCmdType()
 	if cmdType == cmdGet || cmdType == cmdDel || cmdType == cmdCompareAndSet {
 		ctx.reply(errcode.ERR_NOTFOUND,nil,-1)
-		mainQueue.PostNoWait(processSqlNotFound,ctx.getCacheKey())
+		postKeyEventNoWait(ctx.getUniKey(),processSqlNotFound,ctx.getCacheKey())
+		//mainQueue.PostNoWait(processSqlNotFound,ctx.getCacheKey())
 	} else {
 		/*  set操作，数据库不存在的情况
 		*   先写入到redis,redis写入成功后回写sql(设置回写类型insert)
@@ -52,7 +53,8 @@ func processSqlExecError(args []interface{}) {
 func onSqlExecError(ctx *processContext) {
 	Debugln("onSqlExecError key",ctx.getUniKey())
 	ctx.reply(errcode.ERR_SQLERROR,nil,-1)
-	mainQueue.PostNoWait(processSqlExecError,ctx.getCacheKey())
+	//mainQueue.PostNoWait(processSqlExecError,ctx.getCacheKey())
+	postKeyEventNoWait(ctx.getUniKey(),processSqlExecError,ctx.getCacheKey())
 }
 
 func onSqlLoadOKGet(ctx *processContext) {
@@ -79,7 +81,8 @@ func onSqlLoadOKSet(ctx *processContext) {
 			pushRedis = false
 			//版本号不对
 			ctx.reply(errcode.ERR_VERSION,nil,version)
-			mainQueue.PostNoWait(processSqlLoadOKSet,ctx.getCacheKey())
+			postKeyEventNoWait(ctx.getUniKey(),processSqlLoadOKSet,ctx.getCacheKey())
+			//mainQueue.PostNoWait(processSqlLoadOKSet,ctx.getCacheKey())
 		} else {
 			//变更需要将版本号+1
 			for _,v := range(cmd.fields) {
@@ -148,8 +151,10 @@ func onSqlLoadOKDel(ctx *processContext) {
 	}
 
 	ctx.reply(errCode,nil,version)
-	
-	mainQueue.PostNoWait(processSqlLoadOKDel,ctx.getCacheKey(),errCode)
+
+	postKeyEventNoWait(ctx.getUniKey(),processSqlLoadOKDel,ctx.getCacheKey(),errCode)	
+
+	//mainQueue.PostNoWait(processSqlLoadOKDel,ctx.getCacheKey(),errCode)
 }
 
 func onSqlLoadOK(ctx *processContext) { 
