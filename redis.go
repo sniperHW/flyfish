@@ -6,7 +6,6 @@ import(
 	"sync"
 	"fmt"
 	"flyfish/conf"
-	"time"
 )
 
 
@@ -31,21 +30,10 @@ func redisRoutine(queue *util.BlockQueue) {
 	for {
 		closed, localList := queue.Get()	
 		for _,v := range(localList) {
-			switch v.(type) {
-			case *processContext:
-				ctx := v.(*processContext)
-				redisPipeliner_.append(ctx)
-			break
-			default:
-				redisPipeliner_.exec()
-			break
-			}	
+			ctx := v.(*processContext)
+			redisPipeliner_.append(ctx)
 		}
-
-		if len(redisPipeliner_.cmds) >= redisPipeliner_.max {
-			redisPipeliner_.exec()
-		}
-
+		redisPipeliner_.exec()
 		if closed {
 			return
 		}
@@ -67,12 +55,6 @@ func RedisInit(host string,port int,Password string) bool {
 			redisProcessQueue = util.NewBlockQueueWithName(fmt.Sprintf("redis"),conf.RedisEventQueueSize)
 			for i := 0; i < conf.RedisProcessPoolSize; i++ {
 				go redisRoutine(redisProcessQueue)
-				go func() {
-					for {
-						time.Sleep(10 * time.Millisecond)
-						redisProcessQueue.Add(struct{}{})
-					}
-				}()
 			}
 
 			/*go func(){
