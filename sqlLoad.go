@@ -5,6 +5,7 @@ import (
 	protocol "flyfish/proto"
 	"time"
 	"flyfish/errcode"
+	"reflect"
 )
 
 /*
@@ -92,6 +93,7 @@ func (this *sqlLoader) exec() {
 
 		rows, err := this.db.Query(str)
 
+
 		strPut(v.sqlStr)
 		v.sqlStr = nil
 
@@ -102,11 +104,13 @@ func (this *sqlLoader) exec() {
 		}
 
 		if nil != err {
-			Errorln("sqlQueryer exec error:",err)
+			Errorln("sqlQueryer exec error:",err,reflect.TypeOf(err).String())
 			for _,vv := range(v.ctxs) {
 				onSqlExecError(vv)
 			}
 		} else {
+
+			defer rows.Close()
 
 			filed_receiver := v.meta.queryMeta.getReceiver()
 			field_convter  := v.meta.queryMeta.field_convter
@@ -141,8 +145,6 @@ func (this *sqlLoader) exec() {
 			}
 			v.meta.queryMeta.putReceiver(filed_receiver)
 		}
-
-		rows.Close()
 	}
 }
 

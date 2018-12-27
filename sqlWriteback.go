@@ -2,12 +2,15 @@ package flyfish
 
 import (
 	"github.com/jmoiron/sqlx"
-	"fmt"
+	//"fmt"
+	"net"
+	"database/sql/driver"
 	//"strings"
 	"flyfish/conf"
 	"time"
 	protocol "flyfish/proto"
 	"sync"
+	//"io"
 )
 
 type record struct {
@@ -191,6 +194,24 @@ func (this *sqlUpdater) append(v interface{}) {
 	}
 }
 
+func isRetryError(err error) bool {
+	if err == driver.ErrBadConn {
+		return true
+	} else {
+		switch err.(type) {
+		case *net.OpError:
+			return true
+			break
+		case net.Error:
+			return true
+			break
+		default:
+			break
+		}
+	}
+	return false
+}
+
 
 func (this *sqlUpdater) exec() {
 
@@ -222,25 +243,33 @@ func (this *sqlUpdater) exec() {
 		s.append(this.updates.toString())
 	}
 
-	_ , err := this.db.Exec(s.toString())
+	for {
 
-	//Errorln(s.toString())
+		_ , err := this.db.Exec(s.toString())
 
-	elapse := time.Now().Sub(beg)
+		elapse := time.Now().Sub(beg)
 
-	if elapse/time.Millisecond > 500 {
-		Infoln("sqlUpdater long exec",elapse,this.count)
-	}
+		if elapse/time.Millisecond > 500 {
+			Infoln("sqlUpdater long exec",elapse,this.count)
+		}
 
-	if nil != err {
-		Errorln("sqlUpdater exec error:",err,s.toString())
-		fmt.Println("sqlUpdater exec error:",err,s.toString())
-	}
-
-	strPut(s)
-
-	for _,v := range(this.keys) {
-		v.clearWriteBack()
+		if nil != err {
+			if isRetryError(err) {
+				Errorln("sqlUpdater exec error:",err)
+				//休眠一秒重试
+				time.Sleep(time.Second)
+			} else {
+				Errorln("sqlUpdater exec error:",err,s.toString())
+				strPut(s)
+				break
+			}
+		} else {
+			strPut(s)
+			for _,v := range(this.keys) {
+				v.clearWriteBack()
+			}
+		}
+		break
 	}
 
 }
