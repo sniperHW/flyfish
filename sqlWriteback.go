@@ -2,7 +2,7 @@ package flyfish
 
 import (
 	"github.com/jmoiron/sqlx"
-	//"fmt"
+	"fmt"
 	"net"
 	"database/sql/driver"
 	//"strings"
@@ -11,6 +11,8 @@ import (
 	protocol "flyfish/proto"
 	"sync"
 	//"io"
+	"os"
+	"github.com/sniperHW/kendynet"
 )
 
 type record struct {
@@ -86,16 +88,18 @@ type sqlUpdater struct {
 	updateStrSize     int
 	count             int
 	max               int
-	db                *sqlx.DB	
-
+	db                *sqlx.DB
+	name              string	
+	file              *os.File
 	writeFileAndBreak bool
 
 }
 
-func newSqlUpdater(max int,host string, port int,dbname string,user string,password string) *sqlUpdater {
+func newSqlUpdater(name string,max int,host string, port int,dbname string,user string,password string) *sqlUpdater {
 	t := &sqlUpdater {
 		max     : max,
 		keys    : []*cacheKey{},
+		name    : name,
 	}
 	t.db,_ = pgOpen(host,port,dbname,user,password)
 
@@ -215,6 +219,34 @@ func isRetryError(err error) bool {
 	return false
 }
 
+func (this *sqlUpdater) writeFile(s string) {
+	if nil == this.file {
+
+		out_path := fmt.Sprintf("%s/%s_%d.bak",conf.BackDir,this.name,time.Now().Unix())
+
+		f,err := os.OpenFile(out_path,os.O_RDWR,os.ModePerm)
+		if err != nil {
+			if os.IsNotExist(err) {
+				f,err = os.Create(out_path)
+				if err != nil {
+					Errorf("create %s failed:%s",out_path,err.Error())
+					return
+				}
+			} else {
+				Errorf("open %s failed:%s",out_path,err.Error())			
+				return
+			}
+		}
+		this.file = f
+	}
+
+	b := kendynet.NewByteBuffer()
+	b.AppendByte(0)
+	b.AppendString(s)
+
+	this.file.Write(b.Bytes())
+	this.file.Sync()
+}
 
 func (this *sqlUpdater) exec() {
 
@@ -247,7 +279,7 @@ func (this *sqlUpdater) exec() {
 	}
 
 	if this.writeFileAndBreak {
-		//TODO:将str写入文件
+		this.writeFile(s.toString())
 		strPut(s)
 		for _,v := range(this.keys) {
 			v.clearWriteBack()
@@ -270,7 +302,7 @@ func (this *sqlUpdater) exec() {
 				Errorln("sqlUpdater exec error:",err)
 				if isStop() {
 					this.writeFileAndBreak = true
-					//TODO:将str写入文件
+					this.writeFile(s.toString())
 					strPut(s)
 					for _,v := range(this.keys) {
 						v.clearWriteBack()

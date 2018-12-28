@@ -145,8 +145,9 @@ func SQLInit(host string,port int,dbname string,user string,password string) boo
 		sqlUpdateQueue = make([]*util.BlockQueue,conf.SqlUpdatePoolSize)
 		for i := 0; i < conf.SqlUpdatePoolSize; i++ {
 			writeBackWG.Add(1)
-			sqlUpdateQueue[i] = util.NewBlockQueueWithName(fmt.Sprintf("sqlUpdater:%d",i),conf.SqlUpdateEventQueueSize)
-			go sqlRoutine(sqlUpdateQueue[i],newSqlUpdater(conf.SqlUpdatePipeLineSize,host,port,dbname,user,password))
+			name := fmt.Sprintf("sqlUpdater:%d",i)
+			sqlUpdateQueue[i] = util.NewBlockQueueWithName(name,conf.SqlUpdateEventQueueSize)
+			go sqlRoutine(sqlUpdateQueue[i],newSqlUpdater(name,conf.SqlUpdatePipeLineSize,host,port,dbname,user,password))
 		}
 
 		go writeBackRoutine()
