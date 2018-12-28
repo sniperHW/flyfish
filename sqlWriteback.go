@@ -78,15 +78,18 @@ func (this *record) appendInsert(s *str) int {
 }
 
 type sqlUpdater struct {
-	delSets          map[string]*str
-	insertSets       map[string]*str
-	updates          *str
-	keys             []*cacheKey
+	delSets           map[string]*str
+	insertSets        map[string]*str
+	updates           *str
+	keys              []*cacheKey
 
-	updateStrSize  int
-	count          int
-	max            int
-	db             *sqlx.DB	
+	updateStrSize     int
+	count             int
+	max               int
+	db                *sqlx.DB	
+
+	writeFileAndBreak bool
+
 }
 
 func newSqlUpdater(max int,host string, port int,dbname string,user string,password string) *sqlUpdater {
@@ -243,6 +246,15 @@ func (this *sqlUpdater) exec() {
 		s.append(this.updates.toString())
 	}
 
+	if this.writeFileAndBreak {
+		//TODO:将str写入文件
+		strPut(s)
+		for _,v := range(this.keys) {
+			v.clearWriteBack()
+		}	
+		return
+	}
+
 	for {
 
 		_ , err := this.db.Exec(s.toString())
@@ -256,6 +268,15 @@ func (this *sqlUpdater) exec() {
 		if nil != err {
 			if isRetryError(err) {
 				Errorln("sqlUpdater exec error:",err)
+				if isStop() {
+					this.writeFileAndBreak = true
+					//TODO:将str写入文件
+					strPut(s)
+					for _,v := range(this.keys) {
+						v.clearWriteBack()
+					}					
+					break
+				}
 				//休眠一秒重试
 				time.Sleep(time.Second)
 			} else {

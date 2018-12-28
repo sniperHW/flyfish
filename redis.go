@@ -6,20 +6,24 @@ import(
 	"sync"
 	"fmt"
 	"flyfish/conf"
+	"sync/atomic"
 )
 
 
 var redis_once sync.Once
 var cli *redis.Client
+var redisReqCount int32
 
 var redisProcessQueue *util.BlockQueue
 
 func pushRedis(ctx *processContext) {
+	atomic.AddInt32(&redisReqCount,1)
 	Debugln("pushRedis",ctx.getUniKey())
 	redisProcessQueue.Add(ctx)
 }
 
 func pushRedisNoWait(ctx *processContext) {
+	atomic.AddInt32(&redisReqCount,1)	
 	Debugln("pushRedisNoWait",ctx.getUniKey())
 	redisProcessQueue.AddNoWait(ctx)	
 }

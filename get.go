@@ -79,18 +79,32 @@ func getAll(session kendynet.StreamSession,msg *codec.Message) {
 
 	Debugln("getAll",req)
 
-	if "" == req.GetTable() {
-		errno = errcode.ERR_MISSING_TABLE
-	}
+	var meta *table_meta
 
-	if "" == req.GetKey() {
-		errno = errcode.ERR_MISSING_KEY
-	}	
+	for {
 
-	meta := getMetaByTable(req.GetTable())
+		if isStop() {
+			errno = errcode.ERR_SERVER_STOPED
+			break
+		}
 
-	if nil == meta {
-		errno = errcode.ERR_INVAILD_TABLE
+		if "" == req.GetTable() {
+			errno = errcode.ERR_MISSING_TABLE
+			break
+		}
+
+		if "" == req.GetKey() {
+			errno = errcode.ERR_MISSING_KEY
+			break
+		}	
+
+		meta = getMetaByTable(req.GetTable())
+
+		if nil == meta {
+			errno = errcode.ERR_INVAILD_TABLE
+			break
+		}
+		break
 	}
 
 	if errcode.ERR_OK != errno {

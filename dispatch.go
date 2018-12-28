@@ -7,7 +7,11 @@ import(
 	"reflect"
 	"github.com/golang/protobuf/proto"
 	protocol "flyfish/proto"
+	"sync/atomic"
 )
+
+
+var clientCount int32
 
 type handler func(kendynet.StreamSession,*codec.Message)
 
@@ -50,11 +54,12 @@ func (this *dispatcher) OnClose(session kendynet.StreamSession,reason string) {
 }
 
 func (this *dispatcher) OnNewClient(session kendynet.StreamSession) {
-	//fmt.Printf("new client\n")	
+	atomic.AddInt32(&clientCount,1)	
 }
 
 func onClose(session kendynet.StreamSession,reason string) {
 	dispatcher_.OnClose(session,reason)
+	atomic.AddInt32(&clientCount,-1)
 }
 
 func onNewClient(session kendynet.StreamSession) {

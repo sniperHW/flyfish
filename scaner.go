@@ -147,6 +147,13 @@ func (this *scaner) next(req *protocol.ScanReq) {
 		ErrCode : proto.Int32(errcode.ERR_SCAN_END),
 	}
 
+	if isStop() {
+		resp.ErrCode = proto.Int32(errcode.ERR_SERVER_STOPED)
+		this.session.Send(resp)
+		this.session.Close("",1)
+		return
+	}
+
 	deadline := time.Now().Add(time.Duration(req.GetTimeout()))
 
 	count := req.GetCount()

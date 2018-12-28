@@ -36,8 +36,14 @@ func prepareRecord(ctx *processContext) *record {
 
 type notifyWB struct {}
 
+func closeWriteBack() {
+	for _,v := range(sqlUpdateQueue) {
+		v.Close()
+	}
+}
+
 func notiForceWriteBack() {
-	if conf.WriteBackDelay > 0 {
+	if conf.WriteBackDelay > 0 || isStop() {
 		writeBackEventQueue.Add(notifyWB{})
 	}
 }
@@ -45,7 +51,7 @@ func notiForceWriteBack() {
 func pushSQLWriteBack(ctx *processContext) {
 	ckey := ctx.getCacheKey()
 	ckey.setWriteBack()
-	if conf.WriteBackDelay > 0 {
+	if conf.WriteBackDelay > 0 && !isStop() {
 		//延迟回写
 		writeBackEventQueue.Add(ctx)
 	} else {
@@ -60,7 +66,7 @@ func pushSQLWriteBackNoWait(ctx *processContext) {
 
 	ckey := ctx.getCacheKey()
 	ckey.setWriteBack()
-	if conf.WriteBackDelay > 0 {
+	if conf.WriteBackDelay > 0 && !isStop() {
 		//延迟回写
 		writeBackEventQueue.AddNoWait(ctx)
 	} else {
@@ -107,6 +113,14 @@ func sqlRoutine(queue *util.BlockQueue,pipeliner sqlPipeliner) {
 		}
 		pipeliner.exec()
 		if closed {
+			switch pipeliner.(type) {
+			case *sqlUpdater:
+				Infoln("sqlUpdater end")
+				writeBackWG.Done()
+				break
+			default:
+				break
+			}
 			return
 		}
 	}
@@ -130,6 +144,7 @@ func SQLInit(host string,port int,dbname string,user string,password string) boo
 
 		sqlUpdateQueue = make([]*util.BlockQueue,conf.SqlUpdatePoolSize)
 		for i := 0; i < conf.SqlUpdatePoolSize; i++ {
+			writeBackWG.Add(1)
 			sqlUpdateQueue[i] = util.NewBlockQueueWithName(fmt.Sprintf("sqlUpdater:%d",i),conf.SqlUpdateEventQueueSize)
 			go sqlRoutine(sqlUpdateQueue[i],newSqlUpdater(conf.SqlUpdatePipeLineSize,host,port,dbname,user,password))
 		}

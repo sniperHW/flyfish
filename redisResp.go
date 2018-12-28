@@ -2,6 +2,7 @@ package flyfish
 
 import(
 	"flyfish/errcode"
+	"sync/atomic"
 )
 
 func processRedisResp(args []interface{}) {
@@ -37,6 +38,7 @@ func processRedisResp(args []interface{}) {
 		ckey.process()
 	}
 
+	atomic.AddInt32(&redisReqCount,-1)
 }
 
 func onRedisResp(ctx *processContext) {

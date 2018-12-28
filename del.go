@@ -46,12 +46,23 @@ func del(session kendynet.StreamSession,msg *codec.Message) {
 
 	errno := errcode.ERR_OK
 
-	if "" == req.GetTable() {
-		errno = errcode.ERR_MISSING_TABLE
-	}
+	for {
 
-	if "" == req.GetKey() {
-		errno = errcode.ERR_MISSING_KEY
+		if isStop() {
+			errno = errcode.ERR_SERVER_STOPED
+			break
+		}
+
+		if "" == req.GetTable() {
+			errno = errcode.ERR_MISSING_TABLE
+			break
+		}
+
+		if "" == req.GetKey() {
+			errno = errcode.ERR_MISSING_KEY
+			break
+		}
+		break
 	}
 
 	if 0 != errno {

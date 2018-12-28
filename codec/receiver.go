@@ -7,7 +7,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"fmt"
 	"net"
-	"reflect"
 )
 
 const (

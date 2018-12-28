@@ -5,8 +5,9 @@ import(
 	protocol "flyfish/proto"
 	//"strconv"
 	//"fmt"
+	"sync/atomic"
 	"time"
-	"flyfish/errcode"
+	"flyfish/errcode"	
 )
 
 const (
@@ -20,6 +21,8 @@ const (
 	cmdIncrBy 			= 7
 	cmdDecrBy 			= 8
 )
+
+var cmdCount int32 //待回复命令数量
 
 //var mainQueue *event.EventQueue
 
@@ -56,10 +59,13 @@ type command struct {
 
 func (this *command) reply(errCode int32,fields map[string]*protocol.Field,version int64) {
 	this.rpyer.reply(errCode,fields,version)
+	atomic.AddInt32(&cmdCount,-1)
 }
 
 
 func pushCommand(cmd *command) {
+
+	atomic.AddInt32(&cmdCount,1)
 
 	meta := getMetaByTable(cmd.table)
 

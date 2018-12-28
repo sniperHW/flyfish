@@ -4,6 +4,8 @@ import (
 	"fmt"
 	codec "flyfish/codec"
 	"sync/atomic"
+	"sync"
+	"time"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/socket/stream_socket/tcp"
 )
@@ -11,6 +13,7 @@ import (
 var (
 	server     listener
 	started    int32
+	stoped     int32
 )
 
 type Dispatcher interface {
@@ -100,10 +103,47 @@ func StopServer() {
 	if !atomic.CompareAndSwapInt32(&started, 1, 0) {
 		return
 	}
+
+	if !atomic.CompareAndSwapInt32(&stoped, 1, 0) {
+		return
+	}	
+
 	server.Close()
 }
 
+func isStop() bool {
+	return  atomic.LoadInt32(&stoped) == 1
+}
+
+var writeBackWG sync.WaitGroup
 
 func Stop() {
+	
+	//第一步关闭监听
 	StopServer()
+	
+	//等待redis请求和命令执行完成
+	
+	wg := sync.WaitGroup{}
+
+	wg.Add(1)
+	go func(){
+		for {
+			time.Sleep(time.Millisecond * 100)
+			if atomic.LoadInt32(&redisReqCount) == 0 && atomic.LoadInt32(&cmdCount) == 0 {
+				wg.Done()
+				break
+			}
+		}
+	}()
+	wg.Wait()
+
+	//强制执行回写
+	notiForceWriteBack()
+
+	//等待回写执行完毕
+	closeWriteBack()
+
+	writeBackWG.Wait()
+
 }
