@@ -146,4 +146,23 @@ func Stop() {
 
 	writeBackWG.Wait()
 
+	//关闭所有客户连接
+
+	sessions.Range(func(key, value interface{}) bool {
+		value.(kendynet.StreamSession).Close("",1)
+		return true
+	})
+
+	wg.Add(1)
+	go func(){
+		for {
+			time.Sleep(time.Millisecond * 100)
+			if atomic.LoadInt32(&clientCount) == 0 {
+				wg.Done()
+				break
+			}
+		}
+	}()
+	wg.Wait()	
+
 }

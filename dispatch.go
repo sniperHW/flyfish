@@ -8,8 +8,10 @@ import(
 	"github.com/golang/protobuf/proto"
 	protocol "flyfish/proto"
 	"sync/atomic"
+	"sync"
 )
 
+var sessions sync.Map
 
 var clientCount int32
 
@@ -51,18 +53,20 @@ func (this *dispatcher) OnClose(session kendynet.StreamSession,reason string) {
 	if nil != u {
 		u.(*scaner).close()
 	}
+	atomic.AddInt32(&clientCount,-1)
+	sessions.Delete(session)	
 }
 
 func (this *dispatcher) OnNewClient(session kendynet.StreamSession) {
-	atomic.AddInt32(&clientCount,1)	
+	atomic.AddInt32(&clientCount,1)
+	sessions.Store(session,session)	
 }
 
 func onClose(session kendynet.StreamSession,reason string) {
 	dispatcher_.OnClose(session,reason)
-	atomic.AddInt32(&clientCount,-1)
 }
 
-func onNewClient(session kendynet.StreamSession) {
+func onNewClient(session kendynet.StreamSession) {	
 	dispatcher_.OnNewClient(session)
 }
 
