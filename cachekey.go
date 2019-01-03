@@ -1,12 +1,12 @@
 package flyfish
 
 import (
-	protocol "flyfish/proto"
-	"strconv"
 	"container/list"
-	"sync/atomic"
-	"github.com/sniperHW/kendynet/event"
 	"flyfish/conf"
+	protocol "flyfish/proto"
+	"github.com/sniperHW/kendynet/event"
+	"strconv"
+	"sync/atomic"
 )
 
 const (
@@ -16,25 +16,25 @@ const (
 )
 
 type cacheKey struct {
-	uniKey      string
-	idx         uint32
+	uniKey string
+	idx    uint32
 	//lastAccess  int64              //time.Time
 	version     int64
-	status      int    			
-	locked      bool    			//操作是否被锁定	
+	status      int
+	locked      bool //操作是否被锁定
 	cmdQueue    *list.List
 	meta        *table_meta
-	writeBacked int32               //正在回写
+	writeBacked int32 //正在回写
 }
 
 //var tick int64  //每次访问+1假设每秒访问100万次，需要运行584942年才会回绕
 
 type cacheKeyMgr struct {
 	cacheKeys  map[string]*cacheKey
-    eventQueue *event.EventQueue
+	eventQueue *event.EventQueue
 }
 
-var cacheGroup [] *cacheKeyMgr
+var cacheGroup []*cacheKeyMgr
 
 func (this *cacheKey) lock() {
 	if !this.locked {
@@ -47,14 +47,14 @@ func (this *cacheKey) unlock() {
 }
 
 func (this *cacheKey) setMissing() {
-	Debugln("SetMissing key:",this.uniKey)
+	Debugln("SetMissing key:", this.uniKey)
 	this.version = 0
-	this.status  = cache_missing 
+	this.status = cache_missing
 }
 
 func (this *cacheKey) setOK(version int64) {
 	this.version = version
-	this.status  = cache_ok
+	this.status = cache_ok
 }
 
 func (this *cacheKey) reset() {
@@ -70,11 +70,11 @@ func (this *cacheKey) clearCmd() {
 }
 
 func (this *cacheKey) setWriteBack() {
-	atomic.StoreInt32(&this.writeBacked,1)
+	atomic.StoreInt32(&this.writeBacked, 1)
 }
 
 func (this *cacheKey) clearWriteBack() {
-	atomic.StoreInt32(&this.writeBacked,0)	
+	atomic.StoreInt32(&this.writeBacked, 0)
 }
 
 func (this *cacheKey) isWriteBack() bool {
@@ -89,68 +89,68 @@ func (this *cacheKey) updateLRU() {
 	//atomic.AddInt64
 }
 
-func newCacheKey(table string,uniKey string) *cacheKey {
-	
+func newCacheKey(table string, uniKey string) *cacheKey {
+
 	meta := getMetaByTable(table)
 
 	if nil == meta {
-		Errorln("newCacheKey key:",uniKey," error,[missing table_meta]")
+		Errorln("newCacheKey key:", uniKey, " error,[missing table_meta]")
 		return nil
 	}
 
-	k := &cacheKey {
-		uniKey     : uniKey,
-		status     : cache_new,
-		meta       : meta,
-		cmdQueue   : list.New(),
+	k := &cacheKey{
+		uniKey:   uniKey,
+		status:   cache_new,
+		meta:     meta,
+		cmdQueue: list.New(),
 	}
 
-	Debugln("newCacheKey key:",uniKey)
+	Debugln("newCacheKey key:", uniKey)
 
 	mgr := getMgrByUnikey(uniKey)
 
 	mgr.cacheKeys[uniKey] = k
-	
+
 	return k
 }
 
-func getCacheKey(table string,uniKey string) *cacheKey {
+func getCacheKey(table string, uniKey string) *cacheKey {
 	mgr := getMgrByUnikey(uniKey)
-	k,ok := mgr.cacheKeys[uniKey]
+	k, ok := mgr.cacheKeys[uniKey]
 	if ok {
 		k.updateLRU()
 		return k
 	} else {
-		return newCacheKey(table,uniKey)
+		return newCacheKey(table, uniKey)
 	}
 }
 
-func (this *cacheKey) convertStr(fieldName string,value string) *protocol.Field {
-	m,ok := this.meta.fieldMetas[fieldName]
+func (this *cacheKey) convertStr(fieldName string, value string) *protocol.Field {
+	m, ok := this.meta.fieldMetas[fieldName]
 	if !ok {
 		return nil
 	}
 
 	if m.tt == protocol.ValueType_string {
-		return protocol.PackField(fieldName,value)
+		return protocol.PackField(fieldName, value)
 	} else if m.tt == protocol.ValueType_float {
 		f, err := strconv.ParseFloat(value, 64)
 		if nil != err {
 			return nil
 		}
-		return protocol.PackField(fieldName,f)		
+		return protocol.PackField(fieldName, f)
 	} else if m.tt == protocol.ValueType_int {
 		i, err := strconv.ParseInt(value, 10, 64)
 		if nil != err {
 			return nil
 		}
-		return protocol.PackField(fieldName,i)			
+		return protocol.PackField(fieldName, i)
 	} else if m.tt == protocol.ValueType_uint {
 		u, err := strconv.ParseUint(value, 10, 64)
 		if nil != err {
 			return nil
 		}
-		return protocol.PackField(fieldName,u)		
+		return protocol.PackField(fieldName, u)
 	} else {
 		return nil
 	}
@@ -161,22 +161,21 @@ func getMgrByUnikey(uniKey string) *cacheKeyMgr {
 	return cacheGroup[hash%conf.CacheGroupSize]
 }
 
-
-func postKeyEventNoWait(uniKey string,op interface{},args ...interface{}) {
-	getMgrByUnikey(uniKey).eventQueue.PostNoWait(op,args...)
+func postKeyEventNoWait(uniKey string, op interface{}, args ...interface{}) {
+	getMgrByUnikey(uniKey).eventQueue.PostNoWait(op, args...)
 }
 
-func postKeyEvent(uniKey string,op interface{},args ...interface{}) {
-	getMgrByUnikey(uniKey).eventQueue.Post(op,args...)
+func postKeyEvent(uniKey string, op interface{}, args ...interface{}) {
+	getMgrByUnikey(uniKey).eventQueue.Post(op, args...)
 }
 
 func InitCacheKey() {
-	cacheGroup  = make([]*cacheKeyMgr,conf.CacheGroupSize)
-	for i:= 0; i < conf.CacheGroupSize; i++ {
+	cacheGroup = make([]*cacheKeyMgr, conf.CacheGroupSize)
+	for i := 0; i < conf.CacheGroupSize; i++ {
 		eventQueue := event.NewEventQueue(conf.MainEventQueueSize)
-		cacheGroup[i] = &cacheKeyMgr {
-			cacheKeys  : map[string]*cacheKey{},
-			eventQueue : eventQueue, 
+		cacheGroup[i] = &cacheKeyMgr{
+			cacheKeys:  map[string]*cacheKey{},
+			eventQueue: eventQueue,
 		}
 		go func() {
 			eventQueue.Run()

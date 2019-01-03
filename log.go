@@ -8,12 +8,12 @@ import (
 var logger *golog.Logger
 var logger_once sync.Once
 
-func InitLogger(out *golog.OutputLogger,lv golog.Level) {
+func InitLogger(out *golog.OutputLogger, lv golog.Level) {
 	logger_once.Do(func() {
 		fullname := "flyfish"
-		logger = golog.New(fullname,out)
+		logger = golog.New(fullname, out)
 		logger.SetLevel(lv)
-		logger.Debugf("%s logger init",fullname)
+		logger.Debugf("%s logger init", fullname)
 	})
 }
 

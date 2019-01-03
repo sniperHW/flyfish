@@ -1,24 +1,22 @@
 package client
 
-
 import (
 	"flyfish/errcode"
 )
 
-
 type MGetCmd struct {
-	c          *Client
-	cmds       map[string]*SliceCmd
-	rows       []*Row
-	cb         func(*MutiResult)
-	respCount  int
+	c         *Client
+	cmds      map[string]*SliceCmd
+	rows      []*Row
+	cb        func(*MutiResult)
+	respCount int
 }
 
 func (this *MGetCmd) Exec(cb func(*MutiResult)) {
 	this.cb = cb
-	for k,v := range(this.cmds) {
+	for k, v := range this.cmds {
 		key := k
-		v.Exec(func(ret *SliceResult){
+		v.Exec(func(ret *SliceResult) {
 			this.c.mGetQueue.PostNoWait(func() {
 				if nil == this.cb {
 					return
@@ -30,47 +28,46 @@ func (this *MGetCmd) Exec(cb func(*MutiResult)) {
 						this.rows = []*Row{}
 					}
 
-					if ret.ErrCode == errcode.ERR_OK { 
-						row := &Row {
-							Key : key,
-							Version : ret.Version,
-							Fields : ret.Fields,
+					if ret.ErrCode == errcode.ERR_OK {
+						row := &Row{
+							Key:     key,
+							Version: ret.Version,
+							Fields:  ret.Fields,
 						}
-						this.rows = append(this.rows,row)
+						this.rows = append(this.rows, row)
 					} else {
-						row := &Row {
-							Key : key,
+						row := &Row{
+							Key: key,
 						}
-						this.rows = append(this.rows,row)						
+						this.rows = append(this.rows, row)
 					}
 
 					if this.respCount == len(this.cmds) {
-						cb := callback {
-							tt : cb_muti,
-							cb : this.cb,
+						cb := callback{
+							tt: cb_muti,
+							cb: this.cb,
 						}
 						this.cb = nil
-						this.c.doCallBack(cb,&MutiResult{
-							ErrCode : errcode.ERR_OK,
-							Rows : this.rows,
+						this.c.doCallBack(cb, &MutiResult{
+							ErrCode: errcode.ERR_OK,
+							Rows:    this.rows,
 						})
 					}
 
 				} else {
-					cb := callback {
-						tt : cb_muti,
-						cb : this.cb,
+					cb := callback{
+						tt: cb_muti,
+						cb: this.cb,
 					}
 					this.cb = nil
-					this.c.doCallBack(cb,ret.ErrCode)
+					this.c.doCallBack(cb, ret.ErrCode)
 				}
 			})
 		})
 	}
 }
 
-
-func (this *Client) MGet(table string,keys []string,fields ...string) *MGetCmd {
+func (this *Client) MGet(table string, keys []string, fields ...string) *MGetCmd {
 	l := len(keys)
 	if l == 0 {
 		return nil
@@ -81,12 +78,12 @@ func (this *Client) MGet(table string,keys []string,fields ...string) *MGetCmd {
 	}
 
 	cmd := &MGetCmd{
-		c    : this,
-		cmds : map[string]*SliceCmd{},
+		c:    this,
+		cmds: map[string]*SliceCmd{},
 	}
 
-	for _,key := range(keys) {
-		c := this.Get(table,key,fields...)
+	for _, key := range keys {
+		c := this.Get(table, key, fields...)
 		if nil == c {
 			return nil
 		}
@@ -96,9 +93,7 @@ func (this *Client) MGet(table string,keys []string,fields ...string) *MGetCmd {
 	return cmd
 }
 
-
-
-func (this *Client) MGetAll(table string,keys []string) *MGetCmd {
+func (this *Client) MGetAll(table string, keys []string) *MGetCmd {
 	l := len(keys)
 	if l == 0 {
 		return nil
@@ -108,14 +103,13 @@ func (this *Client) MGetAll(table string,keys []string) *MGetCmd {
 		return nil
 	}
 
-
 	cmd := &MGetCmd{
-		c      : this,
-		cmds   : map[string]*SliceCmd{},
+		c:    this,
+		cmds: map[string]*SliceCmd{},
 	}
 
-	for _,key := range(keys) {
-		c := this.GetAll(table,key)
+	for _, key := range keys {
+		c := this.GetAll(table, key)
 		if nil == c {
 			return nil
 		}

@@ -1,22 +1,22 @@
 package flyfish
 
 import (
-	"fmt"
-	"sync"
-	"github.com/sniperHW/kendynet/util"
 	"flyfish/conf"
+	"fmt"
+	"github.com/sniperHW/kendynet/util"
+	"sync"
 	//protocol "flyfish/proto"
-	"time"
 	"container/list"
+	"time"
 )
 
 var sql_once sync.Once
 
-var sqlLoadQueue            *util.BlockQueue        //for get
-var sqlUpdateQueue 			[]*util.BlockQueue      //for set/del
-var writeBackRecords  	    map[string]*record   
-var writeBackEventQueue     *util.BlockQueue
-var pendingWB               *list.List
+var sqlLoadQueue *util.BlockQueue     //for get
+var sqlUpdateQueue []*util.BlockQueue //for set/del
+var writeBackRecords map[string]*record
+var writeBackEventQueue *util.BlockQueue
+var pendingWB *list.List
 
 func prepareRecord(ctx *processContext) *record {
 	uniKey := ctx.getUniKey()
@@ -27,17 +27,16 @@ func prepareRecord(ctx *processContext) *record {
 	wb.uniKey = uniKey
 	wb.ckey = ctx.getCacheKey()
 
-
 	if wb.writeBackFlag == write_back_insert || wb.writeBackFlag == write_back_update {
 		wb.fields = ctx.fields
 	}
-	return wb	
+	return wb
 }
 
-type notifyWB struct {}
+type notifyWB struct{}
 
 func closeWriteBack() {
-	for _,v := range(sqlUpdateQueue) {
+	for _, v := range sqlUpdateQueue {
 		v.Close()
 	}
 }
@@ -58,7 +57,7 @@ func pushSQLWriteBack(ctx *processContext) {
 		//直接回写
 		uniKey := ctx.getUniKey()
 		hash := StringHash(uniKey)
-		sqlUpdateQueue[hash%conf.SqlUpdatePoolSize].Add(prepareRecord(ctx))		
+		sqlUpdateQueue[hash%conf.SqlUpdatePoolSize].Add(prepareRecord(ctx))
 	}
 }
 
@@ -73,8 +72,8 @@ func pushSQLWriteBackNoWait(ctx *processContext) {
 		//直接回写
 		uniKey := ctx.getUniKey()
 		hash := StringHash(uniKey)
-		sqlUpdateQueue[hash%conf.SqlUpdatePoolSize].AddNoWait(prepareRecord(ctx))		
-	}	
+		sqlUpdateQueue[hash%conf.SqlUpdatePoolSize].AddNoWait(prepareRecord(ctx))
+	}
 }
 
 func pushSQLLoad(ctx *processContext) {
@@ -82,16 +81,16 @@ func pushSQLLoad(ctx *processContext) {
 	if ckey.isWriteBack() {
 		/*
 		*   如果记录正在等待回写，redis崩溃，导致重新从数据库载入数据，
-		*   此时回写尚未完成，如果允许读取将可能载入过期数据 
-		*/
+		*   此时回写尚未完成，如果允许读取将可能载入过期数据
+		 */
 		//通告回写处理立即执行回写
 		notiForceWriteBack()
 
 		ckey.unlock()
 
 		/*
-		*  丢弃所有命令，让客户端等待超时 
-		*/
+		*  丢弃所有命令，让客户端等待超时
+		 */
 		ckey.clearCmd()
 
 		return
@@ -103,12 +102,12 @@ func pushSQLLoad(ctx *processContext) {
 type sqlPipeliner interface {
 	append(v interface{})
 	exec()
-}          
+}
 
-func sqlRoutine(queue *util.BlockQueue,pipeliner sqlPipeliner) {
+func sqlRoutine(queue *util.BlockQueue, pipeliner sqlPipeliner) {
 	for {
 		closed, localList := queue.Get()
-		for _,v := range(localList) {
+		for _, v := range localList {
 			pipeliner.append(v)
 		}
 		pipeliner.exec()
@@ -127,38 +126,37 @@ func sqlRoutine(queue *util.BlockQueue,pipeliner sqlPipeliner) {
 }
 
 func SqlClose() {
-	
+
 }
 
-func SQLInit(host string,port int,dbname string,user string,password string) bool {
+func SQLInit(host string, port int, dbname string, user string, password string) bool {
 	sql_once.Do(func() {
 
 		pendingWB = list.New()
-		writeBackRecords = map[string]*record{}   
-		writeBackEventQueue = util.NewBlockQueueWithName("writeBackEventQueue",conf.WriteBackEventQueueSize)
+		writeBackRecords = map[string]*record{}
+		writeBackEventQueue = util.NewBlockQueueWithName("writeBackEventQueue", conf.WriteBackEventQueueSize)
 
-		sqlLoadQueue = util.NewBlockQueueWithName(fmt.Sprintf("sqlLoad"),conf.SqlLoadEventQueueSize)
+		sqlLoadQueue = util.NewBlockQueueWithName(fmt.Sprintf("sqlLoad"), conf.SqlLoadEventQueueSize)
 		for i := 0; i < conf.SqlLoadPoolSize; i++ {
-			go sqlRoutine(sqlLoadQueue,newSqlLoader(conf.SqlLoadPipeLineSize,host,port,dbname,user,password))
-		}	
+			go sqlRoutine(sqlLoadQueue, newSqlLoader(conf.SqlLoadPipeLineSize, host, port, dbname, user, password))
+		}
 
-		sqlUpdateQueue = make([]*util.BlockQueue,conf.SqlUpdatePoolSize)
+		sqlUpdateQueue = make([]*util.BlockQueue, conf.SqlUpdatePoolSize)
 		for i := 0; i < conf.SqlUpdatePoolSize; i++ {
 			writeBackWG.Add(1)
-			name := fmt.Sprintf("sqlUpdater:%d",i)
-			sqlUpdateQueue[i] = util.NewBlockQueueWithName(name,conf.SqlUpdateEventQueueSize)
-			go sqlRoutine(sqlUpdateQueue[i],newSqlUpdater(name,conf.SqlUpdatePipeLineSize,host,port,dbname,user,password))
+			name := fmt.Sprintf("sqlUpdater:%d", i)
+			sqlUpdateQueue[i] = util.NewBlockQueueWithName(name, conf.SqlUpdateEventQueueSize)
+			go sqlRoutine(sqlUpdateQueue[i], newSqlUpdater(name, conf.SqlUpdatePipeLineSize, host, port, dbname, user, password))
 		}
 
 		go writeBackRoutine()
 
-		go func(){
+		go func() {
 			for {
 				time.Sleep(time.Second)
 				writeBackEventQueue.Add(struct{}{})
 			}
 		}()
-
 
 		/*go func(){
 			for {
@@ -175,6 +173,6 @@ func SQLInit(host string,port int,dbname string,user string,password string) boo
 		}()*/
 
 	})
-	
+
 	return true
 }

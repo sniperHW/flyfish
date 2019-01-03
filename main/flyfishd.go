@@ -1,17 +1,17 @@
 package main
 
-import(
+import (
 	"flyfish"
+	"flyfish/conf"
 	"fmt"
-	"github.com/sniperHW/kendynet/golog"
-	_ "net/http/pprof"
-	"net/http"
+	"github.com/go-ini/ini"
 	"github.com/sniperHW/kendynet"
+	"github.com/sniperHW/kendynet/golog"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
-	"flyfish/conf"
-	"github.com/go-ini/ini"
 )
 
 func main() {
@@ -28,14 +28,14 @@ func main() {
 		}
 		conf.ParseConfig(sec)
 	}
-	
+
 	if !conf.EnableLogStdout {
 		golog.DisableStdOut()
 	}
 
 	outLogger := golog.NewOutputLogger(conf.LogDir, conf.LogPrefix, conf.MaxLogfileSize)
-	flyfish.InitLogger(outLogger,golog.Str2loglevel(conf.LogLevel))
-	kendynet.InitLogger(outLogger,conf.LogPrefix)
+	flyfish.InitLogger(outLogger, golog.Str2loglevel(conf.LogLevel))
+	kendynet.InitLogger(outLogger, conf.LogPrefix)
 
 	if !flyfish.InitTableConfig() {
 		fmt.Println("InitTableConfig failed")
@@ -43,20 +43,20 @@ func main() {
 	}
 
 	flyfish.InitCacheKey()
-	flyfish.RedisInit(conf.RedisHost,conf.RedisPort,conf.RedisPassword)
+	flyfish.RedisInit(conf.RedisHost, conf.RedisPort, conf.RedisPassword)
 	flyfish.SQLInit(conf.PgsqlHost, conf.PgsqlPort, conf.PgsqlDataBase, conf.PgsqlUser, conf.PgsqlPassword)
 	flyfish.Recover()
 
 	go func() {
-    	http.ListenAndServe("0.0.0.0:8899", nil)
+		http.ListenAndServe("0.0.0.0:8899", nil)
 	}()
 
-	err := flyfish.StartTcpServer("tcp",fmt.Sprintf("%s:%d",conf.ServiceHost,conf.ServicePort))
+	err := flyfish.StartTcpServer("tcp", fmt.Sprintf("%s:%d", conf.ServiceHost, conf.ServicePort))
 	if nil == err {
-		fmt.Println("flyfish start:",fmt.Sprintf("%s:%d",conf.ServiceHost,conf.ServicePort))
-		c := make(chan os.Signal) 
+		fmt.Println("flyfish start:", fmt.Sprintf("%s:%d", conf.ServiceHost, conf.ServicePort))
+		c := make(chan os.Signal)
 		signal.Notify(c, syscall.SIGINT) //监听指定信号
-		_ = <-c //阻塞直至有信号传入
+		_ = <-c                          //阻塞直至有信号传入
 		flyfish.Stop()
 		fmt.Println("server stop")
 	} else {

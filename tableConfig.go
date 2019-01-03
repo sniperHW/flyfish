@@ -1,14 +1,13 @@
 package flyfish
 
-import(
+import (
 	"flyfish/conf"
 	"fmt"
 )
 
-
 func InitTableConfig() bool {
 
-	db,err := pgOpen(conf.ConfDbHost, conf.ConfDbPort, conf.ConfDataBase, conf.ConfDbUser, conf.ConfDbPassword)
+	db, err := pgOpen(conf.ConfDbHost, conf.ConfDbPort, conf.ConfDataBase, conf.ConfDbUser, conf.ConfDbPassword)
 
 	if nil != err {
 		Errorln(err)
@@ -27,16 +26,16 @@ func InitTableConfig() bool {
 
 		for rows.Next() {
 			var __table__ string
-			var __conf__ string	
-			
-			err := rows.Scan(&__table__,&__conf__)	
+			var __conf__ string
+
+			err := rows.Scan(&__table__, &__conf__)
 
 			if nil != err {
 				Errorln(err)
 				return false
 			}
 
-			metas = append(metas,fmt.Sprintf("%s@%s",__table__,__conf__))
+			metas = append(metas, fmt.Sprintf("%s@%s", __table__, __conf__))
 		}
 
 		if !InitMeta(metas) {

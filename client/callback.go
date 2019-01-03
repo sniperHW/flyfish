@@ -1,14 +1,14 @@
 package client
 
 import (
-	//protocol "flyfish/proto"
-	//"github.com/golang/protobuf/proto"
-	//"github.com/sniperHW/kendynet/util"
-	//"flyfish/codec"
-	//"github.com/sniperHW/kendynet"
-	//"time"
-	//"sync/atomic"
-	//"flyfish/errcode"
+//protocol "flyfish/proto"
+//"github.com/golang/protobuf/proto"
+//"github.com/sniperHW/kendynet/util"
+//"flyfish/codec"
+//"github.com/sniperHW/kendynet"
+//"time"
+//"sync/atomic"
+//"flyfish/errcode"
 )
 
 type StatusResult struct {
@@ -19,18 +19,17 @@ type StatusResult struct {
 type SliceResult struct {
 	ErrCode int32
 	Version int64
-	Fields  map[string]*Field	
+	Fields  map[string]*Field
 }
 
-
 type Row struct {
-	Key      string
-	Version  int64
-	Fields   map[string]*Field
+	Key     string
+	Version int64
+	Fields  map[string]*Field
 }
 
 type MutiResult struct {
-	ErrCode int32	
+	ErrCode int32
 	Rows    []*Row
 }
 
@@ -48,30 +47,29 @@ type callback struct {
 func (this *callback) onError(errCode int32) {
 	if this.tt == cb_status {
 		this.cb.(func(*StatusResult))(&StatusResult{
-			ErrCode : errCode,
+			ErrCode: errCode,
 		})
 	} else if this.tt == cb_slice {
 		this.cb.(func(*SliceResult))(&SliceResult{
-			ErrCode : errCode,
-		})		
+			ErrCode: errCode,
+		})
 	} else if this.tt == cb_muti {
 		this.cb.(func(*MutiResult))(&MutiResult{
-			ErrCode : errCode,
-		})			
+			ErrCode: errCode,
+		})
 	} else {
 		panic("invaild cb_type")
-	} 
+	}
 }
 
 func (this *callback) onResult(r interface{}) {
 	if this.tt == cb_status {
 		this.cb.(func(*StatusResult))(r.(*StatusResult))
 	} else if this.tt == cb_slice {
-		this.cb.(func(*SliceResult))(r.(*SliceResult))		
+		this.cb.(func(*SliceResult))(r.(*SliceResult))
 	} else if this.tt == cb_muti {
-		this.cb.(func(*MutiResult))(r.(*MutiResult))			
+		this.cb.(func(*MutiResult))(r.(*MutiResult))
 	} else {
 		panic("invaild cb_type")
-	} 
+	}
 }
-

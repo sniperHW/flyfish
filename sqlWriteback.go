@@ -1,30 +1,29 @@
 package flyfish
 
 import (
-	"github.com/jmoiron/sqlx"
-	"fmt"
-	"net"
 	"database/sql/driver"
+	"fmt"
+	"github.com/jmoiron/sqlx"
+	"net"
 	//"strings"
 	"flyfish/conf"
-	"time"
 	protocol "flyfish/proto"
 	"sync"
+	"time"
 	//"io"
-	"os"
 	"github.com/sniperHW/kendynet"
+	"os"
 )
 
 type record struct {
-	writeBackFlag  int
-	key            string
-	table          string
-	uniKey         string	
-	ckey           *cacheKey
-	fields         map[string]*protocol.Field        //所有命令的字段聚合
-	expired        int64
+	writeBackFlag int
+	key           string
+	table         string
+	uniKey        string
+	ckey          *cacheKey
+	fields        map[string]*protocol.Field //所有命令的字段聚合
+	expired       int64
 }
-
 
 var recordPool = sync.Pool{
 	New: func() interface{} {
@@ -53,7 +52,7 @@ func (this *record) appendDel(s *str) int {
 	} else {
 		s.append(",'").append(this.key).append("'")
 	}
-	
+
 	return s.len - oldLen
 
 }
@@ -64,13 +63,13 @@ func (this *record) appendInsert(s *str) int {
 
 	if s.len == 0 {
 		s.append(this.ckey.meta.insertPrefix).append("('").append(this.key).append("',").append(this.fields["__version__"].ToSqlStr())
-		for _,name := range(this.ckey.meta.insertFieldOrder) {
+		for _, name := range this.ckey.meta.insertFieldOrder {
 			s.append(",").append(this.fields[name].ToSqlStr())
 		}
 		s.append(")")
 	} else {
 		s.append(",('").append(this.key).append("',").append(this.fields["__version__"].ToSqlStr())
-		for _,name := range(this.ckey.meta.insertFieldOrder) {
+		for _, name := range this.ckey.meta.insertFieldOrder {
 			s.append(",").append(this.fields[name].ToSqlStr())
 		}
 		s.append(")")
@@ -80,38 +79,37 @@ func (this *record) appendInsert(s *str) int {
 }
 
 type sqlUpdater struct {
-	delSets           map[string]*str
-	insertSets        map[string]*str
-	updates           *str
-	keys              []*cacheKey
+	delSets    map[string]*str
+	insertSets map[string]*str
+	updates    *str
+	keys       []*cacheKey
 
 	updateStrSize     int
 	count             int
 	max               int
 	db                *sqlx.DB
-	name              string	
+	name              string
 	file              *os.File
 	writeFileAndBreak bool
-
 }
 
-func newSqlUpdater(name string,max int,host string, port int,dbname string,user string,password string) *sqlUpdater {
-	t := &sqlUpdater {
-		max     : max,
-		keys    : []*cacheKey{},
-		name    : name,
+func newSqlUpdater(name string, max int, host string, port int, dbname string, user string, password string) *sqlUpdater {
+	t := &sqlUpdater{
+		max:  max,
+		keys: []*cacheKey{},
+		name: name,
 	}
-	t.db,_ = pgOpen(host,port,dbname,user,password)
+	t.db, _ = pgOpen(host, port, dbname, user, password)
 
 	return t
 }
 
 func (this *sqlUpdater) Reset() {
-	
-	for _,v := range(this.delSets) {
+
+	for _, v := range this.delSets {
 		strPut(v)
 	}
-	for _,v := range(this.insertSets) {
+	for _, v := range this.insertSets {
 		strPut(v)
 	}
 
@@ -124,17 +122,17 @@ func (this *sqlUpdater) Reset() {
 	this.updates = nil
 	this.keys = []*cacheKey{}
 
-	this.count   = 0
+	this.count = 0
 	this.updateStrSize = 0
 }
 
 func (this *sqlUpdater) appendDel(wb *record) {
-	
+
 	if nil == this.delSets {
 		this.delSets = map[string]*str{}
 	}
 
-	s,ok := this.delSets[wb.table]
+	s, ok := this.delSets[wb.table]
 	if !ok {
 		s = strGet()
 		this.delSets[wb.table] = s
@@ -143,12 +141,12 @@ func (this *sqlUpdater) appendDel(wb *record) {
 }
 
 func (this *sqlUpdater) appendInsert(wb *record) {
-	
+
 	if nil == this.insertSets {
 		this.insertSets = map[string]*str{}
 	}
 
-	s,ok := this.insertSets[wb.table]
+	s, ok := this.insertSets[wb.table]
 	if !ok {
 		s = strGet()
 		this.insertSets[wb.table] = s
@@ -166,7 +164,7 @@ func (this *sqlUpdater) appendUpdate(wb *record) {
 	oldLen := this.updates.len
 	this.updates.append("UPDATE ").append(wb.table).append(" SET ")
 	i := 0
-	for _,v := range(wb.fields) {
+	for _, v := range wb.fields {
 		sqlStr := v.ToSqlStr()
 		if i == 0 {
 			i = 1
@@ -175,14 +173,13 @@ func (this *sqlUpdater) appendUpdate(wb *record) {
 			this.updates.append(",").append(v.GetName()).append(" = ").append(sqlStr)
 		}
 	}
-	this.updates.append(" where __key__ = '").append(wb.key).append("';")	
+	this.updates.append(" where __key__ = '").append(wb.key).append("';")
 	this.updateStrSize += (this.updates.len - oldLen)
 }
 
-
 func (this *sqlUpdater) append(v interface{}) {
-	wb :=  v.(*record) 
-	
+	wb := v.(*record)
+
 	defer recordPut(wb)
 
 	if wb.writeBackFlag == write_back_update {
@@ -194,7 +191,7 @@ func (this *sqlUpdater) append(v interface{}) {
 	} else {
 		return
 	}
-	this.keys = append(this.keys,wb.ckey)
+	this.keys = append(this.keys, wb.ckey)
 	this.count++
 	if this.count >= this.max || this.updateStrSize >= conf.MaxUpdateStringSize {
 		this.exec()
@@ -222,18 +219,18 @@ func isRetryError(err error) bool {
 func (this *sqlUpdater) writeFile(s string) {
 	if nil == this.file {
 
-		out_path := fmt.Sprintf("%s/%s_%d.bak",conf.BackDir,this.name,time.Now().Unix())
+		out_path := fmt.Sprintf("%s/%s_%d.bak", conf.BackDir, this.name, time.Now().Unix())
 
-		f,err := os.OpenFile(out_path,os.O_RDWR,os.ModePerm)
+		f, err := os.OpenFile(out_path, os.O_RDWR, os.ModePerm)
 		if err != nil {
 			if os.IsNotExist(err) {
-				f,err = os.Create(out_path)
+				f, err = os.Create(out_path)
 				if err != nil {
-					Errorf("create %s failed:%s",out_path,err.Error())
+					Errorf("create %s failed:%s", out_path, err.Error())
 					return
 				}
 			} else {
-				Errorf("open %s failed:%s",out_path,err.Error())			
+				Errorf("open %s failed:%s", out_path, err.Error())
 				return
 			}
 		}
@@ -263,15 +260,15 @@ func (this *sqlUpdater) exec() {
 	s := strGet()
 
 	if nil != this.delSets {
-		for _,v := range(this.delSets) {
+		for _, v := range this.delSets {
 			s.append(v.toString()).append(");")
 		}
 	}
 
 	if nil != this.insertSets {
-		for _,v := range(this.insertSets) {
+		for _, v := range this.insertSets {
 			s.append(v.toString()).append(";")
-		}		
+		}
 	}
 
 	if nil != this.updates {
@@ -281,44 +278,44 @@ func (this *sqlUpdater) exec() {
 	if this.writeFileAndBreak {
 		this.writeFile(s.toString())
 		strPut(s)
-		for _,v := range(this.keys) {
+		for _, v := range this.keys {
 			v.clearWriteBack()
-		}	
+		}
 		return
 	}
 
 	for {
 
-		_ , err := this.db.Exec(s.toString())
+		_, err := this.db.Exec(s.toString())
 
 		elapse := time.Now().Sub(beg)
 
 		if elapse/time.Millisecond > 500 {
-			Infoln("sqlUpdater long exec",elapse,this.count)
+			Infoln("sqlUpdater long exec", elapse, this.count)
 		}
 
 		if nil != err {
 			if isRetryError(err) {
-				Errorln("sqlUpdater exec error:",err)
+				Errorln("sqlUpdater exec error:", err)
 				if isStop() {
 					this.writeFileAndBreak = true
 					this.writeFile(s.toString())
 					strPut(s)
-					for _,v := range(this.keys) {
+					for _, v := range this.keys {
 						v.clearWriteBack()
-					}					
+					}
 					break
 				}
 				//休眠一秒重试
 				time.Sleep(time.Second)
 			} else {
-				Errorln("sqlUpdater exec error:",err,s.toString())
+				Errorln("sqlUpdater exec error:", err, s.toString())
 				strPut(s)
 				break
 			}
 		} else {
 			strPut(s)
-			for _,v := range(this.keys) {
+			for _, v := range this.keys {
 				v.clearWriteBack()
 			}
 		}
@@ -326,7 +323,6 @@ func (this *sqlUpdater) exec() {
 	}
 
 }
-
 
 func processWriteBackRecord(now int64) {
 	head := pendingWB.Front()
@@ -336,17 +332,16 @@ func processWriteBackRecord(now int64) {
 			break
 		} else {
 			pendingWB.Remove(head)
-			delete(writeBackRecords,wb.uniKey)
+			delete(writeBackRecords, wb.uniKey)
 			if wb.writeBackFlag != write_back_none {
 				//投入执行
-				Debugln("pushSQLUpdate",wb.uniKey)
+				Debugln("pushSQLUpdate", wb.uniKey)
 				hash := StringHash(wb.uniKey)
 				sqlUpdateQueue[hash%conf.SqlUpdatePoolSize].Add(wb)
-			}			
+			}
 		}
-	} 
+	}
 }
-
 
 /*
 *    insert + update = insert
@@ -355,23 +350,23 @@ func processWriteBackRecord(now int64) {
 *    update + insert = 非法
 *    update + delete = delete
 *    update + update = update
-*    delete + insert = update     
+*    delete + insert = update
 *    delete + update = 非法
 *    delete + delte  = 非法
 *    none   + insert = insert
 *    none   + update = 非法
 *    node   + delete = 非法
-*/
+ */
 
-func addRecord(now int64,ctx *processContext) {
-	
+func addRecord(now int64, ctx *processContext) {
+
 	if ctx.writeBackFlag == write_back_none {
 		panic("ctx.writeBackFlag == write_back_none")
 		return
 	}
 
 	uniKey := ctx.getUniKey()
-	wb,ok := writeBackRecords[uniKey]
+	wb, ok := writeBackRecords[uniKey]
 	if !ok {
 		/*wb := &record{
 			writeBackFlag : ctx.writeBackFlag,
@@ -391,7 +386,7 @@ func addRecord(now int64,ctx *processContext) {
 		writeBackRecords[uniKey] = wb
 		if wb.writeBackFlag == write_back_insert || wb.writeBackFlag == write_back_update {
 			wb.fields = map[string]*protocol.Field{}
-			for k,v := range(ctx.fields) {
+			for k, v := range ctx.fields {
 				wb.fields[k] = v
 			}
 		}
@@ -403,50 +398,50 @@ func addRecord(now int64,ctx *processContext) {
 			*    insert + update = insert
 			*    insert + delete = none
 			*    insert + insert = 非法
-			*/
+			 */
 			if ctx.writeBackFlag == write_back_delete {
 				wb.fields = nil
 				wb.writeBackFlag = write_back_none
 			} else {
-				for k,v := range(ctx.fields) {
+				for k, v := range ctx.fields {
 					wb.fields[k] = v
 				}
-			}				
+			}
 		} else if wb.writeBackFlag == write_back_update {
 			/*
 			 *    update + insert = 非法
 			 *    update + delete = delete
 			 *    update + update = update
-			*/
+			 */
 			if ctx.writeBackFlag == write_back_insert {
 				//逻辑错误，记录日志
 			} else if ctx.writeBackFlag == write_back_delete {
 				wb.fields = nil
 				wb.writeBackFlag = write_back_delete
 			} else {
-				for k,v := range(ctx.fields) {
+				for k, v := range ctx.fields {
 					wb.fields[k] = v
-				}				
+				}
 			}
 		} else if wb.writeBackFlag == write_back_delete {
 			/*
-			*    delete + insert = update     
+			*    delete + insert = update
 			*    delete + update = 非法
-			*    delete + delte  = 非法			
-			*/
+			*    delete + delte  = 非法
+			 */
 			if ctx.writeBackFlag == write_back_insert {
 				wb.fields = map[string]*protocol.Field{}
-				for k,v := range(ctx.fields) {
+				for k, v := range ctx.fields {
 					wb.fields[k] = v
 				}
 				meta := wb.ckey.meta.fieldMetas
-				for k,v := range(meta) {
+				for k, v := range meta {
 					if nil == wb.fields[k] {
 						//使用默认值填充
-						wb.fields[k] = protocol.PackField(k,v.defaultV)
+						wb.fields[k] = protocol.PackField(k, v.defaultV)
 					}
 				}
-				wb.writeBackFlag = write_back_update				
+				wb.writeBackFlag = write_back_update
 			} else {
 				//逻辑错误，记录日志
 			}
@@ -455,20 +450,20 @@ func addRecord(now int64,ctx *processContext) {
 			*    none   + insert = insert
 			*    none   + update = 非法
 			*    node   + delete = 非法
-			*/
+			 */
 			if ctx.writeBackFlag == write_back_insert {
 				wb.fields = map[string]*protocol.Field{}
-				for k,v := range(ctx.fields) {
+				for k, v := range ctx.fields {
 					wb.fields[k] = v
 				}
 				meta := wb.ckey.meta.fieldMetas
-				for k,v := range(meta) {
+				for k, v := range meta {
 					if nil == wb.fields[k] {
 						//使用默认值填充
-						wb.fields[k] = protocol.PackField(k,v.defaultV)
+						wb.fields[k] = protocol.PackField(k, v.defaultV)
 					}
 				}
-				wb.writeBackFlag = write_back_insert				
+				wb.writeBackFlag = write_back_insert
 			} else {
 				//逻辑错误，记录日志
 			}
@@ -481,14 +476,14 @@ func writeBackRoutine() {
 	for {
 		closed, localList := writeBackEventQueue.Get()
 		now := time.Now().Unix()
-		for _,v := range(localList) {
+		for _, v := range localList {
 			switch v.(type) {
 			case notifyWB:
 				processWriteBackRecord(now + conf.WriteBackDelay + 1)
 				break
-			case *processContext:			
+			case *processContext:
 				ctx := v.(*processContext)
-				addRecord(now,ctx)
+				addRecord(now, ctx)
 				break
 			default:
 				processWriteBackRecord(now)
@@ -499,5 +494,5 @@ func writeBackRoutine() {
 		if closed {
 			return
 		}
-	}	
+	}
 }

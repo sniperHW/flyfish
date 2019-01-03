@@ -1,8 +1,7 @@
 package flyfish
 
-
 // 字符串转为16位整形值
-func StringHash(s string) (int) {
+func StringHash(s string) int {
 	var hash uint16
 	for _, c := range s {
 

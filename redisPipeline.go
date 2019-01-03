@@ -1,6 +1,6 @@
 package flyfish
 
-import(
+import (
 	//"github.com/sniperHW/kendynet/util"
 	"github.com/go-redis/redis"
 	//"sync"
@@ -13,10 +13,10 @@ import(
 )
 
 type redisCmd struct {
-	ctx     *processContext
-	fields  []string
-	ret     interface{} 
-} 
+	ctx    *processContext
+	fields []string
+	ret    interface{}
+}
 
 type redisPipeliner struct {
 	pipeLiner redis.Pipeliner
@@ -26,106 +26,106 @@ type redisPipeliner struct {
 
 func newRedisPipeliner(max int) *redisPipeliner {
 	return &redisPipeliner{
-		pipeLiner : cli.Pipeline(),
-		cmds      : []*redisCmd{},
-		max       : max,
-	} 	
+		pipeLiner: cli.Pipeline(),
+		cmds:      []*redisCmd{},
+		max:       max,
+	}
 }
 
 func (this *redisPipeliner) appendIncrBy(ctx *processContext) interface{} {
 	cmd := ctx.getCmd()
 	keys := []string{ctx.getUniKey()}
-	args := []interface{} {
+	args := []interface{}{
 		"__version__",
 		ctx.fields["__version__"].GetValue(),
 		cmd.incrDecr.GetName(),
 		cmd.incrDecr.GetValue(),
 	}
-	return this.pipeLiner.Eval(strIncrBy,keys,args...)
+	return this.pipeLiner.Eval(strIncrBy, keys, args...)
 }
 
 func (this *redisPipeliner) appendDecrBy(ctx *processContext) interface{} {
 	Debugln("appendDecrBy")
 	cmd := ctx.getCmd()
 	keys := []string{ctx.getUniKey()}
-	args := []interface{} {
+	args := []interface{}{
 		"__version__",
 		ctx.fields["__version__"].GetValue(),
 		cmd.incrDecr.GetName(),
 		cmd.incrDecr.GetValue(),
 	}
-	return this.pipeLiner.Eval(strDecrBy,keys,args...)
+	return this.pipeLiner.Eval(strDecrBy, keys, args...)
 }
 
 func (this *redisPipeliner) appendCompareAndSet(ctx *processContext) interface{} {
 	//ARGV[1]:filed_name,ARGV[2]:old_value,ARGV[3]:new_value,ARGV[4]:__version__,ARGV[5]:__version__value
-	cmd  := ctx.getCmd()
+	cmd := ctx.getCmd()
 	keys := []string{ctx.getUniKey()}
 	args := []interface{}{}
-	args = append(args,cmd.cns.oldV.GetName(),cmd.cns.oldV.GetValue(),cmd.cns.newV.GetValue(),"__version__",ctx.fields["__version__"].GetValue())
-	return this.pipeLiner.Eval(strCompareAndSet,keys,args...)
+	args = append(args, cmd.cns.oldV.GetName(), cmd.cns.oldV.GetValue(), cmd.cns.newV.GetValue(), "__version__", ctx.fields["__version__"].GetValue())
+	return this.pipeLiner.Eval(strCompareAndSet, keys, args...)
 }
 
 func (this *redisPipeliner) appendSet(ctx *processContext) interface{} {
 	keys := []string{ctx.getUniKey()}
-	args := []interface{}{"__version__",ctx.fields["__version__"].GetValue()}
+	args := []interface{}{"__version__", ctx.fields["__version__"].GetValue()}
 	ARGV := []string{}
-	c    := 3
-	for _,v := range(ctx.fields) {
-		args = append(args,v.GetName(),v.GetValue())
-		ARGV = append(ARGV,fmt.Sprintf("ARGV[%d]",c),fmt.Sprintf("ARGV[%d]",c + 1))
-		c += 2							
+	c := 3
+	for _, v := range ctx.fields {
+		args = append(args, v.GetName(), v.GetValue())
+		ARGV = append(ARGV, fmt.Sprintf("ARGV[%d]", c), fmt.Sprintf("ARGV[%d]", c+1))
+		c += 2
 	}
-	return this.pipeLiner.Eval(fmt.Sprintf(strSet,strings.Join(ARGV,",")),keys,args...)	
+	return this.pipeLiner.Eval(fmt.Sprintf(strSet, strings.Join(ARGV, ",")), keys, args...)
 }
 
 func (this *redisPipeliner) readGetResult(rcmd *redisCmd) {
-	r,err1 := rcmd.ret.(*redis.SliceCmd).Result()
+	r, err1 := rcmd.ret.(*redis.SliceCmd).Result()
 	if nil != err1 {
-		Debugln("readGetResult error",err1)
+		Debugln("readGetResult error", err1)
 		rcmd.ctx.errno = errcode.ERR_REDIS
-	} else{
-		for kk,vv := range(r) {
+	} else {
+		for kk, vv := range r {
 			if vv == nil {
 				rcmd.ctx.errno = errcode.ERR_STALE_CACHE
 				return
 			}
 			name := rcmd.fields[kk]
 			ckey := rcmd.ctx.getCacheKey()
-			f := ckey.convertStr(name,vv.(string))
+			f := ckey.convertStr(name, vv.(string))
 			if nil != f {
 				rcmd.ctx.fields[name] = f
 			} else {
-				Debugln("invaild value",name,vv.(string))
+				Debugln("invaild value", name, vv.(string))
 			}
 		}
-	}	
+	}
 }
 
 func (this *redisPipeliner) readSetResult(rcmd *redisCmd) {
-	_,err1 := rcmd.ret.(*redis.StatusCmd).Result()
+	_, err1 := rcmd.ret.(*redis.StatusCmd).Result()
 	if nil != err1 {
-		Debugln("readSetResult error",err1)
+		Debugln("readSetResult error", err1)
 		rcmd.ctx.errno = errcode.ERR_REDIS
-	}	
+	}
 }
 
 func (this *redisPipeliner) readDelResult(rcmd *redisCmd) {
-	r,err1 := rcmd.ret.(*redis.Cmd).Result()
+	r, err1 := rcmd.ret.(*redis.Cmd).Result()
 	if nil != err1 {
-		Debugln("cmdIncr error",err1)
+		Debugln("cmdIncr error", err1)
 		rcmd.ctx.errno = errcode.ERR_REDIS
 	} else {
 		if r.(string) != "ok" {
 			rcmd.ctx.errno = errcode.ERR_STALE_CACHE
-		} 	
+		}
 	}
 }
 
 func (this *redisPipeliner) readSetScriptResult(rcmd *redisCmd) {
-	r,err1 := rcmd.ret.(*redis.Cmd).Result()
+	r, err1 := rcmd.ret.(*redis.Cmd).Result()
 	if nil != err1 {
-		Debugln("cmdIncr error",err1)
+		Debugln("cmdIncr error", err1)
 		rcmd.ctx.errno = errcode.ERR_REDIS
 	} else {
 		cmd := rcmd.ctx.getCmd()
@@ -139,7 +139,7 @@ func (this *redisPipeliner) readSetScriptResult(rcmd *redisCmd) {
 				rcmd.ctx.errno = errcode.ERR_STALE_CACHE
 				break
 			case int64:
-				rcmd.ctx.fields[cmd.incrDecr.GetName()] = protocol.PackField(cmd.incrDecr.GetName(),r.(int64))
+				rcmd.ctx.fields[cmd.incrDecr.GetName()] = protocol.PackField(cmd.incrDecr.GetName(), r.(int64))
 				break
 			default:
 				rcmd.ctx.errno = errcode.ERR_REDIS
@@ -156,40 +156,39 @@ func (this *redisPipeliner) readSetScriptResult(rcmd *redisCmd) {
 				if vv[0].(string) == "failed" {
 					rcmd.ctx.errno = errcode.ERR_NOT_EQUAL
 				}
-				rcmd.ctx.fields[cmd.cns.oldV.GetName()] = cmd.ckey.convertStr(cmd.cns.oldV.GetName(),vv[1].(string))
+				rcmd.ctx.fields[cmd.cns.oldV.GetName()] = cmd.ckey.convertStr(cmd.cns.oldV.GetName(), vv[1].(string))
 				break
 			default:
 				rcmd.ctx.errno = errcode.ERR_REDIS
 				break
-			}					
+			}
 		}
 	}
 }
 
-
 func (this *redisPipeliner) append(ctx *processContext) {
-	rcmd := &redisCmd {
-		ctx : ctx,
+	rcmd := &redisCmd{
+		ctx: ctx,
 	}
 
 	if ctx.redisFlag == redis_set || ctx.redisFlag == redis_set_only {
-		Debugln("append set",ctx.redisFlag)
-		rcmd.ret = this.pipeLiner.HMSet(ctx.getUniKey(),*ctx.getSetfields())
+		Debugln("append set", ctx.redisFlag)
+		rcmd.ret = this.pipeLiner.HMSet(ctx.getUniKey(), *ctx.getSetfields())
 	} else if ctx.redisFlag == redis_get {
-		rcmd.fields = make([]string,len(ctx.fields))
+		rcmd.fields = make([]string, len(ctx.fields))
 		c := 0
-		for k,_ := range(ctx.fields) {
+		for k, _ := range ctx.fields {
 			rcmd.fields[c] = k
 			c++
 		}
-		rcmd.ret = this.pipeLiner.HMGet(ctx.getUniKey(),rcmd.fields...)
+		rcmd.ret = this.pipeLiner.HMGet(ctx.getUniKey(), rcmd.fields...)
 	} else if ctx.redisFlag == redis_del {
 		keys := []string{ctx.getUniKey()}
 		args := []interface{}{
 			"__version__",
 			ctx.fields["__version__"].GetValue(),
 		}
-		rcmd.ret = this.pipeLiner.Eval(strDel,keys,args...)		
+		rcmd.ret = this.pipeLiner.Eval(strDel, keys, args...)
 	} else if ctx.redisFlag == redis_set_script {
 		cmdType := ctx.getCmdType()
 		if cmdType == cmdCompareAndSet || cmdType == cmdCompareAndSetNx {
@@ -207,25 +206,23 @@ func (this *redisPipeliner) append(ctx *processContext) {
 		panic("invaild redisFlag")
 	}
 
-	this.cmds = append(this.cmds,rcmd)
+	this.cmds = append(this.cmds, rcmd)
 
 	if len(this.cmds) >= this.max {
 		this.exec()
 	}
 }
 
-
-
 func (this *redisPipeliner) exec() {
 	if len(this.cmds) == 0 {
 		return
 	}
-	_ , err := this.pipeLiner.Exec()
-	for _,v := range(this.cmds) {
+	_, err := this.pipeLiner.Exec()
+	for _, v := range this.cmds {
 		v.ctx.errno = errcode.ERR_OK
 		if nil != err {
 			v.ctx.errno = errcode.ERR_REDIS
-			Errorln("redis exec error",err)
+			Errorln("redis exec error", err)
 		} else {
 			if v.ctx.redisFlag == redis_get {
 				this.readGetResult(v)
@@ -235,10 +232,9 @@ func (this *redisPipeliner) exec() {
 				this.readDelResult(v)
 			} else {
 				this.readSetScriptResult(v)
-			}	
+			}
 		}
 		onRedisResp(v.ctx)
 	}
 	this.cmds = []*redisCmd{}
-} 
-
+}

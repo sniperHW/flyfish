@@ -49,7 +49,6 @@ const strDel string = `
 	end
 `
 
-
 //ARGV[1]:"__version__",ARGV[2]:__version__value,ARGV[3]:hkey,ARGV[4]:hkey_value
 
 const strIncrBy string = `

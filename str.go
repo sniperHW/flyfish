@@ -1,9 +1,8 @@
 package flyfish
 
-
-import(
-	"sync"
+import (
 	"flyfish/conf"
+	"sync"
 )
 
 func isPow2(size int) bool {
@@ -33,16 +32,15 @@ func (this *str) reset() {
 	this.len = 0
 }
 
-
 func (this *str) toString() string {
 	return string(this.data[:this.len])
 }
 
 func (this *str) expand(need int) {
 	newCap := sizeofPow2(this.len + need)
-	data := make([]byte,newCap)
+	data := make([]byte, newCap)
 	if this.len > 0 {
-		copy(data,this.data[:this.len])
+		copy(data, this.data[:this.len])
 	}
 	this.data = data
 	this.cap = newCap
@@ -54,14 +52,14 @@ func (this *str) append(in string) *str {
 	if newLen > this.cap {
 		this.expand(s)
 	}
-	copy(this.data[this.len:],in[:])
+	copy(this.data[this.len:], in[:])
 	this.len = newLen
 	return this
 }
 
-func (this *str) join(other []*str,sep string) *str {
+func (this *str) join(other []*str, sep string) *str {
 	if len(other) > 0 {
-		for i,v := range(other) {
+		for i, v := range other {
 			if i != 0 {
 				this.append(sep).append(v.toString())
 			} else {
@@ -75,9 +73,9 @@ func (this *str) join(other []*str,sep string) *str {
 var strPool = sync.Pool{
 	New: func() interface{} {
 		return &str{
-			data : make([]byte,conf.StrInitCap),
-			cap  : conf.StrInitCap,
-			len  : 0,
+			data: make([]byte, conf.StrInitCap),
+			cap:  conf.StrInitCap,
+			len:  0,
 		}
 	},
 }
