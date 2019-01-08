@@ -99,10 +99,10 @@
 			"revisionTime": "2018-12-10T02:06:24Z"
 		},
 		{
-			"checksumSHA1": "dba3T9TqARVLoAL0njOOzJz+sME=",
+			"checksumSHA1": "yjiaxdUOTdCl6YjeLQ2eko7wDDc=",
 			"path": "github.com/sniperHW/kendynet/event",
-			"revision": "10f2ff4d3d8016d68ea5388499d8a5b4f7ffa466",
-			"revisionTime": "2018-12-10T02:37:43Z"
+			"revision": "1672e4f2a7b055aec9eb1189aef16619cb0327c1",
+			"revisionTime": "2019-01-08T06:50:13Z"
 		},
 		{
 			"checksumSHA1": "hFzCzCnHSHnikHbwBQTj34AzA5Q=",
@@ -119,8 +119,8 @@
 		{
 			"checksumSHA1": "eD86n48NAQBzns/jXGy6V7ngPMQ=",
 			"path": "github.com/sniperHW/kendynet/util",
-			"revision": "0a14b7eb0d2c8f814344c1a23ca6eadc014b1570",
-			"revisionTime": "2019-01-08T06:01:05Z"
+			"revision": "1672e4f2a7b055aec9eb1189aef16619cb0327c1",
+			"revisionTime": "2019-01-08T06:50:13Z"
 		},
 		{
 			"checksumSHA1": "2TJV/f15/49inUOLH5hJK+nkRNw=",
