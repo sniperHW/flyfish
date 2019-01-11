@@ -1,26 +1,26 @@
-package main 
+package main
 
-import(
-	"fmt"
+import (
 	kclient "flyfish/client"
 	"flyfish/errcode"
-	"github.com/sniperHW/kendynet/golog"
+	"fmt"
 	"github.com/sniperHW/kendynet"
+	"github.com/sniperHW/kendynet/golog"
 )
 
 func MGet(c *kclient.Client) {
 
-	keys := []string{"huangwei:1","huangwei:2","huangwei:3","huangwei:xx"}
+	keys := []string{"huangwei:1", "huangwei:2", "huangwei:3", "huangwei:xx"}
 
-	mget := c.MGetAll("users1",keys)
+	mget := c.MGetAll("users1", keys)
 
-	mget.Exec(func(ret *kclient.MutiResult){
+	mget.Exec(func(ret *kclient.MutiResult) {
 		if ret.ErrCode == errcode.ERR_OK {
-			for _,v := range(ret.Rows) {
+			for _, v := range ret.Rows {
 				if nil == v.Fields {
-					fmt.Println(v.Key,"not exist")
+					fmt.Println(v.Key, "not exist")
 				} else {
-					fmt.Println("age",v.Fields["age"].GetInt())					
+					fmt.Println("age", v.Fields["age"].GetInt())
 				}
 			}
 		} else {
@@ -29,15 +29,12 @@ func MGet(c *kclient.Client) {
 	})
 }
 
-
 func main() {
 
-	//golog.DisableStdOut()
-	outLogger := golog.NewOutputLogger("log", "flyfish get", 1024*1024*50)
-	kendynet.InitLogger(outLogger,"flyfish get")
+	kclient.InitLogger(golog.NewOutputLogger("log", "flyfish client", 1024*1024*50), "error")
 
 	services := []string{"127.0.0.1:10012"}
-	c := kclient.OpenClient(services)//eventQueue)
+	c := kclient.OpenClient(services) //eventQueue)
 
 	MGet(c)
 

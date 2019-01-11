@@ -1,41 +1,38 @@
-package main 
+package main
 
-import(
-	"fmt"
+import (
 	kclient "flyfish/client"
 	"flyfish/errcode"
-	"github.com/sniperHW/kendynet/golog"
+	"fmt"
 	"github.com/sniperHW/kendynet"
+	"github.com/sniperHW/kendynet/golog"
 )
 
-func Get(c *kclient.Client,i int) {
+func Get(c *kclient.Client, i int) {
 
-	key := fmt.Sprintf("%s:%d","huangwei",i)//rand.Int()%100000)
-	get := c.Get("users1",key,"name","age","phone")
+	key := fmt.Sprintf("%s:%d", "huangwei", i) //rand.Int()%100000)
+	get := c.Get("users1", key, "name", "age", "phone")
 
 	get.Exec(func(ret *kclient.SliceResult) {
 		if ret.ErrCode == errcode.ERR_OK {
-			fmt.Println("age",ret.Fields["age"].GetInt())
+			fmt.Println("age", ret.Fields["age"].GetInt())
 		} else {
 			fmt.Println(errcode.GetErrorStr(ret.ErrCode))
 		}
 	})
 }
 
-
 func main() {
 
-	golog.DisableStdOut()
-	outLogger := golog.NewOutputLogger("log", "flyfish get", 1024*1024*50)
-	kendynet.InitLogger(outLogger,"flyfish get")
+	kclient.InitLogger(golog.NewOutputLogger("log", "flyfish client", 1024*1024*50), "error")
 
 	services := []string{"127.0.0.1:10012"}
-	c := kclient.OpenClient(services)//eventQueue)
+	c := kclient.OpenClient(services) //eventQueue)
 
-	Get(c,1)
-	Get(c,2)
-	Get(c,3)
-	Get(c,4)
+	Get(c, 1)
+	Get(c, 2)
+	Get(c, 3)
+	Get(c, 4)
 
 	//eventQueue.Run()
 

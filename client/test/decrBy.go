@@ -1,34 +1,31 @@
-package main 
+package main
 
-import(
-	"fmt"
+import (
 	kclient "flyfish/client"
 	"flyfish/errcode"
-	"github.com/sniperHW/kendynet/golog"
+	"fmt"
 	"github.com/sniperHW/kendynet"
+	"github.com/sniperHW/kendynet/golog"
 )
 
 func DecrBy(c *kclient.Client) {
-	decr := c.DecrBy("counter","test_counter2","c",1)
+	decr := c.DecrBy("counter", "test_counter2", "c", 1)
 	decr.Exec(func(ret *kclient.SliceResult) {
 
 		if ret.ErrCode != errcode.ERR_OK {
 			fmt.Println(errcode.GetErrorStr(ret.ErrCode))
 		} else {
-			fmt.Println("c:",ret.Fields["c"].GetInt())
+			fmt.Println("c:", ret.Fields["c"].GetInt())
 		}
-	})	
+	})
 }
-
 
 func main() {
 
-	golog.DisableStdOut()
-	outLogger := golog.NewOutputLogger("log", "flyfish get", 1024*1024*50)
-	kendynet.InitLogger(outLogger,"flyfish get")
+	kclient.InitLogger(golog.NewOutputLogger("log", "flyfish client", 1024*1024*50), "error")
 
 	services := []string{"127.0.0.1:10012"}
-	c := kclient.OpenClient(services)//eventQueue)
+	c := kclient.OpenClient(services) //eventQueue)
 
 	DecrBy(c)
 

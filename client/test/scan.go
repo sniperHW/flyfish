@@ -1,11 +1,11 @@
-package main 
+package main
 
-import(
-	"fmt"
+import (
 	kclient "flyfish/client"
 	"flyfish/errcode"
-	"github.com/sniperHW/kendynet/golog"
+	"fmt"
 	"github.com/sniperHW/kendynet"
+	"github.com/sniperHW/kendynet/golog"
 )
 
 /*
@@ -23,9 +23,7 @@ func Get(c *kclient.Client,i int) {
 	})
 }*/
 
-
 var c int32 = 0
-
 
 func scanCb(scaner *kclient.Scaner, ret *kclient.MutiResult) {
 
@@ -33,7 +31,7 @@ func scanCb(scaner *kclient.Scaner, ret *kclient.MutiResult) {
 
 	if ret.ErrCode == errcode.ERR_OK {
 
-		for _,v := range(ret.Rows) {
+		for _, v := range ret.Rows {
 			fmt.Println(v.Key)
 			c++
 		}
@@ -43,8 +41,7 @@ func scanCb(scaner *kclient.Scaner, ret *kclient.MutiResult) {
 			return
 		}
 
-		scaner.Next(10,scanCb)
-
+		scaner.Next(10, scanCb)
 
 	} else {
 
@@ -56,16 +53,14 @@ func scanCb(scaner *kclient.Scaner, ret *kclient.MutiResult) {
 
 func main() {
 
-	//golog.DisableStdOut()
-	outLogger := golog.NewOutputLogger("log", "flyfish get", 1024*1024*50)
-	kendynet.InitLogger(outLogger,"flyfish get")
+	kclient.InitLogger(golog.NewOutputLogger("log", "flyfish client", 1024*1024*50), "error")
 
 	services := []string{"127.0.0.1:10012"}
-	c := kclient.OpenClient(services)//eventQueue)
+	c := kclient.OpenClient(services) //eventQueue)
 
-	scaner := c.Scaner("users1","age")
+	scaner := c.Scaner("users1", "age")
 
-	scaner.Next(10,scanCb)
+	scaner.Next(10, scanCb)
 
 	sigStop := make(chan bool)
 	_, _ = <-sigStop
