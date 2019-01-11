@@ -136,11 +136,17 @@ func Stop() {
 
 	wg.Add(1)
 	go func() {
+		nextShow := time.Now().Unix() + (time.Second * 5)
 		for {
 			time.Sleep(time.Millisecond * 100)
 			if atomic.LoadInt32(&redisReqCount) == 0 && atomic.LoadInt32(&cmdCount) == 0 {
 				wg.Done()
 				break
+			}
+			now := time.Now().Unix()
+			if now > nextShow {
+				Infoln("redisReqCount", redisReqCount, "cmdCount", cmdCount)
+				nextShow = now + (time.Second * 5)
 			}
 		}
 	}()
