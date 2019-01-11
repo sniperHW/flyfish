@@ -122,6 +122,13 @@ func Stop() {
 	//第一步关闭监听
 	StopServer()
 
+	sessions.Range(func(key, value interface{}) bool {
+		value.(kendynet.StreamSession).ShutdownRead()
+		return true
+	})
+
+	Infoln("ShutdownRead ok")
+
 	//等待redis请求和命令执行完成
 
 	wg := sync.WaitGroup{}
@@ -138,6 +145,8 @@ func Stop() {
 	}()
 	wg.Wait()
 
+	Infoln("redis finish")
+
 	//强制执行回写
 	notiForceWriteBack()
 
@@ -145,6 +154,8 @@ func Stop() {
 	closeWriteBack()
 
 	writeBackWG.Wait()
+
+	Infoln("writeback finish")
 
 	//关闭所有客户连接
 
@@ -164,5 +175,7 @@ func Stop() {
 		}
 	}()
 	wg.Wait()
+
+	Infoln("flyfish stop ok")
 
 }
