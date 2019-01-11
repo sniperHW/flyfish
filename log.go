@@ -1,6 +1,8 @@
 package flyfish
 
 import (
+	"flyfish/conf"
+	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/golog"
 	"sync"
 )
@@ -8,11 +10,15 @@ import (
 var logger *golog.Logger
 var logger_once sync.Once
 
-func InitLogger(out *golog.OutputLogger, lv golog.Level) {
+func InitLogger() {
 	logger_once.Do(func() {
+		if !conf.EnableLogStdout {
+			golog.DisableStdOut()
+		}
 		fullname := "flyfish"
-		logger = golog.New(fullname, out)
-		logger.SetLevel(lv)
+		logger = golog.New(fullname, golog.NewOutputLogger(conf.LogDir, conf.LogPrefix, conf.MaxLogfileSize))
+		logger.SetLevelByString(conf.LogLevel)
+		kendynet.InitLogger(logger)
 		logger.Debugf("%s logger init", fullname)
 	})
 }

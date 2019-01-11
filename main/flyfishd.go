@@ -5,8 +5,7 @@ import (
 	"flyfish/conf"
 	"fmt"
 	"github.com/go-ini/ini"
-	"github.com/sniperHW/kendynet"
-	"github.com/sniperHW/kendynet/golog"
+	//"github.com/sniperHW/kendynet/golog"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -28,14 +27,6 @@ func main() {
 		}
 		conf.ParseConfig(sec)
 	}
-
-	if !conf.EnableLogStdout {
-		golog.DisableStdOut()
-	}
-
-	outLogger := golog.NewOutputLogger(conf.LogDir, conf.LogPrefix, conf.MaxLogfileSize)
-	flyfish.InitLogger(outLogger, golog.Str2loglevel(conf.LogLevel))
-	kendynet.InitLogger(outLogger, conf.LogPrefix)
 
 	if !flyfish.InitTableConfig() {
 		fmt.Println("InitTableConfig failed")
