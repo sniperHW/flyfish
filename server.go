@@ -94,6 +94,7 @@ func startServer(l listener) error {
 		if nil != err {
 			Errorf("server.Start() error:%s\n", err.Error())
 		}
+		Infoln("flyfish listener stop")
 	}()
 
 	return nil
@@ -104,10 +105,10 @@ func StopServer() {
 		return
 	}
 
-	if !atomic.CompareAndSwapInt32(&stoped, 1, 0) {
+	if !atomic.CompareAndSwapInt32(&stoped, 0, 1) {
 		return
 	}
-
+	Infoln("StopServer")
 	server.Close()
 }
 
