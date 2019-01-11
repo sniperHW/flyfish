@@ -104,19 +104,11 @@ func processCmd(cmds []interface{}) {
 	cmd.ckey.process()
 }
 
-/*
 func init() {
-	mainQueue = event.NewEventQueue()
-
-	go func(){
-		mainQueue.Run()
-	}()
-
-	go func(){
+	go func() {
 		for {
 			time.Sleep(time.Second)
-			fmt.Println("keys:",len(cacheKeys),"writeBackKeys",len(writeBackRecords),"writeBackQueue_.size",pendingWB.Len())
+			Infoln("redisReqCount", redisReqCount, "cmdCount", cmdCount)
 		}
 	}()
 }
-*/
