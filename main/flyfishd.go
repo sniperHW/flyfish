@@ -33,6 +33,8 @@ func main() {
 		return
 	}
 
+	flyfish.InitLogger()
+
 	flyfish.InitCacheKey()
 	flyfish.RedisInit(conf.RedisHost, conf.RedisPort, conf.RedisPassword)
 	flyfish.SQLInit(conf.PgsqlHost, conf.PgsqlPort, conf.PgsqlDataBase, conf.PgsqlUser, conf.PgsqlPassword)

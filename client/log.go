@@ -15,7 +15,7 @@ func InitLogger(out *golog.OutputLogger, level string) {
 		logger = golog.New(fullname, out)
 		logger.SetLevelByString(level)
 		kendynet.InitLogger(logger)
-		logger.Debugf("%s logger init", fullname)
+		logger.Infof("%s logger init", fullname)
 	})
 }
 

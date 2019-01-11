@@ -19,7 +19,7 @@ func InitLogger() {
 		logger = golog.New(fullname, golog.NewOutputLogger(conf.LogDir, conf.LogPrefix, conf.MaxLogfileSize))
 		logger.SetLevelByString(conf.LogLevel)
 		kendynet.InitLogger(logger)
-		logger.Debugf("%s logger init", fullname)
+		logger.Infof("%s logger init", fullname)
 	})
 }
 
