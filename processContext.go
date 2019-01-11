@@ -3,6 +3,7 @@ package flyfish
 import (
 	"flyfish/errcode"
 	protocol "flyfish/proto"
+	"sync/atomic"
 	"time"
 )
 
@@ -285,6 +286,7 @@ func (this *cacheKey) process() {
 		if now.After(cmd.deadline) {
 			//已经超时
 			cmdQueue.Remove(e)
+			atomic.AddInt32(&cmdCount, -1)
 		} else {
 			ok := false
 			Debugln(cmd.cmdType, lastCmdType)
