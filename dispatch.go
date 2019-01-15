@@ -11,17 +11,17 @@ import (
 	"sync/atomic"
 )
 
-var sessions sync.Map
-
-var clientCount int32
+var (
+	sessions    sync.Map
+	clientCount int32
+	dispatcher_ *dispatcher
+)
 
 type handler func(kendynet.StreamSession, *codec.Message)
 
 type dispatcher struct {
 	handlers map[string]handler
 }
-
-var dispatcher_ *dispatcher
 
 func (this *dispatcher) Register(msg proto.Message, h handler) {
 	msgName := reflect.TypeOf(msg).String()

@@ -9,11 +9,12 @@ import (
 	"sync/atomic"
 )
 
-var redis_once sync.Once
-var cli *redis.Client
-var redisReqCount int32
-
-var redisProcessQueue *util.BlockQueue
+var (
+	redis_once        sync.Once
+	cli               *redis.Client
+	redisReqCount     int32
+	redisProcessQueue *util.BlockQueue
+)
 
 func pushRedis(ctx *processContext) {
 	atomic.AddInt32(&redisReqCount, 1)
@@ -42,10 +43,6 @@ func redisRoutine(queue *util.BlockQueue) {
 	}
 }
 
-func RedisClose() {
-
-}
-
 func RedisInit(host string, port int, Password string) bool {
 	redis_once.Do(func() {
 		cli = redis.NewClient(&redis.Options{
@@ -58,16 +55,6 @@ func RedisInit(host string, port int, Password string) bool {
 			for i := 0; i < conf.RedisProcessPoolSize; i++ {
 				go redisRoutine(redisProcessQueue)
 			}
-
-			/*go func(){
-				for {
-					time.Sleep(time.Second)
-					fmt.Println("---------------redisProcessQueue-------------")
-					for _,v := range(redisProcessQueue) {
-						fmt.Println(v.Len())
-					}
-				}
-			}()*/
 		}
 	})
 	return cli != nil

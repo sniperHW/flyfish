@@ -1,11 +1,8 @@
 package flyfish
 
 import (
-	//"github.com/sniperHW/kendynet/event"
-	protocol "flyfish/proto"
-	//"strconv"
-	//"fmt"
 	"flyfish/errcode"
+	protocol "flyfish/proto"
 	"sync/atomic"
 	"time"
 )
@@ -22,9 +19,9 @@ const (
 	cmdDecrBy          = 8
 )
 
-var cmdCount int32 //待回复命令数量
-
-//var mainQueue *event.EventQueue
+var (
+	cmdCount int32 //待回复命令数量
+)
 
 func isSetCmd(cmd int) bool {
 	return cmd == cmdSet || cmd == cmdSetNx || cmd == cmdCompareAndSet || cmd == cmdCompareAndSetNx || cmd == cmdIncrBy || cmd == cmdDecrBy

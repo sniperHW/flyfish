@@ -7,8 +7,10 @@ import (
 	"sync"
 )
 
-var logger *golog.Logger
-var logger_once sync.Once
+var (
+	logger      *golog.Logger
+	logger_once sync.Once
+)
 
 func InitLogger() {
 	logger_once.Do(func() {

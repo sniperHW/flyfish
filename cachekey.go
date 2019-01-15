@@ -15,6 +15,10 @@ const (
 	cache_missing = 3
 )
 
+var (
+	cacheGroup []*cacheKeyMgr
+)
+
 type cacheKey struct {
 	uniKey string
 	idx    uint32
@@ -33,8 +37,6 @@ type cacheKeyMgr struct {
 	cacheKeys  map[string]*cacheKey
 	eventQueue *event.EventQueue
 }
-
-var cacheGroup []*cacheKeyMgr
 
 func (this *cacheKey) lock() {
 	if !this.locked {

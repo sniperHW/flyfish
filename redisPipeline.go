@@ -1,15 +1,11 @@
 package flyfish
 
 import (
-	//"github.com/sniperHW/kendynet/util"
-	"github.com/go-redis/redis"
-	//"sync"
-	//"strconv"
-	"fmt"
-	"strings"
-	//"flyfish/conf"
 	"flyfish/errcode"
 	protocol "flyfish/proto"
+	"fmt"
+	"github.com/go-redis/redis"
+	"strings"
 )
 
 type redisCmd struct {

@@ -8,7 +8,9 @@ import (
 	"sync"
 )
 
-var table_metas map[string]*table_meta
+var (
+	table_metas map[string]*table_meta
+)
 
 func convter_string(in interface{}) interface{} {
 	return *(in.(*string))

@@ -15,12 +15,11 @@ func InitTableConfig() bool {
 	} else {
 		rows, err := db.Query("select __table__,__conf__ from table_conf")
 
-		defer rows.Close()
-
 		if nil != err {
 			Errorln(err)
 			return false
 		}
+		defer rows.Close()
 
 		metas := []string{}
 

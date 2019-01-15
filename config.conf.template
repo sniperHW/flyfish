@@ -6,7 +6,7 @@ RedisProcessPoolSize    = 5
 
 SqlLoadPoolSize         = 5
 
-SqlUpdatePoolSize       = 10
+SqlUpdatePoolSize       = 5
 
 RedisPipelineSize       = 50
 
@@ -14,7 +14,7 @@ SqlLoadPipeLineSize     = 200
 
 SqlUpdatePipeLineSize   = 1000
 
-SqlUpdateEventQueueSize = 100000
+SqlUpdateEventQueueSize = 50000
 
 SqlLoadEventQueueSize   = 10000
 
@@ -22,7 +22,7 @@ RedisEventQueueSize     = 50000
 
 WriteBackEventQueueSize = 100000
 
-MainEventQueueSize      = 100000
+MainEventQueueSize      = 20000
 
 MaxPacketSize           = 4mb
 
@@ -34,7 +34,7 @@ StrInitCap              = 1mb
 
 ServiceHost             = "127.0.0.1"
 
-ServicePort             = 10013
+ServicePort             = 10012
 
 RedisHost               = "127.0.0.1"
 
@@ -60,7 +60,8 @@ ConfDbUser               = "sniper"
 
 ConfDbPassword           = "802802"
 
-ConfDataBase             = "test"
+ConfDataBase           = "test"
+
 
 MaxLogfileSize          = 100mb
 
@@ -68,6 +69,6 @@ LogDir                  = "log"
 
 LogPrefix               = "flyfish"
 
-LogLevel                = "error"
+LogLevel                = "info"
 
 EnableLogStdout         = true

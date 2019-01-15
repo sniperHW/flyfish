@@ -10,13 +10,14 @@ import (
 	"time"
 )
 
-var sql_once sync.Once
-
-var sqlLoadQueue *util.BlockQueue     //for get
-var sqlUpdateQueue []*util.BlockQueue //for set/del
-var writeBackRecords map[string]*record
-var writeBackEventQueue *util.BlockQueue
-var pendingWB *list.List
+var (
+	sql_once            sync.Once
+	sqlLoadQueue        *util.BlockQueue   //for get
+	sqlUpdateQueue      []*util.BlockQueue //for set/del
+	writeBackRecords    map[string]*record
+	writeBackEventQueue *util.BlockQueue
+	pendingWB           *list.List
+)
 
 func prepareRecord(ctx *processContext) *record {
 	uniKey := ctx.getUniKey()
