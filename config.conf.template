@@ -40,7 +40,7 @@ RedisHost               = "127.0.0.1"
 
 RedisPort               = 6379
 
-#RedisPassword           = "802802"
+#RedisPassword           = "xxxx"
 
 PgsqlHost               = "127.0.0.1"
 
@@ -48,7 +48,7 @@ PgsqlPort               = 5432
 
 PgsqlUser               = "sniper"
 
-PgsqlPassword           = "802802"
+PgsqlPassword           = "xxxxx"
 
 PgsqlDataBase           = "test"
 
@@ -58,7 +58,7 @@ ConfDbPort               = 5432
 
 ConfDbUser               = "sniper"
 
-ConfDbPassword           = "802802"
+ConfDbPassword           = "xxx"
 
 ConfDataBase           = "test"
 
