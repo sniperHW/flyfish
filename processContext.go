@@ -261,6 +261,8 @@ func (this *cacheKey) processDel(ctx *processContext, cmd *command) bool {
 
 func (this *cacheKey) process(cmd ...*command) {
 
+	Debugln("process")
+
 	this.mtx.Lock()
 
 	if len(cmd) > 0 {
@@ -270,7 +272,7 @@ func (this *cacheKey) process(cmd ...*command) {
 	}
 
 	if this.locked || this.cmdQueue.Len() == 0 {
-		this.mtx.UnLock()
+		this.mtx.Unlock()
 		return
 	} else {
 		Debugln("process", this.uniKey)
@@ -280,7 +282,7 @@ func (this *cacheKey) process(cmd ...*command) {
 	e := cmdQueue.Front()
 
 	if nil == e {
-		this.mtx.UnLock()
+		this.mtx.Unlock()
 		Debugln("cmdQueue empty", this.uniKey)
 		return
 	}
@@ -353,12 +355,12 @@ func (this *cacheKey) process(cmd ...*command) {
 	}
 
 	if lastCmdType == cmdNone {
-		this.mtx.UnLock()
+		this.mtx.Unlock()
 		return
 	}
 
 	this.lock()
-	this.mtx.UnLock()
+	this.mtx.Unlock()
 
 	if this.status == cache_ok || this.status == cache_missing {
 		if lastCmdType == cmdGet {

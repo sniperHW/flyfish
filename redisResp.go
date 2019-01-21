@@ -15,6 +15,8 @@ func onRedisResp(ctx *processContext) {
 		ctx.reply(ctx.errno, ctx.fields, newVersion)
 	}
 
+	Debugln("onRedisResp")
+
 	ckey := ctx.getCacheKey()
 	if ctx.errno == errcode.ERR_STALE_CACHE {
 		/*  redis中的数据与flyfish key不一致
@@ -32,22 +34,17 @@ func onRedisResp(ctx *processContext) {
 
 		if ctx.errno == errcode.ERR_OK {
 			if ctx.redisFlag == redis_get || ctx.redisFlag == redis_set_only {
-				ckey.mtx.Lock()
 				ckey.setOK(newVersion)
-				ckey.mtx.Unlock()
 			} else if ctx.redisFlag == redis_del {
-				ckey.mtx.Lock()
 				ckey.setMissing()
-				ckey.mtx.Unlock()
 				//投递sql删除请求
 				pushSQLWriteBack(ctx)
 			} else {
-				ckey.mtx.Lock()
 				ckey.setOK(newVersion)
-				ckey.mtx.Unlock()
 				pushSQLWriteBack(ctx)
 			}
 		}
+		Debugln("here")
 		ckey.process()
 	}
 

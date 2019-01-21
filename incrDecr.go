@@ -102,7 +102,7 @@ func incrBy(session kendynet.StreamSession, msg *codec.Message) {
 		cmd:     cmd,
 	}
 
-	pushCommand(cmd)
+	processCmd(cmd)
 }
 
 func decrBy(session kendynet.StreamSession, msg *codec.Message) {
@@ -146,5 +146,5 @@ func decrBy(session kendynet.StreamSession, msg *codec.Message) {
 		session: session,
 		cmd:     cmd,
 	}
-	pushCommand(cmd)
+	processCmd(cmd)
 }

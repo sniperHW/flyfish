@@ -142,7 +142,7 @@ func getAll(session kendynet.StreamSession, msg *codec.Message) {
 		}
 	}
 
-	pushCommand(cmd)
+	processCmd(cmd)
 }
 
 func get(session kendynet.StreamSession, msg *codec.Message) {
@@ -191,5 +191,5 @@ func get(session kendynet.StreamSession, msg *codec.Message) {
 	for _, name := range req.GetFields() {
 		cmd.fields[name] = protocol.PackField(name, nil)
 	}
-	pushCommand(cmd)
+	processCmd(cmd)
 }

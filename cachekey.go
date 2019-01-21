@@ -4,7 +4,7 @@ import (
 	"container/list"
 	"flyfish/conf"
 	protocol "flyfish/proto"
-	"github.com/sniperHW/kendynet/event"
+	//"github.com/sniperHW/kendynet/event"
 	"strconv"
 	"sync"
 	"sync/atomic"

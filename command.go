@@ -95,11 +95,11 @@ func processCmd(cmd *command) {
 
 }
 
-func init() {
+/*func init() {
 	go func() {
 		for {
 			time.Sleep(time.Second)
 			Infoln("redisReqCount", redisReqCount, "cmdCount", cmdCount)
 		}
 	}()
-}
+}*/

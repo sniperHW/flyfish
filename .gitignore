@@ -3,3 +3,5 @@ config1.conf
 config2.conf
 log/
 main/main
+config.conf
+flyfishd

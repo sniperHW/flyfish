@@ -10,6 +10,7 @@ func onSqlNotFound(ctx *processContext) {
 	cmdType := ctx.getCmdType()
 	if cmdType == cmdGet || cmdType == cmdDel || cmdType == cmdCompareAndSet {
 		ctx.reply(errcode.ERR_NOTFOUND, nil, -1)
+		ckey := ctx.getCacheKey()
 		ckey.setMissing()
 		ckey.process()
 	} else {
