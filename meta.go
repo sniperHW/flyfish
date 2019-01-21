@@ -86,14 +86,6 @@ type table_meta struct {
 	insertFieldOrder []string
 }
 
-/*
-func (this *table_meta) fillDefault(out *map[string]*protocol.Field) {
-	for _ ,v := range(this.fieldMetas) {
-		(*out)[v.name] = protocol.PackField(v.name,v.defaultV)
-	}
-}
-*/
-
 func (this *table_meta) getDefaultV(name string) interface{} {
 	m, ok := this.fieldMetas[name]
 	if !ok {

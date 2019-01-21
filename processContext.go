@@ -3,6 +3,7 @@ package flyfish
 import (
 	"flyfish/errcode"
 	protocol "flyfish/proto"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -31,6 +32,7 @@ type processContext struct {
 	replyed       bool //是否已经应道
 	writeBackFlag int  //回写数据库类型
 	redisFlag     int
+	mtx           sync.Mutex
 }
 
 func (this *processContext) getCmd() *command {
@@ -257,8 +259,18 @@ func (this *cacheKey) processDel(ctx *processContext, cmd *command) bool {
 	}
 }
 
-func (this *cacheKey) process() {
+func (this *cacheKey) process(cmd ...*command) {
+
+	this.mtx.Lock()
+
+	if len(cmd) > 0 {
+		this.cmdQueue.PushBack(cmd[0])
+	} else {
+		this.unlock()
+	}
+
 	if this.locked || this.cmdQueue.Len() == 0 {
+		this.mtx.UnLock()
 		return
 	} else {
 		Debugln("process", this.uniKey)
@@ -268,6 +280,7 @@ func (this *cacheKey) process() {
 	e := cmdQueue.Front()
 
 	if nil == e {
+		this.mtx.UnLock()
 		Debugln("cmdQueue empty", this.uniKey)
 		return
 	}
@@ -300,7 +313,6 @@ func (this *cacheKey) process() {
 					lastCmdType = cmd.cmdType
 				}
 			} else if lastCmdType == cmdNone {
-				Debugln("here", cmd.cmdType)
 				cmdQueue.Remove(e)
 				switch cmd.cmdType {
 				case cmdSet:
@@ -341,11 +353,12 @@ func (this *cacheKey) process() {
 	}
 
 	if lastCmdType == cmdNone {
-		Debugln("lastCmdType == cmdNone")
+		this.mtx.UnLock()
 		return
 	}
 
 	this.lock()
+	this.mtx.UnLock()
 
 	if this.status == cache_ok || this.status == cache_missing {
 		if lastCmdType == cmdGet {

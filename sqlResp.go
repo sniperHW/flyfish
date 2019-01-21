@@ -5,20 +5,13 @@ import (
 	protocol "flyfish/proto"
 )
 
-func processSqlNotFound(args []interface{}) {
-	ckey := args[0].(*cacheKey)
-	ckey.setMissing()
-	ckey.unlock()
-	ckey.process()
-}
-
 func onSqlNotFound(ctx *processContext) {
 	Debugln("onSqlNotFound key", ctx.getUniKey())
 	cmdType := ctx.getCmdType()
 	if cmdType == cmdGet || cmdType == cmdDel || cmdType == cmdCompareAndSet {
 		ctx.reply(errcode.ERR_NOTFOUND, nil, -1)
-		postKeyEventNoWait(ctx.getUniKey(), processSqlNotFound, ctx.getCacheKey())
-		//mainQueue.PostNoWait(processSqlNotFound,ctx.getCacheKey())
+		ckey.setMissing()
+		ckey.process()
 	} else {
 		/*  set操作，数据库不存在的情况
 		*   先写入到redis,redis写入成功后回写sql(设置回写类型insert)
@@ -44,28 +37,15 @@ func onSqlNotFound(ctx *processContext) {
 	}
 }
 
-func processSqlExecError(args []interface{}) {
-	ckey := args[0].(*cacheKey)
-	ckey.unlock()
-	ckey.process()
-}
-
 func onSqlExecError(ctx *processContext) {
 	Debugln("onSqlExecError key", ctx.getUniKey())
 	ctx.reply(errcode.ERR_SQLERROR, nil, -1)
-	//mainQueue.PostNoWait(processSqlExecError,ctx.getCacheKey())
-	postKeyEventNoWait(ctx.getUniKey(), processSqlExecError, ctx.getCacheKey())
+	ctx.getCacheKey().process()
 }
 
 func onSqlLoadOKGet(ctx *processContext) {
 	ctx.redisFlag = redis_set_only
 	pushRedisNoWait(ctx)
-}
-
-func processSqlLoadOKSet(args []interface{}) {
-	ckey := args[0].(*cacheKey)
-	ckey.unlock()
-	ckey.process()
 }
 
 /*
@@ -81,8 +61,7 @@ func onSqlLoadOKSet(ctx *processContext) {
 			pushRedis = false
 			//版本号不对
 			ctx.reply(errcode.ERR_VERSION, nil, version)
-			postKeyEventNoWait(ctx.getUniKey(), processSqlLoadOKSet, ctx.getCacheKey())
-			//mainQueue.PostNoWait(processSqlLoadOKSet,ctx.getCacheKey())
+			ctx.getCacheKey().process()
 		} else {
 			//变更需要将版本号+1
 			for _, v := range cmd.fields {
@@ -126,16 +105,6 @@ func onSqlLoadOKSet(ctx *processContext) {
 	}
 }
 
-func processSqlLoadOKDel(args []interface{}) {
-	ckey := args[0].(*cacheKey)
-	errCode := args[1].(int32)
-	if errCode == errcode.ERR_OK {
-		ckey.setMissing()
-	}
-	ckey.unlock()
-	ckey.process()
-}
-
 func onSqlLoadOKDel(ctx *processContext) {
 	var errCode int32
 	version := ctx.fields["__version__"].GetInt()
@@ -151,10 +120,11 @@ func onSqlLoadOKDel(ctx *processContext) {
 	}
 
 	ctx.reply(errCode, nil, version)
-
-	postKeyEventNoWait(ctx.getUniKey(), processSqlLoadOKDel, ctx.getCacheKey(), errCode)
-
-	//mainQueue.PostNoWait(processSqlLoadOKDel,ctx.getCacheKey(),errCode)
+	ckey := ctx.getCacheKey()
+	if errCode == errcode.ERR_OK {
+		ckey.setMissing()
+	}
+	ckey.process()
 }
 
 func onSqlLoadOK(ctx *processContext) {

@@ -58,7 +58,7 @@ func (this *command) reply(errCode int32, fields map[string]*protocol.Field, ver
 	atomic.AddInt32(&cmdCount, -1)
 }
 
-func pushCommand(cmd *command) {
+func processCmd(cmd *command) {
 
 	atomic.AddInt32(&cmdCount, 1)
 
@@ -90,15 +90,9 @@ func pushCommand(cmd *command) {
 		return
 	}
 
-	postKeyEvent(cmd.uniKey, processCmd, cmd)
-
-}
-
-func processCmd(cmds []interface{}) {
-	cmd := cmds[0].(*command)
 	cmd.ckey = getCacheKey(cmd.table, cmd.uniKey)
-	cmd.ckey.pushCmd(cmd)
-	cmd.ckey.process()
+	cmd.ckey.process(cmd)
+
 }
 
 func init() {

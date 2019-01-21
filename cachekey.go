@@ -6,6 +6,7 @@ import (
 	protocol "flyfish/proto"
 	"github.com/sniperHW/kendynet/event"
 	"strconv"
+	"sync"
 	"sync/atomic"
 )
 
@@ -20,12 +21,12 @@ var (
 )
 
 type cacheKey struct {
-	uniKey string
-	idx    uint32
-	//lastAccess  int64              //time.Time
+	uniKey      string
+	idx         uint32
 	version     int64
 	status      int
 	locked      bool //操作是否被锁定
+	mtx         sync.Mutex
 	cmdQueue    *list.List
 	meta        *table_meta
 	writeBacked int32 //正在回写
@@ -34,8 +35,8 @@ type cacheKey struct {
 //var tick int64  //每次访问+1假设每秒访问100万次，需要运行584942年才会回绕
 
 type cacheKeyMgr struct {
-	cacheKeys  map[string]*cacheKey
-	eventQueue *event.EventQueue
+	cacheKeys map[string]*cacheKey
+	mtx       sync.Mutex
 }
 
 func (this *cacheKey) lock() {
@@ -49,25 +50,30 @@ func (this *cacheKey) unlock() {
 }
 
 func (this *cacheKey) setMissing() {
+	defer this.mtx.Unlock()
+	this.mtx.Lock()
 	Debugln("SetMissing key:", this.uniKey)
 	this.version = 0
 	this.status = cache_missing
 }
 
 func (this *cacheKey) setOK(version int64) {
+	defer this.mtx.Unlock()
+	this.mtx.Lock()
 	this.version = version
 	this.status = cache_ok
 }
 
 func (this *cacheKey) reset() {
+	defer this.mtx.Unlock()
+	this.mtx.Lock()
 	this.status = cache_new
 }
 
-func (this *cacheKey) pushCmd(cmd *command) {
-	this.cmdQueue.PushBack(cmd)
-}
-
 func (this *cacheKey) clearCmd() {
+	defer this.mtx.Unlock()
+	this.mtx.Lock()
+	this.locked = false
 	this.cmdQueue = list.New()
 }
 
@@ -82,10 +88,6 @@ func (this *cacheKey) clearWriteBack() {
 func (this *cacheKey) isWriteBack() bool {
 	return atomic.LoadInt32(&this.writeBacked) == 1
 }
-
-/*
-UpdateLRU和newCacheKey只能再主消息循环中访问，所以tick不需要加锁保护
-*/
 
 func (this *cacheKey) updateLRU() {
 	//atomic.AddInt64
@@ -109,22 +111,7 @@ func newCacheKey(table string, uniKey string) *cacheKey {
 
 	Debugln("newCacheKey key:", uniKey)
 
-	mgr := getMgrByUnikey(uniKey)
-
-	mgr.cacheKeys[uniKey] = k
-
 	return k
-}
-
-func getCacheKey(table string, uniKey string) *cacheKey {
-	mgr := getMgrByUnikey(uniKey)
-	k, ok := mgr.cacheKeys[uniKey]
-	if ok {
-		k.updateLRU()
-		return k
-	} else {
-		return newCacheKey(table, uniKey)
-	}
 }
 
 func (this *cacheKey) convertStr(fieldName string, value string) *protocol.Field {
@@ -158,29 +145,32 @@ func (this *cacheKey) convertStr(fieldName string, value string) *protocol.Field
 	}
 }
 
+func getCacheKey(table string, uniKey string) *cacheKey {
+	mgr := getMgrByUnikey(uniKey)
+	defer mgr.mtx.Unlock()
+	mgr.mtx.Lock()
+	k, ok := mgr.cacheKeys[uniKey]
+	if ok {
+		k.updateLRU()
+	} else {
+		k = newCacheKey(table, uniKey)
+		if nil != k {
+			mgr.cacheKeys[uniKey] = k
+		}
+	}
+	return k
+}
+
 func getMgrByUnikey(uniKey string) *cacheKeyMgr {
 	hash := StringHash(uniKey)
 	return cacheGroup[hash%conf.CacheGroupSize]
 }
 
-func postKeyEventNoWait(uniKey string, op interface{}, args ...interface{}) {
-	getMgrByUnikey(uniKey).eventQueue.PostNoWait(op, args...)
-}
-
-func postKeyEvent(uniKey string, op interface{}, args ...interface{}) {
-	getMgrByUnikey(uniKey).eventQueue.Post(op, args...)
-}
-
 func InitCacheKey() {
 	cacheGroup = make([]*cacheKeyMgr, conf.CacheGroupSize)
 	for i := 0; i < conf.CacheGroupSize; i++ {
-		eventQueue := event.NewEventQueue(conf.MainEventQueueSize)
 		cacheGroup[i] = &cacheKeyMgr{
-			cacheKeys:  map[string]*cacheKey{},
-			eventQueue: eventQueue,
+			cacheKeys: map[string]*cacheKey{},
 		}
-		go func() {
-			eventQueue.Run()
-		}()
 	}
 }
