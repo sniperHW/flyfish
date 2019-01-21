@@ -7,7 +7,7 @@ import (
 	"github.com/sniperHW/kendynet/socket/stream_socket/tcp"
 	"sync"
 	"sync/atomic"
-	//"time"
+	"time"
 )
 
 var (
@@ -121,7 +121,7 @@ var writeBackWG sync.WaitGroup
 func Stop() {
 
 	//第一步关闭监听
-	/*StopServer()
+	StopServer()
 
 	sessions.Range(func(key, value interface{}) bool {
 		value.(kendynet.StreamSession).ShutdownRead()
@@ -177,6 +177,6 @@ func Stop() {
 	}()
 	wg.Wait()
 
-	Infoln("flyfish stop ok")*/
+	Infoln("flyfish stop ok")
 
 }

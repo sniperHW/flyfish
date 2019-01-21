@@ -22,8 +22,6 @@ RedisEventQueueSize     = 50000
 
 WriteBackEventQueueSize = 100000
 
-MainEventQueueSize      = 20000
-
 MaxPacketSize           = 4mb
 
 WriteBackDelay          = 5
