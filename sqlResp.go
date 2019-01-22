@@ -2,7 +2,7 @@ package flyfish
 
 import (
 	"flyfish/errcode"
-	protocol "flyfish/proto"
+	"flyfish/proto"
 )
 
 func onSqlNotFound(ctx *processContext) {
@@ -24,13 +24,13 @@ func onSqlNotFound(ctx *processContext) {
 			ctx.fields[cmd.incrDecr.GetName()] = cmd.incrDecr
 		} else if cmdType == cmdDecrBy {
 			newV := 0 - cmd.incrDecr.GetInt()
-			ctx.fields[cmd.incrDecr.GetName()] = protocol.PackField(cmd.incrDecr.GetName(), newV)
+			ctx.fields[cmd.incrDecr.GetName()] = proto.PackField(cmd.incrDecr.GetName(), newV)
 		} else if cmdType == cmdSet {
 			for _, v := range cmd.fields {
 				ctx.fields[v.GetName()] = v
 			}
 		}
-		ctx.fields["__version__"] = protocol.PackField("__version__", 1)
+		ctx.fields["__version__"] = proto.PackField("__version__", 1)
 		ctx.writeBackFlag = write_back_insert
 
 		ctx.redisFlag = redis_set
@@ -68,7 +68,7 @@ func onSqlLoadOKSet(ctx *processContext) {
 			for _, v := range cmd.fields {
 				ctx.fields[v.GetName()] = v
 			}
-			ctx.fields["__version__"] = protocol.PackField("__version__", version+1)
+			ctx.fields["__version__"] = proto.PackField("__version__", version+1)
 			ctx.writeBackFlag = write_back_update //sql中存在,使用update回写
 			ctx.redisFlag = redis_set
 		}
@@ -78,7 +78,7 @@ func onSqlLoadOKSet(ctx *processContext) {
 			ctx.reply(errcode.ERR_NOT_EQUAL, ctx.fields, version)
 			ctx.redisFlag = redis_set_only
 		} else {
-			ctx.fields["__version__"] = protocol.PackField("__version__", version+1)
+			ctx.fields["__version__"] = proto.PackField("__version__", version+1)
 			ctx.fields[cmd.cns.oldV.GetName()] = cmd.cns.newV
 			ctx.writeBackFlag = write_back_update //sql中存在,使用update回写
 			ctx.redisFlag = redis_set
@@ -96,7 +96,7 @@ func onSqlLoadOKSet(ctx *processContext) {
 			newV = oldV.GetInt() - cmd.incrDecr.GetInt()
 		}
 		ctx.fields[cmd.incrDecr.GetName()].SetInt(newV)
-		ctx.fields["__version__"] = protocol.PackField("__version__", version+1)
+		ctx.fields["__version__"] = proto.PackField("__version__", version+1)
 		ctx.writeBackFlag = write_back_update //sql中存在,使用update回写
 		ctx.redisFlag = redis_set
 	}

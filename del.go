@@ -3,9 +3,9 @@ package flyfish
 import (
 	codec "flyfish/codec"
 	"flyfish/errcode"
-	protocol "flyfish/proto"
+	"flyfish/proto"
 	"fmt"
-	"github.com/golang/protobuf/proto"
+	pb "github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
 	"time"
 )
@@ -16,16 +16,16 @@ type DelReplyer struct {
 	cmd     *command
 }
 
-func (this *DelReplyer) reply(errCode int32, fields map[string]*protocol.Field, version int64) {
+func (this *DelReplyer) reply(errCode int32, fields map[string]*proto.Field, version int64) {
 
 	if time.Now().After(this.cmd.deadline) {
 		//已经超时
 		return
 	}
 
-	resp := &protocol.DelResp{
-		Seqno:   proto.Int64(this.seqno),
-		ErrCode: proto.Int32(errCode),
+	resp := &proto.DelResp{
+		Seqno:   pb.Int64(this.seqno),
+		ErrCode: pb.Int32(errCode),
 	}
 
 	//Debugln("DelReply",this.context.uniKey,resp)
@@ -38,7 +38,7 @@ func (this *DelReplyer) reply(errCode int32, fields map[string]*protocol.Field, 
 
 func del(session kendynet.StreamSession, msg *codec.Message) {
 
-	req := msg.GetData().(*protocol.DelReq)
+	req := msg.GetData().(*proto.DelReq)
 
 	Debugln("del", req)
 
@@ -64,10 +64,10 @@ func del(session kendynet.StreamSession, msg *codec.Message) {
 	}
 
 	if 0 != errno {
-		resp := &protocol.DelResp{
-			Seqno:   proto.Int64(req.GetSeqno()),
-			ErrCode: proto.Int32(errno),
-			Version: proto.Int64(-1),
+		resp := &proto.DelResp{
+			Seqno:   pb.Int64(req.GetSeqno()),
+			ErrCode: pb.Int32(errno),
+			Version: pb.Int64(-1),
 		}
 		err := session.Send(resp)
 		if nil != err {

@@ -5,9 +5,9 @@ import (
 	codec "flyfish/codec"
 	"flyfish/conf"
 	"flyfish/errcode"
-	protocol "flyfish/proto"
+	"flyfish/proto"
 	"fmt"
-	"github.com/golang/protobuf/proto"
+	pb "github.com/golang/protobuf/proto"
 	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/kendynet"
 	"strings"
@@ -43,7 +43,7 @@ func scan(session kendynet.StreamSession, msg *codec.Message) {
 
 	u := session.GetUserData()
 
-	req := msg.GetData().(*protocol.ScanReq)
+	req := msg.GetData().(*proto.ScanReq)
 
 	Debugln("scan")
 
@@ -51,11 +51,11 @@ func scan(session kendynet.StreamSession, msg *codec.Message) {
 
 	if u == nil {
 
-		req := msg.GetData().(*protocol.ScanReq)
+		req := msg.GetData().(*proto.ScanReq)
 
-		resp := &protocol.ScanResp{
-			Seqno:   proto.Int64(req.GetSeqno()),
-			ErrCode: proto.Int32(errcode.ERR_OK),
+		resp := &proto.ScanResp{
+			Seqno:   pb.Int64(req.GetSeqno()),
+			ErrCode: pb.Int32(errcode.ERR_OK),
 		}
 
 		if session.GetUserData() != nil {
@@ -64,7 +64,7 @@ func scan(session kendynet.StreamSession, msg *codec.Message) {
 		}
 
 		if "" == req.GetTable() {
-			resp.ErrCode = proto.Int32(errcode.ERR_MISSING_TABLE)
+			resp.ErrCode = pb.Int32(errcode.ERR_MISSING_TABLE)
 			session.Send(resp)
 			session.Close("", 1)
 			return
@@ -72,7 +72,7 @@ func scan(session kendynet.StreamSession, msg *codec.Message) {
 
 		meta := getMetaByTable(req.GetTable())
 		if nil == meta {
-			resp.ErrCode = proto.Int32(errcode.ERR_INVAILD_TABLE)
+			resp.ErrCode = pb.Int32(errcode.ERR_INVAILD_TABLE)
 			session.Send(resp)
 			session.Close("", 1)
 			return
@@ -82,7 +82,7 @@ func scan(session kendynet.StreamSession, msg *codec.Message) {
 			for _, name := range req.GetFields() {
 				_, ok := meta.fieldMetas[name]
 				if !ok {
-					resp.ErrCode = proto.Int32(errcode.ERR_INVAILD_FIELD)
+					resp.ErrCode = pb.Int32(errcode.ERR_INVAILD_FIELD)
 					session.Send(resp)
 					session.Close("", 1)
 					return
@@ -119,7 +119,7 @@ func scan(session kendynet.StreamSession, msg *codec.Message) {
 
 		s.db, err = pgOpen(conf.PgsqlHost, conf.PgsqlPort, conf.PgsqlDataBase, conf.PgsqlUser, conf.PgsqlPassword)
 		if nil != err {
-			resp.ErrCode = proto.Int32(errcode.ERR_SQLERROR)
+			resp.ErrCode = pb.Int32(errcode.ERR_SQLERROR)
 			session.Send(resp)
 			session.Close("", 1)
 			return
@@ -138,15 +138,15 @@ func scan(session kendynet.StreamSession, msg *codec.Message) {
 
 const selectTemplate string = "select %s from %s order by __key__ limit %d offset %d;"
 
-func (this *scaner) next(req *protocol.ScanReq) {
+func (this *scaner) next(req *proto.ScanReq) {
 
-	resp := &protocol.ScanResp{
-		Seqno:   proto.Int64(req.GetSeqno()),
-		ErrCode: proto.Int32(errcode.ERR_SCAN_END),
+	resp := &proto.ScanResp{
+		Seqno:   pb.Int64(req.GetSeqno()),
+		ErrCode: pb.Int32(errcode.ERR_SCAN_END),
 	}
 
 	if isStop() {
-		resp.ErrCode = proto.Int32(errcode.ERR_SERVER_STOPED)
+		resp.ErrCode = pb.Int32(errcode.ERR_SERVER_STOPED)
 		this.session.Send(resp)
 		this.session.Close("", 1)
 		return
@@ -173,7 +173,7 @@ func (this *scaner) next(req *protocol.ScanReq) {
 
 	if nil != err {
 		Errorln(selectStr, err)
-		resp.ErrCode = proto.Int32(errcode.ERR_SQLERROR)
+		resp.ErrCode = pb.Int32(errcode.ERR_SQLERROR)
 		this.session.Send(resp)
 		this.session.Close("", 1)
 		return
@@ -184,7 +184,7 @@ func (this *scaner) next(req *protocol.ScanReq) {
 	for rows.Next() {
 		err := rows.Scan(this.field_receiver...)
 		if err != nil {
-			resp.ErrCode = proto.Int32(errcode.ERR_SQLERROR)
+			resp.ErrCode = pb.Int32(errcode.ERR_SQLERROR)
 			this.session.Send(resp)
 			this.session.Close("scan error", 1)
 			Errorln("rows.Scan err", err)
@@ -194,22 +194,22 @@ func (this *scaner) next(req *protocol.ScanReq) {
 		this.offset++
 
 		if nil == resp.Rows {
-			resp.Rows = []*protocol.Row{}
+			resp.Rows = []*proto.Row{}
 		}
 
-		fields := []*protocol.Field{}
+		fields := []*proto.Field{}
 		for i := 0; i < len(this.fields); i++ {
-			fields = append(fields, protocol.PackField(this.fields[i], this.field_convter[i](this.field_receiver[i])))
+			fields = append(fields, proto.PackField(this.fields[i], this.field_convter[i](this.field_receiver[i])))
 		}
 
-		resp.Rows = append(resp.Rows, &protocol.Row{
+		resp.Rows = append(resp.Rows, &proto.Row{
 			Fields: fields,
 		})
 
 		count--
 
 		if 0 == count {
-			resp.ErrCode = proto.Int32(errcode.ERR_OK)
+			resp.ErrCode = pb.Int32(errcode.ERR_OK)
 			break
 		}
 	}

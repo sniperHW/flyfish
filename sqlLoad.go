@@ -2,7 +2,7 @@ package flyfish
 
 import (
 	"flyfish/errcode"
-	protocol "flyfish/proto"
+	"flyfish/proto"
 	"github.com/jmoiron/sqlx"
 	"reflect"
 	"time"
@@ -128,7 +128,7 @@ func (this *sqlLoader) exec() {
 						//填充返回值
 						for i := 1; i < len(filed_receiver); i++ {
 							name := field_names[i]
-							ctx.fields[name] = protocol.PackField(name, field_convter[i](filed_receiver[i]))
+							ctx.fields[name] = proto.PackField(name, field_convter[i](filed_receiver[i]))
 						}
 						delete(v.ctxs, key)
 						//返回给主循环

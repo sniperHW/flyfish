@@ -2,7 +2,7 @@ package flyfish
 
 import (
 	"flyfish/errcode"
-	protocol "flyfish/proto"
+	"flyfish/proto"
 	"sync/atomic"
 	"time"
 )
@@ -34,12 +34,12 @@ func causeWriteBackCmd(cmd int) bool {
 
 //命令回复器
 type replyer interface {
-	reply(errCode int32, fields map[string]*protocol.Field, version int64)
+	reply(errCode int32, fields map[string]*proto.Field, version int64)
 }
 
 type cnsSt struct {
-	oldV *protocol.Field
-	newV *protocol.Field
+	oldV *proto.Field
+	newV *proto.Field
 }
 
 //来自客户端的一条命令请求
@@ -52,13 +52,13 @@ type command struct {
 	uniKey   string //table+key
 	version  *int64
 	ckey     *cacheKey
-	fields   map[string]*protocol.Field //for get/set
-	cns      *cnsSt                     //for compareAndSet
-	incrDecr *protocol.Field            //for incr/decr
+	fields   map[string]*proto.Field //for get/set
+	cns      *cnsSt                  //for compareAndSet
+	incrDecr *proto.Field            //for incr/decr
 	deadline time.Time
 }
 
-func (this *command) reply(errCode int32, fields map[string]*protocol.Field, version int64) {
+func (this *command) reply(errCode int32, fields map[string]*proto.Field, version int64) {
 	this.rpyer.reply(errCode, fields, version)
 	atomic.AddInt32(&cmdCount, -1)
 }

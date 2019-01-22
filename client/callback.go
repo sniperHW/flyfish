@@ -1,16 +1,5 @@
 package client
 
-import (
-//protocol "flyfish/proto"
-//"github.com/golang/protobuf/proto"
-//"github.com/sniperHW/kendynet/util"
-//"flyfish/codec"
-//"github.com/sniperHW/kendynet"
-//"time"
-//"sync/atomic"
-//"flyfish/errcode"
-)
-
 type StatusResult struct {
 	ErrCode int32
 	Version int64

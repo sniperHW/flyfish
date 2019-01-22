@@ -106,13 +106,6 @@ func main() {
 		}
 	}
 
-	//c := kclient.OpenClient(services) //eventQueue)
-	//Set(c)
-
-	/*for i := 0; i < 400; i++ {
-		Get(c)
-	}*/
-
 	go func() {
 		for {
 			time.Sleep(time.Second)

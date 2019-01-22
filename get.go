@@ -3,9 +3,9 @@ package flyfish
 import (
 	codec "flyfish/codec"
 	"flyfish/errcode"
-	protocol "flyfish/proto"
+	"flyfish/proto"
 	"fmt"
-	"github.com/golang/protobuf/proto"
+	pb "github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
 	"time"
 )
@@ -17,21 +17,21 @@ type GetReplyer struct {
 	getAll  bool
 }
 
-func (this *GetReplyer) reply(errCode int32, fields map[string]*protocol.Field, version int64) {
+func (this *GetReplyer) reply(errCode int32, fields map[string]*proto.Field, version int64) {
 
 	if time.Now().After(this.cmd.deadline) {
 		//已经超时
 		return
 	}
 
-	var resp proto.Message
+	var resp pb.Message
 
 	if !this.getAll {
 
-		r := &protocol.GetResp{
-			Seqno:   proto.Int64(this.seqno),
-			ErrCode: proto.Int32(errCode),
-			Version: proto.Int64(version),
+		r := &proto.GetResp{
+			Seqno:   pb.Int64(this.seqno),
+			ErrCode: pb.Int32(errCode),
+			Version: pb.Int64(version),
 		}
 
 		if errcode.ERR_OK == errCode {
@@ -47,10 +47,10 @@ func (this *GetReplyer) reply(errCode int32, fields map[string]*protocol.Field, 
 
 	} else {
 
-		r := &protocol.GetAllResp{
-			Seqno:   proto.Int64(this.seqno),
-			ErrCode: proto.Int32(errCode),
-			Version: proto.Int64(version),
+		r := &proto.GetAllResp{
+			Seqno:   pb.Int64(this.seqno),
+			ErrCode: pb.Int32(errCode),
+			Version: pb.Int64(version),
 		}
 
 		if errcode.ERR_OK == errCode {
@@ -74,7 +74,7 @@ func (this *GetReplyer) reply(errCode int32, fields map[string]*protocol.Field, 
 }
 
 func getAll(session kendynet.StreamSession, msg *codec.Message) {
-	req := msg.GetData().(*protocol.GetAllReq)
+	req := msg.GetData().(*proto.GetAllReq)
 	errno := errcode.ERR_OK
 
 	Debugln("getAll", req)
@@ -108,10 +108,10 @@ func getAll(session kendynet.StreamSession, msg *codec.Message) {
 	}
 
 	if errcode.ERR_OK != errno {
-		resp := &protocol.GetAllResp{
-			Seqno:   proto.Int64(req.GetSeqno()),
-			ErrCode: proto.Int32(errno),
-			Version: proto.Int64(-1),
+		resp := &proto.GetAllResp{
+			Seqno:   pb.Int64(req.GetSeqno()),
+			ErrCode: pb.Int32(errno),
+			Version: pb.Int64(-1),
 		}
 		err := session.Send(resp)
 		if nil != err {
@@ -125,7 +125,7 @@ func getAll(session kendynet.StreamSession, msg *codec.Message) {
 		key:      req.GetKey(),
 		table:    req.GetTable(),
 		uniKey:   fmt.Sprintf("%s:%s", req.GetTable(), req.GetKey()),
-		fields:   map[string]*protocol.Field{},
+		fields:   map[string]*proto.Field{},
 		deadline: time.Now().Add(time.Duration(req.GetTimeout())),
 	}
 
@@ -138,7 +138,7 @@ func getAll(session kendynet.StreamSession, msg *codec.Message) {
 
 	for _, name := range meta.queryMeta.field_names {
 		if name != "__key__" && name != "__version__" {
-			cmd.fields[name] = protocol.PackField(name, nil)
+			cmd.fields[name] = proto.PackField(name, nil)
 		}
 	}
 
@@ -146,7 +146,7 @@ func getAll(session kendynet.StreamSession, msg *codec.Message) {
 }
 
 func get(session kendynet.StreamSession, msg *codec.Message) {
-	req := msg.GetData().(*protocol.GetReq)
+	req := msg.GetData().(*proto.GetReq)
 	errno := errcode.ERR_OK
 
 	Debugln("get", req)
@@ -160,10 +160,10 @@ func get(session kendynet.StreamSession, msg *codec.Message) {
 	}
 
 	if errcode.ERR_OK != errno {
-		resp := &protocol.GetResp{
-			Seqno:   proto.Int64(req.GetSeqno()),
-			ErrCode: proto.Int32(errno),
-			Version: proto.Int64(-1),
+		resp := &proto.GetResp{
+			Seqno:   pb.Int64(req.GetSeqno()),
+			ErrCode: pb.Int32(errno),
+			Version: pb.Int64(-1),
 		}
 		err := session.Send(resp)
 		if nil != err {
@@ -177,7 +177,7 @@ func get(session kendynet.StreamSession, msg *codec.Message) {
 		key:      req.GetKey(),
 		table:    req.GetTable(),
 		uniKey:   fmt.Sprintf("%s:%s", req.GetTable(), req.GetKey()),
-		fields:   map[string]*protocol.Field{},
+		fields:   map[string]*proto.Field{},
 		deadline: time.Now().Add(time.Duration(req.GetTimeout())),
 	}
 
@@ -189,7 +189,7 @@ func get(session kendynet.StreamSession, msg *codec.Message) {
 	}
 
 	for _, name := range req.GetFields() {
-		cmd.fields[name] = protocol.PackField(name, nil)
+		cmd.fields[name] = proto.PackField(name, nil)
 	}
 	processCmd(cmd)
 }

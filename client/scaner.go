@@ -5,9 +5,8 @@ import (
 	protocol "flyfish/proto"
 	"fmt"
 	"github.com/golang/protobuf/proto"
-	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/event"
-	"runtime"
+	"github.com/sniperHW/kendynet/util"
 	"sync/atomic"
 )
 
@@ -37,13 +36,7 @@ func (this *Client) Scaner(table string, fileds ...string) *Scaner {
 
 func (this *Scaner) wrapCb(cb func(*Scaner, *MutiResult)) func(*MutiResult) {
 	return func(r *MutiResult) {
-		defer func() {
-			if r := recover(); r != nil {
-				buf := make([]byte, 65535)
-				l := runtime.Stack(buf, false)
-				kendynet.Errorf("%v: %s\n", r, buf[:l])
-			}
-		}()
+		defer util.Recover(logger)
 		cb(this, r)
 	}
 }

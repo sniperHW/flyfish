@@ -3,7 +3,7 @@ package flyfish
 import (
 	"container/list"
 	"flyfish/conf"
-	proto "flyfish/proto"
+	"flyfish/proto"
 	"strconv"
 	"sync"
 	"sync/atomic"

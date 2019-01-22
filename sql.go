@@ -1,12 +1,11 @@
 package flyfish
 
 import (
+	"container/list"
 	"flyfish/conf"
 	"fmt"
 	"github.com/sniperHW/kendynet/util"
 	"sync"
-	//protocol "flyfish/proto"
-	"container/list"
 	"time"
 )
 
@@ -112,10 +111,6 @@ func sqlRoutine(queue *util.BlockQueue, pipeliner sqlPipeliner) {
 			return
 		}
 	}
-}
-
-func SqlClose() {
-
 }
 
 func SQLInit(host string, port int, dbname string, user string, password string) bool {

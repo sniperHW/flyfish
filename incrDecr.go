@@ -3,9 +3,9 @@ package flyfish
 import (
 	codec "flyfish/codec"
 	"flyfish/errcode"
-	protocol "flyfish/proto"
+	"flyfish/proto"
 	"fmt"
-	"github.com/golang/protobuf/proto"
+	pb "github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
 	"time"
 )
@@ -16,28 +16,28 @@ type IncrDecrByReplyer struct {
 	cmd     *command
 }
 
-func (this *IncrDecrByReplyer) reply(errCode int32, fields map[string]*protocol.Field, version int64) {
+func (this *IncrDecrByReplyer) reply(errCode int32, fields map[string]*proto.Field, version int64) {
 
 	if time.Now().After(this.cmd.deadline) {
 		//已经超时
 		return
 	}
 
-	var resp proto.Message
+	var resp pb.Message
 	cmdType := this.cmd.cmdType
 	if cmdType == cmdIncrBy {
-		r := &protocol.IncrByResp{
-			Seqno:   proto.Int64(this.seqno),
-			ErrCode: proto.Int32(errCode),
-			Version: proto.Int64(version),
+		r := &proto.IncrByResp{
+			Seqno:   pb.Int64(this.seqno),
+			ErrCode: pb.Int32(errCode),
+			Version: pb.Int64(version),
 		}
 		r.NewValue = fields[this.cmd.incrDecr.GetName()]
 		resp = r
 	} else {
-		r := &protocol.DecrByResp{
-			Seqno:   proto.Int64(this.seqno),
-			ErrCode: proto.Int32(errCode),
-			Version: proto.Int64(version),
+		r := &proto.DecrByResp{
+			Seqno:   pb.Int64(this.seqno),
+			ErrCode: pb.Int32(errCode),
+			Version: pb.Int64(version),
 		}
 		r.NewValue = fields[this.cmd.incrDecr.GetName()]
 		resp = r
@@ -51,7 +51,7 @@ func (this *IncrDecrByReplyer) reply(errCode int32, fields map[string]*protocol.
 
 func incrBy(session kendynet.StreamSession, msg *codec.Message) {
 
-	req := msg.GetData().(*protocol.IncrByReq)
+	req := msg.GetData().(*proto.IncrByReq)
 
 	errno := errcode.ERR_OK
 
@@ -75,10 +75,10 @@ func incrBy(session kendynet.StreamSession, msg *codec.Message) {
 	}
 
 	if 0 != errno {
-		resp := &protocol.IncrByResp{
-			Seqno:   proto.Int64(req.GetSeqno()),
-			ErrCode: proto.Int32(errno),
-			Version: proto.Int64(-1),
+		resp := &proto.IncrByResp{
+			Seqno:   pb.Int64(req.GetSeqno()),
+			ErrCode: pb.Int32(errno),
+			Version: pb.Int64(-1),
 		}
 		err := session.Send(resp)
 		if nil != err {
@@ -107,7 +107,7 @@ func incrBy(session kendynet.StreamSession, msg *codec.Message) {
 
 func decrBy(session kendynet.StreamSession, msg *codec.Message) {
 
-	req := msg.GetData().(*protocol.DecrByReq)
+	req := msg.GetData().(*proto.DecrByReq)
 
 	errno := errcode.ERR_OK
 
@@ -120,10 +120,10 @@ func decrBy(session kendynet.StreamSession, msg *codec.Message) {
 	}
 
 	if 0 != errno {
-		resp := &protocol.DecrByResp{
-			Seqno:   proto.Int64(req.GetSeqno()),
-			ErrCode: proto.Int32(errno),
-			Version: proto.Int64(-1),
+		resp := &proto.DecrByResp{
+			Seqno:   pb.Int64(req.GetSeqno()),
+			ErrCode: pb.Int32(errno),
+			Version: pb.Int64(-1),
 		}
 		err := session.Send(resp)
 		if nil != err {

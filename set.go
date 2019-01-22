@@ -3,9 +3,9 @@ package flyfish
 import (
 	codec "flyfish/codec"
 	"flyfish/errcode"
-	protocol "flyfish/proto"
+	"flyfish/proto"
 	"fmt"
-	"github.com/golang/protobuf/proto"
+	pb "github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
 	"time"
 )
@@ -17,45 +17,45 @@ type SetReplyer struct {
 	cmd     *command
 }
 
-func (this *SetReplyer) reply(errCode int32, fields map[string]*protocol.Field, version int64) {
+func (this *SetReplyer) reply(errCode int32, fields map[string]*proto.Field, version int64) {
 
 	if time.Now().After(this.cmd.deadline) {
 		//已经超时
 		return
 	}
 
-	var resp proto.Message
+	var resp pb.Message
 	cmdType := this.cmd.cmdType
 
 	if cmdType == cmdSet {
-		r := &protocol.SetResp{
-			Seqno:   proto.Int64(this.seqno),
-			ErrCode: proto.Int32(errCode),
-			Version: proto.Int64(version),
+		r := &proto.SetResp{
+			Seqno:   pb.Int64(this.seqno),
+			ErrCode: pb.Int32(errCode),
+			Version: pb.Int64(version),
 		}
 		resp = r
 	} else if cmdType == cmdSetNx {
-		r := &protocol.SetNxResp{
-			Seqno:   proto.Int64(this.seqno),
-			ErrCode: proto.Int32(errCode),
-			Version: proto.Int64(version),
+		r := &proto.SetNxResp{
+			Seqno:   pb.Int64(this.seqno),
+			ErrCode: pb.Int32(errCode),
+			Version: pb.Int64(version),
 		}
 		resp = r
 	} else if cmdType == cmdCompareAndSet {
-		r := &protocol.CompareAndSetResp{
-			Seqno:   proto.Int64(this.seqno),
-			ErrCode: proto.Int32(errCode),
-			Version: proto.Int64(version),
+		r := &proto.CompareAndSetResp{
+			Seqno:   pb.Int64(this.seqno),
+			ErrCode: pb.Int32(errCode),
+			Version: pb.Int64(version),
 		}
 		if nil != fields {
 			r.Value = fields[this.cmd.cns.oldV.GetName()]
 		}
 		resp = r
 	} else if cmdType == cmdCompareAndSetNx {
-		r := &protocol.CompareAndSetNxResp{
-			Seqno:   proto.Int64(this.seqno),
-			ErrCode: proto.Int32(errCode),
-			Version: proto.Int64(version),
+		r := &proto.CompareAndSetNxResp{
+			Seqno:   pb.Int64(this.seqno),
+			ErrCode: pb.Int32(errCode),
+			Version: pb.Int64(version),
 		}
 		if nil != fields {
 			r.Value = fields[this.cmd.cns.oldV.GetName()]
@@ -77,7 +77,7 @@ func (this *SetReplyer) reply(errCode int32, fields map[string]*protocol.Field, 
 
 func set(session kendynet.StreamSession, msg *codec.Message) {
 
-	req := msg.GetData().(*protocol.SetReq)
+	req := msg.GetData().(*proto.SetReq)
 
 	//Debugln("set",req,len(req.GetFields()))
 
@@ -107,10 +107,10 @@ func set(session kendynet.StreamSession, msg *codec.Message) {
 	}
 
 	if 0 != errno {
-		resp := &protocol.SetResp{
-			Seqno:   proto.Int64(req.GetSeqno()),
-			ErrCode: proto.Int32(errno),
-			Version: proto.Int64(-1),
+		resp := &proto.SetResp{
+			Seqno:   pb.Int64(req.GetSeqno()),
+			ErrCode: pb.Int32(errno),
+			Version: pb.Int64(-1),
 		}
 		err := session.Send(resp)
 		if nil != err {
@@ -125,7 +125,7 @@ func set(session kendynet.StreamSession, msg *codec.Message) {
 		table:    req.GetTable(),
 		uniKey:   fmt.Sprintf("%s:%s", req.GetTable(), req.GetKey()),
 		version:  req.Version,
-		fields:   map[string]*protocol.Field{},
+		fields:   map[string]*proto.Field{},
 		deadline: time.Now().Add(time.Duration(req.GetTimeout())),
 	}
 
@@ -144,7 +144,7 @@ func set(session kendynet.StreamSession, msg *codec.Message) {
 
 func setNx(session kendynet.StreamSession, msg *codec.Message) {
 
-	req := msg.GetData().(*protocol.SetNxReq)
+	req := msg.GetData().(*proto.SetNxReq)
 
 	//Debugln("set",req,len(req.GetFields()))
 
@@ -174,10 +174,10 @@ func setNx(session kendynet.StreamSession, msg *codec.Message) {
 	}
 
 	if 0 != errno {
-		resp := &protocol.SetNxResp{
-			Seqno:   proto.Int64(req.GetSeqno()),
-			ErrCode: proto.Int32(errno),
-			Version: proto.Int64(-1),
+		resp := &proto.SetNxResp{
+			Seqno:   pb.Int64(req.GetSeqno()),
+			ErrCode: pb.Int32(errno),
+			Version: pb.Int64(-1),
 		}
 		err := session.Send(resp)
 		if nil != err {
@@ -191,7 +191,7 @@ func setNx(session kendynet.StreamSession, msg *codec.Message) {
 		key:      req.GetKey(),
 		table:    req.GetTable(),
 		uniKey:   fmt.Sprintf("%s:%s", req.GetTable(), req.GetKey()),
-		fields:   map[string]*protocol.Field{},
+		fields:   map[string]*proto.Field{},
 		deadline: time.Now().Add(time.Duration(req.GetTimeout())),
 	}
 
@@ -210,7 +210,7 @@ func setNx(session kendynet.StreamSession, msg *codec.Message) {
 
 func compareAndSet(session kendynet.StreamSession, msg *codec.Message) {
 
-	req := msg.GetData().(*protocol.CompareAndSetReq)
+	req := msg.GetData().(*proto.CompareAndSetReq)
 
 	//Debugln("set",req,len(req.GetFields()))
 
@@ -236,10 +236,10 @@ func compareAndSet(session kendynet.StreamSession, msg *codec.Message) {
 	}
 
 	if 0 != errno {
-		resp := &protocol.CompareAndSetResp{
-			Seqno:   proto.Int64(req.GetSeqno()),
-			ErrCode: proto.Int32(errno),
-			Version: proto.Int64(-1),
+		resp := &proto.CompareAndSetResp{
+			Seqno:   pb.Int64(req.GetSeqno()),
+			ErrCode: pb.Int32(errno),
+			Version: pb.Int64(-1),
 		}
 		err := session.Send(resp)
 		if nil != err {
@@ -253,7 +253,7 @@ func compareAndSet(session kendynet.StreamSession, msg *codec.Message) {
 		key:     req.GetKey(),
 		table:   req.GetTable(),
 		uniKey:  fmt.Sprintf("%s:%s", req.GetTable(), req.GetKey()),
-		fields:  map[string]*protocol.Field{},
+		fields:  map[string]*proto.Field{},
 		cns: &cnsSt{
 			oldV: req.GetOld(),
 			newV: req.GetNew(),
@@ -272,7 +272,7 @@ func compareAndSet(session kendynet.StreamSession, msg *codec.Message) {
 
 func compareAndSetNx(session kendynet.StreamSession, msg *codec.Message) {
 
-	req := msg.GetData().(*protocol.CompareAndSetNxReq)
+	req := msg.GetData().(*proto.CompareAndSetNxReq)
 
 	//Debugln("set",req,len(req.GetFields()))
 
@@ -298,10 +298,10 @@ func compareAndSetNx(session kendynet.StreamSession, msg *codec.Message) {
 	}
 
 	if 0 != errno {
-		resp := &protocol.CompareAndSetNxResp{
-			Seqno:   proto.Int64(req.GetSeqno()),
-			ErrCode: proto.Int32(errno),
-			Version: proto.Int64(-1),
+		resp := &proto.CompareAndSetNxResp{
+			Seqno:   pb.Int64(req.GetSeqno()),
+			ErrCode: pb.Int32(errno),
+			Version: pb.Int64(-1),
 		}
 		err := session.Send(resp)
 		if nil != err {
@@ -315,7 +315,7 @@ func compareAndSetNx(session kendynet.StreamSession, msg *codec.Message) {
 		key:     req.GetKey(),
 		table:   req.GetTable(),
 		uniKey:  fmt.Sprintf("%s:%s", req.GetTable(), req.GetKey()),
-		fields:  map[string]*protocol.Field{},
+		fields:  map[string]*proto.Field{},
 		cns: &cnsSt{
 			oldV: req.GetOld(),
 			newV: req.GetNew(),

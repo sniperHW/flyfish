@@ -3,8 +3,8 @@ package flyfish
 import (
 	//"fmt"
 	codec "flyfish/codec"
-	protocol "flyfish/proto"
-	"github.com/golang/protobuf/proto"
+	"flyfish/proto"
+	pb "github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
 	"reflect"
 	"sync"
@@ -23,7 +23,7 @@ type dispatcher struct {
 	handlers map[string]handler
 }
 
-func (this *dispatcher) Register(msg proto.Message, h handler) {
+func (this *dispatcher) Register(msg pb.Message, h handler) {
 	msgName := reflect.TypeOf(msg).String()
 	if nil == h {
 		return
@@ -70,7 +70,7 @@ func onNewClient(session kendynet.StreamSession) {
 	dispatcher_.OnNewClient(session)
 }
 
-func register(msg proto.Message, h handler) {
+func register(msg pb.Message, h handler) {
 	dispatcher_.Register(msg, h)
 }
 
@@ -79,9 +79,9 @@ func dispatch(session kendynet.StreamSession, msg *codec.Message) {
 }
 
 func ping(session kendynet.StreamSession, msg *codec.Message) {
-	req := msg.GetData().(*protocol.PingReq)
-	resp := &protocol.PingResp{
-		Timestamp: proto.Int64(req.GetTimestamp()),
+	req := msg.GetData().(*proto.PingReq)
+	resp := &proto.PingResp{
+		Timestamp: pb.Int64(req.GetTimestamp()),
 	}
 	session.Send(resp)
 }
@@ -91,15 +91,15 @@ func init() {
 		handlers: map[string]handler{},
 	}
 
-	register(&protocol.DelReq{}, del)
-	register(&protocol.GetReq{}, get)
-	register(&protocol.GetAllReq{}, getAll)
-	register(&protocol.SetReq{}, set)
-	register(&protocol.SetNxReq{}, setNx)
-	register(&protocol.CompareAndSetReq{}, compareAndSet)
-	register(&protocol.CompareAndSetNxReq{}, compareAndSetNx)
-	register(&protocol.PingReq{}, ping)
-	register(&protocol.IncrByReq{}, incrBy)
-	register(&protocol.DecrByReq{}, decrBy)
-	register(&protocol.ScanReq{}, scan)
+	register(&proto.DelReq{}, del)
+	register(&proto.GetReq{}, get)
+	register(&proto.GetAllReq{}, getAll)
+	register(&proto.SetReq{}, set)
+	register(&proto.SetNxReq{}, setNx)
+	register(&proto.CompareAndSetReq{}, compareAndSet)
+	register(&proto.CompareAndSetNxReq{}, compareAndSetNx)
+	register(&proto.PingReq{}, ping)
+	register(&proto.IncrByReq{}, incrBy)
+	register(&proto.DecrByReq{}, decrBy)
+	register(&proto.ScanReq{}, scan)
 }

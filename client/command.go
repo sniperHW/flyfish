@@ -2,14 +2,12 @@ package client
 
 import (
 	"flyfish/codec"
+	"flyfish/errcode"
 	protocol "flyfish/proto"
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet/util"
-	//"github.com/sniperHW/kendynet"
-	"flyfish/errcode"
 	"sync/atomic"
 	"time"
-	//"fmt"
 )
 
 type Field protocol.Field

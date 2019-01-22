@@ -3,7 +3,7 @@ package flyfish
 import (
 	"database/sql/driver"
 	"flyfish/conf"
-	protocol "flyfish/proto"
+	"flyfish/proto"
 	"fmt"
 	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/kendynet"
@@ -55,7 +55,7 @@ type record struct {
 	table         string
 	uniKey        string
 	ckey          *cacheKey
-	fields        map[string]*protocol.Field //所有命令的字段聚合
+	fields        map[string]*proto.Field //所有命令的字段聚合
 	expired       int64
 }
 
@@ -411,7 +411,7 @@ func addRecord(now int64, ctx *processContext) {
 
 		writeBackRecords[uniKey] = wb
 		if wb.writeBackFlag == write_back_insert || wb.writeBackFlag == write_back_update {
-			wb.fields = map[string]*protocol.Field{}
+			wb.fields = map[string]*proto.Field{}
 			for k, v := range ctx.fields {
 				wb.fields[k] = v
 			}
@@ -456,7 +456,7 @@ func addRecord(now int64, ctx *processContext) {
 			*    delete + delte  = 非法
 			 */
 			if ctx.writeBackFlag == write_back_insert {
-				wb.fields = map[string]*protocol.Field{}
+				wb.fields = map[string]*proto.Field{}
 				for k, v := range ctx.fields {
 					wb.fields[k] = v
 				}
@@ -464,7 +464,7 @@ func addRecord(now int64, ctx *processContext) {
 				for k, v := range meta {
 					if nil == wb.fields[k] {
 						//使用默认值填充
-						wb.fields[k] = protocol.PackField(k, v.defaultV)
+						wb.fields[k] = proto.PackField(k, v.defaultV)
 					}
 				}
 				wb.writeBackFlag = write_back_update
@@ -478,7 +478,7 @@ func addRecord(now int64, ctx *processContext) {
 			*    node   + delete = 非法
 			 */
 			if ctx.writeBackFlag == write_back_insert {
-				wb.fields = map[string]*protocol.Field{}
+				wb.fields = map[string]*proto.Field{}
 				for k, v := range ctx.fields {
 					wb.fields[k] = v
 				}
@@ -486,7 +486,7 @@ func addRecord(now int64, ctx *processContext) {
 				for k, v := range meta {
 					if nil == wb.fields[k] {
 						//使用默认值填充
-						wb.fields[k] = protocol.PackField(k, v.defaultV)
+						wb.fields[k] = proto.PackField(k, v.defaultV)
 					}
 				}
 				wb.writeBackFlag = write_back_insert

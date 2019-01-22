@@ -4,15 +4,14 @@ import (
 	"flyfish/codec"
 	"flyfish/errcode"
 	protocol "flyfish/proto"
+	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/event"
 	"github.com/sniperHW/kendynet/socket/stream_socket/tcp"
 	"github.com/sniperHW/kendynet/util"
-	"time"
-	//"runtime"
-	"fmt"
 	"sync/atomic"
+	"time"
 )
 
 const requestTimeout = 5 * time.Second
@@ -37,7 +36,7 @@ func openConn(cli *Client, addr string) *Conn {
 		addr:        addr,
 		eventQueue:  event.NewEventQueue(),
 		waitResp:    map[int64]*cmdContext{},
-		minheap:     util.NewMinHeap(65535),
+		minheap:     util.NewMinHeap(1024),
 		pendingSend: []*cmdContext{},
 		c:           cli,
 	}
@@ -206,32 +205,33 @@ func (this *Conn) dial() {
 
 func (this *Conn) sendReq(c *cmdContext) {
 	err := this.session.Send(c.req)
-
 	if nil == err {
 		c.status = wait_resp
 		this.waitResp[c.seqno] = c
 	} else {
 		//记录日志
 		this.minheap.Remove(c)
-		this.c.doCallBack(c.cb, errcode.ERR_SEND)
+		if err == kendynet.ErrSendQueFull {
+			this.c.doCallBack(c.cb, errcode.ERR_BUSY)
+		} else {
+			this.c.doCallBack(c.cb, errcode.ERR_SEND)
+		}
 	}
 }
 
 func (this *Conn) exec(c *cmdContext) {
-
-	if atomic.LoadInt32(&this.closed) == 1 {
-		this.c.doCallBack(c.cb, errcode.ERR_CLOSE)
-		return
-	}
-
 	this.eventQueue.Post(func() {
-		c.deadline = time.Now().Add(requestTimeout)
-		this.minheap.Insert(c)
-		if nil == this.session || this.dialing {
-			c.status = wait_send
-			this.pendingSend = append(this.pendingSend, c)
+		if atomic.LoadInt32(&this.closed) == 1 {
+			this.c.doCallBack(c.cb, errcode.ERR_CLOSE)
 		} else {
-			this.sendReq(c)
+			c.deadline = time.Now().Add(requestTimeout)
+			this.minheap.Insert(c)
+			if nil == this.session || this.dialing {
+				c.status = wait_send
+				this.pendingSend = append(this.pendingSend, c)
+			} else {
+				this.sendReq(c)
+			}
 		}
 	})
 }

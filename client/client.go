@@ -1,18 +1,10 @@
 package client
 
 import (
-	//"flyfish/codec"
-	//"flyfish/errcode"
-	"github.com/sniperHW/kendynet"
-	//"github.com/sniperHW/kendynet/util"
+	//"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/event"
-	//"github.com/sniperHW/kendynet/socket/stream_socket/tcp"
-	//protocol "flyfish/proto"
-	//"github.com/golang/protobuf/proto"
-	//"time"
-	"runtime"
-	//"fmt"
-	//"sync/atomic"
+	"github.com/sniperHW/kendynet/util"
+	//"runtime"
 )
 
 type Client struct {
@@ -36,13 +28,7 @@ func stringHash(s string) int {
 }
 
 func (this *Client) pcall(cb callback, a interface{}) {
-	defer func() {
-		if r := recover(); r != nil {
-			buf := make([]byte, 65535)
-			l := runtime.Stack(buf, false)
-			kendynet.Errorf("%v: %s\n", r, buf[:l])
-		}
-	}()
+	defer util.Recover(logger)
 	switch a.(type) {
 	case int32:
 		cb.onError(a.(int32))

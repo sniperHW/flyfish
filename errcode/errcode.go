@@ -21,7 +21,8 @@ const (
 	ERR_NOT_EQUAL      = int32(17) //指定的field值与要求的不相等
 	ERR_SCAN_END       = int32(18)
 	ERR_SERVER_STOPED  = int32(19)
-	ERR_END            = int32(20)
+	ERR_BUSY           = int32(20)
+	ERR_END            = int32(21)
 )
 
 var err_str []string = []string{
@@ -45,6 +46,7 @@ var err_str []string = []string{
 	"not equal",
 	"scan finish",
 	"server stoped",
+	"busy",
 }
 
 func GetErrorStr(code int32) string {
