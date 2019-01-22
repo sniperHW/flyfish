@@ -27,6 +27,11 @@ func isSetCmd(cmd int) bool {
 	return cmd == cmdSet || cmd == cmdSetNx || cmd == cmdCompareAndSet || cmd == cmdCompareAndSetNx || cmd == cmdIncrBy || cmd == cmdDecrBy
 }
 
+//会导致会写的命令
+func causeWriteBackCmd(cmd int) bool {
+	return isSetCmd(cmd) || cmd == cmdDel
+}
+
 //命令回复器
 type replyer interface {
 	reply(errCode int32, fields map[string]*protocol.Field, version int64)

@@ -17,6 +17,7 @@ var (
 	writeBackRecords    map[string]*record
 	writeBackEventQueue *util.BlockQueue
 	pendingWB           *list.List
+	writeBackBarrior_   writeBackBarrior
 )
 
 func prepareRecord(ctx *processContext) *record {
@@ -43,41 +44,20 @@ func closeWriteBack() {
 }
 
 func notiForceWriteBack() {
-	if conf.WriteBackDelay > 0 || isStop() {
-		writeBackEventQueue.Add(notifyWB{})
-	}
-}
-
-func pushSQLWriteBack(ctx *processContext) {
-	ckey := ctx.getCacheKey()
-	ckey.setWriteBack()
-	if conf.WriteBackDelay > 0 && !isStop() {
-		//延迟回写
-		writeBackEventQueue.Add(ctx)
-	} else {
-		//直接回写
-		uniKey := ctx.getUniKey()
-		hash := StringHash(uniKey)
-		sqlUpdateQueue[hash%conf.SqlUpdatePoolSize].Add(prepareRecord(ctx))
+	if nil == writeBackEventQueue.AddNoWait(notifyWB{}) {
+		writeBackBarrior_.add()
 	}
 }
 
 func pushSQLWriteBackNoWait(ctx *processContext) {
-
 	ckey := ctx.getCacheKey()
 	ckey.setWriteBack()
-	if conf.WriteBackDelay > 0 && !isStop() {
-		//延迟回写
-		writeBackEventQueue.AddNoWait(ctx)
-	} else {
-		//直接回写
-		uniKey := ctx.getUniKey()
-		hash := StringHash(uniKey)
-		sqlUpdateQueue[hash%conf.SqlUpdatePoolSize].AddNoWait(prepareRecord(ctx))
+	if nil == writeBackEventQueue.AddNoWait(ctx) {
+		writeBackBarrior_.add()
 	}
 }
 
-func pushSQLLoad(ctx *processContext) {
+func pushSQLLoad_(ctx *processContext, noWait bool) {
 	ckey := ctx.getCacheKey()
 	if ckey.isWriteBack() {
 		/*
@@ -86,18 +66,26 @@ func pushSQLLoad(ctx *processContext) {
 		 */
 		//通告回写处理立即执行回写
 		notiForceWriteBack()
-
-		ckey.unlock()
-
 		/*
 		*  丢弃所有命令，让客户端等待超时
 		 */
 		ckey.clearCmd()
 
-		return
 	} else {
-		sqlLoadQueue.Add(ctx)
+		if noWait {
+			sqlLoadQueue.AddNoWait(ctx)
+		} else {
+			sqlLoadQueue.Add(ctx)
+		}
 	}
+}
+
+func pushSQLLoadNoWait(ctx *processContext) {
+	pushSQLLoad_(ctx, true)
+}
+
+func pushSQLLoad(ctx *processContext) {
+	pushSQLLoad_(ctx, false)
 }
 
 type sqlPipeliner interface {
@@ -158,21 +146,6 @@ func SQLInit(host string, port int, dbname string, user string, password string)
 				writeBackEventQueue.Add(struct{}{})
 			}
 		}()
-
-		/*go func(){
-			for {
-				time.Sleep(time.Second)
-				fmt.Println("---------------sqlQueryer-------------")
-				for _,v := range(sqlQueryQueue) {
-					fmt.Println(v.Len())
-				}
-				fmt.Println("---------------sqlUpdateQueue-------------")
-				for _,v := range(sqlUpdateQueue) {
-					fmt.Println(v.Len())
-				}
-			}
-		}()*/
-
 	})
 
 	return true

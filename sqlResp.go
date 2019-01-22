@@ -12,7 +12,7 @@ func onSqlNotFound(ctx *processContext) {
 		ctx.reply(errcode.ERR_NOTFOUND, nil, -1)
 		ckey := ctx.getCacheKey()
 		ckey.setMissing()
-		ckey.process()
+		ckey.processNoWait()
 	} else {
 		/*  set操作，数据库不存在的情况
 		*   先写入到redis,redis写入成功后回写sql(设置回写类型insert)
@@ -41,7 +41,7 @@ func onSqlNotFound(ctx *processContext) {
 func onSqlExecError(ctx *processContext) {
 	Debugln("onSqlExecError key", ctx.getUniKey())
 	ctx.reply(errcode.ERR_SQLERROR, nil, -1)
-	ctx.getCacheKey().process()
+	ctx.getCacheKey().processNoWait()
 }
 
 func onSqlLoadOKGet(ctx *processContext) {
@@ -62,7 +62,7 @@ func onSqlLoadOKSet(ctx *processContext) {
 			pushRedis = false
 			//版本号不对
 			ctx.reply(errcode.ERR_VERSION, nil, version)
-			ctx.getCacheKey().process()
+			ctx.getCacheKey().processNoWait()
 		} else {
 			//变更需要将版本号+1
 			for _, v := range cmd.fields {
@@ -115,7 +115,6 @@ func onSqlLoadOKDel(ctx *processContext) {
 		errCode = errcode.ERR_VERSION
 	} else {
 		ctx.writeBackFlag = write_back_delete
-		ctx.redisFlag = redis_del
 		pushSQLWriteBackNoWait(ctx)
 		errCode = errcode.ERR_OK
 	}
@@ -125,7 +124,7 @@ func onSqlLoadOKDel(ctx *processContext) {
 	if errCode == errcode.ERR_OK {
 		ckey.setMissing()
 	}
-	ckey.process()
+	ckey.processNoWait()
 }
 
 func onSqlLoadOK(ctx *processContext) {

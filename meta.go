@@ -70,13 +70,14 @@ func (this *query_meta) getReceiver_() []interface{} {
 	return receiver
 }
 
+//字段元信息
 type field_meta struct {
 	name     string
 	tt       protocol.ValueType
 	defaultV interface{}
 }
 
-//表的元数据
+//表格的元信息
 type table_meta struct {
 	table            string
 	fieldMetas       map[string]field_meta
@@ -86,6 +87,7 @@ type table_meta struct {
 	insertFieldOrder []string
 }
 
+//获取字段默认值
 func (this *table_meta) getDefaultV(name string) interface{} {
 	m, ok := this.fieldMetas[name]
 	if !ok {
@@ -162,6 +164,7 @@ func (this *table_meta) checkCompareAndSet(newV *protocol.Field, oldV *protocol.
 	return true
 }
 
+//根据表名获取表格元数据
 func getMetaByTable(table string) *table_meta {
 	meta, ok := table_metas[table]
 	if ok {

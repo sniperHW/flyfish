@@ -2,18 +2,52 @@ package flyfish
 
 import (
 	"database/sql/driver"
-	"fmt"
-	"github.com/jmoiron/sqlx"
-	"net"
-	//"strings"
 	"flyfish/conf"
 	protocol "flyfish/proto"
+	"fmt"
+	"github.com/jmoiron/sqlx"
+	"github.com/sniperHW/kendynet"
+	"net"
+	"os"
 	"sync"
 	"time"
-	//"io"
-	"github.com/sniperHW/kendynet"
-	"os"
 )
+
+type writeBackBarrior struct {
+	counter int
+	waited  int
+	mtx     sync.Mutex
+	cond    sync.Cond
+}
+
+func (this *writeBackBarrior) add() {
+	this.mtx.Lock()
+	this.counter++
+	this.mtx.Unlock()
+}
+
+func (this *writeBackBarrior) sub(c int) {
+	this.mtx.Lock()
+	this.counter = this.counter - c
+	if this.counter < conf.WriteBackEventQueueSize && this.waited > 0 {
+		this.mtx.Unlock()
+		this.cond.Broadcast()
+	} else {
+		this.mtx.Unlock()
+	}
+}
+
+func (this *writeBackBarrior) wait() {
+	defer this.mtx.Unlock()
+	this.mtx.Lock()
+	if this.counter >= conf.WriteBackEventQueueSize {
+		for this.counter >= conf.WriteBackEventQueueSize {
+			this.waited++
+			this.cond.Wait()
+			this.waited--
+		}
+	}
+}
 
 type record struct {
 	writeBackFlag int
@@ -368,14 +402,6 @@ func addRecord(now int64, ctx *processContext) {
 	uniKey := ctx.getUniKey()
 	wb, ok := writeBackRecords[uniKey]
 	if !ok {
-		/*wb := &record{
-			writeBackFlag : ctx.writeBackFlag,
-			key     : ctx.getKey(),
-			table   : ctx.getTable(),
-			uniKey  : uniKey,
-			ckey    : ctx.getCacheKey(),
-		}*/
-
 		wb = recordGet()
 		wb.writeBackFlag = ctx.writeBackFlag
 		wb.key = ctx.getKey()
@@ -475,6 +501,10 @@ func addRecord(now int64, ctx *processContext) {
 func writeBackRoutine() {
 	for {
 		closed, localList := writeBackEventQueue.Get()
+		size := len(localList)
+		if size > 0 {
+			writeBackBarrior_.sub(size)
+		}
 		now := time.Now().Unix()
 		for _, v := range localList {
 			switch v.(type) {
@@ -489,6 +519,11 @@ func writeBackRoutine() {
 				processWriteBackRecord(now)
 				break
 			}
+		}
+
+		if conf.WriteBackDelay == 0 || isStop() {
+			//延迟为0或服务准备停止,立即执行回写处理
+			processWriteBackRecord(now + conf.WriteBackDelay + 1)
 		}
 
 		if closed {

@@ -3,8 +3,7 @@ package flyfish
 import (
 	"container/list"
 	"flyfish/conf"
-	protocol "flyfish/proto"
-	//"github.com/sniperHW/kendynet/event"
+	proto "flyfish/proto"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -18,6 +17,7 @@ const (
 
 var (
 	cacheGroup []*cacheKeyMgr
+	tick       int64 //每次访问+1假设每秒访问100万次，需要运行584942年才会回绕
 )
 
 type cacheKey struct {
@@ -30,9 +30,8 @@ type cacheKey struct {
 	cmdQueue    *list.List
 	meta        *table_meta
 	writeBacked int32 //正在回写
+	lastAccess  int64
 }
-
-//var tick int64  //每次访问+1假设每秒访问100万次，需要运行584942年才会回绕
 
 type cacheKeyMgr struct {
 	cacheKeys map[string]*cacheKey
@@ -90,7 +89,7 @@ func (this *cacheKey) isWriteBack() bool {
 }
 
 func (this *cacheKey) updateLRU() {
-	//atomic.AddInt64
+	this.lastAccess = atomic.AddInt64(&tick, 1)
 }
 
 func newCacheKey(table string, uniKey string) *cacheKey {
@@ -114,32 +113,32 @@ func newCacheKey(table string, uniKey string) *cacheKey {
 	return k
 }
 
-func (this *cacheKey) convertStr(fieldName string, value string) *protocol.Field {
+func (this *cacheKey) convertStr(fieldName string, value string) *proto.Field {
 	m, ok := this.meta.fieldMetas[fieldName]
 	if !ok {
 		return nil
 	}
 
-	if m.tt == protocol.ValueType_string {
-		return protocol.PackField(fieldName, value)
-	} else if m.tt == protocol.ValueType_float {
+	if m.tt == proto.ValueType_string {
+		return proto.PackField(fieldName, value)
+	} else if m.tt == proto.ValueType_float {
 		f, err := strconv.ParseFloat(value, 64)
 		if nil != err {
 			return nil
 		}
-		return protocol.PackField(fieldName, f)
-	} else if m.tt == protocol.ValueType_int {
+		return proto.PackField(fieldName, f)
+	} else if m.tt == proto.ValueType_int {
 		i, err := strconv.ParseInt(value, 10, 64)
 		if nil != err {
 			return nil
 		}
-		return protocol.PackField(fieldName, i)
-	} else if m.tt == protocol.ValueType_uint {
+		return proto.PackField(fieldName, i)
+	} else if m.tt == proto.ValueType_uint {
 		u, err := strconv.ParseUint(value, 10, 64)
 		if nil != err {
 			return nil
 		}
-		return protocol.PackField(fieldName, u)
+		return proto.PackField(fieldName, u)
 	} else {
 		return nil
 	}

@@ -15,20 +15,18 @@ func onRedisResp(ctx *processContext) {
 		ctx.reply(ctx.errno, ctx.fields, newVersion)
 	}
 
-	Debugln("onRedisResp")
+	Debugln("onRedisResp key:", ctx.getUniKey())
 
 	ckey := ctx.getCacheKey()
 	if ctx.errno == errcode.ERR_STALE_CACHE {
 		/*  redis中的数据与flyfish key不一致
 		 *  将ckey重置为cache_new，强制从数据库取值刷新redis
 		 */
-		ckey.mtx.Lock()
 		ckey.reset()
-		ckey.mtx.Unlock()
 		ctx.writeBackFlag = write_back_none //数据存在执行update
 		ctx.redisFlag = redis_none
 		//到数据库加载
-		pushSQLLoad(ctx)
+		pushSQLLoadNoWait(ctx)
 
 	} else {
 
@@ -38,14 +36,13 @@ func onRedisResp(ctx *processContext) {
 			} else if ctx.redisFlag == redis_del {
 				ckey.setMissing()
 				//投递sql删除请求
-				pushSQLWriteBack(ctx)
+				pushSQLWriteBackNoWait(ctx)
 			} else {
 				ckey.setOK(newVersion)
-				pushSQLWriteBack(ctx)
+				pushSQLWriteBackNoWait(ctx)
 			}
 		}
-		Debugln("here")
-		ckey.process()
+		ckey.processNoWait()
 	}
 
 	atomic.AddInt32(&redisReqCount, -1)

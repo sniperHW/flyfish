@@ -259,7 +259,7 @@ func (this *cacheKey) processDel(ctx *processContext, cmd *command) bool {
 	}
 }
 
-func (this *cacheKey) process(cmd ...*command) {
+func (this *cacheKey) process_(noWait bool, cmd ...*command) {
 
 	Debugln("process")
 
@@ -362,6 +362,11 @@ func (this *cacheKey) process(cmd ...*command) {
 	this.lock()
 	this.mtx.Unlock()
 
+	if !noWait && causeWriteBackCmd(lastCmdType) {
+		//可能导致回写的cmd,需要等待到writeBackQueue不满才能放行
+		writeBackBarrior_.wait()
+	}
+
 	if this.status == cache_ok || this.status == cache_missing {
 		if lastCmdType == cmdGet {
 			ctx.redisFlag = redis_get
@@ -372,11 +377,26 @@ func (this *cacheKey) process(cmd ...*command) {
 		} else {
 			ctx.redisFlag = redis_set
 		}
-
 		//投递redis请求
-		pushRedis(ctx)
+		if noWait {
+			pushRedisNoWait(ctx)
+		} else {
+			pushRedis(ctx)
+		}
 	} else {
 		//投递sql请求
-		pushSQLLoad(ctx)
+		if noWait {
+			pushSQLLoadNoWait(ctx)
+		} else {
+			pushSQLLoad(ctx)
+		}
 	}
+}
+
+func (this *cacheKey) process(cmd ...*command) {
+	this.process_(false, cmd...)
+}
+
+func (this *cacheKey) processNoWait(cmd ...*command) {
+	this.process_(true, cmd...)
 }
