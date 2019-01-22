@@ -122,6 +122,9 @@ func SQLInit(host string, port int, dbname string, user string, password string)
 	sql_once.Do(func() {
 
 		pendingWB = list.New()
+
+		writeBackBarrior_.cond = sync.NewCond(&writeBackBarrior_.mtx)
+
 		writeBackRecords = map[string]*record{}
 		writeBackEventQueue = util.NewBlockQueueWithName("writeBackEventQueue", conf.WriteBackEventQueueSize)
 
