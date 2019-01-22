@@ -101,16 +101,12 @@ func newCacheKey(table string, uniKey string) *cacheKey {
 		return nil
 	}
 
-	k := &cacheKey{
+	return &cacheKey{
 		uniKey:   uniKey,
 		status:   cache_new,
 		meta:     meta,
 		cmdQueue: list.New(),
 	}
-
-	Debugln("newCacheKey key:", uniKey)
-
-	return k
 }
 
 func (this *cacheKey) convertStr(fieldName string, value string) *proto.Field {
@@ -161,8 +157,7 @@ func getCacheKey(table string, uniKey string) *cacheKey {
 }
 
 func getMgrByUnikey(uniKey string) *cacheKeyMgr {
-	hash := StringHash(uniKey)
-	return cacheGroup[hash%conf.CacheGroupSize]
+	return cacheGroup[StringHash(uniKey)%conf.CacheGroupSize]
 }
 
 func InitCacheKey() {
