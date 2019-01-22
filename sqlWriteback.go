@@ -17,7 +17,7 @@ type writeBackBarrior struct {
 	counter int
 	waited  int
 	mtx     sync.Mutex
-	cond    sync.Cond
+	cond    *sync.Cond
 }
 
 func (this *writeBackBarrior) add() {
