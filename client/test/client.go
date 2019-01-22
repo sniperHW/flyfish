@@ -26,7 +26,7 @@ func Set(c *kclient.Client) {
 	fields["age"] = 37
 	fields["phone"] = strings.Repeat("a", 1024)
 	fields["name"] = "sniperHW"
-	key := fmt.Sprintf("%s:%d", "huangwei", rand.Int()%100000)
+	key := fmt.Sprintf("%s:%d", "huangwei", rand.Int()%50000)
 	//key := fmt.Sprintf("%s:%d","huangwei",id%100000)//rand.Int()%1000000)
 	//key := "huangwei:44745"
 	id++
@@ -53,7 +53,7 @@ func Set(c *kclient.Client) {
 
 func Get(c *kclient.Client) {
 
-	key := fmt.Sprintf("%s:%d", "huangwei", rand.Int()%100000)
+	key := fmt.Sprintf("%s:%d", "huangwei", rand.Int()%50000+50000)
 	//key := fmt.Sprintf("%s:%d","huangwei",id%1000000)//rand.Int()%1000000)
 	id++
 	get := c.Get("users1", key, "name", "age", "phone")
@@ -98,6 +98,14 @@ func main() {
 			Set(c)
 		}
 	}
+
+	for j := 0; j < 10; j++ {
+		c := kclient.OpenClient(services) //eventQueue)
+		for i := 0; i < 20; i++ {
+			Get(c)
+		}
+	}
+
 	//c := kclient.OpenClient(services) //eventQueue)
 	//Set(c)
 

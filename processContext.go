@@ -363,7 +363,7 @@ func (this *cacheKey) process_(noWait bool, cmd ...*command) {
 	this.mtx.Unlock()
 
 	if !noWait && causeWriteBackCmd(lastCmdType) {
-		//可能导致回写的cmd,需要等待到writeBackQueue不满才能放行
+		//可能导致回写的cmd,需要等待到writeBackQueue小于容量上限才放行
 		writeBackBarrior_.wait()
 	}
 
