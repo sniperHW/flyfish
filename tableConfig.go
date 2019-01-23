@@ -13,6 +13,7 @@ func InitTableConfig() bool {
 		Errorln(err)
 		return false
 	} else {
+
 		rows, err := db.Query("select __table__,__conf__ from table_conf")
 
 		if nil != err {

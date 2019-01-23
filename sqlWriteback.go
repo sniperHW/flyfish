@@ -167,6 +167,7 @@ func (this *sqlUpdater) doInsert(r *record) error {
 	}
 	str.append(")")
 	_, err := this.db.Exec(str.toString(), this.values...)
+
 	return err
 }
 

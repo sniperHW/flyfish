@@ -2,7 +2,7 @@ package flyfish
 
 import (
 	"flyfish/errcode"
-	protocol "flyfish/proto"
+	"flyfish/proto"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -27,7 +27,7 @@ const (
 
 type processContext struct {
 	commands      []*command //本次处理关联的所有命令请求
-	fields        map[string]*protocol.Field
+	fields        map[string]*proto.Field
 	errno         int32
 	replyed       bool //是否已经应道
 	writeBackFlag int  //回写数据库类型
@@ -72,13 +72,14 @@ func (this *processContext) getSetfields() *map[string]interface{} {
 			ret[v.name] = vv.GetValue()
 		} else {
 			ret[v.name] = v.defaultV
+			this.fields[v.name] = proto.PackField(v.name, v.defaultV)
 		}
 	}
 	ret["__version__"] = this.fields["__version__"].GetValue()
 	return &ret
 }
 
-func (this *processContext) reply(errCode int32, fields map[string]*protocol.Field, version int64) {
+func (this *processContext) reply(errCode int32, fields map[string]*proto.Field, version int64) {
 	if !this.replyed {
 		if len(this.commands) == 0 {
 			Errorln("len(this.commands)", *this)
@@ -97,7 +98,7 @@ func (this *cacheKey) processGet(ctx *processContext, cmd *command) bool {
 	} else {
 		ctx.redisFlag = redis_get
 		ctx.commands = append(ctx.commands, cmd)
-		ctx.fields["__version__"] = protocol.PackField("__version__", this.version)
+		ctx.fields["__version__"] = proto.PackField("__version__", this.version)
 		for _, v := range cmd.fields {
 			ctx.fields[v.GetName()] = v
 		}
@@ -114,7 +115,7 @@ func (this *cacheKey) processSet(ctx *processContext, cmd *command) bool {
 		ctx.commands = append(ctx.commands, cmd)
 		if this.status == cache_ok || this.status == cache_missing {
 			//添加新的版本号
-			ctx.fields["__version__"] = protocol.PackField("__version__", this.version+1)
+			ctx.fields["__version__"] = proto.PackField("__version__", this.version+1)
 			if this.status == cache_ok {
 				ctx.writeBackFlag = write_back_update //数据存在执行update
 				ctx.redisFlag = redis_set_script
@@ -144,7 +145,7 @@ func (this *cacheKey) processSetNx(ctx *processContext, cmd *command) bool {
 		ctx.commands = append(ctx.commands, cmd)
 
 		if this.status == cache_missing {
-			ctx.fields["__version__"] = protocol.PackField("__version__", this.version+1)
+			ctx.fields["__version__"] = proto.PackField("__version__", this.version+1)
 			ctx.writeBackFlag = write_back_insert //数据不存在执行insert
 			ctx.redisFlag = redis_set
 		}
@@ -169,7 +170,7 @@ func (this *cacheKey) processCompareAndSet(ctx *processContext, cmd *command) bo
 		ctx.commands = append(ctx.commands, cmd)
 
 		if this.status == cache_ok {
-			ctx.fields["__version__"] = protocol.PackField("__version__", this.version+1)
+			ctx.fields["__version__"] = proto.PackField("__version__", this.version+1)
 			ctx.writeBackFlag = write_back_update //数据存在执行update
 			ctx.redisFlag = redis_set_script
 		}
@@ -183,7 +184,7 @@ func (this *cacheKey) processCompareAndSetNx(ctx *processContext, cmd *command) 
 	ctx.commands = append(ctx.commands, cmd)
 
 	if this.status == cache_ok || this.status == cache_missing {
-		ctx.fields["__version__"] = protocol.PackField("__version__", this.version+1)
+		ctx.fields["__version__"] = proto.PackField("__version__", this.version+1)
 		if this.status == cache_ok {
 			ctx.writeBackFlag = write_back_update //数据存在执行update
 			ctx.redisFlag = redis_set_script
@@ -204,7 +205,7 @@ func (this *cacheKey) processIncrBy(ctx *processContext, cmd *command) bool {
 	ctx.commands = append(ctx.commands, cmd)
 
 	if this.status == cache_ok || this.status == cache_missing {
-		ctx.fields["__version__"] = protocol.PackField("__version__", this.version+1)
+		ctx.fields["__version__"] = proto.PackField("__version__", this.version+1)
 		if this.status == cache_ok {
 			ctx.writeBackFlag = write_back_update //数据存在执行update
 			ctx.redisFlag = redis_set_script
@@ -224,13 +225,13 @@ func (this *cacheKey) processDecrBy(ctx *processContext, cmd *command) bool {
 	ctx.commands = append(ctx.commands, cmd)
 
 	if this.status == cache_ok || this.status == cache_missing {
-		ctx.fields["__version__"] = protocol.PackField("__version__", this.version+1)
+		ctx.fields["__version__"] = proto.PackField("__version__", this.version+1)
 		if this.status == cache_ok {
 			ctx.writeBackFlag = write_back_update //数据存在执行update
 			ctx.redisFlag = redis_set_script
 		} else {
 			newV := 0 - cmd.incrDecr.GetInt()
-			ctx.fields[cmd.incrDecr.GetName()] = protocol.PackField(cmd.incrDecr.GetName(), newV)
+			ctx.fields[cmd.incrDecr.GetName()] = proto.PackField(cmd.incrDecr.GetName(), newV)
 			ctx.writeBackFlag = write_back_insert //数据不存在执行insert
 			ctx.redisFlag = redis_set
 		}
@@ -248,9 +249,9 @@ func (this *cacheKey) processDel(ctx *processContext, cmd *command) bool {
 			return false
 		} else {
 			if nil != cmd.version {
-				ctx.fields["__version__"] = protocol.PackField("__version__", *cmd.version)
+				ctx.fields["__version__"] = proto.PackField("__version__", *cmd.version)
 			} else {
-				ctx.fields["__version__"] = protocol.PackField("__version__", this.version)
+				ctx.fields["__version__"] = proto.PackField("__version__", this.version)
 			}
 			ctx.writeBackFlag = write_back_delete
 			ctx.commands = append(ctx.commands, cmd)
@@ -289,7 +290,7 @@ func (this *cacheKey) process_(noWait bool, cmd ...*command) {
 
 	ctx := &processContext{
 		commands: []*command{},
-		fields:   map[string]*protocol.Field{},
+		fields:   map[string]*proto.Field{},
 	}
 
 	lastCmdType := cmdNone
