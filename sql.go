@@ -129,6 +129,7 @@ func SQLInit(host string, port int, dbname string, user string, password string)
 
 		sqlLoadQueue = util.NewBlockQueueWithName(fmt.Sprintf("sqlLoad"), conf.SqlLoadEventQueueSize)
 		for i := 0; i < conf.SqlLoadPoolSize; i++ {
+			db, _ := pgOpen(host, port, dbname, user, password)
 			go sqlRoutine(sqlLoadQueue, newSqlLoader(db)) //newSqlLoader(conf.SqlLoadPipeLineSize, host, port, dbname, user, password))
 		}
 
@@ -137,6 +138,7 @@ func SQLInit(host string, port int, dbname string, user string, password string)
 			writeBackWG.Add(1)
 			name := fmt.Sprintf("sqlUpdater:%d", i)
 			sqlUpdateQueue[i] = util.NewBlockQueueWithName(name, conf.SqlUpdateEventQueueSize)
+			db, _ := pgOpen(host, port, dbname, user, password)
 			go sqlRoutine(sqlUpdateQueue[i], newSqlUpdater(name, db)) //newSqlUpdater(name, conf.SqlUpdatePipeLineSize, host, port, dbname, user, password))
 		}
 
