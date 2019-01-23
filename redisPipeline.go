@@ -3,9 +3,7 @@ package flyfish
 import (
 	"flyfish/errcode"
 	"flyfish/proto"
-	"fmt"
 	"github.com/go-redis/redis"
-	//"strings"
 )
 
 type redisCmd struct {
@@ -14,13 +12,80 @@ type redisCmd struct {
 	ret    interface{}
 }
 
+var ARGV = []string{
+	",ARGV[0]",
+	",ARGV[1]",
+	",ARGV[2]",
+	",ARGV[3]",
+	",ARGV[4]",
+	",ARGV[5]",
+	",ARGV[6]",
+	",ARGV[7]",
+	",ARGV[8]",
+	",ARGV[9]",
+	",ARGV[10]",
+	",ARGV[11]",
+	",ARGV[12]",
+	",ARGV[13]",
+	",ARGV[14]",
+	",ARGV[15]",
+	",ARGV[16]",
+	",ARGV[17]",
+	",ARGV[18]",
+	",ARGV[19]",
+	",ARGV[20]",
+	",ARGV[21]",
+	",ARGV[22]",
+	",ARGV[23]",
+	",ARGV[24]",
+	",ARGV[25]",
+	",ARGV[26]",
+	",ARGV[27]",
+	",ARGV[28]",
+	",ARGV[29]",
+	",ARGV[30]",
+	",ARGV[31]",
+	",ARGV[32]",
+	",ARGV[33]",
+	",ARGV[34]",
+	",ARGV[35]",
+	",ARGV[36]",
+	",ARGV[37]",
+	",ARGV[38]",
+	",ARGV[39]",
+	",ARGV[40]",
+	",ARGV[41]",
+	",ARGV[42]",
+	",ARGV[43]",
+	",ARGV[44]",
+	",ARGV[45]",
+	",ARGV[46]",
+	",ARGV[47]",
+	",ARGV[48]",
+	",ARGV[49]",
+	",ARGV[50]",
+	",ARGV[51]",
+	",ARGV[52]",
+	",ARGV[53]",
+	",ARGV[54]",
+	",ARGV[55]",
+	",ARGV[56]",
+	",ARGV[57]",
+	",ARGV[58]",
+	",ARGV[59]",
+	",ARGV[60]",
+	",ARGV[61]",
+	",ARGV[62]",
+	",ARGV[63]",
+	",ARGV[64]",
+}
+
 type redisPipeliner struct {
 	pipeLiner redis.Pipeliner
 	cmds      []*redisCmd
 	max       int
 	keys      []string
 	args      []interface{}
-	//ARGV      []string
 }
 
 func newRedisPipeliner(max int) *redisPipeliner {
@@ -30,7 +95,6 @@ func newRedisPipeliner(max int) *redisPipeliner {
 		max:       max,
 		keys:      []string{},
 		args:      []interface{}{},
-		//ARGV:      []string{},
 	}
 }
 
@@ -63,24 +127,15 @@ func (this *redisPipeliner) appendSet(ctx *processContext) interface{} {
 	c := 3
 	str := strGet()
 	str.append(strSetBeg)
-
 	for _, v := range ctx.fields {
 		this.args = append(this.args, v.GetName(), v.GetValue())
-		//this.ARGV = append(this.ARGV, fmt.Sprintf("ARGV[%d]", c), fmt.Sprintf("ARGV[%d]", c+1))
-		str.append(fmt.Sprintf(",ARGV[%d]", c)).append(fmt.Sprintf(",ARGV[%d]", c+1))
+		str.append(ARGV[c]).append(ARGV[c+1])
 		c += 2
 	}
 	str.append(strSetEnd)
 	ret := this.pipeLiner.Eval(str.toString(), this.keys, this.args...)
 	strPut(str)
 	return ret
-	/*for _, v := range ctx.fields {
-		this.args = append(this.args, v.GetName(), v.GetValue())
-		this.ARGV = append(this.ARGV, fmt.Sprintf("ARGV[%d]", c), fmt.Sprintf("ARGV[%d]", c+1))
-		c += 2
-	}
-	return this.pipeLiner.Eval(fmt.Sprintf(strSet, strings.Join(this.ARGV, ",")), this.keys, this.args...)
-	*/
 }
 
 func (this *redisPipeliner) readGetResult(rcmd *redisCmd) {
@@ -197,7 +252,6 @@ func (this *redisPipeliner) append(ctx *processContext) {
 
 		this.keys = this.keys[0:0]
 		this.args = this.args[0:0]
-		//this.ARGV = this.ARGV[0:0]
 
 		if cmdType == cmdCompareAndSet || cmdType == cmdCompareAndSetNx {
 			rcmd.ret = this.appendCompareAndSet(ctx)
