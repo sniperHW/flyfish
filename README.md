@@ -35,6 +35,25 @@
 	key=user:chuck filed:age = 7 field:phone = 34343
 
 
+## 表格配置
+
+表格元信息存储在table_conf表中，每一行代表一张表格信息，flyfish启动时会从数据库中读取元信息。
+
+表格配置规则如下：
+
+	字段1:类型:默认值,字段2:类型:默认值,字段3:类型:默认值
+
+
+例如有如下三张表，table_conf内容如下：
+
+__table__    __conf__              	
+
+	users1      age:int:0,phone:string:123,name:string:haha
+	counter     c:int:0
+	blob        data:blob:0
+
+对于blob类型会使用0长二进制初始化，所以这里填的默认值0只是占位符，没有实际作用。
+
 ## 命令支持
 
 	Get(table,key string,fields ...string)  //按需获取单条记录的字段
