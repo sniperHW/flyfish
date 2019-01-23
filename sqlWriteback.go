@@ -304,6 +304,7 @@ func addRecord(now int64, ctx *processContext) {
 		wb.table = ctx.getTable()
 		wb.uniKey = uniKey
 		wb.ckey = ctx.getCacheKey()
+		wb.expired = time.Now().Unix() + conf.WriteBackDelay
 		writeBackRecords[uniKey] = wb
 		if wb.writeBackFlag == write_back_insert || wb.writeBackFlag == write_back_update {
 			wb.fields = map[string]*proto.Field{}
