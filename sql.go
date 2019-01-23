@@ -123,10 +123,6 @@ func SQLInit(host string, port int, dbname string, user string, password string)
 		writeBackRecords = map[string]*record{}
 		writeBackEventQueue = util.NewBlockQueueWithName("writeBackEventQueue", conf.WriteBackEventQueueSize)
 
-		//t.db, _ = pgOpen(host, port, dbname, user, password)
-
-		db, _ := pgOpen(host, port, dbname, user, password)
-
 		sqlLoadQueue = util.NewBlockQueueWithName(fmt.Sprintf("sqlLoad"), conf.SqlLoadEventQueueSize)
 		for i := 0; i < conf.SqlLoadPoolSize; i++ {
 			db, _ := pgOpen(host, port, dbname, user, password)
