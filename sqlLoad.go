@@ -1,6 +1,7 @@
 package flyfish
 
 import (
+	"flyfish/conf"
 	"flyfish/errcode"
 	"flyfish/proto"
 	"github.com/jmoiron/sqlx"
@@ -25,12 +26,13 @@ type sqlLoader struct {
 	db      *sqlx.DB
 }
 
-func newSqlLoader(max int, host string, port int, dbname string, user string, password string) *sqlLoader {
+func newSqlLoader(db *sqlx.DB /*max int, host string, port int, dbname string, user string, password string*/) *sqlLoader {
 	t := &sqlLoader{
 		sqlGets: map[string]*sqlGet{},
-		max:     max,
+		max:     conf.SqlLoadPipeLineSize,
+		db:      db,
 	}
-	t.db, _ = pgOpen(host, port, dbname, user, password)
+	//t.db, _ = pgOpen(host, port, dbname, user, password)
 	return t
 }
 

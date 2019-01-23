@@ -123,9 +123,13 @@ func SQLInit(host string, port int, dbname string, user string, password string)
 		writeBackRecords = map[string]*record{}
 		writeBackEventQueue = util.NewBlockQueueWithName("writeBackEventQueue", conf.WriteBackEventQueueSize)
 
+		//t.db, _ = pgOpen(host, port, dbname, user, password)
+
+		db, _ := pgOpen(host, port, dbname, user, password)
+
 		sqlLoadQueue = util.NewBlockQueueWithName(fmt.Sprintf("sqlLoad"), conf.SqlLoadEventQueueSize)
 		for i := 0; i < conf.SqlLoadPoolSize; i++ {
-			go sqlRoutine(sqlLoadQueue, newSqlLoader(conf.SqlLoadPipeLineSize, host, port, dbname, user, password))
+			go sqlRoutine(sqlLoadQueue, newSqlLoader(db)) //newSqlLoader(conf.SqlLoadPipeLineSize, host, port, dbname, user, password))
 		}
 
 		sqlUpdateQueue = make([]*util.BlockQueue, conf.SqlUpdatePoolSize)
@@ -133,7 +137,7 @@ func SQLInit(host string, port int, dbname string, user string, password string)
 			writeBackWG.Add(1)
 			name := fmt.Sprintf("sqlUpdater:%d", i)
 			sqlUpdateQueue[i] = util.NewBlockQueueWithName(name, conf.SqlUpdateEventQueueSize)
-			go sqlRoutine(sqlUpdateQueue[i], newSqlUpdater(name, conf.SqlUpdatePipeLineSize, host, port, dbname, user, password))
+			go sqlRoutine(sqlUpdateQueue[i], newSqlUpdater(name, db)) //newSqlUpdater(name, conf.SqlUpdatePipeLineSize, host, port, dbname, user, password))
 		}
 
 		go writeBackRoutine()

@@ -85,12 +85,13 @@ type sqlUpdater struct {
 	writeFileAndBreak bool
 }
 
-func newSqlUpdater(name string, max int, host string, port int, dbname string, user string, password string) *sqlUpdater {
+func newSqlUpdater(name string, db *sqlx.DB /*name string, max int, host string, port int, dbname string, user string, password string*/) *sqlUpdater {
 	t := &sqlUpdater{
 		name:   name,
 		values: []interface{}{},
+		db:     db,
 	}
-	t.db, _ = pgOpen(host, port, dbname, user, password)
+	//t.db, _ = pgOpen(host, port, dbname, user, password)
 
 	return t
 }
