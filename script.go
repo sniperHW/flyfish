@@ -1,13 +1,15 @@
 package flyfish
 
 //只有key存在且版本号一致才执行hmset
-const strSet string = `local v = redis.call('hget',KEYS[1],ARGV[1])
+const strSetBeg string = `local v = redis.call('hget',KEYS[1],ARGV[1])
 if not v then
 return "not_exist"
 elseif tonumber(v)~=(ARGV[2]-1) then
 return "err_version"
 else
-redis.call('hmset',KEYS[1],%s)
+redis.call('hmset',KEYS[1]`
+
+const strSetEnd string = `)
 return "ok"
 end`
 
