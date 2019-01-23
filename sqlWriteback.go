@@ -363,14 +363,14 @@ type sqlUpdater struct {
 	db                *sqlx.DB
 	name              string
 	file              *os.File
+	values            []interface{}
 	writeFileAndBreak bool
 }
 
 func newSqlUpdater(name string, max int, host string, port int, dbname string, user string, password string) *sqlUpdater {
 	t := &sqlUpdater{
-		//max:  max,
-		//keys: []*cacheKey{},
-		name: name,
+		name:   name,
+		values: []interface{}{},
 	}
 	t.db, _ = pgOpen(host, port, dbname, user, password)
 
@@ -399,26 +399,54 @@ func (this *sqlUpdater) exec() {
 
 }
 
+func (this *sqlUpdater) resetValues() {
+	this.values = this.values[0:0]
+}
+
 func (this *sqlUpdater) doInsert(r *record) error {
-	str := r.ckey.meta.insertPrefix + "($1,$2"
-	values := []interface{}{r.key, r.fields["__version__"].GetValue()}
+	str := strGet()
+	defer func() {
+		this.resetValues()
+		strPut(str)
+	}()
+
+	str.append(r.ckey.meta.insertPrefix).append("($1,$2")
+	this.values = append(this.values, r.key, r.fields["__version__"].GetValue())
 	c := 2
 	for _, name := range r.ckey.meta.insertFieldOrder {
 		c++
-		str += fmt.Sprintf(",$%d", c)
-		values = append(values, r.fields[name].GetValue())
+		str.append(fmt.Sprintf(",$%d", c))
+		this.values = append(this.values, r.fields[name].GetValue())
 	}
-	str += ");"
-	_, err := this.db.Exec(str, values...)
+	_, err := this.db.Exec(str.toString(), this.values...)
 	return err
 }
 
 func (this *sqlUpdater) doUpdate(r *record) error {
-	str := fmt.Sprintf("update %s set ", r.table)
-	values := []interface{}{}
+
+	str := strGet()
+	defer func() {
+		this.resetValues()
+		strPut(str)
+	}()
+
+	str.append("update ").append(r.table).append(" set ")
 	i := 0
 	for _, v := range r.fields {
-		values = append(values, v.GetValue())
+		this.values = append(this.values, v.GetValue())
+		i++
+		if i == 1 {
+			str.append(fmt.Sprintf(" %s = $%d", v.GetName(), i))
+		} else {
+			str.append(fmt.Sprintf(",%s = $%d", v.GetName(), i))
+		}
+	}
+	str.append(fmt.Sprintf(" where __key__ = '%s';", r.table))
+	/*defer this.resetValues()
+	str := fmt.Sprintf("update %s set ", r.table)
+	i := 0
+	for _, v := range r.fields {
+		this.values = append(this.values, v.GetValue())
 		i++
 		if i == 1 {
 			str += fmt.Sprintf(" %s = $%d", v.GetName(), i)
@@ -427,23 +455,23 @@ func (this *sqlUpdater) doUpdate(r *record) error {
 		}
 	}
 	str += fmt.Sprintf(" where __key__ = '%s';", r.table)
-	_, err := this.db.Exec(str, values...)
+	*/
+	_, err := this.db.Exec(str.toString(), this.values...)
 	return err
 }
 
 func (this *sqlUpdater) doDelete(r *record) error {
-	str := fmt.Sprintf("delete from %s where __key__ = '%s';", r.table, r.key)
-	_, err := this.db.Exec(str)
+	str := strGet()
+	defer strPut(str)
+	str.append("delete from ").append(r.table).append(" where __key__ = '").append(r.key).append("';")
+	_, err := this.db.Exec(str.toString())
 	return err
 }
 
 func (this *sqlUpdater) append(v interface{}) {
 	wb := v.(*record)
 
-	defer func() {
-		recordPut(wb)
-		fmt.Println("append end")
-	}()
+	defer recordPut(wb)
 
 	var err error
 
@@ -468,7 +496,6 @@ func (this *sqlUpdater) append(v interface{}) {
 				/*if isStop() {
 					this.writeFileAndBreak = true
 					this.writeFile(s.toString())
-					strPut(s)
 					for _, v := range this.keys {
 						v.clearWriteBack()
 					}

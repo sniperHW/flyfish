@@ -47,7 +47,7 @@ func Set(c *kclient.Client) {
 			kclient.Debugln("set err:", ret.ErrCode, key)
 		}
 		atomic.AddInt32(&setCount, 1)
-		//Set(c)
+		Set(c)
 	})
 }
 
