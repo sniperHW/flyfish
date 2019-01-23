@@ -223,7 +223,7 @@ func (this *sqlUpdater) append(v interface{}) {
 	for {
 
 		if wb.writeBackFlag == write_back_update {
-			err = this.doUpdate(wb)
+			//err = this.doUpdate(wb)
 		} else if wb.writeBackFlag == write_back_insert {
 			err = this.doInsert(wb)
 		} else if wb.writeBackFlag == write_back_delete {
