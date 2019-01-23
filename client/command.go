@@ -32,6 +32,14 @@ func (this *Field) GetFloat() float64 {
 	return (*protocol.Field)(this).GetFloat()
 }
 
+func (this *Field) GetBlob() []byte {
+	return (*protocol.Field)(this).GetBlob()
+}
+
+func (this *Field) GetValue() interface{} {
+	return (*protocol.Field)(this).GetValue()
+}
+
 const (
 	wait_none   = 0
 	wait_send   = 1

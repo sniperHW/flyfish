@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"reflect"
-	"strconv"
 )
 
 func (m *Field) GetType() ValueType {
@@ -54,7 +53,7 @@ func (m *Field) GetString() string {
 func (m *Field) GetBlob() []byte {
 
 	if !m.IsBlob() {
-		panic("v is not string")
+		panic("v is not blob")
 	}
 
 	return m.V.GetB()
@@ -113,20 +112,11 @@ func (m *Field) SetFloat(v float64) {
 	m.V.F = proto.Float64(v)
 }
 
-func (m *Field) ToSqlStr() string {
-	switch m.GetType() {
-	case ValueType_string:
-		return fmt.Sprintf("'%s'", m.GetString())
-	case ValueType_float:
-		return fmt.Sprintf("%f", m.GetFloat())
-	case ValueType_int:
-		return strconv.FormatInt(m.GetInt(), 10)
-	case ValueType_uint:
-		return strconv.FormatUint(m.GetUint(), 10)
-	default:
-		panic("invaild value type")
+func (m *Field) SetBlob(v []byte) {
+	if !m.IsBlob() {
+		panic("v is not Blob")
 	}
-	return ""
+	m.V.B = v
 }
 
 func (m *Field) Equal(o *Field) bool {

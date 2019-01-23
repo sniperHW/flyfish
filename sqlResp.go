@@ -80,6 +80,7 @@ func onSqlLoadOKSet(ctx *processContext) {
 		} else {
 			ctx.fields["__version__"] = proto.PackField("__version__", version+1)
 			ctx.fields[cmd.cns.oldV.GetName()] = cmd.cns.newV
+			Debugln("cmdCompareAndSet", cmd.cns.oldV, cmd.cns.newV, ctx.fields[cmd.cns.oldV.GetName()].GetValue())
 			ctx.writeBackFlag = write_back_update //sql中存在,使用update回写
 			ctx.redisFlag = redis_set
 		}
