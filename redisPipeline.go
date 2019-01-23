@@ -14,10 +14,19 @@ type redisCmd struct {
 	ret    interface{}
 }
 
+/*
+	keys := []string{ctx.getUniKey()}
+	args := []interface{}{"__version__", ctx.fields["__version__"].GetValue()}
+	ARGV := []string{}
+*/
+
 type redisPipeliner struct {
 	pipeLiner redis.Pipeliner
 	cmds      []*redisCmd
 	max       int
+	keys      []string
+	args      []interface{}
+	ARGV      []string
 }
 
 func newRedisPipeliner(max int) *redisPipeliner {
@@ -25,45 +34,58 @@ func newRedisPipeliner(max int) *redisPipeliner {
 		pipeLiner: cli.Pipeline(),
 		cmds:      []*redisCmd{},
 		max:       max,
+		keys:      []string{},
+		args:      []interface{}{},
+		ARGV:      []string{},
 	}
 }
 
 func (this *redisPipeliner) appendIncrBy(ctx *processContext) interface{} {
 	cmd := ctx.getCmd()
-	keys := []string{ctx.getUniKey()}
+	/*keys := []string{ctx.getUniKey()}
 	args := []interface{}{
 		"__version__",
 		ctx.fields["__version__"].GetValue(),
 		cmd.incrDecr.GetName(),
 		cmd.incrDecr.GetValue(),
-	}
-	return this.pipeLiner.Eval(strIncrBy, keys, args...)
+	}*/
+
+	this.keys = append(this.keys, ctx.getUniKey())
+	this.args = append(this.args, "__version__", ctx.fields["__version__"].GetValue(), cmd.incrDecr.GetName(), cmd.incrDecr.GetValue())
+	return this.pipeLiner.Eval(strIncrBy, this.keys, this.args...)
 }
 
 func (this *redisPipeliner) appendDecrBy(ctx *processContext) interface{} {
 	Debugln("appendDecrBy")
 	cmd := ctx.getCmd()
-	keys := []string{ctx.getUniKey()}
+	/*keys := []string{ctx.getUniKey()}
 	args := []interface{}{
 		"__version__",
 		ctx.fields["__version__"].GetValue(),
 		cmd.incrDecr.GetName(),
 		cmd.incrDecr.GetValue(),
-	}
-	return this.pipeLiner.Eval(strDecrBy, keys, args...)
+	}*/
+
+	this.keys = append(this.keys, ctx.getUniKey())
+	this.args = append(this.args, "__version__", ctx.fields["__version__"].GetValue(), cmd.incrDecr.GetName(), cmd.incrDecr.GetValue())
+
+	return this.pipeLiner.Eval(strDecrBy, this.keys, this.args...)
 }
 
 func (this *redisPipeliner) appendCompareAndSet(ctx *processContext) interface{} {
 	//ARGV[1]:filed_name,ARGV[2]:old_value,ARGV[3]:new_value,ARGV[4]:__version__,ARGV[5]:__version__value
 	cmd := ctx.getCmd()
-	keys := []string{ctx.getUniKey()}
+	/*keys := []string{ctx.getUniKey()}
 	args := []interface{}{}
 	args = append(args, cmd.cns.oldV.GetName(), cmd.cns.oldV.GetValue(), cmd.cns.newV.GetValue(), "__version__", ctx.fields["__version__"].GetValue())
-	return this.pipeLiner.Eval(strCompareAndSet, keys, args...)
+	*/
+	this.keys = append(this.keys, ctx.getUniKey())
+	this.args = append(this.args, cmd.cns.oldV.GetName(), cmd.cns.oldV.GetValue(), cmd.cns.newV.GetValue(), "__version__", ctx.fields["__version__"].GetValue())
+	return this.pipeLiner.Eval(strCompareAndSet, this.keys, this.args...)
 }
 
 func (this *redisPipeliner) appendSet(ctx *processContext) interface{} {
-	keys := []string{ctx.getUniKey()}
+	/*keys := []string{ctx.getUniKey()}
 	args := []interface{}{"__version__", ctx.fields["__version__"].GetValue()}
 	ARGV := []string{}
 	c := 3
@@ -71,8 +93,17 @@ func (this *redisPipeliner) appendSet(ctx *processContext) interface{} {
 		args = append(args, v.GetName(), v.GetValue())
 		ARGV = append(ARGV, fmt.Sprintf("ARGV[%d]", c), fmt.Sprintf("ARGV[%d]", c+1))
 		c += 2
+	}*/
+
+	this.keys = append(this.keys, ctx.getUniKey())
+	this.args = append(this.args, "__version__", ctx.fields["__version__"].GetValue())
+	c := 3
+	for _, v := range ctx.fields {
+		this.args = append(this.args, v.GetName(), v.GetValue())
+		this.ARGV = append(this.ARGV, fmt.Sprintf("ARGV[%d]", c), fmt.Sprintf("ARGV[%d]", c+1))
+		c += 2
 	}
-	return this.pipeLiner.Eval(fmt.Sprintf(strSet, strings.Join(ARGV, ",")), keys, args...)
+	return this.pipeLiner.Eval(fmt.Sprintf(strSet, strings.Join(this.ARGV, ",")), this.keys, this.args...)
 }
 
 func (this *redisPipeliner) readGetResult(rcmd *redisCmd) {
@@ -179,14 +210,24 @@ func (this *redisPipeliner) append(ctx *processContext) {
 		}
 		rcmd.ret = this.pipeLiner.HMGet(ctx.getUniKey(), rcmd.fields...)
 	} else if ctx.redisFlag == redis_del {
-		keys := []string{ctx.getUniKey()}
+		this.keys = this.keys[0:0]
+		this.args = this.args[0:0]
+		//this.ARGV = this.ARGV[0:0]
+		this.keys = append(this.keys, ctx.getUniKey())
+		this.args = append(this.args, "__version__", ctx.fields["__version__"].GetValue())
+		/*keys := []string{ctx.getUniKey()}
 		args := []interface{}{
 			"__version__",
 			ctx.fields["__version__"].GetValue(),
-		}
-		rcmd.ret = this.pipeLiner.Eval(strDel, keys, args...)
+		}*/
+		rcmd.ret = this.pipeLiner.Eval(strDel, this.keys, this.args...)
 	} else if ctx.redisFlag == redis_set_script {
 		cmdType := ctx.getCmdType()
+
+		this.keys = this.keys[0:0]
+		this.args = this.args[0:0]
+		this.ARGV = this.ARGV[0:0]
+
 		if cmdType == cmdCompareAndSet || cmdType == cmdCompareAndSetNx {
 			rcmd.ret = this.appendCompareAndSet(ctx)
 		} else if cmdType == cmdSet {
