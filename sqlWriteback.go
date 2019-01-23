@@ -56,6 +56,7 @@ type record struct {
 	ckey          *cacheKey
 	fields        map[string]*proto.Field //所有命令的字段聚合
 	expired       int64
+	writeBackVer  int64
 }
 
 var recordPool = sync.Pool{
