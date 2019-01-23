@@ -6,7 +6,7 @@ import (
 	"flyfish/proto"
 	"fmt"
 	"github.com/jmoiron/sqlx"
-	"github.com/sniperHW/kendynet"
+	//"github.com/sniperHW/kendynet"
 	"net"
 	"os"
 	"sync"
@@ -77,6 +77,7 @@ func recordPut(r *record) {
 	recordPool.Put(r)
 }
 
+/*
 func (this *record) appendDel(s *str) int {
 
 	oldLen := s.len
@@ -354,6 +355,132 @@ func (this *sqlUpdater) exec() {
 			}
 		}
 		break
+	}
+
+}*/
+
+type sqlUpdater struct {
+	db                *sqlx.DB
+	name              string
+	file              *os.File
+	writeFileAndBreak bool
+}
+
+func newSqlUpdater(name string, max int, host string, port int, dbname string, user string, password string) *sqlUpdater {
+	t := &sqlUpdater{
+		//max:  max,
+		//keys: []*cacheKey{},
+		name: name,
+	}
+	t.db, _ = pgOpen(host, port, dbname, user, password)
+
+	return t
+}
+
+func isRetryError(err error) bool {
+	if err == driver.ErrBadConn {
+		return true
+	} else {
+		switch err.(type) {
+		case *net.OpError:
+			return true
+			break
+		case net.Error:
+			return true
+			break
+		default:
+			break
+		}
+	}
+	return false
+}
+
+func (this *sqlUpdater) exec() {
+
+}
+
+func (this *sqlUpdater) doInsert(r *record) error {
+	str := r.ckey.meta.insertPrefix + "($1,$2"
+	values := []interface{}{r.key, r.fields["__version__"].GetValue()}
+	c := 2
+	for _, name := range r.ckey.meta.insertFieldOrder {
+		c++
+		str += fmt.Sprintf(",$%d", c)
+		values = append(values, r.fields[name].GetValue())
+	}
+	str += ");"
+	_, err := this.db.Exec(str, values...)
+	return err
+}
+
+func (this *sqlUpdater) doUpdate(r *record) error {
+	str := fmt.Sprintf("update %s set ", r.table)
+	values := []interface{}{}
+	i := 0
+	for _, v := range r.fields {
+		values = append(values, v.GetValue())
+		i++
+		if i == 1 {
+			str += fmt.Sprintf(" %s = $%d", v.GetName(), i)
+		} else {
+			str += fmt.Sprintf(",%s = $%d", v.GetName(), i)
+		}
+	}
+	str += fmt.Sprintf(" where __key__ = '%s';", r.table)
+	_, err := this.db.Exec(str, values...)
+	return err
+}
+
+func (this *sqlUpdater) doDelete(r *record) error {
+	str := fmt.Sprintf("delete from %s where __key__ = '%s';", r.table, r.key)
+	_, err := this.db.Exec(str)
+	return err
+}
+
+func (this *sqlUpdater) append(v interface{}) {
+	wb := v.(*record)
+
+	defer func() {
+		recordPut(wb)
+		fmt.Println("append end")
+	}()
+
+	var err error
+
+	for {
+
+		if wb.writeBackFlag == write_back_update {
+			err = this.doUpdate(wb)
+		} else if wb.writeBackFlag == write_back_insert {
+			err = this.doInsert(wb)
+		} else if wb.writeBackFlag == write_back_delete {
+			err = this.doDelete(wb)
+		} else {
+			return
+		}
+
+		if nil == err {
+			wb.ckey.clearWriteBack()
+			return
+		} else {
+			if isRetryError(err) {
+				Errorln("sqlUpdater exec error:", err)
+				/*if isStop() {
+					this.writeFileAndBreak = true
+					this.writeFile(s.toString())
+					strPut(s)
+					for _, v := range this.keys {
+						v.clearWriteBack()
+					}
+					break
+				}*/
+				//休眠一秒重试
+				time.Sleep(time.Second)
+			} else {
+				Errorln("sqlUpdater exec error:", err)
+				return
+			}
+		}
 	}
 
 }

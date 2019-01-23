@@ -47,7 +47,7 @@ func Set(c *kclient.Client) {
 			kclient.Debugln("set err:", ret.ErrCode, key)
 		}
 		atomic.AddInt32(&setCount, 1)
-		Set(c)
+		//Set(c)
 	})
 }
 
@@ -92,19 +92,19 @@ func main() {
 
 	services := []string{"127.0.0.1:10012"} //,"127.0.0.1:10013"}
 
-	for j := 0; j < 4; j++ {
+	for j := 0; j < 10; j++ {
 		c := kclient.OpenClient(services) //eventQueue)
-		for i := 0; i < 20; i++ {
+		for i := 0; i < 10; i++ {
 			Set(c)
 		}
 	}
 
-	for j := 0; j < 10; j++ {
+	/*for j := 0; j < 10; j++ {
 		c := kclient.OpenClient(services) //eventQueue)
 		for i := 0; i < 20; i++ {
 			Get(c)
 		}
-	}
+	}*/
 
 	go func() {
 		for {
