@@ -202,7 +202,8 @@ func (this *sqlUpdater) doDelete(r *record) error {
 }
 
 func (this *sqlUpdater) appendDefer(wb *record) {
-	wb.ckey.clearWriteBack()
+	//为了防止错误重置writeback标记，需要核对版本号
+	wb.ckey.clearWriteBack(wb.writeBackVer)
 	recordPut(wb)
 }
 
@@ -300,7 +301,6 @@ func addRecord(now int64, ctx *processContext) {
 		wb.table = ctx.getTable()
 		wb.uniKey = uniKey
 		wb.ckey = ctx.getCacheKey()
-
 		writeBackRecords[uniKey] = wb
 		if wb.writeBackFlag == write_back_insert || wb.writeBackFlag == write_back_update {
 			wb.fields = map[string]*proto.Field{}
@@ -388,6 +388,8 @@ func addRecord(now int64, ctx *processContext) {
 
 		}
 	}
+	//记录版本号
+	wb.writeBackVer = wb.ckey.writeBackVer
 }
 
 func writeBackRoutine() {

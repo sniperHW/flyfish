@@ -2,7 +2,7 @@ package flyfish
 
 import (
 	"flyfish/errcode"
-	protocol "flyfish/proto"
+	"flyfish/proto"
 	"fmt"
 	"github.com/go-redis/redis"
 	"strings"
@@ -135,7 +135,7 @@ func (this *redisPipeliner) readSetScriptResult(rcmd *redisCmd) {
 				rcmd.ctx.errno = errcode.ERR_STALE_CACHE
 				break
 			case int64:
-				rcmd.ctx.fields[cmd.incrDecr.GetName()] = protocol.PackField(cmd.incrDecr.GetName(), r.(int64))
+				rcmd.ctx.fields[cmd.incrDecr.GetName()] = proto.PackField(cmd.incrDecr.GetName(), r.(int64))
 				break
 			default:
 				rcmd.ctx.errno = errcode.ERR_REDIS

@@ -1,12 +1,9 @@
 package flyfish
 
 import (
-	"github.com/jmoiron/sqlx"
-	//"database/sql"
-	//"database/sql/driver"
 	"fmt"
+	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
-	//"os"
 )
 
 func pgOpen(host string, port int, dbname string, user string, password string) (*sqlx.DB, error) {

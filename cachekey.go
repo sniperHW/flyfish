@@ -21,16 +21,17 @@ var (
 )
 
 type cacheKey struct {
-	uniKey      string
-	idx         uint32
-	version     int64
-	status      int
-	locked      bool //操作是否被锁定
-	mtx         sync.Mutex
-	cmdQueue    *list.List
-	meta        *table_meta
-	writeBacked int32 //正在回写
-	lastAccess  int64
+	uniKey       string
+	idx          uint32
+	version      int64
+	status       int
+	locked       bool //操作是否被锁定
+	mtx          sync.Mutex
+	cmdQueue     *list.List
+	meta         *table_meta
+	writeBacked  bool //正在回写
+	writeBackVer int64
+	lastAccess   int64
 }
 
 type cacheKeyMgr struct {
@@ -77,15 +78,24 @@ func (this *cacheKey) clearCmd() {
 }
 
 func (this *cacheKey) setWriteBack() {
-	atomic.StoreInt32(&this.writeBacked, 1)
+	defer this.mtx.Unlock()
+	this.mtx.Lock()
+	this.writeBacked = true
+	this.writeBackVer++
 }
 
-func (this *cacheKey) clearWriteBack() {
-	atomic.StoreInt32(&this.writeBacked, 0)
+func (this *cacheKey) clearWriteBack(ver int64) {
+	defer this.mtx.Unlock()
+	this.mtx.Lock()
+	if this.writeBackVer == ver {
+		this.writeBacked = false
+	}
 }
 
 func (this *cacheKey) isWriteBack() bool {
-	return atomic.LoadInt32(&this.writeBacked) == 1
+	defer this.mtx.Unlock()
+	this.mtx.Lock()
+	return this.writeBacked
 }
 
 func (this *cacheKey) updateLRU() {
