@@ -118,6 +118,21 @@ func isStop() bool {
 
 var writeBackWG sync.WaitGroup
 
+func waitCondition(fn func() bool) {
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		for {
+			time.Sleep(time.Millisecond * 100)
+			if fn() {
+				wg.Done()
+				break
+			}
+		}
+	}()
+	wg.Wait()
+}
+
 func Stop() {
 
 	//第一步关闭监听
@@ -131,25 +146,27 @@ func Stop() {
 	Infoln("ShutdownRead ok")
 
 	//等待redis请求和命令执行完成
-
-	wg := sync.WaitGroup{}
-
-	wg.Add(1)
-	go func() {
-		for {
-			time.Sleep(time.Millisecond * 100)
-			if atomic.LoadInt32(&redisReqCount) == 0 && atomic.LoadInt32(&cmdCount) == 0 {
-				wg.Done()
-				break
-			}
+	waitCondition(func() bool {
+		if atomic.LoadInt32(&redisReqCount) == 0 && atomic.LoadInt32(&cmdCount) == 0 {
+			return true
+		} else {
+			return false
 		}
-	}()
-	wg.Wait()
+	})
 
 	Infoln("redis finish")
 
 	//强制执行回写
 	notiForceWriteBack()
+
+	//等待所有待回写记录被清空
+	waitCondition(func() bool {
+		if len(writeBackRecords) == 0 {
+			return true
+		} else {
+			return false
+		}
+	})
 
 	//等待回写执行完毕
 	closeWriteBack()
@@ -165,17 +182,13 @@ func Stop() {
 		return true
 	})
 
-	wg.Add(1)
-	go func() {
-		for {
-			time.Sleep(time.Millisecond * 100)
-			if atomic.LoadInt32(&clientCount) == 0 {
-				wg.Done()
-				break
-			}
+	waitCondition(func() bool {
+		if atomic.LoadInt32(&clientCount) == 0 {
+			return true
+		} else {
+			return false
 		}
-	}()
-	wg.Wait()
+	})
 
 	Infoln("flyfish stop ok")
 
