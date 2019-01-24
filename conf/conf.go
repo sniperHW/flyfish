@@ -44,6 +44,7 @@ var LogPrefix = "flyfish"
 var LogLevel = "info"
 var EnableLogStdout = false
 var BackDir = "bak"
+var SqlType = "pgsql"
 
 var parser map[string]func(string)
 

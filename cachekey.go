@@ -120,6 +120,15 @@ func newCacheKey(table string, uniKey string) *cacheKey {
 }
 
 func (this *cacheKey) convertStr(fieldName string, value string) *proto.Field {
+
+	if fieldName == "__version__" {
+		i, err := strconv.ParseInt(value, 10, 64)
+		if nil != err {
+			return nil
+		}
+		return proto.PackField(fieldName, i)
+	}
+
 	m, ok := this.meta.fieldMetas[fieldName]
 	if !ok {
 		return nil

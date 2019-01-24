@@ -4,13 +4,295 @@ import (
 	"database/sql/driver"
 	"flyfish/conf"
 	"flyfish/proto"
-	"fmt"
+	//"fmt"
 	"github.com/jmoiron/sqlx"
 	"net"
 	"os"
 	"sync"
 	"time"
 )
+
+var mysqlInsertPlaceHolder = []string{
+	"?",
+	"?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+	",?",
+}
+
+var pgInsertPlaceHolder = []string{
+	"$0",
+	"$1",
+	",$2",
+	",$3",
+	",$4",
+	",$5",
+	",$6",
+	",$7",
+	",$8",
+	",$9",
+	",$10",
+	",$11",
+	",$12",
+	",$13",
+	",$14",
+	",$15",
+	",$16",
+	",$17",
+	",$18",
+	",$19",
+	",$20",
+	",$21",
+	",$22",
+	",$23",
+	",$24",
+	",$25",
+	",$26",
+	",$27",
+	",$28",
+	",$29",
+	",$30",
+	",$31",
+	",$32",
+	",$33",
+	",$34",
+	",$35",
+	",$36",
+	",$37",
+	",$38",
+	",$39",
+	",$40",
+	",$41",
+	",$42",
+	",$43",
+	",$44",
+	",$45",
+	",$46",
+	",$47",
+	",$48",
+	",$49",
+	",$50",
+	",$51",
+	",$52",
+	",$53",
+	",$54",
+	",$55",
+	",$56",
+	",$57",
+	",$58",
+	",$59",
+	",$60",
+	",$61",
+	",$62",
+	",$63",
+	",$64",
+}
+
+var mysqlUpdatePlaceHolder = []string{
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+	"?",
+}
+
+var pgUpdatePlaceHolder = []string{
+	"$0",
+	"$1",
+	"$2",
+	"$3",
+	"$4",
+	"$5",
+	"$6",
+	"$7",
+	"$8",
+	"$9",
+	"$10",
+	"$11",
+	"$12",
+	"$13",
+	"$14",
+	"$15",
+	"$16",
+	"$17",
+	"$18",
+	"$19",
+	"$20",
+	"$21",
+	"$22",
+	"$23",
+	"$24",
+	"$25",
+	"$26",
+	"$27",
+	"$28",
+	"$29",
+	"$30",
+	"$31",
+	"$32",
+	"$33",
+	"$34",
+	"$35",
+	"$36",
+	"$37",
+	"$38",
+	"$39",
+	"$40",
+	"$41",
+	"$42",
+	"$43",
+	"$44",
+	"$45",
+	"$46",
+	"$47",
+	"$48",
+	"$49",
+	"$50",
+	"$51",
+	"$52",
+	"$53",
+	"$54",
+	"$55",
+	"$56",
+	"$57",
+	"$58",
+	"$59",
+	"$60",
+	"$61",
+	"$62",
+	"$63",
+	"$64",
+}
+
+var insertPlaceHolder []string
+
+func getInsertPlaceHolder(c int) string {
+	return insertPlaceHolder[c]
+}
+
+var updatePlaceHolder []string
+
+func getUpdatePlaceHolder(c int) string {
+	return updatePlaceHolder[c]
+}
 
 type writeBackBarrior struct {
 	counter int
@@ -85,15 +367,12 @@ type sqlUpdater struct {
 	writeFileAndBreak bool
 }
 
-func newSqlUpdater(name string, db *sqlx.DB /*name string, max int, host string, port int, dbname string, user string, password string*/) *sqlUpdater {
-	t := &sqlUpdater{
+func newSqlUpdater(name string, db *sqlx.DB) *sqlUpdater {
+	return &sqlUpdater{
 		name:   name,
 		values: []interface{}{},
 		db:     db,
 	}
-	//t.db, _ = pgOpen(host, port, dbname, user, password)
-
-	return t
 }
 
 func (this *sqlUpdater) writeFile(r *record) {
@@ -158,15 +437,16 @@ func (this *sqlUpdater) doInsert(r *record) error {
 		strPut(str)
 	}()
 
-	str.append(r.ckey.meta.insertPrefix).append("($1,$2")
+	str.append(r.ckey.meta.insertPrefix).append(getInsertPlaceHolder(1)).append(getInsertPlaceHolder(2)) //append("($1,$2")
 	this.values = append(this.values, r.key, r.fields["__version__"].GetValue())
 	c := 2
 	for _, name := range r.ckey.meta.insertFieldOrder {
 		c++
-		str.append(fmt.Sprintf(",$%d", c))
+		//str.append(fmt.Sprintf(",$%d", c))
+		str.append(getInsertPlaceHolder(c))
 		this.values = append(this.values, r.fields[name].GetValue())
 	}
-	str.append(")")
+	str.append(");")
 	_, err := this.db.Exec(str.toString(), this.values...)
 
 	return err
@@ -186,12 +466,15 @@ func (this *sqlUpdater) doUpdate(r *record) error {
 		this.values = append(this.values, v.GetValue())
 		i++
 		if i == 1 {
-			str.append(fmt.Sprintf(" %s = $%d", v.GetName(), i))
+			//str.append(fmt.Sprintf(" %s = $%d", v.GetName(), i))
+			str.append(v.GetName()).append("=").append(getUpdatePlaceHolder(i))
 		} else {
-			str.append(fmt.Sprintf(",%s = $%d", v.GetName(), i))
+			str.append(",").append(v.GetName()).append("=").append(getUpdatePlaceHolder(i))
+			//str.append(fmt.Sprintf(",%s = $%d", v.GetName(), i))
 		}
 	}
-	str.append(fmt.Sprintf(" where __key__ = '%s';", r.key))
+	str.append(" where __key__ = '").append(r.key).append("';")
+	//str.append(fmt.Sprintf(" where __key__ = '%s';", r.key))
 	_, err := this.db.Exec(str.toString(), this.values...)
 	return err
 }

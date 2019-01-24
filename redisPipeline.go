@@ -13,8 +13,8 @@ type redisCmd struct {
 }
 
 var ARGV = []string{
-	",ARGV[0]",
-	",ARGV[1]",
+	"ARGV[0]",
+	"ARGV[1]",
 	",ARGV[2]",
 	",ARGV[3]",
 	",ARGV[4]",
@@ -298,5 +298,5 @@ func (this *redisPipeliner) exec() {
 		}
 		onRedisResp(v.ctx)
 	}
-	this.cmds = []*redisCmd{}
+	this.cmds = this.cmds[0:0]
 }

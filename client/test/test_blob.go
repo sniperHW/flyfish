@@ -8,7 +8,7 @@ import (
 )
 
 func Get(c *kclient.Client) {
-	get := c.Get("blob", "blob4", "data")
+	get := c.Get("blob", "blob1", "data")
 
 	get.Exec(func(ret *kclient.SliceResult) {
 		if ret.ErrCode == errcode.ERR_OK {
@@ -23,9 +23,9 @@ func Set(c *kclient.Client) {
 	fields := map[string]interface{}{}
 	//fields["data"] = ([]byte)("blob3")
 
-	fields["name"] = "blob4"
+	fields["name"] = "blob5"
 
-	set := c.Set("blob", "blob4", fields)
+	set := c.Set("blob", "blob5", fields)
 	set.Exec(func(ret *kclient.StatusResult) {
 		if ret.ErrCode != errcode.ERR_OK {
 			fmt.Println(errcode.GetErrorStr(ret.ErrCode))

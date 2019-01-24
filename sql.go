@@ -116,6 +116,14 @@ func sqlRoutine(queue *util.BlockQueue, pipeliner sqlPipeliner) {
 func SQLInit(host string, port int, dbname string, user string, password string) bool {
 	sql_once.Do(func() {
 
+		if conf.SqlType == "pgsql" {
+			insertPlaceHolder = pgInsertPlaceHolder
+			updatePlaceHolder = pgUpdatePlaceHolder
+		} else {
+			insertPlaceHolder = mysqlInsertPlaceHolder
+			updatePlaceHolder = mysqlUpdatePlaceHolder
+		}
+
 		pendingWB = list.New()
 
 		writeBackBarrior_.cond = sync.NewCond(&writeBackBarrior_.mtx)

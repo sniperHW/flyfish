@@ -26,14 +26,12 @@ type sqlLoader struct {
 	db      *sqlx.DB
 }
 
-func newSqlLoader(db *sqlx.DB /*max int, host string, port int, dbname string, user string, password string*/) *sqlLoader {
-	t := &sqlLoader{
+func newSqlLoader(db *sqlx.DB) *sqlLoader {
+	return &sqlLoader{
 		sqlGets: map[string]*sqlGet{},
 		max:     conf.SqlLoadPipeLineSize,
 		db:      db,
 	}
-	//t.db, _ = pgOpen(host, port, dbname, user, password)
-	return t
 }
 
 func (this *sqlLoader) Reset() {
