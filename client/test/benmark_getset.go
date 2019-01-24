@@ -99,12 +99,12 @@ func main() {
 		}
 	}
 
-	/*for j := 0; j < 10; j++ {
+	for j := 0; j < 10; j++ {
 		c := kclient.OpenClient(services) //eventQueue)
 		for i := 0; i < 20; i++ {
 			Get(c)
 		}
-	}*/
+	}
 
 	go func() {
 		for {

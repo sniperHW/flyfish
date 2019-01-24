@@ -118,8 +118,13 @@ func (this *cacheKey) processSet(ctx *processContext, cmd *command) bool {
 			ctx.fields["__version__"] = proto.PackField("__version__", this.version+1)
 			if this.status == cache_ok {
 				ctx.writeBackFlag = write_back_update //数据存在执行update
-				//optimize set ctx.redisFlag = redis_set_script
-				ctx.redisFlag = redis_set
+				/*
+				 *    使用redis_set_script的原因
+				 *    redis设置为缓存不写磁盘模式，一旦redis崩溃后重启内存中数据将会丢失，使得flyfish与redis不一致(flyfish标记cache_ok,redis中却没有)
+				 *    为了能正确处理这种情况，需要执行lua脚本进行一次验证，如果验证不通过重置flyfish的标记
+				 */
+				ctx.redisFlag = redis_set_script
+				//ctx.redisFlag = redis_set
 			} else {
 				ctx.writeBackFlag = write_back_insert //数据不存在执行insert
 				ctx.redisFlag = redis_set
@@ -370,15 +375,6 @@ func (this *cacheKey) process_(noWait bool, cmd ...*command) {
 	}
 
 	if this.status == cache_ok || this.status == cache_missing {
-		/*if lastCmdType == cmdGet {
-			ctx.redisFlag = redis_get
-		} else if lastCmdType == cmdDel {
-			ctx.redisFlag = redis_del
-		} else if this.status == cache_ok {
-			ctx.redisFlag = redis_set_script
-		} else {
-			ctx.redisFlag = redis_set
-		}*/
 		//投递redis请求
 		if noWait {
 			pushRedisNoWait(ctx)
