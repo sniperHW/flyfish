@@ -118,7 +118,8 @@ func (this *cacheKey) processSet(ctx *processContext, cmd *command) bool {
 			ctx.fields["__version__"] = proto.PackField("__version__", this.version+1)
 			if this.status == cache_ok {
 				ctx.writeBackFlag = write_back_update //数据存在执行update
-				ctx.redisFlag = redis_set_script
+				//optimize set ctx.redisFlag = redis_set_script
+				ctx.redisFlag = redis_set
 			} else {
 				ctx.writeBackFlag = write_back_insert //数据不存在执行insert
 				ctx.redisFlag = redis_set
@@ -369,7 +370,7 @@ func (this *cacheKey) process_(noWait bool, cmd ...*command) {
 	}
 
 	if this.status == cache_ok || this.status == cache_missing {
-		if lastCmdType == cmdGet {
+		/*if lastCmdType == cmdGet {
 			ctx.redisFlag = redis_get
 		} else if lastCmdType == cmdDel {
 			ctx.redisFlag = redis_del
@@ -377,7 +378,7 @@ func (this *cacheKey) process_(noWait bool, cmd ...*command) {
 			ctx.redisFlag = redis_set_script
 		} else {
 			ctx.redisFlag = redis_set
-		}
+		}*/
 		//投递redis请求
 		if noWait {
 			pushRedisNoWait(ctx)
