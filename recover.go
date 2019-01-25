@@ -41,7 +41,7 @@ func marshalRecord(r *record) *kendynet.ByteBuffer {
 	} else if r.writeBackFlag == write_back_delete {
 		tt = proto.SqlType_insert.Enum()
 	} else {
-		panic("invaild writeBackFlag")
+		Fatalln("[marshalRecord] invaild writeBackFlag", *r)
 	}
 
 	pbRecord := &proto.Record{
@@ -57,7 +57,7 @@ func marshalRecord(r *record) *kendynet.ByteBuffer {
 
 	bytes, err := pb.Marshal(pbRecord)
 	if err != nil {
-		panic(err)
+		Fatalln("[marshalRecord]", err, *r)
 	}
 
 	/*
@@ -86,11 +86,11 @@ func backupRecord(r *record) {
 			if os.IsNotExist(err) {
 				f, err = os.Create(backFilePath)
 				if err != nil {
-					panic(err)
+					Fatalln("[backupRecord]", err)
 					return
 				}
 			} else {
-				panic(err)
+				Fatalln("[backupRecord]", err)
 				return
 			}
 		}
@@ -114,13 +114,13 @@ func replayRecord(recoverUpdater *sqlUpdater, offset int64, data []byte) {
 
 	//校验数据
 	if checkSum != crc64.Checksum(data[:len(data)-size_checksum], crc64Table) {
-		panic("invaild record:checkSum error")
+		Fatalln("invaild record : checkSum error ,offset:", offset)
 	}
 
 	pbRecord := &proto.Record{}
 
 	if err = pb.Unmarshal(data[:len(data)-size_checksum], pbRecord); err != nil {
-		panic(err)
+		Fatalln("replayRecord error ,offset:", offset, err)
 	}
 
 	fmt.Println(pbRecord)
@@ -134,7 +134,7 @@ func replayRecord(recoverUpdater *sqlUpdater, offset int64, data []byte) {
 	meta := getMetaByTable(r.table)
 
 	if nil == meta {
-		panic("invaild record")
+		Fatalln("replayRecord error invaild table ,offset:", offset, r.table)
 	}
 
 	for _, v := range pbRecord.GetFields() {
@@ -152,11 +152,11 @@ func replayRecord(recoverUpdater *sqlUpdater, offset int64, data []byte) {
 		r.writeBackFlag = write_back_delete
 		err = recoverUpdater.doDelete(r)
 	} else {
-		panic("invaild tt")
+		Fatalln("replayRecord invaild tt,offset:", offset)
 	}
 
 	if err != nil {
-		panic(err)
+		Fatalln("replayRecord sqlError,offset:", offset, err)
 	}
 
 	//清除标记
@@ -183,14 +183,14 @@ func doRecover(recoverUpdater *sqlUpdater) {
 		count, err := backupFile.ReadAt(head, rOffset)
 		if err == io.EOF {
 			ok = true
-			fmt.Println("EOF")
+			Infoln("Recover ok")
 			return
 		}
 		if err != nil {
 			panic(err)
 		}
 		if count != size_head {
-			panic("invaild record")
+			Fatalln("invaild record,offset", rOffset)
 		}
 		if head[0] == byte(0) {
 			//无效数据，切换到下一条
@@ -201,10 +201,10 @@ func doRecover(recoverUpdater *sqlUpdater) {
 			data := make([]byte, size)
 			count, err := backupFile.ReadAt(data, rOffset)
 			if err != nil {
-				panic(err)
+				Fatalln("invaild record,offset", rOffset)
 			}
 			if count != size {
-				panic("invaild record")
+				Fatalln("invaild record,offset", rOffset)
 			}
 			replayRecord(recoverUpdater, rOffset, data)
 			rOffset += int64(size)
@@ -227,7 +227,7 @@ func Recover() {
 		if os.IsNotExist(err) {
 			return
 		} else {
-			panic(err)
+			Fatalln("Recover error:", err)
 		}
 	} else {
 		backupFile = f

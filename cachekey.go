@@ -137,7 +137,7 @@ func (this *cacheKey) convertStr(fieldName string, value string) *proto.Field {
 	if m.tt == proto.ValueType_string {
 		return proto.PackField(fieldName, value)
 	} else if m.tt == proto.ValueType_blob {
-		return proto.PackField(fieldName, ([]byte)(value)) //([]byte)(value)
+		return proto.PackField(fieldName, ([]byte)(value))
 	} else if m.tt == proto.ValueType_float {
 		f, err := strconv.ParseFloat(value, 64)
 		if nil != err {
