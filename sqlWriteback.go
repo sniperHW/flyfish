@@ -4,9 +4,7 @@ import (
 	"database/sql/driver"
 	"flyfish/conf"
 	"flyfish/proto"
-	//"fmt"
 	"github.com/jmoiron/sqlx"
-	//"github.com/sniperHW/kendynet"
 	"net"
 	"sync"
 	"time"
@@ -118,17 +116,17 @@ func (this *sqlUpdater) resetValues() {
 	this.values = this.values[0:0]
 }
 
-func (this *sqlUpdater) doInsert(r *record) error {
+func (this *sqlUpdater) doInsert(r *record, meta *table_meta) error {
 	str := strGet()
 	defer func() {
 		this.resetValues()
 		strPut(str)
 	}()
 
-	str.append(r.ckey.meta.insertPrefix).append(getInsertPlaceHolder(1)).append(getInsertPlaceHolder(2)) //append("($1,$2")
+	str.append(meta.insertPrefix).append(getInsertPlaceHolder(1)).append(getInsertPlaceHolder(2)) //append("($1,$2")
 	this.values = append(this.values, r.key, r.fields["__version__"].GetValue())
 	c := 2
-	for _, name := range r.ckey.meta.insertFieldOrder {
+	for _, name := range meta.insertFieldOrder {
 		c++
 		//str.append(fmt.Sprintf(",$%d", c))
 		str.append(getInsertPlaceHolder(c))
@@ -198,7 +196,7 @@ func (this *sqlUpdater) append(v interface{}) {
 		if wb.writeBackFlag == write_back_update {
 			err = this.doUpdate(wb)
 		} else if wb.writeBackFlag == write_back_insert {
-			err = this.doInsert(wb)
+			err = this.doInsert(wb, wb.ckey.meta)
 		} else if wb.writeBackFlag == write_back_delete {
 			err = this.doDelete(wb)
 		} else {

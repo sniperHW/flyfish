@@ -43,7 +43,8 @@ var LogDir = "log"
 var LogPrefix = "flyfish"
 var LogLevel = "info"
 var EnableLogStdout = false
-var BackDir = "bak"
+var BackDir = "bak/"
+var BackFile = "flyfish_backup.bak"
 var SqlType = "pgsql"
 
 var parser map[string]func(string)

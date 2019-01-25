@@ -30,39 +30,6 @@ func init() {
 	crc64Table = crc64.MakeTable(crc64.ISO)
 }
 
-/*
-type record struct {
-	writeBackFlag int
-	key           string
-	table         string
-	uniKey        string
-	ckey          *cacheKey
-	fields        map[string]*proto.Field //所有命令的字段聚合
-	expired       int64
-	writeBackVer  int64
-}
-
-enum SqlType {
-  insert   = 1;
-  update   = 2;
-  delete   = 3;
-}
-
-message record {
-	required SqlType type = 2;
-	required string table = 3;
-	required string key = 4;
-	repeated field  fields  = 5;
-}
-
-		if wb.writeBackFlag == write_back_update {
-			err = this.doUpdate(wb)
-		} else if wb.writeBackFlag == write_back_insert {
-			err = this.doInsert(wb)
-		} else if wb.writeBackFlag == write_back_delete {
-
-*/
-
 func marshalRecord(r *record) *kendynet.ByteBuffer {
 
 	var tt *proto.SqlType
@@ -112,7 +79,7 @@ func backupRecord(r *record) {
 	fileMtx.Lock()
 	defer fileMtx.Unlock()
 	if nil == backupFile {
-		backFilePath = fmt.Sprintf("%s/flyfish_backup.bak", conf.BackDir)
+		backFilePath = conf.BackDir + conf.BackFile
 		os.MkdirAll(conf.BackDir, os.ModePerm)
 		f, err := os.OpenFile(backFilePath, os.O_RDWR, os.ModePerm)
 		if err != nil {
@@ -137,7 +104,10 @@ func backupRecord(r *record) {
 	}
 }
 
-func replayRecord(offset int64, data []byte) {
+func replayRecord(recoverUpdater *sqlUpdater, offset int64, data []byte) {
+
+	var err error
+
 	wOffset := offset - size_head
 
 	checkSum := binary.BigEndian.Uint64(data[len(data)-size_checksum:])
@@ -149,11 +119,45 @@ func replayRecord(offset int64, data []byte) {
 
 	pbRecord := &proto.Record{}
 
-	if err := pb.Unmarshal(data[:len(data)-size_checksum], pbRecord); err != nil {
+	if err = pb.Unmarshal(data[:len(data)-size_checksum], pbRecord); err != nil {
 		panic(err)
 	}
 
 	fmt.Println(pbRecord)
+
+	r := &record{
+		key:    pbRecord.GetKey(),
+		table:  pbRecord.GetTable(),
+		fields: map[string]*proto.Field{},
+	}
+
+	meta := getMetaByTable(r.table)
+
+	if nil == meta {
+		panic("invaild record")
+	}
+
+	for _, v := range pbRecord.GetFields() {
+		r.fields[v.GetName()] = v
+	}
+
+	tt := pbRecord.GetType()
+	if tt == proto.SqlType_insert {
+		r.writeBackFlag = write_back_insert
+		err = recoverUpdater.doInsert(r, meta)
+	} else if tt == proto.SqlType_update {
+		r.writeBackFlag = write_back_update
+		err = recoverUpdater.doUpdate(r)
+	} else if tt == proto.SqlType_delete {
+		r.writeBackFlag = write_back_delete
+		err = recoverUpdater.doDelete(r)
+	} else {
+		panic("invaild tt")
+	}
+
+	if err != nil {
+		panic(err)
+	}
 
 	//清除标记
 	b := []byte{byte(0)}
@@ -162,16 +166,23 @@ func replayRecord(offset int64, data []byte) {
 
 }
 
-func doRecover() {
+func doRecover(recoverUpdater *sqlUpdater) {
 	rOffset := int64(0)
 	head := make([]byte, size_head)
+	ok := false
+	defer func() {
+		backupFile.Close()
+		backupFile = nil
+		//删除文件
+		if ok {
+			os.Remove(backFilePath)
+		}
+	}()
+
 	for {
 		count, err := backupFile.ReadAt(head, rOffset)
 		if err == io.EOF {
-			backupFile.Close()
-			backupFile = nil
-			//删除文件
-			os.Remove(backFilePath)
+			ok = true
 			fmt.Println("EOF")
 			return
 		}
@@ -195,7 +206,7 @@ func doRecover() {
 			if count != size {
 				panic("invaild record")
 			}
-			replayRecord(rOffset, data)
+			replayRecord(recoverUpdater, rOffset, data)
 			rOffset += int64(size)
 		}
 	}
@@ -206,7 +217,11 @@ func doRecover() {
  */
 
 func Recover() {
-	backFilePath = fmt.Sprintf("%s/flyfish_backup.bak", conf.BackDir)
+	db, _ := pgOpen(conf.PgsqlHost, conf.PgsqlPort, conf.PgsqlDataBase, conf.PgsqlUser, conf.PgsqlPassword)
+
+	recoverUpdater := newSqlUpdater("recover", db)
+
+	backFilePath = conf.BackDir + conf.BackFile
 	f, err := os.OpenFile(backFilePath, os.O_RDWR, os.ModePerm)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -216,6 +231,6 @@ func Recover() {
 		}
 	} else {
 		backupFile = f
-		doRecover()
+		doRecover(recoverUpdater)
 	}
 }

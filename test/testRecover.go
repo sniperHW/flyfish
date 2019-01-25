@@ -2,7 +2,7 @@ package main
 
 import (
 	"flyfish"
-	//"flyfish/conf"
+	"flyfish/conf"
 	//"fmt"
 	//"github.com/go-ini/ini"
 	//"github.com/sniperHW/kendynet/golog"
@@ -15,5 +15,7 @@ import (
 
 func main() {
 	flyfish.InitLogger()
+	flyfish.InitTableConfig()
+	flyfish.SQLInit(conf.PgsqlHost, conf.PgsqlPort, conf.PgsqlDataBase, conf.PgsqlUser, conf.PgsqlPassword)
 	flyfish.TestRecover()
 }

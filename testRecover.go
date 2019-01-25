@@ -12,12 +12,13 @@ func TestRecover() {
 		r := &record{
 			writeBackFlag: write_back_insert,
 			key:           fmt.Sprintf("key:%d", i),
-			table:         "testTable",
+			table:         "blob",
 			fields:        map[string]*proto.Field{},
 		}
 
+		r.fields["__version__"] = proto.PackField("__version__", 1)
 		r.fields["name"] = proto.PackField("name", fmt.Sprintf("huangwei%d", i))
-		r.fields["age"] = proto.PackField("age", 37+i)
+		r.fields["data"] = proto.PackField("data", []byte("data"))
 
 		backupRecord(r)
 
