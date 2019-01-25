@@ -6,308 +6,26 @@ import (
 	"flyfish/proto"
 	//"fmt"
 	"github.com/jmoiron/sqlx"
+	//"github.com/sniperHW/kendynet"
 	"net"
-	"os"
 	"sync"
 	"time"
 )
 
-var mysqlInsertPlaceHolder = []string{
-	"?",
-	"?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-	",?",
-}
-
-var pgInsertPlaceHolder = []string{
-	"$0",
-	"$1",
-	",$2",
-	",$3",
-	",$4",
-	",$5",
-	",$6",
-	",$7",
-	",$8",
-	",$9",
-	",$10",
-	",$11",
-	",$12",
-	",$13",
-	",$14",
-	",$15",
-	",$16",
-	",$17",
-	",$18",
-	",$19",
-	",$20",
-	",$21",
-	",$22",
-	",$23",
-	",$24",
-	",$25",
-	",$26",
-	",$27",
-	",$28",
-	",$29",
-	",$30",
-	",$31",
-	",$32",
-	",$33",
-	",$34",
-	",$35",
-	",$36",
-	",$37",
-	",$38",
-	",$39",
-	",$40",
-	",$41",
-	",$42",
-	",$43",
-	",$44",
-	",$45",
-	",$46",
-	",$47",
-	",$48",
-	",$49",
-	",$50",
-	",$51",
-	",$52",
-	",$53",
-	",$54",
-	",$55",
-	",$56",
-	",$57",
-	",$58",
-	",$59",
-	",$60",
-	",$61",
-	",$62",
-	",$63",
-	",$64",
-}
-
-var mysqlUpdatePlaceHolder = []string{
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-	"?",
-}
-
-var pgUpdatePlaceHolder = []string{
-	"$0",
-	"$1",
-	"$2",
-	"$3",
-	"$4",
-	"$5",
-	"$6",
-	"$7",
-	"$8",
-	"$9",
-	"$10",
-	"$11",
-	"$12",
-	"$13",
-	"$14",
-	"$15",
-	"$16",
-	"$17",
-	"$18",
-	"$19",
-	"$20",
-	"$21",
-	"$22",
-	"$23",
-	"$24",
-	"$25",
-	"$26",
-	"$27",
-	"$28",
-	"$29",
-	"$30",
-	"$31",
-	"$32",
-	"$33",
-	"$34",
-	"$35",
-	"$36",
-	"$37",
-	"$38",
-	"$39",
-	"$40",
-	"$41",
-	"$42",
-	"$43",
-	"$44",
-	"$45",
-	"$46",
-	"$47",
-	"$48",
-	"$49",
-	"$50",
-	"$51",
-	"$52",
-	"$53",
-	"$54",
-	"$55",
-	"$56",
-	"$57",
-	"$58",
-	"$59",
-	"$60",
-	"$61",
-	"$62",
-	"$63",
-	"$64",
-}
-
-var insertPlaceHolder []string
-
-func getInsertPlaceHolder(c int) string {
-	return insertPlaceHolder[c]
-}
-
-var updatePlaceHolder []string
-
-func getUpdatePlaceHolder(c int) string {
-	return updatePlaceHolder[c]
-}
-
-type writeBackBarrior struct {
+type writeBackBarrier struct {
 	counter int
 	waited  int
 	mtx     sync.Mutex
 	cond    *sync.Cond
 }
 
-func (this *writeBackBarrior) add() {
+func (this *writeBackBarrier) add() {
 	this.mtx.Lock()
 	this.counter++
 	this.mtx.Unlock()
 }
 
-func (this *writeBackBarrior) sub(c int) {
+func (this *writeBackBarrier) sub(c int) {
 	this.mtx.Lock()
 	this.counter = this.counter - c
 	if this.counter < conf.WriteBackEventQueueSize && this.waited > 0 {
@@ -318,7 +36,7 @@ func (this *writeBackBarrior) sub(c int) {
 	}
 }
 
-func (this *writeBackBarrior) wait() {
+func (this *writeBackBarrier) wait() {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
 	if this.counter >= conf.WriteBackEventQueueSize {
@@ -362,7 +80,6 @@ func recordPut(r *record) {
 type sqlUpdater struct {
 	db                *sqlx.DB
 	name              string
-	file              *os.File
 	values            []interface{}
 	writeFileAndBreak bool
 }
@@ -373,35 +90,6 @@ func newSqlUpdater(name string, db *sqlx.DB) *sqlUpdater {
 		values: []interface{}{},
 		db:     db,
 	}
-}
-
-func (this *sqlUpdater) writeFile(r *record) {
-	/*if nil == this.file {
-
-		out_path := fmt.Sprintf("%s/%s_%d.bak", conf.BackDir, this.name, time.Now().Unix())
-
-		f, err := os.OpenFile(out_path, os.O_RDWR, os.ModePerm)
-		if err != nil {
-			if os.IsNotExist(err) {
-				f, err = os.Create(out_path)
-				if err != nil {
-					Errorf("create %s failed:%s", out_path, err.Error())
-					return
-				}
-			} else {
-				Errorf("open %s failed:%s", out_path, err.Error())
-				return
-			}
-		}
-		this.file = f
-	}
-
-	b := kendynet.NewByteBuffer()
-	b.AppendByte(0)
-	b.AppendString(s)
-
-	this.file.Write(b.Bytes())
-	this.file.Sync()*/
 }
 
 func isRetryError(err error) bool {
@@ -499,7 +187,7 @@ func (this *sqlUpdater) append(v interface{}) {
 	defer this.appendDefer(wb)
 
 	if this.writeFileAndBreak {
-		this.writeFile(wb)
+		backupRecord(wb)
 		return
 	}
 
@@ -524,7 +212,7 @@ func (this *sqlUpdater) append(v interface{}) {
 				Errorln("sqlUpdater exec error:", err)
 				if isStop() {
 					this.writeFileAndBreak = true
-					this.writeFile(wb)
+					backupRecord(wb)
 					return
 				}
 				//休眠一秒重试
@@ -684,7 +372,7 @@ func writeBackRoutine() {
 		closed, localList := writeBackEventQueue.Get()
 		size := len(localList)
 		if size > 0 {
-			writeBackBarrior_.sub(size)
+			writeBackBarrier_.sub(size)
 		}
 		now := time.Now().Unix()
 		for _, v := range localList {

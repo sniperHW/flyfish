@@ -16,7 +16,7 @@ var (
 	writeBackRecords    map[string]*record
 	writeBackEventQueue *util.BlockQueue
 	pendingWB           *list.List
-	writeBackBarrior_   writeBackBarrior
+	writeBackBarrier_   writeBackBarrier
 )
 
 func prepareRecord(ctx *processContext) *record {
@@ -44,7 +44,7 @@ func closeWriteBack() {
 
 func notiForceWriteBack() {
 	if nil == writeBackEventQueue.AddNoWait(notifyWB{}) {
-		writeBackBarrior_.add()
+		writeBackBarrier_.add()
 	}
 }
 
@@ -52,7 +52,7 @@ func pushSQLWriteBackNoWait(ctx *processContext) {
 	ckey := ctx.getCacheKey()
 	ckey.setWriteBack()
 	if nil == writeBackEventQueue.AddNoWait(ctx) {
-		writeBackBarrior_.add()
+		writeBackBarrier_.add()
 	}
 }
 
@@ -126,7 +126,7 @@ func SQLInit(host string, port int, dbname string, user string, password string)
 
 		pendingWB = list.New()
 
-		writeBackBarrior_.cond = sync.NewCond(&writeBackBarrior_.mtx)
+		writeBackBarrier_.cond = sync.NewCond(&writeBackBarrier_.mtx)
 
 		writeBackRecords = map[string]*record{}
 		writeBackEventQueue = util.NewBlockQueueWithName("writeBackEventQueue", conf.WriteBackEventQueueSize)

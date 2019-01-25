@@ -1,0 +1,17 @@
+syntax = "proto2";
+package proto;
+import "proto.proto";
+
+
+enum SqlType {
+  insert   = 1;
+  update   = 2;
+  delete   = 3;
+}
+
+message record {
+	required SqlType type = 1;
+	required string table = 2;
+	required string key = 3;
+	repeated field  fields  = 4;
+}
