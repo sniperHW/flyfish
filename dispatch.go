@@ -93,7 +93,6 @@ func init() {
 
 	register(&proto.DelReq{}, del)
 	register(&proto.GetReq{}, get)
-	register(&proto.GetAllReq{}, getAll)
 	register(&proto.SetReq{}, set)
 	register(&proto.SetNxReq{}, setNx)
 	register(&proto.CompareAndSetReq{}, compareAndSet)

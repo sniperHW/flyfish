@@ -2,7 +2,6 @@ package flyfish
 
 import (
 	codec "flyfish/codec"
-	"flyfish/errcode"
 	"flyfish/proto"
 	"fmt"
 	pb "github.com/golang/protobuf/proto"
@@ -23,29 +22,22 @@ func (this *IncrDecrByReplyer) reply(errCode int32, fields map[string]*proto.Fie
 		return
 	}
 
-	var resp pb.Message
-	cmdType := this.cmd.cmdType
-	if cmdType == cmdIncrBy {
-		r := &proto.IncrByResp{
-			Seqno:   pb.Int64(this.seqno),
-			ErrCode: pb.Int32(errCode),
-			Version: pb.Int64(version),
-		}
-		r.NewValue = fields[this.cmd.incrDecr.GetName()]
-		resp = r
-	} else {
-		r := &proto.DecrByResp{
-			Seqno:   pb.Int64(this.seqno),
-			ErrCode: pb.Int32(errCode),
-			Version: pb.Int64(version),
-		}
-		r.NewValue = fields[this.cmd.incrDecr.GetName()]
-		resp = r
+	head := &proto.RespCommon{
+		Seqno:   pb.Int64(this.seqno),
+		ErrCode: pb.Int32(errCode),
+		Version: pb.Int64(version),
 	}
 
-	err := this.session.Send(resp)
-	if nil != err {
-		//记录日志
+	if this.cmd.cmdType == cmdIncrBy {
+		this.session.Send(&proto.IncrByResp{
+			Head:     head,
+			NewValue: fields[this.cmd.incrDecr.GetName()],
+		})
+	} else {
+		this.session.Send(&proto.DecrByResp{
+			Head:     head,
+			NewValue: fields[this.cmd.incrDecr.GetName()],
+		})
 	}
 }
 
@@ -53,98 +45,86 @@ func incrBy(session kendynet.StreamSession, msg *codec.Message) {
 
 	req := msg.GetData().(*proto.IncrByReq)
 
-	errno := errcode.ERR_OK
+	head := req.GetHead()
 
-	for {
+	Debugln("incrBy", req)
 
-		if isStop() {
-			errno = errcode.ERR_SERVER_STOPED
-			break
+	var (
+		ok    bool
+		errno int32
+	)
+
+	ok, errno = checkIncrDecrReq(head, req.GetField())
+
+	if !ok {
+		err := session.Send(&proto.IncrByResp{
+			Head: &proto.RespCommon{
+				Seqno:   pb.Int64(head.GetSeqno()),
+				ErrCode: pb.Int32(errno),
+				Version: pb.Int64(-1),
+			},
+		})
+	} else {
+
+		cmd := &command{
+			cmdType:  cmdIncrBy,
+			key:      head.GetKey(),
+			table:    head.GetTable(),
+			uniKey:   fmt.Sprintf("%s:%s", head.GetTable(), head.GetKey()),
+			incrDecr: req.GetField(),
+			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
 		}
 
-		if "" == req.GetTable() {
-			errno = errcode.ERR_MISSING_TABLE
-			break
+		cmd.rpyer = &IncrDecrByReplyer{
+			seqno:   head.GetSeqno(),
+			session: session,
+			cmd:     cmd,
 		}
 
-		if "" == req.GetKey() {
-			errno = errcode.ERR_MISSING_KEY
-			break
-		}
-		break
+		processCmd(cmd)
 	}
-
-	if 0 != errno {
-		resp := &proto.IncrByResp{
-			Seqno:   pb.Int64(req.GetSeqno()),
-			ErrCode: pb.Int32(errno),
-			Version: pb.Int64(-1),
-		}
-		err := session.Send(resp)
-		if nil != err {
-			//记录日志
-		}
-		return
-	}
-
-	cmd := &command{
-		cmdType:  cmdIncrBy,
-		key:      req.GetKey(),
-		table:    req.GetTable(),
-		uniKey:   fmt.Sprintf("%s:%s", req.GetTable(), req.GetKey()),
-		incrDecr: req.GetField(),
-		deadline: time.Now().Add(time.Duration(req.GetTimeout())),
-	}
-
-	cmd.rpyer = &IncrDecrByReplyer{
-		seqno:   req.GetSeqno(),
-		session: session,
-		cmd:     cmd,
-	}
-
-	processCmd(cmd)
 }
 
 func decrBy(session kendynet.StreamSession, msg *codec.Message) {
 
 	req := msg.GetData().(*proto.DecrByReq)
 
-	errno := errcode.ERR_OK
+	head := req.GetHead()
 
-	if "" == req.GetTable() {
-		errno = errcode.ERR_MISSING_TABLE
-	}
+	Debugln("decrBy", req)
 
-	if "" == req.GetKey() {
-		errno = errcode.ERR_MISSING_KEY
-	}
+	var (
+		ok    bool
+		errno int32
+	)
 
-	if 0 != errno {
-		resp := &proto.DecrByResp{
-			Seqno:   pb.Int64(req.GetSeqno()),
-			ErrCode: pb.Int32(errno),
-			Version: pb.Int64(-1),
+	ok, errno = checkIncrDecrReq(head, req.GetField())
+
+	if !ok {
+		err := session.Send(&proto.DecrByResp{
+			Head: &proto.RespCommon{
+				Seqno:   pb.Int64(head.GetSeqno()),
+				ErrCode: pb.Int32(errno),
+				Version: pb.Int64(-1),
+			},
+		})
+	} else {
+
+		cmd := &command{
+			cmdType:  cmdDecrBy,
+			key:      head.GetKey(),
+			table:    head.GetTable(),
+			uniKey:   fmt.Sprintf("%s:%s", head.GetTable(), head.GetKey()),
+			incrDecr: req.GetField(),
+			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
 		}
-		err := session.Send(resp)
-		if nil != err {
-			//记录日志
+
+		cmd.rpyer = &IncrDecrByReplyer{
+			seqno:   head.GetSeqno(),
+			session: session,
+			cmd:     cmd,
 		}
-		return
-	}
 
-	cmd := &command{
-		cmdType:  cmdDecrBy,
-		key:      req.GetKey(),
-		table:    req.GetTable(),
-		uniKey:   fmt.Sprintf("%s:%s", req.GetTable(), req.GetKey()),
-		incrDecr: req.GetField(),
-		deadline: time.Now().Add(time.Duration(req.GetTimeout())),
+		processCmd(cmd)
 	}
-
-	cmd.rpyer = &IncrDecrByReplyer{
-		seqno:   req.GetSeqno(),
-		session: session,
-		cmd:     cmd,
-	}
-	processCmd(cmd)
 }

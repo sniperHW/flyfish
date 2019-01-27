@@ -23,6 +23,56 @@ var (
 	cmdCount int32 //待回复命令数量
 )
 
+func checkReq(req *proto.ReqCommon) (bool, int32) {
+	if isStop() {
+		return false, errcode.ERR_SERVER_STOPED
+	}
+
+	if "" == req.GetTable() {
+		return false, errcode.ERR_MISSING_TABLE
+	}
+
+	if "" == req.GetKey() {
+		return false, errcode.ERR_MISSING_KEY
+	}
+
+	if nil == getMetaByTable(req.GetTable()) {
+		return false, errcode.ERR_INVAILD_TABLE
+	}
+
+	return true, errcode.ERR_OK
+}
+
+func checkIncrDecrReq(req *proto.ReqCommon, field *proto.Field) (bool, int32) {
+	if ok, errno := checkReq(req); !ok {
+		return false, errno
+	} else if nil == field {
+		return false, errcode.ERR_MISSING_FIELDS
+	} else {
+		return true, errcode.ERR_OK
+	}
+}
+
+func checkSetReq(req *proto.ReqCommon, fields []*proto.Field) (bool, int32) {
+	if ok, errno := checkReq(req); !ok {
+		return false, errno
+	} else if 0 == len(fields) {
+		return false, errcode.ERR_MISSING_FIELDS
+	} else {
+		return true, errcode.ERR_OK
+	}
+}
+
+func checkCmpSetReq(req *proto.ReqCommon, newV *proto.Field, oldV *proto.Field) (bool, int32) {
+	if ok, errno := checkReq(req); !ok {
+		return false, errno
+	} else if nil == newV || nil == oldV {
+		return false, errcode.ERR_MISSING_FIELDS
+	} else {
+		return true, errcode.ERR_OK
+	}
+}
+
 func isSetCmd(cmd int) bool {
 	return cmd == cmdSet || cmd == cmdSetNx || cmd == cmdCompareAndSet || cmd == cmdCompareAndSetNx || cmd == cmdIncrBy || cmd == cmdDecrBy
 }

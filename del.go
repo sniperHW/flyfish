@@ -2,7 +2,6 @@ package flyfish
 
 import (
 	codec "flyfish/codec"
-	"flyfish/errcode"
 	"flyfish/proto"
 	"fmt"
 	pb "github.com/golang/protobuf/proto"
@@ -23,73 +22,54 @@ func (this *DelReplyer) reply(errCode int32, fields map[string]*proto.Field, ver
 		return
 	}
 
-	resp := &proto.DelResp{
-		Seqno:   pb.Int64(this.seqno),
-		ErrCode: pb.Int32(errCode),
-	}
-
-	//Debugln("DelReply",this.context.uniKey,resp)
-
-	err := this.session.Send(resp)
-	if nil != err {
-		//记录日志
-	}
+	this.session.Send(&proto.DelResp{
+		Head: &proto.RespCommon{
+			Seqno:   pb.Int64(this.seqno),
+			ErrCode: pb.Int32(errCode),
+		},
+	})
 }
 
 func del(session kendynet.StreamSession, msg *codec.Message) {
 
 	req := msg.GetData().(*proto.DelReq)
 
+	head := req.GetHead()
+
 	Debugln("del", req)
 
-	errno := errcode.ERR_OK
+	var (
+		ok    bool
+		errno int32
+	)
 
-	for {
+	ok, errno = checkReq(head)
 
-		if isStop() {
-			errno = errcode.ERR_SERVER_STOPED
-			break
+	if !ok {
+		session.Send(&proto.DelResp{
+			Head: &proto.RespCommon{
+				Seqno:   pb.Int64(head.GetSeqno()),
+				ErrCode: pb.Int32(errno),
+				Version: pb.Int64(-1),
+			},
+		})
+	} else {
+
+		cmd := &command{
+			cmdType:  cmdDel,
+			key:      head.GetKey(),
+			table:    head.GetTable(),
+			uniKey:   fmt.Sprintf("%s:%s", head.GetTable(), head.GetKey()),
+			version:  req.Version,
+			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
 		}
 
-		if "" == req.GetTable() {
-			errno = errcode.ERR_MISSING_TABLE
-			break
+		cmd.rpyer = &DelReplyer{
+			seqno:   head.GetSeqno(),
+			session: session,
+			cmd:     cmd,
 		}
 
-		if "" == req.GetKey() {
-			errno = errcode.ERR_MISSING_KEY
-			break
-		}
-		break
+		processCmd(cmd)
 	}
-
-	if 0 != errno {
-		resp := &proto.DelResp{
-			Seqno:   pb.Int64(req.GetSeqno()),
-			ErrCode: pb.Int32(errno),
-			Version: pb.Int64(-1),
-		}
-		err := session.Send(resp)
-		if nil != err {
-			//记录日志
-		}
-		return
-	}
-
-	cmd := &command{
-		cmdType:  cmdDel,
-		key:      req.GetKey(),
-		table:    req.GetTable(),
-		uniKey:   fmt.Sprintf("%s:%s", req.GetTable(), req.GetKey()),
-		version:  req.Version,
-		deadline: time.Now().Add(time.Duration(req.GetTimeout())),
-	}
-
-	cmd.rpyer = &DelReplyer{
-		seqno:   req.GetSeqno(),
-		session: session,
-		cmd:     cmd,
-	}
-
-	processCmd(cmd)
 }

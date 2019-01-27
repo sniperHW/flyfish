@@ -1,7 +1,6 @@
 package flyfish
 
 import (
-	//"database/sql"
 	codec "flyfish/codec"
 	"flyfish/conf"
 	"flyfish/errcode"
@@ -53,9 +52,13 @@ func scan(session kendynet.StreamSession, msg *codec.Message) {
 
 		req := msg.GetData().(*proto.ScanReq)
 
+		head := req.GetHead()
+
 		resp := &proto.ScanResp{
-			Seqno:   pb.Int64(req.GetSeqno()),
-			ErrCode: pb.Int32(errcode.ERR_OK),
+			Head: &proto.RespCommon{
+				Seqno:   pb.Int64(head.GetSeqno()),
+				ErrCode: pb.Int32(errcode.ERR_OK),
+			},
 		}
 
 		if session.GetUserData() != nil {
@@ -63,16 +66,16 @@ func scan(session kendynet.StreamSession, msg *codec.Message) {
 			return
 		}
 
-		if "" == req.GetTable() {
-			resp.ErrCode = pb.Int32(errcode.ERR_MISSING_TABLE)
+		if "" == head.GetTable() {
+			resp.Head.ErrCode = pb.Int32(errcode.ERR_MISSING_TABLE)
 			session.Send(resp)
 			session.Close("", 1)
 			return
 		}
 
-		meta := getMetaByTable(req.GetTable())
+		meta := getMetaByTable(head.GetTable())
 		if nil == meta {
-			resp.ErrCode = pb.Int32(errcode.ERR_INVAILD_TABLE)
+			resp.Head.ErrCode = pb.Int32(errcode.ERR_INVAILD_TABLE)
 			session.Send(resp)
 			session.Close("", 1)
 			return
@@ -81,8 +84,8 @@ func scan(session kendynet.StreamSession, msg *codec.Message) {
 		if nil != req.GetFields() {
 			for _, name := range req.GetFields() {
 				_, ok := meta.fieldMetas[name]
-				if !ok {
-					resp.ErrCode = pb.Int32(errcode.ERR_INVAILD_FIELD)
+				if name == "__key__" || name == "__version__" || !ok {
+					resp.Head.ErrCode = pb.Int32(errcode.ERR_INVAILD_FIELD)
 					session.Send(resp)
 					session.Close("", 1)
 					return
@@ -91,12 +94,12 @@ func scan(session kendynet.StreamSession, msg *codec.Message) {
 		}
 
 		s = &scaner{
-			table: req.GetTable(),
+			table: head.GetTable(),
 		}
 
 		//selectTemplate := "select %s from %s order by __key__;"
 
-		if 1 == req.GetAll() {
+		if req.GetAll() {
 			s.fields = meta.queryMeta.field_names
 			s.field_convter = meta.queryMeta.field_convter
 			s.field_receiver = []interface{}{}
@@ -119,7 +122,7 @@ func scan(session kendynet.StreamSession, msg *codec.Message) {
 
 		s.db, err = pgOpen(conf.PgsqlHost, conf.PgsqlPort, conf.PgsqlDataBase, conf.PgsqlUser, conf.PgsqlPassword)
 		if nil != err {
-			resp.ErrCode = pb.Int32(errcode.ERR_SQLERROR)
+			resp.Head.ErrCode = pb.Int32(errcode.ERR_SQLERROR)
 			session.Send(resp)
 			session.Close("", 1)
 			return
@@ -140,19 +143,23 @@ const selectTemplate string = "select %s from %s order by __key__ limit %d offse
 
 func (this *scaner) next(req *proto.ScanReq) {
 
+	head := req.GetHead()
+
 	resp := &proto.ScanResp{
-		Seqno:   pb.Int64(req.GetSeqno()),
-		ErrCode: pb.Int32(errcode.ERR_SCAN_END),
+		Head: &proto.RespCommon{
+			Seqno:   pb.Int64(head.GetSeqno()),
+			ErrCode: pb.Int32(errcode.ERR_OK),
+		},
 	}
 
 	if isStop() {
-		resp.ErrCode = pb.Int32(errcode.ERR_SERVER_STOPED)
+		resp.Head.ErrCode = pb.Int32(errcode.ERR_SERVER_STOPED)
 		this.session.Send(resp)
 		this.session.Close("", 1)
 		return
 	}
 
-	deadline := time.Now().Add(time.Duration(req.GetTimeout()))
+	deadline := time.Now().Add(time.Duration(head.GetTimeout()))
 
 	count := req.GetCount()
 
@@ -173,7 +180,7 @@ func (this *scaner) next(req *proto.ScanReq) {
 
 	if nil != err {
 		Errorln(selectStr, err)
-		resp.ErrCode = pb.Int32(errcode.ERR_SQLERROR)
+		resp.Head.ErrCode = pb.Int32(errcode.ERR_SQLERROR)
 		this.session.Send(resp)
 		this.session.Close("", 1)
 		return
@@ -184,7 +191,7 @@ func (this *scaner) next(req *proto.ScanReq) {
 	for rows.Next() {
 		err := rows.Scan(this.field_receiver...)
 		if err != nil {
-			resp.ErrCode = pb.Int32(errcode.ERR_SQLERROR)
+			resp.Head.ErrCode = pb.Int32(errcode.ERR_SQLERROR)
 			this.session.Send(resp)
 			this.session.Close("scan error", 1)
 			Errorln("rows.Scan err", err)
@@ -197,19 +204,32 @@ func (this *scaner) next(req *proto.ScanReq) {
 			resp.Rows = []*proto.Row{}
 		}
 
+		var (
+			key     string
+			version int64
+		)
+
 		fields := []*proto.Field{}
 		for i := 0; i < len(this.fields); i++ {
-			fields = append(fields, proto.PackField(this.fields[i], this.field_convter[i](this.field_receiver[i])))
+			if this.fields[i] == "__key__" {
+				key = this.field_convter[i](this.field_receiver[i]).(string)
+			} else if this.fields[i] == "__version__" {
+				version = this.field_convter[i](this.field_receiver[i]).(int64)
+			} else {
+				fields = append(fields, proto.PackField(this.fields[i], this.field_convter[i](this.field_receiver[i])))
+			}
 		}
 
 		resp.Rows = append(resp.Rows, &proto.Row{
-			Fields: fields,
+			Key:     pb.String(key),
+			Version: pb.Int64(version),
+			Fields:  fields,
 		})
 
 		count--
 
 		if 0 == count {
-			resp.ErrCode = pb.Int32(errcode.ERR_OK)
+			resp.Head.ErrCode = pb.Int32(errcode.ERR_OK)
 			break
 		}
 	}
@@ -221,7 +241,7 @@ func (this *scaner) next(req *proto.ScanReq) {
 
 	this.session.Send(resp)
 
-	if resp.GetErrCode() != errcode.ERR_OK {
+	if resp.Head.GetErrCode() != errcode.ERR_OK {
 		this.session.Close("scan finish", 1)
 	}
 }

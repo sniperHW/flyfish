@@ -3,11 +3,9 @@
 
 package proto
 
-import (
-	fmt "fmt"
-	proto "github.com/golang/protobuf/proto"
-	math "math"
-)
+import proto "github.com/golang/protobuf/proto"
+import fmt "fmt"
+import math "math"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -18,7 +16,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type ValueType int32
 
@@ -41,7 +39,6 @@ var ValueType_name = map[int32]string{
 	5: "float",
 	6: "blob",
 }
-
 var ValueType_value = map[string]int32{
 	"invaild": 0,
 	"nil":     1,
@@ -57,11 +54,9 @@ func (x ValueType) Enum() *ValueType {
 	*p = x
 	return p
 }
-
 func (x ValueType) String() string {
 	return proto.EnumName(ValueType_name, int32(x))
 }
-
 func (x *ValueType) UnmarshalJSON(data []byte) error {
 	value, err := proto.UnmarshalJSONEnum(ValueType_value, data, "ValueType")
 	if err != nil {
@@ -70,9 +65,8 @@ func (x *ValueType) UnmarshalJSON(data []byte) error {
 	*x = ValueType(value)
 	return nil
 }
-
 func (ValueType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_2fcc84b9998d60d8, []int{0}
+	return fileDescriptor_proto_7d68911a192448ff, []int{0}
 }
 
 type Value struct {
@@ -91,17 +85,16 @@ func (m *Value) Reset()         { *m = Value{} }
 func (m *Value) String() string { return proto.CompactTextString(m) }
 func (*Value) ProtoMessage()    {}
 func (*Value) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2fcc84b9998d60d8, []int{0}
+	return fileDescriptor_proto_7d68911a192448ff, []int{0}
 }
-
 func (m *Value) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Value.Unmarshal(m, b)
 }
 func (m *Value) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Value.Marshal(b, m, deterministic)
 }
-func (m *Value) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Value.Merge(m, src)
+func (dst *Value) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Value.Merge(dst, src)
 }
 func (m *Value) XXX_Size() int {
 	return xxx_messageInfo_Value.Size(m)
@@ -166,17 +159,16 @@ func (m *Field) Reset()         { *m = Field{} }
 func (m *Field) String() string { return proto.CompactTextString(m) }
 func (*Field) ProtoMessage()    {}
 func (*Field) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2fcc84b9998d60d8, []int{1}
+	return fileDescriptor_proto_7d68911a192448ff, []int{1}
 }
-
 func (m *Field) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Field.Unmarshal(m, b)
 }
 func (m *Field) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Field.Marshal(b, m, deterministic)
 }
-func (m *Field) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Field.Merge(m, src)
+func (dst *Field) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Field.Merge(dst, src)
 }
 func (m *Field) XXX_Size() int {
 	return xxx_messageInfo_Field.Size(m)
@@ -212,17 +204,16 @@ func (m *PingReq) Reset()         { *m = PingReq{} }
 func (m *PingReq) String() string { return proto.CompactTextString(m) }
 func (*PingReq) ProtoMessage()    {}
 func (*PingReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2fcc84b9998d60d8, []int{2}
+	return fileDescriptor_proto_7d68911a192448ff, []int{2}
 }
-
 func (m *PingReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PingReq.Unmarshal(m, b)
 }
 func (m *PingReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_PingReq.Marshal(b, m, deterministic)
 }
-func (m *PingReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_PingReq.Merge(m, src)
+func (dst *PingReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PingReq.Merge(dst, src)
 }
 func (m *PingReq) XXX_Size() int {
 	return xxx_messageInfo_PingReq.Size(m)
@@ -251,17 +242,16 @@ func (m *PingResp) Reset()         { *m = PingResp{} }
 func (m *PingResp) String() string { return proto.CompactTextString(m) }
 func (*PingResp) ProtoMessage()    {}
 func (*PingResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2fcc84b9998d60d8, []int{3}
+	return fileDescriptor_proto_7d68911a192448ff, []int{3}
 }
-
 func (m *PingResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PingResp.Unmarshal(m, b)
 }
 func (m *PingResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_PingResp.Marshal(b, m, deterministic)
 }
-func (m *PingResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_PingResp.Merge(m, src)
+func (dst *PingResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PingResp.Merge(dst, src)
 }
 func (m *PingResp) XXX_Size() int {
 	return xxx_messageInfo_PingResp.Size(m)
@@ -279,33 +269,146 @@ func (m *PingResp) GetTimestamp() int64 {
 	return 0
 }
 
-//获取记录的指定字段
-type GetReq struct {
+type ReqCommon struct {
 	Seqno                *int64   `protobuf:"varint,1,req,name=seqno" json:"seqno,omitempty"`
 	Table                *string  `protobuf:"bytes,2,req,name=table" json:"table,omitempty"`
 	Key                  *string  `protobuf:"bytes,3,req,name=key" json:"key,omitempty"`
-	Fields               []string `protobuf:"bytes,4,rep,name=fields" json:"fields,omitempty"`
-	Timeout              *int64   `protobuf:"varint,5,req,name=timeout" json:"timeout,omitempty"`
+	Timeout              *int64   `protobuf:"varint,4,req,name=timeout" json:"timeout,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *ReqCommon) Reset()         { *m = ReqCommon{} }
+func (m *ReqCommon) String() string { return proto.CompactTextString(m) }
+func (*ReqCommon) ProtoMessage()    {}
+func (*ReqCommon) Descriptor() ([]byte, []int) {
+	return fileDescriptor_proto_7d68911a192448ff, []int{4}
+}
+func (m *ReqCommon) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ReqCommon.Unmarshal(m, b)
+}
+func (m *ReqCommon) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ReqCommon.Marshal(b, m, deterministic)
+}
+func (dst *ReqCommon) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ReqCommon.Merge(dst, src)
+}
+func (m *ReqCommon) XXX_Size() int {
+	return xxx_messageInfo_ReqCommon.Size(m)
+}
+func (m *ReqCommon) XXX_DiscardUnknown() {
+	xxx_messageInfo_ReqCommon.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ReqCommon proto.InternalMessageInfo
+
+func (m *ReqCommon) GetSeqno() int64 {
+	if m != nil && m.Seqno != nil {
+		return *m.Seqno
+	}
+	return 0
+}
+
+func (m *ReqCommon) GetTable() string {
+	if m != nil && m.Table != nil {
+		return *m.Table
+	}
+	return ""
+}
+
+func (m *ReqCommon) GetKey() string {
+	if m != nil && m.Key != nil {
+		return *m.Key
+	}
+	return ""
+}
+
+func (m *ReqCommon) GetTimeout() int64 {
+	if m != nil && m.Timeout != nil {
+		return *m.Timeout
+	}
+	return 0
+}
+
+type RespCommon struct {
+	Seqno                *int64   `protobuf:"varint,1,req,name=seqno" json:"seqno,omitempty"`
+	ErrCode              *int32   `protobuf:"varint,2,req,name=errCode" json:"errCode,omitempty"`
+	Version              *int64   `protobuf:"varint,3,opt,name=version" json:"version,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *RespCommon) Reset()         { *m = RespCommon{} }
+func (m *RespCommon) String() string { return proto.CompactTextString(m) }
+func (*RespCommon) ProtoMessage()    {}
+func (*RespCommon) Descriptor() ([]byte, []int) {
+	return fileDescriptor_proto_7d68911a192448ff, []int{5}
+}
+func (m *RespCommon) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_RespCommon.Unmarshal(m, b)
+}
+func (m *RespCommon) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_RespCommon.Marshal(b, m, deterministic)
+}
+func (dst *RespCommon) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RespCommon.Merge(dst, src)
+}
+func (m *RespCommon) XXX_Size() int {
+	return xxx_messageInfo_RespCommon.Size(m)
+}
+func (m *RespCommon) XXX_DiscardUnknown() {
+	xxx_messageInfo_RespCommon.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_RespCommon proto.InternalMessageInfo
+
+func (m *RespCommon) GetSeqno() int64 {
+	if m != nil && m.Seqno != nil {
+		return *m.Seqno
+	}
+	return 0
+}
+
+func (m *RespCommon) GetErrCode() int32 {
+	if m != nil && m.ErrCode != nil {
+		return *m.ErrCode
+	}
+	return 0
+}
+
+func (m *RespCommon) GetVersion() int64 {
+	if m != nil && m.Version != nil {
+		return *m.Version
+	}
+	return 0
+}
+
+// 获取记录的指定字段
+type GetReq struct {
+	Head                 *ReqCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	Fields               []string   `protobuf:"bytes,2,rep,name=fields" json:"fields,omitempty"`
+	All                  *bool      `protobuf:"varint,3,opt,name=all" json:"all,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
+	XXX_unrecognized     []byte     `json:"-"`
+	XXX_sizecache        int32      `json:"-"`
 }
 
 func (m *GetReq) Reset()         { *m = GetReq{} }
 func (m *GetReq) String() string { return proto.CompactTextString(m) }
 func (*GetReq) ProtoMessage()    {}
 func (*GetReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2fcc84b9998d60d8, []int{4}
+	return fileDescriptor_proto_7d68911a192448ff, []int{6}
 }
-
 func (m *GetReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetReq.Unmarshal(m, b)
 }
 func (m *GetReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_GetReq.Marshal(b, m, deterministic)
 }
-func (m *GetReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_GetReq.Merge(m, src)
+func (dst *GetReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetReq.Merge(dst, src)
 }
 func (m *GetReq) XXX_Size() int {
 	return xxx_messageInfo_GetReq.Size(m)
@@ -316,25 +419,11 @@ func (m *GetReq) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_GetReq proto.InternalMessageInfo
 
-func (m *GetReq) GetSeqno() int64 {
-	if m != nil && m.Seqno != nil {
-		return *m.Seqno
+func (m *GetReq) GetHead() *ReqCommon {
+	if m != nil {
+		return m.Head
 	}
-	return 0
-}
-
-func (m *GetReq) GetTable() string {
-	if m != nil && m.Table != nil {
-		return *m.Table
-	}
-	return ""
-}
-
-func (m *GetReq) GetKey() string {
-	if m != nil && m.Key != nil {
-		return *m.Key
-	}
-	return ""
+	return nil
 }
 
 func (m *GetReq) GetFields() []string {
@@ -344,38 +433,35 @@ func (m *GetReq) GetFields() []string {
 	return nil
 }
 
-func (m *GetReq) GetTimeout() int64 {
-	if m != nil && m.Timeout != nil {
-		return *m.Timeout
+func (m *GetReq) GetAll() bool {
+	if m != nil && m.All != nil {
+		return *m.All
 	}
-	return 0
+	return false
 }
 
 type GetResp struct {
-	Seqno                *int64   `protobuf:"varint,1,req,name=seqno" json:"seqno,omitempty"`
-	ErrCode              *int32   `protobuf:"varint,2,req,name=errCode" json:"errCode,omitempty"`
-	Version              *int64   `protobuf:"varint,3,opt,name=version" json:"version,omitempty"`
-	Fields               []*Field `protobuf:"bytes,4,rep,name=fields" json:"fields,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Head                 *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	Fields               []*Field    `protobuf:"bytes,2,rep,name=fields" json:"fields,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
+	XXX_unrecognized     []byte      `json:"-"`
+	XXX_sizecache        int32       `json:"-"`
 }
 
 func (m *GetResp) Reset()         { *m = GetResp{} }
 func (m *GetResp) String() string { return proto.CompactTextString(m) }
 func (*GetResp) ProtoMessage()    {}
 func (*GetResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2fcc84b9998d60d8, []int{5}
+	return fileDescriptor_proto_7d68911a192448ff, []int{7}
 }
-
 func (m *GetResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetResp.Unmarshal(m, b)
 }
 func (m *GetResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_GetResp.Marshal(b, m, deterministic)
 }
-func (m *GetResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_GetResp.Merge(m, src)
+func (dst *GetResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetResp.Merge(dst, src)
 }
 func (m *GetResp) XXX_Size() int {
 	return xxx_messageInfo_GetResp.Size(m)
@@ -386,155 +472,14 @@ func (m *GetResp) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_GetResp proto.InternalMessageInfo
 
-func (m *GetResp) GetSeqno() int64 {
-	if m != nil && m.Seqno != nil {
-		return *m.Seqno
-	}
-	return 0
-}
-
-func (m *GetResp) GetErrCode() int32 {
-	if m != nil && m.ErrCode != nil {
-		return *m.ErrCode
-	}
-	return 0
-}
-
-func (m *GetResp) GetVersion() int64 {
-	if m != nil && m.Version != nil {
-		return *m.Version
-	}
-	return 0
-}
-
-func (m *GetResp) GetFields() []*Field {
+func (m *GetResp) GetHead() *RespCommon {
 	if m != nil {
-		return m.Fields
+		return m.Head
 	}
 	return nil
 }
 
-//获取记录的所有字段
-type GetAllReq struct {
-	Seqno                *int64   `protobuf:"varint,1,req,name=seqno" json:"seqno,omitempty"`
-	Table                *string  `protobuf:"bytes,2,req,name=table" json:"table,omitempty"`
-	Key                  *string  `protobuf:"bytes,3,req,name=key" json:"key,omitempty"`
-	Timeout              *int64   `protobuf:"varint,4,req,name=timeout" json:"timeout,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
-}
-
-func (m *GetAllReq) Reset()         { *m = GetAllReq{} }
-func (m *GetAllReq) String() string { return proto.CompactTextString(m) }
-func (*GetAllReq) ProtoMessage()    {}
-func (*GetAllReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2fcc84b9998d60d8, []int{6}
-}
-
-func (m *GetAllReq) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_GetAllReq.Unmarshal(m, b)
-}
-func (m *GetAllReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_GetAllReq.Marshal(b, m, deterministic)
-}
-func (m *GetAllReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_GetAllReq.Merge(m, src)
-}
-func (m *GetAllReq) XXX_Size() int {
-	return xxx_messageInfo_GetAllReq.Size(m)
-}
-func (m *GetAllReq) XXX_DiscardUnknown() {
-	xxx_messageInfo_GetAllReq.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_GetAllReq proto.InternalMessageInfo
-
-func (m *GetAllReq) GetSeqno() int64 {
-	if m != nil && m.Seqno != nil {
-		return *m.Seqno
-	}
-	return 0
-}
-
-func (m *GetAllReq) GetTable() string {
-	if m != nil && m.Table != nil {
-		return *m.Table
-	}
-	return ""
-}
-
-func (m *GetAllReq) GetKey() string {
-	if m != nil && m.Key != nil {
-		return *m.Key
-	}
-	return ""
-}
-
-func (m *GetAllReq) GetTimeout() int64 {
-	if m != nil && m.Timeout != nil {
-		return *m.Timeout
-	}
-	return 0
-}
-
-type GetAllResp struct {
-	Seqno                *int64   `protobuf:"varint,1,req,name=seqno" json:"seqno,omitempty"`
-	ErrCode              *int32   `protobuf:"varint,2,req,name=errCode" json:"errCode,omitempty"`
-	Version              *int64   `protobuf:"varint,3,opt,name=version" json:"version,omitempty"`
-	Fields               []*Field `protobuf:"bytes,4,rep,name=fields" json:"fields,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
-}
-
-func (m *GetAllResp) Reset()         { *m = GetAllResp{} }
-func (m *GetAllResp) String() string { return proto.CompactTextString(m) }
-func (*GetAllResp) ProtoMessage()    {}
-func (*GetAllResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2fcc84b9998d60d8, []int{7}
-}
-
-func (m *GetAllResp) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_GetAllResp.Unmarshal(m, b)
-}
-func (m *GetAllResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_GetAllResp.Marshal(b, m, deterministic)
-}
-func (m *GetAllResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_GetAllResp.Merge(m, src)
-}
-func (m *GetAllResp) XXX_Size() int {
-	return xxx_messageInfo_GetAllResp.Size(m)
-}
-func (m *GetAllResp) XXX_DiscardUnknown() {
-	xxx_messageInfo_GetAllResp.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_GetAllResp proto.InternalMessageInfo
-
-func (m *GetAllResp) GetSeqno() int64 {
-	if m != nil && m.Seqno != nil {
-		return *m.Seqno
-	}
-	return 0
-}
-
-func (m *GetAllResp) GetErrCode() int32 {
-	if m != nil && m.ErrCode != nil {
-		return *m.ErrCode
-	}
-	return 0
-}
-
-func (m *GetAllResp) GetVersion() int64 {
-	if m != nil && m.Version != nil {
-		return *m.Version
-	}
-	return 0
-}
-
-func (m *GetAllResp) GetFields() []*Field {
+func (m *GetResp) GetFields() []*Field {
 	if m != nil {
 		return m.Fields
 	}
@@ -545,32 +490,28 @@ func (m *GetAllResp) GetFields() []*Field {
 //  设置记录的指定字段，如果version被指定则只有当存储数据的版本号与指定的version一致时才执行设置
 //  (注:未指定版本好的情况下，如果记录不存在则新增记录，新增记录时如果有未设定的字段，将会用设定的默认值初始化)
 type SetReq struct {
-	Seqno                *int64   `protobuf:"varint,1,req,name=seqno" json:"seqno,omitempty"`
-	Version              *int64   `protobuf:"varint,2,opt,name=version" json:"version,omitempty"`
-	Table                *string  `protobuf:"bytes,3,req,name=table" json:"table,omitempty"`
-	Key                  *string  `protobuf:"bytes,4,req,name=key" json:"key,omitempty"`
-	Fields               []*Field `protobuf:"bytes,5,rep,name=fields" json:"fields,omitempty"`
-	Timeout              *int64   `protobuf:"varint,6,req,name=timeout" json:"timeout,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Head                 *ReqCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	Version              *int64     `protobuf:"varint,2,opt,name=version" json:"version,omitempty"`
+	Fields               []*Field   `protobuf:"bytes,3,rep,name=fields" json:"fields,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
+	XXX_unrecognized     []byte     `json:"-"`
+	XXX_sizecache        int32      `json:"-"`
 }
 
 func (m *SetReq) Reset()         { *m = SetReq{} }
 func (m *SetReq) String() string { return proto.CompactTextString(m) }
 func (*SetReq) ProtoMessage()    {}
 func (*SetReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2fcc84b9998d60d8, []int{8}
+	return fileDescriptor_proto_7d68911a192448ff, []int{8}
 }
-
 func (m *SetReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetReq.Unmarshal(m, b)
 }
 func (m *SetReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_SetReq.Marshal(b, m, deterministic)
 }
-func (m *SetReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SetReq.Merge(m, src)
+func (dst *SetReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SetReq.Merge(dst, src)
 }
 func (m *SetReq) XXX_Size() int {
 	return xxx_messageInfo_SetReq.Size(m)
@@ -581,11 +522,11 @@ func (m *SetReq) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_SetReq proto.InternalMessageInfo
 
-func (m *SetReq) GetSeqno() int64 {
-	if m != nil && m.Seqno != nil {
-		return *m.Seqno
+func (m *SetReq) GetHead() *ReqCommon {
+	if m != nil {
+		return m.Head
 	}
-	return 0
+	return nil
 }
 
 func (m *SetReq) GetVersion() int64 {
@@ -595,20 +536,6 @@ func (m *SetReq) GetVersion() int64 {
 	return 0
 }
 
-func (m *SetReq) GetTable() string {
-	if m != nil && m.Table != nil {
-		return *m.Table
-	}
-	return ""
-}
-
-func (m *SetReq) GetKey() string {
-	if m != nil && m.Key != nil {
-		return *m.Key
-	}
-	return ""
-}
-
 func (m *SetReq) GetFields() []*Field {
 	if m != nil {
 		return m.Fields
@@ -616,37 +543,27 @@ func (m *SetReq) GetFields() []*Field {
 	return nil
 }
 
-func (m *SetReq) GetTimeout() int64 {
-	if m != nil && m.Timeout != nil {
-		return *m.Timeout
-	}
-	return 0
-}
-
 type SetResp struct {
-	Seqno                *int64   `protobuf:"varint,1,req,name=seqno" json:"seqno,omitempty"`
-	ErrCode              *int32   `protobuf:"varint,2,req,name=errCode" json:"errCode,omitempty"`
-	Version              *int64   `protobuf:"varint,3,opt,name=version" json:"version,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Head                 *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
+	XXX_unrecognized     []byte      `json:"-"`
+	XXX_sizecache        int32       `json:"-"`
 }
 
 func (m *SetResp) Reset()         { *m = SetResp{} }
 func (m *SetResp) String() string { return proto.CompactTextString(m) }
 func (*SetResp) ProtoMessage()    {}
 func (*SetResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2fcc84b9998d60d8, []int{9}
+	return fileDescriptor_proto_7d68911a192448ff, []int{9}
 }
-
 func (m *SetResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetResp.Unmarshal(m, b)
 }
 func (m *SetResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_SetResp.Marshal(b, m, deterministic)
 }
-func (m *SetResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SetResp.Merge(m, src)
+func (dst *SetResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SetResp.Merge(dst, src)
 }
 func (m *SetResp) XXX_Size() int {
 	return xxx_messageInfo_SetResp.Size(m)
@@ -657,55 +574,37 @@ func (m *SetResp) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_SetResp proto.InternalMessageInfo
 
-func (m *SetResp) GetSeqno() int64 {
-	if m != nil && m.Seqno != nil {
-		return *m.Seqno
+func (m *SetResp) GetHead() *RespCommon {
+	if m != nil {
+		return m.Head
 	}
-	return 0
-}
-
-func (m *SetResp) GetErrCode() int32 {
-	if m != nil && m.ErrCode != nil {
-		return *m.ErrCode
-	}
-	return 0
-}
-
-func (m *SetResp) GetVersion() int64 {
-	if m != nil && m.Version != nil {
-		return *m.Version
-	}
-	return 0
+	return nil
 }
 
 //
 //  与set指令类似，只有当记录不存在时才能成功设置
 type SetNxReq struct {
-	Seqno                *int64   `protobuf:"varint,1,req,name=seqno" json:"seqno,omitempty"`
-	Table                *string  `protobuf:"bytes,2,req,name=table" json:"table,omitempty"`
-	Key                  *string  `protobuf:"bytes,3,req,name=key" json:"key,omitempty"`
-	Fields               []*Field `protobuf:"bytes,4,rep,name=fields" json:"fields,omitempty"`
-	Timeout              *int64   `protobuf:"varint,5,req,name=timeout" json:"timeout,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Head                 *ReqCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	Fields               []*Field   `protobuf:"bytes,2,rep,name=fields" json:"fields,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
+	XXX_unrecognized     []byte     `json:"-"`
+	XXX_sizecache        int32      `json:"-"`
 }
 
 func (m *SetNxReq) Reset()         { *m = SetNxReq{} }
 func (m *SetNxReq) String() string { return proto.CompactTextString(m) }
 func (*SetNxReq) ProtoMessage()    {}
 func (*SetNxReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2fcc84b9998d60d8, []int{10}
+	return fileDescriptor_proto_7d68911a192448ff, []int{10}
 }
-
 func (m *SetNxReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetNxReq.Unmarshal(m, b)
 }
 func (m *SetNxReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_SetNxReq.Marshal(b, m, deterministic)
 }
-func (m *SetNxReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SetNxReq.Merge(m, src)
+func (dst *SetNxReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SetNxReq.Merge(dst, src)
 }
 func (m *SetNxReq) XXX_Size() int {
 	return xxx_messageInfo_SetNxReq.Size(m)
@@ -716,25 +615,11 @@ func (m *SetNxReq) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_SetNxReq proto.InternalMessageInfo
 
-func (m *SetNxReq) GetSeqno() int64 {
-	if m != nil && m.Seqno != nil {
-		return *m.Seqno
+func (m *SetNxReq) GetHead() *ReqCommon {
+	if m != nil {
+		return m.Head
 	}
-	return 0
-}
-
-func (m *SetNxReq) GetTable() string {
-	if m != nil && m.Table != nil {
-		return *m.Table
-	}
-	return ""
-}
-
-func (m *SetNxReq) GetKey() string {
-	if m != nil && m.Key != nil {
-		return *m.Key
-	}
-	return ""
+	return nil
 }
 
 func (m *SetNxReq) GetFields() []*Field {
@@ -744,37 +629,27 @@ func (m *SetNxReq) GetFields() []*Field {
 	return nil
 }
 
-func (m *SetNxReq) GetTimeout() int64 {
-	if m != nil && m.Timeout != nil {
-		return *m.Timeout
-	}
-	return 0
-}
-
 type SetNxResp struct {
-	Seqno                *int64   `protobuf:"varint,1,req,name=seqno" json:"seqno,omitempty"`
-	ErrCode              *int32   `protobuf:"varint,2,req,name=errCode" json:"errCode,omitempty"`
-	Version              *int64   `protobuf:"varint,3,opt,name=version" json:"version,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Head                 *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
+	XXX_unrecognized     []byte      `json:"-"`
+	XXX_sizecache        int32       `json:"-"`
 }
 
 func (m *SetNxResp) Reset()         { *m = SetNxResp{} }
 func (m *SetNxResp) String() string { return proto.CompactTextString(m) }
 func (*SetNxResp) ProtoMessage()    {}
 func (*SetNxResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2fcc84b9998d60d8, []int{11}
+	return fileDescriptor_proto_7d68911a192448ff, []int{11}
 }
-
 func (m *SetNxResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetNxResp.Unmarshal(m, b)
 }
 func (m *SetNxResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_SetNxResp.Marshal(b, m, deterministic)
 }
-func (m *SetNxResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SetNxResp.Merge(m, src)
+func (dst *SetNxResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SetNxResp.Merge(dst, src)
 }
 func (m *SetNxResp) XXX_Size() int {
 	return xxx_messageInfo_SetNxResp.Size(m)
@@ -785,56 +660,38 @@ func (m *SetNxResp) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_SetNxResp proto.InternalMessageInfo
 
-func (m *SetNxResp) GetSeqno() int64 {
-	if m != nil && m.Seqno != nil {
-		return *m.Seqno
+func (m *SetNxResp) GetHead() *RespCommon {
+	if m != nil {
+		return m.Head
 	}
-	return 0
-}
-
-func (m *SetNxResp) GetErrCode() int32 {
-	if m != nil && m.ErrCode != nil {
-		return *m.ErrCode
-	}
-	return 0
-}
-
-func (m *SetNxResp) GetVersion() int64 {
-	if m != nil && m.Version != nil {
-		return *m.Version
-	}
-	return 0
+	return nil
 }
 
 //
 //  将记录的field.name字段增加field.value,并返回增加后的值(field.value只支持int类型，如果记录不存在会用
 //  记录的默认值初始化记录，int类型默认值为0，并在此基础上增加)
 type IncrByReq struct {
-	Seqno                *int64   `protobuf:"varint,1,req,name=seqno" json:"seqno,omitempty"`
-	Table                *string  `protobuf:"bytes,2,req,name=table" json:"table,omitempty"`
-	Key                  *string  `protobuf:"bytes,3,req,name=key" json:"key,omitempty"`
-	Field                *Field   `protobuf:"bytes,4,req,name=field" json:"field,omitempty"`
-	Timeout              *int64   `protobuf:"varint,5,req,name=timeout" json:"timeout,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Head                 *ReqCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	Field                *Field     `protobuf:"bytes,2,req,name=field" json:"field,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
+	XXX_unrecognized     []byte     `json:"-"`
+	XXX_sizecache        int32      `json:"-"`
 }
 
 func (m *IncrByReq) Reset()         { *m = IncrByReq{} }
 func (m *IncrByReq) String() string { return proto.CompactTextString(m) }
 func (*IncrByReq) ProtoMessage()    {}
 func (*IncrByReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2fcc84b9998d60d8, []int{12}
+	return fileDescriptor_proto_7d68911a192448ff, []int{12}
 }
-
 func (m *IncrByReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_IncrByReq.Unmarshal(m, b)
 }
 func (m *IncrByReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_IncrByReq.Marshal(b, m, deterministic)
 }
-func (m *IncrByReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_IncrByReq.Merge(m, src)
+func (dst *IncrByReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_IncrByReq.Merge(dst, src)
 }
 func (m *IncrByReq) XXX_Size() int {
 	return xxx_messageInfo_IncrByReq.Size(m)
@@ -845,25 +702,11 @@ func (m *IncrByReq) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_IncrByReq proto.InternalMessageInfo
 
-func (m *IncrByReq) GetSeqno() int64 {
-	if m != nil && m.Seqno != nil {
-		return *m.Seqno
+func (m *IncrByReq) GetHead() *ReqCommon {
+	if m != nil {
+		return m.Head
 	}
-	return 0
-}
-
-func (m *IncrByReq) GetTable() string {
-	if m != nil && m.Table != nil {
-		return *m.Table
-	}
-	return ""
-}
-
-func (m *IncrByReq) GetKey() string {
-	if m != nil && m.Key != nil {
-		return *m.Key
-	}
-	return ""
+	return nil
 }
 
 func (m *IncrByReq) GetField() *Field {
@@ -873,38 +716,28 @@ func (m *IncrByReq) GetField() *Field {
 	return nil
 }
 
-func (m *IncrByReq) GetTimeout() int64 {
-	if m != nil && m.Timeout != nil {
-		return *m.Timeout
-	}
-	return 0
-}
-
 type IncrByResp struct {
-	Seqno                *int64   `protobuf:"varint,1,req,name=seqno" json:"seqno,omitempty"`
-	ErrCode              *int32   `protobuf:"varint,2,req,name=errCode" json:"errCode,omitempty"`
-	Version              *int64   `protobuf:"varint,3,opt,name=version" json:"version,omitempty"`
-	NewValue             *Field   `protobuf:"bytes,4,opt,name=newValue" json:"newValue,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Head                 *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	NewValue             *Field      `protobuf:"bytes,4,opt,name=newValue" json:"newValue,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
+	XXX_unrecognized     []byte      `json:"-"`
+	XXX_sizecache        int32       `json:"-"`
 }
 
 func (m *IncrByResp) Reset()         { *m = IncrByResp{} }
 func (m *IncrByResp) String() string { return proto.CompactTextString(m) }
 func (*IncrByResp) ProtoMessage()    {}
 func (*IncrByResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2fcc84b9998d60d8, []int{13}
+	return fileDescriptor_proto_7d68911a192448ff, []int{13}
 }
-
 func (m *IncrByResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_IncrByResp.Unmarshal(m, b)
 }
 func (m *IncrByResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_IncrByResp.Marshal(b, m, deterministic)
 }
-func (m *IncrByResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_IncrByResp.Merge(m, src)
+func (dst *IncrByResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_IncrByResp.Merge(dst, src)
 }
 func (m *IncrByResp) XXX_Size() int {
 	return xxx_messageInfo_IncrByResp.Size(m)
@@ -915,25 +748,11 @@ func (m *IncrByResp) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_IncrByResp proto.InternalMessageInfo
 
-func (m *IncrByResp) GetSeqno() int64 {
-	if m != nil && m.Seqno != nil {
-		return *m.Seqno
+func (m *IncrByResp) GetHead() *RespCommon {
+	if m != nil {
+		return m.Head
 	}
-	return 0
-}
-
-func (m *IncrByResp) GetErrCode() int32 {
-	if m != nil && m.ErrCode != nil {
-		return *m.ErrCode
-	}
-	return 0
-}
-
-func (m *IncrByResp) GetVersion() int64 {
-	if m != nil && m.Version != nil {
-		return *m.Version
-	}
-	return 0
+	return nil
 }
 
 func (m *IncrByResp) GetNewValue() *Field {
@@ -947,31 +766,27 @@ func (m *IncrByResp) GetNewValue() *Field {
 //  将记录的field.name字段减少field.value,并返回减少后的值(field.value只支持int类型，如果记录不存在会用
 //  记录的默认值初始化记录，int类型默认值为0，并在此基础上减少)
 type DecrByReq struct {
-	Seqno                *int64   `protobuf:"varint,1,req,name=seqno" json:"seqno,omitempty"`
-	Table                *string  `protobuf:"bytes,2,req,name=table" json:"table,omitempty"`
-	Key                  *string  `protobuf:"bytes,3,req,name=key" json:"key,omitempty"`
-	Field                *Field   `protobuf:"bytes,4,req,name=field" json:"field,omitempty"`
-	Timeout              *int64   `protobuf:"varint,5,req,name=timeout" json:"timeout,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Head                 *ReqCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	Field                *Field     `protobuf:"bytes,2,req,name=field" json:"field,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
+	XXX_unrecognized     []byte     `json:"-"`
+	XXX_sizecache        int32      `json:"-"`
 }
 
 func (m *DecrByReq) Reset()         { *m = DecrByReq{} }
 func (m *DecrByReq) String() string { return proto.CompactTextString(m) }
 func (*DecrByReq) ProtoMessage()    {}
 func (*DecrByReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2fcc84b9998d60d8, []int{14}
+	return fileDescriptor_proto_7d68911a192448ff, []int{14}
 }
-
 func (m *DecrByReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DecrByReq.Unmarshal(m, b)
 }
 func (m *DecrByReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_DecrByReq.Marshal(b, m, deterministic)
 }
-func (m *DecrByReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_DecrByReq.Merge(m, src)
+func (dst *DecrByReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DecrByReq.Merge(dst, src)
 }
 func (m *DecrByReq) XXX_Size() int {
 	return xxx_messageInfo_DecrByReq.Size(m)
@@ -982,25 +797,11 @@ func (m *DecrByReq) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_DecrByReq proto.InternalMessageInfo
 
-func (m *DecrByReq) GetSeqno() int64 {
-	if m != nil && m.Seqno != nil {
-		return *m.Seqno
+func (m *DecrByReq) GetHead() *ReqCommon {
+	if m != nil {
+		return m.Head
 	}
-	return 0
-}
-
-func (m *DecrByReq) GetTable() string {
-	if m != nil && m.Table != nil {
-		return *m.Table
-	}
-	return ""
-}
-
-func (m *DecrByReq) GetKey() string {
-	if m != nil && m.Key != nil {
-		return *m.Key
-	}
-	return ""
+	return nil
 }
 
 func (m *DecrByReq) GetField() *Field {
@@ -1010,38 +811,28 @@ func (m *DecrByReq) GetField() *Field {
 	return nil
 }
 
-func (m *DecrByReq) GetTimeout() int64 {
-	if m != nil && m.Timeout != nil {
-		return *m.Timeout
-	}
-	return 0
-}
-
 type DecrByResp struct {
-	Seqno                *int64   `protobuf:"varint,1,req,name=seqno" json:"seqno,omitempty"`
-	ErrCode              *int32   `protobuf:"varint,2,req,name=errCode" json:"errCode,omitempty"`
-	Version              *int64   `protobuf:"varint,3,opt,name=version" json:"version,omitempty"`
-	NewValue             *Field   `protobuf:"bytes,4,opt,name=newValue" json:"newValue,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Head                 *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	NewValue             *Field      `protobuf:"bytes,2,opt,name=newValue" json:"newValue,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
+	XXX_unrecognized     []byte      `json:"-"`
+	XXX_sizecache        int32       `json:"-"`
 }
 
 func (m *DecrByResp) Reset()         { *m = DecrByResp{} }
 func (m *DecrByResp) String() string { return proto.CompactTextString(m) }
 func (*DecrByResp) ProtoMessage()    {}
 func (*DecrByResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2fcc84b9998d60d8, []int{15}
+	return fileDescriptor_proto_7d68911a192448ff, []int{15}
 }
-
 func (m *DecrByResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DecrByResp.Unmarshal(m, b)
 }
 func (m *DecrByResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_DecrByResp.Marshal(b, m, deterministic)
 }
-func (m *DecrByResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_DecrByResp.Merge(m, src)
+func (dst *DecrByResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DecrByResp.Merge(dst, src)
 }
 func (m *DecrByResp) XXX_Size() int {
 	return xxx_messageInfo_DecrByResp.Size(m)
@@ -1052,25 +843,11 @@ func (m *DecrByResp) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_DecrByResp proto.InternalMessageInfo
 
-func (m *DecrByResp) GetSeqno() int64 {
-	if m != nil && m.Seqno != nil {
-		return *m.Seqno
+func (m *DecrByResp) GetHead() *RespCommon {
+	if m != nil {
+		return m.Head
 	}
-	return 0
-}
-
-func (m *DecrByResp) GetErrCode() int32 {
-	if m != nil && m.ErrCode != nil {
-		return *m.ErrCode
-	}
-	return 0
-}
-
-func (m *DecrByResp) GetVersion() int64 {
-	if m != nil && m.Version != nil {
-		return *m.Version
-	}
-	return 0
+	return nil
 }
 
 func (m *DecrByResp) GetNewValue() *Field {
@@ -1084,32 +861,28 @@ func (m *DecrByResp) GetNewValue() *Field {
 //  如果记录存在且old.name的值与old.value相等，将其设定为new.value
 //  只要记录存在，无论替换是否成功都将返回old.name的当前值。
 type CompareAndSetReq struct {
-	Seqno                *int64   `protobuf:"varint,1,req,name=seqno" json:"seqno,omitempty"`
-	Table                *string  `protobuf:"bytes,2,req,name=table" json:"table,omitempty"`
-	Key                  *string  `protobuf:"bytes,3,req,name=key" json:"key,omitempty"`
-	New                  *Field   `protobuf:"bytes,4,req,name=new" json:"new,omitempty"`
-	Old                  *Field   `protobuf:"bytes,5,req,name=old" json:"old,omitempty"`
-	Timeout              *int64   `protobuf:"varint,6,req,name=timeout" json:"timeout,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Head                 *ReqCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	New                  *Field     `protobuf:"bytes,2,req,name=new" json:"new,omitempty"`
+	Old                  *Field     `protobuf:"bytes,3,req,name=old" json:"old,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
+	XXX_unrecognized     []byte     `json:"-"`
+	XXX_sizecache        int32      `json:"-"`
 }
 
 func (m *CompareAndSetReq) Reset()         { *m = CompareAndSetReq{} }
 func (m *CompareAndSetReq) String() string { return proto.CompactTextString(m) }
 func (*CompareAndSetReq) ProtoMessage()    {}
 func (*CompareAndSetReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2fcc84b9998d60d8, []int{16}
+	return fileDescriptor_proto_7d68911a192448ff, []int{16}
 }
-
 func (m *CompareAndSetReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CompareAndSetReq.Unmarshal(m, b)
 }
 func (m *CompareAndSetReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_CompareAndSetReq.Marshal(b, m, deterministic)
 }
-func (m *CompareAndSetReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CompareAndSetReq.Merge(m, src)
+func (dst *CompareAndSetReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CompareAndSetReq.Merge(dst, src)
 }
 func (m *CompareAndSetReq) XXX_Size() int {
 	return xxx_messageInfo_CompareAndSetReq.Size(m)
@@ -1120,25 +893,11 @@ func (m *CompareAndSetReq) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_CompareAndSetReq proto.InternalMessageInfo
 
-func (m *CompareAndSetReq) GetSeqno() int64 {
-	if m != nil && m.Seqno != nil {
-		return *m.Seqno
+func (m *CompareAndSetReq) GetHead() *ReqCommon {
+	if m != nil {
+		return m.Head
 	}
-	return 0
-}
-
-func (m *CompareAndSetReq) GetTable() string {
-	if m != nil && m.Table != nil {
-		return *m.Table
-	}
-	return ""
-}
-
-func (m *CompareAndSetReq) GetKey() string {
-	if m != nil && m.Key != nil {
-		return *m.Key
-	}
-	return ""
+	return nil
 }
 
 func (m *CompareAndSetReq) GetNew() *Field {
@@ -1155,38 +914,28 @@ func (m *CompareAndSetReq) GetOld() *Field {
 	return nil
 }
 
-func (m *CompareAndSetReq) GetTimeout() int64 {
-	if m != nil && m.Timeout != nil {
-		return *m.Timeout
-	}
-	return 0
-}
-
 type CompareAndSetResp struct {
-	Seqno                *int64   `protobuf:"varint,1,req,name=seqno" json:"seqno,omitempty"`
-	ErrCode              *int32   `protobuf:"varint,2,req,name=errCode" json:"errCode,omitempty"`
-	Version              *int64   `protobuf:"varint,3,opt,name=version" json:"version,omitempty"`
-	Value                *Field   `protobuf:"bytes,4,opt,name=value" json:"value,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Head                 *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	Value                *Field      `protobuf:"bytes,2,opt,name=value" json:"value,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
+	XXX_unrecognized     []byte      `json:"-"`
+	XXX_sizecache        int32       `json:"-"`
 }
 
 func (m *CompareAndSetResp) Reset()         { *m = CompareAndSetResp{} }
 func (m *CompareAndSetResp) String() string { return proto.CompactTextString(m) }
 func (*CompareAndSetResp) ProtoMessage()    {}
 func (*CompareAndSetResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2fcc84b9998d60d8, []int{17}
+	return fileDescriptor_proto_7d68911a192448ff, []int{17}
 }
-
 func (m *CompareAndSetResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CompareAndSetResp.Unmarshal(m, b)
 }
 func (m *CompareAndSetResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_CompareAndSetResp.Marshal(b, m, deterministic)
 }
-func (m *CompareAndSetResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CompareAndSetResp.Merge(m, src)
+func (dst *CompareAndSetResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CompareAndSetResp.Merge(dst, src)
 }
 func (m *CompareAndSetResp) XXX_Size() int {
 	return xxx_messageInfo_CompareAndSetResp.Size(m)
@@ -1197,25 +946,11 @@ func (m *CompareAndSetResp) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_CompareAndSetResp proto.InternalMessageInfo
 
-func (m *CompareAndSetResp) GetSeqno() int64 {
-	if m != nil && m.Seqno != nil {
-		return *m.Seqno
+func (m *CompareAndSetResp) GetHead() *RespCommon {
+	if m != nil {
+		return m.Head
 	}
-	return 0
-}
-
-func (m *CompareAndSetResp) GetErrCode() int32 {
-	if m != nil && m.ErrCode != nil {
-		return *m.ErrCode
-	}
-	return 0
-}
-
-func (m *CompareAndSetResp) GetVersion() int64 {
-	if m != nil && m.Version != nil {
-		return *m.Version
-	}
-	return 0
+	return nil
 }
 
 func (m *CompareAndSetResp) GetValue() *Field {
@@ -1229,32 +964,28 @@ func (m *CompareAndSetResp) GetValue() *Field {
 //  如果记录不存在，或old.name的值与old.value相等，将其设定为new.value
 //  无论替换是否成功都将返回old.name的当前值。(注意:如果记录不存在，old.name以外的字段将被设置为初始值)
 type CompareAndSetNxReq struct {
-	Seqno                *int64   `protobuf:"varint,1,req,name=seqno" json:"seqno,omitempty"`
-	Table                *string  `protobuf:"bytes,2,req,name=table" json:"table,omitempty"`
-	Key                  *string  `protobuf:"bytes,3,req,name=key" json:"key,omitempty"`
-	New                  *Field   `protobuf:"bytes,4,req,name=new" json:"new,omitempty"`
-	Old                  *Field   `protobuf:"bytes,5,req,name=old" json:"old,omitempty"`
-	Timeout              *int64   `protobuf:"varint,6,req,name=timeout" json:"timeout,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Head                 *ReqCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	New                  *Field     `protobuf:"bytes,2,req,name=new" json:"new,omitempty"`
+	Old                  *Field     `protobuf:"bytes,3,req,name=old" json:"old,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
+	XXX_unrecognized     []byte     `json:"-"`
+	XXX_sizecache        int32      `json:"-"`
 }
 
 func (m *CompareAndSetNxReq) Reset()         { *m = CompareAndSetNxReq{} }
 func (m *CompareAndSetNxReq) String() string { return proto.CompactTextString(m) }
 func (*CompareAndSetNxReq) ProtoMessage()    {}
 func (*CompareAndSetNxReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2fcc84b9998d60d8, []int{18}
+	return fileDescriptor_proto_7d68911a192448ff, []int{18}
 }
-
 func (m *CompareAndSetNxReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CompareAndSetNxReq.Unmarshal(m, b)
 }
 func (m *CompareAndSetNxReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_CompareAndSetNxReq.Marshal(b, m, deterministic)
 }
-func (m *CompareAndSetNxReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CompareAndSetNxReq.Merge(m, src)
+func (dst *CompareAndSetNxReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CompareAndSetNxReq.Merge(dst, src)
 }
 func (m *CompareAndSetNxReq) XXX_Size() int {
 	return xxx_messageInfo_CompareAndSetNxReq.Size(m)
@@ -1265,25 +996,11 @@ func (m *CompareAndSetNxReq) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_CompareAndSetNxReq proto.InternalMessageInfo
 
-func (m *CompareAndSetNxReq) GetSeqno() int64 {
-	if m != nil && m.Seqno != nil {
-		return *m.Seqno
+func (m *CompareAndSetNxReq) GetHead() *ReqCommon {
+	if m != nil {
+		return m.Head
 	}
-	return 0
-}
-
-func (m *CompareAndSetNxReq) GetTable() string {
-	if m != nil && m.Table != nil {
-		return *m.Table
-	}
-	return ""
-}
-
-func (m *CompareAndSetNxReq) GetKey() string {
-	if m != nil && m.Key != nil {
-		return *m.Key
-	}
-	return ""
+	return nil
 }
 
 func (m *CompareAndSetNxReq) GetNew() *Field {
@@ -1300,38 +1017,28 @@ func (m *CompareAndSetNxReq) GetOld() *Field {
 	return nil
 }
 
-func (m *CompareAndSetNxReq) GetTimeout() int64 {
-	if m != nil && m.Timeout != nil {
-		return *m.Timeout
-	}
-	return 0
-}
-
 type CompareAndSetNxResp struct {
-	Seqno                *int64   `protobuf:"varint,1,req,name=seqno" json:"seqno,omitempty"`
-	ErrCode              *int32   `protobuf:"varint,2,req,name=errCode" json:"errCode,omitempty"`
-	Version              *int64   `protobuf:"varint,3,opt,name=version" json:"version,omitempty"`
-	Value                *Field   `protobuf:"bytes,4,opt,name=value" json:"value,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Head                 *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	Value                *Field      `protobuf:"bytes,4,opt,name=value" json:"value,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
+	XXX_unrecognized     []byte      `json:"-"`
+	XXX_sizecache        int32       `json:"-"`
 }
 
 func (m *CompareAndSetNxResp) Reset()         { *m = CompareAndSetNxResp{} }
 func (m *CompareAndSetNxResp) String() string { return proto.CompactTextString(m) }
 func (*CompareAndSetNxResp) ProtoMessage()    {}
 func (*CompareAndSetNxResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2fcc84b9998d60d8, []int{19}
+	return fileDescriptor_proto_7d68911a192448ff, []int{19}
 }
-
 func (m *CompareAndSetNxResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CompareAndSetNxResp.Unmarshal(m, b)
 }
 func (m *CompareAndSetNxResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_CompareAndSetNxResp.Marshal(b, m, deterministic)
 }
-func (m *CompareAndSetNxResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CompareAndSetNxResp.Merge(m, src)
+func (dst *CompareAndSetNxResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CompareAndSetNxResp.Merge(dst, src)
 }
 func (m *CompareAndSetNxResp) XXX_Size() int {
 	return xxx_messageInfo_CompareAndSetNxResp.Size(m)
@@ -1342,25 +1049,11 @@ func (m *CompareAndSetNxResp) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_CompareAndSetNxResp proto.InternalMessageInfo
 
-func (m *CompareAndSetNxResp) GetSeqno() int64 {
-	if m != nil && m.Seqno != nil {
-		return *m.Seqno
+func (m *CompareAndSetNxResp) GetHead() *RespCommon {
+	if m != nil {
+		return m.Head
 	}
-	return 0
-}
-
-func (m *CompareAndSetNxResp) GetErrCode() int32 {
-	if m != nil && m.ErrCode != nil {
-		return *m.ErrCode
-	}
-	return 0
-}
-
-func (m *CompareAndSetNxResp) GetVersion() int64 {
-	if m != nil && m.Version != nil {
-		return *m.Version
-	}
-	return 0
+	return nil
 }
 
 func (m *CompareAndSetNxResp) GetValue() *Field {
@@ -1370,33 +1063,29 @@ func (m *CompareAndSetNxResp) GetValue() *Field {
 	return nil
 }
 
-//删除命令(只支持删除整个记录，不支持删除记录的字段)
+// 删除命令(只支持删除整个记录，不支持删除记录的字段)
 type DelReq struct {
-	Seqno                *int64   `protobuf:"varint,1,req,name=seqno" json:"seqno,omitempty"`
-	Version              *int64   `protobuf:"varint,2,opt,name=version" json:"version,omitempty"`
-	Table                *string  `protobuf:"bytes,3,req,name=table" json:"table,omitempty"`
-	Key                  *string  `protobuf:"bytes,4,req,name=key" json:"key,omitempty"`
-	Timeout              *int64   `protobuf:"varint,5,req,name=timeout" json:"timeout,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Head                 *ReqCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	Version              *int64     `protobuf:"varint,2,opt,name=version" json:"version,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
+	XXX_unrecognized     []byte     `json:"-"`
+	XXX_sizecache        int32      `json:"-"`
 }
 
 func (m *DelReq) Reset()         { *m = DelReq{} }
 func (m *DelReq) String() string { return proto.CompactTextString(m) }
 func (*DelReq) ProtoMessage()    {}
 func (*DelReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2fcc84b9998d60d8, []int{20}
+	return fileDescriptor_proto_7d68911a192448ff, []int{20}
 }
-
 func (m *DelReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DelReq.Unmarshal(m, b)
 }
 func (m *DelReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_DelReq.Marshal(b, m, deterministic)
 }
-func (m *DelReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_DelReq.Merge(m, src)
+func (dst *DelReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DelReq.Merge(dst, src)
 }
 func (m *DelReq) XXX_Size() int {
 	return xxx_messageInfo_DelReq.Size(m)
@@ -1407,11 +1096,11 @@ func (m *DelReq) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_DelReq proto.InternalMessageInfo
 
-func (m *DelReq) GetSeqno() int64 {
-	if m != nil && m.Seqno != nil {
-		return *m.Seqno
+func (m *DelReq) GetHead() *ReqCommon {
+	if m != nil {
+		return m.Head
 	}
-	return 0
+	return nil
 }
 
 func (m *DelReq) GetVersion() int64 {
@@ -1421,51 +1110,27 @@ func (m *DelReq) GetVersion() int64 {
 	return 0
 }
 
-func (m *DelReq) GetTable() string {
-	if m != nil && m.Table != nil {
-		return *m.Table
-	}
-	return ""
-}
-
-func (m *DelReq) GetKey() string {
-	if m != nil && m.Key != nil {
-		return *m.Key
-	}
-	return ""
-}
-
-func (m *DelReq) GetTimeout() int64 {
-	if m != nil && m.Timeout != nil {
-		return *m.Timeout
-	}
-	return 0
-}
-
 type DelResp struct {
-	Seqno                *int64   `protobuf:"varint,1,req,name=seqno" json:"seqno,omitempty"`
-	ErrCode              *int32   `protobuf:"varint,2,req,name=errCode" json:"errCode,omitempty"`
-	Version              *int64   `protobuf:"varint,3,opt,name=version" json:"version,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Head                 *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
+	XXX_unrecognized     []byte      `json:"-"`
+	XXX_sizecache        int32       `json:"-"`
 }
 
 func (m *DelResp) Reset()         { *m = DelResp{} }
 func (m *DelResp) String() string { return proto.CompactTextString(m) }
 func (*DelResp) ProtoMessage()    {}
 func (*DelResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2fcc84b9998d60d8, []int{21}
+	return fileDescriptor_proto_7d68911a192448ff, []int{21}
 }
-
 func (m *DelResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DelResp.Unmarshal(m, b)
 }
 func (m *DelResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_DelResp.Marshal(b, m, deterministic)
 }
-func (m *DelResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_DelResp.Merge(m, src)
+func (dst *DelResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DelResp.Merge(dst, src)
 }
 func (m *DelResp) XXX_Size() int {
 	return xxx_messageInfo_DelResp.Size(m)
@@ -1476,29 +1141,17 @@ func (m *DelResp) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_DelResp proto.InternalMessageInfo
 
-func (m *DelResp) GetSeqno() int64 {
-	if m != nil && m.Seqno != nil {
-		return *m.Seqno
+func (m *DelResp) GetHead() *RespCommon {
+	if m != nil {
+		return m.Head
 	}
-	return 0
-}
-
-func (m *DelResp) GetErrCode() int32 {
-	if m != nil && m.ErrCode != nil {
-		return *m.ErrCode
-	}
-	return 0
-}
-
-func (m *DelResp) GetVersion() int64 {
-	if m != nil && m.Version != nil {
-		return *m.Version
-	}
-	return 0
+	return nil
 }
 
 type Row struct {
-	Fields               []*Field `protobuf:"bytes,1,rep,name=fields" json:"fields,omitempty"`
+	Key                  *string  `protobuf:"bytes,1,req,name=key" json:"key,omitempty"`
+	Version              *int64   `protobuf:"varint,2,req,name=version" json:"version,omitempty"`
+	Fields               []*Field `protobuf:"bytes,3,rep,name=fields" json:"fields,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1508,17 +1161,16 @@ func (m *Row) Reset()         { *m = Row{} }
 func (m *Row) String() string { return proto.CompactTextString(m) }
 func (*Row) ProtoMessage()    {}
 func (*Row) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2fcc84b9998d60d8, []int{22}
+	return fileDescriptor_proto_7d68911a192448ff, []int{22}
 }
-
 func (m *Row) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Row.Unmarshal(m, b)
 }
 func (m *Row) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Row.Marshal(b, m, deterministic)
 }
-func (m *Row) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Row.Merge(m, src)
+func (dst *Row) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Row.Merge(dst, src)
 }
 func (m *Row) XXX_Size() int {
 	return xxx_messageInfo_Row.Size(m)
@@ -1529,6 +1181,20 @@ func (m *Row) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_Row proto.InternalMessageInfo
 
+func (m *Row) GetKey() string {
+	if m != nil && m.Key != nil {
+		return *m.Key
+	}
+	return ""
+}
+
+func (m *Row) GetVersion() int64 {
+	if m != nil && m.Version != nil {
+		return *m.Version
+	}
+	return 0
+}
+
 func (m *Row) GetFields() []*Field {
 	if m != nil {
 		return m.Fields
@@ -1537,32 +1203,29 @@ func (m *Row) GetFields() []*Field {
 }
 
 type ScanReq struct {
-	Seqno                *int64   `protobuf:"varint,1,req,name=seqno" json:"seqno,omitempty"`
-	Table                *string  `protobuf:"bytes,2,opt,name=table" json:"table,omitempty"`
-	Fields               []string `protobuf:"bytes,3,rep,name=fields" json:"fields,omitempty"`
-	All                  *int32   `protobuf:"varint,4,opt,name=all" json:"all,omitempty"`
-	Count                *int32   `protobuf:"varint,5,opt,name=count" json:"count,omitempty"`
-	Timeout              *int64   `protobuf:"varint,6,req,name=timeout" json:"timeout,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Head                 *ReqCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	Fields               []string   `protobuf:"bytes,3,rep,name=fields" json:"fields,omitempty"`
+	All                  *bool      `protobuf:"varint,4,opt,name=all" json:"all,omitempty"`
+	Count                *int32     `protobuf:"varint,5,opt,name=count" json:"count,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
+	XXX_unrecognized     []byte     `json:"-"`
+	XXX_sizecache        int32      `json:"-"`
 }
 
 func (m *ScanReq) Reset()         { *m = ScanReq{} }
 func (m *ScanReq) String() string { return proto.CompactTextString(m) }
 func (*ScanReq) ProtoMessage()    {}
 func (*ScanReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2fcc84b9998d60d8, []int{23}
+	return fileDescriptor_proto_7d68911a192448ff, []int{23}
 }
-
 func (m *ScanReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ScanReq.Unmarshal(m, b)
 }
 func (m *ScanReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ScanReq.Marshal(b, m, deterministic)
 }
-func (m *ScanReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ScanReq.Merge(m, src)
+func (dst *ScanReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ScanReq.Merge(dst, src)
 }
 func (m *ScanReq) XXX_Size() int {
 	return xxx_messageInfo_ScanReq.Size(m)
@@ -1573,18 +1236,11 @@ func (m *ScanReq) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ScanReq proto.InternalMessageInfo
 
-func (m *ScanReq) GetSeqno() int64 {
-	if m != nil && m.Seqno != nil {
-		return *m.Seqno
+func (m *ScanReq) GetHead() *ReqCommon {
+	if m != nil {
+		return m.Head
 	}
-	return 0
-}
-
-func (m *ScanReq) GetTable() string {
-	if m != nil && m.Table != nil {
-		return *m.Table
-	}
-	return ""
+	return nil
 }
 
 func (m *ScanReq) GetFields() []string {
@@ -1594,11 +1250,11 @@ func (m *ScanReq) GetFields() []string {
 	return nil
 }
 
-func (m *ScanReq) GetAll() int32 {
+func (m *ScanReq) GetAll() bool {
 	if m != nil && m.All != nil {
 		return *m.All
 	}
-	return 0
+	return false
 }
 
 func (m *ScanReq) GetCount() int32 {
@@ -1608,37 +1264,28 @@ func (m *ScanReq) GetCount() int32 {
 	return 0
 }
 
-func (m *ScanReq) GetTimeout() int64 {
-	if m != nil && m.Timeout != nil {
-		return *m.Timeout
-	}
-	return 0
-}
-
 type ScanResp struct {
-	Seqno                *int64   `protobuf:"varint,1,req,name=seqno" json:"seqno,omitempty"`
-	ErrCode              *int32   `protobuf:"varint,2,req,name=errCode" json:"errCode,omitempty"`
-	Rows                 []*Row   `protobuf:"bytes,3,rep,name=rows" json:"rows,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Head                 *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	Rows                 []*Row      `protobuf:"bytes,3,rep,name=rows" json:"rows,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
+	XXX_unrecognized     []byte      `json:"-"`
+	XXX_sizecache        int32       `json:"-"`
 }
 
 func (m *ScanResp) Reset()         { *m = ScanResp{} }
 func (m *ScanResp) String() string { return proto.CompactTextString(m) }
 func (*ScanResp) ProtoMessage()    {}
 func (*ScanResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_2fcc84b9998d60d8, []int{24}
+	return fileDescriptor_proto_7d68911a192448ff, []int{24}
 }
-
 func (m *ScanResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ScanResp.Unmarshal(m, b)
 }
 func (m *ScanResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ScanResp.Marshal(b, m, deterministic)
 }
-func (m *ScanResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ScanResp.Merge(m, src)
+func (dst *ScanResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ScanResp.Merge(dst, src)
 }
 func (m *ScanResp) XXX_Size() int {
 	return xxx_messageInfo_ScanResp.Size(m)
@@ -1649,18 +1296,11 @@ func (m *ScanResp) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ScanResp proto.InternalMessageInfo
 
-func (m *ScanResp) GetSeqno() int64 {
-	if m != nil && m.Seqno != nil {
-		return *m.Seqno
+func (m *ScanResp) GetHead() *RespCommon {
+	if m != nil {
+		return m.Head
 	}
-	return 0
-}
-
-func (m *ScanResp) GetErrCode() int32 {
-	if m != nil && m.ErrCode != nil {
-		return *m.ErrCode
-	}
-	return 0
+	return nil
 }
 
 func (m *ScanResp) GetRows() []*Row {
@@ -1671,15 +1311,14 @@ func (m *ScanResp) GetRows() []*Row {
 }
 
 func init() {
-	proto.RegisterEnum("proto.ValueType", ValueType_name, ValueType_value)
 	proto.RegisterType((*Value)(nil), "proto.value")
 	proto.RegisterType((*Field)(nil), "proto.field")
 	proto.RegisterType((*PingReq)(nil), "proto.ping_req")
 	proto.RegisterType((*PingResp)(nil), "proto.ping_resp")
+	proto.RegisterType((*ReqCommon)(nil), "proto.req_common")
+	proto.RegisterType((*RespCommon)(nil), "proto.resp_common")
 	proto.RegisterType((*GetReq)(nil), "proto.get_req")
 	proto.RegisterType((*GetResp)(nil), "proto.get_resp")
-	proto.RegisterType((*GetAllReq)(nil), "proto.get_all_req")
-	proto.RegisterType((*GetAllResp)(nil), "proto.get_all_resp")
 	proto.RegisterType((*SetReq)(nil), "proto.set_req")
 	proto.RegisterType((*SetResp)(nil), "proto.set_resp")
 	proto.RegisterType((*SetNxReq)(nil), "proto.set_nx_req")
@@ -1697,54 +1336,54 @@ func init() {
 	proto.RegisterType((*Row)(nil), "proto.row")
 	proto.RegisterType((*ScanReq)(nil), "proto.scan_req")
 	proto.RegisterType((*ScanResp)(nil), "proto.scan_resp")
+	proto.RegisterEnum("proto.ValueType", ValueType_name, ValueType_value)
 }
 
-func init() { proto.RegisterFile("proto.proto", fileDescriptor_2fcc84b9998d60d8) }
+func init() { proto.RegisterFile("proto.proto", fileDescriptor_proto_7d68911a192448ff) }
 
-var fileDescriptor_2fcc84b9998d60d8 = []byte{
-	// 703 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xcc, 0x56, 0xcd, 0x8a, 0xdb, 0x3a,
-	0x14, 0xbe, 0xb2, 0xec, 0xd8, 0x3e, 0x0e, 0x17, 0xa3, 0x3b, 0xcc, 0x35, 0x97, 0xcb, 0x60, 0xcc,
-	0x2c, 0xdc, 0x16, 0x66, 0x31, 0x9b, 0x3e, 0x40, 0xdf, 0x40, 0x4c, 0xdb, 0x45, 0x17, 0xc1, 0x89,
-	0x95, 0xc1, 0xd4, 0x91, 0x3c, 0x96, 0x93, 0x34, 0x2d, 0x74, 0x51, 0x0a, 0xa5, 0x5d, 0xf5, 0x15,
-	0xfa, 0x00, 0x85, 0x3e, 0x62, 0x91, 0xec, 0xc4, 0x71, 0x26, 0x09, 0x43, 0xf1, 0x74, 0xba, 0x49,
-	0x74, 0xce, 0x51, 0xf4, 0xfd, 0x48, 0x39, 0x12, 0x78, 0x45, 0x29, 0x2a, 0x71, 0xa1, 0x3f, 0x89,
-	0xa5, 0xbf, 0x22, 0x09, 0xd6, 0x22, 0xc9, 0xe7, 0x8c, 0x9c, 0x83, 0x59, 0xad, 0x0a, 0x16, 0xa0,
-	0xd0, 0x88, 0xff, 0xbe, 0xf4, 0xeb, 0x59, 0x17, 0x2f, 0x54, 0xed, 0x6a, 0x55, 0x30, 0xaa, 0xab,
-	0x64, 0x08, 0x28, 0x0b, 0x8c, 0x10, 0xc5, 0x98, 0xa2, 0x4c, 0x45, 0xf3, 0x00, 0x87, 0x28, 0x36,
-	0x29, 0x9a, 0xab, 0x68, 0x1a, 0x98, 0x21, 0x8a, 0x11, 0x45, 0x53, 0x15, 0xc9, 0xc0, 0x0a, 0x51,
-	0xec, 0x52, 0x24, 0x55, 0x34, 0x0e, 0x06, 0x21, 0x8a, 0x87, 0x14, 0x8d, 0xa3, 0xa7, 0x60, 0x4d,
-	0x33, 0x96, 0xa7, 0x84, 0x80, 0xc9, 0x93, 0x99, 0x02, 0x55, 0xf3, 0xf4, 0x98, 0xfc, 0x07, 0x68,
-	0xa1, 0x21, 0xbc, 0xcb, 0x61, 0xc3, 0x42, 0x33, 0xa4, 0x68, 0x11, 0xc5, 0xe0, 0x14, 0x19, 0xbf,
-	0x1e, 0x95, 0xec, 0x86, 0xfc, 0x0f, 0x6e, 0x95, 0xcd, 0x98, 0xac, 0x92, 0x59, 0xa1, 0x17, 0xc0,
-	0xb4, 0x4d, 0x44, 0x8f, 0xc0, 0x6d, 0x66, 0xca, 0xa2, 0x3b, 0xd5, 0xd8, 0x9d, 0xba, 0x02, 0xfb,
-	0x9a, 0x55, 0x7a, 0xcd, 0x13, 0xb0, 0x24, 0xbb, 0xe1, 0x42, 0xbb, 0x80, 0x69, 0x1d, 0xa8, 0x6c,
-	0x95, 0x8c, 0x73, 0x16, 0x18, 0xa1, 0x11, 0xbb, 0xb4, 0x0e, 0x88, 0x0f, 0xf8, 0x35, 0x5b, 0x05,
-	0x58, 0xe7, 0xd4, 0x90, 0x9c, 0xc2, 0x40, 0xcb, 0x92, 0x81, 0x19, 0xe2, 0xd8, 0xa5, 0x4d, 0x44,
-	0x02, 0xb0, 0x15, 0x9a, 0x98, 0x57, 0x81, 0xa5, 0xd7, 0x5d, 0x87, 0xd1, 0x5b, 0x70, 0x6a, 0x68,
-	0x59, 0x1c, 0xc0, 0x0e, 0xc0, 0x66, 0x65, 0xf9, 0x4c, 0xa4, 0x35, 0xba, 0x45, 0xd7, 0xa1, 0xaa,
-	0x2c, 0x58, 0x29, 0x33, 0xc1, 0xf5, 0x16, 0x60, 0xba, 0x0e, 0xc9, 0x79, 0x87, 0x47, 0x6b, 0xa3,
-	0x4e, 0xae, 0x59, 0x45, 0x0c, 0x3c, 0x85, 0x9d, 0xe4, 0x79, 0x0f, 0xd2, 0xb7, 0x24, 0x9a, 0x5d,
-	0x89, 0xef, 0x61, 0xd8, 0xc2, 0x3c, 0x80, 0xcc, 0x6f, 0x08, 0x6c, 0x79, 0x74, 0x7b, 0xb7, 0x10,
-	0x8c, 0x2e, 0xc2, 0x46, 0x3d, 0xde, 0xa3, 0xde, 0x6c, 0xd5, 0xb7, 0x4c, 0xac, 0xc3, 0x4c, 0xb6,
-	0x3d, 0x1a, 0x74, 0x3d, 0xba, 0x02, 0x47, 0xf6, 0x7e, 0x0c, 0xa2, 0x2f, 0x08, 0x40, 0x2d, 0xcb,
-	0xdf, 0xf4, 0xb0, 0xc1, 0x77, 0x32, 0xfb, 0xc8, 0x49, 0x7f, 0x09, 0xde, 0x86, 0x4b, 0xaf, 0x2a,
-	0x3f, 0x23, 0xf0, 0x32, 0x3e, 0x29, 0x47, 0xe3, 0x55, 0x0f, 0x32, 0xa3, 0xa6, 0x33, 0xe9, 0xdd,
-	0xdd, 0x55, 0xd9, 0x34, 0xad, 0xc3, 0x22, 0x3f, 0x20, 0x18, 0xb6, 0x5c, 0x7a, 0x3d, 0xec, 0x31,
-	0x38, 0x9c, 0x2d, 0x75, 0x3b, 0xd6, 0x3d, 0x76, 0x97, 0xdb, 0xa6, 0xaa, 0x0d, 0x49, 0xd9, 0x9f,
-	0x63, 0x48, 0xcb, 0xe5, 0x81, 0x0c, 0xf9, 0x8e, 0xe0, 0x9f, 0x89, 0x98, 0x15, 0x49, 0xc9, 0x46,
-	0x09, 0x4f, 0x47, 0xb2, 0x97, 0x66, 0x7f, 0x06, 0x98, 0xb3, 0xe5, 0x5e, 0x5b, 0x54, 0x41, 0xd5,
-	0x45, 0x9e, 0x6a, 0x43, 0x6e, 0xd5, 0x45, 0xd7, 0xb4, 0x9d, 0x6e, 0xf0, 0x11, 0xc1, 0xc9, 0x6d,
-	0xbe, 0xbd, 0x9a, 0x17, 0x35, 0xb7, 0xfe, 0x5e, 0xe7, 0xea, 0x52, 0xf4, 0x03, 0xc1, 0xe9, 0x2e,
-	0x8d, 0x5e, 0x5a, 0xc9, 0xfd, 0x39, 0xf7, 0x09, 0xc1, 0xbf, 0x7b, 0x29, 0xff, 0x76, 0xf3, 0xde,
-	0x81, 0x9d, 0xb2, 0xfc, 0x5e, 0x2f, 0x9d, 0xc3, 0xff, 0xba, 0x2b, 0x70, 0x6a, 0xf0, 0x5e, 0x1b,
-	0xed, 0x13, 0xc0, 0xa5, 0x58, 0x6e, 0x5d, 0x04, 0xe8, 0xc8, 0xad, 0xfb, 0x15, 0x81, 0x23, 0x27,
-	0x09, 0xbf, 0xdb, 0x71, 0x41, 0xad, 0xce, 0xf6, 0x0d, 0x85, 0x3b, 0x6f, 0x28, 0x1f, 0x70, 0x92,
-	0xe7, 0xda, 0x72, 0x8b, 0xaa, 0xa1, 0xfa, 0xfd, 0x44, 0xcc, 0x79, 0xa5, 0x1f, 0x99, 0x16, 0xad,
-	0x83, 0x23, 0x87, 0xe3, 0x15, 0xb8, 0x0d, 0xa3, 0x5f, 0xb0, 0xe5, 0x0c, 0xcc, 0x52, 0x2c, 0x6b,
-	0x52, 0xde, 0x25, 0x34, 0x9a, 0x4b, 0xb1, 0xa4, 0x3a, 0xff, 0xf8, 0x39, 0xb8, 0x9b, 0xa7, 0x32,
-	0xf1, 0xc0, 0xce, 0xf8, 0x22, 0xc9, 0xf2, 0xd4, 0xff, 0x8b, 0xd8, 0x80, 0x79, 0x96, 0xfb, 0x88,
-	0x00, 0x0c, 0x64, 0x55, 0x66, 0xfc, 0xda, 0x37, 0x54, 0x32, 0xe3, 0x95, 0x8f, 0x89, 0x03, 0xe6,
-	0x5c, 0x8d, 0x4c, 0xe2, 0x82, 0x35, 0xcd, 0x45, 0x52, 0xf9, 0x96, 0x4a, 0x8e, 0x73, 0x31, 0xf6,
-	0x07, 0x3f, 0x03, 0x00, 0x00, 0xff, 0xff, 0x14, 0x63, 0xe0, 0x9c, 0xb2, 0x0b, 0x00, 0x00,
+var fileDescriptor_proto_7d68911a192448ff = []byte{
+	// 683 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x56, 0x5d, 0x6f, 0xd3, 0x3c,
+	0x14, 0x7e, 0x1d, 0x27, 0x6d, 0x72, 0x52, 0xbd, 0x0a, 0x66, 0x1a, 0x11, 0x42, 0x53, 0x64, 0x0d,
+	0x14, 0xb8, 0xd8, 0x45, 0x25, 0xc4, 0x0f, 0xe0, 0x8e, 0x4b, 0xf3, 0xb1, 0xc1, 0x4d, 0x49, 0x1a,
+	0x77, 0x44, 0xa4, 0x76, 0x1a, 0xa7, 0x2d, 0x95, 0x90, 0xf8, 0xeb, 0xc8, 0x4e, 0xd2, 0xae, 0x5d,
+	0x99, 0xc8, 0x80, 0x9b, 0xcd, 0xe7, 0x23, 0xcf, 0x79, 0x9e, 0x93, 0xf8, 0x9c, 0x82, 0x5f, 0x56,
+	0xb2, 0x96, 0x17, 0xe6, 0x2f, 0x71, 0xcc, 0x3f, 0xaa, 0xc0, 0x59, 0x25, 0xc5, 0x92, 0x93, 0x73,
+	0xb0, 0xeb, 0x4d, 0xc9, 0x43, 0x14, 0x59, 0xf1, 0xff, 0xe3, 0xa0, 0xc9, 0xba, 0xf8, 0xa0, 0x63,
+	0xef, 0x36, 0x25, 0x67, 0x26, 0x4a, 0x46, 0x80, 0xf2, 0xd0, 0x8a, 0x50, 0x8c, 0x19, 0xca, 0xb5,
+	0xb5, 0x0c, 0x71, 0x84, 0x62, 0x9b, 0xa1, 0xa5, 0xb6, 0x66, 0xa1, 0x1d, 0xa1, 0x18, 0x31, 0x34,
+	0xd3, 0x96, 0x0a, 0x9d, 0x08, 0xc5, 0x1e, 0x43, 0x4a, 0x5b, 0x69, 0x38, 0x88, 0x50, 0x3c, 0x62,
+	0x28, 0xa5, 0xaf, 0xc0, 0x99, 0xe5, 0xbc, 0xc8, 0x08, 0x01, 0x5b, 0x24, 0x73, 0x5d, 0x54, 0xe7,
+	0x99, 0x33, 0x79, 0x0c, 0x68, 0x65, 0x4a, 0xf8, 0xe3, 0x51, 0xcb, 0xc2, 0x30, 0x64, 0x68, 0x45,
+	0x63, 0x70, 0xcb, 0x5c, 0x5c, 0x4f, 0x2a, 0xbe, 0x20, 0x4f, 0xc0, 0xab, 0xf3, 0x39, 0x57, 0x75,
+	0x32, 0x2f, 0x0d, 0x00, 0x66, 0x3b, 0x07, 0x7d, 0x0e, 0x5e, 0x9b, 0xa9, 0xca, 0xfd, 0x54, 0xeb,
+	0x30, 0x35, 0x03, 0xa8, 0xf8, 0x62, 0x32, 0x95, 0xf3, 0xb9, 0x14, 0xe4, 0x04, 0x1c, 0xc5, 0x17,
+	0x42, 0x9a, 0x46, 0x60, 0xd6, 0x18, 0xda, 0x5b, 0x27, 0x69, 0xc1, 0x43, 0x2b, 0xb2, 0x62, 0x8f,
+	0x35, 0x06, 0x09, 0x00, 0x7f, 0xe5, 0x9b, 0x10, 0x1b, 0x9f, 0x3e, 0x92, 0x10, 0x86, 0x1a, 0x58,
+	0x2e, 0xeb, 0xd0, 0x36, 0xcf, 0x77, 0x26, 0xbd, 0x04, 0x5f, 0x73, 0xb9, 0xbb, 0x4c, 0x08, 0x43,
+	0x5e, 0x55, 0xaf, 0x65, 0xd6, 0x14, 0x72, 0x58, 0x67, 0xea, 0xc8, 0x8a, 0x57, 0x2a, 0x97, 0xc2,
+	0x34, 0x1c, 0xb3, 0xce, 0xa4, 0x9f, 0x60, 0x78, 0xcd, 0x6b, 0xd3, 0x92, 0xa7, 0x60, 0x7f, 0xe1,
+	0x49, 0x66, 0x30, 0xfd, 0xf1, 0x83, 0xb6, 0x7b, 0x3b, 0x71, 0xcc, 0x84, 0xc9, 0x29, 0x0c, 0x4c,
+	0xfb, 0x55, 0x68, 0x45, 0x38, 0xf6, 0x58, 0x6b, 0x69, 0x39, 0x49, 0x51, 0x18, 0x7c, 0x97, 0xe9,
+	0x23, 0xbd, 0x02, 0xb7, 0xc1, 0x56, 0x25, 0x79, 0xb6, 0x07, 0x4e, 0xb6, 0xe0, 0x5b, 0x4d, 0x2d,
+	0xfa, 0xf9, 0x1e, 0xfa, 0xee, 0x25, 0x1a, 0x67, 0x57, 0x8b, 0x96, 0x30, 0x54, 0xfd, 0x58, 0xdf,
+	0xe8, 0x80, 0xb5, 0xd7, 0x81, 0x1b, 0x15, 0xf1, 0x1d, 0x15, 0xc7, 0xe0, 0xaa, 0x9e, 0x5a, 0xe8,
+	0x47, 0x00, 0xfd, 0x8c, 0xf8, 0xd6, 0x87, 0xe8, 0xef, 0x35, 0xe0, 0x25, 0xf8, 0x5b, 0xe8, 0x1e,
+	0x8c, 0xae, 0xc0, 0xcf, 0xc5, 0xb4, 0x9a, 0xa4, 0x9b, 0x3e, 0x94, 0x68, 0x7b, 0xe1, 0xcc, 0x57,
+	0x75, 0xc8, 0xa8, 0x09, 0xd1, 0xcf, 0x30, 0xda, 0x21, 0xf7, 0x78, 0xdf, 0x31, 0xb8, 0x82, 0xaf,
+	0xcd, 0xa0, 0x30, 0xb7, 0xff, 0x10, 0x7e, 0x1b, 0xd5, 0xdc, 0x33, 0xfe, 0xaf, 0xb8, 0xef, 0x90,
+	0xef, 0xc9, 0xdd, 0xba, 0x93, 0xfb, 0x77, 0x78, 0x38, 0x95, 0xf3, 0x32, 0xa9, 0xf8, 0x24, 0x11,
+	0xd9, 0xa4, 0xe7, 0xb7, 0x7b, 0x06, 0x58, 0xf0, 0xf5, 0x51, 0x05, 0x3a, 0xa0, 0xe3, 0xb2, 0xc8,
+	0xcc, 0x20, 0xb9, 0x15, 0x97, 0x45, 0x46, 0x53, 0x38, 0xb9, 0x5d, 0xbd, 0x87, 0x4e, 0xda, 0x4e,
+	0xf9, 0xa3, 0x22, 0x9b, 0x10, 0xfd, 0x01, 0xa7, 0x87, 0x35, 0xfa, 0x7d, 0xf7, 0x7f, 0x2a, 0x92,
+	0xc3, 0xa3, 0xa3, 0x04, 0xee, 0xa3, 0xd3, 0xfe, 0xb5, 0xce, 0x37, 0x30, 0xcc, 0x78, 0xf1, 0x57,
+	0x26, 0x8f, 0x9e, 0x29, 0x0d, 0x56, 0x8f, 0x1b, 0x7c, 0x09, 0xb8, 0x92, 0xeb, 0x6e, 0x77, 0xa0,
+	0xbd, 0xdd, 0xb1, 0x2b, 0x63, 0xf5, 0x1f, 0x70, 0x0b, 0x70, 0xd5, 0x34, 0x11, 0xf7, 0xdb, 0x04,
+	0xf8, 0xd8, 0x26, 0xb0, 0xb7, 0x9b, 0x40, 0xef, 0xab, 0xa9, 0x5c, 0x8a, 0xda, 0xac, 0x74, 0x87,
+	0x35, 0x06, 0x7d, 0x0b, 0x5e, 0x5b, 0xb2, 0xc7, 0x4b, 0x3a, 0x03, 0xbb, 0x92, 0xeb, 0x4e, 0x0b,
+	0x74, 0x79, 0x72, 0xcd, 0x8c, 0xff, 0xc5, 0x7b, 0xf0, 0xb6, 0x3f, 0x3b, 0x88, 0x0f, 0xc3, 0x5c,
+	0xac, 0x92, 0xbc, 0xc8, 0x82, 0xff, 0xc8, 0x10, 0xb0, 0xc8, 0x8b, 0x00, 0x11, 0x80, 0x81, 0xaa,
+	0xab, 0x5c, 0x5c, 0x07, 0x96, 0x76, 0xe6, 0xa2, 0x0e, 0x30, 0x71, 0xc1, 0x5e, 0xea, 0x93, 0x4d,
+	0x3c, 0x70, 0x66, 0x85, 0x4c, 0xea, 0xc0, 0xd1, 0xce, 0xb4, 0x90, 0x69, 0x30, 0xf8, 0x19, 0x00,
+	0x00, 0xff, 0xff, 0xee, 0x0e, 0x2a, 0x19, 0xfe, 0x08, 0x00, 0x00,
 }

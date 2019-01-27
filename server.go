@@ -4,7 +4,7 @@ import (
 	codec "flyfish/codec"
 	"fmt"
 	"github.com/sniperHW/kendynet"
-	"github.com/sniperHW/kendynet/socket/stream_socket/tcp"
+	"github.com/sniperHW/kendynet/socket/listener/tcp"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -34,7 +34,7 @@ type tcpListener struct {
 func newTcpListener(nettype, service string) (*tcpListener, error) {
 	var err error
 	l := &tcpListener{}
-	l.l, err = tcp.NewListener(nettype, service)
+	l.l, err = tcp.New(nettype, service)
 
 	if nil == err {
 		return l, nil
