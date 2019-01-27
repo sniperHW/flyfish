@@ -8,7 +8,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/event"
-	"github.com/sniperHW/kendynet/socket/stream_socket/tcp"
+	connector "github.com/sniperHW/kendynet/socket/connector/tcp"
 	"github.com/sniperHW/kendynet/util"
 	"sync/atomic"
 	"time"
@@ -192,9 +192,9 @@ func (this *Conn) dial() {
 	fmt.Println("Conn dial")
 
 	go func() {
-		connector, _ := tcp.NewConnector("tcp", this.addr)
+		c, _ := connector.New("tcp", this.addr)
 		for {
-			session, err := connector.Dial(time.Second * 5)
+			session, err := c.Dial(time.Second * 5)
 			if nil == err {
 				this.onConnected(session)
 				return

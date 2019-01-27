@@ -52,30 +52,30 @@ func (this *Scaner) Next(count int32, cb func(*Scaner, *MutiResult)) error {
 	}
 
 	req := &protocol.ScanReq{
-		Seqno:   proto.Int64(atomic.AddInt64(&this.conn.seqno, 1)),
-		Timeout: proto.Int64(int64(requestTimeout)),
+		Head: &protocol.ReqCommon{
+			Seqno:   proto.Int64(atomic.AddInt64(&this.conn.seqno, 1)),
+			Timeout: proto.Int64(int64(requestTimeout)),
+		},
 	}
 	if atomic.CompareAndSwapInt32(&this.first, 0, 1) {
-		req.Table = proto.String(this.table)
+		req.Head.Table = proto.String(this.table)
 		if this.getAll {
-			req.All = proto.Int32(1)
+			req.All = proto.Bool(true)
 		} else {
-			req.All = proto.Int32(0)
+			req.All = proto.Bool(false)
 			req.Fields = []string{}
 			for _, v := range this.fileds {
-				if v != "__key__" || v != "__version__" {
-					req.Fields = append(req.Fields, v)
-				}
+				req.Fields = append(req.Fields, v)
 			}
 			if len(req.Fields) == 0 {
-				req.All = proto.Int32(1)
+				req.All = proto.Bool(true)
 			}
 		}
 	}
 	req.Count = proto.Int32(count)
 
 	context := &cmdContext{
-		seqno: req.GetSeqno(),
+		seqno: req.Head.GetSeqno(),
 		cb: callback{
 			tt: cb_muti,
 			cb: this.wrapCb(cb),
@@ -94,10 +94,10 @@ func (this *Scaner) Close() {
 }
 
 func (this *Conn) onScanResp(resp *protocol.ScanResp) {
-	c := this.removeContext(resp.GetSeqno())
+	c := this.removeContext(resp.Head.GetSeqno())
 	if nil != c {
 		ret := MutiResult{
-			ErrCode: resp.GetErrCode(),
+			ErrCode: resp.Head.GetErrCode(),
 			Rows:    []*Row{},
 		}
 
@@ -105,17 +105,13 @@ func (this *Conn) onScanResp(resp *protocol.ScanResp) {
 			for _, v := range resp.GetRows() {
 				fields := v.GetFields()
 				r := &Row{
-					Fields: map[string]*Field{},
+					Key:     v.GetKey(),
+					Version: v.GetVersion(),
+					Fields:  map[string]*Field{},
 				}
 
 				for _, field := range fields {
-					if field.GetName() == "__key__" {
-						r.Key = field.GetString()
-					} else if field.GetName() == "__version__" {
-						r.Version = field.GetInt()
-					} else {
-						r.Fields[field.GetName()] = (*Field)(field)
-					}
+					r.Fields[field.GetName()] = (*Field)(field)
 				}
 
 				ret.Rows = append(ret.Rows, r)

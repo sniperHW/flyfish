@@ -121,32 +121,38 @@ func (this *Conn) Get(table, key string, fields ...string) *SliceCmd {
 	}
 
 	req := &protocol.GetReq{
-		Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
-		Table:   proto.String(table),
-		Key:     proto.String(key),
-		Fields:  fields,
-		Timeout: proto.Int64(int64(requestTimeout)),
+		Head: &protocol.ReqCommon{
+			Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
+			Table:   proto.String(table),
+			Key:     proto.String(key),
+			Timeout: proto.Int64(int64(requestTimeout)),
+		},
+		Fields: fields,
+		All:    proto.Bool(false),
 	}
 
 	return &SliceCmd{
 		conn:  this,
 		req:   req,
-		seqno: req.GetSeqno(),
+		seqno: req.Head.GetSeqno(),
 	}
 }
 
 func (this *Conn) GetAll(table, key string) *SliceCmd {
-	req := &protocol.GetAllReq{
-		Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
-		Table:   proto.String(table),
-		Key:     proto.String(key),
-		Timeout: proto.Int64(int64(requestTimeout)),
+	req := &protocol.GetReq{
+		Head: &protocol.ReqCommon{
+			Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
+			Table:   proto.String(table),
+			Key:     proto.String(key),
+			Timeout: proto.Int64(int64(requestTimeout)),
+		},
+		All: proto.Bool(true),
 	}
 
 	return &SliceCmd{
 		conn:  this,
 		req:   req,
-		seqno: req.GetSeqno(),
+		seqno: req.Head.GetSeqno(),
 	}
 }
 
@@ -157,10 +163,12 @@ func (this *Conn) Set(table, key string, fields map[string]interface{}, version 
 	}
 
 	req := &protocol.SetReq{
-		Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
-		Table:   proto.String(table),
-		Key:     proto.String(key),
-		Timeout: proto.Int64(int64(requestTimeout)),
+		Head: &protocol.ReqCommon{
+			Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
+			Table:   proto.String(table),
+			Key:     proto.String(key),
+			Timeout: proto.Int64(int64(requestTimeout)),
+		},
 	}
 
 	if len(version) > 0 {
@@ -174,7 +182,7 @@ func (this *Conn) Set(table, key string, fields map[string]interface{}, version 
 	return &StatusCmd{
 		conn:  this,
 		req:   req,
-		seqno: req.GetSeqno(),
+		seqno: req.Head.GetSeqno(),
 	}
 }
 
@@ -185,10 +193,12 @@ func (this *Conn) SetNx(table, key string, fields map[string]interface{}) *Statu
 	}
 
 	req := &protocol.SetNxReq{
-		Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
-		Table:   proto.String(table),
-		Key:     proto.String(key),
-		Timeout: proto.Int64(int64(requestTimeout)),
+		Head: &protocol.ReqCommon{
+			Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
+			Table:   proto.String(table),
+			Key:     proto.String(key),
+			Timeout: proto.Int64(int64(requestTimeout)),
+		},
 	}
 
 	for k, v := range fields {
@@ -198,7 +208,7 @@ func (this *Conn) SetNx(table, key string, fields map[string]interface{}) *Statu
 	return &StatusCmd{
 		conn:  this,
 		req:   req,
-		seqno: req.GetSeqno(),
+		seqno: req.Head.GetSeqno(),
 	}
 }
 
@@ -210,18 +220,20 @@ func (this *Conn) CompareAndSet(table, key, field string, oldV, newV interface{}
 	}
 
 	req := &protocol.CompareAndSetReq{
-		Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
-		Table:   proto.String(table),
-		Key:     proto.String(key),
-		New:     protocol.PackField(field, newV),
-		Old:     protocol.PackField(field, oldV),
-		Timeout: proto.Int64(int64(requestTimeout)),
+		Head: &protocol.ReqCommon{
+			Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
+			Table:   proto.String(table),
+			Key:     proto.String(key),
+			Timeout: proto.Int64(int64(requestTimeout)),
+		},
+		New: protocol.PackField(field, newV),
+		Old: protocol.PackField(field, oldV),
 	}
 
 	return &SliceCmd{
 		conn:  this,
 		req:   req,
-		seqno: req.GetSeqno(),
+		seqno: req.Head.GetSeqno(),
 	}
 
 }
@@ -233,28 +245,32 @@ func (this *Conn) CompareAndSetNx(table, key, field string, oldV, newV interface
 	}
 
 	req := &protocol.CompareAndSetNxReq{
-		Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
-		Table:   proto.String(table),
-		Key:     proto.String(key),
-		New:     protocol.PackField(field, newV),
-		Old:     protocol.PackField(field, oldV),
-		Timeout: proto.Int64(int64(requestTimeout)),
+		Head: &protocol.ReqCommon{
+			Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
+			Table:   proto.String(table),
+			Key:     proto.String(key),
+			Timeout: proto.Int64(int64(requestTimeout)),
+		},
+		New: protocol.PackField(field, newV),
+		Old: protocol.PackField(field, oldV),
 	}
 
 	return &SliceCmd{
 		conn:  this,
 		req:   req,
-		seqno: req.GetSeqno(),
+		seqno: req.Head.GetSeqno(),
 	}
 }
 
 func (this *Conn) Del(table, key string, version ...int64) *StatusCmd {
 
 	req := &protocol.DelReq{
-		Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
-		Table:   proto.String(table),
-		Key:     proto.String(key),
-		Timeout: proto.Int64(int64(requestTimeout)),
+		Head: &protocol.ReqCommon{
+			Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
+			Table:   proto.String(table),
+			Key:     proto.String(key),
+			Timeout: proto.Int64(int64(requestTimeout)),
+		},
 	}
 
 	if len(version) > 0 {
@@ -264,68 +280,53 @@ func (this *Conn) Del(table, key string, version ...int64) *StatusCmd {
 	return &StatusCmd{
 		conn:  this,
 		req:   req,
-		seqno: req.GetSeqno(),
+		seqno: req.Head.GetSeqno(),
 	}
 
 }
 
 func (this *Conn) IncrBy(table, key, field string, value int64) *SliceCmd {
 	req := &protocol.IncrByReq{
-		Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
-		Table:   proto.String(table),
-		Key:     proto.String(key),
-		Field:   protocol.PackField(field, value),
-		Timeout: proto.Int64(int64(requestTimeout)),
+		Head: &protocol.ReqCommon{
+			Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
+			Table:   proto.String(table),
+			Key:     proto.String(key),
+			Timeout: proto.Int64(int64(requestTimeout)),
+		},
+		Field: protocol.PackField(field, value),
 	}
 
 	return &SliceCmd{
 		conn:  this,
 		req:   req,
-		seqno: req.GetSeqno(),
+		seqno: req.Head.GetSeqno(),
 	}
 }
 
 func (this *Conn) DecrBy(table, key, field string, value int64) *SliceCmd {
 	req := &protocol.DecrByReq{
-		Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
-		Table:   proto.String(table),
-		Key:     proto.String(key),
-		Field:   protocol.PackField(field, value),
-		Timeout: proto.Int64(int64(requestTimeout)),
+		Head: &protocol.ReqCommon{
+			Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
+			Table:   proto.String(table),
+			Key:     proto.String(key),
+			Timeout: proto.Int64(int64(requestTimeout)),
+		},
+		Field: protocol.PackField(field, value),
 	}
 
 	return &SliceCmd{
 		conn:  this,
 		req:   req,
-		seqno: req.GetSeqno(),
-	}
-}
-
-func (this *Conn) onGetAllResp(resp *protocol.GetAllResp) {
-	c := this.removeContext(resp.GetSeqno())
-	if nil != c {
-		ret := SliceResult{
-			ErrCode: resp.GetErrCode(),
-			Version: resp.GetVersion(),
-		}
-
-		if ret.ErrCode == errcode.ERR_OK {
-			ret.Fields = map[string]*Field{}
-			for _, v := range resp.Fields {
-				ret.Fields[v.GetName()] = (*Field)(v)
-			}
-		}
-
-		this.c.doCallBack(c.cb, &ret)
+		seqno: req.Head.GetSeqno(),
 	}
 }
 
 func (this *Conn) onGetResp(resp *protocol.GetResp) {
-	c := this.removeContext(resp.GetSeqno())
+	c := this.removeContext(resp.Head.GetSeqno())
 	if nil != c {
 		ret := SliceResult{
-			ErrCode: resp.GetErrCode(),
-			Version: resp.GetVersion(),
+			ErrCode: resp.Head.GetErrCode(),
+			Version: resp.Head.GetVersion(),
 		}
 
 		if ret.ErrCode == errcode.ERR_OK {
@@ -340,13 +341,12 @@ func (this *Conn) onGetResp(resp *protocol.GetResp) {
 }
 
 func (this *Conn) onSetResp(resp *protocol.SetResp) {
-	//fmt.Println("onSetResp")
-	c := this.removeContext(resp.GetSeqno())
+	c := this.removeContext(resp.Head.GetSeqno())
 	if nil != c {
 
 		ret := StatusResult{
-			ErrCode: resp.GetErrCode(),
-			Version: resp.GetVersion(),
+			ErrCode: resp.Head.GetErrCode(),
+			Version: resp.Head.GetVersion(),
 		}
 
 		this.c.doCallBack(c.cb, &ret)
@@ -354,12 +354,12 @@ func (this *Conn) onSetResp(resp *protocol.SetResp) {
 }
 
 func (this *Conn) onSetNxResp(resp *protocol.SetNxResp) {
-	c := this.removeContext(resp.GetSeqno())
+	c := this.removeContext(resp.Head.GetSeqno())
 	if nil != c {
 
 		ret := StatusResult{
-			ErrCode: resp.GetErrCode(),
-			Version: resp.GetVersion(),
+			ErrCode: resp.Head.GetErrCode(),
+			Version: resp.Head.GetVersion(),
 		}
 
 		this.c.doCallBack(c.cb, &ret)
@@ -367,12 +367,12 @@ func (this *Conn) onSetNxResp(resp *protocol.SetNxResp) {
 }
 
 func (this *Conn) onCompareAndSetResp(resp *protocol.CompareAndSetResp) {
-	c := this.removeContext(resp.GetSeqno())
+	c := this.removeContext(resp.Head.GetSeqno())
 	if nil != c {
 
 		ret := SliceResult{
-			ErrCode: resp.GetErrCode(),
-			Version: resp.GetVersion(),
+			ErrCode: resp.Head.GetErrCode(),
+			Version: resp.Head.GetVersion(),
 		}
 
 		if ret.ErrCode == errcode.ERR_OK || ret.ErrCode == errcode.ERR_NOT_EQUAL {
@@ -385,12 +385,12 @@ func (this *Conn) onCompareAndSetResp(resp *protocol.CompareAndSetResp) {
 }
 
 func (this *Conn) onCompareAndSetNxResp(resp *protocol.CompareAndSetNxResp) {
-	c := this.removeContext(resp.GetSeqno())
+	c := this.removeContext(resp.Head.GetSeqno())
 	if nil != c {
 
 		ret := SliceResult{
-			ErrCode: resp.GetErrCode(),
-			Version: resp.GetVersion(),
+			ErrCode: resp.Head.GetErrCode(),
+			Version: resp.Head.GetVersion(),
 		}
 
 		if ret.ErrCode == errcode.ERR_OK || ret.ErrCode == errcode.ERR_NOT_EQUAL {
@@ -403,12 +403,12 @@ func (this *Conn) onCompareAndSetNxResp(resp *protocol.CompareAndSetNxResp) {
 }
 
 func (this *Conn) onDelResp(resp *protocol.DelResp) {
-	c := this.removeContext(resp.GetSeqno())
+	c := this.removeContext(resp.Head.GetSeqno())
 	if nil != c {
 
 		ret := StatusResult{
-			ErrCode: resp.GetErrCode(),
-			Version: resp.GetVersion(),
+			ErrCode: resp.Head.GetErrCode(),
+			Version: resp.Head.GetVersion(),
 		}
 
 		this.c.doCallBack(c.cb, &ret)
@@ -416,12 +416,12 @@ func (this *Conn) onDelResp(resp *protocol.DelResp) {
 }
 
 func (this *Conn) onIncrByResp(resp *protocol.IncrByResp) {
-	c := this.removeContext(resp.GetSeqno())
+	c := this.removeContext(resp.Head.GetSeqno())
 	if nil != c {
 
 		ret := SliceResult{
-			ErrCode: resp.GetErrCode(),
-			Version: resp.GetVersion(),
+			ErrCode: resp.Head.GetErrCode(),
+			Version: resp.Head.GetVersion(),
 		}
 
 		if errcode.ERR_OK == ret.ErrCode {
@@ -434,12 +434,12 @@ func (this *Conn) onIncrByResp(resp *protocol.IncrByResp) {
 }
 
 func (this *Conn) onDecrByResp(resp *protocol.DecrByResp) {
-	c := this.removeContext(resp.GetSeqno())
+	c := this.removeContext(resp.Head.GetSeqno())
 	if nil != c {
 
 		ret := SliceResult{
-			ErrCode: resp.GetErrCode(),
-			Version: resp.GetVersion(),
+			ErrCode: resp.Head.GetErrCode(),
+			Version: resp.Head.GetVersion(),
 		}
 
 		if errcode.ERR_OK == ret.ErrCode {
@@ -458,8 +458,6 @@ func (this *Conn) onMessage(msg *codec.Message) {
 			return
 		} else if name == "*proto.GetResp" {
 			this.onGetResp(msg.GetData().(*protocol.GetResp))
-		} else if name == "*proto.GetAllResp" {
-			this.onGetAllResp(msg.GetData().(*protocol.GetAllResp))
 		} else if name == "*proto.SetResp" {
 			this.onSetResp(msg.GetData().(*protocol.SetResp))
 		} else if name == "*proto.SetNxResp" {
