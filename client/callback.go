@@ -2,11 +2,13 @@ package client
 
 type StatusResult struct {
 	ErrCode int32
+	Key     string
 	Version int64
 }
 
 type SliceResult struct {
 	ErrCode int32
+	Key     string
 	Version int64
 	Fields  map[string]*Field
 }

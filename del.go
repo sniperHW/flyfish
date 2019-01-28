@@ -24,6 +24,7 @@ func (this *DelReplyer) reply(errCode int32, fields map[string]*proto.Field, ver
 
 	this.session.Send(&proto.DelResp{
 		Head: &proto.RespCommon{
+			Key:     pb.String(this.cmd.key),
 			Seqno:   pb.Int64(this.seqno),
 			ErrCode: pb.Int32(errCode),
 		},
@@ -48,6 +49,7 @@ func del(session kendynet.StreamSession, msg *codec.Message) {
 	if !ok {
 		session.Send(&proto.DelResp{
 			Head: &proto.RespCommon{
+				Key:     pb.String(head.GetKey()),
 				Seqno:   pb.Int64(head.GetSeqno()),
 				ErrCode: pb.Int32(errno),
 				Version: pb.Int64(-1),

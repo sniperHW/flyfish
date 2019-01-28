@@ -4,7 +4,7 @@ import (
 	kclient "flyfish/client"
 	"flyfish/errcode"
 	"fmt"
-	"github.com/sniperHW/kendynet"
+	//"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/golog"
 )
 
@@ -15,7 +15,7 @@ func Get(c *kclient.Client, i int) {
 
 	get.Exec(func(ret *kclient.SliceResult) {
 		if ret.ErrCode == errcode.ERR_OK {
-			fmt.Println("age", ret.Fields["age"].GetInt())
+			fmt.Println(ret.Key, ret.Fields["age"].GetInt())
 		} else {
 			fmt.Println(errcode.GetErrorStr(ret.ErrCode))
 		}

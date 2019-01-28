@@ -37,15 +37,16 @@ message ping_resp {
 
 message req_common {
   required int64  seqno   = 1;
-  required string table   = 2;
-  required string key     = 3; 
-  required int64  timeout = 4;
+  optional string table   = 2;
+  optional string key     = 3; 
+  optional int64  timeout = 4;
 }
 
 message resp_common {
   required int64  seqno   = 1;
   required int32  errCode = 2;
-  optional int64  version = 3;  
+  optional string key     = 3;
+  optional int64  version = 4;  
 }
 
 //获取记录的指定字段

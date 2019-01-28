@@ -325,6 +325,7 @@ func (this *Conn) onGetResp(resp *protocol.GetResp) {
 	c := this.removeContext(resp.Head.GetSeqno())
 	if nil != c {
 		ret := SliceResult{
+			Key:     resp.Head.GetKey(),
 			ErrCode: resp.Head.GetErrCode(),
 			Version: resp.Head.GetVersion(),
 		}
@@ -345,6 +346,7 @@ func (this *Conn) onSetResp(resp *protocol.SetResp) {
 	if nil != c {
 
 		ret := StatusResult{
+			Key:     resp.Head.GetKey(),
 			ErrCode: resp.Head.GetErrCode(),
 			Version: resp.Head.GetVersion(),
 		}
@@ -358,6 +360,7 @@ func (this *Conn) onSetNxResp(resp *protocol.SetNxResp) {
 	if nil != c {
 
 		ret := StatusResult{
+			Key:     resp.Head.GetKey(),
 			ErrCode: resp.Head.GetErrCode(),
 			Version: resp.Head.GetVersion(),
 		}
@@ -371,6 +374,7 @@ func (this *Conn) onCompareAndSetResp(resp *protocol.CompareAndSetResp) {
 	if nil != c {
 
 		ret := SliceResult{
+			Key:     resp.Head.GetKey(),
 			ErrCode: resp.Head.GetErrCode(),
 			Version: resp.Head.GetVersion(),
 		}
@@ -389,6 +393,7 @@ func (this *Conn) onCompareAndSetNxResp(resp *protocol.CompareAndSetNxResp) {
 	if nil != c {
 
 		ret := SliceResult{
+			Key:     resp.Head.GetKey(),
 			ErrCode: resp.Head.GetErrCode(),
 			Version: resp.Head.GetVersion(),
 		}
@@ -407,6 +412,7 @@ func (this *Conn) onDelResp(resp *protocol.DelResp) {
 	if nil != c {
 
 		ret := StatusResult{
+			Key:     resp.Head.GetKey(),
 			ErrCode: resp.Head.GetErrCode(),
 			Version: resp.Head.GetVersion(),
 		}
@@ -420,6 +426,7 @@ func (this *Conn) onIncrByResp(resp *protocol.IncrByResp) {
 	if nil != c {
 
 		ret := SliceResult{
+			Key:     resp.Head.GetKey(),
 			ErrCode: resp.Head.GetErrCode(),
 			Version: resp.Head.GetVersion(),
 		}
@@ -438,6 +445,7 @@ func (this *Conn) onDecrByResp(resp *protocol.DecrByResp) {
 	if nil != c {
 
 		ret := SliceResult{
+			Key:     resp.Head.GetKey(),
 			ErrCode: resp.Head.GetErrCode(),
 			Version: resp.Head.GetVersion(),
 		}

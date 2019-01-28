@@ -23,6 +23,7 @@ func (this *IncrDecrByReplyer) reply(errCode int32, fields map[string]*proto.Fie
 	}
 
 	head := &proto.RespCommon{
+		Key:     pb.String(this.cmd.key),
 		Seqno:   pb.Int64(this.seqno),
 		ErrCode: pb.Int32(errCode),
 		Version: pb.Int64(version),
@@ -57,8 +58,9 @@ func incrBy(session kendynet.StreamSession, msg *codec.Message) {
 	ok, errno = checkIncrDecrReq(head, req.GetField())
 
 	if !ok {
-		err := session.Send(&proto.IncrByResp{
+		session.Send(&proto.IncrByResp{
 			Head: &proto.RespCommon{
+				Key:     pb.String(head.GetKey()),
 				Seqno:   pb.Int64(head.GetSeqno()),
 				ErrCode: pb.Int32(errno),
 				Version: pb.Int64(-1),
@@ -101,8 +103,9 @@ func decrBy(session kendynet.StreamSession, msg *codec.Message) {
 	ok, errno = checkIncrDecrReq(head, req.GetField())
 
 	if !ok {
-		err := session.Send(&proto.DecrByResp{
+		session.Send(&proto.DecrByResp{
 			Head: &proto.RespCommon{
+				Key:     pb.String(head.GetKey()),
 				Seqno:   pb.Int64(head.GetSeqno()),
 				ErrCode: pb.Int32(errno),
 				Version: pb.Int64(-1),

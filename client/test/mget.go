@@ -4,7 +4,7 @@ import (
 	kclient "flyfish/client"
 	"flyfish/errcode"
 	"fmt"
-	"github.com/sniperHW/kendynet"
+	//"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/golog"
 )
 
@@ -20,7 +20,7 @@ func MGet(c *kclient.Client) {
 				if nil == v.Fields {
 					fmt.Println(v.Key, "not exist")
 				} else {
-					fmt.Println("age", v.Fields["age"].GetInt())
+					fmt.Println(v.Key, v.Fields["age"].GetInt())
 				}
 			}
 		} else {

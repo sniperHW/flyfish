@@ -24,6 +24,7 @@ func (this *SetReplyer) reply(errCode int32, fields map[string]*proto.Field, ver
 	}
 
 	head := &proto.RespCommon{
+		Key:     pb.String(this.cmd.key),
 		Seqno:   pb.Int64(this.seqno),
 		ErrCode: pb.Int32(errCode),
 		Version: pb.Int64(version),
@@ -66,8 +67,9 @@ func set(session kendynet.StreamSession, msg *codec.Message) {
 	ok, errno = checkSetReq(head, req.GetFields())
 
 	if !ok {
-		err := session.Send(&proto.SetResp{
+		session.Send(&proto.SetResp{
 			Head: &proto.RespCommon{
+				Key:     pb.String(head.GetKey()),
 				Seqno:   pb.Int64(head.GetSeqno()),
 				ErrCode: pb.Int32(errno),
 				Version: pb.Int64(-1),
@@ -115,8 +117,9 @@ func setNx(session kendynet.StreamSession, msg *codec.Message) {
 	ok, errno = checkSetReq(head, req.GetFields())
 
 	if !ok {
-		err := session.Send(&proto.SetNxResp{
+		session.Send(&proto.SetNxResp{
 			Head: &proto.RespCommon{
+				Key:     pb.String(head.GetKey()),
 				Seqno:   pb.Int64(head.GetSeqno()),
 				ErrCode: pb.Int32(errno),
 				Version: pb.Int64(-1),
@@ -163,8 +166,9 @@ func compareAndSet(session kendynet.StreamSession, msg *codec.Message) {
 	ok, errno = checkCmpSetReq(head, req.GetNew(), req.GetOld())
 
 	if !ok {
-		err := session.Send(&proto.CompareAndSetResp{
+		session.Send(&proto.CompareAndSetResp{
 			Head: &proto.RespCommon{
+				Key:     pb.String(head.GetKey()),
 				Seqno:   pb.Int64(head.GetSeqno()),
 				ErrCode: pb.Int32(errno),
 				Version: pb.Int64(-1),
@@ -211,8 +215,9 @@ func compareAndSetNx(session kendynet.StreamSession, msg *codec.Message) {
 	ok, errno = checkCmpSetReq(head, req.GetNew(), req.GetOld())
 
 	if !ok {
-		err := session.Send(&proto.CompareAndSetNxResp{
+		session.Send(&proto.CompareAndSetNxResp{
 			Head: &proto.RespCommon{
+				Key:     pb.String(head.GetKey()),
 				Seqno:   pb.Int64(head.GetSeqno()),
 				ErrCode: pb.Int32(errno),
 				Version: pb.Int64(-1),

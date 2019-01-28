@@ -25,6 +25,7 @@ func (this *GetReplyer) reply(errCode int32, fields map[string]*proto.Field, ver
 
 	resp := &proto.GetResp{
 		Head: &proto.RespCommon{
+			Key:     pb.String(this.cmd.key),
 			Seqno:   pb.Int64(this.seqno),
 			ErrCode: pb.Int32(errCode),
 			Version: pb.Int64(version),
@@ -58,8 +59,9 @@ func get(session kendynet.StreamSession, msg *codec.Message) {
 	ok, errno = checkReq(head)
 
 	if !ok {
-		err := session.Send(&proto.GetResp{
+		session.Send(&proto.GetResp{
 			Head: &proto.RespCommon{
+				Key:     pb.String(head.GetKey()),
 				Seqno:   pb.Int64(head.GetSeqno()),
 				ErrCode: pb.Int32(errno),
 				Version: pb.Int64(-1),

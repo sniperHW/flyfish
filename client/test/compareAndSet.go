@@ -4,12 +4,11 @@ import (
 	kclient "flyfish/client"
 	"flyfish/errcode"
 	"fmt"
-	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/golog"
 )
 
 func CompareAndSet(c *kclient.Client) {
-	set := c.CompareAndSet("counter", "test_counter1", "c", 101, 100)
+	set := c.CompareAndSet("counter", "test_counter1", "c", 2, 100)
 	set.Exec(func(ret *kclient.SliceResult) {
 
 		if ret.ErrCode != errcode.ERR_OK {

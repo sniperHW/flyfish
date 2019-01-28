@@ -3,9 +3,11 @@
 
 package proto
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
+import (
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -16,7 +18,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 type SqlType int32
 
@@ -31,6 +33,7 @@ var SqlType_name = map[int32]string{
 	2: "update",
 	3: "delete",
 }
+
 var SqlType_value = map[string]int32{
 	"insert": 1,
 	"update": 2,
@@ -42,9 +45,11 @@ func (x SqlType) Enum() *SqlType {
 	*p = x
 	return p
 }
+
 func (x SqlType) String() string {
 	return proto.EnumName(SqlType_name, int32(x))
 }
+
 func (x *SqlType) UnmarshalJSON(data []byte) error {
 	value, err := proto.UnmarshalJSONEnum(SqlType_value, data, "SqlType")
 	if err != nil {
@@ -53,8 +58,9 @@ func (x *SqlType) UnmarshalJSON(data []byte) error {
 	*x = SqlType(value)
 	return nil
 }
+
 func (SqlType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_backup_48054915ee2b4c9f, []int{0}
+	return fileDescriptor_65240d19de191688, []int{0}
 }
 
 type Record struct {
@@ -71,16 +77,17 @@ func (m *Record) Reset()         { *m = Record{} }
 func (m *Record) String() string { return proto.CompactTextString(m) }
 func (*Record) ProtoMessage()    {}
 func (*Record) Descriptor() ([]byte, []int) {
-	return fileDescriptor_backup_48054915ee2b4c9f, []int{0}
+	return fileDescriptor_65240d19de191688, []int{0}
 }
+
 func (m *Record) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Record.Unmarshal(m, b)
 }
 func (m *Record) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Record.Marshal(b, m, deterministic)
 }
-func (dst *Record) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Record.Merge(dst, src)
+func (m *Record) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Record.Merge(m, src)
 }
 func (m *Record) XXX_Size() int {
 	return xxx_messageInfo_Record.Size(m)
@@ -120,13 +127,13 @@ func (m *Record) GetFields() []*Field {
 }
 
 func init() {
-	proto.RegisterType((*Record)(nil), "proto.record")
 	proto.RegisterEnum("proto.SqlType", SqlType_name, SqlType_value)
+	proto.RegisterType((*Record)(nil), "proto.record")
 }
 
-func init() { proto.RegisterFile("backup.proto", fileDescriptor_backup_48054915ee2b4c9f) }
+func init() { proto.RegisterFile("backup.proto", fileDescriptor_65240d19de191688) }
 
-var fileDescriptor_backup_48054915ee2b4c9f = []byte{
+var fileDescriptor_65240d19de191688 = []byte{
 	// 172 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x2c, 0x8c, 0x41, 0x0a, 0x83, 0x30,
 	0x10, 0x45, 0x31, 0x51, 0x4b, 0x47, 0x91, 0x10, 0xba, 0x08, 0x5d, 0x89, 0x74, 0x21, 0x85, 0xba,
