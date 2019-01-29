@@ -52,7 +52,7 @@ func (this *tcpListener) Start() error {
 	if nil == this.l {
 		return fmt.Errorf("invaild listener")
 	}
-	return this.l.Start(func(session kendynet.StreamSession) {
+	return this.l.Serve(func(session kendynet.StreamSession) {
 
 		//fmt.Println("new client")
 
