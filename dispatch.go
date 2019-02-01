@@ -11,16 +11,17 @@ import (
 	"sync/atomic"
 )
 
-var (
-	sessions    sync.Map
-	clientCount int32
-	dispatcher_ *dispatcher
-)
+var sessions sync.Map
+var clientCount int32
 
 type handler func(kendynet.StreamSession, *codec.Message)
 
 type dispatcher struct {
 	handlers map[string]handler
+}
+
+var dispatcher_ *dispatcher = &dispatcher{
+	handlers: map[string]handler{},
 }
 
 func (this *dispatcher) Register(msg pb.Message, h handler) {
@@ -37,7 +38,6 @@ func (this *dispatcher) Register(msg pb.Message, h handler) {
 }
 
 func (this *dispatcher) Dispatch(session kendynet.StreamSession, msg *codec.Message) {
-	//fmt.Println("Dispatch")
 	if nil != msg {
 		name := msg.GetName()
 		handler, ok := this.handlers[name]
@@ -48,7 +48,6 @@ func (this *dispatcher) Dispatch(session kendynet.StreamSession, msg *codec.Mess
 }
 
 func (this *dispatcher) OnClose(session kendynet.StreamSession, reason string) {
-	//fmt.Printf("client close:%s\n",reason)
 	u := session.GetUserData()
 	if nil != u {
 		u.(*scaner).close()
@@ -87,10 +86,6 @@ func ping(session kendynet.StreamSession, msg *codec.Message) {
 }
 
 func init() {
-	dispatcher_ = &dispatcher{
-		handlers: map[string]handler{},
-	}
-
 	register(&proto.DelReq{}, del)
 	register(&proto.GetReq{}, get)
 	register(&proto.SetReq{}, set)
