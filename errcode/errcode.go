@@ -50,6 +50,7 @@ var err_str []string = []string{
 }
 
 func GetErrorStr(code int32) string {
+
 	if code > 0 && code < ERR_END {
 		return err_str[code]
 	} else {

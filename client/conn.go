@@ -189,7 +189,7 @@ func (this *Conn) dial() {
 
 	this.dialing = true
 
-	fmt.Println("Conn dial")
+	fmt.Println("Conn dial", this.addr)
 
 	go func() {
 		c, _ := connector.New("tcp", this.addr)
