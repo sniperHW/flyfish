@@ -4,25 +4,23 @@ import (
 	"flyfish/conf"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/golog"
-	"sync"
 )
 
 var (
-	logger      *golog.Logger
-	logger_once sync.Once
+	logger *golog.Logger
 )
 
 func InitLogger() {
-	logger_once.Do(func() {
-		if !conf.EnableLogStdout {
-			golog.DisableStdOut()
-		}
-		fullname := "flyfish"
-		logger = golog.New(fullname, golog.NewOutputLogger(conf.LogDir, conf.LogPrefix, conf.MaxLogfileSize))
-		logger.SetLevelByString(conf.LogLevel)
-		kendynet.InitLogger(logger)
-		logger.Infof("%s logger init", fullname)
-	})
+
+	if !conf.EnableLogStdout {
+		golog.DisableStdOut()
+	}
+	fullname := "flyfish"
+	logger = golog.New(fullname, golog.NewOutputLogger(conf.LogDir, conf.LogPrefix, conf.MaxLogfileSize))
+	logger.SetLevelByString(conf.LogLevel)
+	kendynet.InitLogger(logger)
+	logger.Infof("%s logger init", fullname)
+
 }
 
 func Debugf(format string, v ...interface{}) {
