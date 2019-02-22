@@ -86,7 +86,7 @@ func Get(c *kclient.Client) {
 func main() {
 
 	//golog.DisableStdOut()
-	kclient.InitLogger(golog.New("flyfish client", golog.NewOutputLogger("log", "flyfish client", 1024*1024*50)), "debug")
+	kclient.InitLogger(golog.New("flyfish client", golog.NewOutputLogger("log", "flyfish client", 1024*1024*50)))
 
 	id = 0
 

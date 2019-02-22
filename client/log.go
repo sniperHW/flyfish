@@ -8,9 +8,8 @@ import (
 
 var logger golog.LoggerI
 
-func InitLogger(l golog.LoggerI, level string) {
+func InitLogger(l golog.LoggerI) {
 	logger = l
-	logger.SetLevelByString(level)
 }
 
 func Debugf(format string, v ...interface{}) {
