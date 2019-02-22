@@ -7,6 +7,7 @@ import (
 )
 
 var CacheGroupSize = int(10)
+var MaxCachePerGroupSize = int(500000)
 var RedisProcessPoolSize = int(5)
 var SqlLoadPoolSize = int(5)
 var SqlUpdatePoolSize = int(10)
@@ -63,6 +64,13 @@ func cacheGroupSize(v string) {
 	i, err := strconv.ParseInt(v, 10, 32)
 	if nil == err {
 		CacheGroupSize = int(i)
+	}
+}
+
+func maxCachePerGroupSize(v string) {
+	i, err := strconv.ParseInt(v, 10, 32)
+	if nil == err {
+		MaxCachePerGroupSize = int(i)
 	}
 }
 
@@ -292,6 +300,7 @@ func init() {
 	parser = map[string]func(string){}
 
 	parser["CacheGroupSize"] = cacheGroupSize
+	parser["MaxCachePerGroupSize"] = maxCachePerGroupSize
 	parser["RedisProcessPoolSize"] = redisProcessPoolSize
 	parser["SqlLoadPoolSize"] = sqlLoadPoolSize
 	parser["SqlUpdatePoolSize"] = sqlUpdatePoolSize

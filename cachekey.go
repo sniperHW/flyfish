@@ -4,9 +4,11 @@ import (
 	"container/list"
 	"flyfish/conf"
 	"flyfish/proto"
+	"github.com/sniperHW/kendynet/util"
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 const (
@@ -36,7 +38,20 @@ type cacheKey struct {
 
 type cacheKeyMgr struct {
 	cacheKeys map[string]*cacheKey
+	minheap   *util.MinHeap
 	mtx       sync.Mutex
+}
+
+func (this *cacheKey) Less(o util.HeapElement) bool {
+	return this.lastAccess < o.(*cacheKey).lastAccess
+}
+
+func (this *cacheKey) GetIndex() uint32 {
+	return this.idx
+}
+
+func (this *cacheKey) SetIndex(idx uint32) {
+	this.idx = idx
 }
 
 func (this *cacheKey) lock() {
@@ -98,8 +113,9 @@ func (this *cacheKey) isWriteBack() bool {
 	return this.writeBacked
 }
 
-func (this *cacheKey) updateLRU() {
+func (this *cacheKey) updateLRU(minheap *util.MinHeap) {
 	this.lastAccess = atomic.AddInt64(&tick, 1)
+	minheap.Insert(this)
 }
 
 func newCacheKey(table string, uniKey string) *cacheKey {
@@ -167,10 +183,11 @@ func getCacheKey(table string, uniKey string) *cacheKey {
 	mgr.mtx.Lock()
 	k, ok := mgr.cacheKeys[uniKey]
 	if ok {
-		k.updateLRU()
+		k.updateLRU(mgr.minheap)
 	} else {
 		k = newCacheKey(table, uniKey)
 		if nil != k {
+			k.updateLRU(mgr.minheap)
 			mgr.cacheKeys[uniKey] = k
 		}
 	}
@@ -181,11 +198,57 @@ func getMgrByUnikey(uniKey string) *cacheKeyMgr {
 	return cacheGroup[StringHash(uniKey)%conf.CacheGroupSize]
 }
 
+func kickCacheKey(mgr *cacheKeyMgr) {
+
+	for !isStop() {
+		time.Sleep(time.Second)
+		mgr.mtx.Lock()
+		for len(mgr.cacheKeys) > conf.MaxCachePerGroupSize {
+			min := mgr.minheap.Min()
+			if nil == min {
+				break
+			}
+			c := min.(*cacheKey)
+			var locked bool
+			c.mtx.Lock()
+			locked = c.locked
+			c.mtx.Unlock()
+			if locked {
+				break
+			}
+			mgr.minheap.PopMin()
+			delete(mgr.cacheKeys, c.uniKey)
+
+			cmd := &command{
+				uniKey: c.uniKey,
+				ckey:   c,
+			}
+
+			ctx := &processContext{
+				commands:  []*command{cmd},
+				redisFlag: redis_kick,
+			}
+
+			pushRedisNoWait(ctx)
+
+		}
+
+		//Infoln("cacheKeys size", len(mgr.cacheKeys))
+
+		mgr.mtx.Unlock()
+	}
+
+}
+
 func InitCacheKey() {
 	cacheGroup = make([]*cacheKeyMgr, conf.CacheGroupSize)
 	for i := 0; i < conf.CacheGroupSize; i++ {
 		cacheGroup[i] = &cacheKeyMgr{
 			cacheKeys: map[string]*cacheKey{},
+			minheap:   util.NewMinHeap(65535),
 		}
+
+		//go kickCacheKey(cacheGroup[i])
+
 	}
 }

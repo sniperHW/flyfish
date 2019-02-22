@@ -2,6 +2,8 @@
 
 CacheGroupSize = 10
 
+MaxCachePerGroupSize = 500000 
+
 RedisProcessPoolSize    = 5
 
 SqlLoadPoolSize         = 5

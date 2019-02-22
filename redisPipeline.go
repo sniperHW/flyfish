@@ -4,6 +4,7 @@ import (
 	"flyfish/errcode"
 	"flyfish/proto"
 	"github.com/go-redis/redis"
+	"sync/atomic"
 )
 
 type redisCmd struct {
@@ -230,7 +231,9 @@ func (this *redisPipeliner) append(ctx *processContext) {
 		ctx: ctx,
 	}
 
-	if ctx.redisFlag == redis_set || ctx.redisFlag == redis_set_only {
+	if ctx.redisFlag == redis_kick {
+		rcmd.ret = this.pipeLiner.Del(ctx.getUniKey())
+	} else if ctx.redisFlag == redis_set || ctx.redisFlag == redis_set_only {
 		Debugln("append set", ctx.redisFlag)
 		rcmd.ret = this.pipeLiner.HMSet(ctx.getUniKey(), *ctx.getSetfields())
 	} else if ctx.redisFlag == redis_get {
@@ -281,22 +284,34 @@ func (this *redisPipeliner) exec() {
 	}
 	_, err := this.pipeLiner.Exec()
 	for _, v := range this.cmds {
-		v.ctx.errno = errcode.ERR_OK
-		if nil != err {
-			v.ctx.errno = errcode.ERR_REDIS
-			Errorln("redis exec error", err)
-		} else {
-			if v.ctx.redisFlag == redis_get {
-				this.readGetResult(v)
-			} else if v.ctx.redisFlag == redis_set || v.ctx.redisFlag == redis_set_only {
-				this.readSetResult(v)
-			} else if v.ctx.redisFlag == redis_del {
-				this.readDelResult(v)
+		if v.ctx.redisFlag != redis_kick {
+			v.ctx.errno = errcode.ERR_OK
+			if nil != err {
+				v.ctx.errno = errcode.ERR_REDIS
+				Errorln("redis exec error", err)
 			} else {
-				this.readSetScriptResult(v)
+				if v.ctx.redisFlag == redis_get {
+					this.readGetResult(v)
+				} else if v.ctx.redisFlag == redis_set || v.ctx.redisFlag == redis_set_only {
+					this.readSetResult(v)
+				} else if v.ctx.redisFlag == redis_del {
+					this.readDelResult(v)
+				} else {
+					this.readSetScriptResult(v)
+				}
+			}
+			onRedisResp(v.ctx)
+		} else {
+			atomic.AddInt32(&redisReqCount, -1)
+			if nil == err {
+				r, err1 := v.ret.(*redis.IntCmd).Result()
+				if nil != err1 {
+					Infoln("kick ", v.ctx.getUniKey(), "error:", err1)
+				} else {
+					Infoln("kick ", v.ctx.getUniKey(), "ret:", r)
+				}
 			}
 		}
-		onRedisResp(v.ctx)
 	}
 	this.cmds = this.cmds[0:0]
 }
