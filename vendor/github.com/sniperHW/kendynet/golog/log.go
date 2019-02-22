@@ -45,6 +45,7 @@ type LoggerI interface {
 	Errorln(v ...interface{})
 	Fatalf(format string, v ...interface{})
 	Fatalln(v ...interface{})
+	SetLevelByString(level string)
 }
 
 var enableStdOut bool = true

@@ -50,7 +50,7 @@ func CompareAndSet(c *kclient.Client) {
 
 func main() {
 
-	kclient.InitLogger(golog.NewOutputLogger("log", "flyfish client", 1024*1024*50), "error")
+	kclient.InitLogger(golog.New("flyfish client", golog.NewOutputLogger("log", "flyfish client", 1024*1024*50)), "debug")
 
 	services := []string{"127.0.0.1:10012"}
 

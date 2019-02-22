@@ -4,7 +4,6 @@ import (
 	"flyfish/codec"
 	"flyfish/errcode"
 	protocol "flyfish/proto"
-	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/event"
@@ -89,9 +88,9 @@ func (this *Conn) checkTimeout(now *time.Time) {
 				this.c.doCallBack(c.cb, errcode.ERR_TIMEOUT)
 			} else {
 				if _, ok := this.waitResp[c.seqno]; !ok {
-					kendynet.Infof("timeout cmdContext:%d not found\n", c.seqno)
+					//Infof("timeout cmdContext:%d not found\n", c.seqno)
 				} else {
-					kendynet.Infof("timeout cmdContext:%d\n", c.seqno)
+					//Infof("timeout cmdContext:%d\n", c.seqno)
 					delete(this.waitResp, c.seqno)
 					this.c.doCallBack(c.cb, errcode.ERR_TIMEOUT)
 				}
@@ -157,7 +156,7 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 		})
 
 		//发送被排队的请求
-		fmt.Println("send pending req", len(this.pendingSend))
+		//fmt.Println("send pending req", len(this.pendingSend))
 		for _, v := range this.pendingSend {
 			//fmt.Println(v.status)
 			if v.status != wait_remove {
@@ -189,7 +188,7 @@ func (this *Conn) dial() {
 
 	this.dialing = true
 
-	fmt.Println("Conn dial", this.addr)
+	//Debugln("Conn dial", this.addr)
 
 	go func() {
 		c, _ := connector.New("tcp", this.addr)
