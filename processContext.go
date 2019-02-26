@@ -20,9 +20,11 @@ const (
 	redis_none       = 0
 	redis_get        = 1
 	redis_set        = 2 //直接执行set
-	redis_del        = 4
-	redis_set_script = 5 //执行设置类脚本
-	redis_set_only   = 6 //执行set,不需要执行sql回写
+	redis_del        = 3
+	redis_set_script = 4 //执行设置类脚本
+	redis_set_only   = 5 //执行set,不需要执行sql回写
+	redis_kick       = 6 //剔除cache
+	redis_end        = 7
 )
 
 type processContext struct {
@@ -260,6 +262,7 @@ func (this *cacheKey) processDel(ctx *processContext, cmd *command) bool {
 				ctx.fields["__version__"] = proto.PackField("__version__", this.version)
 			}
 			ctx.writeBackFlag = write_back_delete
+			ctx.redisFlag = redis_del
 			ctx.commands = append(ctx.commands, cmd)
 			return true
 		}
