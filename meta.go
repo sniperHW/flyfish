@@ -106,6 +106,7 @@ func (this *table_meta) checkGet(fields map[string]*proto.Field) bool {
 	for _, v := range fields {
 		_, ok := this.fieldMetas[v.GetName()]
 		if !ok {
+			Errorln("checkGet failed:", v.GetName())
 			return false
 		}
 	}
@@ -115,10 +116,12 @@ func (this *table_meta) checkGet(fields map[string]*proto.Field) bool {
 func (this *table_meta) checkField(field *proto.Field) bool {
 	m, ok := this.fieldMetas[field.GetName()]
 	if !ok {
+		Errorln("checkField failed:", field.GetName())
 		return false
 	}
 
 	if field.GetType() != m.tt {
+		Errorln("checkField failed:", field.GetName(), field.GetType())
 		return false
 	}
 
@@ -131,10 +134,12 @@ func (this *table_meta) checkSet(fields map[string]*proto.Field) bool {
 	for _, v := range fields {
 		m, ok := this.fieldMetas[v.GetName()]
 		if !ok {
+			Errorln("checkSet failed:", v.GetName())
 			return false
 		}
 
 		if v.GetType() != m.tt {
+			Errorln("checkSet failed:", v.GetName(), v.GetType())
 			return false
 		}
 	}

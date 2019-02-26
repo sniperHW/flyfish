@@ -3,7 +3,6 @@ package flyfish
 import (
 	"flyfish/errcode"
 	"flyfish/proto"
-	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -34,7 +33,6 @@ type processContext struct {
 	replyed       bool //是否已经应道
 	writeBackFlag int  //回写数据库类型
 	redisFlag     int
-	mtx           sync.Mutex
 }
 
 func (this *processContext) getCmd() *command {

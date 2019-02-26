@@ -2,6 +2,8 @@
 
 CacheGroupSize = 10
 
+MaxCachePerGroupSize = 500000 
+
 RedisProcessPoolSize    = 5
 
 SqlLoadPoolSize         = 5
@@ -22,9 +24,11 @@ RedisEventQueueSize     = 50000
 
 WriteBackEventQueueSize = 100000
 
+MainEventQueueSize      = 20000
+
 MaxPacketSize           = 4mb
 
-WriteBackDelay          = 5
+WriteBackDelay          = 1
 
 MaxUpdateStringSize     = 4mb
 
@@ -40,25 +44,25 @@ RedisPort               = 6379
 
 #RedisPassword           = "xxxx"
 
-PgsqlHost               = "127.0.0.1"
+PgsqlHost               = "10.128.2.166"
 
 PgsqlPort               = 5432
 
-PgsqlUser               = "sniper"
+PgsqlUser               = "dbuser"
 
-PgsqlPassword           = "xxxxx"
+PgsqlPassword           = "123456"
 
-PgsqlDataBase           = "test"
+PgsqlDataBase           = "huangwei"
 
-ConfDbHost               = "127.0.0.1"
+ConfDbHost               = "10.128.2.166"
 
 ConfDbPort               = 5432
 
-ConfDbUser               = "sniper"
+ConfDbUser               = "dbuser"
 
-ConfDbPassword           = "xxx"
+ConfDbPassword           = "123456"
 
-ConfDataBase           = "test"
+ConfDataBase           = "huangwei"
 
 
 MaxLogfileSize          = 100mb
@@ -67,6 +71,6 @@ LogDir                  = "log"
 
 LogPrefix               = "flyfish"
 
-LogLevel                = "info"
+LogLevel                = "debug"
 
 EnableLogStdout         = true

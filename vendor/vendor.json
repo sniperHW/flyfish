@@ -69,6 +69,12 @@
 			"revisionTime": "2018-11-28T19:23:52Z"
 		},
 		{
+			"checksumSHA1": "EFilcRi6b0Bf3nckKo3UbeqoW50=",
+			"path": "github.com/gorilla/websocket",
+			"revision": "95ba29eb981bbb27d92e1f70bf8a1949452d926b",
+			"revisionTime": "2018-12-06T07:02:39Z"
+		},
+		{
 			"checksumSHA1": "SVzanxaLYK43jeNWQqNs5P+uhow=",
 			"path": "github.com/jmoiron/sqlx",
 			"revision": "82935fac6c1a317907c8f43ed3f7f85ea844a78b",
@@ -91,6 +97,54 @@
 			"path": "github.com/lib/pq/oid",
 			"revision": "9eb73efc1fcc404148b56765b0d3f61d9a5ef8ee",
 			"revisionTime": "2018-10-16T16:26:27Z"
+		},
+		{
+			"checksumSHA1": "Ao+tsh+PpJH0NwJhuL4StQvr61I=",
+			"path": "github.com/sniperHW/kendynet",
+			"revision": "ed37be05dddaf57adb0273ffb05397726cbd998c",
+			"revisionTime": "2019-02-14T07:50:10Z"
+		},
+		{
+			"checksumSHA1": "aqGAzNrUrNaMHHPLb3fIsnjySH0=",
+			"path": "github.com/sniperHW/kendynet/event",
+			"revision": "ed37be05dddaf57adb0273ffb05397726cbd998c",
+			"revisionTime": "2019-02-14T07:50:10Z"
+		},
+		{
+			"checksumSHA1": "GbOwtuKtJMXAx8osvZ1jwbFTZs8=",
+			"path": "github.com/sniperHW/kendynet/golog",
+			"revision": "65621bbb0f28656993c353ade0757fe6ba63d774",
+			"revisionTime": "2019-02-22T05:39:45Z"
+		},
+		{
+			"checksumSHA1": "fQ6WtEsUGFzMSfbchZFYbL8fBBw=",
+			"path": "github.com/sniperHW/kendynet/message",
+			"revision": "ed37be05dddaf57adb0273ffb05397726cbd998c",
+			"revisionTime": "2019-02-14T07:50:10Z"
+		},
+		{
+			"checksumSHA1": "HdUiJTX5KJ65iE6xdz49EtQovN8=",
+			"path": "github.com/sniperHW/kendynet/socket",
+			"revision": "ed37be05dddaf57adb0273ffb05397726cbd998c",
+			"revisionTime": "2019-02-14T07:50:10Z"
+		},
+		{
+			"checksumSHA1": "1Ki2d2XkGJtfPpigDs7mv8Sl/nA=",
+			"path": "github.com/sniperHW/kendynet/socket/connector/tcp",
+			"revision": "ed37be05dddaf57adb0273ffb05397726cbd998c",
+			"revisionTime": "2019-02-14T07:50:10Z"
+		},
+		{
+			"checksumSHA1": "r6zyPaUP3z1cAz89972sXC3SrmQ=",
+			"path": "github.com/sniperHW/kendynet/socket/listener/tcp",
+			"revision": "ed37be05dddaf57adb0273ffb05397726cbd998c",
+			"revisionTime": "2019-02-14T07:50:10Z"
+		},
+		{
+			"checksumSHA1": "0pt7/5TSubGOpDo1sUNlXeJR2jQ=",
+			"path": "github.com/sniperHW/kendynet/util",
+			"revision": "ed37be05dddaf57adb0273ffb05397726cbd998c",
+			"revisionTime": "2019-02-14T07:50:10Z"
 		},
 		{
 			"checksumSHA1": "2TJV/f15/49inUOLH5hJK+nkRNw=",

@@ -31,7 +31,7 @@ func MGet(c *kclient.Client) {
 
 func main() {
 
-	kclient.InitLogger(golog.NewOutputLogger("log", "flyfish client", 1024*1024*50), "error")
+	kclient.InitLogger(golog.New("flyfish client", golog.NewOutputLogger("log", "flyfish client", 1024*1024*50)))
 
 	services := []string{"127.0.0.1:10012"}
 	c := kclient.OpenClient(services) //eventQueue)

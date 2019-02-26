@@ -1,22 +1,15 @@
 package client
 
 import (
-	"github.com/sniperHW/kendynet"
+	//"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/golog"
-	"sync"
+	//"sync"
 )
 
-var logger *golog.Logger
-var logger_once sync.Once
+var logger golog.LoggerI
 
-func InitLogger(out *golog.OutputLogger, level string) {
-	logger_once.Do(func() {
-		fullname := "flyfish client"
-		logger = golog.New(fullname, out)
-		logger.SetLevelByString(level)
-		kendynet.InitLogger(logger)
-		logger.Infof("%s logger init", fullname)
-	})
+func InitLogger(l golog.LoggerI) {
+	logger = l
 }
 
 func Debugf(format string, v ...interface{}) {

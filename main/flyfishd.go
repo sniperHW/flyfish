@@ -28,12 +28,12 @@ func main() {
 		conf.ParseConfig(sec)
 	}
 
-	flyfish.InitLogger()
-
 	if !flyfish.InitTableConfig() {
 		fmt.Println("InitTableConfig failed")
 		return
 	}
+
+	flyfish.InitLogger()
 
 	flyfish.InitCacheKey()
 	flyfish.RedisInit(conf.RedisHost, conf.RedisPort, conf.RedisPassword)
