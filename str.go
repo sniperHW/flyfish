@@ -3,6 +3,7 @@ package flyfish
 import (
 	"flyfish/conf"
 	"sync"
+	"unsafe"
 )
 
 func isPow2(size int) bool {
@@ -33,7 +34,8 @@ func (this *str) reset() {
 }
 
 func (this *str) toString() string {
-	return string(this.data[:this.len])
+	tmp := this.data[:this.len]
+	return *(*string)(unsafe.Pointer(&tmp))
 }
 
 func (this *str) expand(need int) {
