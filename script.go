@@ -110,6 +110,7 @@ func GetCompareAndSetSha() (bool, string) {
 				sha, err := cli.ScriptLoad(gScriptMgr.compareAndSetSha.script).Result()
 				if nil == err {
 					gScriptMgr.compareAndSetSha.sha = sha
+					Infoln("load compareAndSetSha ok", sha)
 				}
 			}()
 		}
@@ -135,6 +136,7 @@ func GetDelSha() (bool, string) {
 				sha, err := cli.ScriptLoad(gScriptMgr.delSha.script).Result()
 				if nil == err {
 					gScriptMgr.delSha.sha = sha
+					Infoln("load delSha ok", sha)
 				}
 			}()
 
@@ -161,6 +163,7 @@ func GetIncrBySha() (bool, string) {
 				sha, err := cli.ScriptLoad(gScriptMgr.incrBySha.script).Result()
 				if nil == err {
 					gScriptMgr.incrBySha.sha = sha
+					Infoln("load incrBySha ok", sha)
 				}
 			}()
 		}
@@ -186,6 +189,7 @@ func GetDecrBySha() (bool, string) {
 				sha, err := cli.ScriptLoad(gScriptMgr.decrBySha.script).Result()
 				if nil == err {
 					gScriptMgr.decrBySha.sha = sha
+					Infoln("load decrBySha ok", sha)
 				}
 			}()
 		}
@@ -222,6 +226,7 @@ func LoadSetSha(c int, script string) {
 			sha, err := cli.ScriptLoad(s.script).Result()
 			if nil == err {
 				s.sha = sha
+				Infoln("load setsha ok", s.sha)
 			}
 		}()
 	}
