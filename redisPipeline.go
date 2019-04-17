@@ -11,7 +11,6 @@ type redisCmd struct {
 	ctx    *processContext
 	fields []string
 	ret    interface{}
-	s      *str
 }
 
 var ARGV = []string{
@@ -104,7 +103,13 @@ func (this *redisPipeliner) appendIncrBy(ctx *processContext) interface{} {
 	cmd := ctx.getCmd()
 	this.keys = append(this.keys, ctx.getUniKey())
 	this.args = append(this.args, "__version__", ctx.fields["__version__"].GetValue(), cmd.incrDecr.GetName(), cmd.incrDecr.GetValue())
-	return this.pipeLiner.Eval(strIncrBy, this.keys, this.args...)
+
+	sha, script := GetIncrBySha()
+	if sha {
+		return this.pipeLiner.EvalSha(script, this.keys, this.args...)
+	} else {
+		return this.pipeLiner.Eval(script, this.keys, this.args...)
+	}
 }
 
 func (this *redisPipeliner) appendDecrBy(ctx *processContext) interface{} {
@@ -112,7 +117,13 @@ func (this *redisPipeliner) appendDecrBy(ctx *processContext) interface{} {
 	cmd := ctx.getCmd()
 	this.keys = append(this.keys, ctx.getUniKey())
 	this.args = append(this.args, "__version__", ctx.fields["__version__"].GetValue(), cmd.incrDecr.GetName(), cmd.incrDecr.GetValue())
-	return this.pipeLiner.Eval(strDecrBy, this.keys, this.args...)
+
+	sha, script := GetDecrBySha()
+	if sha {
+		return this.pipeLiner.EvalSha(script, this.keys, this.args...)
+	} else {
+		return this.pipeLiner.Eval(script, this.keys, this.args...)
+	}
 }
 
 func (this *redisPipeliner) appendCompareAndSet(ctx *processContext) interface{} {
@@ -120,13 +131,46 @@ func (this *redisPipeliner) appendCompareAndSet(ctx *processContext) interface{}
 	cmd := ctx.getCmd()
 	this.keys = append(this.keys, ctx.getUniKey())
 	this.args = append(this.args, cmd.cns.oldV.GetName(), cmd.cns.oldV.GetValue(), cmd.cns.newV.GetValue(), "__version__", ctx.fields["__version__"].GetValue())
-	return this.pipeLiner.Eval(strCompareAndSet, this.keys, this.args...)
+
+	sha, script := GetCompareAndSetSha()
+
+	if sha {
+		return this.pipeLiner.EvalSha(script, this.keys, this.args...)
+	} else {
+
+		return this.pipeLiner.Eval(script, this.keys, this.args...)
+	}
 }
 
-func (this *redisPipeliner) appendSet(ctx *processContext) (interface{}, *str) {
+func (this *redisPipeliner) appendSet(ctx *processContext) interface{} {
 	this.keys = append(this.keys, ctx.getUniKey())
 	this.args = append(this.args, "__version__", ctx.fields["__version__"].GetValue())
-	c := 3
+	script, sha := GetSetSha(len(ctx.fields))
+	if script != "" && sha != "" {
+		c := 3
+		for _, v := range ctx.fields {
+			this.args = append(this.args, v.GetName(), v.GetValue())
+			c += 2
+		}
+		if sha != "" {
+			return this.pipeLiner.EvalSha(sha, this.keys, this.args...)
+		} else {
+			return this.pipeLiner.Eval(script, this.keys, this.args...)
+		}
+	} else {
+		c := 3
+		s := strSetBeg
+		for _, v := range ctx.fields {
+			this.args = append(this.args, v.GetName(), v.GetValue())
+			s += ARGV[c]
+			s += ARGV[c+1]
+			c += 2
+		}
+		s += strSetEnd
+		LoadSetSha(len(ctx.fields), s)
+		return this.pipeLiner.Eval(s, this.keys, this.args...)
+	}
+	/*c := 3
 	str := strGet()
 	str.append(strSetBeg)
 	for _, v := range ctx.fields {
@@ -136,7 +180,7 @@ func (this *redisPipeliner) appendSet(ctx *processContext) (interface{}, *str) {
 	}
 	str.append(strSetEnd)
 	ret := this.pipeLiner.Eval(str.toString(), this.keys, this.args...)
-	return ret, str
+	return ret, str*/
 }
 
 func (this *redisPipeliner) readGetResult(rcmd *redisCmd) {
@@ -249,7 +293,12 @@ func (this *redisPipeliner) append(ctx *processContext) {
 		this.args = this.args[0:0]
 		this.keys = append(this.keys, ctx.getUniKey())
 		this.args = append(this.args, "__version__", ctx.fields["__version__"].GetValue())
-		rcmd.ret = this.pipeLiner.Eval(strDel, this.keys, this.args...)
+		sha, script := GetDelSha()
+		if sha {
+			rcmd.ret = this.pipeLiner.EvalSha(script, this.keys, this.args...)
+		} else {
+			rcmd.ret = this.pipeLiner.Eval(script, this.keys, this.args...)
+		}
 	} else if ctx.redisFlag == redis_set_script {
 		cmdType := ctx.getCmdType()
 
@@ -259,7 +308,7 @@ func (this *redisPipeliner) append(ctx *processContext) {
 		if cmdType == cmdCompareAndSet || cmdType == cmdCompareAndSetNx {
 			rcmd.ret = this.appendCompareAndSet(ctx)
 		} else if cmdType == cmdSet {
-			rcmd.ret, rcmd.s = this.appendSet(ctx)
+			rcmd.ret = this.appendSet(ctx)
 		} else if cmdType == cmdIncrBy {
 			rcmd.ret = this.appendIncrBy(ctx)
 		} else if cmdType == cmdDecrBy {
@@ -284,9 +333,6 @@ func (this *redisPipeliner) exec() {
 	}
 	_, err := this.pipeLiner.Exec()
 	for _, v := range this.cmds {
-		if nil != v.s {
-			strPut(v.s)
-		}
 		if v.ctx.redisFlag != redis_kick {
 			v.ctx.errno = errcode.ERR_OK
 			if nil != err {
