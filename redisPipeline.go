@@ -87,6 +87,7 @@ type redisPipeliner struct {
 	max       int
 	keys      []string
 	args      []interface{}
+	script    *scriptMgr
 }
 
 func newRedisPipeliner(max int) *redisPipeliner {
@@ -96,6 +97,7 @@ func newRedisPipeliner(max int) *redisPipeliner {
 		max:       max,
 		keys:      []string{},
 		args:      []interface{}{},
+		script:    newScriptMgr(),
 	}
 }
 
@@ -104,7 +106,7 @@ func (this *redisPipeliner) appendIncrBy(ctx *processContext) interface{} {
 	this.keys = append(this.keys, ctx.getUniKey())
 	this.args = append(this.args, "__version__", ctx.fields["__version__"].GetValue(), cmd.incrDecr.GetName(), cmd.incrDecr.GetValue())
 
-	sha, script := GetIncrBySha()
+	sha, script := this.script.GetIncrBySha()
 	if sha {
 		return this.pipeLiner.EvalSha(script, this.keys, this.args...)
 	} else {
@@ -118,7 +120,7 @@ func (this *redisPipeliner) appendDecrBy(ctx *processContext) interface{} {
 	this.keys = append(this.keys, ctx.getUniKey())
 	this.args = append(this.args, "__version__", ctx.fields["__version__"].GetValue(), cmd.incrDecr.GetName(), cmd.incrDecr.GetValue())
 
-	sha, script := GetDecrBySha()
+	sha, script := this.script.GetDecrBySha()
 	if sha {
 		return this.pipeLiner.EvalSha(script, this.keys, this.args...)
 	} else {
@@ -132,7 +134,7 @@ func (this *redisPipeliner) appendCompareAndSet(ctx *processContext) interface{}
 	this.keys = append(this.keys, ctx.getUniKey())
 	this.args = append(this.args, cmd.cns.oldV.GetName(), cmd.cns.oldV.GetValue(), cmd.cns.newV.GetValue(), "__version__", ctx.fields["__version__"].GetValue())
 
-	sha, script := GetCompareAndSetSha()
+	sha, script := this.script.GetCompareAndSetSha()
 
 	if sha {
 		return this.pipeLiner.EvalSha(script, this.keys, this.args...)
@@ -145,7 +147,7 @@ func (this *redisPipeliner) appendCompareAndSet(ctx *processContext) interface{}
 func (this *redisPipeliner) appendSet(ctx *processContext) interface{} {
 	this.keys = append(this.keys, ctx.getUniKey())
 	this.args = append(this.args, "__version__", ctx.fields["__version__"].GetValue())
-	script, sha := GetSetSha(len(ctx.fields))
+	script, sha := this.script.GetSetSha(len(ctx.fields))
 	if script != "" && sha != "" {
 		c := 3
 		for _, v := range ctx.fields {
@@ -167,7 +169,7 @@ func (this *redisPipeliner) appendSet(ctx *processContext) interface{} {
 			c += 2
 		}
 		s += strSetEnd
-		LoadSetSha(len(ctx.fields), s)
+		this.script.LoadSetSha(len(ctx.fields), s)
 		return this.pipeLiner.Eval(s, this.keys, this.args...)
 	}
 	/*c := 3
@@ -293,7 +295,7 @@ func (this *redisPipeliner) append(ctx *processContext) {
 		this.args = this.args[0:0]
 		this.keys = append(this.keys, ctx.getUniKey())
 		this.args = append(this.args, "__version__", ctx.fields["__version__"].GetValue())
-		sha, script := GetDelSha()
+		sha, script := this.script.GetDelSha()
 		if sha {
 			rcmd.ret = this.pipeLiner.EvalSha(script, this.keys, this.args...)
 		} else {

@@ -50,7 +50,7 @@ func RedisInit(host string, port int, Password string) bool {
 			Password: Password,
 		})
 
-		InitScript()
+		//InitScript()
 
 		if nil != cli {
 			redisProcessQueue = util.NewBlockQueueWithName(fmt.Sprintf("redis"), conf.RedisEventQueueSize)

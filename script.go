@@ -92,123 +92,123 @@ type scriptMgr struct {
 	setSha           map[int]*scriptSha
 }
 
-var gScriptMgr *scriptMgr
+//var this *scriptMgr
 
-func GetCompareAndSetSha() (bool, string) {
-	gScriptMgr.mtx.Lock()
-	defer gScriptMgr.mtx.Unlock()
-	if gScriptMgr.compareAndSetSha.sha == "" {
-		if !gScriptMgr.compareAndSetSha.loading {
+func (this *scriptMgr) GetCompareAndSetSha() (bool, string) {
+	this.mtx.Lock()
+	defer this.mtx.Unlock()
+	if this.compareAndSetSha.sha == "" {
+		if !this.compareAndSetSha.loading {
 			//请求redis加载脚本
-			gScriptMgr.compareAndSetSha.loading = true
+			this.compareAndSetSha.loading = true
 			go func() {
-				gScriptMgr.mtx.Lock()
+				this.mtx.Lock()
 				defer func() {
-					gScriptMgr.compareAndSetSha.loading = false
-					gScriptMgr.mtx.Unlock()
+					this.compareAndSetSha.loading = false
+					this.mtx.Unlock()
 				}()
-				sha, err := cli.ScriptLoad(gScriptMgr.compareAndSetSha.script).Result()
+				sha, err := cli.ScriptLoad(this.compareAndSetSha.script).Result()
 				if nil == err {
-					gScriptMgr.compareAndSetSha.sha = sha
+					this.compareAndSetSha.sha = sha
 					Infoln("load compareAndSetSha ok", sha)
 				}
 			}()
 		}
-		return false, gScriptMgr.compareAndSetSha.script
+		return false, this.compareAndSetSha.script
 	} else {
-		return true, gScriptMgr.compareAndSetSha.sha
+		return true, this.compareAndSetSha.sha
 	}
 }
 
-func GetDelSha() (bool, string) {
-	gScriptMgr.mtx.Lock()
-	defer gScriptMgr.mtx.Unlock()
-	if gScriptMgr.delSha.sha == "" {
-		if !gScriptMgr.delSha.loading {
+func (this *scriptMgr) GetDelSha() (bool, string) {
+	this.mtx.Lock()
+	defer this.mtx.Unlock()
+	if this.delSha.sha == "" {
+		if !this.delSha.loading {
 			//请求redis加载脚本
-			gScriptMgr.delSha.loading = true
+			this.delSha.loading = true
 			go func() {
-				gScriptMgr.mtx.Lock()
+				this.mtx.Lock()
 				defer func() {
-					gScriptMgr.delSha.loading = false
-					gScriptMgr.mtx.Unlock()
+					this.delSha.loading = false
+					this.mtx.Unlock()
 				}()
-				sha, err := cli.ScriptLoad(gScriptMgr.delSha.script).Result()
+				sha, err := cli.ScriptLoad(this.delSha.script).Result()
 				if nil == err {
-					gScriptMgr.delSha.sha = sha
+					this.delSha.sha = sha
 					Infoln("load delSha ok", sha)
 				}
 			}()
 
 		}
-		return false, gScriptMgr.delSha.script
+		return false, this.delSha.script
 	} else {
-		return true, gScriptMgr.delSha.sha
+		return true, this.delSha.sha
 	}
 }
 
-func GetIncrBySha() (bool, string) {
-	gScriptMgr.mtx.Lock()
-	defer gScriptMgr.mtx.Unlock()
-	if gScriptMgr.incrBySha.sha == "" {
-		if !gScriptMgr.incrBySha.loading {
+func (this *scriptMgr) GetIncrBySha() (bool, string) {
+	this.mtx.Lock()
+	defer this.mtx.Unlock()
+	if this.incrBySha.sha == "" {
+		if !this.incrBySha.loading {
 			//请求redis加载脚本
-			gScriptMgr.incrBySha.loading = true
+			this.incrBySha.loading = true
 			go func() {
-				gScriptMgr.mtx.Lock()
+				this.mtx.Lock()
 				defer func() {
-					gScriptMgr.incrBySha.loading = false
-					gScriptMgr.mtx.Unlock()
+					this.incrBySha.loading = false
+					this.mtx.Unlock()
 				}()
-				sha, err := cli.ScriptLoad(gScriptMgr.incrBySha.script).Result()
+				sha, err := cli.ScriptLoad(this.incrBySha.script).Result()
 				if nil == err {
-					gScriptMgr.incrBySha.sha = sha
+					this.incrBySha.sha = sha
 					Infoln("load incrBySha ok", sha)
 				}
 			}()
 		}
-		return false, gScriptMgr.incrBySha.script
+		return false, this.incrBySha.script
 	} else {
-		return true, gScriptMgr.incrBySha.sha
+		return true, this.incrBySha.sha
 	}
 }
 
-func GetDecrBySha() (bool, string) {
-	gScriptMgr.mtx.Lock()
-	defer gScriptMgr.mtx.Unlock()
-	if gScriptMgr.decrBySha.sha == "" {
-		if !gScriptMgr.decrBySha.loading {
+func (this *scriptMgr) GetDecrBySha() (bool, string) {
+	this.mtx.Lock()
+	defer this.mtx.Unlock()
+	if this.decrBySha.sha == "" {
+		if !this.decrBySha.loading {
 			//请求redis加载脚本
-			gScriptMgr.decrBySha.loading = true
+			this.decrBySha.loading = true
 			go func() {
-				gScriptMgr.mtx.Lock()
+				this.mtx.Lock()
 				defer func() {
-					gScriptMgr.decrBySha.loading = false
-					gScriptMgr.mtx.Unlock()
+					this.decrBySha.loading = false
+					this.mtx.Unlock()
 				}()
-				sha, err := cli.ScriptLoad(gScriptMgr.decrBySha.script).Result()
+				sha, err := cli.ScriptLoad(this.decrBySha.script).Result()
 				if nil == err {
-					gScriptMgr.decrBySha.sha = sha
+					this.decrBySha.sha = sha
 					Infoln("load decrBySha ok", sha)
 				}
 			}()
 		}
-		return false, gScriptMgr.decrBySha.script
+		return false, this.decrBySha.script
 	} else {
-		return true, gScriptMgr.decrBySha.sha
+		return true, this.decrBySha.sha
 	}
 }
 
-func LoadSetSha(c int, script string) {
-	gScriptMgr.mtx.Lock()
-	defer gScriptMgr.mtx.Unlock()
-	s, ok := gScriptMgr.setSha[c]
+func (this *scriptMgr) LoadSetSha(c int, script string) {
+	this.mtx.Lock()
+	defer this.mtx.Unlock()
+	s, ok := this.setSha[c]
 	load := false
 	if !ok {
 		s = &scriptSha{
 			script: script,
 		}
-		gScriptMgr.setSha[c] = s
+		this.setSha[c] = s
 		load = true
 	} else if !s.loading {
 		load = true
@@ -218,10 +218,10 @@ func LoadSetSha(c int, script string) {
 		//请求redis加载脚本
 		s.loading = true
 		go func() {
-			gScriptMgr.mtx.Lock()
+			this.mtx.Lock()
 			defer func() {
 				s.loading = false
-				gScriptMgr.mtx.Unlock()
+				this.mtx.Unlock()
 			}()
 			sha, err := cli.ScriptLoad(s.script).Result()
 			if nil == err {
@@ -232,10 +232,10 @@ func LoadSetSha(c int, script string) {
 	}
 }
 
-func GetSetSha(c int) (string, string) {
-	gScriptMgr.mtx.Lock()
-	defer gScriptMgr.mtx.Unlock()
-	s, ok := gScriptMgr.setSha[c]
+func (this *scriptMgr) GetSetSha(c int) (string, string) {
+	this.mtx.Lock()
+	defer this.mtx.Unlock()
+	s, ok := this.setSha[c]
 	if !ok {
 		return "", ""
 	} else {
@@ -243,8 +243,10 @@ func GetSetSha(c int) (string, string) {
 	}
 }
 
-func InitScript() {
-	gScriptMgr = &scriptMgr{
+//func InitScript() {
+func newScriptMgr() *scriptMgr {
+	//this = &scriptMgr{
+	return &scriptMgr{
 		compareAndSetSha: scriptSha{
 			script: strCompareAndSet,
 		},
