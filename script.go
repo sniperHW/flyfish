@@ -243,6 +243,18 @@ func (this *scriptMgr) GetSetSha(c int) (string, string) {
 	}
 }
 
+func (this *scriptMgr) ResetSha() {
+	this.mtx.Lock()
+	defer this.mtx.Unlock()
+	this.compareAndSetSha.sha = ""
+	this.delSha.sha = ""
+	this.incrBySha.sha = ""
+	this.decrBySha.sha = ""
+	for _, v := range this.setSha {
+		v.sha = ""
+	}
+}
+
 //func InitScript() {
 func newScriptMgr() *scriptMgr {
 	//this = &scriptMgr{

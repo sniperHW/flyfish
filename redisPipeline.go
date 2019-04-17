@@ -188,7 +188,7 @@ func (this *redisPipeliner) appendSet(ctx *processContext) interface{} {
 func (this *redisPipeliner) readGetResult(rcmd *redisCmd) {
 	r, err1 := rcmd.ret.(*redis.SliceCmd).Result()
 	if nil != err1 {
-		Debugln("readGetResult error", err1)
+		Errorln("readGetResult error", err1)
 		rcmd.ctx.errno = errcode.ERR_REDIS
 	} else {
 		for kk, vv := range r {
@@ -202,7 +202,7 @@ func (this *redisPipeliner) readGetResult(rcmd *redisCmd) {
 			if nil != f {
 				rcmd.ctx.fields[name] = f
 			} else {
-				Debugln("invaild value", name, vv.(string))
+				Errorln("invaild value", name, vv.(string))
 			}
 		}
 	}
@@ -211,7 +211,7 @@ func (this *redisPipeliner) readGetResult(rcmd *redisCmd) {
 func (this *redisPipeliner) readSetResult(rcmd *redisCmd) {
 	_, err1 := rcmd.ret.(*redis.StatusCmd).Result()
 	if nil != err1 {
-		Debugln("readSetResult error", err1)
+		Errorln("readSetResult error", err1)
 		rcmd.ctx.errno = errcode.ERR_REDIS
 	}
 }
@@ -219,7 +219,8 @@ func (this *redisPipeliner) readSetResult(rcmd *redisCmd) {
 func (this *redisPipeliner) readDelResult(rcmd *redisCmd) {
 	r, err1 := rcmd.ret.(*redis.Cmd).Result()
 	if nil != err1 {
-		Debugln("cmdIncr error", err1)
+		Errorln("readDelResult error", err1)
+		this.script.ResetSha()
 		rcmd.ctx.errno = errcode.ERR_REDIS
 	} else {
 		if r.(string) != "ok" {
@@ -231,7 +232,8 @@ func (this *redisPipeliner) readDelResult(rcmd *redisCmd) {
 func (this *redisPipeliner) readSetScriptResult(rcmd *redisCmd) {
 	r, err1 := rcmd.ret.(*redis.Cmd).Result()
 	if nil != err1 {
-		Debugln("cmdIncr error", err1)
+		Debugln("readSetScriptResult error", err1)
+		this.script.ResetSha()
 		rcmd.ctx.errno = errcode.ERR_REDIS
 	} else {
 		cmd := rcmd.ctx.getCmd()
@@ -280,7 +282,6 @@ func (this *redisPipeliner) append(ctx *processContext) {
 	if ctx.redisFlag == redis_kick {
 		rcmd.ret = this.pipeLiner.Del(ctx.getUniKey())
 	} else if ctx.redisFlag == redis_set || ctx.redisFlag == redis_set_only {
-		Debugln("append set", ctx.redisFlag)
 		rcmd.ret = this.pipeLiner.HMSet(ctx.getUniKey(), *ctx.getSetfields())
 	} else if ctx.redisFlag == redis_get {
 		rcmd.fields = make([]string, len(ctx.fields))
@@ -334,6 +335,15 @@ func (this *redisPipeliner) exec() {
 		return
 	}
 	_, err := this.pipeLiner.Exec()
+
+	if nil != err {
+		/*
+		 *   如果由于redis崩溃重启导致的错误sha将全部丢失
+		 *   这里不具体判断错误类型，只要pipeline执行出错就重置sha
+		 */
+		this.script.ResetSha()
+	}
+
 	for _, v := range this.cmds {
 		if v.ctx.redisFlag != redis_kick {
 			v.ctx.errno = errcode.ERR_OK
