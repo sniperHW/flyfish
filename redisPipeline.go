@@ -11,6 +11,7 @@ type redisCmd struct {
 	ctx    *processContext
 	fields []string
 	ret    interface{}
+	s      *str
 }
 
 var ARGV = []string{
@@ -122,7 +123,7 @@ func (this *redisPipeliner) appendCompareAndSet(ctx *processContext) interface{}
 	return this.pipeLiner.Eval(strCompareAndSet, this.keys, this.args...)
 }
 
-func (this *redisPipeliner) appendSet(ctx *processContext) interface{} {
+func (this *redisPipeliner) appendSet(ctx *processContext) (interface{}, *str) {
 	this.keys = append(this.keys, ctx.getUniKey())
 	this.args = append(this.args, "__version__", ctx.fields["__version__"].GetValue())
 	c := 3
@@ -135,8 +136,7 @@ func (this *redisPipeliner) appendSet(ctx *processContext) interface{} {
 	}
 	str.append(strSetEnd)
 	ret := this.pipeLiner.Eval(str.toString(), this.keys, this.args...)
-	strPut(str)
-	return ret
+	return ret, str
 }
 
 func (this *redisPipeliner) readGetResult(rcmd *redisCmd) {
@@ -259,16 +259,16 @@ func (this *redisPipeliner) append(ctx *processContext) {
 		if cmdType == cmdCompareAndSet || cmdType == cmdCompareAndSetNx {
 			rcmd.ret = this.appendCompareAndSet(ctx)
 		} else if cmdType == cmdSet {
-			rcmd.ret = this.appendSet(ctx)
+			rcmd.ret, rcmd.s = this.appendSet(ctx)
 		} else if cmdType == cmdIncrBy {
 			rcmd.ret = this.appendIncrBy(ctx)
 		} else if cmdType == cmdDecrBy {
 			rcmd.ret = this.appendDecrBy(ctx)
 		} else {
-			panic("invaild cmdType")
+			Errorln("invaild cmdType", cmdType)
 		}
 	} else {
-		panic("invaild redisFlag")
+		Errorln("invaild redisFlag", ctx.redisFlag)
 	}
 
 	this.cmds = append(this.cmds, rcmd)
@@ -284,6 +284,9 @@ func (this *redisPipeliner) exec() {
 	}
 	_, err := this.pipeLiner.Exec()
 	for _, v := range this.cmds {
+		if nil != v.s {
+			strPut(v.s)
+		}
 		if v.ctx.redisFlag != redis_kick {
 			v.ctx.errno = errcode.ERR_OK
 			if nil != err {
