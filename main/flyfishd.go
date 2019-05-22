@@ -1,9 +1,9 @@
 package main
 
 import (
+	"flyfish"
 	"flyfish/conf"
 	"fmt"
-	"sanguo/flyfish"
 
 	"github.com/go-ini/ini"
 
