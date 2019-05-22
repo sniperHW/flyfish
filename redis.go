@@ -18,13 +18,13 @@ var (
 
 func pushRedis(ctx *processContext) {
 	atomic.AddInt32(&redisReqCount, 1)
-	Debugln("pushRedis", ctx.getUniKey())
+	Debugln("pushRedis", ctx.getCmdType(), ctx.getUniKey())
 	redisProcessQueue.Add(ctx)
 }
 
 func pushRedisNoWait(ctx *processContext) {
 	atomic.AddInt32(&redisReqCount, 1)
-	Debugln("pushRedisNoWait", ctx.getUniKey())
+	Debugln("pushRedisNoWait", ctx.getCmdType(), ctx.getUniKey())
 	redisProcessQueue.AddNoWait(ctx)
 }
 

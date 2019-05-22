@@ -4,9 +4,10 @@ import (
 	codec "flyfish/codec"
 	"flyfish/proto"
 	"fmt"
+	"time"
+
 	pb "github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
-	"time"
 )
 
 ////////////SetReplyer
@@ -20,8 +21,11 @@ func (this *SetReplyer) reply(errCode int32, fields map[string]*proto.Field, ver
 
 	if time.Now().After(this.cmd.deadline) {
 		//已经超时
+		Debugln("reply SetReplyer timeout", this.cmd.key)
 		return
 	}
+
+	Debugln("reply SetReplyer", this.cmd.key)
 
 	head := &proto.RespCommon{
 		Key:     pb.String(this.cmd.key),

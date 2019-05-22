@@ -1,17 +1,18 @@
 package codec
 
 import (
-	"github.com/golang/protobuf/proto"
-	"github.com/sniperHW/kendynet"
-	"fmt"
 	"flyfish/codec/pb"
 	"flyfish/conf"
 	_ "flyfish/proto"
+	"fmt"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/sniperHW/kendynet"
 )
 
 const (
-	sizeLen      = 4
-	sizeCmd      = 2
+	sizeLen = 4
+	sizeCmd = 2
 )
 
 type Encoder struct {
@@ -27,16 +28,16 @@ type outMessage struct {
 
 /*
 *  Bytes()在连接的发送goroutine中被调用,以避免Marshal过度占用逻辑goroutine的计算能力
-*/
+ */
 
 func (this *outMessage) Bytes() []byte {
 	var pbbytes []byte
 	var cmd uint32
 	var err error
 	var payloadLen int
-	var totalLen int	
+	var totalLen int
 	if pbbytes, cmd, err = pb.Marshal(this.msg); err != nil {
-		kendynet.Errorln("outMessage encode err:",err)
+		kendynet.Errorln("outMessage encode err:", err)
 		return nil
 	}
 	payloadLen = sizeCmd + len(pbbytes)
@@ -60,8 +61,8 @@ func (this *Encoder) EnCode(o interface{}) (kendynet.Message, error) {
 	switch o.(type) {
 	case proto.Message:
 		return &outMessage{
-			msg : o.(proto.Message),
-		},nil
+			msg: o.(proto.Message),
+		}, nil
 		break
 	default:
 		break

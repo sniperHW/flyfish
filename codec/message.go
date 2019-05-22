@@ -3,6 +3,7 @@ package codec
 import (
 	"flyfish/codec/pb"
 	protocol "flyfish/proto"
+
 	"github.com/golang/protobuf/proto"
 )
 

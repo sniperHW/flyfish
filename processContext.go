@@ -92,6 +92,7 @@ func (this *processContext) reply(errCode int32, fields map[string]*proto.Field,
 }
 
 func (this *cacheKey) processGet(ctx *processContext, cmd *command) bool {
+	Debugln("processSet", cmd.uniKey)
 	if this.status == cache_missing {
 		cmd.reply(errcode.ERR_NOTFOUND, nil, -1)
 		return false
@@ -107,7 +108,7 @@ func (this *cacheKey) processGet(ctx *processContext, cmd *command) bool {
 }
 
 func (this *cacheKey) processSet(ctx *processContext, cmd *command) bool {
-	Debugln("processSet")
+	Debugln("processSet", cmd.uniKey)
 	if nil != cmd.version && this.status != cache_new && *cmd.version != this.version {
 		cmd.reply(errcode.ERR_VERSION, nil, this.version)
 		return false
@@ -141,7 +142,7 @@ func (this *cacheKey) processSet(ctx *processContext, cmd *command) bool {
 }
 
 func (this *cacheKey) processSetNx(ctx *processContext, cmd *command) bool {
-	Debugln("processSetNx")
+	Debugln("processSetNx", cmd.uniKey)
 	if this.status == cache_ok {
 		//记录已经存在，不能再设置
 		cmd.reply(errcode.ERR_KEY_EXIST, nil, this.version)
@@ -166,7 +167,7 @@ func (this *cacheKey) processSetNx(ctx *processContext, cmd *command) bool {
 
 func (this *cacheKey) processCompareAndSet(ctx *processContext, cmd *command) bool {
 
-	Debugln("processCompareAndSet")
+	Debugln("processCompareAndSet", cmd.uniKey)
 
 	if this.status == cache_missing {
 		cmd.reply(errcode.ERR_NOTFOUND, nil, -1)
@@ -187,6 +188,8 @@ func (this *cacheKey) processCompareAndSet(ctx *processContext, cmd *command) bo
 
 func (this *cacheKey) processCompareAndSetNx(ctx *processContext, cmd *command) bool {
 
+	Debugln("processCompareAndSetNx", cmd.uniKey)
+
 	ctx.commands = append(ctx.commands, cmd)
 
 	if this.status == cache_ok || this.status == cache_missing {
@@ -206,7 +209,7 @@ func (this *cacheKey) processCompareAndSetNx(ctx *processContext, cmd *command) 
 
 func (this *cacheKey) processIncrBy(ctx *processContext, cmd *command) bool {
 
-	Debugln("processIncrBy")
+	Debugln("processIncrBy", cmd.uniKey)
 
 	ctx.commands = append(ctx.commands, cmd)
 
@@ -226,7 +229,7 @@ func (this *cacheKey) processIncrBy(ctx *processContext, cmd *command) bool {
 
 func (this *cacheKey) processDecrBy(ctx *processContext, cmd *command) bool {
 
-	Debugln("processDecrBy")
+	Debugln("processDecrBy", cmd.uniKey)
 
 	ctx.commands = append(ctx.commands, cmd)
 
@@ -246,6 +249,9 @@ func (this *cacheKey) processDecrBy(ctx *processContext, cmd *command) bool {
 }
 
 func (this *cacheKey) processDel(ctx *processContext, cmd *command) bool {
+
+	Debugln("processDel", cmd.uniKey)
+
 	if this.status == cache_missing {
 		cmd.reply(errcode.ERR_NOTFOUND, nil, -1)
 		return false
@@ -269,8 +275,6 @@ func (this *cacheKey) processDel(ctx *processContext, cmd *command) bool {
 
 func (this *cacheKey) process_(noWait bool, cmd ...*command) {
 
-	Debugln("process")
-
 	this.mtx.Lock()
 
 	if len(cmd) > 0 {
@@ -282,8 +286,6 @@ func (this *cacheKey) process_(noWait bool, cmd ...*command) {
 	if this.locked || this.cmdQueue.Len() == 0 {
 		this.mtx.Unlock()
 		return
-	} else {
-		Debugln("process", this.uniKey)
 	}
 
 	cmdQueue := this.cmdQueue
@@ -291,7 +293,6 @@ func (this *cacheKey) process_(noWait bool, cmd ...*command) {
 
 	if nil == e {
 		this.mtx.Unlock()
-		Debugln("cmdQueue empty", this.uniKey)
 		return
 	}
 
@@ -312,7 +313,6 @@ func (this *cacheKey) process_(noWait bool, cmd ...*command) {
 			atomic.AddInt32(&cmdCount, -1)
 		} else {
 			ok := false
-			Debugln(cmd.cmdType, lastCmdType)
 			if cmd.cmdType == cmdGet {
 				if !(lastCmdType == cmdNone || lastCmdType == cmdGet) {
 					break
@@ -383,11 +383,18 @@ func (this *cacheKey) process_(noWait bool, cmd ...*command) {
 			pushRedis(ctx)
 		}
 	} else {
+
+		ok := true
+
 		//投递sql请求
 		if noWait {
-			pushSQLLoadNoWait(ctx)
+			ok = pushSQLLoadNoWait(ctx)
 		} else {
-			pushSQLLoad(ctx)
+			ok = pushSQLLoad(ctx)
+		}
+
+		if !ok {
+			ctx.reply(errcode.ERR_BUSY, nil, -1)
 		}
 	}
 }

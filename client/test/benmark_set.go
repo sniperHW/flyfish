@@ -4,11 +4,12 @@ import (
 	kclient "flyfish/client"
 	"flyfish/errcode"
 	"fmt"
-	"github.com/sniperHW/kendynet/golog"
 	"math/rand"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/sniperHW/kendynet/golog"
 )
 
 var (

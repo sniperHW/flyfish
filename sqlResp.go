@@ -80,7 +80,6 @@ func onSqlLoadOKSet(ctx *processContext) {
 		} else {
 			ctx.fields["__version__"] = proto.PackField("__version__", version+1)
 			ctx.fields[cmd.cns.oldV.GetName()] = cmd.cns.newV
-			Debugln("cmdCompareAndSet", cmd.cns.oldV, cmd.cns.newV, ctx.fields[cmd.cns.oldV.GetName()].GetValue())
 			ctx.writeBackFlag = write_back_update //sql中存在,使用update回写
 			ctx.redisFlag = redis_set
 		}
@@ -142,7 +141,9 @@ func onSqlLoadOK(ctx *processContext) {
 }
 
 func onSqlResp(ctx *processContext, errno int32) {
-	Debugln("onSqlResp", errno)
+
+	Debugln("onSqlResp", ctx.getUniKey(), ctx.getCmdType(), errno)
+
 	if errno == errcode.ERR_OK {
 		onSqlLoadOK(ctx)
 	} else if errno == errcode.ERR_NOTFOUND {

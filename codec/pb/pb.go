@@ -3,6 +3,7 @@ package pb
 import (
 	"fmt"
 	"reflect"
+
 	"github.com/golang/protobuf/proto"
 )
 
@@ -11,10 +12,8 @@ type reflectInfo struct {
 	name string
 }
 
-
 var nameToID = map[string]uint32{}
 var idToMeta = map[uint32]reflectInfo{}
-
 
 func newMessage(id uint32) (msg proto.Message, err error) {
 	if mt, ok := idToMeta[id]; ok {

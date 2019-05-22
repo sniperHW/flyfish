@@ -4,11 +4,12 @@ import (
 	"container/list"
 	"flyfish/conf"
 	"flyfish/proto"
-	"github.com/sniperHW/kendynet/util"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/sniperHW/kendynet/util"
 )
 
 const (
@@ -89,6 +90,7 @@ func (this *cacheKey) clearCmd() {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
 	this.locked = false
+	atomic.AddInt32(&cmdCount, -int32(this.cmdQueue.Len()))
 	this.cmdQueue = list.New()
 }
 

@@ -4,11 +4,12 @@ import (
 	//"fmt"
 	codec "flyfish/codec"
 	"flyfish/proto"
-	pb "github.com/golang/protobuf/proto"
-	"github.com/sniperHW/kendynet"
 	"reflect"
 	"sync"
 	"sync/atomic"
+
+	pb "github.com/golang/protobuf/proto"
+	"github.com/sniperHW/kendynet"
 )
 
 var sessions sync.Map

@@ -1,20 +1,18 @@
-package main 
-
+package main
 
 import (
-	"github.com/go-redis/redis"
-	"time"
 	"fmt"
 	"math/rand"
-)
+	"time"
 
+	"github.com/go-redis/redis"
+)
 
 func main() {
 
 	cli := redis.NewClient(&redis.Options{
-		Addr:"localhost:6379",
+		Addr: "localhost:6379",
 	})
-
 
 	setStr := `
 		local v = redis.call('hget',KEYS[1],ARGV[1])
@@ -25,14 +23,14 @@ func main() {
 			return ARGV[2]
 		end
 	`
-	
+
 	c := 0
 
 	nextShow := time.Now().Unix()
 
 	for i := 0; i < 1; i++ {
 
-		go func(){
+		go func() {
 
 			for {
 				pipe := cli.Pipeline()
@@ -40,14 +38,14 @@ func main() {
 				rets := []interface{}{}
 
 				var i int
-				for i = 0; i < 100;i++ {
-					keys := []string{fmt.Sprintf("%s:%s_%d","test","huangwei",rand.Int()%1000000)}
-					cmd := pipe.Eval(setStr,keys,"__version__",i)
+				for i = 0; i < 100; i++ {
+					keys := []string{fmt.Sprintf("%s:%s_%d", "test", "huangwei", rand.Int()%1000000)}
+					cmd := pipe.Eval(setStr, keys, "__version__", i)
 					/*key := fmt.Sprintf("%s:%s_%d","test","huangwei",rand.Int()%1000000)
 					fields := map[string]interface{}{}
 					fields["age"] = 33
 					cmd := pipe.HMSet(key,fields)*/
-					rets = append(rets,cmd)
+					rets = append(rets, cmd)
 				}
 
 				_, err := pipe.Exec()
@@ -60,7 +58,7 @@ func main() {
 					c = c + 100
 					now := time.Now().Unix()
 					if now >= nextShow {
-						fmt.Println(c,now)
+						fmt.Println(c, now)
 						c = 0
 						nextShow = now + 1
 					}
@@ -72,5 +70,5 @@ func main() {
 	}
 
 	sigStop := make(chan bool)
-	_,_ = <- sigStop
+	_, _ = <-sigStop
 }

@@ -4,9 +4,10 @@ import (
 	codec "flyfish/codec"
 	"flyfish/proto"
 	"fmt"
+	"time"
+
 	pb "github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
-	"time"
 )
 
 type DelReplyer struct {
@@ -17,7 +18,10 @@ type DelReplyer struct {
 
 func (this *DelReplyer) reply(errCode int32, fields map[string]*proto.Field, version int64) {
 
+	Debugln("reply del", this.cmd.key)
+
 	if time.Now().After(this.cmd.deadline) {
+		Debugln("reply del timeout", this.cmd.key)
 		//已经超时
 		return
 	}

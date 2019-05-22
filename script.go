@@ -8,7 +8,7 @@ import (
 const strSetBeg string = `local v = redis.call('hget',KEYS[1],ARGV[1])
 if not v then
 return "not_exist"
-elseif tonumber(v)~=(ARGV[2]-1) then
+elseif tonumber(v)~=(tonumber(ARGV[2])-1) then
 return "err_version"
 else
 redis.call('hmset',KEYS[1]`
@@ -22,11 +22,8 @@ const strCompareAndSet string = `local v = redis.call('hmget',KEYS[1],ARGV[4],AR
 if (not v) or (not v[1]) or (not v[2]) then
 return "not_exist"
 else
-if tonumber(v[1])~=(ARGV[5]-1) then
+if tonumber(v[1])~=(tonumber(ARGV[5])-1) then
 return "err_version"
-end
-if 'number'==type(ARGV[2]) then
-v[2]=tonumber(v)
 end
 if v[2]~=ARGV[2] then
 return {"failed",v[2]}
@@ -39,7 +36,7 @@ end`
 const strDel string = `local v = redis.call('hget',KEYS[1],ARGV[1])
 if not v then
 return "not_exist"
-elseif tonumber(v)~=ARGV[2] then
+elseif tonumber(v)~=tonumber(ARGV[2]) then
 return "err_version"
 else
 redis.call('del',KEYS[1])
@@ -55,7 +52,7 @@ end
 if r[1]==nil or r[2]==nil then
 return "not_exit"
 end
-if tonumber(r[1])~=(ARGV[2]-1) then
+if tonumber(r[1])~=(tonumber(ARGV[2])-1) then
 return "err_version"
 end
 local newVal=r[2]+ARGV[4]
@@ -70,7 +67,7 @@ end
 if r[1]==nil or r[2]==nil then
 return "not_exit"
 end
-if tonumber(r[1])~=(ARGV[2]-1) then
+if tonumber(r[1])~=(tonumber(ARGV[2])-1) then
 return "err_version"
 end	
 local newVal=r[2]-ARGV[4]

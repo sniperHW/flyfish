@@ -4,10 +4,11 @@ import (
 	"flyfish/errcode"
 	protocol "flyfish/proto"
 	"fmt"
+	"sync/atomic"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet/event"
 	"github.com/sniperHW/kendynet/util"
-	"sync/atomic"
 )
 
 type Scaner struct {

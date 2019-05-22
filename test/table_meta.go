@@ -1,6 +1,6 @@
-package main 
+package main
 
-import(
+import (
 	"flyfish"
 	"fmt"
 )
@@ -13,12 +13,7 @@ func main() {
 		"user2@name:string,age:uint,phone:string,__version__:int",
 		"user3@name:string,age:uint,phone:string,__version__:int",
 	}
-	
+
 	fmt.Println(flyfish.InitMeta(strs))
 
-
-
-
 }
-
-

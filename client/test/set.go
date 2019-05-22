@@ -4,21 +4,33 @@ import (
 	kclient "flyfish/client"
 	"flyfish/errcode"
 	"fmt"
+
 	//"github.com/sniperHW/kendynet"
+	//"strings"
+
 	"github.com/sniperHW/kendynet/golog"
-	"strings"
 )
 
 func Set(c *kclient.Client, i int) {
 	fields := map[string]interface{}{}
-	fields["age"] = 37
-	fields["phone"] = strings.Repeat("a", 1024)
-	fields["name"] = "sniperHW"
+	fields["battle_balance"] = "haha"
 	key := fmt.Sprintf("%s:%d", "huangwei", i)
 
-	set := c.Set("users1", key, fields)
+	set := c.Set("role_battle_balance", key, fields)
 	set.Exec(func(ret *kclient.StatusResult) {
 
+		if ret.ErrCode != errcode.ERR_OK {
+			fmt.Println(errcode.GetErrorStr(ret.ErrCode))
+		} else {
+			fmt.Println("set ok")
+		}
+	})
+}
+
+func Del(c *kclient.Client, i int) {
+	key := fmt.Sprintf("%s:%d", "huangwei", i)
+	del := c.Del("role_battle_balance", key)
+	del.Exec(func(ret *kclient.StatusResult) {
 		if ret.ErrCode != errcode.ERR_OK {
 			fmt.Println(errcode.GetErrorStr(ret.ErrCode))
 		} else {
@@ -30,12 +42,19 @@ func Set(c *kclient.Client, i int) {
 func main() {
 	kclient.InitLogger(golog.New("flyfish client", golog.NewOutputLogger("log", "flyfish client", 1024*1024*50)))
 
-	services := []string{"127.0.0.1:10012"}
+	services := []string{"127.0.0.1:10011"}
 
 	c := kclient.OpenClient(services) //eventQueue)
 
 	Set(c, 1)
-	//Set(c,2)
+	//Set(c, 1)
+	//Set(c, 1)
+	//Set(c, 1)
+	//Set(c, 1)
+
+	Del(c, 1)
+	//Del(c, 2)
+
 	//Set(c,3)
 	//Set(c,4)
 

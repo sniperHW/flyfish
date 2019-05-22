@@ -3,11 +3,12 @@ package flyfish
 import (
 	codec "flyfish/codec"
 	"fmt"
-	"github.com/sniperHW/kendynet"
-	"github.com/sniperHW/kendynet/socket/listener/tcp"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/sniperHW/kendynet"
+	"github.com/sniperHW/kendynet/socket/listener/tcp"
 )
 
 var (
@@ -147,6 +148,7 @@ func Stop() {
 
 	//等待redis请求和命令执行完成
 	waitCondition(func() bool {
+
 		if atomic.LoadInt32(&redisReqCount) == 0 && atomic.LoadInt32(&cmdCount) == 0 {
 			return true
 		} else {

@@ -6,12 +6,13 @@ import (
 	"flyfish/errcode"
 	"flyfish/proto"
 	"fmt"
-	pb "github.com/golang/protobuf/proto"
-	"github.com/jmoiron/sqlx"
-	"github.com/sniperHW/kendynet"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	pb "github.com/golang/protobuf/proto"
+	"github.com/jmoiron/sqlx"
+	"github.com/sniperHW/kendynet"
 )
 
 type scaner struct {

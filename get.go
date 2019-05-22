@@ -5,9 +5,10 @@ import (
 	"flyfish/errcode"
 	"flyfish/proto"
 	"fmt"
+	"time"
+
 	pb "github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
-	"time"
 )
 
 type GetReplyer struct {
@@ -20,6 +21,7 @@ func (this *GetReplyer) reply(errCode int32, fields map[string]*proto.Field, ver
 
 	if time.Now().After(this.cmd.deadline) {
 		//已经超时
+		Debugln("reply get timeout", this.cmd.key)
 		return
 	}
 
@@ -40,6 +42,8 @@ func (this *GetReplyer) reply(errCode int32, fields map[string]*proto.Field, ver
 			}
 		}
 	}
+
+	Debugln("reply get", this.cmd.key)
 
 	this.session.Send(resp)
 

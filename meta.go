@@ -239,25 +239,37 @@ func InitMeta(def []string) bool {
 		if tt == proto.ValueType_string {
 			return v
 		} else if tt == proto.ValueType_int {
-			i, err := strconv.ParseInt(v, 10, 64)
-			if nil != err {
-				return nil
+			if v == "" {
+				return int64(0)
 			} else {
-				return i
+				i, err := strconv.ParseInt(v, 10, 64)
+				if nil != err {
+					return nil
+				} else {
+					return i
+				}
 			}
 		} else if tt == proto.ValueType_uint {
-			u, err := strconv.ParseUint(v, 10, 64)
-			if nil != err {
-				return nil
+			if v == "" {
+				return uint64(0)
 			} else {
-				return u
+				u, err := strconv.ParseUint(v, 10, 64)
+				if nil != err {
+					return nil
+				} else {
+					return u
+				}
 			}
 		} else if tt == proto.ValueType_float {
-			f, err := strconv.ParseFloat(v, 64)
-			if nil != err {
-				return nil
+			if v == "" {
+				return float64(0)
 			} else {
-				return f
+				f, err := strconv.ParseFloat(v, 64)
+				if nil != err {
+					return nil
+				} else {
+					return f
+				}
 			}
 		} else if tt == proto.ValueType_blob {
 			return []byte{}
@@ -294,6 +306,12 @@ func InitMeta(def []string) bool {
 		fields := strings.Split(t1[1], ",")
 
 		if len(fields) == 0 {
+			return false
+		}
+
+		//加上__key__，__version__
+		if len(fields)+2 > len(ARGV)-1 {
+			Errorln("len(fields)+2 > len(ARGV)-1")
 			return false
 		}
 

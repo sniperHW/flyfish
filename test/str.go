@@ -1,7 +1,6 @@
 package main
 
-
-import(
+import (
 	"fmt"
 	"strings"
 )
@@ -33,35 +32,34 @@ func (this *str) reset() {
 	this.len = 0
 }
 
-
 func (this *str) toString() string {
 	return string(this.data[:this.len])
 }
 
 func (this *str) expand(need int) {
 	newCap := sizeofPow2(this.len + need)
-	data := make([]byte,newCap)
+	data := make([]byte, newCap)
 	if this.len > 0 {
-		copy(data,this.data[:this.len])
+		copy(data, this.data[:this.len])
 	}
 	this.data = data
 	this.cap = newCap
 }
 
-func (this *str) append(in string) *str{
+func (this *str) append(in string) *str {
 	s := len(in)
 	newLen := this.len + s
 	if newLen > this.cap {
 		this.expand(s)
 	}
-	copy(this.data[this.len:],in[:])
+	copy(this.data[this.len:], in[:])
 	this.len = newLen
 	return this
 }
 
-func (this *str) join(other []*str,sep string) *str {
+func (this *str) join(other []*str, sep string) *str {
 	if len(other) > 0 {
-		for i,v := range(other) {
+		for i, v := range other {
 			if i != 0 {
 				this.append(sep).append(v.toString())
 			} else {
@@ -73,31 +71,29 @@ func (this *str) join(other []*str,sep string) *str {
 }
 
 func main() {
-	s := str {
-		data : make([]byte,10),
-		len  : 0,
-		cap  : 10,
+	s := str{
+		data: make([]byte, 10),
+		len:  0,
+		cap:  10,
 	}
 
 	ss := []*str{}
-	for i := 0 ; i < 10; i++ {
+	for i := 0; i < 10; i++ {
 		s := &str{
-			data : make([]byte,10),
-			len  : 0,
-			cap  : 10,
+			data: make([]byte, 10),
+			len:  0,
+			cap:  10,
 		}
 		s.append("a")
-		ss = append(ss,s)
+		ss = append(ss, s)
 	}
 
-	s.join(ss,",")
+	s.join(ss, ",")
 	fmt.Println(s.toString())
 
+	v := strings.Split("1213:123213:", ":")
 
-	v := strings.Split("1213:123213:",":")
-
-	fmt.Println(len(v),v[0],v[1],v[2])
-
+	fmt.Println(len(v), v[0], v[1], v[2])
 
 	/*s.append("hello")
 
@@ -107,11 +103,4 @@ func main() {
 
 	fmt.Println(s.toString(),s.len,s.cap)*/
 
-
-
-
-
 }
-
-
-

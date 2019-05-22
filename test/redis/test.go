@@ -1,5 +1,4 @@
-package main 
-
+package main
 
 import (
 	//"strconv"
@@ -9,24 +8,22 @@ import (
 	//"time"
 	"fmt"
 	//"github.com/sniperHW/kendynet/event"
-	//"github.com/sniperHW/kendynet/asyn"	
+	//"github.com/sniperHW/kendynet/asyn"
 	//"math/rand"
 	"reflect"
 )
 
-
 func main() {
 
 	cli := redis.NewClient(&redis.Options{
-		Addr:"localhost:6379",
+		Addr: "localhost:6379",
 	})
 
 	keys := []string{"users1:huangwei:1"}
 	args := []interface{}{}
-	args = append(args,"age",41,42,"__version__",1537)
+	args = append(args, "age", 41, 42, "__version__", 1537)
 
-
-const strCompareAndSet string = `
+	const strCompareAndSet string = `
 	local v = redis.call('hmget',KEYS[1],ARGV[4],ARGV[1])
 	if (not v) or (not v[1]) or (not v[2]) then
 		return version
@@ -49,73 +46,69 @@ const strCompareAndSet string = `
 	end
 `
 
-	cmd := cli.Eval(strCompareAndSet,keys,args...)
+	cmd := cli.Eval(strCompareAndSet, keys, args...)
 
-	r,err1 := cmd.Result()
+	r, err1 := cmd.Result()
 
 	if nil != err1 {
 		fmt.Println(err1)
-	} else { 
-		fmt.Println(r,reflect.TypeOf(r).String(),err1)
+	} else {
+		fmt.Println(r, reflect.TypeOf(r).String(), err1)
 	}
 	/*fields := map[string]interface{}{}
-	fields["key"] = 127.98
- 	cli.HMSet("test",fields)
+		fields["key"] = 127.98
+	 	cli.HMSet("test",fields)
 
- 	ret := cli.HMGet("test","key")
- 	result,_ := ret.Result()
- 	fmt.Println(result[0])
+	 	ret := cli.HMGet("test","key")
+	 	result,_ := ret.Result()
+	 	fmt.Println(result[0])
 
- 	tt := reflect.TypeOf(result[0])
-	name := tt.String()
+	 	tt := reflect.TypeOf(result[0])
+		name := tt.String()
 
-	fmt.Println(name)*/
-
-
-
-
+		fmt.Println(name)*/
 
 	//asyn.SetRoutinePool(asyn.NewRoutinePool(100))
-/*	eventQueue := event.NewEventQueue()
+	/*	eventQueue := event.NewEventQueue()
 
-	asynHMSet := asyn.AsynWrap(eventQueue,cli.HMSet)
+		asynHMSet := asyn.AsynWrap(eventQueue,cli.HMSet)
 
 
-	var callback func(ret []interface{})
+		var callback func(ret []interface{})
 
-	c := 0
+		c := 0
 
-	nextShow := time.Now().Unix()
+		nextShow := time.Now().Unix()
 
-	callback = func(ret []interface{}) {
-		_ , err := ret[0].(*redis.StatusCmd).Result()
-		if err != nil {
-			fmt.Println(err)
-		} else {
-			c++
-			now := time.Now().Unix()
-			if now >= nextShow {
-				fmt.Println(c,now)
-				c = 0
-				nextShow = now + 1
+		callback = func(ret []interface{}) {
+			_ , err := ret[0].(*redis.StatusCmd).Result()
+			if err != nil {
+				fmt.Println(err)
+			} else {
+				c++
+				now := time.Now().Unix()
+				if now >= nextShow {
+					fmt.Println(c,now)
+					c = 0
+					nextShow = now + 1
+				}
 			}
+			key := fmt.Sprintf("%s:%s_%d","test","huangwei",rand.Int()%1000000)
+			fields := map[string]interface{}{}
+			fields["age"] = 36
+			fields["phone"] = "18602174540"
+			asynHMSet(callback,key,fields)
 		}
-		key := fmt.Sprintf("%s:%s_%d","test","huangwei",rand.Int()%1000000)
-		fields := map[string]interface{}{}
-		fields["age"] = 36
-		fields["phone"] = "18602174540"
-		asynHMSet(callback,key,fields)
-	}
 
-	var i int
-	for i = 0; i < 1000;i++ {
-		key := fmt.Sprintf("%s:%s_%d","test","huangwei",rand.Int()%1000000)
-		fields := map[string]interface{}{}
-		fields["age"] = 36
-		fields["phone"] = "18602174540"
-		asynHMSet(callback,key,fields)		
-	}
+		var i int
+		for i = 0; i < 1000;i++ {
+			key := fmt.Sprintf("%s:%s_%d","test","huangwei",rand.Int()%1000000)
+			fields := map[string]interface{}{}
+			fields["age"] = 36
+			fields["phone"] = "18602174540"
+			asynHMSet(callback,key,fields)
+		}
 
-	eventQueue.Run()
-*/	
+		eventQueue.Run()
+	*/
 }

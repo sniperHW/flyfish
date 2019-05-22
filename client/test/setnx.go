@@ -4,9 +4,9 @@ import (
 	kclient "flyfish/client"
 	"flyfish/errcode"
 	"fmt"
-	"github.com/sniperHW/kendynet"
-	"github.com/sniperHW/kendynet/golog"
 	"strings"
+
+	"github.com/sniperHW/kendynet/golog"
 )
 
 func SetNx(c *kclient.Client) {

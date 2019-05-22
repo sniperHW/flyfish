@@ -4,10 +4,11 @@ import (
 	"flyfish/codec"
 	"flyfish/errcode"
 	protocol "flyfish/proto"
-	"github.com/golang/protobuf/proto"
-	"github.com/sniperHW/kendynet/util"
 	"sync/atomic"
 	"time"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/sniperHW/kendynet/util"
 )
 
 type Field protocol.Field

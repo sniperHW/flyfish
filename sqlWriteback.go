@@ -4,10 +4,11 @@ import (
 	"database/sql/driver"
 	"flyfish/conf"
 	"flyfish/proto"
-	"github.com/jmoiron/sqlx"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/jmoiron/sqlx"
 )
 
 type writeBackBarrier struct {
@@ -260,7 +261,7 @@ func processWriteBackRecord(now int64) {
 func addRecord(now int64, ctx *processContext) {
 
 	if ctx.writeBackFlag == write_back_none {
-		panic("ctx.writeBackFlag == write_back_none")
+		Errorln("ctx.writeBackFlag == write_back_none")
 		return
 	}
 

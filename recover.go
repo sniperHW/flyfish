@@ -5,12 +5,13 @@ import (
 	"flyfish/conf"
 	"flyfish/proto"
 	"fmt"
-	pb "github.com/golang/protobuf/proto"
-	"github.com/sniperHW/kendynet"
 	"hash/crc64"
 	"io"
 	"os"
 	"sync"
+
+	pb "github.com/golang/protobuf/proto"
+	"github.com/sniperHW/kendynet"
 )
 
 var (

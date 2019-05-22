@@ -1,10 +1,12 @@
 package main
 
 import (
-	"flyfish"
 	"flyfish/conf"
 	"fmt"
+	"sanguo/flyfish"
+
 	"github.com/go-ini/ini"
+
 	//"github.com/sniperHW/kendynet/golog"
 	"net/http"
 	_ "net/http/pprof"
@@ -28,12 +30,12 @@ func main() {
 		conf.ParseConfig(sec)
 	}
 
+	flyfish.InitLogger()
+
 	if !flyfish.InitTableConfig() {
 		fmt.Println("InitTableConfig failed")
 		return
 	}
-
-	flyfish.InitLogger()
 
 	flyfish.InitCacheKey()
 	flyfish.RedisInit(conf.RedisHost, conf.RedisPort, conf.RedisPassword)

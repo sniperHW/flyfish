@@ -4,9 +4,10 @@ import (
 	"container/list"
 	"flyfish/conf"
 	"fmt"
-	"github.com/sniperHW/kendynet/util"
 	"sync"
 	"time"
+
+	"github.com/sniperHW/kendynet/util"
 )
 
 var (
@@ -56,7 +57,7 @@ func pushSQLWriteBackNoWait(ctx *processContext) {
 	}
 }
 
-func pushSQLLoad_(ctx *processContext, noWait bool) {
+func pushSQLLoad_(ctx *processContext, noWait bool) bool {
 	ckey := ctx.getCacheKey()
 	if ckey.isWriteBack() {
 		/*
@@ -66,9 +67,11 @@ func pushSQLLoad_(ctx *processContext, noWait bool) {
 		//通告回写处理立即执行回写
 		notiForceWriteBack()
 		/*
-		*  丢弃所有命令，让客户端等待超时
+		 *  丢弃所有命令，让客户端等待超时
 		 */
 		ckey.clearCmd()
+
+		return false
 
 	} else {
 		if noWait {
@@ -76,15 +79,16 @@ func pushSQLLoad_(ctx *processContext, noWait bool) {
 		} else {
 			sqlLoadQueue.Add(ctx)
 		}
+		return true
 	}
 }
 
-func pushSQLLoadNoWait(ctx *processContext) {
-	pushSQLLoad_(ctx, true)
+func pushSQLLoadNoWait(ctx *processContext) bool {
+	return pushSQLLoad_(ctx, true)
 }
 
-func pushSQLLoad(ctx *processContext) {
-	pushSQLLoad_(ctx, false)
+func pushSQLLoad(ctx *processContext) bool {
+	return pushSQLLoad_(ctx, false)
 }
 
 type sqlPipeliner interface {

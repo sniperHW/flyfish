@@ -2,6 +2,7 @@ package flyfish
 
 import (
 	"flyfish/conf"
+
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/golog"
 )
@@ -11,7 +12,6 @@ var (
 )
 
 func InitLogger() {
-
 	if !conf.EnableLogStdout {
 		golog.DisableStdOut()
 	}

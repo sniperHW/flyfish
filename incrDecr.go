@@ -4,9 +4,10 @@ import (
 	codec "flyfish/codec"
 	"flyfish/proto"
 	"fmt"
+	"time"
+
 	pb "github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
-	"time"
 )
 
 type IncrDecrByReplyer struct {
@@ -19,8 +20,11 @@ func (this *IncrDecrByReplyer) reply(errCode int32, fields map[string]*proto.Fie
 
 	if time.Now().After(this.cmd.deadline) {
 		//已经超时
+		Debugln("reply IncrDecrByReplyer timeout", this.cmd.key)
 		return
 	}
+
+	Debugln("reply IncrDecrByReplyer", this.cmd.key)
 
 	head := &proto.RespCommon{
 		Key:     pb.String(this.cmd.key),

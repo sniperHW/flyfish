@@ -149,10 +149,8 @@ func (this *redisPipeliner) appendSet(ctx *processContext) interface{} {
 	this.args = append(this.args, "__version__", ctx.fields["__version__"].GetValue())
 	script, sha := this.script.GetSetSha(len(ctx.fields))
 	if script != "" && sha != "" {
-		c := 3
 		for _, v := range ctx.fields {
 			this.args = append(this.args, v.GetName(), v.GetValue())
-			c += 2
 		}
 		if sha != "" {
 			return this.pipeLiner.EvalSha(sha, this.keys, this.args...)
@@ -232,7 +230,7 @@ func (this *redisPipeliner) readDelResult(rcmd *redisCmd) {
 func (this *redisPipeliner) readSetScriptResult(rcmd *redisCmd) {
 	r, err1 := rcmd.ret.(*redis.Cmd).Result()
 	if nil != err1 {
-		Debugln("readSetScriptResult error", err1)
+		Errorln("readSetScriptResult error", err1)
 		this.script.ResetSha()
 		rcmd.ctx.errno = errcode.ERR_REDIS
 	} else {

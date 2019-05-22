@@ -15,7 +15,7 @@ func onRedisResp(ctx *processContext) {
 		ctx.reply(ctx.errno, ctx.fields, newVersion)
 	}
 
-	Debugln("onRedisResp key:", ctx.getUniKey())
+	Debugln("onRedisResp key:", ctx.getCmdType(), ctx.getUniKey(), newVersion, ctx.errno)
 
 	ckey := ctx.getCacheKey()
 	if ctx.errno == errcode.ERR_STALE_CACHE {
@@ -23,13 +23,15 @@ func onRedisResp(ctx *processContext) {
 		 *  将ckey重置为cache_new，强制从数据库取值刷新redis
 		 */
 		ckey.reset()
+
 		ctx.writeBackFlag = write_back_none //数据存在执行update
 		ctx.redisFlag = redis_none
 		//到数据库加载
-		pushSQLLoadNoWait(ctx)
+		if !pushSQLLoadNoWait(ctx) {
+			ctx.reply(errcode.ERR_BUSY, nil, -1)
+		}
 
 	} else {
-
 		if ctx.errno == errcode.ERR_OK {
 			if ctx.redisFlag == redis_get || ctx.redisFlag == redis_set_only {
 				ckey.setOK(newVersion)

@@ -4,13 +4,14 @@ import (
 	"flyfish/codec"
 	"flyfish/errcode"
 	protocol "flyfish/proto"
+	"sync/atomic"
+	"time"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/event"
 	connector "github.com/sniperHW/kendynet/socket/connector/tcp"
 	"github.com/sniperHW/kendynet/util"
-	"sync/atomic"
-	"time"
 )
 
 const requestTimeout = 5 * time.Second

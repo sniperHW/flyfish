@@ -2,8 +2,9 @@ package proto
 
 import (
 	"fmt"
-	"github.com/golang/protobuf/proto"
 	"reflect"
+
+	"github.com/golang/protobuf/proto"
 )
 
 func (m *Field) GetType() ValueType {

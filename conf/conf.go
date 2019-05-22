@@ -2,8 +2,9 @@ package conf
 
 import (
 	"fmt"
-	"github.com/go-ini/ini"
 	"strconv"
+
+	"github.com/go-ini/ini"
 )
 
 var CacheGroupSize = int(10)

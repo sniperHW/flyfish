@@ -1,29 +1,29 @@
-package main 
+package main
 
-import(
-	"github.com/sniperHW/kendynet/util"
-	"time"
+import (
 	"fmt"
+	"time"
+
+	"github.com/sniperHW/kendynet/util"
 )
 
 func main() {
 
 	queue := util.NewBlockQueue(1000)
 
-	go func(){
+	go func() {
 		for {
 			queue.Add(1)
 		}
 	}()
 
-	go func(){
+	go func() {
 		for {
 			queue.Add(1)
 		}
 	}()
 
-
-	go func(){
+	go func() {
 		c := 0
 		for {
 			time.Sleep(time.Second)
@@ -37,6 +37,6 @@ func main() {
 	}()
 
 	sigStop := make(chan bool)
-	_ , _ = <-sigStop
+	_, _ = <-sigStop
 
 }
