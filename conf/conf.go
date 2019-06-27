@@ -28,11 +28,11 @@ var ServicePort = 10012
 var RedisHost = "127.0.0.1"
 var RedisPort = 6379
 var RedisPassword = ""
-var PgsqlHost = "127.0.0.1"
-var PgsqlPort = 5432
-var PgsqlUser = "sniper"
-var PgsqlPassword = "802802"
-var PgsqlDataBase = "test"
+var DbHost = "127.0.0.1"
+var DbPort = 5432
+var DbUser = "sniper"
+var DbPassword = "802802"
+var DbDataBase = "test"
 
 var ConfDbHost = "127.0.0.1"
 var ConfDbPort = 5432
@@ -245,29 +245,29 @@ func confDataBase(v string) {
 	ConfDataBase = v
 }
 
-func pgsqlHost(v string) {
-	PgsqlHost = v
+func dbHost(v string) {
+	DbHost = v
 }
 
-func pgsqlPort(v string) {
+func dbPort(v string) {
 	i, err := strconv.ParseInt(v, 10, 32)
 	if nil == err {
-		PgsqlPort = int(i)
+		DbPort = int(i)
 	}
 }
 
-func pgsqlUser(v string) {
+func dbUser(v string) {
 
-	PgsqlUser = v
+	DbUser = v
 
 }
 
-func pgsqlPassword(v string) {
-	PgsqlPassword = v
+func dbPassword(v string) {
+	DbPassword = v
 }
 
-func pgsqlDataBase(v string) {
-	PgsqlDataBase = v
+func dbDataBase(v string) {
+	DbDataBase = v
 }
 
 func maxLogfileSize(v string) {
@@ -295,6 +295,10 @@ func enableLogStdout(v string) {
 	} else if v == "true" {
 		EnableLogStdout = true
 	}
+}
+
+func sqlType(v string) {
+	SqlType = v
 }
 
 func init() {
@@ -325,11 +329,13 @@ func init() {
 	parser["RedisPort"] = redisPort
 	parser["RedisPassword"] = redisPassword
 
-	parser["PgsqlHost"] = pgsqlHost
-	parser["PgsqlPort"] = pgsqlPort
-	parser["PgsqlUser"] = pgsqlUser
-	parser["PgsqlPassword"] = pgsqlPassword
-	parser["PgsqlDataBase"] = pgsqlDataBase
+	parser["SqlType"] = sqlType
+
+	parser["DbHost"] = dbHost
+	parser["DbPort"] = dbPort
+	parser["DbUser"] = dbUser
+	parser["DbPassword"] = dbPassword
+	parser["DbDataBase"] = dbDataBase
 
 	parser["ConfDbHost"] = confDbHost
 	parser["ConfDbPort"] = confDbPort

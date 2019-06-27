@@ -23,12 +23,37 @@ func Get(c *kclient.Client, i int) {
 	})
 }
 
+func Set(c *kclient.Client, i int) {
+
+	fields := map[string]interface{}{}
+	fields["name"] = "haha"
+	fields["age"] = i
+	fields["phone"] = "12345"
+
+	key := fmt.Sprintf("%s:%d", "huangwei", i)
+
+	set := c.Set("users1", key, fields)
+	set.Exec(func(ret *kclient.StatusResult) {
+
+		if ret.ErrCode != errcode.ERR_OK {
+			fmt.Println(errcode.GetErrorStr(ret.ErrCode))
+		} else {
+			fmt.Println("set ok")
+		}
+	})
+}
+
 func main() {
 
 	kclient.InitLogger(golog.New("flyfish client", golog.NewOutputLogger("log", "flyfish client", 1024*1024*50)))
 
 	services := []string{"127.0.0.1:10012"}
 	c := kclient.OpenClient(services) //eventQueue)
+
+	/*Set(c, 1)
+	Set(c, 2)
+	Set(c, 3)
+	Set(c, 4)*/
 
 	Get(c, 1)
 	Get(c, 2)

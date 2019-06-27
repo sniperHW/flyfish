@@ -57,10 +57,10 @@
 			"revisionTime": "2018-08-15T09:05:44Z"
 		},
 		{
-			"checksumSHA1": "IkLitEJNZjFeTzwPzYVZF5/TJsc=",
+			"checksumSHA1": "zGYOyUB58GVhLkrwhG1ut66SPec=",
 			"path": "github.com/go-sql-driver/mysql",
-			"revision": "60d456a402782453be397030407e34decaf04d73",
-			"revisionTime": "2018-12-02T17:10:36Z"
+			"revision": "877a9775f06853f611fb2d4e817d92479242d1cd",
+			"revisionTime": "2019-05-10T10:23:35Z"
 		},
 		{
 			"checksumSHA1": "Y2MOwzNZfl4NRNDbLCZa6sgx7O0=",
@@ -75,10 +75,10 @@
 			"revisionTime": "2018-12-06T07:02:39Z"
 		},
 		{
-			"checksumSHA1": "SVzanxaLYK43jeNWQqNs5P+uhow=",
+			"checksumSHA1": "vFb/tA6zAeUX1rCRmp3a1BNCmXU=",
 			"path": "github.com/jmoiron/sqlx",
-			"revision": "82935fac6c1a317907c8f43ed3f7f85ea844a78b",
-			"revisionTime": "2018-10-24T16:34:19Z"
+			"revision": "38398a30ed8516ffda617a04c822de09df8a3ec5",
+			"revisionTime": "2019-04-26T15:48:59Z"
 		},
 		{
 			"checksumSHA1": "i2O6Ji8ZL6q+EL+4cu/ftBytqZg=",

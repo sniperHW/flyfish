@@ -5,13 +5,13 @@ import (
 	"flyfish/conf"
 	"flyfish/proto"
 	"fmt"
+	pb "github.com/golang/protobuf/proto"
+	"github.com/jmoiron/sqlx"
+	"github.com/sniperHW/kendynet"
 	"hash/crc64"
 	"io"
 	"os"
 	"sync"
-
-	pb "github.com/golang/protobuf/proto"
-	"github.com/sniperHW/kendynet"
 )
 
 var (
@@ -218,7 +218,13 @@ func doRecover(recoverUpdater *sqlUpdater) {
  */
 
 func Recover() {
-	db, _ := pgOpen(conf.PgsqlHost, conf.PgsqlPort, conf.PgsqlDataBase, conf.PgsqlUser, conf.PgsqlPassword)
+
+	var db *sqlx.DB
+	if conf.SqlType == "pgsql" {
+		db, _ = pgOpen(conf.DbHost, conf.DbPort, conf.DbDataBase, conf.DbUser, conf.DbPassword)
+	} else {
+		db, _ = mysqlOpen(conf.DbHost, conf.DbPort, conf.DbDataBase, conf.DbUser, conf.DbPassword)
+	}
 
 	recoverUpdater := newSqlUpdater("recover", db)
 

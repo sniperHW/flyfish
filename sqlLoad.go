@@ -21,10 +21,11 @@ type sqlGet struct {
 }
 
 type sqlLoader struct {
-	sqlGets map[string]*sqlGet //要获取的结果集
-	count   int
-	max     int
-	db      *sqlx.DB
+	sqlGets  map[string]*sqlGet //要获取的结果集
+	count    int
+	max      int
+	db       *sqlx.DB
+	lastTime time.Time
 }
 
 func newSqlLoader(db *sqlx.DB) *sqlLoader {
@@ -42,30 +43,43 @@ func (this *sqlLoader) Reset() {
 
 func (this *sqlLoader) append(v interface{}) {
 	ctx := v.(*processContext)
-	table := ctx.getTable()
-	key := ctx.getKey()
-	s, ok := this.sqlGets[table]
-	if !ok {
-		s = &sqlGet{
-			table:  table,
-			sqlStr: strGet(),
-			ctxs:   map[string]*processContext{},
-			meta:   getMetaByTable(table),
+	if ctx.ping {
+		if time.Now().Sub(this.lastTime) > time.Second*5*60 {
+			//空闲超过5分钟发送ping
+			err := this.db.Ping()
+			if nil != err {
+				Errorln("ping error", err)
+			} else {
+				Debugln("sqlLoader ping")
+			}
+			this.lastTime = time.Now()
 		}
-		this.sqlGets[table] = s
-	}
-
-	if s.sqlStr.len == 0 {
-		s.sqlStr.append(s.meta.selectPrefix).append("'").append(key).append("'")
 	} else {
-		s.sqlStr.append(",'").append(key).append("'")
-	}
+		table := ctx.getTable()
+		key := ctx.getKey()
+		s, ok := this.sqlGets[table]
+		if !ok {
+			s = &sqlGet{
+				table:  table,
+				sqlStr: strGet(),
+				ctxs:   map[string]*processContext{},
+				meta:   getMetaByTable(table),
+			}
+			this.sqlGets[table] = s
+		}
 
-	s.ctxs[key] = ctx
-	this.count++
+		if s.sqlStr.len == 0 {
+			s.sqlStr.append(s.meta.selectPrefix).append("'").append(key).append("'")
+		} else {
+			s.sqlStr.append(",'").append(key).append("'")
+		}
 
-	if this.count >= this.max {
-		this.exec()
+		s.ctxs[key] = ctx
+		this.count++
+
+		if this.count >= this.max {
+			this.exec()
+		}
 	}
 }
 
@@ -85,6 +99,8 @@ func (this *sqlLoader) exec() {
 
 	defer this.Reset()
 
+	this.lastTime = time.Now()
+
 	for _, v := range this.sqlGets {
 		v.sqlStr.append(");")
 		str := v.sqlStr.toString()
@@ -101,6 +117,8 @@ func (this *sqlLoader) exec() {
 		if elapse/time.Millisecond > 500 {
 			Infoln("sqlQueryer long exec", elapse, this.count)
 		}
+
+		Infoln("count", this.count)
 
 		if nil != err {
 			Errorln("sqlQueryer exec error:", err, reflect.TypeOf(err).String())
