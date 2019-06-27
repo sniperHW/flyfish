@@ -62,12 +62,13 @@ func del(session kendynet.StreamSession, msg *codec.Message) {
 	} else {
 
 		cmd := &command{
-			cmdType:  cmdDel,
-			key:      head.GetKey(),
-			table:    head.GetTable(),
-			uniKey:   fmt.Sprintf("%s:%s", head.GetTable(), head.GetKey()),
-			version:  req.Version,
-			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
+			cmdType:     cmdDel,
+			key:         head.GetKey(),
+			table:       head.GetTable(),
+			uniKey:      fmt.Sprintf("%s:%s", head.GetTable(), head.GetKey()),
+			version:     req.Version,
+			deadline:    time.Now().Add(time.Duration(head.GetTimeout())),
+			replyOnDbOk: head.GetReplyOnDbOk(),
 		}
 
 		cmd.rpyer = &DelReplyer{

@@ -118,6 +118,17 @@ func sqlRoutine(queue *util.BlockQueue, pipeliner sqlPipeliner) {
 }
 
 func SQLInit(host string, port int, dbname string, user string, password string) bool {
+
+	ping := func(q *util.BlockQueue) {
+		for {
+			//每60秒请求一次ping
+			if util.ErrQueueClosed == q.AddNoWait(&processContext{ping: true}) {
+				break
+			}
+			time.Sleep(time.Second * 60)
+		}
+	}
+
 	sql_once.Do(func() {
 
 		if conf.SqlType == "pgsql" {
@@ -139,6 +150,7 @@ func SQLInit(host string, port int, dbname string, user string, password string)
 		for i := 0; i < conf.SqlLoadPoolSize; i++ {
 			db, _ := pgOpen(host, port, dbname, user, password)
 			go sqlRoutine(sqlLoadQueue, newSqlLoader(db)) //newSqlLoader(conf.SqlLoadPipeLineSize, host, port, dbname, user, password))
+			go ping(sqlLoadQueue)
 		}
 
 		sqlUpdateQueue = make([]*util.BlockQueue, conf.SqlUpdatePoolSize)
@@ -148,6 +160,7 @@ func SQLInit(host string, port int, dbname string, user string, password string)
 			sqlUpdateQueue[i] = util.NewBlockQueueWithName(name, conf.SqlUpdateEventQueueSize)
 			db, _ := pgOpen(host, port, dbname, user, password)
 			go sqlRoutine(sqlUpdateQueue[i], newSqlUpdater(name, db)) //newSqlUpdater(name, conf.SqlUpdatePipeLineSize, host, port, dbname, user, password))
+			go ping(sqlUpdateQueue[i])
 		}
 
 		go writeBackRoutine()

@@ -157,7 +157,17 @@ func (this *Conn) GetAll(table, key string) *SliceCmd {
 	}
 }
 
+//当数据更新到redis后返回响应
 func (this *Conn) Set(table, key string, fields map[string]interface{}, version ...int64) *StatusCmd {
+	return this.set(false, table, key, fields, version...)
+}
+
+//数据更新到db之后返回响应
+func (this *Conn) SetSync(table, key string, fields map[string]interface{}, version ...int64) *StatusCmd {
+	return this.set(true, table, key, fields, version...)
+}
+
+func (this *Conn) set(replyOnDbOk bool, table, key string, fields map[string]interface{}, version ...int64) *StatusCmd {
 
 	if len(fields) == 0 {
 		return nil
@@ -165,10 +175,11 @@ func (this *Conn) Set(table, key string, fields map[string]interface{}, version 
 
 	req := &protocol.SetReq{
 		Head: &protocol.ReqCommon{
-			Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
-			Table:   proto.String(table),
-			Key:     proto.String(key),
-			Timeout: proto.Int64(int64(requestTimeout)),
+			Seqno:       proto.Int64(atomic.AddInt64(&this.seqno, 1)),
+			Table:       proto.String(table),
+			Key:         proto.String(key),
+			Timeout:     proto.Int64(int64(requestTimeout)),
+			ReplyOnDbOk: proto.Bool(replyOnDbOk),
 		},
 	}
 
@@ -189,16 +200,25 @@ func (this *Conn) Set(table, key string, fields map[string]interface{}, version 
 
 //记录不存在时设置
 func (this *Conn) SetNx(table, key string, fields map[string]interface{}) *StatusCmd {
+	return this.setNx(false, table, key, fields)
+}
+
+func (this *Conn) SetNxSync(table, key string, fields map[string]interface{}) *StatusCmd {
+	return this.setNx(true, table, key, fields)
+}
+
+func (this *Conn) setNx(replyOnDbOk bool, table, key string, fields map[string]interface{}) *StatusCmd {
 	if len(fields) == 0 {
 		return nil
 	}
 
 	req := &protocol.SetNxReq{
 		Head: &protocol.ReqCommon{
-			Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
-			Table:   proto.String(table),
-			Key:     proto.String(key),
-			Timeout: proto.Int64(int64(requestTimeout)),
+			Seqno:       proto.Int64(atomic.AddInt64(&this.seqno, 1)),
+			Table:       proto.String(table),
+			Key:         proto.String(key),
+			Timeout:     proto.Int64(int64(requestTimeout)),
+			ReplyOnDbOk: proto.Bool(replyOnDbOk),
 		},
 	}
 
@@ -214,7 +234,16 @@ func (this *Conn) SetNx(table, key string, fields map[string]interface{}) *Statu
 }
 
 //当记录的field == old时，将其设置为new,并返回field的实际值(如果filed != old,将返回filed的原值)
+
 func (this *Conn) CompareAndSet(table, key, field string, oldV, newV interface{}) *SliceCmd {
+	return this.compareAndSet(false, table, key, field, oldV, newV)
+}
+
+func (this *Conn) CompareAndSetSync(table, key, field string, oldV, newV interface{}) *SliceCmd {
+	return this.compareAndSet(true, table, key, field, oldV, newV)
+}
+
+func (this *Conn) compareAndSet(replyOnDbOk bool, table, key, field string, oldV, newV interface{}) *SliceCmd {
 
 	if oldV == nil || newV == nil {
 		return nil
@@ -222,10 +251,11 @@ func (this *Conn) CompareAndSet(table, key, field string, oldV, newV interface{}
 
 	req := &protocol.CompareAndSetReq{
 		Head: &protocol.ReqCommon{
-			Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
-			Table:   proto.String(table),
-			Key:     proto.String(key),
-			Timeout: proto.Int64(int64(requestTimeout)),
+			Seqno:       proto.Int64(atomic.AddInt64(&this.seqno, 1)),
+			Table:       proto.String(table),
+			Key:         proto.String(key),
+			Timeout:     proto.Int64(int64(requestTimeout)),
+			ReplyOnDbOk: proto.Bool(replyOnDbOk),
 		},
 		New: protocol.PackField(field, newV),
 		Old: protocol.PackField(field, oldV),
@@ -241,16 +271,25 @@ func (this *Conn) CompareAndSet(table, key, field string, oldV, newV interface{}
 
 //当记录不存在或记录的field == old时，将其设置为new.并返回field的实际值(如果记录存在且filed != old,将返回filed的原值)
 func (this *Conn) CompareAndSetNx(table, key, field string, oldV, newV interface{}) *SliceCmd {
+	return this.compareAndSetNx(false, table, key, field, oldV, newV)
+}
+
+func (this *Conn) CompareAndSetNxSync(table, key, field string, oldV, newV interface{}) *SliceCmd {
+	return this.compareAndSetNx(true, table, key, field, oldV, newV)
+}
+
+func (this *Conn) compareAndSetNx(replyOnDbOk bool, table, key, field string, oldV, newV interface{}) *SliceCmd {
 	if oldV == nil || newV == nil {
 		return nil
 	}
 
 	req := &protocol.CompareAndSetNxReq{
 		Head: &protocol.ReqCommon{
-			Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
-			Table:   proto.String(table),
-			Key:     proto.String(key),
-			Timeout: proto.Int64(int64(requestTimeout)),
+			Seqno:       proto.Int64(atomic.AddInt64(&this.seqno, 1)),
+			Table:       proto.String(table),
+			Key:         proto.String(key),
+			Timeout:     proto.Int64(int64(requestTimeout)),
+			ReplyOnDbOk: proto.Bool(replyOnDbOk),
 		},
 		New: protocol.PackField(field, newV),
 		Old: protocol.PackField(field, oldV),
@@ -264,13 +303,22 @@ func (this *Conn) CompareAndSetNx(table, key, field string, oldV, newV interface
 }
 
 func (this *Conn) Del(table, key string, version ...int64) *StatusCmd {
+	return this.del(false, table, key, version...)
+}
+
+func (this *Conn) DelSync(table, key string, version ...int64) *StatusCmd {
+	return this.del(true, table, key, version...)
+}
+
+func (this *Conn) del(replyOnDbOk bool, table, key string, version ...int64) *StatusCmd {
 
 	req := &protocol.DelReq{
 		Head: &protocol.ReqCommon{
-			Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
-			Table:   proto.String(table),
-			Key:     proto.String(key),
-			Timeout: proto.Int64(int64(requestTimeout)),
+			Seqno:       proto.Int64(atomic.AddInt64(&this.seqno, 1)),
+			Table:       proto.String(table),
+			Key:         proto.String(key),
+			Timeout:     proto.Int64(int64(requestTimeout)),
+			ReplyOnDbOk: proto.Bool(replyOnDbOk),
 		},
 	}
 
@@ -287,12 +335,21 @@ func (this *Conn) Del(table, key string, version ...int64) *StatusCmd {
 }
 
 func (this *Conn) IncrBy(table, key, field string, value int64) *SliceCmd {
+	return this.incrBy(false, table, key, field, value)
+}
+
+func (this *Conn) IncrBySync(table, key, field string, value int64) *SliceCmd {
+	return this.incrBy(true, table, key, field, value)
+}
+
+func (this *Conn) incrBy(replyOnDbOk bool, table, key, field string, value int64) *SliceCmd {
 	req := &protocol.IncrByReq{
 		Head: &protocol.ReqCommon{
-			Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
-			Table:   proto.String(table),
-			Key:     proto.String(key),
-			Timeout: proto.Int64(int64(requestTimeout)),
+			Seqno:       proto.Int64(atomic.AddInt64(&this.seqno, 1)),
+			Table:       proto.String(table),
+			Key:         proto.String(key),
+			Timeout:     proto.Int64(int64(requestTimeout)),
+			ReplyOnDbOk: proto.Bool(replyOnDbOk),
 		},
 		Field: protocol.PackField(field, value),
 	}
@@ -305,12 +362,21 @@ func (this *Conn) IncrBy(table, key, field string, value int64) *SliceCmd {
 }
 
 func (this *Conn) DecrBy(table, key, field string, value int64) *SliceCmd {
+	return this.decrBy(false, table, key, field, value)
+}
+
+func (this *Conn) DecrBySync(table, key, field string, value int64) *SliceCmd {
+	return this.decrBy(true, table, key, field, value)
+}
+
+func (this *Conn) decrBy(replyOnDbOk bool, table, key, field string, value int64) *SliceCmd {
 	req := &protocol.DecrByReq{
 		Head: &protocol.ReqCommon{
-			Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
-			Table:   proto.String(table),
-			Key:     proto.String(key),
-			Timeout: proto.Int64(int64(requestTimeout)),
+			Seqno:       proto.Int64(atomic.AddInt64(&this.seqno, 1)),
+			Table:       proto.String(table),
+			Key:         proto.String(key),
+			Timeout:     proto.Int64(int64(requestTimeout)),
+			ReplyOnDbOk: proto.Bool(replyOnDbOk),
 		},
 		Field: protocol.PackField(field, value),
 	}

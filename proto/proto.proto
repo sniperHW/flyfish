@@ -40,6 +40,7 @@ message req_common {
   optional string table   = 2;
   optional string key     = 3; 
   optional int64  timeout = 4;
+  optional bool   replyOnDbOk = 5;
 }
 
 message resp_common {

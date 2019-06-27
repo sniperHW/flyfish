@@ -3,12 +3,12 @@ package flyfish
 import (
 	"database/sql/driver"
 	"flyfish/conf"
+	"flyfish/errcode"
 	"flyfish/proto"
+	"github.com/jmoiron/sqlx"
 	"net"
 	"sync"
 	"time"
-
-	"github.com/jmoiron/sqlx"
 )
 
 type writeBackBarrier struct {
@@ -56,6 +56,8 @@ type record struct {
 	fields        map[string]*proto.Field //所有命令的字段聚合
 	expired       int64
 	writeBackVer  int64
+	ctx           *processContext
+	droped        bool //已经丢弃
 }
 
 var recordPool = sync.Pool{
@@ -66,13 +68,14 @@ var recordPool = sync.Pool{
 
 func recordGet() *record {
 	r := recordPool.Get().(*record)
-	r.writeBackFlag = write_back_none
-	r.ckey = nil
-	r.fields = nil
 	return r
 }
 
 func recordPut(r *record) {
+	r.writeBackFlag = write_back_none
+	r.ckey = nil
+	r.fields = nil
+	r.ctx = nil
 	recordPool.Put(r)
 }
 
@@ -81,6 +84,7 @@ type sqlUpdater struct {
 	name              string
 	values            []interface{}
 	writeFileAndBreak bool
+	lastTime          time.Time
 }
 
 func newSqlUpdater(name string, db *sqlx.DB) *sqlUpdater {
@@ -181,44 +185,67 @@ func (this *sqlUpdater) appendDefer(wb *record) {
 }
 
 func (this *sqlUpdater) append(v interface{}) {
-	wb := v.(*record)
 
-	defer this.appendDefer(wb)
+	if _, ok := v.(*processContext); ok {
+		if time.Now().Sub(this.lastTime) > time.Second*5*60 {
+			//空闲超过5分钟发送ping
+			err := this.db.Ping()
+			if nil != err {
+				Errorln("sqlUpdater ping error", err)
+			} else {
+				Debugln("sqlUpdater ping")
+			}
+			this.lastTime = time.Now()
+		}
+	} else {
 
-	if this.writeFileAndBreak {
-		backupRecord(wb)
-		return
-	}
+		this.lastTime = time.Now()
 
-	var err error
+		wb := v.(*record)
 
-	for {
+		defer this.appendDefer(wb)
 
-		if wb.writeBackFlag == write_back_update {
-			err = this.doUpdate(wb)
-		} else if wb.writeBackFlag == write_back_insert {
-			err = this.doInsert(wb, wb.ckey.meta)
-		} else if wb.writeBackFlag == write_back_delete {
-			err = this.doDelete(wb)
-		} else {
+		if this.writeFileAndBreak {
+			backupRecord(wb)
 			return
 		}
 
-		if nil == err {
-			return
-		} else {
-			if isRetryError(err) {
-				Errorln("sqlUpdater exec error:", err)
-				if isStop() {
-					this.writeFileAndBreak = true
-					backupRecord(wb)
+		var err error
+
+		for {
+
+			if wb.writeBackFlag == write_back_update {
+				err = this.doUpdate(wb)
+			} else if wb.writeBackFlag == write_back_insert {
+				err = this.doInsert(wb, wb.ckey.meta)
+			} else if wb.writeBackFlag == write_back_delete {
+				err = this.doDelete(wb)
+			} else {
+				return
+			}
+
+			if nil == err {
+				if wb.ctx != nil {
+					onSqlWriteBackResp(wb.ctx, errcode.ERR_OK)
+				}
+				return
+			} else {
+				if isRetryError(err) {
+					Errorln("sqlUpdater exec error:", err)
+					if isStop() {
+						this.writeFileAndBreak = true
+						backupRecord(wb)
+						return
+					}
+					//休眠一秒重试
+					time.Sleep(time.Second)
+				} else {
+					if wb.ctx != nil {
+						onSqlWriteBackResp(wb.ctx, errcode.ERR_SQLERROR)
+					}
+					Errorln("sqlUpdater exec error:", err)
 					return
 				}
-				//休眠一秒重试
-				time.Sleep(time.Second)
-			} else {
-				Errorln("sqlUpdater exec error:", err)
-				return
 			}
 		}
 	}
@@ -229,15 +256,20 @@ func processWriteBackRecord(now int64) {
 	head := pendingWB.Front()
 	for ; nil != head; head = pendingWB.Front() {
 		wb := head.Value.(*record)
-		if wb.expired > now {
+		if !wb.droped && wb.expired > now {
 			break
 		} else {
 			pendingWB.Remove(head)
-			delete(writeBackRecords, wb.uniKey)
-			if wb.writeBackFlag != write_back_none {
-				//投入执行
-				Debugln("pushSQLUpdate", wb.uniKey, wb.writeBackFlag)
-				sqlUpdateQueue[StringHash(wb.uniKey)%conf.SqlUpdatePoolSize].Add(wb)
+			if !wb.droped {
+				delete(writeBackRecords, wb.uniKey)
+				if wb.writeBackFlag != write_back_none {
+					//投入执行
+					Debugln("pushSQLUpdate", wb.uniKey, wb.writeBackFlag)
+					sqlUpdateQueue[StringHash(wb.uniKey)%conf.SqlUpdatePoolSize].Add(wb)
+				}
+			} else {
+				Debugln("processWriteBackRecord record is droped", wb.uniKey)
+				recordPut(wb)
 			}
 		}
 	}
@@ -275,15 +307,27 @@ func addRecord(now int64, ctx *processContext) {
 		wb.uniKey = uniKey
 		wb.ckey = ctx.getCacheKey()
 		wb.expired = time.Now().Unix() + conf.WriteBackDelay
-		writeBackRecords[uniKey] = wb
+		wb.writeBackVer = wb.ckey.writeBackVer
 		if wb.writeBackFlag == write_back_insert || wb.writeBackFlag == write_back_update {
 			wb.fields = map[string]*proto.Field{}
 			for k, v := range ctx.fields {
 				wb.fields[k] = v
 			}
 		}
-		pendingWB.PushBack(wb)
+
+		if ctx.replyOnDbOk {
+			//立即执行
+			Debugln("pushSQLUpdate", wb.uniKey, wb.writeBackFlag)
+			wb.ctx = ctx
+			sqlUpdateQueue[StringHash(wb.uniKey)%conf.SqlUpdatePoolSize].Add(wb)
+			return
+		} else {
+			writeBackRecords[uniKey] = wb
+			pendingWB.PushBack(wb)
+		}
+
 	} else {
+		wb.writeBackVer = wb.ckey.writeBackVer
 		//合并状态
 		if wb.writeBackFlag == write_back_insert {
 			/*
@@ -359,11 +403,18 @@ func addRecord(now int64, ctx *processContext) {
 			} else {
 				//逻辑错误，记录日志
 			}
+		}
 
+		if ctx.replyOnDbOk {
+			delete(writeBackRecords, wb.uniKey)
+			wb.ctx = ctx
+			wb.droped = true
+			//立即执行
+			Debugln("pushSQLUpdate", wb.uniKey, wb.writeBackFlag)
+			sqlUpdateQueue[StringHash(wb.uniKey)%conf.SqlUpdatePoolSize].Add(wb)
+			return
 		}
 	}
-	//记录版本号
-	wb.writeBackVer = wb.ckey.writeBackVer
 }
 
 func writeBackRoutine() {

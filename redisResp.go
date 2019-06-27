@@ -10,7 +10,7 @@ func onRedisResp(ctx *processContext) {
 	newVersion := int64(0)
 	//先发出响应
 
-	if ctx.errno != errcode.ERR_STALE_CACHE {
+	if ctx.errno != errcode.ERR_STALE_CACHE && !ctx.replyOnDbOk {
 		newVersion = ctx.fields["__version__"].GetInt()
 		ctx.reply(ctx.errno, ctx.fields, newVersion)
 	}
@@ -44,7 +44,10 @@ func onRedisResp(ctx *processContext) {
 				pushSQLWriteBackNoWait(ctx)
 			}
 		}
-		ckey.processNoWait()
+
+		if !ctx.replyOnDbOk {
+			ckey.processNoWait()
+		}
 	}
 
 	atomic.AddInt32(&redisReqCount, -1)

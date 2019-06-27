@@ -144,7 +144,7 @@ func Stop() {
 		return true
 	})
 
-	Infoln("ShutdownRead ok")
+	Infoln("ShutdownRead ok", redisReqCount, cmdCount)
 
 	//等待redis请求和命令执行完成
 	waitCondition(func() bool {

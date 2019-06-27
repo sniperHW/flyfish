@@ -33,6 +33,8 @@ type processContext struct {
 	replyed       bool //是否已经应道
 	writeBackFlag int  //回写数据库类型
 	redisFlag     int
+	ping          bool
+	replyOnDbOk   bool //是否在db操作完成后才返回响应
 }
 
 func (this *processContext) getCmd() *command {
@@ -135,6 +137,7 @@ func (this *cacheKey) processSet(ctx *processContext, cmd *command) bool {
 		for _, v := range cmd.fields {
 			ctx.fields[v.GetName()] = v
 		}
+		ctx.replyOnDbOk = cmd.replyOnDbOk
 
 		return true
 
@@ -161,6 +164,8 @@ func (this *cacheKey) processSetNx(ctx *processContext, cmd *command) bool {
 			ctx.fields[v.GetName()] = v
 		}
 
+		ctx.replyOnDbOk = cmd.replyOnDbOk
+
 		return true
 	}
 }
@@ -181,6 +186,8 @@ func (this *cacheKey) processCompareAndSet(ctx *processContext, cmd *command) bo
 			ctx.writeBackFlag = write_back_update //数据存在执行update
 			ctx.redisFlag = redis_set_script
 		}
+
+		ctx.replyOnDbOk = cmd.replyOnDbOk
 
 		return true
 	}
@@ -204,6 +211,8 @@ func (this *cacheKey) processCompareAndSetNx(ctx *processContext, cmd *command) 
 		}
 	}
 
+	ctx.replyOnDbOk = cmd.replyOnDbOk
+
 	return true
 }
 
@@ -224,6 +233,7 @@ func (this *cacheKey) processIncrBy(ctx *processContext, cmd *command) bool {
 			ctx.redisFlag = redis_set
 		}
 	}
+	ctx.replyOnDbOk = cmd.replyOnDbOk
 	return true
 }
 
@@ -245,6 +255,7 @@ func (this *cacheKey) processDecrBy(ctx *processContext, cmd *command) bool {
 			ctx.redisFlag = redis_set
 		}
 	}
+	ctx.replyOnDbOk = cmd.replyOnDbOk
 	return true
 }
 
@@ -267,6 +278,7 @@ func (this *cacheKey) processDel(ctx *processContext, cmd *command) bool {
 			}
 			ctx.writeBackFlag = write_back_delete
 			ctx.redisFlag = redis_del
+			ctx.replyOnDbOk = cmd.replyOnDbOk
 			ctx.commands = append(ctx.commands, cmd)
 			return true
 		}
