@@ -250,7 +250,7 @@ func InitCacheKey() {
 			minheap:   util.NewMinHeap(65535),
 		}
 
-		//go kickCacheKey(cacheGroup[i])
+		go kickCacheKey(cacheGroup[i])
 
 	}
 }
