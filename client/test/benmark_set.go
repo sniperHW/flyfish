@@ -4,12 +4,12 @@ import (
 	kclient "flyfish/client"
 	"flyfish/errcode"
 	"fmt"
+	"github.com/sniperHW/kendynet/golog"
 	"math/rand"
+	"os"
 	"strings"
 	"sync/atomic"
 	"time"
-
-	"github.com/sniperHW/kendynet/golog"
 )
 
 var (
@@ -50,12 +50,21 @@ func Set(c *kclient.Client) {
 
 func main() {
 
+	if len(os.Args) < 2 {
+		fmt.Println("missing ip:port")
+		return
+	}
+
 	//golog.DisableStdOut()
 	kclient.InitLogger(golog.New("flyfish client", golog.NewOutputLogger("log", "flyfish client", 1024*1024*50)))
 
 	id = 0
 
-	services := []string{"127.0.0.1:10012"} //,"127.0.0.1:10013"}
+	services := []string{}
+
+	for i := 1; i < len(os.Args); i++ {
+		services = append(services, os.Args[i])
+	}
 
 	for j := 0; j < 10; j++ {
 		c := kclient.OpenClient(services)
