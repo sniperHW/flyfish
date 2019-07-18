@@ -2,13 +2,13 @@ package flyfish
 
 import (
 	codec "flyfish/codec"
+	protocol "flyfish/proto"
 	"fmt"
+	"github.com/sniperHW/kendynet"
+	"github.com/sniperHW/kendynet/socket/listener/tcp"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/sniperHW/kendynet"
-	"github.com/sniperHW/kendynet/socket/listener/tcp"
 )
 
 var (
@@ -57,7 +57,7 @@ func (this *tcpListener) Start() error {
 
 		//fmt.Println("new client")
 
-		//session.SetRecvTimeout(common.HeartBeat_Timeout * time.Second)
+		session.SetRecvTimeout(protocol.PingTime * 2)
 		session.SetReceiver(codec.NewReceiver())
 		session.SetEncoder(codec.NewEncoder())
 		session.SetCloseCallBack(func(sess kendynet.StreamSession, reason string) {

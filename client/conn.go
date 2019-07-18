@@ -14,9 +14,6 @@ import (
 	"github.com/sniperHW/kendynet/util"
 )
 
-const requestTimeout = 5 * time.Second
-const pingTime = 5
-
 type Conn struct {
 	session     kendynet.StreamSession
 	seqno       int64
@@ -27,7 +24,7 @@ type Conn struct {
 	eventQueue  *event.EventQueue     //此客户端的主处理队列
 	dialing     bool
 	closed      int32
-	nextPing    int64
+	nextPing    time.Time
 	c           *Client
 }
 
@@ -103,7 +100,8 @@ func (this *Conn) checkTimeout(now *time.Time) {
 }
 
 func (this *Conn) ping(now *time.Time) {
-	if nil != this.session && now.Unix() > this.nextPing {
+	if nil != this.session && now.After(this.nextPing) {
+		this.nextPing = now.Add(protocol.PingTime)
 		req := &protocol.PingReq{
 			Timestamp: proto.Int64(now.UnixNano()),
 		}
@@ -114,7 +112,7 @@ func (this *Conn) ping(now *time.Time) {
 func (this *Conn) startTimeoutChecker() {
 	go func() {
 		for atomic.LoadInt32(&this.closed) == 0 {
-			time.Sleep(time.Duration(10) * time.Millisecond)
+			time.Sleep(time.Duration(1) * time.Millisecond)
 			this.eventQueue.Post(func() {
 				now := time.Now()
 				//this.ping(&now)
@@ -139,8 +137,8 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 	this.eventQueue.Post(func() {
 		this.dialing = false
 		this.session = session
-		this.nextPing = time.Now().Unix() + pingTime
-		//session.SetRecvTimeout(common.HeartBeat_Timeout * time.Second)
+		this.nextPing = time.Now().Add(protocol.PingTime)
+		//session.SetRecvTimeout(protocol.PingTime * 2)
 		this.session.SetReceiver(codec.NewReceiver())
 		this.session.SetEncoder(codec.NewEncoder())
 		this.session.SetCloseCallBack(func(sess kendynet.StreamSession, reason string) {
@@ -221,7 +219,7 @@ func (this *Conn) exec(c *cmdContext) {
 		if atomic.LoadInt32(&this.closed) == 1 {
 			this.c.doCallBack(c.cb, errcode.ERR_CLOSE)
 		} else {
-			c.deadline = time.Now().Add(requestTimeout)
+			c.deadline = time.Now().Add(RequestTimeout)
 			this.minheap.Insert(c)
 			if nil == this.session || this.dialing {
 				c.status = wait_send

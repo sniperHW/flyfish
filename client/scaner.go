@@ -55,7 +55,7 @@ func (this *Scaner) Next(count int32, cb func(*Scaner, *MutiResult)) error {
 	req := &protocol.ScanReq{
 		Head: &protocol.ReqCommon{
 			Seqno:   proto.Int64(atomic.AddInt64(&this.conn.seqno, 1)),
-			Timeout: proto.Int64(int64(requestTimeout)),
+			Timeout: proto.Int64(int64(RequestTimeout)),
 		},
 	}
 	if atomic.CompareAndSwapInt32(&this.first, 0, 1) {
