@@ -157,9 +157,7 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 		})
 
 		//发送被排队的请求
-		//fmt.Println("send pending req", len(this.pendingSend))
 		for _, v := range this.pendingSend {
-			//fmt.Println(v.status)
 			if v.status != wait_remove {
 				this.sendReq(v)
 			}
@@ -170,6 +168,7 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 
 func (this *Conn) onDisconnected() {
 	this.eventQueue.Post(func() {
+		this.dialing = false
 		this.session = nil
 		this.minheap.Clear()
 
@@ -188,8 +187,6 @@ func (this *Conn) dial() {
 	}
 
 	this.dialing = true
-
-	//Debugln("Conn dial", this.addr)
 
 	go func() {
 		c, _ := connector.New("tcp", this.addr)

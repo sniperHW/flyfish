@@ -5,10 +5,11 @@ import (
 	"flyfish/conf"
 	"flyfish/errcode"
 	"flyfish/proto"
-	"github.com/jmoiron/sqlx"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/jmoiron/sqlx"
 )
 
 type writeBackBarrier struct {
@@ -27,7 +28,7 @@ func (this *writeBackBarrier) add() {
 func (this *writeBackBarrier) sub(c int) {
 	this.mtx.Lock()
 	this.counter = this.counter - c
-	if this.counter < conf.WriteBackEventQueueSize && this.waited > 0 {
+	if this.counter < conf.DefConfig.WriteBackEventQueueSize && this.waited > 0 {
 		this.mtx.Unlock()
 		this.cond.Broadcast()
 	} else {
@@ -38,8 +39,8 @@ func (this *writeBackBarrier) sub(c int) {
 func (this *writeBackBarrier) wait() {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
-	if this.counter >= conf.WriteBackEventQueueSize {
-		for this.counter >= conf.WriteBackEventQueueSize {
+	if this.counter >= conf.DefConfig.WriteBackEventQueueSize {
+		for this.counter >= conf.DefConfig.WriteBackEventQueueSize {
 			this.waited++
 			this.cond.Wait()
 			this.waited--
@@ -265,7 +266,7 @@ func processWriteBackRecord(now int64) {
 				if wb.writeBackFlag != write_back_none {
 					//投入执行
 					Debugln("pushSQLUpdate", wb.uniKey, wb.writeBackFlag)
-					sqlUpdateQueue[StringHash(wb.uniKey)%conf.SqlUpdatePoolSize].Add(wb)
+					sqlUpdateQueue[StringHash(wb.uniKey)%conf.DefConfig.SqlUpdatePoolSize].Add(wb)
 				}
 			} else {
 				Debugln("processWriteBackRecord record is droped", wb.uniKey)
@@ -306,7 +307,7 @@ func addRecord(now int64, ctx *processContext) {
 		wb.table = ctx.getTable()
 		wb.uniKey = uniKey
 		wb.ckey = ctx.getCacheKey()
-		wb.expired = time.Now().Unix() + conf.WriteBackDelay
+		wb.expired = time.Now().Unix() + conf.DefConfig.WriteBackDelay
 		wb.writeBackVer = wb.ckey.writeBackVer
 		if wb.writeBackFlag == write_back_insert || wb.writeBackFlag == write_back_update {
 			wb.fields = map[string]*proto.Field{}
@@ -319,7 +320,7 @@ func addRecord(now int64, ctx *processContext) {
 			//立即执行
 			Debugln("pushSQLUpdate", wb.uniKey, wb.writeBackFlag)
 			wb.ctx = ctx
-			sqlUpdateQueue[StringHash(wb.uniKey)%conf.SqlUpdatePoolSize].Add(wb)
+			sqlUpdateQueue[StringHash(wb.uniKey)%conf.DefConfig.SqlUpdatePoolSize].Add(wb)
 			return
 		} else {
 			writeBackRecords[uniKey] = wb
@@ -411,7 +412,7 @@ func addRecord(now int64, ctx *processContext) {
 			wb.droped = true
 			//立即执行
 			Debugln("pushSQLUpdate", wb.uniKey, wb.writeBackFlag)
-			sqlUpdateQueue[StringHash(wb.uniKey)%conf.SqlUpdatePoolSize].Add(wb)
+			sqlUpdateQueue[StringHash(wb.uniKey)%conf.DefConfig.SqlUpdatePoolSize].Add(wb)
 			return
 		}
 	}
@@ -428,7 +429,7 @@ func writeBackRoutine() {
 		for _, v := range localList {
 			switch v.(type) {
 			case notifyWB:
-				processWriteBackRecord(now + conf.WriteBackDelay + 1)
+				processWriteBackRecord(now + conf.DefConfig.WriteBackDelay + 1)
 				break
 			case *processContext:
 				ctx := v.(*processContext)
@@ -440,9 +441,9 @@ func writeBackRoutine() {
 			}
 		}
 
-		if conf.WriteBackDelay == 0 || isStop() {
+		if conf.DefConfig.WriteBackDelay == 0 || isStop() {
 			//延迟为0或服务准备停止,立即执行回写处理
-			processWriteBackRecord(now + conf.WriteBackDelay + 1)
+			processWriteBackRecord(now + conf.DefConfig.WriteBackDelay + 1)
 		}
 
 		if closed {

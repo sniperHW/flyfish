@@ -12,12 +12,13 @@ var (
 )
 
 func InitLogger() {
-	if !conf.EnableLogStdout {
+	logConfig := conf.DefConfig.Log
+	if !logConfig.EnableLogStdout {
 		golog.DisableStdOut()
 	}
 	fullname := "flyfish"
-	logger = golog.New(fullname, golog.NewOutputLogger(conf.LogDir, conf.LogPrefix, conf.MaxLogfileSize))
-	logger.SetLevelByString(conf.LogLevel)
+	logger = golog.New(fullname, golog.NewOutputLogger(logConfig.LogDir, logConfig.LogPrefix, logConfig.MaxLogfileSize))
+	logger.SetLevelByString(logConfig.LogLevel)
 	kendynet.InitLogger(logger)
 	logger.Infof("%s logger init", fullname)
 

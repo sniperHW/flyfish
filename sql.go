@@ -4,10 +4,11 @@ import (
 	"container/list"
 	"flyfish/conf"
 	"fmt"
-	"github.com/jmoiron/sqlx"
-	"github.com/sniperHW/kendynet/util"
 	"sync"
 	"time"
+
+	"github.com/jmoiron/sqlx"
+	"github.com/sniperHW/kendynet/util"
 )
 
 var (
@@ -85,12 +86,12 @@ func pushSQLLoad_(q *util.BlockQueue, ctx *processContext, noWait bool) bool {
 }
 
 func pushSQLLoadNoWait(ctx *processContext) bool {
-	q := sqlLoadQueue[StringHash(ctx.getUniKey())%conf.SqlLoadPoolSize]
+	q := sqlLoadQueue[StringHash(ctx.getUniKey())%conf.DefConfig.SqlLoadPoolSize]
 	return pushSQLLoad_(q, ctx, true)
 }
 
 func pushSQLLoad(ctx *processContext) bool {
-	q := sqlLoadQueue[StringHash(ctx.getUniKey())%conf.SqlLoadPoolSize]
+	q := sqlLoadQueue[StringHash(ctx.getUniKey())%conf.DefConfig.SqlLoadPoolSize]
 	return pushSQLLoad_(q, ctx, false)
 }
 
@@ -134,7 +135,7 @@ func SQLInit(host string, port int, dbname string, user string, password string)
 
 	sql_once.Do(func() {
 
-		if conf.SqlType == "pgsql" {
+		if conf.DefConfig.DBConfig.SqlType == "pgsql" {
 			insertPlaceHolder = pgInsertPlaceHolder
 			updatePlaceHolder = pgUpdatePlaceHolder
 		} else {
@@ -147,15 +148,15 @@ func SQLInit(host string, port int, dbname string, user string, password string)
 		writeBackBarrier_.cond = sync.NewCond(&writeBackBarrier_.mtx)
 
 		writeBackRecords = map[string]*record{}
-		writeBackEventQueue = util.NewBlockQueueWithName("writeBackEventQueue", conf.WriteBackEventQueueSize)
+		writeBackEventQueue = util.NewBlockQueueWithName("writeBackEventQueue", conf.DefConfig.WriteBackEventQueueSize)
 
-		sqlLoadQueue = make([]*util.BlockQueue, conf.SqlLoadPoolSize)
-		for i := 0; i < conf.SqlLoadPoolSize; i++ {
+		sqlLoadQueue = make([]*util.BlockQueue, conf.DefConfig.SqlLoadPoolSize)
+		for i := 0; i < conf.DefConfig.SqlLoadPoolSize; i++ {
 			name := fmt.Sprintf("sqlLoad:%d", i)
-			sqlLoadQueue[i] = util.NewBlockQueueWithName(name, conf.SqlLoadEventQueueSize)
+			sqlLoadQueue[i] = util.NewBlockQueueWithName(name, conf.DefConfig.SqlLoadEventQueueSize)
 
 			var db *sqlx.DB
-			if conf.SqlType == "pgsql" {
+			if conf.DefConfig.DBConfig.SqlType == "pgsql" {
 				db, _ = pgOpen(host, port, dbname, user, password)
 			} else {
 				db, _ = mysqlOpen(host, port, dbname, user, password)
@@ -164,14 +165,14 @@ func SQLInit(host string, port int, dbname string, user string, password string)
 			go ping(sqlLoadQueue[i])
 		}
 
-		sqlUpdateQueue = make([]*util.BlockQueue, conf.SqlUpdatePoolSize)
-		for i := 0; i < conf.SqlUpdatePoolSize; i++ {
+		sqlUpdateQueue = make([]*util.BlockQueue, conf.DefConfig.SqlUpdatePoolSize)
+		for i := 0; i < conf.DefConfig.SqlUpdatePoolSize; i++ {
 			writeBackWG.Add(1)
 			name := fmt.Sprintf("sqlUpdater:%d", i)
-			sqlUpdateQueue[i] = util.NewBlockQueueWithName(name, conf.SqlUpdateEventQueueSize)
+			sqlUpdateQueue[i] = util.NewBlockQueueWithName(name, conf.DefConfig.SqlUpdateEventQueueSize)
 			//db, _ := pgOpen(host, port, dbname, user, password)
 			var db *sqlx.DB
-			if conf.SqlType == "pgsql" {
+			if conf.DefConfig.DBConfig.SqlType == "pgsql" {
 				db, _ = pgOpen(host, port, dbname, user, password)
 			} else {
 				db, _ = mysqlOpen(host, port, dbname, user, password)

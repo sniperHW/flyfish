@@ -31,7 +31,7 @@ type sqlLoader struct {
 func newSqlLoader(db *sqlx.DB) *sqlLoader {
 	return &sqlLoader{
 		sqlGets: map[string]*sqlGet{},
-		max:     conf.SqlLoadPipeLineSize,
+		max:     conf.DefConfig.SqlLoadPipeLineSize,
 		db:      db,
 	}
 }

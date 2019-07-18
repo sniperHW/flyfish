@@ -326,12 +326,14 @@ func (this *redisPipeliner) append(ctx *processContext) {
 	if len(this.cmds) >= this.max {
 		this.exec()
 	}
+
 }
 
 func (this *redisPipeliner) exec() {
 	if len(this.cmds) == 0 {
 		return
 	}
+
 	_, err := this.pipeLiner.Exec()
 
 	if nil != err {

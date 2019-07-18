@@ -3,10 +3,11 @@ package flyfish
 import (
 	"flyfish/conf"
 	"fmt"
-	"github.com/go-redis/redis"
-	"github.com/sniperHW/kendynet/util"
 	"sync"
 	"sync/atomic"
+
+	"github.com/go-redis/redis"
+	"github.com/sniperHW/kendynet/util"
 )
 
 var (
@@ -29,7 +30,7 @@ func pushRedisNoWait(ctx *processContext) {
 }
 
 func redisRoutine(queue *util.BlockQueue) {
-	redisPipeliner_ := newRedisPipeliner(conf.RedisPipelineSize)
+	redisPipeliner_ := newRedisPipeliner(conf.DefConfig.RedisPipelineSize)
 	for {
 		closed, localList := queue.Get()
 		for _, v := range localList {
@@ -53,8 +54,8 @@ func RedisInit(host string, port int, Password string) bool {
 		//InitScript()
 
 		if nil != cli {
-			redisProcessQueue = util.NewBlockQueueWithName(fmt.Sprintf("redis"), conf.RedisEventQueueSize)
-			for i := 0; i < conf.RedisProcessPoolSize; i++ {
+			redisProcessQueue = util.NewBlockQueueWithName(fmt.Sprintf("redis"), conf.DefConfig.RedisEventQueueSize)
+			for i := 0; i < conf.DefConfig.RedisProcessPoolSize; i++ {
 				go redisRoutine(redisProcessQueue)
 			}
 		}

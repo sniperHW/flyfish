@@ -1,11 +1,12 @@
 package main
 
 import (
-	"flyfish"
-	"flyfish/conf"
 	"fmt"
 
-	"github.com/go-ini/ini"
+	"github.com/hqpko/hutils"
+
+	"flyfish"
+	"flyfish/conf"
 
 	//"github.com/sniperHW/kendynet/golog"
 	"net/http"
@@ -16,19 +17,8 @@ import (
 )
 
 func main() {
-
-	if len(os.Args) > 1 {
-		cfg, err := ini.LooseLoad(os.Args[1])
-		if err != nil {
-			return
-		}
-
-		sec := cfg.Section("Config")
-		if nil == sec {
-			return
-		}
-		conf.ParseConfig(sec)
-	}
+	hutils.Must(nil, conf.InitConfig(os.Args[1]))
+	config := conf.DefConfig
 
 	flyfish.InitLogger()
 
@@ -38,17 +28,17 @@ func main() {
 	}
 
 	flyfish.InitCacheKey()
-	flyfish.RedisInit(conf.RedisHost, conf.RedisPort, conf.RedisPassword)
-	flyfish.SQLInit(conf.DbHost, conf.DbPort, conf.DbDataBase, conf.DbUser, conf.DbPassword)
+	flyfish.RedisInit(config.Redis.RedisHost, config.Redis.RedisPort, config.Redis.RedisPassword)
+	flyfish.SQLInit(config.DBConfig.DbHost, config.DBConfig.DbPort, config.DBConfig.DbDataBase, config.DBConfig.DbUser, config.DBConfig.DbPassword)
 	flyfish.Recover()
 
 	go func() {
 		http.ListenAndServe("0.0.0.0:8899", nil)
 	}()
 
-	err := flyfish.StartTcpServer("tcp", fmt.Sprintf("%s:%d", conf.ServiceHost, conf.ServicePort))
+	err := flyfish.StartTcpServer("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort))
 	if nil == err {
-		fmt.Println("flyfish start:", fmt.Sprintf("%s:%d", conf.ServiceHost, conf.ServicePort))
+		fmt.Println("flyfish start:", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort))
 		c := make(chan os.Signal)
 		signal.Notify(c, syscall.SIGINT) //监听指定信号
 		_ = <-c                          //阻塞直至有信号传入

@@ -5,13 +5,14 @@ import (
 	"flyfish/conf"
 	"flyfish/proto"
 	"fmt"
-	pb "github.com/golang/protobuf/proto"
-	"github.com/jmoiron/sqlx"
-	"github.com/sniperHW/kendynet"
 	"hash/crc64"
 	"io"
 	"os"
 	"sync"
+
+	pb "github.com/golang/protobuf/proto"
+	"github.com/jmoiron/sqlx"
+	"github.com/sniperHW/kendynet"
 )
 
 var (
@@ -80,8 +81,8 @@ func backupRecord(r *record) {
 	fileMtx.Lock()
 	defer fileMtx.Unlock()
 	if nil == backupFile {
-		backFilePath = conf.BackDir + conf.BackFile
-		os.MkdirAll(conf.BackDir, os.ModePerm)
+		backFilePath = conf.DefConfig.BackDir + conf.DefConfig.BackFile
+		os.MkdirAll(conf.DefConfig.BackDir, os.ModePerm)
 		f, err := os.OpenFile(backFilePath, os.O_RDWR, os.ModePerm)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -220,15 +221,16 @@ func doRecover(recoverUpdater *sqlUpdater) {
 func Recover() {
 
 	var db *sqlx.DB
-	if conf.SqlType == "pgsql" {
-		db, _ = pgOpen(conf.DbHost, conf.DbPort, conf.DbDataBase, conf.DbUser, conf.DbPassword)
+	dbConfig := conf.DefConfig.DBConfig
+	if dbConfig.SqlType == "pgsql" {
+		db, _ = pgOpen(dbConfig.DbHost, dbConfig.DbPort, dbConfig.DbDataBase, dbConfig.DbUser, dbConfig.DbPassword)
 	} else {
-		db, _ = mysqlOpen(conf.DbHost, conf.DbPort, conf.DbDataBase, conf.DbUser, conf.DbPassword)
+		db, _ = mysqlOpen(dbConfig.DbHost, dbConfig.DbPort, dbConfig.DbDataBase, dbConfig.DbUser, dbConfig.DbPassword)
 	}
 
 	recoverUpdater := newSqlUpdater("recover", db)
 
-	backFilePath = conf.BackDir + conf.BackFile
+	backFilePath = conf.DefConfig.BackDir + conf.DefConfig.BackFile
 	f, err := os.OpenFile(backFilePath, os.O_RDWR, os.ModePerm)
 	if err != nil {
 		if os.IsNotExist(err) {

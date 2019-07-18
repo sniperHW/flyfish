@@ -3,6 +3,12 @@
 	"ignore": "test",
 	"package": [
 		{
+			"checksumSHA1": "Pc2ORQp+VY3Un/dkh4QwLC7R6lE=",
+			"path": "github.com/BurntSushi/toml",
+			"revision": "3012a1dbe2e4bd1391d42b32f0577cb7bbc7f005",
+			"revisionTime": "2018-08-15T10:47:33Z"
+		},
+		{
 			"checksumSHA1": "lqS0NXwKskDGDWUvP/aNmPKLW04=",
 			"path": "github.com/go-ini/ini",
 			"revision": "bda519ae5f4cbc60d391ff8610711627a08b86ae",
@@ -73,6 +79,18 @@
 			"path": "github.com/gorilla/websocket",
 			"revision": "95ba29eb981bbb27d92e1f70bf8a1949452d926b",
 			"revisionTime": "2018-12-06T07:02:39Z"
+		},
+		{
+			"checksumSHA1": "UQRxXWW7W736velekrux50Txcyw=",
+			"path": "github.com/hqpko/hbuffer",
+			"revision": "f10ba521a7fba6829a6cf55a59bf65e6dafff0e6",
+			"revisionTime": "2019-03-19T09:22:27Z"
+		},
+		{
+			"checksumSHA1": "R0gAiqykEUbJh0rwlpH+wFHLBa8=",
+			"path": "github.com/hqpko/hutils",
+			"revision": "9b3f2fe7796242cbaf4ee2534d983c496ee2dd0c",
+			"revisionTime": "2019-06-11T02:57:00Z"
 		},
 		{
 			"checksumSHA1": "vFb/tA6zAeUX1rCRmp3a1BNCmXU=",

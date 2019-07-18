@@ -3,19 +3,18 @@ package flyfish
 import (
 	"flyfish/conf"
 	"fmt"
+
 	"github.com/jmoiron/sqlx"
 )
 
 func InitTableConfig() bool {
-
-	//db, err := pgOpen(conf.ConfDbHost, conf.ConfDbPort, conf.ConfDataBase, conf.ConfDbUser, conf.ConfDbPassword)
-
 	var db *sqlx.DB
 	var err error
-	if conf.SqlType == "pgsql" {
-		db, _ = pgOpen(conf.DbHost, conf.DbPort, conf.DbDataBase, conf.DbUser, conf.DbPassword)
+	dbConfig := conf.DefConfig.DBConfig
+	if dbConfig.SqlType == "pgsql" {
+		db, err = pgOpen(dbConfig.ConfDbHost, dbConfig.ConfDbPort, dbConfig.ConfDataBase, dbConfig.ConfDbUser, dbConfig.ConfDbPassword)
 	} else {
-		db, _ = mysqlOpen(conf.DbHost, conf.DbPort, conf.DbDataBase, conf.DbUser, conf.DbPassword)
+		db, err = mysqlOpen(dbConfig.ConfDbHost, dbConfig.ConfDbPort, dbConfig.ConfDataBase, dbConfig.ConfDbUser, dbConfig.ConfDbPassword)
 	}
 
 	if nil != err {

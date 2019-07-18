@@ -197,7 +197,7 @@ func getCacheKey(table string, uniKey string) *cacheKey {
 }
 
 func getMgrByUnikey(uniKey string) *cacheKeyMgr {
-	return cacheGroup[StringHash(uniKey)%conf.CacheGroupSize]
+	return cacheGroup[StringHash(uniKey)%conf.DefConfig.CacheGroupSize]
 }
 
 func kickCacheKey(mgr *cacheKeyMgr) {
@@ -205,7 +205,7 @@ func kickCacheKey(mgr *cacheKeyMgr) {
 	for !isStop() {
 		time.Sleep(time.Second)
 		mgr.mtx.Lock()
-		for len(mgr.cacheKeys) > conf.MaxCachePerGroupSize {
+		for len(mgr.cacheKeys) > conf.DefConfig.MaxCachePerGroupSize {
 			min := mgr.minheap.Min()
 			if nil == min {
 				break
@@ -243,8 +243,8 @@ func kickCacheKey(mgr *cacheKeyMgr) {
 }
 
 func InitCacheKey() {
-	cacheGroup = make([]*cacheKeyMgr, conf.CacheGroupSize)
-	for i := 0; i < conf.CacheGroupSize; i++ {
+	cacheGroup = make([]*cacheKeyMgr, conf.DefConfig.CacheGroupSize)
+	for i := 0; i < conf.DefConfig.CacheGroupSize; i++ {
 		cacheGroup[i] = &cacheKeyMgr{
 			cacheKeys: map[string]*cacheKey{},
 			minheap:   util.NewMinHeap(65535),

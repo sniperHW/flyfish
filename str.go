@@ -75,8 +75,8 @@ func (this *str) join(other []*str, sep string) *str {
 var strPool = sync.Pool{
 	New: func() interface{} {
 		return &str{
-			data: make([]byte, conf.StrInitCap),
-			cap:  conf.StrInitCap,
+			data: make([]byte, conf.DefConfig.StrInitCap),
+			cap:  conf.DefConfig.StrInitCap,
 			len:  0,
 		}
 	},
