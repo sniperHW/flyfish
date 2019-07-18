@@ -118,8 +118,6 @@ func (this *sqlLoader) exec() {
 			Infoln("sqlQueryer long exec", elapse, this.count)
 		}
 
-		Infoln("count", this.count)
-
 		if nil != err {
 			Errorln("sqlQueryer exec error:", err, reflect.TypeOf(err).String())
 			for _, vv := range v.ctxs {
