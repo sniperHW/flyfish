@@ -58,7 +58,7 @@ func pushSQLWriteBackNoWait(ctx *processContext) {
 	}
 }
 
-func pushSQLLoad_(q *util.BlockQueue, ctx *processContext, noWait bool) bool {
+func pushSQLLoad_(q *util.BlockQueue, ctx *processContext, fullReturn ...bool) bool {
 
 	ckey := ctx.getCacheKey()
 	if ckey.isWriteBack() {
@@ -76,24 +76,30 @@ func pushSQLLoad_(q *util.BlockQueue, ctx *processContext, noWait bool) bool {
 		return false
 
 	} else {
-		if noWait {
+		err := q.AddNoWait(ctx, fullReturn...)
+		if nil == err {
+			return true
+		} else {
+			return false
+		}
+		/*if noWait {
 			q.AddNoWait(ctx)
 		} else {
 			q.Add(ctx)
 		}
-		return true
+		return true*/
 	}
 }
 
-func pushSQLLoadNoWait(ctx *processContext) bool {
+func pushSQLLoadNoWait(ctx *processContext, fullReturn ...bool) bool {
 	q := sqlLoadQueue[StringHash(ctx.getUniKey())%conf.DefConfig.SqlLoadPoolSize]
-	return pushSQLLoad_(q, ctx, true)
+	return pushSQLLoad_(q, ctx, fullReturn...)
 }
 
-func pushSQLLoad(ctx *processContext) bool {
+/*func pushSQLLoad(ctx *processContext) bool {
 	q := sqlLoadQueue[StringHash(ctx.getUniKey())%conf.DefConfig.SqlLoadPoolSize]
 	return pushSQLLoad_(q, ctx, false)
-}
+}*/
 
 type sqlPipeliner interface {
 	append(v interface{})

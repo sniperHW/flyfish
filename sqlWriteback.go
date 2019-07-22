@@ -36,7 +36,7 @@ func (this *writeBackBarrier) sub(c int) {
 	}
 }
 
-func (this *writeBackBarrier) wait(fullReturn bool) bool {
+func (this *writeBackBarrier) wait() {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
 

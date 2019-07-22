@@ -17,16 +17,17 @@ var (
 	redisProcessQueue *util.BlockQueue
 )
 
+/*
 func pushRedis(ctx *processContext) {
 	atomic.AddInt32(&redisReqCount, 1)
 	Debugln("pushRedis", ctx.getCmdType(), ctx.getUniKey())
 	redisProcessQueue.Add(ctx)
-}
+}*/
 
-func pushRedisNoWait(ctx *processContext) {
+func pushRedisNoWait(ctx *processContext, fullReturn ...bool) bool {
 	atomic.AddInt32(&redisReqCount, 1)
 	Debugln("pushRedisNoWait", ctx.getCmdType(), ctx.getUniKey())
-	redisProcessQueue.AddNoWait(ctx)
+	return nil == redisProcessQueue.AddNoWait(ctx, fullReturn...)
 }
 
 func redisRoutine(queue *util.BlockQueue) {

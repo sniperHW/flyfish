@@ -392,28 +392,47 @@ func (this *cacheKey) process_(noWait bool, cmd ...*command) {
 		}
 	}
 
-	if this.status == cache_ok || this.status == cache_missing {
-		//投递redis请求
-		if noWait {
-			pushRedisNoWait(ctx)
-		} else {
-			pushRedis(ctx)
-		}
-	} else {
-
-		ok := true
-
-		//投递sql请求
-		if noWait {
-			ok = pushSQLLoadNoWait(ctx)
-		} else {
-			ok = pushSQLLoad(ctx)
-		}
-
-		if !ok {
-			ctx.reply(errcode.ERR_BUSY, nil, -1)
-		}
+	fullReturn := false
+	if !noWait {
+		fullReturn = true
 	}
+
+	ok := true
+	if this.status == cache_ok || this.status == cache_missing {
+		ok = pushRedisNoWait(ctx, fullReturn)
+	} else {
+		ok = pushSQLLoadNoWait(ctx, fullReturn)
+	}
+
+	if !ok {
+		ctx.reply(errcode.ERR_BUSY, nil, -1)
+	}
+
+	/*
+		if this.status == cache_ok || this.status == cache_missing {
+			//投递redis请求
+			if noWait {
+				pushRedisNoWait(ctx)
+			} else {
+				pushRedis(ctx)
+			}
+		} else {
+
+			ok := true
+
+			//投递sql请求
+			if noWait {
+				ok = pushSQLLoadNoWait(ctx)
+			} else {
+				ok = pushSQLLoad(ctx)
+			}
+
+			if !ok {
+				ctx.reply(errcode.ERR_BUSY, nil, -1)
+			}
+		}
+	*/
+
 }
 
 func (this *cacheKey) process(cmd ...*command) {
