@@ -81,18 +81,6 @@
 			"revisionTime": "2018-12-06T07:02:39Z"
 		},
 		{
-			"checksumSHA1": "UQRxXWW7W736velekrux50Txcyw=",
-			"path": "github.com/hqpko/hbuffer",
-			"revision": "f10ba521a7fba6829a6cf55a59bf65e6dafff0e6",
-			"revisionTime": "2019-03-19T09:22:27Z"
-		},
-		{
-			"checksumSHA1": "R0gAiqykEUbJh0rwlpH+wFHLBa8=",
-			"path": "github.com/hqpko/hutils",
-			"revision": "9b3f2fe7796242cbaf4ee2534d983c496ee2dd0c",
-			"revisionTime": "2019-06-11T02:57:00Z"
-		},
-		{
 			"checksumSHA1": "vFb/tA6zAeUX1rCRmp3a1BNCmXU=",
 			"path": "github.com/jmoiron/sqlx",
 			"revision": "38398a30ed8516ffda617a04c822de09df8a3ec5",

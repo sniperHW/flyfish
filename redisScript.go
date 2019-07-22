@@ -252,9 +252,7 @@ func (this *scriptMgr) ResetSha() {
 	}
 }
 
-//func InitScript() {
 func newScriptMgr() *scriptMgr {
-	//this = &scriptMgr{
 	return &scriptMgr{
 		compareAndSetSha: scriptSha{
 			script: strCompareAndSet,

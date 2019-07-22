@@ -1,14 +1,9 @@
 package main
 
 import (
-	"fmt"
-
-	"github.com/hqpko/hutils"
-
 	"flyfish"
 	"flyfish/conf"
-
-	//"github.com/sniperHW/kendynet/golog"
+	"fmt"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -16,8 +11,15 @@ import (
 	"syscall"
 )
 
+func Must(i interface{}, e error) interface{} {
+	if e != nil {
+		panic(e)
+	}
+	return i
+}
+
 func main() {
-	hutils.Must(nil, conf.InitConfig(os.Args[1]))
+	Must(nil, conf.InitConfig(os.Args[1]))
 	config := conf.DefConfig
 
 	flyfish.InitLogger()
@@ -27,8 +29,8 @@ func main() {
 		return
 	}
 
-	flyfish.InitProcessUnit(config.DBConfig.DbHost, config.DBConfig.DbPort, config.DBConfig.DbDataBase, config.DBConfig.DbUser, config.DBConfig.DbPassword)
-	flyfish.RedisInit(config.Redis.RedisHost, config.Redis.RedisPort, config.Redis.RedisPassword)
+	flyfish.InitProcessUnit()
+	flyfish.RedisInit()
 	flyfish.Recover()
 
 	go func() {

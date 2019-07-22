@@ -46,7 +46,7 @@ func onRedisResp(ctx *processContext) {
 		}
 
 		if !ctx.replyOnDbOk {
-			ckey.process()
+			ckey.processQueueCmd()
 		}
 	}
 

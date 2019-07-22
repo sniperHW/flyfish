@@ -289,6 +289,6 @@ func (this *cacheKey) processClientCmd(cmd ...*command) {
 	this.process_(true, cmd...)
 }
 
-func (this *cacheKey) process(cmd ...*command) {
-	this.process_(false, cmd...)
+func (this *cacheKey) processQueueCmd() {
+	this.process_(false)
 }

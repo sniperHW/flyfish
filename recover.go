@@ -222,11 +222,7 @@ func Recover() {
 
 	var db *sqlx.DB
 	dbConfig := conf.DefConfig.DBConfig
-	if dbConfig.SqlType == "pgsql" {
-		db, _ = pgOpen(dbConfig.DbHost, dbConfig.DbPort, dbConfig.DbDataBase, dbConfig.DbUser, dbConfig.DbPassword)
-	} else {
-		db, _ = mysqlOpen(dbConfig.DbHost, dbConfig.DbPort, dbConfig.DbDataBase, dbConfig.DbUser, dbConfig.DbPassword)
-	}
+	db, _ = sqlOpen(dbConfig.SqlType, dbConfig.DbHost, dbConfig.DbPort, dbConfig.DbDataBase, dbConfig.DbUser, dbConfig.DbPassword)
 
 	recoverUpdater := newSqlUpdater(db, "recover", nil)
 

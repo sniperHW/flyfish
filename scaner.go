@@ -122,11 +122,8 @@ func scan(session kendynet.StreamSession, msg *codec.Message) {
 		var err error
 
 		dbConfig := conf.DefConfig.DBConfig
-		if dbConfig.SqlType == "pgsql" {
-			s.db, err = pgOpen(dbConfig.DbHost, dbConfig.DbPort, dbConfig.DbDataBase, dbConfig.DbUser, dbConfig.DbPassword)
-		} else {
-			s.db, err = mysqlOpen(dbConfig.DbHost, dbConfig.DbPort, dbConfig.DbDataBase, dbConfig.DbUser, dbConfig.DbPassword)
-		}
+
+		s.db, err = sqlOpen(dbConfig.SqlType, dbConfig.ConfDbHost, dbConfig.ConfDbPort, dbConfig.ConfDataBase, dbConfig.ConfDbUser, dbConfig.ConfDbPassword)
 
 		if nil != err {
 			resp.Head.ErrCode = pb.Int32(errcode.ERR_SQLERROR)

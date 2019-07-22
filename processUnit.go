@@ -395,7 +395,7 @@ func (this *processUnit) kickCacheKey() {
 	}
 }
 
-func InitProcessUnit(host string, port int, dbname string, user string, password string) bool {
+func InitProcessUnit() bool {
 
 	placeHolderInit()
 
@@ -420,22 +420,15 @@ func InitProcessUnit(host string, port int, dbname string, user string, password
 		var loadDB *sqlx.DB
 		var writeBackDB *sqlx.DB
 		var err error
+		dbConfig := conf.DefConfig.DBConfig
 
-		if conf.DefConfig.DBConfig.SqlType == "pgsql" {
-			loadDB, err = pgOpen(host, port, dbname, user, password)
-		} else {
-			loadDB, err = mysqlOpen(host, port, dbname, user, password)
-		}
+		loadDB, err = sqlOpen(dbConfig.SqlType, dbConfig.DbHost, dbConfig.DbPort, dbConfig.DbDataBase, dbConfig.DbUser, dbConfig.DbPassword)
 
 		if nil != err {
 			return false
 		}
 
-		if conf.DefConfig.DBConfig.SqlType == "pgsql" {
-			writeBackDB, err = pgOpen(host, port, dbname, user, password)
-		} else {
-			writeBackDB, err = mysqlOpen(host, port, dbname, user, password)
-		}
+		writeBackDB, err = sqlOpen(dbConfig.SqlType, dbConfig.DbHost, dbConfig.DbPort, dbConfig.DbDataBase, dbConfig.DbUser, dbConfig.DbPassword)
 
 		if nil != err {
 			return false

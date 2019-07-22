@@ -4,7 +4,6 @@ import (
 	"database/sql/driver"
 	"flyfish/conf"
 	"flyfish/errcode"
-	//"flyfish/proto"
 	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/kendynet/util"
 	"net"
