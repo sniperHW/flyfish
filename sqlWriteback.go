@@ -36,9 +36,10 @@ func (this *writeBackBarrier) sub(c int) {
 	}
 }
 
-func (this *writeBackBarrier) wait() {
+func (this *writeBackBarrier) wait(fullReturn bool) bool {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
+
 	if this.counter >= conf.DefConfig.WriteBackEventQueueSize {
 		for this.counter >= conf.DefConfig.WriteBackEventQueueSize {
 			this.waited++
@@ -46,6 +47,12 @@ func (this *writeBackBarrier) wait() {
 			this.waited--
 		}
 	}
+}
+
+func (this *writeBackBarrier) full() bool {
+	defer this.mtx.Unlock()
+	this.mtx.Lock()
+	return this.counter >= conf.DefConfig.WriteBackEventQueueSize
 }
 
 type record struct {

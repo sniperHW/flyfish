@@ -383,8 +383,13 @@ func (this *cacheKey) process_(noWait bool, cmd ...*command) {
 	this.mtx.Unlock()
 
 	if !noWait && causeWriteBackCmd(lastCmdType) {
-		//可能导致回写的cmd,需要等待到writeBackQueue小于容量上限才放行
-		writeBackBarrier_.wait()
+		/*可能导致回写的cmd,需要等待到writeBackQueue小于容量上限才放行
+		writeBackBarrier_.wait()*/
+		if writeBackBarrier_.full() {
+			//writeBackQueue容量已满，直接返回busy
+			ctx.reply(errcode.ERR_BUSY, nil, -1)
+			return
+		}
 	}
 
 	if this.status == cache_ok || this.status == cache_missing {
