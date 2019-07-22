@@ -8,11 +8,11 @@ import (
 func onSqlNotFound(ctx *processContext) {
 	Debugln("onSqlNotFound key", ctx.getUniKey())
 	cmdType := ctx.getCmdType()
+	ckey := ctx.getCacheKey()
 	if cmdType == cmdGet || cmdType == cmdDel || cmdType == cmdCompareAndSet {
 		ctx.reply(errcode.ERR_NOTFOUND, nil, -1)
-		ckey := ctx.getCacheKey()
 		ckey.setMissing()
-		ckey.processNoWait()
+		ckey.process()
 	} else {
 		/*  set操作，数据库不存在的情况
 		*   先写入到redis,redis写入成功后回写sql(设置回写类型insert)
@@ -34,19 +34,19 @@ func onSqlNotFound(ctx *processContext) {
 		ctx.writeBackFlag = write_back_insert
 
 		ctx.redisFlag = redis_set
-		pushRedisNoWait(ctx)
+		ckey.unit.pushRedisReq(ctx)
 	}
 }
 
 func onSqlExecError(ctx *processContext) {
 	Debugln("onSqlExecError key", ctx.getUniKey())
 	ctx.reply(errcode.ERR_SQLERROR, nil, -1)
-	ctx.getCacheKey().processNoWait()
+	ctx.getCacheKey().process()
 }
 
 func onSqlLoadOKGet(ctx *processContext) {
 	ctx.redisFlag = redis_set_only
-	pushRedisNoWait(ctx)
+	ctx.getCacheKey().unit.pushRedisReq(ctx)
 }
 
 /*
@@ -62,7 +62,7 @@ func onSqlLoadOKSet(ctx *processContext) {
 			pushRedis = false
 			//版本号不对
 			ctx.reply(errcode.ERR_VERSION, nil, version)
-			ctx.getCacheKey().processNoWait()
+			ctx.getCacheKey().process()
 		} else {
 			//变更需要将版本号+1
 			for _, v := range cmd.fields {
@@ -102,7 +102,7 @@ func onSqlLoadOKSet(ctx *processContext) {
 	}
 
 	if pushRedis {
-		pushRedisNoWait(ctx)
+		ctx.getCacheKey().unit.pushRedisReq(ctx)
 	}
 }
 
@@ -110,21 +110,21 @@ func onSqlLoadOKDel(ctx *processContext) {
 	var errCode int32
 	version := ctx.fields["__version__"].GetInt()
 	cmd := ctx.commands[0]
+	ckey := ctx.getCacheKey()
 	if nil != cmd.version && *cmd.version != version {
 		//版本号不对
 		errCode = errcode.ERR_VERSION
 	} else {
 		ctx.writeBackFlag = write_back_delete
-		pushSQLWriteBackNoWait(ctx)
+		ckey.unit.pushSqlWriteBackReq(ctx)
 		errCode = errcode.ERR_OK
 	}
 
 	ctx.reply(errCode, nil, version)
-	ckey := ctx.getCacheKey()
 	if errCode == errcode.ERR_OK {
 		ckey.setMissing()
 	}
-	ckey.processNoWait()
+	ckey.process()
 }
 
 func onSqlLoadOK(ctx *processContext) {
@@ -166,7 +166,7 @@ func onSqlWriteBackResp(ctx *processContext, errno int32) {
 		//将redis中缓存作废
 		ckey.setMissing()
 
-		pushRedisNoWait(&processContext{
+		ckey.unit.pushRedisReq(&processContext{
 			commands: []*command{&command{
 				uniKey: ckey.uniKey,
 				ckey:   ckey,
@@ -175,6 +175,6 @@ func onSqlWriteBackResp(ctx *processContext, errno int32) {
 		})
 	}
 
-	ckey.processNoWait()
+	ckey.process()
 
 }

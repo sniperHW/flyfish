@@ -4,14 +4,14 @@ import (
 	"flyfish/conf"
 	"flyfish/errcode"
 	"flyfish/proto"
+	"github.com/jmoiron/sqlx"
+	"github.com/sniperHW/kendynet/util"
 	"reflect"
 	"time"
-
-	"github.com/jmoiron/sqlx"
 )
 
 /*
-*一个要获取的集合
+ * 一个要获取的集合
  */
 type sqlGet struct {
 	table  string
@@ -26,12 +26,14 @@ type sqlLoader struct {
 	max      int
 	db       *sqlx.DB
 	lastTime time.Time
+	queue    *util.BlockQueue
 }
 
-func newSqlLoader(db *sqlx.DB) *sqlLoader {
+func newSqlLoader(db *sqlx.DB, name string) *sqlLoader {
 	return &sqlLoader{
 		sqlGets: map[string]*sqlGet{},
 		max:     conf.DefConfig.SqlLoadPipeLineSize,
+		queue:   util.NewBlockQueueWithName(name, conf.DefConfig.SqlLoadEventQueueSize),
 		db:      db,
 	}
 }
@@ -159,6 +161,19 @@ func (this *sqlLoader) exec() {
 				onSqlResp(vv, errcode.ERR_NOTFOUND)
 			}
 			v.meta.queryMeta.putReceiver(filed_receiver)
+		}
+	}
+}
+
+func (this *sqlLoader) run() {
+	for {
+		closed, localList := this.queue.Get()
+		for _, v := range localList {
+			this.append(v)
+		}
+		this.exec()
+		if closed {
+			return
 		}
 	}
 }

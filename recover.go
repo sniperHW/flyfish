@@ -228,7 +228,7 @@ func Recover() {
 		db, _ = mysqlOpen(dbConfig.DbHost, dbConfig.DbPort, dbConfig.DbDataBase, dbConfig.DbUser, dbConfig.DbPassword)
 	}
 
-	recoverUpdater := newSqlUpdater("recover", db)
+	recoverUpdater := newSqlUpdater(db, "recover", nil)
 
 	backFilePath = conf.DefConfig.BackDir + conf.DefConfig.BackFile
 	f, err := os.OpenFile(backFilePath, os.O_RDWR, os.ModePerm)

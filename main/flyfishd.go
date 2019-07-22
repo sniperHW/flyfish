@@ -27,9 +27,8 @@ func main() {
 		return
 	}
 
-	flyfish.InitCacheKey()
+	flyfish.InitProcessUnit(config.DBConfig.DbHost, config.DBConfig.DbPort, config.DBConfig.DbDataBase, config.DBConfig.DbUser, config.DBConfig.DbPassword)
 	flyfish.RedisInit(config.Redis.RedisHost, config.Redis.RedisPort, config.Redis.RedisPassword)
-	flyfish.SQLInit(config.DBConfig.DbHost, config.DBConfig.DbPort, config.DBConfig.DbDataBase, config.DBConfig.DbUser, config.DBConfig.DbPassword)
 	flyfish.Recover()
 
 	go func() {

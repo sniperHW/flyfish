@@ -88,12 +88,12 @@ func main() {
 			time.Sleep(time.Second)
 			setCount_ := atomic.LoadInt32(&setCount)
 			timeoutCount_ := atomic.LoadInt32(&timeoutCount)
-			busyCount_ := atomic.LoadInt32(&busyCount_)
+			busyCount_ := atomic.LoadInt32(&busyCount)
 
 			fmt.Printf("s:%d,sava:%d,timeout:%d,busy:%d\n", setCount_, setAvaDelay/time.Millisecond, timeoutCount_, busyCount_)
 			atomic.StoreInt32(&setCount, 0)
 			atomic.StoreInt32(&timeoutCount, 0)
-			atomic.StoreInt32(&busyCount_)
+			atomic.StoreInt32(&busyCount, 0)
 		}
 	}()
 

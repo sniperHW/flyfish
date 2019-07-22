@@ -117,8 +117,6 @@ func isStop() bool {
 	return atomic.LoadInt32(&stoped) == 1
 }
 
-var writeBackWG sync.WaitGroup
-
 func waitCondition(fn func() bool) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -135,7 +133,6 @@ func waitCondition(fn func() bool) {
 }
 
 func Stop() {
-
 	//第一步关闭监听
 	StopServer()
 
@@ -148,7 +145,6 @@ func Stop() {
 
 	//等待redis请求和命令执行完成
 	waitCondition(func() bool {
-
 		if atomic.LoadInt32(&redisReqCount) == 0 && atomic.LoadInt32(&cmdCount) == 0 {
 			return true
 		} else {
@@ -158,24 +154,9 @@ func Stop() {
 
 	Infoln("redis finish")
 
-	//强制执行回写
-	notiForceWriteBack()
+	StopProcessUnit()
 
-	//等待所有待回写记录被清空
-	waitCondition(func() bool {
-		if len(writeBackRecords) == 0 {
-			return true
-		} else {
-			return false
-		}
-	})
-
-	//等待回写执行完毕
-	closeWriteBack()
-
-	writeBackWG.Wait()
-
-	Infoln("writeback finish")
+	Infoln("ProcessUnit stop ok")
 
 	//关闭所有客户连接
 

@@ -3,8 +3,8 @@ package flyfish
 import (
 	"flyfish/errcode"
 	"flyfish/proto"
-	"sync/atomic"
-	"time"
+	//"sync/atomic"
+	//"time"
 )
 
 const (
@@ -285,160 +285,10 @@ func (this *cacheKey) processDel(ctx *processContext, cmd *command) bool {
 	}
 }
 
-func (this *cacheKey) process_(noWait bool, cmd ...*command) {
-
-	this.mtx.Lock()
-
-	if len(cmd) > 0 {
-		this.cmdQueue.PushBack(cmd[0])
-	} else {
-		this.unlock()
-	}
-
-	if this.locked || this.cmdQueue.Len() == 0 {
-		this.mtx.Unlock()
-		return
-	}
-
-	cmdQueue := this.cmdQueue
-	e := cmdQueue.Front()
-
-	if nil == e {
-		this.mtx.Unlock()
-		return
-	}
-
-	ctx := &processContext{
-		commands: []*command{},
-		fields:   map[string]*proto.Field{},
-	}
-
-	lastCmdType := cmdNone
-
-	now := time.Now()
-
-	for ; nil != e; e = cmdQueue.Front() {
-		cmd := e.Value.(*command)
-		if now.After(cmd.deadline) {
-			//已经超时
-			cmdQueue.Remove(e)
-			atomic.AddInt32(&cmdCount, -1)
-		} else {
-			ok := false
-			if cmd.cmdType == cmdGet {
-				if !(lastCmdType == cmdNone || lastCmdType == cmdGet) {
-					break
-				}
-				cmdQueue.Remove(e)
-				ok = this.processGet(ctx, cmd)
-				if ok {
-					lastCmdType = cmd.cmdType
-				}
-			} else if lastCmdType == cmdNone {
-				cmdQueue.Remove(e)
-				switch cmd.cmdType {
-				case cmdSet:
-					ok = this.processSet(ctx, cmd)
-					break
-				case cmdSetNx:
-					ok = this.processSetNx(ctx, cmd)
-					break
-				case cmdCompareAndSet:
-					ok = this.processCompareAndSet(ctx, cmd)
-					break
-				case cmdCompareAndSetNx:
-					ok = this.processCompareAndSetNx(ctx, cmd)
-					break
-				case cmdIncrBy:
-					ok = this.processIncrBy(ctx, cmd)
-					break
-				case cmdDecrBy:
-					ok = this.processDecrBy(ctx, cmd)
-					break
-				case cmdDel:
-					ok = this.processDel(ctx, cmd)
-					break
-				default:
-					//记录日志
-					break
-				}
-
-				if ok {
-					lastCmdType = cmd.cmdType
-					break
-				}
-
-			} else {
-				break
-			}
-		}
-	}
-
-	if lastCmdType == cmdNone {
-		this.mtx.Unlock()
-		return
-	}
-
-	this.lock()
-	this.mtx.Unlock()
-
-	if !noWait && causeWriteBackCmd(lastCmdType) {
-		/*可能导致回写的cmd,需要等待到writeBackQueue小于容量上限才放行
-		writeBackBarrier_.wait()*/
-		if writeBackBarrier_.full() {
-			//writeBackQueue容量已满，直接返回busy
-			ctx.reply(errcode.ERR_BUSY, nil, -1)
-			return
-		}
-	}
-
-	fullReturn := false
-	if !noWait {
-		fullReturn = true
-	}
-
-	ok := true
-	if this.status == cache_ok || this.status == cache_missing {
-		ok = pushRedisNoWait(ctx, fullReturn)
-	} else {
-		ok = pushSQLLoadNoWait(ctx, fullReturn)
-	}
-
-	if !ok {
-		ctx.reply(errcode.ERR_BUSY, nil, -1)
-	}
-
-	/*
-		if this.status == cache_ok || this.status == cache_missing {
-			//投递redis请求
-			if noWait {
-				pushRedisNoWait(ctx)
-			} else {
-				pushRedis(ctx)
-			}
-		} else {
-
-			ok := true
-
-			//投递sql请求
-			if noWait {
-				ok = pushSQLLoadNoWait(ctx)
-			} else {
-				ok = pushSQLLoad(ctx)
-			}
-
-			if !ok {
-				ctx.reply(errcode.ERR_BUSY, nil, -1)
-			}
-		}
-	*/
-
+func (this *cacheKey) processClientCmd(cmd ...*command) {
+	this.process_(true, cmd...)
 }
 
 func (this *cacheKey) process(cmd ...*command) {
 	this.process_(false, cmd...)
-}
-
-func (this *cacheKey) processNoWait(cmd ...*command) {
-	this.process_(true, cmd...)
 }

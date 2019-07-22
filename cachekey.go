@@ -2,14 +2,11 @@ package flyfish
 
 import (
 	"container/list"
-	"flyfish/conf"
 	"flyfish/proto"
+	"github.com/sniperHW/kendynet/util"
 	"strconv"
 	"sync"
 	"sync/atomic"
-	"time"
-
-	"github.com/sniperHW/kendynet/util"
 )
 
 const (
@@ -18,29 +15,48 @@ const (
 	cache_missing = 3
 )
 
-var (
-	cacheGroup []*cacheKeyMgr
-	tick       int64 //每次访问+1假设每秒访问100万次，需要运行584942年才会回绕
-)
-
-type cacheKey struct {
-	uniKey       string
-	idx          uint32
-	version      int64
-	status       int
-	locked       bool //操作是否被锁定
-	mtx          sync.Mutex
-	cmdQueue     *list.List
-	meta         *table_meta
-	writeBacked  bool //正在回写
-	writeBackVer int64
-	lastAccess   int64
+type record struct {
+	writeBackFlag int
+	key           string
+	table         string
+	uniKey        string
+	ckey          *cacheKey
+	fields        map[string]*proto.Field //所有命令的字段聚合
+	ctx           *processContext
 }
 
-type cacheKeyMgr struct {
-	cacheKeys map[string]*cacheKey
-	minheap   *util.MinHeap
-	mtx       sync.Mutex
+var recordPool = sync.Pool{
+	New: func() interface{} {
+		return &record{}
+	},
+}
+
+func recordGet() *record {
+	r := recordPool.Get().(*record)
+	return r
+}
+
+func recordPut(r *record) {
+	r.writeBackFlag = write_back_none
+	r.ckey = nil
+	r.fields = nil
+	r.ctx = nil
+	recordPool.Put(r)
+}
+
+type cacheKey struct {
+	uniKey      string
+	idx         uint32
+	version     int64
+	status      int
+	locked      bool //操作是否被锁定
+	mtx         sync.Mutex
+	cmdQueue    *list.List
+	meta        *table_meta
+	writeBacked bool //正在回写
+	lastAccess  int64
+	unit        *processUnit
+	r           *record
 }
 
 func (this *cacheKey) Less(o util.HeapElement) bool {
@@ -94,19 +110,20 @@ func (this *cacheKey) clearCmd() {
 	this.cmdQueue = list.New()
 }
 
-func (this *cacheKey) setWriteBack() {
+func (this *cacheKey) clearWriteBack() {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
-	this.writeBacked = true
-	this.writeBackVer++
+	this.writeBacked = false
+	if nil != this.r {
+		recordPut(this.r)
+		this.r = nil
+	}
 }
 
-func (this *cacheKey) clearWriteBack(ver int64) {
+func (this *cacheKey) getRecord() *record {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
-	if this.writeBackVer == ver {
-		this.writeBacked = false
-	}
+	return this.r
 }
 
 func (this *cacheKey) isWriteBack() bool {
@@ -115,12 +132,12 @@ func (this *cacheKey) isWriteBack() bool {
 	return this.writeBacked
 }
 
-func (this *cacheKey) updateLRU(minheap *util.MinHeap) {
-	this.lastAccess = atomic.AddInt64(&tick, 1)
-	minheap.Insert(this)
+func (this *cacheKey) updateLRU() {
+	this.lastAccess = atomic.AddInt64(&this.unit.tick, 1)
+	this.unit.minheap.Insert(this)
 }
 
-func newCacheKey(table string, uniKey string) *cacheKey {
+func newCacheKey(unit *processUnit, table string, uniKey string) *cacheKey {
 
 	meta := getMetaByTable(table)
 
@@ -134,6 +151,7 @@ func newCacheKey(table string, uniKey string) *cacheKey {
 		status:   cache_new,
 		meta:     meta,
 		cmdQueue: list.New(),
+		unit:     unit,
 	}
 }
 
@@ -176,81 +194,5 @@ func (this *cacheKey) convertStr(fieldName string, value string) *proto.Field {
 		return proto.PackField(fieldName, u)
 	} else {
 		return nil
-	}
-}
-
-func getCacheKey(table string, uniKey string) *cacheKey {
-	mgr := getMgrByUnikey(uniKey)
-	defer mgr.mtx.Unlock()
-	mgr.mtx.Lock()
-	k, ok := mgr.cacheKeys[uniKey]
-	if ok {
-		k.updateLRU(mgr.minheap)
-	} else {
-		k = newCacheKey(table, uniKey)
-		if nil != k {
-			k.updateLRU(mgr.minheap)
-			mgr.cacheKeys[uniKey] = k
-		}
-	}
-	return k
-}
-
-func getMgrByUnikey(uniKey string) *cacheKeyMgr {
-	return cacheGroup[StringHash(uniKey)%conf.DefConfig.CacheGroupSize]
-}
-
-func kickCacheKey(mgr *cacheKeyMgr) {
-
-	for !isStop() {
-		time.Sleep(time.Second)
-		mgr.mtx.Lock()
-		for len(mgr.cacheKeys) > conf.DefConfig.MaxCachePerGroupSize {
-			min := mgr.minheap.Min()
-			if nil == min {
-				break
-			}
-			c := min.(*cacheKey)
-			var locked bool
-			c.mtx.Lock()
-			locked = c.locked
-			c.mtx.Unlock()
-			if locked {
-				break
-			}
-			mgr.minheap.PopMin()
-			delete(mgr.cacheKeys, c.uniKey)
-
-			cmd := &command{
-				uniKey: c.uniKey,
-				ckey:   c,
-			}
-
-			ctx := &processContext{
-				commands:  []*command{cmd},
-				redisFlag: redis_kick,
-			}
-
-			pushRedisNoWait(ctx)
-
-		}
-
-		//Infoln("cacheKeys size", len(mgr.cacheKeys))
-
-		mgr.mtx.Unlock()
-	}
-
-}
-
-func InitCacheKey() {
-	cacheGroup = make([]*cacheKeyMgr, conf.DefConfig.CacheGroupSize)
-	for i := 0; i < conf.DefConfig.CacheGroupSize; i++ {
-		cacheGroup[i] = &cacheKeyMgr{
-			cacheKeys: map[string]*cacheKey{},
-			minheap:   util.NewMinHeap(65535),
-		}
-
-		go kickCacheKey(cacheGroup[i])
-
 	}
 }

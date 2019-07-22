@@ -147,16 +147,6 @@ func processCmd(cmd *command) {
 	}
 
 	cmd.ckey = getCacheKey(cmd.table, cmd.uniKey)
-	cmd.ckey.process(cmd)
+	cmd.ckey.processClientCmd(cmd)
 
 }
-
-/*
-func init() {
-	go func() {
-		for {
-			time.Sleep(time.Second)
-			Infoln("redisReqCount", redisReqCount, "cmdCount", cmdCount)
-		}
-	}()
-}*/

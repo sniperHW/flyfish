@@ -27,7 +27,7 @@ func onRedisResp(ctx *processContext) {
 		ctx.writeBackFlag = write_back_none //数据存在执行update
 		ctx.redisFlag = redis_none
 		//到数据库加载
-		if !pushSQLLoadNoWait(ctx) {
+		if !ckey.unit.pushSqlLoadReq(ctx) {
 			ctx.reply(errcode.ERR_BUSY, nil, -1)
 		}
 
@@ -38,15 +38,15 @@ func onRedisResp(ctx *processContext) {
 			} else if ctx.redisFlag == redis_del {
 				ckey.setMissing()
 				//投递sql删除请求
-				pushSQLWriteBackNoWait(ctx)
+				ckey.unit.pushSqlWriteBackReq(ctx)
 			} else {
 				ckey.setOK(newVersion)
-				pushSQLWriteBackNoWait(ctx)
+				ckey.unit.pushSqlWriteBackReq(ctx)
 			}
 		}
 
 		if !ctx.replyOnDbOk {
-			ckey.processNoWait()
+			ckey.process()
 		}
 	}
 

@@ -5,3 +5,4 @@ log/
 main/main
 config.conf
 flyfishd
+config.toml

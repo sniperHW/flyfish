@@ -1,5 +1,7 @@
 package flyfish
 
+import "flyfish/conf"
+
 var mysqlInsertPlaceHolder = []string{
 	"?",
 	"?",
@@ -281,4 +283,14 @@ func getInsertPlaceHolder(c int) string {
 
 func getUpdatePlaceHolder(c int) string {
 	return updatePlaceHolder[c]
+}
+
+func placeHolderInit() {
+	if conf.DefConfig.DBConfig.SqlType == "pgsql" {
+		insertPlaceHolder = pgInsertPlaceHolder
+		updatePlaceHolder = pgUpdatePlaceHolder
+	} else {
+		insertPlaceHolder = mysqlInsertPlaceHolder
+		updatePlaceHolder = mysqlUpdatePlaceHolder
+	}
 }
