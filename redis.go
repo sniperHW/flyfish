@@ -25,9 +25,15 @@ func pushRedis(ctx *processContext) {
 }*/
 
 func pushRedisNoWait(ctx *processContext, fullReturn ...bool) bool {
-	atomic.AddInt32(&redisReqCount, 1)
-	Debugln("pushRedisNoWait", ctx.getCmdType(), ctx.getUniKey())
-	return nil == redisProcessQueue.AddNoWait(ctx, fullReturn...)
+	//atomic.AddInt32(&redisReqCount, 1)
+	//Debugln("pushRedisNoWait", ctx.getCmdType(), ctx.getUniKey())
+	err := redisProcessQueue.AddNoWait(ctx, fullReturn...)
+	if nil == err {
+		atomic.AddInt32(&redisReqCount, 1)
+		return true
+	} else {
+		return false
+	}
 }
 
 func redisRoutine(queue *util.BlockQueue) {

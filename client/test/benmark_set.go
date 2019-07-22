@@ -13,9 +13,11 @@ import (
 )
 
 var (
-	setCount    int32
-	setAvaDelay time.Duration
-	id          int64
+	setCount     int32
+	timeoutCount int32
+	busyCount    int32
+	setAvaDelay  time.Duration
+	id           int64
 )
 
 func Set(c *kclient.Client) {
@@ -40,8 +42,16 @@ func Set(c *kclient.Client) {
 		}
 
 		if ret.ErrCode != errcode.ERR_OK {
-			fmt.Println("set err:", ret.ErrCode, key)
-			kclient.Debugln("set err:", ret.ErrCode, key)
+			if ret.ErrCode == errcode.ERR_TIMEOUT {
+				atomic.AddInt32(&timeoutCount, 1)
+			} else if ret.ErrCode == errcode.ERR_BUSY {
+				atomic.AddInt32(&busyCount, 1)
+			} else {
+				fmt.Println("set err:", ret.ErrCode, key)
+			}
+
+			//fmt.Println("set err:", ret.ErrCode, key)
+			//kclient.Debugln("set err:", ret.ErrCode, key)
 		}
 		atomic.AddInt32(&setCount, 1)
 		Set(c)
@@ -77,8 +87,13 @@ func main() {
 		for {
 			time.Sleep(time.Second)
 			setCount_ := atomic.LoadInt32(&setCount)
-			fmt.Printf("s:%d,sava:%d\n", setCount_, setAvaDelay/time.Millisecond)
+			timeoutCount_ := atomic.LoadInt32(&timeoutCount)
+			busyCount_ := atomic.LoadInt32(&busyCount_)
+
+			fmt.Printf("s:%d,sava:%d,timeout:%d,busy:%d\n", setCount_, setAvaDelay/time.Millisecond, timeoutCount_, busyCount_)
 			atomic.StoreInt32(&setCount, 0)
+			atomic.StoreInt32(&timeoutCount, 0)
+			atomic.StoreInt32(&busyCount_)
 		}
 	}()
 
