@@ -28,7 +28,7 @@ func newSqlUpdater(db *sqlx.DB, name string, wg *sync.WaitGroup) *sqlUpdater {
 	return &sqlUpdater{
 		name:   name,
 		values: []interface{}{},
-		queue:  util.NewBlockQueueWithName(name, conf.DefConfig.SqlUpdateEventQueueSize),
+		queue:  util.NewBlockQueueWithName(name, conf.DefConfig.SqlUpdateQueueSize),
 		db:     db,
 		wg:     wg,
 	}

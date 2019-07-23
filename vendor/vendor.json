@@ -147,6 +147,12 @@
 			"revisionTime": "2019-02-14T07:50:10Z"
 		},
 		{
+			"checksumSHA1": "KM7lzrH3RBN4Fo4K4wmZA7JDshc=",
+			"path": "github.com/sniperHW/kendynet/timer",
+			"revision": "68d62fa3181bdc0642336eff609b59d6f85b45f2",
+			"revisionTime": "2019-07-17T13:57:15Z"
+		},
+		{
 			"checksumSHA1": "0pt7/5TSubGOpDo1sUNlXeJR2jQ=",
 			"path": "github.com/sniperHW/kendynet/util",
 			"revision": "ed37be05dddaf57adb0273ffb05397726cbd998c",

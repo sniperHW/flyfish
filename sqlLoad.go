@@ -33,7 +33,7 @@ func newSqlLoader(db *sqlx.DB, name string) *sqlLoader {
 	return &sqlLoader{
 		sqlGets: map[string]*sqlGet{},
 		max:     conf.DefConfig.SqlLoadPipeLineSize,
-		queue:   util.NewBlockQueueWithName(name, conf.DefConfig.SqlLoadEventQueueSize),
+		queue:   util.NewBlockQueueWithName(name, conf.DefConfig.SqlLoadQueueSize),
 		db:      db,
 	}
 }

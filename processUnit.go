@@ -8,8 +8,8 @@ import (
 	"flyfish/proto"
 	"fmt"
 	"github.com/jmoiron/sqlx"
+	"github.com/sniperHW/kendynet/timer"
 	"github.com/sniperHW/kendynet/util"
-	//"net"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -33,7 +33,7 @@ type processUnit struct {
 }
 
 func (this *processUnit) updateQueueFull() bool {
-	return this.sqlUpdater_.queue.Len() >= conf.DefConfig.SqlLoadEventQueueSize
+	return this.sqlUpdater_.queue.Len() >= conf.DefConfig.SqlUpdateQueueSize
 }
 
 func (this *processUnit) pushRedisReq(ctx *processContext, fullReturn ...bool) bool {
@@ -218,10 +218,10 @@ func (this *cacheKey) process_(fromClient bool, cmd ...*command) {
 	if len(cmd) > 0 {
 		this.cmdQueue.PushBack(cmd[0])
 	} else {
-		this.unlock()
+		this.unlockCmdQueue()
 	}
 
-	if this.locked || this.cmdQueue.Len() == 0 {
+	if this.cmdQueueLocked || this.cmdQueue.Len() == 0 {
 		this.mtx.Unlock()
 		return
 	}
@@ -308,7 +308,11 @@ func (this *cacheKey) process_(fromClient bool, cmd ...*command) {
 	if fromClient && causeWriteBackCmd(lastCmdType) {
 		if this.unit.updateQueueFull() {
 			this.mtx.Unlock()
-			ctx.reply(errcode.ERR_BUSY, nil, -1)
+			if conf.DefConfig.ReplyBusyOnQueueFull {
+				ctx.reply(errcode.ERR_BUSY, nil, -1)
+			} else {
+				atomic.AddInt32(&cmdCount, -1)
+			}
 			return
 		}
 	}
@@ -320,7 +324,7 @@ func (this *cacheKey) process_(fromClient bool, cmd ...*command) {
 
 	ok := true
 
-	this.lock()
+	this.lockCmdQueue()
 	this.mtx.Unlock()
 
 	if this.status == cache_ok || this.status == cache_missing {
@@ -331,9 +335,13 @@ func (this *cacheKey) process_(fromClient bool, cmd ...*command) {
 
 	if !ok {
 		this.mtx.Lock()
-		this.unlock()
+		this.unlockCmdQueue()
 		this.mtx.Unlock()
-		ctx.reply(errcode.ERR_BUSY, nil, -1)
+		if conf.DefConfig.ReplyBusyOnQueueFull {
+			ctx.reply(errcode.ERR_BUSY, nil, -1)
+		} else {
+			atomic.AddInt32(&cmdCount, -1)
+		}
 	}
 }
 
@@ -359,40 +367,34 @@ func getCacheKey(table string, uniKey string) *cacheKey {
 }
 
 func (this *processUnit) kickCacheKey() {
-	for !isStop() {
-		time.Sleep(time.Second)
-		this.mtx.Lock()
-		for len(this.cacheKeys) > conf.DefConfig.MaxCachePerGroupSize {
-			min := this.minheap.Min()
-			if nil == min {
-				break
-			}
-			c := min.(*cacheKey)
-			var locked bool
-			c.mtx.Lock()
-			locked = c.locked
-			c.mtx.Unlock()
-			if locked {
-				break
-			}
-			this.minheap.PopMin()
-			delete(this.cacheKeys, c.uniKey)
+	this.mtx.Lock()
 
-			cmd := &command{
-				uniKey: c.uniKey,
-				ckey:   c,
-			}
+	for len(this.cacheKeys) > conf.DefConfig.MaxCachePerGroupSize {
+		min := this.minheap.Min()
+		if nil == min {
+			break
+		}
+		c := min.(*cacheKey)
+		if c.isCmdQueueLocked() {
+			break
+		}
+		this.minheap.PopMin()
+		delete(this.cacheKeys, c.uniKey)
 
-			ctx := &processContext{
-				commands:  []*command{cmd},
-				redisFlag: redis_kick,
-			}
-
-			this.pushRedisReq(ctx)
+		cmd := &command{
+			uniKey: c.uniKey,
+			ckey:   c,
 		}
 
-		this.mtx.Unlock()
+		ctx := &processContext{
+			commands:  []*command{cmd},
+			redisFlag: redis_kick,
+		}
+
+		this.pushRedisReq(ctx)
 	}
+
+	this.mtx.Unlock()
 }
 
 func InitProcessUnit() bool {
@@ -400,16 +402,6 @@ func InitProcessUnit() bool {
 	placeHolderInit()
 
 	sqlUpdateWg = &sync.WaitGroup{}
-
-	ping := func(q *util.BlockQueue) {
-		for {
-			//每60秒请求一次ping
-			if util.ErrQueueClosed == q.AddNoWait(&processContext{ping: true}) {
-				break
-			}
-			time.Sleep(time.Second * 60)
-		}
-	}
 
 	processUnits = make([]*processUnit, conf.DefConfig.CacheGroupSize)
 	for i := 0; i < conf.DefConfig.CacheGroupSize; i++ {
@@ -442,11 +434,28 @@ func InitProcessUnit() bool {
 		}
 		processUnits[i] = unit
 
-		go ping(unit.sqlLoader_.queue)
-		go ping(unit.sqlUpdater_.queue)
-		go unit.kickCacheKey()
 		go unit.sqlLoader_.run()
 		go unit.sqlUpdater_.run()
+
+		timer.Repeat(time.Second, nil, func(t *timer.Timer) {
+			if isStop() {
+				t.Cancel()
+			} else {
+				unit.kickCacheKey()
+			}
+		})
+
+		timer.Repeat(time.Second*60, nil, func(t *timer.Timer) {
+			if isStop() || util.ErrQueueClosed == unit.sqlLoader_.queue.AddNoWait(&processContext{ping: true}) {
+				t.Cancel()
+			}
+		})
+
+		timer.Repeat(time.Second*60, nil, func(t *timer.Timer) {
+			if isStop() || util.ErrQueueClosed == unit.sqlUpdater_.queue.AddNoWait(&processContext{ping: true}) {
+				t.Cancel()
+			}
+		})
 
 	}
 
@@ -457,6 +466,5 @@ func StopProcessUnit() {
 	for i := 0; i < conf.DefConfig.CacheGroupSize; i++ {
 		processUnits[i].sqlUpdater_.queue.Close()
 	}
-	//time.Sleep(time.Second * 5)
 	sqlUpdateWg.Wait()
 }

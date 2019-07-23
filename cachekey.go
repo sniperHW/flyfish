@@ -45,18 +45,18 @@ func recordPut(r *record) {
 }
 
 type cacheKey struct {
-	uniKey      string
-	idx         uint32
-	version     int64
-	status      int
-	locked      bool //操作是否被锁定
-	mtx         sync.Mutex
-	cmdQueue    *list.List
-	meta        *table_meta
-	writeBacked bool //正在回写
-	lastAccess  int64
-	unit        *processUnit
-	r           *record
+	uniKey         string
+	idx            uint32
+	version        int64
+	status         int
+	cmdQueueLocked bool //操作是否被锁定
+	mtx            sync.Mutex
+	cmdQueue       *list.List
+	meta           *table_meta
+	writeBacked    bool //正在回写
+	lastAccess     int64
+	unit           *processUnit
+	r              *record
 }
 
 func (this *cacheKey) Less(o util.HeapElement) bool {
@@ -71,14 +71,20 @@ func (this *cacheKey) SetIndex(idx uint32) {
 	this.idx = idx
 }
 
-func (this *cacheKey) lock() {
-	if !this.locked {
-		this.locked = true
+func (this *cacheKey) lockCmdQueue() {
+	if !this.cmdQueueLocked {
+		this.cmdQueueLocked = true
 	}
 }
 
-func (this *cacheKey) unlock() {
-	this.locked = false
+func (this *cacheKey) unlockCmdQueue() {
+	this.cmdQueueLocked = false
+}
+
+func (this *cacheKey) isCmdQueueLocked() bool {
+	defer this.mtx.Unlock()
+	this.mtx.Lock()
+	return this.cmdQueueLocked
 }
 
 func (this *cacheKey) setMissing() {
@@ -105,7 +111,7 @@ func (this *cacheKey) reset() {
 func (this *cacheKey) clearCmd() {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
-	this.locked = false
+	this.cmdQueueLocked = false
 	atomic.AddInt32(&cmdCount, -int32(this.cmdQueue.Len()))
 	this.cmdQueue = list.New()
 }

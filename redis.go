@@ -8,8 +8,6 @@ import (
 	"github.com/go-redis/redis"
 	"github.com/sniperHW/kendynet/util"
 	"sync/atomic"
-	//"sync"
-	//"sync/atomic"
 )
 
 var (
@@ -181,17 +179,6 @@ func (this *redisPipeliner) appendSet(ctx *processContext) interface{} {
 		this.script.LoadSetSha(len(ctx.fields), s)
 		return this.pipeLiner.Eval(s, this.keys, this.args...)
 	}
-	/*c := 3
-	str := strGet()
-	str.append(strSetBeg)
-	for _, v := range ctx.fields {
-		this.args = append(this.args, v.GetName(), v.GetValue())
-		str.append(ARGV[c]).append(ARGV[c+1])
-		c += 2
-	}
-	str.append(strSetEnd)
-	ret := this.pipeLiner.Eval(str.toString(), this.keys, this.args...)
-	return ret, str*/
 }
 
 func (this *redisPipeliner) readGetResult(rcmd *redisCmd) {
@@ -410,7 +397,7 @@ func RedisInit() bool {
 		Password: config.Redis.RedisPassword,
 	})
 	if nil != cli {
-		redisProcessQueue = util.NewBlockQueueWithName(fmt.Sprintf("redis"), conf.DefConfig.RedisEventQueueSize)
+		redisProcessQueue = util.NewBlockQueueWithName(fmt.Sprintf("redis"), conf.DefConfig.RedisQueueSize)
 		for i := 0; i < conf.DefConfig.RedisProcessPoolSize; i++ {
 			go redisRoutine(redisProcessQueue)
 		}

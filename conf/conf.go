@@ -17,23 +17,20 @@ func InitConfig(path string) error {
 }
 
 type Config struct {
-	CacheGroupSize          int
-	MaxCachePerGroupSize    int
-	RedisProcessPoolSize    int
-	SqlLoadPoolSize         int
-	SqlUpdatePoolSize       int
-	RedisPipelineSize       int
-	SqlLoadPipeLineSize     int
-	SqlUpdateEventQueueSize int
-	SqlLoadEventQueueSize   int
-	RedisEventQueueSize     int
-	WriteBackEventQueueSize int
-	WriteBackDelay          int64
-	StrInitCap              int
-	ServiceHost             string
-	ServicePort             int
-	BackDir                 string
-	BackFile                string
+	CacheGroupSize       int
+	MaxCachePerGroupSize int
+	RedisProcessPoolSize int
+	RedisPipelineSize    int
+	SqlLoadPipeLineSize  int
+	SqlUpdateQueueSize   int
+	SqlLoadQueueSize     int
+	RedisQueueSize       int
+	StrInitCap           int
+	ServiceHost          string
+	ServicePort          int
+	BackDir              string
+	BackFile             string
+	ReplyBusyOnQueueFull bool
 
 	Redis struct {
 		RedisHost     string
