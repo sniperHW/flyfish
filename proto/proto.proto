@@ -4,7 +4,7 @@ package proto;
 
 
 message loginReq {
-  
+  optional bool compress = 1; //客户端是否支持压缩
 }
 
 message loginResp {
