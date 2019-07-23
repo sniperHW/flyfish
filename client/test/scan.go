@@ -4,8 +4,8 @@ import (
 	kclient "flyfish/client"
 	"flyfish/errcode"
 	"fmt"
-
 	"github.com/sniperHW/kendynet/golog"
+	"os"
 )
 
 var c int32 = 0
@@ -21,6 +21,7 @@ func scanCb(scaner *kclient.Scaner, ret *kclient.MutiResult) {
 
 		if c > 100 {
 			scaner.Close()
+			fmt.Println("scan 100 rows")
 			return
 		}
 
@@ -36,9 +37,19 @@ func scanCb(scaner *kclient.Scaner, ret *kclient.MutiResult) {
 
 func main() {
 
+	if len(os.Args) < 2 {
+		fmt.Println("missing ip:port")
+		return
+	}
+
 	kclient.InitLogger(golog.New("flyfish client", golog.NewOutputLogger("log", "flyfish client", 1024*1024*50)))
 
-	services := []string{"127.0.0.1:10012"}
+	services := []string{}
+
+	for i := 1; i < len(os.Args); i++ {
+		services = append(services, os.Args[i])
+	}
+
 	c := kclient.OpenClient(services) //eventQueue)
 
 	scaner := c.Scaner("users1", "age")
