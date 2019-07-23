@@ -12,3 +12,10 @@ func StringHash(s string) int {
 
 	return int(hash)
 }
+
+func Must(i interface{}, e error) interface{} {
+	if e != nil {
+		panic(e)
+	}
+	return i
+}

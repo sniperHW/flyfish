@@ -11,15 +11,8 @@ import (
 	"syscall"
 )
 
-func Must(i interface{}, e error) interface{} {
-	if e != nil {
-		panic(e)
-	}
-	return i
-}
-
 func main() {
-	Must(nil, conf.InitConfig(os.Args[1]))
+	flyfish.Must(nil, conf.InitConfig(os.Args[1]))
 	config := conf.DefConfig
 
 	flyfish.InitLogger()
