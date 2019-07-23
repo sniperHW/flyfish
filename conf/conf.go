@@ -31,6 +31,7 @@ type Config struct {
 	BackDir              string
 	BackFile             string
 	ReplyBusyOnQueueFull bool
+	Compress             bool
 
 	Redis struct {
 		RedisHost     string

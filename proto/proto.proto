@@ -1,6 +1,17 @@
 syntax = "proto2";
 package proto;
 
+
+
+message loginReq {
+  
+}
+
+message loginResp {
+  optional bool ok = 1;
+  optional bool compress = 2;
+}
+
 enum ValueType {
   invaild  = 0;
   nil      = 1;

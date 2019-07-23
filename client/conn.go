@@ -1,17 +1,18 @@
 package client
 
 import (
+	"encoding/binary"
 	"flyfish/codec"
 	"flyfish/errcode"
 	protocol "flyfish/proto"
-	"sync/atomic"
-	"time"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/event"
 	connector "github.com/sniperHW/kendynet/socket/connector/tcp"
 	"github.com/sniperHW/kendynet/util"
+	"net"
+	"sync/atomic"
+	"time"
 )
 
 type Conn struct {
@@ -133,14 +134,78 @@ func (this *Conn) removeContext(seqno int64) *cmdContext {
 	}
 }
 
+func sendLoginReq(session kendynet.StreamSession, loginReq *protocol.LoginReq) bool {
+	conn := session.GetUnderConn().(*net.TCPConn)
+	buffer := kendynet.NewByteBuffer(64)
+	data, _ := proto.Marshal(loginReq)
+	buffer.AppendUint16(uint16(len(data)))
+	buffer.AppendBytes(data)
+
+	conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
+	_, err := conn.Write(buffer.Bytes())
+	conn.SetWriteDeadline(time.Time{})
+	return nil == err
+}
+
+func recvLoginResp(session kendynet.StreamSession) (*protocol.LoginResp, error) {
+	conn := session.GetUnderConn().(*net.TCPConn)
+	buffer := make([]byte, 1024)
+	w := 0
+	pbsize := 0
+	for {
+		conn.SetReadDeadline(time.Now().Add(time.Second * 5))
+		n, err := conn.Read(buffer[w:])
+		conn.SetReadDeadline(time.Time{})
+
+		if nil != err {
+			return nil, err
+		}
+
+		w = w + n
+
+		if w >= 2 {
+			pbsize = int(binary.BigEndian.Uint16(buffer[:2]))
+		}
+
+		if w >= pbsize+2 {
+			loginResp := &protocol.LoginResp{}
+			if err = proto.Unmarshal(buffer[2:w], loginResp); err != nil {
+				return nil, err
+			} else {
+				return loginResp, nil
+			}
+		}
+	}
+}
+
 func (this *Conn) onConnected(session kendynet.StreamSession) {
+	loginReq := &protocol.LoginReq{}
+	if !sendLoginReq(session, loginReq) {
+		session.Close("login failed", 0)
+		this.eventQueue.Post(func() {
+			this.dialing = false
+			this.dial()
+		})
+		return
+	}
+
+	loginResp, err := recvLoginResp(session)
+	if nil != err || !loginResp.GetOk() {
+		session.Close("login failed", 0)
+		this.eventQueue.Post(func() {
+			this.dialing = false
+			this.dial()
+		})
+		return
+	}
+
 	this.eventQueue.Post(func() {
 		this.dialing = false
 		this.session = session
 		this.nextPing = time.Now().Add(protocol.PingTime)
 		//session.SetRecvTimeout(protocol.PingTime * 2)
-		this.session.SetReceiver(codec.NewReceiver())
-		this.session.SetEncoder(codec.NewEncoder())
+		this.session.SetReceiver(codec.NewReceiver(loginResp.GetCompress()))
+		this.session.SetEncoder(codec.NewEncoder(loginResp.GetCompress()))
 		this.session.SetCloseCallBack(func(sess kendynet.StreamSession, reason string) {
 			if atomic.LoadInt32(&this.closed) == 0 {
 				this.onDisconnected()

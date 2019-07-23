@@ -1,18 +1,18 @@
-CacheGroupSize          = 10                   //cache分组数量，每一个cache组单独管理，以降低处理冲突
+CacheGroupSize          = 10                   #cache分组数量，每一个cache组单独管理，以降低处理冲突
 
-MaxCachePerGroupSize    = 500000               //每组最大key数量，超过数量将会触发key剔除
+MaxCachePerGroupSize    = 500000               #每组最大key数量，超过数量将会触发key剔除
 
-RedisProcessPoolSize    = 5                    //redis处理routine的数量
+RedisProcessPoolSize    = 5                    #redis处理routine的数量
 
-RedisPipelineSize       = 50                   //redis请求管道线大小
+RedisPipelineSize       = 50                   #redis请求管道线大小
 
-SqlLoadPipeLineSize     = 200                  //sql加载管道线大小
+SqlLoadPipeLineSize     = 200                  #sql加载管道线大小
 
-SqlUpdateQueueSize      = 50000                //sql回写请求队列大小，此队列每CacheGroup一个
+SqlUpdateQueueSize      = 50000                #sql回写请求队列大小，此队列每CacheGroup一个
 
-SqlLoadQueueSize        = 10000                //sql加载请求队列大小，此队列每CacheGroup一个
+SqlLoadQueueSize        = 10000                #sql加载请求队列大小，此队列每CacheGroup一个
 
-RedisQueueSize          = 100000               //redis请求队列大小，整个服务一个队列供所有redis routine共享
+RedisQueueSize          = 100000               #redis请求队列大小，整个服务一个队列供所有redis routine共享
 
 StrInitCap              = 1048576 # 1mb
 
@@ -20,7 +20,9 @@ ServiceHost             = "127.0.0.1"
 
 ServicePort             = 10012
 
-ReplyBusyOnQueueFull    = false                //当处理队列满时是否用busy响应，如果填false,直接丢弃请求，让客户端超时 
+ReplyBusyOnQueueFull    = false                #当处理队列满时是否用busy响应，如果填false,直接丢弃请求，让客户端超时 
+
+Compress                = false                #是否开启通信压缩
 
 
 [DBConfig]

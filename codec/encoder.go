@@ -5,25 +5,32 @@ import (
 	"flyfish/conf"
 	_ "flyfish/proto"
 	"fmt"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
 )
 
 const (
-	sizeLen = 4
-	sizeCmd = 2
+	sizeLen  = 4
+	sizeFlag = 1
+	sizeCmd  = 2
 )
 
 type Encoder struct {
+	compressor CompressorI
 }
 
-func NewEncoder() *Encoder {
-	return &Encoder{}
+func NewEncoder(compress bool) *Encoder {
+	e := &Encoder{}
+	if compress {
+		e.compressor = &ZipCompressor{}
+	}
+
+	return e
 }
 
 type outMessage struct {
-	msg proto.Message
+	compressor CompressorI
+	msg        proto.Message
 }
 
 /*
@@ -36,11 +43,18 @@ func (this *outMessage) Bytes() []byte {
 	var err error
 	var payloadLen int
 	var totalLen int
+	var flag byte
 	if pbbytes, cmd, err = pb.Marshal(this.msg); err != nil {
 		kendynet.Errorln("outMessage encode err:", err)
 		return nil
 	}
-	payloadLen = sizeCmd + len(pbbytes)
+
+	if this.compressor != nil && len(pbbytes) >= 1024 {
+		pbbytes, _ = this.compressor.Compress(pbbytes)
+		flag = byte(1)
+	}
+
+	payloadLen = sizeFlag + sizeCmd + len(pbbytes)
 	totalLen = sizeLen + payloadLen
 	if uint64(totalLen) > conf.MaxPacketSize {
 		kendynet.Errorln("packet too large totalLen", totalLen)
@@ -50,6 +64,8 @@ func (this *outMessage) Bytes() []byte {
 	buff := kendynet.NewByteBuffer(totalLen)
 	//写payload大小
 	buff.AppendUint32(uint32(payloadLen))
+	//写flag
+	buff.AppendByte(flag)
 	//写cmd
 	buff.AppendUint16(uint16(cmd))
 	//写数据
@@ -61,7 +77,8 @@ func (this *Encoder) EnCode(o interface{}) (kendynet.Message, error) {
 	switch o.(type) {
 	case proto.Message:
 		return &outMessage{
-			msg: o.(proto.Message),
+			msg:        o.(proto.Message),
+			compressor: this.compressor,
 		}, nil
 		break
 	default:

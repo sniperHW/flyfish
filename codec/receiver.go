@@ -11,18 +11,22 @@ import (
 )
 
 const (
-	minSize uint64 = sizeLen + sizeCmd
+	minSize uint64 = sizeLen + sizeCmd + sizeFlag
 )
 
 type Receiver struct {
-	buffer []byte
-	w      uint64
-	r      uint64
+	buffer       []byte
+	w            uint64
+	r            uint64
+	unCompressor UnCompressorI
 }
 
-func NewReceiver() *Receiver {
+func NewReceiver(compress bool) *Receiver {
 	receiver := &Receiver{}
 	receiver.buffer = make([]byte, conf.MaxPacketSize*2)
+	if compress {
+		receiver.unCompressor = &ZipUnCompressor{}
+	}
 	return receiver
 }
 
@@ -30,14 +34,13 @@ func (this *Receiver) unPack() (ret interface{}, err error) {
 	unpackSize := uint64(this.w - this.r)
 	if unpackSize >= minSize {
 
-		//fmt.Println("unPack")
-
 		var payload uint32
 		var cmd uint16
 		var err error
 		var buff []byte
 		var msg proto.Message
 		var totalSize uint64
+		var flag byte
 
 		for {
 
@@ -59,14 +62,31 @@ func (this *Receiver) unPack() (ret interface{}, err error) {
 			totalSize = uint64(payload + sizeLen)
 
 			if totalSize <= unpackSize {
+
+				if flag, err = reader.GetByte(); err != nil {
+					break
+				}
+
 				if cmd, err = reader.GetUint16(); err != nil {
 					break
 				}
 				//普通消息
-				size := payload - (sizeCmd)
+				size := payload - sizeCmd - sizeFlag
 				if buff, err = reader.GetBytes(uint64(size)); err != nil {
 					break
 				}
+
+				if flag == byte(1) {
+					if nil == this.unCompressor {
+						err = fmt.Errorf("invaild compress packet")
+						break
+					}
+
+					if buff, err = this.unCompressor.UnCompress(buff); err != nil {
+						break
+					}
+				}
+
 				if msg, err = pb.Unmarshal(uint32(cmd), buff); err != nil {
 					break
 				}
