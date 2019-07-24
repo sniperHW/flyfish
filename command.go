@@ -146,7 +146,8 @@ func processCmd(cmd *command) {
 		return
 	}
 
-	cmd.ckey = getCacheKey(cmd.table, cmd.uniKey)
-	cmd.ckey.processClientCmd(cmd)
+	cmd.ckey = getCacheKeyAndPushCmd(cmd.table, cmd.uniKey, cmd)
+
+	cmd.ckey.processClientCmd()
 
 }

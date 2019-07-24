@@ -29,7 +29,7 @@ func Set(c *kclient.Client) {
 	//key := fmt.Sprintf("%s:%d","huangwei",id%100000)//rand.Int()%1000000)
 	//key := "huangwei:44745"
 	id++
-	set := c.Set("users1", key, fields)
+	set := c.SetSync("users1", key, fields)
 
 	beg := time.Now()
 

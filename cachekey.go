@@ -3,7 +3,6 @@ package flyfish
 import (
 	"container/list"
 	"flyfish/proto"
-	"github.com/sniperHW/kendynet/util"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -46,7 +45,6 @@ func recordPut(r *record) {
 
 type cacheKey struct {
 	uniKey         string
-	idx            uint32
 	version        int64
 	status         int
 	cmdQueueLocked bool //操作是否被锁定
@@ -54,21 +52,10 @@ type cacheKey struct {
 	cmdQueue       *list.List
 	meta           *table_meta
 	writeBacked    bool //正在回写
-	lastAccess     int64
 	unit           *processUnit
 	r              *record
-}
-
-func (this *cacheKey) Less(o util.HeapElement) bool {
-	return this.lastAccess < o.(*cacheKey).lastAccess
-}
-
-func (this *cacheKey) GetIndex() uint32 {
-	return this.idx
-}
-
-func (this *cacheKey) SetIndex(idx uint32) {
-	this.idx = idx
+	nnext          *cacheKey
+	pprev          *cacheKey
 }
 
 func (this *cacheKey) lockCmdQueue() {
@@ -81,10 +68,22 @@ func (this *cacheKey) unlockCmdQueue() {
 	this.cmdQueueLocked = false
 }
 
-func (this *cacheKey) isCmdQueueLocked() bool {
+func (this *cacheKey) kickAble() (bool, int) {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
-	return this.cmdQueueLocked
+	if this.cmdQueueLocked {
+		return false, this.status
+	}
+
+	if this.writeBacked {
+		return false, this.status
+	}
+
+	if this.cmdQueue.Len() != 0 {
+		return false, this.status
+	}
+
+	return true, this.status
 }
 
 func (this *cacheKey) setMissing() {
@@ -138,9 +137,10 @@ func (this *cacheKey) isWriteBack() bool {
 	return this.writeBacked
 }
 
-func (this *cacheKey) updateLRU() {
-	this.lastAccess = atomic.AddInt64(&this.unit.tick, 1)
-	this.unit.minheap.Insert(this)
+func (this *cacheKey) pushCmd(cmd *command) {
+	defer this.mtx.Unlock()
+	this.mtx.Lock()
+	this.cmdQueue.PushBack(cmd)
 }
 
 func newCacheKey(unit *processUnit, table string, uniKey string) *cacheKey {

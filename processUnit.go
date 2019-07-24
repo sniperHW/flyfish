@@ -1,8 +1,6 @@
 package flyfish
 
 import (
-	//"container/list"
-	//"database/sql/driver"
 	"flyfish/conf"
 	"flyfish/errcode"
 	"flyfish/proto"
@@ -25,11 +23,11 @@ var sqlUpdateWg *sync.WaitGroup
 
 type processUnit struct {
 	cacheKeys   map[string]*cacheKey
-	minheap     *util.MinHeap
 	mtx         sync.Mutex
-	tick        int64 //每次访问+1假设每秒访问100万次，需要运行584942年才会回绕
 	sqlLoader_  *sqlLoader
 	sqlUpdater_ *sqlUpdater
+	lruHead     cacheKey
+	lruTail     cacheKey
 }
 
 func (this *processUnit) updateQueueFull() bool {
@@ -211,13 +209,11 @@ func (this *processUnit) pushSqlWriteBackReq(ctx *processContext) bool {
 	return true
 }
 
-func (this *cacheKey) process_(fromClient bool, cmd ...*command) {
+func (this *cacheKey) process_(fromClient bool) {
 
 	this.mtx.Lock()
 
-	if len(cmd) > 0 {
-		this.cmdQueue.PushBack(cmd[0])
-	} else {
+	if !fromClient {
 		this.unlockCmdQueue()
 	}
 
@@ -349,52 +345,83 @@ func getUnitByUnikey(uniKey string) *processUnit {
 	return processUnits[StringHash(uniKey)%conf.DefConfig.CacheGroupSize]
 }
 
-func getCacheKey(table string, uniKey string) *cacheKey {
+func getCacheKeyAndPushCmd(table string, uniKey string, cmd *command) *cacheKey {
 	unit := getUnitByUnikey(uniKey)
 	defer unit.mtx.Unlock()
 	unit.mtx.Lock()
 	k, ok := unit.cacheKeys[uniKey]
 	if ok {
-		k.updateLRU()
+		k.pushCmd(cmd)
+		unit.updateLRU(k)
 	} else {
 		k = newCacheKey(unit, table, uniKey)
 		if nil != k {
-			k.updateLRU()
+			k.pushCmd(cmd)
+			unit.updateLRU(k)
 			unit.cacheKeys[uniKey] = k
 		}
 	}
+	unit.kickCacheKey()
 	return k
 }
 
-func (this *processUnit) kickCacheKey() {
-	this.mtx.Lock()
+func (this *processUnit) updateLRU(ckey *cacheKey) {
 
-	for len(this.cacheKeys) > conf.DefConfig.MaxCachePerGroupSize {
-		min := this.minheap.Min()
-		if nil == min {
-			break
-		}
-		c := min.(*cacheKey)
-		if c.isCmdQueueLocked() {
-			break
-		}
-		this.minheap.PopMin()
-		delete(this.cacheKeys, c.uniKey)
-
-		cmd := &command{
-			uniKey: c.uniKey,
-			ckey:   c,
-		}
-
-		ctx := &processContext{
-			commands:  []*command{cmd},
-			redisFlag: redis_kick,
-		}
-
-		this.pushRedisReq(ctx)
+	if ckey.nnext != nil || ckey.pprev != nil {
+		//先移除
+		ckey.pprev.nnext = ckey.nnext
+		ckey.nnext.pprev = ckey.pprev
+		ckey.nnext = nil
+		ckey.pprev = nil
 	}
 
-	this.mtx.Unlock()
+	//插入头部
+	ckey.nnext = this.lruHead.nnext
+	ckey.nnext.pprev = ckey
+	ckey.pprev = &this.lruHead
+	this.lruHead.nnext = ckey
+
+}
+
+func (this *processUnit) removeLRU(ckey *cacheKey) {
+	ckey.pprev.nnext = ckey.nnext
+	ckey.nnext.pprev = ckey.pprev
+	ckey.nnext = nil
+	ckey.pprev = nil
+}
+
+func (this *processUnit) kickCacheKey() {
+
+	//defer this.mtx.Unlock()
+	//this.mtx.Lock()
+
+	for len(this.cacheKeys) > conf.DefConfig.MaxCachePerGroupSize && this.lruHead.nnext != &this.lruTail {
+
+		c := this.lruTail.pprev
+
+		kickAble, status := c.kickAble()
+
+		if !kickAble {
+			break
+		}
+
+		this.removeLRU(c)
+		delete(this.cacheKeys, c.uniKey)
+
+		if status == cache_ok {
+			cmd := &command{
+				uniKey: c.uniKey,
+				ckey:   c,
+			}
+
+			ctx := &processContext{
+				commands:  []*command{cmd},
+				redisFlag: redis_kick,
+			}
+
+			this.pushRedisReq(ctx)
+		}
+	}
 }
 
 func InitProcessUnit() bool {
@@ -428,22 +455,25 @@ func InitProcessUnit() bool {
 
 		unit := &processUnit{
 			cacheKeys:   map[string]*cacheKey{},
-			minheap:     util.NewMinHeap(65535),
 			sqlLoader_:  newSqlLoader(loadDB, lname),
 			sqlUpdater_: newSqlUpdater(writeBackDB, wname, sqlUpdateWg),
 		}
+
+		unit.lruHead.nnext = &unit.lruTail
+		unit.lruTail.pprev = &unit.lruHead
+
 		processUnits[i] = unit
 
 		go unit.sqlLoader_.run()
 		go unit.sqlUpdater_.run()
 
-		timer.Repeat(time.Second, nil, func(t *timer.Timer) {
+		/*timer.Repeat(time.Second, nil, func(t *timer.Timer) {
 			if isStop() {
 				t.Cancel()
 			} else {
 				unit.kickCacheKey()
 			}
-		})
+		})*/
 
 		timer.Repeat(time.Second*60, nil, func(t *timer.Timer) {
 			if isStop() || util.ErrQueueClosed == unit.sqlLoader_.queue.AddNoWait(&processContext{ping: true}) {

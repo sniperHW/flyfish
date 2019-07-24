@@ -285,8 +285,8 @@ func (this *cacheKey) processDel(ctx *processContext, cmd *command) bool {
 	}
 }
 
-func (this *cacheKey) processClientCmd(cmd ...*command) {
-	this.process_(true, cmd...)
+func (this *cacheKey) processClientCmd() {
+	this.process_(true)
 }
 
 func (this *cacheKey) processQueueCmd() {
