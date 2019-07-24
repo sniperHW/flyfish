@@ -125,7 +125,7 @@ func scan(session kendynet.StreamSession, msg *codec.Message) {
 
 		var err error
 
-		dbConfig := conf.DefConfig.DBConfig
+		dbConfig := conf.GetConfig().DBConfig
 
 		s.db, err = sqlOpen(dbConfig.SqlType, dbConfig.ConfDbHost, dbConfig.ConfDbPort, dbConfig.ConfDataBase, dbConfig.ConfDbUser, dbConfig.ConfDbPassword)
 

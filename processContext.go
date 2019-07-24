@@ -66,7 +66,7 @@ func (this *processContext) getCacheKey() *cacheKey {
 
 func (this *processContext) getSetfields() *map[string]interface{} {
 	ckey := this.getCacheKey()
-	meta := ckey.meta
+	meta := ckey.getMeta()
 	ret := map[string]interface{}{}
 	for _, v := range meta.fieldMetas {
 		vv, ok := this.fields[v.name]

@@ -56,4 +56,10 @@ func init() {
 	pb.Register(&protocol.ScanReq{}, 21)
 	pb.Register(&protocol.ScanResp{}, 22)
 
+	pb.Register(&protocol.ReloadTableConfReq{}, 23)
+	pb.Register(&protocol.ReloadTableConfResp{}, 24)
+
+	pb.Register(&protocol.ReloadConfigReq{}, 25)
+	pb.Register(&protocol.ReloadConfigResp{}, 26)
+
 }

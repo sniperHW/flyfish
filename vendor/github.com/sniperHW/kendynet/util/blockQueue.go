@@ -151,10 +151,33 @@ func (self *BlockQueue) Len() int {
 	return len(self.list)
 }
 
+func (self *BlockQueue) Full() bool {
+	self.listGuard.Lock()
+	defer self.listGuard.Unlock()
+	return len(self.list) >= self.fullSize
+}
+
 func (self *BlockQueue) Clear() {
 	self.listGuard.Lock()
 	defer self.listGuard.Unlock()
 	self.list = self.list[0:0]
+}
+
+func (self *BlockQueue) SetFullSize(newSize int) {
+	self.listGuard.Lock()
+	if newSize > 0 {
+		needSignal := false
+		self.listGuard.Lock()
+		oldSize := self.fullSize
+		self.fullSize = newSize
+		if oldSize < newSize && self.fullWaited > 0 {
+			needSignal = true
+		}
+		self.listGuard.Unlock()
+		if needSignal {
+			self.fullCond.Broadcast()
+		}
+	}
 }
 
 func NewBlockQueueWithName(name string, fullSize ...int) *BlockQueue {

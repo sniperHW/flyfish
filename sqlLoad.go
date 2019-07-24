@@ -30,10 +30,11 @@ type sqlLoader struct {
 }
 
 func newSqlLoader(db *sqlx.DB, name string) *sqlLoader {
+	config := conf.GetConfig()
 	return &sqlLoader{
 		sqlGets: map[string]*sqlGet{},
-		max:     conf.DefConfig.SqlLoadPipeLineSize,
-		queue:   util.NewBlockQueueWithName(name, conf.DefConfig.SqlLoadQueueSize),
+		max:     config.SqlLoadPipeLineSize,
+		queue:   util.NewBlockQueueWithName(name, config.SqlLoadQueueSize),
 		db:      db,
 	}
 }
@@ -65,7 +66,7 @@ func (this *sqlLoader) append(v interface{}) {
 				table:  table,
 				sqlStr: strGet(),
 				ctxs:   map[string]*processContext{},
-				meta:   getMetaByTable(table),
+				meta:   ctx.getCacheKey().getMeta(),
 			}
 			this.sqlGets[table] = s
 		}

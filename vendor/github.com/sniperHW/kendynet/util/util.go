@@ -32,6 +32,23 @@ func CallStack(maxStack int) string {
 	return str
 }
 
+func RecoverAndCall(fn func(), logger ...golog.LoggerI) {
+	if r := recover(); r != nil {
+		var logger_ golog.LoggerI
+		if len(logger) > 0 {
+			logger_ = logger[0]
+		}
+		if nil != logger_ {
+			buf := make([]byte, 65535)
+			l := runtime.Stack(buf, false)
+			logger_.Errorf(FormatFileLine("%s\n", fmt.Sprintf("%v: %s", r, buf[:l])))
+		}
+		if fn != nil {
+			fn()
+		}
+	}
+}
+
 func Recover(logger ...golog.LoggerI) {
 	if r := recover(); r != nil {
 		var logger_ golog.LoggerI

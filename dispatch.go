@@ -97,4 +97,6 @@ func init() {
 	register(&proto.IncrByReq{}, incrBy)
 	register(&proto.DecrByReq{}, decrBy)
 	register(&proto.ScanReq{}, scan)
+	register(&proto.ReloadTableConfReq{}, reloadTableConf)
+	register(&proto.ReloadConfigReq{}, reloadConf)
 }

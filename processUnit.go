@@ -11,11 +11,14 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 )
 
 /*
  *    每个processUnit负责处理其关联的key
  */
+
+var CacheGroupSize int
 
 var processUnits []*processUnit
 
@@ -31,7 +34,7 @@ type processUnit struct {
 }
 
 func (this *processUnit) updateQueueFull() bool {
-	return this.sqlUpdater_.queue.Len() >= conf.DefConfig.SqlUpdateQueueSize
+	return this.sqlUpdater_.queue.Full()
 }
 
 func (this *processUnit) pushRedisReq(ctx *processContext, fullReturn ...bool) bool {
@@ -164,7 +167,7 @@ func (this *processUnit) pushSqlWriteBackReq(ctx *processContext) bool {
 				for k, v := range ctx.fields {
 					wb.fields[k] = v
 				}
-				meta := wb.ckey.meta.fieldMetas
+				meta := wb.ckey.getMeta().fieldMetas
 				for k, v := range meta {
 					if nil == wb.fields[k] {
 						//使用默认值填充
@@ -186,7 +189,7 @@ func (this *processUnit) pushSqlWriteBackReq(ctx *processContext) bool {
 				for k, v := range ctx.fields {
 					wb.fields[k] = v
 				}
-				meta := wb.ckey.meta.fieldMetas
+				meta := wb.ckey.getMeta().fieldMetas
 				for k, v := range meta {
 					if nil == wb.fields[k] {
 						//使用默认值填充
@@ -304,7 +307,7 @@ func (this *cacheKey) process_(fromClient bool) {
 	if fromClient && causeWriteBackCmd(lastCmdType) {
 		if this.unit.updateQueueFull() {
 			this.mtx.Unlock()
-			if conf.DefConfig.ReplyBusyOnQueueFull {
+			if conf.GetConfig().ReplyBusyOnQueueFull {
 				ctx.reply(errcode.ERR_BUSY, nil, -1)
 			} else {
 				atomic.AddInt32(&cmdCount, -1)
@@ -333,7 +336,7 @@ func (this *cacheKey) process_(fromClient bool) {
 		this.mtx.Lock()
 		this.unlockCmdQueue()
 		this.mtx.Unlock()
-		if conf.DefConfig.ReplyBusyOnQueueFull {
+		if conf.GetConfig().ReplyBusyOnQueueFull {
 			ctx.reply(errcode.ERR_BUSY, nil, -1)
 		} else {
 			atomic.AddInt32(&cmdCount, -1)
@@ -342,7 +345,7 @@ func (this *cacheKey) process_(fromClient bool) {
 }
 
 func getUnitByUnikey(uniKey string) *processUnit {
-	return processUnits[StringHash(uniKey)%conf.DefConfig.CacheGroupSize]
+	return processUnits[StringHash(uniKey)%CacheGroupSize]
 }
 
 func getCacheKeyAndPushCmd(table string, uniKey string, cmd *command) *cacheKey {
@@ -351,6 +354,14 @@ func getCacheKeyAndPushCmd(table string, uniKey string, cmd *command) *cacheKey 
 	unit.mtx.Lock()
 	k, ok := unit.cacheKeys[uniKey]
 	if ok {
+		if !checkMetaVersion(k.meta.meta_version) {
+			newMeta := getMetaByTable(table)
+			if newMeta != nil {
+				atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&k.meta)), unsafe.Pointer(newMeta))
+			} else {
+				//log error
+			}
+		}
 		k.pushCmd(cmd)
 		unit.updateLRU(k)
 	} else {
@@ -395,7 +406,9 @@ func (this *processUnit) kickCacheKey() {
 	//defer this.mtx.Unlock()
 	//this.mtx.Lock()
 
-	for len(this.cacheKeys) > conf.DefConfig.MaxCachePerGroupSize && this.lruHead.nnext != &this.lruTail {
+	MaxCachePerGroupSize := conf.GetConfig().MaxCachePerGroupSize
+
+	for len(this.cacheKeys) > MaxCachePerGroupSize && this.lruHead.nnext != &this.lruTail {
 
 		c := this.lruTail.pprev
 
@@ -430,8 +443,12 @@ func InitProcessUnit() bool {
 
 	sqlUpdateWg = &sync.WaitGroup{}
 
-	processUnits = make([]*processUnit, conf.DefConfig.CacheGroupSize)
-	for i := 0; i < conf.DefConfig.CacheGroupSize; i++ {
+	config := conf.GetConfig()
+
+	CacheGroupSize = config.CacheGroupSize
+
+	processUnits = make([]*processUnit, CacheGroupSize)
+	for i := 0; i < CacheGroupSize; i++ {
 
 		lname := fmt.Sprintf("sqlLoad:%d", i)
 		wname := fmt.Sprintf("sqlUpdater:%d", i)
@@ -439,7 +456,7 @@ func InitProcessUnit() bool {
 		var loadDB *sqlx.DB
 		var writeBackDB *sqlx.DB
 		var err error
-		dbConfig := conf.DefConfig.DBConfig
+		dbConfig := config.DBConfig
 
 		loadDB, err = sqlOpen(dbConfig.SqlType, dbConfig.DbHost, dbConfig.DbPort, dbConfig.DbDataBase, dbConfig.DbUser, dbConfig.DbPassword)
 
@@ -493,8 +510,21 @@ func InitProcessUnit() bool {
 }
 
 func StopProcessUnit() {
-	for i := 0; i < conf.DefConfig.CacheGroupSize; i++ {
+	config := conf.GetConfig()
+	for i := 0; i < config.CacheGroupSize; i++ {
 		processUnits[i].sqlUpdater_.queue.Close()
 	}
 	sqlUpdateWg.Wait()
+}
+
+func updateSqlUpdateQueueSize(SqlUpdateQueueSize int) {
+	for _, v := range processUnits {
+		v.sqlUpdater_.queue.SetFullSize(SqlUpdateQueueSize)
+	}
+}
+
+func updateSqlLoadQueueSize(SqlLoadQueueSize int) {
+	for _, v := range processUnits {
+		v.sqlUpdater_.queue.SetFullSize(SqlLoadQueueSize)
+	}
 }

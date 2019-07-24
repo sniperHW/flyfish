@@ -6,10 +6,13 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"unsafe"
 )
 
 var (
-	table_metas map[string]*table_meta
+	meta_version  int64
+	g_table_metas *map[string]*table_meta
 )
 
 func convert_string(in interface{}) interface{} {
@@ -89,6 +92,7 @@ type table_meta struct {
 	insertPrefix     string
 	selectPrefix     string
 	insertFieldOrder []string
+	meta_version     int64
 }
 
 //获取字段默认值
@@ -175,7 +179,8 @@ func (this *table_meta) checkCompareAndSet(newV *proto.Field, oldV *proto.Field)
 
 //根据表名获取表格元数据
 func getMetaByTable(table string) *table_meta {
-	meta, ok := table_metas[table]
+	p := (*map[string]*table_meta)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&g_table_metas))))
+	meta, ok := (*p)[table]
 	if ok {
 		return meta
 	} else {
@@ -183,8 +188,12 @@ func getMetaByTable(table string) *table_meta {
 	}
 }
 
+func checkMetaVersion(version int64) bool {
+	return version == atomic.LoadInt64(&meta_version)
+}
+
 //tablename@field1:type:defaultValue,field2:type:defaultValue,field3:type:defaultValue...
-func InitMeta(def []string) bool {
+func LoadMeta(def []string) bool {
 
 	getType := func(str string) proto.ValueType {
 		if str == "int" {
@@ -279,7 +288,7 @@ func InitMeta(def []string) bool {
 
 	}
 
-	table_metas = map[string]*table_meta{}
+	table_metas := map[string]*table_meta{}
 	for _, l := range def {
 		t1 := strings.Split(l, "@")
 
@@ -378,6 +387,11 @@ func InitMeta(def []string) bool {
 		t_meta.insertPrefix = fmt.Sprintf("INSERT INTO %s(__key__,__version__,%s) VALUES (", t_meta.table, strings.Join(t_meta.insertFieldOrder, ","))
 
 	}
+
+	atomic.AddInt64(&meta_version, 1)
+	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&g_table_metas)), unsafe.Pointer(&table_metas))
+
+	Infoln("load table meta ok,version:", meta_version)
 
 	return true
 

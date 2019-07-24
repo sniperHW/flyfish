@@ -108,6 +108,8 @@ func (this *tcpListener) Start() error {
 	return this.l.Serve(func(session kendynet.StreamSession) {
 		go func() {
 
+			config := conf.GetConfig()
+
 			loginReq, err := recvLoginReq(session)
 			if nil != err {
 				session.Close("login failed", 0)
@@ -121,7 +123,7 @@ func (this *tcpListener) Start() error {
 
 			loginResp := &protocol.LoginResp{
 				Ok:       proto.Bool(true),
-				Compress: proto.Bool(conf.DefConfig.Compress && loginReq.GetCompress()),
+				Compress: proto.Bool(config.Compress && loginReq.GetCompress()),
 			}
 
 			if !sendLoginResp(session, loginResp) {
@@ -132,8 +134,8 @@ func (this *tcpListener) Start() error {
 			session.SetRecvTimeout(protocol.PingTime * 2)
 
 			//只有配置了压缩开启同时客户端支持压缩才开启通信压缩
-			session.SetReceiver(codec.NewReceiver(conf.DefConfig.Compress && loginReq.GetCompress()))
-			session.SetEncoder(codec.NewEncoder(conf.DefConfig.Compress && loginReq.GetCompress()))
+			session.SetReceiver(codec.NewReceiver(config.Compress && loginReq.GetCompress()))
+			session.SetEncoder(codec.NewEncoder(config.Compress && loginReq.GetCompress()))
 
 			session.SetCloseCallBack(func(sess kendynet.StreamSession, reason string) {
 				onClose(sess, reason)

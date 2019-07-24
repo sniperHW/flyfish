@@ -28,7 +28,7 @@ func newSqlUpdater(db *sqlx.DB, name string, wg *sync.WaitGroup) *sqlUpdater {
 	return &sqlUpdater{
 		name:   name,
 		values: []interface{}{},
-		queue:  util.NewBlockQueueWithName(name, conf.DefConfig.SqlUpdateQueueSize),
+		queue:  util.NewBlockQueueWithName(name, conf.GetConfig().SqlUpdateQueueSize),
 		db:     db,
 		wg:     wg,
 	}
@@ -142,7 +142,7 @@ func (this *sqlUpdater) process(v interface{}) {
 			if wb.writeBackFlag == write_back_update {
 				err = this.doUpdate(wb)
 			} else if wb.writeBackFlag == write_back_insert {
-				err = this.doInsert(wb, wb.ckey.meta)
+				err = this.doInsert(wb, wb.ckey.getMeta())
 			} else if wb.writeBackFlag == write_back_delete {
 				err = this.doDelete(wb)
 			} else {

@@ -1,16 +1,19 @@
 package flyfish
 
 import (
+	codec "flyfish/codec"
 	"flyfish/conf"
+	"flyfish/proto"
 	"fmt"
-
+	pb "github.com/golang/protobuf/proto"
 	"github.com/jmoiron/sqlx"
+	"github.com/sniperHW/kendynet"
 )
 
-func InitTableConfig() bool {
+func LoadTableConfig() bool {
 	var db *sqlx.DB
 	var err error
-	dbConfig := conf.DefConfig.DBConfig
+	dbConfig := conf.GetConfig().DBConfig
 
 	db, err = sqlOpen(dbConfig.SqlType, dbConfig.ConfDbHost, dbConfig.ConfDbPort, dbConfig.ConfDataBase, dbConfig.ConfDbUser, dbConfig.ConfDbPassword)
 
@@ -43,11 +46,18 @@ func InitTableConfig() bool {
 			metas = append(metas, fmt.Sprintf("%s@%s", __table__, __conf__))
 		}
 
-		if !InitMeta(metas) {
+		if !LoadMeta(metas) {
 			Errorln("InitMeta failed")
 			return false
 		}
 	}
 
 	return true
+}
+
+func reloadTableConf(session kendynet.StreamSession, msg *codec.Message) {
+	ok := LoadTableConfig()
+	session.Send(&proto.ReloadTableConfResp{
+		Ok: pb.Bool(ok),
+	})
 }

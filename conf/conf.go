@@ -1,19 +1,32 @@
 package conf
 
-import "github.com/BurntSushi/toml"
+import (
+	"github.com/BurntSushi/toml"
+	"sync/atomic"
+	"unsafe"
+)
 
 const (
 	MaxPacketSize = 4 * 1024 * 1024 // 4mb
 )
 
 var (
-	DefConfig *Config
+	defConfig *Config
 )
 
-func InitConfig(path string) error {
-	DefConfig = &Config{}
-	_, err := toml.DecodeFile(path, DefConfig)
-	return err
+func LoadConfig(path string) error {
+	config := &Config{}
+	_, err := toml.DecodeFile(path, config)
+	if nil != err {
+		return err
+	} else {
+		atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&defConfig)), unsafe.Pointer(config))
+		return nil
+	}
+}
+
+func GetConfig() *Config {
+	return (*Config)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&defConfig))))
 }
 
 type Config struct {
@@ -25,7 +38,7 @@ type Config struct {
 	SqlUpdateQueueSize   int
 	SqlLoadQueueSize     int
 	RedisQueueSize       int
-	StrInitCap           int
+	//StrInitCap           int
 	ServiceHost          string
 	ServicePort          int
 	BackDir              string

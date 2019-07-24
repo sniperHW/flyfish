@@ -1,10 +1,11 @@
 package flyfish
 
 import (
-	"flyfish/conf"
 	"sync"
 	"unsafe"
 )
+
+const strInitCap = 1024 * 1024
 
 func isPow2(size int) bool {
 	return (size & (size - 1)) == 0
@@ -75,8 +76,8 @@ func (this *str) join(other []*str, sep string) *str {
 var strPool = sync.Pool{
 	New: func() interface{} {
 		return &str{
-			data: make([]byte, conf.DefConfig.StrInitCap),
-			cap:  conf.DefConfig.StrInitCap,
+			data: make([]byte, strInitCap),
+			cap:  strInitCap,
 			len:  0,
 		}
 	},

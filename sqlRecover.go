@@ -80,9 +80,11 @@ func marshalRecord(r *record) *kendynet.ByteBuffer {
 func backupRecord(r *record) {
 	fileMtx.Lock()
 	defer fileMtx.Unlock()
+
+	config := conf.GetConfig()
 	if nil == backupFile {
-		backFilePath = conf.DefConfig.BackDir + conf.DefConfig.BackFile
-		os.MkdirAll(conf.DefConfig.BackDir, os.ModePerm)
+		backFilePath = config.BackDir + config.BackFile
+		os.MkdirAll(config.BackDir, os.ModePerm)
 		f, err := os.OpenFile(backFilePath, os.O_RDWR, os.ModePerm)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -221,12 +223,13 @@ func doRecover(recoverUpdater *sqlUpdater) {
 func Recover() {
 
 	var db *sqlx.DB
-	dbConfig := conf.DefConfig.DBConfig
+	config := conf.GetConfig()
+	dbConfig := config.DBConfig
 	db, _ = sqlOpen(dbConfig.SqlType, dbConfig.DbHost, dbConfig.DbPort, dbConfig.DbDataBase, dbConfig.DbUser, dbConfig.DbPassword)
 
 	recoverUpdater := newSqlUpdater(db, "recover", nil)
 
-	backFilePath = conf.DefConfig.BackDir + conf.DefConfig.BackFile
+	backFilePath = config.BackDir + config.BackFile
 	f, err := os.OpenFile(backFilePath, os.O_RDWR, os.ModePerm)
 	if err != nil {
 		if os.IsNotExist(err) {

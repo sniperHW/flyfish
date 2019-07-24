@@ -286,7 +286,9 @@ func getUpdatePlaceHolder(c int) string {
 }
 
 func placeHolderInit() {
-	if conf.DefConfig.DBConfig.SqlType == "pgsql" {
+
+	dbConfig := conf.GetConfig().DBConfig
+	if dbConfig.SqlType == "pgsql" {
 		insertPlaceHolder = pgInsertPlaceHolder
 		updatePlaceHolder = pgUpdatePlaceHolder
 	} else {

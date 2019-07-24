@@ -376,7 +376,7 @@ func (this *redisPipeliner) exec() {
 }
 
 func redisRoutine(queue *util.BlockQueue) {
-	redisPipeliner_ := newRedisPipeliner(conf.DefConfig.RedisPipelineSize)
+	redisPipeliner_ := newRedisPipeliner(conf.GetConfig().RedisPipelineSize)
 	for {
 		closed, localList := queue.Get()
 		for _, v := range localList {
@@ -391,16 +391,20 @@ func redisRoutine(queue *util.BlockQueue) {
 }
 
 func RedisInit() bool {
-	config := conf.DefConfig
+	config := conf.GetConfig()
 	cli = redis.NewClient(&redis.Options{
 		Addr:     fmt.Sprintf("%s:%d", config.Redis.RedisHost, config.Redis.RedisPort),
 		Password: config.Redis.RedisPassword,
 	})
 	if nil != cli {
-		redisProcessQueue = util.NewBlockQueueWithName(fmt.Sprintf("redis"), conf.DefConfig.RedisQueueSize)
-		for i := 0; i < conf.DefConfig.RedisProcessPoolSize; i++ {
+		redisProcessQueue = util.NewBlockQueueWithName(fmt.Sprintf("redis"), config.RedisQueueSize)
+		for i := 0; i < config.RedisProcessPoolSize; i++ {
 			go redisRoutine(redisProcessQueue)
 		}
 	}
 	return cli != nil
+}
+
+func updateRedisQueueSize(RedisQueueSize int) {
+	redisProcessQueue.SetFullSize(RedisQueueSize)
 }

@@ -12,12 +12,12 @@ import (
 )
 
 func main() {
-	flyfish.Must(nil, conf.InitConfig(os.Args[1]))
-	config := conf.DefConfig
+	flyfish.Must(nil, conf.LoadConfig(os.Args[1]))
+	config := conf.GetConfig()
 
 	flyfish.InitLogger()
 
-	if !flyfish.InitTableConfig() {
+	if !flyfish.LoadTableConfig() {
 		fmt.Println("InitTableConfig failed")
 		return
 	}

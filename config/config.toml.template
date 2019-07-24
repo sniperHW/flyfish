@@ -1,28 +1,29 @@
 CacheGroupSize          = 10                   #cache分组数量，每一个cache组单独管理，以降低处理冲突
 
-MaxCachePerGroupSize    = 500000               #每组最大key数量，超过数量将会触发key剔除
+MaxCachePerGroupSize    = 500000               #每组最大key数量，超过数量将会触发key剔除 (可动态重加载)
 
 RedisProcessPoolSize    = 5                    #redis处理routine的数量
 
-RedisPipelineSize       = 50                   #redis请求管道线大小
+RedisPipelineSize       = 50                   #redis请求管道线大小 (可动态重加载)
 
-SqlLoadPipeLineSize     = 200                  #sql加载管道线大小
+SqlLoadPipeLineSize     = 200                  #sql加载管道线大小   (可动态重加载)
 
-SqlUpdateQueueSize      = 50000                #sql回写请求队列大小，此队列每CacheGroup一个
+SqlUpdateQueueSize      = 50000                #sql回写请求队列大小，此队列每CacheGroup一个 (可动态重加载)
 
-SqlLoadQueueSize        = 10000                #sql加载请求队列大小，此队列每CacheGroup一个
+SqlLoadQueueSize        = 10000                #sql加载请求队列大小，此队列每CacheGroup一个 (可动态重加载)
 
-RedisQueueSize          = 100000               #redis请求队列大小，整个服务一个队列供所有redis routine共享
-
-StrInitCap              = 1048576 # 1mb
+RedisQueueSize          = 100000               #redis请求队列大小，整个服务一个队列供所有redis routine共享 (可动态重加载)
 
 ServiceHost             = "127.0.0.1"
 
 ServicePort             = 10012
 
-ReplyBusyOnQueueFull    = false                #当处理队列满时是否用busy响应，如果填false,直接丢弃请求，让客户端超时 
+ReplyBusyOnQueueFull    = false                #当处理队列满时是否用busy响应，如果填false,直接丢弃请求，让客户端超时 (可动态重加载)
 
 Compress                = false                #是否开启通信压缩
+
+BackDir                 = "flyfish_recover"    (可动态重加载)
+BackFile                = "flyfish_recover"    (可动态重加载)
 
 
 [DBConfig]
@@ -34,11 +35,11 @@ DbUser			= "dbuser"
 DbPassword      = "123456"
 DbDataBase      = "wei"
 
-ConfDbHost      = "10.128.2.166"
-ConfDbPort      = 5432
-ConfDbUser      = "dbuser"
-ConfDbPassword  = "123456"
-ConfDataBase    = "wei"
+ConfDbHost      = "10.128.2.166"                (可动态重加载)
+ConfDbPort      = 5432                          (可动态重加载)
+ConfDbUser      = "dbuser"                      (可动态重加载)
+ConfDbPassword  = "123456"                      (可动态重加载) 
+ConfDataBase    = "wei"                         (可动态重加载)
 
 [Redis]
 RedisHost       = "127.0.0.1"
@@ -49,5 +50,5 @@ RedisPort       = 6379
 MaxLogfileSize  = 104857600 # 100mb
 LogDir          = "log"
 LogPrefix       = "flyfish"
-LogLevel        = "debug"
-EnableLogStdout = true
+LogLevel        = "debug"                       (可动态重加载)
+EnableLogStdout = true                          (可动态重加载)

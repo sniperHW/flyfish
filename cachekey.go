@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"unsafe"
 )
 
 const (
@@ -141,6 +142,10 @@ func (this *cacheKey) pushCmd(cmd *command) {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
 	this.cmdQueue.PushBack(cmd)
+}
+
+func (this *cacheKey) getMeta() *table_meta {
+	return (*table_meta)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&this.meta))))
 }
 
 func newCacheKey(unit *processUnit, table string, uniKey string) *cacheKey {

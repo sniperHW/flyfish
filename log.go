@@ -12,7 +12,7 @@ var (
 )
 
 func InitLogger() {
-	logConfig := conf.DefConfig.Log
+	logConfig := conf.GetConfig().Log
 	if !logConfig.EnableLogStdout {
 		golog.DisableStdOut()
 	}
@@ -82,4 +82,14 @@ func Fatalln(v ...interface{}) {
 	if nil != logger {
 		logger.Fatalln(v...)
 	}
+}
+
+func UpdateLogConfig() {
+	logConfig := conf.GetConfig().Log
+	if logConfig.EnableLogStdout {
+		golog.EnableStdOut()
+	} else {
+		golog.DisableStdOut()
+	}
+	logger.SetLevelByString(logConfig.LogLevel)
 }
