@@ -46,7 +46,7 @@ func (self *BlockQueue) AddNoWait(item interface{}, fullReturn ...bool) error {
 	needSignal := self.emptyWaited > 0 && n == 0
 	self.listGuard.Unlock()
 	if needSignal {
-		self.emptyCond.Broadcast()
+		self.emptyCond.Signal()
 	}
 	return nil
 }
@@ -77,7 +77,7 @@ func (self *BlockQueue) Add(item interface{}) error {
 	needSignal := self.emptyWaited > 0 && n == 0
 	self.listGuard.Unlock()
 	if needSignal {
-		self.emptyCond.Broadcast()
+		self.emptyCond.Signal()
 	}
 	return nil
 }
@@ -102,7 +102,7 @@ func (self *BlockQueue) Get() (closed bool, datas []interface{}) {
 		datas = self.list
 		self.list = make([]interface{}, 0, initCap)
 	}
-	needSignal := self.fullWaited > 0
+	needSignal := self.fullWaited > 0 && len(datas) >= self.fullSize
 	closed = self.closed
 	self.listGuard.Unlock()
 	if needSignal {
@@ -122,7 +122,7 @@ func (self *BlockQueue) Swap(swaped []interface{}) (closed bool, datas []interfa
 	}
 	datas = self.list
 	closed = self.closed
-	needSignal := self.fullWaited > 0
+	needSignal := self.fullWaited > 0 && len(datas) >= self.fullSize
 	self.list = swaped
 	self.listGuard.Unlock()
 	if needSignal {
@@ -141,7 +141,7 @@ func (self *BlockQueue) Close() {
 
 	self.closed = true
 	self.listGuard.Unlock()
-	self.emptyCond.Signal()
+	self.emptyCond.Broadcast()
 	self.fullCond.Broadcast()
 }
 
