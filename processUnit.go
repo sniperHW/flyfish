@@ -298,6 +298,7 @@ func (this *cacheKey) process_(fromClient bool) {
 		if this.unit.updateQueueFull() {
 			this.mtx.Unlock()
 			if conf.GetConfig().ReplyBusyOnQueueFull {
+				Infoln("busy2")
 				ctx.reply(errcode.ERR_BUSY, nil, -1)
 			} else {
 				atomic.AddInt32(&cmdCount, -1)
@@ -320,6 +321,7 @@ func (this *cacheKey) process_(fromClient bool) {
 	if !ok {
 		this.mtx.Unlock()
 		if conf.GetConfig().ReplyBusyOnQueueFull {
+			Infoln("busy1")
 			ctx.reply(errcode.ERR_BUSY, nil, -1)
 		} else {
 			atomic.AddInt32(&cmdCount, -1)
@@ -463,13 +465,13 @@ func InitProcessUnit() bool {
 			}
 		})
 
-		timer.Repeat(time.Second, nil, func(t *timer.Timer) {
+		/*timer.Repeat(time.Second, nil, func(t *timer.Timer) {
 			if isStop() {
 				t.Cancel()
 			} else {
 				Infoln(wname, unit.sqlUpdater_.queue.Len())
 			}
-		})
+		})*/
 
 	}
 
