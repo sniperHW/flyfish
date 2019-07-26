@@ -56,13 +56,11 @@ func onSqlLoadOKSet(ctx *processContext) {
 	version := ctx.fields["__version__"].GetInt()
 	cmd := ctx.commands[0]
 	cmdType := cmd.cmdType
-	pushRedis := true
 	if cmdType == cmdSet {
 		if nil != cmd.version && *cmd.version != version {
-			pushRedis = false
 			//版本号不对
 			ctx.reply(errcode.ERR_VERSION, nil, version)
-			ctx.getCacheKey().processQueueCmd()
+			ctx.redisFlag = redis_set_only
 		} else {
 			//变更需要将版本号+1
 			for _, v := range cmd.fields {
@@ -101,9 +99,8 @@ func onSqlLoadOKSet(ctx *processContext) {
 		ctx.redisFlag = redis_set
 	}
 
-	if pushRedis {
-		ctx.getCacheKey().unit.pushRedisReq(ctx)
-	}
+	ctx.getCacheKey().unit.pushRedisReq(ctx)
+
 }
 
 func onSqlLoadOKDel(ctx *processContext) {

@@ -312,6 +312,7 @@ func (this *cacheKey) process_(fromClient bool) {
 			} else {
 				atomic.AddInt32(&cmdCount, -1)
 			}
+			this.process_(fromClient)
 			return
 		}
 	}
@@ -341,6 +342,8 @@ func (this *cacheKey) process_(fromClient bool) {
 		} else {
 			atomic.AddInt32(&cmdCount, -1)
 		}
+		this.process_(fromClient)
+		return
 	}
 }
 
