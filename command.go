@@ -5,6 +5,7 @@ import (
 	"flyfish/proto"
 	"sync/atomic"
 	"time"
+	"unsafe"
 )
 
 const (
@@ -146,8 +147,34 @@ func processCmd(cmd *command) {
 		return
 	}
 
-	cmd.ckey = getCacheKeyAndPushCmd(cmd.table, cmd.uniKey, cmd)
+	unit := getUnitByUnikey(cmd.uniKey)
+	defer unit.mtx.Unlock()
+	unit.mtx.Lock()
+	k, ok := unit.cacheKeys[cmd.uniKey]
+	if ok {
+		if !checkMetaVersion(k.meta.meta_version) {
+			newMeta := getMetaByTable(cmd.table)
+			if newMeta != nil {
+				atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&k.meta)), unsafe.Pointer(newMeta))
+			} else {
+				//log error
+			}
+		}
+		cmd.ckey = k
+		k.pushCmd(cmd)
+		unit.updateLRU(k)
+	} else {
+		k = newCacheKey(unit, cmd.table, cmd.uniKey)
+		if nil != k {
+			cmd.ckey = k
+			k.pushCmd(cmd)
+			unit.updateLRU(k)
+			unit.cacheKeys[cmd.uniKey] = k
+		}
+	}
+	unit.kickCacheKey()
 
-	cmd.ckey.processClientCmd()
-
+	if nil != k {
+		k.processClientCmd()
+	}
 }

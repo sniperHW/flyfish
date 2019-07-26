@@ -12,7 +12,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 )
 
 /*
@@ -334,34 +333,6 @@ func (this *cacheKey) process_(fromClient bool) {
 
 func getUnitByUnikey(uniKey string) *processUnit {
 	return processUnits[StringHash(uniKey)%CacheGroupSize]
-}
-
-func getCacheKeyAndPushCmd(table string, uniKey string, cmd *command) *cacheKey {
-	unit := getUnitByUnikey(uniKey)
-	defer unit.mtx.Unlock()
-	unit.mtx.Lock()
-	k, ok := unit.cacheKeys[uniKey]
-	if ok {
-		if !checkMetaVersion(k.meta.meta_version) {
-			newMeta := getMetaByTable(table)
-			if newMeta != nil {
-				atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&k.meta)), unsafe.Pointer(newMeta))
-			} else {
-				//log error
-			}
-		}
-		k.pushCmd(cmd)
-		unit.updateLRU(k)
-	} else {
-		k = newCacheKey(unit, table, uniKey)
-		if nil != k {
-			k.pushCmd(cmd)
-			unit.updateLRU(k)
-			unit.cacheKeys[uniKey] = k
-		}
-	}
-	unit.kickCacheKey()
-	return k
 }
 
 func (this *processUnit) updateLRU(ckey *cacheKey) {
