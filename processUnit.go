@@ -82,11 +82,10 @@ func (this *processUnit) pushSqlLoadReq(ctx *processContext, fullReturn ...bool)
  *    node   + delete = 非法
  */
 
-func (this *processUnit) pushSqlWriteBackReq(ctx *processContext) bool {
+func (this *processUnit) pushSqlWriteBackReq(ctx *processContext) {
 
 	if ctx.writeBackFlag == write_back_none {
-		Errorln("ctx.writeBackFlag == write_back_none")
-		return false
+		panic("ctx.writeBackFlag == write_back_none")
 	}
 
 	ckey := ctx.getCacheKey()
@@ -115,13 +114,7 @@ func (this *processUnit) pushSqlWriteBackReq(ctx *processContext) bool {
 
 		ckey.mtx.Unlock()
 
-		err := this.sqlUpdater_.queue.AddNoWait(ckey)
-		if nil == err {
-			return true
-		} else {
-			ckey.clearWriteBack()
-			return false
-		}
+		this.sqlUpdater_.queue.AddNoWait(ckey)
 
 	} else {
 
@@ -208,8 +201,6 @@ func (this *processUnit) pushSqlWriteBackReq(ctx *processContext) bool {
 
 		ckey.mtx.Unlock()
 	}
-
-	return true
 }
 
 func (this *cacheKey) process_(fromClient bool) {
