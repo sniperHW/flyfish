@@ -14,17 +14,25 @@ func onSqlNotFound(ctx *processContext) {
 		ckey.setMissing()
 		ckey.processQueueCmd()
 	} else {
-		/*  set操作，数据库不存在的情况
-		*   先写入到redis,redis写入成功后回写sql(设置回写类型insert)
+		/*   set操作，数据库不存在的情况
+		 *   先写入到redis,redis写入成功后回写sql(设置回写类型insert)
 		 */
+		meta := ckey.getMeta()
+		for _, v := range meta.fieldMetas {
+			ctx.fields[v.name] = proto.PackField(v.name, v.defaultV)
+		}
+
 		cmd := ctx.getCmd()
 		if cmdType == cmdCompareAndSetNx {
 			ctx.fields[cmd.cns.newV.GetName()] = cmd.cns.newV
 		} else if cmdType == cmdIncrBy {
-			ctx.fields[cmd.incrDecr.GetName()] = cmd.incrDecr
+			oldV := cmd.incrDecr
+			newV := proto.PackField(cmd.incrDecr.GetName(), oldV.GetInt()+cmd.incrDecr.GetInt())
+			ctx.fields[cmd.incrDecr.GetName()] = newV
 		} else if cmdType == cmdDecrBy {
-			newV := 0 - cmd.incrDecr.GetInt()
-			ctx.fields[cmd.incrDecr.GetName()] = proto.PackField(cmd.incrDecr.GetName(), newV)
+			oldV := cmd.incrDecr
+			newV := proto.PackField(cmd.incrDecr.GetName(), oldV.GetInt()-cmd.incrDecr.GetInt())
+			ctx.fields[cmd.incrDecr.GetName()] = newV
 		} else if cmdType == cmdSet {
 			for _, v := range cmd.fields {
 				ctx.fields[v.GetName()] = v

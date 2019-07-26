@@ -27,7 +27,7 @@ func onRedisResp(ctx *processContext) {
 		ctx.writeBackFlag = write_back_none //数据存在执行update
 		ctx.redisFlag = redis_none
 		//到数据库加载
-		if !ckey.unit.pushSqlLoadReq(ctx) {
+		if !ckey.unit.pushSqlLoadReqOnRedisReply(ctx) {
 			ctx.reply(errcode.ERR_BUSY, nil, -1)
 		}
 

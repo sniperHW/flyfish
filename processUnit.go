@@ -1,6 +1,7 @@
 package flyfish
 
 import (
+	"container/list"
 	"flyfish/conf"
 	"flyfish/errcode"
 	"flyfish/proto"
@@ -48,22 +49,21 @@ func (this *processUnit) pushRedisReq(ctx *processContext, fullReturn ...bool) b
 }
 
 func (this *processUnit) pushSqlLoadReq(ctx *processContext, fullReturn ...bool) bool {
-	ckey := ctx.getCacheKey()
-	if ckey.isWriteBack() {
-		/*
-		 *   如果记录正在等待回写，redis崩溃，导致重新从数据库载入数据，
-		 *   此时回写尚未完成，如果允许读取将可能载入过期数据
-		 */
-		ckey.clearCmd()
-		return false
+	return nil == this.sqlLoader_.queue.AddNoWait(ctx, fullReturn...)
+}
 
+func (this *processUnit) pushSqlLoadReqOnRedisReply(ctx *processContext) bool {
+	ckey := ctx.getCacheKey()
+	ckey.mtx.Lock()
+	if ckey.writeBacked {
+		ckey.cmdQueueLocked = false
+		atomic.AddInt32(&cmdCount, -int32(ckey.cmdQueue.Len()))
+		ckey.cmdQueue = list.New()
+		ckey.mtx.Unlock()
+		return false
 	} else {
-		err := this.sqlLoader_.queue.AddNoWait(ctx, fullReturn...)
-		if nil == err {
-			return true
-		} else {
-			return false
-		}
+		this.sqlLoader_.queue.AddNoWait(ctx)
+		return true
 	}
 }
 
@@ -308,15 +308,9 @@ func (this *cacheKey) process_(fromClient bool) {
 		}
 	}
 
-	fullReturn := false
-	if fromClient {
-		fullReturn = true
-	}
+	fullReturn := fromClient
 
 	ok := true
-
-	this.lockCmdQueue()
-	this.mtx.Unlock()
 
 	if this.status == cache_ok || this.status == cache_missing {
 		ok = this.unit.pushRedisReq(ctx, fullReturn)
@@ -325,8 +319,6 @@ func (this *cacheKey) process_(fromClient bool) {
 	}
 
 	if !ok {
-		this.mtx.Lock()
-		this.unlockCmdQueue()
 		this.mtx.Unlock()
 		if conf.GetConfig().ReplyBusyOnQueueFull {
 			ctx.reply(errcode.ERR_BUSY, nil, -1)
@@ -334,7 +326,9 @@ func (this *cacheKey) process_(fromClient bool) {
 			atomic.AddInt32(&cmdCount, -1)
 		}
 		this.process_(fromClient)
-		return
+	} else {
+		this.unlockCmdQueue()
+		this.mtx.Unlock()
 	}
 }
 

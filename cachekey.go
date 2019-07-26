@@ -90,7 +90,6 @@ func (this *cacheKey) kickAble() (bool, int) {
 func (this *cacheKey) setMissing() {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
-	Debugln("SetMissing key:", this.uniKey)
 	this.version = 0
 	this.status = cache_missing
 }
@@ -108,14 +107,6 @@ func (this *cacheKey) reset() {
 	this.status = cache_new
 }
 
-func (this *cacheKey) clearCmd() {
-	defer this.mtx.Unlock()
-	this.mtx.Lock()
-	this.cmdQueueLocked = false
-	atomic.AddInt32(&cmdCount, -int32(this.cmdQueue.Len()))
-	this.cmdQueue = list.New()
-}
-
 func (this *cacheKey) clearWriteBack() {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
@@ -130,12 +121,6 @@ func (this *cacheKey) getRecord() *record {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
 	return this.r
-}
-
-func (this *cacheKey) isWriteBack() bool {
-	defer this.mtx.Unlock()
-	this.mtx.Lock()
-	return this.writeBacked
 }
 
 func (this *cacheKey) pushCmd(cmd *command) {
