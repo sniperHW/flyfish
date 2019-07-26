@@ -118,7 +118,6 @@ func (this *command) reply(errCode int32, fields map[string]*proto.Field, versio
 func processCmd(cmd *command) {
 
 	atomic.AddInt32(&cmdCount, 1)
-
 	meta := getMetaByTable(cmd.table)
 
 	if nil == meta {
@@ -178,5 +177,7 @@ func processCmd(cmd *command) {
 
 	if nil != k {
 		k.processClientCmd()
+	} else {
+		cmd.reply(errcode.ERR_INVAILD_TABLE, nil, -1)
 	}
 }
