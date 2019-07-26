@@ -28,8 +28,8 @@ func onRedisResp(ctx *processContext) {
 		ctx.redisFlag = redis_none
 		//到数据库加载
 		if !ckey.unit.pushSqlLoadReqOnRedisReply(ctx) {
-			Infoln("busy 3")
-			ctx.reply(errcode.ERR_BUSY, nil, -1)
+			atomic.AddInt32(&cmdCount, -1)
+			//ctx.reply(errcode.ERR_BUSY, nil, -1)
 		}
 
 	} else {

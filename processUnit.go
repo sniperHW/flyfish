@@ -298,7 +298,6 @@ func (this *cacheKey) process_(fromClient bool) {
 		if this.unit.updateQueueFull() {
 			this.mtx.Unlock()
 			if conf.GetConfig().ReplyBusyOnQueueFull {
-				Infoln("busy2")
 				ctx.reply(errcode.ERR_BUSY, nil, -1)
 			} else {
 				atomic.AddInt32(&cmdCount, -1)
@@ -321,14 +320,13 @@ func (this *cacheKey) process_(fromClient bool) {
 	if !ok {
 		this.mtx.Unlock()
 		if conf.GetConfig().ReplyBusyOnQueueFull {
-			Infoln("busy1")
 			ctx.reply(errcode.ERR_BUSY, nil, -1)
 		} else {
 			atomic.AddInt32(&cmdCount, -1)
 		}
 		this.process_(fromClient)
 	} else {
-		this.unlockCmdQueue()
+		this.lockCmdQueue()
 		this.mtx.Unlock()
 	}
 }
