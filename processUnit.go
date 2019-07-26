@@ -239,52 +239,59 @@ func (this *cacheKey) process_(fromClient bool) {
 			cmdQueue.Remove(e)
 			atomic.AddInt32(&cmdCount, -1)
 		} else {
-			ok := false
-			if cmd.cmdType == cmdGet {
-				if !(lastCmdType == cmdNone || lastCmdType == cmdGet) {
-					break
-				}
+			if this.status == cache_new && this.writeBacked {
+				//cache_new触发sqlLoad,当前回写尚未完成，不能执行sqlLoad,所以不响应命令，让客户端请求超时
 				cmdQueue.Remove(e)
-				ok = this.processGet(ctx, cmd)
-				if ok {
-					lastCmdType = cmd.cmdType
-				}
-			} else if lastCmdType == cmdNone {
-				cmdQueue.Remove(e)
-				switch cmd.cmdType {
-				case cmdSet:
-					ok = this.processSet(ctx, cmd)
-					break
-				case cmdSetNx:
-					ok = this.processSetNx(ctx, cmd)
-					break
-				case cmdCompareAndSet:
-					ok = this.processCompareAndSet(ctx, cmd)
-					break
-				case cmdCompareAndSetNx:
-					ok = this.processCompareAndSetNx(ctx, cmd)
-					break
-				case cmdIncrBy:
-					ok = this.processIncrBy(ctx, cmd)
-					break
-				case cmdDecrBy:
-					ok = this.processDecrBy(ctx, cmd)
-					break
-				case cmdDel:
-					ok = this.processDel(ctx, cmd)
-					break
-				default:
-					//记录日志
-					break
-				}
-
-				if ok {
-					lastCmdType = cmd.cmdType
-					break
-				}
-
+				atomic.AddInt32(&cmdCount, -1)
 			} else {
-				break
+				ok := false
+				if cmd.cmdType == cmdGet {
+					if !(lastCmdType == cmdNone || lastCmdType == cmdGet) {
+						break
+					}
+					cmdQueue.Remove(e)
+					ok = this.processGet(ctx, cmd)
+					if ok {
+						lastCmdType = cmd.cmdType
+					}
+				} else if lastCmdType == cmdNone {
+					cmdQueue.Remove(e)
+					switch cmd.cmdType {
+					case cmdSet:
+						ok = this.processSet(ctx, cmd)
+						break
+					case cmdSetNx:
+						ok = this.processSetNx(ctx, cmd)
+						break
+					case cmdCompareAndSet:
+						ok = this.processCompareAndSet(ctx, cmd)
+						break
+					case cmdCompareAndSetNx:
+						ok = this.processCompareAndSetNx(ctx, cmd)
+						break
+					case cmdIncrBy:
+						ok = this.processIncrBy(ctx, cmd)
+						break
+					case cmdDecrBy:
+						ok = this.processDecrBy(ctx, cmd)
+						break
+					case cmdDel:
+						ok = this.processDel(ctx, cmd)
+						break
+					default:
+						//记录日志
+						atomic.AddInt32(&cmdCount, -1)
+						break
+					}
+
+					if ok {
+						lastCmdType = cmd.cmdType
+						break
+					}
+
+				} else {
+					break
+				}
 			}
 		}
 	}
