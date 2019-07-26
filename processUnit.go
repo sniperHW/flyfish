@@ -54,11 +54,11 @@ func (this *processUnit) pushSqlLoadReq(ctx *processContext, fullReturn ...bool)
 func (this *processUnit) pushSqlLoadReqOnRedisReply(ctx *processContext) bool {
 	ckey := ctx.getCacheKey()
 	ckey.mtx.Lock()
+	defer ckey.mtx.Unlock()
 	if ckey.writeBacked {
 		ckey.cmdQueueLocked = false
 		atomic.AddInt32(&cmdCount, -int32(ckey.cmdQueue.Len()))
 		ckey.cmdQueue = list.New()
-		ckey.mtx.Unlock()
 		return false
 	} else {
 		this.sqlLoader_.queue.AddNoWait(ctx)
