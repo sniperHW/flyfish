@@ -148,7 +148,7 @@ func processCmd(cmd *command) {
 	}
 
 	unit := getUnitByUnikey(cmd.uniKey)
-	defer unit.mtx.Unlock()
+
 	unit.mtx.Lock()
 	k, ok := unit.cacheKeys[cmd.uniKey]
 	if ok {
@@ -173,6 +173,8 @@ func processCmd(cmd *command) {
 		}
 	}
 	unit.kickCacheKey()
+
+	unit.mtx.Unlock()
 
 	if nil != k {
 		k.processClientCmd()
