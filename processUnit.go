@@ -463,6 +463,14 @@ func InitProcessUnit() bool {
 			}
 		})
 
+		timer.Repeat(time.Second, nil, func(t *timer.Timer) {
+			if isStop() {
+				t.Cancel()
+			} else {
+				Infoln(wname, unit.sqlUpdater_.queue.Len())
+			}
+		})
+
 	}
 
 	return true
