@@ -406,5 +406,7 @@ func RedisInit() bool {
 }
 
 func updateRedisQueueSize(RedisQueueSize int) {
-	redisProcessQueue.SetFullSize(RedisQueueSize)
+	if nil != redisProcessQueue {
+		redisProcessQueue.SetFullSize(RedisQueueSize)
+	}
 }

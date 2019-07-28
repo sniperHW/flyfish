@@ -25,6 +25,8 @@ Compress                = false                #是否开启通信压缩
 BackDir                 = "flyfish_recover"    (可动态重加载)
 BackFile                = "flyfish_recover"    (可动态重加载)
 
+CacheType               = "local"              #local|redis
+
 
 [DBConfig]
 SqlType         = "pgsql"

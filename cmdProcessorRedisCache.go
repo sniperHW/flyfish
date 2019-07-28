@@ -8,10 +8,10 @@ import (
 	"time"
 )
 
-type cmdProcessorRedisSql struct {
+type cmdProcessorRedisCache struct {
 }
 
-func (this *cmdProcessorRedisSql) processGet(ckey *cacheKey, ctx *processContext, cmd *command) bool {
+func (this cmdProcessorRedisCache) processGet(ckey *cacheKey, ctx *processContext, cmd *command) bool {
 	Debugln("processSet", cmd.uniKey)
 	if ckey.status == cache_missing {
 		cmd.reply(errcode.ERR_NOTFOUND, nil, -1)
@@ -27,7 +27,7 @@ func (this *cmdProcessorRedisSql) processGet(ckey *cacheKey, ctx *processContext
 	}
 }
 
-func (this *cmdProcessorRedisSql) processSet(ckey *cacheKey, ctx *processContext, cmd *command) bool {
+func (this cmdProcessorRedisCache) processSet(ckey *cacheKey, ctx *processContext, cmd *command) bool {
 	Debugln("processSet", cmd.uniKey)
 	if nil != cmd.version && ckey.status != cache_new && *cmd.version != ckey.version {
 		cmd.reply(errcode.ERR_VERSION, nil, ckey.version)
@@ -62,7 +62,7 @@ func (this *cmdProcessorRedisSql) processSet(ckey *cacheKey, ctx *processContext
 	}
 }
 
-func (this *cmdProcessorRedisSql) processSetNx(ckey *cacheKey, ctx *processContext, cmd *command) bool {
+func (this cmdProcessorRedisCache) processSetNx(ckey *cacheKey, ctx *processContext, cmd *command) bool {
 	Debugln("processSetNx", cmd.uniKey)
 	if ckey.status == cache_ok {
 		//记录已经存在，不能再设置
@@ -88,7 +88,7 @@ func (this *cmdProcessorRedisSql) processSetNx(ckey *cacheKey, ctx *processConte
 	}
 }
 
-func (this *cmdProcessorRedisSql) processCompareAndSet(ckey *cacheKey, ctx *processContext, cmd *command) bool {
+func (this cmdProcessorRedisCache) processCompareAndSet(ckey *cacheKey, ctx *processContext, cmd *command) bool {
 
 	Debugln("processCompareAndSet", cmd.uniKey)
 
@@ -111,7 +111,7 @@ func (this *cmdProcessorRedisSql) processCompareAndSet(ckey *cacheKey, ctx *proc
 	}
 }
 
-func (this *cmdProcessorRedisSql) processCompareAndSetNx(ckey *cacheKey, ctx *processContext, cmd *command) bool {
+func (this cmdProcessorRedisCache) processCompareAndSetNx(ckey *cacheKey, ctx *processContext, cmd *command) bool {
 
 	Debugln("processCompareAndSetNx", cmd.uniKey)
 
@@ -134,7 +134,7 @@ func (this *cmdProcessorRedisSql) processCompareAndSetNx(ckey *cacheKey, ctx *pr
 	return true
 }
 
-func (this *cmdProcessorRedisSql) processIncrBy(ckey *cacheKey, ctx *processContext, cmd *command) bool {
+func (this cmdProcessorRedisCache) processIncrBy(ckey *cacheKey, ctx *processContext, cmd *command) bool {
 
 	Debugln("processIncrBy", cmd.uniKey)
 
@@ -155,7 +155,7 @@ func (this *cmdProcessorRedisSql) processIncrBy(ckey *cacheKey, ctx *processCont
 	return true
 }
 
-func (this *cmdProcessorRedisSql) processDecrBy(ckey *cacheKey, ctx *processContext, cmd *command) bool {
+func (this cmdProcessorRedisCache) processDecrBy(ckey *cacheKey, ctx *processContext, cmd *command) bool {
 
 	Debugln("processDecrBy", cmd.uniKey)
 
@@ -177,7 +177,7 @@ func (this *cmdProcessorRedisSql) processDecrBy(ckey *cacheKey, ctx *processCont
 	return true
 }
 
-func (this *cmdProcessorRedisSql) processDel(ckey *cacheKey, ctx *processContext, cmd *command) bool {
+func (this cmdProcessorRedisCache) processDel(ckey *cacheKey, ctx *processContext, cmd *command) bool {
 
 	Debugln("processDel", cmd.uniKey)
 
@@ -203,7 +203,7 @@ func (this *cmdProcessorRedisSql) processDel(ckey *cacheKey, ctx *processContext
 	}
 }
 
-func (this *cmdProcessorRedisSql) processCmd(ckey *cacheKey, fromClient bool) {
+func (this cmdProcessorRedisCache) processCmd(ckey *cacheKey, fromClient bool) {
 	ckey.mtx.Lock()
 
 	if !fromClient {

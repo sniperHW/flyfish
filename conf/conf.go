@@ -45,6 +45,7 @@ type Config struct {
 	BackFile             string
 	ReplyBusyOnQueueFull bool
 	Compress             bool
+	CacheType            string
 
 	Redis struct {
 		RedisHost     string

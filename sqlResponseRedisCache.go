@@ -5,10 +5,10 @@ import (
 	"flyfish/proto"
 )
 
-type sqlResponseCache struct {
+type sqlResponseRedisCache struct {
 }
 
-func (this *sqlResponseCache) onSqlNotFound(ctx *processContext) {
+func (this sqlResponseRedisCache) onSqlNotFound(ctx *processContext) {
 	Debugln("onSqlNotFound key", ctx.getUniKey())
 	cmdType := ctx.getCmdType()
 	ckey := ctx.getCacheKey()
@@ -17,91 +17,78 @@ func (this *sqlResponseCache) onSqlNotFound(ctx *processContext) {
 		ckey.setMissing()
 		ckey.processQueueCmd()
 	} else {
-
-		ckey.mtx.Lock()
-
-		ckey.setDefaultValue(ctx)
-
-		ckey.setOKNoLock(1)
+		/*   set操作，数据库不存在的情况
+		 *   先写入到redis,redis写入成功后回写sql(设置回写类型insert)
+		 */
+		meta := ckey.getMeta()
+		for _, v := range meta.fieldMetas {
+			ctx.fields[v.name] = proto.PackField(v.name, v.defaultV)
+		}
 
 		cmd := ctx.getCmd()
-
 		if cmdType == cmdCompareAndSetNx {
 			ctx.fields[cmd.cns.newV.GetName()] = cmd.cns.newV
-			ckey.values[cmd.cns.newV.GetName()] = cmd.cns.newV
 		} else if cmdType == cmdIncrBy {
-			oldV := ckey.values[cmd.incrDecr.GetName()]
+			oldV := cmd.incrDecr
 			newV := proto.PackField(cmd.incrDecr.GetName(), oldV.GetInt()+cmd.incrDecr.GetInt())
 			ctx.fields[cmd.incrDecr.GetName()] = newV
-			ckey.values[cmd.incrDecr.GetName()] = newV
 		} else if cmdType == cmdDecrBy {
-			oldV := ckey.values[cmd.incrDecr.GetName()]
+			oldV := cmd.incrDecr
 			newV := proto.PackField(cmd.incrDecr.GetName(), oldV.GetInt()-cmd.incrDecr.GetInt())
 			ctx.fields[cmd.incrDecr.GetName()] = newV
-			ckey.values[cmd.incrDecr.GetName()] = newV
-		} else {
+		} else if cmdType == cmdSet {
 			for _, v := range cmd.fields {
-				ckey.values[v.GetName()] = v
+				ctx.fields[v.GetName()] = v
 			}
 		}
-
-		ckey.mtx.Unlock()
-
 		ctx.fields["__version__"] = proto.PackField("__version__", 1)
-
 		ctx.writeBackFlag = write_back_insert
 
-		if !ctx.replyOnDbOk {
-			ctx.reply(errcode.ERR_OK, nil, 1)
-			ckey.processQueueCmd()
-		}
-
-		ckey.unit.pushSqlWriteBackReq(ctx)
-
+		ctx.redisFlag = redis_set
+		ckey.unit.pushRedisReq(ctx)
 	}
 }
 
-func (this *sqlResponseCache) onSqlLoadOKGet(ctx *processContext) {
-	version := ctx.fields["__version__"].GetInt()
-	ckey := ctx.getCacheKey()
-	ckey.mtx.Lock()
-	ckey.setValue(ctx)
-	ckey.setOKNoLock(version)
-	ckey.mtx.Unlock()
-	ctx.reply(errcode.ERR_OK, ctx.fields, version)
-	ckey.processQueueCmd()
+func (this sqlResponseRedisCache) onSqlLoadOKGet(ctx *processContext) {
+	ctx.redisFlag = redis_set_only
+	ctx.getCacheKey().unit.pushRedisReq(ctx)
 }
 
-func (this *sqlResponseCache) onSqlLoadOKSet(ctx *processContext) {
-
+/*
+*   设置类命令簇
+ */
+func (this sqlResponseRedisCache) onSqlLoadOKSet(ctx *processContext) {
 	version := ctx.fields["__version__"].GetInt()
-	cmd := ctx.getCmd()
+	cmd := ctx.commands[0]
 	cmdType := cmd.cmdType
 	if cmdType == cmdSet {
 		if nil != cmd.version && *cmd.version != version {
 			//版本号不对
 			ctx.reply(errcode.ERR_VERSION, nil, version)
+			ctx.redisFlag = redis_set_only
 		} else {
 			//变更需要将版本号+1
 			for _, v := range cmd.fields {
 				ctx.fields[v.GetName()] = v
 			}
-			version++
-			ctx.fields["__version__"] = proto.PackField("__version__", version)
+			ctx.fields["__version__"] = proto.PackField("__version__", version+1)
 			ctx.writeBackFlag = write_back_update //sql中存在,使用update回写
+			ctx.redisFlag = redis_set
 		}
 	} else if cmdType == cmdCompareAndSet || cmdType == cmdCompareAndSetNx {
 		dbV := ctx.fields[cmd.cns.oldV.GetName()]
 		if !dbV.Equal(cmd.cns.oldV) {
 			ctx.reply(errcode.ERR_NOT_EQUAL, ctx.fields, version)
+			ctx.redisFlag = redis_set_only
 		} else {
-			version++
-			ctx.fields["__version__"] = proto.PackField("__version__", version)
+			ctx.fields["__version__"] = proto.PackField("__version__", version+1)
 			ctx.fields[cmd.cns.oldV.GetName()] = cmd.cns.newV
 			ctx.writeBackFlag = write_back_update //sql中存在,使用update回写
+			ctx.redisFlag = redis_set
 		}
 	} else if cmdType == cmdSetNx {
 		ctx.reply(errcode.ERR_KEY_EXIST, nil, version)
+		ctx.redisFlag = redis_set_only
 	} else {
 		//cmdIncrBy/cmdDecrBy
 		var newV int64
@@ -112,61 +99,37 @@ func (this *sqlResponseCache) onSqlLoadOKSet(ctx *processContext) {
 			newV = oldV.GetInt() - cmd.incrDecr.GetInt()
 		}
 		ctx.fields[cmd.incrDecr.GetName()].SetInt(newV)
-		version++
-		ctx.fields["__version__"] = proto.PackField("__version__", version)
+		ctx.fields["__version__"] = proto.PackField("__version__", version+1)
 		ctx.writeBackFlag = write_back_update //sql中存在,使用update回写
+		ctx.redisFlag = redis_set
 	}
 
-	ckey := ctx.getCacheKey()
-
-	ckey.mtx.Lock()
-
-	ckey.setValue(ctx)
-
-	ckey.setOKNoLock(version)
-
-	ckey.mtx.Unlock()
-
-	if ctx.writeBackFlag == write_back_none || !ctx.replyOnDbOk {
-		ctx.reply(errcode.ERR_OK, nil, version)
-		ckey.processQueueCmd()
-	}
+	ctx.getCacheKey().unit.pushRedisReq(ctx)
 
 }
 
-func (this *sqlResponseCache) onSqlLoadOKDel(ctx *processContext) {
-
+func (this sqlResponseRedisCache) onSqlLoadOKDel(ctx *processContext) {
 	var errCode int32
 	version := ctx.fields["__version__"].GetInt()
-	cmd := ctx.getCmd()
+	cmd := ctx.commands[0]
 	ckey := ctx.getCacheKey()
-
 	if nil != cmd.version && *cmd.version != version {
 		//版本号不对
 		errCode = errcode.ERR_VERSION
 	} else {
 		ctx.writeBackFlag = write_back_delete
+		ckey.unit.pushSqlWriteBackReq(ctx)
 		errCode = errcode.ERR_OK
 	}
 
 	ctx.reply(errCode, nil, version)
-
 	if errCode == errcode.ERR_OK {
 		ckey.setMissing()
-		ckey.unit.pushSqlWriteBackReq(ctx)
-	} else {
-		ckey.mtx.Lock()
-		ckey.setValue(ctx)
-		ckey.setOKNoLock(version)
-		ckey.mtx.Unlock()
 	}
-
-	if ctx.writeBackFlag == write_back_none || !ctx.replyOnDbOk {
-		ckey.processQueueCmd()
-	}
+	ckey.processQueueCmd()
 }
 
-func (this *sqlResponseCache) onSqlLoadOK(ctx *processContext) {
+func (this sqlResponseRedisCache) onSqlLoadOK(ctx *processContext) {
 	cmdType := ctx.getCmdType()
 	if cmdType == cmdGet {
 		this.onSqlLoadOKGet(ctx)
@@ -179,21 +142,10 @@ func (this *sqlResponseCache) onSqlLoadOK(ctx *processContext) {
 	}
 }
 
-func (this *sqlResponseCache) onSqlWriteBackResp(ctx *processContext, errno int32) {
-	Debugln("onSqlWriteBackResp", ctx.getUniKey(), ctx.getCmdType(), errno)
-	ckey := ctx.getCacheKey()
-	if errno == errcode.ERR_OK {
-		version := ctx.fields["__version__"].GetInt()
-		ctx.reply(errno, nil, version)
-	} else {
-		ctx.reply(errno, nil, -1)
-		ckey.setMissing()
-	}
-	ckey.processQueueCmd()
-}
+func (this sqlResponseRedisCache) onSqlResp(ctx *processContext, errno int32) {
 
-func (this *sqlResponseCache) onSqlResp(ctx *processContext, errno int32) {
 	Debugln("onSqlResp", ctx.getUniKey(), ctx.getCmdType(), errno)
+
 	if errno == errcode.ERR_OK {
 		this.onSqlLoadOK(ctx)
 	} else if errno == errcode.ERR_NOTFOUND {
@@ -201,4 +153,30 @@ func (this *sqlResponseCache) onSqlResp(ctx *processContext, errno int32) {
 	} else {
 		onSqlExecError(ctx)
 	}
+}
+
+func (this sqlResponseRedisCache) onSqlWriteBackResp(ctx *processContext, errno int32) {
+
+	Debugln("onSqlWriteBackResp", ctx.getUniKey(), ctx.getCmdType(), errno)
+
+	ckey := ctx.getCacheKey()
+	if errno == errcode.ERR_OK {
+		version := ctx.fields["__version__"].GetInt()
+		ctx.reply(errno, nil, version)
+	} else {
+		ctx.reply(errno, nil, -1)
+		//将redis中缓存作废
+		ckey.setMissing()
+
+		ckey.unit.pushRedisReq(&processContext{
+			commands: []*command{&command{
+				uniKey: ckey.uniKey,
+				ckey:   ckey,
+			}},
+			redisFlag: redis_kick,
+		})
+	}
+
+	ckey.processQueueCmd()
+
 }

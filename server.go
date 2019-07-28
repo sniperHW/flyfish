@@ -16,9 +16,8 @@ import (
 )
 
 var (
-	server  listener
-	started int32
-	stoped  int32
+	server listener
+	stoped int32
 )
 
 type Dispatcher interface {
@@ -49,7 +48,6 @@ func newTcpListener(nettype, service string) (*tcpListener, error) {
 }
 
 func (this *tcpListener) Close() {
-
 	this.l.Close()
 }
 
@@ -153,19 +151,26 @@ func (this *tcpListener) Start() error {
 	})
 }
 
-func StartTcpServer(nettype, service string) error {
-	l, err := newTcpListener(nettype, service)
+func Start() error {
+	config := conf.GetConfig()
+	Recover()
+
+	if config.CacheType == "redis" {
+		cmdProcessor = cmdProcessorRedisCache{}
+		sqlResponse = sqlResponseRedisCache{}
+		RedisInit()
+	} else {
+		cmdProcessor = cmdProcessorLocalCache{}
+		sqlResponse = sqlResponseLocalCache{}
+	}
+
+	InitProcessUnit()
+
+	server, err := newTcpListener("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort))
 	if nil != err {
 		return err
 	}
-	return startServer(l)
-}
 
-func startServer(l listener) error {
-	if !atomic.CompareAndSwapInt32(&started, 0, 1) {
-		return fmt.Errorf("server already started")
-	}
-	server = l
 	go func() {
 		err := server.Start()
 		if nil != err {
@@ -174,14 +179,12 @@ func startServer(l listener) error {
 		Infoln("flyfish listener stop")
 	}()
 
+	Infoln("flyfish start:", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort))
+
 	return nil
 }
 
 func StopServer() {
-	if !atomic.CompareAndSwapInt32(&started, 1, 0) {
-		return
-	}
-
 	if !atomic.CompareAndSwapInt32(&stoped, 0, 1) {
 		return
 	}
@@ -221,7 +224,7 @@ func Stop() {
 
 	//等待redis请求和命令执行完成
 	waitCondition(func() bool {
-		if atomic.LoadInt32(&cmdCount) == 0 {
+		if atomic.LoadInt32(&redisReqCount) == 0 && atomic.LoadInt32(&cmdCount) == 0 {
 			return true
 		} else {
 			return false

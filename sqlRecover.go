@@ -221,7 +221,6 @@ func doRecover(recoverUpdater *sqlUpdater) {
  */
 
 func Recover() {
-
 	var db *sqlx.DB
 	config := conf.GetConfig()
 	dbConfig := config.DBConfig
@@ -235,7 +234,7 @@ func Recover() {
 		if os.IsNotExist(err) {
 			return
 		} else {
-			Fatalln("Recover error:", err)
+			Errorln("Recover error:", err)
 		}
 	} else {
 		backupFile = f

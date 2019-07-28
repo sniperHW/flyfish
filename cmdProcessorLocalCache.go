@@ -8,10 +8,10 @@ import (
 	"time"
 )
 
-type cmdProcessorCache struct {
+type cmdProcessorLocalCache struct {
 }
 
-func (this *cmdProcessorCache) processGet(ckey *cacheKey, cmd *command) *processContext {
+func (this cmdProcessorLocalCache) processGet(ckey *cacheKey, cmd *command) *processContext {
 	Debugln("processGet", cmd.uniKey)
 	if ckey.status == cache_missing {
 		cmd.reply(errcode.ERR_NOTFOUND, nil, -1)
@@ -34,7 +34,7 @@ func (this *cmdProcessorCache) processGet(ckey *cacheKey, cmd *command) *process
 	}
 }
 
-func (this *cmdProcessorCache) processSet(ckey *cacheKey, cmd *command) *processContext {
+func (this cmdProcessorLocalCache) processSet(ckey *cacheKey, cmd *command) *processContext {
 	Debugln("processSet", cmd.uniKey)
 	if nil != cmd.version {
 		if ckey.status == cache_missing {
@@ -77,7 +77,7 @@ func (this *cmdProcessorCache) processSet(ckey *cacheKey, cmd *command) *process
 	return ctx
 }
 
-func (this *cmdProcessorCache) processSetNx(ckey *cacheKey, cmd *command) *processContext {
+func (this cmdProcessorLocalCache) processSetNx(ckey *cacheKey, cmd *command) *processContext {
 	Debugln("processSetNx", cmd.uniKey)
 	if ckey.status == cache_ok {
 		//记录已经存在，不能再设置
@@ -112,7 +112,7 @@ func (this *cmdProcessorCache) processSetNx(ckey *cacheKey, cmd *command) *proce
 	return ctx
 }
 
-func (this *cmdProcessorCache) processCompareAndSet(ckey *cacheKey, cmd *command) *processContext {
+func (this cmdProcessorLocalCache) processCompareAndSet(ckey *cacheKey, cmd *command) *processContext {
 
 	Debugln("processCompareAndSet", cmd.uniKey)
 
@@ -148,7 +148,7 @@ func (this *cmdProcessorCache) processCompareAndSet(ckey *cacheKey, cmd *command
 	}
 }
 
-func (this *cmdProcessorCache) processCompareAndSetNx(ckey *cacheKey, cmd *command) *processContext {
+func (this cmdProcessorLocalCache) processCompareAndSetNx(ckey *cacheKey, cmd *command) *processContext {
 
 	Debugln("processCompareAndSetNx", cmd.uniKey)
 
@@ -187,7 +187,7 @@ func (this *cmdProcessorCache) processCompareAndSetNx(ckey *cacheKey, cmd *comma
 	return ctx
 }
 
-func (this *cmdProcessorCache) processIncrBy(ckey *cacheKey, cmd *command) *processContext {
+func (this cmdProcessorLocalCache) processIncrBy(ckey *cacheKey, cmd *command) *processContext {
 
 	Debugln("processIncrBy", cmd.uniKey)
 
@@ -230,7 +230,7 @@ func (this *cmdProcessorCache) processIncrBy(ckey *cacheKey, cmd *command) *proc
 	return ctx
 }
 
-func (this *cmdProcessorCache) processDecrBy(ckey *cacheKey, cmd *command) *processContext {
+func (this cmdProcessorLocalCache) processDecrBy(ckey *cacheKey, cmd *command) *processContext {
 
 	Debugln("processDecrBy", cmd.uniKey)
 
@@ -273,7 +273,7 @@ func (this *cmdProcessorCache) processDecrBy(ckey *cacheKey, cmd *command) *proc
 	return ctx
 }
 
-func (this *cmdProcessorCache) processDel(ckey *cacheKey, cmd *command) *processContext {
+func (this cmdProcessorLocalCache) processDel(ckey *cacheKey, cmd *command) *processContext {
 
 	Debugln("processDel", cmd.uniKey)
 
@@ -302,7 +302,7 @@ func (this *cmdProcessorCache) processDel(ckey *cacheKey, cmd *command) *process
 	}
 }
 
-func (this *cmdProcessorCache) processCmd(ckey *cacheKey, fromClient bool) {
+func (this cmdProcessorLocalCache) processCmd(ckey *cacheKey, fromClient bool) {
 
 	ckey.mtx.Lock()
 
