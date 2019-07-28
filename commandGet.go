@@ -5,10 +5,9 @@ import (
 	"flyfish/errcode"
 	"flyfish/proto"
 	"fmt"
-	"time"
-
 	pb "github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
+	"time"
 )
 
 type GetReplyer struct {

@@ -4,10 +4,9 @@ import (
 	codec "flyfish/codec"
 	"flyfish/proto"
 	"fmt"
-	"time"
-
 	pb "github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet"
+	"time"
 )
 
 type IncrDecrByReplyer struct {

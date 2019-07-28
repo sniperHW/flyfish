@@ -151,7 +151,7 @@ func (this *sqlUpdater) process(v interface{}) {
 
 			if nil == err {
 				if wb.ctx != nil {
-					onSqlWriteBackResp(wb.ctx, errcode.ERR_OK)
+					sqlResponse.onSqlWriteBackResp(wb.ctx, errcode.ERR_OK)
 				}
 				return
 			} else {
@@ -166,7 +166,7 @@ func (this *sqlUpdater) process(v interface{}) {
 					time.Sleep(time.Second)
 				} else {
 					if wb.ctx != nil {
-						onSqlWriteBackResp(wb.ctx, errcode.ERR_SQLERROR)
+						sqlResponse.onSqlWriteBackResp(wb.ctx, errcode.ERR_SQLERROR)
 					}
 					Errorln("sqlUpdater exec error:", err)
 					return

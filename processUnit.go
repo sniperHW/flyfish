@@ -3,7 +3,6 @@ package flyfish
 import (
 	"container/list"
 	"flyfish/conf"
-	"flyfish/errcode"
 	"flyfish/proto"
 	"fmt"
 	"github.com/jmoiron/sqlx"
@@ -24,13 +23,20 @@ var processUnits []*processUnit
 
 var sqlUpdateWg *sync.WaitGroup
 
+var cmdProcessor cmdProcessorI
+
+type cmdProcessorI interface {
+	processCmd(*cacheKey, bool)
+}
+
 type processUnit struct {
-	cacheKeys   map[string]*cacheKey
-	mtx         sync.Mutex
-	sqlLoader_  *sqlLoader
-	sqlUpdater_ *sqlUpdater
-	lruHead     cacheKey
-	lruTail     cacheKey
+	cacheKeys      map[string]*cacheKey
+	mtx            sync.Mutex
+	sqlLoader_     *sqlLoader
+	sqlUpdater_    *sqlUpdater
+	lruHead        cacheKey
+	lruTail        cacheKey
+	fnKickCacheKey func(*processUnit)
 }
 
 func (this *processUnit) updateQueueFull() bool {
@@ -48,7 +54,12 @@ func (this *processUnit) pushRedisReq(ctx *processContext, fullReturn ...bool) b
 }
 
 func (this *processUnit) pushSqlLoadReq(ctx *processContext, fullReturn ...bool) bool {
-	return nil == this.sqlLoader_.queue.AddNoWait(ctx, fullReturn...)
+	err := this.sqlLoader_.queue.AddNoWait(ctx, fullReturn...)
+	if nil == err {
+		return true
+	} else {
+		return false
+	}
 }
 
 func (this *processUnit) pushSqlLoadReqOnRedisReply(ctx *processContext) bool {
@@ -203,139 +214,7 @@ func (this *processUnit) pushSqlWriteBackReq(ctx *processContext) {
 }
 
 func (this *cacheKey) process_(fromClient bool) {
-
-	this.mtx.Lock()
-
-	if !fromClient {
-		this.unlockCmdQueue()
-	}
-
-	if this.cmdQueueLocked || this.cmdQueue.Len() == 0 {
-		this.mtx.Unlock()
-		return
-	}
-
-	cmdQueue := this.cmdQueue
-	e := cmdQueue.Front()
-
-	if nil == e {
-		this.mtx.Unlock()
-		return
-	}
-
-	ctx := &processContext{
-		commands: []*command{},
-		fields:   map[string]*proto.Field{},
-	}
-
-	lastCmdType := cmdNone
-
-	now := time.Now()
-
-	for ; nil != e; e = cmdQueue.Front() {
-		cmd := e.Value.(*command)
-		if now.After(cmd.deadline) {
-			//已经超时
-			cmdQueue.Remove(e)
-			atomic.AddInt32(&cmdCount, -1)
-		} else {
-			if this.status == cache_new && this.writeBacked {
-				//cache_new触发sqlLoad,当前回写尚未完成，不能执行sqlLoad,所以不响应命令，让客户端请求超时
-				cmdQueue.Remove(e)
-				atomic.AddInt32(&cmdCount, -1)
-			} else {
-				ok := false
-				if cmd.cmdType == cmdGet {
-					if !(lastCmdType == cmdNone || lastCmdType == cmdGet) {
-						break
-					}
-					cmdQueue.Remove(e)
-					ok = this.processGet(ctx, cmd)
-					if ok {
-						lastCmdType = cmd.cmdType
-					}
-				} else if lastCmdType == cmdNone {
-					cmdQueue.Remove(e)
-					switch cmd.cmdType {
-					case cmdSet:
-						ok = this.processSet(ctx, cmd)
-						break
-					case cmdSetNx:
-						ok = this.processSetNx(ctx, cmd)
-						break
-					case cmdCompareAndSet:
-						ok = this.processCompareAndSet(ctx, cmd)
-						break
-					case cmdCompareAndSetNx:
-						ok = this.processCompareAndSetNx(ctx, cmd)
-						break
-					case cmdIncrBy:
-						ok = this.processIncrBy(ctx, cmd)
-						break
-					case cmdDecrBy:
-						ok = this.processDecrBy(ctx, cmd)
-						break
-					case cmdDel:
-						ok = this.processDel(ctx, cmd)
-						break
-					default:
-						//记录日志
-						atomic.AddInt32(&cmdCount, -1)
-						break
-					}
-
-					if ok {
-						lastCmdType = cmd.cmdType
-						break
-					}
-
-				} else {
-					break
-				}
-			}
-		}
-	}
-
-	if lastCmdType == cmdNone {
-		this.mtx.Unlock()
-		return
-	}
-
-	if fromClient && causeWriteBackCmd(lastCmdType) {
-		if this.unit.updateQueueFull() {
-			this.mtx.Unlock()
-			if conf.GetConfig().ReplyBusyOnQueueFull {
-				ctx.reply(errcode.ERR_BUSY, nil, -1)
-			} else {
-				atomic.AddInt32(&cmdCount, -1)
-			}
-			this.process_(fromClient)
-			return
-		}
-	}
-
-	fullReturn := fromClient
-
-	ok := true
-
-	if this.status == cache_ok || this.status == cache_missing {
-		ok = this.unit.pushRedisReq(ctx, fullReturn)
-	} else {
-		ok = this.unit.pushSqlLoadReq(ctx, fullReturn)
-	}
-
-	if !ok {
-		this.mtx.Unlock()
-		if conf.GetConfig().ReplyBusyOnQueueFull {
-			ctx.reply(errcode.ERR_BUSY, nil, -1)
-		} else {
-			atomic.AddInt32(&cmdCount, -1)
-		}
-		this.process_(fromClient)
-	} else {
-		this.lockCmdQueue()
-		this.mtx.Unlock()
-	}
+	cmdProcessor.processCmd(this, fromClient)
 }
 
 func getUnitByUnikey(uniKey string) *processUnit {
@@ -367,16 +246,32 @@ func (this *processUnit) removeLRU(ckey *cacheKey) {
 	ckey.pprev = nil
 }
 
-func (this *processUnit) kickCacheKey() {
-
-	//defer this.mtx.Unlock()
-	//this.mtx.Lock()
-
+//本地cache只需要删除key
+func kickCacheKeyCache(unit *processUnit) {
 	MaxCachePerGroupSize := conf.GetConfig().MaxCachePerGroupSize
 
-	for len(this.cacheKeys) > MaxCachePerGroupSize && this.lruHead.nnext != &this.lruTail {
+	for len(unit.cacheKeys) > MaxCachePerGroupSize && unit.lruHead.nnext != &unit.lruTail {
 
-		c := this.lruTail.pprev
+		c := unit.lruTail.pprev
+
+		kickAble, _ := c.kickAble()
+
+		if !kickAble {
+			break
+		}
+
+		unit.removeLRU(c)
+		delete(unit.cacheKeys, c.uniKey)
+	}
+}
+
+//redis cache除了要剔除key还要根据key的状态剔除redis中的缓存
+func kickCacheKeyRedisSql(unit *processUnit) {
+	MaxCachePerGroupSize := conf.GetConfig().MaxCachePerGroupSize
+
+	for len(unit.cacheKeys) > MaxCachePerGroupSize && unit.lruHead.nnext != &unit.lruTail {
+
+		c := unit.lruTail.pprev
 
 		kickAble, status := c.kickAble()
 
@@ -384,8 +279,8 @@ func (this *processUnit) kickCacheKey() {
 			break
 		}
 
-		this.removeLRU(c)
-		delete(this.cacheKeys, c.uniKey)
+		unit.removeLRU(c)
+		delete(unit.cacheKeys, c.uniKey)
 
 		if status == cache_ok {
 			cmd := &command{
@@ -398,9 +293,13 @@ func (this *processUnit) kickCacheKey() {
 				redisFlag: redis_kick,
 			}
 
-			this.pushRedisReq(ctx)
+			unit.pushRedisReq(ctx)
 		}
 	}
+}
+
+func (this *processUnit) kickCacheKey() {
+	this.fnKickCacheKey(this)
 }
 
 func InitProcessUnit() bool {
@@ -450,14 +349,6 @@ func InitProcessUnit() bool {
 		go unit.sqlLoader_.run()
 		go unit.sqlUpdater_.run()
 
-		/*timer.Repeat(time.Second, nil, func(t *timer.Timer) {
-			if isStop() {
-				t.Cancel()
-			} else {
-				unit.kickCacheKey()
-			}
-		})*/
-
 		timer.Repeat(time.Second*60, nil, func(t *timer.Timer) {
 			if isStop() || util.ErrQueueClosed == unit.sqlLoader_.queue.AddNoWait(&processContext{ping: true}) {
 				t.Cancel()
@@ -470,13 +361,13 @@ func InitProcessUnit() bool {
 			}
 		})
 
-		/*timer.Repeat(time.Second, nil, func(t *timer.Timer) {
+		timer.Repeat(time.Second, nil, func(t *timer.Timer) {
 			if isStop() {
 				t.Cancel()
 			} else {
 				Infoln(wname, unit.sqlUpdater_.queue.Len())
 			}
-		})*/
+		})
 
 	}
 

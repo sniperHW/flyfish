@@ -217,18 +217,16 @@ func Stop() {
 		return true
 	})
 
-	Infoln("ShutdownRead ok", redisReqCount, cmdCount)
+	Infoln("ShutdownRead ok", cmdCount)
 
 	//等待redis请求和命令执行完成
 	waitCondition(func() bool {
-		if atomic.LoadInt32(&redisReqCount) == 0 && atomic.LoadInt32(&cmdCount) == 0 {
+		if atomic.LoadInt32(&cmdCount) == 0 {
 			return true
 		} else {
 			return false
 		}
 	})
-
-	Infoln("redis finish")
 
 	StopProcessUnit()
 

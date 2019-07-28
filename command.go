@@ -108,16 +108,20 @@ type command struct {
 	incrDecr    *proto.Field            //for incr/decr
 	deadline    time.Time
 	replyOnDbOk bool //是否在db操作完成后才返回响应
+	replyed     int32
 }
 
 func (this *command) reply(errCode int32, fields map[string]*proto.Field, version int64) {
-	this.rpyer.reply(errCode, fields, version)
-	atomic.AddInt32(&cmdCount, -1)
+	if atomic.CompareAndSwapInt32(&this.replyed, 0, 1) {
+		this.rpyer.reply(errCode, fields, version)
+		atomic.AddInt32(&cmdCount, -1)
+	}
 }
 
 func processCmd(cmd *command) {
 
 	atomic.AddInt32(&cmdCount, 1)
+
 	meta := getMetaByTable(cmd.table)
 
 	if nil == meta {
@@ -163,7 +167,7 @@ func processCmd(cmd *command) {
 		k.pushCmd(cmd)
 		unit.updateLRU(k)
 	} else {
-		k = newCacheKey(unit, cmd.table, cmd.uniKey)
+		k = newCacheKey(unit, cmd.table, cmd.key, cmd.uniKey)
 		if nil != k {
 			cmd.ckey = k
 			k.pushCmd(cmd)
@@ -177,7 +181,6 @@ func processCmd(cmd *command) {
 
 	if nil != k {
 		k.processClientCmd()
-	} else {
-		cmd.reply(errcode.ERR_INVAILD_TABLE, nil, -1)
 	}
+
 }

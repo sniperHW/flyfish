@@ -319,7 +319,7 @@ func LoadMeta(def []string) bool {
 		}
 
 		//加上__key__，__version__
-		if len(fields)+2 > len(ARGV)-1 {
+		if len(fields)+2 > len(mysqlInsertPlaceHolder)-1 {
 			Errorln("len(fields)+2 > len(ARGV)-1")
 			return false
 		}

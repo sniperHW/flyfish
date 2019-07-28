@@ -46,6 +46,7 @@ func recordPut(r *record) {
 
 type cacheKey struct {
 	uniKey         string
+	key            string
 	version        int64
 	status         int
 	cmdQueueLocked bool //操作是否被锁定
@@ -57,6 +58,13 @@ type cacheKey struct {
 	r              *record
 	nnext          *cacheKey
 	pprev          *cacheKey
+	values         map[string]*proto.Field
+}
+
+func (this *cacheKey) reset() {
+	defer this.mtx.Unlock()
+	this.mtx.Lock()
+	this.status = cache_new
 }
 
 func (this *cacheKey) lockCmdQueue() {
@@ -92,6 +100,14 @@ func (this *cacheKey) setMissing() {
 	this.mtx.Lock()
 	this.version = 0
 	this.status = cache_missing
+	this.values = nil
+
+}
+
+func (this *cacheKey) setMissingNoLock() {
+	this.version = 0
+	this.status = cache_missing
+	this.values = nil
 }
 
 func (this *cacheKey) setOK(version int64) {
@@ -101,10 +117,9 @@ func (this *cacheKey) setOK(version int64) {
 	this.status = cache_ok
 }
 
-func (this *cacheKey) reset() {
-	defer this.mtx.Unlock()
-	this.mtx.Lock()
-	this.status = cache_new
+func (this *cacheKey) setOKNoLock(version int64) {
+	this.version = version
+	this.status = cache_ok
 }
 
 func (this *cacheKey) clearWriteBack() {
@@ -123,6 +138,12 @@ func (this *cacheKey) getRecord() *record {
 	return this.r
 }
 
+func (this *cacheKey) isWriteBack() bool {
+	defer this.mtx.Unlock()
+	this.mtx.Lock()
+	return this.writeBacked
+}
+
 func (this *cacheKey) pushCmd(cmd *command) {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
@@ -131,24 +152,6 @@ func (this *cacheKey) pushCmd(cmd *command) {
 
 func (this *cacheKey) getMeta() *table_meta {
 	return (*table_meta)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&this.meta))))
-}
-
-func newCacheKey(unit *processUnit, table string, uniKey string) *cacheKey {
-
-	meta := getMetaByTable(table)
-
-	if nil == meta {
-		Errorln("newCacheKey key:", uniKey, " error,[missing table_meta]")
-		return nil
-	}
-
-	return &cacheKey{
-		uniKey:   uniKey,
-		status:   cache_new,
-		meta:     meta,
-		cmdQueue: list.New(),
-		unit:     unit,
-	}
 }
 
 func (this *cacheKey) convertStr(fieldName string, value string) *proto.Field {
@@ -190,5 +193,24 @@ func (this *cacheKey) convertStr(fieldName string, value string) *proto.Field {
 		return proto.PackField(fieldName, u)
 	} else {
 		return nil
+	}
+}
+
+func newCacheKey(unit *processUnit, table string, key string, uniKey string) *cacheKey {
+
+	meta := getMetaByTable(table)
+
+	if nil == meta {
+		Errorln("newCacheKey key:", uniKey, " error,[missing table_meta]")
+		return nil
+	}
+
+	return &cacheKey{
+		uniKey:   uniKey,
+		key:      key,
+		status:   cache_new,
+		meta:     meta,
+		cmdQueue: list.New(),
+		unit:     unit,
 	}
 }

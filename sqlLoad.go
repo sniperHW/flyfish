@@ -152,14 +152,14 @@ func (this *sqlLoader) exec() {
 						}
 						delete(v.ctxs, key)
 						//返回给主循环
-						onSqlResp(ctx, errcode.ERR_OK)
+						sqlResponse.onSqlResp(ctx, errcode.ERR_OK)
 					}
 				}
 			}
 
 			for _, vv := range v.ctxs {
 				//无结果
-				onSqlResp(vv, errcode.ERR_NOTFOUND)
+				sqlResponse.onSqlResp(vv, errcode.ERR_NOTFOUND)
 			}
 			v.meta.queryMeta.putReceiver(filed_receiver)
 		}
