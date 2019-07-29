@@ -284,7 +284,7 @@ func (this *Conn) exec(c *cmdContext) {
 		if atomic.LoadInt32(&this.closed) == 1 {
 			this.c.doCallBack(c.cb, errcode.ERR_CLOSE)
 		} else {
-			c.deadline = time.Now().Add(RequestTimeout)
+			c.deadline = time.Now().Add(ClientTimeout)
 			this.minheap.Insert(c)
 			if nil == this.session || this.dialing {
 				c.status = wait_send

@@ -1,14 +1,14 @@
 package client
 
 import (
-	//"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/event"
 	"github.com/sniperHW/kendynet/util"
 	"time"
-	//"runtime"
 )
 
-var RequestTimeout time.Duration = 5 * time.Second
+var ClientTimeout time.Duration = 6 * time.Second
+
+var ServerTimeout time.Duration = 2 * time.Second
 
 type Client struct {
 	services      []string

@@ -62,18 +62,22 @@ func (this *processUnit) pushSqlLoadReq(ctx *processContext, fullReturn ...bool)
 	}
 }
 
-func (this *processUnit) pushSqlLoadReqOnRedisReply(ctx *processContext) bool {
-	ckey := ctx.getCacheKey()
+func (this *processUnit) onRedisStale(ckey *cacheKey, ctx *processContext) {
+	/*  redis中的数据与flyfish key不一致
+	 *  将ckey重置为cache_new，强制从数据库取值刷新redis
+	 */
 	ckey.mtx.Lock()
 	defer ckey.mtx.Unlock()
+	ckey.status = cache_new
 	if ckey.writeBacked {
 		ckey.cmdQueueLocked = false
-		atomic.AddInt32(&cmdCount, -int32(ckey.cmdQueue.Len()))
+		//尚未处理的cmd以及ctx中包含的cmd都不做响应，所以需要扣除正确的cmdCount
+		atomic.AddInt32(&cmdCount, -int32(ckey.cmdQueue.Len()+len(ctx.commands)))
 		ckey.cmdQueue = list.New()
-		return false
 	} else {
+		ctx.writeBackFlag = write_back_none //数据存在执行update
+		ctx.redisFlag = redis_none
 		this.sqlLoader_.queue.AddNoWait(ctx)
-		return true
 	}
 }
 

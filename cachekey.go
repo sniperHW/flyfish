@@ -61,12 +61,6 @@ type cacheKey struct {
 	values         map[string]*proto.Field
 }
 
-func (this *cacheKey) reset() {
-	defer this.mtx.Unlock()
-	this.mtx.Lock()
-	this.status = cache_new
-}
-
 func (this *cacheKey) lockCmdQueue() {
 	if !this.cmdQueueLocked {
 		this.cmdQueueLocked = true
@@ -136,12 +130,6 @@ func (this *cacheKey) getRecord() *record {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
 	return this.r
-}
-
-func (this *cacheKey) isWriteBack() bool {
-	defer this.mtx.Unlock()
-	this.mtx.Lock()
-	return this.writeBacked
 }
 
 func (this *cacheKey) pushCmd(cmd *command) {
