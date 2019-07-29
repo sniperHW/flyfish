@@ -166,7 +166,8 @@ func Start() error {
 
 	InitProcessUnit()
 
-	server, err := newTcpListener("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort))
+	var err error
+	server, err = newTcpListener("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort))
 	if nil != err {
 		return err
 	}
@@ -185,11 +186,10 @@ func Start() error {
 }
 
 func StopServer() {
-	if !atomic.CompareAndSwapInt32(&stoped, 0, 1) {
-		return
+	if atomic.CompareAndSwapInt32(&stoped, 0, 1) {
+		Infoln("StopServer")
+		server.Close()
 	}
-	Infoln("StopServer")
-	server.Close()
 }
 
 func isStop() bool {

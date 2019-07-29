@@ -247,7 +247,7 @@ func (this *processUnit) removeLRU(ckey *cacheKey) {
 }
 
 //本地cache只需要删除key
-func kickCacheKeyCache(unit *processUnit) {
+func kickCacheKeyLocalCache(unit *processUnit) {
 	MaxCachePerGroupSize := conf.GetConfig().MaxCachePerGroupSize
 
 	for len(unit.cacheKeys) > MaxCachePerGroupSize && unit.lruHead.nnext != &unit.lruTail {
@@ -266,7 +266,7 @@ func kickCacheKeyCache(unit *processUnit) {
 }
 
 //redis cache除了要剔除key还要根据key的状态剔除redis中的缓存
-func kickCacheKeyRedisSql(unit *processUnit) {
+func kickCacheKeyRedisCache(unit *processUnit) {
 	MaxCachePerGroupSize := conf.GetConfig().MaxCachePerGroupSize
 
 	for len(unit.cacheKeys) > MaxCachePerGroupSize && unit.lruHead.nnext != &unit.lruTail {
@@ -344,6 +344,12 @@ func InitProcessUnit() bool {
 		unit.lruHead.nnext = &unit.lruTail
 		unit.lruTail.pprev = &unit.lruHead
 
+		if config.CacheType == "redis" {
+			unit.fnKickCacheKey = kickCacheKeyRedisCache
+		} else {
+			unit.fnKickCacheKey = kickCacheKeyLocalCache
+		}
+
 		processUnits[i] = unit
 
 		go unit.sqlLoader_.run()
@@ -361,13 +367,13 @@ func InitProcessUnit() bool {
 			}
 		})
 
-		timer.Repeat(time.Second, nil, func(t *timer.Timer) {
+		/*timer.Repeat(time.Second, nil, func(t *timer.Timer) {
 			if isStop() {
 				t.Cancel()
 			} else {
 				Infoln(wname, unit.sqlUpdater_.queue.Len())
 			}
-		})
+		})*/
 
 	}
 
