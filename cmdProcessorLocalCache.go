@@ -388,7 +388,7 @@ func (this cmdProcessorLocalCache) processCmd(ckey *cacheKey, fromClient bool) {
 			} else {
 				atomic.AddInt32(&cmdCount, -1)
 			}
-			ckey.process_(fromClient)
+			this.processCmd(ckey, fromClient)
 			return
 		} else {
 			ckey.lockCmdQueue()

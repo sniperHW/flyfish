@@ -309,7 +309,7 @@ func (this cmdProcessorRedisCache) processCmd(ckey *cacheKey, fromClient bool) {
 			} else {
 				atomic.AddInt32(&cmdCount, -1)
 			}
-			ckey.process_(fromClient)
+			this.processCmd(ckey, fromClient)
 			return
 		}
 	}
@@ -331,7 +331,7 @@ func (this cmdProcessorRedisCache) processCmd(ckey *cacheKey, fromClient bool) {
 		} else {
 			atomic.AddInt32(&cmdCount, -1)
 		}
-		ckey.process_(fromClient)
+		this.processCmd(ckey, fromClient)
 	} else {
 		ckey.lockCmdQueue()
 		ckey.mtx.Unlock()

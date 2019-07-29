@@ -62,6 +62,9 @@ func (this sqlResponseLocalCache) onSqlNotFound(ctx *processContext) {
 }
 
 func (this sqlResponseLocalCache) onSqlLoadOKGet(ctx *processContext) {
+
+	Debugln("onSqlLoadOKGet")
+
 	version := ctx.fields["__version__"].GetInt()
 	ckey := ctx.getCacheKey()
 	ckey.mtx.Lock()
@@ -74,9 +77,13 @@ func (this sqlResponseLocalCache) onSqlLoadOKGet(ctx *processContext) {
 
 func (this sqlResponseLocalCache) onSqlLoadOKSet(ctx *processContext) {
 
+	Debugln("onSqlLoadOKSet")
+
 	version := ctx.fields["__version__"].GetInt()
 	cmd := ctx.getCmd()
+	ckey := ctx.getCacheKey()
 	cmdType := cmd.cmdType
+	ctx.writeBackFlag = write_back_none
 	if cmdType == cmdSet {
 		if nil != cmd.version && *cmd.version != version {
 			//版本号不对
@@ -117,8 +124,6 @@ func (this sqlResponseLocalCache) onSqlLoadOKSet(ctx *processContext) {
 		ctx.writeBackFlag = write_back_update //sql中存在,使用update回写
 	}
 
-	ckey := ctx.getCacheKey()
-
 	ckey.mtx.Lock()
 
 	ckey.setValue(ctx)
@@ -127,14 +132,20 @@ func (this sqlResponseLocalCache) onSqlLoadOKSet(ctx *processContext) {
 
 	ckey.mtx.Unlock()
 
-	if ctx.writeBackFlag == write_back_none || !ctx.replyOnDbOk {
-		ctx.reply(errcode.ERR_OK, nil, version)
+	if ctx.writeBackFlag != write_back_none {
+		if !ctx.replyOnDbOk {
+			ctx.reply(errcode.ERR_OK, nil, version)
+		}
+
+		ckey.unit.pushSqlWriteBackReq(ctx)
+
 		ckey.processQueueCmd()
 	}
-
 }
 
 func (this sqlResponseLocalCache) onSqlLoadOKDel(ctx *processContext) {
+
+	Debugln("onSqlLoadOKDel")
 
 	var errCode int32
 	version := ctx.fields["__version__"].GetInt()
@@ -167,6 +178,7 @@ func (this sqlResponseLocalCache) onSqlLoadOKDel(ctx *processContext) {
 }
 
 func (this sqlResponseLocalCache) onSqlLoadOK(ctx *processContext) {
+	Debugln("onSqlLoadOK")
 	cmdType := ctx.getCmdType()
 	if cmdType == cmdGet {
 		this.onSqlLoadOKGet(ctx)
