@@ -25,18 +25,19 @@ var sqlUpdateWg *sync.WaitGroup
 
 var cmdProcessor cmdProcessorI
 
+var fnKickCacheKey func(*processUnit)
+
 type cmdProcessorI interface {
 	processCmd(*cacheKey, bool)
 }
 
 type processUnit struct {
-	cacheKeys      map[string]*cacheKey
-	mtx            sync.Mutex
-	sqlLoader_     *sqlLoader
-	sqlUpdater_    *sqlUpdater
-	lruHead        cacheKey
-	lruTail        cacheKey
-	fnKickCacheKey func(*processUnit)
+	cacheKeys   map[string]*cacheKey
+	mtx         sync.Mutex
+	sqlLoader_  *sqlLoader
+	sqlUpdater_ *sqlUpdater
+	lruHead     cacheKey
+	lruTail     cacheKey
 }
 
 func (this *processUnit) updateQueueFull() bool {
@@ -303,7 +304,7 @@ func kickCacheKeyRedisCache(unit *processUnit) {
 }
 
 func (this *processUnit) kickCacheKey() {
-	this.fnKickCacheKey(this)
+	fnKickCacheKey(this)
 }
 
 func InitProcessUnit() bool {
@@ -347,12 +348,6 @@ func InitProcessUnit() bool {
 
 		unit.lruHead.nnext = &unit.lruTail
 		unit.lruTail.pprev = &unit.lruHead
-
-		if config.CacheType == "redis" {
-			unit.fnKickCacheKey = kickCacheKeyRedisCache
-		} else {
-			unit.fnKickCacheKey = kickCacheKeyLocalCache
-		}
 
 		processUnits[i] = unit
 

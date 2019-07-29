@@ -158,10 +158,12 @@ func Start() error {
 	if config.CacheType == "redis" {
 		cmdProcessor = cmdProcessorRedisCache{}
 		sqlResponse = sqlResponseRedisCache{}
+		fnKickCacheKey = kickCacheKeyRedisCache
 		RedisInit()
 	} else {
 		cmdProcessor = cmdProcessorLocalCache{}
 		sqlResponse = sqlResponseLocalCache{}
+		fnKickCacheKey = kickCacheKeyLocalCache
 	}
 
 	InitProcessUnit()
