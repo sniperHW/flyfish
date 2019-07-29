@@ -116,7 +116,7 @@ func (this *Conn) startTimeoutChecker() {
 			time.Sleep(time.Duration(1) * time.Millisecond)
 			this.eventQueue.Post(func() {
 				now := time.Now()
-				//this.ping(&now)
+				this.ping(&now)
 				this.checkTimeout(&now)
 			})
 		}
@@ -230,6 +230,7 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 }
 
 func (this *Conn) onDisconnected() {
+
 	this.eventQueue.Post(func() {
 		this.dialing = false
 		this.session = nil
@@ -238,13 +239,11 @@ func (this *Conn) onDisconnected() {
 		for _, c := range this.waitResp {
 			this.c.doCallBack(c.cb, errcode.ERR_DISCONNECTED)
 		}
-
 		this.dial()
 	})
 }
 
 func (this *Conn) dial() {
-
 	if this.dialing {
 		return
 	}
@@ -258,6 +257,9 @@ func (this *Conn) dial() {
 			if nil == err {
 				this.onConnected(session)
 				return
+			} else {
+				Errorln("dial error", this.addr, err)
+				time.Sleep(1 * time.Second)
 			}
 		}
 	}()
