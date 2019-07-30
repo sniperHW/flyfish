@@ -1,9 +1,9 @@
 package codec
 
 import (
-	"flyfish/codec/pb"
-	"flyfish/conf"
 	"fmt"
+	"github.com/sniperHW/flyfish/codec/pb"
+	"github.com/sniperHW/flyfish/conf"
 	"net"
 
 	"github.com/golang/protobuf/proto"

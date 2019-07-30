@@ -1,9 +1,9 @@
 package flyfish
 
 import (
-	"flyfish/conf"
-	"flyfish/errcode"
-	"flyfish/proto"
+	"github.com/sniperHW/flyfish/conf"
+	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/proto"
 	"sync/atomic"
 	"time"
 )

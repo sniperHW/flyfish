@@ -1,7 +1,7 @@
 package flyfish
 
 import (
-	"flyfish/errcode"
+	"github.com/sniperHW/flyfish/errcode"
 	"sync/atomic"
 )
 

@@ -1,8 +1,8 @@
 package main
 
 import (
-	"flyfish"
 	"fmt"
+	"github.com/sniperHW/flyfish"
 )
 
 func main() {

@@ -2,11 +2,11 @@ package flyfish
 
 import (
 	"encoding/binary"
-	codec "flyfish/codec"
-	"flyfish/conf"
-	protocol "flyfish/proto"
 	"fmt"
 	"github.com/golang/protobuf/proto"
+	codec "github.com/sniperHW/flyfish/codec"
+	"github.com/sniperHW/flyfish/conf"
+	protocol "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/socket/listener/tcp"
 	"net"

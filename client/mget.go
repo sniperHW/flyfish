@@ -1,7 +1,7 @@
 package client
 
 import (
-	"flyfish/errcode"
+	"github.com/sniperHW/flyfish/errcode"
 )
 
 type MGetCmd struct {

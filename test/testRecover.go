@@ -1,8 +1,8 @@
 package main
 
 import (
-	"flyfish"
-	"flyfish/conf"
+	"github.com/sniperHW/flyfish"
+	"github.com/sniperHW/flyfish/conf"
 	//"fmt"
 	//"github.com/go-ini/ini"
 	//"github.com/sniperHW/kendynet/golog"

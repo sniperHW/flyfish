@@ -1,9 +1,9 @@
 package client
 
 import (
-	"flyfish/codec"
-	"flyfish/errcode"
-	protocol "flyfish/proto"
+	"github.com/sniperHW/flyfish/codec"
+	"github.com/sniperHW/flyfish/errcode"
+	protocol "github.com/sniperHW/flyfish/proto"
 	"sync/atomic"
 	"time"
 

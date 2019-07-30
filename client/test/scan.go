@@ -1,8 +1,8 @@
 package main
 
 import (
-	kclient "flyfish/client"
 	"fmt"
+	kclient "github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/kendynet/golog"
 	"os"
 )

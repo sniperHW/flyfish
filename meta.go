@@ -1,8 +1,8 @@
 package flyfish
 
 import (
-	"flyfish/proto"
 	"fmt"
+	"github.com/sniperHW/flyfish/proto"
 	"strconv"
 	"strings"
 	"sync"

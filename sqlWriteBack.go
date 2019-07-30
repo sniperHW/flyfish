@@ -2,9 +2,9 @@ package flyfish
 
 import (
 	"database/sql/driver"
-	"flyfish/conf"
-	"flyfish/errcode"
 	"github.com/jmoiron/sqlx"
+	"github.com/sniperHW/flyfish/conf"
+	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/kendynet/util"
 	"net"
 	"sync"

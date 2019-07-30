@@ -51,6 +51,6 @@ RedisPort       = 6379
 [Log]
 MaxLogfileSize  = 104857600 # 100mb
 LogDir          = "log"
-LogPrefix       = "flyfish"
+LogPrefix       = "github.com/sniperHW/flyfish"
 LogLevel        = "debug"                       (可动态重加载)
 EnableLogStdout = true                          (可动态重加载)

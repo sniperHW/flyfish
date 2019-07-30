@@ -2,9 +2,9 @@ package flyfish
 
 import (
 	"encoding/binary"
-	"flyfish/conf"
-	"flyfish/proto"
 	"fmt"
+	"github.com/sniperHW/flyfish/conf"
+	"github.com/sniperHW/flyfish/proto"
 	"hash/crc64"
 	"io"
 	"os"

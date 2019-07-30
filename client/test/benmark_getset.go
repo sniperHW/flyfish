@@ -1,9 +1,9 @@
 package main
 
 import (
-	kclient "flyfish/client"
-	"flyfish/errcode"
 	"fmt"
+	kclient "github.com/sniperHW/flyfish/client"
+	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/kendynet/golog"
 	"math/rand"
 	"os"

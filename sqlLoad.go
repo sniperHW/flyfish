@@ -1,10 +1,10 @@
 package flyfish
 
 import (
-	"flyfish/conf"
-	"flyfish/errcode"
-	"flyfish/proto"
 	"github.com/jmoiron/sqlx"
+	"github.com/sniperHW/flyfish/conf"
+	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet/util"
 	"reflect"
 	"time"

@@ -1,8 +1,8 @@
 package flyfish
 
 import (
-	"flyfish/errcode"
-	"flyfish/proto"
+	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/proto"
 	"sync/atomic"
 	"time"
 	"unsafe"

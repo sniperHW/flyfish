@@ -1,9 +1,9 @@
 package client
 
 import (
-	"flyfish/errcode"
-	protocol "flyfish/proto"
 	"fmt"
+	"github.com/sniperHW/flyfish/errcode"
+	protocol "github.com/sniperHW/flyfish/proto"
 	"sync/atomic"
 
 	"github.com/golang/protobuf/proto"

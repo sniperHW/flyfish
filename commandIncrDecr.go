@@ -1,10 +1,10 @@
 package flyfish
 
 import (
-	codec "flyfish/codec"
-	"flyfish/proto"
 	"fmt"
 	pb "github.com/golang/protobuf/proto"
+	codec "github.com/sniperHW/flyfish/codec"
+	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet"
 	"time"
 )

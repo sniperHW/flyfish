@@ -2,10 +2,10 @@ package client
 
 import (
 	"encoding/binary"
-	"flyfish/codec"
-	"flyfish/errcode"
-	protocol "flyfish/proto"
 	"github.com/golang/protobuf/proto"
+	"github.com/sniperHW/flyfish/codec"
+	"github.com/sniperHW/flyfish/errcode"
+	protocol "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/event"
 	connector "github.com/sniperHW/kendynet/socket/connector/tcp"

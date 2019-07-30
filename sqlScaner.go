@@ -2,13 +2,13 @@ package flyfish
 
 import (
 	"database/sql"
-	codec "flyfish/codec"
-	"flyfish/conf"
-	"flyfish/errcode"
-	"flyfish/proto"
 	"fmt"
 	pb "github.com/golang/protobuf/proto"
 	"github.com/jmoiron/sqlx"
+	codec "github.com/sniperHW/flyfish/codec"
+	"github.com/sniperHW/flyfish/conf"
+	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet"
 	"strings"
 	"sync/atomic"

@@ -1,6 +1,6 @@
 package flyfish
 
-import "flyfish/conf"
+import "github.com/sniperHW/flyfish/conf"
 
 var mysqlInsertPlaceHolder = []string{
 	"?",

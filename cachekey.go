@@ -2,7 +2,7 @@ package flyfish
 
 import (
 	"container/list"
-	"flyfish/proto"
+	"github.com/sniperHW/flyfish/proto"
 	"strconv"
 	"sync"
 	"sync/atomic"

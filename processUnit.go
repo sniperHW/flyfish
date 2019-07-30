@@ -2,10 +2,10 @@ package flyfish
 
 import (
 	"container/list"
-	"flyfish/conf"
-	"flyfish/proto"
 	"fmt"
 	"github.com/jmoiron/sqlx"
+	"github.com/sniperHW/flyfish/conf"
+	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet/timer"
 	"github.com/sniperHW/kendynet/util"
 	"sync"
