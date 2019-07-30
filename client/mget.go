@@ -12,11 +12,11 @@ type MGetCmd struct {
 	respCount int
 }
 
-func (this *MGetCmd) Exec(cb func(*MutiResult)) {
+func (this *MGetCmd) AsyncExec(cb func(*MutiResult)) {
 	this.cb = cb
 	for k, v := range this.cmds {
 		key := k
-		v.Exec(func(ret *SliceResult) {
+		v.AsyncExec(func(ret *SliceResult) {
 			this.c.mGetQueue.PostNoWait(func() {
 				if nil == this.cb {
 					return
@@ -67,6 +67,14 @@ func (this *MGetCmd) Exec(cb func(*MutiResult)) {
 	}
 }
 
+func (this *MGetCmd) Exec() *MutiResult {
+	respChan := make(chan *MutiResult)
+	this.AsyncExec(func(r *MutiResult) {
+		respChan <- r
+	})
+	return <-respChan
+}
+
 func (this *Client) MGet(table string, keys []string, fields ...string) *MGetCmd {
 	l := len(keys)
 	if l == 0 {
@@ -93,7 +101,7 @@ func (this *Client) MGet(table string, keys []string, fields ...string) *MGetCmd
 	return cmd
 }
 
-func (this *Client) MGetAll(table string, keys []string) *MGetCmd {
+func (this *Client) MGetAll(table string, keys ...string) *MGetCmd {
 	l := len(keys)
 	if l == 0 {
 		return nil

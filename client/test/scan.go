@@ -2,38 +2,10 @@ package main
 
 import (
 	kclient "flyfish/client"
-	"flyfish/errcode"
 	"fmt"
 	"github.com/sniperHW/kendynet/golog"
 	"os"
 )
-
-var c int32 = 0
-
-func scanCb(scaner *kclient.Scaner, ret *kclient.MutiResult) {
-
-	if ret.ErrCode == errcode.ERR_OK {
-
-		for _, v := range ret.Rows {
-			fmt.Println(v.Key)
-			c++
-		}
-
-		if c > 100 {
-			scaner.Close()
-			fmt.Println("scan 100 rows")
-			return
-		}
-
-		scaner.Next(10, scanCb)
-
-	} else {
-
-		fmt.Println(errcode.GetErrorStr(ret.ErrCode))
-
-		scaner.Close()
-	}
-}
 
 func main() {
 
@@ -50,12 +22,20 @@ func main() {
 		services = append(services, os.Args[i])
 	}
 
-	c := kclient.OpenClient(services) //eventQueue)
+	c := kclient.OpenClient(services)
 
 	scaner := c.Scaner("users1", "age")
 
-	scaner.Next(10, scanCb)
-
-	sigStop := make(chan bool)
-	_, _ = <-sigStop
+	for i := 0; i < 10; i++ {
+		r, err := scaner.Next(10)
+		if nil == err {
+			for _, v := range r.Rows {
+				fmt.Println(v.Key)
+			}
+		} else {
+			fmt.Println(err)
+			break
+		}
+	}
+	scaner.Close()
 }

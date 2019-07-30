@@ -43,7 +43,7 @@ func Get(c *kclient.Client) {
 	get := c.Get("users1", key, "name", "age", "phone")
 	beg := time.Now()
 
-	get.Exec(func(ret *kclient.SliceResult) {
+	get.AsyncExec(func(ret *kclient.SliceResult) {
 
 		latency := time.Now().Sub(beg)
 		r := result{

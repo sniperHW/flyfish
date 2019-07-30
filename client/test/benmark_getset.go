@@ -35,7 +35,7 @@ func Set(c *kclient.Client) {
 
 	beg := time.Now()
 
-	set.Exec(func(ret *kclient.StatusResult) {
+	set.AsyncExec(func(ret *kclient.StatusResult) {
 
 		if setAvaDelay == time.Duration(0) {
 			setAvaDelay = time.Now().Sub(beg)
@@ -61,7 +61,7 @@ func Get(c *kclient.Client) {
 
 	beg := time.Now()
 
-	get.Exec(func(ret *kclient.SliceResult) {
+	get.AsyncExec(func(ret *kclient.SliceResult) {
 
 		//fmt.Println(ret.Fields["age"].GetInt())
 

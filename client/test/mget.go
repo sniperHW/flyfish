@@ -4,43 +4,66 @@ import (
 	kclient "flyfish/client"
 	"flyfish/errcode"
 	"fmt"
-
-	//"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/golog"
+	"os"
 )
-
-func MGet(c *kclient.Client) {
-
-	keys := []string{"huangwei:1", "huangwei:2", "huangwei:3", "huangwei:xx"}
-
-	mget := c.MGetAll("users1", keys)
-
-	mget.Exec(func(ret *kclient.MutiResult) {
-		if ret.ErrCode == errcode.ERR_OK {
-			for _, v := range ret.Rows {
-				if nil == v.Fields {
-					fmt.Println(v.Key, "not exist")
-				} else {
-					fmt.Println(v.Key, v.Fields["age"].GetInt())
-				}
-			}
-		} else {
-			fmt.Println(errcode.GetErrorStr(ret.ErrCode))
-		}
-	})
-}
 
 func main() {
 
 	kclient.InitLogger(golog.New("flyfish client", golog.NewOutputLogger("log", "flyfish client", 1024*1024*50)))
 
-	services := []string{"127.0.0.1:10012"}
-	c := kclient.OpenClient(services) //eventQueue)
+	services := []string{}
 
-	MGet(c)
+	for i := 1; i < len(os.Args); i++ {
+		services = append(services, os.Args[i])
+	}
 
-	//eventQueue.Run()
+	c := kclient.OpenClient(services)
 
-	sigStop := make(chan bool)
-	_, _ = <-sigStop
+	fields := map[string]interface{}{}
+
+	fields["age"] = 1
+	fields["phone"] = "123456"
+	fields["name"] = "sniperHW1"
+
+	r1 := c.Set("users1", "sniperHW1", fields).Exec()
+	if r1.ErrCode != errcode.ERR_OK {
+		fmt.Println("Set1 error:", errcode.GetErrorStr(r1.ErrCode), r1)
+		return
+	}
+
+	fields["age"] = 2
+	fields["phone"] = "123456"
+	fields["name"] = "sniperHW2"
+
+	r2 := c.Set("users1", "sniperHW2", fields).Exec()
+	if r2.ErrCode != errcode.ERR_OK {
+		fmt.Println("Set2 error:", errcode.GetErrorStr(r2.ErrCode), r2)
+		return
+	}
+
+	fields["age"] = 3
+	fields["phone"] = "123456"
+	fields["name"] = "sniperHW3"
+
+	r3 := c.Set("users1", "sniperHW3", fields).Exec()
+	if r3.ErrCode != errcode.ERR_OK {
+		fmt.Println("Set3 error:", errcode.GetErrorStr(r3.ErrCode), r3)
+		return
+	}
+
+	r4 := c.MGetAll("users1", "sniperHW1", "sniperHW2", "sniperHW3", "sniperHW4").Exec()
+
+	if r4.ErrCode == errcode.ERR_OK {
+		for _, v := range r4.Rows {
+			if nil == v.Fields {
+				fmt.Println(v.Key, "not exist")
+			} else {
+				fmt.Println(v.Key, v.Fields["age"].GetInt())
+			}
+		}
+	} else {
+		fmt.Println(errcode.GetErrorStr(r4.ErrCode))
+	}
+
 }

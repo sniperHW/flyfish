@@ -85,7 +85,7 @@ type StatusCmd struct {
 	seqno int64
 }
 
-func (this *StatusCmd) Exec(cb func(*StatusResult)) {
+func (this *StatusCmd) AsyncExec(cb func(*StatusResult)) {
 	context := &cmdContext{
 		seqno: this.seqno,
 		cb: callback{
@@ -97,13 +97,21 @@ func (this *StatusCmd) Exec(cb func(*StatusResult)) {
 	this.conn.exec(context)
 }
 
+func (this *StatusCmd) Exec() *StatusResult {
+	respChan := make(chan *StatusResult)
+	this.AsyncExec(func(r *StatusResult) {
+		respChan <- r
+	})
+	return <-respChan
+}
+
 type SliceCmd struct {
 	conn  *Conn
 	req   proto.Message
 	seqno int64
 }
 
-func (this *SliceCmd) Exec(cb func(*SliceResult)) {
+func (this *SliceCmd) AsyncExec(cb func(*SliceResult)) {
 	context := &cmdContext{
 		seqno: this.seqno,
 		cb: callback{
@@ -113,6 +121,14 @@ func (this *SliceCmd) Exec(cb func(*SliceResult)) {
 		req: this.req,
 	}
 	this.conn.exec(context)
+}
+
+func (this *SliceCmd) Exec() *SliceResult {
+	respChan := make(chan *SliceResult)
+	this.AsyncExec(func(r *SliceResult) {
+		respChan <- r
+	})
+	return <-respChan
 }
 
 func (this *Conn) Get(table, key string, fields ...string) *SliceCmd {

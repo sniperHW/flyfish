@@ -109,11 +109,6 @@ func (this *sqlUpdater) doDelete(r *writeBackRecord) error {
 	return err
 }
 
-/*func updateDefer(r *writeBackRecord) {
-	r.ckey.clearWriteBack()
-	recordPut(r)
-}*/
-
 func (this *sqlUpdater) process(v interface{}) {
 
 	if _, ok := v.(*processContext); ok {

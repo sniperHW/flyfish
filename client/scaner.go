@@ -42,7 +42,7 @@ func (this *Scaner) wrapCb(cb func(*Scaner, *MutiResult)) func(*MutiResult) {
 	}
 }
 
-func (this *Scaner) Next(count int32, cb func(*Scaner, *MutiResult)) error {
+func (this *Scaner) AsyncNext(count int32, cb func(*Scaner, *MutiResult)) error {
 
 	if atomic.LoadInt32(&this.closed) == 1 {
 		return fmt.Errorf("closed")
@@ -86,6 +86,17 @@ func (this *Scaner) Next(count int32, cb func(*Scaner, *MutiResult)) error {
 	this.conn.exec(context)
 
 	return nil
+}
+
+func (this *Scaner) Next(count int32) (*MutiResult, error) {
+	respChan := make(chan *MutiResult)
+	err := this.AsyncNext(count, func(s *Scaner, r *MutiResult) {
+		respChan <- r
+	})
+	if nil != err {
+		return nil, err
+	}
+	return <-respChan, nil
 }
 
 func (this *Scaner) Close() {

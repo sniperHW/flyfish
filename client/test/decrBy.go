@@ -4,33 +4,40 @@ import (
 	kclient "flyfish/client"
 	"flyfish/errcode"
 	"fmt"
-
 	"github.com/sniperHW/kendynet/golog"
+	"os"
 )
-
-func DecrBy(c *kclient.Client) {
-	decr := c.DecrBy("counter", "test_counter2", "c", 1)
-	decr.Exec(func(ret *kclient.SliceResult) {
-
-		if ret.ErrCode != errcode.ERR_OK {
-			fmt.Println(errcode.GetErrorStr(ret.ErrCode))
-		} else {
-			fmt.Println("c:", ret.Fields["c"].GetInt())
-		}
-	})
-}
 
 func main() {
 
 	kclient.InitLogger(golog.New("flyfish client", golog.NewOutputLogger("log", "flyfish client", 1024*1024*50)))
 
-	services := []string{"127.0.0.1:10012"}
-	c := kclient.OpenClient(services) //eventQueue)
+	services := []string{}
 
-	DecrBy(c)
+	for i := 1; i < len(os.Args); i++ {
+		services = append(services, os.Args[i])
+	}
 
-	//eventQueue.Run()
+	c := kclient.OpenClient(services)
 
-	sigStop := make(chan bool)
-	_, _ = <-sigStop
+	fields := map[string]interface{}{}
+	fields["age"] = 100
+	fields["phone"] = "123456"
+	fields["name"] = "sniperHW"
+
+	//不存在技术sniperHW SetNx成功
+	r2 := c.Set("users1", "sniperHW", fields).Exec()
+	if r2.ErrCode != errcode.ERR_OK {
+		fmt.Println("Set error:", errcode.GetErrorStr(r2.ErrCode))
+		return
+	}
+
+	r3 := c.DecrBy("users1", "sniperHW", "age", 1).Exec()
+	if r3.ErrCode != errcode.ERR_OK {
+		fmt.Println("DecrBy1 error:", errcode.GetErrorStr(r3.ErrCode))
+		return
+	}
+
+	fmt.Println(r3.Fields["age"].GetValue())
+
 }

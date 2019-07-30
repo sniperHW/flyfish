@@ -4,40 +4,53 @@ import (
 	kclient "flyfish/client"
 	"flyfish/errcode"
 	"fmt"
-	"strings"
-
 	"github.com/sniperHW/kendynet/golog"
+	"os"
 )
-
-func SetNx(c *kclient.Client) {
-	fields := map[string]interface{}{}
-	fields["age"] = 37
-	fields["phone"] = strings.Repeat("a", 1024)
-	fields["name"] = "sniperHW"
-	key := fmt.Sprintf("%s:%d", "xiba", 10)
-
-	set := c.SetNx("users1", key, fields)
-	set.Exec(func(ret *kclient.StatusResult) {
-
-		if ret.ErrCode != errcode.ERR_OK {
-			fmt.Println(errcode.GetErrorStr(ret.ErrCode))
-		} else {
-			fmt.Println("set ok")
-		}
-	})
-}
 
 func main() {
 
 	kclient.InitLogger(golog.New("flyfish client", golog.NewOutputLogger("log", "flyfish client", 1024*1024*50)))
 
-	services := []string{"127.0.0.1:10012"}
-	c := kclient.OpenClient(services) //eventQueue)
+	services := []string{}
 
-	SetNx(c)
+	for i := 1; i < len(os.Args); i++ {
+		services = append(services, os.Args[i])
+	}
 
-	//eventQueue.Run()
+	c := kclient.OpenClient(services)
 
-	sigStop := make(chan bool)
-	_, _ = <-sigStop
+	r1 := c.Del("users1", "sniperHW").Exec()
+
+	if !(r1.ErrCode == errcode.ERR_OK || r1.ErrCode == errcode.ERR_NOTFOUND) {
+		fmt.Println("Del error:", errcode.GetErrorStr(r1.ErrCode), r1)
+		return
+	}
+
+	fields := map[string]interface{}{}
+	fields["age"] = 1
+	fields["phone"] = "123456"
+	fields["name"] = "sniperHW"
+
+	//不存在技术sniperHW SetNx成功
+	r2 := c.SetNx("users1", "sniperHW", fields).Exec()
+	if r2.ErrCode != errcode.ERR_OK {
+		fmt.Println("SetNx1 error:", errcode.GetErrorStr(r2.ErrCode), r2)
+		return
+	}
+
+	r3 := c.Get("users1", "sniperHW", "name", "age", "phone").Exec()
+	if r3.ErrCode != errcode.ERR_OK {
+		fmt.Println("Get Error:", errcode.GetErrorStr(r3.ErrCode), r3)
+		return
+	}
+
+	fmt.Println(r3.Fields["name"].GetValue(), r3.Fields["age"].GetValue(), r3.Fields["phone"].GetValue())
+
+	//记录sniperHW存在执行失败
+	r4 := c.SetNx("users1", "sniperHW", fields).Exec()
+	if r4.ErrCode != errcode.ERR_OK {
+		fmt.Println("SetNx2 error:", errcode.GetErrorStr(r4.ErrCode))
+		return
+	}
 }

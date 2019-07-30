@@ -49,7 +49,7 @@ func Set(c *kclient.Client) {
 
 	beg := time.Now()
 
-	set.Exec(func(ret *kclient.StatusResult) {
+	set.AsyncExec(func(ret *kclient.StatusResult) {
 
 		latency := time.Now().Sub(beg)
 		r := result{

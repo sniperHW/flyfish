@@ -26,7 +26,7 @@ func Get(c *kclient.Client) {
 
 	beg := time.Now()
 
-	get.Exec(func(ret *kclient.SliceResult) {
+	get.AsyncExec(func(ret *kclient.SliceResult) {
 
 		//fmt.Println(ret.Fields["age"].GetInt())
 

@@ -25,25 +25,6 @@ type writeBackRecord struct {
 	ctx           *processContext
 }
 
-/*var recordPool = sync.Pool{
-	New: func() interface{} {
-		return &writeBackRecord{}
-	},
-}
-
-func recordGet() *writeBackRecord {
-	r := recordPool.Get().(*writeBackRecord)
-	return r
-}
-
-func recordPut(r *writeBackRecord) {
-	r.writeBackFlag = write_back_none
-	r.ckey = nil
-	r.fields = nil
-	r.ctx = nil
-	recordPool.Put(r)
-}*/
-
 type cacheKey struct {
 	uniKey         string
 	key            string
