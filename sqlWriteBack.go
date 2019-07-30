@@ -56,7 +56,7 @@ func (this *sqlUpdater) resetValues() {
 	this.values = this.values[0:0]
 }
 
-func (this *sqlUpdater) doInsert(r *record, meta *table_meta) error {
+func (this *sqlUpdater) doInsert(r *writeBackRecord, meta *table_meta) error {
 	str := strGet()
 	defer func() {
 		this.resetValues()
@@ -77,7 +77,7 @@ func (this *sqlUpdater) doInsert(r *record, meta *table_meta) error {
 	return err
 }
 
-func (this *sqlUpdater) doUpdate(r *record) error {
+func (this *sqlUpdater) doUpdate(r *writeBackRecord) error {
 
 	str := strGet()
 	defer func() {
@@ -101,12 +101,17 @@ func (this *sqlUpdater) doUpdate(r *record) error {
 	return err
 }
 
-func (this *sqlUpdater) doDelete(r *record) error {
+func (this *sqlUpdater) doDelete(r *writeBackRecord) error {
 	str := strGet()
 	defer strPut(str)
 	str.append("delete from ").append(r.table).append(" where __key__ = '").append(r.key).append("';")
 	_, err := this.db.Exec(str.toString())
 	return err
+}
+
+func updateDefer(r *writeBackRecord) {
+	r.ckey.clearWriteBack()
+	recordPut(r)
 }
 
 func (this *sqlUpdater) process(v interface{}) {
@@ -128,7 +133,7 @@ func (this *sqlUpdater) process(v interface{}) {
 
 		wb := v.(*cacheKey).getRecord()
 
-		defer wb.ckey.clearWriteBack()
+		defer updateDefer(wb)
 
 		if this.writeFileAndBreak {
 			backupRecord(wb)

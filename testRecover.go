@@ -9,7 +9,7 @@ func TestRecover() {
 
 	for i := 0; i < 10; i++ {
 
-		r := &record{
+		r := &writeBackRecord{
 			writeBackFlag: write_back_insert,
 			key:           fmt.Sprintf("key:%d", i),
 			table:         "blob",

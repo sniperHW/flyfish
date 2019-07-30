@@ -15,7 +15,7 @@ const (
 	cache_missing = 3
 )
 
-type record struct {
+type writeBackRecord struct {
 	writeBackFlag int
 	key           string
 	table         string
@@ -27,16 +27,16 @@ type record struct {
 
 var recordPool = sync.Pool{
 	New: func() interface{} {
-		return &record{}
+		return &writeBackRecord{}
 	},
 }
 
-func recordGet() *record {
-	r := recordPool.Get().(*record)
+func recordGet() *writeBackRecord {
+	r := recordPool.Get().(*writeBackRecord)
 	return r
 }
 
-func recordPut(r *record) {
+func recordPut(r *writeBackRecord) {
 	r.writeBackFlag = write_back_none
 	r.ckey = nil
 	r.fields = nil
@@ -55,7 +55,7 @@ type cacheKey struct {
 	meta           *table_meta
 	writeBacked    bool //正在回写
 	unit           *processUnit
-	r              *record
+	r              *writeBackRecord
 	nnext          *cacheKey
 	pprev          *cacheKey
 	values         map[string]*proto.Field
@@ -120,16 +120,14 @@ func (this *cacheKey) clearWriteBack() {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
 	this.writeBacked = false
-	if nil != this.r {
-		recordPut(this.r)
-		this.r = nil
-	}
 }
 
-func (this *cacheKey) getRecord() *record {
+func (this *cacheKey) getRecord() *writeBackRecord {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
-	return this.r
+	r := this.r
+	this.r = nil
+	return r
 }
 
 func (this *cacheKey) pushCmd(cmd *command) {

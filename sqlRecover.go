@@ -32,7 +32,7 @@ func init() {
 	crc64Table = crc64.MakeTable(crc64.ISO)
 }
 
-func marshalRecord(r *record) *kendynet.ByteBuffer {
+func marshalRecord(r *writeBackRecord) *kendynet.ByteBuffer {
 
 	var tt *proto.SqlType
 
@@ -77,7 +77,7 @@ func marshalRecord(r *record) *kendynet.ByteBuffer {
 
 }
 
-func backupRecord(r *record) {
+func backupRecord(r *writeBackRecord) {
 	fileMtx.Lock()
 	defer fileMtx.Unlock()
 
@@ -129,7 +129,7 @@ func replayRecord(recoverUpdater *sqlUpdater, offset int64, data []byte) {
 
 	fmt.Println(pbRecord)
 
-	r := &record{
+	r := &writeBackRecord{
 		key:    pbRecord.GetKey(),
 		table:  pbRecord.GetTable(),
 		fields: map[string]*proto.Field{},
