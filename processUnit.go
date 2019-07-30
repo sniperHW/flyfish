@@ -109,7 +109,7 @@ func (this *processUnit) pushSqlWriteBackReq(ctx *processContext) {
 
 	wb := ckey.r
 	if nil == wb {
-		wb = recordGet()
+		wb = &writeBackRecord{}
 		wb.writeBackFlag = ctx.writeBackFlag
 		wb.key = ctx.getKey()
 		wb.table = ctx.getTable()
@@ -185,6 +185,7 @@ func (this *processUnit) pushSqlWriteBackReq(ctx *processContext) {
 				wb.writeBackFlag = write_back_update
 			} else {
 				//逻辑错误，记录日志
+				panic("invaild writeBackFlag")
 			}
 		} else {
 			/*
@@ -207,6 +208,7 @@ func (this *processUnit) pushSqlWriteBackReq(ctx *processContext) {
 				wb.writeBackFlag = write_back_insert
 			} else {
 				//逻辑错误，记录日志
+				panic("invaild writeBackFlag")
 			}
 		}
 

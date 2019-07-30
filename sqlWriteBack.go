@@ -109,10 +109,10 @@ func (this *sqlUpdater) doDelete(r *writeBackRecord) error {
 	return err
 }
 
-func updateDefer(r *writeBackRecord) {
+/*func updateDefer(r *writeBackRecord) {
 	r.ckey.clearWriteBack()
 	recordPut(r)
-}
+}*/
 
 func (this *sqlUpdater) process(v interface{}) {
 
@@ -133,7 +133,7 @@ func (this *sqlUpdater) process(v interface{}) {
 
 		wb := v.(*cacheKey).getRecord()
 
-		defer updateDefer(wb)
+		defer wb.ckey.clearWriteBack()
 
 		if this.writeFileAndBreak {
 			backupRecord(wb)

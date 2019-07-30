@@ -25,7 +25,7 @@ type writeBackRecord struct {
 	ctx           *processContext
 }
 
-var recordPool = sync.Pool{
+/*var recordPool = sync.Pool{
 	New: func() interface{} {
 		return &writeBackRecord{}
 	},
@@ -42,7 +42,7 @@ func recordPut(r *writeBackRecord) {
 	r.fields = nil
 	r.ctx = nil
 	recordPool.Put(r)
-}
+}*/
 
 type cacheKey struct {
 	uniKey         string
