@@ -51,12 +51,12 @@ func (this sqlResponseLocalCache) onSqlNotFound(ctx *processContext) {
 
 		ctx.writeBackFlag = write_back_insert
 
+		ckey.unit.pushSqlWriteBackReq(ctx)
+
 		if !ctx.replyOnDbOk {
 			ctx.reply(errcode.ERR_OK, nil, 1)
 			ckey.processQueueCmd()
 		}
-
-		ckey.unit.pushSqlWriteBackReq(ctx)
 
 	}
 }

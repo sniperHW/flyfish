@@ -106,6 +106,7 @@ func (this *processUnit) pushSqlWriteBackReq(ctx *processContext) {
 	ckey := ctx.getCacheKey()
 	ckey.mtx.Lock()
 	ckey.writeBacked = true
+	ckey.writeBackVersion++
 
 	wb := ckey.r
 	if nil == wb {
@@ -115,6 +116,7 @@ func (this *processUnit) pushSqlWriteBackReq(ctx *processContext) {
 		wb.table = ctx.getTable()
 		wb.uniKey = ctx.getUniKey()
 		wb.ckey = ckey
+		wb.writeBackVersion = ckey.writeBackVersion
 		if wb.writeBackFlag == write_back_insert || wb.writeBackFlag == write_back_update {
 			wb.fields = map[string]*proto.Field{}
 			for k, v := range ctx.fields {

@@ -16,30 +16,32 @@ const (
 )
 
 type writeBackRecord struct {
-	writeBackFlag int
-	key           string
-	table         string
-	uniKey        string
-	ckey          *cacheKey
-	fields        map[string]*proto.Field //所有命令的字段聚合
-	ctx           *processContext
+	writeBackFlag    int
+	writeBackVersion int64
+	key              string
+	table            string
+	uniKey           string
+	ckey             *cacheKey
+	fields           map[string]*proto.Field //所有命令的字段聚合
+	ctx              *processContext
 }
 
 type cacheKey struct {
-	uniKey         string
-	key            string
-	version        int64
-	status         int
-	cmdQueueLocked bool //操作是否被锁定
-	mtx            sync.Mutex
-	cmdQueue       *list.List
-	meta           *table_meta
-	writeBacked    bool //正在回写
-	unit           *processUnit
-	r              *writeBackRecord
-	nnext          *cacheKey
-	pprev          *cacheKey
-	values         map[string]*proto.Field
+	uniKey           string
+	key              string
+	version          int64
+	status           int
+	cmdQueueLocked   bool //操作是否被锁定
+	mtx              sync.Mutex
+	cmdQueue         *list.List
+	meta             *table_meta
+	writeBacked      bool //正在回写
+	writeBackVersion int64
+	unit             *processUnit
+	r                *writeBackRecord
+	nnext            *cacheKey
+	pprev            *cacheKey
+	values           map[string]*proto.Field
 }
 
 func (this *cacheKey) lockCmdQueue() {
@@ -97,10 +99,12 @@ func (this *cacheKey) setOKNoLock(version int64) {
 	this.status = cache_ok
 }
 
-func (this *cacheKey) clearWriteBack() {
+func (this *cacheKey) clearWriteBack(writeBackVersion int64) {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
-	this.writeBacked = false
+	if this.writeBackVersion == writeBackVersion {
+		this.writeBacked = false
+	}
 }
 
 func (this *cacheKey) getRecord() *writeBackRecord {

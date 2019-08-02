@@ -117,9 +117,9 @@ func (this *sqlUpdater) process(v interface{}) {
 			err := this.db.Ping()
 			if nil != err {
 				Errorln("sqlUpdater ping error", err)
-			} else {
+			} /* else {
 				Debugln("sqlUpdater ping")
-			}
+			}*/
 			this.lastTime = time.Now()
 		}
 	} else {
@@ -128,7 +128,7 @@ func (this *sqlUpdater) process(v interface{}) {
 
 		wb := v.(*cacheKey).getRecord()
 
-		defer wb.ckey.clearWriteBack()
+		defer wb.ckey.clearWriteBack(wb.writeBackVersion)
 
 		if this.writeFileAndBreak {
 			backupRecord(wb)
