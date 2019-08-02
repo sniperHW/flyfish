@@ -385,11 +385,11 @@ func InitProcessUnit() bool {
 			}
 		})
 
-		timer.Repeat(time.Millisecond*10, nil, func(t *timer.Timer) {
+		timer.Repeat(time.Millisecond*100, nil, func(t *timer.Timer) {
 			if isStop() {
 				t.Cancel()
 			} else {
-				unit.writeBack.flushToFile()
+				unit.writeBack.checkFlush()
 			}
 		})
 

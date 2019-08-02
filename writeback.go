@@ -55,10 +55,18 @@ type writeBackProcessor struct {
 	checkSumBuff []byte
 }
 
+func (this *writeBackProcessor) checkFlush() {
+	this.mtx.Lock()
+	defer this.mtx.Unlock()
+	if this.Now.After(this.nextFlush) {
+		this.flushToFile()
+	}
+}
+
 func (this *writeBackProcessor) flushToFile() {
 	if this.offset > 0 {
 		Debugln("flushToFile")
-		counter := AddInt64(&fileCounter, 1)
+		counter := atomic.AddInt64(&fileCounter, 1)
 		os.MkdirAll(fileDir, os.ModePerm)
 		path := fmt.Sprintf("%s/%s_%d.op", fileDir, filePrefix, counter)
 
@@ -75,7 +83,7 @@ func (this *writeBackProcessor) flushToFile() {
 
 		f.Sync()
 
-		this.nextFlush = time.Now().Add(time.Duration(time.Millisecond * 10))
+		this.nextFlush = time.Now().Add(time.Duration(time.Millisecond * 100))
 
 		//通告sqlUpdater执行更新
 
@@ -150,7 +158,7 @@ func (this *writeBackProcessor) writeBack(ctx *processContext) {
 	defer this.mtx.Unlock()
 
 	if this.nextFlush.IsZero() {
-		this.nextFlush = time.Now().Add(time.Duration(time.Millisecond * 10))
+		this.nextFlush = time.Now().Add(time.Duration(time.Millisecond * 100))
 	}
 
 	if this.offset+totalSize > maxBufferSize {
