@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/conf"
-	"github.com/sniperHW/flyfish/proto"
+	//"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet/timer"
 	"github.com/sniperHW/kendynet/util"
 	"sync"
@@ -32,17 +32,19 @@ type cmdProcessorI interface {
 }
 
 type processUnit struct {
-	cacheKeys   map[string]*cacheKey
-	mtx         sync.Mutex
-	sqlLoader_  *sqlLoader
-	sqlUpdater_ *sqlUpdater
-	lruHead     cacheKey
-	lruTail     cacheKey
+	cacheKeys  map[string]*cacheKey
+	mtx        sync.Mutex
+	sqlLoader_ *sqlLoader
+	writeBack  *writeBackProcessor
+	lruHead    cacheKey
+	lruTail    cacheKey
 }
 
+/*
 func (this *processUnit) updateQueueFull() bool {
 	return this.sqlUpdater_.queue.Full()
 }
+*/
 
 func (this *processUnit) pushRedisReq(ctx *processContext, fullReturn ...bool) bool {
 	err := redisProcessQueue.AddNoWait(ctx, fullReturn...)
@@ -97,129 +99,137 @@ func (this *processUnit) onRedisStale(ckey *cacheKey, ctx *processContext) {
  *    node   + delete = 非法
  */
 
-func (this *processUnit) pushSqlWriteBackReq(ctx *processContext) {
+func (this *processUnit) doWriteBack(ctx *processContext) {
 
 	if ctx.writeBackFlag == write_back_none {
 		panic("ctx.writeBackFlag == write_back_none")
 	}
 
-	ckey := ctx.getCacheKey()
-	ckey.mtx.Lock()
-	ckey.writeBacked = true
-	ckey.writeBackVersion++
+	this.writeBack.writeBack(ctx)
 
-	wb := ckey.r
-	if nil == wb {
-		wb = &writeBackRecord{}
-		wb.writeBackFlag = ctx.writeBackFlag
-		wb.key = ctx.getKey()
-		wb.table = ctx.getTable()
-		wb.uniKey = ctx.getUniKey()
-		wb.ckey = ckey
-		wb.writeBackVersion = ckey.writeBackVersion
-		if wb.writeBackFlag == write_back_insert || wb.writeBackFlag == write_back_update {
-			wb.fields = map[string]*proto.Field{}
-			for k, v := range ctx.fields {
-				wb.fields[k] = v
-			}
+	/*
+		if ctx.writeBackFlag == write_back_none {
+			panic("ctx.writeBackFlag == write_back_none")
 		}
 
-		if ctx.replyOnDbOk {
-			wb.ctx = ctx
-		}
-		ckey.r = wb
+		ckey := ctx.getCacheKey()
+		ckey.mtx.Lock()
+		ckey.writeBacked = true
+		ckey.writeBackVersion++
 
-		ckey.mtx.Unlock()
-
-		this.sqlUpdater_.queue.AddNoWait(ckey)
-
-	} else {
-
-		//合并状态
-		if wb.writeBackFlag == write_back_insert {
-			/*
-			*    insert + update = insert
-			*    insert + delete = none
-			*    insert + insert = 非法
-			 */
-			if ctx.writeBackFlag == write_back_delete {
-				wb.fields = nil
-				wb.writeBackFlag = write_back_none
-			} else {
-				for k, v := range ctx.fields {
-					wb.fields[k] = v
-				}
-			}
-		} else if wb.writeBackFlag == write_back_update {
-			/*
-			 *    update + insert = 非法
-			 *    update + delete = delete
-			 *    update + update = update
-			 */
-			if ctx.writeBackFlag == write_back_insert {
-				//逻辑错误，记录日志
-			} else if ctx.writeBackFlag == write_back_delete {
-				wb.fields = nil
-				wb.writeBackFlag = write_back_delete
-			} else {
-				for k, v := range ctx.fields {
-					wb.fields[k] = v
-				}
-			}
-		} else if wb.writeBackFlag == write_back_delete {
-			/*
-			*    delete + insert = update
-			*    delete + update = 非法
-			*    delete + delte  = 非法
-			 */
-			if ctx.writeBackFlag == write_back_insert {
+		wb := ckey.r
+		if nil == wb {
+			wb = &writeBackRecord{}
+			wb.writeBackFlag = ctx.writeBackFlag
+			wb.key = ctx.getKey()
+			wb.table = ctx.getTable()
+			wb.uniKey = ctx.getUniKey()
+			wb.ckey = ckey
+			wb.writeBackVersion = ckey.writeBackVersion
+			wb.version = ckey.version - 1
+			if wb.writeBackFlag == write_back_insert || wb.writeBackFlag == write_back_update {
 				wb.fields = map[string]*proto.Field{}
 				for k, v := range ctx.fields {
 					wb.fields[k] = v
 				}
-				meta := wb.ckey.getMeta().fieldMetas
-				for k, v := range meta {
-					if nil == wb.fields[k] {
-						//使用默认值填充
-						wb.fields[k] = proto.PackField(k, v.defaultV)
-					}
-				}
-				wb.writeBackFlag = write_back_update
-			} else {
-				//逻辑错误，记录日志
-				panic("invaild writeBackFlag")
 			}
+
+			if ctx.replyOnDbOk {
+				wb.ctx = ctx
+			}
+			ckey.r = wb
+
+			ckey.mtx.Unlock()
+
+			this.sqlUpdater_.queue.AddNoWait(ckey)
+
 		} else {
-			/*
-			*    none   + insert = insert
-			*    none   + update = 非法
-			*    node   + delete = 非法
-			 */
-			if ctx.writeBackFlag == write_back_insert {
-				wb.fields = map[string]*proto.Field{}
-				for k, v := range ctx.fields {
-					wb.fields[k] = v
-				}
-				meta := wb.ckey.getMeta().fieldMetas
-				for k, v := range meta {
-					if nil == wb.fields[k] {
-						//使用默认值填充
-						wb.fields[k] = proto.PackField(k, v.defaultV)
+
+			//合并状态
+			if wb.writeBackFlag == write_back_insert {
+				/*
+				*    insert + update = insert
+				*    insert + delete = none
+				*    insert + insert = 非法
+				 * /
+				if ctx.writeBackFlag == write_back_delete {
+					wb.fields = nil
+					wb.writeBackFlag = write_back_none
+				} else {
+					for k, v := range ctx.fields {
+						wb.fields[k] = v
 					}
 				}
-				wb.writeBackFlag = write_back_insert
+			} else if wb.writeBackFlag == write_back_update {
+				/*
+				 *    update + insert = 非法
+				 *    update + delete = delete
+				 *    update + update = update
+				 * /
+				if ctx.writeBackFlag == write_back_insert {
+					//逻辑错误，记录日志
+				} else if ctx.writeBackFlag == write_back_delete {
+					wb.fields = nil
+					wb.writeBackFlag = write_back_delete
+				} else {
+					for k, v := range ctx.fields {
+						wb.fields[k] = v
+					}
+				}
+			} else if wb.writeBackFlag == write_back_delete {
+				/*
+				*    delete + insert = update
+				*    delete + update = 非法
+				*    delete + delte  = 非法
+				 * /
+				if ctx.writeBackFlag == write_back_insert {
+					wb.fields = map[string]*proto.Field{}
+					for k, v := range ctx.fields {
+						wb.fields[k] = v
+					}
+					meta := wb.ckey.getMeta().fieldMetas
+					for k, v := range meta {
+						if nil == wb.fields[k] {
+							//使用默认值填充
+							wb.fields[k] = proto.PackField(k, v.defaultV)
+						}
+					}
+					wb.writeBackFlag = write_back_update
+				} else {
+					//逻辑错误，记录日志
+					panic("invaild writeBackFlag")
+				}
 			} else {
-				//逻辑错误，记录日志
-				panic("invaild writeBackFlag")
+				/*
+				*    none   + insert = insert
+				*    none   + update = 非法
+				*    node   + delete = 非法
+				 * /
+				if ctx.writeBackFlag == write_back_insert {
+					wb.fields = map[string]*proto.Field{}
+					for k, v := range ctx.fields {
+						wb.fields[k] = v
+					}
+					meta := wb.ckey.getMeta().fieldMetas
+					for k, v := range meta {
+						if nil == wb.fields[k] {
+							//使用默认值填充
+							wb.fields[k] = proto.PackField(k, v.defaultV)
+						}
+					}
+					wb.writeBackFlag = write_back_insert
+				} else {
+					//逻辑错误，记录日志
+					panic("invaild writeBackFlag")
+				}
 			}
-		}
 
-		if ctx.replyOnDbOk {
-			wb.ctx = ctx
-		}
+			if ctx.replyOnDbOk {
+				wb.ctx = ctx
+			}
 
-		ckey.mtx.Unlock()
-	}
+			ckey.mtx.Unlock()
+		}*/
 }
 
 func (this *cacheKey) process_(fromClient bool) {
@@ -345,9 +355,14 @@ func InitProcessUnit() bool {
 		}
 
 		unit := &processUnit{
-			cacheKeys:   map[string]*cacheKey{},
-			sqlLoader_:  newSqlLoader(loadDB, lname),
-			sqlUpdater_: newSqlUpdater(writeBackDB, wname, sqlUpdateWg),
+			cacheKeys:  map[string]*cacheKey{},
+			sqlLoader_: newSqlLoader(loadDB, lname),
+			writeBack: &writeBackProcessor{
+				needReplys:   []*processContext{},
+				sqlUpdater_:  newSqlUpdater(writeBackDB, wname, sqlUpdateWg),
+				checkSumBuff: make([]byte, 8),
+				buffer:       make([]byte, maxBufferSize, maxBufferSize),
+			},
 		}
 
 		unit.lruHead.nnext = &unit.lruTail
@@ -356,7 +371,7 @@ func InitProcessUnit() bool {
 		processUnits[i] = unit
 
 		go unit.sqlLoader_.run()
-		go unit.sqlUpdater_.run()
+		go unit.writeBack.sqlUpdater_.run()
 
 		timer.Repeat(time.Second*60, nil, func(t *timer.Timer) {
 			if isStop() || util.ErrQueueClosed == unit.sqlLoader_.queue.AddNoWait(&processContext{ping: true}) {
@@ -365,8 +380,16 @@ func InitProcessUnit() bool {
 		})
 
 		timer.Repeat(time.Second*60, nil, func(t *timer.Timer) {
-			if isStop() || util.ErrQueueClosed == unit.sqlUpdater_.queue.AddNoWait(&processContext{ping: true}) {
+			if isStop() || util.ErrQueueClosed == unit.writeBack.sqlUpdater_.queue.AddNoWait("ping") {
 				t.Cancel()
+			}
+		})
+
+		timer.Repeat(time.Millisecond*10, nil, func(t *timer.Timer) {
+			if isStop() {
+				t.Cancel()
+			} else {
+				unit.writeBack.flushToFile()
 			}
 		})
 
@@ -386,19 +409,19 @@ func InitProcessUnit() bool {
 func StopProcessUnit() {
 	config := conf.GetConfig()
 	for i := 0; i < config.CacheGroupSize; i++ {
-		processUnits[i].sqlUpdater_.queue.Close()
+		processUnits[i].writeBack.sqlUpdater_.queue.Close()
 	}
 	sqlUpdateWg.Wait()
 }
 
 func updateSqlUpdateQueueSize(SqlUpdateQueueSize int) {
 	for _, v := range processUnits {
-		v.sqlUpdater_.queue.SetFullSize(SqlUpdateQueueSize)
+		v.writeBack.sqlUpdater_.queue.SetFullSize(SqlUpdateQueueSize)
 	}
 }
 
 func updateSqlLoadQueueSize(SqlLoadQueueSize int) {
 	for _, v := range processUnits {
-		v.sqlUpdater_.queue.SetFullSize(SqlLoadQueueSize)
+		v.writeBack.sqlUpdater_.queue.SetFullSize(SqlLoadQueueSize)
 	}
 }

@@ -1,5 +1,6 @@
 package flyfish
 
+/*
 import (
 	"fmt"
 	"github.com/sniperHW/flyfish/proto"
@@ -26,3 +27,4 @@ func TestRecover() {
 	backupFile.Close()
 	Recover()
 }
+*/

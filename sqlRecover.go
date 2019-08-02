@@ -1,5 +1,6 @@
 package flyfish
 
+/*
 import (
 	"encoding/binary"
 	"fmt"
@@ -62,10 +63,10 @@ func marshalRecord(r *writeBackRecord) *kendynet.ByteBuffer {
 		Fatalln("[marshalRecord]", err, *r)
 	}
 
-	/*
+	/ *
 	 *  1字节标记记录是否有效
 	 *  4字节数据和校验长度
-	 */
+	 * /
 	buffer := kendynet.NewByteBuffer(size_head + len(bytes) + size_checksum)
 	buffer.AppendByte(byte(1))
 	buffer.AppendUint32(uint32(len(bytes) + size_checksum))
@@ -216,9 +217,9 @@ func doRecover(recoverUpdater *sqlUpdater) {
 	}
 }
 
-/*
+/ *
 *  从bak将未能写入到pgsql的操作写入到pgsql
- */
+ * /
 
 func Recover() {
 	var db *sqlx.DB
@@ -241,3 +242,4 @@ func Recover() {
 		doRecover(recoverUpdater)
 	}
 }
+*/

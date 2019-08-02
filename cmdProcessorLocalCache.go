@@ -329,48 +329,48 @@ func (this cmdProcessorLocalCache) processCmd(ckey *cacheKey, fromClient bool) {
 			atomic.AddInt32(&cmdCount, -1)
 		} else {
 
-			if fromClient && causeWriteBackCmd(cmd.cmdType) && ckey.unit.updateQueueFull() {
+			/*if fromClient && causeWriteBackCmd(cmd.cmdType) && ckey.unit.updateQueueFull() {
 				if conf.GetConfig().ReplyBusyOnQueueFull {
 					ctx.reply(errcode.ERR_BUSY, nil, -1)
 				} else {
 					atomic.AddInt32(&cmdCount, -1)
 				}
-			} else {
+			} else {*/
 
-				switch cmd.cmdType {
-				case cmdGet:
-					ctx = this.processGet(ckey, cmd)
-					break
-				case cmdSet:
-					ctx = this.processSet(ckey, cmd)
-					break
-				case cmdSetNx:
-					ctx = this.processSetNx(ckey, cmd)
-					break
-				case cmdCompareAndSet:
-					ctx = this.processCompareAndSet(ckey, cmd)
-					break
-				case cmdCompareAndSetNx:
-					ctx = this.processCompareAndSetNx(ckey, cmd)
-					break
-				case cmdIncrBy:
-					ctx = this.processIncrBy(ckey, cmd)
-					break
-				case cmdDecrBy:
-					ctx = this.processDecrBy(ckey, cmd)
-					break
-				case cmdDel:
-					ctx = this.processDel(ckey, cmd)
-					break
-				default:
-					//记录日志
-					break
-				}
-
-				if nil != ctx {
-					break
-				}
+			switch cmd.cmdType {
+			case cmdGet:
+				ctx = this.processGet(ckey, cmd)
+				break
+			case cmdSet:
+				ctx = this.processSet(ckey, cmd)
+				break
+			case cmdSetNx:
+				ctx = this.processSetNx(ckey, cmd)
+				break
+			case cmdCompareAndSet:
+				ctx = this.processCompareAndSet(ckey, cmd)
+				break
+			case cmdCompareAndSetNx:
+				ctx = this.processCompareAndSetNx(ckey, cmd)
+				break
+			case cmdIncrBy:
+				ctx = this.processIncrBy(ckey, cmd)
+				break
+			case cmdDecrBy:
+				ctx = this.processDecrBy(ckey, cmd)
+				break
+			case cmdDel:
+				ctx = this.processDel(ckey, cmd)
+				break
+			default:
+				//记录日志
+				break
 			}
+
+			if nil != ctx {
+				break
+			}
+			//}
 		}
 	}
 
@@ -399,6 +399,6 @@ func (this cmdProcessorLocalCache) processCmd(ckey *cacheKey, fromClient bool) {
 			ckey.lockCmdQueue()
 		}
 		ckey.mtx.Unlock()
-		ckey.unit.pushSqlWriteBackReq(ctx)
+		ckey.unit.doWriteBack(ctx)
 	}
 }
