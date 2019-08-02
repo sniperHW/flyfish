@@ -61,9 +61,6 @@ func (this cmdProcessorLocalCache) processSet(ckey *cacheKey, cmd *command) *pro
 			ckey.values[v.GetName()] = v
 			ctx.fields[v.GetName()] = v
 		}
-		//if ctx.replyOnDbOk {
-		//	ctx.reply(errcode.ERR_OK, ctx.fields, ckey.version)
-		//}
 	} else if ckey.status == cache_missing {
 		ckey.setDefaultValue(ctx)
 		ckey.setOKNoLock(1)
@@ -73,9 +70,6 @@ func (this cmdProcessorLocalCache) processSet(ckey *cacheKey, cmd *command) *pro
 			ckey.values[v.GetName()] = v
 			ctx.fields[v.GetName()] = v
 		}
-		//if ctx.replyOnDbOk {
-		//	ctx.reply(errcode.ERR_OK, ctx.fields, ckey.version)
-		//}
 	}
 
 	return ctx
@@ -104,9 +98,6 @@ func (this cmdProcessorLocalCache) processSetNx(ckey *cacheKey, cmd *command) *p
 			ctx.fields[v.GetName()] = v
 		}
 		ctx.writeBackFlag = write_back_insert //数据不存在执行insert
-
-		//ctx.reply(errcode.ERR_OK, ctx.fields, ckey.version)
-
 	} else {
 		for _, v := range cmd.fields {
 			ctx.fields[v.GetName()] = v
@@ -145,7 +136,6 @@ func (this cmdProcessorLocalCache) processCompareAndSet(ckey *cacheKey, cmd *com
 			ctx.fields["__version__"] = proto.PackField("__version__", ckey.version)
 			ckey.values[cmd.cns.oldV.GetName()] = cmd.cns.newV
 			ctx.fields[cmd.cns.oldV.GetName()] = cmd.cns.newV
-			//ctx.reply(errcode.ERR_OK, ctx.fields, ckey.version)
 		}
 
 		return ctx
@@ -177,7 +167,6 @@ func (this cmdProcessorLocalCache) processCompareAndSetNx(ckey *cacheKey, cmd *c
 		ctx.fields["__version__"] = proto.PackField("__version__", ckey.version)
 		ckey.values[cmd.cns.oldV.GetName()] = cmd.cns.newV
 		ctx.fields[cmd.cns.oldV.GetName()] = cmd.cns.newV
-		//ctx.reply(errcode.ERR_OK, ctx.fields, ckey.version)
 	} else if ckey.status == cache_missing {
 		ckey.setDefaultValue(ctx)
 		ckey.setOKNoLock(1)
@@ -185,7 +174,6 @@ func (this cmdProcessorLocalCache) processCompareAndSetNx(ckey *cacheKey, cmd *c
 		ctx.fields["__version__"] = proto.PackField("__version__", ckey.version)
 		ckey.values[cmd.cns.oldV.GetName()] = cmd.cns.newV
 		ctx.fields[cmd.cns.oldV.GetName()] = cmd.cns.newV
-		//ctx.reply(errcode.ERR_OK, ctx.fields, ckey.version)
 	}
 
 	return ctx
@@ -228,7 +216,6 @@ func (this cmdProcessorLocalCache) processIncrBy(ckey *cacheKey, cmd *command) *
 		ctx.fields[cmd.incrDecr.GetName()] = newV
 		ckey.values[cmd.incrDecr.GetName()] = newV
 		ctx.fields["__version__"] = proto.PackField("__version__", ckey.version)
-		//ctx.reply(errcode.ERR_OK, ctx.fields, ckey.version)
 	}
 
 	return ctx
@@ -271,7 +258,6 @@ func (this cmdProcessorLocalCache) processDecrBy(ckey *cacheKey, cmd *command) *
 		ctx.fields[cmd.incrDecr.GetName()] = newV
 		ckey.values[cmd.incrDecr.GetName()] = newV
 		ctx.fields["__version__"] = proto.PackField("__version__", ckey.version)
-		//ctx.reply(errcode.ERR_OK, ctx.fields, ckey.version)
 	}
 
 	return ctx
@@ -299,7 +285,6 @@ func (this cmdProcessorLocalCache) processDel(ckey *cacheKey, cmd *command) *pro
 		if ckey.status == cache_ok {
 			ckey.setMissingNoLock()
 			ctx.writeBackFlag = write_back_delete
-			//ctx.reply(errcode.ERR_OK, ctx.fields, ckey.version)
 		}
 
 		return ctx
@@ -332,15 +317,6 @@ func (this cmdProcessorLocalCache) processCmd(ckey *cacheKey, fromClient bool) {
 			//已经超时
 			atomic.AddInt32(&cmdCount, -1)
 		} else {
-
-			/*if fromClient && causeWriteBackCmd(cmd.cmdType) && ckey.unit.updateQueueFull() {
-				if conf.GetConfig().ReplyBusyOnQueueFull {
-					ctx.reply(errcode.ERR_BUSY, nil, -1)
-				} else {
-					atomic.AddInt32(&cmdCount, -1)
-				}
-			} else {*/
-
 			switch cmd.cmdType {
 			case cmdGet:
 				ctx = this.processGet(ckey, cmd)
@@ -374,7 +350,6 @@ func (this cmdProcessorLocalCache) processCmd(ckey *cacheKey, fromClient bool) {
 			if nil != ctx {
 				break
 			}
-			//}
 		}
 	}
 
@@ -399,8 +374,9 @@ func (this cmdProcessorLocalCache) processCmd(ckey *cacheKey, fromClient bool) {
 			ckey.mtx.Unlock()
 		}
 	} else {
-		if ctx.replyOnDbOk {
+		if !ctx.replyOnDbOk {
 			ctx.reply(errcode.ERR_OK, ctx.fields, ckey.version)
+		} else {
 			ckey.lockCmdQueue()
 		}
 		ckey.mtx.Unlock()
