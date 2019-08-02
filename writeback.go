@@ -58,7 +58,7 @@ type writeBackProcessor struct {
 func (this *writeBackProcessor) checkFlush() {
 	this.mtx.Lock()
 	defer this.mtx.Unlock()
-	if this.Now.After(this.nextFlush) {
+	if time.Now().After(this.nextFlush) {
 		this.flushToFile()
 	}
 }

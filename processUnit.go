@@ -329,6 +329,8 @@ func InitProcessUnit() bool {
 
 	config := conf.GetConfig()
 
+	startAfterReplyProcess()
+
 	CacheGroupSize = config.CacheGroupSize
 
 	processUnits = make([]*processUnit, CacheGroupSize)
