@@ -82,6 +82,7 @@ func (this *writeBackProcessor) flushToFile() {
 		this.offset = 0
 
 		f.Sync()
+		f.Close()
 
 		this.nextFlush = time.Now().Add(time.Duration(time.Millisecond * 100))
 
