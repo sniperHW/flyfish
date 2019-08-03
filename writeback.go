@@ -22,11 +22,12 @@ import (
 var (
 	fileCounter   int64
 	checkSumSize  = 8
-	maxBufferSize = 1024 * 1024 * 4
+	maxBufferSize = 1024 * 1024 * 2
 	maxDataSize   = maxBufferSize - checkSumSize
 	fileDir       = "tmpWriteBackOp"
 	filePrefix    = "tmpWriteBackOp"
 	crc64Table    *crc64.Table
+	flushCount    = 200
 )
 
 var bufferPool = sync.Pool{
@@ -64,6 +65,7 @@ type writeBackProcessor struct {
 	needReplys     []*processContext
 	sqlUpdater_    *sqlUpdater
 	writeFileQueue *util.BlockQueue
+	count          int
 }
 
 func (this *writeBackProcessor) checkFlush() {
@@ -138,6 +140,7 @@ func (this *writeBackProcessor) flushToFile() {
 		this.buffer = nil
 		this.offset = 0
 		this.needReplys = []*processContext{}
+		this.count = 0
 		this.nextFlush = time.Now().Add(time.Duration(time.Millisecond * 100))
 
 		this.writeFileQueue.AddNoWait(st)
@@ -221,12 +224,13 @@ func (this *writeBackProcessor) writeBack(ctx *processContext) {
 	this.offset += 4
 	copy(this.buffer[this.offset:], bytes)
 	this.offset += len(bytes)
+	this.count++
 
 	if ctx.replyOnDbOk {
 		this.needReplys = append(this.needReplys, ctx)
 	}
 
-	if this.offset+totalSize >= maxDataSize || time.Now().After(this.nextFlush) {
+	if this.count >= flushCount || this.offset+totalSize >= maxDataSize || time.Now().After(this.nextFlush) {
 		this.flushToFile()
 	}
 }
