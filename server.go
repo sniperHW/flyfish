@@ -153,7 +153,6 @@ func (this *tcpListener) Start() error {
 
 func Start() error {
 	config := conf.GetConfig()
-	//Recover()
 
 	if config.CacheType == "redis" {
 		cmdProcessor = cmdProcessorRedisCache{}

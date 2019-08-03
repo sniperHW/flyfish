@@ -6,7 +6,6 @@ import (
 	pb "github.com/golang/protobuf/proto"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
-	"github.com/sniperHW/kendynet/util"
 	"hash/crc64"
 	"os"
 	"sync"
@@ -20,39 +19,20 @@ import (
  */
 
 var (
-	fileCounter     int64
-	maxBufferSize   = 1024 * 1024 * 4
-	fileDir         = "tmpWriteBackOp"
-	filePrefix      = "tmpWriteBackOp"
-	afterReplyQueue *util.BlockQueue
-	crc64Table      *crc64.Table
+	fileCounter   int64
+	maxBufferSize = 1024 * 1024 * 4
+	fileDir       = "tmpWriteBackOp"
+	filePrefix    = "tmpWriteBackOp"
+	crc64Table    *crc64.Table
 )
 
-func startAfterReplyProcess() {
-	afterReplyQueue = util.NewBlockQueue()
-	go func() {
-		for {
-			closed, localList := afterReplyQueue.Get()
-			for _, v := range localList {
-				for _, ctx := range v.([]*processContext) {
-					ctx.getCacheKey().processQueueCmd()
-				}
-			}
-			if closed {
-				return
-			}
-		}
-	}()
-}
-
 type writeBackProcessor struct {
-	mtx          sync.Mutex
-	buffer       []byte
-	nextFlush    time.Time
-	offset       int
-	needReplys   []*processContext
-	sqlUpdater_  *sqlUpdater
-	checkSumBuff []byte
+	mtx         sync.Mutex
+	buffer      []byte
+	nextFlush   time.Time
+	offset      int
+	needReplys  []*processContext
+	sqlUpdater_ *sqlUpdater
 }
 
 func (this *writeBackProcessor) checkFlush() {
@@ -63,41 +43,58 @@ func (this *writeBackProcessor) checkFlush() {
 	}
 }
 
-func (this *writeBackProcessor) flushToFile() {
-	if this.offset > 0 {
-		Debugln("flushToFile")
-		counter := atomic.AddInt64(&fileCounter, 1)
-		os.MkdirAll(fileDir, os.ModePerm)
-		path := fmt.Sprintf("%s/%s_%d.op", fileDir, filePrefix, counter)
+func flush(buffer []byte, offset int, needReplys []*processContext, sqlUpdater_ *sqlUpdater) {
 
-		f, err := os.Create(path)
-		if err != nil {
-			Fatalln("create backfile failed", path, err)
-			return
+	Debugln("flushToFile")
+	counter := atomic.AddInt64(&fileCounter, 1)
+	os.MkdirAll(fileDir, os.ModePerm)
+	path := fmt.Sprintf("%s/%s_%d.op", fileDir, filePrefix, counter)
+
+	f, err := os.Create(path)
+	if err != nil {
+		Fatalln("create backfile failed", path, err)
+		return
+	}
+
+	checkSumBuff := make([]byte, 8)
+
+	checkSum := crc64.Checksum(buffer[:offset], crc64Table)
+	f.Write(buffer[:offset])
+	binary.BigEndian.PutUint64(checkSumBuff, checkSum)
+	f.Write(checkSumBuff)
+
+	f.Sync()
+	f.Close()
+
+	//通告sqlUpdater执行更新
+
+	sqlUpdater_.queue.AddNoWait(path)
+
+	if len(needReplys) > 0 {
+		for _, v := range needReplys {
+			v.reply(errcode.ERR_OK, nil, v.fields["__version__"].GetInt())
 		}
-		checkSum := crc64.Checksum(this.buffer[:this.offset], crc64Table)
-		f.Write(this.buffer[:this.offset])
-		binary.BigEndian.PutUint64(this.checkSumBuff, checkSum)
-		f.Write(this.checkSumBuff)
-		this.offset = 0
-
-		f.Sync()
-		f.Close()
-
-		this.nextFlush = time.Now().Add(time.Duration(time.Millisecond * 100))
-
-		//通告sqlUpdater执行更新
-
-		this.sqlUpdater_.queue.AddNoWait(path)
-
-		if len(this.needReplys) > 0 {
-			for _, v := range this.needReplys {
-				v.reply(errcode.ERR_OK, nil, v.fields["__version__"].GetInt())
-			}
-			afterReplyQueue.AddNoWait(this.needReplys)
-			this.needReplys = []*processContext{}
+		for _, v := range needReplys {
+			v.getCacheKey().processQueueCmd()
 		}
 	}
+
+}
+
+func (this *writeBackProcessor) flushToFile() {
+	if this.buffer != nil {
+		offset := this.offset
+		buffer := this.buffer
+		needReplys := this.needReplys
+
+		this.buffer = nil
+		this.offset = 0
+		this.needReplys = []*processContext{}
+		this.nextFlush = time.Now().Add(time.Duration(time.Millisecond * 100))
+
+		go flush(buffer, offset, needReplys, this.sqlUpdater_)
+	}
+
 }
 
 func (this *writeBackProcessor) writeBack(ctx *processContext) {
@@ -163,11 +160,16 @@ func (this *writeBackProcessor) writeBack(ctx *processContext) {
 
 	if this.offset+totalSize > maxBufferSize {
 		this.flushToFile()
+	}
+
+	if this.buffer == nil {
 		if totalSize > maxBufferSize {
 			this.buffer = make([]byte, totalSize, totalSize)
+		} else {
+			this.buffer = make([]byte, maxBufferSize, maxBufferSize)
 		}
 	}
-	Debugln(this.offset)
+
 	binary.BigEndian.PutUint32(this.buffer[this.offset:], uint32(len(bytes)))
 	this.offset += 4
 	copy(this.buffer[this.offset:], bytes)

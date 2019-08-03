@@ -329,8 +329,6 @@ func InitProcessUnit() bool {
 
 	config := conf.GetConfig()
 
-	startAfterReplyProcess()
-
 	CacheGroupSize = config.CacheGroupSize
 
 	processUnits = make([]*processUnit, CacheGroupSize)
@@ -360,10 +358,8 @@ func InitProcessUnit() bool {
 			cacheKeys:  map[string]*cacheKey{},
 			sqlLoader_: newSqlLoader(loadDB, lname),
 			writeBack: &writeBackProcessor{
-				needReplys:   []*processContext{},
-				sqlUpdater_:  newSqlUpdater(writeBackDB, wname, sqlUpdateWg),
-				checkSumBuff: make([]byte, 8),
-				buffer:       make([]byte, maxBufferSize, maxBufferSize),
+				needReplys:  []*processContext{},
+				sqlUpdater_: newSqlUpdater(writeBackDB, wname, sqlUpdateWg),
 			},
 		}
 
