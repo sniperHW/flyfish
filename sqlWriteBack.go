@@ -147,7 +147,7 @@ func (this *sqlUpdater) process(v interface{}) {
 		return
 	}
 
-	buffer := make([]byte, stat.Size())
+	buffer := getBuffer(int(stat.Size()))
 
 	n, err := f.Read(buffer)
 
@@ -160,10 +160,10 @@ func (this *sqlUpdater) process(v interface{}) {
 		return
 	}
 
-	checkSum := binary.BigEndian.Uint64(buffer[len(buffer)-8:])
+	checkSum := binary.BigEndian.Uint64(buffer[n-8:])
 
 	//校验数据
-	if checkSum != crc64.Checksum(buffer[:len(buffer)-8], crc64Table) {
+	if checkSum != crc64.Checksum(buffer[:n-8], crc64Table) {
 		Fatalln("checkSum failed:", path)
 		return
 	}
@@ -171,7 +171,7 @@ func (this *sqlUpdater) process(v interface{}) {
 	recordCount := 0
 
 	offset := 0
-	end := len(buffer) - 8
+	end := n - 8
 	for offset < end {
 		pbRecord := &proto.Record{}
 		l := int(binary.BigEndian.Uint32(buffer[offset : offset+4]))
@@ -231,6 +231,8 @@ func (this *sqlUpdater) process(v interface{}) {
 		//}
 
 	}
+
+	releasaeBuffer(buffer)
 
 	sqlTime := time.Now().Sub(beg)
 

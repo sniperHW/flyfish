@@ -21,11 +21,33 @@ import (
 
 var (
 	fileCounter   int64
+	checkSumSize  = 8
 	maxBufferSize = 1024 * 1024 * 4
+	maxDataSize   = maxBufferSize - checkSumSize
 	fileDir       = "tmpWriteBackOp"
 	filePrefix    = "tmpWriteBackOp"
 	crc64Table    *crc64.Table
 )
+
+var bufferPool = sync.Pool{
+	New: func() interface{} {
+		return make([]byte, maxBufferSize)
+	},
+}
+
+func getBuffer(size int) []byte {
+	if size <= maxBufferSize {
+		return bufferPool.Get().([]byte)
+	} else {
+		return make([]byte, size)
+	}
+}
+
+func releasaeBuffer(b []byte) {
+	if cap(b) == maxBufferSize {
+		bufferPool.Put(b)
+	}
+}
 
 type writeFileSt struct {
 	buffer      []byte
@@ -81,12 +103,11 @@ func flush(buffer []byte, offset int, needReplys []*processContext, sqlUpdater_ 
 		return
 	}
 
-	checkSumBuff := make([]byte, 8)
-
 	checkSum := crc64.Checksum(buffer[:offset], crc64Table)
-	f.Write(buffer[:offset])
-	binary.BigEndian.PutUint64(checkSumBuff, checkSum)
-	f.Write(checkSumBuff)
+	binary.BigEndian.PutUint64(buffer[offset:], checkSum)
+	f.Write(buffer[:offset+checkSumSize])
+
+	releasaeBuffer(buffer)
 
 	f.Sync()
 	f.Close()
@@ -103,7 +124,6 @@ func flush(buffer []byte, offset int, needReplys []*processContext, sqlUpdater_ 
 			v.getCacheKey().processQueueCmd()
 		}
 	}
-
 }
 
 func (this *writeBackProcessor) flushToFile() {
@@ -185,15 +205,15 @@ func (this *writeBackProcessor) writeBack(ctx *processContext) {
 		this.nextFlush = time.Now().Add(time.Duration(time.Millisecond * 100))
 	}
 
-	if this.offset+totalSize > maxBufferSize {
+	if this.offset+totalSize > maxDataSize {
 		this.flushToFile()
 	}
 
 	if this.buffer == nil {
-		if totalSize > maxBufferSize {
-			this.buffer = make([]byte, totalSize, totalSize)
+		if totalSize > maxDataSize {
+			this.buffer = getBuffer(totalSize)
 		} else {
-			this.buffer = make([]byte, maxBufferSize, maxBufferSize)
+			this.buffer = getBuffer(maxBufferSize)
 		}
 	}
 
@@ -206,7 +226,7 @@ func (this *writeBackProcessor) writeBack(ctx *processContext) {
 		this.needReplys = append(this.needReplys, ctx)
 	}
 
-	if this.offset+totalSize >= maxBufferSize || time.Now().After(this.nextFlush) {
+	if this.offset+totalSize >= maxDataSize || time.Now().After(this.nextFlush) {
 		this.flushToFile()
 	}
 }
