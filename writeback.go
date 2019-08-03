@@ -68,7 +68,7 @@ func flush(buffer []byte, offset int, needReplys []*processContext, sqlUpdater_ 
 
 	//通告sqlUpdater执行更新
 
-	sqlUpdater_.queue.AddNoWait(path)
+	sqlUpdater_.queue.AddNoWait(counter)
 
 	if len(needReplys) > 0 {
 		for _, v := range needReplys {

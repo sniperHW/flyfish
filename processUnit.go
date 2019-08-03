@@ -378,7 +378,7 @@ func InitProcessUnit() bool {
 		})
 
 		timer.Repeat(time.Second*60, nil, func(t *timer.Timer) {
-			if isStop() || util.ErrQueueClosed == unit.writeBack.sqlUpdater_.queue.AddNoWait("ping") {
+			if isStop() || util.ErrQueueClosed == unit.writeBack.sqlUpdater_.queue.AddNoWait(int64(-1)) {
 				t.Cancel()
 			}
 		})
