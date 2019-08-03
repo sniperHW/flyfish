@@ -6,6 +6,7 @@ import (
 	pb "github.com/golang/protobuf/proto"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
+	"github.com/sniperHW/kendynet/util"
 	"hash/crc64"
 	"os"
 	"sync"
@@ -26,13 +27,21 @@ var (
 	crc64Table    *crc64.Table
 )
 
-type writeBackProcessor struct {
-	mtx         sync.Mutex
+type writeFileSt struct {
 	buffer      []byte
-	nextFlush   time.Time
 	offset      int
 	needReplys  []*processContext
 	sqlUpdater_ *sqlUpdater
+}
+
+type writeBackProcessor struct {
+	mtx            sync.Mutex
+	buffer         []byte
+	nextFlush      time.Time
+	offset         int
+	needReplys     []*processContext
+	sqlUpdater_    *sqlUpdater
+	writeFileQueue *util.BlockQueue
 }
 
 func (this *writeBackProcessor) checkFlush() {
@@ -41,6 +50,22 @@ func (this *writeBackProcessor) checkFlush() {
 	if time.Now().After(this.nextFlush) {
 		this.flushToFile()
 	}
+}
+
+func (this *writeBackProcessor) start() {
+	this.writeFileQueue = util.NewBlockQueue()
+	go func() {
+		for {
+			closed, localList := this.writeFileQueue.Get()
+			for _, v := range localList {
+				st := v.(*writeFileSt)
+				flush(st.buffer, st.offset, st.needReplys, st.sqlUpdater_)
+			}
+			if closed {
+				return
+			}
+		}
+	}()
 }
 
 func flush(buffer []byte, offset int, needReplys []*processContext, sqlUpdater_ *sqlUpdater) {
@@ -83,18 +108,20 @@ func flush(buffer []byte, offset int, needReplys []*processContext, sqlUpdater_ 
 
 func (this *writeBackProcessor) flushToFile() {
 	if this.buffer != nil {
-		offset := this.offset
-		buffer := this.buffer
-		needReplys := this.needReplys
+		st := &writeFileSt{
+			buffer:      this.buffer,
+			offset:      this.offset,
+			needReplys:  this.needReplys,
+			sqlUpdater_: this.sqlUpdater_,
+		}
 
 		this.buffer = nil
 		this.offset = 0
 		this.needReplys = []*processContext{}
 		this.nextFlush = time.Now().Add(time.Duration(time.Millisecond * 100))
 
-		go flush(buffer, offset, needReplys, this.sqlUpdater_)
+		this.writeFileQueue.AddNoWait(st)
 	}
-
 }
 
 func (this *writeBackProcessor) writeBack(ctx *processContext) {

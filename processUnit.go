@@ -84,21 +84,6 @@ func (this *processUnit) onRedisStale(ckey *cacheKey, ctx *processContext) {
 	}
 }
 
-/*
- *    insert + update = insert
- *    insert + delete = none
- *    insert + insert = 非法
- *    update + insert = 非法
- *    update + delete = delete
- *    update + update = update
- *    delete + insert = update
- *    delete + update = 非法
- *    delete + delte  = 非法
- *    none   + insert = insert
- *    none   + update = 非法
- *    node   + delete = 非法
- */
-
 func (this *processUnit) doWriteBack(ctx *processContext) {
 
 	if ctx.writeBackFlag == write_back_none {
@@ -106,130 +91,6 @@ func (this *processUnit) doWriteBack(ctx *processContext) {
 	}
 
 	this.writeBack.writeBack(ctx)
-
-	/*
-		if ctx.writeBackFlag == write_back_none {
-			panic("ctx.writeBackFlag == write_back_none")
-		}
-
-		ckey := ctx.getCacheKey()
-		ckey.mtx.Lock()
-		ckey.writeBacked = true
-		ckey.writeBackVersion++
-
-		wb := ckey.r
-		if nil == wb {
-			wb = &writeBackRecord{}
-			wb.writeBackFlag = ctx.writeBackFlag
-			wb.key = ctx.getKey()
-			wb.table = ctx.getTable()
-			wb.uniKey = ctx.getUniKey()
-			wb.ckey = ckey
-			wb.writeBackVersion = ckey.writeBackVersion
-			wb.version = ckey.version - 1
-			if wb.writeBackFlag == write_back_insert || wb.writeBackFlag == write_back_update {
-				wb.fields = map[string]*proto.Field{}
-				for k, v := range ctx.fields {
-					wb.fields[k] = v
-				}
-			}
-
-			if ctx.replyOnDbOk {
-				wb.ctx = ctx
-			}
-			ckey.r = wb
-
-			ckey.mtx.Unlock()
-
-			this.sqlUpdater_.queue.AddNoWait(ckey)
-
-		} else {
-
-			//合并状态
-			if wb.writeBackFlag == write_back_insert {
-				/*
-				*    insert + update = insert
-				*    insert + delete = none
-				*    insert + insert = 非法
-				 * /
-				if ctx.writeBackFlag == write_back_delete {
-					wb.fields = nil
-					wb.writeBackFlag = write_back_none
-				} else {
-					for k, v := range ctx.fields {
-						wb.fields[k] = v
-					}
-				}
-			} else if wb.writeBackFlag == write_back_update {
-				/*
-				 *    update + insert = 非法
-				 *    update + delete = delete
-				 *    update + update = update
-				 * /
-				if ctx.writeBackFlag == write_back_insert {
-					//逻辑错误，记录日志
-				} else if ctx.writeBackFlag == write_back_delete {
-					wb.fields = nil
-					wb.writeBackFlag = write_back_delete
-				} else {
-					for k, v := range ctx.fields {
-						wb.fields[k] = v
-					}
-				}
-			} else if wb.writeBackFlag == write_back_delete {
-				/*
-				*    delete + insert = update
-				*    delete + update = 非法
-				*    delete + delte  = 非法
-				 * /
-				if ctx.writeBackFlag == write_back_insert {
-					wb.fields = map[string]*proto.Field{}
-					for k, v := range ctx.fields {
-						wb.fields[k] = v
-					}
-					meta := wb.ckey.getMeta().fieldMetas
-					for k, v := range meta {
-						if nil == wb.fields[k] {
-							//使用默认值填充
-							wb.fields[k] = proto.PackField(k, v.defaultV)
-						}
-					}
-					wb.writeBackFlag = write_back_update
-				} else {
-					//逻辑错误，记录日志
-					panic("invaild writeBackFlag")
-				}
-			} else {
-				/*
-				*    none   + insert = insert
-				*    none   + update = 非法
-				*    node   + delete = 非法
-				 * /
-				if ctx.writeBackFlag == write_back_insert {
-					wb.fields = map[string]*proto.Field{}
-					for k, v := range ctx.fields {
-						wb.fields[k] = v
-					}
-					meta := wb.ckey.getMeta().fieldMetas
-					for k, v := range meta {
-						if nil == wb.fields[k] {
-							//使用默认值填充
-							wb.fields[k] = proto.PackField(k, v.defaultV)
-						}
-					}
-					wb.writeBackFlag = write_back_insert
-				} else {
-					//逻辑错误，记录日志
-					panic("invaild writeBackFlag")
-				}
-			}
-
-			if ctx.replyOnDbOk {
-				wb.ctx = ctx
-			}
-
-			ckey.mtx.Unlock()
-		}*/
 }
 
 func (this *cacheKey) process_(fromClient bool) {
@@ -365,6 +226,7 @@ func InitProcessUnit() bool {
 
 		unit.lruHead.nnext = &unit.lruTail
 		unit.lruTail.pprev = &unit.lruHead
+		unit.writeBack.start()
 
 		processUnits[i] = unit
 

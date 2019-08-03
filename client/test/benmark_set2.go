@@ -87,9 +87,9 @@ func main() {
 		services = append(services, os.Args[i])
 	}
 
-	for j := 0; j < 10; j++ {
+	for j := 0; j < 50; j++ {
 		c := kclient.OpenClient(services)
-		for i := 0; i < 10; i++ {
+		for i := 0; i < 50; i++ {
 			Set(c)
 		}
 	}
