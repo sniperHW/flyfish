@@ -89,7 +89,7 @@ func main() {
 
 	for j := 0; j < 100; j++ {
 		c := kclient.OpenClient(services)
-		for i := 0; i < 200; i++ {
+		for i := 0; i < 20; i++ {
 			Set(c)
 		}
 	}
