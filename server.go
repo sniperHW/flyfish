@@ -255,9 +255,9 @@ func Start() error {
 	}
 
 	if config.DBConfig.SqlType == "mysql" {
-		BinaryToPgsqlStr = mysqlBinaryToPgsqlStr
+		BinaryToSqlStr = mysqlBinaryToPgsqlStr
 	} else {
-		BinaryToPgsqlStr = pgsqlBinaryToPgsqlStr
+		BinaryToSqlStr = pgsqlBinaryToPgsqlStr
 	}
 
 	InitProcessUnit()

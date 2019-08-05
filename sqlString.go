@@ -2,11 +2,8 @@ package flyfish
 
 import (
 	"fmt"
-	//pb "github.com/golang/protobuf/proto"
 	"github.com/sniperHW/flyfish/proto"
 	"strconv"
-	//"strings"
-	//"time"
 )
 
 var mysqlByteToString = []string{
@@ -527,7 +524,7 @@ var pgsqlByteToString = []string{
 	"\\377",
 }
 
-var BinaryToPgsqlStr func(s *str, bytes []byte)
+var BinaryToSqlStr func(s *str, bytes []byte)
 
 func pgsqlBinaryToPgsqlStr(s *str, bytes []byte) {
 	s.append("'")
@@ -545,34 +542,33 @@ func mysqlBinaryToPgsqlStr(s *str, bytes []byte) {
 	s.append("')")
 }
 
-func fieldToString(s *str, field *proto.Field) {
-
+func (this *str) appendField(field *proto.Field) *str {
 	tt := field.GetType()
 
 	switch tt {
 	case proto.ValueType_string:
-		s.append(fmt.Sprintf("'%s'", field.GetString()))
+		this.append(fmt.Sprintf("'%s'", field.GetString()))
 	case proto.ValueType_float:
-		s.append(fmt.Sprintf("%f", field.GetFloat()))
+		this.append(fmt.Sprintf("%f", field.GetFloat()))
 	case proto.ValueType_int:
-		s.append(strconv.FormatInt(field.GetInt(), 10))
+		this.append(strconv.FormatInt(field.GetInt(), 10))
 	case proto.ValueType_uint:
-		s.append(strconv.FormatUint(field.GetUint(), 10))
+		this.append(strconv.FormatUint(field.GetUint(), 10))
 	case proto.ValueType_blob:
-		BinaryToPgsqlStr(s, field.GetBlob())
+		BinaryToSqlStr(this, field.GetBlob())
 	default:
 		panic("invaild value type")
 	}
+
+	return this
 }
 
 func buildInsertString(s *str, r *proto.Record, meta *table_meta) {
 	s.append(meta.insertPrefix).append("'").append(r.GetKey()).append("',") //add __key__
-	fieldToString(s, r.Fields[0])                                           //add __version__
-	s.append(",")
-
+	s.appendField(r.Fields[0]).append(",")                                  //add __version__
 	//add other fileds
 	for i := 1; i < len(r.Fields); i++ {
-		fieldToString(s, r.Fields[i])
+		s.appendField(r.Fields[i])
 		if i != len(r.Fields)-1 {
 			s.append(",")
 		}
@@ -586,11 +582,9 @@ func buildUpdateString(s *str, r *proto.Record, meta *table_meta) {
 
 	for i, v := range r.Fields {
 		if i == 0 {
-			s.append(v.GetName()).append("=")
-			fieldToString(s, v)
+			s.append(v.GetName()).append("=").appendField(v)
 		} else {
-			s.append(",").append(v.GetName()).append("=")
-			fieldToString(s, v)
+			s.append(",").append(v.GetName()).append("=").appendField(v)
 		}
 	}
 
@@ -600,43 +594,3 @@ func buildUpdateString(s *str, r *proto.Record, meta *table_meta) {
 func buildDeleteString(s *str, r *proto.Record) {
 	s.append("delete from ").append(r.GetTable()).append(" where __key__ = '").append(r.GetKey()).append("';")
 }
-
-/*
-func benchmark() {
-
-	r := &proto.Record{}
-	r.Table = pb.String("users1")
-	r.Type = proto.SqlType_insert.Enum()
-	r.Key = pb.String("huangwei1")
-	r.WritebackVersion = pb.Int64(1)
-	r.Fields = []*proto.Field{proto.PackField("name", "huangwei1"), proto.PackField("age", 10), proto.PackField("phone", strings.Repeat("a", 1024))}
-
-	beg := time.Now()
-
-	for i := 0; i < 10000; i++ {
-		s := strGet()
-		bytes, err := pb.Marshal(r)
-		if err != nil {
-			Fatalln("[marshalRecord]", err, *r)
-			return
-		}
-		s.appendBytes(bytes...)
-		strPut(s)
-	}
-
-	fmt.Println(time.Now().Sub(beg))
-
-	beg = time.Now()
-
-	for i := 0; i < 10000; i++ {
-		meta := getMetaByTable("users1")
-		s := strGet()
-
-		buildInsertString(s, r, meta)
-
-		strPut(s)
-	}
-
-	fmt.Println(time.Now().Sub(beg))
-
-}*/
