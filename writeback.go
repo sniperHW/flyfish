@@ -28,9 +28,8 @@ var (
 )
 
 type writeFileSt struct {
-	s           *str
-	needReplys  []*processContext
-	sqlUpdater_ *sqlUpdater
+	s          *str
+	needReplys []*processContext
 }
 
 type writeBackProcessor struct {
@@ -58,7 +57,7 @@ func (this *writeBackProcessor) start() {
 			closed, localList := this.writeFileQueue.Get()
 			for _, v := range localList {
 				st := v.(*writeFileSt)
-				flush(st.s, st.needReplys, st.sqlUpdater_)
+				this.flush(st.s, st.needReplys)
 			}
 			if closed {
 				return
@@ -67,7 +66,7 @@ func (this *writeBackProcessor) start() {
 	}()
 }
 
-func flush(s *str, needReplys []*processContext, sqlUpdater_ *sqlUpdater) {
+func (this *writeBackProcessor) flush(s *str, needReplys []*processContext) {
 
 	config := conf.GetConfig()
 
@@ -92,7 +91,7 @@ func flush(s *str, needReplys []*processContext, sqlUpdater_ *sqlUpdater) {
 
 	//通告sqlUpdater执行更新
 
-	sqlUpdater_.queue.AddNoWait(counter)
+	this.sqlUpdater_.queue.AddNoWait(counter)
 
 	if len(needReplys) > 0 {
 		for _, v := range needReplys {
@@ -110,9 +109,8 @@ func (this *writeBackProcessor) flushToFile() {
 		config := conf.GetConfig()
 
 		st := &writeFileSt{
-			s:           this.s,
-			needReplys:  this.needReplys,
-			sqlUpdater_: this.sqlUpdater_,
+			s:          this.s,
+			needReplys: this.needReplys,
 		}
 
 		this.s = nil

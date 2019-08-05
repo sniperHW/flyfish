@@ -378,8 +378,6 @@ func (this cmdProcessorLocalCache) processCmd(ckey *cacheKey, fromClient bool) {
 			ctx.reply(errcode.ERR_OK, ctx.fields, ckey.version)
 		} else {
 			ckey.lockCmdQueue()
-		} else {
-			ctx.reply(errcode.ERR_OK, ctx.fields, ckey.version)
 		}
 		ckey.mtx.Unlock()
 		ckey.unit.doWriteBack(ctx)
