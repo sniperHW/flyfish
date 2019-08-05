@@ -23,8 +23,8 @@ var (
 	fileCounter  int64
 	checkSumSize = 8
 	crc64Table   *crc64.Table
-	flushCount   = 200
-	flushSize    = 1024 * 1024
+	//flushCount   = 200
+	//flushSize    = 1024 * 1024
 )
 
 type writeFileSt struct {
