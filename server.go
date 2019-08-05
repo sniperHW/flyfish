@@ -12,6 +12,9 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -170,6 +173,36 @@ func getFileList(dirpath string) ([]string, error) {
 	return file_list, dir_err
 }
 
+type ByID []string
+
+func (a ByID) Len() int      { return len(a) }
+func (a ByID) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a ByID) Less(i, j int) bool {
+	l := a[i]
+	r := a[j]
+	fieldl := strings.Split(l, "_")
+	fieldr := strings.Split(r, "_")
+	if len(fieldl) != 2 || len(fieldr) != 2 {
+		panic("invaild writeBack file")
+	}
+
+	idl, err := strconv.ParseInt(strings.TrimRight(fieldl[1], ".wb"), 10, 64)
+	if nil != err {
+		panic("invaild writeBack file")
+	}
+
+	idr, err := strconv.ParseInt(strings.TrimRight(fieldr[1], ".wb"), 10, 64)
+	if nil != err {
+		panic("invaild writeBack file")
+	}
+
+	return idl < idr
+}
+
+func sortFileList(fileList []string) {
+	sort.Sort(ByID(fileList))
+}
+
 //执行尚未完成的回写文件
 func execWriteBackFile() bool {
 	config := conf.GetConfig()
@@ -187,6 +220,9 @@ func execWriteBackFile() bool {
 	if nil != err {
 		return false
 	}
+
+	//对fileList排序
+	sortFileList(fileList)
 
 	writeBackDB, err := sqlOpen(dbConfig.SqlType, dbConfig.DbHost, dbConfig.DbPort, dbConfig.DbDataBase, dbConfig.DbUser, dbConfig.DbPassword)
 

@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
 	"unsafe"
 )
 
@@ -306,6 +309,37 @@ func getFileList(dirpath string) ([]string, error) {
 	return file_list, dir_err
 }
 
+type ByID []string
+
+func (a ByID) Len() int      { return len(a) }
+func (a ByID) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a ByID) Less(i, j int) bool {
+	l := a[i]
+	r := a[j]
+	fieldl := strings.Split(l, "_")
+	fieldr := strings.Split(r, "_")
+	if len(fieldl) != 2 || len(fieldr) != 2 {
+		panic("invaild writeBack file")
+	}
+
+	idl, err := strconv.ParseInt(strings.TrimRight(fieldl[1], ".wb"), 10, 64)
+	if nil != err {
+		panic("invaild writeBack file")
+	}
+
+	idr, err := strconv.ParseInt(strings.TrimRight(fieldr[1], ".wb"), 10, 64)
+	if nil != err {
+		panic("invaild writeBack file")
+	}
+
+	return idl < idr
+
+}
+
+func sortFileList(fileList []string) {
+	sort.Sort(ByID(fileList))
+}
+
 func main() {
 
 	//bytes := []byte{'\142', '\171', '\164', '\145', '\141'}
@@ -324,9 +358,28 @@ func main() {
 
 	fmt.Println(stat, err)*/
 
-	l, _ := getFileList("tmpWriteBackOp")
+	//l, _ := getFileList("tmpWriteBackOp")
 
-	fmt.Println(l)
+	//fmt.Println(l)
+
+	fileList := []string{
+		"writeBackFile_10.wb",
+		"writeBackFile_1.wb",
+		"writeBackFile_2.wb",
+		"writeBackFile_3.wb",
+		"writeBackFile_4.wb",
+		"writeBackFile_5.wb",
+		"writeBackFile_6.wb",
+		"writeBackFile_7.wb",
+		"writeBackFile_8.wb",
+		"writeBackFile_9.wb",
+	}
+
+	sortFileList(fileList)
+
+	for _, v := range fileList {
+		fmt.Println(v)
+	}
 
 	//fmt.Println(binaryToPgsqlStr(bytes))
 

@@ -202,7 +202,7 @@ func (this *sqlUpdater) run() {
 				}
 			} else {
 				config := conf.GetConfig()
-				this.process(fmt.Sprintf("%s/%s_%d.op", config.WriteBackFileDir, config.WriteBackFilePrefix, v.(int64)))
+				this.process(fmt.Sprintf("%s/%s_%d.wb", config.WriteBackFileDir, config.WriteBackFilePrefix, v.(int64)))
 			}
 		}
 
