@@ -2,23 +2,29 @@ package flyfish
 
 import (
 	"database/sql/driver"
+	"encoding/binary"
+	"fmt"
+	pb "github.com/golang/protobuf/proto"
 	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/conf"
-	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet/util"
+	"hash/crc64"
 	"net"
+	"os"
 	"sync"
 	"time"
 )
 
 type sqlUpdater struct {
-	db                *sqlx.DB
-	name              string
-	values            []interface{}
-	writeFileAndBreak bool
-	lastTime          time.Time
-	queue             *util.BlockQueue
-	wg                *sync.WaitGroup
+	db       *sqlx.DB
+	name     string
+	lastTime time.Time
+	queue    *util.BlockQueue
+	wg       *sync.WaitGroup
+	sqlStr   []byte
+	records  []*proto.Record
+	buffer   []byte
 }
 
 func newSqlUpdater(db *sqlx.DB, name string, wg *sync.WaitGroup) *sqlUpdater {
@@ -26,11 +32,11 @@ func newSqlUpdater(db *sqlx.DB, name string, wg *sync.WaitGroup) *sqlUpdater {
 		wg.Add(1)
 	}
 	return &sqlUpdater{
-		name:   name,
-		values: []interface{}{},
-		queue:  util.NewBlockQueueWithName(name, conf.GetConfig().SqlUpdateQueueSize),
-		db:     db,
-		wg:     wg,
+		name:    name,
+		records: []*proto.Record{},
+		queue:   util.NewBlockQueueWithName(name, conf.GetConfig().SqlUpdateQueueSize),
+		db:      db,
+		wg:      wg,
 	}
 }
 
@@ -52,136 +58,154 @@ func isRetryError(err error) bool {
 	return false
 }
 
-func (this *sqlUpdater) resetValues() {
-	this.values = this.values[0:0]
-}
+func (this *sqlUpdater) process(path string) {
 
-func (this *sqlUpdater) doInsert(r *writeBackRecord, meta *table_meta) error {
-	str := strGet()
-	defer func() {
-		this.resetValues()
-		strPut(str)
-	}()
+	Debugln("sqlUpdater process")
 
-	str.append(meta.insertPrefix).append(getInsertPlaceHolder(1)).append(getInsertPlaceHolder(2))
-	this.values = append(this.values, r.key, r.fields["__version__"].GetValue())
-	c := 2
-	for _, name := range meta.insertFieldOrder {
-		c++
-		str.append(getInsertPlaceHolder(c))
-		this.values = append(this.values, r.fields[name].GetValue())
+	beg := time.Now()
+
+	var err error
+
+	stat, err := os.Stat(path)
+
+	if nil != err {
+		Fatalln("open file failed:", path, err)
+		return
 	}
-	str.append(");")
-	_, err := this.db.Exec(str.toString(), this.values...)
 
-	return err
-}
+	f, err := os.OpenFile(path, os.O_RDWR, os.ModePerm)
 
-func (this *sqlUpdater) doUpdate(r *writeBackRecord) error {
+	if nil != err {
+		Fatalln("open file failed:", path, err)
+		return
+	}
+
+	if nil == this.buffer || cap(this.buffer) < int(stat.Size()) {
+		this.buffer = make([]byte, sizeofPow2(int(stat.Size())))
+	}
+
+	n, err := f.Read(this.buffer)
+
+	f.Close()
+
+	loadTime := time.Now().Sub(beg)
+
+	if n != (int)(stat.Size()) {
+		Fatalln("read file failed:", path, err)
+		return
+	}
+
+	checkSum := binary.BigEndian.Uint64(this.buffer[n-8:])
+
+	//校验数据
+	if checkSum != crc64.Checksum(this.buffer[:n-8], crc64Table) {
+		Fatalln("checkSum failed:", path)
+		return
+	}
 
 	str := strGet()
-	defer func() {
-		this.resetValues()
-		strPut(str)
-	}()
+	offset := 0
+	end := n - 8
+	for offset < end {
+		pbRecord := &proto.Record{}
+		l := int(binary.BigEndian.Uint32(this.buffer[offset : offset+4]))
+		offset += 4
+		if err = pb.Unmarshal(this.buffer[offset:offset+l], pbRecord); err != nil {
+			Fatalln("replayRecord error ,offset:", offset, err)
+		}
+		offset += l
 
-	str.append("update ").append(r.table).append(" set ")
-	i := 0
-	for _, v := range r.fields {
-		this.values = append(this.values, v.GetValue())
-		i++
-		if i == 1 {
-			str.append(v.GetName()).append("=").append(getUpdatePlaceHolder(i))
+		meta := getMetaByTable(pbRecord.GetTable())
+
+		if nil == meta {
+			Fatalln("replayRecord error invaild table ,offset:", offset-l, pbRecord.GetTable())
+		}
+
+		this.records = append(this.records, pbRecord)
+
+		tt := pbRecord.GetType()
+		if tt == proto.SqlType_insert {
+			buildInsertString(str, pbRecord, meta)
+		} else if tt == proto.SqlType_update {
+			buildUpdateString(str, pbRecord, meta)
+		} else if tt == proto.SqlType_delete {
+			buildDeleteString(str, pbRecord)
 		} else {
-			str.append(",").append(v.GetName()).append("=").append(getUpdatePlaceHolder(i))
+			Fatalln("replayRecord invaild tt,offset:", offset)
 		}
 	}
-	str.append(" where __key__ = '").append(r.key).append("';")
-	_, err := this.db.Exec(str.toString(), this.values...)
-	return err
-}
 
-func (this *sqlUpdater) doDelete(r *writeBackRecord) error {
-	str := strGet()
-	defer strPut(str)
-	str.append("delete from ").append(r.table).append(" where __key__ = '").append(r.key).append("';")
-	_, err := this.db.Exec(str.toString())
-	return err
-}
+	recordCount := len(this.records)
 
-func (this *sqlUpdater) process(v interface{}) {
+	_, err = this.db.Exec(str.toString())
 
-	if _, ok := v.(*processContext); ok {
-		if time.Now().Sub(this.lastTime) > time.Second*5*60 {
-			//空闲超过5分钟发送ping
-			err := this.db.Ping()
-			if nil != err {
-				Errorln("sqlUpdater ping error", err)
-			} /* else {
-				Debugln("sqlUpdater ping")
-			}*/
-			this.lastTime = time.Now()
-		}
-	} else {
-
-		this.lastTime = time.Now()
-
-		wb := v.(*cacheKey).getRecord()
-
-		defer wb.ckey.clearWriteBack(wb.writeBackVersion)
-
-		if this.writeFileAndBreak {
-			backupRecord(wb)
-			return
-		}
-
-		var err error
-
-		for {
-
-			if wb.writeBackFlag == write_back_update {
-				err = this.doUpdate(wb)
-			} else if wb.writeBackFlag == write_back_insert {
-				err = this.doInsert(wb, wb.ckey.getMeta())
-			} else if wb.writeBackFlag == write_back_delete {
-				err = this.doDelete(wb)
-			} else {
-				return
-			}
-
-			if nil == err {
-				if wb.ctx != nil {
-					sqlResponse.onSqlWriteBackResp(wb.ctx, errcode.ERR_OK)
+	for {
+		if nil == err {
+			for _, v := range this.records {
+				uniKey := fmt.Sprintf("%s:%s", v.GetTable(), v.GetKey())
+				unit := getUnitByUnikey(uniKey)
+				unit.mtx.Lock()
+				k, ok := unit.cacheKeys[uniKey]
+				unit.mtx.Unlock()
+				if ok {
+					k.clearWriteBack(v.GetWritebackVersion())
 				}
-				return
-			} else {
-				if isRetryError(err) {
-					Errorln("sqlUpdater exec error:", err)
-					if isStop() {
-						this.writeFileAndBreak = true
-						backupRecord(wb)
-						return
-					}
-					//休眠一秒重试
-					time.Sleep(time.Second)
-				} else {
-					if wb.ctx != nil {
-						sqlResponse.onSqlWriteBackResp(wb.ctx, errcode.ERR_SQLERROR)
-					}
-					Errorln("sqlUpdater exec error:", err)
+			}
+			break
+		} else {
+			Errorln(str.toString(), err)
+			if isRetryError(err) {
+				Errorln("sqlUpdater exec error:", err)
+				if isStop() {
+					//服务要关闭，不需要做清理了
 					return
 				}
+				//休眠一秒重试
+				time.Sleep(time.Second)
+			} else {
+				this.records = this.records[0:0]
+				strPut(str)
+				Errorln("sqlUpdater exec error:", err, path)
+				return
 			}
 		}
 	}
+
+	this.records = this.records[0:0]
+
+	strPut(str)
+
+	sqlTime := time.Now().Sub(beg)
+
+	//删除文件
+	os.Remove(path)
+
+	totalTime := time.Now().Sub(beg)
+
+	Infoln("loadTime:", loadTime, "recordCount:", recordCount, "sqlTime:", sqlTime, "totalTime:", totalTime)
+
 }
 
 func (this *sqlUpdater) run() {
 	for {
 		closed, localList := this.queue.Get()
+
 		for _, v := range localList {
-			this.process(v)
+			if v.(int64) == -1 {
+				if time.Now().Sub(this.lastTime) > time.Second*5*60 {
+					//空闲超过5分钟发送ping
+					err := this.db.Ping()
+					if nil != err {
+						Errorln("sqlUpdater ping error", err)
+					}
+					this.lastTime = time.Now()
+				}
+			} else {
+				config := conf.GetConfig()
+				this.process(fmt.Sprintf("%s/%s_%d.wb", config.WriteBackFileDir, config.WriteBackFilePrefix, v.(int64)))
+			}
 		}
+
 		if closed {
 			Infoln(this.name, "stoped")
 			if nil != this.wg {

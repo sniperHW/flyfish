@@ -98,7 +98,6 @@ func (this cmdProcessorLocalCache) processSetNx(ckey *cacheKey, cmd *command) *p
 			ctx.fields[v.GetName()] = v
 		}
 		ctx.writeBackFlag = write_back_insert //数据不存在执行insert
-
 	} else {
 		for _, v := range cmd.fields {
 			ctx.fields[v.GetName()] = v
@@ -318,48 +317,38 @@ func (this cmdProcessorLocalCache) processCmd(ckey *cacheKey, fromClient bool) {
 			//已经超时
 			atomic.AddInt32(&cmdCount, -1)
 		} else {
+			switch cmd.cmdType {
+			case cmdGet:
+				ctx = this.processGet(ckey, cmd)
+				break
+			case cmdSet:
+				ctx = this.processSet(ckey, cmd)
+				break
+			case cmdSetNx:
+				ctx = this.processSetNx(ckey, cmd)
+				break
+			case cmdCompareAndSet:
+				ctx = this.processCompareAndSet(ckey, cmd)
+				break
+			case cmdCompareAndSetNx:
+				ctx = this.processCompareAndSetNx(ckey, cmd)
+				break
+			case cmdIncrBy:
+				ctx = this.processIncrBy(ckey, cmd)
+				break
+			case cmdDecrBy:
+				ctx = this.processDecrBy(ckey, cmd)
+				break
+			case cmdDel:
+				ctx = this.processDel(ckey, cmd)
+				break
+			default:
+				//记录日志
+				break
+			}
 
-			if fromClient && causeWriteBackCmd(cmd.cmdType) && ckey.unit.updateQueueFull() {
-				if conf.GetConfig().ReplyBusyOnQueueFull {
-					ctx.reply(errcode.ERR_BUSY, nil, -1)
-				} else {
-					atomic.AddInt32(&cmdCount, -1)
-				}
-			} else {
-
-				switch cmd.cmdType {
-				case cmdGet:
-					ctx = this.processGet(ckey, cmd)
-					break
-				case cmdSet:
-					ctx = this.processSet(ckey, cmd)
-					break
-				case cmdSetNx:
-					ctx = this.processSetNx(ckey, cmd)
-					break
-				case cmdCompareAndSet:
-					ctx = this.processCompareAndSet(ckey, cmd)
-					break
-				case cmdCompareAndSetNx:
-					ctx = this.processCompareAndSetNx(ckey, cmd)
-					break
-				case cmdIncrBy:
-					ctx = this.processIncrBy(ckey, cmd)
-					break
-				case cmdDecrBy:
-					ctx = this.processDecrBy(ckey, cmd)
-					break
-				case cmdDel:
-					ctx = this.processDel(ckey, cmd)
-					break
-				default:
-					//记录日志
-					break
-				}
-
-				if nil != ctx {
-					break
-				}
+			if nil != ctx {
+				break
 			}
 		}
 	}
@@ -385,12 +374,14 @@ func (this cmdProcessorLocalCache) processCmd(ckey *cacheKey, fromClient bool) {
 			ckey.mtx.Unlock()
 		}
 	} else {
-		if ctx.replyOnDbOk {
+		if !ctx.replyOnDbOk {
+			ctx.reply(errcode.ERR_OK, ctx.fields, ckey.version)
+		} else {
 			ckey.lockCmdQueue()
 		} else {
 			ctx.reply(errcode.ERR_OK, ctx.fields, ckey.version)
 		}
 		ckey.mtx.Unlock()
-		ckey.unit.pushSqlWriteBackReq(ctx)
+		ckey.unit.doWriteBack(ctx)
 	}
 }

@@ -40,10 +40,10 @@ func onRedisResp(ctx *processContext) {
 			} else if ctx.redisFlag == redis_del {
 				ckey.setMissing()
 				//投递sql删除请求
-				ckey.unit.pushSqlWriteBackReq(ctx)
+				ckey.unit.doWriteBack(ctx)
 			} else {
 				ckey.setOK(newVersion)
-				ckey.unit.pushSqlWriteBackReq(ctx)
+				ckey.unit.doWriteBack(ctx)
 			}
 		}
 

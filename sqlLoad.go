@@ -52,9 +52,9 @@ func (this *sqlLoader) append(v interface{}) {
 			err := this.db.Ping()
 			if nil != err {
 				Errorln("ping error", err)
-			} else {
+			} /* else {
 				Debugln("sqlLoader ping")
-			}
+			}*/
 			this.lastTime = time.Now()
 		}
 	} else {

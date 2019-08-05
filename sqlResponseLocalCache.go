@@ -51,7 +51,7 @@ func (this sqlResponseLocalCache) onSqlNotFound(ctx *processContext) {
 
 		ctx.writeBackFlag = write_back_insert
 
-		ckey.unit.pushSqlWriteBackReq(ctx)
+		ckey.unit.doWriteBack(ctx)
 
 		if !ctx.replyOnDbOk {
 			ctx.reply(errcode.ERR_OK, nil, 1)
@@ -137,7 +137,7 @@ func (this sqlResponseLocalCache) onSqlLoadOKSet(ctx *processContext) {
 			ctx.reply(errcode.ERR_OK, nil, version)
 		}
 
-		ckey.unit.pushSqlWriteBackReq(ctx)
+		ckey.unit.doWriteBack(ctx)
 
 		ckey.processQueueCmd()
 	}
@@ -164,7 +164,7 @@ func (this sqlResponseLocalCache) onSqlLoadOKDel(ctx *processContext) {
 
 	if errCode == errcode.ERR_OK {
 		ckey.setMissing()
-		ckey.unit.pushSqlWriteBackReq(ctx)
+		ckey.unit.doWriteBack(ctx)
 	} else {
 		ckey.mtx.Lock()
 		ckey.setValue(ctx)
@@ -192,7 +192,7 @@ func (this sqlResponseLocalCache) onSqlLoadOK(ctx *processContext) {
 }
 
 func (this sqlResponseLocalCache) onSqlWriteBackResp(ctx *processContext, errno int32) {
-	Debugln("onSqlWriteBackResp", ctx.getUniKey(), ctx.getCmdType(), errno)
+	/*Debugln("onSqlWriteBackResp", ctx.getUniKey(), ctx.getCmdType(), errno)
 	ckey := ctx.getCacheKey()
 	if errno == errcode.ERR_OK {
 		version := ctx.fields["__version__"].GetInt()
@@ -201,7 +201,7 @@ func (this sqlResponseLocalCache) onSqlWriteBackResp(ctx *processContext, errno 
 		ctx.reply(errno, nil, -1)
 		ckey.setMissing()
 	}
-	ckey.processQueueCmd()
+	ckey.processQueueCmd()*/
 }
 
 func (this sqlResponseLocalCache) onSqlResp(ctx *processContext, errno int32) {

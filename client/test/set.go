@@ -1,65 +1,44 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
 	kclient "github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/errcode"
-
-	//"github.com/sniperHW/kendynet"
-	//"strings"
-
 	"github.com/sniperHW/kendynet/golog"
+	"os"
 )
 
-func Set(c *kclient.Client, i int) {
-	fields := map[string]interface{}{}
-	fields["battle_balance"] = "haha"
-	key := fmt.Sprintf("%s:%d", "huangwei", i)
-
-	set := c.Set("role_battle_balance", key, fields)
-	set.Exec(func(ret *kclient.StatusResult) {
-
-		if ret.ErrCode != errcode.ERR_OK {
-			fmt.Println(errcode.GetErrorStr(ret.ErrCode))
-		} else {
-			fmt.Println("set ok")
-		}
-	})
-}
-
-func Del(c *kclient.Client, i int) {
-	key := fmt.Sprintf("%s:%d", "huangwei", i)
-	del := c.Del("role_battle_balance", key)
-	del.Exec(func(ret *kclient.StatusResult) {
-		if ret.ErrCode != errcode.ERR_OK {
-			fmt.Println(errcode.GetErrorStr(ret.ErrCode))
-		} else {
-			fmt.Println("set ok")
-		}
-	})
-}
-
 func main() {
+
 	kclient.InitLogger(golog.New("flyfish client", golog.NewOutputLogger("log", "flyfish client", 1024*1024*50)))
 
-	services := []string{"127.0.0.1:10011"}
+	services := []string{}
 
-	c := kclient.OpenClient(services) //eventQueue)
+	for i := 1; i < len(os.Args); i++ {
+		services = append(services, os.Args[i])
+	}
 
-	Set(c, 1)
-	//Set(c, 1)
-	//Set(c, 1)
-	//Set(c, 1)
-	//Set(c, 1)
+	c := kclient.OpenClient(services)
 
-	Del(c, 1)
-	//Del(c, 2)
+	buff := make([]byte, 4)
 
-	//Set(c,3)
-	//Set(c,4)
+	binary.BigEndian.PutUint32(buff, 100)
 
-	//eventQueue.Run()
+	fields := map[string]interface{}{}
+	fields["age"] = 100
+	fields["blob"] = buff
+	fields["name"] = "sniperHW"
 
-	sigStop := make(chan bool)
-	_, _ = <-sigStop
+	//不存在技术sniperHW SetNx成功
+	r2 := c.Set("users1", "sniperHW", fields).Exec()
+	if r2.ErrCode != errcode.ERR_OK {
+		fmt.Println("Set error:", errcode.GetErrorStr(r2.ErrCode))
+		return
+	}
+
+	r3 := c.Get("users1", "sniperHW", "blob").Exec()
+
+	fmt.Println(binary.BigEndian.Uint32(r3.Fields["blob"].GetBlob()))
+
 }

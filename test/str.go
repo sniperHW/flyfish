@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strings"
+	"unsafe"
 )
 
 func isPow2(size int) bool {

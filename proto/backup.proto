@@ -11,7 +11,8 @@ enum SqlType {
 
 message record {
 	required SqlType type = 1;
-	required string table = 2;
-	required string key = 3;
-	repeated field  fields  = 4;
+	required string  table = 2;
+	required string  key = 3;
+	required int64   writebackVersion = 4;
+	repeated field   fields  = 5;
 }

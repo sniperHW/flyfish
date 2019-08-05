@@ -5,7 +5,7 @@ import (
 	kclient "github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/kendynet/golog"
-	"math/rand"
+	//"math/rand"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -25,11 +25,9 @@ func Set(c *kclient.Client) {
 	fields["age"] = 37
 	fields["phone"] = strings.Repeat("a", 1024)
 	fields["name"] = "sniperHW"
-	key := fmt.Sprintf("%s:%d", "huangwei", rand.Int()%100000)
-	//key := fmt.Sprintf("%s:%d","huangwei",id%100000)//rand.Int()%1000000)
-	//key := "huangwei:44745"
-	id++
-	set := c.Set("users1", key, fields)
+	nextID := atomic.AddInt64(&id, 1)
+	key := fmt.Sprintf("%s:%d", "huangwei", nextID%100000)
+	set := c.SetSync("users1", key, fields)
 
 	beg := time.Now()
 
@@ -68,17 +66,15 @@ func main() {
 	//golog.DisableStdOut()
 	kclient.InitLogger(golog.New("flyfish client", golog.NewOutputLogger("log", "flyfish client", 1024*1024*50)))
 
-	id = 0
-
 	services := []string{}
 
 	for i := 1; i < len(os.Args); i++ {
 		services = append(services, os.Args[i])
 	}
 
-	for j := 0; j < 10; j++ {
+	for j := 0; j < 50; j++ {
 		c := kclient.OpenClient(services)
-		for i := 0; i < 10; i++ {
+		for i := 0; i < 50; i++ {
 			Set(c)
 		}
 	}

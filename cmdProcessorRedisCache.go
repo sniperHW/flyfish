@@ -301,7 +301,7 @@ func (this cmdProcessorRedisCache) processCmd(ckey *cacheKey, fromClient bool) {
 		return
 	}
 
-	if fromClient && causeWriteBackCmd(lastCmdType) {
+	/*if fromClient && causeWriteBackCmd(lastCmdType) {
 		if ckey.unit.updateQueueFull() {
 			ckey.mtx.Unlock()
 			if conf.GetConfig().ReplyBusyOnQueueFull {
@@ -312,7 +312,7 @@ func (this cmdProcessorRedisCache) processCmd(ckey *cacheKey, fromClient bool) {
 			this.processCmd(ckey, fromClient)
 			return
 		}
-	}
+	}*/
 
 	fullReturn := fromClient
 

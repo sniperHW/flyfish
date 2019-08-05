@@ -45,7 +45,7 @@ func Set(c *kclient.Client) {
 	fields["phone"] = strings.Repeat("a", 1024)
 	fields["name"] = "sniperHW"
 	key := fmt.Sprintf("%s:%d", "huangwei", nextID%100000)
-	set := c.Set("users1", key, fields)
+	set := c.SetSync("users1", key, fields)
 
 	beg := time.Now()
 
@@ -87,9 +87,9 @@ func main() {
 		services = append(services, os.Args[i])
 	}
 
-	for j := 0; j < 10; j++ {
+	for j := 0; j < 100; j++ {
 		c := kclient.OpenClient(services)
-		for i := 0; i < 10; i++ {
+		for i := 0; i < 20; i++ {
 			Set(c)
 		}
 	}
