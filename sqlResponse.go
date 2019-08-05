@@ -6,7 +6,6 @@ import (
 )
 
 type sqlResponseI interface {
-	onSqlWriteBackResp(ctx *processContext, errno int32)
 	onSqlResp(ctx *processContext, errno int32)
 }
 

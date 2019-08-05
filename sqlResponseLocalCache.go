@@ -191,19 +191,6 @@ func (this sqlResponseLocalCache) onSqlLoadOK(ctx *processContext) {
 	}
 }
 
-func (this sqlResponseLocalCache) onSqlWriteBackResp(ctx *processContext, errno int32) {
-	/*Debugln("onSqlWriteBackResp", ctx.getUniKey(), ctx.getCmdType(), errno)
-	ckey := ctx.getCacheKey()
-	if errno == errcode.ERR_OK {
-		version := ctx.fields["__version__"].GetInt()
-		ctx.reply(errno, nil, version)
-	} else {
-		ctx.reply(errno, nil, -1)
-		ckey.setMissing()
-	}
-	ckey.processQueueCmd()*/
-}
-
 func (this sqlResponseLocalCache) onSqlResp(ctx *processContext, errno int32) {
 	Debugln("onSqlResp", ctx.getUniKey(), ctx.getCmdType(), errno)
 	if errno == errcode.ERR_OK {

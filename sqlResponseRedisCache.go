@@ -154,31 +154,3 @@ func (this sqlResponseRedisCache) onSqlResp(ctx *processContext, errno int32) {
 		onSqlExecError(ctx)
 	}
 }
-
-func (this sqlResponseRedisCache) onSqlWriteBackResp(ctx *processContext, errno int32) {
-
-	/*
-		Debugln("onSqlWriteBackResp", ctx.getUniKey(), ctx.getCmdType(), errno)
-
-		ckey := ctx.getCacheKey()
-		if errno == errcode.ERR_OK {
-			version := ctx.fields["__version__"].GetInt()
-			ctx.reply(errno, nil, version)
-		} else {
-			ctx.reply(errno, nil, -1)
-			//将redis中缓存作废
-			ckey.setMissing()
-
-			ckey.unit.pushRedisReq(&processContext{
-				commands: []*command{&command{
-					uniKey: ckey.uniKey,
-					ckey:   ckey,
-				}},
-				redisFlag: redis_kick,
-			})
-		}
-
-		ckey.processQueueCmd()
-	*/
-
-}
