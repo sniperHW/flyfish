@@ -124,7 +124,12 @@ func (this *table_meta) checkField(field *proto.Field) bool {
 		return false
 	}
 
-	if field.GetType() != m.tt {
+	if m.tt == proto.ValueType_blob {
+		if !field.IsBlob() && !field.IsString() {
+			Errorln("checkField failed:", field.GetName(), field.GetType())
+			return false
+		}
+	} else if field.GetType() != m.tt {
 		Errorln("checkField failed:", field.GetName(), field.GetType())
 		return false
 	}
@@ -142,7 +147,12 @@ func (this *table_meta) checkSet(fields map[string]*proto.Field) bool {
 			return false
 		}
 
-		if v.GetType() != m.tt {
+		if m.tt == proto.ValueType_blob {
+			if !v.IsBlob() && !v.IsString() {
+				Errorln("checkSet failed:", v.GetName(), v.GetType())
+				return false
+			}
+		} else if v.GetType() != m.tt {
 			Errorln("checkSet failed:", v.GetName(), v.GetType())
 			return false
 		}
@@ -157,10 +167,6 @@ func (this *table_meta) checkCompareAndSet(newV *proto.Field, oldV *proto.Field)
 		return false
 	}
 
-	if newV.GetType() != oldV.GetType() {
-		return false
-	}
-
 	if newV.GetName() != oldV.GetName() {
 		return false
 	}
@@ -170,8 +176,20 @@ func (this *table_meta) checkCompareAndSet(newV *proto.Field, oldV *proto.Field)
 		return false
 	}
 
-	if oldV.GetType() != m.tt {
-		return false
+	if m.tt == proto.ValueType_blob {
+
+		if !newV.IsBlob() && !newV.IsString() {
+			return false
+		}
+
+		if !oldV.IsBlob() && !oldV.IsString() {
+			return false
+		}
+
+	} else {
+		if newV.GetType() != m.tt || oldV.GetType() != m.tt {
+			return false
+		}
 	}
 
 	return true

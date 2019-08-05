@@ -1,6 +1,7 @@
 package flyfish
 
 import (
+	"encoding/binary"
 	"sync"
 	"unsafe"
 )
@@ -34,9 +35,17 @@ func (this *str) reset() {
 	this.len = 0
 }
 
+func (this *str) dataLen() int {
+	return this.len
+}
+
 func (this *str) toString() string {
 	tmp := this.data[:this.len]
 	return *(*string)(unsafe.Pointer(&tmp))
+}
+
+func (this *str) bytes() []byte {
+	return this.data[:this.len]
 }
 
 func (this *str) expand(need int) {
@@ -47,6 +56,28 @@ func (this *str) expand(need int) {
 	}
 	this.data = data
 	this.cap = newCap
+}
+
+func (this *str) appendInt64(i int64) *str {
+	s := 8
+	newLen := this.len + s
+	if newLen > this.cap {
+		this.expand(s)
+	}
+	binary.BigEndian.PutUint64(this.data[this.len:], uint64(i))
+	this.len = newLen
+	return this
+}
+
+func (this *str) appendInt32(i int32) *str {
+	s := 4
+	newLen := this.len + s
+	if newLen > this.cap {
+		this.expand(s)
+	}
+	binary.BigEndian.PutUint32(this.data[this.len:], uint32(i))
+	this.len = newLen
+	return this
 }
 
 func (this *str) appendBytes(bytes ...byte) *str {

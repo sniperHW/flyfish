@@ -10,6 +10,8 @@ import (
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/socket/listener/tcp"
 	"net"
+	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -151,6 +153,57 @@ func (this *tcpListener) Start() error {
 	})
 }
 
+func getFileList(dirpath string) ([]string, error) {
+	var file_list []string
+	dir_err := filepath.Walk(dirpath,
+		func(path string, f os.FileInfo, err error) error {
+			if f == nil {
+				return err
+			}
+			if !f.IsDir() {
+				file_list = append(file_list, path)
+				return nil
+			}
+
+			return nil
+		})
+	return file_list, dir_err
+}
+
+//执行尚未完成的回写文件
+func execWriteBackFile() bool {
+	config := conf.GetConfig()
+
+	dbConfig := config.DBConfig
+
+	_, err := os.Stat(config.WriteBackFileDir)
+
+	if nil != err && os.IsNotExist(err) {
+		return true
+	}
+
+	//获得所有文件
+	fileList, err := getFileList(config.WriteBackFileDir)
+	if nil != err {
+		return false
+	}
+
+	writeBackDB, err := sqlOpen(dbConfig.SqlType, dbConfig.DbHost, dbConfig.DbPort, dbConfig.DbDataBase, dbConfig.DbUser, dbConfig.DbPassword)
+
+	if nil != err {
+		return false
+	}
+
+	sqlUpdater_ := newSqlUpdater(writeBackDB, "execWriteBackFile", nil)
+
+	for _, v := range fileList {
+		sqlUpdater_.process(v)
+	}
+
+	return true
+
+}
+
 func Start() error {
 	config := conf.GetConfig()
 
@@ -165,11 +218,16 @@ func Start() error {
 		fnKickCacheKey = kickCacheKeyLocalCache
 	}
 
+	if config.DBConfig.SqlType == "mysql" {
+		BinaryToPgsqlStr = mysqlBinaryToPgsqlStr
+	} else {
+		BinaryToPgsqlStr = pgsqlBinaryToPgsqlStr
+	}
+
 	InitProcessUnit()
-
-	//TestbuildInsertString()
-
-	//TestbuildUpdateString()
+	if !execWriteBackFile() {
+		return fmt.Errorf("execWriteBackFile failed")
+	}
 
 	var err error
 	server, err = newTcpListener("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort))

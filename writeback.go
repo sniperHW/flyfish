@@ -1,9 +1,9 @@
 package flyfish
 
 import (
-	"encoding/binary"
 	"fmt"
 	pb "github.com/golang/protobuf/proto"
+	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet/util"
@@ -20,51 +20,26 @@ import (
  */
 
 var (
-	fileCounter   int64
-	checkSumSize  = 8
-	maxBufferSize = 1024 * 1024 * 2
-	maxDataSize   = maxBufferSize - checkSumSize
-	fileDir       = "tmpWriteBackOp"
-	filePrefix    = "tmpWriteBackOp"
-	crc64Table    *crc64.Table
-	flushCount    = 200
+	fileCounter  int64
+	checkSumSize = 8
+	crc64Table   *crc64.Table
+	flushCount   = 200
+	flushSize    = 1024 * 1024
 )
 
-var bufferPool = sync.Pool{
-	New: func() interface{} {
-		return make([]byte, maxBufferSize)
-	},
-}
-
-func getBuffer(size int) []byte {
-	if size <= maxBufferSize {
-		return bufferPool.Get().([]byte)
-	} else {
-		return make([]byte, size)
-	}
-}
-
-func releasaeBuffer(b []byte) {
-	if cap(b) == maxBufferSize {
-		bufferPool.Put(b)
-	}
-}
-
 type writeFileSt struct {
-	buffer      []byte
-	offset      int
+	s           *str
 	needReplys  []*processContext
 	sqlUpdater_ *sqlUpdater
 }
 
 type writeBackProcessor struct {
 	mtx            sync.Mutex
-	buffer         []byte
 	nextFlush      time.Time
-	offset         int
 	needReplys     []*processContext
 	sqlUpdater_    *sqlUpdater
 	writeFileQueue *util.BlockQueue
+	s              *str
 	count          int
 }
 
@@ -83,7 +58,7 @@ func (this *writeBackProcessor) start() {
 			closed, localList := this.writeFileQueue.Get()
 			for _, v := range localList {
 				st := v.(*writeFileSt)
-				flush(st.buffer, st.offset, st.needReplys, st.sqlUpdater_)
+				flush(st.s, st.needReplys, st.sqlUpdater_)
 			}
 			if closed {
 				return
@@ -92,12 +67,14 @@ func (this *writeBackProcessor) start() {
 	}()
 }
 
-func flush(buffer []byte, offset int, needReplys []*processContext, sqlUpdater_ *sqlUpdater) {
+func flush(s *str, needReplys []*processContext, sqlUpdater_ *sqlUpdater) {
+
+	config := conf.GetConfig()
 
 	Debugln("flushToFile")
 	counter := atomic.AddInt64(&fileCounter, 1)
-	os.MkdirAll(fileDir, os.ModePerm)
-	path := fmt.Sprintf("%s/%s_%d.op", fileDir, filePrefix, counter)
+	os.MkdirAll(config.WriteBackFileDir, os.ModePerm)
+	path := fmt.Sprintf("%s/%s_%d.wb", config.WriteBackFileDir, config.WriteBackFilePrefix, counter)
 
 	f, err := os.Create(path)
 	if err != nil {
@@ -105,11 +82,10 @@ func flush(buffer []byte, offset int, needReplys []*processContext, sqlUpdater_ 
 		return
 	}
 
-	checkSum := crc64.Checksum(buffer[:offset], crc64Table)
-	binary.BigEndian.PutUint64(buffer[offset:], checkSum)
-	f.Write(buffer[:offset+checkSumSize])
-
-	releasaeBuffer(buffer)
+	checkSum := crc64.Checksum(s.bytes(), crc64Table)
+	s.appendInt64(int64(checkSum))
+	f.Write(s.bytes())
+	strPut(s)
 
 	f.Sync()
 	f.Close()
@@ -129,19 +105,20 @@ func flush(buffer []byte, offset int, needReplys []*processContext, sqlUpdater_ 
 }
 
 func (this *writeBackProcessor) flushToFile() {
-	if this.buffer != nil {
+	if this.s != nil {
+
+		config := conf.GetConfig()
+
 		st := &writeFileSt{
-			buffer:      this.buffer,
-			offset:      this.offset,
+			s:           this.s,
 			needReplys:  this.needReplys,
 			sqlUpdater_: this.sqlUpdater_,
 		}
 
-		this.buffer = nil
-		this.offset = 0
+		this.s = nil
 		this.needReplys = []*processContext{}
 		this.count = 0
-		this.nextFlush = time.Now().Add(time.Duration(time.Millisecond * 100))
+		this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval))
 
 		this.writeFileQueue.AddNoWait(st)
 	}
@@ -150,6 +127,8 @@ func (this *writeBackProcessor) flushToFile() {
 func (this *writeBackProcessor) writeBack(ctx *processContext) {
 
 	Debugln("writeBack")
+	config := conf.GetConfig()
+
 	var tt *proto.SqlType
 
 	if ctx.writeBackFlag == write_back_insert {
@@ -201,38 +180,26 @@ func (this *writeBackProcessor) writeBack(ctx *processContext) {
 		return
 	}
 
-	totalSize := 4 + len(bytes)
-
 	this.mtx.Lock()
 	defer this.mtx.Unlock()
 
 	if this.nextFlush.IsZero() {
-		this.nextFlush = time.Now().Add(time.Duration(time.Millisecond * 100))
+		this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval))
 	}
 
-	if this.offset+totalSize > maxDataSize {
-		this.flushToFile()
+	if nil == this.s {
+		this.s = strGet()
 	}
 
-	if this.buffer == nil {
-		if totalSize > maxDataSize {
-			this.buffer = getBuffer(totalSize)
-		} else {
-			this.buffer = getBuffer(maxBufferSize)
-		}
-	}
-
-	binary.BigEndian.PutUint32(this.buffer[this.offset:], uint32(len(bytes)))
-	this.offset += 4
-	copy(this.buffer[this.offset:], bytes)
-	this.offset += len(bytes)
+	this.s.appendInt32(int32(len(bytes)))
+	this.s.appendBytes(bytes...)
 	this.count++
 
 	if ctx.replyOnDbOk {
 		this.needReplys = append(this.needReplys, ctx)
 	}
 
-	if this.count >= flushCount || this.offset+totalSize >= maxDataSize || time.Now().After(this.nextFlush) {
+	if this.count >= config.FlushCount || this.s.dataLen() >= config.FlushSize || time.Now().After(this.nextFlush) {
 		this.flushToFile()
 	}
 

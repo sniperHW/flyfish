@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"unsafe"
 )
 
@@ -287,15 +289,44 @@ func binaryToPgsqlStr(bytes []byte) string {
 	return *(*string)(unsafe.Pointer(&out))
 }
 
+func getFileList(dirpath string) ([]string, error) {
+	var file_list []string
+	dir_err := filepath.Walk(dirpath,
+		func(path string, f os.FileInfo, err error) error {
+			if f == nil {
+				return err
+			}
+			if !f.IsDir() {
+				file_list = append(file_list, path)
+				return nil
+			}
+
+			return nil
+		})
+	return file_list, dir_err
+}
+
 func main() {
 
 	//bytes := []byte{'\142', '\171', '\164', '\145', '\141'}
 
-	bytes := []byte{'\075'}
+	//bytes := []byte{'\075'}
 
-	s := binaryToPgsqlStr(bytes)
+	//s := binaryToPgsqlStr(bytes)
 
-	fmt.Println(s, len(s))
+	//fmt.Println(s, len(s))
+
+	/*stat, err := os.Stat("writeBack")
+
+	if nil != err && os.IsNotExist(err) {
+		fmt.Println("IsNotExist")
+	}
+
+	fmt.Println(stat, err)*/
+
+	l, _ := getFileList("tmpWriteBackOp")
+
+	fmt.Println(l)
 
 	//fmt.Println(binaryToPgsqlStr(bytes))
 

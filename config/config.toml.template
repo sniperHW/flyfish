@@ -22,8 +22,11 @@ ReplyBusyOnQueueFull    = false                #当处理队列满时是否用bu
 
 Compress                = false                #是否开启通信压缩
 
-BackDir                 = "flyfish_recover"    (可动态重加载)
-BackFile                = "flyfish_recover"    (可动态重加载)
+WriteBackFileDir     	= "writeBackFileDir"   #(可动态重加载)
+WriteBackFilePrefix  	= "writeBackFile"      #(可动态重加载)
+FlushInterval           = 100                  #文件flush间隔毫秒(可动态重加载)
+FlushSize           	= 148576               #缓冲阀值(字节)，超过阀flush到文件(可动态重加载)
+FlushCount              = 200                  #记录阀值,待回写的记录条数超过阀值flush到文件(可动态重加载)
 
 CacheType               = "local"              #local|redis
 

@@ -38,14 +38,16 @@ type Config struct {
 	SqlUpdateQueueSize   int
 	SqlLoadQueueSize     int
 	RedisQueueSize       int
-	//StrInitCap           int
 	ServiceHost          string
 	ServicePort          int
-	BackDir              string
-	BackFile             string
+	WriteBackFileDir     string
+	WriteBackFilePrefix  string
 	ReplyBusyOnQueueFull bool
 	Compress             bool
 	CacheType            string
+	FlushInterval        int
+	FlushSize            int
+	FlushCount           int
 
 	Redis struct {
 		RedisHost     string

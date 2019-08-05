@@ -17,14 +17,14 @@ import (
 )
 
 type sqlUpdater struct {
-	db   *sqlx.DB
-	name string
-	//values   []interface{}
+	db       *sqlx.DB
+	name     string
 	lastTime time.Time
 	queue    *util.BlockQueue
 	wg       *sync.WaitGroup
 	sqlStr   []byte
 	records  []*proto.Record
+	buffer   []byte
 }
 
 func newSqlUpdater(db *sqlx.DB, name string, wg *sync.WaitGroup) *sqlUpdater {
@@ -58,13 +58,11 @@ func isRetryError(err error) bool {
 	return false
 }
 
-func (this *sqlUpdater) process(v interface{}) {
+func (this *sqlUpdater) process(path string) {
 
 	Debugln("sqlUpdater process")
 
 	beg := time.Now()
-
-	path := fmt.Sprintf("%s/%s_%d.op", fileDir, filePrefix, v.(int64))
 
 	var err error
 
@@ -82,9 +80,11 @@ func (this *sqlUpdater) process(v interface{}) {
 		return
 	}
 
-	buffer := getBuffer(int(stat.Size()))
+	if nil == this.buffer || cap(this.buffer) < int(stat.Size()) {
+		this.buffer = make([]byte, sizeofPow2(int(stat.Size())))
+	}
 
-	n, err := f.Read(buffer)
+	n, err := f.Read(this.buffer)
 
 	f.Close()
 
@@ -95,10 +95,10 @@ func (this *sqlUpdater) process(v interface{}) {
 		return
 	}
 
-	checkSum := binary.BigEndian.Uint64(buffer[n-8:])
+	checkSum := binary.BigEndian.Uint64(this.buffer[n-8:])
 
 	//校验数据
-	if checkSum != crc64.Checksum(buffer[:n-8], crc64Table) {
+	if checkSum != crc64.Checksum(this.buffer[:n-8], crc64Table) {
 		Fatalln("checkSum failed:", path)
 		return
 	}
@@ -108,9 +108,9 @@ func (this *sqlUpdater) process(v interface{}) {
 	end := n - 8
 	for offset < end {
 		pbRecord := &proto.Record{}
-		l := int(binary.BigEndian.Uint32(buffer[offset : offset+4]))
+		l := int(binary.BigEndian.Uint32(this.buffer[offset : offset+4]))
 		offset += 4
-		if err = pb.Unmarshal(buffer[offset:offset+l], pbRecord); err != nil {
+		if err = pb.Unmarshal(this.buffer[offset:offset+l], pbRecord); err != nil {
 			Fatalln("replayRecord error ,offset:", offset, err)
 		}
 		offset += l
@@ -139,39 +139,39 @@ func (this *sqlUpdater) process(v interface{}) {
 
 	_, err = this.db.Exec(str.toString())
 
-	if nil == err {
-		for _, v := range this.records {
-			uniKey := fmt.Sprintf("%s:%s", v.GetTable(), v.GetKey())
-			unit := getUnitByUnikey(uniKey)
-			unit.mtx.Lock()
-			k, ok := unit.cacheKeys[uniKey]
-			unit.mtx.Unlock()
-			if ok {
-				k.clearWriteBack(v.GetWritebackVersion())
+	for {
+		if nil == err {
+			for _, v := range this.records {
+				uniKey := fmt.Sprintf("%s:%s", v.GetTable(), v.GetKey())
+				unit := getUnitByUnikey(uniKey)
+				unit.mtx.Lock()
+				k, ok := unit.cacheKeys[uniKey]
+				unit.mtx.Unlock()
+				if ok {
+					k.clearWriteBack(v.GetWritebackVersion())
+				}
+			}
+			break
+		} else {
+			Errorln(str.toString(), err)
+			if isRetryError(err) {
+				Errorln("sqlUpdater exec error:", err)
+				if isStop() {
+					//服务要关闭，不需要做清理了
+					return
+				}
+				//休眠一秒重试
+				time.Sleep(time.Second)
 			} else {
-				fmt.Println("key notfound", uniKey)
+				this.records = this.records[0:0]
+				strPut(str)
+				Errorln("sqlUpdater exec error:", err, path)
+				return
 			}
 		}
-	} else {
-
-		Errorln(str.toString(), err)
-
-		//	if isRetryError(err) {
-		//		Errorln("sqlUpdater exec error:", err)
-		//		if isStop() {
-		//			this.writeFileAndBreak = true
-		//			return
-		//		}
-		//休眠一秒重试
-		//		time.Sleep(time.Second)
-		//	} else {
-		//		Errorln("sqlUpdater exec error:", err)
-		//	}
 	}
 
 	this.records = this.records[0:0]
-
-	releasaeBuffer(buffer)
 
 	strPut(str)
 
@@ -201,7 +201,8 @@ func (this *sqlUpdater) run() {
 					this.lastTime = time.Now()
 				}
 			} else {
-				this.process(v)
+				config := conf.GetConfig()
+				this.process(fmt.Sprintf("%s/%s_%d.op", config.WriteBackFileDir, config.WriteBackFilePrefix, v.(int64)))
 			}
 		}
 
