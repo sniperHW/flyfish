@@ -86,6 +86,8 @@ func (this *processUnit) onRedisStale(ckey *cacheKey, ctx *processContext) {
 
 func (this *processUnit) doWriteBack(ctx *processContext) {
 
+	Debugln("doWriteBack")
+
 	if ctx.writeBackFlag == write_back_none {
 		panic("ctx.writeBackFlag == write_back_none")
 	}
@@ -184,7 +186,7 @@ func (this *processUnit) kickCacheKey() {
 
 func InitProcessUnit() bool {
 
-	placeHolderInit()
+	//placeHolderInit()
 
 	sqlUpdateWg = &sync.WaitGroup{}
 

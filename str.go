@@ -49,6 +49,21 @@ func (this *str) expand(need int) {
 	this.cap = newCap
 }
 
+func (this *str) appendBytes(bytes ...byte) *str {
+	s := len(bytes)
+	if 0 == s {
+		return this
+	} else {
+		newLen := this.len + s
+		if newLen > this.cap {
+			this.expand(s)
+		}
+		copy(this.data[this.len:], bytes[:])
+		this.len = newLen
+		return this
+	}
+}
+
 func (this *str) append(in string) *str {
 	s := len(in)
 	newLen := this.len + s

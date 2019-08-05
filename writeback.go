@@ -148,6 +148,8 @@ func (this *writeBackProcessor) flushToFile() {
 }
 
 func (this *writeBackProcessor) writeBack(ctx *processContext) {
+
+	Debugln("writeBack")
 	var tt *proto.SqlType
 
 	if ctx.writeBackFlag == write_back_insert {
@@ -233,6 +235,8 @@ func (this *writeBackProcessor) writeBack(ctx *processContext) {
 	if this.count >= flushCount || this.offset+totalSize >= maxDataSize || time.Now().After(this.nextFlush) {
 		this.flushToFile()
 	}
+
+	Debugln("writeBack ok")
 }
 
 func init() {

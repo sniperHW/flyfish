@@ -15,18 +15,6 @@ const (
 	cache_missing = 3
 )
 
-/*type writeBackRecord struct {
-	writeBackFlag    int
-	writeBackVersion int64
-	key              string
-	table            string
-	uniKey           string
-	ckey             *cacheKey
-	fields           map[string]*proto.Field //所有命令的字段聚合
-	ctx              *processContext
-	version          int64
-}*/
-
 type cacheKey struct {
 	uniKey           string
 	key              string
@@ -39,10 +27,9 @@ type cacheKey struct {
 	writeBacked      bool //正在回写
 	writeBackVersion int64
 	unit             *processUnit
-	//r                *writeBackRecord
-	nnext  *cacheKey
-	pprev  *cacheKey
-	values map[string]*proto.Field
+	nnext            *cacheKey
+	pprev            *cacheKey
+	values           map[string]*proto.Field
 }
 
 func (this *cacheKey) lockCmdQueue() {
@@ -107,14 +94,6 @@ func (this *cacheKey) clearWriteBack(writeBackVersion int64) {
 		this.writeBacked = false
 	}
 }
-
-/*func (this *cacheKey) getRecord() *writeBackRecord {
-	defer this.mtx.Unlock()
-	this.mtx.Lock()
-	r := this.r
-	this.r = nil
-	return r
-}*/
 
 func (this *cacheKey) pushCmd(cmd *command) {
 	defer this.mtx.Unlock()

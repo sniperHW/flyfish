@@ -167,6 +167,10 @@ func Start() error {
 
 	InitProcessUnit()
 
+	//TestbuildInsertString()
+
+	//TestbuildUpdateString()
+
 	var err error
 	server, err = newTcpListener("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort))
 	if nil != err {

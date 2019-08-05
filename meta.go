@@ -318,12 +318,6 @@ func LoadMeta(def []string) bool {
 			return false
 		}
 
-		//加上__key__，__version__
-		if len(fields)+2 > len(mysqlInsertPlaceHolder)-1 {
-			Errorln("len(fields)+2 > len(ARGV)-1")
-			return false
-		}
-
 		//插入两个默认字段
 		t_meta.queryMeta.field_names = append(t_meta.queryMeta.field_names, "__key__")
 		t_meta.queryMeta.field_receiver = append(t_meta.queryMeta.field_receiver, func() interface{} {

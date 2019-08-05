@@ -17,12 +17,14 @@ import (
 )
 
 type sqlUpdater struct {
-	db       *sqlx.DB
-	name     string
-	values   []interface{}
+	db   *sqlx.DB
+	name string
+	//values   []interface{}
 	lastTime time.Time
 	queue    *util.BlockQueue
 	wg       *sync.WaitGroup
+	sqlStr   []byte
+	records  []*proto.Record
 }
 
 func newSqlUpdater(db *sqlx.DB, name string, wg *sync.WaitGroup) *sqlUpdater {
@@ -30,11 +32,11 @@ func newSqlUpdater(db *sqlx.DB, name string, wg *sync.WaitGroup) *sqlUpdater {
 		wg.Add(1)
 	}
 	return &sqlUpdater{
-		name:   name,
-		values: []interface{}{},
-		queue:  util.NewBlockQueueWithName(name, conf.GetConfig().SqlUpdateQueueSize),
-		db:     db,
-		wg:     wg,
+		name:    name,
+		records: []*proto.Record{},
+		queue:   util.NewBlockQueueWithName(name, conf.GetConfig().SqlUpdateQueueSize),
+		db:      db,
+		wg:      wg,
 	}
 }
 
@@ -54,73 +56,6 @@ func isRetryError(err error) bool {
 		}
 	}
 	return false
-}
-
-func (this *sqlUpdater) resetValues() {
-	this.values = this.values[0:0]
-}
-
-func (this *sqlUpdater) doInsert(r *proto.Record, meta *table_meta) error {
-
-	Debugln("doInsert")
-
-	str := strGet()
-	defer func() {
-		this.resetValues()
-		strPut(str)
-	}()
-
-	str.append(meta.insertPrefix).append(getInsertPlaceHolder(1)).append(getInsertPlaceHolder(2))
-	this.values = append(this.values, r.GetKey(), r.Fields[0].GetValue())
-	c := 2
-
-	for i := 1; i < len(r.Fields); i++ {
-		c++
-		str.append(getInsertPlaceHolder(c))
-		this.values = append(this.values, r.Fields[i].GetValue())
-	}
-
-	str.append(");")
-	_, err := this.db.Exec(str.toString(), this.values...)
-
-	return err
-}
-
-func (this *sqlUpdater) doUpdate(r *proto.Record) error {
-
-	Debugln("doUpdate")
-
-	str := strGet()
-	defer func() {
-		this.resetValues()
-		strPut(str)
-	}()
-
-	str.append("update ").append(r.GetTable()).append(" set ")
-	i := 0
-	for _, v := range r.Fields {
-		this.values = append(this.values, v.GetValue())
-		i++
-		if i == 1 {
-			str.append(v.GetName()).append("=").append(getUpdatePlaceHolder(i))
-		} else {
-			str.append(",").append(v.GetName()).append("=").append(getUpdatePlaceHolder(i))
-		}
-	}
-
-	str.append(" where __key__ = '").append(r.GetKey()).append("';")
-	_, err := this.db.Exec(str.toString(), this.values...)
-	return err
-}
-
-func (this *sqlUpdater) doDelete(r *proto.Record) error {
-	Debugln("doDelete")
-	str := strGet()
-	defer strPut(str)
-
-	str.append("delete from ").append(r.GetTable()).append(" where __key__ = '").append(r.GetKey()).append("';")
-	_, err := this.db.Exec(str.toString())
-	return err
 }
 
 func (this *sqlUpdater) process(v interface{}) {
@@ -168,8 +103,7 @@ func (this *sqlUpdater) process(v interface{}) {
 		return
 	}
 
-	recordCount := 0
-
+	str := strGet()
 	offset := 0
 	end := n - 8
 	for offset < end {
@@ -187,36 +121,41 @@ func (this *sqlUpdater) process(v interface{}) {
 			Fatalln("replayRecord error invaild table ,offset:", offset-l, pbRecord.GetTable())
 		}
 
-		this.lastTime = time.Now()
+		this.records = append(this.records, pbRecord)
 
 		tt := pbRecord.GetType()
 		if tt == proto.SqlType_insert {
-			err = this.doInsert(pbRecord, meta)
+			buildInsertString(str, pbRecord, meta)
 		} else if tt == proto.SqlType_update {
-			err = this.doUpdate(pbRecord)
+			buildUpdateString(str, pbRecord, meta)
 		} else if tt == proto.SqlType_delete {
-			err = this.doDelete(pbRecord)
+			buildDeleteString(str, pbRecord)
 		} else {
 			Fatalln("replayRecord invaild tt,offset:", offset)
 		}
+	}
 
-		uniKey := fmt.Sprintf("%s:%s", pbRecord.GetTable(), pbRecord.GetKey())
+	recordCount := len(this.records)
 
-		unit := getUnitByUnikey(uniKey)
+	_, err = this.db.Exec(str.toString())
 
-		unit.mtx.Lock()
-		k, ok := unit.cacheKeys[uniKey]
-		unit.mtx.Unlock()
-		if ok {
-			k.clearWriteBack(pbRecord.GetWritebackVersion())
+	if nil == err {
+		for _, v := range this.records {
+			uniKey := fmt.Sprintf("%s:%s", v.GetTable(), v.GetKey())
+			unit := getUnitByUnikey(uniKey)
+			unit.mtx.Lock()
+			k, ok := unit.cacheKeys[uniKey]
+			unit.mtx.Unlock()
+			if ok {
+				k.clearWriteBack(v.GetWritebackVersion())
+			} else {
+				fmt.Println("key notfound", uniKey)
+			}
 		}
-		recordCount++
+	} else {
 
-		//if nil == err {
-		/*if wb.ctx != nil {
-			sqlResponse.onSqlWriteBackResp(wb.ctx, errcode.ERR_OK)
-		}*/
-		//} else {
+		Errorln(str.toString(), err)
+
 		//	if isRetryError(err) {
 		//		Errorln("sqlUpdater exec error:", err)
 		//		if isStop() {
@@ -228,11 +167,13 @@ func (this *sqlUpdater) process(v interface{}) {
 		//	} else {
 		//		Errorln("sqlUpdater exec error:", err)
 		//	}
-		//}
-
 	}
 
+	this.records = this.records[0:0]
+
 	releasaeBuffer(buffer)
+
+	strPut(str)
 
 	sqlTime := time.Now().Sub(beg)
 

@@ -1,11 +1,13 @@
-package main
+package flyfish
 
 import (
 	"fmt"
-	"unsafe"
+	//pb "github.com/golang/protobuf/proto"
+	"github.com/sniperHW/flyfish/proto"
+	"strconv"
 )
 
-var byteToString = []string{
+var pgsqlByteToString = []string{
 	"\\000",
 	"\\001",
 	"\\002",
@@ -264,46 +266,69 @@ var byteToString = []string{
 	"\\377",
 }
 
-var suffix = []byte{'\047', '\072', '\072', '\142', '\171', '\164', '\145', '\141'}
+var pgsqlSuffix = []byte{'\047', '\072', '\072', '\142', '\171', '\164', '\145', '\141'}
 
 //'\075'::bytea
-func binaryToPgsqlStr(bytes []byte) string {
-	l := len(bytes)*4 + 9
-
-	fmt.Println(l)
-
-	out := make([]byte, l)
-	out[0] = '\047'
-	offset := 1
+func pgsqlBinaryToPgsqlStr(s *str, bytes []byte) {
+	s.append("'")
 	for _, v := range bytes {
-		s := byteToString[int(v)]
-		fmt.Println(s)
-		copy(out[offset:], s)
-		offset += len(s)
+		s.append(pgsqlByteToString[int(v)])
 	}
-
-	copy(out[offset:], suffix)
-
-	return *(*string)(unsafe.Pointer(&out))
+	s.append("'::bytea")
 }
 
-func main() {
+func fieldToString(s *str, field *proto.Field) {
 
-	//bytes := []byte{'\142', '\171', '\164', '\145', '\141'}
+	tt := field.GetType()
 
-	bytes := []byte{'\075'}
+	switch tt {
+	case proto.ValueType_string:
+		s.append(fmt.Sprintf("'%s'", field.GetString()))
+	case proto.ValueType_float:
+		s.append(fmt.Sprintf("%f", field.GetFloat()))
+	case proto.ValueType_int:
+		s.append(strconv.FormatInt(field.GetInt(), 10))
+	case proto.ValueType_uint:
+		s.append(strconv.FormatUint(field.GetUint(), 10))
+	case proto.ValueType_blob:
+		pgsqlBinaryToPgsqlStr(s, field.GetBlob())
+	default:
+		panic("invaild value type")
+	}
+}
 
-	s := binaryToPgsqlStr(bytes)
+func buildInsertString(s *str, r *proto.Record, meta *table_meta) {
+	s.append(meta.insertPrefix).append("'").append(r.GetKey()).append("',") //add __key__
+	fieldToString(s, r.Fields[0])                                           //add __version__
+	s.append(",")
 
-	fmt.Println(s, len(s))
+	//add other fileds
+	for i := 1; i < len(r.Fields); i++ {
+		fieldToString(s, r.Fields[i])
+		if i != len(r.Fields)-1 {
+			s.append(",")
+		}
+	}
 
-	//fmt.Println(binaryToPgsqlStr(bytes))
+	s.append(");")
+}
 
-	//	fmt.Println(bytes)
+func buildUpdateString(s *str, r *proto.Record, meta *table_meta) {
+	s.append("update ").append(r.GetTable()).append(" set ")
 
-	//s := "\\008"
-	//fmt.Println(len(s))
-	//for i := 0; i < 256; i++ {
-	//	fmt.Printf("\\"\\\%03o\",\n", i)
-	//}
+	for i, v := range r.Fields {
+		if i == 0 {
+			s.append(v.GetName()).append("=")
+			fieldToString(s, v)
+		} else {
+			s.append(",").append(v.GetName()).append("=")
+			fieldToString(s, v)
+		}
+	}
+
+	s.append(" where __key__ = '").append(r.GetKey()).append("';")
+}
+
+func buildDeleteString(s *str, r *proto.Record) {
+	s.append("delete from ").append(r.GetTable()).append(" where __key__ = '").append(r.GetKey()).append("';")
 }
