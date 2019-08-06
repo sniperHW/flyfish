@@ -8,8 +8,6 @@ RedisPipelineSize       = 50                   #redis请求管道线大小 (可�
 
 SqlLoadPipeLineSize     = 200                  #sql加载管道线大小   (可动态重加载)
 
-SqlUpdateQueueSize      = 50000                #sql回写请求队列大小，此队列每CacheGroup一个 (可动态重加载)
-
 SqlLoadQueueSize        = 10000                #sql加载请求队列大小，此队列每CacheGroup一个 (可动态重加载)
 
 RedisQueueSize          = 100000               #redis请求队列大小，整个服务一个队列供所有redis routine共享 (可动态重加载)

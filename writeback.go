@@ -64,39 +64,54 @@ func (this *writeBackProcessor) start() {
 	}()
 }
 
+var openWriteBack bool = true
+
 func (this *writeBackProcessor) flush(s *str, needReplys []*processContext) {
 
-	config := conf.GetConfig()
+	if openWriteBack {
 
-	Debugln("flushToFile")
-	counter := atomic.AddInt64(&fileCounter, 1)
-	os.MkdirAll(config.WriteBackFileDir, os.ModePerm)
-	path := fmt.Sprintf("%s/%s_%d.wb", config.WriteBackFileDir, config.WriteBackFilePrefix, counter)
+		config := conf.GetConfig()
 
-	f, err := os.Create(path)
-	if err != nil {
-		Fatalln("create backfile failed", path, err)
-		return
-	}
+		Debugln("flushToFile")
+		counter := atomic.AddInt64(&fileCounter, 1)
+		os.MkdirAll(config.WriteBackFileDir, os.ModePerm)
+		path := fmt.Sprintf("%s/%s_%d.wb", config.WriteBackFileDir, config.WriteBackFilePrefix, counter)
 
-	checkSum := crc64.Checksum(s.bytes(), crc64Table)
-	s.appendInt64(int64(checkSum))
-	f.Write(s.bytes())
-	strPut(s)
-
-	f.Sync()
-	f.Close()
-
-	//通告sqlUpdater执行更新
-
-	this.sqlUpdater_.queue.AddNoWait(counter)
-
-	if len(needReplys) > 0 {
-		for _, v := range needReplys {
-			v.reply(errcode.ERR_OK, nil, v.fields["__version__"].GetInt())
+		f, err := os.Create(path)
+		if err != nil {
+			Fatalln("create backfile failed", path, err)
+			return
 		}
-		for _, v := range needReplys {
-			v.getCacheKey().processQueueCmd()
+
+		checkSum := crc64.Checksum(s.bytes(), crc64Table)
+		s.appendInt64(int64(checkSum))
+		f.Write(s.bytes())
+		strPut(s)
+
+		f.Sync()
+		f.Close()
+
+		//通告sqlUpdater执行更新
+
+		this.sqlUpdater_.queue.AddNoWait(counter)
+
+		if len(needReplys) > 0 {
+			for _, v := range needReplys {
+				v.reply(errcode.ERR_OK, nil, v.fields["__version__"].GetInt())
+			}
+			for _, v := range needReplys {
+				v.getCacheKey().processQueueCmd()
+			}
+		}
+	} else {
+		strPut(s)
+		if len(needReplys) > 0 {
+			for _, v := range needReplys {
+				v.reply(errcode.ERR_OK, nil, v.fields["__version__"].GetInt())
+			}
+			for _, v := range needReplys {
+				v.getCacheKey().processQueueCmd()
+			}
 		}
 	}
 }

@@ -18,6 +18,7 @@ var (
 	busyCount    int32
 	setAvaDelay  time.Duration
 	id           int64
+	keyrange     int64
 )
 
 func Set(c *kclient.Client) {
@@ -26,7 +27,7 @@ func Set(c *kclient.Client) {
 	fields["phone"] = strings.Repeat("a", 1024)
 	fields["name"] = "sniperHW"
 	nextID := atomic.AddInt64(&id, 1)
-	key := fmt.Sprintf("%s:%d", "huangwei", nextID%100000)
+	key := fmt.Sprintf("%s:%d", "huangwei", nextID%keyrange)
 	set := c.SetSync("users1", key, fields)
 
 	beg := time.Now()
@@ -58,13 +59,15 @@ func Set(c *kclient.Client) {
 
 func main() {
 
-	if len(os.Args) < 2 {
-		fmt.Println("missing ip:port")
+	if len(os.Args) < 3 {
+		fmt.Println("missing keyrange ip:port")
 		return
 	}
 
 	//golog.DisableStdOut()
 	kclient.InitLogger(golog.New("flyfish client", golog.NewOutputLogger("log", "flyfish client", 1024*1024*50)))
+
+	keyrange, _ = strconv.ParseInt(os.Args[1], 10, 32)
 
 	services := []string{}
 

@@ -22,7 +22,7 @@ type sqlUpdater struct {
 	lastTime time.Time
 	queue    *util.BlockQueue
 	wg       *sync.WaitGroup
-	sqlStr   []byte
+	sqlStr   *str
 	records  []*proto.Record
 	buffer   []byte
 }
@@ -34,7 +34,7 @@ func newSqlUpdater(db *sqlx.DB, name string, wg *sync.WaitGroup) *sqlUpdater {
 	return &sqlUpdater{
 		name:    name,
 		records: []*proto.Record{},
-		queue:   util.NewBlockQueueWithName(name, conf.GetConfig().SqlUpdateQueueSize),
+		queue:   util.NewBlockQueueWithName(name),
 		db:      db,
 		wg:      wg,
 	}
@@ -103,7 +103,17 @@ func (this *sqlUpdater) process(path string) {
 		return
 	}
 
-	str := strGet()
+	this.records = this.records[0:0]
+	if nil == this.sqlStr {
+		this.sqlStr = &str{
+			data: make([]byte, strInitCap),
+			cap:  strInitCap,
+			len:  0,
+		}
+	} else {
+		this.sqlStr.reset()
+	}
+
 	offset := 0
 	end := n - 8
 	for offset < end {
@@ -125,11 +135,11 @@ func (this *sqlUpdater) process(path string) {
 
 		tt := pbRecord.GetType()
 		if tt == proto.SqlType_insert {
-			buildInsertString(str, pbRecord, meta)
+			buildInsertString(this.sqlStr, pbRecord, meta)
 		} else if tt == proto.SqlType_update {
-			buildUpdateString(str, pbRecord, meta)
+			buildUpdateString(this.sqlStr, pbRecord, meta)
 		} else if tt == proto.SqlType_delete {
-			buildDeleteString(str, pbRecord)
+			buildDeleteString(this.sqlStr, pbRecord)
 		} else {
 			Fatalln("replayRecord invaild tt,offset:", offset)
 		}
@@ -137,7 +147,7 @@ func (this *sqlUpdater) process(path string) {
 
 	recordCount := len(this.records)
 
-	_, err = this.db.Exec(str.toString())
+	_, err = this.db.Exec(this.sqlStr.toString())
 
 	for {
 		if nil == err {
@@ -153,27 +163,20 @@ func (this *sqlUpdater) process(path string) {
 			}
 			break
 		} else {
-			Errorln(str.toString(), err)
+			Errorln(this.sqlStr.toString(), err)
 			if isRetryError(err) {
 				Errorln("sqlUpdater exec error:", err)
 				if isStop() {
-					//服务要关闭，不需要做清理了
 					return
 				}
 				//休眠一秒重试
 				time.Sleep(time.Second)
 			} else {
-				this.records = this.records[0:0]
-				strPut(str)
 				Errorln("sqlUpdater exec error:", err, path)
 				return
 			}
 		}
 	}
-
-	this.records = this.records[0:0]
-
-	strPut(str)
 
 	sqlTime := time.Now().Sub(beg)
 

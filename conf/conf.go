@@ -35,7 +35,6 @@ type Config struct {
 	RedisProcessPoolSize int
 	RedisPipelineSize    int
 	SqlLoadPipeLineSize  int
-	SqlUpdateQueueSize   int
 	SqlLoadQueueSize     int
 	RedisQueueSize       int
 	ServiceHost          string

@@ -20,6 +20,8 @@ var getAvaDelay time.Duration
 var setAvaDelay time.Duration
 var delAvaDelay time.Duration
 
+var keyrange int64
+
 var id int64
 
 func Set(c *kclient.Client) {
@@ -27,9 +29,7 @@ func Set(c *kclient.Client) {
 	fields["age"] = 37
 	fields["phone"] = strings.Repeat("a", 1024)
 	fields["name"] = "sniperHW"
-	key := fmt.Sprintf("%s:%d", "huangwei", rand.Int()%50000)
-	//key := fmt.Sprintf("%s:%d","huangwei",id%100000)//rand.Int()%1000000)
-	//key := "huangwei:44745"
+	key := fmt.Sprintf("%s:%d", "huangwei", rand.Int()%int(keyrange))
 	id++
 	set := c.Set("users1", key, fields)
 
@@ -54,16 +54,14 @@ func Set(c *kclient.Client) {
 
 func Get(c *kclient.Client) {
 
-	key := fmt.Sprintf("%s:%d", "huangwei", rand.Int()%50000+50000)
-	//key := fmt.Sprintf("%s:%d","huangwei",id%1000000)//rand.Int()%1000000)
+	key := fmt.Sprintf("%s:%d", "huangwei", rand.Int()%int(keyrange))
+
 	id++
 	get := c.Get("users1", key, "name", "age", "phone")
 
 	beg := time.Now()
 
 	get.AsyncExec(func(ret *kclient.SliceResult) {
-
-		//fmt.Println(ret.Fields["age"].GetInt())
 
 		if getAvaDelay == time.Duration(0) {
 			getAvaDelay = time.Now().Sub(beg)
@@ -86,10 +84,12 @@ func Get(c *kclient.Client) {
 
 func main() {
 
-	if len(os.Args) < 2 {
-		fmt.Println("missing ip:port")
+	if len(os.Args) < 3 {
+		fmt.Println("bin keyrange ip:port")
 		return
 	}
+
+	keyrange, _ = strconv.ParseInt(os.Args[1], 10, 32)
 
 	//golog.DisableStdOut()
 	kclient.InitLogger(golog.New("flyfish client", golog.NewOutputLogger("log", "flyfish client", 1024*1024*50)))

@@ -22,10 +22,6 @@ func reloadConf(session kendynet.StreamSession, msg *codec.Message) {
 		})
 		newConf := conf.GetConfig()
 
-		if oldConf.SqlUpdateQueueSize != newConf.SqlUpdateQueueSize {
-			updateSqlUpdateQueueSize(newConf.SqlUpdateQueueSize)
-		}
-
 		if oldConf.SqlLoadQueueSize != newConf.SqlLoadQueueSize {
 			updateSqlLoadQueueSize(newConf.SqlLoadQueueSize)
 		}

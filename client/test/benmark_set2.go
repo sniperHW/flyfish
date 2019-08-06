@@ -26,11 +26,12 @@ func (a ByTime) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a ByTime) Less(i, j int) bool { return a[i].latency < a[j].latency }
 
 var (
-	id      int64
-	total   int64
-	sigStop chan bool = make(chan bool)
-	results []result  = []result{}
-	mtx     sync.Mutex
+	id       int64
+	total    int64
+	sigStop  chan bool = make(chan bool)
+	results  []result  = []result{}
+	mtx      sync.Mutex
+	keyrange int64
 )
 
 func Set(c *kclient.Client) {
@@ -44,7 +45,7 @@ func Set(c *kclient.Client) {
 	fields["age"] = 37
 	fields["phone"] = strings.Repeat("a", 1024)
 	fields["name"] = "sniperHW"
-	key := fmt.Sprintf("%s:%d", "huangwei", nextID%100000)
+	key := fmt.Sprintf("%s:%d", "huangwei", nextID%keyrange)
 	set := c.SetSync("users1", key, fields)
 
 	beg := time.Now()
@@ -71,11 +72,12 @@ func Set(c *kclient.Client) {
 func main() {
 
 	if len(os.Args) < 3 {
-		fmt.Println("missing count ip:port")
+		fmt.Println("bin keyrange count ip:port")
 		return
 	}
 
-	total, _ = strconv.ParseInt(os.Args[1], 10, 32)
+	keyrange, _ = strconv.ParseInt(os.Args[1], 10, 32)
+	total, _ = strconv.ParseInt(os.Args[2], 10, 32)
 
 	kclient.InitLogger(golog.New("flyfish client", golog.NewOutputLogger("log", "flyfish client", 1024*1024*50)))
 
@@ -83,7 +85,7 @@ func main() {
 
 	services := []string{}
 
-	for i := 2; i < len(os.Args); i++ {
+	for i := 3; i < len(os.Args); i++ {
 		services = append(services, os.Args[i])
 	}
 

@@ -52,9 +52,7 @@ func (this *sqlLoader) append(v interface{}) {
 			err := this.db.Ping()
 			if nil != err {
 				Errorln("ping error", err)
-			} /* else {
-				Debugln("sqlLoader ping")
-			}*/
+			}
 			this.lastTime = time.Now()
 		}
 	} else {
@@ -113,7 +111,6 @@ func (this *sqlLoader) exec() {
 		rows, err := this.db.Query(str)
 
 		strPut(v.sqlStr)
-		v.sqlStr = nil
 
 		elapse := time.Now().Sub(beg)
 
