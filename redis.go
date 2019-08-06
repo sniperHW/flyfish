@@ -397,6 +397,8 @@ func RedisInit() bool {
 		Password: config.Redis.RedisPassword,
 	})
 	if nil != cli {
+		//清空redis上所有数据
+		cli.FlushAll()
 		redisProcessQueue = util.NewBlockQueueWithName(fmt.Sprintf("redis"), config.RedisQueueSize)
 		for i := 0; i < config.RedisProcessPoolSize; i++ {
 			go redisRoutine(redisProcessQueue)

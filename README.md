@@ -65,27 +65,38 @@ __table__    __conf__
 
 ## 命令支持
 
-	Get(table,key string,fields ...string)  //按需获取单条记录的字段
+	//按需获取单条记录的字段	
+	Get(table,key string,fields ...string)
 
-	GetAll(table,key string) //获取单条记录的所有字段
+	//获取单条记录的所有字段	
+	GetAll(table,key string) 
 
-	Set(table,key string,fields map[string]interface{},version ...int64) //设置单条记录的字段，如果提供了version字段会进行版本号校验，只有版本号一致才允许设置
+	//设置单条记录的字段，如果提供了version字段会进行版本号校验，只有版本号一致才允许设置	
+	Set(table,key string,fields map[string]interface{},version ...int64) 
 
-	SetNx(table,key string,fields map[string]interface{}) //设置单条记录，只有当记录不存在时才设置成功
+	//设置单条记录，只有当记录不存在时才设置成功	
+	SetNx(table,key string,fields map[string]interface{})
 
-	CompareAndSet(table,key,field string, oldV ,newV interface{}) //当记录的field内容==oldV时，将其设置为newV,不管设置与否返回field的最新值(除非记录不存在)
+	//当记录的field内容==oldV时，将其设置为newV,不管设置与否返回field的最新值(除非记录不存在)	
+	CompareAndSet(table,key,field string, oldV ,newV interface{}) 
 
-	CompareAndSetNx(table,key,field string, oldV ,newV interface{}) //如果记录不存在用默认值创建记录并将field设为newV,否则同CompareAndSet
+	//如果记录不存在用默认值创建记录并将field设为newV,否则同CompareAndSet	
+	CompareAndSetNx(table,key,field string, oldV ,newV interface{}) 
 
-	Del(table,key string,version ...int64) //删除一条记录，如果提供了版本号需要执行版本号校验
+	//删除一条记录，如果提供了版本号需要执行版本号校验	
+	Del(table,key string,version ...int64) 
 
-	IncrBy(table,key,field string,value int64)  //将记录的field字段原子增加value,如果记录不存在用默认值创建记录后执行
+	//将记录的field字段原子增加value,如果记录不存在用默认值创建记录后执行	
+	IncrBy(table,key,field string,value int64)  
 
-	DecrBy(table,key,field string,value int64)  //将记录的field字段原子减少value,如果记录不存在用默认值创建记录后执行
+	//将记录的field字段原子减少value,如果记录不存在用默认值创建记录后执行
+	DecrBy(table,key,field string,value int64)  
 
-	MGet(table string,keys []string,fields ...string) //获取同一table多条记录的指定字段，如果fields没有传将获取所有字段。
+	//获取同一table多条记录的指定字段，如果fields没有传将获取所有字段。
+	MGet(table string,keys []string,fields ...string) 
 
-	Scaner(table string,fileds ...string) //遍历table表，返回记录，如果fields没有传将获取所有字段。(此命令从pgsql直接获取数据，且不会将数据缓存到redis)
+	//遍历table表，返回记录，如果fields没有传将获取所有字段。(此命令从db直接获取数据，且不会缓存数据)
+	Scaner(table string,fileds ...string) 
 
 
 
@@ -93,9 +104,9 @@ __table__    __conf__
 
 flyfish支持本地缓存以及redis缓存。
 
-*	本地缓存：数据存储在本地
+*	本地缓存：数据存储在本地。
 
-*	redis缓存：flyfish只记录数据是否在redis中存在，所有数据首先载入到redis，更新操作先更新redis之后再回写。
+*	redis缓存：flyfish只记录数据是否在redis中存在，所有数据首先载入到redis，更新操作先更新redis之后再回写。(redis仅做缓存，所以不应开启数据落地，flyfish启动阶段会执行flushall清空redis的数据)
 
 
 ## 数据回写
