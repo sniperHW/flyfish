@@ -46,7 +46,7 @@ func Set(c *kclient.Client) {
 	fields["phone"] = strings.Repeat("a", 1024)
 	fields["name"] = "sniperHW"
 	key := fmt.Sprintf("%s:%d", "huangwei", nextID%keyrange)
-	set := c.SetSync("users1", key, fields)
+	set := c.Set("users1", key, fields)
 
 	beg := time.Now()
 

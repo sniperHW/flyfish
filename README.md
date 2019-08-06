@@ -87,70 +87,20 @@ __table__    __conf__
 
 	Scaner(table string,fileds ...string) //遍历table表，返回记录，如果fields没有传将获取所有字段。(此命令从pgsql直接获取数据，且不会将数据缓存到redis)
 
-## redis缓存
-
-游戏服务器通过代理服务访问数据，对于查询请求，代理首先查看缓存中是否存在，如果不存在则从sql数据库加载记录，并将数据写入到redis,之后响应查询请求。
-
-对于更新请求，有两个版本的操作接口：
-
-* 不带Sync后缀的接口:数据更新到redis后返回响应，然后异步将更新回写到sql
-
-* 带Sync后缀的接口:数据先更新到redis，成功后更新到sql,当操作完成返回响应。如果操作出错，清除redis中的缓存。
-	
-
-### 缓存替换
-
-flyfish通过内存中的LRU缓存来执行redis数据的替换，当key的数量超过设置的缓存数量后，通过LRU把最久
-未访问过的key淘汰出redis。
 
 
-## 本地缓存
+## Cache
 
-对不存在的数据从sql加载到本地，对数据的修改首先修改本地缓存数据，再异步更新到sql。更新请求同redis缓存策略一样，不带Sync后缀的操作在更新本地缓存后返回响应。
-带Sync后缀的请求在数据回写到sql后返回响应。
+flyfish支持本地缓存以及redis缓存。
+
+*	本地缓存：数据存储在本地
+
+*	redis缓存：flyfish只记录数据是否在redis中存在，所有数据首先载入到redis，更新操作先更新redis之后再回写。
+
 
 ## 数据回写
 所有变更操作将产生一条对应的变更记录，变更记录被序列化并添加到回写缓冲中，一旦回写缓冲满|到达记录阀值|超过刷新间隔，缓冲中的操作将写入到磁盘文件(对于所有的Sync请求，写到磁盘即可返回响应，不需要等到完成DB变更)。磁盘写入完成后，将文件名通知sqlupdater,由sqlupdater读取文件中内容并将变更写入到db。
 当所有操作完成，由sqlupdater删除相应文件。如果进程或机器在db更新完成前故障，只要磁盘未被损坏，flyfish启动的时候会加载磁盘文件，完成未完成的更新操作(flyfish的更新请求是幂等的,对于操作执行一半进程崩溃的情况，因为文件只有在全部操作执行完成后才会被删除，进程重启后之前的文件尚未被删除，只需重新执行一次就可以保证操作不丢失)。
-
-
-## 示例 获取多条记录
-
-
-	func MGet(c *kclient.Client) {
-
-		keys := []string{"huangwei:1","huangwei:2","huangwei:3","huangwei:xx"}
-
-		mget := c.MGetAll("users1",keys)
-
-		mget.Exec(func(ret *kclient.MutiResult){
-			if ret.ErrCode == errcode.ERR_OK {
-				for _,v := range(ret.Rows) {
-					if nil == v.Fields {
-						fmt.Println(v.Key,"not exist")
-					} else {
-						fmt.Println(v.Key,"age",v.Fields["age"].GetInt())					
-					}
-				}
-			} else {
-				fmt.Println(errcode.GetErrorStr(ret.ErrCode))
-			}
-		})
-	}
-
-
-	func main() {
-
-		services := []string{"127.0.0.1:10012"}
-		c := kclient.OpenClient(services)
-
-		MGet(c)
-
-		sigStop := make(chan bool)
-		_, _ = <-sigStop
-	}
-
-
 
 
 

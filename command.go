@@ -95,20 +95,20 @@ type cnsSt struct {
 
 //来自客户端的一条命令请求
 type command struct {
-	next        *command
-	cmdType     int
-	rpyer       replyer
-	table       string
-	key         string
-	uniKey      string //table+key
-	version     *int64
-	ckey        *cacheKey
-	fields      map[string]*proto.Field //for get/set
-	cns         *cnsSt                  //for compareAndSet
-	incrDecr    *proto.Field            //for incr/decr
-	deadline    time.Time
-	replyOnDbOk bool //是否在db操作完成后才返回响应
-	replyed     int32
+	next     *command
+	cmdType  int
+	rpyer    replyer
+	table    string
+	key      string
+	uniKey   string //table+key
+	version  *int64
+	ckey     *cacheKey
+	fields   map[string]*proto.Field //for get/set
+	cns      *cnsSt                  //for compareAndSet
+	incrDecr *proto.Field            //for incr/decr
+	deadline time.Time
+	//replyOnDbOk bool //是否在db操作完成后才返回响应
+	replyed int32
 }
 
 func (this *command) reply(errCode int32, fields map[string]*proto.Field, version int64) {

@@ -53,11 +53,6 @@ func (this sqlResponseLocalCache) onSqlNotFound(ctx *processContext) {
 
 		ckey.unit.doWriteBack(ctx)
 
-		if !ctx.replyOnDbOk {
-			ctx.reply(errcode.ERR_OK, nil, 1)
-			ckey.processQueueCmd()
-		}
-
 	}
 }
 
@@ -133,12 +128,8 @@ func (this sqlResponseLocalCache) onSqlLoadOKSet(ctx *processContext) {
 	ckey.mtx.Unlock()
 
 	if ctx.writeBackFlag != write_back_none {
-		if !ctx.replyOnDbOk {
-			ctx.reply(errcode.ERR_OK, nil, version)
-		}
-
 		ckey.unit.doWriteBack(ctx)
-
+	} else {
 		ckey.processQueueCmd()
 	}
 }
@@ -172,7 +163,7 @@ func (this sqlResponseLocalCache) onSqlLoadOKDel(ctx *processContext) {
 		ckey.mtx.Unlock()
 	}
 
-	if ctx.writeBackFlag == write_back_none || !ctx.replyOnDbOk {
+	if ctx.writeBackFlag == write_back_none {
 		ckey.processQueueCmd()
 	}
 }

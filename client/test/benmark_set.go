@@ -5,8 +5,8 @@ import (
 	kclient "github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/kendynet/golog"
-	//"math/rand"
 	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -28,7 +28,7 @@ func Set(c *kclient.Client) {
 	fields["name"] = "sniperHW"
 	nextID := atomic.AddInt64(&id, 1)
 	key := fmt.Sprintf("%s:%d", "huangwei", nextID%keyrange)
-	set := c.SetSync("users1", key, fields)
+	set := c.Set("users1", key, fields)
 
 	beg := time.Now()
 
@@ -71,7 +71,7 @@ func main() {
 
 	services := []string{}
 
-	for i := 1; i < len(os.Args); i++ {
+	for i := 2; i < len(os.Args); i++ {
 		services = append(services, os.Args[i])
 	}
 

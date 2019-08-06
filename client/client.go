@@ -113,54 +113,26 @@ func (this *Client) Set(table, key string, fields map[string]interface{}, versio
 	return this.selectConn(key).Set(table, key, fields, version...)
 }
 
-func (this *Client) SetSync(table, key string, fields map[string]interface{}, version ...int64) *StatusCmd {
-	return this.selectConn(key).SetSync(table, key, fields, version...)
-}
-
 func (this *Client) SetNx(table, key string, fields map[string]interface{}) *StatusCmd {
 	return this.selectConn(key).SetNx(table, key, fields)
-}
-
-func (this *Client) SetNxSync(table, key string, fields map[string]interface{}) *StatusCmd {
-	return this.selectConn(key).SetNxSync(table, key, fields)
 }
 
 func (this *Client) CompareAndSet(table, key, field string, oldV, newV interface{}) *SliceCmd {
 	return this.selectConn(key).CompareAndSet(table, key, field, oldV, newV)
 }
 
-func (this *Client) CompareAndSetSync(table, key, field string, oldV, newV interface{}) *SliceCmd {
-	return this.selectConn(key).CompareAndSetSync(table, key, field, oldV, newV)
-}
-
 func (this *Client) CompareAndSetNx(table, key, field string, oldV, newV interface{}) *SliceCmd {
 	return this.selectConn(key).CompareAndSetNx(table, key, field, oldV, newV)
-}
-
-func (this *Client) CompareAndSetNxSync(table, key, field string, oldV, newV interface{}) *SliceCmd {
-	return this.selectConn(key).CompareAndSetNxSync(table, key, field, oldV, newV)
 }
 
 func (this *Client) Del(table, key string, version ...int64) *StatusCmd {
 	return this.selectConn(key).Del(table, key, version...)
 }
 
-func (this *Client) DelSync(table, key string, version ...int64) *StatusCmd {
-	return this.selectConn(key).DelSync(table, key, version...)
-}
-
 func (this *Client) IncrBy(table, key, field string, value int64) *SliceCmd {
 	return this.selectConn(key).IncrBy(table, key, field, value)
 }
 
-func (this *Client) IncrBySync(table, key, field string, value int64) *SliceCmd {
-	return this.selectConn(key).IncrBySync(table, key, field, value)
-}
-
 func (this *Client) DecrBy(table, key, field string, value int64) *SliceCmd {
 	return this.selectConn(key).DecrBy(table, key, field, value)
-}
-
-func (this *Client) DecrBySync(table, key, field string, value int64) *SliceCmd {
-	return this.selectConn(key).DecrBySync(table, key, field, value)
 }

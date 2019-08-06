@@ -82,14 +82,13 @@ func set(session kendynet.StreamSession, msg *codec.Message) {
 	} else {
 
 		cmd := &command{
-			cmdType:     cmdSet,
-			key:         head.GetKey(),
-			table:       head.GetTable(),
-			uniKey:      fmt.Sprintf("%s:%s", head.GetTable(), head.GetKey()),
-			version:     req.Version,
-			fields:      map[string]*proto.Field{},
-			deadline:    time.Now().Add(time.Duration(head.GetTimeout())),
-			replyOnDbOk: head.GetReplyOnDbOk(),
+			cmdType:  cmdSet,
+			key:      head.GetKey(),
+			table:    head.GetTable(),
+			uniKey:   fmt.Sprintf("%s:%s", head.GetTable(), head.GetKey()),
+			version:  req.Version,
+			fields:   map[string]*proto.Field{},
+			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
 		}
 
 		cmd.rpyer = &SetReplyer{
@@ -133,13 +132,12 @@ func setNx(session kendynet.StreamSession, msg *codec.Message) {
 	} else {
 
 		cmd := &command{
-			cmdType:     cmdSetNx,
-			key:         head.GetKey(),
-			table:       head.GetTable(),
-			uniKey:      fmt.Sprintf("%s:%s", head.GetTable(), head.GetKey()),
-			fields:      map[string]*proto.Field{},
-			deadline:    time.Now().Add(time.Duration(head.GetTimeout())),
-			replyOnDbOk: head.GetReplyOnDbOk(),
+			cmdType:  cmdSetNx,
+			key:      head.GetKey(),
+			table:    head.GetTable(),
+			uniKey:   fmt.Sprintf("%s:%s", head.GetTable(), head.GetKey()),
+			fields:   map[string]*proto.Field{},
+			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
 		}
 
 		cmd.rpyer = &SetReplyer{
@@ -192,8 +190,7 @@ func compareAndSet(session kendynet.StreamSession, msg *codec.Message) {
 				oldV: req.GetOld(),
 				newV: req.GetNew(),
 			},
-			deadline:    time.Now().Add(time.Duration(head.GetTimeout())),
-			replyOnDbOk: head.GetReplyOnDbOk(),
+			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
 		}
 
 		cmd.rpyer = &SetReplyer{
@@ -242,8 +239,7 @@ func compareAndSetNx(session kendynet.StreamSession, msg *codec.Message) {
 				oldV: req.GetOld(),
 				newV: req.GetNew(),
 			},
-			deadline:    time.Now().Add(time.Duration(head.GetTimeout())),
-			replyOnDbOk: head.GetReplyOnDbOk(),
+			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
 		}
 
 		cmd.rpyer = &SetReplyer{

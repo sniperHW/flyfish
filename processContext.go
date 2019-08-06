@@ -33,7 +33,7 @@ type processContext struct {
 	writeBackFlag int   //回写数据库类型
 	redisFlag     int
 	ping          bool
-	replyOnDbOk   bool //是否在db操作完成后才返回响应
+	//replyOnDbOk   bool //是否在db操作完成后才返回响应
 }
 
 func (this *processContext) getCmd() *command {

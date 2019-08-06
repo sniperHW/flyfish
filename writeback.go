@@ -206,9 +206,7 @@ func (this *writeBackProcessor) writeBack(ctx *processContext) {
 	this.s.appendBytes(bytes...)
 	this.count++
 
-	if ctx.replyOnDbOk {
-		this.needReplys = append(this.needReplys, ctx)
-	}
+	this.needReplys = append(this.needReplys, ctx)
 
 	if this.count >= config.FlushCount || this.s.dataLen() >= config.FlushSize || time.Now().After(this.nextFlush) {
 		this.flushToFile()

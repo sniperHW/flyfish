@@ -55,8 +55,6 @@ func (this cmdProcessorRedisCache) processSet(ckey *cacheKey, ctx *processContex
 		for _, v := range cmd.fields {
 			ctx.fields[v.GetName()] = v
 		}
-		ctx.replyOnDbOk = cmd.replyOnDbOk
-
 		return true
 
 	}
@@ -81,9 +79,6 @@ func (this cmdProcessorRedisCache) processSetNx(ckey *cacheKey, ctx *processCont
 		for _, v := range cmd.fields {
 			ctx.fields[v.GetName()] = v
 		}
-
-		ctx.replyOnDbOk = cmd.replyOnDbOk
-
 		return true
 	}
 }
@@ -104,9 +99,6 @@ func (this cmdProcessorRedisCache) processCompareAndSet(ckey *cacheKey, ctx *pro
 			ctx.writeBackFlag = write_back_update //数据存在执行update
 			ctx.redisFlag = redis_set_script
 		}
-
-		ctx.replyOnDbOk = cmd.replyOnDbOk
-
 		return true
 	}
 }
@@ -128,9 +120,6 @@ func (this cmdProcessorRedisCache) processCompareAndSetNx(ckey *cacheKey, ctx *p
 			ctx.redisFlag = redis_set
 		}
 	}
-
-	ctx.replyOnDbOk = cmd.replyOnDbOk
-
 	return true
 }
 
@@ -151,7 +140,6 @@ func (this cmdProcessorRedisCache) processIncrBy(ckey *cacheKey, ctx *processCon
 			ctx.redisFlag = redis_set
 		}
 	}
-	ctx.replyOnDbOk = cmd.replyOnDbOk
 	return true
 }
 
@@ -173,7 +161,6 @@ func (this cmdProcessorRedisCache) processDecrBy(ckey *cacheKey, ctx *processCon
 			ctx.redisFlag = redis_set
 		}
 	}
-	ctx.replyOnDbOk = cmd.replyOnDbOk
 	return true
 }
 
@@ -196,7 +183,6 @@ func (this cmdProcessorRedisCache) processDel(ckey *cacheKey, ctx *processContex
 			}
 			ctx.writeBackFlag = write_back_delete
 			ctx.redisFlag = redis_del
-			ctx.replyOnDbOk = cmd.replyOnDbOk
 			ctx.commands = append(ctx.commands, cmd)
 			return true
 		}
@@ -300,19 +286,6 @@ func (this cmdProcessorRedisCache) processCmd(ckey *cacheKey, fromClient bool) {
 		ckey.mtx.Unlock()
 		return
 	}
-
-	/*if fromClient && causeWriteBackCmd(lastCmdType) {
-		if ckey.unit.updateQueueFull() {
-			ckey.mtx.Unlock()
-			if conf.GetConfig().ReplyBusyOnQueueFull {
-				ctx.reply(errcode.ERR_BUSY, nil, -1)
-			} else {
-				atomic.AddInt32(&cmdCount, -1)
-			}
-			this.processCmd(ckey, fromClient)
-			return
-		}
-	}*/
 
 	fullReturn := fromClient
 
