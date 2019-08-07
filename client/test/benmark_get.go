@@ -66,7 +66,7 @@ func main() {
 
 	services := []string{}
 
-	for i := 1; i < len(os.Args); i++ {
+	for i := 2; i < len(os.Args); i++ {
 		services = append(services, os.Args[i])
 	}
 
