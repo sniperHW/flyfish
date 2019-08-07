@@ -22,6 +22,7 @@ import (
 var (
 	fileCounter        int64
 	writeBackFileCount int32
+	writeBackFileSize  int64
 	checkSumSize       = 8
 	crc64Table         *crc64.Table
 )
@@ -39,6 +40,18 @@ type writeBackProcessor struct {
 	writeFileQueue *util.BlockQueue
 	s              *str
 	count          int
+}
+
+func reachWriteBackFileLimit(config *conf.Config) bool {
+	if atomic.LoadInt32(&writeBackFileCount) > config.MaxWriteBackFileCount {
+		return true
+	}
+
+	if atomic.LoadInt64(&writeBackFileSize) > config.MaxWriteBackFileSize {
+		return true
+	}
+
+	return false
 }
 
 func (this *writeBackProcessor) checkFlush() {
@@ -89,6 +102,7 @@ func (this *writeBackProcessor) flush(s *str, needReplys []*processContext) {
 		checkSum := crc64.Checksum(s.bytes(), crc64Table)
 		s.appendInt64(int64(checkSum))
 		f.Write(s.bytes())
+		atomic.AddInt64(&writeBackFileSize, int64(s.dataLen()))
 		strPut(s)
 
 		f.Sync()

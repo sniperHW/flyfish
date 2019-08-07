@@ -47,7 +47,8 @@ type Config struct {
 	FlushInterval         int
 	FlushSize             int
 	FlushCount            int
-	MaxWriteBackFileCount int
+	MaxWriteBackFileCount int32
+	MaxWriteBackFileSize  int64
 
 	Redis struct {
 		RedisHost     string

@@ -312,7 +312,7 @@ func (this cmdProcessorLocalCache) processCmd(ckey *cacheKey, fromClient bool) {
 			atomic.AddInt32(&cmdCount, -1)
 		} else {
 
-			if causeWriteBackCmd(cmd.cmdType) && atomic.LoadInt32(&writeBackFileCount) > int32(config.MaxWriteBackFileCount) {
+			if causeWriteBackCmd(cmd.cmdType) && reachWriteBackFileLimit(config) {
 				if config.ReplyBusyOnQueueFull {
 					ctx.reply(errcode.ERR_BUSY, nil, -1)
 				} else {

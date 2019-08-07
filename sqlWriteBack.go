@@ -195,6 +195,7 @@ func (this *sqlUpdater) process(path string) {
 
 	if !this.replay {
 		atomic.AddInt32(&writeBackFileCount, -1)
+		atomic.AddInt64(&writeBackFileSize, -int64(n))
 	}
 
 }
