@@ -20,9 +20,10 @@ import (
  */
 
 var (
-	fileCounter  int64
-	checkSumSize = 8
-	crc64Table   *crc64.Table
+	fileCounter        int64
+	writeBackFileCount int32
+	checkSumSize       = 8
+	crc64Table         *crc64.Table
 )
 
 type writeFileSt struct {
@@ -74,6 +75,8 @@ func (this *writeBackProcessor) flush(s *str, needReplys []*processContext) {
 
 		Debugln("flushToFile")
 		counter := atomic.AddInt64(&fileCounter, 1)
+		atomic.AddInt32(&writeBackFileCount, 1)
+
 		os.MkdirAll(config.WriteBackFileDir, os.ModePerm)
 		path := fmt.Sprintf("%s/%s_%d.wb", config.WriteBackFileDir, config.WriteBackFilePrefix, counter)
 

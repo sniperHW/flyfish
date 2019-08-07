@@ -13,6 +13,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -179,7 +180,6 @@ func (this *sqlUpdater) process(path string) {
 				time.Sleep(time.Second)
 			} else {
 				Errorln("sqlUpdater exec error:", err, path)
-				return
 			}
 		}
 	}
@@ -192,6 +192,10 @@ func (this *sqlUpdater) process(path string) {
 	totalTime := time.Now().Sub(beg)
 
 	Infoln("loadTime:", loadTime, "recordCount:", recordCount, "sqlTime:", sqlTime, "totalTime:", totalTime)
+
+	if !this.replay {
+		atomic.AddInt32(&writeBackFileCount, -1)
+	}
 
 }
 

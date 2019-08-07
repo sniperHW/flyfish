@@ -218,6 +218,8 @@ func (this cmdProcessorRedisCache) processCmd(ckey *cacheKey, fromClient bool) {
 
 	now := time.Now()
 
+	config := conf.GetConfig()
+
 	for ; nil != e; e = cmdQueue.Front() {
 		cmd := e.Value.(*command)
 		if now.After(cmd.deadline) {
@@ -225,10 +227,17 @@ func (this cmdProcessorRedisCache) processCmd(ckey *cacheKey, fromClient bool) {
 			cmdQueue.Remove(e)
 			atomic.AddInt32(&cmdCount, -1)
 		} else {
+
 			if ckey.status == cache_new && ckey.writeBacked {
 				//cache_new触发sqlLoad,当前回写尚未完成，不能执行sqlLoad,所以不响应命令，让客户端请求超时
 				cmdQueue.Remove(e)
 				atomic.AddInt32(&cmdCount, -1)
+			} else if causeWriteBackCmd(cmd.cmdType) && atomic.LoadInt32(&writeBackFileCount) > int32(config.MaxWriteBackFileCount) {
+				if config.ReplyBusyOnQueueFull {
+					ctx.reply(errcode.ERR_BUSY, nil, -1)
+				} else {
+					atomic.AddInt32(&cmdCount, -1)
+				}
 			} else {
 				ok := false
 				if cmd.cmdType == cmdGet {
@@ -299,7 +308,7 @@ func (this cmdProcessorRedisCache) processCmd(ckey *cacheKey, fromClient bool) {
 
 	if !ok {
 		ckey.mtx.Unlock()
-		if conf.GetConfig().ReplyBusyOnQueueFull {
+		if config.ReplyBusyOnQueueFull {
 			ctx.reply(errcode.ERR_BUSY, nil, -1)
 		} else {
 			atomic.AddInt32(&cmdCount, -1)
