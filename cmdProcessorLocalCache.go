@@ -314,7 +314,7 @@ func (this cmdProcessorLocalCache) processCmd(ckey *cacheKey, fromClient bool) {
 
 			if causeWriteBackCmd(cmd.cmdType) && reachWriteBackFileLimit(config) {
 				if config.ReplyBusyOnQueueFull {
-					ctx.reply(errcode.ERR_BUSY, nil, -1)
+					cmd.reply(errcode.ERR_BUSY, nil, -1)
 				} else {
 					atomic.AddInt32(&cmdCount, -1)
 				}

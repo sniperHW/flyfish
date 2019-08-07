@@ -234,7 +234,7 @@ func (this cmdProcessorRedisCache) processCmd(ckey *cacheKey, fromClient bool) {
 				atomic.AddInt32(&cmdCount, -1)
 			} else if causeWriteBackCmd(cmd.cmdType) && reachWriteBackFileLimit(config) {
 				if config.ReplyBusyOnQueueFull {
-					ctx.reply(errcode.ERR_BUSY, nil, -1)
+					cmd.reply(errcode.ERR_BUSY, nil, -1)
 				} else {
 					atomic.AddInt32(&cmdCount, -1)
 				}
