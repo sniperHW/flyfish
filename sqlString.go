@@ -526,6 +526,8 @@ var pgsqlByteToString = []string{
 
 var BinaryToSqlStr func(s *str, bytes []byte)
 
+var buildInsertUpdateString func(s *str, r *proto.Record, meta *table_meta)
+
 func pgsqlBinaryToPgsqlStr(s *str, bytes []byte) {
 	s.append("'")
 	for _, v := range bytes {
@@ -561,6 +563,60 @@ func (this *str) appendField(field *proto.Field) *str {
 	}
 
 	return this
+}
+
+/*
+ *重放时对insert要使用updateinsert语句
+ *INSERT INTO %s(%s) VALUES(%s) ON conflict(__key__)  DO UPDATE SET %s;
+ */
+func buildInsertUpdateStringPgSql(s *str, r *proto.Record, meta *table_meta) {
+	s.append(meta.insertPrefix).append("'").append(r.GetKey()).append("',") //add __key__
+	s.appendField(r.Fields[0]).append(",")                                  //add __version__
+	//add other fileds
+	for i := 1; i < len(r.Fields); i++ {
+		s.appendField(r.Fields[i])
+		if i != len(r.Fields)-1 {
+			s.append(",")
+		}
+	}
+	s.append(") ON conflict(__key__)  DO UPDATE SET ")
+
+	for i, v := range r.Fields {
+		if i == 0 {
+			s.append(v.GetName()).append("=").appendField(v)
+		} else {
+			s.append(",").append(v.GetName()).append("=").appendField(v)
+		}
+	}
+
+	s.append(" where ").append(r.GetTable()).append(".__key__ = '").append(r.GetKey()).append("';")
+}
+
+/*
+ *insert into %s(%s) values(%s) on duplicate key update %s;
+ */
+
+func buildInsertUpdateStringMySql(s *str, r *proto.Record, meta *table_meta) {
+	s.append(meta.insertPrefix).append("'").append(r.GetKey()).append("',") //add __key__
+	s.appendField(r.Fields[0]).append(",")                                  //add __version__
+	//add other fileds
+	for i := 1; i < len(r.Fields); i++ {
+		s.appendField(r.Fields[i])
+		if i != len(r.Fields)-1 {
+			s.append(",")
+		}
+	}
+	s.append(") on duplicate key update ")
+
+	for i, v := range r.Fields {
+		if i == 0 {
+			s.append(v.GetName()).append("=").appendField(v)
+		} else {
+			s.append(",").append(v.GetName()).append("=").appendField(v)
+		}
+	}
+
+	s.append(";")
 }
 
 func buildInsertString(s *str, r *proto.Record, meta *table_meta) {

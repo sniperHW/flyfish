@@ -230,7 +230,7 @@ func execWriteBackFile() bool {
 		return false
 	}
 
-	sqlUpdater_ := newSqlUpdater(writeBackDB, "execWriteBackFile", nil)
+	sqlUpdater_ := newSqlUpdater(writeBackDB, "execWriteBackFile", nil, true)
 
 	for _, v := range fileList {
 		sqlUpdater_.process(v)
@@ -256,8 +256,10 @@ func Start() error {
 
 	if config.DBConfig.SqlType == "mysql" {
 		BinaryToSqlStr = mysqlBinaryToPgsqlStr
+		buildInsertUpdateString = buildInsertUpdateStringMySql
 	} else {
 		BinaryToSqlStr = pgsqlBinaryToPgsqlStr
+		buildInsertUpdateString = buildInsertUpdateStringPgSql
 	}
 
 	InitProcessUnit()

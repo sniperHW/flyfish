@@ -222,7 +222,7 @@ func InitProcessUnit() bool {
 			sqlLoader_: newSqlLoader(loadDB, lname),
 			writeBack: &writeBackProcessor{
 				needReplys:  []*processContext{},
-				sqlUpdater_: newSqlUpdater(writeBackDB, wname, sqlUpdateWg),
+				sqlUpdater_: newSqlUpdater(writeBackDB, wname, sqlUpdateWg, false),
 			},
 		}
 

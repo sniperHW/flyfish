@@ -25,9 +25,10 @@ type sqlUpdater struct {
 	sqlStr   *str
 	records  []*proto.Record
 	buffer   []byte
+	replay   bool
 }
 
-func newSqlUpdater(db *sqlx.DB, name string, wg *sync.WaitGroup) *sqlUpdater {
+func newSqlUpdater(db *sqlx.DB, name string, wg *sync.WaitGroup, replay bool) *sqlUpdater {
 	if nil != wg {
 		wg.Add(1)
 	}
@@ -37,6 +38,7 @@ func newSqlUpdater(db *sqlx.DB, name string, wg *sync.WaitGroup) *sqlUpdater {
 		queue:   util.NewBlockQueueWithName(name),
 		db:      db,
 		wg:      wg,
+		replay:  replay,
 	}
 }
 
@@ -135,7 +137,11 @@ func (this *sqlUpdater) process(path string) {
 
 		tt := pbRecord.GetType()
 		if tt == proto.SqlType_insert {
-			buildInsertString(this.sqlStr, pbRecord, meta)
+			if this.replay {
+				buildInsertUpdateString(this.sqlStr, pbRecord, meta)
+			} else {
+				buildInsertString(this.sqlStr, pbRecord, meta)
+			}
 		} else if tt == proto.SqlType_update {
 			buildUpdateString(this.sqlStr, pbRecord, meta)
 		} else if tt == proto.SqlType_delete {
