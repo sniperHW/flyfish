@@ -154,9 +154,8 @@ func (this *sqlUpdater) process(path string) {
 
 	recordCount := len(this.records)
 
-	_, err = this.db.Exec(this.sqlStr.toString())
-
 	for {
+		_, err = this.db.Exec(this.sqlStr.toString())
 		if nil == err {
 			for _, v := range this.records {
 				uniKey := fmt.Sprintf("%s:%s", v.GetTable(), v.GetKey())
