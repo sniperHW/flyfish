@@ -139,10 +139,11 @@ func (this *Conn) Get(table, key string, fields ...string) *SliceCmd {
 
 	req := &protocol.GetReq{
 		Head: &protocol.ReqCommon{
-			Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
-			Table:   proto.String(table),
-			Key:     proto.String(key),
-			Timeout: proto.Int64(int64(ServerTimeout)),
+			Seqno:       proto.Int64(atomic.AddInt64(&this.seqno, 1)),
+			Table:       proto.String(table),
+			Key:         proto.String(key),
+			Timeout:     proto.Int64(int64(ServerTimeout)),
+			RespTimeout: proto.Int64(int64(ClientTimeout)),
 		},
 		Fields: fields,
 		All:    proto.Bool(false),
@@ -158,10 +159,11 @@ func (this *Conn) Get(table, key string, fields ...string) *SliceCmd {
 func (this *Conn) GetAll(table, key string) *SliceCmd {
 	req := &protocol.GetReq{
 		Head: &protocol.ReqCommon{
-			Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
-			Table:   proto.String(table),
-			Key:     proto.String(key),
-			Timeout: proto.Int64(int64(ServerTimeout)),
+			Seqno:       proto.Int64(atomic.AddInt64(&this.seqno, 1)),
+			Table:       proto.String(table),
+			Key:         proto.String(key),
+			Timeout:     proto.Int64(int64(ServerTimeout)),
+			RespTimeout: proto.Int64(int64(ClientTimeout)),
 		},
 		All: proto.Bool(true),
 	}
@@ -181,10 +183,11 @@ func (this *Conn) Set(table, key string, fields map[string]interface{}, version 
 
 	req := &protocol.SetReq{
 		Head: &protocol.ReqCommon{
-			Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
-			Table:   proto.String(table),
-			Key:     proto.String(key),
-			Timeout: proto.Int64(int64(ServerTimeout)),
+			Seqno:       proto.Int64(atomic.AddInt64(&this.seqno, 1)),
+			Table:       proto.String(table),
+			Key:         proto.String(key),
+			Timeout:     proto.Int64(int64(ServerTimeout)),
+			RespTimeout: proto.Int64(int64(ClientTimeout)),
 		},
 	}
 
@@ -210,10 +213,11 @@ func (this *Conn) SetNx(table, key string, fields map[string]interface{}) *Statu
 
 	req := &protocol.SetNxReq{
 		Head: &protocol.ReqCommon{
-			Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
-			Table:   proto.String(table),
-			Key:     proto.String(key),
-			Timeout: proto.Int64(int64(ServerTimeout)),
+			Seqno:       proto.Int64(atomic.AddInt64(&this.seqno, 1)),
+			Table:       proto.String(table),
+			Key:         proto.String(key),
+			Timeout:     proto.Int64(int64(ServerTimeout)),
+			RespTimeout: proto.Int64(int64(ClientTimeout)),
 		},
 	}
 
@@ -237,10 +241,11 @@ func (this *Conn) CompareAndSet(table, key, field string, oldV, newV interface{}
 
 	req := &protocol.CompareAndSetReq{
 		Head: &protocol.ReqCommon{
-			Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
-			Table:   proto.String(table),
-			Key:     proto.String(key),
-			Timeout: proto.Int64(int64(ServerTimeout)),
+			Seqno:       proto.Int64(atomic.AddInt64(&this.seqno, 1)),
+			Table:       proto.String(table),
+			Key:         proto.String(key),
+			Timeout:     proto.Int64(int64(ServerTimeout)),
+			RespTimeout: proto.Int64(int64(ClientTimeout)),
 		},
 		New: protocol.PackField(field, newV),
 		Old: protocol.PackField(field, oldV),
@@ -262,10 +267,11 @@ func (this *Conn) CompareAndSetNx(table, key, field string, oldV, newV interface
 
 	req := &protocol.CompareAndSetNxReq{
 		Head: &protocol.ReqCommon{
-			Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
-			Table:   proto.String(table),
-			Key:     proto.String(key),
-			Timeout: proto.Int64(int64(ServerTimeout)),
+			Seqno:       proto.Int64(atomic.AddInt64(&this.seqno, 1)),
+			Table:       proto.String(table),
+			Key:         proto.String(key),
+			Timeout:     proto.Int64(int64(ServerTimeout)),
+			RespTimeout: proto.Int64(int64(ClientTimeout)),
 		},
 		New: protocol.PackField(field, newV),
 		Old: protocol.PackField(field, oldV),
@@ -282,10 +288,11 @@ func (this *Conn) Del(table, key string, version ...int64) *StatusCmd {
 
 	req := &protocol.DelReq{
 		Head: &protocol.ReqCommon{
-			Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
-			Table:   proto.String(table),
-			Key:     proto.String(key),
-			Timeout: proto.Int64(int64(ServerTimeout)),
+			Seqno:       proto.Int64(atomic.AddInt64(&this.seqno, 1)),
+			Table:       proto.String(table),
+			Key:         proto.String(key),
+			Timeout:     proto.Int64(int64(ServerTimeout)),
+			RespTimeout: proto.Int64(int64(ClientTimeout)),
 		},
 	}
 
@@ -304,10 +311,11 @@ func (this *Conn) Del(table, key string, version ...int64) *StatusCmd {
 func (this *Conn) IncrBy(table, key, field string, value int64) *SliceCmd {
 	req := &protocol.IncrByReq{
 		Head: &protocol.ReqCommon{
-			Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
-			Table:   proto.String(table),
-			Key:     proto.String(key),
-			Timeout: proto.Int64(int64(ServerTimeout)),
+			Seqno:       proto.Int64(atomic.AddInt64(&this.seqno, 1)),
+			Table:       proto.String(table),
+			Key:         proto.String(key),
+			Timeout:     proto.Int64(int64(ServerTimeout)),
+			RespTimeout: proto.Int64(int64(ClientTimeout)),
 		},
 		Field: protocol.PackField(field, value),
 	}
@@ -322,10 +330,11 @@ func (this *Conn) IncrBy(table, key, field string, value int64) *SliceCmd {
 func (this *Conn) DecrBy(table, key, field string, value int64) *SliceCmd {
 	req := &protocol.DecrByReq{
 		Head: &protocol.ReqCommon{
-			Seqno:   proto.Int64(atomic.AddInt64(&this.seqno, 1)),
-			Table:   proto.String(table),
-			Key:     proto.String(key),
-			Timeout: proto.Int64(int64(ServerTimeout)),
+			Seqno:       proto.Int64(atomic.AddInt64(&this.seqno, 1)),
+			Table:       proto.String(table),
+			Key:         proto.String(key),
+			Timeout:     proto.Int64(int64(ServerTimeout)),
+			RespTimeout: proto.Int64(int64(ClientTimeout)),
 		},
 		Field: protocol.PackField(field, value),
 	}

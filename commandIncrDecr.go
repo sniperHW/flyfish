@@ -17,7 +17,7 @@ type IncrDecrByReplyer struct {
 
 func (this *IncrDecrByReplyer) reply(errCode int32, fields map[string]*proto.Field, version int64) {
 
-	if time.Now().After(this.cmd.deadline) {
+	if time.Now().After(this.cmd.respDeadline) {
 		//已经超时
 		Debugln("reply IncrDecrByReplyer timeout", this.cmd.key)
 		return
@@ -72,12 +72,13 @@ func incrBy(session kendynet.StreamSession, msg *codec.Message) {
 	} else {
 
 		cmd := &command{
-			cmdType:  cmdIncrBy,
-			key:      head.GetKey(),
-			table:    head.GetTable(),
-			uniKey:   fmt.Sprintf("%s:%s", head.GetTable(), head.GetKey()),
-			incrDecr: req.GetField(),
-			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
+			cmdType:      cmdIncrBy,
+			key:          head.GetKey(),
+			table:        head.GetTable(),
+			uniKey:       fmt.Sprintf("%s:%s", head.GetTable(), head.GetKey()),
+			incrDecr:     req.GetField(),
+			deadline:     time.Now().Add(time.Duration(head.GetTimeout())),
+			respDeadline: time.Now().Add(time.Duration(head.GetRespTimeout())),
 		}
 
 		cmd.rpyer = &IncrDecrByReplyer{
@@ -117,12 +118,13 @@ func decrBy(session kendynet.StreamSession, msg *codec.Message) {
 	} else {
 
 		cmd := &command{
-			cmdType:  cmdDecrBy,
-			key:      head.GetKey(),
-			table:    head.GetTable(),
-			uniKey:   fmt.Sprintf("%s:%s", head.GetTable(), head.GetKey()),
-			incrDecr: req.GetField(),
-			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
+			cmdType:      cmdDecrBy,
+			key:          head.GetKey(),
+			table:        head.GetTable(),
+			uniKey:       fmt.Sprintf("%s:%s", head.GetTable(), head.GetKey()),
+			incrDecr:     req.GetField(),
+			deadline:     time.Now().Add(time.Duration(head.GetTimeout())),
+			respDeadline: time.Now().Add(time.Duration(head.GetRespTimeout())),
 		}
 
 		cmd.rpyer = &IncrDecrByReplyer{

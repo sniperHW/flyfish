@@ -166,7 +166,7 @@ func (this *scaner) next(req *proto.ScanReq) {
 		return
 	}
 
-	deadline := time.Now().Add(time.Duration(head.GetTimeout()))
+	deadline := time.Now().Add(time.Duration(head.GetRespTimeout()))
 
 	count := req.GetCount()
 

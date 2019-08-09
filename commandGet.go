@@ -18,7 +18,7 @@ type GetReplyer struct {
 
 func (this *GetReplyer) reply(errCode int32, fields map[string]*proto.Field, version int64) {
 
-	if time.Now().After(this.cmd.deadline) {
+	if time.Now().After(this.cmd.respDeadline) {
 		//已经超时
 		Debugln("reply get timeout", this.cmd.key)
 		return
@@ -73,12 +73,13 @@ func get(session kendynet.StreamSession, msg *codec.Message) {
 	} else {
 
 		cmd := &command{
-			cmdType:  cmdGet,
-			key:      head.GetKey(),
-			table:    head.GetTable(),
-			uniKey:   fmt.Sprintf("%s:%s", head.GetTable(), head.GetKey()),
-			fields:   map[string]*proto.Field{},
-			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
+			cmdType:      cmdGet,
+			key:          head.GetKey(),
+			table:        head.GetTable(),
+			uniKey:       fmt.Sprintf("%s:%s", head.GetTable(), head.GetKey()),
+			fields:       map[string]*proto.Field{},
+			deadline:     time.Now().Add(time.Duration(head.GetTimeout())),
+			respDeadline: time.Now().Add(time.Duration(head.GetRespTimeout())),
 		}
 
 		cmd.rpyer = &GetReplyer{

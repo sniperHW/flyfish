@@ -19,7 +19,7 @@ func (this *DelReplyer) reply(errCode int32, fields map[string]*proto.Field, ver
 
 	Debugln("reply del", this.cmd.key)
 
-	if time.Now().After(this.cmd.deadline) {
+	if time.Now().After(this.cmd.respDeadline) {
 		Debugln("reply del timeout", this.cmd.key)
 		//已经超时
 		return
@@ -61,12 +61,13 @@ func del(session kendynet.StreamSession, msg *codec.Message) {
 	} else {
 
 		cmd := &command{
-			cmdType:  cmdDel,
-			key:      head.GetKey(),
-			table:    head.GetTable(),
-			uniKey:   fmt.Sprintf("%s:%s", head.GetTable(), head.GetKey()),
-			version:  req.Version,
-			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
+			cmdType:      cmdDel,
+			key:          head.GetKey(),
+			table:        head.GetTable(),
+			uniKey:       fmt.Sprintf("%s:%s", head.GetTable(), head.GetKey()),
+			version:      req.Version,
+			deadline:     time.Now().Add(time.Duration(head.GetTimeout())),
+			respDeadline: time.Now().Add(time.Duration(head.GetRespTimeout())),
 		}
 
 		cmd.rpyer = &DelReplyer{

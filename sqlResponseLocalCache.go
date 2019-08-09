@@ -81,7 +81,6 @@ func (this sqlResponseLocalCache) onSqlLoadOKSet(ctx *processContext) {
 	cmdType := cmd.cmdType
 	ctx.writeBackFlag = write_back_none
 	if cmdType == cmdSet {
-		Infoln("onSqlLoadOKSet")
 		if nil != cmd.version && *cmd.version != version {
 			//版本号不对
 			ctx.reply(errcode.ERR_VERSION, nil, version)

@@ -19,7 +19,7 @@ type SetReplyer struct {
 
 func (this *SetReplyer) reply(errCode int32, fields map[string]*proto.Field, version int64) {
 
-	if time.Now().After(this.cmd.deadline) {
+	if time.Now().After(this.cmd.respDeadline) {
 		//已经超时
 		Debugln("reply SetReplyer timeout", this.cmd.key)
 		return
@@ -82,13 +82,14 @@ func set(session kendynet.StreamSession, msg *codec.Message) {
 	} else {
 
 		cmd := &command{
-			cmdType:  cmdSet,
-			key:      head.GetKey(),
-			table:    head.GetTable(),
-			uniKey:   fmt.Sprintf("%s:%s", head.GetTable(), head.GetKey()),
-			version:  req.Version,
-			fields:   map[string]*proto.Field{},
-			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
+			cmdType:      cmdSet,
+			key:          head.GetKey(),
+			table:        head.GetTable(),
+			uniKey:       fmt.Sprintf("%s:%s", head.GetTable(), head.GetKey()),
+			version:      req.Version,
+			fields:       map[string]*proto.Field{},
+			deadline:     time.Now().Add(time.Duration(head.GetTimeout())),
+			respDeadline: time.Now().Add(time.Duration(head.GetRespTimeout())),
 		}
 
 		cmd.rpyer = &SetReplyer{
@@ -132,12 +133,13 @@ func setNx(session kendynet.StreamSession, msg *codec.Message) {
 	} else {
 
 		cmd := &command{
-			cmdType:  cmdSetNx,
-			key:      head.GetKey(),
-			table:    head.GetTable(),
-			uniKey:   fmt.Sprintf("%s:%s", head.GetTable(), head.GetKey()),
-			fields:   map[string]*proto.Field{},
-			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
+			cmdType:      cmdSetNx,
+			key:          head.GetKey(),
+			table:        head.GetTable(),
+			uniKey:       fmt.Sprintf("%s:%s", head.GetTable(), head.GetKey()),
+			fields:       map[string]*proto.Field{},
+			deadline:     time.Now().Add(time.Duration(head.GetTimeout())),
+			respDeadline: time.Now().Add(time.Duration(head.GetRespTimeout())),
 		}
 
 		cmd.rpyer = &SetReplyer{
@@ -190,7 +192,8 @@ func compareAndSet(session kendynet.StreamSession, msg *codec.Message) {
 				oldV: req.GetOld(),
 				newV: req.GetNew(),
 			},
-			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
+			deadline:     time.Now().Add(time.Duration(head.GetTimeout())),
+			respDeadline: time.Now().Add(time.Duration(head.GetRespTimeout())),
 		}
 
 		cmd.rpyer = &SetReplyer{
@@ -239,7 +242,8 @@ func compareAndSetNx(session kendynet.StreamSession, msg *codec.Message) {
 				oldV: req.GetOld(),
 				newV: req.GetNew(),
 			},
-			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
+			deadline:     time.Now().Add(time.Duration(head.GetTimeout())),
+			respDeadline: time.Now().Add(time.Duration(head.GetRespTimeout())),
 		}
 
 		cmd.rpyer = &SetReplyer{
