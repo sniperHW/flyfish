@@ -26,6 +26,7 @@ var (
 	binlogFileSize  int64
 	checkSumSize    = 8
 	crc64Table      *crc64.Table
+	binlogSuffix    = ".bin"
 )
 
 type ctxArray struct {
@@ -127,7 +128,7 @@ func (this *writeBackProcessor) flush(s *str, ctxs *ctxArray) {
 		atomic.AddInt32(&binlogFileCount, 1)
 
 		os.MkdirAll(config.BinlogDir, os.ModePerm)
-		path := fmt.Sprintf("%s/%s_%d.bin", config.BinlogDir, config.BinlogPrefix, this.fileIndex)
+		path := fmt.Sprintf("%s/%s_%d%s", config.BinlogDir, config.BinlogPrefix, this.fileIndex, binlogSuffix)
 
 		f, err := os.Create(path)
 		if err != nil {

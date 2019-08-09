@@ -186,12 +186,12 @@ func (a ByID) Less(i, j int) bool {
 		panic("invaild writeBack file")
 	}
 
-	idl, err := strconv.ParseInt(strings.TrimRight(fieldl[1], ".wb"), 10, 64)
+	idl, err := strconv.ParseInt(strings.TrimRight(fieldl[1], binlogSuffix), 10, 64)
 	if nil != err {
 		panic("invaild writeBack file")
 	}
 
-	idr, err := strconv.ParseInt(strings.TrimRight(fieldr[1], ".wb"), 10, 64)
+	idr, err := strconv.ParseInt(strings.TrimRight(fieldr[1], binlogSuffix), 10, 64)
 	if nil != err {
 		panic("invaild writeBack file")
 	}

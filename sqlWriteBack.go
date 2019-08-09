@@ -224,7 +224,7 @@ func (this *sqlUpdater) run() {
 				}
 			} else {
 				config := conf.GetConfig()
-				this.process(fmt.Sprintf("%s/%s_%d.bin", config.BinlogDir, config.BinlogPrefix, v.(int64)))
+				this.process(fmt.Sprintf("%s/%s_%d%s", config.BinlogDir, config.BinlogPrefix, v.(int64), binlogSuffix))
 			}
 		}
 
