@@ -98,19 +98,22 @@ func (this *sqlUpdater) process(path string) {
 		return
 	}
 
-	checkSum := binary.BigEndian.Uint64(this.buffer[n-8:])
-
-	//校验数据
-	if checkSum != crc64.Checksum(this.buffer[:n-8], crc64Table) {
-		Fatalln("checkSum failed:", path)
-		return
-	}
-
+	totalOffset := 0
 	recordCount := 0
-	offset := 0
-	end := n - 8
+	for totalOffset < n {
+		size := int(binary.BigEndian.Uint32(this.buffer[totalOffset : totalOffset+4]))
+		totalOffset += 4
+		checkSum := binary.BigEndian.Uint64(this.buffer[totalOffset : totalOffset+checkSumSize])
+		totalOffset += checkSumSize
+		//校验数据
+		if checkSum != crc64.Checksum(this.buffer[totalOffset:totalOffset+size], crc64Table) {
+			Fatalln("checkSum failed:", path)
+			return
+		}
 
-	for offset < end {
+		offset := totalOffset
+		end := totalOffset + size
+		totalOffset += size
 
 		this.records = this.records[0:0]
 		if nil == this.sqlStr {
@@ -158,34 +161,31 @@ func (this *sqlUpdater) process(path string) {
 
 		recordCount += len(this.records)
 
-		if len(this.records) >= 200 || this.sqlStr.dataLen() >= 1024*1024 {
-
-			for {
-				_, err = this.db.Exec(this.sqlStr.toString())
-				if nil == err {
-					for _, v := range this.records {
-						uniKey := fmt.Sprintf("%s:%s", v.GetTable(), v.GetKey())
-						unit := getUnitByUnikey(uniKey)
-						unit.mtx.Lock()
-						k, ok := unit.cacheKeys[uniKey]
-						unit.mtx.Unlock()
-						if ok {
-							k.clearWriteBack(v.GetWritebackVersion())
-						}
+		for {
+			_, err = this.db.Exec(this.sqlStr.toString())
+			if nil == err {
+				for _, v := range this.records {
+					uniKey := fmt.Sprintf("%s:%s", v.GetTable(), v.GetKey())
+					unit := getUnitByUnikey(uniKey)
+					unit.mtx.Lock()
+					k, ok := unit.cacheKeys[uniKey]
+					unit.mtx.Unlock()
+					if ok {
+						k.clearWriteBack(v.GetWritebackVersion())
 					}
-					break
+				}
+				break
+			} else {
+				Errorln(this.sqlStr.toString(), err)
+				if isRetryError(err) {
+					Errorln("sqlUpdater exec error:", err)
+					if isStop() {
+						return
+					}
+					//休眠一秒重试
+					time.Sleep(time.Second)
 				} else {
-					Errorln(this.sqlStr.toString(), err)
-					if isRetryError(err) {
-						Errorln("sqlUpdater exec error:", err)
-						if isStop() {
-							return
-						}
-						//休眠一秒重试
-						time.Sleep(time.Second)
-					} else {
-						Errorln("sqlUpdater exec error:", err, path)
-					}
+					Errorln("sqlUpdater exec error:", err, path)
 				}
 			}
 		}

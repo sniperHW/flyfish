@@ -28,24 +28,55 @@ var (
 	crc64Table         *crc64.Table
 )
 
+type waitReply struct {
+	count int
+	ctxs  []*processContext
+}
+
+func (this *waitReply) append(ctx *processContext) {
+	this.ctxs[this.count] = ctx
+	this.count++
+}
+
+func (this *waitReply) full() bool {
+	return this.count == cap(this.ctxs)
+}
+
+var waitReplyPool = sync.Pool{
+	New: func() interface{} {
+		return &waitReply{
+			ctxs:  make([]*processContext, conf.GetConfig().FlushCount),
+			count: 0,
+		}
+	},
+}
+
+func waitReplyGet() *waitReply {
+	return waitReplyPool.Get().(*waitReply)
+}
+
+func waitReplyPut(w *waitReply) {
+	w.count = 0
+	waitReplyPool.Put(w)
+}
+
 type writeFileSt struct {
 	s          *str
-	needReplys []*processContext
+	needReplys *waitReply
 }
 
 type writeBackProcessor struct {
 	mtx            sync.Mutex
 	nextFlush      time.Time
 	nextChangeFile time.Time
-	needReplys     []*processContext
+	needReplys     *waitReply
 	sqlUpdater_    *sqlUpdater
 	writeFileQueue *util.BlockQueue
 	s              *str
-	checkSumStr    *str
-	f              *os.File
-	fileSize       int
-	fileIndex      int64
-	count          int
+	//checkSumStr    *str
+	f         *os.File
+	fileSize  int
+	fileIndex int64
 }
 
 func reachWriteBackFileLimit(config *conf.Config) bool {
@@ -70,6 +101,7 @@ func (this *writeBackProcessor) checkFlush() {
 
 func (this *writeBackProcessor) start() {
 	this.writeFileQueue = util.NewBlockQueue()
+	this.needReplys = waitReplyGet()
 	go func() {
 		for {
 			closed, localList := this.writeFileQueue.Get()
@@ -86,7 +118,7 @@ func (this *writeBackProcessor) start() {
 
 var openWriteBack bool = true
 
-func (this *writeBackProcessor) flush(s *str, needReplys []*processContext) {
+func (this *writeBackProcessor) flush(s *str, needReplys *waitReply) {
 
 	if openWriteBack {
 
@@ -114,27 +146,21 @@ func (this *writeBackProcessor) flush(s *str, needReplys []*processContext) {
 
 		if nil != s {
 
-			if nil == this.checkSumStr {
-				this.checkSumStr = strGet()
-			}
-			this.checkSumStr.appendBytes(s.bytes()...)
+			head := make([]byte, 4+checkSumSize)
+			checkSum := crc64.Checksum(s.bytes(), crc64Table)
+			binary.BigEndian.PutUint32(head[0:4], uint32(s.dataLen()))
+			binary.BigEndian.PutUint64(head[4:], uint64(checkSum))
 
-			this.fileSize += s.dataLen()
+			this.fileSize += s.dataLen() + len(head)
+			this.f.Write(head)
 			this.f.Write(s.bytes())
-			atomic.AddInt64(&writeBackFileSize, int64(s.dataLen()))
+			atomic.AddInt64(&writeBackFileSize, int64(s.dataLen()+len(head)))
 			strPut(s)
 			this.f.Sync()
 
 		}
 
 		if this.fileSize >= 1024*1024*4 || time.Now().After(this.nextChangeFile) {
-
-			checkSum := crc64.Checksum(this.checkSumStr.bytes(), crc64Table)
-			checkSumBuffer := make([]byte, 8)
-			binary.BigEndian.PutUint64(checkSumBuffer, uint64(checkSum))
-			this.f.Write(checkSumBuffer)
-			this.checkSumStr.reset()
-
 			this.f.Close()
 			//通告sqlUpdater执行更新
 			this.sqlUpdater_.queue.AddNoWait(this.fileIndex)
@@ -143,26 +169,32 @@ func (this *writeBackProcessor) flush(s *str, needReplys []*processContext) {
 			this.fileSize = 0
 		}
 
-		if len(needReplys) > 0 {
-			for _, v := range needReplys {
+		if nil != needReplys {
+			for i := 0; i < needReplys.count; i++ {
+				v := needReplys.ctxs[i]
 				v.reply(errcode.ERR_OK, nil, v.fields["__version__"].GetInt())
 			}
-			for _, v := range needReplys {
+			for i := 0; i < needReplys.count; i++ {
+				v := needReplys.ctxs[i]
 				v.getCacheKey().processQueueCmd()
 			}
+			waitReplyPut(needReplys)
 		}
 
 	} else {
 		if nil != s {
 			strPut(s)
 		}
-		if len(needReplys) > 0 {
-			for _, v := range needReplys {
+		if nil != needReplys {
+			for i := 0; i < needReplys.count; i++ {
+				v := needReplys.ctxs[i]
 				v.reply(errcode.ERR_OK, nil, v.fields["__version__"].GetInt())
 			}
-			for _, v := range needReplys {
+			for i := 0; i < needReplys.count; i++ {
+				v := needReplys.ctxs[i]
 				v.getCacheKey().processQueueCmd()
 			}
+			waitReplyPut(needReplys)
 		}
 	}
 }
@@ -178,15 +210,12 @@ func (this *writeBackProcessor) flushToFile() {
 		}
 
 		this.s = nil
-		this.needReplys = []*processContext{}
-		this.count = 0
+		this.needReplys = waitReplyGet()
 		this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval))
 
 		this.writeFileQueue.AddNoWait(st)
 	} else if nil != this.f && time.Now().After(this.nextChangeFile) {
-		st := &writeFileSt{
-			needReplys: []*processContext{},
-		}
+		st := &writeFileSt{}
 		this.writeFileQueue.AddNoWait(st)
 	}
 }
@@ -260,11 +289,10 @@ func (this *writeBackProcessor) writeBack(ctx *processContext) {
 
 	this.s.appendInt32(int32(len(bytes)))
 	this.s.appendBytes(bytes...)
-	this.count++
 
-	this.needReplys = append(this.needReplys, ctx)
+	this.needReplys.append(ctx)
 
-	if this.count >= config.FlushCount || this.s.dataLen() >= config.FlushSize || time.Now().After(this.nextFlush) {
+	if this.needReplys.full() || this.s.dataLen() >= config.FlushSize || time.Now().After(this.nextFlush) {
 		this.flushToFile()
 	}
 
