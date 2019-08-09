@@ -9,7 +9,7 @@ import (
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet/util"
-	"hash/crc64"
+	//"hash/crc64"
 	"net"
 	"os"
 	"sync"
@@ -83,6 +83,8 @@ func (this *sqlUpdater) process(path string) {
 		return
 	}
 
+	Infoln("open file", path)
+
 	if nil == this.buffer || cap(this.buffer) < int(stat.Size()) {
 		this.buffer = make([]byte, sizeofPow2(int(stat.Size())))
 	}
@@ -98,89 +100,98 @@ func (this *sqlUpdater) process(path string) {
 		return
 	}
 
-	checkSum := binary.BigEndian.Uint64(this.buffer[n-8:])
+	/*checkSum := binary.BigEndian.Uint64(this.buffer[n-8:])
 
 	//校验数据
 	if checkSum != crc64.Checksum(this.buffer[:n-8], crc64Table) {
 		Fatalln("checkSum failed:", path)
 		return
-	}
+	}*/
 
-	this.records = this.records[0:0]
-	if nil == this.sqlStr {
-		this.sqlStr = &str{
-			data: make([]byte, strInitCap),
-			cap:  strInitCap,
-			len:  0,
-		}
-	} else {
-		this.sqlStr.reset()
-	}
-
+	recordCount := 0
 	offset := 0
 	end := n - 8
+
 	for offset < end {
-		pbRecord := &proto.Record{}
-		l := int(binary.BigEndian.Uint32(this.buffer[offset : offset+4]))
-		offset += 4
-		if err = pb.Unmarshal(this.buffer[offset:offset+l], pbRecord); err != nil {
-			Fatalln("replayRecord error ,offset:", offset, err)
-		}
-		offset += l
 
-		meta := getMetaByTable(pbRecord.GetTable())
-
-		if nil == meta {
-			Fatalln("replayRecord error invaild table ,offset:", offset-l, pbRecord.GetTable())
-		}
-
-		this.records = append(this.records, pbRecord)
-
-		tt := pbRecord.GetType()
-		if tt == proto.SqlType_insert {
-			if this.replay {
-				buildInsertUpdateString(this.sqlStr, pbRecord, meta)
-			} else {
-				buildInsertString(this.sqlStr, pbRecord, meta)
+		this.records = this.records[0:0]
+		if nil == this.sqlStr {
+			this.sqlStr = &str{
+				data: make([]byte, strInitCap),
+				cap:  strInitCap,
+				len:  0,
 			}
-		} else if tt == proto.SqlType_update {
-			buildUpdateString(this.sqlStr, pbRecord, meta)
-		} else if tt == proto.SqlType_delete {
-			buildDeleteString(this.sqlStr, pbRecord)
 		} else {
-			Fatalln("replayRecord invaild tt,offset:", offset)
+			this.sqlStr.reset()
 		}
-	}
 
-	recordCount := len(this.records)
+		for offset < end {
+			pbRecord := &proto.Record{}
+			l := int(binary.BigEndian.Uint32(this.buffer[offset : offset+4]))
+			offset += 4
+			if err = pb.Unmarshal(this.buffer[offset:offset+l], pbRecord); err != nil {
+				Fatalln("replayRecord error ,offset:", offset, err)
+			}
+			offset += l
 
-	for {
-		_, err = this.db.Exec(this.sqlStr.toString())
-		if nil == err {
-			for _, v := range this.records {
-				uniKey := fmt.Sprintf("%s:%s", v.GetTable(), v.GetKey())
-				unit := getUnitByUnikey(uniKey)
-				unit.mtx.Lock()
-				k, ok := unit.cacheKeys[uniKey]
-				unit.mtx.Unlock()
-				if ok {
-					k.clearWriteBack(v.GetWritebackVersion())
+			meta := getMetaByTable(pbRecord.GetTable())
+
+			if nil == meta {
+				Fatalln("replayRecord error invaild table ,offset:", offset-l, pbRecord.GetTable())
+			}
+
+			this.records = append(this.records, pbRecord)
+
+			tt := pbRecord.GetType()
+			if tt == proto.SqlType_insert {
+				if this.replay {
+					buildInsertUpdateString(this.sqlStr, pbRecord, meta)
+				} else {
+					buildInsertString(this.sqlStr, pbRecord, meta)
+				}
+			} else if tt == proto.SqlType_update {
+				buildUpdateString(this.sqlStr, pbRecord, meta)
+			} else if tt == proto.SqlType_delete {
+				buildDeleteString(this.sqlStr, pbRecord)
+			} else {
+				Fatalln("replayRecord invaild tt,offset:", offset)
+			}
+		}
+
+		recordCount += len(this.records)
+
+		if len(this.records) >= 200 || this.sqlStr.dataLen() >= 1024*1024 {
+
+			for {
+				_, err = this.db.Exec(this.sqlStr.toString())
+				if nil == err {
+					for _, v := range this.records {
+						uniKey := fmt.Sprintf("%s:%s", v.GetTable(), v.GetKey())
+						unit := getUnitByUnikey(uniKey)
+						unit.mtx.Lock()
+						k, ok := unit.cacheKeys[uniKey]
+						unit.mtx.Unlock()
+						if ok {
+							k.clearWriteBack(v.GetWritebackVersion())
+						}
+					}
+					break
+				} else {
+					Errorln(this.sqlStr.toString(), err)
+					if isRetryError(err) {
+						Errorln("sqlUpdater exec error:", err)
+						if isStop() {
+							return
+						}
+						//休眠一秒重试
+						time.Sleep(time.Second)
+					} else {
+						Errorln("sqlUpdater exec error:", err, path)
+					}
 				}
 			}
-			break
-		} else {
-			Errorln(this.sqlStr.toString(), err)
-			if isRetryError(err) {
-				Errorln("sqlUpdater exec error:", err)
-				if isStop() {
-					return
-				}
-				//休眠一秒重试
-				time.Sleep(time.Second)
-			} else {
-				Errorln("sqlUpdater exec error:", err, path)
-			}
 		}
+
 	}
 
 	sqlTime := time.Now().Sub(beg)

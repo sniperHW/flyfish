@@ -35,10 +35,14 @@ type writeFileSt struct {
 type writeBackProcessor struct {
 	mtx            sync.Mutex
 	nextFlush      time.Time
+	nextChangeFile time.Time
 	needReplys     []*processContext
 	sqlUpdater_    *sqlUpdater
 	writeFileQueue *util.BlockQueue
 	s              *str
+	f              *os.File
+	fileSize       int
+	fileIndex      int64
 	count          int
 }
 
@@ -87,30 +91,45 @@ func (this *writeBackProcessor) flush(s *str, needReplys []*processContext) {
 		config := conf.GetConfig()
 
 		Debugln("flushToFile")
-		counter := atomic.AddInt64(&fileCounter, 1)
-		atomic.AddInt32(&writeBackFileCount, 1)
 
-		os.MkdirAll(config.WriteBackFileDir, os.ModePerm)
-		path := fmt.Sprintf("%s/%s_%d.wb", config.WriteBackFileDir, config.WriteBackFilePrefix, counter)
+		if nil == this.f {
 
-		f, err := os.Create(path)
-		if err != nil {
-			Fatalln("create backfile failed", path, err)
-			return
+			this.fileIndex = atomic.AddInt64(&fileCounter, 1)
+			atomic.AddInt32(&writeBackFileCount, 1)
+
+			os.MkdirAll(config.WriteBackFileDir, os.ModePerm)
+			path := fmt.Sprintf("%s/%s_%d.wb", config.WriteBackFileDir, config.WriteBackFilePrefix, this.fileIndex)
+
+			f, err := os.Create(path)
+			if err != nil {
+				Fatalln("create backfile failed", path, err)
+				return
+			}
+
+			this.f = f
+			this.nextChangeFile = time.Now().Add(time.Second)
 		}
 
-		checkSum := crc64.Checksum(s.bytes(), crc64Table)
-		s.appendInt64(int64(checkSum))
-		f.Write(s.bytes())
-		atomic.AddInt64(&writeBackFileSize, int64(s.dataLen()))
-		strPut(s)
+		if nil != s {
 
-		f.Sync()
-		f.Close()
+			//checkSum := crc64.Checksum(s.bytes(), crc64Table)
+			//s.appendInt64(int64(checkSum))
+			this.f.Write(s.bytes())
+			atomic.AddInt64(&writeBackFileSize, int64(s.dataLen()))
+			strPut(s)
 
-		//通告sqlUpdater执行更新
+			this.f.Sync()
 
-		this.sqlUpdater_.queue.AddNoWait(counter)
+			this.fileSize += s.dataLen()
+		}
+
+		if this.fileSize >= 1024*1024*4 || time.Now().After(this.nextChangeFile) {
+			this.f.Close()
+			//通告sqlUpdater执行更新
+			this.sqlUpdater_.queue.AddNoWait(this.fileIndex)
+			this.f = nil
+			this.fileIndex = -1
+		}
 
 		if len(needReplys) > 0 {
 			for _, v := range needReplys {
@@ -120,8 +139,11 @@ func (this *writeBackProcessor) flush(s *str, needReplys []*processContext) {
 				v.getCacheKey().processQueueCmd()
 			}
 		}
+
 	} else {
-		strPut(s)
+		if nil != s {
+			strPut(s)
+		}
 		if len(needReplys) > 0 {
 			for _, v := range needReplys {
 				v.reply(errcode.ERR_OK, nil, v.fields["__version__"].GetInt())
@@ -148,6 +170,11 @@ func (this *writeBackProcessor) flushToFile() {
 		this.count = 0
 		this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval))
 
+		this.writeFileQueue.AddNoWait(st)
+	} else if nil != this.f && time.Now().After(this.nextChangeFile) {
+		st := &writeFileSt{
+			needReplys: []*processContext{},
+		}
 		this.writeFileQueue.AddNoWait(st)
 	}
 }
