@@ -34,11 +34,11 @@ var (
 	keyrange int64
 )
 
-func Set(c *kclient.Client) {
+func Set(c *kclient.Client) bool {
 
 	nextID := atomic.AddInt64(&id, 1)
 	if nextID > total {
-		return
+		return false
 	}
 
 	fields := map[string]interface{}{}
@@ -65,8 +65,9 @@ func Set(c *kclient.Client) {
 		if int64(n) == total {
 			sigStop <- true
 		}
-		Set(c)
+		//Set(c)
 	})
+	return true
 }
 
 func main() {
@@ -91,9 +92,16 @@ func main() {
 
 	for j := 0; j < 100; j++ {
 		c := kclient.OpenClient(services)
-		for i := 0; i < 20; i++ {
-			Set(c)
-		}
+		go func() {
+			for {
+				for i := 0; i < 50; i++ {
+					if !Set(c) {
+						return
+					}
+				}
+				time.Sleep(time.Millisecond * 100)
+			}
+		}()
 	}
 
 	sigStop = make(chan bool)
