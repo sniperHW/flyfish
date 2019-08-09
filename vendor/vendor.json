@@ -105,6 +105,18 @@
 			"revisionTime": "2018-10-16T16:26:27Z"
 		},
 		{
+			"checksumSHA1": "T8ZqoYpAeehnFMDOmQ2yNqS3scY=",
+			"path": "github.com/mitchellh/colorstring",
+			"revision": "d06e56a500db4d08c33db0b79461e7c9beafca2d",
+			"revisionTime": "2019-02-13T21:29:51Z"
+		},
+		{
+			"checksumSHA1": "Je3kynthE7YqgFZGBeCdtcu19E0=",
+			"path": "github.com/schollz/progressbar",
+			"revision": "b6d7f92524db8bd0e2561d75633c84f89cad7264",
+			"revisionTime": "2019-06-04T15:29:10Z"
+		},
+		{
 			"checksumSHA1": "Ao+tsh+PpJH0NwJhuL4StQvr61I=",
 			"path": "github.com/sniperHW/kendynet",
 			"revision": "ed37be05dddaf57adb0273ffb05397726cbd998c",
@@ -177,5 +189,5 @@
 			"revisionTime": "2018-08-27T08:56:28Z"
 		}
 	],
-	"rootPath": "flyfish"
+	"rootPath": "github.com/sniperHW/flyfish"
 }

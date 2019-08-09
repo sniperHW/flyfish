@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/schollz/progressbar"
 	kclient "github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/kendynet/golog"
@@ -32,6 +33,7 @@ var (
 	results  []result  = []result{}
 	mtx      sync.Mutex
 	keyrange int64
+	bar      *progressbar.ProgressBar
 )
 
 func Set(c *kclient.Client) bool {
@@ -65,6 +67,7 @@ func Set(c *kclient.Client) bool {
 		if int64(n) == total {
 			sigStop <- true
 		}
+		bar.Add(1)
 		//Set(c)
 	})
 	return true
@@ -89,6 +92,8 @@ func main() {
 	for i := 3; i < len(os.Args); i++ {
 		services = append(services, os.Args[i])
 	}
+
+	bar = progressbar.New(int(total))
 
 	for j := 0; j < 100; j++ {
 		c := kclient.OpenClient(services)
@@ -129,6 +134,8 @@ func main() {
 		avagelatency += v.latency
 
 	}
+
+	fmt.Print("\n")
 
 	fmt.Println("total:", total, "success:", success, "busy:", busy, "timeout:", timeout, "otherErr:", otherErr)
 
