@@ -30,25 +30,25 @@ func GetConfig() *Config {
 }
 
 type Config struct {
-	CacheGroupSize        int
-	MaxCachePerGroupSize  int
-	RedisProcessPoolSize  int
-	RedisPipelineSize     int
-	SqlLoadPipeLineSize   int
-	SqlLoadQueueSize      int
-	RedisQueueSize        int
-	ServiceHost           string
-	ServicePort           int
-	WriteBackFileDir      string
-	WriteBackFilePrefix   string
-	ReplyBusyOnQueueFull  bool
-	Compress              bool
-	CacheType             string
-	FlushInterval         int
-	FlushSize             int
-	FlushCount            int
-	MaxWriteBackFileCount int32
-	MaxWriteBackFileSize  int64
+	CacheGroupSize       int
+	MaxCachePerGroupSize int
+	RedisProcessPoolSize int
+	RedisPipelineSize    int
+	SqlLoadPipeLineSize  int
+	SqlLoadQueueSize     int
+	RedisQueueSize       int
+	ServiceHost          string
+	ServicePort          int
+	BinlogDir            string
+	BinlogPrefix         string
+	ReplyBusyOnQueueFull bool
+	Compress             bool
+	CacheType            string
+	FlushInterval        int
+	FlushSize            int
+	FlushCount           int
+	MaxBinlogFileCount   int32
+	MaxBinlogFileSize    int64
 
 	Redis struct {
 		RedisHost     string

@@ -202,8 +202,8 @@ func (this *sqlUpdater) process(path string) {
 	Infoln("loadTime:", loadTime, "recordCount:", recordCount, "sqlTime:", sqlTime, "totalTime:", totalTime)
 
 	if !this.replay {
-		atomic.AddInt32(&writeBackFileCount, -1)
-		atomic.AddInt64(&writeBackFileSize, -int64(n))
+		atomic.AddInt32(&binlogFileCount, -1)
+		atomic.AddInt64(&binlogFileSize, -int64(n))
 	}
 
 }
@@ -224,7 +224,7 @@ func (this *sqlUpdater) run() {
 				}
 			} else {
 				config := conf.GetConfig()
-				this.process(fmt.Sprintf("%s/%s_%d.wb", config.WriteBackFileDir, config.WriteBackFilePrefix, v.(int64)))
+				this.process(fmt.Sprintf("%s/%s_%d.bin", config.BinlogDir, config.BinlogPrefix, v.(int64)))
 			}
 		}
 

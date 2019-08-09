@@ -21,70 +21,69 @@ import (
  */
 
 var (
-	fileCounter        int64
-	writeBackFileCount int32
-	writeBackFileSize  int64
-	checkSumSize       = 8
-	crc64Table         *crc64.Table
+	fileCounter     int64
+	binlogFileCount int32
+	binlogFileSize  int64
+	checkSumSize    = 8
+	crc64Table      *crc64.Table
 )
 
-type waitReply struct {
+type ctxArray struct {
 	count int
 	ctxs  []*processContext
 }
 
-func (this *waitReply) append(ctx *processContext) {
+func (this *ctxArray) append(ctx *processContext) {
 	this.ctxs[this.count] = ctx
 	this.count++
 }
 
-func (this *waitReply) full() bool {
+func (this *ctxArray) full() bool {
 	return this.count == cap(this.ctxs)
 }
 
-var waitReplyPool = sync.Pool{
+var ctxArrayPool = sync.Pool{
 	New: func() interface{} {
-		return &waitReply{
+		return &ctxArray{
 			ctxs:  make([]*processContext, conf.GetConfig().FlushCount),
 			count: 0,
 		}
 	},
 }
 
-func waitReplyGet() *waitReply {
-	return waitReplyPool.Get().(*waitReply)
+func ctxArrayGet() *ctxArray {
+	return ctxArrayPool.Get().(*ctxArray)
 }
 
-func waitReplyPut(w *waitReply) {
+func ctxArrayPut(w *ctxArray) {
 	w.count = 0
-	waitReplyPool.Put(w)
+	ctxArrayPool.Put(w)
 }
 
-type writeFileSt struct {
-	s          *str
-	needReplys *waitReply
+type binlogSt struct {
+	binlogStr *str
+	ctxs      *ctxArray
 }
 
 type writeBackProcessor struct {
 	mtx            sync.Mutex
 	nextFlush      time.Time
 	nextChangeFile time.Time
-	needReplys     *waitReply
+	ctxs           *ctxArray
 	sqlUpdater_    *sqlUpdater
-	writeFileQueue *util.BlockQueue
-	s              *str
-	//checkSumStr    *str
-	f         *os.File
-	fileSize  int
-	fileIndex int64
+	binlogQueue    *util.BlockQueue
+	binlogStr      *str
+	f              *os.File
+	fileSize       int
+	fileIndex      int64
 }
 
 func reachWriteBackFileLimit(config *conf.Config) bool {
-	if atomic.LoadInt32(&writeBackFileCount) > config.MaxWriteBackFileCount {
+	if atomic.LoadInt32(&binlogFileCount) > config.MaxBinlogFileCount {
 		return true
 	}
 
-	if atomic.LoadInt64(&writeBackFileSize) > config.MaxWriteBackFileSize {
+	if atomic.LoadInt64(&binlogFileSize) > config.MaxBinlogFileSize {
 		return true
 	}
 
@@ -100,14 +99,14 @@ func (this *writeBackProcessor) checkFlush() {
 }
 
 func (this *writeBackProcessor) start() {
-	this.writeFileQueue = util.NewBlockQueue()
-	this.needReplys = waitReplyGet()
+	this.binlogQueue = util.NewBlockQueue()
+	this.ctxs = ctxArrayGet()
 	go func() {
 		for {
-			closed, localList := this.writeFileQueue.Get()
+			closed, localList := this.binlogQueue.Get()
 			for _, v := range localList {
-				st := v.(*writeFileSt)
-				this.flush(st.s, st.needReplys)
+				st := v.(*binlogSt)
+				this.flush(st.binlogStr, st.ctxs)
 			}
 			if closed {
 				return
@@ -116,107 +115,87 @@ func (this *writeBackProcessor) start() {
 	}()
 }
 
-var openWriteBack bool = true
+func (this *writeBackProcessor) flush(s *str, ctxs *ctxArray) {
 
-func (this *writeBackProcessor) flush(s *str, needReplys *waitReply) {
+	config := conf.GetConfig()
 
-	if openWriteBack {
+	Debugln("flushToFile")
 
-		config := conf.GetConfig()
+	if nil == this.f {
 
-		Debugln("flushToFile")
+		this.fileIndex = atomic.AddInt64(&fileCounter, 1)
+		atomic.AddInt32(&binlogFileCount, 1)
 
-		if nil == this.f {
+		os.MkdirAll(config.BinlogDir, os.ModePerm)
+		path := fmt.Sprintf("%s/%s_%d.bin", config.BinlogDir, config.BinlogPrefix, this.fileIndex)
 
-			this.fileIndex = atomic.AddInt64(&fileCounter, 1)
-			atomic.AddInt32(&writeBackFileCount, 1)
-
-			os.MkdirAll(config.WriteBackFileDir, os.ModePerm)
-			path := fmt.Sprintf("%s/%s_%d.wb", config.WriteBackFileDir, config.WriteBackFilePrefix, this.fileIndex)
-
-			f, err := os.Create(path)
-			if err != nil {
-				Fatalln("create backfile failed", path, err)
-				return
-			}
-
-			this.f = f
-			this.nextChangeFile = time.Now().Add(time.Second)
+		f, err := os.Create(path)
+		if err != nil {
+			Fatalln("create backfile failed", path, err)
+			return
 		}
 
-		if nil != s {
-
-			head := make([]byte, 4+checkSumSize)
-			checkSum := crc64.Checksum(s.bytes(), crc64Table)
-			binary.BigEndian.PutUint32(head[0:4], uint32(s.dataLen()))
-			binary.BigEndian.PutUint64(head[4:], uint64(checkSum))
-
-			this.fileSize += s.dataLen() + len(head)
-			this.f.Write(head)
-			this.f.Write(s.bytes())
-			atomic.AddInt64(&writeBackFileSize, int64(s.dataLen()+len(head)))
-			strPut(s)
-			this.f.Sync()
-
-		}
-
-		if this.fileSize >= 1024*1024*4 || time.Now().After(this.nextChangeFile) {
-			this.f.Close()
-			//通告sqlUpdater执行更新
-			this.sqlUpdater_.queue.AddNoWait(this.fileIndex)
-			this.f = nil
-			this.fileIndex = -1
-			this.fileSize = 0
-		}
-
-		if nil != needReplys {
-			for i := 0; i < needReplys.count; i++ {
-				v := needReplys.ctxs[i]
-				v.reply(errcode.ERR_OK, nil, v.fields["__version__"].GetInt())
-			}
-			for i := 0; i < needReplys.count; i++ {
-				v := needReplys.ctxs[i]
-				v.getCacheKey().processQueueCmd()
-			}
-			waitReplyPut(needReplys)
-		}
-
-	} else {
-		if nil != s {
-			strPut(s)
-		}
-		if nil != needReplys {
-			for i := 0; i < needReplys.count; i++ {
-				v := needReplys.ctxs[i]
-				v.reply(errcode.ERR_OK, nil, v.fields["__version__"].GetInt())
-			}
-			for i := 0; i < needReplys.count; i++ {
-				v := needReplys.ctxs[i]
-				v.getCacheKey().processQueueCmd()
-			}
-			waitReplyPut(needReplys)
-		}
+		this.f = f
+		this.nextChangeFile = time.Now().Add(time.Second)
 	}
+
+	if nil != s {
+
+		head := make([]byte, 4+checkSumSize)
+		checkSum := crc64.Checksum(s.bytes(), crc64Table)
+		binary.BigEndian.PutUint32(head[0:4], uint32(s.dataLen()))
+		binary.BigEndian.PutUint64(head[4:], uint64(checkSum))
+
+		this.fileSize += s.dataLen() + len(head)
+		this.f.Write(head)
+		this.f.Write(s.bytes())
+		atomic.AddInt64(&binlogFileSize, int64(s.dataLen()+len(head)))
+		strPut(s)
+		this.f.Sync()
+
+	}
+
+	if this.fileSize >= 1024*1024*4 || time.Now().After(this.nextChangeFile) {
+		this.f.Close()
+		//通告sqlUpdater执行更新
+		this.sqlUpdater_.queue.AddNoWait(this.fileIndex)
+		this.f = nil
+		this.fileIndex = -1
+		this.fileSize = 0
+	}
+
+	if nil != ctxs {
+		for i := 0; i < ctxs.count; i++ {
+			v := ctxs.ctxs[i]
+			v.reply(errcode.ERR_OK, nil, v.fields["__version__"].GetInt())
+		}
+		for i := 0; i < ctxs.count; i++ {
+			v := ctxs.ctxs[i]
+			v.getCacheKey().processQueueCmd()
+		}
+		ctxArrayPut(ctxs)
+	}
+
 }
 
 func (this *writeBackProcessor) flushToFile() {
-	if this.s != nil {
+	if this.binlogStr != nil {
 
 		config := conf.GetConfig()
 
-		st := &writeFileSt{
-			s:          this.s,
-			needReplys: this.needReplys,
+		st := &binlogSt{
+			binlogStr: this.binlogStr,
+			ctxs:      this.ctxs,
 		}
 
-		this.s = nil
-		this.needReplys = waitReplyGet()
+		this.binlogStr = nil
+		this.ctxs = ctxArrayGet()
 		this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval))
 
-		this.writeFileQueue.AddNoWait(st)
+		this.binlogQueue.AddNoWait(st)
 	} else if nil != this.f && time.Now().After(this.nextChangeFile) {
-		st := &writeFileSt{}
-		this.writeFileQueue.AddNoWait(st)
+		st := &binlogSt{}
+		this.binlogQueue.AddNoWait(st)
 	}
 }
 
@@ -283,16 +262,16 @@ func (this *writeBackProcessor) writeBack(ctx *processContext) {
 		this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval))
 	}
 
-	if nil == this.s {
-		this.s = strGet()
+	if nil == this.binlogStr {
+		this.binlogStr = strGet()
 	}
 
-	this.s.appendInt32(int32(len(bytes)))
-	this.s.appendBytes(bytes...)
+	this.binlogStr.appendInt32(int32(len(bytes)))
+	this.binlogStr.appendBytes(bytes...)
 
-	this.needReplys.append(ctx)
+	this.ctxs.append(ctx)
 
-	if this.needReplys.full() || this.s.dataLen() >= config.FlushSize || time.Now().After(this.nextFlush) {
+	if this.ctxs.full() || this.binlogStr.dataLen() >= config.FlushSize || time.Now().After(this.nextFlush) {
 		this.flushToFile()
 	}
 

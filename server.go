@@ -204,19 +204,19 @@ func sortFileList(fileList []string) {
 }
 
 //执行尚未完成的回写文件
-func execWriteBackFile() bool {
+func replayBinlog() bool {
 	config := conf.GetConfig()
 
 	dbConfig := config.DBConfig
 
-	_, err := os.Stat(config.WriteBackFileDir)
+	_, err := os.Stat(config.BinlogDir)
 
 	if nil != err && os.IsNotExist(err) {
 		return true
 	}
 
 	//获得所有文件
-	fileList, err := getFileList(config.WriteBackFileDir)
+	fileList, err := getFileList(config.BinlogDir)
 	if nil != err {
 		return false
 	}
@@ -263,8 +263,8 @@ func Start() error {
 	}
 
 	InitProcessUnit()
-	if !execWriteBackFile() {
-		return fmt.Errorf("execWriteBackFile failed")
+	if !replayBinlog() {
+		return fmt.Errorf("replayBinlog failed")
 	}
 
 	var err error
