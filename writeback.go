@@ -1,6 +1,7 @@
 package flyfish
 
 import (
+	"encoding/binary"
 	"fmt"
 	pb "github.com/golang/protobuf/proto"
 	"github.com/sniperHW/flyfish/conf"
@@ -40,6 +41,7 @@ type writeBackProcessor struct {
 	sqlUpdater_    *sqlUpdater
 	writeFileQueue *util.BlockQueue
 	s              *str
+	checkSumStr    *str
 	f              *os.File
 	fileSize       int
 	fileIndex      int64
@@ -112,23 +114,33 @@ func (this *writeBackProcessor) flush(s *str, needReplys []*processContext) {
 
 		if nil != s {
 
-			//checkSum := crc64.Checksum(s.bytes(), crc64Table)
-			//s.appendInt64(int64(checkSum))
+			if nil == this.checkSumStr {
+				this.checkSumStr = strGet()
+			}
+			this.checkSumStr.appendBytes(s.bytes()...)
+
+			this.fileSize += s.dataLen()
 			this.f.Write(s.bytes())
 			atomic.AddInt64(&writeBackFileSize, int64(s.dataLen()))
 			strPut(s)
-
 			this.f.Sync()
 
-			this.fileSize += s.dataLen()
 		}
 
 		if this.fileSize >= 1024*1024*4 || time.Now().After(this.nextChangeFile) {
+
+			checkSum := crc64.Checksum(this.checkSumStr.bytes(), crc64Table)
+			checkSumBuffer := make([]byte, 8)
+			binary.BigEndian.PutUint64(checkSumBuffer, uint64(checkSum))
+			this.f.Write(checkSumBuffer)
+			this.checkSumStr.reset()
+
 			this.f.Close()
 			//通告sqlUpdater执行更新
 			this.sqlUpdater_.queue.AddNoWait(this.fileIndex)
 			this.f = nil
 			this.fileIndex = -1
+			this.fileSize = 0
 		}
 
 		if len(needReplys) > 0 {

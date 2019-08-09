@@ -9,7 +9,7 @@ import (
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet/util"
-	//"hash/crc64"
+	"hash/crc64"
 	"net"
 	"os"
 	"sync"
@@ -83,8 +83,6 @@ func (this *sqlUpdater) process(path string) {
 		return
 	}
 
-	Infoln("open file", path)
-
 	if nil == this.buffer || cap(this.buffer) < int(stat.Size()) {
 		this.buffer = make([]byte, sizeofPow2(int(stat.Size())))
 	}
@@ -100,13 +98,13 @@ func (this *sqlUpdater) process(path string) {
 		return
 	}
 
-	/*checkSum := binary.BigEndian.Uint64(this.buffer[n-8:])
+	checkSum := binary.BigEndian.Uint64(this.buffer[n-8:])
 
 	//校验数据
 	if checkSum != crc64.Checksum(this.buffer[:n-8], crc64Table) {
 		Fatalln("checkSum failed:", path)
 		return
-	}*/
+	}
 
 	recordCount := 0
 	offset := 0
