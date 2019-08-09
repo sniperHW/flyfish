@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/schollz/progressbar"
 	kclient "github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/kendynet/golog"
@@ -31,6 +32,7 @@ var (
 	sigStop  chan bool = make(chan bool)
 	results  []result  = []result{}
 	mtx      sync.Mutex
+	bar      *progressbar.ProgressBar
 )
 
 func Get(c *kclient.Client) {
@@ -45,7 +47,7 @@ func Get(c *kclient.Client) {
 	beg := time.Now()
 
 	get.AsyncExec(func(ret *kclient.SliceResult) {
-
+		bar.Add(1)
 		latency := time.Now().Sub(beg)
 		r := result{
 			latency: latency,
@@ -84,6 +86,8 @@ func main() {
 		services = append(services, os.Args[i])
 	}
 
+	bar = progressbar.New(int(total))
+
 	for j := 0; j < 10; j++ {
 		c := kclient.OpenClient(services)
 		for i := 0; i < 10; i++ {
@@ -116,6 +120,8 @@ func main() {
 		avagelatency += v.latency
 
 	}
+
+	fmt.Print("\n")
 
 	fmt.Println("total:", total, "success:", success, "busy:", busy, "timeout:", timeout, "otherErr:", otherErr)
 
