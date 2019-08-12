@@ -45,13 +45,13 @@ func (this sqlResponseRedisCache) onSqlNotFound(ctx *processContext) {
 		ctx.writeBackFlag = write_back_insert
 
 		ctx.redisFlag = redis_set
-		ckey.unit.pushRedisReq(ctx)
+		pushRedisReq(ctx)
 	}
 }
 
 func (this sqlResponseRedisCache) onSqlLoadOKGet(ctx *processContext) {
 	ctx.redisFlag = redis_set_only
-	ctx.getCacheKey().unit.pushRedisReq(ctx)
+	pushRedisReq(ctx)
 }
 
 /*
@@ -104,7 +104,7 @@ func (this sqlResponseRedisCache) onSqlLoadOKSet(ctx *processContext) {
 		ctx.redisFlag = redis_set
 	}
 
-	ctx.getCacheKey().unit.pushRedisReq(ctx)
+	pushRedisReq(ctx)
 
 }
 

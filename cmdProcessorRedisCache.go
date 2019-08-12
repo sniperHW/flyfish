@@ -301,9 +301,9 @@ func (this cmdProcessorRedisCache) processCmd(ckey *cacheKey, fromClient bool) {
 	ok := true
 
 	if ckey.status == cache_ok || ckey.status == cache_missing {
-		ok = ckey.unit.pushRedisReq(ctx, fullReturn)
+		ok = pushRedisReq(ctx, fullReturn)
 	} else {
-		ok = ckey.unit.pushSqlLoadReq(ctx, fullReturn)
+		ok = pushSqlLoadReq(ctx, fullReturn)
 	}
 
 	if !ok {

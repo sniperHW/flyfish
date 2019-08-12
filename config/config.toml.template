@@ -12,6 +12,10 @@ SqlLoadQueueSize        = 10000                #sql加载请求队列大小，�
 
 RedisQueueSize          = 100000               #redis请求队列大小，整个服务一个队列供所有redis routine共享 (可动态重加载)
 
+
+SqlLoaderCount          = 5
+SqlUpdaterCount         = 5
+
 ServiceHost             = "127.0.0.1"
 
 ServicePort             = 10012

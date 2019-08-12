@@ -412,3 +412,13 @@ func updateRedisQueueSize(RedisQueueSize int) {
 		redisProcessQueue.SetFullSize(RedisQueueSize)
 	}
 }
+
+func pushRedisReq(ctx *processContext, fullReturn ...bool) bool {
+	err := redisProcessQueue.AddNoWait(ctx, fullReturn...)
+	if nil == err {
+		atomic.AddInt32(&redisReqCount, 1)
+		return true
+	} else {
+		return false
+	}
+}

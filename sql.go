@@ -5,6 +5,17 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
+	"github.com/sniperHW/flyfish/conf"
+	"github.com/sniperHW/kendynet/timer"
+	"github.com/sniperHW/kendynet/util"
+	"sync"
+	"time"
+)
+
+var (
+	sqlUpdateWg *sync.WaitGroup
+	sqlLoaders  []*sqlLoader
+	sqlUpdaters []*sqlUpdater
 )
 
 func pgsqlOpen(host string, port int, dbname string, user string, password string) (*sqlx.DB, error) {
@@ -23,4 +34,92 @@ func sqlOpen(sqlType string, host string, port int, dbname string, user string, 
 	} else {
 		return pgsqlOpen(host, port, dbname, user, password)
 	}
+}
+
+func pushSqlLoadReq(ctx *processContext, fullReturn ...bool) bool {
+	l := sqlLoaders[StringHash(ctx.getUniKey())%len(sqlLoaders)]
+	err := l.queue.AddNoWait(ctx, fullReturn...)
+	if nil == err {
+		return true
+	} else {
+		return false
+	}
+}
+
+func pushSqlWriteReq(id int, fileIndex int64) {
+	u := sqlUpdaters[id%len(sqlUpdaters)]
+	u.queue.AddNoWait(fileIndex)
+}
+
+func stopSql() {
+	for _, v := range sqlUpdaters {
+		v.queue.Close()
+	}
+	sqlUpdateWg.Wait()
+}
+
+func updateSqlUpdateQueueSize(SqlUpdateQueueSize int) {
+	for _, v := range sqlUpdaters {
+		v.queue.SetFullSize(SqlUpdateQueueSize)
+	}
+}
+
+func updateSqlLoadQueueSize(SqlLoadQueueSize int) {
+	for _, v := range sqlLoaders {
+		v.queue.SetFullSize(SqlLoadQueueSize)
+	}
+}
+
+func initSql() bool {
+
+	sqlUpdateWg = &sync.WaitGroup{}
+	config := conf.GetConfig()
+	dbConfig := config.DBConfig
+
+	sqlLoaders = []*sqlLoader{}
+	for i := 0; i < config.SqlLoaderCount; i++ {
+		lname := fmt.Sprintf("sqlLoad:%d", i)
+		var loadDB *sqlx.DB
+		var err error
+		loadDB, err = sqlOpen(dbConfig.SqlType, dbConfig.DbHost, dbConfig.DbPort, dbConfig.DbDataBase, dbConfig.DbUser, dbConfig.DbPassword)
+
+		if nil != err {
+			Errorln(err)
+			return false
+		}
+		l := newSqlLoader(loadDB, lname)
+		sqlLoaders = append(sqlLoaders, l)
+		go l.run()
+		timer.Repeat(time.Second*60, nil, func(t *timer.Timer) {
+			if isStop() || util.ErrQueueClosed == l.queue.AddNoWait(&processContext{ping: true}) {
+				t.Cancel()
+			}
+		})
+	}
+
+	sqlUpdaters = []*sqlUpdater{}
+
+	for i := 0; i < config.SqlUpdaterCount; i++ {
+		wname := fmt.Sprintf("sqlUpdater:%d", i)
+		var writeBackDB *sqlx.DB
+		var err error
+		writeBackDB, err = sqlOpen(dbConfig.SqlType, dbConfig.DbHost, dbConfig.DbPort, dbConfig.DbDataBase, dbConfig.DbUser, dbConfig.DbPassword)
+		if nil != err {
+			Errorln(err)
+			return false
+		}
+
+		u := newSqlUpdater(writeBackDB, wname, sqlUpdateWg, false)
+		sqlUpdaters = append(sqlUpdaters, u)
+		go u.run()
+		timer.Repeat(time.Second*60, nil, func(t *timer.Timer) {
+			if isStop() || util.ErrQueueClosed == u.queue.AddNoWait(int64(-1)) {
+				t.Cancel()
+			}
+		})
+
+	}
+
+	return true
+
 }

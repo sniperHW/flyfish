@@ -262,10 +262,15 @@ func Start() error {
 		buildInsertUpdateString = buildInsertUpdateStringPgSql
 	}
 
-	InitProcessUnit()
+	if !initSql() {
+		return fmt.Errorf("initSql failed")
+	}
+
 	if !replayBinlog() {
 		return fmt.Errorf("replayBinlog failed")
 	}
+
+	initProcessUnit()
 
 	var err error
 	server, err = newTcpListener("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort))
@@ -333,7 +338,7 @@ func Stop() {
 		}
 	})
 
-	StopProcessUnit()
+	stopSql()
 
 	Infoln("ProcessUnit stop ok")
 

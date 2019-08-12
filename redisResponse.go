@@ -1,9 +1,29 @@
 package flyfish
 
 import (
+	"container/list"
 	"github.com/sniperHW/flyfish/errcode"
 	"sync/atomic"
 )
+
+func onRedisStale(ckey *cacheKey, ctx *processContext) {
+	/*  redis中的数据与flyfish key不一致
+	 *  将ckey重置为cache_new，强制从数据库取值刷新redis
+	 */
+	ckey.mtx.Lock()
+	defer ckey.mtx.Unlock()
+	ckey.status = cache_new
+	if ckey.writeBacked {
+		ckey.cmdQueueLocked = false
+		//尚未处理的cmd以及ctx中包含的cmd都不做响应，所以需要扣除正确的cmdCount
+		atomic.AddInt32(&cmdCount, -int32(ckey.cmdQueue.Len()+len(ctx.commands)))
+		ckey.cmdQueue = list.New()
+	} else {
+		ctx.writeBackFlag = write_back_none //数据存在执行update
+		ctx.redisFlag = redis_none
+		pushSqlLoadReq(ctx, false)
+	}
+}
 
 func onRedisResp(ctx *processContext) {
 
@@ -14,7 +34,7 @@ func onRedisResp(ctx *processContext) {
 		/*  redis中的数据与flyfish key不一致
 		 *  将ckey重置为cache_new，强制从数据库取值刷新redis
 		 */
-		ckey.unit.onRedisStale(ckey, ctx)
+		onRedisStale(ckey, ctx)
 	} else {
 		if ctx.errno == errcode.ERR_OK {
 			if ctx.redisFlag == redis_get || ctx.redisFlag == redis_set_only {

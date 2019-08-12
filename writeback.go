@@ -77,6 +77,7 @@ type writeBackProcessor struct {
 	f              *os.File
 	fileSize       int
 	fileIndex      int64
+	id             int
 }
 
 func reachWriteBackFileLimit(config *conf.Config) bool {
@@ -159,7 +160,7 @@ func (this *writeBackProcessor) flush(s *str, ctxs *ctxArray) {
 	if this.fileSize >= 1024*1024*4 || time.Now().After(this.nextChangeFile) {
 		this.f.Close()
 		//通告sqlUpdater执行更新
-		this.sqlUpdater_.queue.AddNoWait(this.fileIndex)
+		pushSqlWriteReq(this.id, this.fileIndex)
 		this.f = nil
 		this.fileIndex = -1
 		this.fileSize = 0

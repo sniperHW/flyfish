@@ -364,7 +364,7 @@ func (this cmdProcessorLocalCache) processCmd(ckey *cacheKey, fromClient bool) {
 
 	if ckey.status == cache_new {
 		fullReturn := fromClient
-		if !ckey.unit.pushSqlLoadReq(ctx, fullReturn) {
+		if !pushSqlLoadReq(ctx, fullReturn) {
 			ckey.mtx.Unlock()
 			if config.ReplyBusyOnQueueFull {
 				ctx.reply(errcode.ERR_BUSY, nil, -1)
