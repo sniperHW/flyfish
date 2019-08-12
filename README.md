@@ -1,18 +1,9 @@
 # flyfish
 
-为游戏服务器设计的sql缓存，缓存可选择使用redis或本地缓存，sql支持mysql和pgsql
+为游戏服务器设计的sql缓存，sql支持mysql和pgsql
 
 
 ## 系统结构
-
-	redis    sqlDB
-	   \      /
-	   flyfishd
-	      |
-        client
-
-
-或
 
 	    sqlDB
 	      |
@@ -25,9 +16,9 @@
 ## 数据存储
 
 数据在sql库中用传统的表格存储。表格包括`__key__`,`__version__`两个默认字段以及用户自定义的字段。用户自定义字段仅支持int64,uint64,string,float64四种类型。
-当记录被访问时，如果记录在redis中不存在，被访问的记录将会被写入到redis。数据库记录到redis记录的映射规则如下:
+当记录被访问时，如果记录在本地不存在，被访问的记录将会被载入本地cache。数据库记录到本地cache记录的映射规则如下:
 
-	用table:key合成唯一的redis键,用hash结构存储,表格中的字段作为hash内容。
+	用table:key合成唯一的键,用hash结构存储,表格中的字段作为hash内容。
 
 
 假如sql中存在一个user表格，有以下记录
@@ -37,7 +28,7 @@
 	bily           12         434443
 	chuck          7          34343
 
-在redis中被映射为
+在本地被映射为
 
 	key=user:lili field:age = 10 field:phone = 123456
 	key=user:bily field:age = 12 field:phone = 434443
@@ -98,15 +89,6 @@ __table__    __conf__
 	//遍历table表，返回记录，如果fields没有传将获取所有字段。(此命令从db直接获取数据，且不会缓存数据)
 	Scaner(table string,fileds ...string) 
 
-
-
-## Cache
-
-flyfish支持本地缓存以及redis缓存。
-
-*	本地缓存：数据存储在本地。
-
-*	redis缓存：flyfish只记录数据是否在redis中存在，所有数据首先载入到redis，更新操作先更新redis之后再回写。(redis仅做缓存，所以不应开启数据落地，flyfish启动阶段会执行flushall清空redis的数据)
 
 
 ## 数据回写

@@ -26,10 +26,6 @@ func reloadConf(session kendynet.StreamSession, msg *codec.Message) {
 			updateSqlLoadQueueSize(newConf.SqlLoadQueueSize)
 		}
 
-		if oldConf.RedisQueueSize != newConf.RedisQueueSize {
-			updateRedisQueueSize(newConf.RedisQueueSize)
-		}
-
 		UpdateLogConfig()
 
 	} else {

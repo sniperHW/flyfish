@@ -243,16 +243,8 @@ func replayBinlog() bool {
 func Start() error {
 	config := conf.GetConfig()
 
-	if config.CacheType == "redis" {
-		cmdProcessor = cmdProcessorRedisCache{}
-		sqlResponse = sqlResponseRedisCache{}
-		fnKickCacheKey = kickCacheKeyRedisCache
-		RedisInit()
-	} else {
-		cmdProcessor = cmdProcessorLocalCache{}
-		sqlResponse = sqlResponseLocalCache{}
-		fnKickCacheKey = kickCacheKeyLocalCache
-	}
+	cmdProcessor = cmdProcessorLocalCache{}
+	sqlResponse = sqlResponseLocalCache{}
 
 	if config.DBConfig.SqlType == "mysql" {
 		BinaryToSqlStr = mysqlBinaryToPgsqlStr
@@ -331,7 +323,7 @@ func Stop() {
 
 	//等待redis请求和命令执行完成
 	waitCondition(func() bool {
-		if atomic.LoadInt32(&redisReqCount) == 0 && atomic.LoadInt32(&cmdCount) == 0 {
+		if atomic.LoadInt32(&cmdCount) == 0 {
 			return true
 		} else {
 			return false

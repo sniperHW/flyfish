@@ -2,15 +2,9 @@ CacheGroupSize          = 10                   #cache分组数量，每一个cac
 
 MaxCachePerGroupSize    = 500000               #每组最大key数量，超过数量将会触发key剔除 (可动态重加载)
 
-RedisProcessPoolSize    = 5                    #redis处理routine的数量
-
-RedisPipelineSize       = 50                   #redis请求管道线大小 (可动态重加载)
-
 SqlLoadPipeLineSize     = 200                  #sql加载管道线大小   (可动态重加载)
 
 SqlLoadQueueSize        = 10000                #sql加载请求队列大小，此队列每CacheGroup一个 (可动态重加载)
-
-RedisQueueSize          = 100000               #redis请求队列大小，整个服务一个队列供所有redis routine共享 (可动态重加载)
 
 
 SqlLoaderCount          = 5
@@ -49,11 +43,6 @@ ConfDbPort      = 5432                          (可动态重加载)
 ConfDbUser      = "dbuser"                      (可动态重加载)
 ConfDbPassword  = "123456"                      (可动态重加载) 
 ConfDataBase    = "wei"                         (可动态重加载)
-
-[Redis]
-RedisHost       = "127.0.0.1"
-RedisPort       = 6379
-# RedisPassword = "xxxx"
 
 [Log]
 MaxLogfileSize  = 104857600 # 100mb

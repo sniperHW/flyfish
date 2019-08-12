@@ -1,15 +1,9 @@
 package flyfish
 
 import (
-	//"container/list"
-	//"fmt"
-	//"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/conf"
-	//"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet/timer"
-	//"github.com/sniperHW/kendynet/util"
 	"sync"
-	//"sync/atomic"
 	"time"
 )
 
@@ -23,7 +17,7 @@ var processUnits []*processUnit
 
 var cmdProcessor cmdProcessorI
 
-var fnKickCacheKey func(*processUnit)
+//var fnKickCacheKey func(*processUnit)
 
 type cmdProcessorI interface {
 	processCmd(*cacheKey, bool)
@@ -81,13 +75,12 @@ func (this *processUnit) removeLRU(ckey *cacheKey) {
 	ckey.pprev = nil
 }
 
-//本地cache只需要删除key
-func kickCacheKeyLocalCache(unit *processUnit) {
+func (this *processUnit) kickCacheKey() {
 	MaxCachePerGroupSize := conf.GetConfig().MaxCachePerGroupSize
 
-	for len(unit.cacheKeys) > MaxCachePerGroupSize && unit.lruHead.nnext != &unit.lruTail {
+	for len(this.cacheKeys) > MaxCachePerGroupSize && this.lruHead.nnext != &this.lruTail {
 
-		c := unit.lruTail.pprev
+		c := this.lruTail.pprev
 
 		kickAble, _ := c.kickAble()
 
@@ -95,46 +88,9 @@ func kickCacheKeyLocalCache(unit *processUnit) {
 			break
 		}
 
-		unit.removeLRU(c)
-		delete(unit.cacheKeys, c.uniKey)
+		this.removeLRU(c)
+		delete(this.cacheKeys, c.uniKey)
 	}
-}
-
-//redis cache除了要剔除key还要根据key的状态剔除redis中的缓存
-func kickCacheKeyRedisCache(unit *processUnit) {
-	MaxCachePerGroupSize := conf.GetConfig().MaxCachePerGroupSize
-
-	for len(unit.cacheKeys) > MaxCachePerGroupSize && unit.lruHead.nnext != &unit.lruTail {
-
-		c := unit.lruTail.pprev
-
-		kickAble, status := c.kickAble()
-
-		if !kickAble {
-			break
-		}
-
-		unit.removeLRU(c)
-		delete(unit.cacheKeys, c.uniKey)
-
-		if status == cache_ok {
-			cmd := &command{
-				uniKey: c.uniKey,
-				ckey:   c,
-			}
-
-			ctx := &processContext{
-				commands:  []*command{cmd},
-				redisFlag: redis_kick,
-			}
-
-			pushRedisReq(ctx)
-		}
-	}
-}
-
-func (this *processUnit) kickCacheKey() {
-	fnKickCacheKey(this)
 }
 
 func initProcessUnit() {
