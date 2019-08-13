@@ -152,8 +152,18 @@ func (this *writeBackProcessor) flush(s *str, ctxs *ctxArray) {
 		this.f.Write(head)
 		this.f.Write(s.bytes())
 		atomic.AddInt64(&binlogFileSize, int64(s.dataLen()+len(head)))
-		strPut(s)
 		this.f.Sync()
+
+		for i := 0; i < ctxs.count; i++ {
+			v := ctxs.ctxs[i]
+			v.reply(errcode.ERR_OK, nil, v.fields["__version__"].GetInt())
+		}
+		for i := 0; i < ctxs.count; i++ {
+			v := ctxs.ctxs[i]
+			v.getCacheKey().processQueueCmd()
+		}
+		strPut(s)
+		ctxArrayPut(ctxs)
 
 	}
 
@@ -165,19 +175,6 @@ func (this *writeBackProcessor) flush(s *str, ctxs *ctxArray) {
 		this.fileIndex = -1
 		this.fileSize = 0
 	}
-
-	if nil != ctxs {
-		for i := 0; i < ctxs.count; i++ {
-			v := ctxs.ctxs[i]
-			v.reply(errcode.ERR_OK, nil, v.fields["__version__"].GetInt())
-		}
-		for i := 0; i < ctxs.count; i++ {
-			v := ctxs.ctxs[i]
-			v.getCacheKey().processQueueCmd()
-		}
-		ctxArrayPut(ctxs)
-	}
-
 }
 
 func (this *writeBackProcessor) flushToFile() {
