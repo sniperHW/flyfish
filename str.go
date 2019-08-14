@@ -6,7 +6,7 @@ import (
 	"unsafe"
 )
 
-const strInitCap = 1024 * 1024
+const strThreshold = 1024 * 128 //128k
 
 type str struct {
 	data []byte
@@ -105,8 +105,8 @@ func (this *str) join(other []*str, sep string) *str {
 var strPool = sync.Pool{
 	New: func() interface{} {
 		return &str{
-			data: make([]byte, strInitCap),
-			cap:  strInitCap,
+			data: make([]byte, strThreshold),
+			cap:  strThreshold,
 			len:  0,
 		}
 	},
