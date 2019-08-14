@@ -78,6 +78,10 @@ func (this *str) appendBytes(bytes ...byte) *str {
 	}
 }
 
+func (this *str) appendField(field *proto.Field) *str {
+
+}
+
 func (this *str) append(in string) *str {
 	s := len(in)
 	newLen := this.len + s
