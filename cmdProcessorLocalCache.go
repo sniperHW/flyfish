@@ -22,8 +22,8 @@ func (this cmdProcessorLocalCache) processGet(ckey *cacheKey, cmd *command) *pro
 	} else {
 
 		ctx := &processContext{
-			commands: []*command{cmd},
-			fields:   map[string]*proto.Field{},
+			command: cmd,
+			fields:  map[string]*proto.Field{},
 		}
 
 		ctx.fields["__version__"] = proto.PackField("__version__", ckey.version)
@@ -49,8 +49,8 @@ func (this cmdProcessorLocalCache) processSet(ckey *cacheKey, cmd *command) *pro
 	}
 
 	ctx := &processContext{
-		commands: []*command{cmd},
-		fields:   map[string]*proto.Field{},
+		command: cmd,
+		fields:  map[string]*proto.Field{},
 	}
 	if ckey.status == cache_ok {
 		ckey.setOKNoLock(ckey.version + 1)
@@ -83,8 +83,8 @@ func (this cmdProcessorLocalCache) processSetNx(ckey *cacheKey, cmd *command) *p
 	}
 
 	ctx := &processContext{
-		commands: []*command{cmd},
-		fields:   map[string]*proto.Field{},
+		command: cmd,
+		fields:  map[string]*proto.Field{},
 	}
 
 	if ckey.status == cache_missing {
@@ -123,8 +123,8 @@ func (this cmdProcessorLocalCache) processCompareAndSet(ckey *cacheKey, cmd *com
 		}
 
 		ctx := &processContext{
-			commands: []*command{cmd},
-			fields:   map[string]*proto.Field{},
+			command: cmd,
+			fields:  map[string]*proto.Field{},
 		}
 
 		if ckey.status == cache_ok {
@@ -153,8 +153,8 @@ func (this cmdProcessorLocalCache) processCompareAndSetNx(ckey *cacheKey, cmd *c
 	}
 
 	ctx := &processContext{
-		commands: []*command{cmd},
-		fields:   map[string]*proto.Field{},
+		command: cmd,
+		fields:  map[string]*proto.Field{},
 	}
 
 	if ckey.status == cache_ok {
@@ -192,8 +192,8 @@ func (this cmdProcessorLocalCache) processIncrBy(ckey *cacheKey, cmd *command) *
 	}
 
 	ctx := &processContext{
-		commands: []*command{cmd},
-		fields:   map[string]*proto.Field{},
+		command: cmd,
+		fields:  map[string]*proto.Field{},
 	}
 
 	if ckey.status == cache_ok || ckey.status == cache_missing {
@@ -233,8 +233,8 @@ func (this cmdProcessorLocalCache) processDecrBy(ckey *cacheKey, cmd *command) *
 	}
 
 	ctx := &processContext{
-		commands: []*command{cmd},
-		fields:   map[string]*proto.Field{},
+		command: cmd,
+		fields:  map[string]*proto.Field{},
 	}
 
 	if ckey.status == cache_ok || ckey.status == cache_missing {
@@ -271,8 +271,8 @@ func (this cmdProcessorLocalCache) processDel(ckey *cacheKey, cmd *command) *pro
 		}
 
 		ctx := &processContext{
-			commands: []*command{cmd},
-			fields:   map[string]*proto.Field{},
+			command: cmd,
+			fields:  map[string]*proto.Field{},
 		}
 
 		if ckey.status == cache_ok {

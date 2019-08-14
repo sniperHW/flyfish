@@ -1,9 +1,7 @@
 package flyfish
 
 import (
-	//"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
-	"sync/atomic"
 )
 
 const (
@@ -26,47 +24,36 @@ const (
 )
 
 type processContext struct {
-	commands      []*command
+	command       *command
 	fields        map[string]*proto.Field
 	errno         int32
-	replyed       int32 //是否已经应道
-	writeBackFlag int   //回写数据库类型
+	writeBackFlag int //回写数据库类型
 	redisFlag     int
 	ping          bool
-	//replyOnDbOk   bool //是否在db操作完成后才返回响应
 }
 
 func (this *processContext) getCmd() *command {
-	return this.commands[0]
+	return this.command
 }
 
 func (this *processContext) getCmdType() int {
-	return this.getCmd().cmdType
+	return this.command.cmdType
 }
 
 func (this *processContext) getTable() string {
-	return this.getCmd().table
+	return this.command.table
 }
 
 func (this *processContext) getKey() string {
-	return this.getCmd().key
+	return this.command.key
 }
 
 func (this *processContext) getUniKey() string {
-	return this.getCmd().uniKey
+	return this.command.uniKey
 }
 
 func (this *processContext) getCacheKey() *cacheKey {
-
-	if this.getCmd() == nil {
-		panic("command == nil")
-	}
-
-	if this.getCmd().ckey == nil {
-		panic("ckey == nil")
-	}
-
-	return this.getCmd().ckey
+	return this.command.ckey
 }
 
 func (this *processContext) getSetfields() *map[string]interface{} {
@@ -87,11 +74,7 @@ func (this *processContext) getSetfields() *map[string]interface{} {
 }
 
 func (this *processContext) reply(errCode int32, fields map[string]*proto.Field, version int64) {
-	if atomic.CompareAndSwapInt32(&this.replyed, 0, 1) {
-		for _, v := range this.commands {
-			v.reply(errCode, fields, version)
-		}
-	}
+	this.command.reply(errCode, fields, version)
 }
 
 func (this *cacheKey) setDefaultValue(ctx *processContext) {
