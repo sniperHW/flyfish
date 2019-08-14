@@ -13,7 +13,7 @@ flyfish只是一个缓存系统，所有数据最终都要落地到后端的sql�
 
 
 从上面的处理过程中可以看到，一旦binlog被持久化，就会向客户端返回操作成功，如果再向sql执行回写之前flyfish崩溃，更新操作实际上是未被执行的，
-当flyfish重启后，客户端再次请求这个unikey,将会重sql中载入未更新过的数据。
+当flyfish重启后，客户端再次请求这个unikey,将会从sql中载入未更新过的数据。
 
 为了避免这种情况的发生，flyfish启动后会读取所有的binlog文件(执行过回写的binlog文件会被删除)，按顺序将binlog执行一次，保证数据变更全部回写
 到sql。
@@ -70,8 +70,32 @@ flyfish(master) flyfish(slave) flyfish(slave)
 sentinel负责监控flyfish节点，当超过半数以上sentinel判定master出现故障，将在sentinel中执行leader选举，由选出的leader完成故障转移(选择新的flyfish master)。
 
 
+binlog及其同步
+
+flyfish的每一个操作产生一条binlog,里面包含了unikey,操作类型，变更值。binlog被序列化到内存缓冲区，当缓冲区满|超过一定的条目|到达刷新时间,缓冲区中的内容被持久化到文件。
+对于单机模式，可以对这些持久化的操作返回应答。当binlog文件达到一定大小或超过刷新时间，将关闭当前binlog文件，创建新的文件以用于后续的序列化，同时通知sql处理器读取并执行
+binlog中的操作，一旦所有操作都执行完,binlog文件就可以被删除（对于主备模式，需要将文件id通知到slave节点，让slave节点将响应文件删除）。
+
+binlog文件的命名规则
+
+flyfish被分成不同的处理单元，unikey被固定hash到不同的处理单元处理，每个处理单元执行同样的流程，binlog文件的命名规则是prefix_id.bin，其中prefix由配置文件控，id为64位单调递增计数器。
+
+binlog文件重放
+
+对binlog文件id排序，按从小到大的顺序执行即可保证操作按序执行。
 
 
+binlog同步
+
+binlog缓冲达到条件后向从机同步，内容包括,缓冲区的内容本身以及id。副本节点收到不同内容分以下几种情况:
 
 
+1) 副本节点当前没有任何binlog文件：根据id创建新的binlog文件，将内容写入文件。
+
+2) id与当前打开文件一致：将内容写入文件。
+
+3) id比当前打开文件大：关闭当前文件，创建新文件并写入。
+
+4）id比当前记录到的最大id小：这种情况表明,master重启或切换了master,master重放了所有未执行完的binlog文件,id归0。slave要关闭自己当前文件，并删除所有之前保存到磁盘中
+的binlog文件,用最新id创建并打开文件，将binlog内容写入文件。
 
