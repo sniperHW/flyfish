@@ -171,7 +171,7 @@ func (this *sqlUpdater) process(path string) {
 					k, ok := unit.cacheKeys[uniKey]
 					unit.mtx.Unlock()
 					if ok {
-						k.clearWriteBack(v.GetWritebackVersion())
+						k.clearWriteBack()
 					}
 				}
 				break
