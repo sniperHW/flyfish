@@ -215,14 +215,12 @@ func (this *writeBackProcessor) writeBack(ctx *processContext) {
 
 	ckey := ctx.getCacheKey()
 	ckey.mtx.Lock()
-	ckey.writeBacked = true
-	ckey.writeBackVersion++
+	ckey.writeBackLocked++
 
 	pbRecord := &proto.BinRecord{
-		Type:             tt,
-		Table:            pb.String(ctx.getTable()),
-		Key:              pb.String(ctx.getKey()),
-		WritebackVersion: pb.Int64(ckey.writeBackVersion),
+		Type:  tt,
+		Table: pb.String(ctx.getTable()),
+		Key:   pb.String(ctx.getKey()),
 	}
 
 	if ctx.writeBackFlag == write_back_update {

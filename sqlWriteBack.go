@@ -118,8 +118,8 @@ func (this *sqlUpdater) process(path string) {
 		this.records = this.records[0:0]
 		if nil == this.sqlStr {
 			this.sqlStr = &str{
-				data: make([]byte, strInitCap),
-				cap:  strInitCap,
+				data: make([]byte, strThreshold),
+				cap:  strThreshold,
 				len:  0,
 			}
 		} else {
@@ -171,7 +171,7 @@ func (this *sqlUpdater) process(path string) {
 					k, ok := unit.cacheKeys[uniKey]
 					unit.mtx.Unlock()
 					if ok {
-						k.clearWriteBack(v.GetWritebackVersion())
+						k.clearWriteBack()
 					}
 				}
 				break
