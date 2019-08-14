@@ -24,7 +24,7 @@ type sqlUpdater struct {
 	queue    *util.BlockQueue
 	wg       *sync.WaitGroup
 	sqlStr   *str
-	records  []*proto.Record
+	records  []*proto.BinRecord
 	buffer   []byte
 	replay   bool
 }
@@ -35,7 +35,7 @@ func newSqlUpdater(db *sqlx.DB, name string, wg *sync.WaitGroup, replay bool) *s
 	}
 	return &sqlUpdater{
 		name:    name,
-		records: []*proto.Record{},
+		records: []*proto.BinRecord{},
 		queue:   util.NewBlockQueueWithName(name),
 		db:      db,
 		wg:      wg,
@@ -127,7 +127,7 @@ func (this *sqlUpdater) process(path string) {
 		}
 
 		for offset < end {
-			pbRecord := &proto.Record{}
+			pbRecord := &proto.BinRecord{}
 			l := int(binary.BigEndian.Uint32(this.buffer[offset : offset+4]))
 			offset += 4
 			if err = pb.Unmarshal(this.buffer[offset:offset+l], pbRecord); err != nil {

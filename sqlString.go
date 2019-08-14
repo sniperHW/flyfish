@@ -526,7 +526,7 @@ var pgsqlByteToString = []string{
 
 var BinaryToSqlStr func(s *str, bytes []byte)
 
-var buildInsertUpdateString func(s *str, r *proto.Record, meta *table_meta)
+var buildInsertUpdateString func(s *str, r *proto.BinRecord, meta *table_meta)
 
 func pgsqlBinaryToPgsqlStr(s *str, bytes []byte) {
 	s.append("'")
@@ -569,7 +569,7 @@ func (this *str) appendField(field *proto.Field) *str {
  *重放时对insert要使用updateinsert语句
  *INSERT INTO %s(%s) VALUES(%s) ON conflict(__key__)  DO UPDATE SET %s;
  */
-func buildInsertUpdateStringPgSql(s *str, r *proto.Record, meta *table_meta) {
+func buildInsertUpdateStringPgSql(s *str, r *proto.BinRecord, meta *table_meta) {
 	s.append(meta.insertPrefix).append("'").append(r.GetKey()).append("',") //add __key__
 	s.appendField(r.Fields[0]).append(",")                                  //add __version__
 	//add other fileds
@@ -596,7 +596,7 @@ func buildInsertUpdateStringPgSql(s *str, r *proto.Record, meta *table_meta) {
  *insert into %s(%s) values(%s) on duplicate key update %s;
  */
 
-func buildInsertUpdateStringMySql(s *str, r *proto.Record, meta *table_meta) {
+func buildInsertUpdateStringMySql(s *str, r *proto.BinRecord, meta *table_meta) {
 	s.append(meta.insertPrefix).append("'").append(r.GetKey()).append("',") //add __key__
 	s.appendField(r.Fields[0]).append(",")                                  //add __version__
 	//add other fileds
@@ -619,7 +619,7 @@ func buildInsertUpdateStringMySql(s *str, r *proto.Record, meta *table_meta) {
 	s.append(";")
 }
 
-func buildInsertString(s *str, r *proto.Record, meta *table_meta) {
+func buildInsertString(s *str, r *proto.BinRecord, meta *table_meta) {
 	s.append(meta.insertPrefix).append("'").append(r.GetKey()).append("',") //add __key__
 	s.appendField(r.Fields[0]).append(",")                                  //add __version__
 	//add other fileds
@@ -633,7 +633,7 @@ func buildInsertString(s *str, r *proto.Record, meta *table_meta) {
 	s.append(");")
 }
 
-func buildUpdateString(s *str, r *proto.Record, meta *table_meta) {
+func buildUpdateString(s *str, r *proto.BinRecord, meta *table_meta) {
 	s.append("update ").append(r.GetTable()).append(" set ")
 
 	for i, v := range r.Fields {
@@ -647,6 +647,6 @@ func buildUpdateString(s *str, r *proto.Record, meta *table_meta) {
 	s.append(" where __key__ = '").append(r.GetKey()).append("';")
 }
 
-func buildDeleteString(s *str, r *proto.Record) {
+func buildDeleteString(s *str, r *proto.BinRecord) {
 	s.append("delete from ").append(r.GetTable()).append(" where __key__ = '").append(r.GetKey()).append("';")
 }

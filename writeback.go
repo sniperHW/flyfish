@@ -218,7 +218,7 @@ func (this *writeBackProcessor) writeBack(ctx *processContext) {
 	ckey.writeBacked = true
 	ckey.writeBackVersion++
 
-	pbRecord := &proto.Record{
+	pbRecord := &proto.BinRecord{
 		Type:             tt,
 		Table:            pb.String(ctx.getTable()),
 		Key:              pb.String(ctx.getKey()),

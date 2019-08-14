@@ -9,7 +9,7 @@ enum SqlType {
   delete   = 3;
 }
 
-message record {
+message binRecord {
 	required SqlType type = 1;
 	required string  table = 2;
 	required string  key = 3;
