@@ -42,22 +42,22 @@ func (this *cacheKey) unlockCmdQueue() {
 	this.cmdQueueLocked = false
 }
 
-func (this *cacheKey) kickAble() (bool, int) {
+func (this *cacheKey) kickAble() bool {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
 	if this.cmdQueueLocked {
-		return false, this.status
+		return false
 	}
 
 	if this.writeBacked {
-		return false, this.status
+		return false
 	}
 
 	if this.cmdQueue.Len() != 0 {
-		return false, this.status
+		return false
 	}
 
-	return true, this.status
+	return true
 }
 
 func (this *cacheKey) setMissing() {

@@ -17,8 +17,6 @@ var processUnits []*processUnit
 
 var cmdProcessor cmdProcessorI
 
-//var fnKickCacheKey func(*processUnit)
-
 type cmdProcessorI interface {
 	processCmd(*cacheKey, bool)
 }
@@ -82,9 +80,7 @@ func (this *processUnit) kickCacheKey() {
 
 		c := this.lruTail.pprev
 
-		kickAble, _ := c.kickAble()
-
-		if !kickAble {
+		if c.kickAble() {
 			break
 		}
 
