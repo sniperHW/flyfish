@@ -60,7 +60,6 @@ func (this cmdProcessorLocalCache) processSet(ckey *cacheKey, cmd *command) *pro
 			ckey.values[v.GetName()] = v
 			ctx.fields[v.GetName()] = v
 		}
-		ckey.modify = true
 	} else if ckey.status == cache_missing {
 		ckey.setDefaultValue(ctx)
 		ckey.setOKNoLock(1)
@@ -134,7 +133,6 @@ func (this cmdProcessorLocalCache) processCompareAndSet(ckey *cacheKey, cmd *com
 			ctx.fields["__version__"] = proto.PackField("__version__", ckey.version)
 			ckey.values[cmd.cns.oldV.GetName()] = cmd.cns.newV
 			ctx.fields[cmd.cns.oldV.GetName()] = cmd.cns.newV
-			ckey.modify = true
 		}
 
 		return ctx
@@ -314,48 +312,48 @@ func (this cmdProcessorLocalCache) processCmd(ckey *cacheKey, fromClient bool) {
 			atomic.AddInt32(&cmdCount, -1)
 		} else {
 
-			if causeWriteBackCmd(cmd.cmdType) && reachWriteBackFileLimit(config) {
-				if config.ReplyBusyOnQueueFull {
-					cmd.reply(errcode.ERR_BUSY, nil, -1)
-				} else {
-					atomic.AddInt32(&cmdCount, -1)
-				}
-			} else {
+			//if causeWriteBackCmd(cmd.cmdType) && reachWriteBackFileLimit(config) {
+			//	if config.ReplyBusyOnQueueFull {
+			//		cmd.reply(errcode.ERR_BUSY, nil, -1)
+			//	} else {
+			//		atomic.AddInt32(&cmdCount, -1)
+			//	}
+			//} else {
 
-				switch cmd.cmdType {
-				case cmdGet:
-					ctx = this.processGet(ckey, cmd)
-					break
-				case cmdSet:
-					ctx = this.processSet(ckey, cmd)
-					break
-				case cmdSetNx:
-					ctx = this.processSetNx(ckey, cmd)
-					break
-				case cmdCompareAndSet:
-					ctx = this.processCompareAndSet(ckey, cmd)
-					break
-				case cmdCompareAndSetNx:
-					ctx = this.processCompareAndSetNx(ckey, cmd)
-					break
-				case cmdIncrBy:
-					ctx = this.processIncrBy(ckey, cmd)
-					break
-				case cmdDecrBy:
-					ctx = this.processDecrBy(ckey, cmd)
-					break
-				case cmdDel:
-					ctx = this.processDel(ckey, cmd)
-					break
-				default:
-					//记录日志
-					break
-				}
-
-				if nil != ctx {
-					break
-				}
+			switch cmd.cmdType {
+			case cmdGet:
+				ctx = this.processGet(ckey, cmd)
+				break
+			case cmdSet:
+				ctx = this.processSet(ckey, cmd)
+				break
+			case cmdSetNx:
+				ctx = this.processSetNx(ckey, cmd)
+				break
+			case cmdCompareAndSet:
+				ctx = this.processCompareAndSet(ckey, cmd)
+				break
+			case cmdCompareAndSetNx:
+				ctx = this.processCompareAndSetNx(ckey, cmd)
+				break
+			case cmdIncrBy:
+				ctx = this.processIncrBy(ckey, cmd)
+				break
+			case cmdDecrBy:
+				ctx = this.processDecrBy(ckey, cmd)
+				break
+			case cmdDel:
+				ctx = this.processDel(ckey, cmd)
+				break
+			default:
+				//记录日志
+				break
 			}
+
+			if nil != ctx {
+				break
+			}
+			//}
 		}
 	}
 

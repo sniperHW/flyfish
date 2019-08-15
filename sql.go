@@ -46,9 +46,9 @@ func pushSqlLoadReq(ctx *processContext, fullReturn ...bool) bool {
 	}
 }
 
-func pushSqlWriteReq(id int, fileIndex int64) {
-	u := sqlUpdaters[id%len(sqlUpdaters)]
-	u.queue.AddNoWait(fileIndex)
+func pushSqlWriteReq(ckey *cacheKey) {
+	u := sqlUpdaters[StringHash(ckey.uniKey)%len(sqlUpdaters)]
+	u.queue.AddNoWait(ckey)
 }
 
 func stopSql() {
@@ -109,11 +109,11 @@ func initSql() bool {
 			return false
 		}
 
-		u := newSqlUpdater(writeBackDB, wname, sqlUpdateWg, false)
+		u := newSqlUpdater(writeBackDB, wname, sqlUpdateWg)
 		sqlUpdaters = append(sqlUpdaters, u)
 		go u.run()
 		timer.Repeat(time.Second*60, nil, func(t *timer.Timer) {
-			if isStop() || util.ErrQueueClosed == u.queue.AddNoWait(int64(-1)) {
+			if isStop() || util.ErrQueueClosed == u.queue.AddNoWait(nil) {
 				t.Cancel()
 			}
 		})

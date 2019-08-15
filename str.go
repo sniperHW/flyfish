@@ -2,6 +2,8 @@ package flyfish
 
 import (
 	"encoding/binary"
+	"github.com/sniperHW/flyfish/proto"
+	"math"
 	"sync"
 	"unsafe"
 )
@@ -63,6 +65,17 @@ func (this *str) appendInt32(i int32) *str {
 	return this
 }
 
+func (this *str) appendByte(i byte) *str {
+	s := 1
+	newLen := this.len + s
+	if newLen > this.cap {
+		this.expand(s)
+	}
+	this.data[this.len] = i
+	this.len = newLen
+	return this
+}
+
 func (this *str) appendBytes(bytes ...byte) *str {
 	s := len(bytes)
 	if 0 == s {
@@ -80,6 +93,32 @@ func (this *str) appendBytes(bytes ...byte) *str {
 
 func (this *str) appendField(field *proto.Field) *str {
 
+	tt := field.GetType()
+
+	switch tt {
+	case proto.ValueType_string:
+		this.appendByte(byte(proto.ValueType_string))
+		this.append(field.GetString())
+	case proto.ValueType_float:
+		this.appendByte(byte(proto.ValueType_float))
+		u64 := math.Float64bits(field.GetFloat())
+		this.appendInt64(int64(u64))
+	case proto.ValueType_int:
+		this.appendByte(byte(proto.ValueType_int))
+		this.appendInt64(field.GetInt())
+	case proto.ValueType_uint:
+		this.appendByte(byte(proto.ValueType_uint))
+		this.appendInt64(int64(field.GetUint()))
+	case proto.ValueType_blob:
+		this.appendByte(byte(proto.ValueType_blob))
+		this.appendBytes(field.GetBlob()...)
+	default:
+		panic("invaild value type")
+	}
+
+	return this
+
+	return this
 }
 
 func (this *str) append(in string) *str {

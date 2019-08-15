@@ -124,6 +124,8 @@ func (this sqlResponseLocalCache) onSqlLoadOKSet(ctx *processContext) {
 
 	ckey.setValue(ctx)
 
+	Debugln(*ckey)
+
 	ckey.setOKNoLock(version)
 
 	ckey.mtx.Unlock()

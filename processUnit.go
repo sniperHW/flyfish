@@ -2,9 +2,9 @@ package flyfish
 
 import (
 	"github.com/sniperHW/flyfish/conf"
-	"github.com/sniperHW/kendynet/timer"
+	//"github.com/sniperHW/kendynet/timer"
 	"sync"
-	"time"
+	//"time"
 )
 
 /*
@@ -24,7 +24,6 @@ type cmdProcessorI interface {
 type processUnit struct {
 	cacheKeys map[string]*cacheKey
 	mtx       sync.Mutex
-	writeBack *writeBackProcessor
 	lruHead   cacheKey
 	lruTail   cacheKey
 }
@@ -37,7 +36,7 @@ func (this *processUnit) doWriteBack(ctx *processContext) {
 		panic("ctx.writeBackFlag == write_back_none")
 	}
 
-	this.writeBack.writeBack(ctx)
+	writeBack(ctx)
 }
 
 func (this *cacheKey) process_(fromClient bool) {
@@ -100,24 +99,12 @@ func initProcessUnit() {
 
 		unit := &processUnit{
 			cacheKeys: map[string]*cacheKey{},
-			writeBack: &writeBackProcessor{
-				id: i,
-			},
 		}
 
 		unit.lruHead.nnext = &unit.lruTail
 		unit.lruTail.pprev = &unit.lruHead
-		unit.writeBack.start()
 
 		processUnits[i] = unit
-
-		timer.Repeat(time.Millisecond*100, nil, func(t *timer.Timer) {
-			if isStop() {
-				t.Cancel()
-			} else {
-				unit.writeBack.checkFlush()
-			}
-		})
 
 	}
 }

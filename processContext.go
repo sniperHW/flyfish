@@ -28,7 +28,6 @@ type processContext struct {
 	fields        map[string]*proto.Field
 	errno         int32
 	writeBackFlag int //回写数据库类型
-	redisFlag     int
 	ping          bool
 }
 
@@ -84,13 +83,19 @@ func (this *cacheKey) setDefaultValue(ctx *processContext) {
 		defaultV := proto.PackField(v.name, v.defaultV)
 		this.values[v.name] = defaultV
 		ctx.fields[v.name] = defaultV
+
+		Infoln("setDefaultValue", v.name)
+
 	}
 }
 
 func (this *cacheKey) setValue(ctx *processContext) {
 	this.values = map[string]*proto.Field{}
 	for _, v := range ctx.fields {
-		if !(v.GetName() != "__version__" || v.GetName() != "__key__") {
+
+		Debugln("setValue", v.GetName())
+
+		if !(v.GetName() == "__version__" || v.GetName() == "__key__") {
 			this.values[v.GetName()] = v
 		}
 	}

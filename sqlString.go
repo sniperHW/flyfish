@@ -526,7 +526,7 @@ var pgsqlByteToString = []string{
 
 var BinaryToSqlStr func(s *str, bytes []byte)
 
-var buildInsertUpdateString func(s *str, r *proto.BinRecord, meta *table_meta)
+var buildInsertUpdateString func(s *str, ckey *cacheKey) //r *proto.BinRecord, meta *table_meta)
 
 func pgsqlBinaryToPgsqlStr(s *str, bytes []byte) {
 	s.append("'")
@@ -544,7 +544,7 @@ func mysqlBinaryToPgsqlStr(s *str, bytes []byte) {
 	s.append("')")
 }
 
-func (this *str) appendField(field *proto.Field) *str {
+func (this *str) appendFieldStr(field *proto.Field) *str {
 	tt := field.GetType()
 
 	switch tt {
@@ -569,84 +569,89 @@ func (this *str) appendField(field *proto.Field) *str {
  *重放时对insert要使用updateinsert语句
  *INSERT INTO %s(%s) VALUES(%s) ON conflict(__key__)  DO UPDATE SET %s;
  */
-func buildInsertUpdateStringPgSql(s *str, r *proto.BinRecord, meta *table_meta) {
-	s.append(meta.insertPrefix).append("'").append(r.GetKey()).append("',") //add __key__
-	s.appendField(r.Fields[0]).append(",")                                  //add __version__
+
+//INSERT INTO users1(__key__,__version__,age,phone,name,blob) VALUES
+//('users1:sniperHW',1,100,'123','sniperHW','\000\000\000\144'::bytea)
+//on duplicate key update name='sniperHW',blob='\000\000\000\144'::bytea,age=100,phone='123',1;
+
+func buildInsertUpdateStringPgSql(s *str, ckey *cacheKey) { // r *proto.BinRecord, meta *table_meta) {
+
+	Debugln("buildInsertUpdateStringPgSql")
+
+	meta := ckey.getMeta()
+
+	version := proto.PackField("__version__", ckey.version)
+
+	s.append(meta.insertPrefix).append("'").append(ckey.uniKey).append("',") //add __key__
+	s.appendFieldStr(version).append(",")                                    //add __version__
+
 	//add other fileds
-	for i := 1; i < len(r.Fields); i++ {
-		s.appendField(r.Fields[i])
-		if i != len(r.Fields)-1 {
+	i := 0
+
+	Infoln(ckey.values)
+
+	for _, name := range meta.insertFieldOrder {
+		Infoln(name)
+		s.appendFieldStr(ckey.values[name])
+		if i != len(ckey.values)-1 {
 			s.append(",")
 		}
+		i++
 	}
 	s.append(") ON conflict(__key__)  DO UPDATE SET ")
-
-	for i, v := range r.Fields {
+	i = 0
+	for _, v := range ckey.values {
 		if i == 0 {
-			s.append(v.GetName()).append("=").appendField(v)
+			s.append(v.GetName()).append("=").appendFieldStr(v)
 		} else {
-			s.append(",").append(v.GetName()).append("=").appendField(v)
+			s.append(",").append(v.GetName()).append("=").appendFieldStr(v)
 		}
+		i++
 	}
-
-	s.append(" where ").append(r.GetTable()).append(".__key__ = '").append(r.GetKey()).append("';")
+	s.append(",__version__=").appendFieldStr(version)
+	s.append(" where ").append(ckey.table).append(".__key__ = '").append(ckey.uniKey).append("';")
 }
 
 /*
  *insert into %s(%s) values(%s) on duplicate key update %s;
  */
 
-func buildInsertUpdateStringMySql(s *str, r *proto.BinRecord, meta *table_meta) {
-	s.append(meta.insertPrefix).append("'").append(r.GetKey()).append("',") //add __key__
-	s.appendField(r.Fields[0]).append(",")                                  //add __version__
+func buildInsertUpdateStringMySql(s *str, ckey *cacheKey) { //r *proto.BinRecord, meta *table_meta) {
+
+	Debugln("buildInsertUpdateStringMySql")
+
+	meta := ckey.getMeta()
+
+	version := proto.PackField("__version__", ckey.version)
+
+	s.append(meta.insertPrefix).append("'").append(ckey.uniKey).append("',") //add __key__
+	s.appendFieldStr(version).append(",")                                    //add __version__
+
 	//add other fileds
-	for i := 1; i < len(r.Fields); i++ {
-		s.appendField(r.Fields[i])
-		if i != len(r.Fields)-1 {
+	i := 0
+	for _, name := range meta.insertFieldOrder {
+		s.appendFieldStr(ckey.values[name])
+		if i != len(ckey.values)-1 {
 			s.append(",")
 		}
+		i++
 	}
+
 	s.append(") on duplicate key update ")
 
-	for i, v := range r.Fields {
+	i = 0
+	for _, v := range ckey.values {
 		if i == 0 {
-			s.append(v.GetName()).append("=").appendField(v)
+			s.append(v.GetName()).append("=").appendFieldStr(v)
 		} else {
-			s.append(",").append(v.GetName()).append("=").appendField(v)
+			s.append(",").append(v.GetName()).append("=").appendFieldStr(v)
 		}
+		i++
 	}
-
+	s.append(",__version__=").appendFieldStr(version)
 	s.append(";")
 }
 
-func buildInsertString(s *str, r *proto.BinRecord, meta *table_meta) {
-	s.append(meta.insertPrefix).append("'").append(r.GetKey()).append("',") //add __key__
-	s.appendField(r.Fields[0]).append(",")                                  //add __version__
-	//add other fileds
-	for i := 1; i < len(r.Fields); i++ {
-		s.appendField(r.Fields[i])
-		if i != len(r.Fields)-1 {
-			s.append(",")
-		}
-	}
-
-	s.append(");")
-}
-
-func buildUpdateString(s *str, r *proto.BinRecord, meta *table_meta) {
-	s.append("update ").append(r.GetTable()).append(" set ")
-
-	for i, v := range r.Fields {
-		if i == 0 {
-			s.append(v.GetName()).append("=").appendField(v)
-		} else {
-			s.append(",").append(v.GetName()).append("=").appendField(v)
-		}
-	}
-
-	s.append(" where __key__ = '").append(r.GetKey()).append("';")
-}
-
-func buildDeleteString(s *str, r *proto.BinRecord) {
-	s.append("delete from ").append(r.GetTable()).append(" where __key__ = '").append(r.GetKey()).append("';")
+func buildDeleteString(s *str, ckey *cacheKey) {
+	s.append("delete from ").append(ckey.table).append(" where __key__ = '").append(ckey.uniKey).append("';")
 }

@@ -10,11 +10,11 @@ import (
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/socket/listener/tcp"
 	"net"
-	"os"
-	"path/filepath"
-	"sort"
-	"strconv"
-	"strings"
+	//"os"
+	//"path/filepath"
+	//"sort"
+	//"strconv"
+	//"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -156,7 +156,7 @@ func (this *tcpListener) Start() error {
 	})
 }
 
-func getFileList(dirpath string) ([]string, error) {
+/*func getFileList(dirpath string) ([]string, error) {
 	var file_list []string
 	dir_err := filepath.Walk(dirpath,
 		func(path string, f os.FileInfo, err error) error {
@@ -238,13 +238,18 @@ func replayBinlog() bool {
 
 	return true
 
-}
+}*/
 
 func Start() error {
+
+	var err error
+
 	config := conf.GetConfig()
 
 	cmdProcessor = cmdProcessorLocalCache{}
 	sqlResponse = sqlResponseLocalCache{}
+
+	Debugln(config.DBConfig.SqlType)
 
 	if config.DBConfig.SqlType == "mysql" {
 		BinaryToSqlStr = mysqlBinaryToPgsqlStr
@@ -258,13 +263,20 @@ func Start() error {
 		return fmt.Errorf("initSql failed")
 	}
 
-	if !replayBinlog() {
+	/*if !replayBinlog() {
 		return fmt.Errorf("replayBinlog failed")
-	}
+	}*/
 
 	initProcessUnit()
 
-	var err error
+	leveldbInit()
+
+	err = loadFromLevelDB()
+
+	if nil != err {
+		return err
+	}
+
 	server, err = newTcpListener("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort))
 	if nil != err {
 		return err
