@@ -286,6 +286,8 @@ func (this cmdProcessorLocalCache) processDel(ckey *cacheKey, cmd *command) *pro
 
 func (this cmdProcessorLocalCache) processCmd(ckey *cacheKey, fromClient bool) {
 
+	//Infoln(ckey.values)
+
 	ckey.mtx.Lock()
 
 	if !fromClient {

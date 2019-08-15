@@ -589,7 +589,6 @@ func buildInsertUpdateStringPgSql(s *str, ckey *cacheKey) { // r *proto.BinRecor
 	i := 0
 
 	for _, name := range meta.insertFieldOrder {
-		//Infoln(name)
 		s.appendFieldStr(ckey.values[name])
 		if i != len(ckey.values)-1 {
 			s.append(",")

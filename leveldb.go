@@ -8,7 +8,6 @@ import (
 	"math"
 	"strings"
 	"time"
-	"unsafe"
 )
 
 var (
@@ -24,18 +23,18 @@ func leveldbInit() bool {
 	return true
 }
 
+//return table, key, unikey, fileName
 func fetchUnikeyAndFieldName(key []byte) (string, string, string, string, error) {
-	//key shoud be table:__key__:filedname
-	s := *(*string)(unsafe.Pointer(&key))
+	s := string(key)
 	t := strings.Split(s, ":")
 	if !(len(t) >= 3) {
 		return "", "", "", "", fmt.Errorf("invaild key")
 	} else {
-		return t[0], t[1], t[0] + ":" + t[1], t[2], nil
+		return t[1], strings.Join(t[2:], ":"), strings.Join(t[1:], ":"), t[0], nil
 	}
 }
 
-func fetchFieldFromLevekDBValue(meta *table_meta, fileName string, value []byte) *proto.Field {
+func fetchFieldFromLevelDBValue(meta *table_meta, fileName string, value []byte) *proto.Field {
 	//to do,对配置配型和存储的类型做检查
 	tt := proto.ValueType(value[0])
 	switch tt {
@@ -59,10 +58,14 @@ func fetchFieldFromLevekDBValue(meta *table_meta, fileName string, value []byte)
 }
 
 func processLoadLevelDBKV(table, key, unikey, fileName string, value []byte) {
+
+	//Debugln("fileName", fileName)
+
 	unit := getUnitByUnikey(unikey)
 	unit.mtx.Lock()
 	k, ok := unit.cacheKeys[unikey]
 	if !ok {
+		Debugln("newCacheKey")
 		k = newCacheKey(unit, table, key, unikey)
 		if nil == k {
 			Fatalln("processLoadLevelDBKV newCacheKey falied")
@@ -71,7 +74,29 @@ func processLoadLevelDBKV(table, key, unikey, fileName string, value []byte) {
 		unit.cacheKeys[unikey] = k
 		unit.updateLRU(k)
 	}
-	k.values[fileName] = fetchFieldFromLevekDBValue(k.meta, fileName, value)
+
+	//Debugln(&k, &unit, unit.cacheKeys)
+
+	v := fetchFieldFromLevelDBValue(k.meta, fileName, value)
+	if fileName != "__version__" {
+		k.values[fileName] = v
+
+		Debugln("Set", v)
+
+	} else {
+		k.version = v.GetInt()
+		k.status = cache_ok
+		Infoln(unikey, "ok")
+	}
+
+	//Debugln(len(k.values), k.values)
+
+	Debugln("--------------------------", v)
+	for n, v := range k.values {
+		Debugln(n, v.GetName(), v.GetValue())
+	}
+	Debugln("--------------------------")
+
 	unit.mtx.Unlock()
 }
 
@@ -83,6 +108,8 @@ func loadFromLevelDB() error {
 		v := iter.Value()
 
 		table, key, unikey, fileName, err := fetchUnikeyAndFieldName(k)
+
+		//Infoln(table, key, unikey, fileName)
 
 		if nil != err {
 			return err
@@ -102,11 +129,13 @@ func levelDBWrite(tt int, unikey string, meta *table_meta, fields map[string]*pr
 
 	batch := new(leveldb.Batch)
 
+	//leveldb key  fieldname:unikey
+
 	if tt == write_back_delete {
 		key := strGet()
 		val := strGet()
 		for n, _ := range meta.fieldMetas {
-			key.append(unikey).append(":").append(n)
+			key.append(n).append(":").append(unikey)
 			batch.Delete(key.bytes())
 			key.reset()
 		}
@@ -125,7 +154,7 @@ func levelDBWrite(tt int, unikey string, meta *table_meta, fields map[string]*pr
 		key := strGet()
 		val := strGet()
 		for _, v := range fields {
-			key.append(unikey).append(":").append(v.GetName())
+			key.append(v.GetName()).append(":").append(unikey)
 			val.appendField(v)
 			batch.Put(key.bytes(), val.bytes())
 			key.reset()
