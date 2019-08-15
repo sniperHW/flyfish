@@ -90,7 +90,7 @@ func (this *cacheKey) setDefaultValue(ctx *processContext) {
 func (this *cacheKey) setValue(ctx *processContext) {
 	this.values = map[string]*proto.Field{}
 	for _, v := range ctx.fields {
-		if !(v.GetName() != "__version__" || v.GetName() != "__key__") {
+		if !(v.GetName() == "__version__" || v.GetName() == "__key__") {
 			this.values[v.GetName()] = v
 		}
 	}
