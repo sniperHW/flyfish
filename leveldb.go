@@ -7,6 +7,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	"math"
 	"strings"
+	"time"
 	"unsafe"
 )
 
@@ -27,7 +28,7 @@ func fetchUnikeyAndFieldName(key []byte) (string, string, string, string, error)
 	//key shoud be table:__key__:filedname
 	s := *(*string)(unsafe.Pointer(&key))
 	t := strings.Split(s, ":")
-	if len(t) != 3 {
+	if !(len(t) >= 3) {
 		return "", "", "", "", fmt.Errorf("invaild key")
 	} else {
 		return t[0], t[1], t[0] + ":" + t[1], t[2], nil
@@ -75,13 +76,11 @@ func processLoadLevelDBKV(table, key, unikey, fileName string, value []byte) {
 }
 
 func loadFromLevelDB() error {
-	Infoln("loadFromLevelDB")
+	beg := time.Now()
 	iter := levelDB.NewIterator(nil, nil)
 	for iter.Next() {
 		k := iter.Key()
 		v := iter.Value()
-
-		Infoln(string(k))
 
 		table, key, unikey, fileName, err := fetchUnikeyAndFieldName(k)
 
@@ -93,6 +92,7 @@ func loadFromLevelDB() error {
 
 	}
 	iter.Release()
+	Infoln("loadFromLevelDB load time", time.Now().Sub(beg))
 	return iter.Error()
 }
 
