@@ -89,7 +89,7 @@ func (this *sqlUpdater) append(v interface{}) {
 			Fatalln("invaild ctx")
 		}
 
-		ckey.writeBackLocked--
+		ckey.writeBackLocked = false
 
 		ckey.mtx.Unlock()
 

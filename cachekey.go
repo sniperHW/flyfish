@@ -30,7 +30,7 @@ type cacheKey struct {
 	nnext           *cacheKey
 	pprev           *cacheKey
 	values          map[string]*proto.Field
-	writeBackLocked int64 //每次更新+1,sql执行完-1
+	writeBackLocked bool
 }
 
 func (this *cacheKey) lockCmdQueue() {

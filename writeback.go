@@ -27,7 +27,6 @@ func writeBack(ctx *processContext) {
 	ckey := ctx.getCacheKey()
 
 	ckey.mtx.Lock()
-	ckey.writeBackLocked++
 	version := ckey.version
 
 	if ckey.sqlFlag == write_back_none {
@@ -74,7 +73,8 @@ func writeBack(ctx *processContext) {
 		Errorln(err)
 	} else {
 
-		if ckey.writeBackLocked == 1 {
+		if !ckey.writeBackLocked {
+			ckey.writeBackLocked = true
 			pushSqlWriteReq(ckey)
 		}
 
