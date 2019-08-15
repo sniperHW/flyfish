@@ -28,17 +28,7 @@ func levelDBBatch(batch *leveldb.Batch, tt int, unikey string, meta *table_meta,
 		s.append(unikey).append(":").append("__version__")
 		batch.Delete(s.bytes())
 		s.reset()
-
-		s.append(unikey).append(":").append("writeBackVersion")
-		batch.Delete(s.bytes())
-		s.reset()
-
-		s.append(unikey).append(":").append("writeBacked")
-		batch.Delete(s.bytes())
-		s.reset()
-
 		strPut(s)
-
 	} else {
 		key := strGet()
 		val := strGet()

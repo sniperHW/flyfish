@@ -20,6 +20,7 @@ import (
  *  成功后通知sqlupdater加载文件执行其中的回写操作，执行完成后删除文件
  */
 
+/*
 var (
 	fileCounter     int64
 	binlogFileCount int32
@@ -277,4 +278,83 @@ func (this *writeBackProcessor) writeBack(ctx *processContext) {
 
 func init() {
 	crc64Table = crc64.MakeTable(crc64.ISO)
+}
+*/
+
+func (this *writeBackProcessor) writeBack(ctx *processContext) {
+
+	Debugln("writeBack")
+	config := conf.GetConfig()
+
+	var tt *proto.SqlType
+
+	if ctx.writeBackFlag == write_back_insert {
+		tt = proto.SqlType_insert.Enum()
+	} else if ctx.writeBackFlag == write_back_update {
+		//tt = proto.SqlType_update.Enum()
+	} else {
+		tt = proto.SqlType_insert.Enum()
+	}
+
+	ckey := ctx.getCacheKey()
+
+	/*ckey.mtx.Lock()
+	ckey.writeBackLocked++
+
+	pbRecord := &proto.BinRecord{
+		Type:  tt,
+		Table: pb.String(ctx.getTable()),
+		Key:   pb.String(ctx.getKey()),
+	}
+
+	if ctx.writeBackFlag == write_back_update {
+		pbRecord.Fields = make([]*proto.Field, len(ctx.fields))
+		i := 0
+		for _, v := range ctx.fields {
+			pbRecord.Fields[i] = v
+			i++
+		}
+
+	} else if ctx.writeBackFlag == write_back_insert {
+		pbRecord.Fields = make([]*proto.Field, len(ctx.fields))
+		meta := ctx.getCacheKey().getMeta()
+		pbRecord.Fields[0] = ctx.fields["__version__"]
+		i := 1
+		for _, name := range meta.insertFieldOrder {
+			if name != "__version__" {
+				pbRecord.Fields[i] = ctx.fields[name]
+				i++
+			}
+		}
+	}
+
+	ckey.mtx.Unlock()
+
+	bytes, err := pb.Marshal(pbRecord)
+	if err != nil {
+		Fatalln("[marshalRecord]", err, *pbRecord)
+		return
+	}
+
+	this.mtx.Lock()
+	defer this.mtx.Unlock()
+
+	if this.nextFlush.IsZero() {
+		this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval))
+	}
+
+	if nil == this.binlogStr {
+		this.binlogStr = strGet()
+	}
+
+	this.binlogStr.appendInt32(int32(len(bytes)))
+	this.binlogStr.appendBytes(bytes...)
+
+	this.ctxs.append(ctx)
+
+	if this.ctxs.full() || this.binlogStr.dataLen() >= config.FlushSize || time.Now().After(this.nextFlush) {
+		this.flushToFile()
+	}
+
+	Debugln("writeBack ok")*/
 }

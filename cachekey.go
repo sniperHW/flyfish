@@ -16,19 +16,20 @@ const (
 )
 
 type cacheKey struct {
-	uniKey          string
-	key             string
-	version         int64
-	status          int
-	cmdQueueLocked  bool //操作是否被锁定
-	mtx             sync.Mutex
-	cmdQueue        *list.List
-	meta            *table_meta
-	writeBackLocked int64 //每次更新+1,sql执行完-1
-	unit            *processUnit
-	nnext           *cacheKey
-	pprev           *cacheKey
-	values          map[string]*proto.Field
+	uniKey         string
+	key            string
+	version        int64
+	status         int
+	cmdQueueLocked bool //操作是否被锁定
+	mtx            sync.Mutex
+	cmdQueue       *list.List
+	meta           *table_meta
+	modify         bool
+	sqlFlag        int
+	unit           *processUnit
+	nnext          *cacheKey
+	pprev          *cacheKey
+	values         map[string]*proto.Field
 }
 
 func (this *cacheKey) lockCmdQueue() {
@@ -48,15 +49,24 @@ func (this *cacheKey) kickAble() bool {
 		return false
 	}
 
-	if this.writeBackLocked > 0 {
-		return false
-	}
-
 	if this.cmdQueue.Len() != 0 {
 		return false
 	}
 
 	return true
+}
+
+func (this *cacheKey) setSqlFlag(flag int) {
+
+	if flag == write_back_none {
+		return
+	}
+
+	if this.sqlFlag == write_back_none {
+		this.sqlFlag = flag
+	} else {
+
+	}
 }
 
 func (this *cacheKey) setMissing() {
@@ -84,14 +94,6 @@ func (this *cacheKey) setOK(version int64) {
 func (this *cacheKey) setOKNoLock(version int64) {
 	this.version = version
 	this.status = cache_ok
-}
-
-func (this *cacheKey) clearWriteBack() {
-	defer this.mtx.Unlock()
-	this.mtx.Lock()
-	if this.writeBackLocked > 0 {
-		this.writeBackLocked--
-	}
 }
 
 func (this *cacheKey) pushCmd(cmd *command) {

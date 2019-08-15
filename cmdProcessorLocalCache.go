@@ -60,6 +60,7 @@ func (this cmdProcessorLocalCache) processSet(ckey *cacheKey, cmd *command) *pro
 			ckey.values[v.GetName()] = v
 			ctx.fields[v.GetName()] = v
 		}
+		ckey.modify = true
 	} else if ckey.status == cache_missing {
 		ckey.setDefaultValue(ctx)
 		ckey.setOKNoLock(1)
@@ -133,6 +134,7 @@ func (this cmdProcessorLocalCache) processCompareAndSet(ckey *cacheKey, cmd *com
 			ctx.fields["__version__"] = proto.PackField("__version__", ckey.version)
 			ckey.values[cmd.cns.oldV.GetName()] = cmd.cns.newV
 			ctx.fields[cmd.cns.oldV.GetName()] = cmd.cns.newV
+			ckey.modify = true
 		}
 
 		return ctx
