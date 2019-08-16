@@ -1,49 +1,31 @@
 package flyfish
 
 import (
-	//"encoding/binary"
-	//"fmt"
-	//pb "github.com/golang/protobuf/proto"
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/errcode"
-	//"github.com/sniperHW/flyfish/proto"
-	//"github.com/sniperHW/kendynet/util"
-	//"hash/crc64"
-	//"os"
-	//"sync"
-	//"sync/atomic"
 	"time"
 )
 
 func (this *processUnit) flushBatch() *ctxArray {
-	//if this.ctxs.len() > 0 {
 	if this.ctxs != nil {
 		err := levelDB.Write(this.levelDBBatch, nil)
 		if err == nil {
 			for i := 0; i < this.ctxs.count; i++ {
 				v := this.ctxs.ctxs[i]
-				v.reply(errcode.ERR_OK, nil, v.fields["__version__"].GetInt())
 				ckey := v.getCacheKey()
 				ckey.mtx.Lock()
+				v.reply(errcode.ERR_OK, nil, ckey.version)
 				if !ckey.writeBackLocked {
 					ckey.writeBackLocked = true
 					pushSqlWriteReq(ckey)
 				}
 				ckey.mtx.Unlock()
 			}
-			/*for i := 0; i < this.ctxs.count; i++ {
-				v := this.ctxs.ctxs[i]
-				v.getCacheKey().processQueueCmd()
-			}*/
 		} else {
 			for i := 0; i < this.ctxs.count; i++ {
 				v := this.ctxs.ctxs[i]
 				v.reply(errcode.ERR_LEVELDB, nil, -1)
 			}
-			/*for i := 0; i < this.ctxs.count; i++ {
-				v := this.ctxs.ctxs[i]
-				v.getCacheKey().processQueueCmd()
-			}*/
 		}
 		this.levelDBBatch.Reset()
 	}
@@ -102,11 +84,11 @@ func (this *processUnit) writeBack(ctx *processContext) {
 	}
 
 	if ckey.sqlFlag == write_back_delete {
-		levelDBWrite(this.levelDBBatch, ckey.sqlFlag, ckey.uniKey, ckey.getMeta(), nil)
+		levelDBWrite(this.levelDBBatch, ckey.sqlFlag, ckey.uniKey, ckey.getMeta(), nil, 0)
 	} else if ckey.sqlFlag == write_back_insert {
-		levelDBWrite(this.levelDBBatch, ckey.sqlFlag, ckey.uniKey, ckey.getMeta(), ckey.values)
+		levelDBWrite(this.levelDBBatch, ckey.sqlFlag, ckey.uniKey, ckey.getMeta(), ckey.values, ckey.version)
 	} else {
-		levelDBWrite(this.levelDBBatch, ckey.sqlFlag, ckey.uniKey, ckey.getMeta(), ctx.fields)
+		levelDBWrite(this.levelDBBatch, ckey.sqlFlag, ckey.uniKey, ckey.getMeta(), ctx.fields, ckey.version)
 	}
 
 	ckey.mtx.Unlock()

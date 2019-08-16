@@ -20,7 +20,7 @@ func (this sqlResponseLocalCache) onSqlNotFound(ctx *processContext) {
 
 		ckey.mtx.Lock()
 
-		Infoln("onSqlNotFound setDefaultValue", ctx.getUniKey())
+		//Infoln("onSqlNotFound setDefaultValue", ctx.getUniKey())
 		ckey.setDefaultValue(ctx)
 
 		ckey.setOKNoLock(1)
@@ -49,7 +49,7 @@ func (this sqlResponseLocalCache) onSqlNotFound(ctx *processContext) {
 
 		ckey.mtx.Unlock()
 
-		ctx.fields["__version__"] = proto.PackField("__version__", 1)
+		//ctx.fields["__version__"] = proto.PackField("__version__", 1)
 
 		ctx.writeBackFlag = write_back_insert
 
@@ -91,7 +91,7 @@ func (this sqlResponseLocalCache) onSqlLoadOKSet(ctx *processContext) {
 				ctx.fields[v.GetName()] = v
 			}
 			version++
-			ctx.fields["__version__"] = proto.PackField("__version__", version)
+			//ctx.fields["__version__"] = proto.PackField("__version__", version)
 			ctx.writeBackFlag = write_back_update //sql中存在,使用update回写
 		}
 	} else if cmdType == cmdCompareAndSet || cmdType == cmdCompareAndSetNx {
@@ -100,7 +100,7 @@ func (this sqlResponseLocalCache) onSqlLoadOKSet(ctx *processContext) {
 			ctx.reply(errcode.ERR_NOT_EQUAL, ctx.fields, version)
 		} else {
 			version++
-			ctx.fields["__version__"] = proto.PackField("__version__", version)
+			//ctx.fields["__version__"] = proto.PackField("__version__", version)
 			ctx.fields[cmd.cns.oldV.GetName()] = cmd.cns.newV
 			ctx.writeBackFlag = write_back_update //sql中存在,使用update回写
 		}
@@ -117,7 +117,7 @@ func (this sqlResponseLocalCache) onSqlLoadOKSet(ctx *processContext) {
 		}
 		ctx.fields[cmd.incrDecr.GetName()].SetInt(newV)
 		version++
-		ctx.fields["__version__"] = proto.PackField("__version__", version)
+		//ctx.fields["__version__"] = proto.PackField("__version__", version)
 		ctx.writeBackFlag = write_back_update //sql中存在,使用update回写
 	}
 

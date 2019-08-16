@@ -34,24 +34,24 @@ func fetchUnikeyAndFieldName(key []byte) (string, string, string, string, error)
 	}
 }
 
-func fetchFieldFromLevelDBValue(meta *table_meta, fileName string, value []byte) *proto.Field {
+func fetchFieldFromLevelDBValue(meta *table_meta, fieldName string, value []byte) *proto.Field {
 	//to do,对配置配型和存储的类型做检查
 	tt := proto.ValueType(value[0])
 	switch tt {
 	case proto.ValueType_string:
-		return proto.PackField(fileName, string(value[1:]))
+		return proto.PackField(fieldName, string(value[1:]))
 	case proto.ValueType_float:
 		u := binary.BigEndian.Uint64(value[1:])
 		f := math.Float64frombits(u)
-		return proto.PackField(fileName, f)
+		return proto.PackField(fieldName, f)
 	case proto.ValueType_int:
 		i := binary.BigEndian.Uint64(value[1:])
-		return proto.PackField(fileName, int64(i))
+		return proto.PackField(fieldName, int64(i))
 	case proto.ValueType_uint:
 		u := binary.BigEndian.Uint64(value[1:])
-		return proto.PackField(fileName, u)
+		return proto.PackField(fieldName, u)
 	case proto.ValueType_blob:
-		return proto.PackField(fileName, value[1:])
+		return proto.PackField(fieldName, value[1:])
 	default:
 		panic("invaild value type")
 	}
@@ -59,9 +59,7 @@ func fetchFieldFromLevelDBValue(meta *table_meta, fileName string, value []byte)
 
 var loadKeyCount int
 
-func processLoadLevelDBKV(table, key, unikey, fileName string, value []byte) {
-
-	//Debugln("fileName", fileName)
+func processLoadLevelDBKV(table, key, unikey, fieldName string, value []byte) {
 
 	unit := getUnitByUnikey(unikey)
 	unit.mtx.Lock()
@@ -72,27 +70,20 @@ func processLoadLevelDBKV(table, key, unikey, fileName string, value []byte) {
 		if nil == k {
 			Fatalln("processLoadLevelDBKV newCacheKey falied")
 		}
+		k.status = cache_new
 		k.values = map[string]*proto.Field{}
 		unit.cacheKeys[unikey] = k
 		unit.updateLRU(k)
 	}
 
-	//Debugln(&k, &unit, unit.cacheKeys)
-
-	v := fetchFieldFromLevelDBValue(k.meta, fileName, value)
-	if fileName != "__version__" {
-		k.values[fileName] = v
-
-		Debugln("Set", v)
-
+	v := fetchFieldFromLevelDBValue(k.meta, fieldName, value)
+	if fieldName != "__version__" {
+		k.values[fieldName] = v
 	} else {
+		loadKeyCount++
 		k.version = v.GetInt()
 		k.status = cache_ok
-		loadKeyCount++
-		Infoln(unikey, "ok")
 	}
-
-	//Debugln(len(k.values), k.values)
 
 	Debugln("--------------------------", v)
 	for n, v := range k.values {
@@ -110,15 +101,13 @@ func loadFromLevelDB() error {
 		k := iter.Key()
 		v := iter.Value()
 
-		table, key, unikey, fileName, err := fetchUnikeyAndFieldName(k)
-
-		//Infoln(table, key, unikey, fileName)
+		table, key, unikey, fieldName, err := fetchUnikeyAndFieldName(k)
 
 		if nil != err {
 			return err
 		}
 
-		processLoadLevelDBKV(table, key, unikey, fileName, v)
+		processLoadLevelDBKV(table, key, unikey, fieldName, v)
 
 	}
 	iter.Release()
@@ -126,12 +115,9 @@ func loadFromLevelDB() error {
 	return iter.Error()
 }
 
-func levelDBWrite(batch *leveldb.Batch, tt int, unikey string, meta *table_meta, fields map[string]*proto.Field) {
+func levelDBWrite(batch *leveldb.Batch, tt int, unikey string, meta *table_meta, fields map[string]*proto.Field, version int64) {
 
 	Debugln("levelDBWrite")
-
-	//batch := new(leveldb.Batch)
-
 	//leveldb key  fieldname:unikey
 
 	if tt == write_back_delete {
@@ -144,29 +130,30 @@ func levelDBWrite(batch *leveldb.Batch, tt int, unikey string, meta *table_meta,
 		}
 
 		//将版本号设置为0
-		key.append("__version__")
-		val.appendInt64(0)
+		key.append("__version__:").append(unikey)
+		val.appendByte(byte(proto.ValueType_int)).appendInt64(version)
 		batch.Put(key.bytes(), val.bytes())
 
 		strPut(key)
 		strPut(val)
 	} else {
-
-		if len(fields) > 0 {
-			Infoln("levelDBWrite put", unikey)
-		}
-
 		key := strGet()
 		val := strGet()
-		for _, v := range fields {
-			key.append(v.GetName()).append(":").append(unikey)
-			val.appendField(v)
-			batch.Put(key.bytes(), val.bytes())
-			key.reset()
-			val.reset()
+		for n, v := range fields {
+			if n != "__version__" {
+				key.append(v.GetName()).append(":").append(unikey)
+				val.appendField(v)
+				batch.Put(key.bytes(), val.bytes())
+				key.reset()
+				val.reset()
+			}
 		}
+
+		key.append("__version__:").append(unikey)
+		val.appendByte(byte(proto.ValueType_int)).appendInt64(version)
+		batch.Put(key.bytes(), val.bytes())
+
 		strPut(key)
 		strPut(val)
 	}
-	//return levelDB.Write(batch, nil)
 }
