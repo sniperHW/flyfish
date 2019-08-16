@@ -267,6 +267,8 @@ func Start() error {
 		return fmt.Errorf("replayBinlog failed")
 	}*/
 
+	TestSnapshot()
+
 	initProcessUnit()
 
 	leveldbInit()
