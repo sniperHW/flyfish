@@ -123,11 +123,11 @@ func loadFromLevelDB() error {
 	return iter.Error()
 }
 
-func levelDBWrite(tt int, unikey string, meta *table_meta, fields map[string]*proto.Field) error {
+func levelDBWrite(batch *leveldb.Batch, tt int, unikey string, meta *table_meta, fields map[string]*proto.Field) {
 
 	Debugln("levelDBWrite")
 
-	batch := new(leveldb.Batch)
+	//batch := new(leveldb.Batch)
 
 	//leveldb key  fieldname:unikey
 
@@ -163,5 +163,5 @@ func levelDBWrite(tt int, unikey string, meta *table_meta, fields map[string]*pr
 		strPut(key)
 		strPut(val)
 	}
-	return levelDB.Write(batch, nil)
+	//return levelDB.Write(batch, nil)
 }

@@ -4,7 +4,7 @@ import (
 	//"encoding/binary"
 	//"fmt"
 	//pb "github.com/golang/protobuf/proto"
-	//"github.com/sniperHW/flyfish/conf"
+	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/errcode"
 	//"github.com/sniperHW/flyfish/proto"
 	//"github.com/sniperHW/kendynet/util"
@@ -12,10 +12,45 @@ import (
 	//"os"
 	//"sync"
 	//"sync/atomic"
-	//"time"
+	"time"
 )
 
-func writeBack(ctx *processContext) {
+func (this *processUnit) flushBatch() {
+	if this.ctxs.len() > 0 {
+		err := levelDB.Write(this.levelDBBatch, nil)
+		if err == nil {
+			for i := 0; i < this.ctxs.count; i++ {
+				v := this.ctxs.ctxs[i]
+				v.reply(errcode.ERR_OK, nil, v.fields["__version__"].GetInt())
+				ckey := v.getCacheKey()
+				ckey.mtx.Lock()
+				if !ckey.writeBackLocked {
+					ckey.writeBackLocked = true
+					pushSqlWriteReq(ckey)
+				}
+				ckey.mtx.Unlock()
+			}
+			for i := 0; i < this.ctxs.count; i++ {
+				v := this.ctxs.ctxs[i]
+				v.getCacheKey().processQueueCmd()
+			}
+		} else {
+			for i := 0; i < this.ctxs.count; i++ {
+				v := this.ctxs.ctxs[i]
+				v.reply(errcode.ERR_LEVELDB, nil, -1)
+			}
+			for i := 0; i < this.ctxs.count; i++ {
+				v := this.ctxs.ctxs[i]
+				v.getCacheKey().processQueueCmd()
+			}
+		}
+		this.ctxs.reset()
+	}
+	config := conf.GetConfig()
+	this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval))
+}
+
+func (this *processUnit) writeBack(ctx *processContext) {
 
 	if ctx.writeBackFlag == write_back_none {
 		panic("ctx.writeBackFlag == write_back_none")
@@ -26,8 +61,11 @@ func writeBack(ctx *processContext) {
 
 	ckey := ctx.getCacheKey()
 
+	this.mtx.Lock()
+	defer this.mtx.Unlock()
+
 	ckey.mtx.Lock()
-	version := ckey.version
+	//version := ckey.version
 
 	if ckey.sqlFlag == write_back_none {
 		ckey.sqlFlag = ctx.writeBackFlag
@@ -55,17 +93,23 @@ func writeBack(ctx *processContext) {
 		}
 	}
 
-	var err error
-
 	if ckey.sqlFlag == write_back_delete {
-		err = levelDBWrite(ckey.sqlFlag, ckey.uniKey, ckey.getMeta(), nil)
+		levelDBWrite(this.levelDBBatch, ckey.sqlFlag, ckey.uniKey, ckey.getMeta(), nil)
 	} else if ckey.sqlFlag == write_back_insert {
-		err = levelDBWrite(ckey.sqlFlag, ckey.uniKey, ckey.getMeta(), ckey.values)
+		levelDBWrite(this.levelDBBatch, ckey.sqlFlag, ckey.uniKey, ckey.getMeta(), ckey.values)
 	} else {
-		err = levelDBWrite(ckey.sqlFlag, ckey.uniKey, ckey.getMeta(), ctx.fields)
+		levelDBWrite(this.levelDBBatch, ckey.sqlFlag, ckey.uniKey, ckey.getMeta(), ctx.fields)
 	}
 
-	if nil != err {
+	ckey.mtx.Unlock()
+
+	this.ctxs.append(ctx)
+
+	if this.ctxs.full() || time.Now().After(this.nextFlush) {
+		this.flushBatch()
+	}
+
+	/*if nil != err {
 		ckey.mtx.Unlock()
 
 		ctx.reply(errcode.ERR_LEVELDB, nil, -1)
@@ -83,5 +127,5 @@ func writeBack(ctx *processContext) {
 		ctx.reply(errcode.ERR_OK, nil, version)
 	}
 
-	ckey.processQueueCmd()
+	ckey.processQueueCmd()*/
 }

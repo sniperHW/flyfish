@@ -2,9 +2,10 @@ package flyfish
 
 import (
 	"github.com/sniperHW/flyfish/conf"
-	//"github.com/sniperHW/kendynet/timer"
+	"github.com/sniperHW/kendynet/timer"
+	"github.com/syndtr/goleveldb/leveldb"
 	"sync"
-	//"time"
+	"time"
 )
 
 /*
@@ -21,11 +22,36 @@ type cmdProcessorI interface {
 	processCmd(*cacheKey, bool)
 }
 
+type ctxArray struct {
+	count int
+	ctxs  []*processContext
+}
+
+func (this *ctxArray) append(ctx *processContext) {
+	this.ctxs[this.count] = ctx
+	this.count++
+}
+
+func (this *ctxArray) full() bool {
+	return this.count == cap(this.ctxs)
+}
+
+func (this *ctxArray) reset() {
+	this.count = 0
+}
+
+func (this *ctxArray) len() int {
+	return this.count
+}
+
 type processUnit struct {
-	cacheKeys map[string]*cacheKey
-	mtx       sync.Mutex
-	lruHead   cacheKey
-	lruTail   cacheKey
+	cacheKeys    map[string]*cacheKey
+	mtx          sync.Mutex
+	lruHead      cacheKey
+	lruTail      cacheKey
+	levelDBBatch *leveldb.Batch
+	ctxs         *ctxArray
+	nextFlush    time.Time
 }
 
 func (this *processUnit) doWriteBack(ctx *processContext) {
@@ -36,7 +62,7 @@ func (this *processUnit) doWriteBack(ctx *processContext) {
 		panic("ctx.writeBackFlag == write_back_none")
 	}
 
-	writeBack(ctx)
+	this.writeBack(ctx)
 }
 
 func (this *cacheKey) process_(fromClient bool) {
@@ -73,7 +99,7 @@ func (this *processUnit) removeLRU(ckey *cacheKey) {
 }
 
 func (this *processUnit) kickCacheKey() {
-	MaxCachePerGroupSize := conf.GetConfig().MaxCachePerGroupSize
+	/*MaxCachePerGroupSize := conf.GetConfig().MaxCachePerGroupSize
 
 	for len(this.cacheKeys) > MaxCachePerGroupSize && this.lruHead.nnext != &this.lruTail {
 
@@ -85,6 +111,14 @@ func (this *processUnit) kickCacheKey() {
 
 		this.removeLRU(c)
 		delete(this.cacheKeys, c.uniKey)
+	}*/
+}
+
+func (this *processUnit) checkFlush() {
+	this.mtx.Lock()
+	defer this.mtx.Unlock()
+	if time.Now().After(this.nextFlush) {
+		this.flushBatch()
 	}
 }
 
@@ -98,13 +132,26 @@ func initProcessUnit() {
 	for i := 0; i < CacheGroupSize; i++ {
 
 		unit := &processUnit{
-			cacheKeys: map[string]*cacheKey{},
+			cacheKeys:    map[string]*cacheKey{},
+			levelDBBatch: new(leveldb.Batch),
+			ctxs: &ctxArray{
+				ctxs:  make([]*processContext, conf.GetConfig().FlushCount),
+				count: 0,
+			},
+			nextFlush: time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval)),
 		}
 
 		unit.lruHead.nnext = &unit.lruTail
 		unit.lruTail.pprev = &unit.lruHead
 
-		processUnits[i] = unit
+		timer.Repeat(time.Millisecond*100, nil, func(t *timer.Timer) {
+			if isStop() {
+				t.Cancel()
+			} else {
+				unit.checkFlush()
+			}
+		})
 
+		processUnits[i] = unit
 	}
 }
