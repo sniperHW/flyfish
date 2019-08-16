@@ -1,6 +1,7 @@
 package flyfish
 
 import (
+	"fmt"
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/golog"
@@ -16,6 +17,9 @@ func InitLogger() {
 		golog.DisableStdOut()
 	}
 	fullname := "flyfishd"
+
+	fmt.Println(logConfig.LogDir, logConfig.LogPrefix)
+
 	logger = golog.New(fullname, golog.NewOutputLogger(logConfig.LogDir, logConfig.LogPrefix, logConfig.MaxLogfileSize))
 	logger.SetLevelByString(logConfig.LogLevel)
 	kendynet.InitLogger(logger)

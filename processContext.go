@@ -83,9 +83,7 @@ func (this *cacheKey) setDefaultValue(ctx *processContext) {
 		defaultV := proto.PackField(v.name, v.defaultV)
 		this.values[v.name] = defaultV
 		ctx.fields[v.name] = defaultV
-
-		Infoln("setDefaultValue", v.name)
-
+		//Infoln("setDefaultValue", v.name)
 	}
 }
 

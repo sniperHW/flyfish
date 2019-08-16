@@ -20,6 +20,7 @@ func (this sqlResponseLocalCache) onSqlNotFound(ctx *processContext) {
 
 		ckey.mtx.Lock()
 
+		Infoln("onSqlNotFound setDefaultValue", ctx.getUniKey())
 		ckey.setDefaultValue(ctx)
 
 		ckey.setOKNoLock(1)

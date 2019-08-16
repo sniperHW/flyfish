@@ -61,6 +61,7 @@ func (this cmdProcessorLocalCache) processSet(ckey *cacheKey, cmd *command) *pro
 			ctx.fields[v.GetName()] = v
 		}
 	} else if ckey.status == cache_missing {
+		Infoln("processSet cache_missing setDefaultValue", ckey.uniKey)
 		ckey.setDefaultValue(ctx)
 		ckey.setOKNoLock(1)
 		ctx.writeBackFlag = write_back_insert //数据不存在执行insert

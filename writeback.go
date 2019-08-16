@@ -15,8 +15,9 @@ import (
 	"time"
 )
 
-func (this *processUnit) flushBatch() {
-	if this.ctxs.len() > 0 {
+func (this *processUnit) flushBatch() *ctxArray {
+	//if this.ctxs.len() > 0 {
+	if this.ctxs != nil {
 		err := levelDB.Write(this.levelDBBatch, nil)
 		if err == nil {
 			for i := 0; i < this.ctxs.count; i++ {
@@ -30,25 +31,30 @@ func (this *processUnit) flushBatch() {
 				}
 				ckey.mtx.Unlock()
 			}
-			for i := 0; i < this.ctxs.count; i++ {
+			/*for i := 0; i < this.ctxs.count; i++ {
 				v := this.ctxs.ctxs[i]
 				v.getCacheKey().processQueueCmd()
-			}
+			}*/
 		} else {
 			for i := 0; i < this.ctxs.count; i++ {
 				v := this.ctxs.ctxs[i]
 				v.reply(errcode.ERR_LEVELDB, nil, -1)
 			}
-			for i := 0; i < this.ctxs.count; i++ {
+			/*for i := 0; i < this.ctxs.count; i++ {
 				v := this.ctxs.ctxs[i]
 				v.getCacheKey().processQueueCmd()
-			}
+			}*/
 		}
-		this.ctxs.reset()
 		this.levelDBBatch.Reset()
 	}
 	config := conf.GetConfig()
 	this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval))
+
+	ctxs := this.ctxs
+	this.ctxs = nil
+
+	return ctxs
+
 }
 
 func (this *processUnit) writeBack(ctx *processContext) {
@@ -58,15 +64,16 @@ func (this *processUnit) writeBack(ctx *processContext) {
 	}
 
 	Debugln("writeBack")
-	//config := conf.GetConfig()
 
 	ckey := ctx.getCacheKey()
 
 	this.mtx.Lock()
-	defer this.mtx.Unlock()
+
+	if nil == this.ctxs {
+		this.ctxs = ctxArrayGet()
+	}
 
 	ckey.mtx.Lock()
-	//version := ckey.version
 
 	if ckey.sqlFlag == write_back_none {
 		ckey.sqlFlag = ctx.writeBackFlag
@@ -106,27 +113,19 @@ func (this *processUnit) writeBack(ctx *processContext) {
 
 	this.ctxs.append(ctx)
 
+	var ctxs *ctxArray
+
 	if this.ctxs.full() || time.Now().After(this.nextFlush) {
-		this.flushBatch()
+		ctxs = this.flushBatch()
 	}
 
-	/*if nil != err {
-		ckey.mtx.Unlock()
+	this.mtx.Unlock()
 
-		ctx.reply(errcode.ERR_LEVELDB, nil, -1)
-
-		Errorln(err)
-	} else {
-
-		if !ckey.writeBackLocked {
-			ckey.writeBackLocked = true
-			pushSqlWriteReq(ckey)
+	if nil != ctxs {
+		for i := 0; i < ctxs.count; i++ {
+			v := ctxs.ctxs[i]
+			v.getCacheKey().processQueueCmd()
 		}
-
-		ckey.mtx.Unlock()
-
-		ctx.reply(errcode.ERR_OK, nil, version)
+		ctxArrayPut(ctxs)
 	}
-
-	ckey.processQueueCmd()*/
 }

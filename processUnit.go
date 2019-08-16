@@ -44,6 +44,24 @@ func (this *ctxArray) len() int {
 	return this.count
 }
 
+var ctxArrayPool = sync.Pool{
+	New: func() interface{} {
+		return &ctxArray{
+			ctxs:  make([]*processContext, conf.GetConfig().FlushCount),
+			count: 0,
+		}
+	},
+}
+
+func ctxArrayGet() *ctxArray {
+	return ctxArrayPool.Get().(*ctxArray)
+}
+
+func ctxArrayPut(w *ctxArray) {
+	w.count = 0
+	ctxArrayPool.Put(w)
+}
+
 type processUnit struct {
 	cacheKeys    map[string]*cacheKey
 	mtx          sync.Mutex
@@ -116,9 +134,18 @@ func (this *processUnit) kickCacheKey() {
 
 func (this *processUnit) checkFlush() {
 	this.mtx.Lock()
-	defer this.mtx.Unlock()
+	var ctxs *ctxArray
 	if time.Now().After(this.nextFlush) {
-		this.flushBatch()
+		ctxs = this.flushBatch()
+	}
+	this.mtx.Unlock()
+
+	if nil != ctxs {
+		for i := 0; i < ctxs.count; i++ {
+			v := ctxs.ctxs[i]
+			v.getCacheKey().processQueueCmd()
+		}
+		ctxArrayPut(ctxs)
 	}
 }
 
@@ -134,10 +161,10 @@ func initProcessUnit() {
 		unit := &processUnit{
 			cacheKeys:    map[string]*cacheKey{},
 			levelDBBatch: new(leveldb.Batch),
-			ctxs: &ctxArray{
+			/*ctxs: &ctxArray{
 				ctxs:  make([]*processContext, conf.GetConfig().FlushCount),
 				count: 0,
-			},
+			},*/
 			nextFlush: time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval)),
 		}
 

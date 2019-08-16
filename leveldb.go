@@ -57,6 +57,8 @@ func fetchFieldFromLevelDBValue(meta *table_meta, fileName string, value []byte)
 	}
 }
 
+var loadKeyCount int
+
 func processLoadLevelDBKV(table, key, unikey, fileName string, value []byte) {
 
 	//Debugln("fileName", fileName)
@@ -86,6 +88,7 @@ func processLoadLevelDBKV(table, key, unikey, fileName string, value []byte) {
 	} else {
 		k.version = v.GetInt()
 		k.status = cache_ok
+		loadKeyCount++
 		Infoln(unikey, "ok")
 	}
 
@@ -119,7 +122,7 @@ func loadFromLevelDB() error {
 
 	}
 	iter.Release()
-	Infoln("loadFromLevelDB load time", time.Now().Sub(beg))
+	Infoln("loadFromLevelDB load time", time.Now().Sub(beg), loadKeyCount)
 	return iter.Error()
 }
 
@@ -149,7 +152,9 @@ func levelDBWrite(batch *leveldb.Batch, tt int, unikey string, meta *table_meta,
 		strPut(val)
 	} else {
 
-		Debugln("levelDBWrite put")
+		if len(fields) > 0 {
+			Infoln("levelDBWrite put", unikey)
+		}
 
 		key := strGet()
 		val := strGet()

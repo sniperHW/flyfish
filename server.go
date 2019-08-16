@@ -361,6 +361,8 @@ func Stop() {
 		}
 	})
 
+	levelDB.Close()
+
 	Infoln("flyfish stop ok")
 
 }
