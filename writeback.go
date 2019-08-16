@@ -45,6 +45,7 @@ func (this *processUnit) flushBatch() {
 			}
 		}
 		this.ctxs.reset()
+		this.levelDBBatch.Reset()
 	}
 	config := conf.GetConfig()
 	this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval))
