@@ -93,11 +93,15 @@ func (this *str) appendBytes(bytes ...byte) *str {
 
 func (this *str) appendField(field *proto.Field) *str {
 
+	this.appendInt32(int32(len(field.GetName())))
+	this.append(field.GetName())
+
 	tt := field.GetType()
 
 	switch tt {
 	case proto.ValueType_string:
 		this.appendByte(byte(proto.ValueType_string))
+		this.appendInt32(int32(len(field.GetString())))
 		this.append(field.GetString())
 	case proto.ValueType_float:
 		this.appendByte(byte(proto.ValueType_float))
@@ -111,6 +115,7 @@ func (this *str) appendField(field *proto.Field) *str {
 		this.appendInt64(int64(field.GetUint()))
 	case proto.ValueType_blob:
 		this.appendByte(byte(proto.ValueType_blob))
+		this.appendInt32(int32(len(field.GetBlob())))
 		this.appendBytes(field.GetBlob()...)
 	default:
 		panic("invaild value type")

@@ -10,11 +10,11 @@ import (
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/socket/listener/tcp"
 	"net"
-	//"os"
-	//"path/filepath"
-	//"sort"
-	//"strconv"
-	//"strings"
+	"os"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -156,7 +156,7 @@ func (this *tcpListener) Start() error {
 	})
 }
 
-/*func getFileList(dirpath string) ([]string, error) {
+func getFileList(dirpath string) ([]string, error) {
 	var file_list []string
 	dir_err := filepath.Walk(dirpath,
 		func(path string, f os.FileInfo, err error) error {
@@ -203,43 +203,6 @@ func sortFileList(fileList []string) {
 	sort.Sort(ByID(fileList))
 }
 
-//执行尚未完成的回写文件
-func replayBinlog() bool {
-	config := conf.GetConfig()
-
-	dbConfig := config.DBConfig
-
-	_, err := os.Stat(config.BinlogDir)
-
-	if nil != err && os.IsNotExist(err) {
-		return true
-	}
-
-	//获得所有文件
-	fileList, err := getFileList(config.BinlogDir)
-	if nil != err {
-		return false
-	}
-
-	//对fileList排序
-	sortFileList(fileList)
-
-	writeBackDB, err := sqlOpen(dbConfig.SqlType, dbConfig.DbHost, dbConfig.DbPort, dbConfig.DbDataBase, dbConfig.DbUser, dbConfig.DbPassword)
-
-	if nil != err {
-		return false
-	}
-
-	sqlUpdater_ := newSqlUpdater(writeBackDB, "execWriteBackFile", nil, true)
-
-	for _, v := range fileList {
-		sqlUpdater_.process(v)
-	}
-
-	return true
-
-}*/
-
 func Start() error {
 
 	var err error
@@ -263,20 +226,10 @@ func Start() error {
 		return fmt.Errorf("initSql failed")
 	}
 
-	/*if !replayBinlog() {
-		return fmt.Errorf("replayBinlog failed")
-	}*/
-
-	TestSnapshot()
-
 	initProcessUnit()
 
-	leveldbInit()
-
-	err = loadFromLevelDB()
-
-	if nil != err {
-		return err
+	if !StartReplayBinlog() {
+		return fmt.Errorf("StartReplayBinlog failed")
 	}
 
 	server, err = newTcpListener("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort))
@@ -363,7 +316,7 @@ func Stop() {
 		}
 	})
 
-	levelDB.Close()
+	//levelDB.Close()
 
 	Infoln("flyfish stop ok")
 

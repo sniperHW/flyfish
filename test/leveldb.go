@@ -30,7 +30,7 @@ func main() {
 
 	batch := new(leveldb.Batch)
 
-	for i := 1; i <= 2000000; i++ {
+	for i := 1; i <= 1000000; i++ {
 		key := fmt.Sprintf("key:%d", i)
 		//levelDB.Put([]byte(key), []byte(val), nil)
 		batch.Put([]byte(key), val)

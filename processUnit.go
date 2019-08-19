@@ -3,7 +3,7 @@ package flyfish
 import (
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/kendynet/timer"
-	"github.com/syndtr/goleveldb/leveldb"
+	"os"
 	"sync"
 	"time"
 )
@@ -63,13 +63,17 @@ func ctxArrayPut(w *ctxArray) {
 }
 
 type processUnit struct {
-	cacheKeys    map[string]*cacheKey
-	mtx          sync.Mutex
-	lruHead      cacheKey
-	lruTail      cacheKey
-	levelDBBatch *leveldb.Batch
-	ctxs         *ctxArray
-	nextFlush    time.Time
+	cacheKeys   map[string]*cacheKey
+	mtx         sync.Mutex
+	lruHead     cacheKey
+	lruTail     cacheKey
+	ctxs        *ctxArray
+	nextFlush   time.Time
+	binlogStr   *str
+	f           *os.File
+	filePath    string
+	binlogCount int64
+	fileSize    int
 }
 
 func (this *processUnit) doWriteBack(ctx *processContext) {
@@ -117,7 +121,7 @@ func (this *processUnit) removeLRU(ckey *cacheKey) {
 }
 
 func (this *processUnit) kickCacheKey() {
-	/*MaxCachePerGroupSize := conf.GetConfig().MaxCachePerGroupSize
+	MaxCachePerGroupSize := conf.GetConfig().MaxCachePerGroupSize
 
 	for len(this.cacheKeys) > MaxCachePerGroupSize && this.lruHead.nnext != &this.lruTail {
 
@@ -128,15 +132,16 @@ func (this *processUnit) kickCacheKey() {
 		}
 
 		this.removeLRU(c)
+		this.writeKick(c.uniKey)
 		delete(this.cacheKeys, c.uniKey)
-	}*/
+	}
 }
 
 func (this *processUnit) checkFlush() {
 	this.mtx.Lock()
 	var ctxs *ctxArray
 	if time.Now().After(this.nextFlush) {
-		ctxs = this.flushBatch()
+		ctxs = this.flush()
 	}
 	this.mtx.Unlock()
 
@@ -159,12 +164,7 @@ func initProcessUnit() {
 	for i := 0; i < CacheGroupSize; i++ {
 
 		unit := &processUnit{
-			cacheKeys:    map[string]*cacheKey{},
-			levelDBBatch: new(leveldb.Batch),
-			/*ctxs: &ctxArray{
-				ctxs:  make([]*processContext, conf.GetConfig().FlushCount),
-				count: 0,
-			},*/
+			cacheKeys: map[string]*cacheKey{},
 			nextFlush: time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval)),
 		}
 

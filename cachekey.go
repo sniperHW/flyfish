@@ -26,6 +26,7 @@ type cacheKey struct {
 	cmdQueue        *list.List
 	meta            *table_meta
 	sqlFlag         int
+	snapshot        bool
 	unit            *processUnit
 	nnext           *cacheKey
 	pprev           *cacheKey
