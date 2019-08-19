@@ -72,7 +72,7 @@ type processUnit struct {
 	binlogStr   *str
 	f           *os.File
 	filePath    string
-	binlogCount int64
+	binlogCount int32
 	fileSize    int
 }
 

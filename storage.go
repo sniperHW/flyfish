@@ -37,6 +37,8 @@ func (this *processUnit) flush() *ctxArray {
 		return nil
 	}
 
+	beg := time.Now()
+
 	config := conf.GetConfig()
 
 	if nil == this.f {
@@ -61,7 +63,7 @@ func (this *processUnit) flush() *ctxArray {
 	binary.BigEndian.PutUint32(head[0:4], uint32(this.binlogStr.dataLen()))
 	binary.BigEndian.PutUint64(head[4:], uint64(checkSum))
 
-	if this.binlogCount >= 100000 || this.fileSize+this.binlogStr.dataLen()+len(head) >= 64*1024*1024 {
+	if this.binlogCount >= config.MaxBinlogCount || this.fileSize+this.binlogStr.dataLen()+len(head) >= int(config.MaxBinlogFileSize) {
 		this.snapshot(config)
 	} else {
 		this.fileSize += this.binlogStr.dataLen() + len(head)
@@ -82,6 +84,8 @@ func (this *processUnit) flush() *ctxArray {
 		}
 		ckey.mtx.Unlock()
 	}
+
+	Infoln("flush time:", time.Now().Sub(beg))
 
 	this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval))
 

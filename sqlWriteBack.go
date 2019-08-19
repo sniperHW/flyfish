@@ -115,12 +115,12 @@ func (this *sqlUpdater) exec() {
 
 		defer this.reset()
 
-		beg := time.Now()
+		//beg := time.Now()
 
 		for {
 			_, err := this.db.Exec(this.sqlStr.toString())
 			if nil == err {
-				Infoln("writeback time:", time.Now().Sub(beg), "record:", this.count)
+				//Infoln("writeback time:", time.Now().Sub(beg), "record:", this.count)
 				break
 			} else {
 				Errorln(this.sqlStr.toString(), err)
