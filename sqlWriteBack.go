@@ -97,7 +97,7 @@ func (this *sqlUpdater) append(v interface{}) {
 		}
 
 		ckey.writeBackLocked = false
-		ckey.sqlFlag = write_back_none
+		//ckey.sqlFlag = write_back_none
 
 		/*if len(ckey.modifyFields) > 0 {
 			ckey.modifyFields = map[string]bool{}
