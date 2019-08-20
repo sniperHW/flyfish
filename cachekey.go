@@ -70,6 +70,7 @@ func (this *cacheKey) setMissing() {
 	this.mtx.Lock()
 	this.version = 0
 	this.status = cache_missing
+	this.snapshot = false
 	this.values = nil
 }
 
@@ -77,6 +78,7 @@ func (this *cacheKey) setMissingNoLock() {
 	this.version = 0
 	this.status = cache_missing
 	this.values = nil
+	this.snapshot = false
 }
 
 func (this *cacheKey) setOK(version int64) {

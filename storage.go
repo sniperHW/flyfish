@@ -18,10 +18,9 @@ import (
 
 const (
 	binlog_snapshot = 1
-	binlog_insert   = 2
-	binlog_update   = 3
-	binlog_delete   = 4
-	binlog_kick     = 5
+	binlog_update   = 2
+	binlog_delete   = 3
+	binlog_kick     = 4
 )
 
 var (
@@ -35,8 +34,6 @@ func binlogTypeToString(tt int) string {
 	switch tt {
 	case binlog_snapshot:
 		return "binlog_snapshot"
-	case binlog_insert:
-		return "binlog_insert"
 	case binlog_update:
 		return "binlog_update"
 	case binlog_delete:
@@ -86,7 +83,7 @@ func (this *processUnit) startSnapshot() {
 
 	for _, v := range this.cacheKeys {
 		v.mtx.Lock()
-		if v.status == cache_ok {
+		if v.status == cache_ok || v.status == cache_missing {
 			v.snapshot = false
 			cacheKeys = append(cacheKeys, v)
 		}
@@ -99,7 +96,7 @@ func (this *processUnit) startSnapshot() {
 		c := 0
 		for _, v := range cacheKeys {
 			v.mtx.Lock()
-			if v.status == cache_ok && !v.snapshot {
+			if (v.status == cache_ok || v.status == cache_missing) && !v.snapshot {
 				c++
 				v.snapshot = true
 				this.mtx.Lock()
@@ -201,7 +198,7 @@ func (this *processUnit) write(tt int, unikey string, fields map[string]*proto.F
 	this.binlogStr.append(unikey)
 	//写version
 	this.binlogStr.appendInt64(version)
-	if tt == binlog_snapshot || tt == binlog_insert || tt == binlog_update {
+	if tt == binlog_snapshot || tt == binlog_update {
 		pos := this.binlogStr.len
 		this.binlogStr.appendInt32(int32(0))
 		c := 0
@@ -260,7 +257,7 @@ func (this *processUnit) snapshot(config *conf.Config) {
 
 	for _, v := range this.cacheKeys {
 		v.mtx.Lock()
-		if v.status == cache_ok {
+		if v.status == cache_ok || v.status == cache_missing {
 			v.snapshot = true
 			this.write(binlog_snapshot, v.uniKey, v.values, v.version)
 		}
@@ -332,16 +329,21 @@ func (this *processUnit) writeBack(ctx *processContext) {
 	}
 
 	if ckey.sqlFlag == write_back_delete {
-		this.write(binlog_delete, ckey.uniKey, nil, 0)
+		if ckey.snapshot {
+			this.write(binlog_delete, ckey.uniKey, nil, 0)
+		} else {
+			ckey.snapshot = true
+			this.write(binlog_snapshot, ckey.uniKey, ckey.values, ckey.version)
+		}
 	} else if ckey.sqlFlag == write_back_insert {
 		ckey.snapshot = true
-		this.write(binlog_insert, ckey.uniKey, ckey.values, ckey.version)
+		this.write(binlog_snapshot, ckey.uniKey, ckey.values, ckey.version)
 	} else {
 		if ckey.snapshot {
 			this.write(binlog_update, ckey.uniKey, ctx.fields, ckey.version)
 		} else {
 			ckey.snapshot = true
-			this.write(binlog_insert, ckey.uniKey, ckey.values, ckey.version)
+			this.write(binlog_snapshot, ckey.uniKey, ckey.values, ckey.version)
 		}
 	}
 
@@ -485,27 +487,22 @@ func replayBinLog(path string) bool {
 				if nil == ckey {
 					tmp := strings.Split(unikey, ":")
 					ckey = newCacheKey(unit, tmp[0], strings.Join(tmp[1:], ""), unikey)
-					ckey.status = cache_ok
 					ckey.values = values
 					ckey.version = version
-					ckey.sqlFlag = write_back_insert
-					ckey.snapshot = true
-					unit.cacheKeys[unikey] = ckey
-					unit.updateLRU(ckey)
-				}
-			} else if tt == binlog_insert {
-				if nil == ckey || ckey.status == cache_missing {
-					if nil == ckey {
-						tmp := strings.Split(unikey, ":")
-						ckey = newCacheKey(unit, tmp[0], strings.Join(tmp[1:], ""), unikey)
+					if ckey.version == 0 {
+						ckey.sqlFlag = write_back_delete
+						ckey.status = cache_missing
+					} else {
+						ckey.sqlFlag = write_back_insert
+						ckey.status = cache_ok
 					}
-					ckey.status = cache_ok
+					unit.cacheKeys[unikey] = ckey
+					unit.updateLRU(ckey)
+				} else if ckey.status == cache_missing && version != 0 {
 					ckey.values = values
 					ckey.version = version
 					ckey.sqlFlag = write_back_insert
-					ckey.snapshot = true
-					unit.cacheKeys[unikey] = ckey
-					unit.updateLRU(ckey)
+					ckey.status = cache_ok
 				} else {
 					Fatalln("invaild tt")
 					return false
