@@ -78,7 +78,7 @@ func (this sqlResponseLocalCache) onSqlLoadOKSet(ctx *processContext) {
 
 	version := ctx.fields["__version__"].GetInt()
 
-	Infoln("onSqlLoadOKSet", version)
+	Debugln("onSqlLoadOKSet", version)
 
 	cmd := ctx.getCmd()
 	ckey := ctx.getCacheKey()

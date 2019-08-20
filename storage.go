@@ -95,11 +95,16 @@ func (this *processUnit) startSnapshot() {
 	go func() {
 		beg := time.Now()
 		Infoln("start snapshot")
+		c := 0
 		for _, v := range cacheKeys {
+			v.mtx.Lock()
 			if v.status == cache_ok && !v.snapshot {
+				c++
 				v.snapshot = true
 				this.write(binlog_snapshot, v.uniKey, v.values, v.version)
 			}
+			v.make_snapshot = false
+			v.mtx.Unlock()
 		}
 
 		//移除backfile
@@ -108,7 +113,7 @@ func (this *processUnit) startSnapshot() {
 		this.mtx.Lock()
 		this.make_snapshot = false
 		this.mtx.Unlock()
-		Infoln("snapshot ok", time.Now().Sub(beg))
+		Infoln("snapshot ok", time.Now().Sub(beg), c)
 	}()
 }
 
@@ -474,19 +479,17 @@ func replayBinLog(path string) bool {
 			recordCount++
 
 			if tt == binlog_snapshot {
-				if nil != ckey {
-					Fatalln("invaild tt")
-					return false
+				if nil == ckey {
+					tmp := strings.Split(unikey, ":")
+					ckey = newCacheKey(unit, tmp[0], strings.Join(tmp[1:], ""), unikey)
+					ckey.status = cache_ok
+					ckey.values = values
+					ckey.version = version
+					ckey.sqlFlag = write_back_insert
+					ckey.snapshot = true
+					unit.cacheKeys[unikey] = ckey
+					unit.updateLRU(ckey)
 				}
-				tmp := strings.Split(unikey, ":")
-				ckey = newCacheKey(unit, tmp[0], strings.Join(tmp[1:], ""), unikey)
-				ckey.status = cache_ok
-				ckey.values = values
-				ckey.version = version
-				ckey.sqlFlag = write_back_insert
-				ckey.snapshot = true
-				unit.cacheKeys[unikey] = ckey
-				unit.updateLRU(ckey)
 			} else if tt == binlog_insert {
 				if nil == ckey || ckey.status == cache_missing {
 					if nil == ckey {
