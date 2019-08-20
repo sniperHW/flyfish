@@ -276,8 +276,8 @@ func (this *processUnit) snapshot(config *conf.Config) {
 		//执行一次sql操作，防止数据不一致的情况
 		for _, v := range this.cacheKeys {
 			v.mtx.Lock()
-			ckey.writeBackLocked = true
-			pushSqlWriteReq(ckey)
+			v.writeBackLocked = true
+			pushSqlWriteReq(v)
 			v.mtx.Unlock()
 		}
 
