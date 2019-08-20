@@ -7,7 +7,7 @@ import (
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/proto"
 	//"github.com/sniperHW/kendynet/util"
-	"github.com/sniperHW/flyfish/errcode"
+	//"github.com/sniperHW/flyfish/errcode"
 	"hash/crc64"
 	"math"
 	"os"
@@ -54,7 +54,9 @@ func (this *processUnit) flush() *ctxArray {
 		return nil
 	}
 
-	beg := time.Now()
+	config := conf.GetConfig()
+
+	/*beg := time.Now()
 
 	config := conf.GetConfig()
 
@@ -103,6 +105,9 @@ func (this *processUnit) flush() *ctxArray {
 	}
 
 	Debugln("flush time:", time.Now().Sub(beg))
+	*/
+
+	this.binlogStr.reset()
 
 	this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval))
 
