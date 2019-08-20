@@ -651,6 +651,7 @@ func buildInsertUpdateStringMySql(s *str, ckey *cacheKey) { //r *proto.BinRecord
 	Debugln(s.toString())
 }
 
+/*
 func buildInsertString(s *str, ckey *cacheKey) {
 	meta := ckey.getMeta()
 	version := proto.PackField("__version__", ckey.version)
@@ -700,7 +701,7 @@ func buildUpdateString(s *str, ckey *cacheKey) {
 
 	Debugln(s.toString())
 
-}
+}*/
 
 func buildDeleteString(s *str, ckey *cacheKey) {
 	s.append("delete from ").append(ckey.table).append(" where __key__ = '").append(ckey.key).append("';")

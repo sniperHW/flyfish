@@ -58,7 +58,7 @@ func (this cmdProcessorLocalCache) processSet(ckey *cacheKey, cmd *command) *pro
 		ctx.fields["__version__"] = proto.PackField("__version__", ckey.version)
 		for _, v := range cmd.fields {
 			ckey.values[v.GetName()] = v
-			ckey.modifyFields[v.GetName()] = true
+			//ckey.modifyFields[v.GetName()] = true
 			ctx.fields[v.GetName()] = v
 		}
 	} else if ckey.status == cache_missing {
@@ -134,7 +134,7 @@ func (this cmdProcessorLocalCache) processCompareAndSet(ckey *cacheKey, cmd *com
 			ctx.writeBackFlag = write_back_update //数据存在执行update
 			ctx.fields["__version__"] = proto.PackField("__version__", ckey.version)
 			ckey.values[cmd.cns.oldV.GetName()] = cmd.cns.newV
-			ckey.modifyFields[cmd.cns.oldV.GetName()] = true
+			//ckey.modifyFields[cmd.cns.oldV.GetName()] = true
 			ctx.fields[cmd.cns.oldV.GetName()] = cmd.cns.newV
 		}
 
@@ -165,7 +165,7 @@ func (this cmdProcessorLocalCache) processCompareAndSetNx(ckey *cacheKey, cmd *c
 		ctx.writeBackFlag = write_back_update //数据存在执行update
 		ctx.fields["__version__"] = proto.PackField("__version__", ckey.version)
 		ckey.values[cmd.cns.oldV.GetName()] = cmd.cns.newV
-		ckey.modifyFields[cmd.cns.oldV.GetName()] = true
+		//ckey.modifyFields[cmd.cns.oldV.GetName()] = true
 		ctx.fields[cmd.cns.oldV.GetName()] = cmd.cns.newV
 	} else if ckey.status == cache_missing {
 		ckey.setDefaultValue(ctx)
@@ -214,9 +214,9 @@ func (this cmdProcessorLocalCache) processIncrBy(ckey *cacheKey, cmd *command) *
 		newV := proto.PackField(cmd.incrDecr.GetName(), oldV.GetInt()+cmd.incrDecr.GetInt())
 		ctx.fields[cmd.incrDecr.GetName()] = newV
 		ckey.values[cmd.incrDecr.GetName()] = newV
-		if ctx.writeBackFlag == write_back_update {
-			ckey.modifyFields[cmd.incrDecr.GetName()] = true
-		}
+		//if ctx.writeBackFlag == write_back_update {
+		//	ckey.modifyFields[cmd.incrDecr.GetName()] = true
+		//}
 
 		ctx.fields["__version__"] = proto.PackField("__version__", ckey.version)
 	}
@@ -259,9 +259,9 @@ func (this cmdProcessorLocalCache) processDecrBy(ckey *cacheKey, cmd *command) *
 		newV := proto.PackField(cmd.incrDecr.GetName(), oldV.GetInt()-cmd.incrDecr.GetInt())
 		ctx.fields[cmd.incrDecr.GetName()] = newV
 		ckey.values[cmd.incrDecr.GetName()] = newV
-		if ctx.writeBackFlag == write_back_update {
-			ckey.modifyFields[cmd.incrDecr.GetName()] = true
-		}
+		//if ctx.writeBackFlag == write_back_update {
+		//	ckey.modifyFields[cmd.incrDecr.GetName()] = true
+		//}
 		ctx.fields["__version__"] = proto.PackField("__version__", ckey.version)
 	}
 

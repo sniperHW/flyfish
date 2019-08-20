@@ -16,22 +16,22 @@ const (
 )
 
 type cacheKey struct {
-	table           string
-	uniKey          string
-	key             string
-	version         int64
-	status          int
-	cmdQueueLocked  bool //操作是否被锁定
-	mtx             sync.Mutex
-	cmdQueue        *list.List
-	meta            *table_meta
-	sqlFlag         int
-	snapshot        bool
-	unit            *processUnit
-	nnext           *cacheKey
-	pprev           *cacheKey
-	values          map[string]*proto.Field
-	modifyFields    map[string]bool
+	table          string
+	uniKey         string
+	key            string
+	version        int64
+	status         int
+	cmdQueueLocked bool //操作是否被锁定
+	mtx            sync.Mutex
+	cmdQueue       *list.List
+	meta           *table_meta
+	sqlFlag        int
+	snapshot       bool
+	unit           *processUnit
+	nnext          *cacheKey
+	pprev          *cacheKey
+	values         map[string]*proto.Field
+	//modifyFields    map[string]bool
 	writeBackLocked bool
 }
 
@@ -147,13 +147,13 @@ func newCacheKey(unit *processUnit, table string, key string, uniKey string) *ca
 	}
 
 	return &cacheKey{
-		uniKey:       uniKey,
-		key:          key,
-		status:       cache_new,
-		meta:         meta,
-		cmdQueue:     list.New(),
-		unit:         unit,
-		table:        table,
-		modifyFields: map[string]bool{},
+		uniKey:   uniKey,
+		key:      key,
+		status:   cache_new,
+		meta:     meta,
+		cmdQueue: list.New(),
+		unit:     unit,
+		table:    table,
+		//modifyFields: map[string]bool{},
 	}
 }
