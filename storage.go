@@ -56,7 +56,7 @@ func (this *processUnit) flush() *ctxArray {
 
 	config := conf.GetConfig()
 
-	/*beg := time.Now()
+	beg := time.Now()
 
 	config := conf.GetConfig()
 
@@ -104,10 +104,9 @@ func (this *processUnit) flush() *ctxArray {
 		ckey.mtx.Unlock()
 	}
 
-	Debugln("flush time:", time.Now().Sub(beg))
-	*/
+	Debugln("flush time:", time.Now().Sub(beg), len(this.ctxs))
 
-	for i := 0; i < this.ctxs.count; i++ {
+	/*for i := 0; i < this.ctxs.count; i++ {
 		v := this.ctxs.ctxs[i]
 		ckey := v.getCacheKey()
 		ckey.mtx.Lock()
@@ -119,7 +118,7 @@ func (this *processUnit) flush() *ctxArray {
 		ckey.mtx.Unlock()
 	}
 
-	this.binlogStr.reset()
+	this.binlogStr.reset()*/
 
 	this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval))
 
