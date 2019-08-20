@@ -272,6 +272,15 @@ func (this *processUnit) snapshot(config *conf.Config) {
 		f.Write(head)
 		f.Write(this.binlogStr.bytes())
 		f.Sync()
+
+		//执行一次sql操作，防止数据不一致的情况
+		for _, v := range this.cacheKeys {
+			v.mtx.Lock()
+			ckey.writeBackLocked = true
+			pushSqlWriteReq(ckey)
+			v.mtx.Unlock()
+		}
+
 	}
 
 	this.f = f
@@ -493,7 +502,7 @@ func replayBinLog(path string) bool {
 						ckey.sqlFlag = write_back_delete
 						ckey.status = cache_missing
 					} else {
-						ckey.sqlFlag = write_back_insert
+						ckey.sqlFlag = write_back_insert_update
 						ckey.status = cache_ok
 					}
 					unit.cacheKeys[unikey] = ckey
@@ -501,7 +510,7 @@ func replayBinLog(path string) bool {
 				} else if ckey.status == cache_missing && version != 0 {
 					ckey.values = values
 					ckey.version = version
-					ckey.sqlFlag = write_back_insert
+					ckey.sqlFlag = write_back_insert_update
 					ckey.status = cache_ok
 				} else {
 					Fatalln("invaild tt")
@@ -516,6 +525,7 @@ func replayBinLog(path string) bool {
 					ckey.values[k] = v
 				}
 				ckey.version = version
+				ckey.sqlFlag = write_back_insert_update
 			} else if tt == binlog_delete {
 				if nil == ckey || ckey.status != cache_ok {
 					Fatalln("invaild tt")
@@ -524,6 +534,7 @@ func replayBinLog(path string) bool {
 				ckey.values = nil
 				ckey.version = version
 				ckey.status = cache_missing
+				ckey.sqlFlag = write_back_delete
 			} else if tt == binlog_kick {
 				if nil == ckey {
 					Fatalln("invaild tt")
@@ -577,7 +588,9 @@ func StartReplayBinlog() bool {
 
 	//建立新快照
 	for _, v := range processUnits {
+		v.mtx.Lock()
 		v.snapshot(config)
+		v.mtx.Unlock()
 	}
 
 	return true
