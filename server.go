@@ -286,7 +286,7 @@ func Stop() {
 		return true
 	})
 
-	Infoln("ShutdownRead ok", cmdCount)
+	Infoln("ShutdownRead ok", cmdCount, totalSqlCount)
 
 	//等待redis请求和命令执行完成
 	waitCondition(func() bool {
