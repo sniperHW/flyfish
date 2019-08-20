@@ -31,6 +31,7 @@ type cacheKey struct {
 	nnext           *cacheKey
 	pprev           *cacheKey
 	values          map[string]*proto.Field
+	modifyFields    map[string]bool
 	writeBackLocked bool
 }
 
@@ -146,12 +147,13 @@ func newCacheKey(unit *processUnit, table string, key string, uniKey string) *ca
 	}
 
 	return &cacheKey{
-		uniKey:   uniKey,
-		key:      key,
-		status:   cache_new,
-		meta:     meta,
-		cmdQueue: list.New(),
-		unit:     unit,
-		table:    table,
+		uniKey:       uniKey,
+		key:          key,
+		status:       cache_new,
+		meta:         meta,
+		cmdQueue:     list.New(),
+		unit:         unit,
+		table:        table,
+		modifyFields: map[string]bool{},
 	}
 }

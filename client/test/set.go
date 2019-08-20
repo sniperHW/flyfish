@@ -26,19 +26,22 @@ func main() {
 	binary.BigEndian.PutUint32(buff, 100)
 
 	fields := map[string]interface{}{}
-	fields["age"] = 100
+	fields["age"] = 12
 	fields["blob"] = buff
 	fields["name"] = "sniperHW"
 
-	//不存在技术sniperHW SetNx成功
 	r2 := c.Set("users1", "sniperHW", fields).Exec()
 	if r2.ErrCode != errcode.ERR_OK {
 		fmt.Println("Set error:", errcode.GetErrorStr(r2.ErrCode))
 		return
 	}
 
-	r3 := c.Get("users1", "sniperHW", "blob").Exec()
+	r3 := c.Get("users1", "sniperHW", "name", "phone", "age", "blob").Exec()
 
+	fmt.Println(r3.Fields["name"].GetString())
+	fmt.Println(r3.Fields["phone"].GetString())
+	fmt.Println(r3.Fields["age"].GetInt())
 	fmt.Println(binary.BigEndian.Uint32(r3.Fields["blob"].GetBlob()))
+	fmt.Println(r3.Version)
 
 }

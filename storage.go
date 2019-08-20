@@ -31,6 +31,23 @@ var (
 	binlogSuffix = ".bin"
 )
 
+func binlogTypeToString(tt int) string {
+	switch tt {
+	case binlog_snapshot:
+		return "binlog_snapshot"
+	case binlog_insert:
+		return "binlog_insert"
+	case binlog_update:
+		return "binlog_update"
+	case binlog_delete:
+		return "binlog_delete"
+	case binlog_kick:
+		return "binlog_kick"
+	default:
+		return "unkonw"
+	}
+}
+
 func (this *processUnit) flush() *ctxArray {
 
 	if nil == this.ctxs {
@@ -177,13 +194,15 @@ func (this *processUnit) snapshot(config *conf.Config) {
 		v.mtx.Unlock()
 	}
 
-	head := make([]byte, 4+checkSumSize)
-	checkSum := crc64.Checksum(this.binlogStr.bytes(), crc64Table)
-	binary.BigEndian.PutUint32(head[0:4], uint32(this.binlogStr.dataLen()))
-	binary.BigEndian.PutUint64(head[4:], uint64(checkSum))
-	f.Write(head)
-	f.Write(this.binlogStr.bytes())
-	f.Sync()
+	if this.binlogCount > 0 {
+		head := make([]byte, 4+checkSumSize)
+		checkSum := crc64.Checksum(this.binlogStr.bytes(), crc64Table)
+		binary.BigEndian.PutUint32(head[0:4], uint32(this.binlogStr.dataLen()))
+		binary.BigEndian.PutUint64(head[4:], uint64(checkSum))
+		f.Write(head)
+		f.Write(this.binlogStr.bytes())
+		f.Sync()
+	}
 
 	//删除老文件
 	if nil != this.f {
@@ -223,7 +242,7 @@ func (this *processUnit) writeBack(ctx *processContext) {
 		ckey.sqlFlag = ctx.writeBackFlag
 	} else if ckey.sqlFlag == write_back_insert {
 		if ctx.writeBackFlag == write_back_update {
-			ckey.sqlFlag = write_back_insert
+			ckey.sqlFlag = write_back_insert_update
 		} else if ctx.writeBackFlag == write_back_delete {
 			ckey.sqlFlag = write_back_delete
 		} else {
@@ -405,6 +424,8 @@ func replayBinLog(path string) bool {
 				ckey.status = cache_ok
 				ckey.values = values
 				ckey.version = version
+				ckey.sqlFlag = write_back_insert
+				ckey.snapshot = true
 				unit.cacheKeys[unikey] = ckey
 				unit.updateLRU(ckey)
 			} else if tt == binlog_insert {
@@ -416,6 +437,8 @@ func replayBinLog(path string) bool {
 					ckey.status = cache_ok
 					ckey.values = values
 					ckey.version = version
+					ckey.sqlFlag = write_back_insert
+					ckey.snapshot = true
 					unit.cacheKeys[unikey] = ckey
 					unit.updateLRU(ckey)
 				} else {
@@ -496,6 +519,84 @@ func StartReplayBinlog() bool {
 	}
 
 	return true
+}
+
+func ShowBinlog(path string) {
+
+	//获得所有文件
+	fileList, err := getFileList(path)
+	if nil != err {
+		return
+	}
+
+	//对fileList排序
+	sortFileList(fileList)
+
+	read := func(path string) bool {
+
+		var err error
+
+		stat, err := os.Stat(path)
+
+		if nil != err {
+			Fatalln("open file failed:", path, err)
+			return false
+		}
+
+		f, err := os.OpenFile(path, os.O_RDWR, os.ModePerm)
+
+		if nil != err {
+			Fatalln("open file failed:", path, err)
+			return false
+		}
+
+		buffer := make([]byte, int(stat.Size()))
+
+		n, err := f.Read(buffer)
+
+		f.Close()
+
+		if n != (int)(stat.Size()) {
+			Fatalln("read file failed:", path, err)
+			return false
+		}
+
+		if n == 0 {
+			return true
+		}
+
+		fmt.Println("-------------------------", path, "---------------------------")
+
+		totalOffset := 0
+		for totalOffset < n {
+			size := int(binary.BigEndian.Uint32(buffer[totalOffset : totalOffset+4]))
+			totalOffset += 4
+			checkSum := binary.BigEndian.Uint64(buffer[totalOffset : totalOffset+checkSumSize])
+			totalOffset += checkSumSize
+			//校验数据
+			if checkSum != crc64.Checksum(buffer[totalOffset:totalOffset+size], crc64Table) {
+				Fatalln("checkSum failed:", path)
+				return false
+			}
+
+			offset := totalOffset
+			end := totalOffset + size
+			totalOffset += size
+
+			for offset < end {
+				newOffset, tt, unikey, version, _ := readBinLog(buffer, offset)
+				offset = newOffset
+				fmt.Println(unikey, "version:", version, "type:", binlogTypeToString(tt))
+			}
+		}
+		return true
+	}
+
+	for _, v := range fileList {
+		if !read(v) {
+			return
+		}
+	}
 }
 
 func init() {

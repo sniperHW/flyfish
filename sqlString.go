@@ -582,8 +582,8 @@ func buildInsertUpdateStringPgSql(s *str, ckey *cacheKey) { // r *proto.BinRecor
 
 	version := proto.PackField("__version__", ckey.version)
 
-	s.append(meta.insertPrefix).append("'").append(ckey.uniKey).append("',") //add __key__
-	s.appendFieldStr(version).append(",")                                    //add __version__
+	s.append(meta.insertPrefix).append("'").append(ckey.key).append("',") //add __key__
+	s.appendFieldStr(version).append(",")                                 //add __version__
 
 	//add other fileds
 	i := 0
@@ -606,7 +606,8 @@ func buildInsertUpdateStringPgSql(s *str, ckey *cacheKey) { // r *proto.BinRecor
 		i++
 	}
 	s.append(",__version__=").appendFieldStr(version)
-	s.append(" where ").append(ckey.table).append(".__key__ = '").append(ckey.uniKey).append("';")
+	s.append(" where ").append(ckey.table).append(".__key__ = '").append(ckey.key).append("';")
+	Debugln(s.toString())
 }
 
 /*
@@ -621,8 +622,8 @@ func buildInsertUpdateStringMySql(s *str, ckey *cacheKey) { //r *proto.BinRecord
 
 	version := proto.PackField("__version__", ckey.version)
 
-	s.append(meta.insertPrefix).append("'").append(ckey.uniKey).append("',") //add __key__
-	s.appendFieldStr(version).append(",")                                    //add __version__
+	s.append(meta.insertPrefix).append("'").append(ckey.key).append("',") //add __key__
+	s.appendFieldStr(version).append(",")                                 //add __version__
 
 	//add other fileds
 	i := 0
@@ -647,8 +648,60 @@ func buildInsertUpdateStringMySql(s *str, ckey *cacheKey) { //r *proto.BinRecord
 	}
 	s.append(",__version__=").appendFieldStr(version)
 	s.append(";")
+	Debugln(s.toString())
+}
+
+func buildInsertString(s *str, ckey *cacheKey) {
+	meta := ckey.getMeta()
+	version := proto.PackField("__version__", ckey.version)
+	s.append(meta.insertPrefix).append("'").append(ckey.key).append("',") //add __key__
+	s.appendFieldStr(version).append(",")                                 //add __version__
+
+	i := 0
+	for _, name := range meta.insertFieldOrder {
+		s.appendFieldStr(ckey.values[name])
+		if i != len(ckey.values)-1 {
+			s.append(",")
+		}
+		i++
+	}
+
+	s.append(");")
+}
+
+func buildUpdateString(s *str, ckey *cacheKey) {
+	s.append("update ").append(ckey.table).append(" set ")
+	i := 0
+	version := proto.PackField("__version__", ckey.version)
+	if len(ckey.modifyFields) > 0 {
+		for k, _ := range ckey.modifyFields {
+			if i == 0 {
+				s.append(k).append("=").appendFieldStr(ckey.values[k])
+			} else {
+				s.append(",").append(k).append("=").appendFieldStr(ckey.values[k])
+			}
+			i++
+		}
+	} else {
+
+		for _, v := range ckey.values {
+			if i == 0 {
+				s.append(v.GetName()).append("=").appendFieldStr(v)
+			} else {
+				s.append(",").append(v.GetName()).append("=").appendFieldStr(v)
+			}
+			i++
+		}
+
+	}
+
+	s.append(",__version__=").appendFieldStr(version)
+	s.append(" where __key__ = '").append(ckey.key).append("';")
+
+	Debugln(s.toString())
+
 }
 
 func buildDeleteString(s *str, ckey *cacheKey) {
-	s.append("delete from ").append(ckey.table).append(" where __key__ = '").append(ckey.uniKey).append("';")
+	s.append("delete from ").append(ckey.table).append(" where __key__ = '").append(ckey.key).append("';")
 }

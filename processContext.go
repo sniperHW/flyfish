@@ -16,11 +16,11 @@ const (
 )
 
 const (
-	write_back_none   = 0
-	write_back_insert = 1
-	write_back_update = 2
-	write_back_delete = 3
-	write_back_force  = 4
+	write_back_none          = 0
+	write_back_insert        = 1
+	write_back_update        = 2
+	write_back_delete        = 3
+	write_back_insert_update = 4
 )
 
 type processContext struct {

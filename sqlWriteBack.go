@@ -81,8 +81,10 @@ func (this *sqlUpdater) append(v interface{}) {
 		ckey.mtx.Lock()
 
 		tt := ckey.sqlFlag
-		if tt == write_back_insert || tt == write_back_update {
+		if tt == write_back_insert || tt == write_back_insert_update {
 			buildInsertUpdateString(this.sqlStr, ckey)
+		} else if tt == write_back_update {
+			buildUpdateString(this.sqlStr, ckey)
 		} else if tt == write_back_delete {
 			buildDeleteString(this.sqlStr, ckey)
 		} else {
@@ -90,6 +92,11 @@ func (this *sqlUpdater) append(v interface{}) {
 		}
 
 		ckey.writeBackLocked = false
+		ckey.sqlFlag = write_back_none
+
+		if len(ckey.modifyFields) > 0 {
+			ckey.modifyFields = map[string]bool{}
+		}
 
 		ckey.mtx.Unlock()
 

@@ -77,8 +77,12 @@ func (this sqlResponseLocalCache) onSqlLoadOKSet(ctx *processContext) {
 	Debugln("onSqlLoadOKSet")
 
 	version := ctx.fields["__version__"].GetInt()
+
+	Infoln("onSqlLoadOKSet", version)
+
 	cmd := ctx.getCmd()
 	ckey := ctx.getCacheKey()
+	ckey.mtx.Lock()
 	cmdType := cmd.cmdType
 	ctx.writeBackFlag = write_back_none
 	if cmdType == cmdSet {
@@ -89,9 +93,9 @@ func (this sqlResponseLocalCache) onSqlLoadOKSet(ctx *processContext) {
 			//变更需要将版本号+1
 			for _, v := range cmd.fields {
 				ctx.fields[v.GetName()] = v
+				ckey.modifyFields[v.GetName()] = true
 			}
 			version++
-			//ctx.fields["__version__"] = proto.PackField("__version__", version)
 			ctx.writeBackFlag = write_back_update //sql中存在,使用update回写
 		}
 	} else if cmdType == cmdCompareAndSet || cmdType == cmdCompareAndSetNx {
@@ -100,8 +104,8 @@ func (this sqlResponseLocalCache) onSqlLoadOKSet(ctx *processContext) {
 			ctx.reply(errcode.ERR_NOT_EQUAL, ctx.fields, version)
 		} else {
 			version++
-			//ctx.fields["__version__"] = proto.PackField("__version__", version)
 			ctx.fields[cmd.cns.oldV.GetName()] = cmd.cns.newV
+			ckey.modifyFields[cmd.cns.oldV.GetName()] = true
 			ctx.writeBackFlag = write_back_update //sql中存在,使用update回写
 		}
 	} else if cmdType == cmdSetNx {
@@ -116,16 +120,12 @@ func (this sqlResponseLocalCache) onSqlLoadOKSet(ctx *processContext) {
 			newV = oldV.GetInt() - cmd.incrDecr.GetInt()
 		}
 		ctx.fields[cmd.incrDecr.GetName()].SetInt(newV)
+		ckey.modifyFields[cmd.incrDecr.GetName()] = true
 		version++
-		//ctx.fields["__version__"] = proto.PackField("__version__", version)
 		ctx.writeBackFlag = write_back_update //sql中存在,使用update回写
 	}
 
-	ckey.mtx.Lock()
-
 	ckey.setValue(ctx)
-
-	Debugln(*ckey)
 
 	ckey.setOKNoLock(version)
 
