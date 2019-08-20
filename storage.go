@@ -102,7 +102,7 @@ func (this *processUnit) flush() *ctxArray {
 		ckey.mtx.Unlock()
 	}
 
-	Infoln("flush time:", time.Now().Sub(beg))
+	Debugln("flush time:", time.Now().Sub(beg))
 
 	this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval))
 

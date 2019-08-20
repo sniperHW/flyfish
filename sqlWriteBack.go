@@ -78,6 +78,10 @@ func (this *sqlUpdater) append(v interface{}) {
 
 		meta := ckey.getMeta()
 
+		if nil == meta {
+			Fatalln("invaild ctx")
+		}
+
 		ckey.mtx.Lock()
 
 		tt := ckey.sqlFlag
@@ -88,7 +92,7 @@ func (this *sqlUpdater) append(v interface{}) {
 		} else if tt == write_back_delete {
 			buildDeleteString(this.sqlStr, ckey)
 		} else {
-			Fatalln("invaild ctx")
+			Fatalln("invaild ctx", ckey.sqlFlag)
 		}
 
 		ckey.writeBackLocked = false
@@ -99,10 +103,6 @@ func (this *sqlUpdater) append(v interface{}) {
 		}
 
 		ckey.mtx.Unlock()
-
-		if nil == meta {
-			Fatalln("invaild ctx")
-		}
 
 		this.count++
 
