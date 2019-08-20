@@ -104,20 +104,6 @@ func (this *processUnit) flush() *ctxArray {
 
 	Debugln("flush time:", time.Now().Sub(beg), this.ctxs.len())
 
-	/*for i := 0; i < this.ctxs.count; i++ {
-		v := this.ctxs.ctxs[i]
-		ckey := v.getCacheKey()
-		ckey.mtx.Lock()
-		v.reply(errcode.ERR_OK, nil, ckey.version)
-		if !ckey.writeBackLocked {
-			ckey.writeBackLocked = true
-			pushSqlWriteReq(ckey)
-		}
-		ckey.mtx.Unlock()
-	}
-
-	this.binlogStr.reset()*/
-
 	this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval))
 
 	ctxs := this.ctxs

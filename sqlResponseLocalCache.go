@@ -93,7 +93,7 @@ func (this sqlResponseLocalCache) onSqlLoadOKSet(ctx *processContext) {
 			//变更需要将版本号+1
 			for _, v := range cmd.fields {
 				ctx.fields[v.GetName()] = v
-				//ckey.modifyFields[v.GetName()] = true
+				ckey.modifyFields[v.GetName()] = true
 			}
 			version++
 			ctx.writeBackFlag = write_back_update //sql中存在,使用update回写
@@ -105,7 +105,7 @@ func (this sqlResponseLocalCache) onSqlLoadOKSet(ctx *processContext) {
 		} else {
 			version++
 			ctx.fields[cmd.cns.oldV.GetName()] = cmd.cns.newV
-			//ckey.modifyFields[cmd.cns.oldV.GetName()] = true
+			ckey.modifyFields[cmd.cns.oldV.GetName()] = true
 			ctx.writeBackFlag = write_back_update //sql中存在,使用update回写
 		}
 	} else if cmdType == cmdSetNx {
@@ -120,7 +120,7 @@ func (this sqlResponseLocalCache) onSqlLoadOKSet(ctx *processContext) {
 			newV = oldV.GetInt() - cmd.incrDecr.GetInt()
 		}
 		ctx.fields[cmd.incrDecr.GetName()].SetInt(newV)
-		//ckey.modifyFields[cmd.incrDecr.GetName()] = true
+		ckey.modifyFields[cmd.incrDecr.GetName()] = true
 		version++
 		ctx.writeBackFlag = write_back_update //sql中存在,使用update回写
 	}
