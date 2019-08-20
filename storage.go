@@ -77,6 +77,7 @@ func (this *processUnit) startSnapshot() {
 	}
 
 	this.binlogCount = 0
+	this.fileSize = 0
 
 	this.f = f
 	this.filePath = path
@@ -101,7 +102,9 @@ func (this *processUnit) startSnapshot() {
 			if v.status == cache_ok && !v.snapshot {
 				c++
 				v.snapshot = true
+				this.mtx.Lock()
 				this.write(binlog_snapshot, v.uniKey, v.values, v.version)
+				this.mtx.Unlock()
 			}
 			v.make_snapshot = false
 			v.mtx.Unlock()
@@ -156,9 +159,9 @@ func (this *processUnit) flush() *ctxArray {
 
 	if this.binlogCount >= config.MaxBinlogCount || this.fileSize+this.binlogStr.dataLen()+len(head) >= int(config.MaxBinlogFileSize) {
 		this.startSnapshot()
+	} else {
+		this.binlogStr.reset()
 	}
-
-	this.binlogStr.reset()
 
 	for i := 0; i < this.ctxs.count; i++ {
 		v := this.ctxs.ctxs[i]
