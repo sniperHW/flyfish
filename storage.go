@@ -7,7 +7,7 @@ import (
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/proto"
 	//"github.com/sniperHW/kendynet/util"
-	//"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/errcode"
 	"hash/crc64"
 	"math"
 	"os"
@@ -58,8 +58,6 @@ func (this *processUnit) flush() *ctxArray {
 
 	beg := time.Now()
 
-	config := conf.GetConfig()
-
 	if nil == this.f {
 
 		fileIndex := atomic.AddInt64(&fileCounter, 1)
@@ -104,7 +102,7 @@ func (this *processUnit) flush() *ctxArray {
 		ckey.mtx.Unlock()
 	}
 
-	Debugln("flush time:", time.Now().Sub(beg), len(this.ctxs))
+	Debugln("flush time:", time.Now().Sub(beg), this.ctxs.len())
 
 	/*for i := 0; i < this.ctxs.count; i++ {
 		v := this.ctxs.ctxs[i]
