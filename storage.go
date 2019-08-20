@@ -48,6 +48,70 @@ func binlogTypeToString(tt int) string {
 	}
 }
 
+func (this *processUnit) startSnapshot() {
+
+	if this.make_snapshot {
+		return
+	}
+
+	config := conf.GetConfig()
+
+	this.make_snapshot = true
+
+	this.backFilePath = this.filePath
+	this.f.Close()
+
+	fileIndex := atomic.AddInt64(&fileCounter, 1)
+	os.MkdirAll(config.BinlogDir, os.ModePerm)
+	path := fmt.Sprintf("%s/%s_%d%s", config.BinlogDir, config.BinlogPrefix, fileIndex, binlogSuffix)
+
+	f, err := os.Create(path)
+	if err != nil {
+		Fatalln("create backfile failed", path, err)
+	}
+
+	if nil != this.binlogStr {
+		this.binlogStr.reset()
+	} else {
+		this.binlogStr = strGet()
+	}
+
+	this.binlogCount = 0
+
+	this.f = f
+	this.filePath = path
+
+	cacheKeys := []*cacheKey{}
+
+	for _, v := range this.cacheKeys {
+		v.mtx.Lock()
+		if v.status == cache_ok {
+			v.snapshot = false
+			cacheKeys = append(cacheKeys, v)
+		}
+		v.mtx.Unlock()
+	}
+
+	go func() {
+		beg := time.Now()
+		Infoln("start snapshot")
+		for _, v := range cacheKeys {
+			if v.status == cache_ok && !v.snapshot {
+				v.snapshot = true
+				this.write(binlog_snapshot, v.uniKey, v.values, v.version)
+			}
+		}
+
+		//移除backfile
+		os.Remove(this.backFilePath)
+
+		this.mtx.Lock()
+		this.make_snapshot = false
+		this.mtx.Unlock()
+		Infoln("snapshot ok", time.Now().Sub(beg))
+	}()
+}
+
 func (this *processUnit) flush() *ctxArray {
 
 	if nil == this.ctxs {
@@ -80,15 +144,16 @@ func (this *processUnit) flush() *ctxArray {
 	binary.BigEndian.PutUint32(head[0:4], uint32(this.binlogStr.dataLen()))
 	binary.BigEndian.PutUint64(head[4:], uint64(checkSum))
 
+	this.fileSize += this.binlogStr.dataLen() + len(head)
+	this.f.Write(head)
+	this.f.Write(this.binlogStr.bytes())
+	this.f.Sync()
+
 	if this.binlogCount >= config.MaxBinlogCount || this.fileSize+this.binlogStr.dataLen()+len(head) >= int(config.MaxBinlogFileSize) {
-		this.snapshot(config)
-	} else {
-		this.fileSize += this.binlogStr.dataLen() + len(head)
-		this.f.Write(head)
-		this.f.Write(this.binlogStr.bytes())
-		this.f.Sync()
-		this.binlogStr.reset()
+		this.startSnapshot()
 	}
+
+	this.binlogStr.reset()
 
 	for i := 0; i < this.ctxs.count; i++ {
 		v := this.ctxs.ctxs[i]
@@ -202,12 +267,6 @@ func (this *processUnit) snapshot(config *conf.Config) {
 		f.Write(head)
 		f.Write(this.binlogStr.bytes())
 		f.Sync()
-	}
-
-	//删除老文件
-	if nil != this.f {
-		this.f.Close()
-		os.Remove(this.filePath)
 	}
 
 	this.f = f

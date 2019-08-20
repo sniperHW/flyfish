@@ -33,6 +33,7 @@ type cacheKey struct {
 	values          map[string]*proto.Field
 	modifyFields    map[string]bool
 	writeBackLocked bool
+	make_snapshot   bool
 }
 
 func (this *cacheKey) lockCmdQueue() {
@@ -48,6 +49,11 @@ func (this *cacheKey) unlockCmdQueue() {
 func (this *cacheKey) kickAble() bool {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
+
+	if this.make_snapshot {
+		return false
+	}
+
 	if this.cmdQueueLocked {
 		return false
 	}

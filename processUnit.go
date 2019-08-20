@@ -63,17 +63,19 @@ func ctxArrayPut(w *ctxArray) {
 }
 
 type processUnit struct {
-	cacheKeys   map[string]*cacheKey
-	mtx         sync.Mutex
-	lruHead     cacheKey
-	lruTail     cacheKey
-	ctxs        *ctxArray
-	nextFlush   time.Time
-	binlogStr   *str
-	f           *os.File
-	filePath    string
-	binlogCount int32
-	fileSize    int
+	cacheKeys     map[string]*cacheKey
+	mtx           sync.Mutex
+	lruHead       cacheKey
+	lruTail       cacheKey
+	ctxs          *ctxArray
+	nextFlush     time.Time
+	binlogStr     *str
+	f             *os.File
+	filePath      string
+	backFilePath  string
+	binlogCount   int32
+	fileSize      int
+	make_snapshot bool
 }
 
 func (this *processUnit) doWriteBack(ctx *processContext) {
