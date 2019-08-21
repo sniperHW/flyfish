@@ -130,7 +130,6 @@ func (this *processUnit) afterFlush(ctxs *ctxArray) {
 
 func (this *processUnit) start() {
 	this.afterFlushQueue = util.NewBlockQueue()
-	this.ctxs = ctxArrayGet()
 	go func() {
 		for {
 			closed, localList := this.afterFlushQueue.Get()
