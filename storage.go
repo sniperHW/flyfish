@@ -168,6 +168,8 @@ func (this *processUnit) flush() {
 		return
 	}
 
+	cacheBinlogCount := this.cacheBinlogCount
+
 	this.cacheBinlogCount = 0
 
 	config := conf.GetConfig()
@@ -216,7 +218,7 @@ func (this *processUnit) flush() {
 		this.binlogStr.reset()
 	}
 
-	Debugln("flush time:", time.Now().Sub(beg), this.ctxs.len())
+	Debugln("flush time:", time.Now().Sub(beg), cacheBinlogCount)
 
 	this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval))
 
@@ -289,6 +291,10 @@ func (this *processUnit) snapshot(config *conf.Config, wg *sync.WaitGroup) {
 		this.binlogStr = strGet()
 	}
 
+	this.f = f
+	this.filePath = path
+	this.fileSize = 0
+	this.make_snapshot = true
 	this.binlogCount = 0
 
 	for _, v := range this.cacheKeys {
@@ -300,36 +306,42 @@ func (this *processUnit) snapshot(config *conf.Config, wg *sync.WaitGroup) {
 		v.mtx.Unlock()
 	}
 
-	if this.binlogCount > 0 {
-		head := make([]byte, 4+checkSumSize)
-		checkSum := crc64.Checksum(this.binlogStr.bytes(), crc64Table)
-		binary.BigEndian.PutUint32(head[0:4], uint32(this.binlogStr.dataLen()))
-		binary.BigEndian.PutUint64(head[4:], uint64(checkSum))
-		if _, err := f.Write(head); nil != err {
-			panic(err)
-		}
-
-		if _, err := f.Write(this.binlogStr.bytes()); nil != err {
-			panic(err)
-		}
-
-		if err := f.Sync(); nil != err {
-			panic(err)
-		}
-
-		//执行一次sql操作，防止数据不一致的情况
-		for _, v := range this.cacheKeys {
-			v.mtx.Lock()
-			v.writeBackLocked = true
-			pushSqlWriteReq(v)
-			v.mtx.Unlock()
-		}
-
+	//执行一次sql操作，防止数据不一致的情况
+	for _, v := range this.cacheKeys {
+		v.mtx.Lock()
+		v.writeBackLocked = true
+		pushSqlWriteReq(v)
+		v.mtx.Unlock()
 	}
 
-	this.f = f
-	this.filePath = path
-	this.fileSize = this.binlogStr.dataLen()
+	/*	if this.binlogCount > 0 {
+			head := make([]byte, 4+checkSumSize)
+			checkSum := crc64.Checksum(this.binlogStr.bytes(), crc64Table)
+			binary.BigEndian.PutUint32(head[0:4], uint32(this.binlogStr.dataLen()))
+			binary.BigEndian.PutUint64(head[4:], uint64(checkSum))
+			if _, err := f.Write(head); nil != err {
+				panic(err)
+			}
+
+			if _, err := f.Write(this.binlogStr.bytes()); nil != err {
+				panic(err)
+			}
+
+			if err := f.Sync(); nil != err {
+				panic(err)
+			}
+
+			//执行一次sql操作，防止数据不一致的情况
+			for _, v := range this.cacheKeys {
+				v.mtx.Lock()
+				v.writeBackLocked = true
+				pushSqlWriteReq(v)
+				v.mtx.Unlock()
+			}
+		}
+	*/
+
+	this.make_snapshot = false
 
 	this.binlogStr.reset()
 
