@@ -96,16 +96,17 @@ func (this *processUnit) startSnapshot() {
 		Infoln("start snapshot")
 		c := 0
 		for _, v := range cacheKeys {
+			this.mtx.Lock()
 			v.mtx.Lock()
 			if (v.status == cache_ok || v.status == cache_missing) && !v.snapshot {
 				c++
 				v.snapshot = true
-				this.mtx.Lock()
 				this.write(binlog_snapshot, v.uniKey, v.values, v.version)
-				this.mtx.Unlock()
+
 			}
 			v.make_snapshot = false
 			v.mtx.Unlock()
+			this.mtx.Unlock()
 		}
 
 		//移除backfile
