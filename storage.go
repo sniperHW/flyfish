@@ -153,12 +153,22 @@ func (this *processUnit) tryFlush() {
 			this.filePath = path
 		}
 
+		var ctxs *ctxArray
+		if nil != this.ctxs {
+			ctxs = this.ctxs
+			this.ctxs = nil
+		}
+		binlogStr := this.binlogStr
+		this.binlogStr = nil
+
 		head := make([]byte, 4+checkSumSize)
-		checkSum := crc64.Checksum(this.binlogStr.bytes(), crc64Table)
-		binary.BigEndian.PutUint32(head[0:4], uint32(this.binlogStr.dataLen()))
+		checkSum := crc64.Checksum(binlogStr.bytes(), crc64Table)
+		binary.BigEndian.PutUint32(head[0:4], uint32(binlogStr.dataLen()))
 		binary.BigEndian.PutUint64(head[4:], uint64(checkSum))
 
-		this.fileSize += this.binlogStr.dataLen() + len(head)
+		this.fileSize += binlogStr.dataLen() + len(head)
+
+		this.mtx.Unlock()
 
 		if _, err := this.f.Write(head); nil != err {
 			panic(err)
@@ -172,17 +182,45 @@ func (this *processUnit) tryFlush() {
 			panic(err)
 		}
 
-		if this.binlogCount >= config.MaxBinlogCount || this.fileSize+this.binlogStr.dataLen()+len(head) >= int(config.MaxBinlogFileSize) {
+		this.mtx.Lock()
+
+		if this.binlogCount >= config.MaxBinlogCount || this.fileSize >= int(config.MaxBinlogFileSize) {
 			this.startSnapshot()
-		} else {
-			this.binlogStr.reset()
 		}
 
 		Debugln("flush time:", time.Now().Sub(beg), cacheBinlogCount)
 
 		this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval))
 
-		if nil != this.ctxs {
+		this.mtx.Unlock()
+
+		strPut(binlogStr)
+
+		if nil != ctxs {
+			for i := 0; i < ctxs.count; i++ {
+				v := ctxs.ctxs[i]
+				v.reply(errcode.ERR_OK, v.fields, v.version)
+				ckey := v.getCacheKey()
+				ckey.mtx.Lock()
+				if !ckey.writeBackLocked {
+					ckey.writeBackLocked = true
+					pushSqlWriteReq(ckey)
+				}
+				ckey.mtx.Unlock()
+			}
+
+			this.mtx.Unlock()
+
+			for i := 0; i < ctxs.count; i++ {
+				v := ctxs.ctxs[i]
+				v.getCacheKey().processQueueCmd()
+			}
+			ctxArrayPut(ctxs)
+		}
+
+		this.mtx.Lock()
+
+		/*if nil != this.ctxs {
 			ctxs := this.ctxs
 			this.ctxs = nil
 
@@ -207,7 +245,7 @@ func (this *processUnit) tryFlush() {
 			ctxArrayPut(ctxs)
 
 			this.mtx.Lock()
-		}
+		}*/
 	}
 }
 
