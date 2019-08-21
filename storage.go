@@ -7,7 +7,7 @@ import (
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
-	//"github.com/sniperHW/kendynet/util"
+	"github.com/sniperHW/kendynet/util"
 	"hash/crc64"
 	"math"
 	"os"
@@ -124,7 +124,7 @@ func (this *processUnit) startSnapshot() {
 	}()
 }
 
-/*func (this *processUnit) afterFlush(ctxs *ctxArray) {
+func (this *processUnit) afterFlush(ctxs *ctxArray) {
 	if nil != ctxs {
 
 		for i := 0; i < ctxs.count; i++ {
@@ -160,7 +160,7 @@ func (this *processUnit) start() {
 			}
 		}
 	}()
-}*/
+}
 
 func (this *processUnit) flush() {
 
@@ -225,32 +225,8 @@ func (this *processUnit) flush() {
 	if nil != this.ctxs {
 		ctxs := this.ctxs
 		this.ctxs = nil
-		this.mtx.Unlock()
-		for i := 0; i < ctxs.count; i++ {
-			v := ctxs.ctxs[i]
-			ckey := v.getCacheKey()
-			ckey.mtx.Lock()
-			v.reply(errcode.ERR_OK, nil, ckey.version)
-			if !ckey.writeBackLocked {
-				ckey.writeBackLocked = true
-				pushSqlWriteReq(ckey)
-			}
-			ckey.mtx.Unlock()
-		}
-
-		for i := 0; i < ctxs.count; i++ {
-			v := ctxs.ctxs[i]
-			v.getCacheKey().processQueueCmd()
-		}
-		ctxArrayPut(ctxs)
-		this.mtx.Lock()
-	}
-
-	/*if nil != this.ctxs {
-		ctxs := this.ctxs
-		this.ctxs = nil
 		this.afterFlushQueue.AddNoWait(ctxs)
-	}*/
+	}
 }
 
 func (this *processUnit) write(tt int, unikey string, fields map[string]*proto.Field, version int64) {
