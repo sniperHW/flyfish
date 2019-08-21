@@ -23,7 +23,7 @@ type cmdProcessorI interface {
 	processCmd(*cacheKey, bool)
 }
 
-type ctxArray struct {
+/*type ctxArray struct {
 	count int
 	ctxs  []*processContext
 }
@@ -61,14 +61,14 @@ func ctxArrayGet() *ctxArray {
 func ctxArrayPut(w *ctxArray) {
 	w.count = 0
 	ctxArrayPool.Put(w)
-}
+}*/
 
 type processUnit struct {
 	cacheKeys        map[string]*cacheKey
 	mtx              sync.Mutex
 	lruHead          cacheKey
 	lruTail          cacheKey
-	ctxs             *ctxArray
+	ctxs             []*processContext
 	nextFlush        time.Time
 	binlogStr        *str
 	f                *os.File

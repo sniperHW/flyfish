@@ -155,7 +155,7 @@ func (this *processUnit) tryFlush() {
 			this.filePath = path
 		}
 
-		var ctxs *ctxArray
+		var ctxs []*processContext
 		if nil != this.ctxs {
 			ctxs = this.ctxs
 			this.ctxs = nil
@@ -197,8 +197,9 @@ func (this *processUnit) tryFlush() {
 		strPut(binlogStr)
 
 		if nil != ctxs {
-			for i := 0; i < ctxs.count; i++ {
-				v := ctxs.ctxs[i]
+			//for i := 0; i < ctxs.count; i++ {
+			//	v := ctxs.ctxs[i]
+			for _, v := range ctxs {
 				v.reply(errcode.ERR_OK, v.fields, v.version)
 				ckey := v.getCacheKey()
 				ckey.mtx.Lock()
@@ -209,11 +210,12 @@ func (this *processUnit) tryFlush() {
 				ckey.mtx.Unlock()
 			}
 
-			for i := 0; i < ctxs.count; i++ {
-				v := ctxs.ctxs[i]
+			//for i := 0; i < ctxs.count; i++ {
+			//	v := ctxs.ctxs[i]
+			for _, v := range ctxs {
 				v.getCacheKey().processQueueCmd()
 			}
-			ctxArrayPut(ctxs)
+			//ctxArrayPut(ctxs)
 		}
 	}
 }
@@ -346,10 +348,10 @@ func (this *processUnit) writeBack(ctx *processContext) {
 	}
 
 	if nil == this.ctxs {
-		this.ctxs = ctxArrayGet()
+		this.ctxs = []*processContext{}
 	}
 
-	this.ctxs.append(ctx)
+	this.ctxs = append(this.ctxs, ctx)
 
 	if ckey.sqlFlag == write_back_delete {
 		if ckey.snapshot {
