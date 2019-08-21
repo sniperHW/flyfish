@@ -23,46 +23,6 @@ type cmdProcessorI interface {
 	processCmd(*cacheKey, bool)
 }
 
-/*type ctxArray struct {
-	count int
-	ctxs  []*processContext
-}
-
-func (this *ctxArray) append(ctx *processContext) {
-	this.ctxs[this.count] = ctx
-	this.count++
-}
-
-func (this *ctxArray) full() bool {
-	return this.count == cap(this.ctxs)
-}
-
-func (this *ctxArray) reset() {
-	this.count = 0
-}
-
-func (this *ctxArray) len() int {
-	return this.count
-}
-
-var ctxArrayPool = sync.Pool{
-	New: func() interface{} {
-		return &ctxArray{
-			ctxs:  make([]*processContext, conf.GetConfig().FlushCount),
-			count: 0,
-		}
-	},
-}
-
-func ctxArrayGet() *ctxArray {
-	return ctxArrayPool.Get().(*ctxArray)
-}
-
-func ctxArrayPut(w *ctxArray) {
-	w.count = 0
-	ctxArrayPool.Put(w)
-}*/
-
 type processUnit struct {
 	cacheKeys        map[string]*cacheKey
 	mtx              sync.Mutex
@@ -78,7 +38,7 @@ type processUnit struct {
 	cacheBinlogCount int32
 	fileSize         int
 	make_snapshot    bool
-	afterFlushQueue  *util.BlockQueue
+	binlogQueue      *util.BlockQueue
 }
 
 func (this *processUnit) doWriteBack(ctx *processContext) {
@@ -143,7 +103,9 @@ func (this *processUnit) kickCacheKey() {
 }
 
 func (this *processUnit) checkFlush() {
+	this.mtx.Lock()
 	this.tryFlush()
+	this.mtx.Unlock()
 }
 
 func initProcessUnit() {
@@ -170,6 +132,8 @@ func initProcessUnit() {
 				unit.checkFlush()
 			}
 		})
+
+		unit.start()
 
 		processUnits[i] = unit
 	}
