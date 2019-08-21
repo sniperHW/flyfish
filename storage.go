@@ -95,6 +95,7 @@ func (this *processUnit) startSnapshot() {
 		beg := time.Now()
 		Infoln("start snapshot")
 		c := 0
+		i := 0
 		for _, v := range cacheKeys {
 			this.mtx.Lock()
 			v.mtx.Lock()
@@ -107,6 +108,10 @@ func (this *processUnit) startSnapshot() {
 			v.make_snapshot = false
 			v.mtx.Unlock()
 			this.mtx.Unlock()
+			i++
+			if i >= 100 {
+				time.Sleep(time.Millisecond)
+			}
 		}
 
 		//移除backfile
