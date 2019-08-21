@@ -174,7 +174,7 @@ func (this *processUnit) tryFlush() {
 			panic(err)
 		}
 
-		if _, err := this.f.Write(this.binlogStr.bytes()); nil != err {
+		if _, err := this.f.Write(binlogStr.bytes()); nil != err {
 			panic(err)
 		}
 
@@ -209,8 +209,6 @@ func (this *processUnit) tryFlush() {
 				ckey.mtx.Unlock()
 			}
 
-			this.mtx.Unlock()
-
 			for i := 0; i < ctxs.count; i++ {
 				v := ctxs.ctxs[i]
 				v.getCacheKey().processQueueCmd()
@@ -219,33 +217,6 @@ func (this *processUnit) tryFlush() {
 		}
 
 		this.mtx.Lock()
-
-		/*if nil != this.ctxs {
-			ctxs := this.ctxs
-			this.ctxs = nil
-
-			for i := 0; i < ctxs.count; i++ {
-				v := ctxs.ctxs[i]
-				v.reply(errcode.ERR_OK, v.fields, v.version)
-				ckey := v.getCacheKey()
-				ckey.mtx.Lock()
-				if !ckey.writeBackLocked {
-					ckey.writeBackLocked = true
-					pushSqlWriteReq(ckey)
-				}
-				ckey.mtx.Unlock()
-			}
-
-			this.mtx.Unlock()
-
-			for i := 0; i < ctxs.count; i++ {
-				v := ctxs.ctxs[i]
-				v.getCacheKey().processQueueCmd()
-			}
-			ctxArrayPut(ctxs)
-
-			this.mtx.Lock()
-		}*/
 	}
 }
 
