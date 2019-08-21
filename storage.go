@@ -212,13 +212,8 @@ func (this *processUnit) flush() {
 	this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval))
 
 	ctxs := this.ctxs
-
-	if nil != ctxs {
-		this.afterFlushQueue.AddNoWait(ctxs)
-	}
-
 	this.ctxs = nil
-
+	this.afterFlushQueue.AddNoWait(ctxs)
 }
 
 func (this *processUnit) write(tt int, unikey string, fields map[string]*proto.Field, version int64) {
@@ -255,7 +250,7 @@ func (this *processUnit) write(tt int, unikey string, fields map[string]*proto.F
 func (this *processUnit) writeKick(unikey string) {
 	this.mtx.Lock()
 	this.write(binlog_kick, unikey, nil, 0)
-	var ctxs *ctxArray
+	//var ctxs *ctxArray
 
 	if this.ctxs.full() || time.Now().After(this.nextFlush) {
 		this.flush()
@@ -263,13 +258,13 @@ func (this *processUnit) writeKick(unikey string) {
 
 	this.mtx.Unlock()
 
-	if nil != ctxs {
+	/*if nil != ctxs {
 		for i := 0; i < ctxs.count; i++ {
 			v := ctxs.ctxs[i]
 			v.getCacheKey().processQueueCmd()
 		}
 		ctxArrayPut(ctxs)
-	}
+	}*/
 }
 
 func (this *processUnit) snapshot(config *conf.Config, wg *sync.WaitGroup) {

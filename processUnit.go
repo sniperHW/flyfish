@@ -175,7 +175,7 @@ func initProcessUnit() {
 		unit.lruHead.nnext = &unit.lruTail
 		unit.lruTail.pprev = &unit.lruHead
 
-		timer.Repeat(time.Millisecond*100, nil, func(t *timer.Timer) {
+		timer.Repeat(time.Millisecond*time.Duration(config.FlushInterval), nil, func(t *timer.Timer) {
 			if isStop() {
 				t.Cancel()
 			} else {
