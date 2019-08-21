@@ -241,7 +241,6 @@ func (this *processUnit) write(tt int, unikey string, fields map[string]*proto.F
 			binary.BigEndian.PutUint32(this.binlogStr.data[pos:pos+4], uint32(c))
 		}
 	}
-	fmt.Println(this.binlogStr.len)
 }
 
 func (this *processUnit) writeKick(unikey string) {
