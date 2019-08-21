@@ -331,15 +331,6 @@ func (this cmdProcessorLocalCache) processCmd(ckey *cacheKey, fromClient bool) {
 			//已经超时
 			atomic.AddInt32(&cmdCount, -1)
 		} else {
-
-			//if causeWriteBackCmd(cmd.cmdType) && reachWriteBackFileLimit(config) {
-			//	if config.ReplyBusyOnQueueFull {
-			//		cmd.reply(errcode.ERR_BUSY, nil, -1)
-			//	} else {
-			//		atomic.AddInt32(&cmdCount, -1)
-			//	}
-			//} else {
-
 			switch cmd.cmdType {
 			case cmdGet:
 				ctx = this.processGet(ckey, cmd)
@@ -373,7 +364,6 @@ func (this cmdProcessorLocalCache) processCmd(ckey *cacheKey, fromClient bool) {
 			if nil != ctx {
 				break
 			}
-			//}
 		}
 	}
 
@@ -398,7 +388,7 @@ func (this cmdProcessorLocalCache) processCmd(ckey *cacheKey, fromClient bool) {
 			ckey.mtx.Unlock()
 		}
 	} else {
-		//ckey.lockCmdQueue()
+		ckey.lockCmdQueue()
 		ckey.mtx.Unlock()
 		ckey.unit.doWriteBack(ctx)
 	}
