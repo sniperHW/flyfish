@@ -7,7 +7,7 @@ import (
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
-	"github.com/sniperHW/kendynet/util"
+	//"github.com/sniperHW/kendynet/util"
 	"hash/crc64"
 	"math"
 	"os"
@@ -107,6 +107,7 @@ func (this *processUnit) startSnapshot() {
 			}
 			v.make_snapshot = false
 			v.mtx.Unlock()
+			this.tryFlush()
 			this.mtx.Unlock()
 			i++
 			if i >= 100 {
@@ -124,108 +125,90 @@ func (this *processUnit) startSnapshot() {
 	}()
 }
 
-func (this *processUnit) afterFlush(ctxs *ctxArray) {
-	if nil != ctxs {
+func (this *processUnit) tryFlush() {
 
-		for i := 0; i < ctxs.count; i++ {
-			v := ctxs.ctxs[i]
-			ckey := v.getCacheKey()
-			ckey.mtx.Lock()
-			v.reply(errcode.ERR_OK, nil, ckey.version)
-			if !ckey.writeBackLocked {
-				ckey.writeBackLocked = true
-				pushSqlWriteReq(ckey)
-			}
-			ckey.mtx.Unlock()
-		}
+	if this.cacheBinlogCount > 0 && (this.cacheBinlogCount >= int32(conf.GetConfig().FlushCount) || time.Now().After(this.nextFlush)) {
 
-		for i := 0; i < ctxs.count; i++ {
-			v := ctxs.ctxs[i]
-			v.getCacheKey().processQueueCmd()
-		}
-		ctxArrayPut(ctxs)
-	}
-}
+		cacheBinlogCount := this.cacheBinlogCount
 
-func (this *processUnit) start() {
-	this.afterFlushQueue = util.NewBlockQueue()
-	go func() {
-		for {
-			closed, localList := this.afterFlushQueue.Get()
-			for _, v := range localList {
-				this.afterFlush(v.(*ctxArray))
-			}
-			if closed {
+		this.cacheBinlogCount = 0
+
+		config := conf.GetConfig()
+
+		beg := time.Now()
+
+		if nil == this.f {
+
+			fileIndex := atomic.AddInt64(&fileCounter, 1)
+
+			os.MkdirAll(config.BinlogDir, os.ModePerm)
+			path := fmt.Sprintf("%s/%s_%d%s", config.BinlogDir, config.BinlogPrefix, fileIndex, binlogSuffix)
+
+			f, err := os.Create(path)
+			if err != nil {
+				Fatalln("create backfile failed", path, err)
 				return
 			}
-		}
-	}()
-}
 
-func (this *processUnit) flush() {
-
-	if 0 == this.cacheBinlogCount {
-		return
-	}
-
-	cacheBinlogCount := this.cacheBinlogCount
-
-	this.cacheBinlogCount = 0
-
-	config := conf.GetConfig()
-
-	beg := time.Now()
-
-	if nil == this.f {
-
-		fileIndex := atomic.AddInt64(&fileCounter, 1)
-
-		os.MkdirAll(config.BinlogDir, os.ModePerm)
-		path := fmt.Sprintf("%s/%s_%d%s", config.BinlogDir, config.BinlogPrefix, fileIndex, binlogSuffix)
-
-		f, err := os.Create(path)
-		if err != nil {
-			Fatalln("create backfile failed", path, err)
-			return
+			this.f = f
+			this.filePath = path
 		}
 
-		this.f = f
-		this.filePath = path
-	}
+		head := make([]byte, 4+checkSumSize)
+		checkSum := crc64.Checksum(this.binlogStr.bytes(), crc64Table)
+		binary.BigEndian.PutUint32(head[0:4], uint32(this.binlogStr.dataLen()))
+		binary.BigEndian.PutUint64(head[4:], uint64(checkSum))
 
-	head := make([]byte, 4+checkSumSize)
-	checkSum := crc64.Checksum(this.binlogStr.bytes(), crc64Table)
-	binary.BigEndian.PutUint32(head[0:4], uint32(this.binlogStr.dataLen()))
-	binary.BigEndian.PutUint64(head[4:], uint64(checkSum))
+		this.fileSize += this.binlogStr.dataLen() + len(head)
 
-	this.fileSize += this.binlogStr.dataLen() + len(head)
+		if _, err := this.f.Write(head); nil != err {
+			panic(err)
+		}
 
-	if _, err := this.f.Write(head); nil != err {
-		panic(err)
-	}
+		if _, err := this.f.Write(this.binlogStr.bytes()); nil != err {
+			panic(err)
+		}
 
-	if _, err := this.f.Write(this.binlogStr.bytes()); nil != err {
-		panic(err)
-	}
+		if err := this.f.Sync(); nil != err {
+			panic(err)
+		}
 
-	if err := this.f.Sync(); nil != err {
-		panic(err)
-	}
+		if this.binlogCount >= config.MaxBinlogCount || this.fileSize+this.binlogStr.dataLen()+len(head) >= int(config.MaxBinlogFileSize) {
+			this.startSnapshot()
+		} else {
+			this.binlogStr.reset()
+		}
 
-	if this.binlogCount >= config.MaxBinlogCount || this.fileSize+this.binlogStr.dataLen()+len(head) >= int(config.MaxBinlogFileSize) {
-		this.startSnapshot()
-	} else {
-		this.binlogStr.reset()
-	}
+		Debugln("flush time:", time.Now().Sub(beg), cacheBinlogCount)
 
-	Debugln("flush time:", time.Now().Sub(beg), cacheBinlogCount)
+		this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval))
 
-	this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval))
+		if nil != this.ctxs {
+			ctxs := this.ctxs
+			this.ctxs = nil
 
-	if nil != this.ctxs {
-		ctxs := this.ctxs
-		this.ctxs = nil
-		this.afterFlushQueue.AddNoWait(ctxs)
+			for i := 0; i < ctxs.count; i++ {
+				v := ctxs.ctxs[i]
+				ckey := v.getCacheKey()
+				ckey.mtx.Lock()
+				v.reply(errcode.ERR_OK, nil, ckey.version)
+				if !ckey.writeBackLocked {
+					ckey.writeBackLocked = true
+					pushSqlWriteReq(ckey)
+				}
+				ckey.mtx.Unlock()
+			}
+
+			this.mtx.Unlock()
+
+			for i := 0; i < ctxs.count; i++ {
+				v := ctxs.ctxs[i]
+				v.getCacheKey().processQueueCmd()
+			}
+			ctxArrayPut(ctxs)
+
+			this.mtx.Lock()
+		}
 	}
 }
 
@@ -259,16 +242,12 @@ func (this *processUnit) write(tt int, unikey string, fields map[string]*proto.F
 			binary.BigEndian.PutUint32(this.binlogStr.data[pos:pos+4], uint32(c))
 		}
 	}
-
-	if this.cacheBinlogCount >= int32(conf.GetConfig().FlushCount) || time.Now().After(this.nextFlush) {
-		this.flush()
-	}
-
 }
 
 func (this *processUnit) writeKick(unikey string) {
 	this.mtx.Lock()
 	this.write(binlog_kick, unikey, nil, 0)
+	this.tryFlush()
 	this.mtx.Unlock()
 }
 
@@ -306,6 +285,8 @@ func (this *processUnit) snapshot(config *conf.Config, wg *sync.WaitGroup) {
 		v.mtx.Unlock()
 	}
 
+	this.tryFlush()
+
 	//执行一次sql操作，防止数据不一致的情况
 	for _, v := range this.cacheKeys {
 		v.mtx.Lock()
@@ -313,33 +294,6 @@ func (this *processUnit) snapshot(config *conf.Config, wg *sync.WaitGroup) {
 		pushSqlWriteReq(v)
 		v.mtx.Unlock()
 	}
-
-	/*	if this.binlogCount > 0 {
-			head := make([]byte, 4+checkSumSize)
-			checkSum := crc64.Checksum(this.binlogStr.bytes(), crc64Table)
-			binary.BigEndian.PutUint32(head[0:4], uint32(this.binlogStr.dataLen()))
-			binary.BigEndian.PutUint64(head[4:], uint64(checkSum))
-			if _, err := f.Write(head); nil != err {
-				panic(err)
-			}
-
-			if _, err := f.Write(this.binlogStr.bytes()); nil != err {
-				panic(err)
-			}
-
-			if err := f.Sync(); nil != err {
-				panic(err)
-			}
-
-			//执行一次sql操作，防止数据不一致的情况
-			for _, v := range this.cacheKeys {
-				v.mtx.Lock()
-				v.writeBackLocked = true
-				pushSqlWriteReq(v)
-				v.mtx.Unlock()
-			}
-		}
-	*/
 
 	this.make_snapshot = false
 
@@ -362,9 +316,7 @@ func (this *processUnit) writeBack(ctx *processContext) {
 	ckey := ctx.getCacheKey()
 
 	this.mtx.Lock()
-	defer this.mtx.Unlock()
 	ckey.mtx.Lock()
-	defer ckey.mtx.Unlock()
 
 	if ckey.sqlFlag == write_back_none {
 		ckey.sqlFlag = ctx.writeBackFlag
@@ -374,13 +326,13 @@ func (this *processUnit) writeBack(ctx *processContext) {
 		} else if ctx.writeBackFlag == write_back_delete {
 			ckey.sqlFlag = write_back_delete
 		} else {
-			panic("invaild ctx.writeBackFlag")
+			Errorln("invaild ctx.writeBackFlag")
 		}
 	} else if ckey.sqlFlag == write_back_delete {
 		if ctx.writeBackFlag == write_back_insert {
 			ckey.sqlFlag = write_back_insert
 		} else {
-			panic("invaild ctx.writeBackFlag")
+			Errorln("invaild ctx.writeBackFlag")
 		}
 	} else if ckey.sqlFlag == write_back_update {
 		if ctx.writeBackFlag == write_back_update {
@@ -388,13 +340,14 @@ func (this *processUnit) writeBack(ctx *processContext) {
 		} else if ctx.writeBackFlag == write_back_delete {
 			ckey.sqlFlag = write_back_delete
 		} else {
-			panic("invaild ctx.writeBackFlag")
+			Errorln("invaild ctx.writeBackFlag")
 		}
 	}
 
 	if nil == this.ctxs {
 		this.ctxs = ctxArrayGet()
 	}
+
 	this.ctxs.append(ctx)
 
 	if ckey.sqlFlag == write_back_delete {
@@ -415,6 +368,10 @@ func (this *processUnit) writeBack(ctx *processContext) {
 			this.write(binlog_snapshot, ckey.uniKey, ckey.values, ckey.version)
 		}
 	}
+
+	ckey.mtx.Unlock()
+	this.tryFlush()
+	this.mtx.Unlock()
 }
 
 func readBinLog(buffer []byte, offset int) (int, int, string, int64, map[string]*proto.Field) {

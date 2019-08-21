@@ -144,19 +144,8 @@ func (this *processUnit) kickCacheKey() {
 
 func (this *processUnit) checkFlush() {
 	this.mtx.Lock()
-	//var ctxs *ctxArray
-	if time.Now().After(this.nextFlush) {
-		this.flush()
-	}
+	this.tryFlush()
 	this.mtx.Unlock()
-
-	/*if nil != ctxs {
-		for i := 0; i < ctxs.count; i++ {
-			v := ctxs.ctxs[i]
-			v.getCacheKey().processQueueCmd()
-		}
-		ctxArrayPut(ctxs)
-	}*/
 }
 
 func initProcessUnit() {
@@ -183,8 +172,6 @@ func initProcessUnit() {
 				unit.checkFlush()
 			}
 		})
-
-		unit.start()
 
 		processUnits[i] = unit
 	}
