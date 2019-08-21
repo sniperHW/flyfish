@@ -392,12 +392,10 @@ func (this *processUnit) writeBack(ctx *processContext) {
 		}
 	}
 
-	if ckey.cmdQueueLocked {
-		if nil == this.ctxs {
-			this.ctxs = ctxArrayGet()
-		}
-		this.ctxs.append(ctx)
+	if nil == this.ctxs {
+		this.ctxs = ctxArrayGet()
 	}
+	this.ctxs.append(ctx)
 
 	if ckey.sqlFlag == write_back_delete {
 		if ckey.snapshot {
