@@ -391,7 +391,7 @@ func (this cmdProcessorLocalCache) processCmd(ckey *cacheKey, fromClient bool) {
 			ckey.mtx.Unlock()
 		}
 	} else {
-		ckey.lockCmdQueue()
+		//ckey.lockCmdQueue()
 		ckey.mtx.Unlock()
 		ckey.unit.doWriteBack(ctx)
 	}

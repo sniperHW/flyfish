@@ -121,6 +121,19 @@ func (this *processUnit) startSnapshot() {
 
 func (this *processUnit) afterFlush(ctxs *ctxArray) {
 	if nil != ctxs {
+
+		for i := 0; i < ctxs.count; i++ {
+			v := ctxs.ctxs[i]
+			ckey := v.getCacheKey()
+			ckey.mtx.Lock()
+			v.reply(errcode.ERR_OK, nil, ckey.version)
+			if !ckey.writeBackLocked {
+				ckey.writeBackLocked = true
+				pushSqlWriteReq(ckey)
+			}
+			ckey.mtx.Unlock()
+		}
+
 		for i := 0; i < ctxs.count; i++ {
 			v := ctxs.ctxs[i]
 			v.getCacheKey().processQueueCmd()
@@ -146,9 +159,11 @@ func (this *processUnit) start() {
 
 func (this *processUnit) flush() {
 
-	if nil == this.ctxs {
+	if 0 == this.cacheBinlogCount {
 		return
 	}
+
+	this.cacheBinlogCount = 0
 
 	config := conf.GetConfig()
 
@@ -196,30 +211,21 @@ func (this *processUnit) flush() {
 		this.binlogStr.reset()
 	}
 
-	for i := 0; i < this.ctxs.count; i++ {
-		v := this.ctxs.ctxs[i]
-		ckey := v.getCacheKey()
-		ckey.mtx.Lock()
-		v.reply(errcode.ERR_OK, nil, ckey.version)
-		if !ckey.writeBackLocked {
-			ckey.writeBackLocked = true
-			pushSqlWriteReq(ckey)
-		}
-		ckey.mtx.Unlock()
-	}
-
 	Debugln("flush time:", time.Now().Sub(beg), this.ctxs.len())
 
 	this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval))
 
-	ctxs := this.ctxs
-	this.ctxs = nil
-	this.afterFlushQueue.AddNoWait(ctxs)
+	if nil != this.ctxs {
+		ctxs := this.ctxs
+		this.ctxs = nil
+		this.afterFlushQueue.AddNoWait(ctxs)
+	}
 }
 
 func (this *processUnit) write(tt int, unikey string, fields map[string]*proto.Field, version int64) {
 
 	this.binlogCount++
+	this.cacheBinlogCount++
 
 	if nil == this.binlogStr {
 		this.binlogStr = strGet()
@@ -246,26 +252,17 @@ func (this *processUnit) write(tt int, unikey string, fields map[string]*proto.F
 			binary.BigEndian.PutUint32(this.binlogStr.data[pos:pos+4], uint32(c))
 		}
 	}
+
+	if this.cacheBinlogCount >= int32(conf.GetConfig().FlushCount) || time.Now().After(this.nextFlush) {
+		this.flush()
+	}
+
 }
 
 func (this *processUnit) writeKick(unikey string) {
 	this.mtx.Lock()
 	this.write(binlog_kick, unikey, nil, 0)
-	//var ctxs *ctxArray
-
-	if this.ctxs.full() || time.Now().After(this.nextFlush) {
-		this.flush()
-	}
-
 	this.mtx.Unlock()
-
-	/*if nil != ctxs {
-		for i := 0; i < ctxs.count; i++ {
-			v := ctxs.ctxs[i]
-			v.getCacheKey().processQueueCmd()
-		}
-		ctxArrayPut(ctxs)
-	}*/
 }
 
 func (this *processUnit) snapshot(config *conf.Config, wg *sync.WaitGroup) {
@@ -348,12 +345,9 @@ func (this *processUnit) writeBack(ctx *processContext) {
 	ckey := ctx.getCacheKey()
 
 	this.mtx.Lock()
-
-	if nil == this.ctxs {
-		this.ctxs = ctxArrayGet()
-	}
-
+	defer this.mtx.Unlock()
 	ckey.mtx.Lock()
+	defer ckey.mtx.Unlock()
 
 	if ckey.sqlFlag == write_back_none {
 		ckey.sqlFlag = ctx.writeBackFlag
@@ -381,6 +375,13 @@ func (this *processUnit) writeBack(ctx *processContext) {
 		}
 	}
 
+	if ckey.cmdQueueLocked {
+		if nil == this.ctxs {
+			this.ctxs = ctxArrayGet()
+		}
+		this.ctxs.append(ctx)
+	}
+
 	if ckey.sqlFlag == write_back_delete {
 		if ckey.snapshot {
 			this.write(binlog_delete, ckey.uniKey, nil, 0)
@@ -399,18 +400,6 @@ func (this *processUnit) writeBack(ctx *processContext) {
 			this.write(binlog_snapshot, ckey.uniKey, ckey.values, ckey.version)
 		}
 	}
-
-	ckey.mtx.Unlock()
-
-	this.ctxs.append(ctx)
-
-	//var ctxs *ctxArray
-
-	if this.ctxs.full() || time.Now().After(this.nextFlush) {
-		this.flush()
-	}
-
-	this.mtx.Unlock()
 }
 
 func readBinLog(buffer []byte, offset int) (int, int, string, int64, map[string]*proto.Field) {
@@ -543,14 +532,11 @@ func replayBinLog(path string) bool {
 					}
 					unit.cacheKeys[unikey] = ckey
 					unit.updateLRU(ckey)
-				} else if ckey.status == cache_missing && version != 0 {
+				} else {
 					ckey.values = values
 					ckey.version = version
 					ckey.sqlFlag = write_back_insert_update
 					ckey.status = cache_ok
-				} else {
-					Fatalln("invaild tt")
-					return false
 				}
 			} else if tt == binlog_update {
 				if nil == ckey || ckey.status != cache_ok || ckey.values == nil {
