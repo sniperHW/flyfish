@@ -3,6 +3,7 @@ package flyfish
 import (
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/kendynet/timer"
+	"github.com/sniperHW/kendynet/util"
 	"os"
 	"sync"
 	"time"
@@ -63,19 +64,20 @@ func ctxArrayPut(w *ctxArray) {
 }
 
 type processUnit struct {
-	cacheKeys     map[string]*cacheKey
-	mtx           sync.Mutex
-	lruHead       cacheKey
-	lruTail       cacheKey
-	ctxs          *ctxArray
-	nextFlush     time.Time
-	binlogStr     *str
-	f             *os.File
-	filePath      string
-	backFilePath  string
-	binlogCount   int32
-	fileSize      int
-	make_snapshot bool
+	cacheKeys       map[string]*cacheKey
+	mtx             sync.Mutex
+	lruHead         cacheKey
+	lruTail         cacheKey
+	ctxs            *ctxArray
+	nextFlush       time.Time
+	binlogStr       *str
+	f               *os.File
+	filePath        string
+	backFilePath    string
+	binlogCount     int32
+	fileSize        int
+	make_snapshot   bool
+	afterFlushQueue *util.BlockQueue
 }
 
 func (this *processUnit) doWriteBack(ctx *processContext) {
@@ -141,19 +143,19 @@ func (this *processUnit) kickCacheKey() {
 
 func (this *processUnit) checkFlush() {
 	this.mtx.Lock()
-	var ctxs *ctxArray
+	//var ctxs *ctxArray
 	if time.Now().After(this.nextFlush) {
-		ctxs = this.flush()
+		this.flush()
 	}
 	this.mtx.Unlock()
 
-	if nil != ctxs {
+	/*if nil != ctxs {
 		for i := 0; i < ctxs.count; i++ {
 			v := ctxs.ctxs[i]
 			v.getCacheKey().processQueueCmd()
 		}
 		ctxArrayPut(ctxs)
-	}
+	}*/
 }
 
 func initProcessUnit() {
@@ -180,6 +182,8 @@ func initProcessUnit() {
 				unit.checkFlush()
 			}
 		})
+
+		unit.start()
 
 		processUnits[i] = unit
 	}

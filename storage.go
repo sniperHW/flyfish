@@ -5,9 +5,9 @@ import (
 	"fmt"
 	//"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/conf"
-	"github.com/sniperHW/flyfish/proto"
-	//"github.com/sniperHW/kendynet/util"
 	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/proto"
+	"github.com/sniperHW/kendynet/util"
 	"hash/crc64"
 	"math"
 	"os"
@@ -118,10 +118,36 @@ func (this *processUnit) startSnapshot() {
 	}()
 }
 
-func (this *processUnit) flush() *ctxArray {
+func (this *processUnit) afterFlush(ctxs *ctxArray) {
+	if nil != ctxs {
+		for i := 0; i < ctxs.count; i++ {
+			v := ctxs.ctxs[i]
+			v.getCacheKey().processQueueCmd()
+		}
+		ctxArrayPut(ctxs)
+	}
+}
+
+func (this *processUnit) start() {
+	this.afterFlushQueue = util.NewBlockQueue()
+	this.ctxs = ctxArrayGet()
+	go func() {
+		for {
+			closed, localList := this.afterFlushQueue.Get()
+			for _, v := range localList {
+				this.afterFlush(v.(*ctxArray))
+			}
+			if closed {
+				return
+			}
+		}
+	}()
+}
+
+func (this *processUnit) flush() {
 
 	if nil == this.ctxs {
-		return nil
+		return
 	}
 
 	config := conf.GetConfig()
@@ -138,7 +164,7 @@ func (this *processUnit) flush() *ctxArray {
 		f, err := os.Create(path)
 		if err != nil {
 			Fatalln("create backfile failed", path, err)
-			return nil
+			return
 		}
 
 		this.f = f
@@ -187,9 +213,12 @@ func (this *processUnit) flush() *ctxArray {
 	this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval))
 
 	ctxs := this.ctxs
-	this.ctxs = nil
 
-	return ctxs
+	if nil != ctxs {
+		this.afterFlushQueue.AddNoWait(ctxs)
+	}
+
+	this.ctxs = nil
 
 }
 
@@ -230,7 +259,7 @@ func (this *processUnit) writeKick(unikey string) {
 	var ctxs *ctxArray
 
 	if this.ctxs.full() || time.Now().After(this.nextFlush) {
-		ctxs = this.flush()
+		this.flush()
 	}
 
 	this.mtx.Unlock()
@@ -380,21 +409,13 @@ func (this *processUnit) writeBack(ctx *processContext) {
 
 	this.ctxs.append(ctx)
 
-	var ctxs *ctxArray
+	//var ctxs *ctxArray
 
 	if this.ctxs.full() || time.Now().After(this.nextFlush) {
-		ctxs = this.flush()
+		this.flush()
 	}
 
 	this.mtx.Unlock()
-
-	if nil != ctxs {
-		for i := 0; i < ctxs.count; i++ {
-			v := ctxs.ctxs[i]
-			v.getCacheKey().processQueueCmd()
-		}
-		ctxArrayPut(ctxs)
-	}
 }
 
 func readBinLog(buffer []byte, offset int) (int, int, string, int64, map[string]*proto.Field) {
