@@ -12,6 +12,7 @@ import (
 	"math"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -150,9 +151,18 @@ func (this *processUnit) flush() *ctxArray {
 	binary.BigEndian.PutUint64(head[4:], uint64(checkSum))
 
 	this.fileSize += this.binlogStr.dataLen() + len(head)
-	this.f.Write(head)
-	this.f.Write(this.binlogStr.bytes())
-	this.f.Sync()
+
+	if _, err := this.f.Write(head); nil != err {
+		panic(err)
+	}
+
+	if _, err := this.f.Write(this.binlogStr.bytes()); nil != err {
+		panic(err)
+	}
+
+	if err := this.f.Sync(); nil != err {
+		panic(err)
+	}
 
 	if this.binlogCount >= config.MaxBinlogCount || this.fileSize+this.binlogStr.dataLen()+len(head) >= int(config.MaxBinlogFileSize) {
 		this.startSnapshot()
@@ -234,7 +244,7 @@ func (this *processUnit) writeKick(unikey string) {
 	}
 }
 
-func (this *processUnit) snapshot(config *conf.Config) {
+func (this *processUnit) snapshot(config *conf.Config, wg *sync.WaitGroup) {
 
 	beg := time.Now()
 
@@ -269,9 +279,17 @@ func (this *processUnit) snapshot(config *conf.Config) {
 		checkSum := crc64.Checksum(this.binlogStr.bytes(), crc64Table)
 		binary.BigEndian.PutUint32(head[0:4], uint32(this.binlogStr.dataLen()))
 		binary.BigEndian.PutUint64(head[4:], uint64(checkSum))
-		f.Write(head)
-		f.Write(this.binlogStr.bytes())
-		f.Sync()
+		if _, err := f.Write(head); nil != err {
+			panic(err)
+		}
+
+		if _, err := f.Write(this.binlogStr.bytes()); nil != err {
+			panic(err)
+		}
+
+		if err := f.Sync(); nil != err {
+			panic(err)
+		}
 
 		//执行一次sql操作，防止数据不一致的情况
 		for _, v := range this.cacheKeys {
@@ -290,6 +308,8 @@ func (this *processUnit) snapshot(config *conf.Config) {
 	this.binlogStr.reset()
 
 	Infoln("snapshot time:", time.Now().Sub(beg), " count:", this.binlogCount)
+
+	wg.Done()
 
 }
 
@@ -586,12 +606,19 @@ func StartReplayBinlog() bool {
 		os.Remove(v)
 	}
 
+	wg := &sync.WaitGroup{}
+
 	//建立新快照
 	for _, v := range processUnits {
-		v.mtx.Lock()
-		v.snapshot(config)
-		v.mtx.Unlock()
+		wg.Add(1)
+		go func(u *processUnit) {
+			u.mtx.Lock()
+			u.snapshot(config, wg)
+			u.mtx.Unlock()
+		}(v)
 	}
+
+	wg.Wait()
 
 	return true
 }
