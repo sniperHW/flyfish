@@ -24,6 +24,7 @@ func (this sqlResponseLocalCache) onSqlNotFound(ctx *processContext) {
 		ckey.setDefaultValue(ctx)
 
 		ckey.setOKNoLock(1)
+		ctx.version = ckey.version
 
 		cmd := ctx.getCmd()
 
@@ -128,6 +129,8 @@ func (this sqlResponseLocalCache) onSqlLoadOKSet(ctx *processContext) {
 	ckey.setValue(ctx)
 
 	ckey.setOKNoLock(version)
+
+	ctx.version = ckey.version
 
 	ckey.mtx.Unlock()
 

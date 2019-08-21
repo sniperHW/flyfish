@@ -107,11 +107,10 @@ func (this *processUnit) startSnapshot() {
 			}
 			v.make_snapshot = false
 			v.mtx.Unlock()
-			this.tryFlush()
 			this.mtx.Unlock()
 			i++
-			if i >= 100 {
-				time.Sleep(time.Millisecond)
+			if i%100 == 0 {
+				time.Sleep(time.Millisecond * 10)
 			}
 		}
 
@@ -189,9 +188,9 @@ func (this *processUnit) tryFlush() {
 
 			for i := 0; i < ctxs.count; i++ {
 				v := ctxs.ctxs[i]
+				v.reply(errcode.ERR_OK, v.fields, v.version)
 				ckey := v.getCacheKey()
 				ckey.mtx.Lock()
-				v.reply(errcode.ERR_OK, nil, ckey.version)
 				if !ckey.writeBackLocked {
 					ckey.writeBackLocked = true
 					pushSqlWriteReq(ckey)
@@ -242,6 +241,7 @@ func (this *processUnit) write(tt int, unikey string, fields map[string]*proto.F
 			binary.BigEndian.PutUint32(this.binlogStr.data[pos:pos+4], uint32(c))
 		}
 	}
+	fmt.Println(this.binlogStr.len)
 }
 
 func (this *processUnit) writeKick(unikey string) {
@@ -270,32 +270,31 @@ func (this *processUnit) snapshot(config *conf.Config, wg *sync.WaitGroup) {
 		this.binlogStr = strGet()
 	}
 
-	this.f = f
-	this.filePath = path
-	this.fileSize = 0
-	this.make_snapshot = true
 	this.binlogCount = 0
 
 	for _, v := range this.cacheKeys {
 		v.mtx.Lock()
-		if v.status == cache_ok || v.status == cache_missing {
+		if v.status == cache_ok {
 			v.snapshot = true
 			this.write(binlog_snapshot, v.uniKey, v.values, v.version)
 		}
 		v.mtx.Unlock()
 	}
 
-	this.tryFlush()
-
-	//执行一次sql操作，防止数据不一致的情况
-	for _, v := range this.cacheKeys {
-		v.mtx.Lock()
-		v.writeBackLocked = true
-		pushSqlWriteReq(v)
-		v.mtx.Unlock()
+	if this.binlogCount > 0 {
+		head := make([]byte, 4+checkSumSize)
+		checkSum := crc64.Checksum(this.binlogStr.bytes(), crc64Table)
+		binary.BigEndian.PutUint32(head[0:4], uint32(this.binlogStr.dataLen()))
+		binary.BigEndian.PutUint64(head[4:], uint64(checkSum))
+		f.Write(head)
+		f.Write(this.binlogStr.bytes())
+		f.Sync()
 	}
 
-	this.make_snapshot = false
+	this.f = f
+	this.filePath = path
+	this.fileSize = this.binlogStr.dataLen()
+	this.cacheBinlogCount = 0
 
 	this.binlogStr.reset()
 
@@ -326,13 +325,13 @@ func (this *processUnit) writeBack(ctx *processContext) {
 		} else if ctx.writeBackFlag == write_back_delete {
 			ckey.sqlFlag = write_back_delete
 		} else {
-			Errorln("invaild ctx.writeBackFlag")
+			Fatalln("invaild ctx.writeBackFlag")
 		}
 	} else if ckey.sqlFlag == write_back_delete {
 		if ctx.writeBackFlag == write_back_insert {
 			ckey.sqlFlag = write_back_insert
 		} else {
-			Errorln("invaild ctx.writeBackFlag")
+			Fatalln("invaild ctx.writeBackFlag")
 		}
 	} else if ckey.sqlFlag == write_back_update {
 		if ctx.writeBackFlag == write_back_update {
@@ -340,7 +339,7 @@ func (this *processUnit) writeBack(ctx *processContext) {
 		} else if ctx.writeBackFlag == write_back_delete {
 			ckey.sqlFlag = write_back_delete
 		} else {
-			Errorln("invaild ctx.writeBackFlag")
+			Fatalln("invaild ctx.writeBackFlag")
 		}
 	}
 
@@ -370,6 +369,7 @@ func (this *processUnit) writeBack(ctx *processContext) {
 	}
 
 	ckey.mtx.Unlock()
+
 	this.tryFlush()
 	this.mtx.Unlock()
 }

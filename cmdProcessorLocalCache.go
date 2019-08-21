@@ -56,13 +56,13 @@ func (this cmdProcessorLocalCache) processSet(ckey *cacheKey, cmd *command) *pro
 		ckey.setOKNoLock(ckey.version + 1)
 		ctx.writeBackFlag = write_back_update //数据存在执行update
 		ctx.fields["__version__"] = proto.PackField("__version__", ckey.version)
+		ctx.version = ckey.version
 		for _, v := range cmd.fields {
 			ckey.values[v.GetName()] = v
 			ckey.modifyFields[v.GetName()] = true
 			ctx.fields[v.GetName()] = v
 		}
 	} else if ckey.status == cache_missing {
-		//Infoln("processSet cache_missing setDefaultValue", ckey.uniKey)
 		ckey.setDefaultValue(ctx)
 		ckey.setOKNoLock(1)
 		ctx.writeBackFlag = write_back_insert //数据不存在执行insert
@@ -92,6 +92,7 @@ func (this cmdProcessorLocalCache) processSetNx(ckey *cacheKey, cmd *command) *p
 	if ckey.status == cache_missing {
 		ckey.setDefaultValue(ctx)
 		ckey.setOKNoLock(1)
+		ctx.version = ckey.version
 		ctx.fields["__version__"] = proto.PackField("__version__", ckey.version)
 		for _, v := range cmd.fields {
 			ckey.values[v.GetName()] = v
@@ -131,6 +132,7 @@ func (this cmdProcessorLocalCache) processCompareAndSet(ckey *cacheKey, cmd *com
 
 		if ckey.status == cache_ok {
 			ckey.setOKNoLock(ckey.version + 1)
+			ctx.version = ckey.version
 			ctx.writeBackFlag = write_back_update //数据存在执行update
 			ctx.fields["__version__"] = proto.PackField("__version__", ckey.version)
 			ckey.values[cmd.cns.oldV.GetName()] = cmd.cns.newV
@@ -162,6 +164,7 @@ func (this cmdProcessorLocalCache) processCompareAndSetNx(ckey *cacheKey, cmd *c
 
 	if ckey.status == cache_ok {
 		ckey.setOKNoLock(ckey.version + 1)
+		ctx.version = ckey.version
 		ctx.writeBackFlag = write_back_update //数据存在执行update
 		ctx.fields["__version__"] = proto.PackField("__version__", ckey.version)
 		ckey.values[cmd.cns.oldV.GetName()] = cmd.cns.newV
@@ -170,6 +173,7 @@ func (this cmdProcessorLocalCache) processCompareAndSetNx(ckey *cacheKey, cmd *c
 	} else if ckey.status == cache_missing {
 		ckey.setDefaultValue(ctx)
 		ckey.setOKNoLock(1)
+		ctx.version = ckey.version
 		ctx.writeBackFlag = write_back_insert
 		ctx.fields["__version__"] = proto.PackField("__version__", ckey.version)
 		ckey.values[cmd.cns.oldV.GetName()] = cmd.cns.newV
@@ -210,6 +214,7 @@ func (this cmdProcessorLocalCache) processIncrBy(ckey *cacheKey, cmd *command) *
 			ckey.setOKNoLock(1)
 			ctx.writeBackFlag = write_back_insert
 		}
+		ctx.version = ckey.version
 		oldV := ckey.values[cmd.incrDecr.GetName()]
 		newV := proto.PackField(cmd.incrDecr.GetName(), oldV.GetInt()+cmd.incrDecr.GetInt())
 		ctx.fields[cmd.incrDecr.GetName()] = newV
@@ -255,6 +260,7 @@ func (this cmdProcessorLocalCache) processDecrBy(ckey *cacheKey, cmd *command) *
 			ckey.setDefaultValue(ctx)
 			ckey.setOKNoLock(1)
 		}
+		ctx.version = ckey.version
 		oldV := ckey.values[cmd.incrDecr.GetName()]
 		newV := proto.PackField(cmd.incrDecr.GetName(), oldV.GetInt()-cmd.incrDecr.GetInt())
 		ctx.fields[cmd.incrDecr.GetName()] = newV
@@ -289,6 +295,7 @@ func (this cmdProcessorLocalCache) processDel(ckey *cacheKey, cmd *command) *pro
 		if ckey.status == cache_ok {
 			ckey.setMissingNoLock()
 			ctx.writeBackFlag = write_back_delete
+			ctx.version = ckey.version
 		}
 
 		return ctx

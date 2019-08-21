@@ -29,6 +29,7 @@ type processContext struct {
 	errno         int32
 	writeBackFlag int //回写数据库类型
 	ping          bool
+	version       int64
 }
 
 func (this *processContext) getCmd() *command {

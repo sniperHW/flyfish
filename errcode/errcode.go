@@ -22,7 +22,7 @@ const (
 	ERR_SCAN_END       = int32(18)
 	ERR_SERVER_STOPED  = int32(19)
 	ERR_BUSY           = int32(20)
-	ERR_LEVELDB        = int32(21)
+	ERR_ERROR          = int32(21)
 	ERR_END            = int32(22)
 )
 
@@ -48,7 +48,7 @@ var err_str []string = []string{
 	"scan finish",
 	"server stoped",
 	"busy",
-	"leveldb error",
+	"error",
 }
 
 func GetErrorStr(code int32) string {
