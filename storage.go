@@ -68,11 +68,7 @@ func (this *processUnit) startSnapshot() {
 		Fatalln("create backfile failed", path, err)
 	}
 
-	if nil != this.binlogStr {
-		this.binlogStr.reset()
-	} else {
-		this.binlogStr = strGet()
-	}
+	this.binlogStr = strGet()
 
 	this.binlogCount = 0
 	this.fileSize = 0
@@ -126,13 +122,19 @@ func (this *processUnit) startSnapshot() {
 
 func (this *processUnit) tryFlush() {
 
-	if this.cacheBinlogCount > 0 && (this.cacheBinlogCount >= int32(conf.GetConfig().FlushCount) || time.Now().After(this.nextFlush)) {
+	this.mtx.Lock()
+
+	if !(this.cacheBinlogCount > 0 && (this.cacheBinlogCount >= int32(conf.GetConfig().FlushCount) || time.Now().After(this.nextFlush))) {
+		this.mtx.Unlock()
+	} else {
+
+		config := conf.GetConfig()
+
+		this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval))
 
 		cacheBinlogCount := this.cacheBinlogCount
 
 		this.cacheBinlogCount = 0
-
-		config := conf.GetConfig()
 
 		beg := time.Now()
 
@@ -190,8 +192,6 @@ func (this *processUnit) tryFlush() {
 
 		Debugln("flush time:", time.Now().Sub(beg), cacheBinlogCount)
 
-		this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval))
-
 		this.mtx.Unlock()
 
 		strPut(binlogStr)
@@ -215,8 +215,6 @@ func (this *processUnit) tryFlush() {
 			}
 			ctxArrayPut(ctxs)
 		}
-
-		this.mtx.Lock()
 	}
 }
 
@@ -255,8 +253,8 @@ func (this *processUnit) write(tt int, unikey string, fields map[string]*proto.F
 func (this *processUnit) writeKick(unikey string) {
 	this.mtx.Lock()
 	this.write(binlog_kick, unikey, nil, 0)
-	this.tryFlush()
 	this.mtx.Unlock()
+	this.tryFlush()
 }
 
 func (this *processUnit) snapshot(config *conf.Config, wg *sync.WaitGroup) {
@@ -272,11 +270,7 @@ func (this *processUnit) snapshot(config *conf.Config, wg *sync.WaitGroup) {
 		Fatalln("create backfile failed", path, err)
 	}
 
-	if nil != this.binlogStr {
-		this.binlogStr.reset()
-	} else {
-		this.binlogStr = strGet()
-	}
+	this.binlogStr = strGet()
 
 	this.binlogCount = 0
 
@@ -377,9 +371,9 @@ func (this *processUnit) writeBack(ctx *processContext) {
 	}
 
 	ckey.mtx.Unlock()
+	this.mtx.Unlock()
 
 	this.tryFlush()
-	this.mtx.Unlock()
 }
 
 func readBinLog(buffer []byte, offset int) (int, int, string, int64, map[string]*proto.Field) {

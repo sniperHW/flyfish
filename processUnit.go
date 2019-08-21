@@ -143,9 +143,7 @@ func (this *processUnit) kickCacheKey() {
 }
 
 func (this *processUnit) checkFlush() {
-	this.mtx.Lock()
 	this.tryFlush()
-	this.mtx.Unlock()
 }
 
 func initProcessUnit() {
