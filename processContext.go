@@ -5,17 +5,6 @@ import (
 )
 
 const (
-	redis_none       = 0
-	redis_get        = 1
-	redis_set        = 2 //直接执行set
-	redis_del        = 3
-	redis_set_script = 4 //执行设置类脚本
-	redis_set_only   = 5 //执行set,不需要执行sql回写
-	redis_kick       = 6 //剔除cache
-	redis_end        = 7
-)
-
-const (
 	write_back_none          = 0
 	write_back_insert        = 1
 	write_back_update        = 2
@@ -54,23 +43,6 @@ func (this *processContext) getUniKey() string {
 
 func (this *processContext) getCacheKey() *cacheKey {
 	return this.command.ckey
-}
-
-func (this *processContext) getSetfields() *map[string]interface{} {
-	ckey := this.getCacheKey()
-	meta := ckey.getMeta()
-	ret := map[string]interface{}{}
-	for _, v := range meta.fieldMetas {
-		vv, ok := this.fields[v.name]
-		if ok {
-			ret[v.name] = vv.GetValue()
-		} else {
-			ret[v.name] = v.defaultV
-			this.fields[v.name] = proto.PackField(v.name, v.defaultV)
-		}
-	}
-	ret["__version__"] = this.fields["__version__"].GetValue()
-	return &ret
 }
 
 func (this *processContext) reply(errCode int32, fields map[string]*proto.Field, version int64) {

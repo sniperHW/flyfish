@@ -3,7 +3,6 @@ package flyfish
 import (
 	"encoding/binary"
 	"fmt"
-	//"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"

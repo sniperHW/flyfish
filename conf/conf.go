@@ -44,7 +44,6 @@ type Config struct {
 	BinlogPrefix         string
 	ReplyBusyOnQueueFull bool
 	Compress             bool
-	CacheType            string
 	FlushInterval        int
 	FlushSize            int
 	FlushCount           int
