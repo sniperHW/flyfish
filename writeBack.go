@@ -34,7 +34,15 @@ var (
 	checkSumSize = 8
 	crc64Table   *crc64.Table
 	binlogSuffix = ".bin"
+	tmpFileName  string
 )
+
+func onWriteFileError(err error) {
+	//写文件错误可能是因为磁盘满导致，所以先删除预留文件，释放磁盘空间用来写日志
+	os.Remove(tmpFileName)
+	Errorln("onWriteFileError", err)
+	os.Exit(1)
+}
 
 func binlogTypeToString(tt int) string {
 	switch tt {
@@ -175,15 +183,15 @@ func (this *processUnit) flush(binlogStr *str, ctxs []*processContext, cacheBinl
 	this.mtx.Unlock()
 
 	if _, err := this.f.Write(head); nil != err {
-		panic(err)
+		onWriteFileError(err)
 	}
 
 	if _, err := this.f.Write(binlogStr.bytes()); nil != err {
-		panic(err)
+		onWriteFileError(err)
 	}
 
 	if err := this.f.Sync(); nil != err {
-		panic(err)
+		onWriteFileError(err)
 	}
 
 	this.mtx.Lock()
@@ -276,11 +284,8 @@ func (this *processUnit) write(tt int, unikey string, fields map[string]*proto.F
 }
 
 func (this *processUnit) writeKick(unikey string) {
-	//this.mtx.Lock()
-	Infoln("kick", unikey)
 	this.write(binlog_kick, unikey, nil, 0)
 	this.tryFlush()
-	//this.mtx.Unlock()
 }
 
 func (this *processUnit) snapshot(config *conf.Config, wg *sync.WaitGroup) {
@@ -314,9 +319,18 @@ func (this *processUnit) snapshot(config *conf.Config, wg *sync.WaitGroup) {
 		checkSum := crc64.Checksum(this.binlogStr.bytes(), crc64Table)
 		binary.BigEndian.PutUint32(head[0:4], uint32(this.binlogStr.dataLen()))
 		binary.BigEndian.PutUint64(head[4:], uint64(checkSum))
-		f.Write(head)
-		f.Write(this.binlogStr.bytes())
-		f.Sync()
+
+		if _, err := f.Write(head); nil != err {
+			onWriteFileError(err)
+		}
+
+		if _, err := f.Write(this.binlogStr.bytes()); nil != err {
+			onWriteFileError(err)
+		}
+
+		if err := f.Sync(); nil != err {
+			onWriteFileError(err)
+		}
 	}
 
 	this.f = f

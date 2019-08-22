@@ -42,13 +42,6 @@ type processUnit struct {
 }
 
 func (this *processUnit) doWriteBack(ctx *processContext) {
-
-	Debugln("doWriteBack")
-
-	if ctx.writeBackFlag == write_back_none {
-		panic("ctx.writeBackFlag == write_back_none")
-	}
-
 	this.writeBack(ctx)
 }
 
@@ -102,12 +95,6 @@ func (this *processUnit) kickCacheKey() {
 	}
 }
 
-func (this *processUnit) checkFlush() {
-	this.mtx.Lock()
-	this.tryFlush()
-	this.mtx.Unlock()
-}
-
 func initProcessUnit() {
 
 	config := conf.GetConfig()
@@ -129,7 +116,9 @@ func initProcessUnit() {
 			if isStop() {
 				t.Cancel()
 			} else {
-				unit.checkFlush()
+				unit.mtx.Lock()
+				unit.tryFlush()
+				unit.mtx.Unlock()
 			}
 		})
 

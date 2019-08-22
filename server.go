@@ -206,8 +206,31 @@ func sortFileList(fileList []string) {
 func Start() error {
 
 	var err error
+	var f *os.File
 
 	config := conf.GetConfig()
+
+	//创建保留文件
+	pid := os.Getpid()
+
+	tmpFileName = fmt.Sprintf("%d_%d.tmp", pid, time.Now().Unix())
+
+	f, err = os.Create(tmpFileName)
+
+	if nil != err {
+		return err
+	}
+
+	//预留1MB空间
+	if _, err := f.Write(make([]byte, 1024*1024)); nil != err {
+		return err
+	}
+
+	if err := f.Sync(); nil != err {
+		return err
+	}
+
+	f.Close()
 
 	cmdProcessor = cmdProcessorLocalCache{}
 	sqlResponse = sqlResponseLocalCache{}
@@ -286,7 +309,7 @@ func Stop() {
 		return true
 	})
 
-	Infoln("ShutdownRead ok", cmdCount, totalSqlCount)
+	Infoln("ShutdownRead ok", "cmdCount:", cmdCount, "totalSqlCount:", totalSqlCount)
 
 	//等待redis请求和命令执行完成
 	waitCondition(func() bool {
@@ -299,7 +322,7 @@ func Stop() {
 
 	stopSql()
 
-	Infoln("ProcessUnit stop ok")
+	Infoln("sql stop ok")
 
 	//关闭所有客户连接
 
@@ -316,7 +339,7 @@ func Stop() {
 		}
 	})
 
-	//levelDB.Close()
+	os.Remove(tmpFileName)
 
 	Infoln("flyfish stop ok")
 
