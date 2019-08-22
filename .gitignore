@@ -2,6 +2,7 @@
 config1.conf
 config2.conf
 log/
+binlog/
 main/main
 config.conf
 flyfishd
