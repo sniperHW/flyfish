@@ -54,6 +54,10 @@ func (this *cacheKey) kickAble() bool {
 		return false
 	}
 
+	if this.writeBackLocked {
+		return false
+	}
+
 	if this.cmdQueueLocked {
 		return false
 	}
@@ -143,6 +147,35 @@ func (this *cacheKey) convertStr(fieldName string, value string) *proto.Field {
 	} else {
 		return nil
 	}
+}
+
+func (this *cacheKey) setDefaultValueNoLock() {
+	this.values = map[string]*proto.Field{}
+	meta := this.getMeta()
+	for _, v := range meta.fieldMetas {
+		defaultV := proto.PackField(v.name, v.defaultV)
+		this.values[v.name] = defaultV
+	}
+}
+
+func (this *cacheKey) setValueNoLock(ctx *processContext) {
+	this.values = map[string]*proto.Field{}
+	for _, v := range ctx.fields {
+
+		Debugln("setValue", v.GetName())
+
+		if !(v.GetName() == "__version__" || v.GetName() == "__key__") {
+			this.values[v.GetName()] = v
+		}
+	}
+}
+
+func (this *cacheKey) processClientCmd() {
+	this.process_(true)
+}
+
+func (this *cacheKey) processQueueCmd() {
+	this.process_(false)
 }
 
 func newCacheKey(unit *processUnit, table string, key string, uniKey string) *cacheKey {
