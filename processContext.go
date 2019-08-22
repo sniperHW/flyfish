@@ -76,34 +76,3 @@ func (this *processContext) getSetfields() *map[string]interface{} {
 func (this *processContext) reply(errCode int32, fields map[string]*proto.Field, version int64) {
 	this.command.reply(errCode, fields, version)
 }
-
-func (this *cacheKey) setDefaultValue(ctx *processContext) {
-	this.values = map[string]*proto.Field{}
-	meta := this.getMeta()
-	for _, v := range meta.fieldMetas {
-		defaultV := proto.PackField(v.name, v.defaultV)
-		this.values[v.name] = defaultV
-		ctx.fields[v.name] = defaultV
-		//Infoln("setDefaultValue", v.name)
-	}
-}
-
-func (this *cacheKey) setValue(ctx *processContext) {
-	this.values = map[string]*proto.Field{}
-	for _, v := range ctx.fields {
-
-		Debugln("setValue", v.GetName())
-
-		if !(v.GetName() == "__version__" || v.GetName() == "__key__") {
-			this.values[v.GetName()] = v
-		}
-	}
-}
-
-func (this *cacheKey) processClientCmd() {
-	this.process_(true)
-}
-
-func (this *cacheKey) processQueueCmd() {
-	this.process_(false)
-}

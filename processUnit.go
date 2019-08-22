@@ -92,8 +92,8 @@ func (this *processUnit) kickCacheKey() {
 
 		c := this.lruTail.pprev
 
-		if c.kickAble() {
-			break
+		if !c.kickAble() {
+			return
 		}
 
 		this.removeLRU(c)
@@ -130,6 +130,16 @@ func initProcessUnit() {
 				t.Cancel()
 			} else {
 				unit.checkFlush()
+			}
+		})
+
+		timer.Repeat(time.Second, nil, func(t *timer.Timer) {
+			if isStop() {
+				t.Cancel()
+			} else {
+				unit.mtx.Lock()
+				unit.kickCacheKey()
+				unit.mtx.Unlock()
 			}
 		})
 

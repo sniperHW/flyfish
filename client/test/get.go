@@ -14,7 +14,7 @@ func Get(c *kclient.Client, i int) {
 	key := fmt.Sprintf("%s:%d", "huangwei", i) //rand.Int()%100000)
 	get := c.Get("users1", key, "name", "age", "phone")
 
-	get.Exec(func(ret *kclient.SliceResult) {
+	get.AsyncExec(func(ret *kclient.SliceResult) {
 		if ret.ErrCode == errcode.ERR_OK {
 			fmt.Println(ret.Key, ret.Fields["age"].GetInt())
 		} else {
@@ -33,7 +33,7 @@ func Set(c *kclient.Client, i int) {
 	key := fmt.Sprintf("%s:%d", "huangwei", i)
 
 	set := c.Set("users1", key, fields)
-	set.Exec(func(ret *kclient.StatusResult) {
+	set.AsyncExec(func(ret *kclient.StatusResult) {
 
 		if ret.ErrCode != errcode.ERR_OK {
 			fmt.Println(errcode.GetErrorStr(ret.ErrCode))

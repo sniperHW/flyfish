@@ -271,14 +271,17 @@ func (this *processUnit) write(tt int, unikey string, fields map[string]*proto.F
 		if c > 0 {
 			binary.BigEndian.PutUint32(this.binlogStr.data[pos:pos+4], uint32(c))
 		}
+	} else {
+		this.binlogStr.appendInt32(int32(0))
 	}
 }
 
 func (this *processUnit) writeKick(unikey string) {
-	this.mtx.Lock()
+	//this.mtx.Lock()
+	Infoln("kick", unikey)
 	this.write(binlog_kick, unikey, nil, 0)
 	this.tryFlush()
-	this.mtx.Unlock()
+	//this.mtx.Unlock()
 }
 
 func (this *processUnit) snapshot(config *conf.Config, wg *sync.WaitGroup) {
@@ -343,6 +346,8 @@ func (this *processUnit) writeBack(ctx *processContext) {
 	this.mtx.Lock()
 	ckey.mtx.Lock()
 
+	gotErr := false
+
 	if ckey.sqlFlag == write_back_none {
 		ckey.sqlFlag = ctx.writeBackFlag
 	} else if ckey.sqlFlag == write_back_insert {
@@ -351,13 +356,15 @@ func (this *processUnit) writeBack(ctx *processContext) {
 		} else if ctx.writeBackFlag == write_back_delete {
 			ckey.sqlFlag = write_back_delete
 		} else {
-			Fatalln("invaild ctx.writeBackFlag")
+			gotErr = true
+			Errorln("invaild ctx.writeBackFlag")
 		}
 	} else if ckey.sqlFlag == write_back_delete {
 		if ctx.writeBackFlag == write_back_insert {
 			ckey.sqlFlag = write_back_insert
 		} else {
-			Fatalln("invaild ctx.writeBackFlag")
+			gotErr = true
+			Errorln("invaild ctx.writeBackFlag")
 		}
 	} else if ckey.sqlFlag == write_back_update {
 		if ctx.writeBackFlag == write_back_update {
@@ -365,8 +372,17 @@ func (this *processUnit) writeBack(ctx *processContext) {
 		} else if ctx.writeBackFlag == write_back_delete {
 			ckey.sqlFlag = write_back_delete
 		} else {
-			Fatalln("invaild ctx.writeBackFlag")
+			gotErr = true
+			Errorln("invaild ctx.writeBackFlag")
 		}
+	}
+
+	if gotErr {
+		ckey.mtx.Unlock()
+		this.mtx.Unlock()
+		ctx.reply(errcode.ERR_ERROR, nil, -1)
+		ckey.processQueueCmd()
+		return
 	}
 
 	if nil == this.ctxs {
@@ -374,6 +390,45 @@ func (this *processUnit) writeBack(ctx *processContext) {
 	}
 
 	this.ctxs = append(this.ctxs, ctx)
+
+	cmdType := ctx.getCmdType()
+
+	switch cmdType {
+	case cmdIncrBy, cmdDecrBy:
+		if nil == ckey.values {
+			ckey.setDefaultValueNoLock()
+		}
+		cmd := ctx.getCmd()
+		var newV *proto.Field
+		oldV := ckey.values[cmd.incrDecr.GetName()]
+		if cmdType == cmdIncrBy {
+			newV = proto.PackField(cmd.incrDecr.GetName(), oldV.GetInt()+cmd.incrDecr.GetInt())
+		} else {
+			newV = proto.PackField(cmd.incrDecr.GetName(), oldV.GetInt()-cmd.incrDecr.GetInt())
+		}
+		ckey.modifyFields[newV.GetName()] = true
+		ckey.values[newV.GetName()] = newV
+		ctx.fields[newV.GetName()] = newV
+		ckey.setOKNoLock(ckey.version + 1)
+		break
+	case cmdDel:
+		ckey.setMissingNoLock()
+		break
+	default:
+		if nil == ckey.values {
+			ckey.setDefaultValueNoLock()
+		}
+		for k, v := range ctx.fields {
+			if k != "__version__" {
+				ckey.values[k] = v
+				ckey.modifyFields[k] = true
+			}
+		}
+		ckey.setOKNoLock(ckey.version + 1)
+		break
+	}
+
+	ctx.version = ckey.version
 
 	if ckey.sqlFlag == write_back_delete {
 		if ckey.snapshot {
@@ -558,7 +613,7 @@ func replayBinLog(path string) bool {
 				ckey.sqlFlag = write_back_delete
 			} else if tt == binlog_kick {
 				if nil == ckey {
-					Fatalln("invaild tt")
+					Fatalln("invaild tt", unikey)
 					return false
 				}
 				unit.removeLRU(ckey)

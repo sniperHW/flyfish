@@ -2,7 +2,7 @@ package flyfish
 
 import (
 	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/proto"
+	//"github.com/sniperHW/flyfish/proto"
 )
 
 type sqlResponseLocalCache struct {
@@ -17,45 +17,8 @@ func (this sqlResponseLocalCache) onSqlNotFound(ctx *processContext) {
 		ckey.setMissing()
 		ckey.processQueueCmd()
 	} else {
-
-		ckey.mtx.Lock()
-
-		//Infoln("onSqlNotFound setDefaultValue", ctx.getUniKey())
-		ckey.setDefaultValue(ctx)
-
-		ckey.setOKNoLock(1)
-		ctx.version = ckey.version
-
-		cmd := ctx.getCmd()
-
-		if cmdType == cmdCompareAndSetNx {
-			ctx.fields[cmd.cns.newV.GetName()] = cmd.cns.newV
-			ckey.values[cmd.cns.newV.GetName()] = cmd.cns.newV
-		} else if cmdType == cmdIncrBy {
-			oldV := ckey.values[cmd.incrDecr.GetName()]
-			newV := proto.PackField(cmd.incrDecr.GetName(), oldV.GetInt()+cmd.incrDecr.GetInt())
-			ctx.fields[cmd.incrDecr.GetName()] = newV
-			ckey.values[cmd.incrDecr.GetName()] = newV
-		} else if cmdType == cmdDecrBy {
-			oldV := ckey.values[cmd.incrDecr.GetName()]
-			newV := proto.PackField(cmd.incrDecr.GetName(), oldV.GetInt()-cmd.incrDecr.GetInt())
-			ctx.fields[cmd.incrDecr.GetName()] = newV
-			ckey.values[cmd.incrDecr.GetName()] = newV
-		} else {
-			for _, v := range cmd.fields {
-				ckey.values[v.GetName()] = v
-				ctx.fields[v.GetName()] = v
-			}
-		}
-
-		ckey.mtx.Unlock()
-
-		//ctx.fields["__version__"] = proto.PackField("__version__", 1)
-
 		ctx.writeBackFlag = write_back_insert
-
 		ckey.unit.doWriteBack(ctx)
-
 	}
 }
 
@@ -66,7 +29,7 @@ func (this sqlResponseLocalCache) onSqlLoadOKGet(ctx *processContext) {
 	version := ctx.fields["__version__"].GetInt()
 	ckey := ctx.getCacheKey()
 	ckey.mtx.Lock()
-	ckey.setValue(ctx)
+	ckey.setValueNoLock(ctx)
 	ckey.setOKNoLock(version)
 	ckey.mtx.Unlock()
 	ctx.reply(errcode.ERR_OK, ctx.fields, version)
@@ -84,6 +47,10 @@ func (this sqlResponseLocalCache) onSqlLoadOKSet(ctx *processContext) {
 	cmd := ctx.getCmd()
 	ckey := ctx.getCacheKey()
 	ckey.mtx.Lock()
+	ckey.setValueNoLock(ctx)
+	ckey.setOKNoLock(version)
+	ckey.mtx.Unlock()
+
 	cmdType := cmd.cmdType
 	ctx.writeBackFlag = write_back_none
 	if cmdType == cmdSet {
@@ -91,12 +58,6 @@ func (this sqlResponseLocalCache) onSqlLoadOKSet(ctx *processContext) {
 			//版本号不对
 			ctx.reply(errcode.ERR_VERSION, nil, version)
 		} else {
-			//变更需要将版本号+1
-			for _, v := range cmd.fields {
-				ctx.fields[v.GetName()] = v
-				ckey.modifyFields[v.GetName()] = true
-			}
-			version++
 			ctx.writeBackFlag = write_back_update //sql中存在,使用update回写
 		}
 	} else if cmdType == cmdCompareAndSet || cmdType == cmdCompareAndSetNx {
@@ -104,35 +65,15 @@ func (this sqlResponseLocalCache) onSqlLoadOKSet(ctx *processContext) {
 		if !dbV.Equal(cmd.cns.oldV) {
 			ctx.reply(errcode.ERR_NOT_EQUAL, ctx.fields, version)
 		} else {
-			version++
 			ctx.fields[cmd.cns.oldV.GetName()] = cmd.cns.newV
-			ckey.modifyFields[cmd.cns.oldV.GetName()] = true
 			ctx.writeBackFlag = write_back_update //sql中存在,使用update回写
 		}
 	} else if cmdType == cmdSetNx {
 		ctx.reply(errcode.ERR_KEY_EXIST, nil, version)
 	} else {
 		//cmdIncrBy/cmdDecrBy
-		var newV int64
-		oldV := ctx.fields[cmd.incrDecr.GetName()]
-		if cmdType == cmdIncrBy {
-			newV = oldV.GetInt() + cmd.incrDecr.GetInt()
-		} else {
-			newV = oldV.GetInt() - cmd.incrDecr.GetInt()
-		}
-		ctx.fields[cmd.incrDecr.GetName()].SetInt(newV)
-		ckey.modifyFields[cmd.incrDecr.GetName()] = true
-		version++
 		ctx.writeBackFlag = write_back_update //sql中存在,使用update回写
 	}
-
-	ckey.setValue(ctx)
-
-	ckey.setOKNoLock(version)
-
-	ctx.version = ckey.version
-
-	ckey.mtx.Unlock()
 
 	if ctx.writeBackFlag != write_back_none {
 		ckey.unit.doWriteBack(ctx)
@@ -161,11 +102,11 @@ func (this sqlResponseLocalCache) onSqlLoadOKDel(ctx *processContext) {
 	ctx.reply(errCode, nil, version)
 
 	if errCode == errcode.ERR_OK {
-		ckey.setMissing()
+		//ckey.setMissing()
 		ckey.unit.doWriteBack(ctx)
 	} else {
 		ckey.mtx.Lock()
-		ckey.setValue(ctx)
+		ckey.setValueNoLock(ctx)
 		ckey.setOKNoLock(version)
 		ckey.mtx.Unlock()
 	}
