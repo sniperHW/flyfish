@@ -90,10 +90,55 @@ __table__    __conf__
 	Scaner(table string,fileds ...string) 
 
 
+## 示例
 
-## 数据回写
-所有变更操作将产生一条对应的变更记录，变更记录被序列化并添加到回写缓冲中，一旦回写缓冲满|到达记录阀值|超过刷新间隔，缓冲中的操作将写入到磁盘文件，并向相应的客户端请求返回操作响应。磁盘写入完成后，将文件名通知sqlupdater,由sqlupdater读取文件中内容并将变更写入到db。
-当所有操作完成，由sqlupdater删除相应文件。如果进程或机器在db更新完成前故障，只要磁盘未被损坏，flyfish启动的时候会加载磁盘文件，完成未完成的更新操作(flyfish的更新请求是幂等的<重放时insert操作使用insert update语句>,对于操作执行一半进程崩溃的情况，因为文件只有在全部操作执行完成后才会被删除，进程重启后之前的文件尚未被删除，只需重新执行一次就可以保证操作不丢失)。
+	package main
+
+	import (
+		"encoding/binary"
+		"fmt"
+		kclient "github.com/sniperHW/flyfish/client"
+		"github.com/sniperHW/flyfish/errcode"
+		"github.com/sniperHW/kendynet/golog"
+		"os"
+	)
+
+	func main() {
+
+		kclient.InitLogger(golog.New("flyfish client", golog.NewOutputLogger("log", "flyfish client", 1024*1024*50)))
+
+		services := []string{}
+
+		for i := 1; i < len(os.Args); i++ {
+			services = append(services, os.Args[i])
+		}
+
+		c := kclient.OpenClient(services)
+
+		buff := make([]byte, 4)
+
+		binary.BigEndian.PutUint32(buff, 100)
+
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		fields["blob"] = buff
+		fields["name"] = "sniperHW"
+
+		r2 := c.Set("users1", "sniperHW", fields).Exec()
+		if r2.ErrCode != errcode.ERR_OK {
+			fmt.Println("Set error:", errcode.GetErrorStr(r2.ErrCode))
+			return
+		}
+
+		r3 := c.Get("users1", "sniperHW", "name", "phone", "age", "blob").Exec()
+
+		fmt.Println(r3.Fields["name"].GetString())
+		fmt.Println(r3.Fields["phone"].GetString())
+		fmt.Println(r3.Fields["age"].GetInt())
+		fmt.Println(binary.BigEndian.Uint32(r3.Fields["blob"].GetBlob()))
+		fmt.Println(r3.Version)
+
+	}
 
 
 
