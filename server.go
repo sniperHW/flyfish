@@ -203,48 +203,16 @@ func sortFileList(fileList []string) {
 	sort.Sort(ByID(fileList))
 }
 
-//执行尚未完成的回写文件
-func replayBinlog() bool {
-	config := conf.GetConfig()
-
-	dbConfig := config.DBConfig
-
-	_, err := os.Stat(config.BinlogDir)
-
-	if nil != err && os.IsNotExist(err) {
-		return true
-	}
-
-	//获得所有文件
-	fileList, err := getFileList(config.BinlogDir)
-	if nil != err {
-		return false
-	}
-
-	//对fileList排序
-	sortFileList(fileList)
-
-	writeBackDB, err := sqlOpen(dbConfig.SqlType, dbConfig.DbHost, dbConfig.DbPort, dbConfig.DbDataBase, dbConfig.DbUser, dbConfig.DbPassword)
-
-	if nil != err {
-		return false
-	}
-
-	sqlUpdater_ := newSqlUpdater(writeBackDB, "execWriteBackFile", nil, true)
-
-	for _, v := range fileList {
-		sqlUpdater_.process(v)
-	}
-
-	return true
-
-}
-
 func Start() error {
+
+	var err error
+
 	config := conf.GetConfig()
 
 	cmdProcessor = cmdProcessorLocalCache{}
 	sqlResponse = sqlResponseLocalCache{}
+
+	Debugln(config.DBConfig.SqlType)
 
 	if config.DBConfig.SqlType == "mysql" {
 		BinaryToSqlStr = mysqlBinaryToPgsqlStr
@@ -258,13 +226,12 @@ func Start() error {
 		return fmt.Errorf("initSql failed")
 	}
 
-	if !replayBinlog() {
-		return fmt.Errorf("replayBinlog failed")
-	}
-
 	initProcessUnit()
 
-	var err error
+	if !StartReplayBinlog() {
+		return fmt.Errorf("StartReplayBinlog failed")
+	}
+
 	server, err = newTcpListener("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort))
 	if nil != err {
 		return err
@@ -319,7 +286,7 @@ func Stop() {
 		return true
 	})
 
-	Infoln("ShutdownRead ok", cmdCount)
+	Infoln("ShutdownRead ok", cmdCount, totalSqlCount)
 
 	//等待redis请求和命令执行完成
 	waitCondition(func() bool {
@@ -348,6 +315,8 @@ func Stop() {
 			return false
 		}
 	})
+
+	//levelDB.Close()
 
 	Infoln("flyfish stop ok")
 

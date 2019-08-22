@@ -3,6 +3,8 @@ package flyfish
 import (
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/kendynet/timer"
+	"github.com/sniperHW/kendynet/util"
+	"os"
 	"sync"
 	"time"
 )
@@ -22,11 +24,21 @@ type cmdProcessorI interface {
 }
 
 type processUnit struct {
-	cacheKeys map[string]*cacheKey
-	mtx       sync.Mutex
-	writeBack *writeBackProcessor
-	lruHead   cacheKey
-	lruTail   cacheKey
+	cacheKeys        map[string]*cacheKey
+	mtx              sync.Mutex
+	lruHead          cacheKey
+	lruTail          cacheKey
+	ctxs             []*processContext
+	nextFlush        time.Time
+	binlogStr        *str
+	f                *os.File
+	filePath         string
+	backFilePath     string
+	binlogCount      int32
+	cacheBinlogCount int32
+	fileSize         int
+	make_snapshot    bool
+	binlogQueue      *util.BlockQueue
 }
 
 func (this *processUnit) doWriteBack(ctx *processContext) {
@@ -37,7 +49,7 @@ func (this *processUnit) doWriteBack(ctx *processContext) {
 		panic("ctx.writeBackFlag == write_back_none")
 	}
 
-	this.writeBack.writeBack(ctx)
+	this.writeBack(ctx)
 }
 
 func (this *cacheKey) process_(fromClient bool) {
@@ -80,13 +92,20 @@ func (this *processUnit) kickCacheKey() {
 
 		c := this.lruTail.pprev
 
-		if c.kickAble() {
-			break
+		if !c.kickAble() {
+			return
 		}
 
 		this.removeLRU(c)
+		this.writeKick(c.uniKey)
 		delete(this.cacheKeys, c.uniKey)
 	}
+}
+
+func (this *processUnit) checkFlush() {
+	this.mtx.Lock()
+	this.tryFlush()
+	this.mtx.Unlock()
 }
 
 func initProcessUnit() {
@@ -100,24 +119,32 @@ func initProcessUnit() {
 
 		unit := &processUnit{
 			cacheKeys: map[string]*cacheKey{},
-			writeBack: &writeBackProcessor{
-				id: i,
-			},
+			nextFlush: time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval)),
 		}
 
 		unit.lruHead.nnext = &unit.lruTail
 		unit.lruTail.pprev = &unit.lruHead
-		unit.writeBack.start()
 
-		processUnits[i] = unit
-
-		timer.Repeat(time.Millisecond*100, nil, func(t *timer.Timer) {
+		timer.Repeat(time.Millisecond*time.Duration(config.FlushInterval), nil, func(t *timer.Timer) {
 			if isStop() {
 				t.Cancel()
 			} else {
-				unit.writeBack.checkFlush()
+				unit.checkFlush()
 			}
 		})
 
+		timer.Repeat(time.Second, nil, func(t *timer.Timer) {
+			if isStop() {
+				t.Cancel()
+			} else {
+				unit.mtx.Lock()
+				unit.kickCacheKey()
+				unit.mtx.Unlock()
+			}
+		})
+
+		unit.start()
+
+		processUnits[i] = unit
 	}
 }

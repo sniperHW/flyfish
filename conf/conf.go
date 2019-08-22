@@ -48,7 +48,7 @@ type Config struct {
 	FlushInterval        int
 	FlushSize            int
 	FlushCount           int
-	MaxBinlogFileCount   int32
+	MaxBinlogCount       int32
 	MaxBinlogFileSize    int64
 
 	DBConfig struct {

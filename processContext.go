@@ -16,11 +16,11 @@ const (
 )
 
 const (
-	write_back_none   = 0
-	write_back_insert = 1
-	write_back_update = 2
-	write_back_delete = 3
-	write_back_force  = 4
+	write_back_none          = 0
+	write_back_insert        = 1
+	write_back_update        = 2
+	write_back_delete        = 3
+	write_back_insert_update = 4
 )
 
 type processContext struct {
@@ -28,8 +28,8 @@ type processContext struct {
 	fields        map[string]*proto.Field
 	errno         int32
 	writeBackFlag int //回写数据库类型
-	redisFlag     int
 	ping          bool
+	version       int64
 }
 
 func (this *processContext) getCmd() *command {
@@ -75,31 +75,4 @@ func (this *processContext) getSetfields() *map[string]interface{} {
 
 func (this *processContext) reply(errCode int32, fields map[string]*proto.Field, version int64) {
 	this.command.reply(errCode, fields, version)
-}
-
-func (this *cacheKey) setDefaultValue(ctx *processContext) {
-	this.values = map[string]*proto.Field{}
-	meta := this.getMeta()
-	for _, v := range meta.fieldMetas {
-		defaultV := proto.PackField(v.name, v.defaultV)
-		this.values[v.name] = defaultV
-		ctx.fields[v.name] = defaultV
-	}
-}
-
-func (this *cacheKey) setValue(ctx *processContext) {
-	this.values = map[string]*proto.Field{}
-	for _, v := range ctx.fields {
-		if !(v.GetName() == "__version__" || v.GetName() == "__key__") {
-			this.values[v.GetName()] = v
-		}
-	}
-}
-
-func (this *cacheKey) processClientCmd() {
-	this.process_(true)
-}
-
-func (this *cacheKey) processQueueCmd() {
-	this.process_(false)
 }

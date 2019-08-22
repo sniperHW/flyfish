@@ -8,7 +8,7 @@ import (
 
 var ClientTimeout time.Duration = 6 * time.Second
 
-var ServerTimeout time.Duration = 2 * time.Second
+var ServerTimeout time.Duration = 3 * time.Second
 
 type Client struct {
 	services      []string

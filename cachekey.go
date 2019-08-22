@@ -16,6 +16,7 @@ const (
 )
 
 type cacheKey struct {
+	table           string
 	uniKey          string
 	key             string
 	version         int64
@@ -24,11 +25,15 @@ type cacheKey struct {
 	mtx             sync.Mutex
 	cmdQueue        *list.List
 	meta            *table_meta
-	writeBackLocked int64 //每次更新+1,sql执行完-1
+	sqlFlag         int
+	snapshot        bool
 	unit            *processUnit
 	nnext           *cacheKey
 	pprev           *cacheKey
 	values          map[string]*proto.Field
+	modifyFields    map[string]bool
+	writeBackLocked bool
+	make_snapshot   bool
 }
 
 func (this *cacheKey) lockCmdQueue() {
@@ -44,11 +49,16 @@ func (this *cacheKey) unlockCmdQueue() {
 func (this *cacheKey) kickAble() bool {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
-	if this.cmdQueueLocked {
+
+	if this.make_snapshot {
 		return false
 	}
 
-	if this.writeBackLocked > 0 {
+	if this.writeBackLocked {
+		return false
+	}
+
+	if this.cmdQueueLocked {
 		return false
 	}
 
@@ -64,14 +74,15 @@ func (this *cacheKey) setMissing() {
 	this.mtx.Lock()
 	this.version = 0
 	this.status = cache_missing
+	this.snapshot = false
 	this.values = nil
-
 }
 
 func (this *cacheKey) setMissingNoLock() {
 	this.version = 0
 	this.status = cache_missing
 	this.values = nil
+	this.snapshot = false
 }
 
 func (this *cacheKey) setOK(version int64) {
@@ -84,14 +95,6 @@ func (this *cacheKey) setOK(version int64) {
 func (this *cacheKey) setOKNoLock(version int64) {
 	this.version = version
 	this.status = cache_ok
-}
-
-func (this *cacheKey) clearWriteBack() {
-	defer this.mtx.Unlock()
-	this.mtx.Lock()
-	if this.writeBackLocked > 0 {
-		this.writeBackLocked--
-	}
 }
 
 func (this *cacheKey) pushCmd(cmd *command) {
@@ -146,6 +149,35 @@ func (this *cacheKey) convertStr(fieldName string, value string) *proto.Field {
 	}
 }
 
+func (this *cacheKey) setDefaultValueNoLock() {
+	this.values = map[string]*proto.Field{}
+	meta := this.getMeta()
+	for _, v := range meta.fieldMetas {
+		defaultV := proto.PackField(v.name, v.defaultV)
+		this.values[v.name] = defaultV
+	}
+}
+
+func (this *cacheKey) setValueNoLock(ctx *processContext) {
+	this.values = map[string]*proto.Field{}
+	for _, v := range ctx.fields {
+
+		Debugln("setValue", v.GetName())
+
+		if !(v.GetName() == "__version__" || v.GetName() == "__key__") {
+			this.values[v.GetName()] = v
+		}
+	}
+}
+
+func (this *cacheKey) processClientCmd() {
+	this.process_(true)
+}
+
+func (this *cacheKey) processQueueCmd() {
+	this.process_(false)
+}
+
 func newCacheKey(unit *processUnit, table string, key string, uniKey string) *cacheKey {
 
 	meta := getMetaByTable(table)
@@ -156,11 +188,13 @@ func newCacheKey(unit *processUnit, table string, key string, uniKey string) *ca
 	}
 
 	return &cacheKey{
-		uniKey:   uniKey,
-		key:      key,
-		status:   cache_new,
-		meta:     meta,
-		cmdQueue: list.New(),
-		unit:     unit,
+		uniKey:       uniKey,
+		key:          key,
+		status:       cache_new,
+		meta:         meta,
+		cmdQueue:     list.New(),
+		unit:         unit,
+		table:        table,
+		modifyFields: map[string]bool{},
 	}
 }

@@ -23,12 +23,7 @@ func (this cmdProcessorLocalCache) processGet(ckey *cacheKey, cmd *command) *pro
 
 		ctx := &processContext{
 			command: cmd,
-			fields:  map[string]*proto.Field{},
-		}
-
-		ctx.fields["__version__"] = proto.PackField("__version__", ckey.version)
-		for _, v := range cmd.fields {
-			ctx.fields[v.GetName()] = v
+			fields:  cmd.fields,
 		}
 		return ctx
 	}
@@ -50,25 +45,12 @@ func (this cmdProcessorLocalCache) processSet(ckey *cacheKey, cmd *command) *pro
 
 	ctx := &processContext{
 		command: cmd,
-		fields:  map[string]*proto.Field{},
+		fields:  cmd.fields,
 	}
 	if ckey.status == cache_ok {
-		ckey.setOKNoLock(ckey.version + 1)
 		ctx.writeBackFlag = write_back_update //数据存在执行update
-		ctx.fields["__version__"] = proto.PackField("__version__", ckey.version)
-		for _, v := range cmd.fields {
-			ckey.values[v.GetName()] = v
-			ctx.fields[v.GetName()] = v
-		}
 	} else if ckey.status == cache_missing {
-		ckey.setDefaultValue(ctx)
-		ckey.setOKNoLock(1)
 		ctx.writeBackFlag = write_back_insert //数据不存在执行insert
-		ctx.fields["__version__"] = proto.PackField("__version__", ckey.version)
-		for _, v := range cmd.fields {
-			ckey.values[v.GetName()] = v
-			ctx.fields[v.GetName()] = v
-		}
 	}
 
 	return ctx
@@ -84,22 +66,11 @@ func (this cmdProcessorLocalCache) processSetNx(ckey *cacheKey, cmd *command) *p
 
 	ctx := &processContext{
 		command: cmd,
-		fields:  map[string]*proto.Field{},
+		fields:  cmd.fields,
 	}
 
 	if ckey.status == cache_missing {
-		ckey.setDefaultValue(ctx)
-		ckey.setOKNoLock(1)
-		ctx.fields["__version__"] = proto.PackField("__version__", ckey.version)
-		for _, v := range cmd.fields {
-			ckey.values[v.GetName()] = v
-			ctx.fields[v.GetName()] = v
-		}
 		ctx.writeBackFlag = write_back_insert //数据不存在执行insert
-	} else {
-		for _, v := range cmd.fields {
-			ctx.fields[v.GetName()] = v
-		}
 	}
 
 	return ctx
@@ -128,10 +99,7 @@ func (this cmdProcessorLocalCache) processCompareAndSet(ckey *cacheKey, cmd *com
 		}
 
 		if ckey.status == cache_ok {
-			ckey.setOKNoLock(ckey.version + 1)
 			ctx.writeBackFlag = write_back_update //数据存在执行update
-			ctx.fields["__version__"] = proto.PackField("__version__", ckey.version)
-			ckey.values[cmd.cns.oldV.GetName()] = cmd.cns.newV
 			ctx.fields[cmd.cns.oldV.GetName()] = cmd.cns.newV
 		}
 
@@ -158,17 +126,10 @@ func (this cmdProcessorLocalCache) processCompareAndSetNx(ckey *cacheKey, cmd *c
 	}
 
 	if ckey.status == cache_ok {
-		ckey.setOKNoLock(ckey.version + 1)
 		ctx.writeBackFlag = write_back_update //数据存在执行update
-		ctx.fields["__version__"] = proto.PackField("__version__", ckey.version)
-		ckey.values[cmd.cns.oldV.GetName()] = cmd.cns.newV
 		ctx.fields[cmd.cns.oldV.GetName()] = cmd.cns.newV
 	} else if ckey.status == cache_missing {
-		ckey.setDefaultValue(ctx)
-		ckey.setOKNoLock(1)
 		ctx.writeBackFlag = write_back_insert
-		ctx.fields["__version__"] = proto.PackField("__version__", ckey.version)
-		ckey.values[cmd.cns.oldV.GetName()] = cmd.cns.newV
 		ctx.fields[cmd.cns.oldV.GetName()] = cmd.cns.newV
 	}
 
@@ -199,18 +160,10 @@ func (this cmdProcessorLocalCache) processIncrBy(ckey *cacheKey, cmd *command) *
 	if ckey.status == cache_ok || ckey.status == cache_missing {
 
 		if ckey.status == cache_ok {
-			ckey.setOKNoLock(ckey.version + 1)
 			ctx.writeBackFlag = write_back_update //数据存在执行update
 		} else if ckey.status == cache_missing {
-			ckey.setDefaultValue(ctx)
-			ckey.setOKNoLock(1)
 			ctx.writeBackFlag = write_back_insert
 		}
-		oldV := ckey.values[cmd.incrDecr.GetName()]
-		newV := proto.PackField(cmd.incrDecr.GetName(), oldV.GetInt()+cmd.incrDecr.GetInt())
-		ctx.fields[cmd.incrDecr.GetName()] = newV
-		ckey.values[cmd.incrDecr.GetName()] = newV
-		ctx.fields["__version__"] = proto.PackField("__version__", ckey.version)
 	}
 
 	return ctx
@@ -240,18 +193,10 @@ func (this cmdProcessorLocalCache) processDecrBy(ckey *cacheKey, cmd *command) *
 	if ckey.status == cache_ok || ckey.status == cache_missing {
 
 		if ckey.status == cache_ok {
-			ckey.setOKNoLock(ckey.version + 1)
 			ctx.writeBackFlag = write_back_update //数据存在执行update
 		} else if ckey.status == cache_missing {
 			ctx.writeBackFlag = write_back_insert
-			ckey.setDefaultValue(ctx)
-			ckey.setOKNoLock(1)
 		}
-		oldV := ckey.values[cmd.incrDecr.GetName()]
-		newV := proto.PackField(cmd.incrDecr.GetName(), oldV.GetInt()-cmd.incrDecr.GetInt())
-		ctx.fields[cmd.incrDecr.GetName()] = newV
-		ckey.values[cmd.incrDecr.GetName()] = newV
-		ctx.fields["__version__"] = proto.PackField("__version__", ckey.version)
 	}
 
 	return ctx
@@ -276,7 +221,6 @@ func (this cmdProcessorLocalCache) processDel(ckey *cacheKey, cmd *command) *pro
 		}
 
 		if ckey.status == cache_ok {
-			ckey.setMissingNoLock()
 			ctx.writeBackFlag = write_back_delete
 		}
 
@@ -285,6 +229,8 @@ func (this cmdProcessorLocalCache) processDel(ckey *cacheKey, cmd *command) *pro
 }
 
 func (this cmdProcessorLocalCache) processCmd(ckey *cacheKey, fromClient bool) {
+
+	//Infoln(ckey.values)
 
 	ckey.mtx.Lock()
 
@@ -311,48 +257,38 @@ func (this cmdProcessorLocalCache) processCmd(ckey *cacheKey, fromClient bool) {
 			//已经超时
 			atomic.AddInt32(&cmdCount, -1)
 		} else {
+			switch cmd.cmdType {
+			case cmdGet:
+				ctx = this.processGet(ckey, cmd)
+				break
+			case cmdSet:
+				ctx = this.processSet(ckey, cmd)
+				break
+			case cmdSetNx:
+				ctx = this.processSetNx(ckey, cmd)
+				break
+			case cmdCompareAndSet:
+				ctx = this.processCompareAndSet(ckey, cmd)
+				break
+			case cmdCompareAndSetNx:
+				ctx = this.processCompareAndSetNx(ckey, cmd)
+				break
+			case cmdIncrBy:
+				ctx = this.processIncrBy(ckey, cmd)
+				break
+			case cmdDecrBy:
+				ctx = this.processDecrBy(ckey, cmd)
+				break
+			case cmdDel:
+				ctx = this.processDel(ckey, cmd)
+				break
+			default:
+				//记录日志
+				break
+			}
 
-			if causeWriteBackCmd(cmd.cmdType) && reachWriteBackFileLimit(config) {
-				if config.ReplyBusyOnQueueFull {
-					cmd.reply(errcode.ERR_BUSY, nil, -1)
-				} else {
-					atomic.AddInt32(&cmdCount, -1)
-				}
-			} else {
-
-				switch cmd.cmdType {
-				case cmdGet:
-					ctx = this.processGet(ckey, cmd)
-					break
-				case cmdSet:
-					ctx = this.processSet(ckey, cmd)
-					break
-				case cmdSetNx:
-					ctx = this.processSetNx(ckey, cmd)
-					break
-				case cmdCompareAndSet:
-					ctx = this.processCompareAndSet(ckey, cmd)
-					break
-				case cmdCompareAndSetNx:
-					ctx = this.processCompareAndSetNx(ckey, cmd)
-					break
-				case cmdIncrBy:
-					ctx = this.processIncrBy(ckey, cmd)
-					break
-				case cmdDecrBy:
-					ctx = this.processDecrBy(ckey, cmd)
-					break
-				case cmdDel:
-					ctx = this.processDel(ckey, cmd)
-					break
-				default:
-					//记录日志
-					break
-				}
-
-				if nil != ctx {
-					break
-				}
+			if nil != ctx {
+				break
 			}
 		}
 	}
