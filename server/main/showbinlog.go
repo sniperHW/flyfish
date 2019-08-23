@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/sniperHW/flyfish"
+	flyfish "github.com/sniperHW/flyfish/server"
 	"os"
 )
 

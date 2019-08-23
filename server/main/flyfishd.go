@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"github.com/sniperHW/flyfish"
 	"github.com/sniperHW/flyfish/conf"
+	flyfish "github.com/sniperHW/flyfish/server"
 	"net/http"
 	_ "net/http/pprof"
 	"os"

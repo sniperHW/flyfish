@@ -1,4 +1,4 @@
-package flyfish
+package server
 
 import (
 	"container/list"
