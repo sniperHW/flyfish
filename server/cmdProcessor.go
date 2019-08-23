@@ -42,12 +42,16 @@ func processSet(ckey *cacheKey, cmd *command) *cmdContext {
 
 	ctx := &cmdContext{
 		command: cmd,
-		fields:  cmd.fields,
 	}
+
 	if ckey.status == cache_ok {
 		ctx.writeBackFlag = write_back_update //数据存在执行update
+		ctx.fields = cmd.fields
 	} else if ckey.status == cache_missing {
 		ctx.writeBackFlag = write_back_insert //数据不存在执行insert
+		ctx.fields = cmd.fields
+	} else {
+		ctx.fields = map[string]*proto.Field{}
 	}
 
 	return ctx
@@ -63,11 +67,13 @@ func processSetNx(ckey *cacheKey, cmd *command) *cmdContext {
 
 	ctx := &cmdContext{
 		command: cmd,
-		fields:  cmd.fields,
 	}
 
 	if ckey.status == cache_missing {
 		ctx.writeBackFlag = write_back_insert //数据不存在执行insert
+		ctx.fields = cmd.fields
+	} else {
+		ctx.fields = map[string]*proto.Field{}
 	}
 
 	return ctx

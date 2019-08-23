@@ -61,9 +61,7 @@ func onSqlLoadOKSet(ctx *cmdContext) {
 			ckey.processQueueCmd()
 			return
 		} else {
-			for k, v := range ctx.command.fields {
-				ctx.fields[k] = v
-			}
+			ctx.fields = ctx.command.fields
 		}
 	case cmdCompareAndSet, cmdCompareAndSetNx:
 		dbV := ctx.fields[cmd.cns.oldV.GetName()]
