@@ -92,7 +92,7 @@ func (this *cacheMgr) startSnapshot() {
 	for _, v := range this.kv {
 		v.mtx.Lock()
 		if v.status == cache_ok || v.status == cache_missing {
-			v.snapshot = false
+			v.snapshoted = false
 			kv = append(kv, v)
 		}
 		v.mtx.Unlock()
@@ -106,9 +106,9 @@ func (this *cacheMgr) startSnapshot() {
 		for _, v := range kv {
 			this.mtx.Lock()
 			v.mtx.Lock()
-			if (v.status == cache_ok || v.status == cache_missing) && !v.snapshot {
+			if (v.status == cache_ok || v.status == cache_missing) && !v.snapshoted {
 				c++
-				v.snapshot = true
+				v.snapshoted = true
 				this.write(binlog_snapshot, v.uniKey, v.values, v.version)
 
 			}
@@ -250,15 +250,17 @@ func (this *cacheMgr) write(tt int, unikey string, fields map[string]*proto.Fiel
 	if tt == binlog_snapshot || tt == binlog_update {
 		pos := this.binlogStr.len
 		this.binlogStr.appendInt32(int32(0))
-		c := 0
-		for n, v := range fields {
-			if n != "__version__" {
-				c++
-				this.binlogStr.appendField(v)
+		if nil != fields {
+			c := 0
+			for n, v := range fields {
+				if n != "__version__" {
+					c++
+					this.binlogStr.appendField(v)
+				}
 			}
-		}
-		if c > 0 {
-			binary.BigEndian.PutUint32(this.binlogStr.data[pos:pos+4], uint32(c))
+			if c > 0 {
+				binary.BigEndian.PutUint32(this.binlogStr.data[pos:pos+4], uint32(c))
+			}
 		}
 	} else {
 		this.binlogStr.appendInt32(int32(0))
@@ -368,20 +370,20 @@ func (this *cacheMgr) writeBack(ctx *cmdContext) {
 	ctx.version = ckey.version
 
 	if ckey.sqlFlag == write_back_delete {
-		if ckey.snapshot {
+		if ckey.snapshoted {
 			this.write(binlog_delete, ckey.uniKey, nil, 0)
 		} else {
-			ckey.snapshot = true
-			this.write(binlog_snapshot, ckey.uniKey, ckey.values, ckey.version)
+			ckey.snapshoted = true
+			this.write(binlog_snapshot, ckey.uniKey, nil, 0)
 		}
 	} else if ckey.sqlFlag == write_back_insert {
-		ckey.snapshot = true
+		ckey.snapshoted = true
 		this.write(binlog_snapshot, ckey.uniKey, ckey.values, ckey.version)
 	} else {
-		if ckey.snapshot {
+		if ckey.snapshoted {
 			this.write(binlog_update, ckey.uniKey, ctx.fields, ckey.version)
 		} else {
-			ckey.snapshot = true
+			ckey.snapshoted = true
 			this.write(binlog_snapshot, ckey.uniKey, ckey.values, ckey.version)
 		}
 	}

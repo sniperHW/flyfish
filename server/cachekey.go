@@ -26,7 +26,7 @@ type cacheKey struct {
 	cmdQueue        *list.List
 	meta            *table_meta
 	sqlFlag         int
-	snapshot        bool //当前key是否建立过快照
+	snapshoted      bool //当前key是否建立过快照
 	m               *cacheMgr
 	nnext           *cacheKey
 	pprev           *cacheKey
@@ -74,7 +74,7 @@ func (this *cacheKey) setMissing() {
 	this.mtx.Lock()
 	this.version = 0
 	this.status = cache_missing
-	this.snapshot = false
+	this.snapshoted = false
 	this.values = nil
 	this.modifyFields = map[string]bool{}
 }
@@ -83,7 +83,7 @@ func (this *cacheKey) setMissingNoLock() {
 	this.version = 0
 	this.status = cache_missing
 	this.values = nil
-	this.snapshot = false
+	this.snapshoted = false
 	this.modifyFields = map[string]bool{}
 }
 

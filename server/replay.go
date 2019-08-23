@@ -267,7 +267,7 @@ func (this *cacheMgr) firstSnapshot(config *conf.Config, wg *sync.WaitGroup) {
 	for _, v := range this.kv {
 		v.mtx.Lock()
 		if v.status == cache_ok {
-			v.snapshot = true
+			v.snapshoted = true
 			this.write(binlog_snapshot, v.uniKey, v.values, v.version)
 		}
 		v.mtx.Unlock()
