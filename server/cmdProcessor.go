@@ -20,7 +20,7 @@ func processGet(ckey *cacheKey, cmd *command) *cmdContext {
 
 		ctx := &cmdContext{
 			command: cmd,
-			fields:  cmd.fields,
+			fields:  map[string]*proto.Field{},
 		}
 		return ctx
 	}
