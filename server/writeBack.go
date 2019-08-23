@@ -342,11 +342,12 @@ func (this *cacheMgr) writeBack(ctx *cmdContext) {
 
 	cmdType := ctx.getCmdType()
 
+	if cmdType != cmdDel && nil == ckey.values {
+		ckey.setDefaultValueNoLock()
+	}
+
 	switch cmdType {
 	case cmdIncrBy, cmdDecrBy:
-		if nil == ckey.values {
-			ckey.setDefaultValueNoLock()
-		}
 		cmd := ctx.getCmd()
 		var newV *proto.Field
 		oldV := ckey.values[cmd.incrDecr.GetName()]
@@ -359,14 +360,9 @@ func (this *cacheMgr) writeBack(ctx *cmdContext) {
 		ckey.values[newV.GetName()] = newV
 		ctx.fields[newV.GetName()] = newV
 		ckey.setOKNoLock(ckey.version + 1)
-		break
 	case cmdDel:
 		ckey.setMissingNoLock()
-		break
 	default:
-		if nil == ckey.values {
-			ckey.setDefaultValueNoLock()
-		}
 		for k, v := range ctx.fields {
 			if k != "__version__" {
 				ckey.values[k] = v
@@ -374,7 +370,6 @@ func (this *cacheMgr) writeBack(ctx *cmdContext) {
 			}
 		}
 		ckey.setOKNoLock(ckey.version + 1)
-		break
 	}
 
 	ctx.version = ckey.version

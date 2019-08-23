@@ -187,7 +187,6 @@ func compareAndSet(session kendynet.StreamSession, msg *codec.Message) {
 			key:     head.GetKey(),
 			table:   head.GetTable(),
 			uniKey:  fmt.Sprintf("%s:%s", head.GetTable(), head.GetKey()),
-			fields:  map[string]*proto.Field{},
 			cns: &cnsSt{
 				oldV: req.GetOld(),
 				newV: req.GetNew(),
@@ -237,7 +236,6 @@ func compareAndSetNx(session kendynet.StreamSession, msg *codec.Message) {
 			key:     head.GetKey(),
 			table:   head.GetTable(),
 			uniKey:  fmt.Sprintf("%s:%s", head.GetTable(), head.GetKey()),
-			fields:  map[string]*proto.Field{},
 			cns: &cnsSt{
 				oldV: req.GetOld(),
 				newV: req.GetNew(),

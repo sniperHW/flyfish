@@ -72,11 +72,7 @@ func (this *cacheKey) kickAble() bool {
 func (this *cacheKey) setMissing() {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
-	this.version = 0
-	this.status = cache_missing
-	this.snapshoted = false
-	this.values = nil
-	this.modifyFields = map[string]bool{}
+	this.setMissingNoLock()
 }
 
 func (this *cacheKey) setMissingNoLock() {
@@ -90,8 +86,7 @@ func (this *cacheKey) setMissingNoLock() {
 func (this *cacheKey) setOK(version int64) {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
-	this.version = version
-	this.status = cache_ok
+	this.setOKNoLock(version)
 }
 
 func (this *cacheKey) setOKNoLock(version int64) {
@@ -149,6 +144,12 @@ func (this *cacheKey) convertStr(fieldName string, value string) *proto.Field {
 	} else {
 		return nil
 	}
+}
+
+func (this *cacheKey) setDefaultValue() {
+	defer this.mtx.Unlock()
+	this.mtx.Lock()
+	this.setDefaultValueNoLock()
 }
 
 func (this *cacheKey) setDefaultValueNoLock() {

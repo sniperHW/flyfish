@@ -43,12 +43,9 @@ func isRetryError(err error) bool {
 		switch err.(type) {
 		case *net.OpError:
 			return true
-			break
 		case net.Error:
 			return true
-			break
 		default:
-			break
 		}
 	}
 	return false

@@ -151,7 +151,6 @@ func processIncrBy(ckey *cacheKey, cmd *command) *cmdContext {
 
 	ctx := &cmdContext{
 		command: cmd,
-		fields:  map[string]*proto.Field{},
 	}
 
 	if ckey.status == cache_ok || ckey.status == cache_missing {
@@ -161,6 +160,8 @@ func processIncrBy(ckey *cacheKey, cmd *command) *cmdContext {
 		} else if ckey.status == cache_missing {
 			ctx.writeBackFlag = write_back_insert
 		}
+	} else {
+		ctx.fields = map[string]*proto.Field{}
 	}
 
 	return ctx
@@ -184,7 +185,6 @@ func processDecrBy(ckey *cacheKey, cmd *command) *cmdContext {
 
 	ctx := &cmdContext{
 		command: cmd,
-		fields:  map[string]*proto.Field{},
 	}
 
 	if ckey.status == cache_ok || ckey.status == cache_missing {
@@ -194,6 +194,8 @@ func processDecrBy(ckey *cacheKey, cmd *command) *cmdContext {
 		} else if ckey.status == cache_missing {
 			ctx.writeBackFlag = write_back_insert
 		}
+	} else {
+		ctx.fields = map[string]*proto.Field{}
 	}
 
 	return ctx
@@ -214,11 +216,12 @@ func processDel(ckey *cacheKey, cmd *command) *cmdContext {
 
 		ctx := &cmdContext{
 			command: cmd,
-			fields:  map[string]*proto.Field{},
 		}
 
 		if ckey.status == cache_ok {
 			ctx.writeBackFlag = write_back_delete
+		} else {
+			ctx.fields = map[string]*proto.Field{}
 		}
 
 		return ctx
@@ -257,31 +260,22 @@ func processCmd(ckey *cacheKey, fromClient bool) {
 			switch cmd.cmdType {
 			case cmdGet:
 				ctx = processGet(ckey, cmd)
-				break
 			case cmdSet:
 				ctx = processSet(ckey, cmd)
-				break
 			case cmdSetNx:
 				ctx = processSetNx(ckey, cmd)
-				break
 			case cmdCompareAndSet:
 				ctx = processCompareAndSet(ckey, cmd)
-				break
 			case cmdCompareAndSetNx:
 				ctx = processCompareAndSetNx(ckey, cmd)
-				break
 			case cmdIncrBy:
 				ctx = processIncrBy(ckey, cmd)
-				break
 			case cmdDecrBy:
 				ctx = processDecrBy(ckey, cmd)
-				break
 			case cmdDel:
 				ctx = processDel(ckey, cmd)
-				break
 			default:
 				//记录日志
-				break
 			}
 
 			if nil != ctx {

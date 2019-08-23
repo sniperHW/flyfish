@@ -14,9 +14,9 @@ func onSqlNotFound(ctx *cmdContext) {
 	Debugln("onSqlNotFound key", ctx.getUniKey())
 	cmdType := ctx.getCmdType()
 	ckey := ctx.getCacheKey()
+	ckey.setMissing()
 	if cmdType == cmdGet || cmdType == cmdDel || cmdType == cmdCompareAndSet {
 		ctx.reply(errcode.ERR_NOTFOUND, nil, -1)
-		ckey.setMissing()
 		ckey.processQueueCmd()
 	} else {
 		ctx.writeBackFlag = write_back_insert
@@ -25,9 +25,7 @@ func onSqlNotFound(ctx *cmdContext) {
 }
 
 func onSqlLoadOKGet(ctx *cmdContext) {
-
 	Debugln("onSqlLoadOKGet")
-
 	version := ctx.fields["__version__"].GetInt()
 	ckey := ctx.getCacheKey()
 	ckey.mtx.Lock()
@@ -54,67 +52,57 @@ func onSqlLoadOKSet(ctx *cmdContext) {
 	ckey.mtx.Unlock()
 
 	cmdType := cmd.cmdType
-	ctx.writeBackFlag = write_back_none
-	if cmdType == cmdSet {
+
+	switch cmdType {
+	case cmdSet:
 		if nil != cmd.version && *cmd.version != version {
 			//版本号不对
 			ctx.reply(errcode.ERR_VERSION, nil, version)
+			ckey.processQueueCmd()
+			return
 		} else {
-			ctx.writeBackFlag = write_back_update //sql中存在,使用update回写
+			for k, v := range ctx.command.fields {
+				ctx.fields[k] = v
+			}
 		}
-	} else if cmdType == cmdCompareAndSet || cmdType == cmdCompareAndSetNx {
+	case cmdCompareAndSet, cmdCompareAndSetNx:
 		dbV := ctx.fields[cmd.cns.oldV.GetName()]
 		if !dbV.Equal(cmd.cns.oldV) {
 			ctx.reply(errcode.ERR_NOT_EQUAL, ctx.fields, version)
+			ckey.processQueueCmd()
+			return
 		} else {
 			ctx.fields[cmd.cns.oldV.GetName()] = cmd.cns.newV
-			ctx.writeBackFlag = write_back_update //sql中存在,使用update回写
 		}
-	} else if cmdType == cmdSetNx {
+	case cmdSetNx:
 		ctx.reply(errcode.ERR_KEY_EXIST, nil, version)
-	} else {
-		//cmdIncrBy/cmdDecrBy
-		ctx.writeBackFlag = write_back_update //sql中存在,使用update回写
-	}
-
-	if ctx.writeBackFlag != write_back_none {
-		ckey.m.doWriteBack(ctx)
-	} else {
 		ckey.processQueueCmd()
+		return
+	default:
 	}
+	ctx.writeBackFlag = write_back_update //sql中存在,使用update回写
+	ckey.m.doWriteBack(ctx)
 }
 
 func onSqlLoadOKDel(ctx *cmdContext) {
 
 	Debugln("onSqlLoadOKDel")
 
-	var errCode int32
 	version := ctx.fields["__version__"].GetInt()
 	cmd := ctx.getCmd()
 	ckey := ctx.getCacheKey()
+	ckey.mtx.Lock()
+	ckey.setValueNoLock(ctx)
+	ckey.setOKNoLock(version)
+	ckey.mtx.Unlock()
 
 	if nil != cmd.version && *cmd.version != version {
 		//版本号不对
-		errCode = errcode.ERR_VERSION
+		ctx.reply(errcode.ERR_VERSION, nil, version)
+		ckey.processQueueCmd()
 	} else {
 		ctx.writeBackFlag = write_back_delete
-		errCode = errcode.ERR_OK
-	}
-
-	ctx.reply(errCode, nil, version)
-
-	if errCode == errcode.ERR_OK {
-		//ckey.setMissing()
 		ckey.m.doWriteBack(ctx)
-	} else {
-		ckey.mtx.Lock()
-		ckey.setValueNoLock(ctx)
-		ckey.setOKNoLock(version)
-		ckey.mtx.Unlock()
-	}
-
-	if ctx.writeBackFlag == write_back_none {
-		ckey.processQueueCmd()
 	}
 }
 

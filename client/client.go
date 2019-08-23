@@ -35,10 +35,8 @@ func (this *Client) pcall(cb callback, a interface{}) {
 	switch a.(type) {
 	case int32:
 		cb.onError(a.(int32))
-		break
 	default:
 		cb.onResult(a)
-		break
 	}
 }
 
@@ -48,10 +46,8 @@ func (this *Client) doCallBack(cb callback, a interface{}) {
 			switch a.(type) {
 			case int32:
 				cb.onError(a.(int32))
-				break
 			default:
 				cb.onResult(a)
-				break
 			}
 		})
 	} else {

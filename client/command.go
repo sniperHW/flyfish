@@ -1,14 +1,13 @@
 package client
 
 import (
+	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/flyfish/codec"
 	"github.com/sniperHW/flyfish/errcode"
 	protocol "github.com/sniperHW/flyfish/proto"
+	"github.com/sniperHW/kendynet/util"
 	"sync/atomic"
 	"time"
-
-	"github.com/golang/protobuf/proto"
-	"github.com/sniperHW/kendynet/util"
 )
 
 type Field protocol.Field
@@ -487,28 +486,28 @@ func (this *Conn) onDecrByResp(resp *protocol.DecrByResp) {
 func (this *Conn) onMessage(msg *codec.Message) {
 	this.eventQueue.Post(func() {
 		name := msg.GetName()
-		if name == "*proto.PingResp" {
-			return
-		} else if name == "*proto.GetResp" {
+		switch name {
+		//case "*proto.PingResp":
+		case "*proto.GetResp":
 			this.onGetResp(msg.GetData().(*protocol.GetResp))
-		} else if name == "*proto.SetResp" {
+		case "*proto.SetResp":
 			this.onSetResp(msg.GetData().(*protocol.SetResp))
-		} else if name == "*proto.SetNxResp" {
+		case "*proto.SetNxResp":
 			this.onSetNxResp(msg.GetData().(*protocol.SetNxResp))
-		} else if name == "*proto.CompareAndSetResp" {
+		case "*proto.CompareAndSetResp":
 			this.onCompareAndSetResp(msg.GetData().(*protocol.CompareAndSetResp))
-		} else if name == "*proto.CompareAndSetNxResp" {
+		case "*proto.CompareAndSetNxResp":
 			this.onCompareAndSetNxResp(msg.GetData().(*protocol.CompareAndSetNxResp))
-		} else if name == "*proto.DelResp" {
+		case "*proto.DelResp":
 			this.onDelResp(msg.GetData().(*protocol.DelResp))
-		} else if name == "*proto.IncrByResp" {
+		case "*proto.IncrByResp":
 			this.onIncrByResp(msg.GetData().(*protocol.IncrByResp))
-		} else if name == "*proto.DecrByResp" {
+		case "*proto.DecrByResp":
 			this.onDecrByResp(msg.GetData().(*protocol.DecrByResp))
-		} else if name == "*proto.ScanResp" {
+		case "*proto.ScanResp":
 			this.onScanResp(msg.GetData().(*protocol.ScanResp))
-		} else {
-
+		default:
 		}
 	})
+
 }

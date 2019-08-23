@@ -380,19 +380,14 @@ func binlogDetail(fields map[string]*proto.Field) {
 		switch v.GetType() {
 		case proto.ValueType_string:
 			fmt.Println(k, v.GetString())
-			break
 		case proto.ValueType_blob:
 			fmt.Println(k, v.GetBlob())
-			break
 		case proto.ValueType_float:
 			fmt.Println(k, v.GetFloat())
-			break
 		case proto.ValueType_int:
 			fmt.Println(k, v.GetInt())
-			break
 		case proto.ValueType_uint:
 			fmt.Println(k, v.GetUint())
-			break
 		default:
 			panic("invaild field type")
 		}
