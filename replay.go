@@ -334,6 +334,8 @@ func StartReplayBinlog() bool {
 
 	wg := &sync.WaitGroup{}
 
+	totalKvCount := 0
+
 	//建立新快照
 	for _, v := range cacheMgrs {
 		wg.Add(1)
@@ -345,6 +347,12 @@ func StartReplayBinlog() bool {
 	}
 
 	wg.Wait()
+
+	for _, v := range cacheMgrs {
+		totalKvCount += len(v.kv)
+	}
+
+	Infoln("totalKvCount:", totalKvCount)
 
 	return true
 }
