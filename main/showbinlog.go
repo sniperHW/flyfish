@@ -6,5 +6,10 @@ import (
 )
 
 func main() {
-	flyfish.ShowBinlog(os.Args[1])
+	showDetail := false
+	if len(os.Args) > 2 && os.Args[2] == "detail" {
+		showDetail = true
+	}
+
+	flyfish.ShowBinlog(os.Args[1], showDetail)
 }

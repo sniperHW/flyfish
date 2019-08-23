@@ -372,16 +372,38 @@ func binlogTypeToString(tt int) string {
 	}
 }
 
-func ShowBinlog(path string) {
+func binlogDetail(fields map[string]*proto.Field) {
+	for k, v := range fields {
+		switch v.GetType() {
+		case proto.ValueType_string:
+			fmt.Println(k, v.GetString())
+			break
+		case proto.ValueType_blob:
+			fmt.Println(k, v.GetBlob())
+			break
+		case proto.ValueType_float:
+			fmt.Println(k, v.GetFloat())
+			break
+		case proto.ValueType_int:
+			fmt.Println(k, v.GetInt())
+			break
+		case proto.ValueType_uint:
+			fmt.Println(k, v.GetUint())
+			break
+		default:
+			panic("invaild field type")
+		}
+	}
+}
 
-	//获得所有文件
-	fileList, err := getFileList(path)
+func ShowBinlog(path string, showDetail bool) {
+
+	stat, err := os.Stat(path)
+
 	if nil != err {
+		fmt.Println(err)
 		return
 	}
-
-	//对fileList排序
-	sortFileList(fileList)
 
 	read := func(path string) bool {
 
@@ -435,17 +457,35 @@ func ShowBinlog(path string) {
 			totalOffset += size
 
 			for offset < end {
-				newOffset, tt, unikey, version, _ := readBinLog(buffer, offset)
+				newOffset, tt, unikey, version, fields := readBinLog(buffer, offset)
 				offset = newOffset
 				fmt.Println(unikey, "version:", version, "type:", binlogTypeToString(tt))
+				if showDetail {
+					binlogDetail(fields)
+					fmt.Println()
+				}
 			}
 		}
 		return true
 	}
 
-	for _, v := range fileList {
-		if !read(v) {
+	if stat.IsDir() {
+
+		//获得所有文件
+		fileList, err := getFileList(path)
+		if nil != err {
 			return
 		}
+
+		//对fileList排序
+		sortFileList(fileList)
+
+		for _, v := range fileList {
+			if !read(v) {
+				return
+			}
+		}
+	} else {
+		read(path)
 	}
 }
