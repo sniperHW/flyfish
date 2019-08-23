@@ -22,7 +22,7 @@ const (
 
 type binlogSt struct {
 	binlogStr        *str
-	ctxs             []*cmdContext
+	ctxs             *ctxArray
 	cacheBinlogCount int32
 }
 
@@ -131,7 +131,7 @@ func (this *cacheMgr) startSnapshot() {
 	}()
 }
 
-func (this *cacheMgr) flush(binlogStr *str, ctxs []*cmdContext, cacheBinlogCount int32) {
+func (this *cacheMgr) flush(binlogStr *str, ctxs *ctxArray, cacheBinlogCount int32) {
 	this.mtx.Lock()
 
 	beg := time.Now()
@@ -186,10 +186,10 @@ func (this *cacheMgr) flush(binlogStr *str, ctxs []*cmdContext, cacheBinlogCount
 
 	this.mtx.Unlock()
 
-	strPut(binlogStr)
-
 	if nil != ctxs {
-		for _, v := range ctxs {
+
+		for i := 0; i < ctxs.count; i++ {
+			v := ctxs.ctxs[i]
 			v.reply(errcode.ERR_OK, v.fields, v.version)
 			ckey := v.getCacheKey()
 			ckey.mtx.Lock()
@@ -199,45 +199,55 @@ func (this *cacheMgr) flush(binlogStr *str, ctxs []*cmdContext, cacheBinlogCount
 			}
 			ckey.mtx.Unlock()
 		}
-		for _, v := range ctxs {
+
+		for i := 0; i < ctxs.count; i++ {
+			v := ctxs.ctxs[i]
 			v.getCacheKey().processQueueCmd()
 		}
 	}
+
+	strPut(binlogStr)
+	ctxArrayPut(ctxs)
 }
 
 func (this *cacheMgr) tryFlush() {
 
-	if this.cacheBinlogCount > 0 && (this.cacheBinlogCount >= int32(conf.GetConfig().FlushCount) || time.Now().After(this.nextFlush)) {
+	if this.cacheBinlogCount > 0 {
 
 		config := conf.GetConfig()
 
-		this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval))
+		if this.cacheBinlogCount >= int32(config.FlushCount) || this.binlogStr.dataLen() >= config.FlushSize || time.Now().After(this.nextFlush) {
 
-		cacheBinlogCount := this.cacheBinlogCount
+			cacheBinlogCount := this.cacheBinlogCount
 
-		this.cacheBinlogCount = 0
+			this.cacheBinlogCount = 0
 
-		binlogStr := this.binlogStr
-		ctxs := this.ctxs
+			binlogStr := this.binlogStr
+			ctxs := this.ctxs
 
-		this.binlogStr = nil
-		this.ctxs = nil
+			this.binlogStr = nil
+			this.ctxs = nil
 
-		this.binlogQueue.AddNoWait(&binlogSt{
-			binlogStr:        binlogStr,
-			ctxs:             ctxs,
-			cacheBinlogCount: cacheBinlogCount,
-		})
+			this.binlogQueue.AddNoWait(&binlogSt{
+				binlogStr:        binlogStr,
+				ctxs:             ctxs,
+				cacheBinlogCount: cacheBinlogCount,
+			})
+		}
 	}
 }
 
 func (this *cacheMgr) write(tt int, unikey string, fields map[string]*proto.Field, version int64) {
 
+	if nil == this.binlogStr {
+		this.binlogStr = strGet()
+	}
+
 	this.binlogCount++
 	this.cacheBinlogCount++
 
-	if nil == this.binlogStr {
-		this.binlogStr = strGet()
+	if this.binlogCount == 1 {
+		this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(conf.GetConfig().FlushInterval))
 	}
 
 	//写操作码1byte
@@ -285,6 +295,10 @@ func (this *cacheMgr) writeBack(ctx *cmdContext) {
 	this.mtx.Lock()
 	ckey.mtx.Lock()
 
+	if nil == this.ctxs {
+		this.ctxs = ctxArrayGet()
+	}
+
 	gotErr := false
 
 	if ckey.sqlFlag == write_back_none {
@@ -324,11 +338,7 @@ func (this *cacheMgr) writeBack(ctx *cmdContext) {
 		return
 	}
 
-	if nil == this.ctxs {
-		this.ctxs = []*cmdContext{}
-	}
-
-	this.ctxs = append(this.ctxs, ctx)
+	this.ctxs.append(ctx)
 
 	cmdType := ctx.getCmdType()
 

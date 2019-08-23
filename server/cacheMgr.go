@@ -19,12 +19,50 @@ type cmdProcessorI interface {
 	processCmd(*cacheKey, bool)
 }
 
+type ctxArray struct {
+	count int
+	ctxs  []*cmdContext
+}
+
+func (this *ctxArray) append(ctx *cmdContext) {
+	//FlushCount可能因为重载配置文件变大，导致原有空间不足
+	if this.count >= len(this.ctxs) {
+		ctxs := make([]*cmdContext, conf.GetConfig().FlushCount)
+		copy(ctxs, this.ctxs)
+		this.ctxs = ctxs
+	}
+	this.ctxs[this.count] = ctx
+	this.count++
+}
+
+func (this *ctxArray) full() bool {
+	return this.count == cap(this.ctxs)
+}
+
+var ctxArrayPool = sync.Pool{
+	New: func() interface{} {
+		return &ctxArray{
+			ctxs:  make([]*cmdContext, conf.GetConfig().FlushCount),
+			count: 0,
+		}
+	},
+}
+
+func ctxArrayGet() *ctxArray {
+	return ctxArrayPool.Get().(*ctxArray)
+}
+
+func ctxArrayPut(w *ctxArray) {
+	w.count = 0
+	ctxArrayPool.Put(w)
+}
+
 type cacheMgr struct {
 	kv               map[string]*cacheKey
 	mtx              sync.Mutex
 	lruHead          cacheKey
 	lruTail          cacheKey
-	ctxs             []*cmdContext
+	ctxs             *ctxArray
 	nextFlush        time.Time
 	binlogStr        *str
 	f                *os.File
