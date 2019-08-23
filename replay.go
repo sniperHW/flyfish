@@ -161,13 +161,14 @@ func replayBinLog(path string) bool {
 	totalOffset := 0
 	recordCount := 0
 	for totalOffset < n {
+		begOffset := totalOffset
 		size := int(binary.BigEndian.Uint32(buffer[totalOffset : totalOffset+4]))
 		totalOffset += 4
 		checkSum := binary.BigEndian.Uint64(buffer[totalOffset : totalOffset+checkSumSize])
 		totalOffset += checkSumSize
 		//校验数据
 		if checkSum != crc64.Checksum(buffer[totalOffset:totalOffset+size], crc64Table) {
-			Fatalln("checkSum failed:", path)
+			Fatalln("checkSum failed:", path, begOffset)
 			return false
 		}
 
@@ -176,6 +177,8 @@ func replayBinLog(path string) bool {
 		totalOffset += size
 
 		for offset < end {
+
+			begOffset := offset
 			newOffset, tt, unikey, version, values := readBinLog(buffer, offset)
 			offset = newOffset
 
@@ -206,7 +209,7 @@ func replayBinLog(path string) bool {
 				}
 			} else if tt == binlog_update {
 				if nil == ckey || ckey.status != cache_ok || ckey.values == nil {
-					Fatalln("invaild tt")
+					Fatalln("invaild tt", path, unikey, tt, recordCount, begOffset)
 					return false
 				}
 				for k, v := range values {
@@ -216,7 +219,7 @@ func replayBinLog(path string) bool {
 				ckey.sqlFlag = write_back_insert_update
 			} else if tt == binlog_delete {
 				if nil == ckey || ckey.status != cache_ok {
-					Fatalln("invaild tt")
+					Fatalln("invaild tt", path, unikey, tt, recordCount, begOffset)
 					return false
 				}
 				ckey.values = nil
@@ -225,13 +228,13 @@ func replayBinLog(path string) bool {
 				ckey.sqlFlag = write_back_delete
 			} else if tt == binlog_kick {
 				if nil == ckey {
-					Fatalln("invaild tt", unikey)
+					Fatalln("invaild tt", path, unikey, tt, recordCount, begOffset)
 					return false
 				}
 				m.removeLRU(ckey)
 				delete(m.kv, unikey)
 			} else {
-				Fatalln("invaild tt", path, tt, offset)
+				Fatalln("invaild tt", path, unikey, tt, recordCount, begOffset)
 				return false
 			}
 		}
@@ -440,6 +443,7 @@ func ShowBinlog(path string, showDetail bool) {
 
 		fmt.Println("-------------------------", path, "---------------------------")
 
+		c := 0
 		totalOffset := 0
 		for totalOffset < n {
 			size := int(binary.BigEndian.Uint32(buffer[totalOffset : totalOffset+4]))
@@ -458,8 +462,9 @@ func ShowBinlog(path string, showDetail bool) {
 
 			for offset < end {
 				newOffset, tt, unikey, version, fields := readBinLog(buffer, offset)
+				c++
 				offset = newOffset
-				fmt.Println(unikey, "version:", version, "type:", binlogTypeToString(tt))
+				fmt.Println(c, unikey, "version:", version, "type:", binlogTypeToString(tt))
 				if showDetail {
 					binlogDetail(fields)
 					fmt.Println()
