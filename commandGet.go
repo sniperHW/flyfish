@@ -102,6 +102,6 @@ func get(session kendynet.StreamSession, msg *codec.Message) {
 			}
 		}
 
-		processCmd(cmd)
+		cmd.process()
 	}
 }

@@ -9,13 +9,9 @@ import (
 	"time"
 )
 
-/*
- *    每个processUnit负责处理其关联的key
- */
-
 var CacheGroupSize int
 
-var processUnits []*processUnit
+var cacheMgrs []*cacheMgr
 
 var cmdProcessor cmdProcessorI
 
@@ -23,37 +19,37 @@ type cmdProcessorI interface {
 	processCmd(*cacheKey, bool)
 }
 
-type processUnit struct {
-	cacheKeys        map[string]*cacheKey
+type cacheMgr struct {
+	kv               map[string]*cacheKey
 	mtx              sync.Mutex
 	lruHead          cacheKey
 	lruTail          cacheKey
-	ctxs             []*processContext
+	ctxs             []*cmdContext
 	nextFlush        time.Time
 	binlogStr        *str
 	f                *os.File
 	filePath         string
 	backFilePath     string
-	binlogCount      int32
-	cacheBinlogCount int32
-	fileSize         int
-	make_snapshot    bool
+	binlogCount      int32 //当前binlog文件总binlog数量
+	cacheBinlogCount int32 //待序列化到文件的binlog数量
+	fileSize         int   //当前binlog文件大小
+	make_snapshot    bool  //当前是否正在建立快照
 	binlogQueue      *util.BlockQueue
 }
 
-func (this *processUnit) doWriteBack(ctx *processContext) {
+func (this *cacheMgr) doWriteBack(ctx *cmdContext) {
 	this.writeBack(ctx)
 }
 
 func (this *cacheKey) process_(fromClient bool) {
-	cmdProcessor.processCmd(this, fromClient)
+	processCmd(this, fromClient)
 }
 
-func getUnitByUnikey(uniKey string) *processUnit {
-	return processUnits[StringHash(uniKey)%CacheGroupSize]
+func getMgrByUnikey(uniKey string) *cacheMgr {
+	return cacheMgrs[StringHash(uniKey)%CacheGroupSize]
 }
 
-func (this *processUnit) updateLRU(ckey *cacheKey) {
+func (this *cacheMgr) updateLRU(ckey *cacheKey) {
 
 	if ckey.nnext != nil || ckey.pprev != nil {
 		//先移除
@@ -71,17 +67,17 @@ func (this *processUnit) updateLRU(ckey *cacheKey) {
 
 }
 
-func (this *processUnit) removeLRU(ckey *cacheKey) {
+func (this *cacheMgr) removeLRU(ckey *cacheKey) {
 	ckey.pprev.nnext = ckey.nnext
 	ckey.nnext.pprev = ckey.pprev
 	ckey.nnext = nil
 	ckey.pprev = nil
 }
 
-func (this *processUnit) kickCacheKey() {
+func (this *cacheMgr) kickCacheKey() {
 	MaxCachePerGroupSize := conf.GetConfig().MaxCachePerGroupSize
 
-	for len(this.cacheKeys) > MaxCachePerGroupSize && this.lruHead.nnext != &this.lruTail {
+	for len(this.kv) > MaxCachePerGroupSize && this.lruHead.nnext != &this.lruTail {
 
 		c := this.lruTail.pprev
 
@@ -91,34 +87,34 @@ func (this *processUnit) kickCacheKey() {
 
 		this.removeLRU(c)
 		this.writeKick(c.uniKey)
-		delete(this.cacheKeys, c.uniKey)
+		delete(this.kv, c.uniKey)
 	}
 }
 
-func initProcessUnit() {
+func initCacheMgr() {
 
 	config := conf.GetConfig()
 
 	CacheGroupSize = config.CacheGroupSize
 
-	processUnits = make([]*processUnit, CacheGroupSize)
+	cacheMgrs = make([]*cacheMgr, CacheGroupSize)
 	for i := 0; i < CacheGroupSize; i++ {
 
-		unit := &processUnit{
-			cacheKeys: map[string]*cacheKey{},
+		m := &cacheMgr{
+			kv:        map[string]*cacheKey{},
 			nextFlush: time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval)),
 		}
 
-		unit.lruHead.nnext = &unit.lruTail
-		unit.lruTail.pprev = &unit.lruHead
+		m.lruHead.nnext = &m.lruTail
+		m.lruTail.pprev = &m.lruHead
 
 		timer.Repeat(time.Millisecond*time.Duration(config.FlushInterval), nil, func(t *timer.Timer) {
 			if isStop() {
 				t.Cancel()
 			} else {
-				unit.mtx.Lock()
-				unit.tryFlush()
-				unit.mtx.Unlock()
+				m.mtx.Lock()
+				m.tryFlush()
+				m.mtx.Unlock()
 			}
 		})
 
@@ -126,14 +122,14 @@ func initProcessUnit() {
 			if isStop() {
 				t.Cancel()
 			} else {
-				unit.mtx.Lock()
-				unit.kickCacheKey()
-				unit.mtx.Unlock()
+				m.mtx.Lock()
+				m.kickCacheKey()
+				m.mtx.Unlock()
 			}
 		})
 
-		unit.start()
+		m.start()
 
-		processUnits[i] = unit
+		cacheMgrs[i] = m
 	}
 }

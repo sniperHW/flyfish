@@ -8,10 +8,7 @@ import (
 	"time"
 )
 
-type cmdProcessorLocalCache struct {
-}
-
-func (this cmdProcessorLocalCache) processGet(ckey *cacheKey, cmd *command) *processContext {
+func processGet(ckey *cacheKey, cmd *command) *cmdContext {
 	Debugln("processGet", cmd.uniKey)
 	if ckey.status == cache_missing {
 		cmd.reply(errcode.ERR_NOTFOUND, nil, -1)
@@ -21,7 +18,7 @@ func (this cmdProcessorLocalCache) processGet(ckey *cacheKey, cmd *command) *pro
 		return nil
 	} else {
 
-		ctx := &processContext{
+		ctx := &cmdContext{
 			command: cmd,
 			fields:  cmd.fields,
 		}
@@ -29,7 +26,7 @@ func (this cmdProcessorLocalCache) processGet(ckey *cacheKey, cmd *command) *pro
 	}
 }
 
-func (this cmdProcessorLocalCache) processSet(ckey *cacheKey, cmd *command) *processContext {
+func processSet(ckey *cacheKey, cmd *command) *cmdContext {
 	Debugln("processSet", cmd.uniKey)
 	if nil != cmd.version {
 		if ckey.status == cache_missing {
@@ -43,7 +40,7 @@ func (this cmdProcessorLocalCache) processSet(ckey *cacheKey, cmd *command) *pro
 		}
 	}
 
-	ctx := &processContext{
+	ctx := &cmdContext{
 		command: cmd,
 		fields:  cmd.fields,
 	}
@@ -56,7 +53,7 @@ func (this cmdProcessorLocalCache) processSet(ckey *cacheKey, cmd *command) *pro
 	return ctx
 }
 
-func (this cmdProcessorLocalCache) processSetNx(ckey *cacheKey, cmd *command) *processContext {
+func processSetNx(ckey *cacheKey, cmd *command) *cmdContext {
 	Debugln("processSetNx", cmd.uniKey)
 	if ckey.status == cache_ok {
 		//记录已经存在，不能再设置
@@ -64,7 +61,7 @@ func (this cmdProcessorLocalCache) processSetNx(ckey *cacheKey, cmd *command) *p
 		return nil
 	}
 
-	ctx := &processContext{
+	ctx := &cmdContext{
 		command: cmd,
 		fields:  cmd.fields,
 	}
@@ -76,7 +73,7 @@ func (this cmdProcessorLocalCache) processSetNx(ckey *cacheKey, cmd *command) *p
 	return ctx
 }
 
-func (this cmdProcessorLocalCache) processCompareAndSet(ckey *cacheKey, cmd *command) *processContext {
+func processCompareAndSet(ckey *cacheKey, cmd *command) *cmdContext {
 
 	Debugln("processCompareAndSet", cmd.uniKey)
 
@@ -93,7 +90,7 @@ func (this cmdProcessorLocalCache) processCompareAndSet(ckey *cacheKey, cmd *com
 			}
 		}
 
-		ctx := &processContext{
+		ctx := &cmdContext{
 			command: cmd,
 			fields:  map[string]*proto.Field{},
 		}
@@ -107,7 +104,7 @@ func (this cmdProcessorLocalCache) processCompareAndSet(ckey *cacheKey, cmd *com
 	}
 }
 
-func (this cmdProcessorLocalCache) processCompareAndSetNx(ckey *cacheKey, cmd *command) *processContext {
+func processCompareAndSetNx(ckey *cacheKey, cmd *command) *cmdContext {
 
 	Debugln("processCompareAndSetNx", cmd.uniKey)
 
@@ -120,7 +117,7 @@ func (this cmdProcessorLocalCache) processCompareAndSetNx(ckey *cacheKey, cmd *c
 		}
 	}
 
-	ctx := &processContext{
+	ctx := &cmdContext{
 		command: cmd,
 		fields:  map[string]*proto.Field{},
 	}
@@ -136,7 +133,7 @@ func (this cmdProcessorLocalCache) processCompareAndSetNx(ckey *cacheKey, cmd *c
 	return ctx
 }
 
-func (this cmdProcessorLocalCache) processIncrBy(ckey *cacheKey, cmd *command) *processContext {
+func processIncrBy(ckey *cacheKey, cmd *command) *cmdContext {
 
 	Debugln("processIncrBy", cmd.uniKey)
 
@@ -152,7 +149,7 @@ func (this cmdProcessorLocalCache) processIncrBy(ckey *cacheKey, cmd *command) *
 		}
 	}
 
-	ctx := &processContext{
+	ctx := &cmdContext{
 		command: cmd,
 		fields:  map[string]*proto.Field{},
 	}
@@ -169,7 +166,7 @@ func (this cmdProcessorLocalCache) processIncrBy(ckey *cacheKey, cmd *command) *
 	return ctx
 }
 
-func (this cmdProcessorLocalCache) processDecrBy(ckey *cacheKey, cmd *command) *processContext {
+func processDecrBy(ckey *cacheKey, cmd *command) *cmdContext {
 
 	Debugln("processDecrBy", cmd.uniKey)
 
@@ -185,7 +182,7 @@ func (this cmdProcessorLocalCache) processDecrBy(ckey *cacheKey, cmd *command) *
 		}
 	}
 
-	ctx := &processContext{
+	ctx := &cmdContext{
 		command: cmd,
 		fields:  map[string]*proto.Field{},
 	}
@@ -202,7 +199,7 @@ func (this cmdProcessorLocalCache) processDecrBy(ckey *cacheKey, cmd *command) *
 	return ctx
 }
 
-func (this cmdProcessorLocalCache) processDel(ckey *cacheKey, cmd *command) *processContext {
+func processDel(ckey *cacheKey, cmd *command) *cmdContext {
 
 	Debugln("processDel", cmd.uniKey)
 
@@ -215,7 +212,7 @@ func (this cmdProcessorLocalCache) processDel(ckey *cacheKey, cmd *command) *pro
 			return nil
 		}
 
-		ctx := &processContext{
+		ctx := &cmdContext{
 			command: cmd,
 			fields:  map[string]*proto.Field{},
 		}
@@ -228,7 +225,7 @@ func (this cmdProcessorLocalCache) processDel(ckey *cacheKey, cmd *command) *pro
 	}
 }
 
-func (this cmdProcessorLocalCache) processCmd(ckey *cacheKey, fromClient bool) {
+func processCmd(ckey *cacheKey, fromClient bool) {
 
 	//Infoln(ckey.values)
 
@@ -243,7 +240,7 @@ func (this cmdProcessorLocalCache) processCmd(ckey *cacheKey, fromClient bool) {
 		return
 	}
 
-	var ctx *processContext
+	var ctx *cmdContext
 
 	now := time.Now()
 
@@ -259,28 +256,28 @@ func (this cmdProcessorLocalCache) processCmd(ckey *cacheKey, fromClient bool) {
 		} else {
 			switch cmd.cmdType {
 			case cmdGet:
-				ctx = this.processGet(ckey, cmd)
+				ctx = processGet(ckey, cmd)
 				break
 			case cmdSet:
-				ctx = this.processSet(ckey, cmd)
+				ctx = processSet(ckey, cmd)
 				break
 			case cmdSetNx:
-				ctx = this.processSetNx(ckey, cmd)
+				ctx = processSetNx(ckey, cmd)
 				break
 			case cmdCompareAndSet:
-				ctx = this.processCompareAndSet(ckey, cmd)
+				ctx = processCompareAndSet(ckey, cmd)
 				break
 			case cmdCompareAndSetNx:
-				ctx = this.processCompareAndSetNx(ckey, cmd)
+				ctx = processCompareAndSetNx(ckey, cmd)
 				break
 			case cmdIncrBy:
-				ctx = this.processIncrBy(ckey, cmd)
+				ctx = processIncrBy(ckey, cmd)
 				break
 			case cmdDecrBy:
-				ctx = this.processDecrBy(ckey, cmd)
+				ctx = processDecrBy(ckey, cmd)
 				break
 			case cmdDel:
-				ctx = this.processDel(ckey, cmd)
+				ctx = processDel(ckey, cmd)
 				break
 			default:
 				//记录日志
@@ -307,7 +304,7 @@ func (this cmdProcessorLocalCache) processCmd(ckey *cacheKey, fromClient bool) {
 			} else {
 				atomic.AddInt32(&cmdCount, -1)
 			}
-			this.processCmd(ckey, fromClient)
+			processCmd(ckey, fromClient)
 			return
 		} else {
 			ckey.lockCmdQueue()
@@ -316,6 +313,6 @@ func (this cmdProcessorLocalCache) processCmd(ckey *cacheKey, fromClient bool) {
 	} else {
 		ckey.lockCmdQueue()
 		ckey.mtx.Unlock()
-		ckey.unit.doWriteBack(ctx)
+		ckey.m.doWriteBack(ctx)
 	}
 }

@@ -118,66 +118,66 @@ func (this *command) reply(errCode int32, fields map[string]*proto.Field, versio
 	}
 }
 
-func processCmd(cmd *command) {
+func (this *command) process() {
 
 	atomic.AddInt32(&cmdCount, 1)
 
-	meta := getMetaByTable(cmd.table)
+	meta := getMetaByTable(this.table)
 
 	if nil == meta {
-		cmd.reply(errcode.ERR_INVAILD_TABLE, nil, -1)
+		this.reply(errcode.ERR_INVAILD_TABLE, nil, -1)
 		return
 	}
 
-	if cmd.cmdType == cmdGet && !meta.checkGet(cmd.fields) {
-		cmd.reply(errcode.ERR_INVAILD_FIELD, nil, -1)
+	if this.cmdType == cmdGet && !meta.checkGet(this.fields) {
+		this.reply(errcode.ERR_INVAILD_FIELD, nil, -1)
 		return
 	}
 
-	if (cmd.cmdType == cmdCompareAndSet || cmd.cmdType == cmdCompareAndSetNx) &&
-		!meta.checkCompareAndSet(cmd.cns.newV, cmd.cns.oldV) {
-		cmd.reply(errcode.ERR_INVAILD_FIELD, nil, -1)
+	if (this.cmdType == cmdCompareAndSet || this.cmdType == cmdCompareAndSetNx) &&
+		!meta.checkCompareAndSet(this.cns.newV, this.cns.oldV) {
+		this.reply(errcode.ERR_INVAILD_FIELD, nil, -1)
 		return
 	}
 
-	if (cmd.cmdType == cmdSet || cmd.cmdType == cmdSetNx) && !meta.checkSet(cmd.fields) {
-		cmd.reply(errcode.ERR_INVAILD_FIELD, nil, -1)
+	if (this.cmdType == cmdSet || this.cmdType == cmdSetNx) && !meta.checkSet(this.fields) {
+		this.reply(errcode.ERR_INVAILD_FIELD, nil, -1)
 		return
 	}
 
-	if (cmd.cmdType == cmdIncrBy || cmd.cmdType == cmdDecrBy) && !meta.checkField(cmd.incrDecr) {
-		cmd.reply(errcode.ERR_INVAILD_FIELD, nil, -1)
+	if (this.cmdType == cmdIncrBy || this.cmdType == cmdDecrBy) && !meta.checkField(this.incrDecr) {
+		this.reply(errcode.ERR_INVAILD_FIELD, nil, -1)
 		return
 	}
 
-	unit := getUnitByUnikey(cmd.uniKey)
+	m := getMgrByUnikey(this.uniKey)
 
-	unit.mtx.Lock()
-	k, ok := unit.cacheKeys[cmd.uniKey]
+	m.mtx.Lock()
+	k, ok := m.kv[this.uniKey]
 	if ok {
 		if !checkMetaVersion(k.meta.meta_version) {
-			newMeta := getMetaByTable(cmd.table)
+			newMeta := getMetaByTable(this.table)
 			if newMeta != nil {
 				atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&k.meta)), unsafe.Pointer(newMeta))
 			} else {
 				//log error
 			}
 		}
-		cmd.ckey = k
-		k.pushCmd(cmd)
-		unit.updateLRU(k)
+		this.ckey = k
+		k.pushCmd(this)
+		m.updateLRU(k)
 	} else {
-		k = newCacheKey(unit, cmd.table, cmd.key, cmd.uniKey)
+		k = newCacheKey(m, this.table, this.key, this.uniKey)
 		if nil != k {
-			cmd.ckey = k
-			k.pushCmd(cmd)
-			unit.updateLRU(k)
-			unit.cacheKeys[cmd.uniKey] = k
+			this.ckey = k
+			k.pushCmd(this)
+			m.updateLRU(k)
+			m.kv[this.uniKey] = k
 		}
 	}
-	unit.kickCacheKey()
+	m.kickCacheKey()
 
-	unit.mtx.Unlock()
+	m.mtx.Unlock()
 
 	if nil != k {
 		k.processClientCmd()

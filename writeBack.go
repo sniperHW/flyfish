@@ -8,10 +8,7 @@ import (
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet/util"
 	"hash/crc64"
-	"math"
 	"os"
-	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -25,7 +22,7 @@ const (
 
 type binlogSt struct {
 	binlogStr        *str
-	ctxs             []*processContext
+	ctxs             []*cmdContext
 	cacheBinlogCount int32
 }
 
@@ -44,22 +41,7 @@ func onWriteFileError(err error) {
 	os.Exit(1)
 }
 
-func binlogTypeToString(tt int) string {
-	switch tt {
-	case binlog_snapshot:
-		return "binlog_snapshot"
-	case binlog_update:
-		return "binlog_update"
-	case binlog_delete:
-		return "binlog_delete"
-	case binlog_kick:
-		return "binlog_kick"
-	default:
-		return "unkonw"
-	}
-}
-
-func (this *processUnit) start() {
+func (this *cacheMgr) start() {
 	this.binlogQueue = util.NewBlockQueue()
 	go func() {
 		for {
@@ -75,7 +57,7 @@ func (this *processUnit) start() {
 	}()
 }
 
-func (this *processUnit) startSnapshot() {
+func (this *cacheMgr) startSnapshot() {
 
 	if this.make_snapshot {
 		return
@@ -105,13 +87,13 @@ func (this *processUnit) startSnapshot() {
 	this.f = f
 	this.filePath = path
 
-	cacheKeys := []*cacheKey{}
+	kv := []*cacheKey{}
 
-	for _, v := range this.cacheKeys {
+	for _, v := range this.kv {
 		v.mtx.Lock()
 		if v.status == cache_ok || v.status == cache_missing {
 			v.snapshot = false
-			cacheKeys = append(cacheKeys, v)
+			kv = append(kv, v)
 		}
 		v.mtx.Unlock()
 	}
@@ -121,7 +103,7 @@ func (this *processUnit) startSnapshot() {
 		Infoln("start snapshot")
 		c := 0
 		i := 0
-		for _, v := range cacheKeys {
+		for _, v := range kv {
 			this.mtx.Lock()
 			v.mtx.Lock()
 			if (v.status == cache_ok || v.status == cache_missing) && !v.snapshot {
@@ -149,7 +131,7 @@ func (this *processUnit) startSnapshot() {
 	}()
 }
 
-func (this *processUnit) flush(binlogStr *str, ctxs []*processContext, cacheBinlogCount int32) {
+func (this *cacheMgr) flush(binlogStr *str, ctxs []*cmdContext, cacheBinlogCount int32) {
 	this.mtx.Lock()
 
 	beg := time.Now()
@@ -223,7 +205,7 @@ func (this *processUnit) flush(binlogStr *str, ctxs []*processContext, cacheBinl
 	}
 }
 
-func (this *processUnit) tryFlush() {
+func (this *cacheMgr) tryFlush() {
 
 	if this.cacheBinlogCount > 0 && (this.cacheBinlogCount >= int32(conf.GetConfig().FlushCount) || time.Now().After(this.nextFlush)) {
 
@@ -249,7 +231,7 @@ func (this *processUnit) tryFlush() {
 	}
 }
 
-func (this *processUnit) write(tt int, unikey string, fields map[string]*proto.Field, version int64) {
+func (this *cacheMgr) write(tt int, unikey string, fields map[string]*proto.Field, version int64) {
 
 	this.binlogCount++
 	this.cacheBinlogCount++
@@ -283,70 +265,12 @@ func (this *processUnit) write(tt int, unikey string, fields map[string]*proto.F
 	}
 }
 
-func (this *processUnit) writeKick(unikey string) {
+func (this *cacheMgr) writeKick(unikey string) {
 	this.write(binlog_kick, unikey, nil, 0)
 	this.tryFlush()
 }
 
-func (this *processUnit) snapshot(config *conf.Config, wg *sync.WaitGroup) {
-
-	beg := time.Now()
-
-	fileIndex := atomic.AddInt64(&fileCounter, 1)
-	os.MkdirAll(config.BinlogDir, os.ModePerm)
-	path := fmt.Sprintf("%s/%s_%d%s", config.BinlogDir, config.BinlogPrefix, fileIndex, binlogSuffix)
-
-	f, err := os.Create(path)
-	if err != nil {
-		Fatalln("create backfile failed", path, err)
-	}
-
-	this.binlogStr = strGet()
-
-	this.binlogCount = 0
-
-	for _, v := range this.cacheKeys {
-		v.mtx.Lock()
-		if v.status == cache_ok {
-			v.snapshot = true
-			this.write(binlog_snapshot, v.uniKey, v.values, v.version)
-		}
-		v.mtx.Unlock()
-	}
-
-	if this.binlogCount > 0 {
-		head := make([]byte, 4+checkSumSize)
-		checkSum := crc64.Checksum(this.binlogStr.bytes(), crc64Table)
-		binary.BigEndian.PutUint32(head[0:4], uint32(this.binlogStr.dataLen()))
-		binary.BigEndian.PutUint64(head[4:], uint64(checkSum))
-
-		if _, err := f.Write(head); nil != err {
-			onWriteFileError(err)
-		}
-
-		if _, err := f.Write(this.binlogStr.bytes()); nil != err {
-			onWriteFileError(err)
-		}
-
-		if err := f.Sync(); nil != err {
-			onWriteFileError(err)
-		}
-	}
-
-	this.f = f
-	this.filePath = path
-	this.fileSize = this.binlogStr.dataLen()
-	this.cacheBinlogCount = 0
-
-	this.binlogStr.reset()
-
-	Infoln("snapshot time:", time.Now().Sub(beg), " count:", this.binlogCount)
-
-	wg.Done()
-
-}
-
-func (this *processUnit) writeBack(ctx *processContext) {
+func (this *cacheMgr) writeBack(ctx *cmdContext) {
 
 	if ctx.writeBackFlag == write_back_none {
 		panic("ctx.writeBackFlag == write_back_none")
@@ -399,7 +323,7 @@ func (this *processUnit) writeBack(ctx *processContext) {
 	}
 
 	if nil == this.ctxs {
-		this.ctxs = []*processContext{}
+		this.ctxs = []*cmdContext{}
 	}
 
 	this.ctxs = append(this.ctxs, ctx)
@@ -467,307 +391,6 @@ func (this *processUnit) writeBack(ctx *processContext) {
 
 	this.mtx.Unlock()
 
-}
-
-func readBinLog(buffer []byte, offset int) (int, int, string, int64, map[string]*proto.Field) {
-	tt := int(buffer[offset])
-	offset += 1
-	l := int(binary.BigEndian.Uint32(buffer[offset : offset+4]))
-	offset += 4
-	uniKey := string(buffer[offset : offset+l])
-	offset += l
-	version := int64(binary.BigEndian.Uint64(buffer[offset : offset+8]))
-	offset += 8
-
-	var values map[string]*proto.Field
-
-	valueSize := int(binary.BigEndian.Uint32(buffer[offset : offset+4]))
-	offset += 4
-
-	if valueSize > 0 {
-		values = map[string]*proto.Field{}
-		for i := 0; i < valueSize; i++ {
-			l := int(binary.BigEndian.Uint32(buffer[offset : offset+4]))
-			offset += 4
-			name := string(buffer[offset : offset+l])
-			offset += l
-
-			vType := proto.ValueType(int(buffer[offset]))
-			offset += 1
-
-			switch vType {
-			case proto.ValueType_string:
-				l = int(binary.BigEndian.Uint32(buffer[offset : offset+4]))
-				offset += 4
-				values[name] = proto.PackField(name, string(buffer[offset:offset+l]))
-				offset += l
-			case proto.ValueType_float:
-				u64 := binary.BigEndian.Uint64(buffer[offset : offset+8])
-				values[name] = proto.PackField(name, math.Float64frombits(u64))
-				offset += 8
-			case proto.ValueType_int:
-				values[name] = proto.PackField(name, int64(binary.BigEndian.Uint64(buffer[offset:offset+8])))
-				offset += 8
-			case proto.ValueType_uint:
-				values[name] = proto.PackField(name, uint64(binary.BigEndian.Uint64(buffer[offset:offset+8])))
-				offset += 8
-			case proto.ValueType_blob:
-				l = int(binary.BigEndian.Uint32(buffer[offset : offset+4]))
-				offset += 4
-				v := make([]byte, l)
-				copy(v, buffer[offset:offset+l])
-				values[name] = proto.PackField(name, v)
-				offset += l
-			default:
-				panic("invaild value type")
-			}
-		}
-	}
-
-	return offset, tt, uniKey, version, values
-}
-
-func replayBinLog(path string) bool {
-	beg := time.Now()
-
-	var err error
-
-	stat, err := os.Stat(path)
-
-	if nil != err {
-		Fatalln("open file failed:", path, err)
-		return false
-	}
-
-	f, err := os.OpenFile(path, os.O_RDWR, os.ModePerm)
-
-	if nil != err {
-		Fatalln("open file failed:", path, err)
-		return false
-	}
-
-	buffer := make([]byte, int(stat.Size()))
-
-	n, err := f.Read(buffer)
-
-	f.Close()
-
-	loadTime := time.Now().Sub(beg)
-
-	if n != (int)(stat.Size()) {
-		Fatalln("read file failed:", path, err)
-		return false
-	}
-
-	totalOffset := 0
-	recordCount := 0
-	for totalOffset < n {
-		size := int(binary.BigEndian.Uint32(buffer[totalOffset : totalOffset+4]))
-		totalOffset += 4
-		checkSum := binary.BigEndian.Uint64(buffer[totalOffset : totalOffset+checkSumSize])
-		totalOffset += checkSumSize
-		//校验数据
-		if checkSum != crc64.Checksum(buffer[totalOffset:totalOffset+size], crc64Table) {
-			Fatalln("checkSum failed:", path)
-			return false
-		}
-
-		offset := totalOffset
-		end := totalOffset + size
-		totalOffset += size
-
-		for offset < end {
-			newOffset, tt, unikey, version, values := readBinLog(buffer, offset)
-			offset = newOffset
-
-			unit := getUnitByUnikey(unikey)
-			ckey, _ := unit.cacheKeys[unikey]
-			recordCount++
-
-			if tt == binlog_snapshot {
-				if nil == ckey {
-					tmp := strings.Split(unikey, ":")
-					ckey = newCacheKey(unit, tmp[0], strings.Join(tmp[1:], ""), unikey)
-					ckey.values = values
-					ckey.version = version
-					if ckey.version == 0 {
-						ckey.sqlFlag = write_back_delete
-						ckey.status = cache_missing
-					} else {
-						ckey.sqlFlag = write_back_insert_update
-						ckey.status = cache_ok
-					}
-					unit.cacheKeys[unikey] = ckey
-					unit.updateLRU(ckey)
-				} else {
-					ckey.values = values
-					ckey.version = version
-					ckey.sqlFlag = write_back_insert_update
-					ckey.status = cache_ok
-				}
-			} else if tt == binlog_update {
-				if nil == ckey || ckey.status != cache_ok || ckey.values == nil {
-					Fatalln("invaild tt")
-					return false
-				}
-				for k, v := range values {
-					ckey.values[k] = v
-				}
-				ckey.version = version
-				ckey.sqlFlag = write_back_insert_update
-			} else if tt == binlog_delete {
-				if nil == ckey || ckey.status != cache_ok {
-					Fatalln("invaild tt")
-					return false
-				}
-				ckey.values = nil
-				ckey.version = version
-				ckey.status = cache_missing
-				ckey.sqlFlag = write_back_delete
-			} else if tt == binlog_kick {
-				if nil == ckey {
-					Fatalln("invaild tt", unikey)
-					return false
-				}
-				unit.removeLRU(ckey)
-				delete(unit.cacheKeys, unikey)
-			} else {
-				Fatalln("invaild tt", path, tt, offset)
-				return false
-			}
-		}
-	}
-
-	totalTime := time.Now().Sub(beg)
-
-	Infoln("loadTime:", loadTime, "recordCount:", recordCount, "totalTime:", totalTime)
-
-	return true
-}
-
-//执行尚未完成的回写文件
-func StartReplayBinlog() bool {
-	config := conf.GetConfig()
-
-	_, err := os.Stat(config.BinlogDir)
-
-	if nil != err && os.IsNotExist(err) {
-		return true
-	}
-
-	//获得所有文件
-	fileList, err := getFileList(config.BinlogDir)
-	if nil != err {
-		return false
-	}
-
-	//对fileList排序
-	sortFileList(fileList)
-
-	for _, v := range fileList {
-		if !replayBinLog(v) {
-			return false
-		}
-	}
-
-	//重放完成删除所有文件
-	for _, v := range fileList {
-		os.Remove(v)
-	}
-
-	wg := &sync.WaitGroup{}
-
-	//建立新快照
-	for _, v := range processUnits {
-		wg.Add(1)
-		go func(u *processUnit) {
-			u.mtx.Lock()
-			u.snapshot(config, wg)
-			u.mtx.Unlock()
-		}(v)
-	}
-
-	wg.Wait()
-
-	return true
-}
-
-func ShowBinlog(path string) {
-
-	//获得所有文件
-	fileList, err := getFileList(path)
-	if nil != err {
-		return
-	}
-
-	//对fileList排序
-	sortFileList(fileList)
-
-	read := func(path string) bool {
-
-		var err error
-
-		stat, err := os.Stat(path)
-
-		if nil != err {
-			Fatalln("open file failed:", path, err)
-			return false
-		}
-
-		f, err := os.OpenFile(path, os.O_RDWR, os.ModePerm)
-
-		if nil != err {
-			Fatalln("open file failed:", path, err)
-			return false
-		}
-
-		buffer := make([]byte, int(stat.Size()))
-
-		n, err := f.Read(buffer)
-
-		f.Close()
-
-		if n != (int)(stat.Size()) {
-			Fatalln("read file failed:", path, err)
-			return false
-		}
-
-		if n == 0 {
-			return true
-		}
-
-		fmt.Println("-------------------------", path, "---------------------------")
-
-		totalOffset := 0
-		for totalOffset < n {
-			size := int(binary.BigEndian.Uint32(buffer[totalOffset : totalOffset+4]))
-			totalOffset += 4
-			checkSum := binary.BigEndian.Uint64(buffer[totalOffset : totalOffset+checkSumSize])
-			totalOffset += checkSumSize
-			//校验数据
-			if checkSum != crc64.Checksum(buffer[totalOffset:totalOffset+size], crc64Table) {
-				Fatalln("checkSum failed:", path)
-				return false
-			}
-
-			offset := totalOffset
-			end := totalOffset + size
-			totalOffset += size
-
-			for offset < end {
-				newOffset, tt, unikey, version, _ := readBinLog(buffer, offset)
-				offset = newOffset
-				fmt.Println(unikey, "version:", version, "type:", binlogTypeToString(tt))
-			}
-		}
-		return true
-	}
-
-	for _, v := range fileList {
-		if !read(v) {
-			return
-		}
-	}
 }
 
 func init() {

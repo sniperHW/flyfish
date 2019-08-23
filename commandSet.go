@@ -102,7 +102,7 @@ func set(session kendynet.StreamSession, msg *codec.Message) {
 			cmd.fields[v.GetName()] = v
 		}
 
-		processCmd(cmd)
+		cmd.process()
 	}
 }
 
@@ -152,7 +152,7 @@ func setNx(session kendynet.StreamSession, msg *codec.Message) {
 			cmd.fields[v.GetName()] = v
 		}
 
-		processCmd(cmd)
+		cmd.process()
 	}
 }
 
@@ -202,7 +202,7 @@ func compareAndSet(session kendynet.StreamSession, msg *codec.Message) {
 			cmd:     cmd,
 		}
 
-		processCmd(cmd)
+		cmd.process()
 	}
 }
 
@@ -252,6 +252,6 @@ func compareAndSetNx(session kendynet.StreamSession, msg *codec.Message) {
 			cmd:     cmd,
 		}
 
-		processCmd(cmd)
+		cmd.process()
 	}
 }

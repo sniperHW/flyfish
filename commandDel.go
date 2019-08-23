@@ -76,6 +76,6 @@ func del(session kendynet.StreamSession, msg *codec.Message) {
 			cmd:     cmd,
 		}
 
-		processCmd(cmd)
+		cmd.process()
 	}
 }

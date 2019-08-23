@@ -26,7 +26,7 @@ func Set(c *kclient.Client) {
 	fields["age"] = 37
 	fields["phone"] = strings.Repeat("a", 1024)
 	fields["name"] = "sniperHW"
-	key := fmt.Sprintf("%s:%d", "huangwei", rand.Ini63()%keyrange)
+	key := fmt.Sprintf("%s:%d", "huangwei", rand.Int63()%keyrange)
 	set := c.Set("users1", key, fields)
 
 	beg := time.Now()

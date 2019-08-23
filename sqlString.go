@@ -526,7 +526,7 @@ var pgsqlByteToString = []string{
 
 var BinaryToSqlStr func(s *str, bytes []byte)
 
-var buildInsertUpdateString func(s *str, ckey *cacheKey) //r *proto.BinRecord, meta *table_meta)
+var buildInsertUpdateString func(s *str, ckey *cacheKey)
 
 func pgsqlBinaryToPgsqlStr(s *str, bytes []byte) {
 	s.append("'")
@@ -570,11 +570,7 @@ func (this *str) appendFieldStr(field *proto.Field) *str {
  *INSERT INTO %s(%s) VALUES(%s) ON conflict(__key__)  DO UPDATE SET %s;
  */
 
-//INSERT INTO users1(__key__,__version__,age,phone,name,blob) VALUES
-//('users1:sniperHW',1,100,'123','sniperHW','\000\000\000\144'::bytea)
-//on duplicate key update name='sniperHW',blob='\000\000\000\144'::bytea,age=100,phone='123',1;
-
-func buildInsertUpdateStringPgSql(s *str, ckey *cacheKey) { // r *proto.BinRecord, meta *table_meta) {
+func buildInsertUpdateStringPgSql(s *str, ckey *cacheKey) {
 
 	Debugln("buildInsertUpdateStringPgSql")
 
@@ -614,7 +610,7 @@ func buildInsertUpdateStringPgSql(s *str, ckey *cacheKey) { // r *proto.BinRecor
  *insert into %s(%s) values(%s) on duplicate key update %s;
  */
 
-func buildInsertUpdateStringMySql(s *str, ckey *cacheKey) { //r *proto.BinRecord, meta *table_meta) {
+func buildInsertUpdateStringMySql(s *str, ckey *cacheKey) {
 
 	Debugln("buildInsertUpdateStringMySql")
 

@@ -17,7 +17,7 @@ type sqlGet struct {
 	table  string
 	meta   *table_meta
 	sqlStr *str
-	ctxs   map[string]*processContext
+	ctxs   map[string]*cmdContext
 }
 
 type sqlLoader struct {
@@ -45,7 +45,7 @@ func (this *sqlLoader) Reset() {
 }
 
 func (this *sqlLoader) append(v interface{}) {
-	ctx := v.(*processContext)
+	ctx := v.(*cmdContext)
 	if ctx.ping {
 		if time.Now().Sub(this.lastTime) > time.Second*5*60 {
 			//空闲超过5分钟发送ping
@@ -63,7 +63,7 @@ func (this *sqlLoader) append(v interface{}) {
 			s = &sqlGet{
 				table:  table,
 				sqlStr: strGet(),
-				ctxs:   map[string]*processContext{},
+				ctxs:   map[string]*cmdContext{},
 				meta:   ctx.getCacheKey().getMeta(),
 			}
 			this.sqlGets[table] = s
@@ -149,14 +149,14 @@ func (this *sqlLoader) exec() {
 						}
 						delete(v.ctxs, key)
 						//返回给主循环
-						sqlResponse.onSqlResp(ctx, errcode.ERR_OK)
+						onSqlResp(ctx, errcode.ERR_OK)
 					}
 				}
 			}
 
 			for _, vv := range v.ctxs {
 				//无结果
-				sqlResponse.onSqlResp(vv, errcode.ERR_NOTFOUND)
+				onSqlResp(vv, errcode.ERR_NOTFOUND)
 			}
 			v.meta.queryMeta.putReceiver(filed_receiver)
 		}

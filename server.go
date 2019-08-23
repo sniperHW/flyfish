@@ -11,10 +11,6 @@ import (
 	"github.com/sniperHW/kendynet/socket/listener/tcp"
 	"net"
 	"os"
-	"path/filepath"
-	"sort"
-	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -156,53 +152,6 @@ func (this *tcpListener) Start() error {
 	})
 }
 
-func getFileList(dirpath string) ([]string, error) {
-	var file_list []string
-	dir_err := filepath.Walk(dirpath,
-		func(path string, f os.FileInfo, err error) error {
-			if f == nil {
-				return err
-			}
-			if !f.IsDir() {
-				file_list = append(file_list, path)
-				return nil
-			}
-
-			return nil
-		})
-	return file_list, dir_err
-}
-
-type ByID []string
-
-func (a ByID) Len() int      { return len(a) }
-func (a ByID) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a ByID) Less(i, j int) bool {
-	l := a[i]
-	r := a[j]
-	fieldl := strings.Split(l, "_")
-	fieldr := strings.Split(r, "_")
-	if len(fieldl) != 2 || len(fieldr) != 2 {
-		panic("invaild writeBack file")
-	}
-
-	idl, err := strconv.ParseInt(strings.TrimRight(fieldl[1], binlogSuffix), 10, 64)
-	if nil != err {
-		panic("invaild writeBack file")
-	}
-
-	idr, err := strconv.ParseInt(strings.TrimRight(fieldr[1], binlogSuffix), 10, 64)
-	if nil != err {
-		panic("invaild writeBack file")
-	}
-
-	return idl < idr
-}
-
-func sortFileList(fileList []string) {
-	sort.Sort(ByID(fileList))
-}
-
 func Start() error {
 
 	var err error
@@ -232,11 +181,6 @@ func Start() error {
 
 	f.Close()
 
-	cmdProcessor = cmdProcessorLocalCache{}
-	sqlResponse = sqlResponseLocalCache{}
-
-	Debugln(config.DBConfig.SqlType)
-
 	if config.DBConfig.SqlType == "mysql" {
 		BinaryToSqlStr = mysqlBinaryToPgsqlStr
 		buildInsertUpdateString = buildInsertUpdateStringMySql
@@ -249,7 +193,7 @@ func Start() error {
 		return fmt.Errorf("initSql failed")
 	}
 
-	initProcessUnit()
+	initCacheMgr()
 
 	if !StartReplayBinlog() {
 		return fmt.Errorf("StartReplayBinlog failed")

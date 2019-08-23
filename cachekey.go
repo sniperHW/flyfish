@@ -26,14 +26,14 @@ type cacheKey struct {
 	cmdQueue        *list.List
 	meta            *table_meta
 	sqlFlag         int
-	snapshot        bool
-	unit            *processUnit
+	snapshot        bool //当前key是否建立过快照
+	m               *cacheMgr
 	nnext           *cacheKey
 	pprev           *cacheKey
-	values          map[string]*proto.Field
-	modifyFields    map[string]bool
-	writeBackLocked bool
-	make_snapshot   bool
+	values          map[string]*proto.Field //关联的字段
+	modifyFields    map[string]bool         //发生变更尚未更新到sql数据库的字段
+	writeBackLocked bool                    //是否已经提交sql回写处理
+	make_snapshot   bool                    //费否处于快照处理过程中
 }
 
 func (this *cacheKey) lockCmdQueue() {
@@ -76,6 +76,7 @@ func (this *cacheKey) setMissing() {
 	this.status = cache_missing
 	this.snapshot = false
 	this.values = nil
+	this.modifyFields = map[string]bool{}
 }
 
 func (this *cacheKey) setMissingNoLock() {
@@ -83,6 +84,7 @@ func (this *cacheKey) setMissingNoLock() {
 	this.status = cache_missing
 	this.values = nil
 	this.snapshot = false
+	this.modifyFields = map[string]bool{}
 }
 
 func (this *cacheKey) setOK(version int64) {
@@ -158,7 +160,7 @@ func (this *cacheKey) setDefaultValueNoLock() {
 	}
 }
 
-func (this *cacheKey) setValueNoLock(ctx *processContext) {
+func (this *cacheKey) setValueNoLock(ctx *cmdContext) {
 	this.values = map[string]*proto.Field{}
 	for _, v := range ctx.fields {
 
@@ -178,7 +180,7 @@ func (this *cacheKey) processQueueCmd() {
 	this.process_(false)
 }
 
-func newCacheKey(unit *processUnit, table string, key string, uniKey string) *cacheKey {
+func newCacheKey(m *cacheMgr, table string, key string, uniKey string) *cacheKey {
 
 	meta := getMetaByTable(table)
 
@@ -193,7 +195,7 @@ func newCacheKey(unit *processUnit, table string, key string, uniKey string) *ca
 		status:       cache_new,
 		meta:         meta,
 		cmdQueue:     list.New(),
-		unit:         unit,
+		m:            m,
 		table:        table,
 		modifyFields: map[string]bool{},
 	}

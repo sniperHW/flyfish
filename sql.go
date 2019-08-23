@@ -36,7 +36,7 @@ func sqlOpen(sqlType string, host string, port int, dbname string, user string, 
 	}
 }
 
-func pushSqlLoadReq(ctx *processContext, fullReturn ...bool) bool {
+func pushSqlLoadReq(ctx *cmdContext, fullReturn ...bool) bool {
 	l := sqlLoaders[StringHash(ctx.getUniKey())%len(sqlLoaders)]
 	err := l.queue.AddNoWait(ctx, fullReturn...)
 	if nil == err {
@@ -91,7 +91,7 @@ func initSql() bool {
 		sqlLoaders = append(sqlLoaders, l)
 		go l.run()
 		timer.Repeat(time.Second*60, nil, func(t *timer.Timer) {
-			if isStop() || util.ErrQueueClosed == l.queue.AddNoWait(&processContext{ping: true}) {
+			if isStop() || util.ErrQueueClosed == l.queue.AddNoWait(&cmdContext{ping: true}) {
 				t.Cancel()
 			}
 		})
