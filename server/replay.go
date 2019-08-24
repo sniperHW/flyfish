@@ -266,11 +266,21 @@ func (this *cacheMgr) firstSnapshot(config *conf.Config, wg *sync.WaitGroup) {
 
 	for _, v := range this.kv {
 		v.mtx.Lock()
+		v.snapshoted = true
+		this.write(binlog_snapshot, v.uniKey, v.values, v.version)
+
+		/*
+		 *  如果某个key的binlog在序列化到磁盘后回写到sql前进程崩溃，且这个key长时间不被访问，
+		 *  对于这个key的内容flyfish和sql将长时间不一致，为了避免这种情况，强制执行一次sql回写。
+		 */
 		if v.status == cache_ok {
-			v.snapshoted = true
-			this.write(binlog_snapshot, v.uniKey, v.values, v.version)
+			v.sqlFlag = write_back_insert_update
+		} else {
+			v.sqlFlag = write_back_delete
 		}
+		v.writeBackLocked = true
 		v.mtx.Unlock()
+		pushSqlWriteReq(v)
 	}
 
 	if this.binlogCount > 0 {
@@ -324,15 +334,18 @@ func StartReplayBinlog() bool {
 	//对fileList排序
 	sortFileList(fileList)
 
+	if len(fileList) > 0 {
+		//记录下最大的文件序号
+		max := fileList[len(fileList)-1]
+		tmp := strings.Split(max, "_")
+		id, _ := strconv.ParseInt(strings.TrimRight(tmp[1], binlogSuffix), 10, 64)
+		fileCounter = id
+	}
+
 	for _, v := range fileList {
 		if !replayBinLog(v) {
 			return false
 		}
-	}
-
-	//重放完成删除所有文件
-	for _, v := range fileList {
-		os.Remove(v)
 	}
 
 	wg := &sync.WaitGroup{}
@@ -350,6 +363,11 @@ func StartReplayBinlog() bool {
 	}
 
 	wg.Wait()
+
+	//重放完成删除所有文件
+	for _, v := range fileList {
+		os.Remove(v)
+	}
 
 	for _, v := range cacheMgrs {
 		totalKvCount += len(v.kv)
