@@ -253,7 +253,7 @@ func Stop() {
 		return true
 	})
 
-	Infoln("ShutdownRead ok", "cmdCount:", cmdCount, "totalSqlCount:", totalSqlCount)
+	Infoln("ShutdownRead ok", "cmdCount:", cmdCount)
 
 	//等待redis请求和命令执行完成
 	waitCondition(func() bool {
@@ -266,7 +266,7 @@ func Stop() {
 
 	stopSql()
 
-	Infoln("sql stop ok")
+	Infoln("sql stop ok", "totalSqlUpdateCount:", totalSqlCount)
 
 	//关闭所有客户连接
 
