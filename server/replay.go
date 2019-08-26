@@ -190,49 +190,46 @@ func replayBinLog(path string) bool {
 				if nil == ckey {
 					tmp := strings.Split(unikey, ":")
 					ckey = newCacheKey(m, tmp[0], strings.Join(tmp[1:], ""), unikey)
-					ckey.values = values
-					ckey.version = version
-					if ckey.version == 0 {
-						ckey.sqlFlag = write_back_delete
-						ckey.status = cache_missing
-					} else {
-						ckey.sqlFlag = write_back_insert_update
-						ckey.status = cache_ok
-					}
 					m.kv[unikey] = ckey
 					m.updateLRU(ckey)
+				}
+				ckey.values = values
+				ckey.version = version
+				if ckey.version == 0 {
+					ckey.sqlFlag = write_back_delete
+					ckey.status = cache_missing
 				} else {
-					ckey.values = values
-					ckey.version = version
 					ckey.sqlFlag = write_back_insert_update
 					ckey.status = cache_ok
 				}
 			} else if tt == binlog_update {
-				if nil == ckey || ckey.status != cache_ok || ckey.values == nil {
-					Fatalln("invaild tt", path, unikey, tt, recordCount, begOffset)
-					return false
+				if ckey != nil {
+					if ckey.status != cache_ok || ckey.values == nil {
+						Fatalln("invaild tt", path, unikey, tt, recordCount, begOffset)
+						return false
+					}
+					for k, v := range values {
+						ckey.values[k] = v
+					}
+					ckey.version = version
+					ckey.sqlFlag = write_back_insert_update
 				}
-				for k, v := range values {
-					ckey.values[k] = v
-				}
-				ckey.version = version
-				ckey.sqlFlag = write_back_insert_update
 			} else if tt == binlog_delete {
-				if nil == ckey || ckey.status != cache_ok {
-					Fatalln("invaild tt", path, unikey, tt, recordCount, begOffset)
-					return false
+				if ckey != nil {
+					if ckey.status != cache_ok {
+						Fatalln("invaild tt", path, unikey, tt, recordCount, begOffset)
+						return false
+					}
+					ckey.values = nil
+					ckey.version = version
+					ckey.status = cache_missing
+					ckey.sqlFlag = write_back_delete
 				}
-				ckey.values = nil
-				ckey.version = version
-				ckey.status = cache_missing
-				ckey.sqlFlag = write_back_delete
 			} else if tt == binlog_kick {
-				if nil == ckey {
-					Fatalln("invaild tt", path, unikey, tt, recordCount, begOffset)
-					return false
+				if ckey != nil {
+					m.removeLRU(ckey)
+					delete(m.kv, unikey)
 				}
-				m.removeLRU(ckey)
-				delete(m.kv, unikey)
 			} else {
 				Fatalln("invaild tt", path, unikey, tt, recordCount, begOffset)
 				return false

@@ -187,7 +187,6 @@ func (this *cacheMgr) flush(binlogStr *str, ctxs *ctxArray, cacheBinlogCount int
 	this.mtx.Unlock()
 
 	if nil != ctxs {
-
 		for i := 0; i < ctxs.count; i++ {
 			v := ctxs.ctxs[i]
 			v.reply(errcode.ERR_OK, v.fields, v.version)
@@ -204,10 +203,9 @@ func (this *cacheMgr) flush(binlogStr *str, ctxs *ctxArray, cacheBinlogCount int
 			v := ctxs.ctxs[i]
 			v.getCacheKey().processQueueCmd()
 		}
+		ctxArrayPut(ctxs)
 	}
-
 	strPut(binlogStr)
-	ctxArrayPut(ctxs)
 }
 
 func (this *cacheMgr) tryFlush() {
@@ -282,22 +280,8 @@ func (this *cacheMgr) writeKick(unikey string) {
 	this.tryFlush()
 }
 
-func (this *cacheMgr) writeBack(ctx *cmdContext) {
-
-	if ctx.writeBackFlag == write_back_none {
-		panic("ctx.writeBackFlag == write_back_none")
-	}
-
-	Debugln("writeBack")
-
-	ckey := ctx.getCacheKey()
-
-	this.mtx.Lock()
+func (this *cacheMgr) checkCacheKey(ckey *cacheKey, ctx *cmdContext) bool {
 	ckey.mtx.Lock()
-
-	if nil == this.ctxs {
-		this.ctxs = ctxArrayGet()
-	}
 
 	gotErr := false
 
@@ -336,47 +320,72 @@ func (this *cacheMgr) writeBack(ctx *cmdContext) {
 
 	if gotErr {
 		ckey.mtx.Unlock()
-		this.mtx.Unlock()
 		ctx.reply(errcode.ERR_ERROR, nil, -1)
 		ckey.processQueueCmd()
+		return false
+	} else {
+
+		cmdType := ctx.getCmdType()
+
+		if cmdType != cmdDel && nil == ckey.values {
+			ckey.setDefaultValueNoLock()
+		}
+
+		switch cmdType {
+		case cmdIncrBy, cmdDecrBy:
+			cmd := ctx.getCmd()
+			var newV *proto.Field
+			oldV := ckey.values[cmd.incrDecr.GetName()]
+			if cmdType == cmdIncrBy {
+				newV = proto.PackField(cmd.incrDecr.GetName(), oldV.GetInt()+cmd.incrDecr.GetInt())
+			} else {
+				newV = proto.PackField(cmd.incrDecr.GetName(), oldV.GetInt()-cmd.incrDecr.GetInt())
+			}
+			ckey.modifyFields[newV.GetName()] = true
+			ckey.values[newV.GetName()] = newV
+			ctx.fields[newV.GetName()] = newV
+			ckey.setOKNoLock(ckey.version + 1)
+		case cmdDel:
+			ckey.setMissingNoLock()
+		case cmdSet, cmdSetNx, cmdCompareAndSet, cmdCompareAndSetNx:
+			for k, v := range ctx.fields {
+				if k != "__version__" {
+					ckey.values[k] = v
+					ckey.modifyFields[k] = true
+				}
+			}
+			ckey.setOKNoLock(ckey.version + 1)
+		}
+
+		ctx.version = ckey.version
+
+		ckey.mtx.Unlock()
+		return true
+	}
+}
+
+func (this *cacheMgr) writeBack(ctx *cmdContext) {
+
+	if ctx.writeBackFlag == write_back_none {
+		panic("ctx.writeBackFlag == write_back_none")
+	}
+
+	Debugln("writeBack")
+
+	ckey := ctx.getCacheKey()
+
+	if !this.checkCacheKey(ckey, ctx) {
 		return
 	}
 
+	this.mtx.Lock()
+	ckey.mtx.Lock()
+
+	if nil == this.ctxs {
+		this.ctxs = ctxArrayGet()
+	}
+
 	this.ctxs.append(ctx)
-
-	cmdType := ctx.getCmdType()
-
-	if cmdType != cmdDel && nil == ckey.values {
-		ckey.setDefaultValueNoLock()
-	}
-
-	switch cmdType {
-	case cmdIncrBy, cmdDecrBy:
-		cmd := ctx.getCmd()
-		var newV *proto.Field
-		oldV := ckey.values[cmd.incrDecr.GetName()]
-		if cmdType == cmdIncrBy {
-			newV = proto.PackField(cmd.incrDecr.GetName(), oldV.GetInt()+cmd.incrDecr.GetInt())
-		} else {
-			newV = proto.PackField(cmd.incrDecr.GetName(), oldV.GetInt()-cmd.incrDecr.GetInt())
-		}
-		ckey.modifyFields[newV.GetName()] = true
-		ckey.values[newV.GetName()] = newV
-		ctx.fields[newV.GetName()] = newV
-		ckey.setOKNoLock(ckey.version + 1)
-	case cmdDel:
-		ckey.setMissingNoLock()
-	case cmdSet, cmdSetNx, cmdCompareAndSet, cmdCompareAndSetNx:
-		for k, v := range ctx.fields {
-			if k != "__version__" {
-				ckey.values[k] = v
-				ckey.modifyFields[k] = true
-			}
-		}
-		ckey.setOKNoLock(ckey.version + 1)
-	}
-
-	ctx.version = ckey.version
 
 	switch ckey.sqlFlag {
 	case write_back_delete:
