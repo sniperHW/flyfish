@@ -33,8 +33,8 @@ func stringHash(s string) int {
 func (this *Client) pcall(cb callback, a interface{}) {
 	defer util.Recover(logger)
 	switch a.(type) {
-	case int32:
-		cb.onError(a.(int32))
+	case int:
+		cb.onError(a.(int))
 	default:
 		cb.onResult(a)
 	}
@@ -44,8 +44,8 @@ func (this *Client) doCallBack(cb callback, a interface{}) {
 	if nil != this.callbackQueue {
 		this.callbackQueue.Post(func() {
 			switch a.(type) {
-			case int32:
-				cb.onError(a.(int32))
+			case int:
+				cb.onError(a.(int))
 			default:
 				cb.onResult(a)
 			}

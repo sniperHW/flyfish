@@ -70,7 +70,7 @@ func (this *cmdContext) SetIndex(idx uint32) {
 	this.heapIdx = idx
 }
 
-func (this *cmdContext) onError(errCode int32) {
+func (this *cmdContext) onError(errCode int) {
 	this.cb.onError(errCode)
 }
 
@@ -350,7 +350,7 @@ func (this *Conn) onGetResp(resp *protocol.GetResp) {
 	if nil != c {
 		ret := SliceResult{
 			Key:     resp.Head.GetKey(),
-			ErrCode: resp.Head.GetErrCode(),
+			ErrCode: int(resp.Head.GetErrCode()),
 			Version: resp.Head.GetVersion(),
 		}
 
@@ -371,7 +371,7 @@ func (this *Conn) onSetResp(resp *protocol.SetResp) {
 
 		ret := StatusResult{
 			Key:     resp.Head.GetKey(),
-			ErrCode: resp.Head.GetErrCode(),
+			ErrCode: int(resp.Head.GetErrCode()),
 			Version: resp.Head.GetVersion(),
 		}
 
@@ -385,7 +385,7 @@ func (this *Conn) onSetNxResp(resp *protocol.SetNxResp) {
 
 		ret := StatusResult{
 			Key:     resp.Head.GetKey(),
-			ErrCode: resp.Head.GetErrCode(),
+			ErrCode: int(resp.Head.GetErrCode()),
 			Version: resp.Head.GetVersion(),
 		}
 
@@ -399,7 +399,7 @@ func (this *Conn) onCompareAndSetResp(resp *protocol.CompareAndSetResp) {
 
 		ret := SliceResult{
 			Key:     resp.Head.GetKey(),
-			ErrCode: resp.Head.GetErrCode(),
+			ErrCode: int(resp.Head.GetErrCode()),
 			Version: resp.Head.GetVersion(),
 		}
 
@@ -418,7 +418,7 @@ func (this *Conn) onCompareAndSetNxResp(resp *protocol.CompareAndSetNxResp) {
 
 		ret := SliceResult{
 			Key:     resp.Head.GetKey(),
-			ErrCode: resp.Head.GetErrCode(),
+			ErrCode: int(resp.Head.GetErrCode()),
 			Version: resp.Head.GetVersion(),
 		}
 
@@ -437,7 +437,7 @@ func (this *Conn) onDelResp(resp *protocol.DelResp) {
 
 		ret := StatusResult{
 			Key:     resp.Head.GetKey(),
-			ErrCode: resp.Head.GetErrCode(),
+			ErrCode: int(resp.Head.GetErrCode()),
 			Version: resp.Head.GetVersion(),
 		}
 
@@ -451,7 +451,7 @@ func (this *Conn) onIncrByResp(resp *protocol.IncrByResp) {
 
 		ret := SliceResult{
 			Key:     resp.Head.GetKey(),
-			ErrCode: resp.Head.GetErrCode(),
+			ErrCode: int(resp.Head.GetErrCode()),
 			Version: resp.Head.GetVersion(),
 		}
 
@@ -470,7 +470,7 @@ func (this *Conn) onDecrByResp(resp *protocol.DecrByResp) {
 
 		ret := SliceResult{
 			Key:     resp.Head.GetKey(),
-			ErrCode: resp.Head.GetErrCode(),
+			ErrCode: int(resp.Head.GetErrCode()),
 			Version: resp.Head.GetVersion(),
 		}
 

@@ -1,13 +1,13 @@
 package client
 
 type StatusResult struct {
-	ErrCode int32
+	ErrCode int
 	Key     string
 	Version int64
 }
 
 type SliceResult struct {
-	ErrCode int32
+	ErrCode int
 	Key     string
 	Version int64
 	Fields  map[string]*Field
@@ -20,7 +20,7 @@ type Row struct {
 }
 
 type MutiResult struct {
-	ErrCode int32
+	ErrCode int
 	Rows    []*Row
 }
 
@@ -35,7 +35,7 @@ type callback struct {
 	cb interface{}
 }
 
-func (this *callback) onError(errCode int32) {
+func (this *callback) onError(errCode int) {
 	if this.tt == cb_status {
 		this.cb.(func(*StatusResult))(&StatusResult{
 			ErrCode: errCode,

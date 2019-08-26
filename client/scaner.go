@@ -110,7 +110,7 @@ func (this *Conn) onScanResp(resp *protocol.ScanResp) {
 	c := this.removeContext(resp.Head.GetSeqno())
 	if nil != c {
 		ret := MutiResult{
-			ErrCode: resp.Head.GetErrCode(),
+			ErrCode: int(resp.Head.GetErrCode()),
 			Rows:    []*Row{},
 		}
 
