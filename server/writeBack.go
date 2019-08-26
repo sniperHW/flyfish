@@ -301,9 +301,10 @@ func (this *cacheMgr) writeBack(ctx *cmdContext) {
 
 	gotErr := false
 
-	if ckey.sqlFlag == write_back_none {
+	switch ckey.sqlFlag {
+	case write_back_none:
 		ckey.sqlFlag = ctx.writeBackFlag
-	} else if ckey.sqlFlag == write_back_insert {
+	case write_back_insert:
 		if ctx.writeBackFlag == write_back_update {
 			ckey.sqlFlag = write_back_insert_update
 		} else if ctx.writeBackFlag == write_back_delete {
@@ -312,14 +313,14 @@ func (this *cacheMgr) writeBack(ctx *cmdContext) {
 			gotErr = true
 			Errorln("invaild ctx.writeBackFlag")
 		}
-	} else if ckey.sqlFlag == write_back_delete {
+	case write_back_delete:
 		if ctx.writeBackFlag == write_back_insert {
 			ckey.sqlFlag = write_back_insert
 		} else {
 			gotErr = true
 			Errorln("invaild ctx.writeBackFlag")
 		}
-	} else if ckey.sqlFlag == write_back_update {
+	case write_back_update:
 		if ctx.writeBackFlag == write_back_update {
 			ckey.sqlFlag = write_back_update
 		} else if ctx.writeBackFlag == write_back_delete {
@@ -328,6 +329,9 @@ func (this *cacheMgr) writeBack(ctx *cmdContext) {
 			gotErr = true
 			Errorln("invaild ctx.writeBackFlag")
 		}
+	default:
+		gotErr = true
+		Errorln("invaild ctx.writeBackFlag")
 	}
 
 	if gotErr {
@@ -374,17 +378,18 @@ func (this *cacheMgr) writeBack(ctx *cmdContext) {
 
 	ctx.version = ckey.version
 
-	if ckey.sqlFlag == write_back_delete {
+	switch ckey.sqlFlag {
+	case write_back_delete:
 		if ckey.snapshoted {
 			this.write(binlog_delete, ckey.uniKey, nil, 0)
 		} else {
 			ckey.snapshoted = true
 			this.write(binlog_snapshot, ckey.uniKey, nil, 0)
 		}
-	} else if ckey.sqlFlag == write_back_insert {
+	case write_back_insert:
 		ckey.snapshoted = true
 		this.write(binlog_snapshot, ckey.uniKey, ckey.values, ckey.version)
-	} else {
+	default:
 		if ckey.snapshoted {
 			this.write(binlog_update, ckey.uniKey, ctx.fields, ckey.version)
 		} else {
@@ -392,6 +397,7 @@ func (this *cacheMgr) writeBack(ctx *cmdContext) {
 			this.write(binlog_snapshot, ckey.uniKey, ckey.values, ckey.version)
 		}
 	}
+
 	ckey.mtx.Unlock()
 
 	this.tryFlush()
