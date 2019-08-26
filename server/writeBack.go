@@ -366,7 +366,7 @@ func (this *cacheMgr) writeBack(ctx *cmdContext) {
 		ckey.setOKNoLock(ckey.version + 1)
 	case cmdDel:
 		ckey.setMissingNoLock()
-	default:
+	case cmdSet, cmdSetNx, cmdCompareAndSet, cmdCompareAndSetNx:
 		for k, v := range ctx.fields {
 			if k != "__version__" {
 				ckey.values[k] = v
@@ -389,7 +389,7 @@ func (this *cacheMgr) writeBack(ctx *cmdContext) {
 	case write_back_insert:
 		ckey.snapshoted = true
 		this.write(binlog_snapshot, ckey.uniKey, ckey.values, ckey.version)
-	default:
+	case write_back_update:
 		if ckey.snapshoted {
 			this.write(binlog_update, ckey.uniKey, ctx.fields, ckey.version)
 		} else {
