@@ -246,7 +246,7 @@ func (this *cacheMgr) write(tt int, unikey string, fields map[string]*proto.Fiel
 	this.binlogCount++
 	this.cacheBinlogCount++
 
-	if this.binlogCount == 1 {
+	if this.cacheBinlogCount == 1 {
 		this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(conf.GetConfig().FlushInterval))
 	}
 
