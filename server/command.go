@@ -95,7 +95,6 @@ type cnsSt struct {
 
 //来自客户端的一条命令请求
 type command struct {
-	next         *command
 	cmdType      int
 	rpyer        replyer
 	table        string
@@ -108,14 +107,11 @@ type command struct {
 	incrDecr     *proto.Field            //for incr/decr
 	deadline     time.Time
 	respDeadline time.Time
-	//replyed      int32
 }
 
 func (this *command) reply(errCode int32, fields map[string]*proto.Field, version int64) {
-	//if atomic.CompareAndSwapInt32(&this.replyed, 0, 1) {
 	this.rpyer.reply(errCode, fields, version)
 	atomic.AddInt32(&cmdCount, -1)
-	//}
 }
 
 func (this *command) process() {
