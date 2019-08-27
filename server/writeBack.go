@@ -288,7 +288,7 @@ func (this *cacheMgr) checkCacheKey(ckey *cacheKey, ctx *cmdContext) bool {
 	switch ckey.sqlFlag {
 	case write_back_none:
 		ckey.sqlFlag = ctx.writeBackFlag
-	case write_back_insert:
+	case write_back_insert, write_back_insert_update:
 		if ctx.writeBackFlag == write_back_update {
 			ckey.sqlFlag = write_back_insert_update
 		} else if ctx.writeBackFlag == write_back_delete {
@@ -395,7 +395,7 @@ func (this *cacheMgr) writeBack(ctx *cmdContext) {
 			ckey.snapshoted = true
 			this.write(binlog_snapshot, ckey.uniKey, nil, 0)
 		}
-	case write_back_insert:
+	case write_back_insert, write_back_insert_update:
 		ckey.snapshoted = true
 		this.write(binlog_snapshot, ckey.uniKey, ckey.values, ckey.version)
 	case write_back_update:
