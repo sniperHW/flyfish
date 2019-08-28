@@ -174,11 +174,11 @@ func (this *cacheKey) setValueNoLock(ctx *cmdContext) {
 }
 
 func (this *cacheKey) processClientCmd() {
-	this.process_(true)
+	processCmd(this, true)
 }
 
 func (this *cacheKey) processQueueCmd() {
-	this.process_(false)
+	processCmd(this, false)
 }
 
 func newCacheKey(m *cacheMgr, table string, key string, uniKey string) *cacheKey {

@@ -79,10 +79,6 @@ func (this *cacheMgr) doWriteBack(ctx *cmdContext) {
 	this.writeBack(ctx)
 }
 
-func (this *cacheKey) process_(fromClient bool) {
-	processCmd(this, fromClient)
-}
-
 func getMgrByUnikey(uniKey string) *cacheMgr {
 	return cacheMgrs[StringHash(uniKey)%CacheGroupSize]
 }
