@@ -245,7 +245,7 @@ func (this *kvstore) writeBack(ctx *cmdContext) {
 
 	this.ctxs.append(ctx)
 
-	if len(ctx.fields == 0) || ctx.version == 0 {
+	if len(ctx.fields) == 0 || ctx.version == 0 {
 		panic("len(ctx.fields == 0) || ctx.version == 0")
 	}
 

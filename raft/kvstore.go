@@ -294,7 +294,7 @@ func readBinLog(buffer []byte, offset int) (int, int, string, int64, map[string]
 	valueSize := int(binary.BigEndian.Uint32(buffer[offset : offset+4]))
 	offset += 4
 
-	Infoln(unikey, version, valueSize)
+	//Infoln(unikey, version, valueSize)
 
 	if valueSize > 0 {
 		values = map[string]*proto.Field{}
