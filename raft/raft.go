@@ -179,6 +179,7 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 		if ents[i].Index == rc.lastIndex {
 			select {
 			case rc.commitC <- nil:
+				Infoln("here1")
 			case <-rc.stopc:
 				return false
 			}
@@ -243,6 +244,7 @@ func (rc *raftNode) replayWAL() *wal.WAL {
 	if len(ents) > 0 {
 		rc.lastIndex = ents[len(ents)-1].Index
 	} else {
+		Infoln("here3")
 		rc.commitC <- nil
 	}
 	return w
@@ -338,6 +340,7 @@ func (rc *raftNode) publishSnapshot(snapshotToSave raftpb.Snapshot) {
 	if snapshotToSave.Metadata.Index <= rc.appliedIndex {
 		log.Fatalf("snapshot index [%d] should > progress.appliedIndex [%d]", snapshotToSave.Metadata.Index, rc.appliedIndex)
 	}
+	Infoln("here2")
 	rc.commitC <- nil // trigger kvstore to load snapshot
 
 	rc.confState = snapshotToSave.Metadata.ConfState
