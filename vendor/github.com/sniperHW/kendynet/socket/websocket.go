@@ -156,7 +156,7 @@ func (this *WebSocket) Close(reason string, delay time.Duration) {
 	}
 }
 
-func NewWSSocket(conn *gorilla.Conn, sendQueueSize ...int) kendynet.StreamSession {
+func NewWSSocket(conn *gorilla.Conn) kendynet.StreamSession {
 	if nil == conn {
 		return nil
 	} else {
@@ -167,7 +167,7 @@ func NewWSSocket(conn *gorilla.Conn, sendQueueSize ...int) kendynet.StreamSessio
 			conn: conn,
 		}
 		s.SocketBase = &SocketBase{
-			sendQue:       util.NewBlockQueue(sendQueueSize...),
+			sendQue:       util.NewBlockQueue(1024),
 			sendCloseChan: make(chan int, 1),
 			imp:           s,
 		}

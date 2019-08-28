@@ -93,4 +93,9 @@ type StreamSession interface {
 	SetRecvTimeout(time.Duration)
 
 	SetSendTimeout(time.Duration)
+
+	/*
+	 *   设置异步发送队列大小,必须在调用Start前设置
+	 */
+	SetSendQueueSize(int)
 }
