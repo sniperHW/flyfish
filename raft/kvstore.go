@@ -207,7 +207,7 @@ func (s *kvstore) readCommits(commitC <-chan *[]byte, errorC <-chan error) {
 				log.Panic(err)
 			}
 			log.Printf("loading snapshot at term %d and index %d", snapshot.Metadata.Term, snapshot.Metadata.Index)
-			if !s.recoverFromSnapshot(snapshot.Data) {
+			if !s.recoverFromSnapshot(snapshot.Data[8:]) {
 				log.Panic("recoverFromSnapshot failed")
 			}
 			continue
