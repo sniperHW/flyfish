@@ -116,7 +116,7 @@ func newKVStore(snapshotter *snap.Snapshotter, proposeC chan<- []byte, commitC <
 	s.lruTail.pprev = &s.lruHead
 
 	// replay log into key-value map
-	s.readCommits(commitC, errorC)
+	s.readCommits(true, commitC, errorC)
 	// read commits from raft into kvStore map until error
 
 	timer.Repeat(time.Millisecond*time.Duration(config.FlushInterval), nil, func(t *timer.Timer) {
@@ -139,7 +139,7 @@ func newKVStore(snapshotter *snap.Snapshotter, proposeC chan<- []byte, commitC <
 		}
 	})
 
-	go s.readCommits(commitC, errorC)
+	go s.readCommits(false, commitC, errorC)
 	return s
 }
 
@@ -194,7 +194,7 @@ func (s *kvstore) Propose(propose *binlogSt) {
 	s.proposeC <- propose.binlogStr.bytes()
 }
 
-func (s *kvstore) readCommits(commitC <-chan *[]byte, errorC <-chan error) {
+func (s *kvstore) readCommits(once bool, commitC <-chan *[]byte, errorC <-chan error) {
 	for data := range commitC {
 		if data == nil {
 			// done replaying log; new data incoming
@@ -210,7 +210,11 @@ func (s *kvstore) readCommits(commitC <-chan *[]byte, errorC <-chan error) {
 			if !s.recoverFromSnapshot(snapshot.Data[8:]) {
 				log.Panic("recoverFromSnapshot failed")
 			}
-			continue
+			if once {
+				return
+			} else {
+				continue
+			}
 		}
 
 		id := int64(binary.BigEndian.Uint64((*data)[0:8]))
