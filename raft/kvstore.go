@@ -233,7 +233,7 @@ func (s *kvstore) readCommits(commitC <-chan *[]byte, errorC <-chan error) {
 
 					if v.writeBackFlag == write_back_insert || v.writeBackFlag == write_back_update || v.writeBackFlag == write_back_insert_update {
 						ckey.setValueNoLock(v)
-						ckey.setOKNoLock(v.version + 1)
+						ckey.setOKNoLock(v.version)
 					} else {
 						ckey.setMissingNoLock()
 					}
@@ -293,6 +293,8 @@ func readBinLog(buffer []byte, offset int) (int, int, string, int64, map[string]
 
 	valueSize := int(binary.BigEndian.Uint32(buffer[offset : offset+4]))
 	offset += 4
+
+	Infoln(unikey, version, valueSize)
 
 	if valueSize > 0 {
 		values = map[string]*proto.Field{}

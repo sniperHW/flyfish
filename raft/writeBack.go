@@ -183,11 +183,12 @@ func (this *kvstore) checkCacheKey(ckey *cacheKey, ctx *cmdContext) (bool, int) 
 				newV = proto.PackField(cmd.incrDecr.GetName(), oldV.GetInt()-cmd.incrDecr.GetInt())
 			}
 			ctx.fields[newV.GetName()] = newV
+			ctx.version = ckey.version + 1
 		case cmdDel:
+			ctx.version = 0
 		case cmdSet, cmdSetNx, cmdCompareAndSet, cmdCompareAndSetNx:
+			ctx.version = ckey.version + 1
 		}
-
-		ctx.version = ckey.version
 
 		switch sqlFlag {
 		case write_back_delete:
@@ -243,6 +244,10 @@ func (this *kvstore) writeBack(ctx *cmdContext) {
 	}
 
 	this.ctxs.append(ctx)
+
+	if len(ctx.fields == 0) || ctx.version == 0 {
+		panic("len(ctx.fields == 0) || ctx.version == 0")
+	}
 
 	this.write(binop, ckey.uniKey, ctx.fields, ctx.version)
 
