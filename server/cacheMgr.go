@@ -142,13 +142,25 @@ func initCacheMgr() {
 		m.lruHead.nnext = &m.lruTail
 		m.lruTail.pprev = &m.lruHead
 
+		cacheMgrs[i] = m
+	}
+}
+
+func startCacheMgr() {
+
+	config := conf.GetConfig()
+
+	for _, v := range cacheMgrs {
+
+		c := v
+
 		timer.Repeat(time.Millisecond*time.Duration(config.FlushInterval), nil, func(t *timer.Timer) {
 			if isStop() {
 				t.Cancel()
 			} else {
-				m.mtx.Lock()
-				m.tryFlush()
-				m.mtx.Unlock()
+				c.mtx.Lock()
+				c.tryFlush()
+				c.mtx.Unlock()
 			}
 		})
 
@@ -156,14 +168,12 @@ func initCacheMgr() {
 			if isStop() {
 				t.Cancel()
 			} else {
-				m.mtx.Lock()
-				m.kickCacheKey()
-				m.mtx.Unlock()
+				c.mtx.Lock()
+				c.kickCacheKey()
+				c.mtx.Unlock()
 			}
 		})
 
-		m.start()
-
-		cacheMgrs[i] = m
+		c.start()
 	}
 }
