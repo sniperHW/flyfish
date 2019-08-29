@@ -68,8 +68,6 @@ func (this *kvstore) startSnapshot() {
 	this.binlogCount = 0
 	this.fileSize = 0
 
-	Infoln("startSnapshot", this.binlogCount, this.fileSize)
-
 	this.f = f
 	this.filePath = path
 
@@ -166,7 +164,6 @@ func (this *kvstore) flushBinlog(binlogStr *str, ctxs *ctxArray, cacheBinlogCoun
 	this.mtx.Lock()
 
 	if this.binlogCount >= config.MaxBinlogCount || this.fileSize >= int(config.MaxBinlogFileSize) {
-		Infoln("startSnapshot", this.binlogCount, this.fileSize)
 		this.startSnapshot()
 	}
 
