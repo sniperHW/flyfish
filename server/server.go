@@ -199,6 +199,8 @@ func Start() error {
 		return fmt.Errorf("StartReplayBinlog failed")
 	}
 
+	startCacheMgr()
+
 	server, err = newTcpListener("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort))
 	if nil != err {
 		return err

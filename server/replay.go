@@ -126,6 +126,63 @@ func readBinLog(buffer []byte, offset int) (int, int, string, int64, map[string]
 	return offset, tt, uniKey, version, values
 }
 
+func replay(recordCount int, path string, begOffset int, tt int, unikey string, version int64, values map[string]*proto.Field) bool {
+	m := getMgrByUnikey(unikey)
+	m.mtx.Lock()
+	defer m.mtx.Unlock()
+	ckey, _ := m.kv[unikey]
+	if tt == binlog_snapshot {
+		if nil == ckey {
+			tmp := strings.Split(unikey, ":")
+			ckey = newCacheKey(m, tmp[0], strings.Join(tmp[1:], ""), unikey)
+			m.kv[unikey] = ckey
+			m.updateLRU(ckey)
+		}
+		ckey.values = values
+		ckey.version = version
+		if ckey.version == 0 {
+			ckey.sqlFlag = write_back_delete
+			ckey.status = cache_missing
+		} else {
+			ckey.sqlFlag = write_back_insert_update
+			ckey.status = cache_ok
+		}
+	} else if tt == binlog_update {
+		if ckey != nil {
+			if ckey.status != cache_ok || ckey.values == nil {
+				Fatalln("invaild tt", path, unikey, tt, recordCount, begOffset)
+				return false
+			}
+			for k, v := range values {
+				ckey.values[k] = v
+			}
+			ckey.version = version
+			ckey.sqlFlag = write_back_insert_update
+		}
+	} else if tt == binlog_delete {
+		if ckey != nil {
+			if ckey.status != cache_ok {
+				Fatalln("invaild tt", path, unikey, tt, recordCount, begOffset)
+				return false
+			}
+			ckey.values = nil
+			ckey.version = version
+			ckey.status = cache_missing
+			ckey.sqlFlag = write_back_delete
+		}
+	} else if tt == binlog_kick {
+		if ckey != nil {
+			m.removeLRU(ckey)
+			delete(m.kv, unikey)
+		}
+	} else {
+		Fatalln("invaild tt", path, unikey, tt, recordCount, begOffset)
+		return false
+	}
+
+	return true
+}
+
 func replayBinLog(path string) bool {
 	beg := time.Now()
 
@@ -177,61 +234,11 @@ func replayBinLog(path string) bool {
 		totalOffset += size
 
 		for offset < end {
-
 			begOffset := offset
 			newOffset, tt, unikey, version, values := readBinLog(buffer, offset)
 			offset = newOffset
-
-			m := getMgrByUnikey(unikey)
-			ckey, _ := m.kv[unikey]
 			recordCount++
-
-			if tt == binlog_snapshot {
-				if nil == ckey {
-					tmp := strings.Split(unikey, ":")
-					ckey = newCacheKey(m, tmp[0], strings.Join(tmp[1:], ""), unikey)
-					m.kv[unikey] = ckey
-					m.updateLRU(ckey)
-				}
-				ckey.values = values
-				ckey.version = version
-				if ckey.version == 0 {
-					ckey.sqlFlag = write_back_delete
-					ckey.status = cache_missing
-				} else {
-					ckey.sqlFlag = write_back_insert_update
-					ckey.status = cache_ok
-				}
-			} else if tt == binlog_update {
-				if ckey != nil {
-					if ckey.status != cache_ok || ckey.values == nil {
-						Fatalln("invaild tt", path, unikey, tt, recordCount, begOffset)
-						return false
-					}
-					for k, v := range values {
-						ckey.values[k] = v
-					}
-					ckey.version = version
-					ckey.sqlFlag = write_back_insert_update
-				}
-			} else if tt == binlog_delete {
-				if ckey != nil {
-					if ckey.status != cache_ok {
-						Fatalln("invaild tt", path, unikey, tt, recordCount, begOffset)
-						return false
-					}
-					ckey.values = nil
-					ckey.version = version
-					ckey.status = cache_missing
-					ckey.sqlFlag = write_back_delete
-				}
-			} else if tt == binlog_kick {
-				if ckey != nil {
-					m.removeLRU(ckey)
-					delete(m.kv, unikey)
-				}
-			} else {
-				Fatalln("invaild tt", path, unikey, tt, recordCount, begOffset)
+			if !replay(recordCount, path, begOffset, tt, unikey, version, values) {
 				return false
 			}
 		}
