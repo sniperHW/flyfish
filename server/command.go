@@ -101,7 +101,7 @@ type command struct {
 	key          string
 	uniKey       string //table+key
 	version      *int64
-	ckey         *cacheKey
+	ckey         *kv
 	fields       map[string]*proto.Field //for get/set
 	cns          *cnsSt                  //for compareAndSet
 	incrDecr     *proto.Field            //for incr/decr
@@ -146,7 +146,7 @@ func (this *command) process() {
 		return
 	}
 
-	m := getMgrByUnikey(this.uniKey)
+	m := getKvstore(this.uniKey)
 
 	m.mtx.Lock()
 	k, ok := m.kv[this.uniKey]

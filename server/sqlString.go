@@ -526,7 +526,7 @@ var pgsqlByteToString = []string{
 
 var BinaryToSqlStr func(s *str, bytes []byte)
 
-var buildInsertUpdateString func(s *str, ckey *cacheKey)
+var buildInsertUpdateString func(s *str, ckey *kv)
 
 func pgsqlBinaryToPgsqlStr(s *str, bytes []byte) {
 	s.append("'")
@@ -570,7 +570,7 @@ func (this *str) appendFieldStr(field *proto.Field) *str {
  *INSERT INTO %s(%s) VALUES(%s) ON conflict(__key__)  DO UPDATE SET %s;
  */
 
-func buildInsertUpdateStringPgSql(s *str, ckey *cacheKey) {
+func buildInsertUpdateStringPgSql(s *str, ckey *kv) {
 
 	Debugln("buildInsertUpdateStringPgSql")
 
@@ -610,7 +610,7 @@ func buildInsertUpdateStringPgSql(s *str, ckey *cacheKey) {
  *insert into %s(%s) values(%s) on duplicate key update %s;
  */
 
-func buildInsertUpdateStringMySql(s *str, ckey *cacheKey) {
+func buildInsertUpdateStringMySql(s *str, ckey *kv) {
 
 	Debugln("buildInsertUpdateStringMySql")
 
@@ -647,7 +647,7 @@ func buildInsertUpdateStringMySql(s *str, ckey *cacheKey) {
 	Debugln(s.toString())
 }
 
-func buildInsertString(s *str, ckey *cacheKey) {
+func buildInsertString(s *str, ckey *kv) {
 	meta := ckey.getMeta()
 	version := proto.PackField("__version__", ckey.version)
 	s.append(meta.insertPrefix).append("'").append(ckey.key).append("',") //add __key__
@@ -665,7 +665,7 @@ func buildInsertString(s *str, ckey *cacheKey) {
 	s.append(");")
 }
 
-func buildUpdateString(s *str, ckey *cacheKey) {
+func buildUpdateString(s *str, ckey *kv) {
 	s.append("update ").append(ckey.table).append(" set ")
 	i := 0
 	version := proto.PackField("__version__", ckey.version)
@@ -697,6 +697,6 @@ func buildUpdateString(s *str, ckey *cacheKey) {
 	Debugln(s.toString())
 }
 
-func buildDeleteString(s *str, ckey *cacheKey) {
+func buildDeleteString(s *str, ckey *kv) {
 	s.append("delete from ").append(ckey.table).append(" where __key__ = '").append(ckey.key).append("';")
 }

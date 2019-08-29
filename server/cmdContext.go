@@ -41,7 +41,7 @@ func (this *cmdContext) getUniKey() string {
 	return this.command.uniKey
 }
 
-func (this *cmdContext) getCacheKey() *cacheKey {
+func (this *cmdContext) getCacheKey() *kv {
 	return this.command.ckey
 }
 

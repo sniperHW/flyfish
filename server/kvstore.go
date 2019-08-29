@@ -11,12 +11,12 @@ import (
 
 var CacheGroupSize int
 
-var cacheMgrs []*cacheMgr
+var kvstoreMgr []*kvstore
 
 var cmdProcessor cmdProcessorI
 
 type cmdProcessorI interface {
-	processCmd(*cacheKey, bool)
+	processCmd(*kv, bool)
 }
 
 type ctxArray struct {
@@ -57,11 +57,11 @@ func ctxArrayPut(w *ctxArray) {
 	ctxArrayPool.Put(w)
 }
 
-type cacheMgr struct {
-	kv               map[string]*cacheKey
+type kvstore struct {
+	kv               map[string]*kv
 	mtx              sync.Mutex
-	lruHead          cacheKey
-	lruTail          cacheKey
+	lruHead          kv
+	lruTail          kv
 	ctxs             *ctxArray
 	nextFlush        time.Time
 	binlogStr        *str
@@ -75,15 +75,11 @@ type cacheMgr struct {
 	binlogQueue      *util.BlockQueue
 }
 
-func (this *cacheMgr) doWriteBack(ctx *cmdContext) {
-	this.writeBack(ctx)
+func getKvstore(uniKey string) *kvstore {
+	return kvstoreMgr[StringHash(uniKey)%CacheGroupSize]
 }
 
-func getMgrByUnikey(uniKey string) *cacheMgr {
-	return cacheMgrs[StringHash(uniKey)%CacheGroupSize]
-}
-
-func (this *cacheMgr) updateLRU(ckey *cacheKey) {
+func (this *kvstore) updateLRU(ckey *kv) {
 
 	if ckey.nnext != nil || ckey.pprev != nil {
 		//先移除
@@ -101,14 +97,14 @@ func (this *cacheMgr) updateLRU(ckey *cacheKey) {
 
 }
 
-func (this *cacheMgr) removeLRU(ckey *cacheKey) {
+func (this *kvstore) removeLRU(ckey *kv) {
 	ckey.pprev.nnext = ckey.nnext
 	ckey.nnext.pprev = ckey.pprev
 	ckey.nnext = nil
 	ckey.pprev = nil
 }
 
-func (this *cacheMgr) kickCacheKey() {
+func (this *kvstore) kickCacheKey() {
 	MaxCachePerGroupSize := conf.GetConfig().MaxCachePerGroupSize
 
 	for len(this.kv) > MaxCachePerGroupSize && this.lruHead.nnext != &this.lruTail {
@@ -120,37 +116,37 @@ func (this *cacheMgr) kickCacheKey() {
 		}
 
 		this.removeLRU(c)
-		this.writeKick(c.uniKey)
+		this.writeBinlog(binlog_kick, c.uniKey, nil, 0)
+		this.tryFlushBinlog()
 		delete(this.kv, c.uniKey)
 	}
 }
 
-func initCacheMgr() {
-
+func initKvStore() bool {
 	config := conf.GetConfig()
 
 	CacheGroupSize = config.CacheGroupSize
 
-	cacheMgrs = make([]*cacheMgr, CacheGroupSize)
+	kvstoreMgr = make([]*kvstore, CacheGroupSize)
 	for i := 0; i < CacheGroupSize; i++ {
 
-		m := &cacheMgr{
-			kv:        map[string]*cacheKey{},
-			nextFlush: time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval)),
+		m := &kvstore{
+			kv:          map[string]*kv{},
+			nextFlush:   time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval)),
+			binlogQueue: util.NewBlockQueue(),
 		}
 
 		m.lruHead.nnext = &m.lruTail
 		m.lruTail.pprev = &m.lruHead
 
-		cacheMgrs[i] = m
+		kvstoreMgr[i] = m
 	}
-}
 
-func startCacheMgr() {
+	if !StartReplayBinlog() {
+		return false
+	}
 
-	config := conf.GetConfig()
-
-	for _, v := range cacheMgrs {
+	for _, v := range kvstoreMgr {
 
 		c := v
 
@@ -159,7 +155,7 @@ func startCacheMgr() {
 				t.Cancel()
 			} else {
 				c.mtx.Lock()
-				c.tryFlush()
+				c.tryFlushBinlog()
 				c.mtx.Unlock()
 			}
 		})
@@ -174,6 +170,20 @@ func startCacheMgr() {
 			}
 		})
 
-		c.start()
+		go func() {
+			for {
+				closed, localList := c.binlogQueue.Get()
+				for _, v := range localList {
+					st := v.(*binlogSt)
+					c.flushBinlog(st.binlogStr, st.ctxs, st.cacheBinlogCount)
+				}
+				if closed {
+					return
+				}
+			}
+		}()
 	}
+
+	return true
+
 }

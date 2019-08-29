@@ -193,13 +193,19 @@ func Start() error {
 		return fmt.Errorf("initSql failed")
 	}
 
-	initCacheMgr()
-
-	if !StartReplayBinlog() {
-		return fmt.Errorf("StartReplayBinlog failed")
+	if !initKvStore() {
+		return fmt.Errorf("initKvStore failed")
 	}
 
-	startCacheMgr()
+	/*
+		initCacheMgr()
+
+		if !StartReplayBinlog() {
+			return fmt.Errorf("StartReplayBinlog failed")
+		}
+
+		startCacheMgr()
+	*/
 
 	server, err = newTcpListener("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort))
 	if nil != err {

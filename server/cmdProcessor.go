@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func processGet(ckey *cacheKey, cmd *command) *cmdContext {
+func processGet(ckey *kv, cmd *command) *cmdContext {
 	Debugln("processGet", cmd.uniKey)
 	if ckey.status == cache_missing {
 		cmd.reply(errcode.ERR_NOTFOUND, nil, -1)
@@ -26,7 +26,7 @@ func processGet(ckey *cacheKey, cmd *command) *cmdContext {
 	}
 }
 
-func processSet(ckey *cacheKey, cmd *command) *cmdContext {
+func processSet(ckey *kv, cmd *command) *cmdContext {
 	Debugln("processSet", cmd.uniKey)
 	if nil != cmd.version {
 		if ckey.status == cache_missing {
@@ -57,7 +57,7 @@ func processSet(ckey *cacheKey, cmd *command) *cmdContext {
 	return ctx
 }
 
-func processSetNx(ckey *cacheKey, cmd *command) *cmdContext {
+func processSetNx(ckey *kv, cmd *command) *cmdContext {
 	Debugln("processSetNx", cmd.uniKey)
 	if ckey.status == cache_ok {
 		//记录已经存在，不能再设置
@@ -79,7 +79,7 @@ func processSetNx(ckey *cacheKey, cmd *command) *cmdContext {
 	return ctx
 }
 
-func processCompareAndSet(ckey *cacheKey, cmd *command) *cmdContext {
+func processCompareAndSet(ckey *kv, cmd *command) *cmdContext {
 
 	Debugln("processCompareAndSet", cmd.uniKey)
 
@@ -110,7 +110,7 @@ func processCompareAndSet(ckey *cacheKey, cmd *command) *cmdContext {
 	}
 }
 
-func processCompareAndSetNx(ckey *cacheKey, cmd *command) *cmdContext {
+func processCompareAndSetNx(ckey *kv, cmd *command) *cmdContext {
 
 	Debugln("processCompareAndSetNx", cmd.uniKey)
 
@@ -139,7 +139,7 @@ func processCompareAndSetNx(ckey *cacheKey, cmd *command) *cmdContext {
 	return ctx
 }
 
-func processIncrBy(ckey *cacheKey, cmd *command) *cmdContext {
+func processIncrBy(ckey *kv, cmd *command) *cmdContext {
 
 	Debugln("processIncrBy", cmd.uniKey)
 
@@ -173,7 +173,7 @@ func processIncrBy(ckey *cacheKey, cmd *command) *cmdContext {
 	return ctx
 }
 
-func processDecrBy(ckey *cacheKey, cmd *command) *cmdContext {
+func processDecrBy(ckey *kv, cmd *command) *cmdContext {
 
 	Debugln("processDecrBy", cmd.uniKey)
 
@@ -207,7 +207,7 @@ func processDecrBy(ckey *cacheKey, cmd *command) *cmdContext {
 	return ctx
 }
 
-func processDel(ckey *cacheKey, cmd *command) *cmdContext {
+func processDel(ckey *kv, cmd *command) *cmdContext {
 
 	Debugln("processDel", cmd.uniKey)
 
@@ -234,7 +234,7 @@ func processDel(ckey *cacheKey, cmd *command) *cmdContext {
 	}
 }
 
-func processCmd(ckey *cacheKey, fromClient bool) {
+func processCmd(ckey *kv, fromClient bool) {
 
 	//Infoln(ckey.values)
 
@@ -313,6 +313,6 @@ func processCmd(ckey *cacheKey, fromClient bool) {
 	} else {
 		ckey.lockCmdQueue()
 		ckey.mtx.Unlock()
-		ckey.m.doWriteBack(ctx)
+		ckey.m.processUpdate(ctx)
 	}
 }

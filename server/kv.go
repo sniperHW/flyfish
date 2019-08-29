@@ -15,7 +15,7 @@ const (
 	cache_missing = 3
 )
 
-type cacheKey struct {
+type kv struct {
 	table           string
 	uniKey          string
 	key             string
@@ -27,26 +27,26 @@ type cacheKey struct {
 	meta            *table_meta
 	sqlFlag         int
 	snapshoted      bool //当前key是否建立过快照
-	m               *cacheMgr
-	nnext           *cacheKey
-	pprev           *cacheKey
+	m               *kvstore
+	nnext           *kv
+	pprev           *kv
 	values          map[string]*proto.Field //关联的字段
 	modifyFields    map[string]bool         //发生变更尚未更新到sql数据库的字段
 	writeBackLocked bool                    //是否已经提交sql回写处理
 	make_snapshot   bool                    //费否处于快照处理过程中
 }
 
-func (this *cacheKey) lockCmdQueue() {
+func (this *kv) lockCmdQueue() {
 	if !this.cmdQueueLocked {
 		this.cmdQueueLocked = true
 	}
 }
 
-func (this *cacheKey) unlockCmdQueue() {
+func (this *kv) unlockCmdQueue() {
 	this.cmdQueueLocked = false
 }
 
-func (this *cacheKey) kickAble() bool {
+func (this *kv) kickAble() bool {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
 
@@ -69,13 +69,13 @@ func (this *cacheKey) kickAble() bool {
 	return true
 }
 
-func (this *cacheKey) setMissing() {
+func (this *kv) setMissing() {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
 	this.setMissingNoLock()
 }
 
-func (this *cacheKey) setMissingNoLock() {
+func (this *kv) setMissingNoLock() {
 	this.version = 0
 	this.status = cache_missing
 	this.values = nil
@@ -83,28 +83,28 @@ func (this *cacheKey) setMissingNoLock() {
 	this.modifyFields = map[string]bool{}
 }
 
-func (this *cacheKey) setOK(version int64) {
+func (this *kv) setOK(version int64) {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
 	this.setOKNoLock(version)
 }
 
-func (this *cacheKey) setOKNoLock(version int64) {
+func (this *kv) setOKNoLock(version int64) {
 	this.version = version
 	this.status = cache_ok
 }
 
-func (this *cacheKey) pushCmd(cmd *command) {
+func (this *kv) pushCmd(cmd *command) {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
 	this.cmdQueue.PushBack(cmd)
 }
 
-func (this *cacheKey) getMeta() *table_meta {
+func (this *kv) getMeta() *table_meta {
 	return (*table_meta)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&this.meta))))
 }
 
-func (this *cacheKey) convertStr(fieldName string, value string) *proto.Field {
+func (this *kv) convertStr(fieldName string, value string) *proto.Field {
 
 	if fieldName == "__version__" {
 		i, err := strconv.ParseInt(value, 10, 64)
@@ -146,13 +146,13 @@ func (this *cacheKey) convertStr(fieldName string, value string) *proto.Field {
 	}
 }
 
-func (this *cacheKey) setDefaultValue() {
+func (this *kv) setDefaultValue() {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
 	this.setDefaultValueNoLock()
 }
 
-func (this *cacheKey) setDefaultValueNoLock() {
+func (this *kv) setDefaultValueNoLock() {
 	this.values = map[string]*proto.Field{}
 	meta := this.getMeta()
 	for _, v := range meta.fieldMetas {
@@ -161,7 +161,7 @@ func (this *cacheKey) setDefaultValueNoLock() {
 	}
 }
 
-func (this *cacheKey) setValueNoLock(ctx *cmdContext) {
+func (this *kv) setValueNoLock(ctx *cmdContext) {
 	this.values = map[string]*proto.Field{}
 	for _, v := range ctx.fields {
 
@@ -173,15 +173,15 @@ func (this *cacheKey) setValueNoLock(ctx *cmdContext) {
 	}
 }
 
-func (this *cacheKey) processClientCmd() {
+func (this *kv) processClientCmd() {
 	processCmd(this, true)
 }
 
-func (this *cacheKey) processQueueCmd() {
+func (this *kv) processQueueCmd() {
 	processCmd(this, false)
 }
 
-func newCacheKey(m *cacheMgr, table string, key string, uniKey string) *cacheKey {
+func newCacheKey(m *kvstore, table string, key string, uniKey string) *kv {
 
 	meta := getMetaByTable(table)
 
@@ -190,7 +190,7 @@ func newCacheKey(m *cacheMgr, table string, key string, uniKey string) *cacheKey
 		return nil
 	}
 
-	return &cacheKey{
+	return &kv{
 		uniKey:       uniKey,
 		key:          key,
 		status:       cache_new,

@@ -46,7 +46,7 @@ func pushSqlLoadReq(ctx *cmdContext, fullReturn ...bool) bool {
 	}
 }
 
-func pushSqlWriteReq(ckey *cacheKey) {
+func pushSqlWriteReq(ckey *kv) {
 	u := sqlUpdaters[StringHash(ckey.uniKey)%len(sqlUpdaters)]
 	u.queue.AddNoWait(ckey)
 }

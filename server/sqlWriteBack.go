@@ -72,7 +72,7 @@ func (this *sqlUpdater) append(v interface{}) {
 			}
 		}
 
-		ckey := v.(*cacheKey)
+		ckey := v.(*kv)
 
 		Debugln(*ckey)
 

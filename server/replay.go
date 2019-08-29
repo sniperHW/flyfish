@@ -127,7 +127,7 @@ func readBinLog(buffer []byte, offset int) (int, int, string, int64, map[string]
 }
 
 func replay(recordCount int, path string, begOffset int, tt int, unikey string, version int64, values map[string]*proto.Field) bool {
-	m := getMgrByUnikey(unikey)
+	m := getKvstore(unikey)
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 	ckey, _ := m.kv[unikey]
@@ -251,7 +251,7 @@ func replayBinLog(path string) bool {
 	return true
 }
 
-func (this *cacheMgr) firstSnapshot(config *conf.Config, wg *sync.WaitGroup) {
+func (this *kvstore) firstSnapshot(config *conf.Config, wg *sync.WaitGroup) {
 
 	beg := time.Now()
 
@@ -271,7 +271,7 @@ func (this *cacheMgr) firstSnapshot(config *conf.Config, wg *sync.WaitGroup) {
 	for _, v := range this.kv {
 		v.mtx.Lock()
 		v.snapshoted = true
-		this.write(binlog_snapshot, v.uniKey, v.values, v.version)
+		this.writeBinlog(binlog_snapshot, v.uniKey, v.values, v.version)
 
 		/*
 		 *  如果某个key的binlog在序列化到磁盘后回写到sql前进程崩溃，且这个key长时间不被访问，
@@ -357,9 +357,9 @@ func StartReplayBinlog() bool {
 	totalKvCount := 0
 
 	//建立新快照
-	for _, v := range cacheMgrs {
+	for _, v := range kvstoreMgr {
 		wg.Add(1)
-		go func(m *cacheMgr) {
+		go func(m *kvstore) {
 			m.mtx.Lock()
 			m.firstSnapshot(config, wg)
 			m.mtx.Unlock()
@@ -373,7 +373,7 @@ func StartReplayBinlog() bool {
 		os.Remove(v)
 	}
 
-	for _, v := range cacheMgrs {
+	for _, v := range kvstoreMgr {
 		totalKvCount += len(v.kv)
 	}
 

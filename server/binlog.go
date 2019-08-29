@@ -6,7 +6,6 @@ import (
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
-	"github.com/sniperHW/kendynet/util"
 	"hash/crc64"
 	"os"
 	"sync/atomic"
@@ -41,23 +40,7 @@ func onWriteFileError(err error) {
 	os.Exit(1)
 }
 
-func (this *cacheMgr) start() {
-	this.binlogQueue = util.NewBlockQueue()
-	go func() {
-		for {
-			closed, localList := this.binlogQueue.Get()
-			for _, v := range localList {
-				st := v.(*binlogSt)
-				this.flush(st.binlogStr, st.ctxs, st.cacheBinlogCount)
-			}
-			if closed {
-				return
-			}
-		}
-	}()
-}
-
-func (this *cacheMgr) startSnapshot() {
+func (this *kvstore) startSnapshot() {
 
 	if this.make_snapshot {
 		return
@@ -87,7 +70,7 @@ func (this *cacheMgr) startSnapshot() {
 	this.f = f
 	this.filePath = path
 
-	kv := []*cacheKey{}
+	kv := []*kv{}
 
 	for _, v := range this.kv {
 		v.mtx.Lock()
@@ -109,7 +92,7 @@ func (this *cacheMgr) startSnapshot() {
 			if (v.status == cache_ok || v.status == cache_missing) && !v.snapshoted {
 				c++
 				v.snapshoted = true
-				this.write(binlog_snapshot, v.uniKey, v.values, v.version)
+				this.writeBinlog(binlog_snapshot, v.uniKey, v.values, v.version)
 
 			}
 			v.make_snapshot = false
@@ -131,7 +114,7 @@ func (this *cacheMgr) startSnapshot() {
 	}()
 }
 
-func (this *cacheMgr) flush(binlogStr *str, ctxs *ctxArray, cacheBinlogCount int32) {
+func (this *kvstore) flushBinlog(binlogStr *str, ctxs *ctxArray, cacheBinlogCount int32) {
 	this.mtx.Lock()
 
 	beg := time.Now()
@@ -208,7 +191,7 @@ func (this *cacheMgr) flush(binlogStr *str, ctxs *ctxArray, cacheBinlogCount int
 	strPut(binlogStr)
 }
 
-func (this *cacheMgr) tryFlush() {
+func (this *kvstore) tryFlushBinlog() {
 
 	if this.cacheBinlogCount > 0 {
 
@@ -235,7 +218,7 @@ func (this *cacheMgr) tryFlush() {
 	}
 }
 
-func (this *cacheMgr) write(tt int, unikey string, fields map[string]*proto.Field, version int64) {
+func (this *kvstore) writeBinlog(tt int, unikey string, fields map[string]*proto.Field, version int64) {
 
 	if nil == this.binlogStr {
 		this.binlogStr = strGet()
@@ -275,12 +258,7 @@ func (this *cacheMgr) write(tt int, unikey string, fields map[string]*proto.Fiel
 	}
 }
 
-func (this *cacheMgr) writeKick(unikey string) {
-	this.write(binlog_kick, unikey, nil, 0)
-	this.tryFlush()
-}
-
-func (this *cacheMgr) checkCacheKey(ckey *cacheKey, ctx *cmdContext) bool {
+func (this *kvstore) checkCacheKey(ckey *kv, ctx *cmdContext) bool {
 	ckey.mtx.Lock()
 
 	gotErr := false
@@ -364,13 +342,11 @@ func (this *cacheMgr) checkCacheKey(ckey *cacheKey, ctx *cmdContext) bool {
 	}
 }
 
-func (this *cacheMgr) writeBack(ctx *cmdContext) {
+func (this *kvstore) processUpdate(ctx *cmdContext) {
 
 	if ctx.writeBackFlag == write_back_none {
 		panic("ctx.writeBackFlag == write_back_none")
 	}
-
-	Debugln("writeBack")
 
 	ckey := ctx.getCacheKey()
 
@@ -390,26 +366,26 @@ func (this *cacheMgr) writeBack(ctx *cmdContext) {
 	switch ckey.sqlFlag {
 	case write_back_delete:
 		if ckey.snapshoted {
-			this.write(binlog_delete, ckey.uniKey, nil, 0)
+			this.writeBinlog(binlog_delete, ckey.uniKey, nil, 0)
 		} else {
 			ckey.snapshoted = true
-			this.write(binlog_snapshot, ckey.uniKey, nil, 0)
+			this.writeBinlog(binlog_snapshot, ckey.uniKey, nil, 0)
 		}
 	case write_back_insert, write_back_insert_update:
 		ckey.snapshoted = true
-		this.write(binlog_snapshot, ckey.uniKey, ckey.values, ckey.version)
+		this.writeBinlog(binlog_snapshot, ckey.uniKey, ckey.values, ckey.version)
 	case write_back_update:
 		if ckey.snapshoted {
-			this.write(binlog_update, ckey.uniKey, ctx.fields, ckey.version)
+			this.writeBinlog(binlog_update, ckey.uniKey, ctx.fields, ckey.version)
 		} else {
 			ckey.snapshoted = true
-			this.write(binlog_snapshot, ckey.uniKey, ckey.values, ckey.version)
+			this.writeBinlog(binlog_snapshot, ckey.uniKey, ckey.values, ckey.version)
 		}
 	}
 
 	ckey.mtx.Unlock()
 
-	this.tryFlush()
+	this.tryFlushBinlog()
 
 	this.mtx.Unlock()
 
