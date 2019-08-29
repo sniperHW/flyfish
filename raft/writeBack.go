@@ -43,7 +43,7 @@ func (this *kvstore) tryFlush() {
 
 			id := atomic.AddInt64(&idcounter, 1)
 
-			binary.BigEndian.PutUint64(binlogStr.data[:8], uint64(id))
+			binary.BigEndian.PutUint64(binlogStr.data[4:12], uint64(id))
 
 			this.Propose(&binlogSt{
 				binlogStr: binlogStr,
@@ -87,6 +87,7 @@ func (this *kvstore) write(tt int, unikey string, fields map[string]*proto.Field
 
 	if nil == this.binlogStr {
 		this.binlogStr = strGet()
+		this.binlogStr.appendInt32(int32(this.id))
 		this.binlogStr.appendInt64(0)
 	}
 

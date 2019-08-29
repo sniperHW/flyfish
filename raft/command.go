@@ -146,8 +146,10 @@ func (this *command) process() {
 		return
 	}
 
-	caches.mtx.Lock()
-	k, ok := caches.kv[this.uniKey]
+	m := getMgrByUnikey(this.uniKey)
+
+	m.mtx.Lock()
+	k, ok := m.kv[this.uniKey]
 	if ok {
 		if !checkMetaVersion(k.meta.meta_version) {
 			newMeta := getMetaByTable(this.table)
@@ -159,19 +161,19 @@ func (this *command) process() {
 		}
 		this.ckey = k
 		k.pushCmd(this)
-		caches.updateLRU(k)
+		m.updateLRU(k)
 	} else {
-		k = newCacheKey(caches, this.table, this.key, this.uniKey)
+		k = newCacheKey(m, this.table, this.key, this.uniKey)
 		if nil != k {
 			this.ckey = k
 			k.pushCmd(this)
-			caches.updateLRU(k)
-			caches.kv[this.uniKey] = k
+			m.updateLRU(k)
+			m.kv[this.uniKey] = k
 		}
 	}
-	caches.kickCacheKey()
+	m.kickCacheKey()
 
-	caches.mtx.Unlock()
+	m.mtx.Unlock()
 
 	if nil != k {
 		k.processClientCmd()

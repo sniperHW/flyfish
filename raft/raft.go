@@ -106,6 +106,10 @@ func newRaftNode(id int, peers []string, join bool, getSnapshot func() ([]byte, 
 	return commitC, errorC, rc.snapshotterReady
 }
 
+func (rc *raftNode) isLeader() bool {
+	return rc.node.Status().RaftState == raft.StateLeader
+}
+
 func (rc *raftNode) saveSnap(snap raftpb.Snapshot) error {
 	// must save the snapshot index to the WAL before saving the
 	// snapshot to maintain the invariant that we only Open the
