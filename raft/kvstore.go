@@ -295,8 +295,8 @@ func readCommits(once bool, commitC <-chan *[]byte, errorC <-chan error) {
 			s.mtx.Lock()
 			propose, ok := s.pendingPropose[id]
 			if !ok {
-				recoverFromSnapshot((*data)[12:])
 				s.mtx.Unlock()
+				recoverFromSnapshot((*data)[12:])
 			} else {
 				delete(s.pendingPropose, id)
 				s.mtx.Unlock()
