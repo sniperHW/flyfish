@@ -20,7 +20,7 @@ import (
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet/timer"
-	//"github.com/sniperHW/kendynet/util"
+	"github.com/sniperHW/kendynet/util"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	"go.etcd.io/etcd/raft/raftpb"
 	"log"
@@ -82,9 +82,8 @@ func ctxArrayPut(w *ctxArray) {
 
 // a key-value store backed by raft
 type kvstore struct {
-	//proposeC         chan<- []byte // channel for proposing updates
-	//snapshotter      *snap.Snapshotter
-	id               int
+	proposeC         chan<- []byte // channel for proposing updates
+	snapshotter      *snap.Snapshotter
 	kv               map[string]*cacheKey
 	mtx              sync.Mutex
 	lruHead          cacheKey
@@ -93,28 +92,22 @@ type kvstore struct {
 	nextFlush        time.Time
 	binlogStr        *str
 	cacheBinlogCount int32 //待序列化到文件的binlog数量
-	//binlogQueue      *util.BlockQueue
-	pendingPropose map[int64]*binlogSt
+	binlogQueue      *util.BlockQueue
+	pendingPropose   map[int64]*binlogSt
 }
 
-var caches []*kvstore
-var proposeC chan []byte
-var confChangeC chan raftpb.ConfChange
-var snapshotter *snap.Snapshotter
+var caches *kvstore
+var proposeC <-chan []byte
+var confChangeC <-chan raftpb.ConfChange
 
-func getMgrByUnikey(uniKey string) *kvstore {
-	return caches[StringHash(uniKey)%len(caches)]
-}
-
-func newKVStore(id int) *kvstore {
+func newKVStore(snapshotter *snap.Snapshotter, proposeC chan<- []byte, commitC <-chan *[]byte, errorC <-chan error) *kvstore {
 
 	config := conf.GetConfig()
 
 	s := &kvstore{
-		//proposeC:       proposeC,
-		id: id,
-		kv: map[string]*cacheKey{},
-		//snapshotter:    snapshotter,
+		proposeC:       proposeC,
+		kv:             map[string]*cacheKey{},
+		snapshotter:    snapshotter,
 		nextFlush:      time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval)),
 		pendingPropose: map[int64]*binlogSt{},
 	}
@@ -122,13 +115,11 @@ func newKVStore(id int) *kvstore {
 	s.lruHead.nnext = &s.lruTail
 	s.lruTail.pprev = &s.lruHead
 
-	return s
-
 	// replay log into key-value map
-	//s.readCommits(true, commitC, errorC)
+	s.readCommits(true, commitC, errorC)
 	// read commits from raft into kvStore map until error
 
-	/*timer.Repeat(time.Millisecond*time.Duration(config.FlushInterval), nil, func(t *timer.Timer) {
+	timer.Repeat(time.Millisecond*time.Duration(config.FlushInterval), nil, func(t *timer.Timer) {
 		if isStop() {
 			t.Cancel()
 		} else {
@@ -146,10 +137,10 @@ func newKVStore(id int) *kvstore {
 			s.kickCacheKey()
 			s.mtx.Unlock()
 		}
-	})*/
+	})
 
-	//go s.readCommits(false, commitC, errorC)
-	//return s
+	go s.readCommits(false, commitC, errorC)
+	return s
 }
 
 func (s *kvstore) doWriteBack(ctx *cmdContext) {
@@ -200,7 +191,96 @@ func (s *kvstore) kickCacheKey() {
 
 func (s *kvstore) Propose(propose *binlogSt) {
 	s.pendingPropose[propose.id] = propose
-	proposeC <- propose.binlogStr.bytes()
+	s.proposeC <- propose.binlogStr.bytes()
+}
+
+func (s *kvstore) readCommits(once bool, commitC <-chan *[]byte, errorC <-chan error) {
+	for data := range commitC {
+		if data == nil {
+			// done replaying log; new data incoming
+			// OR signaled to load snapshot
+			snapshot, err := s.snapshotter.Load()
+			if err == snap.ErrNoSnapshot {
+				return
+			}
+			if err != nil {
+				log.Panic(err)
+			}
+			log.Printf("loading snapshot at term %d and index %d", snapshot.Metadata.Term, snapshot.Metadata.Index)
+			if !s.recoverFromSnapshot(snapshot.Data[8:]) {
+				log.Panic("recoverFromSnapshot failed")
+			}
+			if once {
+				return
+			} else {
+				continue
+			}
+		}
+
+		id := int64(binary.BigEndian.Uint64((*data)[0:8]))
+		s.mtx.Lock()
+		propose, ok := s.pendingPropose[id]
+		if !ok {
+			s.recoverFromSnapshot((*data)[8:])
+			s.mtx.Unlock()
+		} else {
+			delete(s.pendingPropose, id)
+			s.mtx.Unlock()
+			if propose.ctxs != nil {
+
+				for i := 0; i < propose.ctxs.count; i++ {
+					v := propose.ctxs.ctxs[i]
+					v.reply(errcode.ERR_OK, v.fields, v.version)
+					ckey := v.getCacheKey()
+					ckey.mtx.Lock()
+					ckey.snapshoted = true
+
+					if v.writeBackFlag == write_back_insert || v.writeBackFlag == write_back_update || v.writeBackFlag == write_back_insert_update {
+						ckey.setValueNoLock(v)
+						ckey.setOKNoLock(v.version)
+					} else {
+						ckey.setMissingNoLock()
+					}
+
+					ckey.sqlFlag = v.writeBackFlag
+
+					if !ckey.writeBackLocked {
+						ckey.writeBackLocked = true
+						pushSqlWriteReq(ckey)
+					}
+					ckey.mtx.Unlock()
+				}
+
+				for i := 0; i < propose.ctxs.count; i++ {
+					v := propose.ctxs.ctxs[i]
+					v.getCacheKey().processQueueCmd()
+				}
+
+				ctxArrayPut(propose.ctxs)
+			}
+			strPut(propose.binlogStr)
+		}
+
+	}
+	if err, ok := <-errorC; ok {
+		log.Fatal(err)
+	}
+}
+
+func (s *kvstore) getSnapshot() ([]byte, error) {
+	ss := strGet()
+	ss.appendInt64(0)
+	s.mtx.Lock()
+	for _, v := range s.kv {
+		v.mtx.Lock()
+		if v.status == cache_ok || v.status == cache_missing {
+			v.snapshoted = true
+			ss.appendBinLog(binlog_snapshot, v.uniKey, v.values, v.version)
+		}
+		v.mtx.Unlock()
+	}
+	s.mtx.Unlock()
+	return ss.bytes(), nil
 }
 
 func readBinLog(buffer []byte, offset int) (int, int, string, int64, map[string]*proto.Field) {
@@ -263,249 +343,82 @@ func readBinLog(buffer []byte, offset int) (int, int, string, int64, map[string]
 	return offset, tt, uniKey, version, values
 }
 
-func readCommits(once bool, commitC <-chan *[]byte, errorC <-chan error) {
-	for data := range commitC {
-		if data == nil {
-			// done replaying log; new data incoming
-			// OR signaled to load snapshot
-			snapshot, err := snapshotter.Load()
-			if err == snap.ErrNoSnapshot {
-				return
-			}
-			if err != nil {
-				log.Panic(err)
-			}
-			log.Printf("loading snapshot at term %d and index %d", snapshot.Metadata.Term, snapshot.Metadata.Index)
-			if !recoverFromSnapshot(snapshot.Data[12:]) {
-				log.Panic("recoverFromSnapshot failed")
-			}
-			if once {
-				return
-			} else {
-				continue
-			}
-		}
-
-		kvIndex := int(binary.BigEndian.Uint32((*data)[0:4]))
-		id := int64(binary.BigEndian.Uint64((*data)[4:12]))
-		if id == 0 || kvIndex >= len(caches) {
-			recoverFromSnapshot((*data)[12:])
-		} else {
-			s := caches[kvIndex]
-			s.mtx.Lock()
-			propose, ok := s.pendingPropose[id]
-			if !ok {
-				s.mtx.Unlock()
-				recoverFromSnapshot((*data)[12:])
-			} else {
-				delete(s.pendingPropose, id)
-				s.mtx.Unlock()
-				if propose.ctxs != nil {
-
-					for i := 0; i < propose.ctxs.count; i++ {
-						v := propose.ctxs.ctxs[i]
-						v.reply(errcode.ERR_OK, v.fields, v.version)
-						ckey := v.getCacheKey()
-						ckey.mtx.Lock()
-						ckey.snapshoted = true
-
-						if v.writeBackFlag == write_back_insert || v.writeBackFlag == write_back_update || v.writeBackFlag == write_back_insert_update {
-							ckey.setValueNoLock(v)
-							ckey.setOKNoLock(v.version)
-						} else {
-							ckey.setMissingNoLock()
-						}
-
-						ckey.sqlFlag = v.writeBackFlag
-
-						if !ckey.writeBackLocked {
-							ckey.writeBackLocked = true
-							pushSqlWriteReq(ckey)
-						}
-						ckey.mtx.Unlock()
-					}
-
-					for i := 0; i < propose.ctxs.count; i++ {
-						v := propose.ctxs.ctxs[i]
-						v.getCacheKey().processQueueCmd()
-					}
-
-					ctxArrayPut(propose.ctxs)
-				}
-				strPut(propose.binlogStr)
-			}
-		}
-
-	}
-	if err, ok := <-errorC; ok {
-		log.Fatal(err)
-	}
-}
-
-func recoverFromSnapshot(snapshot []byte) bool {
+func (s *kvstore) recoverFromSnapshot(snapshot []byte) bool {
 	offset := 0
 	recordCount := 0
 	n := len(snapshot)
-
-	gotError := false
 
 	for offset < n {
 
 		newOffset, tt, unikey, version, values := readBinLog(snapshot, offset)
 		offset = newOffset
-
-		s := getMgrByUnikey(unikey)
-		s.mtx.Lock()
-
 		ckey, _ := s.kv[unikey]
 		recordCount++
 
-		if nil == ckey && (tt == binlog_update || tt == binlog_delete || tt == binlog_kick) {
-
-		} else {
-
+		if tt == binlog_snapshot {
 			if nil == ckey {
 				tmp := strings.Split(unikey, ":")
 				ckey = newCacheKey(s, tmp[0], strings.Join(tmp[1:], ""), unikey)
 				s.kv[unikey] = ckey
 				s.updateLRU(ckey)
 			}
-
-			ckey.mtx.Lock()
-			if tt == binlog_snapshot {
-				ckey.values = values
-				ckey.version = version
-				ckey.snapshoted = true
-				if ckey.version == 0 {
-					ckey.sqlFlag = write_back_delete
-					ckey.status = cache_missing
-				} else {
-					ckey.sqlFlag = write_back_insert_update
-					ckey.status = cache_ok
-				}
-			} else if tt == binlog_update {
-
+			ckey.values = values
+			ckey.version = version
+			ckey.snapshoted = true
+			if ckey.version == 0 {
+				ckey.sqlFlag = write_back_delete
+				ckey.status = cache_missing
+			} else {
+				ckey.sqlFlag = write_back_insert_update
+				ckey.status = cache_ok
+			}
+		} else if tt == binlog_update {
+			if ckey != nil {
 				if ckey.status != cache_ok || ckey.values == nil {
-					gotError = true
-					ckey.mtx.Unlock()
-					s.mtx.Unlock()
-					break
-					//Fatalln("invaild tt", unikey, tt, recordCount, offset)
-					//return false
+					Fatalln("invaild tt", unikey, tt, recordCount, offset)
+					return false
 				}
 				for k, v := range values {
 					ckey.values[k] = v
 				}
 				ckey.version = version
 				ckey.sqlFlag = write_back_insert_update
-
-			} else if tt == binlog_delete {
-
+			}
+		} else if tt == binlog_delete {
+			if ckey != nil {
 				if ckey.status != cache_ok {
-					//Fatalln("invaild tt", unikey, tt, recordCount, offset)
-					//return false
-					gotError = true
-					ckey.mtx.Unlock()
-					s.mtx.Unlock()
-					break
+					Fatalln("invaild tt", unikey, tt, recordCount, offset)
+					return false
 				}
 				ckey.values = nil
 				ckey.version = version
 				ckey.status = cache_missing
 				ckey.sqlFlag = write_back_delete
-
-			} else if tt == binlog_kick {
-
+			}
+		} else if tt == binlog_kick {
+			if ckey != nil {
 				s.removeLRU(ckey)
 				delete(s.kv, unikey)
-
-			} else {
-				//Fatalln("invaild tt", unikey, tt, recordCount, offset)
-				//return false
-				gotError = true
-				ckey.mtx.Unlock()
-				s.mtx.Unlock()
-				break
 			}
-
-			ckey.mtx.Unlock()
-			s.mtx.Unlock()
+		} else {
+			Fatalln("invaild tt", unikey, tt, recordCount, offset)
+			return false
 		}
 	}
 
-	return gotError == false
+	//fmt.Println("recoverFromSnapshot", recordCount)
+
+	return true
 }
 
 func initKVStore(id *int, cluster *string) {
 
-	proposeC = make(chan []byte)
-	confChangeC = make(chan raftpb.ConfChange)
+	proposeC := make(chan []byte)
+	confChangeC := make(chan raftpb.ConfChange)
+
 	// raft provides a commit stream for the proposals from the http api
-	getSnapshot := func() ([]byte, error) {
-		for _, v := range caches {
-			v.mtx.Lock()
-		}
-
-		ss := strGet()
-		ss.appendInt64(0)
-		for _, c := range caches {
-			for _, v := range c.kv {
-				v.mtx.Lock()
-				if v.status == cache_ok || v.status == cache_missing {
-					v.snapshoted = true
-					ss.appendBinLog(binlog_snapshot, v.uniKey, v.values, v.version)
-				}
-				v.mtx.Unlock()
-			}
-		}
-
-		for _, v := range caches {
-			v.mtx.Unlock()
-		}
-
-		return ss.bytes(), nil
-
-	}
+	getSnapshot := func() ([]byte, error) { return caches.getSnapshot() }
 	commitC, errorC, snapshotterReady := newRaftNode(*id, strings.Split(*cluster, ","), false, getSnapshot, proposeC, confChangeC)
-	snapshotter = <-snapshotterReady
 
-	config := conf.GetConfig()
-
-	CacheGroupSize := config.CacheGroupSize
-
-	caches = make([]*kvstore, CacheGroupSize)
-	for i := 0; i < CacheGroupSize; i++ {
-		caches[i] = newKVStore(i)
-	}
-
-	readCommits(true, commitC, errorC)
-
-	go readCommits(false, commitC, errorC)
-
-	for _, v := range caches {
-
-		c := v
-
-		timer.Repeat(time.Millisecond*time.Duration(config.FlushInterval), nil, func(t *timer.Timer) {
-			if isStop() {
-				t.Cancel()
-			} else {
-				c.mtx.Lock()
-				c.tryFlush()
-				c.mtx.Unlock()
-			}
-		})
-
-		timer.Repeat(time.Second, nil, func(t *timer.Timer) {
-			if isStop() {
-				t.Cancel()
-			} else {
-				c.mtx.Lock()
-				c.kickCacheKey()
-				c.mtx.Unlock()
-			}
-		})
-	}
-
-	//caches = newKVStore(<-snapshotterReady, proposeC, commitC, errorC)
+	caches = newKVStore(<-snapshotterReady, proposeC, commitC, errorC)
 }
