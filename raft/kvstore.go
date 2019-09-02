@@ -267,19 +267,51 @@ func (s *kvstore) readCommits(once bool, commitC <-chan *[]byte, errorC <-chan e
 	}
 }
 
+type kvsnap struct {
+	uniKey  string
+	values  map[string]*proto.Field
+	version int64
+}
+
 func (s *kvstore) getSnapshot() ([]byte, error) {
 	ss := strGet()
 	ss.appendInt64(0)
+
+	kvsnaps := []kvsnap{}
+
 	s.mtx.Lock()
+
+	beg := time.Now()
+
 	for _, v := range s.kv {
 		v.mtx.Lock()
 		if v.status == cache_ok || v.status == cache_missing {
 			v.snapshoted = true
-			ss.appendBinLog(binlog_snapshot, v.uniKey, v.values, v.version)
+
+			s := kvsnap{
+				uniKey:  v.uniKey,
+				version: v.version,
+			}
+
+			if v.values != nil {
+				s.values = map[string]*proto.Field{}
+				for kk, vv := range v.values {
+					s.values[kk] = vv
+				}
+			}
+			kvsnaps = append(kvsnaps, s)
 		}
 		v.mtx.Unlock()
 	}
+
+	Infoln("clone time", time.Now().Sub(beg))
+
 	s.mtx.Unlock()
+
+	for _, v := range kvsnaps {
+		ss.appendBinLog(binlog_snapshot, v.uniKey, v.values, v.version)
+	}
+
 	return ss.bytes(), nil
 }
 
