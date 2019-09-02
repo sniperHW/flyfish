@@ -174,8 +174,13 @@ func initKvStore() bool {
 			for {
 				closed, localList := c.binlogQueue.Get()
 				for _, v := range localList {
-					st := v.(*binlogSt)
-					c.flushBinlog(st.binlogStr, st.ctxs, st.cacheBinlogCount)
+					switch v.(type) {
+					case *binlogSt:
+						st := v.(*binlogSt)
+						c.flushBinlog(st.binlogStr, st.ctxs, st.cacheBinlogCount)
+					default:
+						v.(func())()
+					}
 				}
 				if closed {
 					return

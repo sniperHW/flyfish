@@ -106,13 +106,18 @@ func (this *kvstore) startSnapshot() {
 			}
 		}
 
-		//移除backfile
-		os.Remove(this.backFilePath)
+		backFilePath := this.backFilePath
 
 		this.mtx.Lock()
 		this.make_snapshot = false
 		this.mtx.Unlock()
 		Infoln("snapshot ok", time.Now().Sub(beg), c)
+
+		this.binlogQueue.AddNoWait(func() {
+			//删除backfile
+			os.Remove(backFilePath)
+		})
+
 	}()
 }
 
