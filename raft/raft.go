@@ -364,6 +364,9 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 	if err != nil {
 		log.Panic(err)
 	}
+
+	beg := time.Now()
+
 	snap, err := rc.raftStorage.CreateSnapshot(rc.appliedIndex, &rc.confState, data)
 	if err != nil {
 		panic(err)
@@ -382,6 +385,9 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 
 	log.Printf("compacted log at index %d", compactIndex)
 	rc.snapshotIndex = rc.appliedIndex
+
+	Infoln("snapshot time", time.Now().Sub(beg))
+
 }
 
 func (rc *raftNode) serveChannels() {
