@@ -371,9 +371,13 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 	if err != nil {
 		panic(err)
 	}
+
+	Infoln("create snapshot time", time.Now().Sub(beg))
+
 	if err := rc.saveSnap(snap); err != nil {
 		panic(err)
 	}
+	Infoln("save snapshot time", time.Now().Sub(beg))
 
 	compactIndex := uint64(1)
 	if rc.appliedIndex > snapshotCatchUpEntriesN {
@@ -382,6 +386,8 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 	if err := rc.raftStorage.Compact(compactIndex); err != nil {
 		panic(err)
 	}
+
+	Infoln("compact snapshot time", time.Now().Sub(beg))
 
 	log.Printf("compacted log at index %d", compactIndex)
 	rc.snapshotIndex = rc.appliedIndex
