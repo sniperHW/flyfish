@@ -104,6 +104,7 @@ func (l *raftLog) maybeAppend(index, logTerm, committed uint64, ents ...pb.Entry
 }
 
 func (l *raftLog) append(ents ...pb.Entry) uint64 {
+	//fmt.Println("raftLog.append")
 	if len(ents) == 0 {
 		return l.lastIndex()
 	}
@@ -203,10 +204,13 @@ func (l *raftLog) commitTo(tocommit uint64) {
 			l.logger.Panicf("tocommit(%d) is out of range [lastIndex(%d)]. Was the raft log corrupted, truncated, or lost?", tocommit, l.lastIndex())
 		}
 		l.committed = tocommit
+		//fmt.Println("commitTo")
+		//CallStack(100)
 	}
 }
 
 func (l *raftLog) appliedTo(i uint64) {
+	//fmt.Println("appliedTo")
 	if i == 0 {
 		return
 	}

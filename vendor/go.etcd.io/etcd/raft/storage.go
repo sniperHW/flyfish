@@ -239,6 +239,8 @@ func (ms *MemoryStorage) Compact(compactIndex uint64) error {
 // TODO (xiangli): ensure the entries are continuous and
 // entries[0].Index > ms.entries[0].Index
 func (ms *MemoryStorage) Append(entries []pb.Entry) error {
+	//raftLogger.Infof("MemoryStorage Append")
+	//CallStack(100)
 	if len(entries) == 0 {
 		return nil
 	}

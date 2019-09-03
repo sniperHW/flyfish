@@ -17,7 +17,7 @@ package raft
 import (
 	"context"
 	"errors"
-
+	//"fmt"
 	pb "go.etcd.io/etcd/raft/raftpb"
 )
 
@@ -212,6 +212,9 @@ type Peer struct {
 //
 // Peers must not be zero length; call RestartNode in that case.
 func StartNode(c *Config, peers []Peer) Node {
+
+	//CallStack(100)
+
 	if len(peers) == 0 {
 		panic("no peers given; use RestartNode instead")
 	}
@@ -315,6 +318,7 @@ func (n *node) run() {
 			// handled first, but it's generally good to emit larger Readys plus
 			// it simplifies testing (by emitting less frequently and more
 			// predictably).
+			//fmt.Println("HasReady")
 			rd = n.rn.readyWithoutAccept()
 			readyc = n.readyc
 		}
@@ -339,6 +343,7 @@ func (n *node) run() {
 		// described in raft dissertation)
 		// Currently it is dropped in Step silently.
 		case pm := <-propc:
+			//fmt.Println("m := <-propc")
 			m := pm.m
 			m.From = r.id
 			err := r.Step(m)
@@ -347,6 +352,7 @@ func (n *node) run() {
 				close(pm.result)
 			}
 		case m := <-n.recvc:
+			//fmt.Println("m := <-n.recvc")
 			// filter out response message from unknown From.
 			if pr := r.prs.Progress[m.From]; pr != nil || !IsResponseMsg(m.Type) {
 				r.Step(m)
@@ -383,6 +389,7 @@ func (n *node) run() {
 		case <-n.tickc:
 			n.rn.Tick()
 		case readyc <- rd:
+			//fmt.Println("readyc <- rd")
 			n.rn.acceptReady(rd)
 			advancec = n.advancec
 		case <-advancec:
@@ -412,6 +419,7 @@ func (n *node) Tick() {
 func (n *node) Campaign(ctx context.Context) error { return n.step(ctx, pb.Message{Type: pb.MsgHup}) }
 
 func (n *node) Propose(ctx context.Context, data []byte) error {
+	//fmt.Println("node.Propose")
 	return n.stepWait(ctx, pb.Message{Type: pb.MsgProp, Entries: []pb.Entry{{Data: data}}})
 }
 
@@ -451,9 +459,11 @@ func (n *node) stepWait(ctx context.Context, m pb.Message) error {
 // Step advances the state machine using msgs. The ctx.Err() will be returned,
 // if any.
 func (n *node) stepWithWaitOption(ctx context.Context, m pb.Message, wait bool) error {
+	//fmt.Println("stepWithWaitOption")
 	if m.Type != pb.MsgProp {
 		select {
 		case n.recvc <- m:
+			//fmt.Println("stepWithWaitOption n.recvc <- m")
 			return nil
 		case <-ctx.Done():
 			return ctx.Err()

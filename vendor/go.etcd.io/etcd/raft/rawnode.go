@@ -16,9 +16,10 @@ package raft
 
 import (
 	"errors"
-
+	//"fmt"
 	pb "go.etcd.io/etcd/raft/raftpb"
 	"go.etcd.io/etcd/raft/tracker"
+	//"runtime"
 )
 
 // ErrStepLocalMsg is returned when try to step a local raft message
@@ -150,26 +151,49 @@ func (rn *RawNode) acceptReady(rd Ready) {
 func (rn *RawNode) HasReady() bool {
 	r := rn.raft
 	if !r.softState().equal(rn.prevSoftSt) {
+		//fmt.Println("HasReady1")
 		return true
 	}
 	if hardSt := r.hardState(); !IsEmptyHardState(hardSt) && !isHardStateEqual(hardSt, rn.prevHardSt) {
+		//fmt.Println("HasReady2")
 		return true
 	}
 	if r.raftLog.unstable.snapshot != nil && !IsEmptySnap(*r.raftLog.unstable.snapshot) {
+		//fmt.Println("HasReady3")
 		return true
 	}
 	if len(r.msgs) > 0 || len(r.raftLog.unstableEntries()) > 0 || r.raftLog.hasNextEnts() {
+		//fmt.Println("HasReady4")
 		return true
 	}
 	if len(r.readStates) != 0 {
+		//fmt.Println("HasReady5")
 		return true
 	}
 	return false
 }
 
+/*func CallStack(maxStack int) string {
+	var str string
+	i := 1
+	for {
+		pc, file, line, ok := runtime.Caller(i)
+		if !ok || i > maxStack {
+			break
+		}
+		str += fmt.Sprintf("    stack: %d %v [file: %s] [func: %s] [line: %d]\n", i-1, ok, file, runtime.FuncForPC(pc).Name(), line)
+		i++
+	}
+	fmt.Println(str)
+	return str
+}*/
+
 // Advance notifies the RawNode that the application has applied and saved progress in the
 // last Ready results.
 func (rn *RawNode) Advance(rd Ready) {
+	//fmt.Println("RawNode.Advance")
+	//CallStack(100)
+
 	if !IsEmptyHardState(rd.HardState) {
 		rn.prevHardSt = rd.HardState
 	}
