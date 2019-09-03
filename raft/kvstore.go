@@ -273,9 +273,9 @@ type kvsnap struct {
 	version int64
 }
 
-func (s *kvstore) getSnapshot() ([]byte, error) {
-	ss := strGet()
-	ss.appendInt64(0)
+func (s *kvstore) getSnapshot() []kvsnap { //([]byte, error) {
+	//ss := strGet()
+	//ss.appendInt64(0)
 
 	kvsnaps := []kvsnap{}
 
@@ -308,11 +308,13 @@ func (s *kvstore) getSnapshot() ([]byte, error) {
 
 	s.mtx.Unlock()
 
-	for _, v := range kvsnaps {
-		ss.appendBinLog(binlog_snapshot, v.uniKey, v.values, v.version)
-	}
+	return kvsnaps
 
-	return ss.bytes(), nil
+	//for _, v := range kvsnaps {
+	//	ss.appendBinLog(binlog_snapshot, v.uniKey, v.values, v.version)
+	//}
+
+	//return ss.bytes(), nil
 }
 
 func readBinLog(buffer []byte, offset int) (int, int, string, int64, map[string]*proto.Field) {
@@ -449,7 +451,7 @@ func initKVStore(id *int, cluster *string) {
 	confChangeC := make(chan raftpb.ConfChange)
 
 	// raft provides a commit stream for the proposals from the http api
-	getSnapshot := func() ([]byte, error) { return caches.getSnapshot() }
+	getSnapshot := func() []kvsnap { return caches.getSnapshot() }
 	commitC, errorC, snapshotterReady := newRaftNode(*id, strings.Split(*cluster, ","), false, getSnapshot, proposeC, confChangeC)
 
 	caches = newKVStore(<-snapshotterReady, proposeC, commitC, errorC)

@@ -48,7 +48,7 @@ type raftNode struct {
 	join        bool     // node is joining an existing cluster
 	waldir      string   // path to WAL directory
 	snapdir     string   // path to snapshot directory
-	getSnapshot func() ([]byte, error)
+	getSnapshot func() []kvsnap
 	lastIndex   uint64 // index of log at start
 
 	confState     raftpb.ConfState
@@ -82,7 +82,7 @@ var defaultSnapshotCount uint64 = 10000
 // provided the proposal channel. All log entries are replayed over the
 // commit channel, followed by a nil message (to indicate the channel is
 // current), then new log entries. To shutdown, close proposeC and read errorC.
-func newRaftNode(id int, peers []string, join bool, getSnapshot func() ([]byte, error), proposeC <-chan []byte,
+func newRaftNode(id int, peers []string, join bool, getSnapshot func() []kvsnap, proposeC <-chan []byte,
 	confChangeC <-chan raftpb.ConfChange) (<-chan *[]byte, <-chan error, <-chan *snap.Snapshotter) {
 
 	commitC := make(chan *[]byte)
@@ -103,7 +103,6 @@ func newRaftNode(id int, peers []string, join bool, getSnapshot func() ([]byte, 
 		stopc:            make(chan struct{}),
 		httpstopc:        make(chan struct{}),
 		httpdonec:        make(chan struct{}),
-		entries:          [][]raftpb.Entry{},
 		snapshotterReady: make(chan *snap.Snapshotter, 1),
 		snapshottingOK:   make(chan struct{}),
 		// rest of structure populated after WAL replay
@@ -364,12 +363,6 @@ var snapshotCatchUpEntriesN uint64 = 10000
 
 func (rc *raftNode) onTriggerSnapshotOK() {
 
-	//for _, v := range rc.entries {
-	//	rc.raftStorage.Append(v)
-	//}
-
-	//rc.entries = [][]raftpb.Entry{}
-
 	compactIndex := uint64(1)
 	if rc.appliedIndex > snapshotCatchUpEntriesN {
 		compactIndex = rc.appliedIndex - snapshotCatchUpEntriesN
@@ -396,23 +389,32 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 	rc.snapshotting = true
 
 	log.Printf("start snapshot [applied index: %d | last snapshot index: %d]", rc.appliedIndex, rc.snapshotIndex)
-	data, err := rc.getSnapshot()
-	if err != nil {
-		log.Panic(err)
-	}
 
-	snap, err := rc.raftStorage.CreateSnapshot(rc.appliedIndex, &rc.confState, data)
-	if err != nil {
-		panic(err)
-	}
+	clone := rc.getSnapshot()
+	appliedIndex := rc.appliedIndex
+	confState := rc.confState
 
 	go func() {
 
+		ss := strGet()
+		ss.appendInt64(0)
+
+		for _, v := range clone {
+			ss.appendBinLog(binlog_snapshot, v.uniKey, v.values, v.version)
+		}
+
 		beg := time.Now()
+
+		snap, err := rc.raftStorage.CreateSnapshot(appliedIndex, &confState, ss.bytes())
+		if err != nil {
+			panic(err)
+		}
 
 		if err := rc.saveSnap(snap); err != nil {
 			panic(err)
 		}
+
+		strPut(ss)
 
 		Infoln("save snapshot time", time.Now().Sub(beg))
 
@@ -507,12 +509,7 @@ func (rc *raftNode) serveChannels() {
 				rc.publishSnapshot(rd.Snapshot)
 			}
 
-			//if rc.snapshotting {
-			//	fmt.Println("here111111")
-			//rc.entries = append(rc.entries, rd.Entries)
-			//} else {
 			rc.raftStorage.Append(rd.Entries)
-			//}
 
 			if islead {
 				rc.transport.Send(rd.Messages)
