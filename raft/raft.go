@@ -509,9 +509,9 @@ func (rc *raftNode) serveChannels() {
 
 			//if rc.snapshotting {
 			//	fmt.Println("here111111")
-			rc.entries = append(rc.entries, rd.Entries)
+			//rc.entries = append(rc.entries, rd.Entries)
 			//} else {
-			//	rc.raftStorage.Append(rd.Entries)
+			rc.raftStorage.Append(rd.Entries)
 			//}
 
 			if islead {
