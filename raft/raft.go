@@ -364,11 +364,11 @@ var snapshotCatchUpEntriesN uint64 = 10000
 
 func (rc *raftNode) onTriggerSnapshotOK() {
 
-	for _, v := range rc.entries {
-		rc.raftStorage.Append(v)
-	}
+	//for _, v := range rc.entries {
+	//	rc.raftStorage.Append(v)
+	//}
 
-	rc.entries = [][]raftpb.Entry{}
+	//rc.entries = [][]raftpb.Entry{}
 
 	compactIndex := uint64(1)
 	if rc.appliedIndex > snapshotCatchUpEntriesN {
@@ -507,12 +507,12 @@ func (rc *raftNode) serveChannels() {
 				rc.publishSnapshot(rd.Snapshot)
 			}
 
-			if rc.snapshotting {
-				fmt.Println("here111111")
-				rc.entries = append(rc.entries, rd.Entries)
-			} else {
-				rc.raftStorage.Append(rd.Entries)
-			}
+			//if rc.snapshotting {
+			//	fmt.Println("here111111")
+			rc.entries = append(rc.entries, rd.Entries)
+			//} else {
+			//	rc.raftStorage.Append(rd.Entries)
+			//}
 
 			if islead {
 				rc.transport.Send(rd.Messages)
