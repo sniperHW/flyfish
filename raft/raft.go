@@ -171,7 +171,7 @@ func (rc *raftNode) removeOldWal(index uint64) {
 	nameIndex, ok := searchIndex(names, index)
 	if ok {
 		for _, v := range names[:nameIndex] {
-			os.Remove(v)
+			os.Remove(rc.waldir + "/" + v)
 			Infoln("remove old wal", v)
 		}
 	}
