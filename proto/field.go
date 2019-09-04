@@ -176,28 +176,6 @@ func UnpackField(filed *Field) interface{} {
 	}
 }
 
-func GetValueType(v interface{}) ValueType {
-	if nil == v {
-		return ValueType_nil
-	}
-
-	switch v.(type) {
-	case string:
-		return ValueType_string
-	case int, int8, int16, int32, int64:
-		return ValueType_int
-	case uint, uint8, uint16, uint32, uint64:
-		return ValueType_uint
-	case float32, float64:
-		return ValueType_float
-	case []byte:
-		return ValueType_blob
-	default:
-		return ValueType_invaild
-	}
-	return ValueType_invaild
-}
-
 func PackField(name string, v interface{}) *Field {
 
 	field := &Field{
