@@ -127,17 +127,16 @@ func (m *Field) Equal(o *Field) bool {
 		return false
 	}
 
-	tt := m.GetType()
-
-	if tt == ValueType_string {
+	switch m.GetType() {
+	case ValueType_string:
 		return m.GetString() == o.GetString()
-	} else if tt == ValueType_float {
+	case ValueType_float:
 		return m.GetFloat() == o.GetFloat()
-	} else if tt == ValueType_int {
+	case ValueType_int:
 		return m.GetInt() == o.GetInt()
-	} else if tt == ValueType_uint {
+	case ValueType_uint:
 		return m.GetUint() == o.GetUint()
-	} else if tt == ValueType_blob {
+	case ValueType_blob:
 		mm := m.GetBlob()
 		oo := o.GetBlob()
 		if len(mm) != len(oo) {
@@ -149,9 +148,10 @@ func (m *Field) Equal(o *Field) bool {
 			}
 		}
 		return true
-
-	} else {
+	case ValueType_nil:
 		return true
+	default:
+		return false
 	}
 }
 
@@ -160,52 +160,20 @@ func UnpackField(filed *Field) interface{} {
 		return nil
 	}
 
-	if filed.IsNil() {
-		return nil
-	} else if filed.IsString() {
+	switch filed.GetType() {
+	case ValueType_string:
 		return filed.GetString()
-	} else if filed.IsInt() {
+	case ValueType_int:
 		return filed.GetInt()
-	} else if filed.IsUint() {
+	case ValueType_uint:
 		return filed.GetUint()
-	} else if filed.IsFloat() {
+	case ValueType_float:
 		return filed.GetFloat()
-	} else if filed.IsBlob() {
+	case ValueType_blob:
 		return filed.GetBlob()
-	} else {
+	default:
 		return nil
 	}
-}
-
-func GetValueType(v interface{}) ValueType {
-	if nil == v {
-		return ValueType_nil
-	}
-
-	switch v.(type) {
-	case string:
-		return ValueType_string
-	case int:
-	case int8:
-	case int16:
-	case int32:
-	case int64:
-		return ValueType_int
-	case uint:
-	case uint8:
-	case uint16:
-	case uint32:
-	case uint64:
-		return ValueType_uint
-	case float32:
-	case float64:
-		return ValueType_float
-	case []byte:
-		return ValueType_blob
-	default:
-		return ValueType_invaild
-	}
-	return ValueType_invaild
 }
 
 func PackField(name string, v interface{}) *Field {

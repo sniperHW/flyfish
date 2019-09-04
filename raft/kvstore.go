@@ -451,8 +451,15 @@ func initKVStore(id *int, cluster *string) {
 	confChangeC := make(chan raftpb.ConfChange)
 
 	// raft provides a commit stream for the proposals from the http api
-	getSnapshot := func() []kvsnap { return caches.getSnapshot() }
+	getSnapshot := func() []kvsnap {
+		if nil == caches {
+			return nil
+		}
+		return caches.getSnapshot()
+	}
+
 	commitC, errorC, snapshotterReady := newRaftNode(*id, strings.Split(*cluster, ","), false, getSnapshot, proposeC, confChangeC)
 
 	caches = newKVStore(<-snapshotterReady, proposeC, commitC, errorC)
+
 }

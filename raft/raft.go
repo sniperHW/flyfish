@@ -75,7 +75,7 @@ type raftNode struct {
 	snapshottingOK chan struct{}
 }
 
-var defaultSnapshotCount uint64 = 10000
+var defaultSnapshotCount uint64 = 1000
 
 // newRaftNode initiates a raft instance and returns a committed log entry
 // channel and error channel. Proposals for log updates are sent over the
@@ -242,6 +242,8 @@ func (rc *raftNode) replayWAL() *wal.WAL {
 	_, st, ents, err := w.ReadAll()
 	if err != nil {
 		log.Fatalf("raftexample: failed to read WAL (%v)", err)
+	} else {
+		log.Printf("ents:%d", len(ents))
 	}
 	rc.raftStorage = raft.NewMemoryStorage()
 	if snapshot != nil {
@@ -386,11 +388,16 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 		return
 	}
 
+	clone := rc.getSnapshot()
+
+	if nil == clone {
+		return
+	}
+
 	rc.snapshotting = true
 
 	log.Printf("start snapshot [applied index: %d | last snapshot index: %d]", rc.appliedIndex, rc.snapshotIndex)
 
-	clone := rc.getSnapshot()
 	appliedIndex := rc.appliedIndex
 	confState := rc.confState
 
