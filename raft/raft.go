@@ -21,7 +21,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"go.etcd.io/etcd/etcdserver/api/rafthttp"
@@ -115,6 +117,61 @@ func (rc *raftNode) isLeader() bool {
 	return rc.node.Status().RaftState == raft.StateLeader
 }
 
+func (rc *raftNode) removeOldWal(index uint64) {
+	filepath.Walk(rc.waldir,
+		func(path string, f os.FileInfo, err error) error {
+			if f == nil {
+				return err
+			}
+
+			if !f.IsDir() && strings.HasSuffix(path, ".wal") {
+				filename := strings.TrimLeft(path, rc.waldir+"/")
+				var _seq uint64
+				var _index uint64
+
+				n, err := fmt.Sscanf(filename, "%016x-%016x.wal", &_seq, &_index)
+				if nil == err && n == 2 {
+					if _index < index {
+						os.Remove(path)
+						Infoln("remove old wal", path)
+					}
+				}
+				return nil
+			}
+
+			return nil
+		})
+}
+
+func (rc *raftNode) removeOldSnapAndWal(term uint64, index uint64) {
+	go func() {
+		filepath.Walk(rc.snapdir,
+			func(path string, f os.FileInfo, err error) error {
+				if f == nil {
+					return err
+				}
+
+				if !f.IsDir() && strings.HasSuffix(path, ".snap") {
+					filename := strings.TrimLeft(path, rc.snapdir+"/")
+					var _term uint64
+					var _index uint64
+
+					n, err := fmt.Sscanf(filename, "%016x-%016x.snap", &_term, &_index)
+					if nil == err && n == 2 {
+						if _term <= term && _index < index {
+							os.Remove(path)
+							Infoln("remove old snap", path)
+							rc.removeOldWal(_index)
+						}
+					}
+					return nil
+				}
+
+				return nil
+			})
+	}()
+}
+
 func (rc *raftNode) saveSnap(snap raftpb.Snapshot) error {
 	// must save the snapshot index to the WAL before saving the
 	// snapshot to maintain the invariant that we only Open the
@@ -129,7 +186,13 @@ func (rc *raftNode) saveSnap(snap raftpb.Snapshot) error {
 	if err := rc.snapshotter.SaveSnap(snap); err != nil {
 		return err
 	}
-	return rc.wal.ReleaseLockTo(snap.Metadata.Index)
+	err := rc.wal.ReleaseLockTo(snap.Metadata.Index)
+
+	if nil == err {
+		rc.removeOldSnapAndWal(snap.Metadata.Term, snap.Metadata.Index)
+	}
+
+	return err
 }
 
 func (rc *raftNode) entriesToApply(ents []raftpb.Entry) (nents []raftpb.Entry) {
