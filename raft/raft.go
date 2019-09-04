@@ -117,30 +117,64 @@ func (rc *raftNode) isLeader() bool {
 	return rc.node.Status().RaftState == raft.StateLeader
 }
 
+func readWALNames(dirpath string) []string {
+	names, err := fileutil.ReadDir(dirpath)
+	if err != nil {
+		return nil
+	}
+	wnames := checkWalNames(names)
+	if len(wnames) == 0 {
+		return nil
+	}
+	return wnames
+}
+
+func checkWalNames(names []string) []string {
+	wnames := make([]string, 0)
+	for _, name := range names {
+		if _, _, err := parseWALName(name); err != nil {
+			continue
+		}
+		wnames = append(wnames, name)
+	}
+	return wnames
+}
+
+func parseWALName(str string) (seq, index uint64, err error) {
+	if !strings.HasSuffix(str, ".wal") {
+		return 0, 0, fmt.Errorf("bad wal file")
+	}
+	_, err = fmt.Sscanf(str, "%016x-%016x.wal", &seq, &index)
+	return seq, index, err
+}
+
+func searchIndex(names []string, index uint64) (int, bool) {
+	for i := len(names) - 1; i >= 0; i-- {
+		name := names[i]
+		_, curIndex, err := parseWALName(name)
+		if err != nil {
+			return -1, false
+		}
+		if index >= curIndex {
+			return i, true
+		}
+	}
+	return -1, false
+}
+
 func (rc *raftNode) removeOldWal(index uint64) {
-	filepath.Walk(rc.waldir,
-		func(path string, f os.FileInfo, err error) error {
-			if f == nil {
-				return err
-			}
+	names := readWALNames(rc.waldir)
+	if names == nil {
+		return
+	}
 
-			if !f.IsDir() && strings.HasSuffix(path, ".wal") {
-				filename := strings.TrimLeft(path, rc.waldir+"/")
-				var _seq uint64
-				var _index uint64
-
-				n, err := fmt.Sscanf(filename, "%016x-%016x.wal", &_seq, &_index)
-				if nil == err && n == 2 {
-					if _index < index {
-						os.Remove(path)
-						Infoln("remove old wal", path)
-					}
-				}
-				return nil
-			}
-
-			return nil
-		})
+	nameIndex, ok := searchIndex(names, index)
+	if ok {
+		for _, v := range names[:nameIndex] {
+			os.Remove(v)
+			Infoln("remove old wal", v)
+		}
+	}
 }
 
 func (rc *raftNode) removeOldSnapAndWal(term uint64, index uint64) {
