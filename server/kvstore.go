@@ -58,21 +58,21 @@ func ctxArrayPut(w *ctxArray) {
 }
 
 type kvstore struct {
-	kv               map[string]*kv
-	mtx              sync.Mutex
-	lruHead          kv
-	lruTail          kv
-	ctxs             *ctxArray
-	nextFlush        time.Time
-	binlogStr        *str
-	f                *os.File
-	filePath         string
-	backFilePath     string
-	binlogCount      int32 //当前binlog文件总binlog数量
-	cacheBinlogCount int32 //待序列化到文件的binlog数量
-	fileSize         int   //当前binlog文件大小
-	make_snapshot    bool  //当前是否正在建立快照
-	binlogQueue      *util.BlockQueue
+	kv            map[string]*kv
+	mtx           sync.Mutex
+	lruHead       kv
+	lruTail       kv
+	ctxs          *ctxArray
+	nextFlush     time.Time
+	binlogStr     *str
+	f             *os.File
+	filePath      string
+	backFilePath  string
+	binlogCount   int32 //当前binlog文件总binlog数量
+	batchCount    int32 //待序列化到文件的binlog数量
+	fileSize      int   //当前binlog文件大小
+	make_snapshot bool  //当前是否正在建立快照
+	binlogQueue   *util.BlockQueue
 }
 
 func getKvstore(uniKey string) *kvstore {
@@ -116,8 +116,8 @@ func (this *kvstore) kickCacheKey() {
 		}
 
 		this.removeLRU(c)
-		this.writeBinlog(binlog_kick, c.uniKey, nil, 0)
-		this.tryFlushBinlog()
+		this.appendBinlog(binlog_kick, c.uniKey, nil, 0)
+		this.tryBatchWrite()
 		delete(this.kv, c.uniKey)
 	}
 }
@@ -155,7 +155,7 @@ func initKvStore() bool {
 				t.Cancel()
 			} else {
 				c.mtx.Lock()
-				c.tryFlushBinlog()
+				c.tryBatchWrite()
 				c.mtx.Unlock()
 			}
 		})
@@ -175,9 +175,9 @@ func initKvStore() bool {
 				closed, localList := c.binlogQueue.Get()
 				for _, v := range localList {
 					switch v.(type) {
-					case *binlogSt:
-						st := v.(*binlogSt)
-						c.flushBinlog(st.binlogStr, st.ctxs, st.cacheBinlogCount)
+					case *binlogBatch:
+						st := v.(*binlogBatch)
+						c.batchWriteBinlog(st.binlogStr, st.ctxs, st.batchCount)
 					default:
 						v.(func())()
 					}

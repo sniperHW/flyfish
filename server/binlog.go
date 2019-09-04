@@ -12,18 +12,45 @@ import (
 	"time"
 )
 
+/*
+ *  binlog操作只有三种合法类型
+ *  snapshot:kv的全量状态信息，如果key被删除,binlog中fields信息为空,version==0
+ *  update:基于前一个snapshot的fields变更以及最新版本号
+ *  kick:将对应key踢除缓存
+ *
+ *  binlog文件的组织:
+ *  对于binlog中存在kv日志，每个kv相关日志必定以一个snapshot开始。
+ *
+ *
+ *  当内存中新插入一个kv对时,当前binlog文件中不存在kv的snapshot,此时kv的snapshoted标记为false。
+ *  这个kv在当前binlog文件中的第一条log将以snapshot标记写入。写入后snapshoted标记设置true,后续更新
+ *  update操作将以update标记写入binlog文件。
+ *
+ *  binlog文件替换:
+ *
+ *  当前binlog文件超过设定的条目数量后，将触发binlog替换流程。
+ *
+ *  1）记录下旧binlog文件的path.
+ *  2) 创建新的binlog文件设置为当前binlog文件。将当前所有kv保存到一个数组中，将每个kv的snapshoted标记设置为false。
+ *  3）启动独立的go程,遍历kv数组，向binlog文件追加snapshot,追加完成后kv的snapshoted标记设置为true。
+ *  4）执行完且持久化到磁盘后删除旧的binlog文件。
+ *
+ *  优化:
+ *  遍历与主服务是并行执行的。因此可能在处理某个kv之前，这个kv接收到了新的update操作请求。因为此时snapshoted标记为false,
+ *  所以会向当前binlog插入snapshot日志并将snapshoted设置为true，当遍历到这个kv时，发现snapshoted为true,则无需再重复写入snapshot。
+ */
+
 const (
 	binlog_none     = 0
 	binlog_snapshot = 1
 	binlog_update   = 2
-	binlog_delete   = 3
-	binlog_kick     = 4
+	binlog_kick     = 3
 )
 
-type binlogSt struct {
-	binlogStr        *str
-	ctxs             *ctxArray
-	cacheBinlogCount int32
+type binlogBatch struct {
+	binlogStr  *str
+	ctxs       *ctxArray
+	batchCount int32
 }
 
 var (
@@ -94,7 +121,7 @@ func (this *kvstore) startSnapshot() {
 			if (v.status == cache_ok || v.status == cache_missing) && !v.snapshoted {
 				c++
 				v.snapshoted = true
-				this.writeBinlog(binlog_snapshot, v.uniKey, v.values, v.version)
+				this.appendBinlog(binlog_snapshot, v.uniKey, v.values, v.version)
 
 			}
 			v.make_snapshot = false
@@ -121,7 +148,7 @@ func (this *kvstore) startSnapshot() {
 	}()
 }
 
-func (this *kvstore) flushBinlog(binlogStr *str, ctxs *ctxArray, cacheBinlogCount int32) {
+func (this *kvstore) batchWriteBinlog(binlogStr *str, ctxs *ctxArray, batchCount int32) {
 	this.mtx.Lock()
 
 	beg := time.Now()
@@ -168,11 +195,11 @@ func (this *kvstore) flushBinlog(binlogStr *str, ctxs *ctxArray, cacheBinlogCoun
 
 	this.mtx.Lock()
 
-	if this.binlogCount >= config.MaxBinlogCount || this.fileSize >= int(config.MaxBinlogFileSize) {
+	if this.binlogCount >= config.MaxBinlogCount { // || this.fileSize >= int(config.MaxBinlogFileSize) {
 		this.startSnapshot()
 	}
 
-	Debugln("flush time:", time.Now().Sub(beg), cacheBinlogCount)
+	Debugln("flush time:", time.Now().Sub(beg), batchCount)
 
 	this.mtx.Unlock()
 
@@ -198,17 +225,17 @@ func (this *kvstore) flushBinlog(binlogStr *str, ctxs *ctxArray, cacheBinlogCoun
 	strPut(binlogStr)
 }
 
-func (this *kvstore) tryFlushBinlog() {
+func (this *kvstore) tryBatchWrite() {
 
-	if this.cacheBinlogCount > 0 {
+	if this.batchCount > 0 {
 
 		config := conf.GetConfig()
 
-		if this.cacheBinlogCount >= int32(config.FlushCount) || this.binlogStr.dataLen() >= config.FlushSize || time.Now().After(this.nextFlush) {
+		if this.batchCount >= int32(config.FlushCount) || this.binlogStr.dataLen() >= config.FlushSize || time.Now().After(this.nextFlush) {
 
-			cacheBinlogCount := this.cacheBinlogCount
+			batchCount := this.batchCount
 
-			this.cacheBinlogCount = 0
+			this.batchCount = 0
 
 			binlogStr := this.binlogStr
 			ctxs := this.ctxs
@@ -216,25 +243,25 @@ func (this *kvstore) tryFlushBinlog() {
 			this.binlogStr = nil
 			this.ctxs = nil
 
-			this.binlogQueue.AddNoWait(&binlogSt{
-				binlogStr:        binlogStr,
-				ctxs:             ctxs,
-				cacheBinlogCount: cacheBinlogCount,
+			this.binlogQueue.AddNoWait(&binlogBatch{
+				binlogStr:  binlogStr,
+				ctxs:       ctxs,
+				batchCount: batchCount,
 			})
 		}
 	}
 }
 
-func (this *kvstore) writeBinlog(tt int, unikey string, fields map[string]*proto.Field, version int64) {
+func (this *kvstore) appendBinlog(tt int, unikey string, fields map[string]*proto.Field, version int64) {
 
 	if nil == this.binlogStr {
 		this.binlogStr = strGet()
 	}
 
 	this.binlogCount++
-	this.cacheBinlogCount++
+	this.batchCount++
 
-	if this.cacheBinlogCount == 1 {
+	if this.batchCount == 1 {
 		this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(conf.GetConfig().FlushInterval))
 	}
 
@@ -372,27 +399,23 @@ func (this *kvstore) processUpdate(ctx *cmdContext) {
 
 	switch ckey.sqlFlag {
 	case write_back_delete:
-		if ckey.snapshoted {
-			this.writeBinlog(binlog_delete, ckey.uniKey, nil, 0)
-		} else {
-			ckey.snapshoted = true
-			this.writeBinlog(binlog_snapshot, ckey.uniKey, nil, 0)
-		}
+		ckey.snapshoted = true
+		this.appendBinlog(binlog_snapshot, ckey.uniKey, nil, 0)
 	case write_back_insert, write_back_insert_update:
 		ckey.snapshoted = true
-		this.writeBinlog(binlog_snapshot, ckey.uniKey, ckey.values, ckey.version)
+		this.appendBinlog(binlog_snapshot, ckey.uniKey, ckey.values, ckey.version)
 	case write_back_update:
 		if ckey.snapshoted {
-			this.writeBinlog(binlog_update, ckey.uniKey, ctx.fields, ckey.version)
+			this.appendBinlog(binlog_update, ckey.uniKey, ctx.fields, ckey.version)
 		} else {
 			ckey.snapshoted = true
-			this.writeBinlog(binlog_snapshot, ckey.uniKey, ckey.values, ckey.version)
+			this.appendBinlog(binlog_snapshot, ckey.uniKey, ckey.values, ckey.version)
 		}
 	}
 
 	ckey.mtx.Unlock()
 
-	this.tryFlushBinlog()
+	this.tryBatchWrite()
 
 	this.mtx.Unlock()
 

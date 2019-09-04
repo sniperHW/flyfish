@@ -159,17 +159,6 @@ func replay(recordCount int, path string, begOffset int, tt int, unikey string, 
 			ckey.version = version
 			ckey.sqlFlag = write_back_insert_update
 		}
-	} else if tt == binlog_delete {
-		if ckey != nil {
-			if ckey.status != cache_ok {
-				Fatalln("invaild tt", path, unikey, tt, recordCount, begOffset)
-				return false
-			}
-			ckey.values = nil
-			ckey.version = version
-			ckey.status = cache_missing
-			ckey.sqlFlag = write_back_delete
-		}
 	} else if tt == binlog_kick {
 		if ckey != nil {
 			m.removeLRU(ckey)
@@ -271,7 +260,7 @@ func (this *kvstore) firstSnapshot(config *conf.Config, wg *sync.WaitGroup) {
 	for _, v := range this.kv {
 		v.mtx.Lock()
 		v.snapshoted = true
-		this.writeBinlog(binlog_snapshot, v.uniKey, v.values, v.version)
+		this.appendBinlog(binlog_snapshot, v.uniKey, v.values, v.version)
 
 		/*
 		 *  如果某个key的binlog在序列化到磁盘后回写到sql前进程崩溃，且这个key长时间不被访问，
@@ -309,7 +298,7 @@ func (this *kvstore) firstSnapshot(config *conf.Config, wg *sync.WaitGroup) {
 	this.f = f
 	this.filePath = path
 	this.fileSize = this.binlogStr.dataLen()
-	this.cacheBinlogCount = 0
+	this.batchCount = 0
 
 	this.binlogStr.reset()
 
@@ -388,8 +377,6 @@ func binlogTypeToString(tt int) string {
 		return "binlog_snapshot"
 	case binlog_update:
 		return "binlog_update"
-	case binlog_delete:
-		return "binlog_delete"
 	case binlog_kick:
 		return "binlog_kick"
 	default:
