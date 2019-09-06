@@ -20,6 +20,7 @@ const (
 	ERR_SERVER_STOPED
 	ERR_BUSY
 	ERR_ERROR
+	ERR_NOT_LEADER
 	ERR_END
 )
 
@@ -42,6 +43,7 @@ var err_str []string = []string{
 	"scan finish",
 	"server stoped",
 	"busy",
+	"not leader",
 	"error",
 }
 

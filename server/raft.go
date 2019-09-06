@@ -81,6 +81,9 @@ type raftNode struct {
 
 	muPendingPropose sync.Mutex
 	pendingPropose   *list.List //[]*batchBinlog
+
+	muLeader sync.Mutex
+	leader   int
 }
 
 var defaultSnapshotCount uint64 = 10000
@@ -121,7 +124,9 @@ func newRaftNode(id int, peers []string, join bool, getSnapshot func() []kvsnap,
 }
 
 func (rc *raftNode) isLeader() bool {
-	return rc.node.Status().RaftState == raft.StateLeader
+	rc.muLeader.Lock()
+	defer rc.muLeader.Unlock()
+	return rc.leader == rc.id
 }
 
 func readWALNames(dirpath string) []string {
@@ -261,13 +266,13 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 				break
 			}
 
-			index := binary.BigEndian.Uint64(ents[i].Data[0:8])
+			//index := binary.BigEndian.Uint64(ents[i].Data[0:8])
 			committedEntry := &commitedBatchBinlog{
 				data: ents[i].Data[8:],
 			}
 			rc.muPendingPropose.Lock()
 			front := rc.pendingPropose.Front()
-			if nil != front && front.Value.(*batchBinlog).index == index {
+			if nil != front { //&& front.Value.(*batchBinlog).index == index {
 				committedEntry.ctxs = front.Value.(*batchBinlog).ctxs
 				committedEntry.localPropose = true
 				strPut(front.Value.(*batchBinlog).binlogStr)
@@ -549,6 +554,29 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 
 }
 
+func (rc *raftNode) onLoseLeadership() {
+	rc.muPendingPropose.Lock()
+
+	for e := rc.pendingPropose.Front(); e != nil; e = e.Next() {
+		v := e.Value.(*batchBinlog)
+		strPut(v.binlogStr)
+		if nil != v.ctxs {
+			for i := 0; i < v.ctxs.count; i++ {
+				ctx := v.ctxs.ctxs[i]
+				if ctx.getCmdType() != cmdKick {
+					ctx.reply(errcode.ERR_NOT_LEADER, nil, 0)
+				}
+				ctx.getCacheKey().processQueueCmd()
+			}
+			ctxArrayPut(v.ctxs)
+		}
+	}
+
+	rc.pendingPropose = list.New()
+
+	rc.muPendingPropose.Unlock()
+}
+
 func (rc *raftNode) serveChannels() {
 	snap, err := rc.raftStorage.Snapshot()
 	if err != nil {
@@ -573,46 +601,64 @@ func (rc *raftNode) serveChannels() {
 				if !ok {
 					rc.proposeC = nil
 				} else {
-					// blocks until accepted by raft state machine
-					prop.index = rc.lastIndex
-					binary.BigEndian.PutUint64(prop.binlogStr.data[:8], prop.index)
-					rc.muPendingPropose.Lock()
-					e := rc.pendingPropose.PushBack(prop)
-					rc.muPendingPropose.Unlock()
-					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-					err := rc.node.Propose(ctx, prop.binlogStr.bytes())
-					cancel()
 
-					if nil != err {
-						if err == raft.ErrStopped {
+					go func() {
+
+						if !rc.isLeader() {
 							strPut(prop.binlogStr)
 							if nil != prop.ctxs {
 								for i := 0; i < prop.ctxs.count; i++ {
 									v := prop.ctxs.ctxs[i]
 									if v.getCmdType() != cmdKick {
-										v.reply(errcode.ERR_SERVER_STOPED, nil, nil)
+										v.reply(errcode.ERR_NOT_LEADER, nil, 0)
 									}
+									v.getCacheKey().processQueueCmd()
 								}
 								ctxArrayPut(prop.ctxs)
 							}
-							rc.muPendingPropose.Lock()
-							rc.pendingPropose.Remove(e)
-							rc.muPendingPropose.Unlock()
 						} else {
-							/*   timeout
-							 *   只是对客户端超时,复制处理还在继续
-							 *   所以只向客户端返回response
-							 */
-							if nil != prop.ctxs {
-								for i := 0; i < prop.ctxs.count; i++ {
-									v := prop.ctxs.ctxs[i]
-									if v.getCmdType() != cmdKick {
-										v.reply(errcode.ERR_TIMEOUT, nil, nil)
+							// blocks until accepted by raft state machine
+							//prop.index = rc.lastIndex
+							binary.BigEndian.PutUint64(prop.binlogStr.data[:8], prop.index)
+							rc.muPendingPropose.Lock()
+							e := rc.pendingPropose.PushBack(prop)
+							rc.muPendingPropose.Unlock()
+							ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+							err := rc.node.Propose(ctx, prop.binlogStr.bytes())
+							cancel()
+
+							if nil != err {
+								if err == raft.ErrStopped {
+									strPut(prop.binlogStr)
+									if nil != prop.ctxs {
+										for i := 0; i < prop.ctxs.count; i++ {
+											v := prop.ctxs.ctxs[i]
+											if v.getCmdType() != cmdKick {
+												v.reply(errcode.ERR_SERVER_STOPED, nil, 0)
+											}
+										}
+										ctxArrayPut(prop.ctxs)
+									}
+									rc.muPendingPropose.Lock()
+									rc.pendingPropose.Remove(e)
+									rc.muPendingPropose.Unlock()
+								} else {
+									/*   timeout
+									 *   只是对客户端超时,复制处理还在继续
+									 *   所以只向客户端返回response
+									 */
+									if nil != prop.ctxs {
+										for i := 0; i < prop.ctxs.count; i++ {
+											v := prop.ctxs.ctxs[i]
+											if v.getCmdType() != cmdKick {
+												v.reply(errcode.ERR_TIMEOUT, nil, 0)
+											}
+										}
 									}
 								}
 							}
 						}
-					}
+					}()
 				}
 
 			case cc, ok := <-rc.confChangeC:
@@ -662,6 +708,15 @@ func (rc *raftNode) serveChannels() {
 				rh.updateLeadership(newLeader)
 				r.td.Reset()*/
 				//islead = rd.RaftState == raft.StateLeader
+				rc.muLeader.Lock()
+				oldLeader := rc.leader
+				rc.leader = int(rd.SoftState.Lead)
+				rc.muLeader.Unlock()
+
+				if oldLeader == rc.id && rc.leader != rc.id {
+					rc.onLoseLeadership()
+				}
+
 				Infoln(rd.SoftState.Lead, "is leader")
 			}
 

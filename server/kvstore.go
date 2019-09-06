@@ -472,7 +472,7 @@ func (s *kvstore) recoverFromSnapshot(snapshot []byte) bool {
 
 func initKVStore(id *int, cluster *string) {
 
-	proposeC := make(chan *batchBinlog, 100)
+	proposeC := make(chan *batchBinlog)
 	confChangeC := make(chan raftpb.ConfChange)
 
 	// raft provides a commit stream for the proposals from the http api
