@@ -475,6 +475,9 @@ func (s *kvstore) recoverFromSnapshot(snapshot []byte) bool {
 	for offset < n {
 
 		newOffset, tt, unikey, version, values := readBinLog(snapshot, offset)
+
+		Infoln(newOffset, tt, unikey, version, values)
+
 		offset = newOffset
 
 		slot := s.slots[StringHash(unikey)%len(s.slots)]
