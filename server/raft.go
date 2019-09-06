@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/kendynet/util"
 	"go.etcd.io/etcd/etcdserver/api/rafthttp"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	stats "go.etcd.io/etcd/etcdserver/api/v2stats"
@@ -84,6 +85,8 @@ type raftNode struct {
 
 	muLeader sync.Mutex
 	leader   int
+
+	pipeline *util.BlockQueue
 }
 
 var defaultSnapshotCount uint64 = 10000
@@ -119,6 +122,7 @@ func newRaftNode(id int, peers []string, join bool, getSnapshot func() []kvsnap,
 		pendingPropose:   list.New(), //[]*batchBinlog{}
 		// rest of structure populated after WAL replay
 	}
+	rc.startProposePipeline()
 	go rc.startRaft()
 	return commitC, errorC, rc.snapshotterReady
 }
@@ -577,6 +581,82 @@ func (rc *raftNode) onLoseLeadership() {
 	rc.muPendingPropose.Unlock()
 }
 
+func (rc *raftNode) startProposePipeline() {
+	rc.pipeline = util.NewBlockQueue()
+
+	go func() {
+
+		for {
+			closed, localList := rc.pipeline.Get()
+			for _, vv := range localList {
+
+				prop := vv.(*batchBinlog)
+
+				if !rc.isLeader() {
+					strPut(prop.binlogStr)
+					if nil != prop.ctxs {
+						for i := 0; i < prop.ctxs.count; i++ {
+							v := prop.ctxs.ctxs[i]
+							if v.getCmdType() != cmdKick {
+								v.reply(errcode.ERR_NOT_LEADER, nil, 0)
+							}
+							v.getCacheKey().processQueueCmd()
+						}
+						ctxArrayPut(prop.ctxs)
+					}
+				} else {
+					// blocks until accepted by raft state machine
+					//prop.index = rc.lastIndex
+					binary.BigEndian.PutUint64(prop.binlogStr.data[:8], prop.index)
+					rc.muPendingPropose.Lock()
+					e := rc.pendingPropose.PushBack(prop)
+					rc.muPendingPropose.Unlock()
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					err := rc.node.Propose(ctx, prop.binlogStr.bytes())
+					cancel()
+
+					if nil != err {
+						if err == raft.ErrStopped {
+							strPut(prop.binlogStr)
+							if nil != prop.ctxs {
+								for i := 0; i < prop.ctxs.count; i++ {
+									v := prop.ctxs.ctxs[i]
+									if v.getCmdType() != cmdKick {
+										v.reply(errcode.ERR_SERVER_STOPED, nil, 0)
+									}
+								}
+								ctxArrayPut(prop.ctxs)
+							}
+							rc.muPendingPropose.Lock()
+							rc.pendingPropose.Remove(e)
+							rc.muPendingPropose.Unlock()
+						} else {
+							/*   timeout
+							 *   只是对客户端超时,复制处理还在继续
+							 *   所以只向客户端返回response
+							 */
+							if nil != prop.ctxs {
+								for i := 0; i < prop.ctxs.count; i++ {
+									v := prop.ctxs.ctxs[i]
+									if v.getCmdType() != cmdKick {
+										v.reply(errcode.ERR_TIMEOUT, nil, 0)
+									}
+								}
+							}
+						}
+					}
+				}
+
+				//this.append(v)
+			}
+
+			if closed {
+				return
+			}
+		}
+	}()
+}
+
 func (rc *raftNode) serveChannels() {
 	snap, err := rc.raftStorage.Snapshot()
 	if err != nil {
@@ -601,64 +681,7 @@ func (rc *raftNode) serveChannels() {
 				if !ok {
 					rc.proposeC = nil
 				} else {
-
-					go func() {
-
-						if !rc.isLeader() {
-							strPut(prop.binlogStr)
-							if nil != prop.ctxs {
-								for i := 0; i < prop.ctxs.count; i++ {
-									v := prop.ctxs.ctxs[i]
-									if v.getCmdType() != cmdKick {
-										v.reply(errcode.ERR_NOT_LEADER, nil, 0)
-									}
-									v.getCacheKey().processQueueCmd()
-								}
-								ctxArrayPut(prop.ctxs)
-							}
-						} else {
-							// blocks until accepted by raft state machine
-							//prop.index = rc.lastIndex
-							binary.BigEndian.PutUint64(prop.binlogStr.data[:8], prop.index)
-							rc.muPendingPropose.Lock()
-							e := rc.pendingPropose.PushBack(prop)
-							rc.muPendingPropose.Unlock()
-							ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-							err := rc.node.Propose(ctx, prop.binlogStr.bytes())
-							cancel()
-
-							if nil != err {
-								if err == raft.ErrStopped {
-									strPut(prop.binlogStr)
-									if nil != prop.ctxs {
-										for i := 0; i < prop.ctxs.count; i++ {
-											v := prop.ctxs.ctxs[i]
-											if v.getCmdType() != cmdKick {
-												v.reply(errcode.ERR_SERVER_STOPED, nil, 0)
-											}
-										}
-										ctxArrayPut(prop.ctxs)
-									}
-									rc.muPendingPropose.Lock()
-									rc.pendingPropose.Remove(e)
-									rc.muPendingPropose.Unlock()
-								} else {
-									/*   timeout
-									 *   只是对客户端超时,复制处理还在继续
-									 *   所以只向客户端返回response
-									 */
-									if nil != prop.ctxs {
-										for i := 0; i < prop.ctxs.count; i++ {
-											v := prop.ctxs.ctxs[i]
-											if v.getCmdType() != cmdKick {
-												v.reply(errcode.ERR_TIMEOUT, nil, 0)
-											}
-										}
-									}
-								}
-							}
-						}
-					}()
+					rc.pipeline.AddNoWait(prop)
 				}
 
 			case cc, ok := <-rc.confChangeC:
