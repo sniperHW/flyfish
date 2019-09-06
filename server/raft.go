@@ -89,7 +89,7 @@ type raftNode struct {
 	pipeline *util.BlockQueue
 }
 
-var defaultSnapshotCount uint64 = 10000
+var defaultSnapshotCount uint64 = 100
 
 // newRaftNode initiates a raft instance and returns a committed log entry
 // channel and error channel. Proposals for log updates are sent over the
@@ -488,7 +488,7 @@ func (rc *raftNode) publishSnapshot(snapshotToSave raftpb.Snapshot) {
 	rc.appliedIndex = snapshotToSave.Metadata.Index
 }
 
-var snapshotCatchUpEntriesN uint64 = 10000
+var snapshotCatchUpEntriesN uint64 = 100
 
 func (rc *raftNode) onTriggerSnapshotOK() {
 
@@ -535,6 +535,9 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 
 		for _, v := range clone {
 			for _, vv := range v {
+				//if "" == vv.uniKey || vv.version == 0 {
+				//	panic("error")
+				//}
 				ss.appendBinLog(binlog_snapshot, vv.uniKey, vv.values, vv.version)
 			}
 		}

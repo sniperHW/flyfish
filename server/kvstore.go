@@ -74,7 +74,7 @@ func ctxArrayPut(w *ctxArray) {
 	ctxArrayPool.Put(w)
 }
 
-var kvSlotSize int = 63
+var kvSlotSize int = 129
 
 type kvSlot struct {
 	kv  map[string]*cacheKey
@@ -321,7 +321,7 @@ func (s *kvstore) getSnapshot() [][]kvsnap {
 
 	beg := time.Now()
 
-	ret := make([][]kvsnap, len(s.slots))
+	ret := make([][]kvsnap, 0, len(s.slots))
 
 	ch := make(chan []kvsnap)
 
@@ -329,15 +329,15 @@ func (s *kvstore) getSnapshot() [][]kvsnap {
 		go func(i int) {
 			slot := s.slots[i]
 			slot.mtx.Lock()
-			kvsnaps := make([]kvsnap, len(slot.kv))
+			kvsnaps := make([]kvsnap, 0, len(slot.kv))
 			for _, v := range slot.kv {
 				v.mtx.Lock()
 				if v.status == cache_ok || v.status == cache_missing {
 					v.snapshoted = true
 
-					if v.uniKey == "" {
-						panic("uniKey is nil")
-					}
+					//if v.uniKey == "" || v.version == 0 {
+					//	panic("uniKey is nil")
+					//}
 
 					s := kvsnap{
 						uniKey:  v.uniKey,
