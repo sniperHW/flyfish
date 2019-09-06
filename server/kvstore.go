@@ -335,6 +335,10 @@ func (s *kvstore) getSnapshot() [][]kvsnap {
 				if v.status == cache_ok || v.status == cache_missing {
 					v.snapshoted = true
 
+					if v.uniKey == "" {
+						panic("uniKey is nil")
+					}
+
 					s := kvsnap{
 						uniKey:  v.uniKey,
 						version: v.version,
@@ -476,7 +480,7 @@ func (s *kvstore) recoverFromSnapshot(snapshot []byte) bool {
 
 		newOffset, tt, unikey, version, values := readBinLog(snapshot, offset)
 
-		Infoln(newOffset, tt, unikey, version, values)
+		//Infoln(newOffset, tt, unikey, version, values)
 
 		offset = newOffset
 
