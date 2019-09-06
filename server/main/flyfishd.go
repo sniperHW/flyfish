@@ -4,7 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/sniperHW/flyfish/conf"
-	flyfish "github.com/sniperHW/flyfish/raft"
+	flyfish "github.com/sniperHW/flyfish/server"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
