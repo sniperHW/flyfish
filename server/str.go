@@ -137,6 +137,35 @@ func (this *str) append(in string) *str {
 	return this
 }
 
+func (this *str) appendBinLog(tt int, unikey string, fields map[string]*proto.Field, version int64) {
+
+	//写操作码1byte
+	this.appendByte(byte(tt))
+	//写unikey
+	this.appendInt32(int32(len(unikey)))
+	this.append(unikey)
+	//写version
+	this.appendInt64(version)
+	if tt == binlog_snapshot || tt == binlog_update {
+		pos := this.len
+		this.appendInt32(int32(0))
+		if nil != fields {
+			c := 0
+			for n, v := range fields {
+				if n != "__version__" {
+					c++
+					this.appendField(v)
+				}
+			}
+			if c > 0 {
+				binary.BigEndian.PutUint32(this.data[pos:pos+4], uint32(c))
+			}
+		}
+	} else {
+		this.appendInt32(int32(0))
+	}
+}
+
 func (this *str) join(other []*str, sep string) *str {
 	if len(other) > 0 {
 		for i, v := range other {

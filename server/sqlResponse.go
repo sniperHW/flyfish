@@ -20,7 +20,7 @@ func onSqlNotFound(ctx *cmdContext) {
 		ckey.processQueueCmd()
 	} else {
 		ctx.writeBackFlag = write_back_insert
-		ckey.m.doWriteBack(ctx)
+		ckey.m.commit(ctx)
 	}
 }
 
@@ -79,7 +79,7 @@ func onSqlLoadOKSet(ctx *cmdContext) {
 	default:
 	}
 	ctx.writeBackFlag = write_back_update //sql中存在,使用update回写
-	ckey.m.doWriteBack(ctx)
+	ckey.m.commit(ctx)
 }
 
 func onSqlLoadOKDel(ctx *cmdContext) {
@@ -100,7 +100,7 @@ func onSqlLoadOKDel(ctx *cmdContext) {
 		ckey.processQueueCmd()
 	} else {
 		ctx.writeBackFlag = write_back_delete
-		ckey.m.doWriteBack(ctx)
+		ckey.m.commit(ctx)
 	}
 }
 

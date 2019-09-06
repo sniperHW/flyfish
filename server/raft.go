@@ -15,17 +15,11 @@
 package raft
 
 import (
+	"container/list"
 	"context"
+	"encoding/binary"
 	"fmt"
-	"log"
-	"net/http"
-	"net/url"
-	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"time"
-
+	"github.com/sniperHW/flyfish/errcode"
 	"go.etcd.io/etcd/etcdserver/api/rafthttp"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	stats "go.etcd.io/etcd/etcdserver/api/v2stats"
@@ -36,14 +30,23 @@ import (
 	"go.etcd.io/etcd/wal"
 	"go.etcd.io/etcd/wal/walpb"
 	"go.uber.org/zap"
+	"log"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
 )
 
 // A key-value stream backed by raft
 type raftNode struct {
-	proposeC    <-chan []byte            // proposed messages (k,v)
-	confChangeC <-chan raftpb.ConfChange // proposed cluster config changes
-	commitC     chan<- *[]byte           // entries committed to log (k,v)
-	errorC      chan<- error             // errors from raft session
+	proposeC    <-chan *batchBinlog         //<-chan []byte            // proposed messages (k,v)
+	confChangeC <-chan raftpb.ConfChange    // proposed cluster config changes
+	commitC     chan<- *commitedBatchBinlog //chan<- *[]byte           // entries committed to log (k,v)
+	errorC      chan<- error                // errors from raft session
 
 	id          int      // client ID for raft session
 	peers       []string // raft peer URLs
@@ -75,6 +78,9 @@ type raftNode struct {
 	snapshotting   bool             //当前是否正在做快照
 	entries        [][]raftpb.Entry //快照期间无法添加到storage中的[]raftpb.Entry
 	snapshottingOK chan struct{}
+
+	muPendingPropose sync.Mutex
+	pendingPropose   *list.List //[]*batchBinlog
 }
 
 var defaultSnapshotCount uint64 = 10000
@@ -84,10 +90,10 @@ var defaultSnapshotCount uint64 = 10000
 // provided the proposal channel. All log entries are replayed over the
 // commit channel, followed by a nil message (to indicate the channel is
 // current), then new log entries. To shutdown, close proposeC and read errorC.
-func newRaftNode(id int, peers []string, join bool, getSnapshot func() []kvsnap, proposeC <-chan []byte,
-	confChangeC <-chan raftpb.ConfChange) (<-chan *[]byte, <-chan error, <-chan *snap.Snapshotter) {
+func newRaftNode(id int, peers []string, join bool, getSnapshot func() []kvsnap, proposeC <-chan *batchBinlog,
+	confChangeC <-chan raftpb.ConfChange) (<-chan *commitedBatchBinlog, <-chan error, <-chan *snap.Snapshotter) {
 
-	commitC := make(chan *[]byte)
+	commitC := make(chan *commitedBatchBinlog)
 	errorC := make(chan error)
 
 	rc := &raftNode{
@@ -107,6 +113,7 @@ func newRaftNode(id int, peers []string, join bool, getSnapshot func() []kvsnap,
 		httpdonec:        make(chan struct{}),
 		snapshotterReady: make(chan *snap.Snapshotter, 1),
 		snapshottingOK:   make(chan struct{}),
+		pendingPropose:   list.New(), //[]*batchBinlog{}
 		// rest of structure populated after WAL replay
 	}
 	go rc.startRaft()
@@ -253,9 +260,23 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 				// ignore empty messages
 				break
 			}
-			//s := string(ents[i].Data)
+
+			index := binary.BigEndian.Uint64(ents[i].Data[0:8])
+			committedEntry := &commitedBatchBinlog{
+				data: ents[i].Data[8:],
+			}
+			rc.muPendingPropose.Lock()
+			front := rc.pendingPropose.Front()
+			if nil != front && front.Value.(*batchBinlog).index == index {
+				committedEntry.ctxs = front.Value.(*batchBinlog).ctxs
+				committedEntry.localPropose = true
+				strPut(front.Value.(*batchBinlog).binlogStr)
+				rc.pendingPropose.Remove(front)
+			}
+			rc.muPendingPropose.Unlock()
+
 			select {
-			case rc.commitC <- &ents[i].Data:
+			case rc.commitC <- committedEntry:
 			case <-rc.stopc:
 				return false
 			}
@@ -553,7 +574,45 @@ func (rc *raftNode) serveChannels() {
 					rc.proposeC = nil
 				} else {
 					// blocks until accepted by raft state machine
-					rc.node.Propose(context.TODO(), prop)
+					prop.index = rc.lastIndex
+					binary.BigEndian.PutUint64(prop.binlogStr.data[:8], prop.index)
+					rc.muPendingPropose.Lock()
+					e := rc.pendingPropose.PushBack(prop)
+					rc.muPendingPropose.Unlock()
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					err := rc.node.Propose(ctx, prop.binlogStr.bytes())
+					cancel()
+
+					if nil != err {
+						if err == raft.ErrStopped {
+							strPut(prop.binlogStr)
+							if nil != prop.ctxs {
+								for i := 0; i < prop.ctxs.count; i++ {
+									v := prop.ctxs.ctxs[i]
+									if v.getCmdType() != cmdKick {
+										v.reply(errcode.ERR_SERVER_STOPED, nil, nil)
+									}
+								}
+								ctxArrayPut(prop.ctxs)
+							}
+							rc.muPendingPropose.Lock()
+							rc.pendingPropose.Remove(e)
+							rc.muPendingPropose.Unlock()
+						} else {
+							/*   timeout
+							 *   只是对客户端超时,复制处理还在继续
+							 *   所以只向客户端返回response
+							 */
+							if nil != prop.ctxs {
+								for i := 0; i < prop.ctxs.count; i++ {
+									v := prop.ctxs.ctxs[i]
+									if v.getCmdType() != cmdKick {
+										v.reply(errcode.ERR_TIMEOUT, nil, nil)
+									}
+								}
+							}
+						}
+					}
 				}
 
 			case cc, ok := <-rc.confChangeC:

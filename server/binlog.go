@@ -2,14 +2,9 @@ package raft
 
 import (
 	"encoding/binary"
-	//"fmt"
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
-	//"github.com/sniperHW/kendynet/util"
-	//"hash/crc64"
-	//"os"
-	"sync/atomic"
 	"time"
 )
 
@@ -21,19 +16,27 @@ const (
 	binlog_kick     = 4
 )
 
-var (
-	idcounter int64
-)
+type batchBinlog struct {
+	binlogStr *str
+	ctxs      *ctxArray
+	index     uint64
+}
 
-func (this *kvstore) tryFlush() {
+type commitedBatchBinlog struct {
+	data         []byte
+	ctxs         *ctxArray
+	localPropose bool
+}
 
-	if this.cacheBinlogCount > 0 {
+func (this *kvstore) tryCommitBatch() {
+
+	if this.batchCount > 0 {
 
 		config := conf.GetConfig()
 
-		if this.cacheBinlogCount >= int32(config.FlushCount) || this.binlogStr.dataLen() >= config.FlushSize || time.Now().After(this.nextFlush) {
+		if this.batchCount >= int32(config.FlushCount) || this.binlogStr.dataLen() >= config.FlushSize || time.Now().After(this.nextFlush) {
 
-			this.cacheBinlogCount = 0
+			this.batchCount = 0
 
 			binlogStr := this.binlogStr
 			ctxs := this.ctxs
@@ -41,68 +44,30 @@ func (this *kvstore) tryFlush() {
 			this.binlogStr = nil
 			this.ctxs = nil
 
-			id := atomic.AddInt64(&idcounter, 1)
+			binary.BigEndian.PutUint64(binlogStr.data[:8], uint64(0))
 
-			binary.BigEndian.PutUint64(binlogStr.data[:8], uint64(id))
-
-			this.Propose(&binlogSt{
+			this.Propose(&batchBinlog{
 				binlogStr: binlogStr,
 				ctxs:      ctxs,
-				id:        id,
 			})
 		}
 	}
 }
 
-func (this *str) appendBinLog(tt int, unikey string, fields map[string]*proto.Field, version int64) {
-
-	//写操作码1byte
-	this.appendByte(byte(tt))
-	//写unikey
-	this.appendInt32(int32(len(unikey)))
-	this.append(unikey)
-	//写version
-	this.appendInt64(version)
-	if tt == binlog_snapshot || tt == binlog_update {
-		pos := this.len
-		this.appendInt32(int32(0))
-		if nil != fields {
-			c := 0
-			for n, v := range fields {
-				if n != "__version__" {
-					c++
-					this.appendField(v)
-				}
-			}
-			if c > 0 {
-				binary.BigEndian.PutUint32(this.data[pos:pos+4], uint32(c))
-			}
-		}
-	} else {
-		this.appendInt32(int32(0))
-	}
-}
-
-func (this *kvstore) write(tt int, unikey string, fields map[string]*proto.Field, version int64) {
+func (this *kvstore) appendBinLog(tt int, unikey string, fields map[string]*proto.Field, version int64) {
 
 	if nil == this.binlogStr {
 		this.binlogStr = strGet()
 		this.binlogStr.appendInt64(0)
 	}
 
-	this.cacheBinlogCount++
+	this.batchCount++
 
-	if this.cacheBinlogCount == 1 {
+	if this.batchCount == 1 {
 		this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(conf.GetConfig().FlushInterval))
 	}
 
 	this.binlogStr.appendBinLog(tt, unikey, fields, version)
-
-}
-
-func (this *kvstore) writeKick(unikey string) {
-	this.write(binlog_kick, unikey, nil, 0)
-	this.tryFlush()
 }
 
 func fillDefaultValue(meta *table_meta, ctx *cmdContext) {
@@ -114,7 +79,7 @@ func fillDefaultValue(meta *table_meta, ctx *cmdContext) {
 	}
 }
 
-func (this *kvstore) checkCacheKey(ckey *cacheKey, ctx *cmdContext) (bool, int) {
+func (this *kvstore) checkContext(ckey *cacheKey, ctx *cmdContext) (bool, int) {
 	ckey.mtx.Lock()
 
 	gotErr := false
@@ -221,7 +186,7 @@ func (this *kvstore) checkCacheKey(ckey *cacheKey, ctx *cmdContext) (bool, int) 
 	}
 }
 
-func (this *kvstore) writeBack(ctx *cmdContext) {
+func (this *kvstore) commit(ctx *cmdContext) {
 
 	if ctx.writeBackFlag == write_back_none {
 		panic("ctx.writeBackFlag == write_back_none")
@@ -231,7 +196,7 @@ func (this *kvstore) writeBack(ctx *cmdContext) {
 
 	ckey := ctx.getCacheKey()
 
-	ok, binop := this.checkCacheKey(ckey, ctx)
+	ok, binop := this.checkContext(ckey, ctx)
 
 	if !ok {
 		return
@@ -249,9 +214,9 @@ func (this *kvstore) writeBack(ctx *cmdContext) {
 		panic("len(ctx.fields == 0) || ctx.version == 0")
 	}
 
-	this.write(binop, ckey.uniKey, ctx.fields, ctx.version)
+	this.appendBinLog(binop, ckey.uniKey, ctx.fields, ctx.version)
 
-	this.tryFlush()
+	this.tryCommitBatch()
 
 	this.mtx.Unlock()
 

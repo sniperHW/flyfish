@@ -313,6 +313,6 @@ func processCmd(ckey *cacheKey, fromClient bool) {
 	} else {
 		ckey.lockCmdQueue()
 		ckey.mtx.Unlock()
-		ckey.m.doWriteBack(ctx)
+		ckey.m.commit(ctx)
 	}
 }

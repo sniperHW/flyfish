@@ -46,10 +46,7 @@ func (this *cacheKey) unlockCmdQueue() {
 	this.cmdQueueLocked = false
 }
 
-func (this *cacheKey) kickAble() bool {
-	defer this.mtx.Unlock()
-	this.mtx.Lock()
-
+func (this *cacheKey) kickAbleNoLock() bool {
 	if this.make_snapshot {
 		return false
 	}
