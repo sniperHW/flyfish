@@ -74,7 +74,7 @@ func ctxArrayPut(w *ctxArray) {
 	ctxArrayPool.Put(w)
 }
 
-var kvSlotSize int = 19
+var kvSlotSize int = 63
 
 type kvSlot struct {
 	kv  map[string]*cacheKey
