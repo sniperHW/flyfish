@@ -570,7 +570,7 @@ func (rc *raftNode) serveChannels() {
 		close(rc.stopc)
 	}()
 
-	islead := false
+	//islead := false
 
 	// event loop on raft state machine updates
 	for {
@@ -602,11 +602,12 @@ func (rc *raftNode) serveChannels() {
 				}
 				rh.updateLeadership(newLeader)
 				r.td.Reset()*/
-				islead = rd.RaftState == raft.StateLeader
+				//islead = rd.RaftState == raft.StateLeader
 				Infoln(rd.SoftState.Lead, "is leader")
 			}
 
 			rc.wal.Save(rd.HardState, rd.Entries)
+
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				rc.saveSnap(rd.Snapshot)
 				rc.raftStorage.ApplySnapshot(rd.Snapshot)
@@ -615,9 +616,8 @@ func (rc *raftNode) serveChannels() {
 
 			rc.raftStorage.Append(rd.Entries)
 
-			if islead {
-				rc.transport.Send(rd.Messages)
-			}
+			rc.transport.Send(rd.Messages)
+
 			if ok := rc.publishEntries(rc.entriesToApply(rd.CommittedEntries)); !ok {
 				rc.stop()
 				return

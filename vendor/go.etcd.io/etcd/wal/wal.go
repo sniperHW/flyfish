@@ -371,6 +371,7 @@ func selectWALFiles(lg *zap.Logger, dirpath string, snap walpb.Snapshot) ([]stri
 	}
 
 	nameIndex, ok := searchIndex(lg, names, snap.Index)
+	//fmt.Println(names[nameIndex:])
 	if !ok || !isValidSeq(lg, names[nameIndex:]) {
 		err = ErrFileNotFound
 		return nil, -1, err

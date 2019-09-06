@@ -352,7 +352,7 @@ func (n *node) run() {
 				close(pm.result)
 			}
 		case m := <-n.recvc:
-			//fmt.Println("m := <-n.recvc")
+			//r.logger.Infof("m := <-n.recvc")
 			// filter out response message from unknown From.
 			if pr := r.prs.Progress[m.From]; pr != nil || !IsResponseMsg(m.Type) {
 				r.Step(m)
@@ -464,6 +464,7 @@ func (n *node) stepWithWaitOption(ctx context.Context, m pb.Message, wait bool) 
 		select {
 		case n.recvc <- m:
 			//fmt.Println("stepWithWaitOption n.recvc <- m")
+			//CallStack(100)
 			return nil
 		case <-ctx.Done():
 			return ctx.Err()
@@ -566,6 +567,11 @@ func newReady(r *raft, prevSoftSt *SoftState, prevHardSt pb.HardState) Ready {
 		CommittedEntries: r.raftLog.nextEnts(),
 		Messages:         r.msgs,
 	}
+
+	//if nil != r.msgs && len(r.msgs) > 0 {
+	//	CallStack(100)
+	//}
+
 	if softSt := r.softState(); !softSt.equal(prevSoftSt) {
 		rd.SoftState = softSt
 	}

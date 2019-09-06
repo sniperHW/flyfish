@@ -443,7 +443,7 @@ func (r *raft) sendAppend(to uint64) {
 // ("empty" messages are useful to convey updated Commit indexes, but
 // are undesirable when we're sending multiple messages in a batch).
 func (r *raft) maybeSendAppend(to uint64, sendIfEmpty bool) bool {
-	fmt.Println("maybeSendAppend")
+	//fmt.Println("maybeSendAppend")
 	pr := r.prs.Progress[to]
 	if pr.IsPaused() {
 		return false
@@ -487,6 +487,8 @@ func (r *raft) maybeSendAppend(to uint64, sendIfEmpty bool) bool {
 		m.LogTerm = term
 		m.Entries = ents
 		m.Commit = r.raftLog.committed
+		//fmt.Println("send MsgApp", m.Index, to, m.Commit)
+		//CallStack(100)
 		if n := len(m.Entries); n != 0 {
 			switch pr.State {
 			// optimistically increase the next when in StateReplicate
@@ -665,6 +667,7 @@ func (r *raft) tickElection() {
 
 	if r.promotable() && r.pastElectionTimeout() {
 		r.electionElapsed = 0
+		//CallStack(100)
 		r.Step(pb.Message{From: r.id, Type: pb.MsgHup})
 	}
 }
@@ -912,7 +915,7 @@ func (r *raft) Step(m pb.Message) error {
 
 	switch m.Type {
 	case pb.MsgHup:
-		fmt.Println("4")
+		fmt.Println("44444444444444444")
 		if r.state != StateLeader {
 			if !r.promotable() {
 				r.logger.Warningf("%x is unpromotable and can not campaign; ignoring MsgHup", r.id)
@@ -938,7 +941,7 @@ func (r *raft) Step(m pb.Message) error {
 		}
 
 	case pb.MsgVote, pb.MsgPreVote:
-		fmt.Println("5")
+		fmt.Println("5555555555555")
 		// We can vote if this is a repeat of a vote we've already cast...
 		canVote := r.Vote == m.From ||
 			// ...we haven't voted and we don't think there's a leader yet in this term...
@@ -1137,6 +1140,9 @@ func stepLeader(r *raft, m pb.Message) error {
 	}
 	switch m.Type {
 	case pb.MsgAppResp:
+
+		fmt.Println("recv pb.MsgAppResp", m.From, m.Index)
+
 		pr.RecentActive = true
 
 		if m.Reject {
@@ -1343,9 +1349,11 @@ func stepFollower(r *raft, m pb.Message) error {
 			r.logger.Infof("%x not forwarding to leader %x at term %d; dropping proposal", r.id, r.lead, r.Term)
 			return ErrProposalDropped
 		}
+		r.logger.Infof("stepFollower case pb.MsgProp")
 		m.To = r.lead
 		r.send(m)
 	case pb.MsgApp:
+		fmt.Println("recv pb.MsgApp", m.From, m.Index, len(m.Entries))
 		r.electionElapsed = 0
 		r.lead = m.From
 		r.handleAppendEntries(m)
@@ -1398,6 +1406,7 @@ func (r *raft) handleAppendEntries(m pb.Message) {
 	}
 
 	if mlastIndex, ok := r.raftLog.maybeAppend(m.Index, m.LogTerm, m.Commit, m.Entries...); ok {
+		fmt.Println("send pb.MsgAppResp")
 		r.send(pb.Message{To: m.From, Type: pb.MsgAppResp, Index: mlastIndex})
 	} else {
 		r.logger.Debugf("%x [logterm: %d, index: %d] rejected MsgApp [logterm: %d, index: %d] from %x",

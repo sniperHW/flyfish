@@ -16,10 +16,10 @@ package raft
 
 import (
 	"errors"
-	//"fmt"
+	"fmt"
 	pb "go.etcd.io/etcd/raft/raftpb"
 	"go.etcd.io/etcd/raft/tracker"
-	//"runtime"
+	"runtime"
 )
 
 // ErrStepLocalMsg is returned when try to step a local raft message
@@ -173,7 +173,7 @@ func (rn *RawNode) HasReady() bool {
 	return false
 }
 
-/*func CallStack(maxStack int) string {
+func CallStack(maxStack int) string {
 	var str string
 	i := 1
 	for {
@@ -186,7 +186,7 @@ func (rn *RawNode) HasReady() bool {
 	}
 	fmt.Println(str)
 	return str
-}*/
+}
 
 // Advance notifies the RawNode that the application has applied and saved progress in the
 // last Ready results.

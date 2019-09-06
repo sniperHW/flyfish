@@ -16,14 +16,13 @@ package rafthttp
 
 import (
 	"context"
-	"sync"
-	"time"
-
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	stats "go.etcd.io/etcd/etcdserver/api/v2stats"
 	"go.etcd.io/etcd/pkg/types"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
+	"sync"
+	"time"
 
 	"go.uber.org/zap"
 	"golang.org/x/time/rate"
@@ -233,6 +232,7 @@ func startPeer(t *Transport, urls types.URLs, peerID types.ID, fs *stats.Followe
 }
 
 func (p *peer) send(m raftpb.Message) {
+
 	p.mu.Lock()
 	paused := p.paused
 	p.mu.Unlock()

@@ -16,6 +16,7 @@ package raft
 
 import (
 	"encoding/binary"
+	//"fmt"
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
@@ -190,6 +191,7 @@ func (s *kvstore) kickCacheKey() {
 }
 
 func (s *kvstore) Propose(propose *binlogSt) {
+	//fmt.Println("-----------------------Propose--------------------")
 	s.pendingPropose[propose.id] = propose
 	s.proposeC <- propose.binlogStr.bytes()
 }
@@ -309,12 +311,6 @@ func (s *kvstore) getSnapshot() []kvsnap { //([]byte, error) {
 	s.mtx.Unlock()
 
 	return kvsnaps
-
-	//for _, v := range kvsnaps {
-	//	ss.appendBinLog(binlog_snapshot, v.uniKey, v.values, v.version)
-	//}
-
-	//return ss.bytes(), nil
 }
 
 func readBinLog(buffer []byte, offset int) (int, int, string, int64, map[string]*proto.Field) {
@@ -447,7 +443,7 @@ func (s *kvstore) recoverFromSnapshot(snapshot []byte) bool {
 
 func initKVStore(id *int, cluster *string) {
 
-	proposeC := make(chan []byte)
+	proposeC := make(chan []byte, 100)
 	confChangeC := make(chan raftpb.ConfChange)
 
 	// raft provides a commit stream for the proposals from the http api
