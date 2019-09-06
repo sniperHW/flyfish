@@ -170,7 +170,7 @@ func (this *command) process() {
 		k.pushCmd(this)
 		caches.updateLRU(k)
 	} else {
-		k = newCacheKey(caches, &slot, this.table, this.key, this.uniKey)
+		k = newCacheKey(caches, slot, this.table, this.key, this.uniKey)
 		if nil != k {
 			this.ckey = k
 			k.pushCmd(this)

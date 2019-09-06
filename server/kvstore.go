@@ -85,7 +85,7 @@ type kvSlot struct {
 type kvstore struct {
 	proposeC    chan<- *batchBinlog // channel for proposing updates
 	snapshotter *snap.Snapshotter
-	slots       []kvSlot //map[string]*cacheKey
+	slots       []*kvSlot //map[string]*cacheKey
 	mtx         sync.Mutex
 	lruHead     cacheKey
 	lruTail     cacheKey
@@ -104,13 +104,13 @@ func newKVStore(snapshotter *snap.Snapshotter, proposeC chan<- *batchBinlog, com
 
 	s := &kvstore{
 		proposeC:    proposeC,
-		slots:       []kvSlot{}, //map[string]*cacheKey{},
+		slots:       []*kvSlot{}, //map[string]*cacheKey{},
 		snapshotter: snapshotter,
 		nextFlush:   time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval)),
 	}
 
 	for i := 0; i < kvSlotSize; i++ {
-		s.slots = append(s.slots, kvSlot{
+		s.slots = append(s.slots, &kvSlot{
 			kv: map[string]*cacheKey{},
 		})
 	}
@@ -494,7 +494,7 @@ func (s *kvstore) recoverFromSnapshot(snapshot []byte) bool {
 		if tt == binlog_snapshot {
 			if nil == ckey {
 				tmp := strings.Split(unikey, ":")
-				ckey = newCacheKey(s, &slot, tmp[0], strings.Join(tmp[1:], ""), unikey)
+				ckey = newCacheKey(s, slot, tmp[0], strings.Join(tmp[1:], ""), unikey)
 				s.keySize++
 				slot.kv[unikey] = ckey
 				s.updateLRU(ckey)
