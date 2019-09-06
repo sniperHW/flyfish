@@ -151,7 +151,12 @@ func (this *command) process() {
 	}
 
 	caches.mtx.Lock()
-	k, ok := caches.kv[this.uniKey]
+
+	slot := caches.slots[StringHash(this.uniKey)%len(caches.slots)]
+
+	slot.mtx.Lock()
+
+	k, ok := slot.kv[this.uniKey]
 	if ok {
 		if !checkMetaVersion(k.meta.meta_version) {
 			newMeta := getMetaByTable(this.table)
@@ -165,15 +170,18 @@ func (this *command) process() {
 		k.pushCmd(this)
 		caches.updateLRU(k)
 	} else {
-		k = newCacheKey(caches, this.table, this.key, this.uniKey)
+		k = newCacheKey(caches, &slot, this.table, this.key, this.uniKey)
 		if nil != k {
 			this.ckey = k
 			k.pushCmd(this)
 			caches.updateLRU(k)
-			caches.kv[this.uniKey] = k
+			slot.kv[this.uniKey] = k
+			caches.keySize++
 		}
 	}
 	caches.kickCacheKey()
+
+	slot.mtx.Unlock()
 
 	caches.mtx.Unlock()
 

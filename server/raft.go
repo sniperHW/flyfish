@@ -54,7 +54,7 @@ type raftNode struct {
 	join        bool     // node is joining an existing cluster
 	waldir      string   // path to WAL directory
 	snapdir     string   // path to snapshot directory
-	getSnapshot func() []kvsnap
+	getSnapshot func() [][]kvsnap
 	lastIndex   uint64 // index of log at start
 
 	confState     raftpb.ConfState
@@ -96,7 +96,7 @@ var defaultSnapshotCount uint64 = 10000
 // provided the proposal channel. All log entries are replayed over the
 // commit channel, followed by a nil message (to indicate the channel is
 // current), then new log entries. To shutdown, close proposeC and read errorC.
-func newRaftNode(id int, peers []string, join bool, getSnapshot func() []kvsnap, proposeC <-chan *batchBinlog,
+func newRaftNode(id int, peers []string, join bool, getSnapshot func() [][]kvsnap, proposeC <-chan *batchBinlog,
 	confChangeC <-chan raftpb.ConfChange) (<-chan *commitedBatchBinlog, <-chan error, <-chan *snap.Snapshotter) {
 
 	commitC := make(chan *commitedBatchBinlog)
@@ -534,7 +534,9 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 		ss.appendInt64(0)
 
 		for _, v := range clone {
-			ss.appendBinLog(binlog_snapshot, v.uniKey, v.values, v.version)
+			for _, vv := range v {
+				ss.appendBinLog(binlog_snapshot, vv.uniKey, vv.values, vv.version)
+			}
 		}
 
 		beg := time.Now()

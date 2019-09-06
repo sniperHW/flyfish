@@ -28,6 +28,7 @@ type cacheKey struct {
 	sqlFlag         int
 	snapshoted      bool //当前key是否建立过快照
 	m               *kvstore
+	slot            *kvSlot
 	nnext           *cacheKey
 	pprev           *cacheKey
 	values          map[string]*proto.Field //关联的字段
@@ -187,7 +188,7 @@ func (this *cacheKey) processQueueCmd() {
 	processCmd(this, false)
 }
 
-func newCacheKey(m *kvstore, table string, key string, uniKey string) *cacheKey {
+func newCacheKey(m *kvstore, slot *kvSlot, table string, key string, uniKey string) *cacheKey {
 
 	meta := getMetaByTable(table)
 
@@ -203,6 +204,7 @@ func newCacheKey(m *kvstore, table string, key string, uniKey string) *cacheKey 
 		meta:         meta,
 		cmdQueue:     list.New(),
 		m:            m,
+		slot:         slot,
 		table:        table,
 		modifyFields: map[string]bool{},
 	}

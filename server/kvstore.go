@@ -74,11 +74,18 @@ func ctxArrayPut(w *ctxArray) {
 	ctxArrayPool.Put(w)
 }
 
+var kvSlotSize int = 19
+
+type kvSlot struct {
+	kv  map[string]*cacheKey
+	mtx sync.Mutex
+}
+
 // a key-value store backed by raft
 type kvstore struct {
 	proposeC    chan<- *batchBinlog // channel for proposing updates
 	snapshotter *snap.Snapshotter
-	kv          map[string]*cacheKey
+	slots       []kvSlot //map[string]*cacheKey
 	mtx         sync.Mutex
 	lruHead     cacheKey
 	lruTail     cacheKey
@@ -86,6 +93,7 @@ type kvstore struct {
 	nextFlush   time.Time
 	binlogStr   *str
 	batchCount  int32 //待序列化到文件的binlog数量
+	keySize     int
 }
 
 var caches *kvstore
@@ -96,9 +104,15 @@ func newKVStore(snapshotter *snap.Snapshotter, proposeC chan<- *batchBinlog, com
 
 	s := &kvstore{
 		proposeC:    proposeC,
-		kv:          map[string]*cacheKey{},
+		slots:       []kvSlot{}, //map[string]*cacheKey{},
 		snapshotter: snapshotter,
 		nextFlush:   time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval)),
+	}
+
+	for i := 0; i < kvSlotSize; i++ {
+		s.slots = append(s.slots, kvSlot{
+			kv: map[string]*cacheKey{},
+		})
 	}
 
 	s.lruHead.nnext = &s.lruTail
@@ -132,6 +146,10 @@ func newKVStore(snapshotter *snap.Snapshotter, proposeC chan<- *batchBinlog, com
 	return s
 }
 
+//func (s *kvstore) getKV(unikey string) *cacheKey {
+//	slot := s.kv[StringHash(unikey%len(s.kv)]
+//}
+
 func (s *kvstore) updateLRU(ckey *cacheKey) {
 
 	if ckey.nnext != nil || ckey.pprev != nil {
@@ -160,7 +178,7 @@ func (s *kvstore) removeLRU(ckey *cacheKey) {
 func (s *kvstore) kickCacheKey() {
 	MaxCachePerGroupSize := conf.GetConfig().MaxCachePerGroupSize
 
-	for len(s.kv) > MaxCachePerGroupSize && s.lruHead.nnext != &s.lruTail {
+	for s.keySize > MaxCachePerGroupSize && s.lruHead.nnext != &s.lruTail {
 		c := s.lruTail.pprev
 		if !s.kick(c) {
 			return
@@ -272,8 +290,11 @@ func (s *kvstore) readCommits(once bool, commitC <-chan *commitedBatchBinlog, er
 						} else {
 							s.mtx.Lock()
 							s.removeLRU(ckey)
-							delete(s.kv, ckey.uniKey)
+							s.keySize--
 							s.mtx.Unlock()
+							ckey.slot.mtx.Lock()
+							delete(ckey.slot.kv, ckey.uniKey)
+							ckey.slot.mtx.Unlock()
 						}
 					} else {
 						v.getCacheKey().processQueueCmd()
@@ -296,40 +317,87 @@ type kvsnap struct {
 	version int64
 }
 
-func (s *kvstore) getSnapshot() []kvsnap {
-
-	kvsnaps := []kvsnap{}
-
-	s.mtx.Lock()
+func (s *kvstore) getSnapshot() [][]kvsnap {
 
 	beg := time.Now()
 
-	for _, v := range s.kv {
-		v.mtx.Lock()
-		if v.status == cache_ok || v.status == cache_missing {
-			v.snapshoted = true
+	ret := make([][]kvsnap, len(s.slots))
 
-			s := kvsnap{
-				uniKey:  v.uniKey,
-				version: v.version,
-			}
+	ch := make(chan []kvsnap)
 
-			if v.values != nil {
-				s.values = map[string]*proto.Field{}
-				for kk, vv := range v.values {
-					s.values[kk] = vv
+	for i := 0; i < len(s.slots); i++ {
+		go func(i int) {
+			slot := s.slots[i]
+			slot.mtx.Lock()
+			kvsnaps := make([]kvsnap, len(slot.kv))
+			for _, v := range slot.kv {
+				v.mtx.Lock()
+				if v.status == cache_ok || v.status == cache_missing {
+					v.snapshoted = true
+
+					s := kvsnap{
+						uniKey:  v.uniKey,
+						version: v.version,
+					}
+
+					if v.values != nil {
+						s.values = map[string]*proto.Field{}
+						for kk, vv := range v.values {
+							s.values[kk] = vv
+						}
+					}
+					kvsnaps = append(kvsnaps, s)
 				}
+				v.mtx.Unlock()
 			}
-			kvsnaps = append(kvsnaps, s)
-		}
-		v.mtx.Unlock()
+			slot.mtx.Unlock()
+			ch <- kvsnaps
+		}(i)
+	}
+
+	for i := 0; i < len(s.slots); i++ {
+		v := <-ch
+		ret = append(ret, v)
 	}
 
 	Infoln("clone time", time.Now().Sub(beg))
 
-	s.mtx.Unlock()
+	return ret
 
-	return kvsnaps
+	/*	s.mtx.Lock()
+
+		kvsnaps := make([]kvsnap, len(s.kv))
+
+		beg := time.Now()
+
+		for _, v := range s.kv {
+			v.mtx.Lock()
+			if v.status == cache_ok || v.status == cache_missing {
+				v.snapshoted = true
+
+				s := kvsnap{
+					uniKey:  v.uniKey,
+					version: v.version,
+				}
+
+				if v.values != nil {
+					s.values = map[string]*proto.Field{}
+					for kk, vv := range v.values {
+						s.values[kk] = vv
+					}
+				}
+				kvsnaps = append(kvsnaps, s)
+			}
+			v.mtx.Unlock()
+		}
+
+		Infoln("clone time", time.Now().Sub(beg))
+
+		s.mtx.Unlock()
+
+		return kvsnaps
+	*/
+
 }
 
 func readBinLog(buffer []byte, offset int) (int, int, string, int64, map[string]*proto.Field) {
@@ -408,14 +476,20 @@ func (s *kvstore) recoverFromSnapshot(snapshot []byte) bool {
 
 		newOffset, tt, unikey, version, values := readBinLog(snapshot, offset)
 		offset = newOffset
-		ckey, _ := s.kv[unikey]
+
+		slot := s.slots[StringHash(unikey)%len(s.slots)]
+
+		slot.mtx.Lock()
+
+		ckey, _ := slot.kv[unikey]
 		recordCount++
 
 		if tt == binlog_snapshot {
 			if nil == ckey {
 				tmp := strings.Split(unikey, ":")
-				ckey = newCacheKey(s, tmp[0], strings.Join(tmp[1:], ""), unikey)
-				s.kv[unikey] = ckey
+				ckey = newCacheKey(s, &slot, tmp[0], strings.Join(tmp[1:], ""), unikey)
+				s.keySize++
+				slot.kv[unikey] = ckey
 				s.updateLRU(ckey)
 			}
 			ckey.mtx.Lock()
@@ -434,6 +508,7 @@ func (s *kvstore) recoverFromSnapshot(snapshot []byte) bool {
 			if ckey != nil {
 				if ckey.status != cache_ok || ckey.values == nil {
 					Fatalln("invaild tt", unikey, tt, recordCount, offset)
+					slot.mtx.Unlock()
 					return false
 				}
 				ckey.mtx.Lock()
@@ -447,6 +522,7 @@ func (s *kvstore) recoverFromSnapshot(snapshot []byte) bool {
 		} else if tt == binlog_delete {
 			if ckey != nil {
 				if ckey.status != cache_ok {
+					slot.mtx.Unlock()
 					Fatalln("invaild tt", unikey, tt, recordCount, offset)
 					return false
 				}
@@ -459,13 +535,16 @@ func (s *kvstore) recoverFromSnapshot(snapshot []byte) bool {
 			}
 		} else if tt == binlog_kick {
 			if ckey != nil {
+				s.keySize--
 				s.removeLRU(ckey)
-				delete(s.kv, unikey)
+				delete(slot.kv, unikey)
 			}
 		} else {
+			slot.mtx.Unlock()
 			Fatalln("invaild tt", unikey, tt, recordCount, offset)
 			return false
 		}
+		slot.mtx.Unlock()
 	}
 	return true
 }
@@ -476,7 +555,7 @@ func initKVStore(id *int, cluster *string) {
 	confChangeC := make(chan raftpb.ConfChange)
 
 	// raft provides a commit stream for the proposals from the http api
-	getSnapshot := func() []kvsnap {
+	getSnapshot := func() [][]kvsnap {
 		if nil == caches {
 			return nil
 		}
