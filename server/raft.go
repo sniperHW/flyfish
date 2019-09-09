@@ -287,7 +287,7 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 			}
 			rc.muPendingPropose.Unlock()
 
-			Infoln("committedEntry", ends[i].Index)
+			Infoln("committedEntry", ents[i].Index)
 
 			select {
 			case rc.commitC <- committedEntry:
