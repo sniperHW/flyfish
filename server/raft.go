@@ -42,8 +42,8 @@ import (
 	"time"
 )
 
-var replayOK *commitedBatchBinlog
-var replaySnapshot *commitedBatchBinlog
+var replayOK *commitedBatchBinlog = &commitedBatchBinlog{}
+var replaySnapshot *commitedBatchBinlog = &commitedBatchBinlog{}
 
 // A key-value stream backed by raft
 type raftNode struct {
@@ -282,12 +282,11 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 			if nil != front { //&& front.Value.(*batchBinlog).index == index {
 				committedEntry.ctxs = front.Value.(*batchBinlog).ctxs
 				committedEntry.localPropose = true
+				committedEntry.Index = ents[i].Index
 				strPut(front.Value.(*batchBinlog).binlogStr)
 				rc.pendingPropose.Remove(front)
 			}
 			rc.muPendingPropose.Unlock()
-
-			Infoln("committedEntry", ents[i].Index)
 
 			select {
 			case rc.commitC <- committedEntry:

@@ -226,7 +226,9 @@ func (s *kvstore) Propose(propose *batchBinlog) {
 
 func (s *kvstore) readCommits(once bool, commitC <-chan *commitedBatchBinlog, errorC <-chan error) {
 	for data := range commitC {
-		if data == replaySnapshot {
+		if data == nil {
+			Infoln("got nil data")
+		} else if data == replaySnapshot {
 			// done replaying log; new data incoming
 			// OR signaled to load snapshot
 			snapshot, err := s.snapshotter.Load()
@@ -240,71 +242,72 @@ func (s *kvstore) readCommits(once bool, commitC <-chan *commitedBatchBinlog, er
 			if !s.recoverFromSnapshot(snapshot.Data[8:]) {
 				log.Panic("recoverFromSnapshot failed")
 			}
-		}
-
-		if data == replayOK {
+		} else if data == replayOK {
 			if once {
 				return
 			} else {
 				continue
 			}
-		}
-
-		if !data.localPropose {
-			s.applyLeaderPropose(data.data)
 		} else {
-			//本地提交的propose直接使用ctxs中内容apply
-			if nil != data.ctxs {
-				for i := 0; i < data.ctxs.count; i++ {
-					v := data.ctxs.ctxs[i]
-					if v.getCmdType() != cmdKick {
-						v.reply(errcode.ERR_OK, v.fields, v.version)
-						ckey := v.getCacheKey()
-						ckey.mtx.Lock()
-						ckey.snapshoted = true
 
-						if v.writeBackFlag == write_back_insert || v.writeBackFlag == write_back_update || v.writeBackFlag == write_back_insert_update {
-							ckey.setValueNoLock(v)
-							ckey.setOKNoLock(v.version)
-						} else {
-							ckey.setMissingNoLock()
+			Infoln("commited", data.Index)
+
+			if !data.localPropose {
+				s.applyLeaderPropose(data.data)
+			} else {
+				//本地提交的propose直接使用ctxs中内容apply
+				if nil != data.ctxs {
+					for i := 0; i < data.ctxs.count; i++ {
+						v := data.ctxs.ctxs[i]
+						if v.getCmdType() != cmdKick {
+							v.reply(errcode.ERR_OK, v.fields, v.version)
+							ckey := v.getCacheKey()
+							ckey.mtx.Lock()
+							ckey.snapshoted = true
+
+							if v.writeBackFlag == write_back_insert || v.writeBackFlag == write_back_update || v.writeBackFlag == write_back_insert_update {
+								ckey.setValueNoLock(v)
+								ckey.setOKNoLock(v.version)
+							} else {
+								ckey.setMissingNoLock()
+							}
+
+							ckey.sqlFlag = v.writeBackFlag
+
+							if !ckey.writeBackLocked {
+								ckey.writeBackLocked = true
+								pushSqlWriteReq(ckey)
+							}
+							ckey.mtx.Unlock()
 						}
-
-						ckey.sqlFlag = v.writeBackFlag
-
-						if !ckey.writeBackLocked {
-							ckey.writeBackLocked = true
-							pushSqlWriteReq(ckey)
-						}
-						ckey.mtx.Unlock()
 					}
-				}
 
-				for i := 0; i < data.ctxs.count; i++ {
-					v := data.ctxs.ctxs[i]
-					if v.getCmdType() == cmdKick {
-						queueCmdSize := 0
-						ckey := v.getCacheKey()
-						ckey.mtx.Lock()
-						queueCmdSize = ckey.cmdQueue.Len()
-						ckey.mtx.Unlock()
-						if queueCmdSize > 0 {
-							ckey.processQueueCmd()
+					for i := 0; i < data.ctxs.count; i++ {
+						v := data.ctxs.ctxs[i]
+						if v.getCmdType() == cmdKick {
+							queueCmdSize := 0
+							ckey := v.getCacheKey()
+							ckey.mtx.Lock()
+							queueCmdSize = ckey.cmdQueue.Len()
+							ckey.mtx.Unlock()
+							if queueCmdSize > 0 {
+								ckey.processQueueCmd()
+							} else {
+								s.mtx.Lock()
+								s.removeLRU(ckey)
+								s.keySize--
+								s.mtx.Unlock()
+								ckey.slot.mtx.Lock()
+								delete(ckey.slot.kv, ckey.uniKey)
+								ckey.slot.mtx.Unlock()
+							}
 						} else {
-							s.mtx.Lock()
-							s.removeLRU(ckey)
-							s.keySize--
-							s.mtx.Unlock()
-							ckey.slot.mtx.Lock()
-							delete(ckey.slot.kv, ckey.uniKey)
-							ckey.slot.mtx.Unlock()
+							v.getCacheKey().processQueueCmd()
 						}
-					} else {
-						v.getCacheKey().processQueueCmd()
 					}
-				}
 
-				ctxArrayPut(data.ctxs)
+					ctxArrayPut(data.ctxs)
+				}
 			}
 		}
 	}

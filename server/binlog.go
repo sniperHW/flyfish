@@ -26,6 +26,7 @@ type commitedBatchBinlog struct {
 	data         []byte
 	ctxs         *ctxArray
 	localPropose bool
+	Index        uint64
 }
 
 func (this *kvstore) tryCommitBatch() {
