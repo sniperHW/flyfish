@@ -21,6 +21,8 @@ const (
 	ERR_BUSY
 	ERR_ERROR
 	ERR_NOT_LEADER
+	ERR_PROPOSAL_DROPPED
+	ERR_RAFT
 	ERR_END
 )
 
@@ -44,6 +46,8 @@ var err_str []string = []string{
 	"server stoped",
 	"busy",
 	"not leader",
+	"proposal dropped",
+	"raft error",
 	"error",
 }
 

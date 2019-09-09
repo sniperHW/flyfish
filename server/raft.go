@@ -42,6 +42,9 @@ import (
 	"time"
 )
 
+var replayOK *commitedBatchBinlog
+var replaySnapshot *commitedBatchBinlog
+
 // A key-value stream backed by raft
 type raftNode struct {
 	proposeC    <-chan *batchBinlog         //<-chan []byte            // proposed messages (k,v)
@@ -284,6 +287,8 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 			}
 			rc.muPendingPropose.Unlock()
 
+			//Infoln("committedEntry")
+
 			select {
 			case rc.commitC <- committedEntry:
 			case <-rc.stopc:
@@ -314,7 +319,7 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 		// special nil commit to signal replay has finished
 		if ents[i].Index == rc.lastIndex {
 			select {
-			case rc.commitC <- nil:
+			case rc.commitC <- replayOK:
 				Infoln("here1")
 			case <-rc.stopc:
 				return false
@@ -378,14 +383,18 @@ func (rc *raftNode) replayWAL() *wal.WAL {
 	}
 	rc.raftStorage.SetHardState(st)
 
+	if snapshot != nil {
+		rc.commitC <- replaySnapshot
+	}
+
 	// append to storage so raft starts at the right place in log
 	rc.raftStorage.Append(ents)
 	// send nil once lastIndex is published so client knows commit channel is current
 	if len(ents) > 0 {
 		rc.lastIndex = ents[len(ents)-1].Index
 	} else {
-		Infoln("here3")
-		rc.commitC <- nil
+		//Infoln("here3")
+		rc.commitC <- replayOK //nil
 	}
 	return w
 }
@@ -481,7 +490,7 @@ func (rc *raftNode) publishSnapshot(snapshotToSave raftpb.Snapshot) {
 		log.Fatalf("snapshot index [%d] should > progress.appliedIndex [%d]", snapshotToSave.Metadata.Index, rc.appliedIndex)
 	}
 	Infoln("here2")
-	rc.commitC <- nil // trigger kvstore to load snapshot
+	rc.commitC <- replaySnapshot // trigger kvstore to load snapshot
 
 	rc.confState = snapshotToSave.Metadata.ConfState
 	rc.snapshotIndex = snapshotToSave.Metadata.Index
@@ -621,25 +630,13 @@ func (rc *raftNode) startProposePipeline() {
 					cancel()
 
 					if nil != err {
-						if err == raft.ErrStopped {
-							strPut(prop.binlogStr)
-							if nil != prop.ctxs {
-								for i := 0; i < prop.ctxs.count; i++ {
-									v := prop.ctxs.ctxs[i]
-									if v.getCmdType() != cmdKick {
-										v.reply(errcode.ERR_SERVER_STOPED, nil, 0)
-									}
-								}
-								ctxArrayPut(prop.ctxs)
-							}
-							rc.muPendingPropose.Lock()
-							rc.pendingPropose.Remove(e)
-							rc.muPendingPropose.Unlock()
-						} else {
+						if err == ctx.Err() {
+
 							/*   timeout
 							 *   只是对客户端超时,复制处理还在继续
 							 *   所以只向客户端返回response
 							 */
+
 							if nil != prop.ctxs {
 								for i := 0; i < prop.ctxs.count; i++ {
 									v := prop.ctxs.ctxs[i]
@@ -648,11 +645,40 @@ func (rc *raftNode) startProposePipeline() {
 									}
 								}
 							}
+
+						} else {
+
+							errCode := int32(0)
+
+							switch err {
+							case raft.ErrStopped:
+								errCode = errcode.ERR_SERVER_STOPED
+							case raft.ErrProposalDropped:
+								if !rc.isLeader() {
+									errCode = errcode.ERR_NOT_LEADER
+								} else {
+									errCode = errcode.ERR_PROPOSAL_DROPPED
+								}
+							default:
+								errCode = errcode.ERR_RAFT
+							}
+
+							strPut(prop.binlogStr)
+							if nil != prop.ctxs {
+								for i := 0; i < prop.ctxs.count; i++ {
+									v := prop.ctxs.ctxs[i]
+									if v.getCmdType() != cmdKick {
+										v.reply(errCode, nil, 0)
+									}
+								}
+								ctxArrayPut(prop.ctxs)
+							}
+							rc.muPendingPropose.Lock()
+							rc.pendingPropose.Remove(e)
+							rc.muPendingPropose.Unlock()
 						}
 					}
 				}
-
-				//this.append(v)
 			}
 
 			if closed {

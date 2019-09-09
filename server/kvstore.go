@@ -226,7 +226,7 @@ func (s *kvstore) Propose(propose *batchBinlog) {
 
 func (s *kvstore) readCommits(once bool, commitC <-chan *commitedBatchBinlog, errorC <-chan error) {
 	for data := range commitC {
-		if data == nil {
+		if data == replaySnapshot {
 			// done replaying log; new data incoming
 			// OR signaled to load snapshot
 			snapshot, err := s.snapshotter.Load()
@@ -240,6 +240,9 @@ func (s *kvstore) readCommits(once bool, commitC <-chan *commitedBatchBinlog, er
 			if !s.recoverFromSnapshot(snapshot.Data[8:]) {
 				log.Panic("recoverFromSnapshot failed")
 			}
+		}
+
+		if data == replayOK {
 			if once {
 				return
 			} else {
@@ -525,6 +528,8 @@ func (s *kvstore) recoverFromSnapshot(snapshot []byte) bool {
 				ckey.version = version
 				ckey.sqlFlag = write_back_insert_update
 				ckey.mtx.Unlock()
+			} else {
+				panic("binlog_update key == nil")
 			}
 		} else if tt == binlog_delete {
 			if ckey != nil {
@@ -539,12 +544,16 @@ func (s *kvstore) recoverFromSnapshot(snapshot []byte) bool {
 				ckey.status = cache_missing
 				ckey.sqlFlag = write_back_delete
 				ckey.mtx.Unlock()
+			} else {
+				panic("binlog_delete key == nil")
 			}
 		} else if tt == binlog_kick {
 			if ckey != nil {
 				s.keySize--
 				s.removeLRU(ckey)
 				delete(slot.kv, unikey)
+			} else {
+				panic("binlog_kick key == nil")
 			}
 		} else {
 			slot.mtx.Unlock()
