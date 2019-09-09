@@ -282,11 +282,12 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 			if nil != front { //&& front.Value.(*batchBinlog).index == index {
 				committedEntry.ctxs = front.Value.(*batchBinlog).ctxs
 				committedEntry.localPropose = true
-				committedEntry.Index = ents[i].Index
 				strPut(front.Value.(*batchBinlog).binlogStr)
 				rc.pendingPropose.Remove(front)
 			}
 			rc.muPendingPropose.Unlock()
+
+			committedEntry.Index = ents[i].Index
 
 			select {
 			case rc.commitC <- committedEntry:
