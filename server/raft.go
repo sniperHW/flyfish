@@ -287,7 +287,7 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 			}
 			rc.muPendingPropose.Unlock()
 
-			//Infoln("committedEntry")
+			Infoln("committedEntry", ends[i].Index)
 
 			select {
 			case rc.commitC <- committedEntry:
@@ -320,7 +320,7 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 		if ents[i].Index == rc.lastIndex {
 			select {
 			case rc.commitC <- replayOK:
-				Infoln("here1")
+				Infoln("send replayOK")
 			case <-rc.stopc:
 				return false
 			}
@@ -384,6 +384,7 @@ func (rc *raftNode) replayWAL() *wal.WAL {
 	rc.raftStorage.SetHardState(st)
 
 	if snapshot != nil {
+		Infoln("send replaySnapshot")
 		rc.commitC <- replaySnapshot
 	}
 
