@@ -123,13 +123,9 @@ func newKVStore(snapshotter *snap.Snapshotter, proposeC chan<- *batchBinlog, com
 	// read commits from raft into kvStore map until error
 
 	timer.Repeat(time.Millisecond*time.Duration(config.FlushInterval), nil, func(t *timer.Timer) {
-		if server.isStoped() {
-			t.Cancel()
-		} else {
-			s.mtx.Lock()
-			s.tryCommitBatch()
-			s.mtx.Unlock()
-		}
+		s.mtx.Lock()
+		s.tryCommitBatch()
+		s.mtx.Unlock()
 	})
 
 	timer.Repeat(time.Second, nil, func(t *timer.Timer) {
@@ -239,6 +235,7 @@ func (s *kvstore) readCommits(once bool, commitC <-chan *commitedBatchBinlog, er
 			}
 		} else if data == replayOK {
 			if once {
+				Infoln("replay ok,keycount", s.keySize)
 				return
 			} else {
 				continue
