@@ -26,10 +26,6 @@ var (
 )
 
 func checkReq(req *proto.ReqCommon) (bool, int32) {
-	if isStop() {
-		return false, errcode.ERR_SERVER_STOPED
-	}
-
 	if "" == req.GetTable() {
 		return false, errcode.ERR_MISSING_TABLE
 	}

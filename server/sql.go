@@ -91,7 +91,7 @@ func initSql() bool {
 		sqlLoaders = append(sqlLoaders, l)
 		go l.run()
 		timer.Repeat(time.Second*60, nil, func(t *timer.Timer) {
-			if isStop() || util.ErrQueueClosed == l.queue.AddNoWait(&cmdContext{ping: true}) {
+			if server.isStoped() || util.ErrQueueClosed == l.queue.AddNoWait(&cmdContext{ping: true}) {
 				t.Cancel()
 			}
 		})
@@ -113,7 +113,7 @@ func initSql() bool {
 		sqlUpdaters = append(sqlUpdaters, u)
 		go u.run()
 		timer.Repeat(time.Second*60, nil, func(t *timer.Timer) {
-			if isStop() || util.ErrQueueClosed == u.queue.AddNoWait(nil) {
+			if server.isStoped() || util.ErrQueueClosed == u.queue.AddNoWait(nil) {
 				t.Cancel()
 			}
 		})

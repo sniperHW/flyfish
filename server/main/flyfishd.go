@@ -9,7 +9,6 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
-	"runtime"
 	"syscall"
 )
 
@@ -32,14 +31,6 @@ func main() {
 
 	go func() {
 		http.ListenAndServe("0.0.0.0:8899", nil)
-	}()
-
-	defer func() {
-		if r := recover(); r != nil {
-			buf := make([]byte, 1024*1024*4)
-			l := runtime.Stack(buf, false)
-			flyfish.Errorln(fmt.Sprintf("%v: %s", r, buf[:l]))
-		}
 	}()
 
 	err := flyfish.Start(id, cluster)

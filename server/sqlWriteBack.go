@@ -134,7 +134,7 @@ func (this *sqlUpdater) exec() {
 				Errorln(this.sqlStr.toString(), err)
 				if isRetryError(err) {
 					Errorln("sqlUpdater exec error:", err)
-					if isStop() {
+					if server.isStoped() {
 						return
 					}
 					//休眠一秒重试

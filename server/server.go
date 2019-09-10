@@ -13,42 +13,16 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 )
 
 var (
-	server listener
-	stoped int32
+	server *Server
 )
 
-type Dispatcher interface {
-	Dispatch(kendynet.StreamSession, *codec.Message)
-	OnClose(kendynet.StreamSession, string)
-	OnNewClient(kendynet.StreamSession)
-}
-
-type listener interface {
-	Close()
-	Start() error
-}
-
-type tcpListener struct {
-	l *tcp.Listener
-}
-
-func newTcpListener(nettype, service string) (*tcpListener, error) {
-	var err error
-	l := &tcpListener{}
-	l.l, err = tcp.New(nettype, service)
-
-	if nil == err {
-		return l, nil
-	} else {
-		return nil, err
-	}
-}
-
-func (this *tcpListener) Close() {
-	this.l.Close()
+type Server struct {
+	listener *tcp.Listener
+	stoped   int32
 }
 
 func sendLoginResp(session kendynet.StreamSession, loginResp *protocol.LoginResp) bool {
@@ -99,11 +73,16 @@ func verifyLogin(loginReq *protocol.LoginReq) bool {
 	return true
 }
 
-func (this *tcpListener) Start() error {
-	if nil == this.l {
+func (this *Server) isStoped() bool {
+	return atomic.LoadInt32(&this.stoped) == 1
+}
+
+func (this *Server) startListener() error {
+	if nil == this.listener {
 		return fmt.Errorf("invaild listener")
 	}
-	return this.l.Serve(func(session kendynet.StreamSession) {
+
+	return this.listener.Serve(func(session kendynet.StreamSession) {
 		go func() {
 
 			config := conf.GetConfig()
@@ -151,7 +130,7 @@ func (this *tcpListener) Start() error {
 	})
 }
 
-func Start(id *int, cluster *string) error {
+func (this *Server) Start(id *int, cluster *string) error {
 
 	var err error
 
@@ -165,19 +144,20 @@ func Start(id *int, cluster *string) error {
 		buildInsertUpdateString = buildInsertUpdateStringPgSql
 	}
 
+	this.listener, err = tcp.New("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort))
+
+	if nil != err {
+		return err
+	}
+
 	if !initSql() {
 		return fmt.Errorf("initSql failed")
 	}
 
 	initKVStore(id, cluster)
 
-	server, err = newTcpListener("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort))
-	if nil != err {
-		return err
-	}
-
 	go func() {
-		err := server.Start()
+		err := this.startListener()
 		if nil != err {
 			Errorf("server.Start() error:%s\n", err.Error())
 		}
@@ -187,17 +167,6 @@ func Start(id *int, cluster *string) error {
 	Infoln("flyfish start:", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort))
 
 	return nil
-}
-
-func StopServer() {
-	if atomic.CompareAndSwapInt32(&stoped, 0, 1) {
-		Infoln("StopServer")
-		server.Close()
-	}
-}
-
-func isStop() bool {
-	return atomic.LoadInt32(&stoped) == 1
 }
 
 func waitCondition(fn func() bool) {
@@ -215,46 +184,68 @@ func waitCondition(fn func() bool) {
 	wg.Wait()
 }
 
+func (this *Server) Stop() {
+
+	if atomic.CompareAndSwapInt32(&this.stoped, 0, 1) {
+		Infoln("StopServer")
+		//关闭监听
+		this.listener.Close()
+
+		//关闭现有连接的读端
+		sessions.Range(func(key, value interface{}) bool {
+			value.(kendynet.StreamSession).ShutdownRead()
+			return true
+		})
+
+		Infoln("ShutdownRead ok", "cmdCount:", cmdCount)
+
+		//等待redis请求和命令执行完成
+		waitCondition(func() bool {
+			if atomic.LoadInt32(&cmdCount) == 0 {
+				return true
+			} else {
+				return false
+			}
+		})
+
+		stopSql()
+
+		Infoln("sql stop ok", "totalSqlUpdateCount:", totalSqlCount)
+
+		//关闭所有客户连接
+
+		sessions.Range(func(key, value interface{}) bool {
+			value.(kendynet.StreamSession).Close("", 1)
+			return true
+		})
+
+		waitCondition(func() bool {
+			if atomic.LoadInt32(&clientCount) == 0 {
+				return true
+			} else {
+				return false
+			}
+		})
+
+		caches.stop()
+
+		Infoln("flyfish stop ok")
+
+	}
+}
+
+func Start(id *int, cluster *string) error {
+	s := &Server{}
+	if atomic.CompareAndSwapPointer((*unsafe.Pointer)((unsafe.Pointer)(&server)), nil, (unsafe.Pointer)(s)) {
+		return s.Start(id, cluster)
+	} else {
+		return fmt.Errorf("server already started")
+	}
+}
+
 func Stop() {
-
-	//第一步关闭监听
-	StopServer()
-
-	sessions.Range(func(key, value interface{}) bool {
-		value.(kendynet.StreamSession).ShutdownRead()
-		return true
-	})
-
-	Infoln("ShutdownRead ok", "cmdCount:", cmdCount)
-
-	//等待redis请求和命令执行完成
-	waitCondition(func() bool {
-		if atomic.LoadInt32(&cmdCount) == 0 {
-			return true
-		} else {
-			return false
-		}
-	})
-
-	stopSql()
-
-	Infoln("sql stop ok", "totalSqlUpdateCount:", totalSqlCount)
-
-	//关闭所有客户连接
-
-	sessions.Range(func(key, value interface{}) bool {
-		value.(kendynet.StreamSession).Close("", 1)
-		return true
-	})
-
-	waitCondition(func() bool {
-		if atomic.LoadInt32(&clientCount) == 0 {
-			return true
-		} else {
-			return false
-		}
-	})
-
-	Infoln("flyfish stop ok")
-
+	s := (*Server)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&server))))
+	if nil != s {
+		s.Stop()
+	}
 }

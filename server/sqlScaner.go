@@ -159,7 +159,7 @@ func (this *scaner) next(req *proto.ScanReq) {
 		},
 	}
 
-	if isStop() {
+	if server.isStoped() {
 		resp.Head.ErrCode = pb.Int32(errcode.ERR_SERVER_STOPED)
 		this.session.Send(resp)
 		this.session.Close("", 1)

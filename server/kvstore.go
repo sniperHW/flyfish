@@ -16,7 +16,6 @@ package raft
 
 import (
 	"encoding/binary"
-	//"fmt"
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
@@ -94,6 +93,7 @@ type kvstore struct {
 	binlogStr   *str
 	batchCount  int32 //待序列化到文件的binlog数量
 	keySize     int
+	stop        func()
 }
 
 var caches *kvstore
@@ -123,7 +123,7 @@ func newKVStore(snapshotter *snap.Snapshotter, proposeC chan<- *batchBinlog, com
 	// read commits from raft into kvStore map until error
 
 	timer.Repeat(time.Millisecond*time.Duration(config.FlushInterval), nil, func(t *timer.Timer) {
-		if isStop() {
+		if server.isStoped() {
 			t.Cancel()
 		} else {
 			s.mtx.Lock()
@@ -133,7 +133,7 @@ func newKVStore(snapshotter *snap.Snapshotter, proposeC chan<- *batchBinlog, com
 	})
 
 	timer.Repeat(time.Second, nil, func(t *timer.Timer) {
-		if isStop() {
+		if server.isStoped() {
 			t.Cancel()
 		} else {
 			s.mtx.Lock()
@@ -145,10 +145,6 @@ func newKVStore(snapshotter *snap.Snapshotter, proposeC chan<- *batchBinlog, com
 	go s.readCommits(false, commitC, errorC)
 	return s
 }
-
-//func (s *kvstore) getKV(unikey string) *cacheKey {
-//	slot := s.kv[StringHash(unikey%len(s.kv)]
-//}
 
 func (s *kvstore) updateLRU(ckey *cacheKey) {
 
@@ -220,7 +216,6 @@ func (s *kvstore) kick(ckey *cacheKey) bool {
 }
 
 func (s *kvstore) Propose(propose *batchBinlog) {
-	//fmt.Println("-----------------------Propose--------------------")
 	s.proposeC <- propose
 }
 
@@ -341,10 +336,6 @@ func (s *kvstore) getSnapshot() [][]kvsnap {
 				if v.status == cache_ok || v.status == cache_missing {
 					v.snapshoted = true
 
-					//if v.uniKey == "" || v.version == 0 {
-					//	panic("uniKey is nil")
-					//}
-
 					s := kvsnap{
 						uniKey:  v.uniKey,
 						version: v.version,
@@ -373,40 +364,6 @@ func (s *kvstore) getSnapshot() [][]kvsnap {
 	Infoln("clone time", time.Now().Sub(beg))
 
 	return ret
-
-	/*	s.mtx.Lock()
-
-		kvsnaps := make([]kvsnap, len(s.kv))
-
-		beg := time.Now()
-
-		for _, v := range s.kv {
-			v.mtx.Lock()
-			if v.status == cache_ok || v.status == cache_missing {
-				v.snapshoted = true
-
-				s := kvsnap{
-					uniKey:  v.uniKey,
-					version: v.version,
-				}
-
-				if v.values != nil {
-					s.values = map[string]*proto.Field{}
-					for kk, vv := range v.values {
-						s.values[kk] = vv
-					}
-				}
-				kvsnaps = append(kvsnaps, s)
-			}
-			v.mtx.Unlock()
-		}
-
-		Infoln("clone time", time.Now().Sub(beg))
-
-		s.mtx.Unlock()
-
-		return kvsnaps
-	*/
 
 }
 
@@ -485,8 +442,6 @@ func (s *kvstore) recoverFromSnapshot(snapshot []byte) bool {
 	for offset < n {
 
 		newOffset, tt, unikey, version, values := readBinLog(snapshot, offset)
-
-		//Infoln(newOffset, tt, unikey, version, values)
 
 		offset = newOffset
 
@@ -581,8 +536,14 @@ func initKVStore(id *int, cluster *string) {
 		return caches.getSnapshot()
 	}
 
-	commitC, errorC, snapshotterReady := newRaftNode(*id, strings.Split(*cluster, ","), false, getSnapshot, proposeC, confChangeC)
+	rn, commitC, errorC, snapshotterReady := newRaftNode(*id, strings.Split(*cluster, ","), false, getSnapshot, proposeC, confChangeC)
 
 	caches = newKVStore(<-snapshotterReady, proposeC, commitC, errorC)
+
+	caches.stop = func() {
+		close(proposeC)
+		close(confChangeC)
+		rn.stop()
+	}
 
 }
