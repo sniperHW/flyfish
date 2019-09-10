@@ -187,20 +187,19 @@ func (s *kvstore) kickCacheKey() {
 
 func (s *kvstore) kick(ckey *cacheKey) bool {
 	kickAble := false
-	kicking := false
 	ckey.mtx.Lock()
+	if ckey.status == caches_kicking {
+		ckey.mtx.Unlock()
+		return true
+	}
+
 	kickAble = ckey.kickAbleNoLock()
 	if kickAble {
-		kicking = true
 		ckey.back_status = ckey.status
 		ckey.status = cache_kicking
 		ckey.lockCmdQueue()
 	}
 	ckey.mtx.Unlock()
-
-	if kicking {
-		return true
-	}
 
 	if !kickAble {
 		return false
