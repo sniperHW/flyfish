@@ -1141,7 +1141,7 @@ func stepLeader(r *raft, m pb.Message) error {
 	switch m.Type {
 	case pb.MsgAppResp:
 
-		fmt.Println("recv pb.MsgAppResp", m.From, m.Index)
+		//fmt.Println("recv pb.MsgAppResp", m.From, m.Index)
 
 		pr.RecentActive = true
 
@@ -1353,7 +1353,7 @@ func stepFollower(r *raft, m pb.Message) error {
 		m.To = r.lead
 		r.send(m)
 	case pb.MsgApp:
-		fmt.Println("recv pb.MsgApp", m.From, m.Index, len(m.Entries))
+		//fmt.Println("recv pb.MsgApp", m.From, m.Index, len(m.Entries))
 		r.electionElapsed = 0
 		r.lead = m.From
 		r.handleAppendEntries(m)
@@ -1406,7 +1406,7 @@ func (r *raft) handleAppendEntries(m pb.Message) {
 	}
 
 	if mlastIndex, ok := r.raftLog.maybeAppend(m.Index, m.LogTerm, m.Commit, m.Entries...); ok {
-		fmt.Println("send pb.MsgAppResp")
+		//fmt.Println("send pb.MsgAppResp")
 		r.send(pb.Message{To: m.From, Type: pb.MsgAppResp, Index: mlastIndex})
 	} else {
 		r.logger.Debugf("%x [logterm: %d, index: %d] rejected MsgApp [logterm: %d, index: %d] from %x",
