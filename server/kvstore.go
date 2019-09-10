@@ -245,7 +245,7 @@ func (s *kvstore) readCommits(once bool, commitC <-chan *commitedBatchBinlog, er
 			}
 		} else {
 
-			Infoln("commited", data.Index)
+			//Infoln("commited", data.Index)
 
 			if !data.localPropose {
 				s.applyLeaderPropose(data.data)
