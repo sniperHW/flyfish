@@ -188,7 +188,7 @@ func (s *kvstore) kickCacheKey() {
 func (s *kvstore) kick(ckey *cacheKey) bool {
 	kickAble := false
 	ckey.mtx.Lock()
-	if ckey.status == caches_kicking {
+	if ckey.status == cache_kicking {
 		ckey.mtx.Unlock()
 		return true
 	}
@@ -321,7 +321,7 @@ func (s *kvstore) readCommits(once bool, commitC <-chan *commitedBatchBinlog, er
 								ckey.slot.mtx.Lock()
 								delete(ckey.slot.kv, ckey.uniKey)
 								ckey.slot.mtx.Unlock()
-								Infoln("kick", s.keySize, s.kickingCount)
+								//Infoln("kick", s.keySize, s.kickingCount)
 							}
 						} else {
 							v.getCacheKey().processQueueCmd()
