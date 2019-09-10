@@ -517,6 +517,10 @@ func (rc *raftNode) onTriggerSnapshotOK() {
 
 func (rc *raftNode) maybeTriggerSnapshot() {
 
+	if !rc.isLeader() {
+		return
+	}
+
 	if rc.snapshotting {
 		return
 	}
