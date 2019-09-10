@@ -13,6 +13,7 @@ const (
 	cache_new     = 1
 	cache_ok      = 2
 	cache_missing = 3
+	cache_kicking = 4
 )
 
 type cacheKey struct {
@@ -21,6 +22,7 @@ type cacheKey struct {
 	key             string
 	version         int64
 	status          int
+	back_status     int
 	cmdQueueLocked  bool //操作是否被锁定
 	mtx             sync.Mutex
 	cmdQueue        *list.List

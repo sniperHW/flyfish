@@ -82,18 +82,19 @@ type kvSlot struct {
 
 // a key-value store backed by raft
 type kvstore struct {
-	proposeC    chan<- *batchBinlog // channel for proposing updates
-	snapshotter *snap.Snapshotter
-	slots       []*kvSlot //map[string]*cacheKey
-	mtx         sync.Mutex
-	lruHead     cacheKey
-	lruTail     cacheKey
-	ctxs        *ctxArray
-	nextFlush   time.Time
-	binlogStr   *str
-	batchCount  int32 //待序列化到文件的binlog数量
-	keySize     int
-	stop        func()
+	proposeC     chan<- *batchBinlog // channel for proposing updates
+	snapshotter  *snap.Snapshotter
+	slots        []*kvSlot //map[string]*cacheKey
+	mtx          sync.Mutex
+	lruHead      cacheKey
+	lruTail      cacheKey
+	ctxs         *ctxArray
+	nextFlush    time.Time
+	binlogStr    *str
+	batchCount   int32 //待序列化到文件的binlog数量
+	keySize      int
+	kickingCount int
+	stop         func()
 }
 
 var caches *kvstore
@@ -170,22 +171,37 @@ func (s *kvstore) removeLRU(ckey *cacheKey) {
 func (s *kvstore) kickCacheKey() {
 	MaxCachePerGroupSize := conf.GetConfig().MaxCachePerGroupSize
 
-	for s.keySize > MaxCachePerGroupSize && s.lruHead.nnext != &s.lruTail {
+	if s.lruHead.nnext != &s.lruTail {
 		c := s.lruTail.pprev
-		if !s.kick(c) {
-			return
+		for (s.keySize - s.kickingCount) > MaxCachePerGroupSize {
+			if c == &s.lruHead {
+				return
+			}
+			if !s.kick(c) {
+				return
+			}
+			c = c.pprev
 		}
 	}
 }
 
 func (s *kvstore) kick(ckey *cacheKey) bool {
 	kickAble := false
+	kicking := false
 	ckey.mtx.Lock()
 	kickAble = ckey.kickAbleNoLock()
 	if kickAble {
+		kicking = true
+		ckey.back_status = ckey.status
+		ckey.status = cache_kicking
 		ckey.lockCmdQueue()
 	}
 	ckey.mtx.Unlock()
+
+	if kicking {
+		return true
+	}
+
 	if !kickAble {
 		return false
 	}
@@ -201,6 +217,8 @@ func (s *kvstore) kick(ckey *cacheKey) bool {
 			ckey:    ckey,
 		},
 	}
+
+	s.kickingCount++
 
 	s.ctxs.append(ctx)
 
@@ -288,8 +306,12 @@ func (s *kvstore) readCommits(once bool, commitC <-chan *commitedBatchBinlog, er
 								 *   否则，重放日志时因为kick先执行，变更重放将因为找不到key出错
 								 */
 								ckey.snapshoted = false
+								ckey.status = ckey.back_status
 							}
 							ckey.mtx.Unlock()
+							s.mtx.Lock()
+							s.kickingCount--
+							s.mtx.Unlock()
 							if queueCmdSize > 0 {
 								ckey.processQueueCmd()
 							} else {
@@ -300,6 +322,7 @@ func (s *kvstore) readCommits(once bool, commitC <-chan *commitedBatchBinlog, er
 								ckey.slot.mtx.Lock()
 								delete(ckey.slot.kv, ckey.uniKey)
 								ckey.slot.mtx.Unlock()
+								Infoln("kick", s.keySize, s.kickingCount)
 							}
 						} else {
 							v.getCacheKey().processQueueCmd()
