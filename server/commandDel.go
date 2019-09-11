@@ -34,7 +34,7 @@ func (this *DelReplyer) reply(errCode int32, fields map[string]*proto.Field, ver
 	})
 }
 
-func del(session kendynet.StreamSession, msg *codec.Message) {
+func del(server *Server, session kendynet.StreamSession, msg *codec.Message) {
 
 	req := msg.GetData().(*proto.DelReq)
 
@@ -68,6 +68,7 @@ func del(session kendynet.StreamSession, msg *codec.Message) {
 			version:      req.Version,
 			deadline:     time.Now().Add(time.Duration(head.GetTimeout())),
 			respDeadline: time.Now().Add(time.Duration(head.GetRespTimeout())),
+			store:        server.store,
 		}
 
 		cmd.rpyer = &DelReplyer{

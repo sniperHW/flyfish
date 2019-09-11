@@ -70,7 +70,7 @@ func updateSqlLoadQueueSize(SqlLoadQueueSize int) {
 	}
 }
 
-func initSql() bool {
+func initSql(server *Server) bool {
 
 	sqlUpdateWg = &sync.WaitGroup{}
 	config := conf.GetConfig()
@@ -109,7 +109,7 @@ func initSql() bool {
 			return false
 		}
 
-		u := newSqlUpdater(writeBackDB, wname, sqlUpdateWg)
+		u := newSqlUpdater(server, writeBackDB, wname, sqlUpdateWg)
 		sqlUpdaters = append(sqlUpdaters, u)
 		go u.run()
 		timer.Repeat(time.Second*60, nil, func(t *timer.Timer) {

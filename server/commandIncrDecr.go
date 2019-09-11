@@ -45,7 +45,7 @@ func (this *IncrDecrByReplyer) reply(errCode int32, fields map[string]*proto.Fie
 	}
 }
 
-func incrBy(session kendynet.StreamSession, msg *codec.Message) {
+func incrBy(server *Server, session kendynet.StreamSession, msg *codec.Message) {
 
 	req := msg.GetData().(*proto.IncrByReq)
 
@@ -79,6 +79,7 @@ func incrBy(session kendynet.StreamSession, msg *codec.Message) {
 			incrDecr:     req.GetField(),
 			deadline:     time.Now().Add(time.Duration(head.GetTimeout())),
 			respDeadline: time.Now().Add(time.Duration(head.GetRespTimeout())),
+			store:        server.store,
 		}
 
 		cmd.rpyer = &IncrDecrByReplyer{
@@ -91,7 +92,7 @@ func incrBy(session kendynet.StreamSession, msg *codec.Message) {
 	}
 }
 
-func decrBy(session kendynet.StreamSession, msg *codec.Message) {
+func decrBy(server *Server, session kendynet.StreamSession, msg *codec.Message) {
 
 	req := msg.GetData().(*proto.DecrByReq)
 
@@ -125,6 +126,7 @@ func decrBy(session kendynet.StreamSession, msg *codec.Message) {
 			incrDecr:     req.GetField(),
 			deadline:     time.Now().Add(time.Duration(head.GetTimeout())),
 			respDeadline: time.Now().Add(time.Duration(head.GetRespTimeout())),
+			store:        server.store,
 		}
 
 		cmd.rpyer = &IncrDecrByReplyer{

@@ -20,19 +20,21 @@ type sqlUpdater struct {
 	sqlStr   *str
 	max      int
 	count    int
+	server   *Server
 }
 
-func newSqlUpdater(db *sqlx.DB, name string, wg *sync.WaitGroup) *sqlUpdater {
+func newSqlUpdater(server *Server, db *sqlx.DB, name string, wg *sync.WaitGroup) *sqlUpdater {
 	if nil != wg {
 		wg.Add(1)
 	}
 	return &sqlUpdater{
-		name:  name,
-		queue: util.NewBlockQueueWithName(name),
-		db:    db,
-		wg:    wg,
-		max:   200,
-		count: 0,
+		name:   name,
+		queue:  util.NewBlockQueueWithName(name),
+		db:     db,
+		wg:     wg,
+		max:    200,
+		count:  0,
+		server: server,
 	}
 }
 
@@ -134,7 +136,7 @@ func (this *sqlUpdater) exec() {
 				Errorln(this.sqlStr.toString(), err)
 				if isRetryError(err) {
 					Errorln("sqlUpdater exec error:", err)
-					if server.isStoped() {
+					if this.server.isStoped() {
 						return
 					}
 					//休眠一秒重试

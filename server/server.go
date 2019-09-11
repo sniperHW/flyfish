@@ -13,16 +13,18 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
+	//"unsafe"
 )
 
-var (
+/*var (
 	server *Server
-)
+)*/
 
 type Server struct {
-	listener *tcp.Listener
-	stoped   int32
+	listener   *tcp.Listener
+	stoped     int32
+	store      *kvstore
+	dispatcher *dispatcher
 }
 
 func sendLoginResp(session kendynet.StreamSession, loginResp *protocol.LoginResp) bool {
@@ -115,15 +117,15 @@ func (this *Server) startListener() error {
 			session.SetEncoder(codec.NewEncoder(config.Compress && loginReq.GetCompress()))
 
 			session.SetCloseCallBack(func(sess kendynet.StreamSession, reason string) {
-				onClose(sess, reason)
+				this.dispatcher.OnClose(sess, reason)
 			})
-			onNewClient(session)
+			this.dispatcher.OnNewClient(session)
 			session.Start(func(event *kendynet.Event) {
 				if event.EventType == kendynet.EventTypeError {
 					event.Session.Close(event.Data.(error).Error(), 0)
 				} else {
 					msg := event.Data.(*codec.Message)
-					dispatch(session, msg)
+					this.dispatcher.Dispatch(this, session, msg)
 				}
 			})
 		}()
@@ -150,11 +152,11 @@ func (this *Server) Start(id *int, cluster *string) error {
 		return err
 	}
 
-	if !initSql() {
+	if !initSql(this) {
 		return fmt.Errorf("initSql failed")
 	}
 
-	initKVStore(id, cluster)
+	this.store = initKVStore(id, cluster)
 
 	go func() {
 		err := this.startListener()
@@ -204,6 +206,9 @@ func (this *Server) Stop() {
 			if atomic.LoadInt32(&cmdCount) == 0 {
 				return true
 			} else {
+				this.store.mtx.Lock()
+				this.store.tryCommitBatch()
+				this.store.mtx.Unlock()
 				return false
 			}
 		})
@@ -227,14 +232,40 @@ func (this *Server) Stop() {
 			}
 		})
 
-		caches.stop()
+		this.store.stop()
 
 		Infoln("flyfish stop ok")
 
 	}
 }
 
-func Start(id *int, cluster *string) error {
+func (this *Server) initHandler() {
+
+	this.dispatcher = &dispatcher{
+		handlers: map[string]handler{},
+	}
+
+	this.dispatcher.Register(&protocol.DelReq{}, del)
+	this.dispatcher.Register(&protocol.GetReq{}, get)
+	this.dispatcher.Register(&protocol.SetReq{}, set)
+	this.dispatcher.Register(&protocol.SetNxReq{}, setNx)
+	this.dispatcher.Register(&protocol.CompareAndSetReq{}, compareAndSet)
+	this.dispatcher.Register(&protocol.CompareAndSetNxReq{}, compareAndSetNx)
+	this.dispatcher.Register(&protocol.PingReq{}, ping)
+	this.dispatcher.Register(&protocol.IncrByReq{}, incrBy)
+	this.dispatcher.Register(&protocol.DecrByReq{}, decrBy)
+	this.dispatcher.Register(&protocol.ScanReq{}, scan)
+	this.dispatcher.Register(&protocol.ReloadTableConfReq{}, reloadTableConf)
+	this.dispatcher.Register(&protocol.ReloadConfigReq{}, reloadConf)
+}
+
+func NewServer() *Server {
+	s := &Server{}
+	s.initHandler()
+	return s
+}
+
+/*func Start(id *int, cluster *string) error {
 	s := &Server{}
 	if atomic.CompareAndSwapPointer((*unsafe.Pointer)((unsafe.Pointer)(&server)), nil, (unsafe.Pointer)(s)) {
 		return s.Start(id, cluster)
@@ -248,4 +279,4 @@ func Stop() {
 	if nil != s {
 		s.Stop()
 	}
-}
+}*/

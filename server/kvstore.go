@@ -95,9 +95,11 @@ type kvstore struct {
 	keySize      int
 	kickingCount int
 	stop         func()
+	batchTimer   *timer.Timer
+	lruTimer     *timer.Timer
 }
 
-var caches *kvstore
+//var caches *kvstore
 
 func newKVStore(snapshotter *snap.Snapshotter, proposeC chan<- *batchBinlog, commitC <-chan *commitedBatchBinlog, errorC <-chan error) *kvstore {
 
@@ -123,20 +125,16 @@ func newKVStore(snapshotter *snap.Snapshotter, proposeC chan<- *batchBinlog, com
 	s.readCommits(true, commitC, errorC)
 	// read commits from raft into kvStore map until error
 
-	timer.Repeat(time.Millisecond*time.Duration(config.FlushInterval), nil, func(t *timer.Timer) {
+	s.batchTimer = timer.Repeat(time.Millisecond*time.Duration(config.FlushInterval), nil, func(t *timer.Timer) {
 		s.mtx.Lock()
 		s.tryCommitBatch()
 		s.mtx.Unlock()
 	})
 
-	timer.Repeat(time.Second, nil, func(t *timer.Timer) {
-		if server.isStoped() {
-			t.Cancel()
-		} else {
-			s.mtx.Lock()
-			s.kickCacheKey()
-			s.mtx.Unlock()
-		}
+	s.lruTimer = timer.Repeat(time.Second, nil, func(t *timer.Timer) {
+		s.mtx.Lock()
+		s.kickCacheKey()
+		s.mtx.Unlock()
 	})
 
 	go s.readCommits(false, commitC, errorC)
@@ -550,26 +548,32 @@ func (s *kvstore) recoverFromSnapshot(snapshot []byte) bool {
 	return true
 }
 
-func initKVStore(id *int, cluster *string) {
+func initKVStore(id *int, cluster *string) *kvstore {
 
 	proposeC := make(chan *batchBinlog)
 	confChangeC := make(chan raftpb.ConfChange)
 
+	var store *kvstore
+
 	// raft provides a commit stream for the proposals from the http api
 	getSnapshot := func() [][]kvsnap {
-		if nil == caches {
+		if nil == store {
 			return nil
 		}
-		return caches.getSnapshot()
+		return store.getSnapshot()
 	}
 
 	commitC, errorC, snapshotterReady := newRaftNode(*id, strings.Split(*cluster, ","), false, getSnapshot, proposeC, confChangeC)
 
-	caches = newKVStore(<-snapshotterReady, proposeC, commitC, errorC)
+	store = newKVStore(<-snapshotterReady, proposeC, commitC, errorC)
 
-	caches.stop = func() {
+	store.stop = func() {
 		close(proposeC)
 		close(confChangeC)
+		store.batchTimer.Cancel()
+		store.lruTimer.Cancel()
 	}
+
+	return store
 
 }

@@ -26,6 +26,7 @@ type scaner struct {
 	field_receiver []interface{}
 	field_convter  []func(interface{}) interface{}
 	rows           *sql.Rows
+	server         *Server
 }
 
 func (this *scaner) close() {
@@ -45,7 +46,7 @@ func (this *scaner) close() {
 	}
 }
 
-func scan(session kendynet.StreamSession, msg *codec.Message) {
+func scan(server *Server, session kendynet.StreamSession, msg *codec.Message) {
 
 	u := session.GetUserData()
 
@@ -101,7 +102,8 @@ func scan(session kendynet.StreamSession, msg *codec.Message) {
 		}
 
 		s = &scaner{
-			table: head.GetTable(),
+			table:  head.GetTable(),
+			server: server,
 		}
 
 		if req.GetAll() {
@@ -159,7 +161,7 @@ func (this *scaner) next(req *proto.ScanReq) {
 		},
 	}
 
-	if server.isStoped() {
+	if this.server.isStoped() {
 		resp.Head.ErrCode = pb.Int32(errcode.ERR_SERVER_STOPED)
 		this.session.Send(resp)
 		this.session.Close("", 1)

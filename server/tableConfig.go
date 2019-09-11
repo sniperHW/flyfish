@@ -55,7 +55,7 @@ func LoadTableConfig() bool {
 	return true
 }
 
-func reloadTableConf(session kendynet.StreamSession, msg *codec.Message) {
+func reloadTableConf(server *Server, session kendynet.StreamSession, msg *codec.Message) {
 	ok := LoadTableConfig()
 	session.Send(&proto.ReloadTableConfResp{
 		Ok: pb.Bool(ok),

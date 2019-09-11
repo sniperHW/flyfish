@@ -9,7 +9,7 @@ import (
 	"io/ioutil"
 )
 
-func reloadConf(session kendynet.StreamSession, msg *codec.Message) {
+func reloadConf(server *Server, session kendynet.StreamSession, msg *codec.Message) {
 	oldConf := conf.GetConfig()
 	path := msg.GetData().(*proto.ReloadConfigReq).GetPath()
 	err := conf.LoadConfig(path)

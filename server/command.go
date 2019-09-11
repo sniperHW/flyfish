@@ -105,6 +105,7 @@ type command struct {
 	deadline     time.Time
 	respDeadline time.Time
 	replyed      int32
+	store        *kvstore
 }
 
 func (this *command) reply(errCode int32, fields map[string]*proto.Field, version int64) {
@@ -146,9 +147,9 @@ func (this *command) process() {
 		return
 	}
 
-	caches.mtx.Lock()
+	this.store.mtx.Lock()
 
-	slot := caches.slots[StringHash(this.uniKey)%len(caches.slots)]
+	slot := this.store.slots[StringHash(this.uniKey)%len(this.store.slots)]
 
 	slot.mtx.Lock()
 
@@ -164,22 +165,22 @@ func (this *command) process() {
 		}
 		this.ckey = k
 		k.pushCmd(this)
-		caches.updateLRU(k)
+		this.store.updateLRU(k)
 	} else {
-		k = newCacheKey(caches, slot, this.table, this.key, this.uniKey)
+		k = newCacheKey(this.store, slot, this.table, this.key, this.uniKey)
 		if nil != k {
 			this.ckey = k
 			k.pushCmd(this)
-			caches.updateLRU(k)
+			this.store.updateLRU(k)
 			slot.kv[this.uniKey] = k
-			caches.keySize++
+			this.store.keySize++
 		}
 	}
-	caches.kickCacheKey()
+	this.store.kickCacheKey()
 
 	slot.mtx.Unlock()
 
-	caches.mtx.Unlock()
+	this.store.mtx.Unlock()
 
 	if nil != k {
 		k.processClientCmd()

@@ -13,14 +13,10 @@ import (
 var sessions sync.Map
 var clientCount int32
 
-type handler func(kendynet.StreamSession, *codec.Message)
+type handler func(*Server, kendynet.StreamSession, *codec.Message)
 
 type dispatcher struct {
 	handlers map[string]handler
-}
-
-var dispatcher_ *dispatcher = &dispatcher{
-	handlers: map[string]handler{},
 }
 
 func (this *dispatcher) Register(msg pb.Message, h handler) {
@@ -36,12 +32,12 @@ func (this *dispatcher) Register(msg pb.Message, h handler) {
 	this.handlers[msgName] = h
 }
 
-func (this *dispatcher) Dispatch(session kendynet.StreamSession, msg *codec.Message) {
+func (this *dispatcher) Dispatch(server *Server, session kendynet.StreamSession, msg *codec.Message) {
 	if nil != msg {
 		name := msg.GetName()
 		handler, ok := this.handlers[name]
 		if ok {
-			handler(session, msg)
+			handler(server, session, msg)
 		}
 	}
 }
@@ -60,6 +56,7 @@ func (this *dispatcher) OnNewClient(session kendynet.StreamSession) {
 	sessions.Store(session, session)
 }
 
+/*
 func onClose(session kendynet.StreamSession, reason string) {
 	dispatcher_.OnClose(session, reason)
 }
@@ -74,9 +71,9 @@ func register(msg pb.Message, h handler) {
 
 func dispatch(session kendynet.StreamSession, msg *codec.Message) {
 	dispatcher_.Dispatch(session, msg)
-}
+}*/
 
-func ping(session kendynet.StreamSession, msg *codec.Message) {
+func ping(server *Server, session kendynet.StreamSession, msg *codec.Message) {
 	req := msg.GetData().(*proto.PingReq)
 	resp := &proto.PingResp{
 		Timestamp: pb.Int64(req.GetTimestamp()),
@@ -84,6 +81,7 @@ func ping(session kendynet.StreamSession, msg *codec.Message) {
 	session.Send(resp)
 }
 
+/*
 func init() {
 	register(&proto.DelReq{}, del)
 	register(&proto.GetReq{}, get)
@@ -97,4 +95,4 @@ func init() {
 	register(&proto.ScanReq{}, scan)
 	register(&proto.ReloadTableConfReq{}, reloadTableConf)
 	register(&proto.ReloadConfigReq{}, reloadConf)
-}
+}*/

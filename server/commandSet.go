@@ -55,7 +55,7 @@ func (this *SetReplyer) reply(errCode int32, fields map[string]*proto.Field, ver
 	}
 }
 
-func set(session kendynet.StreamSession, msg *codec.Message) {
+func set(server *Server, session kendynet.StreamSession, msg *codec.Message) {
 
 	req := msg.GetData().(*proto.SetReq)
 
@@ -90,6 +90,7 @@ func set(session kendynet.StreamSession, msg *codec.Message) {
 			fields:       map[string]*proto.Field{},
 			deadline:     time.Now().Add(time.Duration(head.GetTimeout())),
 			respDeadline: time.Now().Add(time.Duration(head.GetRespTimeout())),
+			store:        server.store,
 		}
 
 		cmd.rpyer = &SetReplyer{
@@ -106,7 +107,7 @@ func set(session kendynet.StreamSession, msg *codec.Message) {
 	}
 }
 
-func setNx(session kendynet.StreamSession, msg *codec.Message) {
+func setNx(server *Server, session kendynet.StreamSession, msg *codec.Message) {
 
 	req := msg.GetData().(*proto.SetNxReq)
 
@@ -140,6 +141,7 @@ func setNx(session kendynet.StreamSession, msg *codec.Message) {
 			fields:       map[string]*proto.Field{},
 			deadline:     time.Now().Add(time.Duration(head.GetTimeout())),
 			respDeadline: time.Now().Add(time.Duration(head.GetRespTimeout())),
+			store:        server.store,
 		}
 
 		cmd.rpyer = &SetReplyer{
@@ -156,7 +158,7 @@ func setNx(session kendynet.StreamSession, msg *codec.Message) {
 	}
 }
 
-func compareAndSet(session kendynet.StreamSession, msg *codec.Message) {
+func compareAndSet(server *Server, session kendynet.StreamSession, msg *codec.Message) {
 
 	req := msg.GetData().(*proto.CompareAndSetReq)
 
@@ -193,6 +195,7 @@ func compareAndSet(session kendynet.StreamSession, msg *codec.Message) {
 			},
 			deadline:     time.Now().Add(time.Duration(head.GetTimeout())),
 			respDeadline: time.Now().Add(time.Duration(head.GetRespTimeout())),
+			store:        server.store,
 		}
 
 		cmd.rpyer = &SetReplyer{
@@ -205,7 +208,7 @@ func compareAndSet(session kendynet.StreamSession, msg *codec.Message) {
 	}
 }
 
-func compareAndSetNx(session kendynet.StreamSession, msg *codec.Message) {
+func compareAndSetNx(server *Server, session kendynet.StreamSession, msg *codec.Message) {
 
 	req := msg.GetData().(*proto.CompareAndSetNxReq)
 
@@ -242,6 +245,7 @@ func compareAndSetNx(session kendynet.StreamSession, msg *codec.Message) {
 			},
 			deadline:     time.Now().Add(time.Duration(head.GetTimeout())),
 			respDeadline: time.Now().Add(time.Duration(head.GetRespTimeout())),
+			store:        server.store,
 		}
 
 		cmd.rpyer = &SetReplyer{
