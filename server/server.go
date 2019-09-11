@@ -156,7 +156,8 @@ func (this *Server) Start(id *int, cluster *string) error {
 		return fmt.Errorf("initSql failed")
 	}
 
-	this.storeGroup = initKvGroup(id, cluster, config.CacheGroupSize)
+	//mutil raft尚未实现，只能填1
+	this.storeGroup = initKvGroup(id, cluster, 1 /*config.CacheGroupSize*/)
 
 	go func() {
 		err := this.startListener()
