@@ -68,7 +68,7 @@ func del(server *Server, session kendynet.StreamSession, msg *codec.Message) {
 			version:      req.Version,
 			deadline:     time.Now().Add(time.Duration(head.GetTimeout())),
 			respDeadline: time.Now().Add(time.Duration(head.GetRespTimeout())),
-			store:        server.store,
+			storeGroup:   server.storeGroup,
 		}
 
 		cmd.rpyer = &DelReplyer{

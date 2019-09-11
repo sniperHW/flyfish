@@ -23,7 +23,7 @@ import (
 type Server struct {
 	listener   *tcp.Listener
 	stoped     int32
-	store      *kvstore
+	storeGroup *storeGroup //store      *kvstore
 	dispatcher *dispatcher
 }
 
@@ -156,7 +156,7 @@ func (this *Server) Start(id *int, cluster *string) error {
 		return fmt.Errorf("initSql failed")
 	}
 
-	this.store = initKVStore(id, cluster)
+	this.storeGroup = initKvGroup(id, cluster, config.CacheGroupSize)
 
 	go func() {
 		err := this.startListener()
@@ -206,9 +206,7 @@ func (this *Server) Stop() {
 			if atomic.LoadInt32(&cmdCount) == 0 {
 				return true
 			} else {
-				this.store.mtx.Lock()
-				this.store.tryCommitBatch()
-				this.store.mtx.Unlock()
+				this.storeGroup.tryCommitBatch()
 				return false
 			}
 		})
@@ -232,7 +230,7 @@ func (this *Server) Stop() {
 			}
 		})
 
-		this.store.stop()
+		this.storeGroup.stop()
 
 		Infoln("flyfish stop ok")
 

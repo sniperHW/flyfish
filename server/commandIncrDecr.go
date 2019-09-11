@@ -79,7 +79,7 @@ func incrBy(server *Server, session kendynet.StreamSession, msg *codec.Message) 
 			incrDecr:     req.GetField(),
 			deadline:     time.Now().Add(time.Duration(head.GetTimeout())),
 			respDeadline: time.Now().Add(time.Duration(head.GetRespTimeout())),
-			store:        server.store,
+			storeGroup:   server.storeGroup,
 		}
 
 		cmd.rpyer = &IncrDecrByReplyer{
@@ -126,7 +126,7 @@ func decrBy(server *Server, session kendynet.StreamSession, msg *codec.Message) 
 			incrDecr:     req.GetField(),
 			deadline:     time.Now().Add(time.Duration(head.GetTimeout())),
 			respDeadline: time.Now().Add(time.Duration(head.GetRespTimeout())),
-			store:        server.store,
+			storeGroup:   server.storeGroup,
 		}
 
 		cmd.rpyer = &IncrDecrByReplyer{

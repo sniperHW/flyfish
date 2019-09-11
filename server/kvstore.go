@@ -99,7 +99,48 @@ type kvstore struct {
 	lruTimer     *timer.Timer
 }
 
-//var caches *kvstore
+type storeGroup struct {
+	sync.RWMutex
+	stores map[int]*kvstore
+	mod    int
+}
+
+func (this *storeGroup) getStore(uniKey string) *kvstore {
+	this.RLock()
+	defer this.RUnlock()
+	index := (StringHash(uniKey) % this.mod) + 1
+	return this.stores[index]
+}
+
+func (this *storeGroup) addStore(index int, store *kvstore) bool {
+	if 0 == index || nil == store {
+		panic("0 == index || nil == store")
+	}
+	this.Lock()
+	defer this.Unlock()
+	_, ok := this.stores[index]
+	if ok {
+		return false
+	}
+	this.stores[index] = store
+	return true
+}
+
+func (this *storeGroup) stop() {
+	this.RLock()
+	defer this.RUnlock()
+	for _, v := range this.stores {
+		v.stop()
+	}
+}
+
+func (this *storeGroup) tryCommitBatch() {
+	this.RLock()
+	defer this.RUnlock()
+	for _, v := range this.stores {
+		v.tryCommitBatch()
+	}
+}
 
 func newKVStore(snapshotter *snap.Snapshotter, proposeC chan<- *batchBinlog, commitC <-chan *commitedBatchBinlog, errorC <-chan error) *kvstore {
 
@@ -548,32 +589,42 @@ func (s *kvstore) recoverFromSnapshot(snapshot []byte) bool {
 	return true
 }
 
-func initKVStore(id *int, cluster *string) *kvstore {
+func initKvGroup(id *int, cluster *string, mod int) *storeGroup {
 
-	proposeC := make(chan *batchBinlog)
-	confChangeC := make(chan raftpb.ConfChange)
+	storeGroup := &storeGroup{
+		stores: map[int]*kvstore{},
+		mod:    mod,
+	}
 
-	var store *kvstore
+	for i := 1; i <= mod; i++ {
 
-	// raft provides a commit stream for the proposals from the http api
-	getSnapshot := func() [][]kvsnap {
-		if nil == store {
-			return nil
+		proposeC := make(chan *batchBinlog)
+		confChangeC := make(chan raftpb.ConfChange)
+
+		var store *kvstore
+
+		// raft provides a commit stream for the proposals from the http api
+		getSnapshot := func() [][]kvsnap {
+			if nil == store {
+				return nil
+			}
+			return store.getSnapshot()
 		}
-		return store.getSnapshot()
+
+		commitC, errorC, snapshotterReady := newRaftNode(*id, i, strings.Split(*cluster, ","), false, getSnapshot, proposeC, confChangeC)
+
+		store = newKVStore(<-snapshotterReady, proposeC, commitC, errorC)
+
+		store.stop = func() {
+			close(proposeC)
+			close(confChangeC)
+			store.batchTimer.Cancel()
+			store.lruTimer.Cancel()
+		}
+
+		storeGroup.addStore(i, store)
 	}
 
-	commitC, errorC, snapshotterReady := newRaftNode(*id, strings.Split(*cluster, ","), false, getSnapshot, proposeC, confChangeC)
-
-	store = newKVStore(<-snapshotterReady, proposeC, commitC, errorC)
-
-	store.stop = func() {
-		close(proposeC)
-		close(confChangeC)
-		store.batchTimer.Cancel()
-		store.lruTimer.Cancel()
-	}
-
-	return store
+	return storeGroup
 
 }

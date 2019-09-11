@@ -80,7 +80,7 @@ func get(server *Server, session kendynet.StreamSession, msg *codec.Message) {
 			fields:       map[string]*proto.Field{},
 			deadline:     time.Now().Add(time.Duration(head.GetTimeout())),
 			respDeadline: time.Now().Add(time.Duration(head.GetRespTimeout())),
-			store:        server.store,
+			storeGroup:   server.storeGroup,
 		}
 
 		cmd.rpyer = &GetReplyer{
