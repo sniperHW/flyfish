@@ -611,7 +611,7 @@ func initKvGroup(id *int, cluster *string, mod int) *storeGroup {
 			return store.getSnapshot()
 		}
 
-		commitC, errorC, snapshotterReady := newRaftNode((*id<<16)*i, strings.Split(*cluster, ","), false, getSnapshot, proposeC, confChangeC)
+		commitC, errorC, snapshotterReady := newRaftNode(id, strings.Split(*cluster, ","), false, getSnapshot, proposeC, confChangeC)
 
 		store = newKVStore(<-snapshotterReady, proposeC, commitC, errorC)
 
