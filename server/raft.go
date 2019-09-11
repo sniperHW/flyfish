@@ -99,7 +99,7 @@ var defaultSnapshotCount uint64 = 10000
 // provided the proposal channel. All log entries are replayed over the
 // commit channel, followed by a nil message (to indicate the channel is
 // current), then new log entries. To shutdown, close proposeC and read errorC.
-func newRaftNode(id int, storeIndex int, peers []string, join bool, getSnapshot func() [][]kvsnap, proposeC <-chan *batchBinlog,
+func newRaftNode(id int, peers []string, join bool, getSnapshot func() [][]kvsnap, proposeC <-chan *batchBinlog,
 	confChangeC <-chan raftpb.ConfChange) (<-chan *commitedBatchBinlog, <-chan error, <-chan *snap.Snapshotter) {
 
 	commitC := make(chan *commitedBatchBinlog)
@@ -113,8 +113,8 @@ func newRaftNode(id int, storeIndex int, peers []string, join bool, getSnapshot 
 		id:               id,
 		peers:            peers,
 		join:             join,
-		waldir:           fmt.Sprintf("raftexample-%d-%d", id, storeIndex),
-		snapdir:          fmt.Sprintf("raftexample-%d-%d-snap", id, storeIndex),
+		waldir:           fmt.Sprintf("raftexample-%d", id),
+		snapdir:          fmt.Sprintf("raftexample-%d-snap", id),
 		getSnapshot:      getSnapshot,
 		snapCount:        defaultSnapshotCount,
 		stopc:            make(chan struct{}),

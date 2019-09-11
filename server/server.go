@@ -13,17 +13,12 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	//"unsafe"
 )
-
-/*var (
-	server *Server
-)*/
 
 type Server struct {
 	listener   *tcp.Listener
 	stoped     int32
-	storeGroup *storeGroup //store      *kvstore
+	storeGroup *storeGroup
 	dispatcher *dispatcher
 }
 
@@ -263,19 +258,3 @@ func NewServer() *Server {
 	s.initHandler()
 	return s
 }
-
-/*func Start(id *int, cluster *string) error {
-	s := &Server{}
-	if atomic.CompareAndSwapPointer((*unsafe.Pointer)((unsafe.Pointer)(&server)), nil, (unsafe.Pointer)(s)) {
-		return s.Start(id, cluster)
-	} else {
-		return fmt.Errorf("server already started")
-	}
-}
-
-func Stop() {
-	s := (*Server)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&server))))
-	if nil != s {
-		s.Stop()
-	}
-}*/
