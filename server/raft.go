@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package raft
+package server
 
 import (
 	"container/list"
@@ -20,8 +20,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/rafthttp"
 	"github.com/sniperHW/kendynet/util"
-	"go.etcd.io/etcd/etcdserver/api/rafthttp"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	stats "go.etcd.io/etcd/etcdserver/api/v2stats"
 	"go.etcd.io/etcd/pkg/fileutil"
@@ -32,8 +32,8 @@ import (
 	"go.etcd.io/etcd/wal/walpb"
 	"go.uber.org/zap"
 	"log"
-	"net/http"
-	"net/url"
+	//"net/http"
+	//"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -51,6 +51,9 @@ type raftNode struct {
 	confChangeC <-chan raftpb.ConfChange    // proposed cluster config changes
 	commitC     chan<- *commitedBatchBinlog //chan<- *[]byte           // entries committed to log (k,v)
 	errorC      chan<- error                // errors from raft session
+
+	nodeID int
+	region int
 
 	id          int      // client ID for raft session
 	peers       []string // raft peer URLs
@@ -75,8 +78,8 @@ type raftNode struct {
 	snapCount uint64
 	transport *rafthttp.Transport
 	stopc     chan struct{} // signals proposal channel closed
-	httpstopc chan struct{} // signals http server to shutdown
-	httpdonec chan struct{} // signals http server shutdown complete
+	//httpstopc chan struct{} // signals http server to shutdown
+	//httpdonec chan struct{} // signals http server shutdown complete
 
 	//muSnapshotting sync.Mutex
 	snapshotting   bool             //当前是否正在做快照
@@ -89,7 +92,8 @@ type raftNode struct {
 	muLeader sync.Mutex
 	leader   int
 
-	pipeline *util.BlockQueue
+	pipeline  *util.BlockQueue
+	mutilRaft *mutilRaft
 }
 
 var defaultSnapshotCount uint64 = 10000
@@ -99,30 +103,36 @@ var defaultSnapshotCount uint64 = 10000
 // provided the proposal channel. All log entries are replayed over the
 // commit channel, followed by a nil message (to indicate the channel is
 // current), then new log entries. To shutdown, close proposeC and read errorC.
-func newRaftNode(id int, peers []string, join bool, getSnapshot func() [][]kvsnap, proposeC <-chan *batchBinlog,
+func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSnapshot func() [][]kvsnap, proposeC <-chan *batchBinlog,
 	confChangeC <-chan raftpb.ConfChange) (<-chan *commitedBatchBinlog, <-chan error, <-chan *snap.Snapshotter) {
 
 	commitC := make(chan *commitedBatchBinlog)
 	errorC := make(chan error)
 
+	nodeID := id >> 16
+	region := id & 0xFFFF
+
 	rc := &raftNode{
-		proposeC:         proposeC,
-		confChangeC:      confChangeC,
-		commitC:          commitC,
-		errorC:           errorC,
-		id:               id,
-		peers:            peers,
-		join:             join,
-		waldir:           fmt.Sprintf("raftexample-%d", id),
-		snapdir:          fmt.Sprintf("raftexample-%d-snap", id),
-		getSnapshot:      getSnapshot,
-		snapCount:        defaultSnapshotCount,
-		stopc:            make(chan struct{}),
-		httpstopc:        make(chan struct{}),
-		httpdonec:        make(chan struct{}),
+		proposeC:    proposeC,
+		confChangeC: confChangeC,
+		commitC:     commitC,
+		errorC:      errorC,
+		id:          id,
+		peers:       peers,
+		join:        join,
+		waldir:      fmt.Sprintf("raftexample-%d-%d", nodeID, region),
+		snapdir:     fmt.Sprintf("raftexample-%d-%d-snap", nodeID, region),
+		getSnapshot: getSnapshot,
+		snapCount:   defaultSnapshotCount,
+		stopc:       make(chan struct{}),
+		//httpstopc:        make(chan struct{}),
+		//httpdonec:        make(chan struct{}),
 		snapshotterReady: make(chan *snap.Snapshotter, 1),
 		snapshottingOK:   make(chan struct{}),
 		pendingPropose:   list.New(), //[]*batchBinlog{}
+		mutilRaft:        mutilRaft,
+		nodeID:           nodeID,
+		region:           region,
 		// rest of structure populated after WAL replay
 	}
 	rc.startProposePipeline()
@@ -401,7 +411,7 @@ func (rc *raftNode) replayWAL() *wal.WAL {
 }
 
 func (rc *raftNode) writeError(err error) {
-	rc.stopHTTP()
+	//rc.stopHTTP()
 	close(rc.commitC)
 	rc.errorC <- err
 	close(rc.errorC)
@@ -447,37 +457,42 @@ func (rc *raftNode) startRaft() {
 	rc.transport = &rafthttp.Transport{
 		Logger:      zap.NewExample(),
 		ID:          types.ID(rc.id),
-		ClusterID:   0x1000,
+		ClusterID:   0x100000000000,
 		Raft:        rc,
 		ServerStats: stats.NewServerStats("", ""),
 		LeaderStats: stats.NewLeaderStats(strconv.Itoa(rc.id)),
 		ErrorC:      make(chan error),
 	}
 
+	rc.mutilRaft.addTransport(rc.id, rc.transport)
 	rc.transport.Start()
 	for i := range rc.peers {
-		if i+1 != rc.id {
-			rc.transport.AddPeer(types.ID(i+1), []string{rc.peers[i]})
+		id := (i+1)<<16 + rc.region
+		if id != rc.id {
+			rc.transport.AddPeer(types.ID(id), []string{rc.peers[i]})
 		}
 	}
 
-	go rc.serveRaft()
+	//go rc.serveRaft()
+
 	go rc.serveChannels()
 }
 
 // stop closes http, closes all channels, and stops raft.
 func (rc *raftNode) stop() {
-	rc.stopHTTP()
+	//rc.stopHTTP()
+	rc.transport.Stop()
+	rc.mutilRaft.removeTransport(rc.id)
 	close(rc.commitC)
 	close(rc.errorC)
 	rc.node.Stop()
 }
 
-func (rc *raftNode) stopHTTP() {
-	rc.transport.Stop()
-	close(rc.httpstopc)
-	<-rc.httpdonec
-}
+//func (rc *raftNode) stopHTTP() {
+//rc.transport.Stop()
+//close(rc.httpstopc)
+//<-rc.httpdonec
+//}
 
 func (rc *raftNode) publishSnapshot(snapshotToSave raftpb.Snapshot) {
 	if raft.IsEmptySnap(snapshotToSave) {
@@ -807,6 +822,7 @@ func (rc *raftNode) serveChannels() {
 	}
 }
 
+/*
 func (rc *raftNode) serveRaft() {
 	url, err := url.Parse(rc.peers[rc.id-1])
 	if err != nil {
@@ -825,7 +841,7 @@ func (rc *raftNode) serveRaft() {
 		log.Fatalf("raftexample: Failed to serve rafthttp (%v)", err)
 	}
 	close(rc.httpdonec)
-}
+}*/
 
 func (rc *raftNode) Process(ctx context.Context, m raftpb.Message) error {
 	return rc.node.Step(ctx, m)

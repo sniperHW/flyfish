@@ -1,4 +1,4 @@
-package raft
+package server
 
 // 字符串转为16位整形值
 func StringHash(s string) int {

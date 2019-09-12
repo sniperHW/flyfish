@@ -1,4 +1,4 @@
-package raft
+package server
 
 import (
 	"encoding/binary"

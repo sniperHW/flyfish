@@ -1,4 +1,4 @@
-package raft
+package server
 
 import (
 	"encoding/binary"
@@ -10,6 +10,7 @@ import (
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/socket/listener/tcp"
 	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -151,8 +152,14 @@ func (this *Server) Start(id *int, cluster *string) error {
 		return fmt.Errorf("initSql failed")
 	}
 
+	clusterArray := strings.Split(*cluster, ",")
+
+	mutilRaft := newMutilRaft()
+
 	//mutil raft尚未实现，只能填1
-	this.storeGroup = initKvGroup(id, cluster, 1 /*config.CacheGroupSize*/)
+	this.storeGroup = initKvGroup(mutilRaft, id, cluster, config.CacheGroupSize)
+
+	go mutilRaft.serveMutilRaft(clusterArray[*id-1])
 
 	go func() {
 		err := this.startListener()

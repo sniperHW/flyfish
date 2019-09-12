@@ -1,4 +1,4 @@
-package raft
+package server
 
 import (
 	"database/sql"

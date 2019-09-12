@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package raft
+package server
 
 import (
 	"encoding/binary"
@@ -589,7 +589,7 @@ func (s *kvstore) recoverFromSnapshot(snapshot []byte) bool {
 	return true
 }
 
-func initKvGroup(id *int, cluster *string, mod int) *storeGroup {
+func initKvGroup(mutilRaft *mutilRaft, id *int, cluster *string, mod int) *storeGroup {
 
 	storeGroup := &storeGroup{
 		stores: map[int]*kvstore{},
@@ -611,7 +611,7 @@ func initKvGroup(id *int, cluster *string, mod int) *storeGroup {
 			return store.getSnapshot()
 		}
 
-		commitC, errorC, snapshotterReady := newRaftNode(id, strings.Split(*cluster, ","), false, getSnapshot, proposeC, confChangeC)
+		commitC, errorC, snapshotterReady := newRaftNode(mutilRaft, (*id<<16)+i, strings.Split(*cluster, ","), false, getSnapshot, proposeC, confChangeC)
 
 		store = newKVStore(<-snapshotterReady, proposeC, commitC, errorC)
 

@@ -1,4 +1,4 @@
-package raft
+package server
 
 import (
 	pb "github.com/golang/protobuf/proto"
