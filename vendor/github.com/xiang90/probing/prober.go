@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	//"runtime"
 	"sync"
 	"time"
 )
@@ -38,7 +39,23 @@ func NewProber(tr http.RoundTripper) Prober {
 	return p
 }
 
+/*func CallStack(maxStack int) string {
+	var str string
+	i := 1
+	for {
+		pc, file, line, ok := runtime.Caller(i)
+		if !ok || i > maxStack {
+			break
+		}
+		str += fmt.Sprintf("    stack: %d %v [file: %s] [func: %s] [line: %d]\n", i-1, ok, file, runtime.FuncForPC(pc).Name(), line)
+		i++
+	}
+	fmt.Println(str)
+	return str
+}*/
+
 func (p *prober) AddHTTP(id string, probingInterval time.Duration, endpoints []string) error {
+	//CallStack(100)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if _, ok := p.targets[id]; ok {
@@ -60,6 +77,9 @@ func (p *prober) AddHTTP(id string, probingInterval time.Duration, endpoints []s
 				if err != nil {
 					panic(err)
 				}
+
+				//fmt.Println("probe", endpoints[pinned], id, endpoints)
+
 				resp, err := p.tr.RoundTrip(req)
 				if err == nil && resp.StatusCode != http.StatusOK {
 					err = fmt.Errorf("got unexpected HTTP status code %s from %s", resp.Status, endpoints[pinned])

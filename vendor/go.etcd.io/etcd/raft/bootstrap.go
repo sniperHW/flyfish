@@ -16,7 +16,7 @@ package raft
 
 import (
 	"errors"
-
+	//"fmt"
 	pb "go.etcd.io/etcd/raft/raftpb"
 )
 
@@ -28,6 +28,9 @@ import (
 // their state manually by setting up a Storage that has a first index > 1 and
 // which stores the desired ConfState as its InitialState.
 func (rn *RawNode) Bootstrap(peers []Peer) error {
+
+	//fmt.Println("Bootstrap", peers)
+
 	if len(peers) == 0 {
 		return errors.New("must provide at least one peer to Bootstrap")
 	}
@@ -50,6 +53,7 @@ func (rn *RawNode) Bootstrap(peers []Peer) error {
 	rn.raft.becomeFollower(1, None)
 	ents := make([]pb.Entry, len(peers))
 	for i, peer := range peers {
+		//fmt.Println("------------------------1--------------------------")
 		cc := pb.ConfChange{Type: pb.ConfChangeAddNode, NodeID: peer.ID, Context: peer.Context}
 		data, err := cc.Marshal()
 		if err != nil {
@@ -74,6 +78,7 @@ func (rn *RawNode) Bootstrap(peers []Peer) error {
 	// the invariant that committed < unstable?
 	rn.raft.raftLog.committed = uint64(len(ents))
 	for _, peer := range peers {
+		//fmt.Println("------------------------2--------------------------")
 		rn.raft.applyConfChange(pb.ConfChange{NodeID: peer.ID, Type: pb.ConfChangeAddNode}.AsV2())
 	}
 	return nil

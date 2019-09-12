@@ -162,6 +162,7 @@ func (c Changer) apply(cfg *tracker.Config, prs tracker.ProgressMap, ccs ...pb.C
 		}
 		switch cc.Type {
 		case pb.ConfChangeAddNode:
+			//fmt.Println("---------------------------4------------------------------", cc.NodeID)
 			c.makeVoter(cfg, prs, cc.NodeID)
 		case pb.ConfChangeAddLearnerNode:
 			c.makeLearner(cfg, prs, cc.NodeID)

@@ -16,10 +16,7 @@ package rafthttp
 
 import (
 	"context"
-	"net/http"
-	"sync"
-	"time"
-
+	"fmt"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	stats "go.etcd.io/etcd/etcdserver/api/v2stats"
 	"go.etcd.io/etcd/pkg/logutil"
@@ -27,6 +24,9 @@ import (
 	"go.etcd.io/etcd/pkg/types"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
+	"net/http"
+	"sync"
+	"time"
 
 	"github.com/coreos/pkg/capnslog"
 	"github.com/xiang90/probing"
@@ -210,6 +210,7 @@ func (t *Transport) Send(msgs []raftpb.Message) {
 			)
 		} else {
 			plog.Debugf("ignored message %s (sent to unknown peer %s)", m.Type, to)
+			fmt.Println(t.peers)
 		}
 	}
 }

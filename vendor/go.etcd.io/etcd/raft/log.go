@@ -107,6 +107,9 @@ func (l *raftLog) maybeAppend(index, logTerm, committed uint64, ents ...pb.Entry
 }
 
 func (l *raftLog) append(ents ...pb.Entry) uint64 {
+
+	//CallStack(100)
+
 	//fmt.Println("raftLog.append")
 	if len(ents) == 0 {
 		return l.lastIndex()

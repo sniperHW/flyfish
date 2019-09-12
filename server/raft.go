@@ -309,6 +309,7 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 			var cc raftpb.ConfChange
 			cc.Unmarshal(ents[i].Data)
 			rc.confState = *rc.node.ApplyConfChange(cc)
+			Infoln("raftpb.EntryConfChange", cc.Type, cc)
 			switch cc.Type {
 			case raftpb.ConfChangeAddNode:
 				if len(cc.Context) > 0 {
@@ -432,7 +433,7 @@ func (rc *raftNode) startRaft() {
 
 	rpeers := make([]raft.Peer, len(rc.peers))
 	for i := range rpeers {
-		rpeers[i] = raft.Peer{ID: uint64(i + 1)}
+		rpeers[i] = raft.Peer{ID: uint64(rc.id)}
 	}
 	c := &raft.Config{
 		ID:                        uint64(rc.id),
@@ -457,18 +458,19 @@ func (rc *raftNode) startRaft() {
 	rc.transport = &rafthttp.Transport{
 		Logger:      zap.NewExample(),
 		ID:          types.ID(rc.id),
-		ClusterID:   0x100000000000,
+		ClusterID:   0x10000,
 		Raft:        rc,
 		ServerStats: stats.NewServerStats("", ""),
 		LeaderStats: stats.NewLeaderStats(strconv.Itoa(rc.id)),
 		ErrorC:      make(chan error),
 	}
 
-	rc.mutilRaft.addTransport(rc.id, rc.transport)
+	rc.mutilRaft.addTransport(types.ID(rc.id), rc.transport)
 	rc.transport.Start()
 	for i := range rc.peers {
 		id := (i+1)<<16 + rc.region
 		if id != rc.id {
+			Infoln("AddPeer", types.ID(id).String())
 			rc.transport.AddPeer(types.ID(id), []string{rc.peers[i]})
 		}
 	}
@@ -482,7 +484,7 @@ func (rc *raftNode) startRaft() {
 func (rc *raftNode) stop() {
 	//rc.stopHTTP()
 	rc.transport.Stop()
-	rc.mutilRaft.removeTransport(rc.id)
+	rc.mutilRaft.removeTransport(types.ID(rc.id))
 	close(rc.commitC)
 	close(rc.errorC)
 	rc.node.Stop()

@@ -76,7 +76,7 @@ func (s *snapshotSender) send(merged snap.Message) {
 	defer body.Close()
 
 	u := s.picker.pick()
-	req := createPostRequest(u, RaftSnapshotPrefix, body, "application/octet-stream", s.tr.URLs, s.from, s.cid)
+	req := createPostRequest(u, RaftSnapshotPrefix, body, "application/octet-stream", s.tr.URLs, s.from, s.to, s.cid)
 
 	if s.tr.Logger != nil {
 		s.tr.Logger.Info(

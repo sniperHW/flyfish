@@ -156,10 +156,10 @@ func (this *Server) Start(id *int, cluster *string) error {
 
 	mutilRaft := newMutilRaft()
 
+	go mutilRaft.serveMutilRaft(clusterArray[*id-1])
+
 	//mutil raft尚未实现，只能填1
 	this.storeGroup = initKvGroup(mutilRaft, id, cluster, config.CacheGroupSize)
-
-	go mutilRaft.serveMutilRaft(clusterArray[*id-1])
 
 	go func() {
 		err := this.startListener()

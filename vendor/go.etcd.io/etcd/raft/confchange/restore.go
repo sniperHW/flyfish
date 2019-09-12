@@ -15,6 +15,7 @@
 package confchange
 
 import (
+	//"fmt"
 	pb "go.etcd.io/etcd/raft/raftpb"
 	"go.etcd.io/etcd/raft/tracker"
 )
@@ -55,6 +56,7 @@ func toConfChangeSingle(cs pb.ConfState) (out []pb.ConfChangeSingle, in []pb.Con
 	for _, id := range cs.VotersOutgoing {
 		// If there are outgoing voters, first add them one by one so that the
 		// (non-joint) config has them all.
+		//fmt.Println("-----------------------3-----------------------")
 		out = append(out, pb.ConfChangeSingle{
 			Type:   pb.ConfChangeAddNode,
 			NodeID: id,
@@ -74,6 +76,7 @@ func toConfChangeSingle(cs pb.ConfState) (out []pb.ConfChangeSingle, in []pb.Con
 	}
 	// Then we'll add the incoming voters and learners.
 	for _, id := range cs.Voters {
+		//fmt.Println("-----------------------5-----------------------")
 		in = append(in, pb.ConfChangeSingle{
 			Type:   pb.ConfChangeAddNode,
 			NodeID: id,

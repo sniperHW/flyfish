@@ -3,9 +3,10 @@ package server
 import (
 	"github.com/sniperHW/flyfish/rafthttp"
 	"github.com/xiang90/probing"
+	"go.etcd.io/etcd/pkg/types"
 	"net/http"
 	"net/url"
-	"strconv"
+	//"strconv"
 	"strings"
 	"sync"
 )
@@ -20,7 +21,7 @@ type mutilRaft struct {
 	sync.RWMutex
 	httpstopc  chan struct{}
 	httpdonec  chan struct{}
-	transports map[int]*raftHandler
+	transports map[types.ID]*raftHandler
 }
 
 type mutilRaftHandler struct {
@@ -29,7 +30,51 @@ type mutilRaftHandler struct {
 }
 
 func (this *mutilRaftHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	tmp := strings.Split(r.URL.Path, "/")
+	//Infoln(r.URL.Path)
+	to := ""
+
+	if tmp := strings.Split(r.URL.Path, "/"); len(tmp) >= 3 {
+		cmd := tmp[2]
+		if cmd == "probing" {
+			if len(tmp) >= 4 {
+				to = tmp[3]
+			}
+		} else {
+			to = r.Header.Get("X-Raft-To")
+		}
+
+		if id, err := types.IDFromString(to); err == nil {
+			if t := this.mutilRaft.getTransport(id); nil != t {
+				if cmd == "stream" {
+					t.streamHandler.ServeHTTP(w, r)
+				} else if cmd == "snapshot" {
+					t.snapHandler.ServeHTTP(w, r)
+				} else if cmd == "probing" {
+					this.probingHandler.ServeHTTP(w, r)
+				}
+			}
+		}
+	}
+
+	/*if strings.Contains(r.URL.Path, "probing") {
+		this.probingHandler.ServeHTTP(w, r)
+	} else {
+		if to := r.Header.Get("X-Raft-To"); to != "" {
+			if id, err := types.IDFromString(to); err == nil {
+				if t := this.mutilRaft.getTransport(id); nil != t {
+					if tmp := strings.Split(r.URL.Path, "/"); len(tmp) >= 3 {
+						if tmp[2] == "stream" {
+							t.streamHandler.ServeHTTP(w, r)
+						} else if tmp[2] == "snapshot" {
+							t.snapHandler.ServeHTTP(w, r)
+						}
+					}
+				}
+			}
+		}
+	}*/
+
+	/*tmp := strings.Split(r.URL.Path, "/")
 	Infoln(r.URL.Path)
 	if len(tmp) >= 3 {
 		if tmp[2] == "raft" {
@@ -54,10 +99,10 @@ func (this *mutilRaftHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 				}
 			}
 		}
-	}
+	}*/
 }
 
-func (this *mutilRaft) addTransport(id int, t *rafthttp.Transport) {
+func (this *mutilRaft) addTransport(id types.ID, t *rafthttp.Transport) {
 	this.Lock()
 	defer this.Unlock()
 
@@ -72,13 +117,13 @@ func (this *mutilRaft) addTransport(id int, t *rafthttp.Transport) {
 	this.transports[id] = handler
 }
 
-func (this *mutilRaft) getTransport(id int) *raftHandler {
+func (this *mutilRaft) getTransport(id types.ID) *raftHandler {
 	this.RLock()
 	defer this.RUnlock()
 	return this.transports[id]
 }
 
-func (this *mutilRaft) removeTransport(id int) {
+func (this *mutilRaft) removeTransport(id types.ID) {
 	this.Lock()
 	defer this.Unlock()
 	delete(this.transports, id)
@@ -102,6 +147,8 @@ func (this *mutilRaft) serveMutilRaft(urlStr string) {
 		Fatalln("raftexample: Failed to listen rafthttp (%v)", err)
 	}
 
+	Infoln("serve", urlStr)
+
 	err = (&http.Server{Handler: this.Handler()}).Serve(ln)
 
 	select {
@@ -117,6 +164,6 @@ func newMutilRaft() *mutilRaft {
 	return &mutilRaft{
 		httpstopc:  make(chan struct{}),
 		httpdonec:  make(chan struct{}),
-		transports: map[int]*raftHandler{},
+		transports: map[types.ID]*raftHandler{},
 	}
 }

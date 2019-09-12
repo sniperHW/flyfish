@@ -1547,6 +1547,9 @@ func (r *raft) applyConfChange(cc pb.ConfChangeV2) pb.ConfState {
 //
 // The inputs usually result from restoring a ConfState or applying a ConfChange.
 func (r *raft) switchToConfig(cfg tracker.Config, prs tracker.ProgressMap) pb.ConfState {
+
+	//CallStack(100)
+
 	r.prs.Config = cfg
 	r.prs.Progress = prs
 
