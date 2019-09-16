@@ -17,8 +17,8 @@ import (
 )
 
 type Server struct {
+	stoped     int64
 	listener   *tcp.Listener
-	stoped     int32
 	storeGroup *storeGroup
 	dispatcher *dispatcher
 }
@@ -72,7 +72,7 @@ func verifyLogin(loginReq *protocol.LoginReq) bool {
 }
 
 func (this *Server) isStoped() bool {
-	return atomic.LoadInt32(&this.stoped) == 1
+	return atomic.LoadInt64(&this.stoped) == 1
 }
 
 func (this *Server) startListener() error {
@@ -191,7 +191,7 @@ func waitCondition(fn func() bool) {
 
 func (this *Server) Stop() {
 
-	if atomic.CompareAndSwapInt32(&this.stoped, 0, 1) {
+	if atomic.CompareAndSwapInt64(&this.stoped, 0, 1) {
 		Infoln("StopServer")
 		//关闭监听
 		this.listener.Close()
@@ -206,7 +206,7 @@ func (this *Server) Stop() {
 
 		//等待redis请求和命令执行完成
 		waitCondition(func() bool {
-			if atomic.LoadInt32(&cmdCount) == 0 {
+			if atomic.LoadInt64(&cmdCount) == 0 {
 				return true
 			} else {
 				this.storeGroup.tryCommitBatch()
@@ -226,7 +226,7 @@ func (this *Server) Stop() {
 		})
 
 		waitCondition(func() bool {
-			if atomic.LoadInt32(&clientCount) == 0 {
+			if atomic.LoadInt64(&clientCount) == 0 {
 				return true
 			} else {
 				return false

@@ -261,7 +261,7 @@ func processCmd(ckey *cacheKey, fromClient bool) {
 		ckey.cmdQueue.Remove(e)
 		if now.After(cmd.deadline) {
 			//已经超时
-			atomic.AddInt32(&cmdCount, -1)
+			atomic.AddInt64(&cmdCount, -1)
 		} else {
 			switch cmd.cmdType {
 			case cmdGet:
@@ -302,7 +302,7 @@ func processCmd(ckey *cacheKey, fromClient bool) {
 			if config.ReplyBusyOnQueueFull {
 				ctx.reply(errcode.ERR_BUSY, nil, -1)
 			} else {
-				atomic.AddInt32(&cmdCount, -1)
+				atomic.AddInt64(&cmdCount, -1)
 			}
 			processCmd(ckey, fromClient)
 			return

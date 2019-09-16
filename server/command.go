@@ -22,7 +22,7 @@ const (
 )
 
 var (
-	cmdCount int32 //待回复命令数量
+	cmdCount int64 //待回复命令数量
 )
 
 func checkReq(req *proto.ReqCommon) (bool, int32) {
@@ -92,6 +92,7 @@ type cnsSt struct {
 
 //来自客户端的一条命令请求
 type command struct {
+	replyed      int64
 	cmdType      int
 	rpyer        replyer
 	table        string
@@ -104,20 +105,19 @@ type command struct {
 	incrDecr     *proto.Field            //for incr/decr
 	deadline     time.Time
 	respDeadline time.Time
-	replyed      int32
 	storeGroup   *storeGroup
 }
 
 func (this *command) reply(errCode int32, fields map[string]*proto.Field, version int64) {
-	if atomic.CompareAndSwapInt32(&this.replyed, 0, 1) {
+	if atomic.CompareAndSwapInt64(&this.replyed, 0, 1) {
 		this.rpyer.reply(errCode, fields, version)
-		atomic.AddInt32(&cmdCount, -1)
+		atomic.AddInt64(&cmdCount, -1)
 	}
 }
 
 func (this *command) process() {
 
-	atomic.AddInt32(&cmdCount, 1)
+	atomic.AddInt64(&cmdCount, 1)
 
 	meta := getMetaByTable(this.table)
 

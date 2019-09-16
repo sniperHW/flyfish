@@ -11,7 +11,7 @@ import (
 )
 
 var sessions sync.Map
-var clientCount int32
+var clientCount int64
 
 type handler func(*Server, kendynet.StreamSession, *codec.Message)
 
@@ -47,12 +47,12 @@ func (this *dispatcher) OnClose(session kendynet.StreamSession, reason string) {
 	if nil != u {
 		u.(*scaner).close()
 	}
-	atomic.AddInt32(&clientCount, -1)
+	atomic.AddInt64(&clientCount, -1)
 	sessions.Delete(session)
 }
 
 func (this *dispatcher) OnNewClient(session kendynet.StreamSession) {
-	atomic.AddInt32(&clientCount, 1)
+	atomic.AddInt64(&clientCount, 1)
 	sessions.Store(session, session)
 }
 
