@@ -15,9 +15,11 @@ func onSqlNotFound(ctx *cmdContext) {
 	cmdType := ctx.getCmdType()
 	ckey := ctx.getCacheKey()
 	ckey.setMissing()
-	if cmdType == cmdGet || cmdType == cmdDel || cmdType == cmdCompareAndSet {
+	if cmdType == cmdDel || cmdType == cmdCompareAndSet {
 		ctx.reply(errcode.ERR_NOTFOUND, nil, -1)
 		ckey.processQueueCmd()
+	} else if cmdType == cmdGet {
+		ckey.m.IssueReadReq(ctx)
 	} else {
 		ctx.writeBackFlag = write_back_insert
 		ckey.m.commit(ctx)
@@ -32,8 +34,9 @@ func onSqlLoadOKGet(ctx *cmdContext) {
 	ckey.setValueNoLock(ctx)
 	ckey.setOKNoLock(version)
 	ckey.mtx.Unlock()
-	ctx.reply(errcode.ERR_OK, ctx.fields, version)
-	ckey.processQueueCmd()
+	ckey.m.IssueReadReq(ctx)
+	//ctx.reply(errcode.ERR_OK, ctx.fields, version)
+	//ckey.processQueueCmd()
 }
 
 func onSqlLoadOKSet(ctx *cmdContext) {

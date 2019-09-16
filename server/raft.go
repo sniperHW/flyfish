@@ -34,11 +34,13 @@ import (
 	"log"
 	//"net/http"
 	//"net/url"
+	"github.com/sniperHW/kendynet/timer"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -88,12 +90,18 @@ type raftNode struct {
 
 	muPendingPropose sync.Mutex
 	pendingPropose   *list.List //[]*batchBinlog
+	//proposeIndex     int64
 
 	muLeader sync.Mutex
 	leader   int
 
 	pipeline  *util.BlockQueue
 	mutilRaft *mutilRaft
+
+	muPendingRead sync.Mutex
+	pendingRead   *list.List
+	readC         <-chan *cmdContext
+	readIndex     int64
 }
 
 var defaultSnapshotCount uint64 = 10000
@@ -104,10 +112,11 @@ var defaultSnapshotCount uint64 = 10000
 // commit channel, followed by a nil message (to indicate the channel is
 // current), then new log entries. To shutdown, close proposeC and read errorC.
 func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSnapshot func() [][]kvsnap, proposeC <-chan *batchBinlog,
-	confChangeC <-chan raftpb.ConfChange) (<-chan *commitedBatchBinlog, <-chan error, <-chan *snap.Snapshotter) {
+	confChangeC <-chan raftpb.ConfChange) (<-chan *commitedBatchBinlog, <-chan error, <-chan *snap.Snapshotter, chan<- *cmdContext) {
 
 	commitC := make(chan *commitedBatchBinlog)
 	errorC := make(chan error)
+	readC := make(chan *cmdContext, 100)
 
 	nodeID := id >> 16
 	region := id & 0xFFFF
@@ -133,11 +142,15 @@ func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSna
 		mutilRaft:        mutilRaft,
 		nodeID:           nodeID,
 		region:           region,
+
+		pendingRead: list.New(),
+		readC:       readC,
+
 		// rest of structure populated after WAL replay
 	}
 	rc.startProposePipeline()
 	go rc.startRaft()
-	return commitC, errorC, rc.snapshotterReady
+	return commitC, errorC, rc.snapshotterReady, readC
 }
 
 func (rc *raftNode) isLeader() bool {
@@ -477,6 +490,8 @@ func (rc *raftNode) startRaft() {
 
 	//go rc.serveRaft()
 
+	timer.Repeat(time.Second, nil, rc.processTimeoutReadReq)
+
 	go rc.serveChannels()
 }
 
@@ -638,8 +653,8 @@ func (rc *raftNode) startProposePipeline() {
 					}
 				} else {
 					// blocks until accepted by raft state machine
-					//prop.index = rc.lastIndex
-					binary.BigEndian.PutUint64(prop.binlogStr.data[:8], prop.index)
+					//prop.index = atomic.AddInt64(&rc.proposeIndex, 1)
+					//binary.BigEndian.PutUint64(prop.binlogStr.data[:8], prop.index)
 					rc.muPendingPropose.Lock()
 					e := rc.pendingPropose.PushBack(prop)
 					rc.muPendingPropose.Unlock()
@@ -706,6 +721,95 @@ func (rc *raftNode) startProposePipeline() {
 	}()
 }
 
+func (rc *raftNode) processTimeoutReadReq(_ *timer.Timer) {
+	for {
+		rc.muPendingRead.Lock()
+		e := rc.pendingRead.Front()
+		if e == nil {
+			rc.muPendingRead.Unlock()
+			return
+		}
+		now := time.Now()
+		if now.After(e.Value.(*cmdContext).getCmd().respDeadline) {
+			c := e.Value.(*cmdContext)
+			rc.pendingRead.Remove(e)
+			rc.muPendingRead.Unlock()
+			c.reply(errcode.ERR_TIMEOUT, nil, 0)
+			c.getCacheKey().processQueueCmd()
+		} else {
+			rc.muPendingRead.Unlock()
+			return
+		}
+	}
+}
+
+func (rc *raftNode) processReadStates(readStates []raft.ReadState) {
+	for _, rs := range readStates {
+		rc.muPendingRead.Lock()
+		e := rc.pendingRead.Front()
+		index := int64(binary.BigEndian.Uint64(rs.RequestCtx))
+		if nil == e || e.Value.(*cmdContext).readIndex != index {
+			//上下文已经因为超时被移除
+			rc.muPendingRead.Unlock()
+		} else {
+			c := e.Value.(*cmdContext)
+			rc.pendingRead.Remove(e)
+			rc.muPendingRead.Unlock()
+
+			ckey := c.getCacheKey()
+			ckey.mtx.Lock()
+			if ckey.status == cache_missing {
+				c.reply(errcode.ERR_NOTFOUND, nil, -1)
+			} else {
+				c.reply(errcode.ERR_OK, ckey.values, ckey.version)
+			}
+			ckey.mtx.Unlock()
+
+			ckey.processQueueCmd()
+		}
+	}
+}
+
+func (rc *raftNode) issueRead(c *cmdContext) {
+	now := time.Now()
+	if now.After(c.getCmd().respDeadline) {
+		//已经超时
+		c.getCacheKey().processQueueCmd()
+		return
+	}
+
+	ctxToSend := make([]byte, 8)
+	c.readIndex = atomic.AddInt64(&rc.readIndex, 1)
+	binary.BigEndian.PutUint64(ctxToSend, uint64(c.readIndex))
+
+	rc.muPendingRead.Lock()
+	e := rc.pendingRead.PushBack(c)
+	rc.muPendingRead.Unlock()
+
+	timeout := c.getCmd().respDeadline.Sub(now)
+
+	cctx, cancel := context.WithTimeout(context.Background(), timeout)
+
+	if err := rc.node.ReadIndex(cctx, ctxToSend); err != nil {
+		cancel()
+		code := errcode.ERR_RAFT
+		if err == raft.ErrStopped {
+			code = errcode.ERR_SERVER_STOPED
+		} else if err == cctx.Err() {
+			code = errcode.ERR_TIMEOUT
+		}
+
+		rc.muPendingRead.Lock()
+		rc.pendingRead.Remove(e)
+		rc.muPendingRead.Unlock()
+
+		c.reply(int32(code), nil, 0)
+		c.getCacheKey().processQueueCmd()
+		return
+	}
+	cancel()
+}
+
 func (rc *raftNode) serveChannels() {
 	snap, err := rc.raftStorage.Snapshot()
 	if err != nil {
@@ -740,6 +844,11 @@ func (rc *raftNode) serveChannels() {
 					confChangeCount++
 					cc.ID = confChangeCount
 					rc.node.ProposeConfChange(context.TODO(), cc)
+				}
+			case readReq, ok := <-rc.readC:
+				Infoln("get readReq", ok)
+				if ok {
+					rc.issueRead(readReq)
 				}
 			}
 		}
@@ -808,6 +917,11 @@ func (rc *raftNode) serveChannels() {
 				rc.stop()
 				return
 			}
+
+			if len(rd.ReadStates) != 0 {
+				rc.processReadStates(rd.ReadStates)
+			}
+
 			rc.maybeTriggerSnapshot()
 			rc.node.Advance()
 

@@ -83,6 +83,7 @@ type kvSlot struct {
 // a key-value store backed by raft
 type kvstore struct {
 	proposeC     chan<- *batchBinlog // channel for proposing updates
+	readReqC     chan<- *cmdContext
 	snapshotter  *snap.Snapshotter
 	slots        []*kvSlot //map[string]*cacheKey
 	mtx          sync.Mutex
@@ -142,7 +143,7 @@ func (this *storeGroup) tryCommitBatch() {
 	}
 }
 
-func newKVStore(snapshotter *snap.Snapshotter, proposeC chan<- *batchBinlog, commitC <-chan *commitedBatchBinlog, errorC <-chan error) *kvstore {
+func newKVStore(snapshotter *snap.Snapshotter, proposeC chan<- *batchBinlog, commitC <-chan *commitedBatchBinlog, errorC <-chan error, readReqC chan<- *cmdContext) *kvstore {
 
 	config := conf.GetConfig()
 
@@ -151,6 +152,7 @@ func newKVStore(snapshotter *snap.Snapshotter, proposeC chan<- *batchBinlog, com
 		slots:       []*kvSlot{}, //map[string]*cacheKey{},
 		snapshotter: snapshotter,
 		nextFlush:   time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval)),
+		readReqC:    readReqC,
 	}
 
 	for i := 0; i < kvSlotSize; i++ {
@@ -269,6 +271,11 @@ func (s *kvstore) kick(ckey *cacheKey) bool {
 
 func (s *kvstore) Propose(propose *batchBinlog) {
 	s.proposeC <- propose
+}
+
+func (s *kvstore) IssueReadReq(c *cmdContext) {
+	Infoln("IssueReadReq")
+	s.readReqC <- c
 }
 
 func (s *kvstore) readCommits(once bool, commitC <-chan *commitedBatchBinlog, errorC <-chan error) {
@@ -611,9 +618,9 @@ func initKvGroup(mutilRaft *mutilRaft, id *int, cluster *string, mod int) *store
 			return store.getSnapshot()
 		}
 
-		commitC, errorC, snapshotterReady := newRaftNode(mutilRaft, (*id<<16)+i, strings.Split(*cluster, ","), false, getSnapshot, proposeC, confChangeC)
+		commitC, errorC, snapshotterReady, readC := newRaftNode(mutilRaft, (*id<<16)+i, strings.Split(*cluster, ","), false, getSnapshot, proposeC, confChangeC)
 
-		store = newKVStore(<-snapshotterReady, proposeC, commitC, errorC)
+		store = newKVStore(<-snapshotterReady, proposeC, commitC, errorC, readC)
 
 		store.stop = func() {
 			close(proposeC)

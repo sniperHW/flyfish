@@ -10,7 +10,12 @@ import (
 
 func processGet(ckey *cacheKey, cmd *command) *cmdContext {
 	Debugln("processGet", cmd.uniKey)
-	if ckey.status == cache_missing {
+	ctx := &cmdContext{
+		command: cmd,
+		fields:  map[string]*proto.Field{},
+	}
+	return ctx
+	/*if ckey.status == cache_missing {
 		cmd.reply(errcode.ERR_NOTFOUND, nil, -1)
 		return nil
 	} else if ckey.status == cache_ok {
@@ -23,7 +28,7 @@ func processGet(ckey *cacheKey, cmd *command) *cmdContext {
 			fields:  map[string]*proto.Field{},
 		}
 		return ctx
-	}
+	}*/
 }
 
 func processSet(ckey *cacheKey, cmd *command) *cmdContext {
@@ -313,6 +318,10 @@ func processCmd(ckey *cacheKey, fromClient bool) {
 	} else {
 		ckey.lockCmdQueue()
 		ckey.mtx.Unlock()
-		ckey.m.commit(ctx)
+		if ctx.getCmdType() == cmdGet {
+			ckey.m.IssueReadReq(ctx)
+		} else {
+			ckey.m.commit(ctx)
+		}
 	}
 }
