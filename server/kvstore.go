@@ -177,7 +177,7 @@ func newKVStore(rn *raftNode, snapshotter *snap.Snapshotter, proposeC chan<- *ba
 			nextFlush: time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval)),
 		},
 		readBatch: readBatch{
-			nextFlush: time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval)),
+			nextFlush: time.Now().Add(time.Millisecond * time.Duration(config.ReadFlushInterval)),
 		},
 		readReqC: readReqC,
 		rn:       rn,
@@ -202,7 +202,7 @@ func newKVStore(rn *raftNode, snapshotter *snap.Snapshotter, proposeC chan<- *ba
 		s.mtx.Unlock()
 	})
 
-	s.readBatch.timer = timer.Repeat(time.Millisecond*time.Duration(config.FlushInterval), nil, func(t *timer.Timer) {
+	s.readBatch.timer = timer.Repeat(time.Millisecond*time.Duration(config.ReadFlushInterval), nil, func(t *timer.Timer) {
 		s.mtx.Lock()
 		s.tryReadBatch()
 		s.mtx.Unlock()
@@ -313,7 +313,7 @@ func (s *kvstore) tryReadBatch() {
 
 		config := conf.GetConfig()
 
-		if s.readBatch.batchCount >= int32(config.FlushCount) || time.Now().After(s.readBatch.nextFlush) {
+		if s.readBatch.batchCount >= int32(config.ReadFlushCount) || time.Now().After(s.readBatch.nextFlush) {
 
 			s.readBatch.batchCount = 0
 
