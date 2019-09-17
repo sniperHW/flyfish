@@ -274,7 +274,6 @@ func (s *kvstore) Propose(propose *batchBinlog) {
 }
 
 func (s *kvstore) IssueReadReq(c *cmdContext) {
-	Infoln("IssueReadReq")
 	s.readReqC <- c
 }
 

@@ -847,7 +847,6 @@ func (rc *raftNode) serveChannels() {
 					rc.node.ProposeConfChange(context.TODO(), cc)
 				}
 			case readReq, ok := <-rc.readC:
-				Infoln("get readReq", ok)
 				if ok {
 					rc.issueRead(readReq)
 				}
