@@ -552,6 +552,7 @@ func (s *kvstore) replay(data []byte) bool {
 				ckey.version = version
 				ckey.sqlFlag = write_back_insert_update
 				ckey.mtx.Unlock()
+				s.updateLRU(ckey)
 			} else {
 				panic("binlog_update key == nil")
 			}
@@ -568,6 +569,7 @@ func (s *kvstore) replay(data []byte) bool {
 				ckey.status = cache_missing
 				ckey.sqlFlag = write_back_delete
 				ckey.mtx.Unlock()
+				s.updateLRU(ckey)
 			} else {
 				panic("binlog_delete key == nil")
 			}

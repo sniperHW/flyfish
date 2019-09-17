@@ -80,8 +80,6 @@ type raftNode struct {
 	snapCount uint64
 	transport *rafthttp.Transport
 	stopc     chan struct{} // signals proposal channel closed
-	//httpstopc chan struct{} // signals http server to shutdown
-	//httpdonec chan struct{} // signals http server shutdown complete
 
 	//muSnapshotting sync.Mutex
 	snapshotting   bool             //当前是否正在做快照
@@ -602,8 +600,11 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 
 func (rc *raftNode) onLoseLeadership() {
 	rc.muPendingPropose.Lock()
+	pendingPropose := rc.pendingPropose
+	rc.pendingPropose = list.New()
+	rc.muPendingPropose.Unlock()
 
-	for e := rc.pendingPropose.Front(); e != nil; e = e.Next() {
+	for e := pendingPropose.Front(); e != nil; e = e.Next() {
 		v := e.Value.(*batchBinlog)
 		strPut(v.binlogStr)
 		if nil != v.ctxs {
@@ -620,9 +621,17 @@ func (rc *raftNode) onLoseLeadership() {
 		}
 	}
 
-	rc.pendingPropose = list.New()
+	rc.muPendingRead.Lock()
+	pendingRead := rc.pendingRead
+	rc.pendingRead = list.New()
+	rc.muPendingRead.Unlock()
 
-	rc.muPendingPropose.Unlock()
+	for e := pendingRead.Front(); e != nil; e = e.Next() {
+		ctx := e.Value.(*cmdContext)
+		ctx.reply(errcode.ERR_NOT_LEADER, nil, 0)
+		ctx.getCacheKey().processQueueCmd()
+	}
+
 }
 
 func (rc *raftNode) startProposePipeline() {
@@ -638,18 +647,16 @@ func (rc *raftNode) startProposePipeline() {
 
 				if !rc.isLeader() {
 					strPut(prop.binlogStr)
-					if nil != prop.ctxs {
-						for i := 0; i < prop.ctxs.count; i++ {
-							v := prop.ctxs.ctxs[i]
-							if v.getCmdType() != cmdKick {
-								v.reply(errcode.ERR_NOT_LEADER, nil, 0)
-							} else {
-								v.getCacheKey().clearKicking()
-							}
-							v.getCacheKey().processQueueCmd()
+					for i := 0; i < prop.ctxs.count; i++ {
+						v := prop.ctxs.ctxs[i]
+						if v.getCmdType() != cmdKick {
+							v.reply(errcode.ERR_NOT_LEADER, nil, 0)
+						} else {
+							v.getCacheKey().clearKicking()
 						}
-						ctxArrayPut(prop.ctxs)
+						v.getCacheKey().processQueueCmd()
 					}
+					ctxArrayPut(prop.ctxs)
 				} else {
 					// blocks until accepted by raft state machine
 					prop.index = atomic.AddInt64(&rc.proposeIndex, 1)
@@ -668,19 +675,20 @@ func (rc *raftNode) startProposePipeline() {
 							 *   只是对客户端超时,复制处理还在继续
 							 *   所以只向客户端返回response
 							 */
-
-							if nil != prop.ctxs {
-								for i := 0; i < prop.ctxs.count; i++ {
-									v := prop.ctxs.ctxs[i]
-									if v.getCmdType() != cmdKick {
-										v.reply(errcode.ERR_TIMEOUT, nil, 0)
-									} else {
-										v.getCacheKey().clearKicking()
-									}
+							for i := 0; i < prop.ctxs.count; i++ {
+								v := prop.ctxs.ctxs[i]
+								if v.getCmdType() != cmdKick {
+									v.reply(errcode.ERR_TIMEOUT, nil, 0)
+								} else {
+									v.getCacheKey().clearKicking()
 								}
+								v.getCacheKey().processQueueCmd()
 							}
-
 						} else {
+
+							rc.muPendingPropose.Lock()
+							rc.pendingPropose.Remove(e)
+							rc.muPendingPropose.Unlock()
 
 							errCode := int32(0)
 
@@ -698,20 +706,17 @@ func (rc *raftNode) startProposePipeline() {
 							}
 
 							strPut(prop.binlogStr)
-							if nil != prop.ctxs {
-								for i := 0; i < prop.ctxs.count; i++ {
-									v := prop.ctxs.ctxs[i]
-									if v.getCmdType() != cmdKick {
-										v.reply(errCode, nil, 0)
-									} else {
-										v.getCacheKey().clearKicking()
-									}
+
+							for i := 0; i < prop.ctxs.count; i++ {
+								v := prop.ctxs.ctxs[i]
+								if v.getCmdType() != cmdKick {
+									v.reply(errCode, nil, 0)
+								} else {
+									v.getCacheKey().clearKicking()
 								}
-								ctxArrayPut(prop.ctxs)
+								v.getCacheKey().processQueueCmd()
 							}
-							rc.muPendingPropose.Lock()
-							rc.pendingPropose.Remove(e)
-							rc.muPendingPropose.Unlock()
+							ctxArrayPut(prop.ctxs)
 						}
 					}
 				}
