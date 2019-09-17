@@ -98,6 +98,7 @@ type kvstore struct {
 	stop         func()
 	batchTimer   *timer.Timer
 	lruTimer     *timer.Timer
+	rn           *raftNode
 }
 
 type storeGroup struct {
@@ -135,15 +136,15 @@ func (this *storeGroup) stop() {
 	}
 }
 
-func (this *storeGroup) tryCommitBatch() {
+func (this *storeGroup) tryProposeBatch() {
 	this.RLock()
 	defer this.RUnlock()
 	for _, v := range this.stores {
-		v.tryCommitBatch()
+		v.tryProposeBatch()
 	}
 }
 
-func newKVStore(snapshotter *snap.Snapshotter, proposeC chan<- *batchBinlog, commitC <-chan *commitedBatchBinlog, errorC <-chan error, readReqC chan<- *cmdContext) *kvstore {
+func newKVStore(rn *raftNode, snapshotter *snap.Snapshotter, proposeC chan<- *batchBinlog, commitC <-chan *commitedBatchBinlog, errorC <-chan error, readReqC chan<- *cmdContext) *kvstore {
 
 	config := conf.GetConfig()
 
@@ -153,6 +154,7 @@ func newKVStore(snapshotter *snap.Snapshotter, proposeC chan<- *batchBinlog, com
 		snapshotter: snapshotter,
 		nextFlush:   time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval)),
 		readReqC:    readReqC,
+		rn:          rn,
 	}
 
 	for i := 0; i < kvSlotSize; i++ {
@@ -170,7 +172,7 @@ func newKVStore(snapshotter *snap.Snapshotter, proposeC chan<- *batchBinlog, com
 
 	s.batchTimer = timer.Repeat(time.Millisecond*time.Duration(config.FlushInterval), nil, func(t *timer.Timer) {
 		s.mtx.Lock()
-		s.tryCommitBatch()
+		s.tryProposeBatch()
 		s.mtx.Unlock()
 	})
 
@@ -210,18 +212,20 @@ func (s *kvstore) removeLRU(ckey *cacheKey) {
 }
 
 func (s *kvstore) kickCacheKey() {
-	MaxCachePerGroupSize := conf.GetConfig().MaxCachePerGroupSize
+	if s.rn.isLeader() {
+		MaxCachePerGroupSize := conf.GetConfig().MaxCachePerGroupSize
 
-	if s.lruHead.nnext != &s.lruTail {
-		c := s.lruTail.pprev
-		for (s.keySize - s.kickingCount) > MaxCachePerGroupSize {
-			if c == &s.lruHead {
-				return
+		if s.lruHead.nnext != &s.lruTail {
+			c := s.lruTail.pprev
+			for (s.keySize - s.kickingCount) > MaxCachePerGroupSize {
+				if c == &s.lruHead {
+					return
+				}
+				if !s.kick(c) {
+					return
+				}
+				c = c.pprev
 			}
-			if !s.kick(c) {
-				return
-			}
-			c = c.pprev
 		}
 	}
 }
@@ -229,15 +233,14 @@ func (s *kvstore) kickCacheKey() {
 func (s *kvstore) kick(ckey *cacheKey) bool {
 	kickAble := false
 	ckey.mtx.Lock()
-	if ckey.status == cache_kicking {
+	if ckey.kicking {
 		ckey.mtx.Unlock()
 		return true
 	}
 
 	kickAble = ckey.kickAbleNoLock()
 	if kickAble {
-		ckey.back_status = ckey.status
-		ckey.status = cache_kicking
+		ckey.kicking = true
 		ckey.lockCmdQueue()
 	}
 	ckey.mtx.Unlock()
@@ -264,7 +267,7 @@ func (s *kvstore) kick(ckey *cacheKey) bool {
 
 	s.appendBinLog(binlog_kick, ckey.uniKey, nil, 0)
 
-	s.tryCommitBatch()
+	s.tryProposeBatch()
 
 	return true
 }
@@ -273,7 +276,7 @@ func (s *kvstore) Propose(propose *batchBinlog) {
 	s.proposeC <- propose
 }
 
-func (s *kvstore) IssueReadReq(c *cmdContext) {
+func (s *kvstore) issueReadReq(c *cmdContext) {
 	s.readReqC <- c
 }
 
@@ -292,7 +295,7 @@ func (s *kvstore) readCommits(once bool, commitC <-chan *commitedBatchBinlog, er
 				log.Panic(err)
 			}
 			log.Printf("loading snapshot at term %d and index %d", snapshot.Metadata.Term, snapshot.Metadata.Index)
-			if !s.recoverFromSnapshot(snapshot.Data[8:]) {
+			if !s.replay(snapshot.Data[8:]) {
 				log.Panic("recoverFromSnapshot failed")
 			}
 		} else if data == replayOK {
@@ -304,77 +307,72 @@ func (s *kvstore) readCommits(once bool, commitC <-chan *commitedBatchBinlog, er
 			}
 		} else {
 
-			//Infoln("commited", data.Index)
+			//本地提交的propose直接使用ctxs中内容apply
+			if nil != data.ctxs {
+				for i := 0; i < data.ctxs.count; i++ {
+					v := data.ctxs.ctxs[i]
+					if v.getCmdType() != cmdKick {
+						v.reply(errcode.ERR_OK, v.fields, v.version)
+						ckey := v.getCacheKey()
+						ckey.mtx.Lock()
+						ckey.snapshoted = true
 
-			if !data.localPropose {
-				s.applyLeaderPropose(data.data)
-			} else {
-				//本地提交的propose直接使用ctxs中内容apply
-				if nil != data.ctxs {
-					for i := 0; i < data.ctxs.count; i++ {
-						v := data.ctxs.ctxs[i]
-						if v.getCmdType() != cmdKick {
-							v.reply(errcode.ERR_OK, v.fields, v.version)
-							ckey := v.getCacheKey()
-							ckey.mtx.Lock()
-							ckey.snapshoted = true
-
-							if v.writeBackFlag == write_back_insert || v.writeBackFlag == write_back_update || v.writeBackFlag == write_back_insert_update {
-								ckey.setValueNoLock(v)
-								ckey.setOKNoLock(v.version)
-							} else {
-								ckey.setMissingNoLock()
-							}
-
-							ckey.sqlFlag = v.writeBackFlag
-
-							if !ckey.writeBackLocked {
-								ckey.writeBackLocked = true
-								pushSqlWriteReq(ckey)
-							}
-							ckey.mtx.Unlock()
-						}
-					}
-
-					for i := 0; i < data.ctxs.count; i++ {
-						v := data.ctxs.ctxs[i]
-						if v.getCmdType() == cmdKick {
-							queueCmdSize := 0
-							ckey := v.getCacheKey()
-							ckey.mtx.Lock()
-							queueCmdSize = ckey.cmdQueue.Len()
-							if queueCmdSize > 0 {
-								/*
-								 *   kick执行完之后，对这个key又有新的访问请求
-								 *   此时必须把snapshoted设置为true,这样后面的变更请求才能以snapshot记录到日志中
-								 *   否则，重放日志时因为kick先执行，变更重放将因为找不到key出错
-								 */
-								ckey.snapshoted = false
-								ckey.status = ckey.back_status
-							}
-							ckey.mtx.Unlock()
-							s.mtx.Lock()
-							s.kickingCount--
-							s.mtx.Unlock()
-							if queueCmdSize > 0 {
-								ckey.processQueueCmd()
-							} else {
-								s.mtx.Lock()
-								s.removeLRU(ckey)
-								s.keySize--
-								s.mtx.Unlock()
-								ckey.slot.mtx.Lock()
-								delete(ckey.slot.kv, ckey.uniKey)
-								ckey.slot.mtx.Unlock()
-								//Infoln("kick", s.keySize, s.kickingCount)
-							}
+						if v.writeBackFlag == write_back_insert || v.writeBackFlag == write_back_update || v.writeBackFlag == write_back_insert_update {
+							ckey.setValueNoLock(v)
+							ckey.setOKNoLock(v.version)
 						} else {
-							v.getCacheKey().processQueueCmd()
+							ckey.setMissingNoLock()
 						}
-					}
 
-					ctxArrayPut(data.ctxs)
+						ckey.sqlFlag = v.writeBackFlag
+
+						if !ckey.writeBackLocked {
+							ckey.writeBackLocked = true
+							pushSqlWriteReq(ckey)
+						}
+						ckey.mtx.Unlock()
+					}
 				}
+
+				for i := 0; i < data.ctxs.count; i++ {
+					v := data.ctxs.ctxs[i]
+					if v.getCmdType() == cmdKick {
+						queueCmdSize := 0
+						ckey := v.getCacheKey()
+						ckey.mtx.Lock()
+						queueCmdSize = ckey.cmdQueue.Len()
+						if queueCmdSize > 0 {
+							/*
+							 *   kick执行完之后，对这个key又有新的访问请求
+							 *   此时必须把snapshoted设置为true,这样后面的变更请求才能以snapshot记录到日志中
+							 *   否则，重放日志时因为kick先执行，变更重放将因为找不到key出错
+							 */
+							ckey.snapshoted = false
+							ckey.kicking = false
+						}
+						ckey.mtx.Unlock()
+						s.mtx.Lock()
+						s.kickingCount--
+						s.mtx.Unlock()
+						if queueCmdSize > 0 {
+							ckey.processQueueCmd()
+						} else {
+							s.mtx.Lock()
+							s.removeLRU(ckey)
+							s.keySize--
+							s.mtx.Unlock()
+							ckey.slot.mtx.Lock()
+							delete(ckey.slot.kv, ckey.uniKey)
+							ckey.slot.mtx.Unlock()
+						}
+					} else {
+						v.getCacheKey().processQueueCmd()
+					}
+				}
+
+				ctxArrayPut(data.ctxs)
+			} else {
+				s.replay(data.data)
 			}
 		}
 	}
@@ -499,21 +497,17 @@ func readBinLog(buffer []byte, offset int) (int, int, string, int64, map[string]
 	return offset, tt, uniKey, version, values
 }
 
-func (s *kvstore) applyLeaderPropose(data []byte) bool {
-	return s.recoverFromSnapshot(data)
-}
-
-func (s *kvstore) recoverFromSnapshot(snapshot []byte) bool {
+func (s *kvstore) replay(data []byte) bool {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
 	offset := 0
 	recordCount := 0
-	n := len(snapshot)
+	n := len(data)
 
 	for offset < n {
 
-		newOffset, tt, unikey, version, values := readBinLog(snapshot, offset)
+		newOffset, tt, unikey, version, values := readBinLog(data, offset)
 
 		offset = newOffset
 
@@ -617,9 +611,9 @@ func initKvGroup(mutilRaft *mutilRaft, id *int, cluster *string, mod int) *store
 			return store.getSnapshot()
 		}
 
-		commitC, errorC, snapshotterReady, readC := newRaftNode(mutilRaft, (*id<<16)+i, strings.Split(*cluster, ","), false, getSnapshot, proposeC, confChangeC)
+		rn, commitC, errorC, snapshotterReady, readC := newRaftNode(mutilRaft, (*id<<16)+i, strings.Split(*cluster, ","), false, getSnapshot, proposeC, confChangeC)
 
-		store = newKVStore(<-snapshotterReady, proposeC, commitC, errorC, readC)
+		store = newKVStore(rn, <-snapshotterReady, proposeC, commitC, errorC, readC)
 
 		store.stop = func() {
 			close(proposeC)

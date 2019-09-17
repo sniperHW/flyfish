@@ -112,7 +112,7 @@ var defaultSnapshotCount uint64 = 10000
 // commit channel, followed by a nil message (to indicate the channel is
 // current), then new log entries. To shutdown, close proposeC and read errorC.
 func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSnapshot func() [][]kvsnap, proposeC <-chan *batchBinlog,
-	confChangeC <-chan raftpb.ConfChange) (<-chan *commitedBatchBinlog, <-chan error, <-chan *snap.Snapshotter, chan<- *cmdContext) {
+	confChangeC <-chan raftpb.ConfChange) (*raftNode, <-chan *commitedBatchBinlog, <-chan error, <-chan *snap.Snapshotter, chan<- *cmdContext) {
 
 	commitC := make(chan *commitedBatchBinlog)
 	errorC := make(chan error)
@@ -150,7 +150,7 @@ func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSna
 	}
 	rc.startProposePipeline()
 	go rc.startRaft()
-	return commitC, errorC, rc.snapshotterReady, readC
+	return rc, commitC, errorC, rc.snapshotterReady, readC
 }
 
 func (rc *raftNode) isLeader() bool {
@@ -304,7 +304,7 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 			front := rc.pendingPropose.Front()
 			if nil != front { //&& front.Value.(*batchBinlog).index == index {
 				committedEntry.ctxs = front.Value.(*batchBinlog).ctxs
-				committedEntry.localPropose = true
+				//committedEntry.localPropose = true
 				strPut(front.Value.(*batchBinlog).binlogStr)
 				rc.pendingPropose.Remove(front)
 			}
@@ -607,7 +607,9 @@ func (rc *raftNode) onLoseLeadership() {
 		if nil != v.ctxs {
 			for i := 0; i < v.ctxs.count; i++ {
 				ctx := v.ctxs.ctxs[i]
-				if ctx.getCmdType() != cmdKick {
+				if ctx.getCmdType() == cmdKick {
+					ctx.getCacheKey().clearKicking()
+				} else {
 					ctx.reply(errcode.ERR_NOT_LEADER, nil, 0)
 				}
 				ctx.getCacheKey().processQueueCmd()
@@ -639,6 +641,8 @@ func (rc *raftNode) startProposePipeline() {
 							v := prop.ctxs.ctxs[i]
 							if v.getCmdType() != cmdKick {
 								v.reply(errcode.ERR_NOT_LEADER, nil, 0)
+							} else {
+								v.getCacheKey().clearKicking()
 							}
 							v.getCacheKey().processQueueCmd()
 						}
@@ -668,6 +672,8 @@ func (rc *raftNode) startProposePipeline() {
 									v := prop.ctxs.ctxs[i]
 									if v.getCmdType() != cmdKick {
 										v.reply(errcode.ERR_TIMEOUT, nil, 0)
+									} else {
+										v.getCacheKey().clearKicking()
 									}
 								}
 							}
@@ -695,6 +701,8 @@ func (rc *raftNode) startProposePipeline() {
 									v := prop.ctxs.ctxs[i]
 									if v.getCmdType() != cmdKick {
 										v.reply(errCode, nil, 0)
+									} else {
+										v.getCacheKey().clearKicking()
 									}
 								}
 								ctxArrayPut(prop.ctxs)
@@ -748,16 +756,18 @@ func (rc *raftNode) processReadStates(readStates []raft.ReadState) {
 			c := e.Value.(*cmdContext)
 			rc.pendingRead.Remove(e)
 			rc.muPendingRead.Unlock()
-
 			ckey := c.getCacheKey()
-			ckey.mtx.Lock()
-			if ckey.status == cache_missing {
-				c.reply(errcode.ERR_NOTFOUND, nil, -1)
+			if !rc.isLeader() {
+				c.reply(errcode.ERR_NOT_LEADER, nil, -1)
 			} else {
-				c.reply(errcode.ERR_OK, ckey.values, ckey.version)
+				ckey.mtx.Lock()
+				if ckey.status == cache_missing {
+					c.reply(errcode.ERR_NOTFOUND, nil, -1)
+				} else {
+					c.reply(errcode.ERR_OK, ckey.values, ckey.version)
+				}
+				ckey.mtx.Unlock()
 			}
-			ckey.mtx.Unlock()
-
 			ckey.processQueueCmd()
 		}
 	}
@@ -856,8 +866,6 @@ func (rc *raftNode) serveChannels() {
 		close(rc.stopc)
 	}()
 
-	//islead := false
-
 	// event loop on raft state machine updates
 	for {
 		select {
@@ -866,38 +874,16 @@ func (rc *raftNode) serveChannels() {
 
 		// store raft entries to wal, then publish over commit channel
 		case rd := <-rc.node.Ready():
-			//fmt.Println("get rd")
+			loseLeadership := false
 			if rd.SoftState != nil {
-				/*newLeader := rd.SoftState.Lead != raft.None && rh.getLead() != rd.SoftState.Lead
-				if newLeader {
-					leaderChanges.Inc()
-				}
-
-				if rd.SoftState.Lead == raft.None {
-					hasLeader.Set(0)
-				} else {
-					hasLeader.Set(1)
-				}
-
-				rh.updateLead(rd.SoftState.Lead)
-				islead = rd.RaftState == raft.StateLeader
-				if islead {
-					isLeader.Set(1)
-				} else {
-					isLeader.Set(0)
-				}
-				rh.updateLeadership(newLeader)
-				r.td.Reset()*/
-				//islead = rd.RaftState == raft.StateLeader
 				rc.muLeader.Lock()
 				oldLeader := rc.leader
 				rc.leader = int(rd.SoftState.Lead)
 				rc.muLeader.Unlock()
 
 				if oldLeader == rc.id && rc.leader != rc.id {
-					rc.onLoseLeadership()
+					loseLeadership = true
 				}
-
 				Infoln(rd.SoftState.Lead, "is leader")
 			}
 
@@ -923,6 +909,11 @@ func (rc *raftNode) serveChannels() {
 			}
 
 			rc.maybeTriggerSnapshot()
+
+			if loseLeadership {
+				rc.onLoseLeadership()
+			}
+
 			rc.node.Advance()
 
 		case err := <-rc.transport.ErrorC:

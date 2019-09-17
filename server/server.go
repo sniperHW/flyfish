@@ -209,7 +209,7 @@ func (this *Server) Stop() {
 			if atomic.LoadInt64(&cmdCount) == 0 {
 				return true
 			} else {
-				this.storeGroup.tryCommitBatch()
+				this.storeGroup.tryProposeBatch()
 				return false
 			}
 		})

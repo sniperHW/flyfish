@@ -319,9 +319,9 @@ func processCmd(ckey *cacheKey, fromClient bool) {
 		ckey.lockCmdQueue()
 		ckey.mtx.Unlock()
 		if ctx.getCmdType() == cmdGet {
-			ckey.m.IssueReadReq(ctx)
+			ckey.store.issueReadReq(ctx)
 		} else {
-			ckey.m.commit(ctx)
+			ckey.store.issueUpdate(ctx)
 		}
 	}
 }

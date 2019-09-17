@@ -13,7 +13,7 @@ const (
 	cache_new     = 1
 	cache_ok      = 2
 	cache_missing = 3
-	cache_kicking = 4
+	//cache_kicking = 4
 )
 
 type cacheKey struct {
@@ -22,14 +22,13 @@ type cacheKey struct {
 	key             string
 	version         int64
 	status          int
-	back_status     int
 	cmdQueueLocked  bool //操作是否被锁定
 	mtx             sync.Mutex
 	cmdQueue        *list.List
 	meta            *table_meta
 	sqlFlag         int
 	snapshoted      bool //当前key是否建立过快照
-	m               *kvstore
+	store           *kvstore
 	slot            *kvSlot
 	nnext           *cacheKey
 	pprev           *cacheKey
@@ -37,6 +36,20 @@ type cacheKey struct {
 	modifyFields    map[string]bool         //发生变更尚未更新到sql数据库的字段
 	writeBackLocked bool                    //是否已经提交sql回写处理
 	make_snapshot   bool                    //费否处于快照处理过程中
+	kicking         bool
+}
+
+func (this *cacheKey) clearKicking() {
+	defer this.mtx.Unlock()
+	this.mtx.Lock()
+	kicking := this.kicking
+	this.kicking = false
+	if kicking {
+		this.store.mtx.Lock()
+		this.store.kickingCount--
+		this.store.mtx.Unlock()
+	}
+
 }
 
 func (this *cacheKey) lockCmdQueue() {
@@ -190,7 +203,7 @@ func (this *cacheKey) processQueueCmd() {
 	processCmd(this, false)
 }
 
-func newCacheKey(m *kvstore, slot *kvSlot, table string, key string, uniKey string) *cacheKey {
+func newCacheKey(store *kvstore, slot *kvSlot, table string, key string, uniKey string) *cacheKey {
 
 	meta := getMetaByTable(table)
 
@@ -205,7 +218,7 @@ func newCacheKey(m *kvstore, slot *kvSlot, table string, key string, uniKey stri
 		status:       cache_new,
 		meta:         meta,
 		cmdQueue:     list.New(),
-		m:            m,
+		store:        store,
 		slot:         slot,
 		table:        table,
 		modifyFields: map[string]bool{},

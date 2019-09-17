@@ -154,6 +154,11 @@ func (this *command) process() {
 		return
 	}
 
+	if !store.rn.isLeader() {
+		this.reply(errcode.ERR_NOT_LEADER, nil, -1)
+		return
+	}
+
 	store.mtx.Lock()
 
 	slot := store.slots[StringHash(this.uniKey)%len(store.slots)]
@@ -183,7 +188,7 @@ func (this *command) process() {
 			store.keySize++
 		}
 	}
-	store.kickCacheKey()
+	//store.kickCacheKey()
 
 	slot.mtx.Unlock()
 

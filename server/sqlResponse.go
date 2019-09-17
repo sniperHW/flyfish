@@ -19,10 +19,10 @@ func onSqlNotFound(ctx *cmdContext) {
 		ctx.reply(errcode.ERR_NOTFOUND, nil, -1)
 		ckey.processQueueCmd()
 	} else if cmdType == cmdGet {
-		ckey.m.IssueReadReq(ctx)
+		ckey.store.issueReadReq(ctx)
 	} else {
 		ctx.writeBackFlag = write_back_insert
-		ckey.m.commit(ctx)
+		ckey.store.issueUpdate(ctx)
 	}
 }
 
@@ -34,7 +34,7 @@ func onSqlLoadOKGet(ctx *cmdContext) {
 	ckey.setValueNoLock(ctx)
 	ckey.setOKNoLock(version)
 	ckey.mtx.Unlock()
-	ckey.m.IssueReadReq(ctx)
+	ckey.store.issueReadReq(ctx)
 	//ctx.reply(errcode.ERR_OK, ctx.fields, version)
 	//ckey.processQueueCmd()
 }
@@ -82,7 +82,7 @@ func onSqlLoadOKSet(ctx *cmdContext) {
 	default:
 	}
 	ctx.writeBackFlag = write_back_update //sql中存在,使用update回写
-	ckey.m.commit(ctx)
+	ckey.store.issueUpdate(ctx)
 }
 
 func onSqlLoadOKDel(ctx *cmdContext) {
@@ -103,7 +103,7 @@ func onSqlLoadOKDel(ctx *cmdContext) {
 		ckey.processQueueCmd()
 	} else {
 		ctx.writeBackFlag = write_back_delete
-		ckey.m.commit(ctx)
+		ckey.store.issueUpdate(ctx)
 	}
 }
 

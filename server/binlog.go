@@ -23,13 +23,13 @@ type batchBinlog struct {
 }
 
 type commitedBatchBinlog struct {
-	data         []byte
-	ctxs         *ctxArray
-	localPropose bool
-	Index        uint64
+	data []byte
+	ctxs *ctxArray
+	//	localPropose bool
+	Index uint64
 }
 
-func (this *kvstore) tryCommitBatch() {
+func (this *kvstore) tryProposeBatch() {
 
 	if this.batchCount > 0 {
 
@@ -187,7 +187,7 @@ func (this *kvstore) checkContext(ckey *cacheKey, ctx *cmdContext) (bool, int) {
 	}
 }
 
-func (this *kvstore) commit(ctx *cmdContext) {
+func (this *kvstore) issueUpdate(ctx *cmdContext) {
 
 	if ctx.writeBackFlag == write_back_none {
 		panic("ctx.writeBackFlag == write_back_none")
@@ -217,7 +217,7 @@ func (this *kvstore) commit(ctx *cmdContext) {
 
 	this.appendBinLog(binop, ckey.uniKey, ctx.fields, ctx.version)
 
-	this.tryCommitBatch()
+	this.tryProposeBatch()
 
 	this.mtx.Unlock()
 
