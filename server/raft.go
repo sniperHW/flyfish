@@ -773,7 +773,7 @@ func (rc *raftNode) processReadStates(readStates []raft.ReadState) {
 			rc.pendingRead.Remove(e)
 			rc.muPendingRead.Unlock()
 
-			for i := 0; i < c.ctxs.count; i++ {
+			/*for i := 0; i < c.ctxs.count; i++ {
 				v := c.ctxs.ctxs[i]
 				ckey := v.getCacheKey()
 				if !rc.isLeader() {
@@ -789,28 +789,12 @@ func (rc *raftNode) processReadStates(readStates []raft.ReadState) {
 				}
 				ckey.processQueueCmd()
 			}
-			ctxArrayPut(c.ctxs)
+			ctxArrayPut(c.ctxs)*/
 
-			/*select {
+			select {
 			case rc.commitC <- c:
 			case <-rc.stopc:
-			}*/
-			/*for _, v := range c.ctxs.ctxs {
-				ckey := v.getCacheKey()
-				if !rc.isLeader() {
-					v.reply(errcode.ERR_NOT_LEADER, nil, -1)
-				} else {
-					ckey.mtx.Lock()
-					if ckey.status == cache_missing {
-						v.reply(errcode.ERR_NOTFOUND, nil, -1)
-					} else {
-						v.reply(errcode.ERR_OK, ckey.values, ckey.version)
-					}
-					ckey.mtx.Unlock()
-				}
-				ckey.processQueueCmd()
 			}
-			ctxArrayPut(c.ctxs)*/
 		}
 	}
 }

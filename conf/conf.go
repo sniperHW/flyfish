@@ -48,7 +48,6 @@ type Config struct {
 	FlushSize            int
 	FlushCount           int
 	ReadFlushInterval    int
-	ReadFlushCount       int
 	MaxBinlogCount       int32
 	MaxBinlogFileSize    int64
 

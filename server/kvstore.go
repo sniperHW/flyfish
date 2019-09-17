@@ -313,7 +313,7 @@ func (s *kvstore) tryReadBatch() {
 
 		config := conf.GetConfig()
 
-		if s.readBatch.batchCount >= int32(config.ReadFlushCount) || time.Now().After(s.readBatch.nextFlush) {
+		if s.readBatch.batchCount >= int32(config.FlushCount) || time.Now().After(s.readBatch.nextFlush) {
 
 			s.readBatch.batchCount = 0
 

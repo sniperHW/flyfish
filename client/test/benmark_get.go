@@ -70,9 +70,9 @@ func main() {
 		services = append(services, os.Args[i])
 	}
 
-	for j := 0; j < 100; j++ {
+	for j := 0; j < 50; j++ {
 		c := kclient.OpenClient(services) //eventQueue)
-		for i := 0; i < 100; i++ {
+		for i := 0; i < 50; i++ {
 			Get(c)
 		}
 	}
