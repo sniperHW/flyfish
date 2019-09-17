@@ -19,14 +19,12 @@ const (
 type batchBinlog struct {
 	binlogStr *str
 	ctxs      *ctxArray
-	index     uint64
+	index     int64
 }
 
 type commitedBatchBinlog struct {
 	data []byte
 	ctxs *ctxArray
-	//	localPropose bool
-	Index uint64
 }
 
 func (this *kvstore) tryProposeBatch() {

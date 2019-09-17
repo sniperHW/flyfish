@@ -90,7 +90,7 @@ type raftNode struct {
 
 	muPendingPropose sync.Mutex
 	pendingPropose   *list.List //[]*batchBinlog
-	//proposeIndex     int64
+	proposeIndex     int64
 
 	muLeader sync.Mutex
 	leader   int
@@ -296,21 +296,24 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 				break
 			}
 
-			//index := binary.BigEndian.Uint64(ents[i].Data[0:8])
+			index := int64(binary.BigEndian.Uint64(ents[i].Data[0:8]))
 			committedEntry := &commitedBatchBinlog{
 				data: ents[i].Data[8:],
 			}
 			rc.muPendingPropose.Lock()
 			front := rc.pendingPropose.Front()
-			if nil != front { //&& front.Value.(*batchBinlog).index == index {
-				committedEntry.ctxs = front.Value.(*batchBinlog).ctxs
-				//committedEntry.localPropose = true
-				strPut(front.Value.(*batchBinlog).binlogStr)
-				rc.pendingPropose.Remove(front)
+			if nil != front {
+				if front.Value.(*batchBinlog).index == index {
+					committedEntry.ctxs = front.Value.(*batchBinlog).ctxs
+					strPut(front.Value.(*batchBinlog).binlogStr)
+					rc.pendingPropose.Remove(front)
+				} else {
+					Infoln("index not match", index, front.Value.(*batchBinlog).index)
+				}
 			}
 			rc.muPendingPropose.Unlock()
 
-			committedEntry.Index = ents[i].Index
+			//committedEntry.Index = ents[i].Index
 
 			select {
 			case rc.commitC <- committedEntry:
@@ -515,7 +518,6 @@ func (rc *raftNode) publishSnapshot(snapshotToSave raftpb.Snapshot) {
 	if snapshotToSave.Metadata.Index <= rc.appliedIndex {
 		log.Fatalf("snapshot index [%d] should > progress.appliedIndex [%d]", snapshotToSave.Metadata.Index, rc.appliedIndex)
 	}
-	Infoln("here2")
 	rc.commitC <- replaySnapshot // trigger kvstore to load snapshot
 
 	rc.confState = snapshotToSave.Metadata.ConfState
@@ -650,8 +652,8 @@ func (rc *raftNode) startProposePipeline() {
 					}
 				} else {
 					// blocks until accepted by raft state machine
-					//prop.index = atomic.AddInt64(&rc.proposeIndex, 1)
-					//binary.BigEndian.PutUint64(prop.binlogStr.data[:8], prop.index)
+					prop.index = atomic.AddInt64(&rc.proposeIndex, 1)
+					binary.BigEndian.PutUint64(prop.binlogStr.data[:8], uint64(prop.index))
 					rc.muPendingPropose.Lock()
 					e := rc.pendingPropose.PushBack(prop)
 					rc.muPendingPropose.Unlock()
