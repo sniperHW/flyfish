@@ -233,6 +233,7 @@ func processCmd(ckey *cacheKey, fromClient bool) {
 			cmd.dontReply()
 		} else {
 			if cmd.cmdType == cmdGet {
+				Debugln("processGet", cmd.uniKey)
 				ckey.cmdQueue.Remove(e)
 				//连续的get请求可以合并到同一个ctx钟
 				ctx.commands = append(ctx.commands, cmd)

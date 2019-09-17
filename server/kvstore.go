@@ -26,7 +26,9 @@ import (
 	"math"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
+	"unsafe"
 )
 
 var cmdProcessor cmdProcessorI
@@ -99,6 +101,15 @@ type readBatchSt struct {
 	readIndex int64 //for linearizableRead
 	ctxs      *ctxArray
 	deadline  time.Time
+}
+
+func (this *readBatchSt) onError(err int) {
+	for i := 0; i < this.ctxs.count; i++ {
+		v := this.ctxs.ctxs[i]
+		v.reply(int32(err), nil, -1)
+		v.getCacheKey().processQueueCmd()
+	}
+	ctxArrayPut(this.ctxs)
 }
 
 // a key-value store backed by raft
@@ -450,22 +461,17 @@ func (s *kvstore) readCommits(once bool, commitC <-chan interface{}, errorC <-ch
 			for i := 0; i < c.ctxs.count; i++ {
 				v := c.ctxs.ctxs[i]
 				ckey := v.getCacheKey()
-				if !s.rn.isLeader() {
-					v.reply(errcode.ERR_NOT_LEADER, nil, -1)
+				ckey.mtx.Lock()
+				if ckey.status == cache_missing {
+					v.reply(errcode.ERR_NOTFOUND, nil, -1)
 				} else {
-					ckey.mtx.Lock()
-					if ckey.status == cache_missing {
-						v.reply(errcode.ERR_NOTFOUND, nil, -1)
-					} else {
-						v.reply(errcode.ERR_OK, ckey.values, ckey.version)
-					}
-					ckey.mtx.Unlock()
+					v.reply(errcode.ERR_OK, ckey.values, ckey.version)
 				}
+				ckey.mtx.Unlock()
 				ckey.processQueueCmd()
 			}
 			ctxArrayPut(c.ctxs)
 		}
-
 	}
 
 	if err, ok := <-errorC; ok {
@@ -684,6 +690,44 @@ func (s *kvstore) replay(data []byte) bool {
 		slot.mtx.Unlock()
 	}
 	return true
+}
+
+func (s *kvstore) getCacheKeyAndPushCmd(cmd *command) *cacheKey {
+	s.mtx.Lock()
+
+	slot := s.slots[StringHash(cmd.uniKey)%len(s.slots)]
+
+	slot.mtx.Lock()
+
+	k, ok := slot.kv[cmd.uniKey]
+	if ok {
+		if !checkMetaVersion(k.meta.meta_version) {
+			newMeta := getMetaByTable(cmd.table)
+			if newMeta != nil {
+				atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&k.meta)), unsafe.Pointer(newMeta))
+			} else {
+				//log error
+			}
+		}
+		cmd.ckey = k
+		k.pushCmd(cmd)
+		s.updateLRU(k)
+	} else {
+		k = newCacheKey(s, slot, cmd.table, cmd.key, cmd.uniKey)
+		if nil != k {
+			cmd.ckey = k
+			k.pushCmd(cmd)
+			s.updateLRU(k)
+			slot.kv[cmd.uniKey] = k
+			s.keySize++
+		}
+	}
+
+	slot.mtx.Unlock()
+
+	s.mtx.Unlock()
+
+	return k
 }
 
 func initKvGroup(mutilRaft *mutilRaft, id *int, cluster *string, mod int) *storeGroup {

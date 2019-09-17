@@ -5,7 +5,6 @@ import (
 	"github.com/sniperHW/flyfish/proto"
 	"sync/atomic"
 	"time"
-	"unsafe"
 )
 
 const (
@@ -165,40 +164,7 @@ func (this *command) process() {
 		return
 	}
 
-	store.mtx.Lock()
-
-	slot := store.slots[StringHash(this.uniKey)%len(store.slots)]
-
-	slot.mtx.Lock()
-
-	k, ok := slot.kv[this.uniKey]
-	if ok {
-		if !checkMetaVersion(k.meta.meta_version) {
-			newMeta := getMetaByTable(this.table)
-			if newMeta != nil {
-				atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&k.meta)), unsafe.Pointer(newMeta))
-			} else {
-				//log error
-			}
-		}
-		this.ckey = k
-		k.pushCmd(this)
-		store.updateLRU(k)
-	} else {
-		k = newCacheKey(store, slot, this.table, this.key, this.uniKey)
-		if nil != k {
-			this.ckey = k
-			k.pushCmd(this)
-			store.updateLRU(k)
-			slot.kv[this.uniKey] = k
-			store.keySize++
-		}
-	}
-	//store.kickCacheKey()
-
-	slot.mtx.Unlock()
-
-	store.mtx.Unlock()
+	k := store.getCacheKeyAndPushCmd(this)
 
 	if nil != k {
 		k.processClientCmd()

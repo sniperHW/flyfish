@@ -35,8 +35,6 @@ func onSqlLoadOKGet(ctx *cmdContext) {
 	ckey.setOKNoLock(version)
 	ckey.mtx.Unlock()
 	ckey.store.issueReadReq(ctx)
-	//ctx.reply(errcode.ERR_OK, ctx.fields, version)
-	//ckey.processQueueCmd()
 }
 
 func onSqlLoadOKSet(ctx *cmdContext) {

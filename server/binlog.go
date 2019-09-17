@@ -22,6 +22,19 @@ type batchBinlog struct {
 	index     int64
 }
 
+func (this *batchBinlog) onError(err int) {
+	for i := 0; i < this.ctxs.count; i++ {
+		v := this.ctxs.ctxs[i]
+		if v.getCmdType() != cmdKick {
+			v.reply(int32(err), nil, 0)
+		} else {
+			v.getCacheKey().clearKicking()
+		}
+		v.getCacheKey().processQueueCmd()
+	}
+	ctxArrayPut(this.ctxs)
+}
+
 type commitedBatchBinlog struct {
 	data []byte
 	ctxs *ctxArray

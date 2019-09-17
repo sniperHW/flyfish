@@ -120,20 +120,18 @@ func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSna
 	region := id & 0xFFFF
 
 	rc := &raftNode{
-		proposeC:    proposeC,
-		confChangeC: confChangeC,
-		commitC:     commitC,
-		errorC:      errorC,
-		id:          id,
-		peers:       peers,
-		join:        join,
-		waldir:      fmt.Sprintf("raftexample-%d-%d", nodeID, region),
-		snapdir:     fmt.Sprintf("raftexample-%d-%d-snap", nodeID, region),
-		getSnapshot: getSnapshot,
-		snapCount:   defaultSnapshotCount,
-		stopc:       make(chan struct{}),
-		//httpstopc:        make(chan struct{}),
-		//httpdonec:        make(chan struct{}),
+		proposeC:         proposeC,
+		confChangeC:      confChangeC,
+		commitC:          commitC,
+		errorC:           errorC,
+		id:               id,
+		peers:            peers,
+		join:             join,
+		waldir:           fmt.Sprintf("raftexample-%d-%d", nodeID, region),
+		snapdir:          fmt.Sprintf("raftexample-%d-%d-snap", nodeID, region),
+		getSnapshot:      getSnapshot,
+		snapCount:        defaultSnapshotCount,
+		stopc:            make(chan struct{}),
 		snapshotterReady: make(chan *snap.Snapshotter, 1),
 		snapshottingOK:   make(chan struct{}),
 		pendingPropose:   list.New(), //[]*batchBinlog{}
@@ -570,9 +568,6 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 
 		for _, v := range clone {
 			for _, vv := range v {
-				//if "" == vv.uniKey || vv.version == 0 {
-				//	panic("error")
-				//}
 				ss.appendBinLog(binlog_snapshot, vv.uniKey, vv.values, vv.version)
 			}
 		}
@@ -607,18 +602,7 @@ func (rc *raftNode) onLoseLeadership() {
 	for e := pendingPropose.Front(); e != nil; e = e.Next() {
 		v := e.Value.(*batchBinlog)
 		strPut(v.binlogStr)
-		if nil != v.ctxs {
-			for i := 0; i < v.ctxs.count; i++ {
-				ctx := v.ctxs.ctxs[i]
-				if ctx.getCmdType() == cmdKick {
-					ctx.getCacheKey().clearKicking()
-				} else {
-					ctx.reply(errcode.ERR_NOT_LEADER, nil, 0)
-				}
-				ctx.getCacheKey().processQueueCmd()
-			}
-			ctxArrayPut(v.ctxs)
-		}
+		v.onError(errcode.ERR_NOT_LEADER)
 	}
 
 	rc.muPendingRead.Lock()
@@ -628,13 +612,7 @@ func (rc *raftNode) onLoseLeadership() {
 
 	for e := pendingRead.Front(); e != nil; e = e.Next() {
 		c := e.Value.(*readBatchSt)
-		for i := 0; i < c.ctxs.count; i++ {
-			v := c.ctxs.ctxs[i]
-			v.reply(int32(errcode.ERR_NOT_LEADER), nil, -1)
-			v.getCacheKey().processQueueCmd()
-		}
-		ctxArrayPut(c.ctxs)
-
+		c.onError(errcode.ERR_NOT_LEADER)
 	}
 }
 
@@ -651,16 +629,7 @@ func (rc *raftNode) startProposePipeline() {
 
 				if !rc.isLeader() {
 					strPut(prop.binlogStr)
-					for i := 0; i < prop.ctxs.count; i++ {
-						v := prop.ctxs.ctxs[i]
-						if v.getCmdType() != cmdKick {
-							v.reply(errcode.ERR_NOT_LEADER, nil, 0)
-						} else {
-							v.getCacheKey().clearKicking()
-						}
-						v.getCacheKey().processQueueCmd()
-					}
-					ctxArrayPut(prop.ctxs)
+					prop.onError(errcode.ERR_NOT_LEADER)
 				} else {
 					// blocks until accepted by raft state machine
 					prop.index = atomic.AddInt64(&rc.proposeIndex, 1)
@@ -683,18 +652,17 @@ func (rc *raftNode) startProposePipeline() {
 								v := prop.ctxs.ctxs[i]
 								if v.getCmdType() != cmdKick {
 									v.reply(errcode.ERR_TIMEOUT, nil, 0)
-								} else {
-									v.getCacheKey().clearKicking()
 								}
 								v.getCacheKey().processQueueCmd()
 							}
+
 						} else {
 
 							rc.muPendingPropose.Lock()
 							rc.pendingPropose.Remove(e)
 							rc.muPendingPropose.Unlock()
 
-							errCode := int32(0)
+							errCode := 0
 
 							switch err {
 							case raft.ErrStopped:
@@ -710,17 +678,7 @@ func (rc *raftNode) startProposePipeline() {
 							}
 
 							strPut(prop.binlogStr)
-
-							for i := 0; i < prop.ctxs.count; i++ {
-								v := prop.ctxs.ctxs[i]
-								if v.getCmdType() != cmdKick {
-									v.reply(errCode, nil, 0)
-								} else {
-									v.getCacheKey().clearKicking()
-								}
-								v.getCacheKey().processQueueCmd()
-							}
-							ctxArrayPut(prop.ctxs)
+							prop.onError(errCode)
 						}
 					}
 				}
@@ -747,12 +705,7 @@ func (rc *raftNode) processTimeoutReadReq(_ *timer.Timer) {
 			c := e.Value.(*readBatchSt)
 			rc.pendingRead.Remove(e)
 			rc.muPendingRead.Unlock()
-			for i := 0; i < c.ctxs.count; i++ {
-				v := c.ctxs.ctxs[i]
-				v.reply(errcode.ERR_TIMEOUT, nil, 0)
-				v.getCacheKey().processQueueCmd()
-			}
-			ctxArrayPut(c.ctxs)
+			c.onError(errcode.ERR_TIMEOUT)
 		} else {
 			rc.muPendingRead.Unlock()
 			return
@@ -772,25 +725,6 @@ func (rc *raftNode) processReadStates(readStates []raft.ReadState) {
 			c := e.Value.(*readBatchSt)
 			rc.pendingRead.Remove(e)
 			rc.muPendingRead.Unlock()
-
-			/*for i := 0; i < c.ctxs.count; i++ {
-				v := c.ctxs.ctxs[i]
-				ckey := v.getCacheKey()
-				if !rc.isLeader() {
-					v.reply(errcode.ERR_NOT_LEADER, nil, -1)
-				} else {
-					ckey.mtx.Lock()
-					if ckey.status == cache_missing {
-						v.reply(errcode.ERR_NOTFOUND, nil, -1)
-					} else {
-						v.reply(errcode.ERR_OK, ckey.values, ckey.version)
-					}
-					ckey.mtx.Unlock()
-				}
-				ckey.processQueueCmd()
-			}
-			ctxArrayPut(c.ctxs)*/
-
 			select {
 			case rc.commitC <- c:
 			case <-rc.stopc:
@@ -799,19 +733,10 @@ func (rc *raftNode) processReadStates(readStates []raft.ReadState) {
 	}
 }
 
-func (rc *raftNode) issueReadFailed(c *readBatchSt, err int) {
-	for i := 0; i < c.ctxs.count; i++ {
-		v := c.ctxs.ctxs[i]
-		v.reply(int32(err), nil, -1)
-		v.getCacheKey().processQueueCmd()
-	}
-	ctxArrayPut(c.ctxs)
-}
-
 func (rc *raftNode) issueRead(c *readBatchSt) {
 
 	if !rc.isLeader() {
-		rc.issueReadFailed(c, errcode.ERR_NOT_LEADER)
+		c.onError(errcode.ERR_NOT_LEADER)
 		return
 	}
 
@@ -838,7 +763,7 @@ func (rc *raftNode) issueRead(c *readBatchSt) {
 		rc.muPendingRead.Lock()
 		rc.pendingRead.Remove(e)
 		rc.muPendingRead.Unlock()
-		rc.issueReadFailed(c, code)
+		c.onError(code)
 		return
 	}
 	cancel()
