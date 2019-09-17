@@ -338,7 +338,7 @@ func (s *kvstore) issueReadReq(c *cmdContext) {
 	s.readBatch.batchCount++
 
 	if s.readBatch.batchCount == 1 {
-		s.readBatch.nextFlush = time.Now().Add(time.Millisecond * time.Duration(conf.GetConfig().FlushInterval))
+		s.readBatch.nextFlush = time.Now().Add(time.Millisecond * time.Duration(conf.GetConfig().ReadFlushInterval))
 	}
 
 	s.readBatch.ctxs.append(c)
