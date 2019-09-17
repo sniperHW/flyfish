@@ -29,19 +29,19 @@ type commitedBatchBinlog struct {
 
 func (this *kvstore) tryProposeBatch() {
 
-	if this.batchCount > 0 {
+	if this.proposeBatch.batchCount > 0 {
 
 		config := conf.GetConfig()
 
-		if this.batchCount >= int32(config.FlushCount) || this.binlogStr.dataLen() >= config.FlushSize || time.Now().After(this.nextFlush) {
+		if this.proposeBatch.batchCount >= int32(config.FlushCount) || this.proposeBatch.binlogStr.dataLen() >= config.FlushSize || time.Now().After(this.proposeBatch.nextFlush) {
 
-			this.batchCount = 0
+			this.proposeBatch.batchCount = 0
 
-			binlogStr := this.binlogStr
-			ctxs := this.ctxs
+			binlogStr := this.proposeBatch.binlogStr
+			ctxs := this.proposeBatch.ctxs
 
-			this.binlogStr = nil
-			this.ctxs = nil
+			this.proposeBatch.binlogStr = nil
+			this.proposeBatch.ctxs = nil
 
 			binary.BigEndian.PutUint64(binlogStr.data[:8], uint64(0))
 
@@ -55,18 +55,18 @@ func (this *kvstore) tryProposeBatch() {
 
 func (this *kvstore) appendBinLog(tt int, unikey string, fields map[string]*proto.Field, version int64) {
 
-	if nil == this.binlogStr {
-		this.binlogStr = strGet()
-		this.binlogStr.appendInt64(0)
+	if nil == this.proposeBatch.binlogStr {
+		this.proposeBatch.binlogStr = strGet()
+		this.proposeBatch.binlogStr.appendInt64(0)
 	}
 
-	this.batchCount++
+	this.proposeBatch.batchCount++
 
-	if this.batchCount == 1 {
-		this.nextFlush = time.Now().Add(time.Millisecond * time.Duration(conf.GetConfig().FlushInterval))
+	if this.proposeBatch.batchCount == 1 {
+		this.proposeBatch.nextFlush = time.Now().Add(time.Millisecond * time.Duration(conf.GetConfig().FlushInterval))
 	}
 
-	this.binlogStr.appendBinLog(tt, unikey, fields, version)
+	this.proposeBatch.binlogStr.appendBinLog(tt, unikey, fields, version)
 }
 
 func fillDefaultValue(meta *table_meta, ctx *cmdContext) {
@@ -203,11 +203,11 @@ func (this *kvstore) issueUpdate(ctx *cmdContext) {
 
 	this.mtx.Lock()
 
-	if nil == this.ctxs {
-		this.ctxs = ctxArrayGet()
+	if nil == this.proposeBatch.ctxs {
+		this.proposeBatch.ctxs = ctxArrayGet()
 	}
 
-	this.ctxs.append(ctx)
+	this.proposeBatch.ctxs.append(ctx)
 
 	if len(ctx.fields) == 0 || ctx.version == 0 {
 		panic("len(ctx.fields == 0) || ctx.version == 0")

@@ -19,7 +19,6 @@ type cmdContext struct {
 	writeBackFlag int //回写数据库类型
 	ping          bool
 	version       int64
-	readIndex     int64 //for linearizableRead
 }
 
 func (this *cmdContext) getCmd() *command {
