@@ -447,7 +447,8 @@ func (s *kvstore) readCommits(once bool, commitC <-chan interface{}, errorC <-ch
 			}
 		case *readBatchSt:
 			c := d.(*readBatchSt)
-			for _, v := range c.ctxs.ctxs {
+			for i := 0; i < c.ctxs.count; i++ {
+				v := c.ctxs.ctxs[i]
 				ckey := v.getCacheKey()
 				if !s.rn.isLeader() {
 					v.reply(errcode.ERR_NOT_LEADER, nil, -1)

@@ -627,11 +627,15 @@ func (rc *raftNode) onLoseLeadership() {
 	rc.muPendingRead.Unlock()
 
 	for e := pendingRead.Front(); e != nil; e = e.Next() {
-		ctx := e.Value.(*cmdContext)
-		ctx.reply(errcode.ERR_NOT_LEADER, nil, 0)
-		ctx.getCacheKey().processQueueCmd()
-	}
+		c := e.Value.(*readBatchSt)
+		for i := 0; i < c.ctxs.count; i++ {
+			v := c.ctxs.ctxs[i]
+			v.reply(int32(errcode.ERR_NOT_LEADER), nil, -1)
+			v.getCacheKey().processQueueCmd()
+		}
+		ctxArrayPut(c.ctxs)
 
+	}
 }
 
 func (rc *raftNode) startProposePipeline() {
@@ -743,7 +747,8 @@ func (rc *raftNode) processTimeoutReadReq(_ *timer.Timer) {
 			c := e.Value.(*readBatchSt)
 			rc.pendingRead.Remove(e)
 			rc.muPendingRead.Unlock()
-			for _, v := range c.ctxs.ctxs {
+			for i := 0; i < c.ctxs.count; i++ {
+				v := c.ctxs.ctxs[i]
 				v.reply(errcode.ERR_TIMEOUT, nil, 0)
 				v.getCacheKey().processQueueCmd()
 			}
@@ -792,7 +797,8 @@ func (rc *raftNode) processReadStates(readStates []raft.ReadState) {
 }
 
 func (rc *raftNode) issueReadFailed(c *readBatchSt, err int) {
-	for _, v := range c.ctxs.ctxs {
+	for i := 0; i < c.ctxs.count; i++ {
+		v := c.ctxs.ctxs[i]
 		v.reply(int32(err), nil, -1)
 		v.getCacheKey().processQueueCmd()
 	}
