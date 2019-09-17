@@ -766,7 +766,7 @@ func (rc *raftNode) processReadStates(readStates []raft.ReadState) {
 func (rc *raftNode) issueRead(c *cmdContext) {
 
 	if !rc.isLeader() {
-		c.reply(errcode.ERR_NOT_LEADER, ckey.values, ckey.version)
+		c.reply(errcode.ERR_NOT_LEADER, nil, -1)
 		c.getCacheKey().processQueueCmd()
 		return
 	}
@@ -774,7 +774,7 @@ func (rc *raftNode) issueRead(c *cmdContext) {
 	now := time.Now()
 	if now.After(c.getCmd().respDeadline) {
 		//已经超时
-		c.reply(errcode.ERR_TIMEOUT, ckey.values, ckey.version)
+		c.reply(errcode.ERR_TIMEOUT, nil, -1)
 		c.getCacheKey().processQueueCmd()
 		return
 	}
