@@ -497,19 +497,12 @@ func (rc *raftNode) startRaft() {
 
 // stop closes http, closes all channels, and stops raft.
 func (rc *raftNode) stop() {
-	//rc.stopHTTP()
 	rc.transport.Stop()
 	rc.mutilRaft.removeTransport(types.ID(rc.id))
 	close(rc.commitC)
 	close(rc.errorC)
 	rc.node.Stop()
 }
-
-//func (rc *raftNode) stopHTTP() {
-//rc.transport.Stop()
-//close(rc.httpstopc)
-//<-rc.httpdonec
-//}
 
 func (rc *raftNode) publishSnapshot(snapshotToSave raftpb.Snapshot) {
 	if raft.IsEmptySnap(snapshotToSave) {
@@ -771,9 +764,17 @@ func (rc *raftNode) processReadStates(readStates []raft.ReadState) {
 }
 
 func (rc *raftNode) issueRead(c *cmdContext) {
+
+	if !rc.isLeader() {
+		c.reply(errcode.ERR_NOT_LEADER, ckey.values, ckey.version)
+		c.getCacheKey().processQueueCmd()
+		return
+	}
+
 	now := time.Now()
 	if now.After(c.getCmd().respDeadline) {
 		//已经超时
+		c.reply(errcode.ERR_TIMEOUT, ckey.values, ckey.version)
 		c.getCacheKey().processQueueCmd()
 		return
 	}
@@ -937,27 +938,6 @@ func (rc *raftNode) serveChannels() {
 		}
 	}
 }
-
-/*
-func (rc *raftNode) serveRaft() {
-	url, err := url.Parse(rc.peers[rc.id-1])
-	if err != nil {
-		log.Fatalf("raftexample: Failed parsing URL (%v)", err)
-	}
-
-	ln, err := newStoppableListener(url.Host, rc.httpstopc)
-	if err != nil {
-		log.Fatalf("raftexample: Failed to listen rafthttp (%v)", err)
-	}
-
-	err = (&http.Server{Handler: rc.transport.Handler()}).Serve(ln)
-	select {
-	case <-rc.httpstopc:
-	default:
-		log.Fatalf("raftexample: Failed to serve rafthttp (%v)", err)
-	}
-	close(rc.httpdonec)
-}*/
 
 func (rc *raftNode) Process(ctx context.Context, m raftpb.Message) error {
 	return rc.node.Step(ctx, m)
