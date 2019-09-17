@@ -13,7 +13,7 @@ const (
 )
 
 type cmdContext struct {
-	command       *command
+	commands      []*command
 	fields        map[string]*proto.Field
 	errno         int32
 	writeBackFlag int //回写数据库类型
@@ -22,29 +22,37 @@ type cmdContext struct {
 }
 
 func (this *cmdContext) getCmd() *command {
-	return this.command
+	return this.commands[0]
 }
 
 func (this *cmdContext) getCmdType() int {
-	return this.command.cmdType
+	return this.commands[0].cmdType
 }
 
 func (this *cmdContext) getTable() string {
-	return this.command.table
+	return this.commands[0].table
 }
 
 func (this *cmdContext) getKey() string {
-	return this.command.key
+	return this.commands[0].key
 }
 
 func (this *cmdContext) getUniKey() string {
-	return this.command.uniKey
+	return this.commands[0].uniKey
 }
 
 func (this *cmdContext) getCacheKey() *cacheKey {
-	return this.command.ckey
+	return this.commands[0].ckey
 }
 
 func (this *cmdContext) reply(errCode int32, fields map[string]*proto.Field, version int64) {
-	this.command.reply(errCode, fields, version)
+	for _, v := range this.commands {
+		v.reply(errCode, fields, version)
+	}
+}
+
+func (this *cmdContext) dontReply() {
+	for _, v := range this.commands {
+		v.dontReply()
+	}
 }

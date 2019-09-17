@@ -115,6 +115,12 @@ func (this *command) reply(errCode int32, fields map[string]*proto.Field, versio
 	}
 }
 
+func (this *command) dontReply() {
+	if atomic.CompareAndSwapInt64(&this.replyed, 0, 1) {
+		atomic.AddInt64(&cmdCount, -1)
+	}
+}
+
 func (this *command) process() {
 
 	atomic.AddInt64(&cmdCount, 1)

@@ -286,11 +286,11 @@ func (s *kvstore) kick(ckey *cacheKey) bool {
 	}
 
 	ctx := &cmdContext{
-		command: &command{
+		commands: []*command{&command{
 			cmdType: cmdKick,
 			uniKey:  ckey.uniKey,
 			ckey:    ckey,
-		},
+		}},
 	}
 
 	s.kickingCount++

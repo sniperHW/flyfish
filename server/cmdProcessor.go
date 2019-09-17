@@ -4,50 +4,24 @@ import (
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
-	"sync/atomic"
 	"time"
 )
 
-func processGet(ckey *cacheKey, cmd *command) *cmdContext {
-	Debugln("processGet", cmd.uniKey)
-	ctx := &cmdContext{
-		command: cmd,
-		fields:  map[string]*proto.Field{},
-	}
-	return ctx
-	/*if ckey.status == cache_missing {
-		cmd.reply(errcode.ERR_NOTFOUND, nil, -1)
-		return nil
-	} else if ckey.status == cache_ok {
-		cmd.reply(errcode.ERR_OK, ckey.values, ckey.version)
-		return nil
-	} else {
-
-		ctx := &cmdContext{
-			command: cmd,
-			fields:  map[string]*proto.Field{},
-		}
-		return ctx
-	}*/
-}
-
-func processSet(ckey *cacheKey, cmd *command) *cmdContext {
+func processSet(ckey *cacheKey, cmd *command, ctx *cmdContext) {
 	Debugln("processSet", cmd.uniKey)
 	if nil != cmd.version {
 		if ckey.status == cache_missing {
 			cmd.reply(errcode.ERR_NOTFOUND, nil, -1)
-			return nil
+			return
 		}
 
 		if ckey.status == cache_ok && *cmd.version != ckey.version {
 			cmd.reply(errcode.ERR_VERSION, nil, ckey.version)
-			return nil
+			return
 		}
 	}
 
-	ctx := &cmdContext{
-		command: cmd,
-	}
+	ctx.commands = append(ctx.commands, cmd)
 
 	if ckey.status == cache_ok {
 		ctx.writeBackFlag = write_back_update //数据存在执行update
@@ -59,20 +33,18 @@ func processSet(ckey *cacheKey, cmd *command) *cmdContext {
 		ctx.fields = map[string]*proto.Field{}
 	}
 
-	return ctx
+	return
 }
 
-func processSetNx(ckey *cacheKey, cmd *command) *cmdContext {
+func processSetNx(ckey *cacheKey, cmd *command, ctx *cmdContext) {
 	Debugln("processSetNx", cmd.uniKey)
 	if ckey.status == cache_ok {
 		//记录已经存在，不能再设置
 		cmd.reply(errcode.ERR_KEY_EXIST, nil, ckey.version)
-		return nil
+		return
 	}
 
-	ctx := &cmdContext{
-		command: cmd,
-	}
+	ctx.commands = append(ctx.commands, cmd)
 
 	if ckey.status == cache_missing {
 		ctx.writeBackFlag = write_back_insert //数据不存在执行insert
@@ -81,41 +53,39 @@ func processSetNx(ckey *cacheKey, cmd *command) *cmdContext {
 		ctx.fields = map[string]*proto.Field{}
 	}
 
-	return ctx
+	return
 }
 
-func processCompareAndSet(ckey *cacheKey, cmd *command) *cmdContext {
+func processCompareAndSet(ckey *cacheKey, cmd *command, ctx *cmdContext) {
 
 	Debugln("processCompareAndSet", cmd.uniKey)
 
 	if ckey.status == cache_missing {
 		cmd.reply(errcode.ERR_NOTFOUND, nil, -1)
-		return nil
+		return
 	} else {
 
 		if ckey.status == cache_ok {
 			v := ckey.values[cmd.cns.oldV.GetName()]
 			if !v.Equal(cmd.cns.oldV) {
 				cmd.reply(errcode.ERR_NOT_EQUAL, ckey.values, ckey.version)
-				return nil
+				return
 			}
 		}
 
-		ctx := &cmdContext{
-			command: cmd,
-			fields:  map[string]*proto.Field{},
-		}
+		ctx.commands = append(ctx.commands, cmd)
+		ctx.fields = map[string]*proto.Field{}
 
 		if ckey.status == cache_ok {
 			ctx.writeBackFlag = write_back_update //数据存在执行update
 			ctx.fields[cmd.cns.oldV.GetName()] = cmd.cns.newV
 		}
 
-		return ctx
+		return
 	}
 }
 
-func processCompareAndSetNx(ckey *cacheKey, cmd *command) *cmdContext {
+func processCompareAndSetNx(ckey *cacheKey, cmd *command, ctx *cmdContext) {
 
 	Debugln("processCompareAndSetNx", cmd.uniKey)
 
@@ -124,14 +94,12 @@ func processCompareAndSetNx(ckey *cacheKey, cmd *command) *cmdContext {
 		if !v.Equal(cmd.cns.oldV) {
 			//存在但不相等
 			cmd.reply(errcode.ERR_NOT_EQUAL, ckey.values, ckey.version)
-			return nil
+			return
 		}
 	}
 
-	ctx := &cmdContext{
-		command: cmd,
-		fields:  map[string]*proto.Field{},
-	}
+	ctx.commands = append(ctx.commands, cmd)
+	ctx.fields = map[string]*proto.Field{}
 
 	if ckey.status == cache_ok {
 		ctx.writeBackFlag = write_back_update //数据存在执行update
@@ -141,28 +109,26 @@ func processCompareAndSetNx(ckey *cacheKey, cmd *command) *cmdContext {
 		ctx.fields[cmd.cns.oldV.GetName()] = cmd.cns.newV
 	}
 
-	return ctx
+	return
 }
 
-func processIncrBy(ckey *cacheKey, cmd *command) *cmdContext {
+func processIncrBy(ckey *cacheKey, cmd *command, ctx *cmdContext) {
 
 	Debugln("processIncrBy", cmd.uniKey)
 
 	if nil != cmd.version {
 		if ckey.status == cache_missing {
 			cmd.reply(errcode.ERR_NOTFOUND, nil, -1)
-			return nil
+			return
 		}
 
 		if ckey.status == cache_ok && *cmd.version != ckey.version {
 			cmd.reply(errcode.ERR_VERSION, nil, ckey.version)
-			return nil
+			return
 		}
 	}
 
-	ctx := &cmdContext{
-		command: cmd,
-	}
+	ctx.commands = append(ctx.commands, cmd)
 
 	if ckey.status == cache_ok || ckey.status == cache_missing {
 
@@ -175,28 +141,26 @@ func processIncrBy(ckey *cacheKey, cmd *command) *cmdContext {
 		ctx.fields = map[string]*proto.Field{}
 	}
 
-	return ctx
+	return
 }
 
-func processDecrBy(ckey *cacheKey, cmd *command) *cmdContext {
+func processDecrBy(ckey *cacheKey, cmd *command, ctx *cmdContext) {
 
 	Debugln("processDecrBy", cmd.uniKey)
 
 	if nil != cmd.version {
 		if ckey.status == cache_missing {
 			cmd.reply(errcode.ERR_NOTFOUND, nil, -1)
-			return nil
+			return
 		}
 
 		if ckey.status == cache_ok && *cmd.version != ckey.version {
 			cmd.reply(errcode.ERR_VERSION, nil, ckey.version)
-			return nil
+			return
 		}
 	}
 
-	ctx := &cmdContext{
-		command: cmd,
-	}
+	ctx.commands = append(ctx.commands, cmd)
 
 	if ckey.status == cache_ok || ckey.status == cache_missing {
 
@@ -209,25 +173,23 @@ func processDecrBy(ckey *cacheKey, cmd *command) *cmdContext {
 		ctx.fields = map[string]*proto.Field{}
 	}
 
-	return ctx
+	return
 }
 
-func processDel(ckey *cacheKey, cmd *command) *cmdContext {
+func processDel(ckey *cacheKey, cmd *command, ctx *cmdContext) {
 
 	Debugln("processDel", cmd.uniKey)
 
 	if ckey.status == cache_missing {
 		cmd.reply(errcode.ERR_NOTFOUND, nil, -1)
-		return nil
+		return
 	} else {
 		if nil != cmd.version && ckey.status == cache_ok && *cmd.version != ckey.version {
 			cmd.reply(errcode.ERR_VERSION, nil, ckey.version)
-			return nil
+			return
 		}
 
-		ctx := &cmdContext{
-			command: cmd,
-		}
+		ctx.commands = append(ctx.commands, cmd)
 
 		if ckey.status == cache_ok {
 			ctx.writeBackFlag = write_back_delete
@@ -235,7 +197,7 @@ func processDel(ckey *cacheKey, cmd *command) *cmdContext {
 			ctx.fields = map[string]*proto.Field{}
 		}
 
-		return ctx
+		return
 	}
 }
 
@@ -254,7 +216,9 @@ func processCmd(ckey *cacheKey, fromClient bool) {
 		return
 	}
 
-	var ctx *cmdContext
+	ctx := &cmdContext{
+		commands: []*command{},
+	}
 
 	now := time.Now()
 
@@ -263,39 +227,49 @@ func processCmd(ckey *cacheKey, fromClient bool) {
 	for ckey.cmdQueue.Len() > 0 {
 		e := ckey.cmdQueue.Front()
 		cmd := e.Value.(*command)
-		ckey.cmdQueue.Remove(e)
 		if now.After(cmd.deadline) {
+			ckey.cmdQueue.Remove(e)
 			//已经超时
-			atomic.AddInt64(&cmdCount, -1)
+			cmd.dontReply()
 		} else {
-			switch cmd.cmdType {
-			case cmdGet:
-				ctx = processGet(ckey, cmd)
-			case cmdSet:
-				ctx = processSet(ckey, cmd)
-			case cmdSetNx:
-				ctx = processSetNx(ckey, cmd)
-			case cmdCompareAndSet:
-				ctx = processCompareAndSet(ckey, cmd)
-			case cmdCompareAndSetNx:
-				ctx = processCompareAndSetNx(ckey, cmd)
-			case cmdIncrBy:
-				ctx = processIncrBy(ckey, cmd)
-			case cmdDecrBy:
-				ctx = processDecrBy(ckey, cmd)
-			case cmdDel:
-				ctx = processDel(ckey, cmd)
-			default:
-				//记录日志
-			}
-
-			if nil != ctx {
-				break
+			if cmd.cmdType == cmdGet {
+				ckey.cmdQueue.Remove(e)
+				//连续的get请求可以合并到同一个ctx钟
+				ctx.commands = append(ctx.commands, cmd)
+			} else {
+				if len(ctx.commands) > 0 {
+					//前面已经有get命令了
+					break
+				} else {
+					ckey.cmdQueue.Remove(e)
+					switch cmd.cmdType {
+					case cmdSet:
+						processSet(ckey, cmd, ctx)
+					case cmdSetNx:
+						processSetNx(ckey, cmd, ctx)
+					case cmdCompareAndSet:
+						processCompareAndSet(ckey, cmd, ctx)
+					case cmdCompareAndSetNx:
+						processCompareAndSetNx(ckey, cmd, ctx)
+					case cmdIncrBy:
+						processIncrBy(ckey, cmd, ctx)
+					case cmdDecrBy:
+						processDecrBy(ckey, cmd, ctx)
+					case cmdDel:
+						processDel(ckey, cmd, ctx)
+					default:
+						//记录日志
+					}
+					//会产生数据变更的命令只能按序执行
+					if len(ctx.commands) > 0 {
+						break
+					}
+				}
 			}
 		}
 	}
 
-	if nil == ctx {
+	if len(ctx.commands) == 0 {
 		ckey.mtx.Unlock()
 		return
 	}
@@ -307,7 +281,7 @@ func processCmd(ckey *cacheKey, fromClient bool) {
 			if config.ReplyBusyOnQueueFull {
 				ctx.reply(errcode.ERR_BUSY, nil, -1)
 			} else {
-				atomic.AddInt64(&cmdCount, -1)
+				ctx.dontReply()
 			}
 			processCmd(ckey, fromClient)
 			return
