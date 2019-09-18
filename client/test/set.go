@@ -38,7 +38,7 @@ func main() {
 	r3 := c.Get("users1", "sniperHW", "name", "phone", "age", "blob").Exec()
 
 	if r3.ErrCode != errcode.ERR_OK {
-		fmt.Println("Set error:", errcode.GetErrorStr(r3.ErrCode))
+		fmt.Println("Get error:", errcode.GetErrorStr(r3.ErrCode))
 	} else {
 		fmt.Println(r3.Fields["name"].GetString())
 		fmt.Println(r3.Fields["phone"].GetString())

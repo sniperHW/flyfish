@@ -55,51 +55,6 @@ func (this *mutilRaftHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 			}
 		}
 	}
-
-	/*if strings.Contains(r.URL.Path, "probing") {
-		this.probingHandler.ServeHTTP(w, r)
-	} else {
-		if to := r.Header.Get("X-Raft-To"); to != "" {
-			if id, err := types.IDFromString(to); err == nil {
-				if t := this.mutilRaft.getTransport(id); nil != t {
-					if tmp := strings.Split(r.URL.Path, "/"); len(tmp) >= 3 {
-						if tmp[2] == "stream" {
-							t.streamHandler.ServeHTTP(w, r)
-						} else if tmp[2] == "snapshot" {
-							t.snapHandler.ServeHTTP(w, r)
-						}
-					}
-				}
-			}
-		}
-	}*/
-
-	/*tmp := strings.Split(r.URL.Path, "/")
-	Infoln(r.URL.Path)
-	if len(tmp) >= 3 {
-		if tmp[2] == "raft" {
-			id, err := strconv.ParseInt(tmp[1], 10, 64)
-			Infoln(id)
-			if nil == err {
-				t := this.mutilRaft.getTransport(int(id))
-				if nil != t {
-					if len(tmp) > 3 {
-						if tmp[3] == "stream" {
-							t.streamHandler.ServeHTTP(w, r)
-						} else if tmp[3] == "snapshot" {
-							t.snapHandler.ServeHTTP(w, r)
-						} else if tmp[3] == "probing" {
-							this.probingHandler.ServeHTTP(w, r)
-						}
-					} else {
-						t.pipelineHandler.ServeHTTP(w, r)
-					}
-				} else {
-					panic(id)
-				}
-			}
-		}
-	}*/
 }
 
 func (this *mutilRaft) addTransport(id types.ID, t *rafthttp.Transport) {

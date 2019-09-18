@@ -370,6 +370,7 @@ func (s *kvstore) readCommits(once bool, commitC <-chan interface{}, errorC <-ch
 	for d := range commitC {
 		switch d.(type) {
 		case *commitedBatchBinlog:
+
 			data := d.(*commitedBatchBinlog)
 			if data == replaySnapshot {
 				// done replaying log; new data incoming
@@ -627,8 +628,11 @@ func (s *kvstore) replay(data []byte) bool {
 		ckey, _ := slot.kv[unikey]
 		recordCount++
 
+		Debugln(tt, unikey)
+
 		if tt == binlog_snapshot {
 			if nil == ckey {
+				Debugln("newCacheKey", unikey)
 				tmp := strings.Split(unikey, ":")
 				ckey = newCacheKey(s, slot, tmp[0], strings.Join(tmp[1:], ""), unikey, false)
 				s.keySize++
@@ -701,7 +705,7 @@ func (s *kvstore) replay(data []byte) bool {
 }
 
 func (s *kvstore) moveTmpkv2OK(ckey *cacheKey) {
-	Infoln("moveTmpkv2OK", ckey.uniKey)
+	Debugln("moveTmpkv2OK", ckey.uniKey)
 	s.mtx.Lock()
 	slot := ckey.slot
 	slot.mtx.Lock()

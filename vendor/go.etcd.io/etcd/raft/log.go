@@ -71,7 +71,7 @@ func newLogWithSize(storage Storage, logger Logger, maxNextEntsSize uint64) *raf
 		panic(err) // TODO(bdarnell)
 	}
 
-	fmt.Println(firstIndex, lastIndex)
+	//fmt.Println(firstIndex, lastIndex)
 
 	log.unstable.offset = lastIndex + 1
 	log.unstable.logger = logger

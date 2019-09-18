@@ -152,6 +152,7 @@ func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSna
 func (rc *raftNode) isLeader() bool {
 	rc.muLeader.Lock()
 	defer rc.muLeader.Unlock()
+	//Infoln("isLeader", rc.leader == rc.id, rc.leader, rc.id)
 	return rc.leader == rc.id
 }
 
@@ -445,7 +446,8 @@ func (rc *raftNode) startRaft() {
 
 	rpeers := make([]raft.Peer, len(rc.peers))
 	for i := range rpeers {
-		rpeers[i] = raft.Peer{ID: uint64(rc.id)}
+		id := (i+1)<<16 + rc.region
+		rpeers[i] = raft.Peer{ID: uint64(id)}
 	}
 	c := &raft.Config{
 		ID:                        uint64(rc.id),
@@ -833,7 +835,7 @@ func (rc *raftNode) serveChannels() {
 				if oldLeader == rc.id && rc.leader != rc.id {
 					loseLeadership = true
 				}
-				Infoln(rd.SoftState.Lead, "is leader")
+				Infoln(rd.SoftState.Lead>>16, "is leader", rc.isLeader(), rc.leader, rc.id)
 			}
 
 			rc.wal.Save(rd.HardState, rd.Entries)

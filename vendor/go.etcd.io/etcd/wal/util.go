@@ -50,7 +50,7 @@ func searchIndex(lg *zap.Logger, names []string, index uint64) (int, bool) {
 			}
 		}
 		if index >= curIndex {
-			fmt.Println(index, i)
+			//fmt.Println(index, i)
 			return i, true
 		}
 	}

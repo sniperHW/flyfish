@@ -13,7 +13,6 @@ const (
 	cache_new     = 1
 	cache_ok      = 2
 	cache_missing = 3
-	//cache_kicking = 4
 )
 
 type cacheKey struct {
@@ -35,7 +34,7 @@ type cacheKey struct {
 	values          map[string]*proto.Field //关联的字段
 	modifyFields    map[string]bool         //发生变更尚未更新到sql数据库的字段
 	writeBackLocked bool                    //是否已经提交sql回写处理
-	make_snapshot   bool                    //费否处于快照处理过程中
+	make_snapshot   bool                    //是否处于快照处理过程中
 	kicking         bool
 	isTmp           bool
 }
