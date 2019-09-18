@@ -33,7 +33,7 @@ func (this *batchBinlog) onError(err int) {
 		}
 
 		if !ckey.tryRemoveTmpKey(err) {
-			v.getCacheKey().processQueueCmd()
+			ckey.processQueueCmd()
 		}
 	}
 	ctxArrayPut(this.ctxs)

@@ -6,8 +6,11 @@ import (
 
 func onSqlExecError(ctx *cmdContext) {
 	Debugln("onSqlExecError key", ctx.getUniKey())
+	ckey := ctx.getCacheKey()
 	ctx.reply(errcode.ERR_SQLERROR, nil, -1)
-	ctx.getCacheKey().processQueueCmd()
+	if !ckey.tryRemoveTmpKey(errcode.ERR_SQLERROR) {
+		ckey.processQueueCmd()
+	}
 }
 
 /*

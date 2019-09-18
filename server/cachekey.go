@@ -180,22 +180,6 @@ func (this *cacheKey) convertStr(fieldName string, value string) *proto.Field {
 	}
 }
 
-/*
-func (this *cacheKey) setDefaultValue() {
-	defer this.mtx.Unlock()
-	this.mtx.Lock()
-	this.setDefaultValueNoLock()
-}
-
-func (this *cacheKey) setDefaultValueNoLock() {
-	this.values = map[string]*proto.Field{}
-	meta := this.getMeta()
-	for _, v := range meta.fieldMetas {
-		defaultV := proto.PackField(v.name, v.defaultV)
-		this.values[v.name] = defaultV
-	}
-}*/
-
 func (this *cacheKey) setValueNoLock(ctx *cmdContext) {
 	modify := false
 	if nil == this.values {
