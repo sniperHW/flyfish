@@ -38,18 +38,16 @@ type Config struct {
 	SqlLoaderCount      int
 	SqlUpdaterCount     int
 
-	ServiceHost          string
-	ServicePort          int
-	BinlogDir            string
-	BinlogPrefix         string
-	ReplyBusyOnQueueFull bool
-	Compress             bool
-	FlushInterval        int
-	FlushSize            int
-	FlushCount           int
-	ReadFlushInterval    int
-	MaxBinlogCount       int32
-	MaxBinlogFileSize    int64
+	ServiceHost string
+	ServicePort int
+	//BinlogDir             string
+	//BinlogPrefix          string
+	ReplyBusyOnQueueFull  bool
+	Compress              bool
+	BatchByteSize         int
+	BatchCount            int
+	ProposalFlushInterval int
+	ReadFlushInterval     int
 
 	DBConfig struct {
 		SqlType string

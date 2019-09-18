@@ -44,12 +44,12 @@ import (
 	"time"
 )
 
-var replayOK *commitedBatchBinlog = &commitedBatchBinlog{}
-var replaySnapshot *commitedBatchBinlog = &commitedBatchBinlog{}
+var replayOK *commitedBatchProposal = &commitedBatchProposal{}
+var replaySnapshot *commitedBatchProposal = &commitedBatchProposal{}
 
 // A key-value stream backed by raft
 type raftNode struct {
-	proposeC    <-chan *batchBinlog      //<-chan []byte            // proposed messages (k,v)
+	proposeC    <-chan *batchProposal    //<-chan []byte            // proposed messages (k,v)
 	confChangeC <-chan raftpb.ConfChange // proposed cluster config changes
 	commitC     chan<- interface{}       //chan<- *[]byte           // entries committed to log (k,v)
 	errorC      chan<- error             // errors from raft session
@@ -87,7 +87,7 @@ type raftNode struct {
 	snapshottingOK chan struct{}
 
 	muPendingPropose sync.Mutex
-	pendingPropose   *list.List //[]*batchBinlog
+	pendingPropose   *list.List //[]*batchProposal
 	proposeIndex     int64
 
 	muLeader sync.Mutex
@@ -109,7 +109,7 @@ var defaultSnapshotCount uint64 = 10000
 // provided the proposal channel. All log entries are replayed over the
 // commit channel, followed by a nil message (to indicate the channel is
 // current), then new log entries. To shutdown, close proposeC and read errorC.
-func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSnapshot func() [][]kvsnap, proposeC <-chan *batchBinlog,
+func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSnapshot func() [][]kvsnap, proposeC <-chan *batchProposal,
 	confChangeC <-chan raftpb.ConfChange) (*raftNode, <-chan interface{}, <-chan error, <-chan *snap.Snapshotter, chan<- *readBatchSt) {
 
 	commitC := make(chan interface{})
@@ -134,7 +134,7 @@ func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSna
 		stopc:            make(chan struct{}),
 		snapshotterReady: make(chan *snap.Snapshotter, 1),
 		snapshottingOK:   make(chan struct{}),
-		pendingPropose:   list.New(), //[]*batchBinlog{}
+		pendingPropose:   list.New(), //[]*batchProposal{}
 		mutilRaft:        mutilRaft,
 		nodeID:           nodeID,
 		region:           region,
@@ -294,18 +294,18 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 			}
 
 			index := int64(binary.BigEndian.Uint64(ents[i].Data[0:8]))
-			committedEntry := &commitedBatchBinlog{
+			committedEntry := &commitedBatchProposal{
 				data: ents[i].Data[8:],
 			}
 			rc.muPendingPropose.Lock()
 			front := rc.pendingPropose.Front()
 			if nil != front {
-				if front.Value.(*batchBinlog).index == index {
-					committedEntry.ctxs = front.Value.(*batchBinlog).ctxs
-					strPut(front.Value.(*batchBinlog).binlogStr)
+				if front.Value.(*batchProposal).index == index {
+					committedEntry.ctxs = front.Value.(*batchProposal).ctxs
+					strPut(front.Value.(*batchProposal).proposalStr)
 					rc.pendingPropose.Remove(front)
 				} else {
-					Infoln("index not match", index, front.Value.(*batchBinlog).index)
+					Infoln("index not match", index, front.Value.(*batchProposal).index)
 				}
 			}
 			rc.muPendingPropose.Unlock()
@@ -570,7 +570,7 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 
 		for _, v := range clone {
 			for _, vv := range v {
-				ss.appendBinLog(binlog_snapshot, vv.uniKey, vv.values, vv.version)
+				ss.appendProposal(proposal_snapshot, vv.uniKey, vv.values, vv.version)
 			}
 		}
 
@@ -602,8 +602,8 @@ func (rc *raftNode) onLoseLeadership() {
 	rc.muPendingPropose.Unlock()
 
 	for e := pendingPropose.Front(); e != nil; e = e.Next() {
-		v := e.Value.(*batchBinlog)
-		strPut(v.binlogStr)
+		v := e.Value.(*batchProposal)
+		strPut(v.proposalStr)
 		v.onError(errcode.ERR_NOT_LEADER)
 	}
 
@@ -627,21 +627,21 @@ func (rc *raftNode) startProposePipeline() {
 			closed, localList := rc.pipeline.Get()
 			for _, vv := range localList {
 
-				prop := vv.(*batchBinlog)
+				prop := vv.(*batchProposal)
 
 				if !rc.isLeader() {
-					strPut(prop.binlogStr)
+					strPut(prop.proposalStr)
 					prop.onError(errcode.ERR_NOT_LEADER)
 				} else {
 					// blocks until accepted by raft state machine
 					prop.index = atomic.AddInt64(&rc.proposeIndex, 1)
-					binary.BigEndian.PutUint64(prop.binlogStr.data[:8], uint64(prop.index))
+					binary.BigEndian.PutUint64(prop.proposalStr.data[:8], uint64(prop.index))
 					rc.muPendingPropose.Lock()
 					e := rc.pendingPropose.PushBack(prop)
 					rc.muPendingPropose.Unlock()
 
 					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-					err := rc.node.Propose(ctx, prop.binlogStr.bytes())
+					err := rc.node.Propose(ctx, prop.proposalStr.bytes())
 					cancel()
 
 					if nil != err {
@@ -680,7 +680,7 @@ func (rc *raftNode) startProposePipeline() {
 								errCode = errcode.ERR_RAFT
 							}
 
-							strPut(prop.binlogStr)
+							strPut(prop.proposalStr)
 							prop.onError(errCode)
 						}
 					}
@@ -835,7 +835,7 @@ func (rc *raftNode) serveChannels() {
 				if oldLeader == rc.id && rc.leader != rc.id {
 					loseLeadership = true
 				}
-				Infoln(rd.SoftState.Lead>>16, "is leader", rc.isLeader(), rc.leader, rc.id)
+				Infoln(rd.SoftState.Lead>>16, "is leader")
 			}
 
 			rc.wal.Save(rd.HardState, rd.Entries)

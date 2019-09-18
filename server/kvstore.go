@@ -45,7 +45,7 @@ type ctxArray struct {
 func (this *ctxArray) append(ctx *cmdContext) {
 	//FlushCount可能因为重载配置文件变大，导致原有空间不足
 	if this.count >= len(this.ctxs) {
-		ctxs := make([]*cmdContext, conf.GetConfig().FlushCount)
+		ctxs := make([]*cmdContext, conf.GetConfig().BatchCount)
 		copy(ctxs, this.ctxs)
 		this.ctxs = ctxs
 	}
@@ -60,7 +60,7 @@ func (this *ctxArray) full() bool {
 var ctxArrayPool = sync.Pool{
 	New: func() interface{} {
 		return &ctxArray{
-			ctxs:  make([]*cmdContext, conf.GetConfig().FlushCount),
+			ctxs:  make([]*cmdContext, conf.GetConfig().BatchCount),
 			count: 0,
 		}
 	},
@@ -88,11 +88,11 @@ func (this *kvSlot) removeTmpKv(ckey *cacheKey) {
 }
 
 type proposeBatch struct {
-	ctxs       *ctxArray
-	nextFlush  time.Time
-	binlogStr  *str
-	batchCount int32 //待序列化到文件的binlog数量
-	timer      *timer.Timer
+	ctxs        *ctxArray
+	nextFlush   time.Time
+	proposalStr *str
+	batchCount  int32 //待序列化到文件的binlog数量
+	timer       *timer.Timer
 }
 
 type readBatch struct {
@@ -119,7 +119,7 @@ func (this *readBatchSt) onError(err int) {
 
 // a key-value store backed by raft
 type kvstore struct {
-	proposeC    chan<- *batchBinlog // channel for proposing updates
+	proposeC    chan<- *batchProposal // channel for proposing updates
 	readReqC    chan<- *readBatchSt
 	snapshotter *snap.Snapshotter
 	slots       []*kvSlot //map[string]*cacheKey
@@ -181,7 +181,7 @@ func (this *storeGroup) tryProposeBatch() {
 	}
 }
 
-func newKVStore(rn *raftNode, snapshotter *snap.Snapshotter, proposeC chan<- *batchBinlog, commitC <-chan interface{}, errorC <-chan error, readReqC chan<- *readBatchSt) *kvstore {
+func newKVStore(rn *raftNode, snapshotter *snap.Snapshotter, proposeC chan<- *batchProposal, commitC <-chan interface{}, errorC <-chan error, readReqC chan<- *readBatchSt) *kvstore {
 
 	config := conf.GetConfig()
 
@@ -190,7 +190,7 @@ func newKVStore(rn *raftNode, snapshotter *snap.Snapshotter, proposeC chan<- *ba
 		slots:       []*kvSlot{},
 		snapshotter: snapshotter,
 		proposeBatch: proposeBatch{
-			nextFlush: time.Now().Add(time.Millisecond * time.Duration(config.FlushInterval)),
+			nextFlush: time.Now().Add(time.Millisecond * time.Duration(config.ProposalFlushInterval)),
 		},
 		readBatch: readBatch{
 			nextFlush: time.Now().Add(time.Millisecond * time.Duration(config.ReadFlushInterval)),
@@ -213,7 +213,7 @@ func newKVStore(rn *raftNode, snapshotter *snap.Snapshotter, proposeC chan<- *ba
 	s.readCommits(true, commitC, errorC)
 	// read commits from raft into kvStore map until error
 
-	s.proposeBatch.timer = timer.Repeat(time.Millisecond*time.Duration(config.FlushInterval), nil, func(t *timer.Timer) {
+	s.proposeBatch.timer = timer.Repeat(time.Millisecond*time.Duration(config.ProposalFlushInterval), nil, func(t *timer.Timer) {
 		s.mtx.Lock()
 		s.tryProposeBatch()
 		s.mtx.Unlock()
@@ -314,14 +314,14 @@ func (s *kvstore) kick(ckey *cacheKey) bool {
 
 	s.proposeBatch.ctxs.append(ctx)
 
-	s.appendBinLog(binlog_kick, ckey.uniKey, nil, 0)
+	s.appendProposal(proposal_kick, ckey.uniKey, nil, 0)
 
 	s.tryProposeBatch()
 
 	return true
 }
 
-func (s *kvstore) Propose(propose *batchBinlog) {
+func (s *kvstore) Propose(propose *batchProposal) {
 	s.proposeC <- propose
 }
 
@@ -330,7 +330,7 @@ func (s *kvstore) tryReadBatch() {
 
 		config := conf.GetConfig()
 
-		if s.readBatch.batchCount >= int32(config.FlushCount) || time.Now().After(s.readBatch.nextFlush) {
+		if s.readBatch.batchCount >= int32(config.BatchCount) || time.Now().After(s.readBatch.nextFlush) {
 
 			s.readBatch.batchCount = 0
 
@@ -369,9 +369,9 @@ func (s *kvstore) issueReadReq(c *cmdContext) {
 func (s *kvstore) readCommits(once bool, commitC <-chan interface{}, errorC <-chan error) {
 	for d := range commitC {
 		switch d.(type) {
-		case *commitedBatchBinlog:
+		case *commitedBatchProposal:
 
-			data := d.(*commitedBatchBinlog)
+			data := d.(*commitedBatchProposal)
 			if data == replaySnapshot {
 				// done replaying log; new data incoming
 				// OR signaled to load snapshot
@@ -630,7 +630,7 @@ func (s *kvstore) replay(data []byte) bool {
 
 		Debugln(tt, unikey)
 
-		if tt == binlog_snapshot {
+		if tt == proposal_snapshot {
 			if nil == ckey {
 				Debugln("newCacheKey", unikey)
 				tmp := strings.Split(unikey, ":")
@@ -651,7 +651,7 @@ func (s *kvstore) replay(data []byte) bool {
 				ckey.status = cache_ok
 			}
 			ckey.mtx.Unlock()
-		} else if tt == binlog_update {
+		} else if tt == proposal_update {
 			if ckey != nil {
 				if ckey.status != cache_ok || ckey.values == nil {
 					Fatalln("invaild tt", unikey, tt, recordCount, offset)
@@ -669,7 +669,7 @@ func (s *kvstore) replay(data []byte) bool {
 			} else {
 				panic("binlog_update key == nil")
 			}
-		} else if tt == binlog_delete {
+		} else if tt == proposal_delete {
 			if ckey != nil {
 				if ckey.status != cache_ok {
 					slot.mtx.Unlock()
@@ -686,13 +686,13 @@ func (s *kvstore) replay(data []byte) bool {
 			} else {
 				panic("binlog_delete key == nil")
 			}
-		} else if tt == binlog_kick {
+		} else if tt == proposal_kick {
 			if ckey != nil {
 				s.keySize--
 				s.removeLRU(ckey)
 				delete(slot.kv, unikey)
 			} else {
-				panic("binlog_kick key == nil")
+				panic("proposal_kick key == nil")
 			}
 		} else {
 			slot.mtx.Unlock()
@@ -767,7 +767,7 @@ func initKvGroup(mutilRaft *mutilRaft, id *int, cluster *string, mod int) *store
 
 	for i := 1; i <= mod; i++ {
 
-		proposeC := make(chan *batchBinlog)
+		proposeC := make(chan *batchProposal)
 		confChangeC := make(chan raftpb.ConfChange)
 
 		var store *kvstore

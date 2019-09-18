@@ -9,20 +9,20 @@ import (
 )
 
 const (
-	binlog_none     = 0
-	binlog_snapshot = 1
-	binlog_update   = 2
-	binlog_delete   = 3
-	binlog_kick     = 4
+	proposal_none     = 0
+	proposal_snapshot = 1
+	proposal_update   = 2
+	proposal_delete   = 3
+	proposal_kick     = 4
 )
 
-type batchBinlog struct {
-	binlogStr *str
-	ctxs      *ctxArray
-	index     int64
+type batchProposal struct {
+	proposalStr *str
+	ctxs        *ctxArray
+	index       int64
 }
 
-func (this *batchBinlog) onError(err int) {
+func (this *batchProposal) onError(err int) {
 	for i := 0; i < this.ctxs.count; i++ {
 		v := this.ctxs.ctxs[i]
 		ckey := v.getCacheKey()
@@ -39,7 +39,7 @@ func (this *batchBinlog) onError(err int) {
 	ctxArrayPut(this.ctxs)
 }
 
-type commitedBatchBinlog struct {
+type commitedBatchProposal struct {
 	data []byte
 	ctxs *ctxArray
 }
@@ -50,40 +50,40 @@ func (this *kvstore) tryProposeBatch() {
 
 		config := conf.GetConfig()
 
-		if this.proposeBatch.batchCount >= int32(config.FlushCount) || this.proposeBatch.binlogStr.dataLen() >= config.FlushSize || time.Now().After(this.proposeBatch.nextFlush) {
+		if this.proposeBatch.batchCount >= int32(config.BatchCount) || this.proposeBatch.proposalStr.dataLen() >= config.BatchByteSize || time.Now().After(this.proposeBatch.nextFlush) {
 
 			this.proposeBatch.batchCount = 0
 
-			binlogStr := this.proposeBatch.binlogStr
+			proposalStr := this.proposeBatch.proposalStr
 			ctxs := this.proposeBatch.ctxs
 
-			this.proposeBatch.binlogStr = nil
+			this.proposeBatch.proposalStr = nil
 			this.proposeBatch.ctxs = nil
 
-			binary.BigEndian.PutUint64(binlogStr.data[:8], uint64(0))
+			binary.BigEndian.PutUint64(proposalStr.data[:8], uint64(0))
 
-			this.Propose(&batchBinlog{
-				binlogStr: binlogStr,
-				ctxs:      ctxs,
+			this.Propose(&batchProposal{
+				proposalStr: proposalStr,
+				ctxs:        ctxs,
 			})
 		}
 	}
 }
 
-func (this *kvstore) appendBinLog(tt int, unikey string, fields map[string]*proto.Field, version int64) {
+func (this *kvstore) appendProposal(tt int, unikey string, fields map[string]*proto.Field, version int64) {
 
-	if nil == this.proposeBatch.binlogStr {
-		this.proposeBatch.binlogStr = strGet()
-		this.proposeBatch.binlogStr.appendInt64(0)
+	if nil == this.proposeBatch.proposalStr {
+		this.proposeBatch.proposalStr = strGet()
+		this.proposeBatch.proposalStr.appendInt64(0)
 	}
 
 	this.proposeBatch.batchCount++
 
 	if this.proposeBatch.batchCount == 1 {
-		this.proposeBatch.nextFlush = time.Now().Add(time.Millisecond * time.Duration(conf.GetConfig().FlushInterval))
+		this.proposeBatch.nextFlush = time.Now().Add(time.Millisecond * time.Duration(conf.GetConfig().ProposalFlushInterval))
 	}
 
-	this.proposeBatch.binlogStr.appendBinLog(tt, unikey, fields, version)
+	this.proposeBatch.proposalStr.appendProposal(tt, unikey, fields, version)
 }
 
 func fillDefaultValue(meta *table_meta, ctx *cmdContext) {
@@ -99,7 +99,7 @@ func (this *kvstore) checkContext(ckey *cacheKey, ctx *cmdContext) (bool, int) {
 	ckey.mtx.Lock()
 
 	gotErr := false
-	binop := binlog_none
+	proposalOP := proposal_none
 	sqlFlag := write_back_none
 
 	switch ckey.sqlFlag {
@@ -139,7 +139,7 @@ func (this *kvstore) checkContext(ckey *cacheKey, ctx *cmdContext) (bool, int) {
 		ckey.mtx.Unlock()
 		ctx.reply(errcode.ERR_ERROR, nil, -1)
 		ckey.processQueueCmd()
-		return false, binop
+		return false, proposalOP
 	} else {
 
 		cmdType := ctx.getCmdType()
@@ -174,21 +174,21 @@ func (this *kvstore) checkContext(ckey *cacheKey, ctx *cmdContext) (bool, int) {
 		switch sqlFlag {
 		case write_back_delete:
 			if ckey.snapshoted {
-				binop = binlog_delete
+				proposalOP = proposal_delete
 			} else {
-				binop = binlog_snapshot
+				proposalOP = proposal_snapshot
 			}
 		case write_back_insert, write_back_insert_update:
-			binop = binlog_snapshot
+			proposalOP = proposal_snapshot
 		case write_back_update:
 			if ckey.snapshoted {
-				binop = binlog_update
+				proposalOP = proposal_update
 			} else {
-				binop = binlog_snapshot
+				proposalOP = proposal_snapshot
 			}
 		}
 
-		if binop == binlog_snapshot && sqlFlag != write_back_delete && ckey.values != nil {
+		if proposalOP == proposal_snapshot && sqlFlag != write_back_delete && ckey.values != nil {
 			for k, v := range ckey.values {
 				if _, ok := ctx.fields[k]; !ok {
 					ctx.fields[k] = v
@@ -198,7 +198,7 @@ func (this *kvstore) checkContext(ckey *cacheKey, ctx *cmdContext) (bool, int) {
 
 		ckey.mtx.Unlock()
 		ctx.writeBackFlag = sqlFlag
-		return true, binop
+		return true, proposalOP
 	}
 }
 
@@ -226,7 +226,7 @@ func (this *kvstore) issueUpdate(ctx *cmdContext) {
 
 	this.proposeBatch.ctxs.append(ctx)
 
-	this.appendBinLog(binop, ckey.uniKey, ctx.fields, ctx.version)
+	this.appendProposal(binop, ckey.uniKey, ctx.fields, ctx.version)
 
 	this.tryProposeBatch()
 
@@ -247,7 +247,7 @@ func (this *kvstore) issueAddKv(ctx *cmdContext) {
 
 	this.proposeBatch.ctxs.append(ctx)
 
-	this.appendBinLog(binlog_snapshot, ctx.getCacheKey().uniKey, ctx.fields, ctx.version)
+	this.appendProposal(proposal_snapshot, ctx.getCacheKey().uniKey, ctx.fields, ctx.version)
 
 	this.tryProposeBatch()
 
