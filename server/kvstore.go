@@ -78,8 +78,13 @@ func ctxArrayPut(w *ctxArray) {
 var kvSlotSize int = 129
 
 type kvSlot struct {
-	kv  map[string]*cacheKey
-	mtx sync.Mutex
+	tmpkv map[string]*cacheKey
+	kv    map[string]*cacheKey
+	mtx   sync.Mutex
+}
+
+func (this *kvSlot) removeTmpKv(ckey *cacheKey) {
+	delete(this.tmpkv, ckey.uniKey)
 }
 
 type proposeBatch struct {
@@ -196,7 +201,8 @@ func newKVStore(rn *raftNode, snapshotter *snap.Snapshotter, proposeC chan<- *ba
 
 	for i := 0; i < kvSlotSize; i++ {
 		s.slots = append(s.slots, &kvSlot{
-			kv: map[string]*cacheKey{},
+			kv:    map[string]*cacheKey{},
+			tmpkv: map[string]*cacheKey{},
 		})
 	}
 
@@ -393,21 +399,27 @@ func (s *kvstore) readCommits(once bool, commitC <-chan interface{}, errorC <-ch
 					for i := 0; i < data.ctxs.count; i++ {
 						v := data.ctxs.ctxs[i]
 						if v.getCmdType() != cmdKick {
-							v.reply(errcode.ERR_OK, v.fields, v.version)
+							v.reply(v.errno, v.fields, v.version)
 							ckey := v.getCacheKey()
 							ckey.mtx.Lock()
 							ckey.snapshoted = true
 
+							if ckey.isTmp {
+								//将ckey从tmpkv移动到kv
+								ckey.isTmp = false
+								s.moveTmpkv2OK(ckey)
+							}
+
 							if v.writeBackFlag == write_back_insert || v.writeBackFlag == write_back_update || v.writeBackFlag == write_back_insert_update {
 								ckey.setValueNoLock(v)
 								ckey.setOKNoLock(v.version)
-							} else {
+							} else if v.writeBackFlag == write_back_delete {
 								ckey.setMissingNoLock()
 							}
 
 							ckey.sqlFlag = v.writeBackFlag
 
-							if !ckey.writeBackLocked {
+							if ckey.sqlFlag != write_back_none && !ckey.writeBackLocked {
 								ckey.writeBackLocked = true
 								pushSqlWriteReq(ckey)
 							}
@@ -618,7 +630,7 @@ func (s *kvstore) replay(data []byte) bool {
 		if tt == binlog_snapshot {
 			if nil == ckey {
 				tmp := strings.Split(unikey, ":")
-				ckey = newCacheKey(s, slot, tmp[0], strings.Join(tmp[1:], ""), unikey)
+				ckey = newCacheKey(s, slot, tmp[0], strings.Join(tmp[1:], ""), unikey, false)
 				s.keySize++
 				slot.kv[unikey] = ckey
 				s.updateLRU(ckey)
@@ -671,16 +683,12 @@ func (s *kvstore) replay(data []byte) bool {
 				panic("binlog_delete key == nil")
 			}
 		} else if tt == binlog_kick {
-			/*
-			 *   ckey == nil 是合法的
-			 *   例如,leader接到一个get请求，在本地内存插入一对kv,但因为没有对数据做变更，所以不会生成一个proposal,也就不会将
-			 *   这个事件同步到副本。
-			 *   过了一段时间,leader要kick这个kv,kick操作将同步到所有副本，此时副本内存中并没有这个kv
-			 */
 			if ckey != nil {
 				s.keySize--
 				s.removeLRU(ckey)
 				delete(slot.kv, unikey)
+			} else {
+				panic("binlog_kick key == nil")
 			}
 		} else {
 			slot.mtx.Unlock()
@@ -692,6 +700,19 @@ func (s *kvstore) replay(data []byte) bool {
 	return true
 }
 
+func (s *kvstore) moveTmpkv2OK(ckey *cacheKey) {
+	Infoln("moveTmpkv2OK", ckey.uniKey)
+	s.mtx.Lock()
+	slot := ckey.slot
+	slot.mtx.Lock()
+	delete(slot.tmpkv, ckey.uniKey)
+	slot.kv[ckey.uniKey] = ckey
+	s.keySize++
+	s.updateLRU(ckey)
+	slot.mtx.Unlock()
+	s.mtx.Unlock()
+}
+
 func (s *kvstore) getCacheKeyAndPushCmd(cmd *command) *cacheKey {
 	s.mtx.Lock()
 
@@ -700,6 +721,9 @@ func (s *kvstore) getCacheKeyAndPushCmd(cmd *command) *cacheKey {
 	slot.mtx.Lock()
 
 	k, ok := slot.kv[cmd.uniKey]
+	if !ok {
+		k, ok = slot.tmpkv[cmd.uniKey]
+	}
 	if ok {
 		if !checkMetaVersion(k.meta.meta_version) {
 			newMeta := getMetaByTable(cmd.table)
@@ -711,15 +735,15 @@ func (s *kvstore) getCacheKeyAndPushCmd(cmd *command) *cacheKey {
 		}
 		cmd.ckey = k
 		k.pushCmd(cmd)
-		s.updateLRU(k)
 	} else {
-		k = newCacheKey(s, slot, cmd.table, cmd.key, cmd.uniKey)
+		k = newCacheKey(s, slot, cmd.table, cmd.key, cmd.uniKey, true)
 		if nil != k {
+			/*   新key只能放在tmpkv中,插入key的操作将向副本同步
+			 *   当操作被提交，才将key移到正式kv中
+			 */
 			cmd.ckey = k
 			k.pushCmd(cmd)
-			s.updateLRU(k)
-			slot.kv[cmd.uniKey] = k
-			s.keySize++
+			slot.tmpkv[cmd.uniKey] = k
 		}
 	}
 

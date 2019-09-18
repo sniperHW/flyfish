@@ -10,16 +10,20 @@ func onSqlExecError(ctx *cmdContext) {
 	ctx.getCacheKey().processQueueCmd()
 }
 
+/*
+ *  如果数据库中不存在，也需要在内存中建立kv,并将其标记为缺失以供后续访问
+ */
 func onSqlNotFound(ctx *cmdContext) {
 	Debugln("onSqlNotFound key", ctx.getUniKey())
 	cmdType := ctx.getCmdType()
 	ckey := ctx.getCacheKey()
 	ckey.setMissing()
-	if cmdType == cmdDel || cmdType == cmdCompareAndSet {
-		ctx.reply(errcode.ERR_NOTFOUND, nil, -1)
-		ckey.processQueueCmd()
-	} else if cmdType == cmdGet {
-		ckey.store.issueReadReq(ctx)
+	if cmdType == cmdDel || cmdType == cmdCompareAndSet || cmdType == cmdGet {
+		ctx.errno = errcode.ERR_NOTFOUND
+		ctx.fields = nil
+		ctx.version = 0
+		//向副本同步插入操作
+		ckey.store.issueAddKv(ctx)
 	} else {
 		ctx.writeBackFlag = write_back_insert
 		ckey.store.issueUpdate(ctx)
@@ -30,11 +34,15 @@ func onSqlLoadOKGet(ctx *cmdContext) {
 	Debugln("onSqlLoadOKGet")
 	version := ctx.fields["__version__"].GetInt()
 	ckey := ctx.getCacheKey()
+
 	ckey.mtx.Lock()
 	ckey.setValueNoLock(ctx)
 	ckey.setOKNoLock(version)
 	ckey.mtx.Unlock()
-	ckey.store.issueReadReq(ctx)
+
+	ctx.errno = errcode.ERR_OK
+	ctx.version = version
+	ckey.store.issueAddKv(ctx)
 }
 
 func onSqlLoadOKSet(ctx *cmdContext) {
@@ -47,6 +55,7 @@ func onSqlLoadOKSet(ctx *cmdContext) {
 
 	cmd := ctx.getCmd()
 	ckey := ctx.getCacheKey()
+
 	ckey.mtx.Lock()
 	ckey.setValueNoLock(ctx)
 	ckey.setOKNoLock(version)
@@ -58,24 +67,27 @@ func onSqlLoadOKSet(ctx *cmdContext) {
 	case cmdSet:
 		if nil != cmd.version && *cmd.version != version {
 			//版本号不对
-			ctx.reply(errcode.ERR_VERSION, nil, version)
-			ckey.processQueueCmd()
+			ctx.errno = errcode.ERR_VERSION
+			ctx.version = version
+			ckey.store.issueAddKv(ctx)
 			return
 		} else {
-			ctx.fields = ctx.getCmd().fields //ctx.command.fields
+			ctx.fields = ctx.getCmd().fields
 		}
 	case cmdCompareAndSet, cmdCompareAndSetNx:
 		dbV := ctx.fields[cmd.cns.oldV.GetName()]
 		if !dbV.Equal(cmd.cns.oldV) {
-			ctx.reply(errcode.ERR_NOT_EQUAL, ctx.fields, version)
-			ckey.processQueueCmd()
+			ctx.errno = errcode.ERR_NOT_EQUAL
+			ctx.version = version
+			ckey.store.issueAddKv(ctx)
 			return
 		} else {
 			ctx.fields[cmd.cns.oldV.GetName()] = cmd.cns.newV
 		}
 	case cmdSetNx:
-		ctx.reply(errcode.ERR_KEY_EXIST, nil, version)
-		ckey.processQueueCmd()
+		ctx.errno = errcode.ERR_KEY_EXIST
+		ctx.version = version
+		ckey.store.issueAddKv(ctx)
 		return
 	default:
 	}
@@ -94,11 +106,11 @@ func onSqlLoadOKDel(ctx *cmdContext) {
 	ckey.setValueNoLock(ctx)
 	ckey.setOKNoLock(version)
 	ckey.mtx.Unlock()
-
 	if nil != cmd.version && *cmd.version != version {
 		//版本号不对
-		ctx.reply(errcode.ERR_VERSION, nil, version)
-		ckey.processQueueCmd()
+		ctx.errno = errcode.ERR_VERSION
+		ctx.version = version
+		ckey.store.issueAddKv(ctx)
 	} else {
 		ctx.writeBackFlag = write_back_delete
 		ckey.store.issueUpdate(ctx)

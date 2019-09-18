@@ -637,6 +637,7 @@ func (rc *raftNode) startProposePipeline() {
 					rc.muPendingPropose.Lock()
 					e := rc.pendingPropose.PushBack(prop)
 					rc.muPendingPropose.Unlock()
+
 					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 					err := rc.node.Propose(ctx, prop.binlogStr.bytes())
 					cancel()

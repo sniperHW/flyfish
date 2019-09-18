@@ -37,19 +37,37 @@ type cacheKey struct {
 	writeBackLocked bool                    //是否已经提交sql回写处理
 	make_snapshot   bool                    //费否处于快照处理过程中
 	kicking         bool
+	isTmp           bool
+}
+
+func (this *cacheKey) tryRemoveTmpKey(err int) bool {
+	this.slot.mtx.Lock()
+	this.mtx.Lock()
+	isTmp := this.isTmp
+	if this.isTmp {
+		this.slot.removeTmpKv(this)
+		Infoln(this.cmdQueue.Len())
+		for this.cmdQueue.Len() > 0 {
+			e := this.cmdQueue.Front()
+			this.cmdQueue.Remove(e)
+			e.Value.(*command).reply(int32(err), nil, 0)
+		}
+	}
+	this.mtx.Unlock()
+	this.slot.mtx.Unlock()
+	return isTmp
 }
 
 func (this *cacheKey) clearKicking() {
-	defer this.mtx.Unlock()
 	this.mtx.Lock()
 	kicking := this.kicking
 	this.kicking = false
+	this.mtx.Unlock()
 	if kicking {
 		this.store.mtx.Lock()
 		this.store.kickingCount--
 		this.store.mtx.Unlock()
 	}
-
 }
 
 func (this *cacheKey) lockCmdQueue() {
@@ -111,6 +129,9 @@ func (this *cacheKey) pushCmd(cmd *command) {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
 	this.cmdQueue.PushBack(cmd)
+	if !this.isTmp {
+		this.store.updateLRU(this)
+	}
 }
 
 func (this *cacheKey) getMeta() *table_meta {
@@ -203,7 +224,7 @@ func (this *cacheKey) processQueueCmd() {
 	processCmd(this, false)
 }
 
-func newCacheKey(store *kvstore, slot *kvSlot, table string, key string, uniKey string) *cacheKey {
+func newCacheKey(store *kvstore, slot *kvSlot, table string, key string, uniKey string, isTmp bool) *cacheKey {
 
 	meta := getMetaByTable(table)
 
@@ -222,5 +243,6 @@ func newCacheKey(store *kvstore, slot *kvSlot, table string, key string, uniKey 
 		slot:         slot,
 		table:        table,
 		modifyFields: map[string]bool{},
+		isTmp:        isTmp,
 	}
 }

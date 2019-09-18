@@ -33,15 +33,18 @@ func main() {
 	r2 := c.Set("users1", "sniperHW", fields).Exec()
 	if r2.ErrCode != errcode.ERR_OK {
 		fmt.Println("Set error:", errcode.GetErrorStr(r2.ErrCode))
-		return
 	}
 
 	r3 := c.Get("users1", "sniperHW", "name", "phone", "age", "blob").Exec()
 
-	fmt.Println(r3.Fields["name"].GetString())
-	fmt.Println(r3.Fields["phone"].GetString())
-	fmt.Println(r3.Fields["age"].GetInt())
-	fmt.Println(binary.BigEndian.Uint32(r3.Fields["blob"].GetBlob()))
-	fmt.Println(r3.Version)
+	if r3.ErrCode != errcode.ERR_OK {
+		fmt.Println("Set error:", errcode.GetErrorStr(r3.ErrCode))
+	} else {
+		fmt.Println(r3.Fields["name"].GetString())
+		fmt.Println(r3.Fields["phone"].GetString())
+		fmt.Println(r3.Fields["age"].GetInt())
+		fmt.Println(binary.BigEndian.Uint32(r3.Fields["blob"].GetBlob()))
+		fmt.Println("version", r3.Version)
+	}
 
 }

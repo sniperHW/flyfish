@@ -25,12 +25,16 @@ type batchBinlog struct {
 func (this *batchBinlog) onError(err int) {
 	for i := 0; i < this.ctxs.count; i++ {
 		v := this.ctxs.ctxs[i]
+		ckey := v.getCacheKey()
 		if v.getCmdType() != cmdKick {
 			v.reply(int32(err), nil, 0)
 		} else {
-			v.getCacheKey().clearKicking()
+			ckey.clearKicking()
 		}
-		v.getCacheKey().processQueueCmd()
+
+		if !ckey.tryRemoveTmpKey(err) {
+			v.getCacheKey().processQueueCmd()
+		}
 	}
 	ctxArrayPut(this.ctxs)
 }
@@ -222,14 +226,30 @@ func (this *kvstore) issueUpdate(ctx *cmdContext) {
 
 	this.proposeBatch.ctxs.append(ctx)
 
-	if len(ctx.fields) == 0 || ctx.version == 0 {
-		panic("len(ctx.fields == 0) || ctx.version == 0")
-	}
-
 	this.appendBinLog(binop, ckey.uniKey, ctx.fields, ctx.version)
 
 	this.tryProposeBatch()
 
 	this.mtx.Unlock()
 
+}
+
+/*
+ *   向副本同步插入kv操作(从数据库load导致,数据内容并无变更)
+ */
+
+func (this *kvstore) issueAddKv(ctx *cmdContext) {
+	this.mtx.Lock()
+
+	if nil == this.proposeBatch.ctxs {
+		this.proposeBatch.ctxs = ctxArrayGet()
+	}
+
+	this.proposeBatch.ctxs.append(ctx)
+
+	this.appendBinLog(binlog_snapshot, ctx.getCacheKey().uniKey, ctx.fields, ctx.version)
+
+	this.tryProposeBatch()
+
+	this.mtx.Unlock()
 }
