@@ -152,7 +152,7 @@ func CallStack(maxStack int) string {
 // post POSTs a data payload to a url. Returns nil if the POST succeeds,
 // error on any failure.
 func (p *pipeline) post(data []byte) (err error) {
-	CallStack(100)
+	//CallStack(100)
 	u := p.picker.pick()
 	req := createPostRequest(u, RaftPrefix, bytes.NewBuffer(data), "application/protobuf", p.tr.URLs, p.tr.ID, p.peerID, p.tr.ClusterID)
 
