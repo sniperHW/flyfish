@@ -29,6 +29,9 @@ import (
 	"go.etcd.io/etcd/raft/raftpb"
 
 	"go.uber.org/zap"
+
+	"fmt"
+	"runtime"
 )
 
 const (
@@ -131,9 +134,25 @@ func (p *pipeline) handle() {
 	}
 }
 
+func CallStack(maxStack int) string {
+	var str string
+	i := 1
+	for {
+		pc, file, line, ok := runtime.Caller(i)
+		if !ok || i > maxStack {
+			break
+		}
+		str += fmt.Sprintf("    stack: %d %v [file: %s] [func: %s] [line: %d]\n", i-1, ok, file, runtime.FuncForPC(pc).Name(), line)
+		i++
+	}
+	fmt.Println(str)
+	return str
+}
+
 // post POSTs a data payload to a url. Returns nil if the POST succeeds,
 // error on any failure.
 func (p *pipeline) post(data []byte) (err error) {
+	CallStack(100)
 	u := p.picker.pick()
 	req := createPostRequest(u, RaftPrefix, bytes.NewBuffer(data), "application/protobuf", p.tr.URLs, p.tr.ID, p.peerID, p.tr.ClusterID)
 
