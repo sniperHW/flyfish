@@ -769,6 +769,7 @@ func initKvGroup(mutilRaft *mutilRaft, id *int, cluster *string, mod int) *store
 
 		proposeC := make(chan *batchProposal)
 		confChangeC := make(chan raftpb.ConfChange)
+		readC := make(chan *readBatchSt)
 
 		var store *kvstore
 
@@ -780,13 +781,14 @@ func initKvGroup(mutilRaft *mutilRaft, id *int, cluster *string, mod int) *store
 			return store.getSnapshot()
 		}
 
-		rn, commitC, errorC, snapshotterReady, readC := newRaftNode(mutilRaft, (*id<<16)+i, strings.Split(*cluster, ","), false, getSnapshot, proposeC, confChangeC)
+		rn, commitC, errorC, snapshotterReady := newRaftNode(mutilRaft, (*id<<16)+i, strings.Split(*cluster, ","), false, getSnapshot, proposeC, confChangeC, readC)
 
 		store = newKVStore(rn, <-snapshotterReady, proposeC, commitC, errorC, readC)
 
 		store.stop = func() {
 			close(proposeC)
 			close(confChangeC)
+			close(readC)
 			store.proposeBatch.timer.Cancel()
 			store.readBatch.timer.Cancel()
 			store.lruTimer.Cancel()

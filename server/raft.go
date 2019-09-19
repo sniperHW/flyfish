@@ -108,11 +108,10 @@ var defaultSnapshotCount uint64 = 10000
 // commit channel, followed by a nil message (to indicate the channel is
 // current), then new log entries. To shutdown, close proposeC and read errorC.
 func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSnapshot func() [][]kvsnap, proposeC <-chan *batchProposal,
-	confChangeC <-chan raftpb.ConfChange) (*raftNode, <-chan interface{}, <-chan error, <-chan *snap.Snapshotter, chan<- *readBatchSt) {
+	confChangeC <-chan raftpb.ConfChange, readC <-chan *readBatchSt) (*raftNode, <-chan interface{}, <-chan error, <-chan *snap.Snapshotter) {
 
 	commitC := make(chan interface{})
 	errorC := make(chan error)
-	readC := make(chan *readBatchSt, 100)
 
 	nodeID := id >> 16
 	region := id & 0xFFFF
@@ -144,7 +143,7 @@ func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSna
 	}
 	rc.startProposePipeline()
 	go rc.startRaft()
-	return rc, commitC, errorC, rc.snapshotterReady, readC
+	return rc, commitC, errorC, rc.snapshotterReady
 }
 
 func (rc *raftNode) isLeader() bool {
@@ -788,7 +787,7 @@ func (rc *raftNode) serveChannels() {
 	go func() {
 		confChangeCount := uint64(0)
 
-		for rc.proposeC != nil && rc.confChangeC != nil {
+		for rc.proposeC != nil && rc.confChangeC != nil && rc.readC != nil {
 			select {
 			case prop, ok := <-rc.proposeC:
 				if !ok {
@@ -806,7 +805,9 @@ func (rc *raftNode) serveChannels() {
 					rc.node.ProposeConfChange(context.TODO(), cc)
 				}
 			case readReq, ok := <-rc.readC:
-				if ok {
+				if !ok {
+					rc.readC = nil
+				} else {
 					rc.issueRead(readReq)
 				}
 			}
