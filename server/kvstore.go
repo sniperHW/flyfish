@@ -383,12 +383,12 @@ func (s *kvstore) readCommits(once bool, commitC <-chan interface{}, errorC <-ch
 					log.Panic(err)
 				}
 				log.Printf("loading snapshot at term %d and index %d", snapshot.Metadata.Term, snapshot.Metadata.Index)
-				if !s.replay(snapshot.Data[8:]) {
+				if !s.apply(snapshot.Data[8:]) {
 					log.Panic("recoverFromSnapshot failed")
 				}
 			} else if data == replayOK {
 				if once {
-					Infoln("replay ok,keycount", s.keySize)
+					Infoln("apply ok,keycount", s.keySize)
 					return
 				} else {
 					continue
@@ -466,7 +466,7 @@ func (s *kvstore) readCommits(once bool, commitC <-chan interface{}, errorC <-ch
 
 					ctxArrayPut(data.ctxs)
 				} else {
-					s.replay(data.data)
+					s.apply(data.data)
 				}
 			}
 		case *readBatchSt:
@@ -607,7 +607,7 @@ func readBinLog(buffer []byte, offset int) (int, int, string, int64, map[string]
 	return offset, tt, uniKey, version, values
 }
 
-func (s *kvstore) replay(data []byte) bool {
+func (s *kvstore) apply(data []byte) bool {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
