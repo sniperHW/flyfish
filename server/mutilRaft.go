@@ -30,11 +30,20 @@ type mutilRaftHandler struct {
 }
 
 func (this *mutilRaftHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	//Infoln(r.URL.Path)
+
 	to := ""
 
-	if tmp := strings.Split(r.URL.Path, "/"); len(tmp) >= 3 {
-		cmd := tmp[2]
+	if tmp := strings.Split(r.URL.Path, "/"); len(tmp) >= 2 {
+		cmd := ""
+
+		if len(tmp) == 2 && tmp[1] == "raft" {
+			cmd = "pipeline"
+		} else if len(tmp) > 2 {
+			cmd = tmp[2]
+		} else {
+			return
+		}
+
 		if cmd == "probing" {
 			if len(tmp) >= 4 {
 				to = tmp[3]
@@ -51,6 +60,8 @@ func (this *mutilRaftHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 					t.snapHandler.ServeHTTP(w, r)
 				} else if cmd == "probing" {
 					this.probingHandler.ServeHTTP(w, r)
+				} else if cmd == "pipeline" {
+					t.pipelineHandler.ServeHTTP(w, r)
 				}
 			}
 		}
