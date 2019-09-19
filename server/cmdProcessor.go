@@ -201,13 +201,24 @@ func processDel(ckey *cacheKey, cmd *command, ctx *cmdContext) {
 	}
 }
 
-func processCmd(ckey *cacheKey, fromClient bool) {
+/*
+ *   处理ckey关联的命令
+ *   fromClient = true:表示从网络层直接调用过来
+ *   fromClient = false:表示前一条命令处理完毕后，由其它模块调用过来
+ *
+ *   连续的get命令可以被合并处理，其余命令排队处理。
+ *   当前一条命令尚未执行完毕,队列被锁定，新到的命令插入队列，不处理。
+ *
+ *   当一条命令执行完毕后，调用processCmd,检查是否有排队的命令，如果有继续执行排队命令。
+ *
+ */
 
-	//Infoln(ckey.values)
+func processCmd(ckey *cacheKey, fromClient bool) {
 
 	ckey.mtx.Lock()
 
 	if !fromClient {
+		//前一条命令执行完毕，解锁队列
 		ckey.unlockCmdQueue()
 	}
 
@@ -283,16 +294,18 @@ func processCmd(ckey *cacheKey, fromClient bool) {
 	}
 
 	if ckey.status == cache_new {
-		fullReturn := fromClient
-		if !pushSqlLoadReq(ctx, fullReturn) {
+		if !pushSqlLoadReq(ctx, fromClient) {
 			ckey.mtx.Unlock()
 			if config.ReplyBusyOnQueueFull {
 				ctx.reply(errcode.ERR_BUSY, nil, -1)
 			} else {
 				ctx.dontReply()
 			}
-			processCmd(ckey, fromClient)
-			return
+			/*
+			 * 只有在fromClient==true时pushSqlLoadReq才有可能返回false
+			 * 此时必定是由网络层直接调用上来，不会存在排队未处理的cmd,所以不需要调用processCmd
+			 */
+			//processCmd(ckey, fromClient)
 		} else {
 			ckey.lockCmdQueue()
 			ckey.mtx.Unlock()
