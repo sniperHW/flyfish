@@ -227,7 +227,11 @@ func processCmd(ckey *cacheKey, fromClient bool) {
 	for ckey.cmdQueue.Len() > 0 {
 		e := ckey.cmdQueue.Front()
 		cmd := e.Value.(*command)
-		if now.After(cmd.deadline) {
+		if cmd.isClosed() {
+			//客户端连接已经关闭
+			ckey.cmdQueue.Remove(e)
+			cmd.dontReply()
+		} else if now.After(cmd.deadline) {
 			ckey.cmdQueue.Remove(e)
 			//已经超时
 			cmd.dontReply()

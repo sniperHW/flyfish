@@ -12,9 +12,7 @@ import (
 
 ////////////SetReplyer
 type SetReplyer struct {
-	seqno   int64
-	session kendynet.StreamSession
-	cmd     *command
+	*replyerBase
 }
 
 func (this *SetReplyer) reply(errCode int32, fields map[string]*proto.Field, version int64) {
@@ -94,9 +92,11 @@ func set(server *Server, session kendynet.StreamSession, msg *codec.Message) {
 		}
 
 		cmd.rpyer = &SetReplyer{
-			seqno:   head.GetSeqno(),
-			session: session,
-			cmd:     cmd,
+			replyerBase: &replyerBase{
+				seqno:   head.GetSeqno(),
+				session: session,
+				cmd:     cmd,
+			},
 		}
 
 		for _, v := range req.GetFields() {
@@ -145,9 +145,11 @@ func setNx(server *Server, session kendynet.StreamSession, msg *codec.Message) {
 		}
 
 		cmd.rpyer = &SetReplyer{
-			seqno:   head.GetSeqno(),
-			session: session,
-			cmd:     cmd,
+			replyerBase: &replyerBase{
+				seqno:   head.GetSeqno(),
+				session: session,
+				cmd:     cmd,
+			},
 		}
 
 		for _, v := range req.GetFields() {
@@ -199,9 +201,11 @@ func compareAndSet(server *Server, session kendynet.StreamSession, msg *codec.Me
 		}
 
 		cmd.rpyer = &SetReplyer{
-			seqno:   head.GetSeqno(),
-			session: session,
-			cmd:     cmd,
+			replyerBase: &replyerBase{
+				seqno:   head.GetSeqno(),
+				session: session,
+				cmd:     cmd,
+			},
 		}
 
 		cmd.process()
@@ -249,9 +253,11 @@ func compareAndSetNx(server *Server, session kendynet.StreamSession, msg *codec.
 		}
 
 		cmd.rpyer = &SetReplyer{
-			seqno:   head.GetSeqno(),
-			session: session,
-			cmd:     cmd,
+			replyerBase: &replyerBase{
+				seqno:   head.GetSeqno(),
+				session: session,
+				cmd:     cmd,
+			},
 		}
 
 		cmd.process()

@@ -40,6 +40,8 @@ type StreamSession interface {
 	*/
 	Close(reason string, timeout time.Duration)
 
+	IsClosed() bool
+
 	/*
 		关闭读
 	*/

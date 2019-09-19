@@ -41,6 +41,12 @@ type SocketBase struct {
 	imp           SocketImpl
 }
 
+func (this *SocketBase) IsClosed() bool {
+	this.mutex.Lock()
+	defer this.mutex.Unlock()
+	return this.flag&closed > 0
+}
+
 func (this *SocketBase) LocalAddr() net.Addr {
 	return this.imp.getNetConn().LocalAddr()
 }

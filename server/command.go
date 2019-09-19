@@ -3,6 +3,7 @@ package server
 import (
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
+	"github.com/sniperHW/kendynet"
 	"sync/atomic"
 	"time"
 )
@@ -82,6 +83,17 @@ func causeWriteBackCmd(cmd int) bool {
 //命令回复器
 type replyer interface {
 	reply(errCode int32, fields map[string]*proto.Field, version int64)
+	isClosed() bool
+}
+
+type replyerBase struct {
+	seqno   int64
+	session kendynet.StreamSession
+	cmd     *command
+}
+
+func (this *replyerBase) isClosed() bool {
+	return this.session.IsClosed()
 }
 
 type cnsSt struct {
@@ -105,6 +117,10 @@ type command struct {
 	deadline     time.Time
 	respDeadline time.Time
 	storeGroup   *storeGroup
+}
+
+func (this *command) isClosed() bool {
+	return this.rpyer.isClosed()
 }
 
 func (this *command) reply(errCode int32, fields map[string]*proto.Field, version int64) {

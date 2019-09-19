@@ -10,9 +10,7 @@ import (
 )
 
 type IncrDecrByReplyer struct {
-	seqno   int64
-	session kendynet.StreamSession
-	cmd     *command
+	*replyerBase
 }
 
 func (this *IncrDecrByReplyer) reply(errCode int32, fields map[string]*proto.Field, version int64) {
@@ -83,9 +81,11 @@ func incrBy(server *Server, session kendynet.StreamSession, msg *codec.Message) 
 		}
 
 		cmd.rpyer = &IncrDecrByReplyer{
-			seqno:   head.GetSeqno(),
-			session: session,
-			cmd:     cmd,
+			replyerBase: &replyerBase{
+				seqno:   head.GetSeqno(),
+				session: session,
+				cmd:     cmd,
+			},
 		}
 
 		cmd.process()
@@ -130,9 +130,11 @@ func decrBy(server *Server, session kendynet.StreamSession, msg *codec.Message) 
 		}
 
 		cmd.rpyer = &IncrDecrByReplyer{
-			seqno:   head.GetSeqno(),
-			session: session,
-			cmd:     cmd,
+			replyerBase: &replyerBase{
+				seqno:   head.GetSeqno(),
+				session: session,
+				cmd:     cmd,
+			},
 		}
 
 		cmd.process()

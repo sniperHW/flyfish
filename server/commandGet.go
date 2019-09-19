@@ -11,9 +11,7 @@ import (
 )
 
 type GetReplyer struct {
-	seqno   int64
-	session kendynet.StreamSession
-	cmd     *command
+	*replyerBase
 }
 
 func (this *GetReplyer) reply(errCode int32, fields map[string]*proto.Field, version int64) {
@@ -84,9 +82,11 @@ func get(server *Server, session kendynet.StreamSession, msg *codec.Message) {
 		}
 
 		cmd.rpyer = &GetReplyer{
-			seqno:   head.GetSeqno(),
-			session: session,
-			cmd:     cmd,
+			replyerBase: &replyerBase{
+				seqno:   head.GetSeqno(),
+				session: session,
+				cmd:     cmd,
+			},
 		}
 
 		if req.GetAll() {
