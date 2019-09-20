@@ -40,10 +40,16 @@ type cacheKey struct {
 }
 
 func (this *cacheKey) tryRemoveTmpKey(err int) bool {
-	this.slot.mtx.Lock()
 	this.mtx.Lock()
 	isTmp := this.isTmp
-	if this.isTmp {
+	this.mtx.Unlock()
+	if isTmp {
+		return false
+	} else {
+		//为了防止死锁，必须先锁外层容器再锁this
+		this.slot.mtx.Lock()
+		this.mtx.Lock()
+
 		this.slot.removeTmpKv(this)
 		Infoln(this.cmdQueue.Len())
 		for this.cmdQueue.Len() > 0 {
@@ -51,10 +57,11 @@ func (this *cacheKey) tryRemoveTmpKey(err int) bool {
 			this.cmdQueue.Remove(e)
 			e.Value.(*command).reply(int32(err), nil, 0)
 		}
+
+		this.mtx.Unlock()
+		this.slot.mtx.Unlock()
+		return true
 	}
-	this.mtx.Unlock()
-	this.slot.mtx.Unlock()
-	return isTmp
 }
 
 func (this *cacheKey) clearKicking() {

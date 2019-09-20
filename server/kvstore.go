@@ -305,11 +305,9 @@ func (s *kvstore) readCommits(once bool, commitC <-chan interface{}, errorC <-ch
 							ckey := v.getCacheKey()
 							ckey.mtx.Lock()
 							ckey.snapshoted = true
-
+							isTmp := ckey.isTmp
 							if ckey.isTmp {
-								//将ckey从tmpkv移动到kv
 								ckey.isTmp = false
-								s.moveTmpkv2OK(ckey)
 							}
 
 							if v.writeBackFlag == write_back_insert || v.writeBackFlag == write_back_update || v.writeBackFlag == write_back_insert_update {
@@ -325,6 +323,11 @@ func (s *kvstore) readCommits(once bool, commitC <-chan interface{}, errorC <-ch
 								pushSqlWriteReq(ckey)
 							}
 							ckey.mtx.Unlock()
+
+							if isTmp {
+								s.moveTmpkv2OK(ckey)
+							}
+
 						}
 					}
 
