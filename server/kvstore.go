@@ -43,12 +43,6 @@ type ctxArray struct {
 }
 
 func (this *ctxArray) append(ctx *cmdContext) {
-	//FlushCount可能因为重载配置文件变大，导致原有空间不足
-	if this.count >= len(this.ctxs) {
-		ctxs := make([]*cmdContext, conf.GetConfig().BatchCount)
-		copy(ctxs, this.ctxs)
-		this.ctxs = ctxs
-	}
 	this.ctxs[this.count] = ctx
 	this.count++
 }
