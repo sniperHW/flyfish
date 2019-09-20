@@ -767,9 +767,9 @@ func initKvGroup(mutilRaft *mutilRaft, id *int, cluster *string, mod int) *store
 
 	for i := 1; i <= mod; i++ {
 
-		proposeC := make(chan *batchProposal)
+		proposeC := make(chan *batchProposal, 100)
 		confChangeC := make(chan raftpb.ConfChange)
-		readC := make(chan *readBatchSt)
+		readC := make(chan *readBatchSt, 100)
 
 		var store *kvstore
 

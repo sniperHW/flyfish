@@ -22,6 +22,11 @@ type batchProposal struct {
 	index       int64
 }
 
+func (this *batchProposal) onCommit() *ctxArray {
+	strPut(this.proposalStr)
+	return this.ctxs
+}
+
 func (this *batchProposal) onError(err int) {
 	for i := 0; i < this.ctxs.count; i++ {
 		v := this.ctxs.ctxs[i]
@@ -37,6 +42,21 @@ func (this *batchProposal) onError(err int) {
 		}
 	}
 	ctxArrayPut(this.ctxs)
+	strPut(this.proposalStr)
+}
+
+func (this *batchProposal) onPorposeTimeout() {
+	/*   timeout
+	 *   只是对客户端超时,复制处理还在继续
+	 *   所以只向客户端返回response
+	 */
+	for i := 0; i < this.ctxs.count; i++ {
+		v := this.ctxs.ctxs[i]
+		if v.getCmdType() != cmdKick {
+			v.reply(errcode.ERR_TIMEOUT, nil, 0)
+		}
+		v.getCacheKey().processQueueCmd()
+	}
 }
 
 type commitedBatchProposal struct {

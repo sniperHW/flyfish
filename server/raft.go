@@ -110,7 +110,13 @@ var defaultSnapshotCount uint64 = 10000
 func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSnapshot func() [][]kvsnap, proposeC <-chan *batchProposal,
 	confChangeC <-chan raftpb.ConfChange, readC <-chan *readBatchSt) (*raftNode, <-chan interface{}, <-chan error, <-chan *snap.Snapshotter) {
 
-	commitC := make(chan interface{})
+	/*
+	 *  如果commitC设置成无缓冲，则raftNode会等待上层提取commitedEntry之后才继续后续处理。
+	 *  flyfish的apply只涉及内存操作，可以给commitC设置缓冲区,使得raftNode快速从投递中返回继续后续工作。
+	 */
+
+	commitC := make(chan interface{}, 100)
+
 	errorC := make(chan error)
 
 	nodeID := id >> 16
@@ -131,7 +137,7 @@ func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSna
 		stopc:            make(chan struct{}),
 		snapshotterReady: make(chan *snap.Snapshotter, 1),
 		snapshottingOK:   make(chan struct{}),
-		pendingPropose:   list.New(), //[]*batchProposal{}
+		pendingPropose:   list.New(),
 		mutilRaft:        mutilRaft,
 		nodeID:           nodeID,
 		region:           region,
@@ -298,16 +304,13 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 			front := rc.pendingPropose.Front()
 			if nil != front {
 				if front.Value.(*batchProposal).index == index {
-					committedEntry.ctxs = front.Value.(*batchProposal).ctxs
-					strPut(front.Value.(*batchProposal).proposalStr)
+					committedEntry.ctxs = front.Value.(*batchProposal).onCommit()
 					rc.pendingPropose.Remove(front)
 				} else {
 					Infoln("index not match", index, front.Value.(*batchProposal).index)
 				}
 			}
 			rc.muPendingPropose.Unlock()
-
-			//committedEntry.Index = ents[i].Index
 
 			select {
 			case rc.commitC <- committedEntry:
@@ -600,7 +603,6 @@ func (rc *raftNode) onLoseLeadership() {
 
 	for e := pendingPropose.Front(); e != nil; e = e.Next() {
 		v := e.Value.(*batchProposal)
-		strPut(v.proposalStr)
 		v.onError(errcode.ERR_NOT_LEADER)
 	}
 
@@ -627,7 +629,6 @@ func (rc *raftNode) startProposePipeline() {
 				prop := vv.(*batchProposal)
 
 				if !rc.isLeader() {
-					strPut(prop.proposalStr)
 					prop.onError(errcode.ERR_NOT_LEADER)
 				} else {
 					// blocks until accepted by raft state machine
@@ -643,19 +644,7 @@ func (rc *raftNode) startProposePipeline() {
 
 					if nil != err {
 						if err == ctx.Err() {
-
-							/*   timeout
-							 *   只是对客户端超时,复制处理还在继续
-							 *   所以只向客户端返回response
-							 */
-							for i := 0; i < prop.ctxs.count; i++ {
-								v := prop.ctxs.ctxs[i]
-								if v.getCmdType() != cmdKick {
-									v.reply(errcode.ERR_TIMEOUT, nil, 0)
-								}
-								v.getCacheKey().processQueueCmd()
-							}
-
+							prop.onPorposeTimeout()
 						} else {
 
 							rc.muPendingPropose.Lock()
@@ -676,8 +665,6 @@ func (rc *raftNode) startProposePipeline() {
 							default:
 								errCode = errcode.ERR_RAFT
 							}
-
-							strPut(prop.proposalStr)
 							prop.onError(errCode)
 						}
 					}
