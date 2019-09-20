@@ -57,6 +57,10 @@ func (this *ctxArray) full() bool {
 	return this.count == cap(this.ctxs)
 }
 
+func (this *ctxArray) empty() bool {
+	return this.count == 0
+}
+
 var ctxArrayPool = sync.Pool{
 	New: func() interface{} {
 		return &ctxArray{
@@ -95,32 +99,17 @@ type proposeBatch struct {
 	timer       *timer.Timer
 }
 
-type readBatch struct {
+/*type readBatch struct {
 	ctxs       *ctxArray
 	nextFlush  time.Time
 	batchCount int32 //待序列化到文件的binlog数量
 	timer      *timer.Timer
-}
-
-type readBatchSt struct {
-	readIndex int64 //for linearizableRead
-	ctxs      *ctxArray
-	deadline  time.Time
-}
-
-func (this *readBatchSt) onError(err int) {
-	for i := 0; i < this.ctxs.count; i++ {
-		v := this.ctxs.ctxs[i]
-		v.reply(int32(err), nil, -1)
-		v.getCacheKey().processQueueCmd()
-	}
-	ctxArrayPut(this.ctxs)
-}
+}*/
 
 // a key-value store backed by raft
 type kvstore struct {
 	proposeC    chan<- *batchProposal // channel for proposing updates
-	readReqC    chan<- *readBatchSt
+	readReqC    chan<- *cmdContext
 	snapshotter *snap.Snapshotter
 	slots       []*kvSlot //map[string]*cacheKey
 	mtx         sync.Mutex
@@ -135,7 +124,7 @@ type kvstore struct {
 	rn       *raftNode
 
 	proposeBatch proposeBatch
-	readBatch    readBatch
+	//readBatch    readBatch
 }
 
 type storeGroup struct {
@@ -181,7 +170,7 @@ func (this *storeGroup) tryProposeBatch() {
 	}
 }
 
-func newKVStore(rn *raftNode, snapshotter *snap.Snapshotter, proposeC chan<- *batchProposal, commitC <-chan interface{}, errorC <-chan error, readReqC chan<- *readBatchSt) *kvstore {
+func newKVStore(rn *raftNode, snapshotter *snap.Snapshotter, proposeC chan<- *batchProposal, commitC <-chan interface{}, errorC <-chan error, readReqC chan<- *cmdContext) *kvstore {
 
 	config := conf.GetConfig()
 
@@ -192,9 +181,9 @@ func newKVStore(rn *raftNode, snapshotter *snap.Snapshotter, proposeC chan<- *ba
 		proposeBatch: proposeBatch{
 			nextFlush: time.Now().Add(time.Millisecond * time.Duration(config.ProposalFlushInterval)),
 		},
-		readBatch: readBatch{
+		/*readBatch: readBatch{
 			nextFlush: time.Now().Add(time.Millisecond * time.Duration(config.ReadFlushInterval)),
-		},
+		},*/
 		readReqC: readReqC,
 		rn:       rn,
 	}
@@ -219,11 +208,11 @@ func newKVStore(rn *raftNode, snapshotter *snap.Snapshotter, proposeC chan<- *ba
 		s.mtx.Unlock()
 	})
 
-	s.readBatch.timer = timer.Repeat(time.Millisecond*time.Duration(config.ReadFlushInterval), nil, func(t *timer.Timer) {
+	/*s.readBatch.timer = timer.Repeat(time.Millisecond*time.Duration(config.ReadFlushInterval), nil, func(t *timer.Timer) {
 		s.mtx.Lock()
 		s.tryReadBatch()
 		s.mtx.Unlock()
-	})
+	})*/
 
 	s.lruTimer = timer.Repeat(time.Second, nil, func(t *timer.Timer) {
 		s.mtx.Lock()
@@ -325,45 +314,8 @@ func (s *kvstore) Propose(propose *batchProposal) {
 	s.proposeC <- propose
 }
 
-func (s *kvstore) tryReadBatch() {
-	if s.readBatch.batchCount > 0 {
-
-		config := conf.GetConfig()
-
-		if s.readBatch.batchCount >= int32(config.BatchCount) || time.Now().After(s.readBatch.nextFlush) {
-
-			s.readBatch.batchCount = 0
-
-			ctxs := s.readBatch.ctxs
-
-			s.readBatch.ctxs = nil
-
-			s.readReqC <- &readBatchSt{
-				ctxs: ctxs,
-			}
-		}
-	}
-}
-
 func (s *kvstore) issueReadReq(c *cmdContext) {
-	s.mtx.Lock()
-
-	if nil == s.readBatch.ctxs {
-		s.readBatch.ctxs = ctxArrayGet()
-	}
-
-	s.readBatch.batchCount++
-
-	if s.readBatch.batchCount == 1 {
-		s.readBatch.nextFlush = time.Now().Add(time.Millisecond * time.Duration(conf.GetConfig().ReadFlushInterval))
-	}
-
-	s.readBatch.ctxs.append(c)
-
-	s.tryReadBatch()
-
-	s.mtx.Unlock()
-
+	s.readReqC <- c
 }
 
 func (s *kvstore) readCommits(once bool, commitC <-chan interface{}, errorC <-chan error) {
@@ -769,7 +721,7 @@ func initKvGroup(mutilRaft *mutilRaft, id *int, cluster *string, mod int) *store
 
 		proposeC := make(chan *batchProposal, 100)
 		confChangeC := make(chan raftpb.ConfChange)
-		readC := make(chan *readBatchSt, 100)
+		readC := make(chan *cmdContext, 100)
 
 		var store *kvstore
 
@@ -790,7 +742,6 @@ func initKvGroup(mutilRaft *mutilRaft, id *int, cluster *string, mod int) *store
 			close(confChangeC)
 			close(readC)
 			store.proposeBatch.timer.Cancel()
-			store.readBatch.timer.Cancel()
 			store.lruTimer.Cancel()
 		}
 

@@ -45,6 +45,21 @@ import (
 var replayOK *commitedBatchProposal = &commitedBatchProposal{}
 var replaySnapshot *commitedBatchProposal = &commitedBatchProposal{}
 
+type readBatchSt struct {
+	readIndex int64 //for linearizableRead
+	ctxs      *ctxArray
+	deadline  time.Time
+}
+
+func (this *readBatchSt) onError(err int) {
+	for i := 0; i < this.ctxs.count; i++ {
+		v := this.ctxs.ctxs[i]
+		v.reply(int32(err), nil, -1)
+		v.getCacheKey().processQueueCmd()
+	}
+	ctxArrayPut(this.ctxs)
+}
+
 // A key-value stream backed by raft
 type raftNode struct {
 	proposeC    <-chan *batchProposal    //<-chan []byte            // proposed messages (k,v)
@@ -91,12 +106,13 @@ type raftNode struct {
 	muLeader sync.Mutex
 	leader   int
 
-	pipeline  *util.BlockQueue
-	mutilRaft *mutilRaft
+	proposePipeline *util.BlockQueue
+	readPipeline    *util.BlockQueue
+	mutilRaft       *mutilRaft
 
 	muPendingRead sync.Mutex
 	pendingRead   *list.List
-	readC         <-chan *readBatchSt
+	readC         <-chan *cmdContext
 	readIndex     int64
 }
 
@@ -108,7 +124,7 @@ var defaultSnapshotCount uint64 = 10000
 // commit channel, followed by a nil message (to indicate the channel is
 // current), then new log entries. To shutdown, close proposeC and read errorC.
 func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSnapshot func() [][]kvsnap, proposeC <-chan *batchProposal,
-	confChangeC <-chan raftpb.ConfChange, readC <-chan *readBatchSt) (*raftNode, <-chan interface{}, <-chan error, <-chan *snap.Snapshotter) {
+	confChangeC <-chan raftpb.ConfChange, readC <-chan *cmdContext) (*raftNode, <-chan interface{}, <-chan error, <-chan *snap.Snapshotter) {
 
 	/*
 	 *  如果commitC设置成无缓冲，则raftNode会等待上层提取commitedEntry之后才继续后续处理。
@@ -145,9 +161,13 @@ func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSna
 		pendingRead: list.New(),
 		readC:       readC,
 
+		proposePipeline: util.NewBlockQueue(),
+		readPipeline:    util.NewBlockQueue(),
+
 		// rest of structure populated after WAL replay
 	}
 	rc.startProposePipeline()
+	rc.startReadPipeline()
 	go rc.startRaft()
 	return rc, commitC, errorC, rc.snapshotterReady
 }
@@ -617,13 +637,81 @@ func (rc *raftNode) onLoseLeadership() {
 	}
 }
 
+func (rc *raftNode) issueRead(ctxs *ctxArray) {
+
+	ctxToSend := make([]byte, 8)
+	c := &readBatchSt{
+		readIndex: atomic.AddInt64(&rc.readIndex, 1),
+		deadline:  time.Now().Add(time.Second * 5),
+		ctxs:      ctxs,
+	}
+
+	binary.BigEndian.PutUint64(ctxToSend, uint64(c.readIndex))
+
+	rc.muPendingRead.Lock()
+	e := rc.pendingRead.PushBack(c)
+	rc.muPendingRead.Unlock()
+
+	cctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	if err := rc.node.ReadIndex(cctx, ctxToSend); err != nil {
+		cancel()
+		code := errcode.ERR_RAFT
+		if err == raft.ErrStopped {
+			code = errcode.ERR_SERVER_STOPED
+		} else if err == cctx.Err() {
+			code = errcode.ERR_TIMEOUT
+		}
+
+		rc.muPendingRead.Lock()
+		rc.pendingRead.Remove(e)
+		rc.muPendingRead.Unlock()
+		c.onError(code)
+		return
+	}
+	cancel()
+}
+
+func (rc *raftNode) startReadPipeline() {
+	go func() {
+
+		ctxs := ctxArrayGet()
+
+		for {
+			closed, localList := rc.readPipeline.Get()
+
+			for _, vv := range localList {
+				ctx := vv.(*cmdContext)
+				if !rc.isLeader() {
+					ctx.reply(errcode.ERR_NOT_LEADER, nil, -1)
+					ctx.getCacheKey().processQueueCmd()
+				} else {
+					ctxs.append(ctx)
+					if ctxs.full() {
+						rc.issueRead(ctxs)
+						ctxs = ctxArrayGet()
+					}
+				}
+			}
+
+			if !ctxs.empty() {
+				rc.issueRead(ctxs)
+				ctxs = ctxArrayGet()
+			}
+
+			if closed {
+				return
+			}
+		}
+	}()
+}
+
 func (rc *raftNode) startProposePipeline() {
-	rc.pipeline = util.NewBlockQueue()
 
 	go func() {
 
 		for {
-			closed, localList := rc.pipeline.Get()
+			closed, localList := rc.proposePipeline.Get()
 			for _, vv := range localList {
 
 				prop := vv.(*batchProposal)
@@ -720,42 +808,6 @@ func (rc *raftNode) processReadStates(readStates []raft.ReadState) {
 	}
 }
 
-func (rc *raftNode) issueRead(c *readBatchSt) {
-
-	if !rc.isLeader() {
-		c.onError(errcode.ERR_NOT_LEADER)
-		return
-	}
-
-	ctxToSend := make([]byte, 8)
-	c.readIndex = atomic.AddInt64(&rc.readIndex, 1)
-	c.deadline = time.Now().Add(time.Second * 5)
-	binary.BigEndian.PutUint64(ctxToSend, uint64(c.readIndex))
-
-	rc.muPendingRead.Lock()
-	e := rc.pendingRead.PushBack(c)
-	rc.muPendingRead.Unlock()
-
-	cctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-	if err := rc.node.ReadIndex(cctx, ctxToSend); err != nil {
-		cancel()
-		code := errcode.ERR_RAFT
-		if err == raft.ErrStopped {
-			code = errcode.ERR_SERVER_STOPED
-		} else if err == cctx.Err() {
-			code = errcode.ERR_TIMEOUT
-		}
-
-		rc.muPendingRead.Lock()
-		rc.pendingRead.Remove(e)
-		rc.muPendingRead.Unlock()
-		c.onError(code)
-		return
-	}
-	cancel()
-}
-
 func (rc *raftNode) serveChannels() {
 	snap, err := rc.raftStorage.Snapshot()
 	if err != nil {
@@ -780,7 +832,7 @@ func (rc *raftNode) serveChannels() {
 				if !ok {
 					rc.proposeC = nil
 				} else {
-					rc.pipeline.AddNoWait(prop)
+					rc.proposePipeline.AddNoWait(prop)
 				}
 
 			case cc, ok := <-rc.confChangeC:
@@ -795,7 +847,7 @@ func (rc *raftNode) serveChannels() {
 				if !ok {
 					rc.readC = nil
 				} else {
-					rc.issueRead(readReq)
+					rc.readPipeline.AddNoWait(readReq)
 				}
 			}
 		}

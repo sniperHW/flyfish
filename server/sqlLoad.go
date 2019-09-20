@@ -56,7 +56,6 @@ func (this *sqlLoader) append(v interface{}) {
 			this.lastTime = time.Now()
 		}
 	} else {
-		Infoln("sqlLoader")
 		table := ctx.getTable()
 		key := ctx.getKey()
 		s, ok := this.sqlGets[table]
