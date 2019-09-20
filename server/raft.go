@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/rafthttp"
 	"github.com/sniperHW/kendynet/timer"
@@ -688,6 +689,19 @@ func (rc *raftNode) issueRead(ctxs *ctxArray) {
 }
 
 func (rc *raftNode) startReadPipeline() {
+
+	sleepTime := time.Duration(conf.GetConfig().ReadFlushInterval)
+
+	go func() {
+		for {
+			time.Sleep(time.Millisecond * sleepTime)
+			//发送信号，触发batch
+			if rc.readPipeline.AddNoWait(nil) != nil {
+				return
+			}
+		}
+	}()
+
 	go func() {
 
 		ctxs := ctxArrayGet()
@@ -696,22 +710,25 @@ func (rc *raftNode) startReadPipeline() {
 			closed, localList := rc.readPipeline.Get()
 
 			for _, vv := range localList {
-				ctx := vv.(*cmdContext)
-				if !rc.isLeader() {
-					ctx.reply(errcode.ERR_NOT_LEADER, nil, -1)
-					ctx.getCacheKey().processQueueCmd()
-				} else {
-					ctxs.append(ctx)
-					if ctxs.full() {
+				if vv == nil {
+					if !ctxs.empty() {
 						rc.issueRead(ctxs)
 						ctxs = ctxArrayGet()
 					}
-				}
-			}
+				} else {
 
-			if !ctxs.empty() {
-				rc.issueRead(ctxs)
-				ctxs = ctxArrayGet()
+					ctx := vv.(*cmdContext)
+					if !rc.isLeader() {
+						ctx.reply(errcode.ERR_NOT_LEADER, nil, -1)
+						ctx.getCacheKey().processQueueCmd()
+					} else {
+						ctxs.append(ctx)
+						if ctxs.full() {
+							rc.issueRead(ctxs)
+							ctxs = ctxArrayGet()
+						}
+					}
+				}
 			}
 
 			if closed {
@@ -722,12 +739,6 @@ func (rc *raftNode) startReadPipeline() {
 }
 
 func (rc *raftNode) issuePropose(batch *batchProposal) {
-
-	Infoln("batch", batch.ctxs.count)
-
-	// blocks until accepted by raft state machine
-	//batch.index = atomic.AddInt64(&rc.proposeIndex, 1)
-	//binary.BigEndian.PutUint64(batch.proposalStr.data[:8], uint64(batch.index))
 
 	rc.muPendingPropose.Lock()
 	e := rc.pendingPropose.PushBack(batch)
@@ -777,6 +788,18 @@ func (rc *raftNode) newBatchProposal() *batchProposal {
 
 func (rc *raftNode) startProposePipeline() {
 
+	sleepTime := time.Duration(conf.GetConfig().ProposalFlushInterval)
+
+	go func() {
+		for {
+			time.Sleep(time.Millisecond * sleepTime)
+			//发送信号，触发batch提交
+			if rc.proposePipeline.AddNoWait(nil) != nil {
+				return
+			}
+		}
+	}()
+
 	go func() {
 
 		batch := rc.newBatchProposal()
@@ -784,32 +807,35 @@ func (rc *raftNode) startProposePipeline() {
 		for {
 			closed, localList := rc.proposePipeline.Get()
 			for _, vv := range localList {
-				prop := vv.(*proposal)
-				if !rc.isLeader() {
-					ckey := prop.ctx.getCacheKey()
-					if prop.ctx.getCmdType() != cmdKick {
-						prop.ctx.reply(int32(errcode.ERR_NOT_LEADER), nil, 0)
-					} else {
-						ckey.clearKicking()
-					}
-					if !ckey.tryRemoveTmpKey(errcode.ERR_NOT_LEADER) {
-						ckey.processQueueCmd()
-					}
-				} else {
-
-					batch.ctxs.append(prop.ctx)
-					batch.proposalStr.appendProposal(prop.op, prop.ctx.getUniKey(), prop.ctx.fields, prop.ctx.version)
-
-					if batch.ctxs.full() {
+				if nil == vv {
+					if !batch.ctxs.empty() {
 						rc.issuePropose(batch)
 						batch = rc.newBatchProposal()
 					}
-				}
-			}
+				} else {
 
-			if !batch.ctxs.empty() {
-				rc.issuePropose(batch)
-				batch = rc.newBatchProposal()
+					prop := vv.(*proposal)
+					if !rc.isLeader() {
+						ckey := prop.ctx.getCacheKey()
+						if prop.ctx.getCmdType() != cmdKick {
+							prop.ctx.reply(int32(errcode.ERR_NOT_LEADER), nil, 0)
+						} else {
+							ckey.clearKicking()
+						}
+						if !ckey.tryRemoveTmpKey(errcode.ERR_NOT_LEADER) {
+							ckey.processQueueCmd()
+						}
+					} else {
+
+						batch.ctxs.append(prop.ctx)
+						batch.proposalStr.appendProposal(prop.op, prop.ctx.getUniKey(), prop.ctx.fields, prop.ctx.version)
+
+						if batch.ctxs.full() {
+							rc.issuePropose(batch)
+							batch = rc.newBatchProposal()
+						}
+					}
+				}
 			}
 
 			if closed {
