@@ -6,7 +6,6 @@ import (
 	"go.etcd.io/etcd/pkg/types"
 	"net/http"
 	"net/url"
-	//"strconv"
 	"strings"
 	"sync"
 )

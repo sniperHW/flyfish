@@ -114,8 +114,8 @@ type command struct {
 	fields       map[string]*proto.Field //for get/set
 	cns          *cnsSt                  //for compareAndSet
 	incrDecr     *proto.Field            //for incr/decr
-	deadline     time.Time
-	respDeadline time.Time
+	deadline     time.Time               //服务器超时,如果服务器在处理命令时已经超过deadline,则直接向客户端返回timeout
+	respDeadline time.Time               //响应超时,超过这个时间服务器就不需要想客户端返回响应(客户端已经触发超时)。
 	storeGroup   *storeGroup
 }
 

@@ -113,15 +113,31 @@ func (this *cacheKey) setMissingNoLock() {
 	this.modifyFields = map[string]bool{}
 }
 
-func (this *cacheKey) setOK(version int64) {
+func (this *cacheKey) setOK(version int64, fields *map[string]*proto.Field) {
 	defer this.mtx.Unlock()
 	this.mtx.Lock()
-	this.setOKNoLock(version)
+	this.setOKNoLock(version, fields)
 }
 
-func (this *cacheKey) setOKNoLock(version int64) {
+func (this *cacheKey) setOKNoLock(version int64, fields *map[string]*proto.Field) {
 	this.version = version
 	this.status = cache_ok
+	modify := false
+
+	if nil == this.values {
+		this.values = map[string]*proto.Field{}
+	} else {
+		modify = true
+	}
+
+	for k, v := range *fields {
+		if !(k == "__version__" || k == "__key__") {
+			this.values[v.GetName()] = v
+			if modify {
+				this.modifyFields[k] = true
+			}
+		}
+	}
 }
 
 func (this *cacheKey) pushCmd(cmd *command) {
@@ -179,30 +195,12 @@ func (this *cacheKey) convertStr(fieldName string, value string) *proto.Field {
 	}
 }
 
-func (this *cacheKey) setValueNoLock(ctx *cmdContext) {
-	modify := false
-	if nil == this.values {
-		this.values = map[string]*proto.Field{}
-	} else {
-		modify = true
-	}
-	for k, v := range ctx.fields {
-
-		Debugln("setValue", v.GetName())
-
-		if !(k == "__version__" || k == "__key__") {
-			this.values[v.GetName()] = v
-			if modify {
-				this.modifyFields[k] = true
-			}
-		}
-	}
-}
-
+//直接从网络层调用
 func (this *cacheKey) processClientCmd() {
 	processCmd(this, true)
 }
 
+//其它模块在处理完前面的消息之后调用
 func (this *cacheKey) processQueueCmd() {
 	processCmd(this, false)
 }

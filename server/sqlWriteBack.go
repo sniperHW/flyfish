@@ -3,7 +3,6 @@ package server
 import (
 	"database/sql/driver"
 	"github.com/jmoiron/sqlx"
-	//"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/kendynet/util"
 	"net"
 	"sync"

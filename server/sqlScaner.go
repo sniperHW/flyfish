@@ -16,11 +16,10 @@ import (
 )
 
 type scaner struct {
-	db      *sqlx.DB
-	meta    *table_meta
-	session kendynet.StreamSession
-	closed  int32
-	//offset         int32
+	db             *sqlx.DB
+	meta           *table_meta
+	session        kendynet.StreamSession
+	closed         int32
 	table          string
 	fields         []string
 	field_receiver []interface{}
@@ -207,8 +206,6 @@ func (this *scaner) next(req *proto.ScanReq) {
 			return
 		}
 
-		//this.offset++
-
 		if nil == resp.Rows {
 			resp.Rows = []*proto.Row{}
 		}
@@ -255,112 +252,3 @@ func (this *scaner) next(req *proto.ScanReq) {
 	}
 
 }
-
-/*
-const selectTemplate string = "select %s from %s order by __key__ limit %d offset %d;"
-
-func (this *scaner) next(req *proto.ScanReq) {
-
-	head := req.GetHead()
-
-	resp := &proto.ScanResp{
-		Head: &proto.RespCommon{
-			Seqno:   pb.Int64(head.GetSeqno()),
-			ErrCode: pb.Int32(errcode.ERR_OK),
-		},
-	}
-
-	if isStop() {
-		resp.Head.ErrCode = pb.Int32(errcode.ERR_SERVER_STOPED)
-		this.session.Send(resp)
-		this.session.Close("", 1)
-		return
-	}
-
-	deadline := time.Now().Add(time.Duration(head.GetTimeout()))
-
-	count := req.GetCount()
-
-	if 0 == count {
-		count = 50
-	}
-
-	selectStr := fmt.Sprintf(selectTemplate, strings.Join(this.fields, ","), this.table, count, this.offset)
-
-	rows, err := this.db.Query(selectStr)
-
-	if time.Now().After(deadline) {
-		//已经超时
-		return
-	}
-
-	Debugln("query ok")
-
-	if nil != err {
-		Errorln(selectStr, err)
-		resp.Head.ErrCode = pb.Int32(errcode.ERR_SQLERROR)
-		this.session.Send(resp)
-		this.session.Close("", 1)
-		return
-	}
-
-	defer rows.Close()
-
-	for rows.Next() {
-		err := rows.Scan(this.field_receiver...)
-		if err != nil {
-			resp.Head.ErrCode = pb.Int32(errcode.ERR_SQLERROR)
-			this.session.Send(resp)
-			this.session.Close("scan error", 1)
-			Errorln("rows.Scan err", err)
-			return
-		}
-
-		this.offset++
-
-		if nil == resp.Rows {
-			resp.Rows = []*proto.Row{}
-		}
-
-		var (
-			key     string
-			version int64
-		)
-
-		fields := []*proto.Field{}
-		for i := 0; i < len(this.fields); i++ {
-			if this.fields[i] == "__key__" {
-				key = this.field_convter[i](this.field_receiver[i]).(string)
-			} else if this.fields[i] == "__version__" {
-				version = this.field_convter[i](this.field_receiver[i]).(int64)
-			} else {
-				fields = append(fields, proto.PackField(this.fields[i], this.field_convter[i](this.field_receiver[i])))
-			}
-		}
-
-		resp.Rows = append(resp.Rows, &proto.Row{
-			Key:     pb.String(key),
-			Version: pb.Int64(version),
-			Fields:  fields,
-		})
-
-		count--
-
-		if 0 == count {
-			resp.Head.ErrCode = pb.Int32(errcode.ERR_OK)
-			break
-		}
-	}
-
-	if time.Now().After(deadline) {
-		//已经超时
-		return
-	}
-
-	this.session.Send(resp)
-
-	if resp.Head.GetErrCode() != errcode.ERR_OK {
-		this.session.Close("scan finish", 1)
-	}
-}
-*/

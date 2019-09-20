@@ -47,7 +47,6 @@ func processSet(ckey *cacheKey, cmd *command, ctx *cmdContext) {
 		ctx.fields = map[string]*proto.Field{}
 	}
 
-	return
 }
 
 func processSetNx(ckey *cacheKey, cmd *command, ctx *cmdContext) {
@@ -67,7 +66,6 @@ func processSetNx(ckey *cacheKey, cmd *command, ctx *cmdContext) {
 		ctx.fields = map[string]*proto.Field{}
 	}
 
-	return
 }
 
 func processCompareAndSet(ckey *cacheKey, cmd *command, ctx *cmdContext) {
@@ -94,8 +92,6 @@ func processCompareAndSet(ckey *cacheKey, cmd *command, ctx *cmdContext) {
 			ctx.writeBackFlag = write_back_update //数据存在执行update
 			ctx.fields[cmd.cns.oldV.GetName()] = cmd.cns.newV
 		}
-
-		return
 	}
 }
 
@@ -122,8 +118,6 @@ func processCompareAndSetNx(ckey *cacheKey, cmd *command, ctx *cmdContext) {
 		ctx.writeBackFlag = write_back_insert
 		ctx.fields[cmd.cns.oldV.GetName()] = cmd.cns.newV
 	}
-
-	return
 }
 
 func processIncrBy(ckey *cacheKey, cmd *command, ctx *cmdContext) {
@@ -154,8 +148,6 @@ func processIncrBy(ckey *cacheKey, cmd *command, ctx *cmdContext) {
 	} else {
 		ctx.fields = map[string]*proto.Field{}
 	}
-
-	return
 }
 
 func processDecrBy(ckey *cacheKey, cmd *command, ctx *cmdContext) {
@@ -186,8 +178,6 @@ func processDecrBy(ckey *cacheKey, cmd *command, ctx *cmdContext) {
 	} else {
 		ctx.fields = map[string]*proto.Field{}
 	}
-
-	return
 }
 
 func processDel(ckey *cacheKey, cmd *command, ctx *cmdContext) {
@@ -210,8 +200,6 @@ func processDel(ckey *cacheKey, cmd *command, ctx *cmdContext) {
 		} else {
 			ctx.fields = map[string]*proto.Field{}
 		}
-
-		return
 	}
 }
 
@@ -259,7 +247,7 @@ func processCmd(ckey *cacheKey, fromClient bool) {
 		} else if now.After(cmd.deadline) {
 			ckey.cmdQueue.Remove(e)
 			//已经超时
-			cmd.dontReply()
+			cmd.reply(errcode.ERR_TIMEOUT, nil, -1)
 		} else {
 			if cmd.cmdType == cmdGet {
 				ckey.cmdQueue.Remove(e)

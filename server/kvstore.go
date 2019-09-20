@@ -93,10 +93,10 @@ func (this *kvSlot) removeTmpKv(ckey *cacheKey) {
 
 // a key-value store backed by raft
 type kvstore struct {
-	proposeC    *util.BlockQueue //chan<- *batchProposal // channel for proposing updates
-	readReqC    *util.BlockQueue //chan<- *cmdContext
+	proposeC    *util.BlockQueue
+	readReqC    *util.BlockQueue
 	snapshotter *snap.Snapshotter
-	slots       []*kvSlot //map[string]*cacheKey
+	slots       []*kvSlot
 	mtx         sync.Mutex
 	lruHead     cacheKey
 	lruTail     cacheKey
@@ -313,8 +313,7 @@ func (s *kvstore) readCommits(once bool, commitC <-chan interface{}, errorC <-ch
 							}
 
 							if v.writeBackFlag == write_back_insert || v.writeBackFlag == write_back_update || v.writeBackFlag == write_back_insert_update {
-								ckey.setValueNoLock(v)
-								ckey.setOKNoLock(v.version)
+								ckey.setOKNoLock(v.version, &v.fields)
 							} else if v.writeBackFlag == write_back_delete {
 								ckey.setMissingNoLock()
 							}

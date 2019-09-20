@@ -37,12 +37,7 @@ func onSqlLoadOKGet(ctx *cmdContext) {
 	Debugln("onSqlLoadOKGet")
 	version := ctx.fields["__version__"].GetInt()
 	ckey := ctx.getCacheKey()
-
-	ckey.mtx.Lock()
-	ckey.setValueNoLock(ctx)
-	ckey.setOKNoLock(version)
-	ckey.mtx.Unlock()
-
+	ckey.setOK(version, &ctx.fields)
 	ctx.errno = errcode.ERR_OK
 	ctx.version = version
 	ckey.store.issueAddKv(ctx)
@@ -59,10 +54,7 @@ func onSqlLoadOKSet(ctx *cmdContext) {
 	cmd := ctx.getCmd()
 	ckey := ctx.getCacheKey()
 
-	ckey.mtx.Lock()
-	ckey.setValueNoLock(ctx)
-	ckey.setOKNoLock(version)
-	ckey.mtx.Unlock()
+	ckey.setOK(version, &ctx.fields)
 
 	cmdType := cmd.cmdType
 
@@ -105,10 +97,7 @@ func onSqlLoadOKDel(ctx *cmdContext) {
 	version := ctx.fields["__version__"].GetInt()
 	cmd := ctx.getCmd()
 	ckey := ctx.getCacheKey()
-	ckey.mtx.Lock()
-	ckey.setValueNoLock(ctx)
-	ckey.setOKNoLock(version)
-	ckey.mtx.Unlock()
+	ckey.setOK(version, &ctx.fields)
 	if nil != cmd.version && *cmd.version != version {
 		//版本号不对
 		ctx.errno = errcode.ERR_VERSION

@@ -56,23 +56,6 @@ func (this *dispatcher) OnNewClient(session kendynet.StreamSession) {
 	sessions.Store(session, session)
 }
 
-/*
-func onClose(session kendynet.StreamSession, reason string) {
-	dispatcher_.OnClose(session, reason)
-}
-
-func onNewClient(session kendynet.StreamSession) {
-	dispatcher_.OnNewClient(session)
-}
-
-func register(msg pb.Message, h handler) {
-	dispatcher_.Register(msg, h)
-}
-
-func dispatch(session kendynet.StreamSession, msg *codec.Message) {
-	dispatcher_.Dispatch(session, msg)
-}*/
-
 func ping(server *Server, session kendynet.StreamSession, msg *codec.Message) {
 	req := msg.GetData().(*proto.PingReq)
 	resp := &proto.PingResp{
@@ -80,19 +63,3 @@ func ping(server *Server, session kendynet.StreamSession, msg *codec.Message) {
 	}
 	session.Send(resp)
 }
-
-/*
-func init() {
-	register(&proto.DelReq{}, del)
-	register(&proto.GetReq{}, get)
-	register(&proto.SetReq{}, set)
-	register(&proto.SetNxReq{}, setNx)
-	register(&proto.CompareAndSetReq{}, compareAndSet)
-	register(&proto.CompareAndSetNxReq{}, compareAndSetNx)
-	register(&proto.PingReq{}, ping)
-	register(&proto.IncrByReq{}, incrBy)
-	register(&proto.DecrByReq{}, decrBy)
-	register(&proto.ScanReq{}, scan)
-	register(&proto.ReloadTableConfReq{}, reloadTableConf)
-	register(&proto.ReloadConfigReq{}, reloadConf)
-}*/
