@@ -1,11 +1,11 @@
 package server
 
 import (
-	"encoding/binary"
-	"github.com/sniperHW/flyfish/conf"
+	//"encoding/binary"
+	//"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
-	"time"
+	//"time"
 )
 
 const (
@@ -15,6 +15,11 @@ const (
 	proposal_delete   = 3
 	proposal_kick     = 4
 )
+
+type proposal struct {
+	ctx *cmdContext
+	op  int
+}
 
 type batchProposal struct {
 	proposalStr *str
@@ -62,48 +67,6 @@ func (this *batchProposal) onPorposeTimeout() {
 type commitedBatchProposal struct {
 	data []byte
 	ctxs *ctxArray
-}
-
-func (this *kvstore) tryProposeBatch() {
-
-	if this.proposeBatch.batchCount > 0 {
-
-		config := conf.GetConfig()
-
-		if this.proposeBatch.batchCount >= int32(config.BatchCount) || this.proposeBatch.proposalStr.dataLen() >= config.BatchByteSize || time.Now().After(this.proposeBatch.nextFlush) {
-
-			this.proposeBatch.batchCount = 0
-
-			proposalStr := this.proposeBatch.proposalStr
-			ctxs := this.proposeBatch.ctxs
-
-			this.proposeBatch.proposalStr = nil
-			this.proposeBatch.ctxs = nil
-
-			binary.BigEndian.PutUint64(proposalStr.data[:8], uint64(0))
-
-			this.Propose(&batchProposal{
-				proposalStr: proposalStr,
-				ctxs:        ctxs,
-			})
-		}
-	}
-}
-
-func (this *kvstore) appendProposal(tt int, unikey string, fields map[string]*proto.Field, version int64) {
-
-	if nil == this.proposeBatch.proposalStr {
-		this.proposeBatch.proposalStr = strGet()
-		this.proposeBatch.proposalStr.appendInt64(0)
-	}
-
-	this.proposeBatch.batchCount++
-
-	if this.proposeBatch.batchCount == 1 {
-		this.proposeBatch.nextFlush = time.Now().Add(time.Millisecond * time.Duration(conf.GetConfig().ProposalFlushInterval))
-	}
-
-	this.proposeBatch.proposalStr.appendProposal(tt, unikey, fields, version)
 }
 
 func fillDefaultValue(meta *table_meta, ctx *cmdContext) {
@@ -238,19 +201,10 @@ func (this *kvstore) issueUpdate(ctx *cmdContext) {
 		return
 	}
 
-	this.mtx.Lock()
-
-	if nil == this.proposeBatch.ctxs {
-		this.proposeBatch.ctxs = ctxArrayGet()
-	}
-
-	this.proposeBatch.ctxs.append(ctx)
-
-	this.appendProposal(binop, ckey.uniKey, ctx.fields, ctx.version)
-
-	this.tryProposeBatch()
-
-	this.mtx.Unlock()
+	this.proposeC.AddNoWait(&proposal{
+		op:  binop,
+		ctx: ctx,
+	})
 
 }
 
@@ -259,17 +213,9 @@ func (this *kvstore) issueUpdate(ctx *cmdContext) {
  */
 
 func (this *kvstore) issueAddKv(ctx *cmdContext) {
-	this.mtx.Lock()
 
-	if nil == this.proposeBatch.ctxs {
-		this.proposeBatch.ctxs = ctxArrayGet()
-	}
-
-	this.proposeBatch.ctxs.append(ctx)
-
-	this.appendProposal(proposal_snapshot, ctx.getCacheKey().uniKey, ctx.fields, ctx.version)
-
-	this.tryProposeBatch()
-
-	this.mtx.Unlock()
+	this.proposeC.AddNoWait(&proposal{
+		op:  proposal_snapshot,
+		ctx: ctx,
+	})
 }

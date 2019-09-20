@@ -75,7 +75,7 @@ func (this *readBatchSt) reply() {
 
 // A key-value stream backed by raft
 type raftNode struct {
-	proposeC    <-chan *batchProposal    //<-chan []byte            // proposed messages (k,v)
+	//proposeC    <-chan *proposal         //<-chan []byte            // proposed messages (k,v)
 	confChangeC <-chan raftpb.ConfChange // proposed cluster config changes
 	commitC     chan<- interface{}       //chan<- *[]byte           // entries committed to log (k,v)
 	errorC      chan<- error             // errors from raft session
@@ -721,63 +721,102 @@ func (rc *raftNode) startReadPipeline() {
 	}()
 }
 
+func (rc *raftNode) issuePropose(batch *batchProposal) {
+
+	Infoln("batch", batch.ctxs.count)
+
+	// blocks until accepted by raft state machine
+	//batch.index = atomic.AddInt64(&rc.proposeIndex, 1)
+	//binary.BigEndian.PutUint64(batch.proposalStr.data[:8], uint64(batch.index))
+
+	rc.muPendingPropose.Lock()
+	e := rc.pendingPropose.PushBack(batch)
+	rc.muPendingPropose.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	err := rc.node.Propose(ctx, batch.proposalStr.bytes())
+	cancel()
+
+	if nil != err {
+		if err == ctx.Err() {
+			batch.onPorposeTimeout()
+		} else {
+
+			rc.muPendingPropose.Lock()
+			rc.pendingPropose.Remove(e)
+			rc.muPendingPropose.Unlock()
+
+			errCode := 0
+
+			switch err {
+			case raft.ErrStopped:
+				errCode = errcode.ERR_SERVER_STOPED
+			case raft.ErrProposalDropped:
+				if !rc.isLeader() {
+					errCode = errcode.ERR_NOT_LEADER
+				} else {
+					errCode = errcode.ERR_PROPOSAL_DROPPED
+				}
+			default:
+				errCode = errcode.ERR_RAFT
+			}
+			batch.onError(errCode)
+		}
+	}
+}
+
+func (rc *raftNode) newBatchProposal() *batchProposal {
+	index := atomic.AddInt64(&rc.proposeIndex, 1)
+
+	return &batchProposal{
+		index:       index,
+		ctxs:        ctxArrayGet(),
+		proposalStr: strGet().appendInt64(index),
+	}
+}
+
 func (rc *raftNode) startProposePipeline() {
 
 	go func() {
 
+		batch := rc.newBatchProposal()
+
 		for {
 			closed, localList := rc.proposePipeline.Get()
 			for _, vv := range localList {
-
-				prop := vv.(*batchProposal)
-
+				prop := vv.(*proposal)
 				if !rc.isLeader() {
-					prop.onError(errcode.ERR_NOT_LEADER)
+					ckey := prop.ctx.getCacheKey()
+					if prop.ctx.getCmdType() != cmdKick {
+						prop.ctx.reply(int32(errcode.ERR_NOT_LEADER), nil, 0)
+					} else {
+						ckey.clearKicking()
+					}
+					if !ckey.tryRemoveTmpKey(errcode.ERR_NOT_LEADER) {
+						ckey.processQueueCmd()
+					}
 				} else {
-					// blocks until accepted by raft state machine
-					prop.index = atomic.AddInt64(&rc.proposeIndex, 1)
-					binary.BigEndian.PutUint64(prop.proposalStr.data[:8], uint64(prop.index))
-					rc.muPendingPropose.Lock()
-					e := rc.pendingPropose.PushBack(prop)
-					rc.muPendingPropose.Unlock()
 
-					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-					err := rc.node.Propose(ctx, prop.proposalStr.bytes())
-					cancel()
+					batch.ctxs.append(prop.ctx)
+					batch.proposalStr.appendProposal(prop.op, prop.ctx.getUniKey(), prop.ctx.fields, prop.ctx.version)
 
-					if nil != err {
-						if err == ctx.Err() {
-							prop.onPorposeTimeout()
-						} else {
-
-							rc.muPendingPropose.Lock()
-							rc.pendingPropose.Remove(e)
-							rc.muPendingPropose.Unlock()
-
-							errCode := 0
-
-							switch err {
-							case raft.ErrStopped:
-								errCode = errcode.ERR_SERVER_STOPED
-							case raft.ErrProposalDropped:
-								if !rc.isLeader() {
-									errCode = errcode.ERR_NOT_LEADER
-								} else {
-									errCode = errcode.ERR_PROPOSAL_DROPPED
-								}
-							default:
-								errCode = errcode.ERR_RAFT
-							}
-							prop.onError(errCode)
-						}
+					if batch.ctxs.full() {
+						rc.issuePropose(batch)
+						batch = rc.newBatchProposal()
 					}
 				}
+			}
+
+			if !batch.ctxs.empty() {
+				rc.issuePropose(batch)
+				batch = rc.newBatchProposal()
 			}
 
 			if closed {
 				return
 			}
 		}
+
 	}()
 }
 

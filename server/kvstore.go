@@ -92,21 +92,6 @@ func (this *kvSlot) removeTmpKv(ckey *cacheKey) {
 	delete(this.tmpkv, ckey.uniKey)
 }
 
-type proposeBatch struct {
-	ctxs        *ctxArray
-	nextFlush   time.Time
-	proposalStr *str
-	batchCount  int32 //待序列化到文件的binlog数量
-	timer       *timer.Timer
-}
-
-/*type readBatch struct {
-	ctxs       *ctxArray
-	nextFlush  time.Time
-	batchCount int32 //待序列化到文件的binlog数量
-	timer      *timer.Timer
-}*/
-
 // a key-value store backed by raft
 type kvstore struct {
 	proposeC    *util.BlockQueue //chan<- *batchProposal // channel for proposing updates
@@ -123,9 +108,6 @@ type kvstore struct {
 
 	lruTimer *timer.Timer
 	rn       *raftNode
-
-	proposeBatch proposeBatch
-	//readBatch    readBatch
 }
 
 type storeGroup struct {
@@ -163,30 +145,16 @@ func (this *storeGroup) stop() {
 	}
 }
 
-func (this *storeGroup) tryProposeBatch() {
-	this.RLock()
-	defer this.RUnlock()
-	for _, v := range this.stores {
-		v.tryProposeBatch()
-	}
-}
-
 func newKVStore(rn *raftNode, snapshotter *snap.Snapshotter, proposeC *util.BlockQueue, commitC <-chan interface{}, errorC <-chan error, readReqC *util.BlockQueue) *kvstore {
 
-	config := conf.GetConfig()
+	//config := conf.GetConfig()
 
 	s := &kvstore{
 		proposeC:    proposeC,
 		slots:       []*kvSlot{},
 		snapshotter: snapshotter,
-		proposeBatch: proposeBatch{
-			nextFlush: time.Now().Add(time.Millisecond * time.Duration(config.ProposalFlushInterval)),
-		},
-		/*readBatch: readBatch{
-			nextFlush: time.Now().Add(time.Millisecond * time.Duration(config.ReadFlushInterval)),
-		},*/
-		readReqC: readReqC,
-		rn:       rn,
+		readReqC:    readReqC,
+		rn:          rn,
 	}
 
 	for i := 0; i < kvSlotSize; i++ {
@@ -203,11 +171,11 @@ func newKVStore(rn *raftNode, snapshotter *snap.Snapshotter, proposeC *util.Bloc
 	s.readCommits(true, commitC, errorC)
 	// read commits from raft into kvStore map until error
 
-	s.proposeBatch.timer = timer.Repeat(time.Millisecond*time.Duration(config.ProposalFlushInterval), nil, func(t *timer.Timer) {
+	/*s.proposeBatch.timer = timer.Repeat(time.Millisecond*time.Duration(config.ProposalFlushInterval), nil, func(t *timer.Timer) {
 		s.mtx.Lock()
 		s.tryProposeBatch()
 		s.mtx.Unlock()
-	})
+	})*/
 
 	/*s.readBatch.timer = timer.Repeat(time.Millisecond*time.Duration(config.ReadFlushInterval), nil, func(t *timer.Timer) {
 		s.mtx.Lock()
@@ -288,10 +256,6 @@ func (s *kvstore) kick(ckey *cacheKey) bool {
 		return false
 	}
 
-	if nil == s.proposeBatch.ctxs {
-		s.proposeBatch.ctxs = ctxArrayGet()
-	}
-
 	ctx := &cmdContext{
 		commands: []*command{&command{
 			cmdType: cmdKick,
@@ -302,11 +266,10 @@ func (s *kvstore) kick(ckey *cacheKey) bool {
 
 	s.kickingCount++
 
-	s.proposeBatch.ctxs.append(ctx)
-
-	s.appendProposal(proposal_kick, ckey.uniKey, nil, 0)
-
-	s.tryProposeBatch()
+	s.proposeC.AddNoWait(&proposal{
+		op:  proposal_kick,
+		ctx: ctx,
+	})
 
 	return true
 }
@@ -732,7 +695,7 @@ func initKvGroup(mutilRaft *mutilRaft, id *int, cluster *string, mod int) *store
 			proposeC.Close()
 			close(confChangeC)
 			readC.Close()
-			store.proposeBatch.timer.Cancel()
+			//store.proposeBatch.timer.Cancel()
 			store.lruTimer.Cancel()
 		}
 

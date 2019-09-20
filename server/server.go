@@ -204,12 +204,11 @@ func (this *Server) Stop() {
 
 		Infoln("ShutdownRead ok", "cmdCount:", cmdCount)
 
-		//等待redis请求和命令执行完成
 		waitCondition(func() bool {
 			if atomic.LoadInt64(&cmdCount) == 0 {
 				return true
 			} else {
-				this.storeGroup.tryProposeBatch()
+				//this.storeGroup.tryProposeBatch()
 				return false
 			}
 		})
