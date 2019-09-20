@@ -123,8 +123,8 @@ var defaultSnapshotCount uint64 = 10000
 // provided the proposal channel. All log entries are replayed over the
 // commit channel, followed by a nil message (to indicate the channel is
 // current), then new log entries. To shutdown, close proposeC and read errorC.
-func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSnapshot func() [][]kvsnap, proposeC <-chan *batchProposal,
-	confChangeC <-chan raftpb.ConfChange, readC <-chan *cmdContext) (*raftNode, <-chan interface{}, <-chan error, <-chan *snap.Snapshotter) {
+func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSnapshot func() [][]kvsnap, proposeC *util.BlockQueue,
+	confChangeC <-chan raftpb.ConfChange, readC *util.BlockQueue) (*raftNode, <-chan interface{}, <-chan error, <-chan *snap.Snapshotter) {
 
 	/*
 	 *  如果commitC设置成无缓冲，则raftNode会等待上层提取commitedEntry之后才继续后续处理。
@@ -139,7 +139,7 @@ func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSna
 	region := id & 0xFFFF
 
 	rc := &raftNode{
-		proposeC:         proposeC,
+		//proposeC:         proposeC,
 		confChangeC:      confChangeC,
 		commitC:          commitC,
 		errorC:           errorC,
@@ -159,10 +159,10 @@ func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSna
 		region:           region,
 
 		pendingRead: list.New(),
-		readC:       readC,
+		//readC:       readC,
 
-		proposePipeline: util.NewBlockQueue(),
-		readPipeline:    util.NewBlockQueue(),
+		proposePipeline: proposeC, //util.NewBlockQueue(),
+		readPipeline:    readC,    //util.NewBlockQueue(),
 
 		// rest of structure populated after WAL replay
 	}
@@ -639,6 +639,8 @@ func (rc *raftNode) onLoseLeadership() {
 
 func (rc *raftNode) issueRead(ctxs *ctxArray) {
 
+	Infoln("c:", ctxs.count)
+
 	ctxToSend := make([]byte, 8)
 	c := &readBatchSt{
 		readIndex: atomic.AddInt64(&rc.readIndex, 1),
@@ -825,8 +827,19 @@ func (rc *raftNode) serveChannels() {
 	// send proposals over raft
 	go func() {
 		confChangeCount := uint64(0)
+		for rc.confChangeC != nil {
+			select {
+			case cc, ok := <-rc.confChangeC:
+				if !ok {
+					rc.confChangeC = nil
+				} else {
+					confChangeCount++
+					cc.ID = confChangeCount
+					rc.node.ProposeConfChange(context.TODO(), cc)
+				}
+			}
 
-		for rc.proposeC != nil && rc.confChangeC != nil && rc.readC != nil {
+			/*for rc.proposeC != nil && rc.confChangeC != nil && rc.readC != nil {
 			select {
 			case prop, ok := <-rc.proposeC:
 				if !ok {
@@ -849,7 +862,7 @@ func (rc *raftNode) serveChannels() {
 				} else {
 					rc.readPipeline.AddNoWait(readReq)
 				}
-			}
+			}*/
 		}
 		// client closed channel; shutdown raft if not already
 		close(rc.stopc)

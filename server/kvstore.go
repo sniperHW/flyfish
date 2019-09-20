@@ -20,6 +20,7 @@ import (
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet/timer"
+	"github.com/sniperHW/kendynet/util"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	"go.etcd.io/etcd/raft/raftpb"
 	"log"
@@ -108,8 +109,8 @@ type proposeBatch struct {
 
 // a key-value store backed by raft
 type kvstore struct {
-	proposeC    chan<- *batchProposal // channel for proposing updates
-	readReqC    chan<- *cmdContext
+	proposeC    *util.BlockQueue //chan<- *batchProposal // channel for proposing updates
+	readReqC    *util.BlockQueue //chan<- *cmdContext
 	snapshotter *snap.Snapshotter
 	slots       []*kvSlot //map[string]*cacheKey
 	mtx         sync.Mutex
@@ -170,7 +171,7 @@ func (this *storeGroup) tryProposeBatch() {
 	}
 }
 
-func newKVStore(rn *raftNode, snapshotter *snap.Snapshotter, proposeC chan<- *batchProposal, commitC <-chan interface{}, errorC <-chan error, readReqC chan<- *cmdContext) *kvstore {
+func newKVStore(rn *raftNode, snapshotter *snap.Snapshotter, proposeC *util.BlockQueue, commitC <-chan interface{}, errorC <-chan error, readReqC *util.BlockQueue) *kvstore {
 
 	config := conf.GetConfig()
 
@@ -311,11 +312,13 @@ func (s *kvstore) kick(ckey *cacheKey) bool {
 }
 
 func (s *kvstore) Propose(propose *batchProposal) {
-	s.proposeC <- propose
+	//s.proposeC <- propose
+	s.proposeC.AddNoWait(propose)
 }
 
 func (s *kvstore) issueReadReq(c *cmdContext) {
-	s.readReqC <- c
+	//s.readReqC <- c
+	s.readReqC.AddNoWait(c)
 }
 
 func (s *kvstore) readCommits(once bool, commitC <-chan interface{}, errorC <-chan error) {
@@ -719,9 +722,9 @@ func initKvGroup(mutilRaft *mutilRaft, id *int, cluster *string, mod int) *store
 
 	for i := 1; i <= mod; i++ {
 
-		proposeC := make(chan *batchProposal, 100)
+		proposeC := util.NewBlockQueue() //make(chan *batchProposal, 100)
 		confChangeC := make(chan raftpb.ConfChange)
-		readC := make(chan *cmdContext, 100)
+		readC := util.NewBlockQueue() //make(chan *cmdContext, 100)
 
 		var store *kvstore
 
@@ -738,9 +741,9 @@ func initKvGroup(mutilRaft *mutilRaft, id *int, cluster *string, mod int) *store
 		store = newKVStore(rn, <-snapshotterReady, proposeC, commitC, errorC, readC)
 
 		store.stop = func() {
-			close(proposeC)
+			proposeC.Close()
 			close(confChangeC)
-			close(readC)
+			readC.Close()
 			store.proposeBatch.timer.Cancel()
 			store.lruTimer.Cancel()
 		}
