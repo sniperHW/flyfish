@@ -60,6 +60,22 @@ func (this *readBatchSt) onError(err int) {
 	ctxArrayPut(this.ctxs)
 }
 
+func (this *readBatchSt) reply() {
+	for i := 0; i < this.ctxs.count; i++ {
+		v := this.ctxs.ctxs[i]
+		ckey := v.getCacheKey()
+		ckey.mtx.Lock()
+		if ckey.status == cache_missing {
+			v.reply(errcode.ERR_NOTFOUND, nil, -1)
+		} else {
+			v.reply(errcode.ERR_OK, ckey.values, ckey.version)
+		}
+		ckey.mtx.Unlock()
+		ckey.processQueueCmd()
+	}
+	ctxArrayPut(this.ctxs)
+}
+
 // A key-value stream backed by raft
 type raftNode struct {
 	proposeC    <-chan *batchProposal    //<-chan []byte            // proposed messages (k,v)
@@ -802,10 +818,11 @@ func (rc *raftNode) processReadStates(readStates []raft.ReadState) {
 			c := e.Value.(*readBatchSt)
 			rc.pendingRead.Remove(e)
 			rc.muPendingRead.Unlock()
-			select {
+			c.reply()
+			/*select {
 			case rc.commitC <- c:
 			case <-rc.stopc:
-			}
+			}*/
 		}
 	}
 }

@@ -17,7 +17,7 @@ package server
 import (
 	"encoding/binary"
 	"github.com/sniperHW/flyfish/conf"
-	"github.com/sniperHW/flyfish/errcode"
+	//"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet/timer"
 	"github.com/sniperHW/kendynet/util"
@@ -426,19 +426,7 @@ func (s *kvstore) readCommits(once bool, commitC <-chan interface{}, errorC <-ch
 			}
 		case *readBatchSt:
 			c := d.(*readBatchSt)
-			for i := 0; i < c.ctxs.count; i++ {
-				v := c.ctxs.ctxs[i]
-				ckey := v.getCacheKey()
-				ckey.mtx.Lock()
-				if ckey.status == cache_missing {
-					v.reply(errcode.ERR_NOTFOUND, nil, -1)
-				} else {
-					v.reply(errcode.ERR_OK, ckey.values, ckey.version)
-				}
-				ckey.mtx.Unlock()
-				ckey.processQueueCmd()
-			}
-			ctxArrayPut(c.ctxs)
+			c.reply()
 		}
 	}
 
