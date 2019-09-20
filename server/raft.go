@@ -63,15 +63,12 @@ func (this *readBatchSt) onError(err int) {
 func (this *readBatchSt) reply() {
 	for i := 0; i < this.ctxs.count; i++ {
 		v := this.ctxs.ctxs[i]
-		ckey := v.getCacheKey()
-		ckey.mtx.Lock()
-		if ckey.status == cache_missing {
+		if v.fields == nil {
 			v.reply(errcode.ERR_NOTFOUND, nil, -1)
 		} else {
-			v.reply(errcode.ERR_OK, ckey.values, ckey.version)
+			v.reply(errcode.ERR_OK, v.fields, v.version)
 		}
-		ckey.mtx.Unlock()
-		ckey.processQueueCmd()
+		v.getCacheKey().processQueueCmd()
 	}
 	ctxArrayPut(this.ctxs)
 }
@@ -818,11 +815,10 @@ func (rc *raftNode) processReadStates(readStates []raft.ReadState) {
 			c := e.Value.(*readBatchSt)
 			rc.pendingRead.Remove(e)
 			rc.muPendingRead.Unlock()
-			c.reply()
-			/*select {
+			select {
 			case rc.commitC <- c:
 			case <-rc.stopc:
-			}*/
+			}
 		}
 	}
 }
@@ -855,31 +851,6 @@ func (rc *raftNode) serveChannels() {
 					rc.node.ProposeConfChange(context.TODO(), cc)
 				}
 			}
-
-			/*for rc.proposeC != nil && rc.confChangeC != nil && rc.readC != nil {
-			select {
-			case prop, ok := <-rc.proposeC:
-				if !ok {
-					rc.proposeC = nil
-				} else {
-					rc.proposePipeline.AddNoWait(prop)
-				}
-
-			case cc, ok := <-rc.confChangeC:
-				if !ok {
-					rc.confChangeC = nil
-				} else {
-					confChangeCount++
-					cc.ID = confChangeCount
-					rc.node.ProposeConfChange(context.TODO(), cc)
-				}
-			case readReq, ok := <-rc.readC:
-				if !ok {
-					rc.readC = nil
-				} else {
-					rc.readPipeline.AddNoWait(readReq)
-				}
-			}*/
 		}
 		// client closed channel; shutdown raft if not already
 		close(rc.stopc)

@@ -7,6 +7,20 @@ import (
 	"time"
 )
 
+func processGet(ckey *cacheKey, cmd *command, ctx *cmdContext) {
+	Debugln("processGet", cmd.uniKey)
+	if ckey.status != cache_missing {
+		if ckey.status == cache_ok {
+			ctx.fields = ckey.values
+			ctx.version = ckey.version
+		} else {
+			ctx.fields = map[string]*proto.Field{}
+		}
+	}
+	//连续的get请求可以合并到同一个ctx钟
+	ctx.commands = append(ctx.commands, cmd)
+}
+
 func processSet(ckey *cacheKey, cmd *command, ctx *cmdContext) {
 	Debugln("processSet", cmd.uniKey)
 	if nil != cmd.version {
@@ -248,13 +262,8 @@ func processCmd(ckey *cacheKey, fromClient bool) {
 			cmd.dontReply()
 		} else {
 			if cmd.cmdType == cmdGet {
-				Debugln("processGet", cmd.uniKey)
 				ckey.cmdQueue.Remove(e)
-				if nil == ctx.fields {
-					ctx.fields = map[string]*proto.Field{}
-				}
-				//连续的get请求可以合并到同一个ctx钟
-				ctx.commands = append(ctx.commands, cmd)
+				processGet(ckey, cmd, ctx)
 			} else {
 				if len(ctx.commands) > 0 {
 					//前面已经有get命令了
