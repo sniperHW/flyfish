@@ -1,11 +1,8 @@
 package server
 
 import (
-	//"encoding/binary"
-	//"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
-	//"time"
 )
 
 const (

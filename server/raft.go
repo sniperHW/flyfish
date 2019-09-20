@@ -653,8 +653,6 @@ func (rc *raftNode) onLoseLeadership() {
 
 func (rc *raftNode) issueRead(ctxs *ctxArray) {
 
-	Infoln("c:", ctxs.count)
-
 	ctxToSend := make([]byte, 8)
 	c := &readBatchSt{
 		readIndex: atomic.AddInt64(&rc.readIndex, 1),

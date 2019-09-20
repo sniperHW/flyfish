@@ -17,7 +17,6 @@ package server
 import (
 	"encoding/binary"
 	"github.com/sniperHW/flyfish/conf"
-	//"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet/timer"
 	"github.com/sniperHW/kendynet/util"
@@ -147,8 +146,6 @@ func (this *storeGroup) stop() {
 
 func newKVStore(rn *raftNode, snapshotter *snap.Snapshotter, proposeC *util.BlockQueue, commitC <-chan interface{}, errorC <-chan error, readReqC *util.BlockQueue) *kvstore {
 
-	//config := conf.GetConfig()
-
 	s := &kvstore{
 		proposeC:    proposeC,
 		slots:       []*kvSlot{},
@@ -170,18 +167,6 @@ func newKVStore(rn *raftNode, snapshotter *snap.Snapshotter, proposeC *util.Bloc
 	// replay log into key-value map
 	s.readCommits(true, commitC, errorC)
 	// read commits from raft into kvStore map until error
-
-	/*s.proposeBatch.timer = timer.Repeat(time.Millisecond*time.Duration(config.ProposalFlushInterval), nil, func(t *timer.Timer) {
-		s.mtx.Lock()
-		s.tryProposeBatch()
-		s.mtx.Unlock()
-	})*/
-
-	/*s.readBatch.timer = timer.Repeat(time.Millisecond*time.Duration(config.ReadFlushInterval), nil, func(t *timer.Timer) {
-		s.mtx.Lock()
-		s.tryReadBatch()
-		s.mtx.Unlock()
-	})*/
 
 	s.lruTimer = timer.Repeat(time.Second, nil, func(t *timer.Timer) {
 		s.mtx.Lock()
@@ -275,12 +260,10 @@ func (s *kvstore) kick(ckey *cacheKey) bool {
 }
 
 func (s *kvstore) Propose(propose *batchProposal) {
-	//s.proposeC <- propose
 	s.proposeC.AddNoWait(propose)
 }
 
 func (s *kvstore) issueReadReq(c *cmdContext) {
-	//s.readReqC <- c
 	s.readReqC.AddNoWait(c)
 }
 
@@ -673,9 +656,9 @@ func initKvGroup(mutilRaft *mutilRaft, id *int, cluster *string, mod int) *store
 
 	for i := 1; i <= mod; i++ {
 
-		proposeC := util.NewBlockQueue() //make(chan *batchProposal, 100)
+		proposeC := util.NewBlockQueue()
 		confChangeC := make(chan raftpb.ConfChange)
-		readC := util.NewBlockQueue() //make(chan *cmdContext, 100)
+		readC := util.NewBlockQueue()
 
 		var store *kvstore
 
@@ -695,7 +678,6 @@ func initKvGroup(mutilRaft *mutilRaft, id *int, cluster *string, mod int) *store
 			proposeC.Close()
 			close(confChangeC)
 			readC.Close()
-			//store.proposeBatch.timer.Cancel()
 			store.lruTimer.Cancel()
 		}
 
