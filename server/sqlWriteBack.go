@@ -75,6 +75,19 @@ func (this *sqlUpdater) append(v interface{}) {
 
 		ckey := v.(*cacheKey)
 
+		if !ckey.store.rn.isLeader() {
+			//当前store已经不是leader,不能执行sql操作。
+			ckey.mtx.Lock()
+			ckey.writeBackLocked = false
+			ckey.sqlFlag = write_back_none
+
+			if len(ckey.modifyFields) > 0 {
+				ckey.modifyFields = map[string]bool{}
+			}
+			ckey.mtx.Unlock()
+			return
+		}
+
 		Debugln(*ckey)
 
 		meta := ckey.getMeta()
