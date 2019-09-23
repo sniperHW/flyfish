@@ -102,7 +102,7 @@ func (this *StreamSocket) sendThreadFunc() {
 
 	var err error
 
-	writer := bufio.NewWriterSize(this.conn, 65535*2)
+	writer := bufio.NewWriterSize(this.conn, kendynet.SendBufferSize)
 
 	for {
 		closed, localList := this.sendQue.Get()
