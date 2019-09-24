@@ -11,6 +11,7 @@ const (
 	proposal_update   = 2
 	proposal_delete   = 3
 	proposal_kick     = 4
+	proposal_lease    = 5
 )
 
 type proposal struct {
@@ -32,15 +33,17 @@ func (this *batchProposal) onCommit() *ctxArray {
 func (this *batchProposal) onError(err int) {
 	for i := 0; i < this.ctxs.count; i++ {
 		v := this.ctxs.ctxs[i]
-		ckey := v.getCacheKey()
-		if v.getCmdType() != cmdKick {
-			v.reply(int32(err), nil, 0)
-		} else {
-			ckey.clearKicking()
-		}
+		if v.lease == nil {
+			ckey := v.getCacheKey()
+			if v.getCmdType() != cmdKick {
+				v.reply(int32(err), nil, 0)
+			} else {
+				ckey.clearKicking()
+			}
 
-		if !ckey.tryRemoveTmpKey(err) {
-			ckey.processQueueCmd()
+			if !ckey.tryRemoveTmpKey(err) {
+				ckey.processQueueCmd()
+			}
 		}
 	}
 	ctxArrayPut(this.ctxs)
@@ -54,10 +57,12 @@ func (this *batchProposal) onPorposeTimeout() {
 	 */
 	for i := 0; i < this.ctxs.count; i++ {
 		v := this.ctxs.ctxs[i]
-		if v.getCmdType() != cmdKick {
-			v.reply(errcode.ERR_TIMEOUT, nil, 0)
+		if v.lease == nil {
+			if v.getCmdType() != cmdKick {
+				v.reply(errcode.ERR_TIMEOUT, nil, 0)
+			}
+			v.getCacheKey().processQueueCmd()
 		}
-		v.getCacheKey().processQueueCmd()
 	}
 }
 

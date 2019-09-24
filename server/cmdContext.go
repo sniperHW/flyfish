@@ -19,6 +19,7 @@ type cmdContext struct {
 	writeBackFlag int //回写数据库类型
 	ping          bool
 	version       int64
+	lease         *int
 }
 
 func (this *cmdContext) getCmd() *command {

@@ -253,10 +253,6 @@ func (s *kvstore) kick(ckey *cacheKey) bool {
 	return true
 }
 
-func (s *kvstore) Propose(propose *batchProposal) {
-	s.proposeC.AddNoWait(propose)
-}
-
 func (s *kvstore) issueReadReq(c *cmdContext) {
 	s.readReqC.AddNoWait(c)
 }
@@ -294,73 +290,78 @@ func (s *kvstore) readCommits(once bool, commitC <-chan interface{}, errorC <-ch
 				if nil != data.ctxs {
 					for i := 0; i < data.ctxs.count; i++ {
 						v := data.ctxs.ctxs[i]
-						if v.getCmdType() != cmdKick {
-							v.reply(v.errno, v.fields, v.version)
-							ckey := v.getCacheKey()
-							ckey.mtx.Lock()
-							ckey.snapshoted = true
-							isTmp := ckey.isTmp
-							if ckey.isTmp {
-								ckey.isTmp = false
+						if v.lease != nil {
+							Infoln("updateLease")
+							s.updateLease(int(*v.lease))
+						} else {
+							if v.getCmdType() != cmdKick {
+								v.reply(v.errno, v.fields, v.version)
+								ckey := v.getCacheKey()
+								ckey.mtx.Lock()
+								ckey.snapshoted = true
+								isTmp := ckey.isTmp
+								if ckey.isTmp {
+									ckey.isTmp = false
+								}
+
+								if v.writeBackFlag == write_back_insert || v.writeBackFlag == write_back_update || v.writeBackFlag == write_back_insert_update {
+									ckey.setOKNoLock(v.version, &v.fields)
+								} else if v.writeBackFlag == write_back_delete {
+									ckey.setMissingNoLock()
+								}
+
+								ckey.sqlFlag = v.writeBackFlag
+
+								if ckey.sqlFlag != write_back_none && !ckey.writeBackLocked {
+									ckey.writeBackLocked = true
+									pushSqlWriteReq(ckey)
+								}
+								ckey.mtx.Unlock()
+
+								if isTmp {
+									s.moveTmpkv2OK(ckey)
+								}
 							}
-
-							if v.writeBackFlag == write_back_insert || v.writeBackFlag == write_back_update || v.writeBackFlag == write_back_insert_update {
-								ckey.setOKNoLock(v.version, &v.fields)
-							} else if v.writeBackFlag == write_back_delete {
-								ckey.setMissingNoLock()
-							}
-
-							ckey.sqlFlag = v.writeBackFlag
-
-							if ckey.sqlFlag != write_back_none && !ckey.writeBackLocked {
-								ckey.writeBackLocked = true
-								pushSqlWriteReq(ckey)
-							}
-							ckey.mtx.Unlock()
-
-							if isTmp {
-								s.moveTmpkv2OK(ckey)
-							}
-
 						}
 					}
 
 					for i := 0; i < data.ctxs.count; i++ {
 						v := data.ctxs.ctxs[i]
-						if v.getCmdType() == cmdKick {
-							queueCmdSize := 0
-							ckey := v.getCacheKey()
-							ckey.mtx.Lock()
-							queueCmdSize = ckey.cmdQueue.Len()
-							if queueCmdSize > 0 {
-								/*
-								 *   kick执行完之后，对这个key又有新的访问请求
-								 *   此时必须把snapshoted设置为true,这样后面的变更请求才能以snapshot记录到日志中
-								 *   否则，重放日志时因为kick先执行，变更重放将因为找不到key出错
-								 */
-								ckey.snapshoted = false
-								ckey.kicking = false
-							}
-							ckey.mtx.Unlock()
-							s.mtx.Lock()
-							s.kickingCount--
-							s.mtx.Unlock()
-							if queueCmdSize > 0 {
-								ckey.processQueueCmd()
-							} else {
+						if v.lease == nil {
+							if v.getCmdType() == cmdKick {
+								queueCmdSize := 0
+								ckey := v.getCacheKey()
+								ckey.mtx.Lock()
+								queueCmdSize = ckey.cmdQueue.Len()
+								if queueCmdSize > 0 {
+									/*
+									 *   kick执行完之后，对这个key又有新的访问请求
+									 *   此时必须把snapshoted设置为true,这样后面的变更请求才能以snapshot记录到日志中
+									 *   否则，重放日志时因为kick先执行，变更重放将因为找不到key出错
+									 */
+									ckey.snapshoted = false
+									ckey.kicking = false
+								}
+								ckey.mtx.Unlock()
 								s.mtx.Lock()
-								s.removeLRU(ckey)
-								s.keySize--
+								s.kickingCount--
 								s.mtx.Unlock()
-								ckey.slot.mtx.Lock()
-								delete(ckey.slot.kv, ckey.uniKey)
-								ckey.slot.mtx.Unlock()
+								if queueCmdSize > 0 {
+									ckey.processQueueCmd()
+								} else {
+									s.mtx.Lock()
+									s.removeLRU(ckey)
+									s.keySize--
+									s.mtx.Unlock()
+									ckey.slot.mtx.Lock()
+									delete(ckey.slot.kv, ckey.uniKey)
+									ckey.slot.mtx.Unlock()
+								}
+							} else {
+								v.getCacheKey().processQueueCmd()
 							}
-						} else {
-							v.getCacheKey().processQueueCmd()
 						}
 					}
-
 					ctxArrayPut(data.ctxs)
 				} else {
 					s.apply(data.data)
@@ -437,6 +438,11 @@ func readBinLog(buffer []byte, offset int) (int, int, string, int64, map[string]
 	offset += 1
 	l := int(binary.BigEndian.Uint32(buffer[offset : offset+4]))
 	offset += 4
+
+	if tt == proposal_lease {
+		return offset, tt, "", int64(l), nil
+	}
+
 	uniKey := string(buffer[offset : offset+l])
 	offset += l
 	version := int64(binary.BigEndian.Uint64(buffer[offset : offset+8]))
@@ -506,85 +512,91 @@ func (s *kvstore) apply(data []byte) bool {
 
 		offset = newOffset
 
-		slot := s.slots[StringHash(unikey)%len(s.slots)]
-
-		slot.mtx.Lock()
-
-		ckey, _ := slot.kv[unikey]
-		recordCount++
-
-		Debugln(tt, unikey)
-
-		if tt == proposal_snapshot {
-			if nil == ckey {
-				Debugln("newCacheKey", unikey)
-				tmp := strings.Split(unikey, ":")
-				ckey = newCacheKey(s, slot, tmp[0], strings.Join(tmp[1:], ""), unikey, false)
-				s.keySize++
-				slot.kv[unikey] = ckey
-				s.updateLRU(ckey)
-			}
-			ckey.mtx.Lock()
-			ckey.values = values
-			ckey.version = version
-			ckey.snapshoted = true
-			if ckey.version == 0 {
-				ckey.sqlFlag = write_back_delete
-				ckey.status = cache_missing
-			} else {
-				ckey.sqlFlag = write_back_insert_update
-				ckey.status = cache_ok
-			}
-			ckey.mtx.Unlock()
-		} else if tt == proposal_update {
-			if ckey != nil {
-				if ckey.status != cache_ok || ckey.values == nil {
-					Fatalln("invaild tt", unikey, tt, recordCount, offset)
-					slot.mtx.Unlock()
-					return false
-				}
-				ckey.mtx.Lock()
-				for k, v := range values {
-					ckey.values[k] = v
-				}
-				ckey.version = version
-				ckey.sqlFlag = write_back_insert_update
-				ckey.mtx.Unlock()
-				s.updateLRU(ckey)
-			} else {
-				panic("binlog_update key == nil")
-			}
-		} else if tt == proposal_delete {
-			if ckey != nil {
-				if ckey.status != cache_ok {
-					slot.mtx.Unlock()
-					Fatalln("invaild tt", unikey, tt, recordCount, offset)
-					return false
-				}
-				ckey.mtx.Lock()
-				ckey.values = nil
-				ckey.version = version
-				ckey.status = cache_missing
-				ckey.sqlFlag = write_back_delete
-				ckey.mtx.Unlock()
-				s.updateLRU(ckey)
-			} else {
-				panic("binlog_delete key == nil")
-			}
-		} else if tt == proposal_kick {
-			if ckey != nil {
-				s.keySize--
-				s.removeLRU(ckey)
-				delete(slot.kv, unikey)
-			} else {
-				panic("proposal_kick key == nil")
-			}
+		if tt == proposal_lease {
+			owner := int(version)
+			s.updateLease(owner)
 		} else {
+
+			slot := s.slots[StringHash(unikey)%len(s.slots)]
+
+			slot.mtx.Lock()
+
+			ckey, _ := slot.kv[unikey]
+			recordCount++
+
+			Debugln(tt, unikey)
+
+			if tt == proposal_snapshot {
+				if nil == ckey {
+					Debugln("newCacheKey", unikey)
+					tmp := strings.Split(unikey, ":")
+					ckey = newCacheKey(s, slot, tmp[0], strings.Join(tmp[1:], ""), unikey, false)
+					s.keySize++
+					slot.kv[unikey] = ckey
+					s.updateLRU(ckey)
+				}
+				ckey.mtx.Lock()
+				ckey.values = values
+				ckey.version = version
+				ckey.snapshoted = true
+				if ckey.version == 0 {
+					ckey.sqlFlag = write_back_delete
+					ckey.status = cache_missing
+				} else {
+					ckey.sqlFlag = write_back_insert_update
+					ckey.status = cache_ok
+				}
+				ckey.mtx.Unlock()
+			} else if tt == proposal_update {
+				if ckey != nil {
+					if ckey.status != cache_ok || ckey.values == nil {
+						Fatalln("invaild tt", unikey, tt, recordCount, offset)
+						slot.mtx.Unlock()
+						return false
+					}
+					ckey.mtx.Lock()
+					for k, v := range values {
+						ckey.values[k] = v
+					}
+					ckey.version = version
+					ckey.sqlFlag = write_back_insert_update
+					ckey.mtx.Unlock()
+					s.updateLRU(ckey)
+				} else {
+					panic("binlog_update key == nil")
+				}
+			} else if tt == proposal_delete {
+				if ckey != nil {
+					if ckey.status != cache_ok {
+						slot.mtx.Unlock()
+						Fatalln("invaild tt", unikey, tt, recordCount, offset)
+						return false
+					}
+					ckey.mtx.Lock()
+					ckey.values = nil
+					ckey.version = version
+					ckey.status = cache_missing
+					ckey.sqlFlag = write_back_delete
+					ckey.mtx.Unlock()
+					s.updateLRU(ckey)
+				} else {
+					panic("binlog_delete key == nil")
+				}
+			} else if tt == proposal_kick {
+				if ckey != nil {
+					s.keySize--
+					s.removeLRU(ckey)
+					delete(slot.kv, unikey)
+				} else {
+					panic("proposal_kick key == nil")
+				}
+			} else {
+				slot.mtx.Unlock()
+				Fatalln("invaild tt", unikey, tt, recordCount, offset)
+				return false
+			}
 			slot.mtx.Unlock()
-			Fatalln("invaild tt", unikey, tt, recordCount, offset)
-			return false
 		}
-		slot.mtx.Unlock()
 	}
 	return true
 }
@@ -641,6 +653,23 @@ func (s *kvstore) getCacheKeyAndPushCmd(cmd *command) *cacheKey {
 	s.mtx.Unlock()
 
 	return k
+}
+
+func (s *kvstore) updateLease(id int) {
+	old := s.rn.l.update(id)
+	if id == s.rn.id {
+		Infoln("----------------got lease-----------------------")
+	}
+
+	if id == s.rn.id && old != s.rn.id {
+		s.issueForceSqlWriteBack()
+	}
+
+}
+
+func (s *kvstore) issueForceSqlWriteBack() {
+	//强制对所有key执行一次sql回写
+	Infoln("----------------issueForceSqlWriteBack-----------------------")
 }
 
 func initKvGroup(mutilRaft *mutilRaft, id *int, cluster *string, mod int) *storeGroup {

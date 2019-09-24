@@ -137,6 +137,11 @@ func (this *str) append(in string) *str {
 	return this
 }
 
+func (this *str) appendLease(id int) {
+	this.appendByte(byte(proposal_lease))
+	this.appendInt32(int32(id))
+}
+
 func (this *str) appendProposal(tt int, unikey string, fields map[string]*proto.Field, version int64) {
 
 	//写操作码1byte

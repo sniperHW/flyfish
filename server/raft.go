@@ -128,6 +128,7 @@ type raftNode struct {
 	pendingRead   *list.List
 	readC         <-chan *cmdContext
 	readIndex     int64
+	l             *lease
 }
 
 var defaultSnapshotCount uint64 = 10000
@@ -177,6 +178,7 @@ func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSna
 
 		proposePipeline: proposeC, //util.NewBlockQueue(),
 		readPipeline:    readC,    //util.NewBlockQueue(),
+		l:               &lease{stop: nil},
 
 		// rest of structure populated after WAL replay
 	}
@@ -630,6 +632,9 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 }
 
 func (rc *raftNode) onLoseLeadership() {
+
+	rc.l.loseLeaderShip()
+
 	rc.muPendingPropose.Lock()
 	pendingPropose := rc.pendingPropose
 	rc.pendingPropose = list.New()
@@ -814,21 +819,27 @@ func (rc *raftNode) startProposePipeline() {
 
 					prop := vv.(*proposal)
 					if !rc.isLeader() {
-						ckey := prop.ctx.getCacheKey()
-						if prop.ctx.getCmdType() != cmdKick {
-							prop.ctx.reply(int32(errcode.ERR_NOT_LEADER), nil, 0)
-						} else {
-							ckey.clearKicking()
-						}
-						if !ckey.tryRemoveTmpKey(errcode.ERR_NOT_LEADER) {
-							ckey.processQueueCmd()
+						if nil == prop.ctx.lease {
+							ckey := prop.ctx.getCacheKey()
+							if prop.ctx.getCmdType() != cmdKick {
+								prop.ctx.reply(int32(errcode.ERR_NOT_LEADER), nil, 0)
+							} else {
+								ckey.clearKicking()
+							}
+							if !ckey.tryRemoveTmpKey(errcode.ERR_NOT_LEADER) {
+								ckey.processQueueCmd()
+							}
 						}
 					} else {
-
 						batch.ctxs.append(prop.ctx)
-						batch.proposalStr.appendProposal(prop.op, prop.ctx.getUniKey(), prop.ctx.fields, prop.ctx.version)
-
-						if batch.ctxs.full() {
+						if nil == prop.ctx.lease {
+							batch.proposalStr.appendProposal(prop.op, prop.ctx.getUniKey(), prop.ctx.fields, prop.ctx.version)
+							if batch.ctxs.full() {
+								rc.issuePropose(batch)
+								batch = rc.newBatchProposal()
+							}
+						} else {
+							batch.proposalStr.appendLease(int(*prop.ctx.lease))
 							rc.issuePropose(batch)
 							batch = rc.newBatchProposal()
 						}
@@ -938,6 +949,11 @@ func (rc *raftNode) serveChannels() {
 					loseLeadership = true
 				}
 				Infoln(rd.SoftState.Lead>>16, "is leader")
+
+				if rc.leader == rc.id {
+					rc.l.becomeLeader(rc)
+				}
+
 			}
 
 			rc.wal.Save(rd.HardState, rd.Entries)
@@ -980,6 +996,15 @@ func (rc *raftNode) serveChannels() {
 			rc.onTriggerSnapshotOK()
 		}
 	}
+}
+
+func (rc *raftNode) lease() {
+	rc.proposePipeline.AddNoWait(&proposal{
+		op: proposal_lease,
+		ctx: &cmdContext{
+			lease: &rc.id,
+		},
+	})
 }
 
 func (rc *raftNode) Process(ctx context.Context, m raftpb.Message) error {
