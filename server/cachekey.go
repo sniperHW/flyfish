@@ -37,6 +37,7 @@ type cacheKey struct {
 	make_snapshot   bool                    //是否处于快照处理过程中
 	kicking         bool
 	isTmp           bool
+	kickLocked      bool //锁定，不允许kick
 }
 
 func (this *cacheKey) tryRemoveTmpKey(err int) bool {
@@ -87,6 +88,11 @@ func (this *cacheKey) unlockCmdQueue() {
 }
 
 func (this *cacheKey) kickAbleNoLock() bool {
+
+	if this.kickLocked {
+		return false
+	}
+
 	if this.make_snapshot {
 		return false
 	}

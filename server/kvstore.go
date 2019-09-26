@@ -85,6 +85,45 @@ func (this *kvSlot) removeTmpKv(ckey *cacheKey) {
 	delete(this.tmpkv, ckey.uniKey)
 }
 
+func (this *kvSlot) lockKickAll() {
+	this.mtx.Lock()
+	defer this.mtx.Unlock()
+	for _, v := range this.kv {
+		v.mtx.Lock()
+		v.kickLocked = true
+		v.mtx.Unlock()
+	}
+}
+
+func (this *kvSlot) unLockKickAll() {
+	this.mtx.Lock()
+	defer this.mtx.Unlock()
+	for _, v := range this.kv {
+		v.mtx.Lock()
+		v.kickLocked = false
+		v.mtx.Unlock()
+	}
+}
+
+func (this *kvSlot) issueForceSqlWriteBack() {
+	this.mtx.Lock()
+	defer this.mtx.Unlock()
+	for _, v := range this.kv {
+		v.mtx.Lock()
+
+		if v.status == cache_ok {
+			v.sqlFlag = write_back_insert_update
+		} else {
+			v.sqlFlag = write_back_delete
+		}
+
+		v.kickLocked = false
+		v.writeBackLocked = true
+		v.mtx.Unlock()
+		pushSqlWriteReq(v)
+	}
+}
+
 // a key-value store backed by raft
 type kvstore struct {
 	proposeC    *util.BlockQueue
@@ -257,6 +296,22 @@ func (s *kvstore) issueReadReq(c *cmdContext) {
 	s.readReqC.AddNoWait(c)
 }
 
+func (s *kvstore) lockKickAll() {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	for _, v := range s.slots {
+		v.lockKickAll()
+	}
+}
+
+func (s *kvstore) unLockKickAll() {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	for _, v := range s.slots {
+		v.unLockKickAll()
+	}
+}
+
 func (s *kvstore) readCommits(once bool, commitC <-chan interface{}, errorC <-chan error) {
 	for d := range commitC {
 		switch d.(type) {
@@ -316,6 +371,7 @@ func (s *kvstore) readCommits(once bool, commitC <-chan interface{}, errorC <-ch
 									ckey.writeBackLocked = true
 									pushSqlWriteReq(ckey)
 								}
+
 								ckey.mtx.Unlock()
 
 								if isTmp {
@@ -670,6 +726,11 @@ func (s *kvstore) updateLease(id int) {
 func (s *kvstore) issueForceSqlWriteBack() {
 	//强制对所有key执行一次sql回写
 	Infoln("----------------issueForceSqlWriteBack-----------------------")
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	for _, v := range s.slots {
+		v.issueForceSqlWriteBack()
+	}
 }
 
 func initKvGroup(mutilRaft *mutilRaft, id *int, cluster *string, mod int) *storeGroup {
@@ -695,7 +756,16 @@ func initKvGroup(mutilRaft *mutilRaft, id *int, cluster *string, mod int) *store
 			return store.getSnapshot()
 		}
 
-		rn, commitC, errorC, snapshotterReady := newRaftNode(mutilRaft, (*id<<16)+i, strings.Split(*cluster, ","), false, getSnapshot, proposeC, confChangeC, readC)
+		cbBecomeLeader := func() {
+			//成为leader需要锁定所有kv,禁止kick
+			store.lockKickAll()
+		}
+
+		cbLoseLeaderShip := func() {
+			store.unLockKickAll()
+		}
+
+		rn, commitC, errorC, snapshotterReady := newRaftNode(mutilRaft, (*id<<16)+i, strings.Split(*cluster, ","), false, getSnapshot, proposeC, confChangeC, readC, cbBecomeLeader, cbLoseLeaderShip)
 
 		store = newKVStore(rn, <-snapshotterReady, proposeC, commitC, errorC, readC)
 

@@ -2,6 +2,7 @@ package server
 
 import (
 	"database/sql/driver"
+	"fmt"
 	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/kendynet/util"
 	"net"
@@ -11,15 +12,14 @@ import (
 )
 
 type sqlUpdater struct {
-	db       *sqlx.DB
-	name     string
-	lastTime time.Time
-	queue    *util.BlockQueue
-	wg       *sync.WaitGroup
-	sqlStr   *str
-	max      int
-	count    int
-	server   *Server
+	db        *sqlx.DB
+	name      string
+	lastTime  time.Time
+	queue     *util.BlockQueue
+	wg        *sync.WaitGroup
+	sqlStr    *str
+	server    *Server
+	localList []interface{}
 }
 
 func newSqlUpdater(server *Server, db *sqlx.DB, name string, wg *sync.WaitGroup) *sqlUpdater {
@@ -27,13 +27,12 @@ func newSqlUpdater(server *Server, db *sqlx.DB, name string, wg *sync.WaitGroup)
 		wg.Add(1)
 	}
 	return &sqlUpdater{
-		name:   name,
-		queue:  util.NewBlockQueueWithName(name),
-		db:     db,
-		wg:     wg,
-		max:    200,
-		count:  0,
-		server: server,
+		name:      name,
+		queue:     util.NewBlockQueueWithName(name),
+		db:        db,
+		wg:        wg,
+		server:    server,
+		localList: []interface{}{},
 	}
 }
 
@@ -54,7 +53,34 @@ func isRetryError(err error) bool {
 
 var totalSqlCount int64
 
-func (this *sqlUpdater) append(v interface{}) {
+func (this *sqlUpdater) reset() {
+	this.sqlStr.reset()
+}
+
+func (this *sqlUpdater) onSqlResult(ckey *cacheKey, err error) {
+	ckey.mtx.Lock()
+	defer ckey.mtx.Unlock()
+	if err == errLoseLease {
+		ckey.writeBackLocked = false
+	} else if err != errServerStop {
+		if write_back_none == ckey.sqlFlag {
+			ckey.writeBackLocked = false
+		} else {
+			//执行exec时再次发生变更
+			this.localList = append(this.localList)
+		}
+	}
+}
+
+var (
+	errServerStop = fmt.Errorf("errServerStop")
+	errLoseLease  = fmt.Errorf("errLoseLease")
+)
+
+func (this *sqlUpdater) exec(v interface{}) {
+
+	defer this.reset()
+
 	if v == nil {
 		if time.Now().Sub(this.lastTime) > time.Second*5*60 {
 			//空闲超过5分钟发送ping
@@ -65,6 +91,7 @@ func (this *sqlUpdater) append(v interface{}) {
 			this.lastTime = time.Now()
 		}
 	} else {
+
 		if nil == this.sqlStr {
 			this.sqlStr = &str{
 				data: make([]byte, strThreshold),
@@ -77,8 +104,8 @@ func (this *sqlUpdater) append(v interface{}) {
 
 		rn := ckey.store.rn
 
-		if !rn.isLeader() || !rn.l.hasLease(rn) {
-			//当前store不是leader或没有持有租约,不能执行sql操作。
+		if !rn.l.hasLease(rn) {
+			//没有持有租约,不能执行sql操作。
 			ckey.mtx.Lock()
 			ckey.writeBackLocked = false
 			ckey.mtx.Unlock()
@@ -107,7 +134,6 @@ func (this *sqlUpdater) append(v interface{}) {
 			atomic.AddInt64(&totalSqlCount, 1)
 		}
 
-		ckey.writeBackLocked = false
 		ckey.sqlFlag = write_back_none
 
 		if len(ckey.modifyFields) > 0 {
@@ -116,38 +142,27 @@ func (this *sqlUpdater) append(v interface{}) {
 
 		ckey.mtx.Unlock()
 
-		this.count++
-
-		if this.count >= this.max {
-			this.exec()
-		}
-	}
-}
-
-func (this *sqlUpdater) reset() {
-	this.count = 0
-	this.sqlStr.reset()
-}
-
-func (this *sqlUpdater) exec() {
-	if this.count > 0 {
-
-		defer this.reset()
-
-		//beg := time.Now()
+		var err error
 
 		for {
-			_, err := this.db.Exec(this.sqlStr.toString())
+			_, err = this.db.Exec(this.sqlStr.toString())
 			if nil == err {
-				//Infoln("writeback time:", time.Now().Sub(beg), "record:", this.count)
 				break
 			} else {
 				Errorln(this.sqlStr.toString(), err)
 				if isRetryError(err) {
 					Errorln("sqlUpdater exec error:", err)
 					if this.server.isStoped() {
-						return
+						err = errServerStop
+						break
 					}
+
+					if !rn.l.hasLease(rn) {
+						//已经失去租约，不能再执行
+						err = errLoseLease
+						break
+					}
+
 					//休眠一秒重试
 					time.Sleep(time.Second)
 				} else {
@@ -156,6 +171,8 @@ func (this *sqlUpdater) exec() {
 				}
 			}
 		}
+
+		this.onSqlResult(ckey, err)
 	}
 }
 
@@ -163,9 +180,25 @@ func (this *sqlUpdater) run() {
 	for {
 		closed, localList := this.queue.Get()
 		for _, v := range localList {
-			this.append(v)
+			this.exec(v)
 		}
-		this.exec()
+
+		for {
+			if len(this.localList) > 0 {
+				localList = this.localList
+				this.localList = []interface{}{}
+				for _, v := range localList {
+					this.exec(v)
+				}
+			} else {
+				break
+			}
+
+			if this.queue.Len() > 0 || len(this.localList) == 0 {
+				break
+			}
+		}
+
 		if closed {
 			Infoln(this.name, "stoped")
 			if nil != this.wg {

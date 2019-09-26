@@ -28,6 +28,31 @@ lease
 
 
 
+3) 如前1所述，为了避免回写丢失，follower成为leader后需要对所有的kv发起一次sql回写。但此时leader可能尚未获得租约，因此回写无法执行。
+此时kick操作不能执行，否则将导致数据丢失。因此需要增加一个kick锁，在follower成为leader之后将所有kv的kick锁锁住，以防止被执行kick。
+当leader获得租约的时候释放kick锁，并发起回写请求（回写状态本身也会保护kv不会被kick）。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -129,6 +129,9 @@ type raftNode struct {
 	readC         <-chan *cmdContext
 	readIndex     int64
 	l             *lease
+
+	cbBecomeLeader   func()
+	cbLoseLeaderShip func()
 }
 
 var defaultSnapshotCount uint64 = 10000
@@ -139,7 +142,7 @@ var defaultSnapshotCount uint64 = 10000
 // commit channel, followed by a nil message (to indicate the channel is
 // current), then new log entries. To shutdown, close proposeC and read errorC.
 func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSnapshot func() [][]kvsnap, proposeC *util.BlockQueue,
-	confChangeC <-chan raftpb.ConfChange, readC *util.BlockQueue) (*raftNode, <-chan interface{}, <-chan error, <-chan *snap.Snapshotter) {
+	confChangeC <-chan raftpb.ConfChange, readC *util.BlockQueue, onBecomeLeader func(), onLoseLeadership func()) (*raftNode, <-chan interface{}, <-chan error, <-chan *snap.Snapshotter) {
 
 	/*
 	 *  如果commitC设置成无缓冲，则raftNode会等待上层提取commitedEntry之后才继续后续处理。
@@ -179,6 +182,9 @@ func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSna
 		proposePipeline: proposeC, //util.NewBlockQueue(),
 		readPipeline:    readC,    //util.NewBlockQueue(),
 		l:               &lease{stop: nil},
+
+		cbBecomeLeader:   onBecomeLeader,
+		cbLoseLeaderShip: onLoseLeadership,
 
 		// rest of structure populated after WAL replay
 	}
@@ -634,6 +640,7 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 func (rc *raftNode) onLoseLeadership() {
 
 	rc.l.loseLeaderShip()
+	rc.cbLoseLeaderShip()
 
 	rc.muPendingPropose.Lock()
 	pendingPropose := rc.pendingPropose
@@ -952,6 +959,7 @@ func (rc *raftNode) serveChannels() {
 
 				if rc.leader == rc.id {
 					rc.l.becomeLeader(rc)
+					rc.cbBecomeLeader()
 				}
 
 			}

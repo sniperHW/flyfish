@@ -101,7 +101,7 @@ func (l *lease) startLeaseRoutine(rn *raftNode) {
 				}
 				//续租
 				rn.lease()
-				l.wait(l.stop, (leaseOwnerTimeout/2)*time.Second)
+				l.wait(l.stop, 1*time.Second)
 			}
 			Infoln("break")
 		}()
