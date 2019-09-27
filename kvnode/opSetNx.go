@@ -12,39 +12,12 @@ import (
 )
 
 type opSetNx struct {
-	kv       *kv
-	deadline time.Time
-	replyer  *replyer
-	seqno    int64
-	fields   map[string]*proto.Field
+	*opBase
+	fields map[string]*proto.Field
 }
 
 func (this *opSetNx) reply(errCode int32, fields map[string]*proto.Field, version int64) {
 	this.replyer.reply(this, errCode, fields, version)
-}
-
-func (this *opSetNx) dontReply() {
-	this.replyer.dontReply()
-}
-
-func (this *opSetNx) causeWriteBack() bool {
-	return true
-}
-
-func (this *opSetNx) isSetOp() bool {
-	return true
-}
-
-func (this *opSetNx) isReplyerClosed() bool {
-	this.replyer.isClosed()
-}
-
-func (this *opSetNx) getKV() *kv {
-	return this.kv
-}
-
-func (this *opSetNx) isTimeout() bool {
-	return time.Now().After(this.deadline)
 }
 
 func (this *opSetNx) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) pb.Message {
@@ -73,10 +46,12 @@ func setNx(n *kvnode, session kendynet.StreamSession, msg *codec.Message) {
 
 	head := req.GetHead()
 	op := &opSetNx{
-		deadline: time.Now().Add(time.Duration(head.GetTimeout())),
-		replyer:  newReplyer(session, time.Now().Add(time.Duration(head.GetRespTimeout()))),
-		seqno:    head.GetSeqno(),
-		fields:   map[string]*proto.Field{},
+		opBase: &opBase{
+			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
+			replyer:  newReplyer(session, time.Now().Add(time.Duration(head.GetRespTimeout()))),
+			seqno:    head.GetSeqno(),
+		},
+		fields: map[string]*proto.Field{},
 	}
 
 	err := checkReqCommon(head)

@@ -12,40 +12,13 @@ import (
 )
 
 type opSet struct {
-	kv       *kv
-	deadline time.Time
-	replyer  *replyer
-	seqno    int64
-	fields   map[string]*proto.Field
-	version  *int64
+	*opBase
+	fields  map[string]*proto.Field
+	version *int64
 }
 
 func (this *opSet) reply(errCode int32, fields map[string]*proto.Field, version int64) {
 	this.replyer.reply(this, errCode, fields, version)
-}
-
-func (this *opSet) dontReply() {
-	this.replyer.dontReply()
-}
-
-func (this *opSet) causeWriteBack() bool {
-	return true
-}
-
-func (this *opSet) isSetOp() bool {
-	return true
-}
-
-func (this *opSet) isReplyerClosed() bool {
-	this.replyer.isClosed()
-}
-
-func (this *opSet) getKV() *kv {
-	return this.kv
-}
-
-func (this *opSet) isTimeout() bool {
-	return time.Now().After(this.deadline)
 }
 
 func (this *opSet) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) pb.Message {
@@ -74,11 +47,13 @@ func set(n *kvnode, session kendynet.StreamSession, msg *codec.Message) {
 
 	head := req.GetHead()
 	op := &opSet{
-		deadline: time.Now().Add(time.Duration(head.GetTimeout())),
-		replyer:  newReplyer(session, time.Now().Add(time.Duration(head.GetRespTimeout()))),
-		seqno:    head.GetSeqno(),
-		fields:   map[string]*proto.Field{},
-		version:  req.Version,
+		opBase: &opBase{
+			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
+			replyer:  newReplyer(session, time.Now().Add(time.Duration(head.GetRespTimeout()))),
+			seqno:    head.GetSeqno(),
+		},
+		fields:  map[string]*proto.Field{},
+		version: req.Version,
 	}
 
 	err := checkReqCommon(head)

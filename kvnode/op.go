@@ -14,6 +14,54 @@ var (
 	wait4ReplyCount int64
 )
 
+func checkReqCommon(reqCommon *proto.ReqCommon) int32 {
+	if "" == reqCommon.GetTable() {
+		return errcode.ERR_MISSING_TABLE
+	}
+
+	if "" == reqCommon.GetKey() {
+		return errcode.ERR_MISSING_KEY
+	}
+
+	return errcode.ERR_OK
+}
+
+func makeUniKey(table string, key string) string {
+	return fmt.Sprintf("%s:%s", table, key)
+}
+
+type opI interface {
+	makeResponse(errCode int32, fields map[string]*proto.Field, version int64) pb.Message
+	reply(errCode int32, fields map[string]*proto.Field, version int64)
+	dontReply()
+	isReplyerClosed() bool //replyer是否已经关闭
+	getKV() *kv            //获取op操作的目标
+	isTimeout() bool       //命令已经超时
+}
+
+type opBase struct {
+	kv       *kv
+	deadline time.Time
+	replyer  *replyer
+	seqno    int64
+}
+
+func (this *opBase) dontReply() {
+	this.replyer.dontReply()
+}
+
+func (this *opBase) isReplyerClosed() bool {
+	this.replyer.isClosed()
+}
+
+func (this *opBase) getKV() *kv {
+	return this.kv
+}
+
+func (this *opBase) isTimeout() bool {
+	return time.Now().After(this.deadline)
+}
+
 type replyer struct {
 	replyed      int64
 	session      kendynet.StreamSession
@@ -46,32 +94,4 @@ func (this *replyer) dontReply() {
 	if atomic.CompareAndSwapInt64(&this.replyed, 0, 1) {
 		atomic.AddInt64(&wait4ReplyCount, -1)
 	}
-}
-
-type opI interface {
-	makeResponse(errCode int32, fields map[string]*proto.Field, version int64) pb.Message
-	reply(errCode int32, fields map[string]*proto.Field, version int64)
-	dontReply()
-	causeWriteBack() bool  //是否会导致回写
-	isSetOp() bool         //是否设置类操作
-	isReplyerClosed() bool //replyer是否已经关闭
-	getKV() *kv            //获取op操作的目标
-	isTimeout() bool       //命令已经超时
-	//checkHead(*codec.Message) int32 //检查传递的参数是否合法
-}
-
-func checkReqCommon(reqCommon *proto.ReqCommon) int32 {
-	if "" == reqCommon.GetTable() {
-		return errcode.ERR_MISSING_TABLE
-	}
-
-	if "" == reqCommon.GetKey() {
-		return errcode.ERR_MISSING_KEY
-	}
-
-	return errcode.ERR_OK
-}
-
-func makeUniKey(table string, key string) string {
-	return fmt.Sprintf("%s:%s", table, key)
 }

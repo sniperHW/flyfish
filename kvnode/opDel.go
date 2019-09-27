@@ -12,39 +12,12 @@ import (
 )
 
 type opDel struct {
-	kv       *kv
-	deadline time.Time
-	replyer  *replyer
-	seqno    int64
-	version  *int64
+	*opBase
+	version *int64
 }
 
 func (this *opDel) reply(errCode int32, fields map[string]*proto.Field, version int64) {
 	this.replyer.reply(this, errCode, fields, version)
-}
-
-func (this *opDel) dontReply() {
-	this.replyer.dontReply()
-}
-
-func (this *opDel) causeWriteBack() bool {
-	return true
-}
-
-func (this *opDel) isSetOp() bool {
-	return true
-}
-
-func (this *opDel) isReplyerClosed() bool {
-	this.replyer.isClosed()
-}
-
-func (this *opDel) getKV() *kv {
-	return this.kv
-}
-
-func (this *opDel) isTimeout() bool {
-	return time.Now().After(this.deadline)
 }
 
 func (this *opDel) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) pb.Message {
@@ -73,10 +46,12 @@ func del(n *kvnode, session kendynet.StreamSession, msg *codec.Message) {
 
 	head := req.GetHead()
 	op := &opDel{
-		deadline: time.Now().Add(time.Duration(head.GetTimeout())),
-		replyer:  newReplyer(session, time.Now().Add(time.Duration(head.GetRespTimeout()))),
-		seqno:    head.GetSeqno(),
-		version:  req.Version,
+		opBase: &opBase{
+			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
+			replyer:  newReplyer(session, time.Now().Add(time.Duration(head.GetRespTimeout()))),
+			seqno:    head.GetSeqno(),
+		},
+		version: req.Version,
 	}
 
 	err := checkReqCommon(head)

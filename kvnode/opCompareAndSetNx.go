@@ -12,40 +12,13 @@ import (
 )
 
 type opCompareAndSetNx struct {
-	kv       *kv
-	deadline time.Time
-	replyer  *replyer
-	seqno    int64
-	oldV     *proto.Field
-	newV     *proto.Field
+	*opBase
+	oldV *proto.Field
+	newV *proto.Field
 }
 
 func (this *opCompareAndSetNx) reply(errCode int32, fields map[string]*proto.Field, version int64) {
 	this.replyer.reply(this, errCode, fields, version)
-}
-
-func (this *opCompareAndSetNx) dontReply() {
-	this.replyer.dontReply()
-}
-
-func (this *opCompareAndSetNx) causeWriteBack() bool {
-	return true
-}
-
-func (this *opCompareAndSetNx) isSetOp() bool {
-	return true
-}
-
-func (this *opCompareAndSetNx) isReplyerClosed() bool {
-	this.replyer.isClosed()
-}
-
-func (this *opCompareAndSetNx) getKV() *kv {
-	return this.kv
-}
-
-func (this *opCompareAndSetNx) isTimeout() bool {
-	return time.Now().After(this.deadline)
 }
 
 func (this *opCompareAndSetNx) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) pb.Message {
@@ -78,13 +51,15 @@ func compareAndSetNx(n *kvnode, session kendynet.StreamSession, msg *codec.Messa
 
 	head := req.GetHead()
 	op := &opCompareAndSetNx{
-		deadline: time.Now().Add(time.Duration(head.GetTimeout())),
-		replyer:  newReplyer(session, time.Now().Add(time.Duration(head.GetRespTimeout()))),
-		seqno:    head.GetSeqno(),
-		fields:   map[string]*proto.Field{},
-		version:  req.Version,
-		oldV:     req.GetOld(),
-		newV:     req.GetNew(),
+		opBase: &opBase{
+			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
+			replyer:  newReplyer(session, time.Now().Add(time.Duration(head.GetRespTimeout()))),
+			seqno:    head.GetSeqno(),
+		},
+		fields:  map[string]*proto.Field{},
+		version: req.Version,
+		oldV:    req.GetOld(),
+		newV:    req.GetNew(),
 	}
 
 	err := checkReqCommon(head)
