@@ -1,4 +1,4 @@
-package server
+package dbmeta
 
 import (
 	"fmt"
@@ -8,11 +8,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"unsafe"
-)
-
-var (
-	meta_version  int64
-	g_table_metas *map[string]*table_meta
 )
 
 func convert_string(in interface{}) interface{} {
@@ -35,15 +30,39 @@ func convert_blob(in interface{}) interface{} {
 	return *in.(*[]byte)
 }
 
+type DBMeta struct {
+	version     int64
+	table_metas *map[string]*TableMeta
+}
+
+//根据表名获取表格元数据
+func (this *DBMeta) GetTableMeta(table string) *TableMeta {
+	p := (*map[string]*TableMeta)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&this.table_metas))))
+	meta, ok := (*p)[table]
+	if ok {
+		return meta
+	} else {
+		return nil
+	}
+}
+
+func (this *DBMeta) CheckMetaVersion(version int64) bool {
+	return version == atomic.LoadInt64(&this.version)
+}
+
 //表查询元数据
-type query_meta struct {
+type QueryMeta struct {
 	field_names    []string             //所有的字段名
 	field_receiver []func() interface{} //用于接收查询返回值
 	receiver_pool  sync.Pool
 	field_convter  []func(interface{}) interface{}
 }
 
-func (this *query_meta) getReceiverByName(name string) interface{} {
+func (this *QueryMeta) GetFieldNames() []string {
+	return this.field_names
+}
+
+func (this *QueryMeta) GetReceiverByName(name string) interface{} {
 	for i := 0; i < len(this.field_names); i++ {
 		if this.field_names[i] == name {
 			return this.field_receiver[i]()
@@ -52,7 +71,7 @@ func (this *query_meta) getReceiverByName(name string) interface{} {
 	return nil
 }
 
-func (this *query_meta) getConvetorByName(name string) func(interface{}) interface{} {
+func (this *QueryMeta) GetConvetorByName(name string) func(interface{}) interface{} {
 	for i := 0; i < len(this.field_names); i++ {
 		if this.field_names[i] == name {
 			return this.field_convter[i]
@@ -61,15 +80,15 @@ func (this *query_meta) getConvetorByName(name string) func(interface{}) interfa
 	return nil
 }
 
-func (this *query_meta) getReceiver() []interface{} {
+func (this *QueryMeta) GetReceivers() []interface{} {
 	return this.receiver_pool.Get().([]interface{})
 }
 
-func (this *query_meta) putReceiver(r []interface{}) {
+func (this *QueryMeta) PutReceivers(r []interface{}) {
 	this.receiver_pool.Put(r)
 }
 
-func (this *query_meta) getReceiver_() []interface{} {
+func (this *QueryMeta) getReceivers_() []interface{} {
 	receiver := []interface{}{}
 	for _, v := range this.field_receiver {
 		receiver = append(receiver, v())
@@ -78,25 +97,33 @@ func (this *query_meta) getReceiver_() []interface{} {
 }
 
 //字段元信息
-type field_meta struct {
-	name     string
-	tt       proto.ValueType
-	defaultV interface{}
+type FieldMeta struct {
+	name     string          //字段名
+	tt       proto.ValueType //字段类型
+	defaultV interface{}     //字段默认值
 }
 
 //表格的元信息
-type table_meta struct {
-	table            string
-	fieldMetas       map[string]field_meta
-	queryMeta        query_meta
+type TableMeta struct {
+	table            string                //表名
+	fieldMetas       map[string]*FieldMeta //所有字段元信息
+	queryMeta        *QueryMeta
 	insertPrefix     string
 	selectPrefix     string
 	insertFieldOrder []string
-	meta_version     int64
+	version          int64
+}
+
+func (this *TableMeta) GetQueryMeta() *QueryMeta {
+	return this.queryMeta
+}
+
+func (this *TableMeta) GetTable() string {
+	return this.table
 }
 
 //获取字段默认值
-func (this *table_meta) getDefaultV(name string) interface{} {
+func (this *TableMeta) GetDefaultV(name string) interface{} {
 	m, ok := this.fieldMetas[name]
 	if !ok {
 		return nil
@@ -106,113 +133,90 @@ func (this *table_meta) getDefaultV(name string) interface{} {
 }
 
 //检查要获取的字段是否符合表配置
-func (this *table_meta) checkGet(fields map[string]*proto.Field) bool {
+func (this *TableMeta) CheckGet(fields map[string]*proto.Field) error {
 	for _, v := range fields {
 		_, ok := this.fieldMetas[v.GetName()]
 		if !ok {
-			Errorln("checkGet failed:", v.GetName())
-			return false
+			return fmt.Errorf("checkGet failed:%s", v.GetName())
+
 		}
 	}
-	return true
+	return nil
 }
 
-func (this *table_meta) checkField(field *proto.Field) bool {
+func (this *TableMeta) CheckField(field *proto.Field) error {
 	m, ok := this.fieldMetas[field.GetName()]
 	if !ok {
-		Errorln("checkField failed:", field.GetName())
-		return false
+		return fmt.Errorf("checkField failed:%s", field.GetName())
 	}
 
 	if m.tt == proto.ValueType_blob {
 		if !field.IsBlob() && !field.IsString() {
-			Errorln("checkField failed:", field.GetName(), field.GetType())
-			return false
+			return fmt.Errorf("checkField failed:%s", field.GetName())
+
 		}
 	} else if field.GetType() != m.tt {
-		Errorln("checkField failed:", field.GetName(), field.GetType())
-		return false
+		return fmt.Errorf("checkField failed:%s", field.GetName())
 	}
 
-	return true
-
+	return nil
 }
 
 //检查要设置的字段是否符合表配置
-func (this *table_meta) checkSet(fields map[string]*proto.Field) bool {
+func (this *TableMeta) CheckSet(fields map[string]*proto.Field) error {
 	for _, v := range fields {
 		m, ok := this.fieldMetas[v.GetName()]
 		if !ok {
-			Errorln("checkSet failed:", v.GetName())
-			return false
+			return fmt.Errorf("checkSet failed:%s", v.GetName())
 		}
 
 		if m.tt == proto.ValueType_blob {
 			if !v.IsBlob() && !v.IsString() {
-				Errorln("checkSet failed:", v.GetName(), v.GetType())
-				return false
+				return fmt.Errorf("checkSet failed:%s", v.GetName())
 			}
 		} else if v.GetType() != m.tt {
-			Errorln("checkSet failed:", v.GetName(), v.GetType())
-			return false
+			return fmt.Errorf("checkSet failed:%s", v.GetName())
 		}
 	}
-	return true
+	return nil
 }
 
 //检查要设置的新老值是否符合表配置
-func (this *table_meta) checkCompareAndSet(newV *proto.Field, oldV *proto.Field) bool {
+func (this *TableMeta) CheckCompareAndSet(newV *proto.Field, oldV *proto.Field) error {
 
 	if newV == nil || oldV == nil {
-		return false
+		return fmt.Errorf("newV == nil || oldV == nil")
 	}
 
 	if newV.GetName() != oldV.GetName() {
-		return false
+		return fmt.Errorf("newV.GetName() != oldV.GetName()")
 	}
 
 	m, ok := this.fieldMetas[oldV.GetName()]
 	if !ok {
-		return false
+		return fmt.Errorf("invaild filed %s", oldV.GetName())
 	}
 
 	if m.tt == proto.ValueType_blob {
 
 		if !newV.IsBlob() && !newV.IsString() {
-			return false
+			return fmt.Errorf("newV is not blob:%s", newV.GetName())
 		}
 
 		if !oldV.IsBlob() && !oldV.IsString() {
-			return false
+			return fmt.Errorf("oldV is not blob:%s", oldV.GetName())
 		}
 
 	} else {
 		if newV.GetType() != m.tt || oldV.GetType() != m.tt {
-			return false
+			return fmt.Errorf("newV.GetType() != m.tt || oldV.GetType() != m.tt")
 		}
 	}
 
-	return true
+	return nil
 }
 
-//根据表名获取表格元数据
-func getMetaByTable(table string) *table_meta {
-	p := (*map[string]*table_meta)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&g_table_metas))))
-	meta, ok := (*p)[table]
-	if ok {
-		return meta
-	} else {
-		return nil
-	}
-}
-
-func checkMetaVersion(version int64) bool {
-	return version == atomic.LoadInt64(&meta_version)
-}
-
-//tablename@field1:type:defaultValue,field2:type:defaultValue,field3:type:defaultValue...
-func LoadMeta(def []string) bool {
-
+func loadMeta(def []string) (*map[string]*TableMeta, error) {
 	getType := func(str string) proto.ValueType {
 		if str == "int" {
 			return proto.ValueType_int
@@ -306,19 +310,19 @@ func LoadMeta(def []string) bool {
 
 	}
 
-	table_metas := map[string]*table_meta{}
+	table_metas := map[string]*TableMeta{}
 	for _, l := range def {
 		t1 := strings.Split(l, "@")
 
 		if len(t1) != 2 {
-			return false
+			return nil, fmt.Errorf("len(t1) != 2 %s", l)
 		}
 
-		t_meta := &table_meta{
+		t_meta := &TableMeta{
 			table:            t1[0],
-			fieldMetas:       map[string]field_meta{},
+			fieldMetas:       map[string]*FieldMeta{},
 			insertFieldOrder: []string{},
-			queryMeta: query_meta{
+			queryMeta: &QueryMeta{
 				field_names:    []string{},
 				field_receiver: []func() interface{}{},
 				field_convter:  []func(interface{}) interface{}{},
@@ -326,14 +330,14 @@ func LoadMeta(def []string) bool {
 		}
 		t_meta.queryMeta.receiver_pool = sync.Pool{
 			New: func() interface{} {
-				return t_meta.queryMeta.getReceiver_()
+				return t_meta.queryMeta.getReceivers_()
 			},
 		}
 
 		fields := strings.Split(t1[1], ",")
 
 		if len(fields) == 0 {
-			return false
+			return nil, fmt.Errorf("len(fields) == 0")
 		}
 
 		//插入两个默认字段
@@ -349,34 +353,37 @@ func LoadMeta(def []string) bool {
 		})
 		t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter, getConvetor(proto.ValueType_int))
 
-		//fieldNames := []string{}
 		//处理其它字段
 		for _, v := range fields {
+			if v == "" {
+				break
+			}
+
 			field := strings.Split(v, ":")
 			if len(field) != 3 {
-				return false
+				return nil, fmt.Errorf("len(fields) != 3")
 			}
 
 			name := field[0]
 
 			//字段名不允许以__开头
 			if strings.HasPrefix(name, "__") {
-				return false
+				return nil, fmt.Errorf("has prefix _")
 			}
 
 			ftype := getType(field[1])
 
 			if ftype == proto.ValueType_invaild {
-				return false
+				return nil, fmt.Errorf("unsupport data type")
 			}
 
 			defaultValue := getDefaultV(ftype, field[2])
 
 			if nil == defaultValue {
-				return false
+				return nil, fmt.Errorf("no default value")
 			}
 
-			t_meta.fieldMetas[name] = field_meta{
+			t_meta.fieldMetas[name] = &FieldMeta{
 				name:     name,
 				tt:       ftype,
 				defaultV: defaultValue,
@@ -400,11 +407,28 @@ func LoadMeta(def []string) bool {
 
 	}
 
-	atomic.AddInt64(&meta_version, 1)
-	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&g_table_metas)), unsafe.Pointer(&table_metas))
+	return &table_metas, nil
+}
 
-	Infoln("load table meta ok,version:", meta_version)
+func (this *DBMeta) Reload(def []string) {
+	table_metas, err := loadMeta(def)
+	if nil == err {
+		atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&this.table_metas)), unsafe.Pointer(table_metas))
+		atomic.AddInt64(&this.version, 1)
+	}
+}
 
-	return true
+//tablename@field1:type:defaultValue,field2:type:defaultValue,field3:type:defaultValue...
+func NewDBMeta(def []string) (*DBMeta, error) {
 
+	table_metas, err := loadMeta(def)
+
+	if nil == table_metas {
+		return nil, err
+	}
+
+	return &DBMeta{
+		version:     1,
+		table_metas: table_metas,
+	}, nil
 }

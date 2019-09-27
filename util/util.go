@@ -1,4 +1,4 @@
-package server
+package util
 
 // 字符串转为16位整形值
 func StringHash(s string) int {
@@ -20,12 +20,12 @@ func Must(i interface{}, e error) interface{} {
 	return i
 }
 
-func isPow2(size int) bool {
+func IsPow2(size int) bool {
 	return (size & (size - 1)) == 0
 }
 
-func sizeofPow2(size int) int {
-	if isPow2(size) {
+func SizeOfPow2(size int) int {
+	if IsPow2(size) {
 		return size
 	}
 	size = size - 1

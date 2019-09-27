@@ -13,6 +13,7 @@ const (
 	cache_new     = 1
 	cache_ok      = 2
 	cache_missing = 3
+	cache_remove  = 4
 )
 
 type cacheKey struct {
