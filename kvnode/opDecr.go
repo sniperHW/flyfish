@@ -29,7 +29,12 @@ func (this *opDecr) makeResponse(errCode int32, fields map[string]*proto.Field, 
 	}
 
 	resp := &proto.DecrByResp{
-		Head: head,
+		Head: &proto.RespCommon{
+			Key:     pb.String(key),
+			Seqno:   pb.Int64(this.replyer.seqno),
+			ErrCode: pb.Int32(errCode),
+			Version: pb.Int64(version),
+		}
 	}
 
 	if errCode == errcode.ERR_OK {
@@ -39,18 +44,16 @@ func (this *opDecr) makeResponse(errCode int32, fields map[string]*proto.Field, 
 	return resp
 }
 
-func decrBy(n *kvnode, session kendynet.StreamSession, msg *codec.Message) {
+func decrBy(n *kvnode, cli *cliConn, msg *codec.Message) {
 
 	req := msg.GetData().(*proto.DecrByReq)
 
 	head := req.GetHead()
 
-	head := req.GetHead()
 	op := &opDecr{
 		opBase: &opBase{
 			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
-			replyer:  newReplyer(session, time.Now().Add(time.Duration(head.GetRespTimeout()))),
-			seqno:    head.GetSeqno(),
+			replyer:  newReplyer(cli, head.GetSeqno(), time.Now().Add(time.Duration(head.GetRespTimeout()))),
 		},
 		decr: req.GetField(),
 	}

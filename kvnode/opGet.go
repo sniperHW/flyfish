@@ -31,7 +31,7 @@ func (this *opGet) makeResponse(errCode int32, fields map[string]*proto.Field, v
 	resp := &proto.GetResp{
 		Head: &proto.RespCommon{
 			Key:     pb.String(key),
-			Seqno:   pb.Int64(this.seqno),
+			Seqno:   pb.Int64(this.replyer.seqno),
 			ErrCode: pb.Int32(errCode),
 			Version: pb.Int64(version),
 		},
@@ -49,14 +49,13 @@ func (this *opGet) makeResponse(errCode int32, fields map[string]*proto.Field, v
 	return resp
 }
 
-func get(n *kvnode, session kendynet.StreamSession, msg *codec.Message) {
+func get(n *kvnode, cli *cliConn, msg *codec.Message) {
 	req := msg.GetData().(*proto.GetReq)
 	head := req.GetHead()
 	op := &opGet{
 		opBase: &opBase{
 			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
-			replyer:  newReplyer(session, time.Now().Add(time.Duration(head.GetRespTimeout()))),
-			seqno:    head.GetSeqno(),
+			replyer:  newReplyer(cli, head.GetSeqno(), time.Now().Add(time.Duration(head.GetRespTimeout()))),
 		},
 		fields: map[string]*proto.Field{},
 	}

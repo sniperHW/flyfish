@@ -207,3 +207,7 @@ message scan_resp {
   required resp_common head = 1;  
   repeated row    rows     = 3;
 }
+
+message cancel {
+  repeated int64 seqs = 1;//所有需要取消的seqno 
+}

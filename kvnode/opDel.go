@@ -31,14 +31,14 @@ func (this *opDel) makeResponse(errCode int32, fields map[string]*proto.Field, v
 	return &proto.DelResp{
 		Head: &proto.RespCommon{
 			Key:     pb.String(key),
-			Seqno:   pb.Int64(this.seqno),
+			Seqno:   pb.Int64(this.replyer.seqno),
 			ErrCode: pb.Int32(errCode),
 			Version: pb.Int64(version),
 		},
 	}
 }
 
-func del(n *kvnode, session kendynet.StreamSession, msg *codec.Message) {
+func del(n *kvnode, cli *cliConn, msg *codec.Message) {
 
 	req := msg.GetData().(*proto.DelReq)
 
@@ -48,8 +48,7 @@ func del(n *kvnode, session kendynet.StreamSession, msg *codec.Message) {
 	op := &opDel{
 		opBase: &opBase{
 			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
-			replyer:  newReplyer(session, time.Now().Add(time.Duration(head.GetRespTimeout()))),
-			seqno:    head.GetSeqno(),
+			replyer:  newReplyer(cli, head.GetSeqno(), time.Now().Add(time.Duration(head.GetRespTimeout()))),
 		},
 		version: req.Version,
 	}
