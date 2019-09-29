@@ -17,6 +17,8 @@ const (
 	ERR_MISSING_KEY    //没有指定key
 	ERR_INVAILD_TABLE  //非法表
 	ERR_INVAILD_FIELD  //非法字段
+	ERR_CAS_NOT_EQUAL
+	ERR_CONNECTION
 	ERR_END
 )
 

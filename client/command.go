@@ -70,7 +70,7 @@ func (this *cmdContext) SetIndex(idx uint32) {
 	this.heapIdx = idx
 }
 
-func (this *cmdContext) onError(errCode int) {
+func (this *cmdContext) onError(errCode int32) {
 	this.cb.onError(errCode)
 }
 
@@ -191,7 +191,7 @@ func (this *Conn) Set(table, key string, fields map[string]interface{}, version 
 	}
 
 	if len(version) > 0 {
-		req.Version = proto.Int64(version[0])
+		req.Head.Version = proto.Int64(version[0])
 	}
 
 	for k, v := range fields {
@@ -232,7 +232,7 @@ func (this *Conn) SetNx(table, key string, fields map[string]interface{}) *Statu
 }
 
 //当记录的field == old时，将其设置为new,并返回field的实际值(如果filed != old,将返回filed的原值)
-func (this *Conn) CompareAndSet(table, key, field string, oldV, newV interface{}) *SliceCmd {
+func (this *Conn) CompareAndSet(table, key, field string, oldV, newV interface{}, version ...int64) *SliceCmd {
 
 	if oldV == nil || newV == nil {
 		return nil
@@ -250,6 +250,10 @@ func (this *Conn) CompareAndSet(table, key, field string, oldV, newV interface{}
 		Old: protocol.PackField(field, oldV),
 	}
 
+	if len(version) > 0 {
+		req.Head.Version = proto.Int64(version[0])
+	}
+
 	return &SliceCmd{
 		conn:  this,
 		req:   req,
@@ -259,7 +263,7 @@ func (this *Conn) CompareAndSet(table, key, field string, oldV, newV interface{}
 }
 
 //当记录不存在或记录的field == old时，将其设置为new.并返回field的实际值(如果记录存在且filed != old,将返回filed的原值)
-func (this *Conn) CompareAndSetNx(table, key, field string, oldV, newV interface{}) *SliceCmd {
+func (this *Conn) CompareAndSetNx(table, key, field string, oldV, newV interface{}, version ...int64) *SliceCmd {
 	if oldV == nil || newV == nil {
 		return nil
 	}
@@ -274,6 +278,10 @@ func (this *Conn) CompareAndSetNx(table, key, field string, oldV, newV interface
 		},
 		New: protocol.PackField(field, newV),
 		Old: protocol.PackField(field, oldV),
+	}
+
+	if len(version) > 0 {
+		req.Head.Version = proto.Int64(version[0])
 	}
 
 	return &SliceCmd{
@@ -296,7 +304,7 @@ func (this *Conn) Del(table, key string, version ...int64) *StatusCmd {
 	}
 
 	if len(version) > 0 {
-		req.Version = proto.Int64(version[0])
+		req.Head.Version = proto.Int64(version[0])
 	}
 
 	return &StatusCmd{
@@ -307,7 +315,7 @@ func (this *Conn) Del(table, key string, version ...int64) *StatusCmd {
 
 }
 
-func (this *Conn) IncrBy(table, key, field string, value int64) *SliceCmd {
+func (this *Conn) IncrBy(table, key, field string, value int64, version ...int64) *SliceCmd {
 	req := &protocol.IncrByReq{
 		Head: &protocol.ReqCommon{
 			Seqno:       proto.Int64(atomic.AddInt64(&this.seqno, 1)),
@@ -319,6 +327,10 @@ func (this *Conn) IncrBy(table, key, field string, value int64) *SliceCmd {
 		Field: protocol.PackField(field, value),
 	}
 
+	if len(version) > 0 {
+		req.Head.Version = proto.Int64(version[0])
+	}
+
 	return &SliceCmd{
 		conn:  this,
 		req:   req,
@@ -326,7 +338,7 @@ func (this *Conn) IncrBy(table, key, field string, value int64) *SliceCmd {
 	}
 }
 
-func (this *Conn) DecrBy(table, key, field string, value int64) *SliceCmd {
+func (this *Conn) DecrBy(table, key, field string, value int64, version ...int64) *SliceCmd {
 	req := &protocol.DecrByReq{
 		Head: &protocol.ReqCommon{
 			Seqno:       proto.Int64(atomic.AddInt64(&this.seqno, 1)),
@@ -336,6 +348,10 @@ func (this *Conn) DecrBy(table, key, field string, value int64) *SliceCmd {
 			RespTimeout: proto.Int64(int64(ClientTimeout)),
 		},
 		Field: protocol.PackField(field, value),
+	}
+
+	if len(version) > 0 {
+		req.Head.Version = proto.Int64(version[0])
 	}
 
 	return &SliceCmd{
@@ -350,7 +366,7 @@ func (this *Conn) onGetResp(resp *protocol.GetResp) {
 	if nil != c {
 		ret := SliceResult{
 			Key:     resp.Head.GetKey(),
-			ErrCode: int(resp.Head.GetErrCode()),
+			ErrCode: resp.Head.GetErrCode(),
 			Version: resp.Head.GetVersion(),
 		}
 
@@ -371,7 +387,7 @@ func (this *Conn) onSetResp(resp *protocol.SetResp) {
 
 		ret := StatusResult{
 			Key:     resp.Head.GetKey(),
-			ErrCode: int(resp.Head.GetErrCode()),
+			ErrCode: resp.Head.GetErrCode(),
 			Version: resp.Head.GetVersion(),
 		}
 
@@ -385,7 +401,7 @@ func (this *Conn) onSetNxResp(resp *protocol.SetNxResp) {
 
 		ret := StatusResult{
 			Key:     resp.Head.GetKey(),
-			ErrCode: int(resp.Head.GetErrCode()),
+			ErrCode: resp.Head.GetErrCode(),
 			Version: resp.Head.GetVersion(),
 		}
 
@@ -399,11 +415,11 @@ func (this *Conn) onCompareAndSetResp(resp *protocol.CompareAndSetResp) {
 
 		ret := SliceResult{
 			Key:     resp.Head.GetKey(),
-			ErrCode: int(resp.Head.GetErrCode()),
+			ErrCode: resp.Head.GetErrCode(),
 			Version: resp.Head.GetVersion(),
 		}
 
-		if ret.ErrCode == errcode.ERR_OK || ret.ErrCode == errcode.ERR_NOT_EQUAL {
+		if ret.ErrCode == errcode.ERR_OK || ret.ErrCode == errcode.ERR_CAS_NOT_EQUAL {
 			ret.Fields = map[string]*Field{}
 			ret.Fields[resp.GetValue().GetName()] = (*Field)(resp.GetValue())
 		}
@@ -418,11 +434,11 @@ func (this *Conn) onCompareAndSetNxResp(resp *protocol.CompareAndSetNxResp) {
 
 		ret := SliceResult{
 			Key:     resp.Head.GetKey(),
-			ErrCode: int(resp.Head.GetErrCode()),
+			ErrCode: resp.Head.GetErrCode(),
 			Version: resp.Head.GetVersion(),
 		}
 
-		if ret.ErrCode == errcode.ERR_OK || ret.ErrCode == errcode.ERR_NOT_EQUAL {
+		if ret.ErrCode == errcode.ERR_OK || ret.ErrCode == errcode.ERR_CAS_NOT_EQUAL {
 			ret.Fields = map[string]*Field{}
 			ret.Fields[resp.GetValue().GetName()] = (*Field)(resp.GetValue())
 		}
@@ -437,7 +453,7 @@ func (this *Conn) onDelResp(resp *protocol.DelResp) {
 
 		ret := StatusResult{
 			Key:     resp.Head.GetKey(),
-			ErrCode: int(resp.Head.GetErrCode()),
+			ErrCode: resp.Head.GetErrCode(),
 			Version: resp.Head.GetVersion(),
 		}
 
@@ -451,7 +467,7 @@ func (this *Conn) onIncrByResp(resp *protocol.IncrByResp) {
 
 		ret := SliceResult{
 			Key:     resp.Head.GetKey(),
-			ErrCode: int(resp.Head.GetErrCode()),
+			ErrCode: resp.Head.GetErrCode(),
 			Version: resp.Head.GetVersion(),
 		}
 
@@ -470,7 +486,7 @@ func (this *Conn) onDecrByResp(resp *protocol.DecrByResp) {
 
 		ret := SliceResult{
 			Key:     resp.Head.GetKey(),
-			ErrCode: int(resp.Head.GetErrCode()),
+			ErrCode: resp.Head.GetErrCode(),
 			Version: resp.Head.GetVersion(),
 		}
 

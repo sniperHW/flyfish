@@ -13,8 +13,7 @@ import (
 
 type opSet struct {
 	*opBase
-	fields  map[string]*proto.Field
-	version *int64
+	fields map[string]*proto.Field
 }
 
 func (this *opSet) reply(errCode int32, fields map[string]*proto.Field, version int64) {
@@ -49,9 +48,9 @@ func set(n *kvnode, cli *cliConn, msg *codec.Message) {
 		opBase: &opBase{
 			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
 			replyer:  newReplyer(cli, head.GetSeqno(), time.Now().Add(time.Duration(head.GetRespTimeout()))),
+			version:  head.Version,
 		},
-		fields:  map[string]*proto.Field{},
-		version: req.Version,
+		fields: map[string]*proto.Field{},
 	}
 
 	err := checkReqCommon(head)

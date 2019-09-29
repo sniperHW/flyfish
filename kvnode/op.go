@@ -38,12 +38,14 @@ type opI interface {
 	isCancel() bool  //操作是否被取消(客户端连接断开或主动发送取消请求)
 	getKV() *kv      //获取op操作的目标
 	isTimeout() bool //命令已经超时
+	checkVersion(version int64) bool
 }
 
 type opBase struct {
 	kv       *kv
 	deadline time.Time
 	replyer  *replyer
+	version  *int64
 }
 
 func (this *opBase) dontReply() {
@@ -60,6 +62,14 @@ func (this *opBase) getKV() *kv {
 
 func (this *opBase) isTimeout() bool {
 	return time.Now().After(this.deadline)
+}
+
+func (this *opBase) checkVersion(version int64) bool {
+	if this.version == nil {
+		return true
+	} else {
+		return *this.version == version
+	}
 }
 
 type replyer struct {

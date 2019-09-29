@@ -34,7 +34,7 @@ func (this *Client) pcall(cb callback, a interface{}) {
 	defer util.Recover(logger)
 	switch a.(type) {
 	case int:
-		cb.onError(a.(int))
+		cb.onError(a.(int32))
 	default:
 		cb.onResult(a)
 	}
@@ -45,7 +45,7 @@ func (this *Client) doCallBack(cb callback, a interface{}) {
 		this.callbackQueue.Post(func() {
 			switch a.(type) {
 			case int:
-				cb.onError(a.(int))
+				cb.onError(a.(int32))
 			default:
 				cb.onResult(a)
 			}

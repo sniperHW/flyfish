@@ -54,6 +54,7 @@ func incrBy(n *kvnode, cli *cliConn, msg *codec.Message) {
 		opBase: &opBase{
 			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
 			replyer:  newReplyer(cli, head.GetSeqno(), time.Now().Add(time.Duration(head.GetRespTimeout()))),
+			version:  head.Version,
 		},
 		incr: req.GetField(),
 	}

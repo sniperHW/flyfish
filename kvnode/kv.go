@@ -9,6 +9,7 @@ import (
 	"sync"
 	//"sync/atomic"
 	//"unsafe"
+	"time"
 )
 
 const (
@@ -16,6 +17,14 @@ const (
 	cache_ok      = uint32(2) //
 	cache_missing = uint32(3)
 	cache_remove  = uint32(4)
+)
+
+const (
+	sql_none          = uint32(0)
+	sql_insert        = uint32(1)
+	sql_update        = uint32(2)
+	sql_delete        = uint32(3)
+	sql_insert_update = uint32(4)
 )
 
 const (
@@ -182,6 +191,17 @@ func (this *kv) processQueueOp(unlockOpQueue ...bool) {
 	if this.opQueue.isLocked() || this.opQueue.empty() {
 		this.Unlock()
 		return
+	}
+
+	now := time.Now()
+
+	for op := this.opQueue.front(); nil != op; {
+		if op.isCancel() || op.isTimeout() {
+			this.opQueue.popFront()
+			op.dontReply()
+		} else {
+
+		}
 	}
 
 	/*	ckey.mtx.Lock()

@@ -66,9 +66,10 @@ message ping_resp {
 message req_common {
   required int64  seqno   = 1;
   optional string table   = 2;
-  optional string key     = 3; 
-  optional int64  timeout = 4;
-  optional int64  respTimeout = 5;
+  optional string key     = 3;
+  optional int64  version = 4;  
+  optional int64  timeout = 5;
+  optional int64  respTimeout = 6;
 }
 
 message resp_common {
@@ -98,8 +99,7 @@ message get_resp {
 */
 message set_req {
   required req_common head = 1;
-  optional int64  version = 2;
-  repeated field  fields  = 3;  
+  repeated field  fields  = 2;  
 }
 
 message set_resp {
@@ -181,7 +181,6 @@ message compare_and_set_nx_resp {
 //删除命令(只支持删除整个记录，不支持删除记录的字段)
 message del_req {
   required req_common head = 1;
-  optional int64  version = 2;
 }
 
 message del_resp {

@@ -53,11 +53,11 @@ func (this *Conn) onClose() {
 
 		for _, c := range this.pendingSend {
 			if c.status != wait_remove {
-				this.c.doCallBack(c.cb, errcode.ERR_CLOSE)
+				this.c.doCallBack(c.cb, errcode.ERR_CONNECTION)
 			}
 		}
 		for _, c := range this.waitResp {
-			this.c.doCallBack(c.cb, errcode.ERR_CLOSE)
+			this.c.doCallBack(c.cb, errcode.ERR_CONNECTION)
 		}
 	}
 }
@@ -237,7 +237,7 @@ func (this *Conn) onDisconnected() {
 		this.minheap.Clear()
 
 		for _, c := range this.waitResp {
-			this.c.doCallBack(c.cb, errcode.ERR_DISCONNECTED)
+			this.c.doCallBack(c.cb, errcode.ERR_CONNECTION)
 		}
 		this.dial()
 	})
@@ -276,7 +276,7 @@ func (this *Conn) sendReq(c *cmdContext) {
 		if err == kendynet.ErrSendQueFull {
 			this.c.doCallBack(c.cb, errcode.ERR_BUSY)
 		} else {
-			this.c.doCallBack(c.cb, errcode.ERR_SEND)
+			this.c.doCallBack(c.cb, errcode.ERR_CONNECTION)
 		}
 	}
 }
@@ -284,7 +284,7 @@ func (this *Conn) sendReq(c *cmdContext) {
 func (this *Conn) exec(c *cmdContext) {
 	this.eventQueue.Post(func() {
 		if atomic.LoadInt32(&this.closed) == 1 {
-			this.c.doCallBack(c.cb, errcode.ERR_CLOSE)
+			this.c.doCallBack(c.cb, errcode.ERR_CONNECTION)
 		} else {
 			c.deadline = time.Now().Add(ClientTimeout)
 			this.minheap.Insert(c)
