@@ -42,46 +42,46 @@ const (
 	mask_kv_kicking      = uint32(0xF << kv_kicking_offset) //21-24位,是否正在被踢除
 )
 
-type opQueue struct {
+type cmdQueue struct {
 	queue  *ringqueue.Queue //待执行的操作请求
 	locked bool             //队列是否被锁定（前面有op尚未完成）
 }
 
-func (this *opQueue) empty() bool {
+func (this *cmdQueue) empty() bool {
 	return this.queue.Front() == nil
 }
 
-func (this *opQueue) append(op opI) bool {
+func (this *cmdQueue) append(op commandI) bool {
 	return this.queue.Append(op)
 }
 
-func (this *opQueue) front() opI {
+func (this *cmdQueue) front() commandI {
 	o := this.queue.Front()
 	if nil == o {
 		return nil
 	} else {
-		return o.(opI)
+		return o.(commandI)
 	}
 }
 
-func (this *opQueue) popFront() opI {
+func (this *cmdQueue) popFront() commandI {
 	o := this.queue.PopFront()
 	if nil == o {
 		return nil
 	} else {
-		return o.(opI)
+		return o.(commandI)
 	}
 }
 
-func (this *opQueue) lock() {
+func (this *cmdQueue) lock() {
 	this.locked = true
 }
 
-func (this *opQueue) unlock() {
+func (this *cmdQueue) unlock() {
 	this.locked = false
 }
 
-func (this *opQueue) isLocked() bool {
+func (this *cmdQueue) isLocked() bool {
 	return this.locked
 }
 
@@ -90,7 +90,7 @@ type kv struct {
 	uniKey       string
 	key          string
 	version      int64
-	opQueue      *opQueue //待执行的操作请求
+	cmdQueue     *cmdQueue //待执行的操作请求
 	meta         *dbmeta.TableMeta
 	fields       map[string]*proto.Field //字段
 	modifyFields map[string]*proto.Field //发生变更尚未更新到sql数据库的字段
@@ -168,7 +168,7 @@ func newkv(slot *kvSlot, tableMeta *dbmeta.TableMeta, key string, uniKey string,
 		uniKey: uniKey,
 		key:    key,
 		meta:   tableMeta,
-		opQueue: &opQueue{
+		cmdQueue: &cmdQueue{
 			queue: ringqueue.New(100),
 		},
 		modifyFields: map[string]*proto.Field{},
@@ -181,23 +181,23 @@ func newkv(slot *kvSlot, tableMeta *dbmeta.TableMeta, key string, uniKey string,
 	return k
 }
 
-func (this *kv) processQueueOp(unlockOpQueue ...bool) {
+func (this *kv) processQueueCmd(unlockOpQueue ...bool) {
 
 	this.Lock()
 	if len(unlockOpQueue) > 0 {
-		this.opQueue.unlock()
+		this.cmdQueue.unlock()
 	}
 
-	if this.opQueue.isLocked() || this.opQueue.empty() {
+	if this.cmdQueue.isLocked() || this.cmdQueue.empty() {
 		this.Unlock()
 		return
 	}
 
 	now := time.Now()
 
-	for op := this.opQueue.front(); nil != op; {
+	for op := this.cmdQueue.front(); nil != op; {
 		if op.isCancel() || op.isTimeout() {
-			this.opQueue.popFront()
+			this.cmdQueue.popFront()
 			op.dontReply()
 		} else {
 

@@ -11,16 +11,16 @@ import (
 	"time"
 )
 
-type opSetNx struct {
-	*opBase
+type cmdSetNx struct {
+	*commandBase
 	fields map[string]*proto.Field
 }
 
-func (this *opSetNx) reply(errCode int32, fields map[string]*proto.Field, version int64) {
+func (this *cmdSetNx) reply(errCode int32, fields map[string]*proto.Field, version int64) {
 	this.replyer.reply(this, errCode, fields, version)
 }
 
-func (this *opSetNx) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) pb.Message {
+func (this *cmdSetNx) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) pb.Message {
 
 	var key string
 
@@ -44,8 +44,8 @@ func setNx(n *kvnode, cli *cliConn, msg *codec.Message) {
 
 	head := req.GetHead()
 
-	op := &opSetNx{
-		opBase: &opBase{
+	op := &cmdSetNx{
+		commandBase: &commandBase{
 			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
 			replyer:  newReplyer(cli, head.GetSeqno(), time.Now().Add(time.Duration(head.GetRespTimeout()))),
 			version:  head.Version,
@@ -83,11 +83,11 @@ func setNx(n *kvnode, cli *cliConn, msg *codec.Message) {
 		return
 	}
 
-	if !kv.opQueue.append(op) {
+	if !kv.cmdQueue.append(op) {
 		op.reply(errcode.ERR_BUSY, nil, -1)
 		return
 	}
 
-	kv.processQueueOp()
+	kv.processQueueCmd()
 
 }

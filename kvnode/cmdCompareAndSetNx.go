@@ -11,17 +11,17 @@ import (
 	"time"
 )
 
-type opCompareAndSet struct {
-	*opBase
+type cmdCompareAndSetNx struct {
+	*commandBase
 	oldV *proto.Field
 	newV *proto.Field
 }
 
-func (this *opCompareAndSet) reply(errCode int32, fields map[string]*proto.Field, version int64) {
+func (this *cmdCompareAndSetNx) reply(errCode int32, fields map[string]*proto.Field, version int64) {
 	this.replyer.reply(this, errCode, fields, version)
 }
 
-func (this *opCompareAndSet) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) pb.Message {
+func (this *cmdCompareAndSetNx) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) pb.Message {
 
 	var key string
 
@@ -29,7 +29,7 @@ func (this *opCompareAndSet) makeResponse(errCode int32, fields map[string]*prot
 		key = this.kv.key
 	}
 
-	resp := &proto.CompareAndSetResp{
+	resp := &proto.CompareAndSetNxResp{
 		Head: &proto.RespCommon{
 			Key:     pb.String(key),
 			Seqno:   pb.Int64(this.replyer.seqno),
@@ -43,14 +43,14 @@ func (this *opCompareAndSet) makeResponse(errCode int32, fields map[string]*prot
 	return resp
 }
 
-func compareAndSet(n *kvnode, cli *cliConn, msg *codec.Message) {
+func compareAndSetNx(n *kvnode, cli *cliConn, msg *codec.Message) {
 
-	req := msg.GetData().(*proto.CompareAndSetReq)
+	req := msg.GetData().(*proto.CompareAndSetNxReq)
 
 	head := req.GetHead()
 
-	op := &opCompareAndSet{
-		opBase: &opBase{
+	op := &cmdCompareAndSetNx{
+		commandBase: &commandBase{
 			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
 			replyer:  newReplyer(cli, head.GetSeqno(), time.Now().Add(time.Duration(head.GetRespTimeout()))),
 			version:  head.Version,
@@ -85,11 +85,11 @@ func compareAndSet(n *kvnode, cli *cliConn, msg *codec.Message) {
 		return
 	}
 
-	if !kv.opQueue.append(op) {
+	if !kv.cmdQueue.append(op) {
 		op.reply(errcode.ERR_BUSY, nil, -1)
 		return
 	}
 
-	kv.processQueueOp()
+	kv.processQueueCmd()
 
 }

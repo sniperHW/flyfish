@@ -31,7 +31,7 @@ func makeUniKey(table string, key string) string {
 	return fmt.Sprintf("%s:%s", table, key)
 }
 
-type opI interface {
+type commandI interface {
 	makeResponse(errCode int32, fields map[string]*proto.Field, version int64) pb.Message
 	reply(errCode int32, fields map[string]*proto.Field, version int64)
 	dontReply()
@@ -41,30 +41,30 @@ type opI interface {
 	checkVersion(version int64) bool
 }
 
-type opBase struct {
+type commandBase struct {
 	kv       *kv
 	deadline time.Time
 	replyer  *replyer
 	version  *int64
 }
 
-func (this *opBase) dontReply() {
+func (this *commandBase) dontReply() {
 	this.replyer.dontReply()
 }
 
-func (this *opBase) isCancel() bool {
+func (this *commandBase) isCancel() bool {
 	return this.replyer.isCancel()
 }
 
-func (this *opBase) getKV() *kv {
+func (this *commandBase) getKV() *kv {
 	return this.kv
 }
 
-func (this *opBase) isTimeout() bool {
+func (this *commandBase) isTimeout() bool {
 	return time.Now().After(this.deadline)
 }
 
-func (this *opBase) checkVersion(version int64) bool {
+func (this *commandBase) checkVersion(version int64) bool {
 	if this.version == nil {
 		return true
 	} else {
@@ -105,11 +105,11 @@ func (this *replyer) isCancel() bool {
 	return false
 }
 
-func (this *replyer) reply(op opI, errCode int32, fields map[string]*proto.Field, version int64) {
+func (this *replyer) reply(cmd commandI, errCode int32, fields map[string]*proto.Field, version int64) {
 	if atomic.CompareAndSwapInt64(&this.replyed, 0, 1) {
 		atomic.AddInt64(&wait4ReplyCount, -1)
 		if this.peer.removeReplyer(this) && !time.Now().After(this.respDeadline) {
-			resp := op.makeResponse(errCode, fields, version)
+			resp := cmd.makeResponse(errCode, fields, version)
 			this.peer.send(resp)
 		}
 	}
@@ -121,3 +121,52 @@ func (this *replyer) dontReply() {
 		this.peer.removeReplyer(this)
 	}
 }
+
+/*
+type cmdContext struct {
+	commands      []*command
+	fields        map[string]*proto.Field
+	errno         int32
+	writeBackFlag int //回写数据库类型
+	ping          bool
+	version       int64
+	lease         *int
+}*/
+
+/*
+func (this *cmdContext) getCmd() *command {
+	return this.commands[0]
+}
+
+func (this *cmdContext) getCmdType() int {
+	return this.commands[0].cmdType
+}
+
+func (this *cmdContext) getTable() string {
+	return this.commands[0].table
+}
+
+func (this *cmdContext) getKey() string {
+	return this.commands[0].key
+}
+
+func (this *cmdContext) getUniKey() string {
+	return this.commands[0].uniKey
+}
+
+func (this *cmdContext) getCacheKey() *cacheKey {
+	return this.commands[0].ckey
+}
+
+func (this *cmdContext) reply(errCode int32, fields map[string]*proto.Field, version int64) {
+	for _, v := range this.commands {
+		v.reply(errCode, fields, version)
+	}
+}
+
+func (this *cmdContext) dontReply() {
+	for _, v := range this.commands {
+		v.dontReply()
+	}
+}
+*/

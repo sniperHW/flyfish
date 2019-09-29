@@ -11,17 +11,16 @@ import (
 	"time"
 )
 
-type opCompareAndSetNx struct {
-	*opBase
-	oldV *proto.Field
-	newV *proto.Field
+type cmdDecr struct {
+	*commandBase
+	decr *proto.Field
 }
 
-func (this *opCompareAndSetNx) reply(errCode int32, fields map[string]*proto.Field, version int64) {
+func (this *cmdDecr) reply(errCode int32, fields map[string]*proto.Field, version int64) {
 	this.replyer.reply(this, errCode, fields, version)
 }
 
-func (this *opCompareAndSetNx) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) pb.Message {
+func (this *cmdDecr) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) pb.Message {
 
 	var key string
 
@@ -29,34 +28,35 @@ func (this *opCompareAndSetNx) makeResponse(errCode int32, fields map[string]*pr
 		key = this.kv.key
 	}
 
-	resp := &proto.CompareAndSetNxResp{
+	resp := &proto.DecrByResp{
 		Head: &proto.RespCommon{
 			Key:     pb.String(key),
 			Seqno:   pb.Int64(this.replyer.seqno),
 			ErrCode: pb.Int32(errCode),
 			Version: pb.Int64(version),
-		}}
-	if nil != fields {
-		resp.Value = fields[this.oldV.GetName()]
+		},
+	}
+
+	if errCode == errcode.ERR_OK {
+		resp.NewValue = fields[this.decr.GetName()]
 	}
 
 	return resp
 }
 
-func compareAndSetNx(n *kvnode, cli *cliConn, msg *codec.Message) {
+func decrBy(n *kvnode, cli *cliConn, msg *codec.Message) {
 
-	req := msg.GetData().(*proto.CompareAndSetNxReq)
+	req := msg.GetData().(*proto.DecrByReq)
 
 	head := req.GetHead()
 
-	op := &opCompareAndSetNx{
-		opBase: &opBase{
+	op := &cmdDecr{
+		commandBase: &commandBase{
 			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
 			replyer:  newReplyer(cli, head.GetSeqno(), time.Now().Add(time.Duration(head.GetRespTimeout()))),
 			version:  head.Version,
 		},
-		oldV: req.GetOld(),
-		newV: req.GetNew(),
+		decr: req.GetField(),
 	}
 
 	err := checkReqCommon(head)
@@ -66,7 +66,7 @@ func compareAndSetNx(n *kvnode, cli *cliConn, msg *codec.Message) {
 		return
 	}
 
-	if nil == op.newV || nil == op.oldV {
+	if nil == op.decr {
 		op.reply(errcode.ERR_MISSING_FIELDS, nil, -1)
 		return
 	}
@@ -80,16 +80,16 @@ func compareAndSetNx(n *kvnode, cli *cliConn, msg *codec.Message) {
 
 	op.kv = kv
 
-	if err := kv.meta.CheckCompareAndSet(op.newV, op.oldV); nil != err {
+	if err := kv.meta.CheckField(op.decr); nil != err {
 		op.reply(errcode.ERR_INVAILD_FIELD, nil, -1)
 		return
 	}
 
-	if !kv.opQueue.append(op) {
+	if !kv.cmdQueue.append(op) {
 		op.reply(errcode.ERR_BUSY, nil, -1)
 		return
 	}
 
-	kv.processQueueOp()
+	kv.processQueueCmd()
 
 }

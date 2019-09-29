@@ -11,16 +11,17 @@ import (
 	"time"
 )
 
-type opDecr struct {
-	*opBase
-	decr *proto.Field
+type cmdCompareAndSet struct {
+	*commandBase
+	oldV *proto.Field
+	newV *proto.Field
 }
 
-func (this *opDecr) reply(errCode int32, fields map[string]*proto.Field, version int64) {
+func (this *cmdCompareAndSet) reply(errCode int32, fields map[string]*proto.Field, version int64) {
 	this.replyer.reply(this, errCode, fields, version)
 }
 
-func (this *opDecr) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) pb.Message {
+func (this *cmdCompareAndSet) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) pb.Message {
 
 	var key string
 
@@ -28,35 +29,34 @@ func (this *opDecr) makeResponse(errCode int32, fields map[string]*proto.Field, 
 		key = this.kv.key
 	}
 
-	resp := &proto.DecrByResp{
+	resp := &proto.CompareAndSetResp{
 		Head: &proto.RespCommon{
 			Key:     pb.String(key),
 			Seqno:   pb.Int64(this.replyer.seqno),
 			ErrCode: pb.Int32(errCode),
 			Version: pb.Int64(version),
-		},
-	}
-
-	if errCode == errcode.ERR_OK {
-		resp.NewValue = fields[this.decr.GetName()]
+		}}
+	if nil != fields {
+		resp.Value = fields[this.oldV.GetName()]
 	}
 
 	return resp
 }
 
-func decrBy(n *kvnode, cli *cliConn, msg *codec.Message) {
+func compareAndSet(n *kvnode, cli *cliConn, msg *codec.Message) {
 
-	req := msg.GetData().(*proto.DecrByReq)
+	req := msg.GetData().(*proto.CompareAndSetReq)
 
 	head := req.GetHead()
 
-	op := &opDecr{
-		opBase: &opBase{
+	op := &cmdCompareAndSet{
+		commandBase: &commandBase{
 			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
 			replyer:  newReplyer(cli, head.GetSeqno(), time.Now().Add(time.Duration(head.GetRespTimeout()))),
 			version:  head.Version,
 		},
-		decr: req.GetField(),
+		oldV: req.GetOld(),
+		newV: req.GetNew(),
 	}
 
 	err := checkReqCommon(head)
@@ -66,7 +66,7 @@ func decrBy(n *kvnode, cli *cliConn, msg *codec.Message) {
 		return
 	}
 
-	if nil == op.decr {
+	if nil == op.newV || nil == op.oldV {
 		op.reply(errcode.ERR_MISSING_FIELDS, nil, -1)
 		return
 	}
@@ -80,16 +80,16 @@ func decrBy(n *kvnode, cli *cliConn, msg *codec.Message) {
 
 	op.kv = kv
 
-	if err := kv.meta.CheckField(op.decr); nil != err {
+	if err := kv.meta.CheckCompareAndSet(op.newV, op.oldV); nil != err {
 		op.reply(errcode.ERR_INVAILD_FIELD, nil, -1)
 		return
 	}
 
-	if !kv.opQueue.append(op) {
+	if !kv.cmdQueue.append(op) {
 		op.reply(errcode.ERR_BUSY, nil, -1)
 		return
 	}
 
-	kv.processQueueOp()
+	kv.processQueueCmd()
 
 }

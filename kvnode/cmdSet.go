@@ -11,15 +11,16 @@ import (
 	"time"
 )
 
-type opDel struct {
-	*opBase
+type cmdSet struct {
+	*commandBase
+	fields map[string]*proto.Field
 }
 
-func (this *opDel) reply(errCode int32, fields map[string]*proto.Field, version int64) {
+func (this *cmdSet) reply(errCode int32, fields map[string]*proto.Field, version int64) {
 	this.replyer.reply(this, errCode, fields, version)
 }
 
-func (this *opDel) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) pb.Message {
+func (this *cmdSet) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) pb.Message {
 
 	var key string
 
@@ -27,7 +28,7 @@ func (this *opDel) makeResponse(errCode int32, fields map[string]*proto.Field, v
 		key = this.kv.key
 	}
 
-	return &proto.DelResp{
+	return &proto.SetResp{
 		Head: &proto.RespCommon{
 			Key:     pb.String(key),
 			Seqno:   pb.Int64(this.replyer.seqno),
@@ -37,24 +38,30 @@ func (this *opDel) makeResponse(errCode int32, fields map[string]*proto.Field, v
 	}
 }
 
-func del(n *kvnode, cli *cliConn, msg *codec.Message) {
+func set(n *kvnode, cli *cliConn, msg *codec.Message) {
 
-	req := msg.GetData().(*proto.DelReq)
+	req := msg.GetData().(*proto.SetReq)
 
 	head := req.GetHead()
 
-	op := &opDel{
-		opBase: &opBase{
+	op := &cmdSet{
+		commandBase: &commandBase{
 			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
 			replyer:  newReplyer(cli, head.GetSeqno(), time.Now().Add(time.Duration(head.GetRespTimeout()))),
 			version:  head.Version,
 		},
+		fields: map[string]*proto.Field{},
 	}
 
 	err := checkReqCommon(head)
 
 	if err != errcode.ERR_OK {
 		op.reply(err, nil, -1)
+		return
+	}
+
+	if len(req.GetFields()) == 0 {
+		op.reply(errcode.ERR_MISSING_FIELDS, nil, -1)
 		return
 	}
 
@@ -67,10 +74,20 @@ func del(n *kvnode, cli *cliConn, msg *codec.Message) {
 
 	op.kv = kv
 
-	if !kv.opQueue.append(op) {
+	for _, v := range req.GetFields() {
+		op.fields[v.GetName()] = v
+	}
+
+	if err := kv.meta.CheckSet(op.fields); nil != err {
+		op.reply(errcode.ERR_INVAILD_FIELD, nil, -1)
+		return
+	}
+
+	if !kv.cmdQueue.append(op) {
 		op.reply(errcode.ERR_BUSY, nil, -1)
 		return
 	}
 
-	kv.processQueueOp()
+	kv.processQueueCmd()
+
 }

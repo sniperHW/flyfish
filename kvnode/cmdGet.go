@@ -11,16 +11,16 @@ import (
 	"time"
 )
 
-type opGet struct {
-	*opBase
+type cmdGet struct {
+	*commandBase
 	fields map[string]*proto.Field
 }
 
-func (this *opGet) reply(errCode int32, fields map[string]*proto.Field, version int64) {
+func (this *cmdGet) reply(errCode int32, fields map[string]*proto.Field, version int64) {
 	this.replyer.reply(this, errCode, fields, version)
 }
 
-func (this *opGet) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) pb.Message {
+func (this *cmdGet) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) pb.Message {
 
 	var key string
 
@@ -52,8 +52,8 @@ func (this *opGet) makeResponse(errCode int32, fields map[string]*proto.Field, v
 func get(n *kvnode, cli *cliConn, msg *codec.Message) {
 	req := msg.GetData().(*proto.GetReq)
 	head := req.GetHead()
-	op := &opGet{
-		opBase: &opBase{
+	op := &cmdGet{
+		commandBase: &commandBase{
 			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
 			replyer:  newReplyer(cli, head.GetSeqno(), time.Now().Add(time.Duration(head.GetRespTimeout()))),
 		},
@@ -93,11 +93,11 @@ func get(n *kvnode, cli *cliConn, msg *codec.Message) {
 		return
 	}
 
-	if !kv.opQueue.append(op) {
+	if !kv.cmdQueue.append(op) {
 		op.reply(errcode.ERR_BUSY, nil, -1)
 		return
 	}
 
-	kv.processQueueOp()
+	kv.processQueueCmd()
 
 }
