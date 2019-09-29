@@ -5,10 +5,10 @@ import (
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/util/bitfield"
 	"github.com/sniperHW/flyfish/util/ringqueue"
-	"strconv"
+	//"strconv"
 	"sync"
-	"sync/atomic"
-	"unsafe"
+	//"sync/atomic"
+	//"unsafe"
 )
 
 const (
@@ -42,25 +42,25 @@ func (this *opQueue) empty() bool {
 	return this.queue.Front() == nil
 }
 
-func (this *opQueue) append(op *opI) bool {
+func (this *opQueue) append(op opI) bool {
 	return this.queue.Append(op)
 }
 
-func (this *opQueue) front() *opI {
+func (this *opQueue) front() opI {
 	o := this.queue.Front()
 	if nil == o {
 		return nil
 	} else {
-		return o.(*opI)
+		return o.(opI)
 	}
 }
 
-func (this *opQueue) popFront() *opI {
+func (this *opQueue) popFront() opI {
 	o := this.queue.PopFront()
 	if nil == o {
 		return nil
 	} else {
-		return o.(*opI)
+		return o.(opI)
 	}
 }
 
@@ -90,7 +90,7 @@ type kv struct {
 }
 
 func (this *kv) setSqlFlag(sqlFlag uint32) {
-	this.flag.Set(mask_kv_status, kv_sql_flag_offset, status)
+	this.flag.Set(mask_kv_status, kv_sql_flag_offset, sqlFlag)
 }
 
 func (this *kv) getSqlFlag() uint32 {
@@ -113,8 +113,8 @@ func (this *kv) setTmp(tmp bool) {
 	}
 }
 
-func (this *kv) isTmp() {
-	return this.flag.Get(mask_kv_tmp, kv_tmp_offset)
+func (this *kv) isTmp() bool {
+	return this.flag.Get(mask_kv_tmp, kv_tmp_offset) == 1
 }
 
 func (this *kv) setKicking(kicking bool) {
@@ -125,8 +125,8 @@ func (this *kv) setKicking(kicking bool) {
 	}
 }
 
-func (this *kv) isKicking() {
-	return this.flag.Get(mask_kv_kicking, kv_kicking_offset)
+func (this *kv) isKicking() bool {
+	return this.flag.Get(mask_kv_kicking, kv_kicking_offset) == 1
 }
 
 func (this *kv) setWriteBack(writeback bool) {
@@ -137,8 +137,8 @@ func (this *kv) setWriteBack(writeback bool) {
 	}
 }
 
-func (this *kv) isWriteBack() {
-	return this.flag.Get(mask_kv_writeback, kv_writeback_offset)
+func (this *kv) isWriteBack() bool {
+	return this.flag.Get(mask_kv_writeback, kv_writeback_offset) == 1
 }
 
 func (this *kv) setSnapshoted(snapshoted bool) {
@@ -149,8 +149,8 @@ func (this *kv) setSnapshoted(snapshoted bool) {
 	}
 }
 
-func (this *kv) isSnapshoted() {
-	return this.flag.Get(mask_kv_snapshoted, kv_snapshoted_offset)
+func (this *kv) isSnapshoted() bool {
+	return this.flag.Get(mask_kv_snapshoted, kv_snapshoted_offset) == 1
 }
 
 func newkv(slot *kvSlot, tableMeta *dbmeta.TableMeta, key string, uniKey string, isTmp bool) *kv {
@@ -162,7 +162,7 @@ func newkv(slot *kvSlot, tableMeta *dbmeta.TableMeta, key string, uniKey string,
 		opQueue: &opQueue{
 			queue: ringqueue.New(100),
 		},
-		modifyFields: map[string]bool{},
+		modifyFields: map[string]*proto.Field{},
 		slot:         slot,
 	}
 

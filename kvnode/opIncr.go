@@ -1,13 +1,13 @@
 package kvnode
 
 import (
-	"fmt"
+	//"fmt"
 	pb "github.com/golang/protobuf/proto"
 	codec "github.com/sniperHW/flyfish/codec"
-	"github.com/sniperHW/flyfish/dbmeta"
+	//"github.com/sniperHW/flyfish/dbmeta"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
-	"github.com/sniperHW/kendynet"
+	//"github.com/sniperHW/kendynet"
 	"time"
 )
 
@@ -34,7 +34,7 @@ func (this *opIncr) makeResponse(errCode int32, fields map[string]*proto.Field, 
 			Seqno:   pb.Int64(this.replyer.seqno),
 			ErrCode: pb.Int32(errCode),
 			Version: pb.Int64(version),
-		}
+		},
 	}
 
 	if errCode == errcode.ERR_OK {
@@ -50,11 +50,10 @@ func incrBy(n *kvnode, cli *cliConn, msg *codec.Message) {
 
 	head := req.GetHead()
 
-	head := req.GetHead()
 	op := &opIncr{
 		opBase: &opBase{
 			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
-			replyer:  newReplyer(cli,head.GetSeqno(), time.Now().Add(time.Duration(head.GetRespTimeout()))),
+			replyer:  newReplyer(cli, head.GetSeqno(), time.Now().Add(time.Duration(head.GetRespTimeout()))),
 		},
 		incr: req.GetField(),
 	}
@@ -80,7 +79,7 @@ func incrBy(n *kvnode, cli *cliConn, msg *codec.Message) {
 
 	op.kv = kv
 
-	if !kv.meta.CheckField(op.incr) {
+	if err := kv.meta.CheckField(op.incr); nil != err {
 		op.reply(errcode.ERR_INVAILD_FIELD, nil, -1)
 		return
 	}

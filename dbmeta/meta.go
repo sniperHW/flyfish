@@ -114,6 +114,10 @@ type TableMeta struct {
 	version          int64
 }
 
+func (this *TableMeta) Version() int64 {
+	return this.version
+}
+
 func (this *TableMeta) GetQueryMeta() *QueryMeta {
 	return this.queryMeta
 }

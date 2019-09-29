@@ -21,7 +21,7 @@ func (this *cliConn) isClosed() bool {
 }
 
 func (this *cliConn) close(reason string, timeout time.Duration) {
-	return session.Close()
+	this.session.Close(reason, timeout)
 }
 
 func (this *cliConn) addReplyer(replyer *replyer) {
@@ -30,7 +30,7 @@ func (this *cliConn) addReplyer(replyer *replyer) {
 	this.replyers[replyer.seqno] = replyer
 }
 
-func (this *cliConn) removeReplyerBySeqno(seqno int) bool {
+func (this *cliConn) removeReplyerBySeqno(seqno int64) bool {
 	this.Lock()
 	defer this.Unlock()
 	if _, ok := this.replyers[seqno]; ok {
@@ -42,7 +42,7 @@ func (this *cliConn) removeReplyerBySeqno(seqno int) bool {
 }
 
 func (this *cliConn) removeReplyer(replyer *replyer) bool {
-	this.removeReplyerBySeqno(replyer.seqno)
+	return this.removeReplyerBySeqno(replyer.seqno)
 }
 
 func (this *cliConn) checkReplyer(replyer *replyer) bool {

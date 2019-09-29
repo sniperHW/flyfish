@@ -1,13 +1,13 @@
 package kvnode
 
 import (
-	"fmt"
+	//"fmt"
 	pb "github.com/golang/protobuf/proto"
 	codec "github.com/sniperHW/flyfish/codec"
-	"github.com/sniperHW/flyfish/dbmeta"
+	//"github.com/sniperHW/flyfish/dbmeta"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
-	"github.com/sniperHW/kendynet"
+	//"github.com/sniperHW/kendynet"
 	"time"
 )
 
@@ -88,7 +88,7 @@ func get(n *kvnode, cli *cliConn, msg *codec.Message) {
 		}
 	}
 
-	if !kv.meta.CheckGet(op.fields) {
+	if err := kv.meta.CheckGet(op.fields); nil != err {
 		op.reply(errcode.ERR_INVAILD_FIELD, nil, -1)
 		return
 	}

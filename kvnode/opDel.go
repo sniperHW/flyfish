@@ -1,13 +1,13 @@
 package kvnode
 
 import (
-	"fmt"
+	//"fmt"
 	pb "github.com/golang/protobuf/proto"
 	codec "github.com/sniperHW/flyfish/codec"
-	"github.com/sniperHW/flyfish/dbmeta"
+	//"github.com/sniperHW/flyfish/dbmeta"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
-	"github.com/sniperHW/kendynet"
+	//"github.com/sniperHW/kendynet"
 	"time"
 )
 
@@ -44,7 +44,6 @@ func del(n *kvnode, cli *cliConn, msg *codec.Message) {
 
 	head := req.GetHead()
 
-	head := req.GetHead()
 	op := &opDel{
 		opBase: &opBase{
 			deadline: time.Now().Add(time.Duration(head.GetTimeout())),

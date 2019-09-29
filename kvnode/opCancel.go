@@ -1,14 +1,14 @@
 package kvnode
 
 import (
-	"fmt"
-	pb "github.com/golang/protobuf/proto"
+	//"fmt"
+	//pb "github.com/golang/protobuf/proto"
 	codec "github.com/sniperHW/flyfish/codec"
-	"github.com/sniperHW/flyfish/dbmeta"
-	"github.com/sniperHW/flyfish/errcode"
+	//"github.com/sniperHW/flyfish/dbmeta"
+	//"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
-	"github.com/sniperHW/kendynet"
-	"time"
+	//"github.com/sniperHW/kendynet"
+	//"time"
 )
 
 /*

@@ -1,20 +1,22 @@
 package kvnode
 
 import (
-	"encoding/binary"
-	"github.com/sniperHW/flyfish/conf"
+	"fmt"
+	//"encoding/binary"
+	//"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/dbmeta"
-	"github.com/sniperHW/flyfish/proto"
-	"github.com/sniperHW/kendynet/timer"
+	futil "github.com/sniperHW/flyfish/util"
+	//"github.com/sniperHW/flyfish/proto"
+	//"github.com/sniperHW/kendynet/timer"
 	"github.com/sniperHW/kendynet/util"
 	"go.etcd.io/etcd/etcdserver/api/snap"
-	"go.etcd.io/etcd/raft/raftpb"
-	"log"
-	"math"
-	"strings"
+	//"go.etcd.io/etcd/raft/raftpb"
+	//"log"
+	//	"math"
+	//	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
+	//	"time"
 	"unsafe"
 )
 
@@ -43,11 +45,11 @@ type kvstore struct {
 
 	stop func()
 
-	rn *raftNode
+	//rn *raftNode
 }
 
 func (this *kvstore) getSlot(uniKey string) *kvSlot {
-	return this.slots[StringHash(uniKey)%len(s.slots)]
+	return this.slots[futil.StringHash(uniKey)%len(this.slots)]
 }
 
 type storeMgr struct {
@@ -75,7 +77,7 @@ func (this *storeMgr) getkv(table string, key string) (*kv, error) {
 		}
 
 		if ok {
-			if !this.dbmeta.CheckMetaVersion(k.meta.version) {
+			if !this.dbmeta.CheckMetaVersion(k.meta.Version()) {
 				newMeta := this.dbmeta.GetTableMeta(table)
 				if newMeta != nil {
 					atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&k.meta)), unsafe.Pointer(newMeta))
@@ -91,7 +93,7 @@ func (this *storeMgr) getkv(table string, key string) (*kv, error) {
 				err = fmt.Errorf("missing table meta")
 			} else {
 				k = newkv(slot, meta, key, uniKey, true)
-				slot.tmpkv[uniKey] = k
+				slot.tmp[uniKey] = k
 			}
 		}
 
@@ -104,7 +106,7 @@ func (this *storeMgr) getkv(table string, key string) (*kv, error) {
 func (this *storeMgr) getStore(uniKey string) *kvstore {
 	this.RLock()
 	defer this.RUnlock()
-	index := (StringHash(uniKey) % this.mask) + 1
+	index := (futil.StringHash(uniKey) % this.mask) + 1
 	return this.stores[index]
 }
 

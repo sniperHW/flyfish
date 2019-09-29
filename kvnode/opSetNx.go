@@ -1,13 +1,13 @@
 package kvnode
 
 import (
-	"fmt"
+	//"fmt"
 	pb "github.com/golang/protobuf/proto"
 	codec "github.com/sniperHW/flyfish/codec"
-	"github.com/sniperHW/flyfish/dbmeta"
+	//"github.com/sniperHW/flyfish/dbmeta"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
-	"github.com/sniperHW/kendynet"
+	//"github.com/sniperHW/kendynet"
 	"time"
 )
 
@@ -44,7 +44,6 @@ func setNx(n *kvnode, cli *cliConn, msg *codec.Message) {
 
 	head := req.GetHead()
 
-	head := req.GetHead()
 	op := &opSetNx{
 		opBase: &opBase{
 			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
@@ -78,7 +77,7 @@ func setNx(n *kvnode, cli *cliConn, msg *codec.Message) {
 		op.fields[v.GetName()] = v
 	}
 
-	if !kv.meta.CheckSet(op.fields) {
+	if err := kv.meta.CheckSet(op.fields); nil != err {
 		op.reply(errcode.ERR_INVAILD_FIELD, nil, -1)
 		return
 	}

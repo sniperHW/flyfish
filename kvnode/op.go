@@ -2,10 +2,11 @@ package kvnode
 
 import (
 	"fmt"
-	codec "github.com/sniperHW/flyfish/codec"
+	//codec "github.com/sniperHW/flyfish/codec"
+	pb "github.com/golang/protobuf/proto"
 	"github.com/sniperHW/flyfish/errcode"
-	pb "github.com/sniperHW/flyfish/proto"
-	"github.com/sniperHW/kendynet"
+	//"github.com/sniperHW/kendynet"
+	"github.com/sniperHW/flyfish/proto"
 	"sync/atomic"
 	"time"
 )
@@ -34,7 +35,7 @@ type opI interface {
 	makeResponse(errCode int32, fields map[string]*proto.Field, version int64) pb.Message
 	reply(errCode int32, fields map[string]*proto.Field, version int64)
 	dontReply()
-	isCancel() bool
+	isCancel() bool  //操作是否被取消(客户端连接断开或主动发送取消请求)
 	getKV() *kv      //获取op操作的目标
 	isTimeout() bool //命令已经超时
 }
@@ -50,7 +51,7 @@ func (this *opBase) dontReply() {
 }
 
 func (this *opBase) isCancel() bool {
-	this.replyer.isCancel()
+	return this.replyer.isCancel()
 }
 
 func (this *opBase) getKV() *kv {
@@ -71,7 +72,7 @@ type replyer struct {
 func newReplyer(peer *cliConn, seqno int64, respDeadline time.Time) *replyer {
 	atomic.AddInt64(&wait4ReplyCount, 1)
 
-	r = &replyer{
+	r := &replyer{
 		peer:         peer,
 		respDeadline: respDeadline,
 		seqno:        seqno,

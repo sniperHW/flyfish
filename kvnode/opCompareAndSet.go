@@ -1,13 +1,13 @@
 package kvnode
 
 import (
-	"fmt"
+	//"fmt"
 	pb "github.com/golang/protobuf/proto"
 	codec "github.com/sniperHW/flyfish/codec"
-	"github.com/sniperHW/flyfish/dbmeta"
+	//"github.com/sniperHW/flyfish/dbmeta"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
-	"github.com/sniperHW/kendynet"
+	//"github.com/sniperHW/kendynet"
 	"time"
 )
 
@@ -49,16 +49,13 @@ func compareAndSet(n *kvnode, cli *cliConn, msg *codec.Message) {
 
 	head := req.GetHead()
 
-	head := req.GetHead()
 	op := &opCompareAndSet{
 		opBase: &opBase{
 			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
 			replyer:  newReplyer(cli, head.GetSeqno(), time.Now().Add(time.Duration(head.GetRespTimeout()))),
 		},
-		fields:  map[string]*proto.Field{},
-		version: req.Version,
-		oldV:    req.GetOld(),
-		newV:    req.GetNew(),
+		oldV: req.GetOld(),
+		newV: req.GetNew(),
 	}
 
 	err := checkReqCommon(head)
@@ -82,7 +79,7 @@ func compareAndSet(n *kvnode, cli *cliConn, msg *codec.Message) {
 
 	op.kv = kv
 
-	if !kv.meta.CheckCompareAndSet(op.newV, op.oldV) {
+	if err := kv.meta.CheckCompareAndSet(op.newV, op.oldV); nil != err {
 		op.reply(errcode.ERR_INVAILD_FIELD, nil, -1)
 		return
 	}
