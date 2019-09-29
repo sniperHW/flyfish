@@ -9,7 +9,7 @@ import (
 	"sync"
 	//"sync/atomic"
 	//"unsafe"
-	"time"
+	//"time"
 )
 
 const (
@@ -96,6 +96,55 @@ type kv struct {
 	modifyFields map[string]*proto.Field //发生变更尚未更新到sql数据库的字段
 	flag         bitfield.BitField32
 	slot         *kvSlot
+}
+
+func (this *kv) appendCmd(op commandI) bool {
+	this.Lock()
+	defer this.Unlock()
+	if this.getStatus() == cache_remove {
+		return false
+	}
+	return this.cmdQueue.append(op)
+}
+
+func (this *kv) removeTmp(err int32) bool {
+
+	this.setStatus(cache_remove)
+
+	this.slot.Lock()
+
+	this.slot.removeTmpKv(this)
+
+	for cmd := this.cmdQueue.popFront(); nil != cmd; {
+		cmd.reply(err, nil, 0)
+	}
+
+	this.slot.Unlock()
+}
+
+func (this *kv) tryRemoveTmp(err int32) bool {
+	this.Lock()
+	isTmp := this.isTmp()
+	this.Unlock()
+	if isTmp {
+		return false
+	} else {
+		//为了防止死锁，必须先锁外层容器再锁this
+		this.slot.Lock()
+		this.Lock()
+
+		this.setStatus(cache_remove)
+
+		this.slot.removeTmpKv(this)
+
+		for cmd := this.cmdQueue.popFront(); nil != cmd; {
+			cmd.reply(err, nil, 0)
+		}
+
+		this.Unlock()
+		this.slot.Unlock()
+		return true
+	}
 }
 
 func (this *kv) setSqlFlag(sqlFlag uint32) {
@@ -193,115 +242,81 @@ func (this *kv) processQueueCmd(unlockOpQueue ...bool) {
 		return
 	}
 
-	now := time.Now()
+	var asynTask asynCmdTaskI
 
-	for op := this.cmdQueue.front(); nil != op; {
-		if op.isCancel() || op.isTimeout() {
+	for cmd := this.cmdQueue.front(); nil != cmd; {
+		if cmd.isCancel() || cmd.isTimeout() {
 			this.cmdQueue.popFront()
-			op.dontReply()
+			cmd.dontReply()
 		} else {
-
+			switch cmd.(type) {
+			case *cmdGet:
+				this.cmdQueue.popFront()
+				asynCmdTaskI = cmd.prepare(asynCmdTaskI)
+			case *cmdCompareAndSet, *cmdCompareAndSetNx, *cmdDecr, *cmdDel, *Incr, *Set, *SetNx:
+				if nil != asynTask {
+					goto loopEnd
+				}
+				this.cmdQueue.popFront()
+				asynCmdTaskI = cmd.prepare(asynCmdTaskI)
+				goto loopEnd
+			default:
+				this.cmdQueue.popFront()
+				//记录日志
+			}
 		}
 	}
 
-	/*	ckey.mtx.Lock()
+loopEnd:
 
-		if !fromClient {
-			//前一条命令执行完毕，解锁队列
-			ckey.unlockCmdQueue()
-		}
-
-		if ckey.cmdQueueLocked || ckey.cmdQueue.Len() == 0 {
-			ckey.mtx.Unlock()
-			return
-		}
-
-		ctx := &cmdContext{
-			commands: []*command{},
-		}
-
-		now := time.Now()
-
-		config := conf.GetConfig()
-
-		for ckey.cmdQueue.Len() > 0 {
-			e := ckey.cmdQueue.Front()
-			cmd := e.Value.(*command)
-			if cmd.isClosed() {
-				//客户端连接已经关闭
-				ckey.cmdQueue.Remove(e)
-				cmd.dontReply()
-			} else if now.After(cmd.deadline) {
-				ckey.cmdQueue.Remove(e)
-				//已经超时
-				cmd.reply(errcode.ERR_TIMEOUT, nil, -1)
-			} else {
-				if cmd.cmdType == cmdGet {
-					ckey.cmdQueue.Remove(e)
-					processGet(ckey, cmd, ctx)
-				} else {
-					if len(ctx.commands) > 0 {
-						//前面已经有get命令了
-						break
-					} else {
-						ckey.cmdQueue.Remove(e)
-						switch cmd.cmdType {
-						case cmdSet:
-							processSet(ckey, cmd, ctx)
-						case cmdSetNx:
-							processSetNx(ckey, cmd, ctx)
-						case cmdCompareAndSet:
-							processCompareAndSet(ckey, cmd, ctx)
-						case cmdCompareAndSetNx:
-							processCompareAndSetNx(ckey, cmd, ctx)
-						case cmdIncrBy:
-							processIncrBy(ckey, cmd, ctx)
-						case cmdDecrBy:
-							processDecrBy(ckey, cmd, ctx)
-						case cmdDel:
-							processDel(ckey, cmd, ctx)
-						default:
-							//记录日志
-						}
-						//会产生数据变更的命令只能按序执行
-						if len(ctx.commands) > 0 {
-							break
-						}
-					}
-				}
+	if nil == asynTask {
+		if this.isTmp() {
+			this.setStatus(cache_remove)
+			for cmd := this.cmdQueue.popFront(); nil != cmd; {
+				cmd.reply(errcode.ERR_BUSY, nil, 0)
 			}
+			this.Unlock()
+			this.slot.Lock()
+			this.slot.removeTmpKv(this)
+			this.slot.Unlock()
+		} else {
+			this.Unlock()
 		}
+		return
+	}
 
-		if len(ctx.commands) == 0 {
-			ckey.mtx.Unlock()
-			return
-		}
-
-		if ckey.status == cache_new {
-			if !pushSqlLoadReq(ctx, fromClient) {
-				ckey.mtx.Unlock()
-				if config.ReplyBusyOnQueueFull {
-					ctx.reply(errcode.ERR_BUSY, nil, -1)
-				} else {
-					ctx.dontReply()
+	if this.getStatus() == cache_new {
+		fullReturn := len(unlockOpQueue) == 0
+		if !this.slot.getKvNode().pushSqlLoadReq(asynTask, fullReturn) {
+			if this.isTmp() {
+				for _, v := range asynTask.getCommands() {
+					v.reply(errcode.ERR_BUSY, nil, -1)
 				}
-				/*
-				 * 只有在fromClient==true时pushSqlLoadReq才有可能返回false
-				 * 此时必定是由网络层直接调用上来，不会存在排队未处理的cmd,所以不需要调用processCmd
-				 * /
-				//processCmd(ckey, fromClient)
-			} else {
-				ckey.lockCmdQueue()
-				ckey.mtx.Unlock()
+
+				this.setStatus(cache_remove)
+
+				for cmd := this.cmdQueue.popFront(); nil != cmd; {
+					cmd.reply(errcode.ERR_BUSY, nil, 0)
+				}
+
+				this.Unlock()
+
+				this.slot.Lock()
+				this.slot.removeTmpKv(this)
+				this.slot.Unlock()
 			}
 		} else {
-			ckey.lockCmdQueue()
-			ckey.mtx.Unlock()
-			if ctx.getCmdType() == cmdGet {
-				ckey.store.issueReadReq(ctx)
-			} else {
-				ckey.store.issueUpdate(ctx)
-			}
+			this.cmdQueue.lock()
+			this.Unlock()
 		}
-	*/
+	} else {
+		this.cmdQueue.lock()
+		this.Unlock()
+		switch asynTask.(type) {
+		case *asynCmdTaskGet:
+			this.slot.issueReadReq(asynTask)
+		default:
+			this.slot.issueUpdate(asynTask)
+		}
+	}
 }

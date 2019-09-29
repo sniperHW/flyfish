@@ -67,7 +67,7 @@ func del(n *kvnode, cli *cliConn, msg *codec.Message) {
 
 	op.kv = kv
 
-	if !kv.cmdQueue.append(op) {
+	if !kv.appendCmd(op) {
 		op.reply(errcode.ERR_BUSY, nil, -1)
 		return
 	}

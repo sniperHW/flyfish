@@ -33,6 +33,17 @@ func (this *kvSlot) removeTmpKv(k *kv) {
 	delete(this.tmp, k.uniKey)
 }
 
+func (this *kvSlot) getKvNode() *kvnode {
+	return this.store.getKvNode()
+}
+
+func (this *kvSlot) issueReadReq(task asynTaskI) {
+
+}
+
+func (this *kvSlot) issueUpdate(task asynTaskI) {
+}
+
 // a key-value store backed by raft
 type kvstore struct {
 	sync.Mutex
@@ -42,10 +53,14 @@ type kvstore struct {
 	slots          []*kvSlot
 	kvcount        int //所有slot中len(elements)的总和
 	kvKickingCount int //当前正在执行kicking的kv数量
-
-	stop func()
+	kvNode         *kvnode
+	stop           func()
 
 	//rn *raftNode
+}
+
+func (this *kvstore) getKvNode() *kvnode {
+	return this.kvNode
 }
 
 func (this *kvstore) getSlot(uniKey string) *kvSlot {

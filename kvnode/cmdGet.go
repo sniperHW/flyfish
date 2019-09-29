@@ -93,7 +93,7 @@ func get(n *kvnode, cli *cliConn, msg *codec.Message) {
 		return
 	}
 
-	if !kv.cmdQueue.append(op) {
+	if !kv.appendCmd(op) {
 		op.reply(errcode.ERR_BUSY, nil, -1)
 		return
 	}
