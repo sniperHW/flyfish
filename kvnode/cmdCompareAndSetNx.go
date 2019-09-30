@@ -11,6 +11,37 @@ import (
 	"time"
 )
 
+type asynCmdTaskCompareAndSetNx struct {
+	*asynCmdTaskBase
+}
+
+func (this *asynCmdTaskCompareAndSetNx) onSqlResp(errno int32) {
+	this.asynCmdTaskBase.onSqlResp(errno)
+	cmd := this.commands[0].(*cmdCompareAndSetNx)
+	if errno == errcode.ERR_RECORD_NOTFOUND {
+		fillDefaultValue(cmd.getKV().meta, &this.fields)
+		this.sqlFlag = sql_insert
+		this.fields[cmd.newV.GetName()] = cmd.newV
+	} else if errno == errcode.ERR_OK {
+		if !cmd.checkVersion(this.version) {
+			this.errno = errcode.ERR_VERSION_MISMATCH
+		} else if !this.fields[cmd.oldV.GetName()].Equal(cmd.oldV) {
+			this.errno = errcode.ERR_CAS_NOT_EQUAL
+		} else {
+			this.sqlFlag = sql_update
+			this.fields[cmd.oldV.GetName()] = cmd.newV
+		}
+	}
+}
+
+func newAsynCmdTaskCompareAndSetNx(cmd commandI) *asynCmdTaskCompareAndSetNx {
+	return &asynCmdTaskCompareAndSetNx{
+		asynCmdTaskBase: &asynCmdTaskBase{
+			commands: []commandI{cmd},
+		},
+	}
+}
+
 type cmdCompareAndSetNx struct {
 	*commandBase
 	oldV *proto.Field
@@ -41,6 +72,39 @@ func (this *cmdCompareAndSetNx) makeResponse(errCode int32, fields map[string]*p
 	}
 
 	return resp
+}
+
+func (this *cmdCompareAndSetNx) prepare(_ asynCmdTaskI) asynCmdTaskI {
+
+	status := this.kv.getStatus()
+
+	if status == cache_ok {
+		if !this.checkVersion(kv.version) {
+			this.reply(errcode.ERR_VERSION, nil, kv.version)
+			return nil
+		}
+
+		if !this.kv.fields[this.oldV.GetName()].Equal(this.oldV) {
+			this.reply(errcode.ERR_CAS_NOT_EQUAL, nil, kv.version)
+			return nil
+		}
+	}
+
+	var sqlFlag uint32
+
+	task := newAsynCmdTaskCompareAndSetNx(this)
+
+	if status == cache_ok {
+		task.sqlFlag = sql_update
+		task.fields = map[string]*proto.Field{}
+		task.fields[this.newV.GetName()] = this.newV
+	} else if status == cache_missing {
+		task.sqlFlag = sql_insert
+		task.fields = map[string]*proto.Field{}
+		fillDefaultValue(this.getKV().meta, &task.fields)
+		task.fields[cmd.newV.GetName()] = cmd.newV
+	}
+	return task
 }
 
 func compareAndSetNx(n *KVNode, cli *cliConn, msg *codec.Message) {

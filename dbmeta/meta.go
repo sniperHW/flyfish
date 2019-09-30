@@ -108,6 +108,10 @@ type FieldMeta struct {
 	defaultV interface{}     //字段默认值
 }
 
+func (this *FieldMeta) GetDefaultV() interface{} {
+	return this.defaultV
+}
+
 //表格的元信息
 type TableMeta struct {
 	table            string                //表名
@@ -117,6 +121,10 @@ type TableMeta struct {
 	selectPrefix     string
 	insertFieldOrder []string
 	version          int64
+}
+
+func (this *TableMeta) GetFieldMetas() map[string]*FieldMeta {
+	return this.fieldMetas
 }
 
 func (this *TableMeta) GetInsertOrder() []string {

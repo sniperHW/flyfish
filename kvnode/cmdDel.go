@@ -11,6 +11,29 @@ import (
 	"time"
 )
 
+type asynCmdTaskDel struct {
+	*asynCmdTaskBase
+}
+
+func (this *asynCmdTaskDel) onSqlResp(errno int32) {
+	this.asynCmdTaskBase.onSqlResp(errno)
+	if errno == errcode.ERR_RECORD_NOTFOUND {
+		//向副本同步插入操作
+		//ckey.store.issueAddKv(ctx)
+	} else if errno == errcode.ERR_OK {
+
+	}
+}
+
+func newAsynCmdTaskDel(cmd commandI, sqlFlag uint32) *asynCmdTaskDel {
+	return &asynCmdTaskDel{
+		asynCmdTaskBase: &asynCmdTaskBase{
+			commands: []commandI{cmdI},
+			sqlFlag:  sqlFlag,
+		},
+	}
+}
+
 type cmdDel struct {
 	*commandBase
 }
@@ -45,7 +68,7 @@ func (this *cmdDel) prepare(_ asynCmdTaskI) asynCmdTaskI {
 		this.reply(errcode.ERR_NOTFOUND, nil, 0)
 		return nil
 	} else {
-		if !this.checkVersion(kv.version) {
+		if status == cache_ok && !this.checkVersion(kv.version) {
 			this.reply(errcode.ERR_VERSION, nil, kv.version)
 			return nil
 		}

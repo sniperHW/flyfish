@@ -73,67 +73,10 @@ func (this *asynCmdTaskBase) done() {
 
 }
 
-type asynCmdTaskGet struct {
-	*asynCmdTaskBase
-}
-
-func (this *asynCmdTaskGet) onSqlResp(errno int32) {
-	this.asynCmdTaskBase.onSqlResp(errno)
-	if errno == errcode.ERR_OK || errno == errcode.ERR_RECORD_NOTFOUND {
-		//向副本同步插入操作
-		//ckey.store.issueAddKv(ctx)
-	}
-}
-
-func newAsynCmdTaskGet() *asynCmdTaskGet {
-	return &asynCmdTaskGet{
-		asynCmdTaskBase: &asynCmdTaskBase{
-			commands: []commandI{},
-		},
-	}
-}
-
-type asynCmdTaskCompareAndSet struct {
-	*asynCmdTaskBase
-}
-
-func (this *asynCmdTaskCompareAndSet) onSqlResp(errno int32) {
-	this.asynCmdTaskBase.onSqlResp(errno)
-	if errno == errcode.ERR_RECORD_NOTFOUND {
-		//向副本同步插入操作
-		//ckey.store.issueAddKv(ctx)
-	} else if errno == errcode.ERR_OK {
-
-	}
-}
-
-func newAsynCmdTaskCompareAndSet(cmd commandI) *asynCmdTaskCompareAndSet {
-	return &asynCmdTaskCompareAndSet{
-		asynCmdTaskBase: &asynCmdTaskBase{
-			commands: []commandI{cmd},
-		},
-	}
-}
-
-type asynCmdTaskDel struct {
-	*asynCmdTaskBase
-}
-
-func (this *asynCmdTaskDel) onSqlResp(errno int32) {
-	this.asynCmdTaskBase.onSqlResp(errno)
-	if errno == errcode.ERR_RECORD_NOTFOUND {
-		//向副本同步插入操作
-		//ckey.store.issueAddKv(ctx)
-	} else if errno == errcode.ERR_OK {
-
-	}
-}
-
-func newAsynCmdTaskDel(cmd commandI, sqlFlag uint32) *asynCmdTaskDel {
-	return &asynCmdTaskDel{
-		asynCmdTaskBase: &asynCmdTaskBase{
-			commands: []commandI{cmdI},
-			sqlFlag:  sqlFlag,
-		},
+func fillDefaultValue(meta *dbmeta.TableMeta, fields *map[string]*proto.Field) {
+	for name, v := range meta.GetFieldMetas() {
+		if _, ok := (*fields)[name]; !ok {
+			(*fields)[name] = proto.PackField(name, v.GetDefaultV())
+		}
 	}
 }

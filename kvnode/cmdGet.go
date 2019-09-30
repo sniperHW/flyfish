@@ -11,6 +11,26 @@ import (
 	"time"
 )
 
+type asynCmdTaskGet struct {
+	*asynCmdTaskBase
+}
+
+func (this *asynCmdTaskGet) onSqlResp(errno int32) {
+	this.asynCmdTaskBase.onSqlResp(errno)
+	if errno == errcode.ERR_OK || errno == errcode.ERR_RECORD_NOTFOUND {
+		//向副本同步插入操作
+		//ckey.store.issueAddKv(ctx)
+	}
+}
+
+func newAsynCmdTaskGet() *asynCmdTaskGet {
+	return &asynCmdTaskGet{
+		asynCmdTaskBase: &asynCmdTaskBase{
+			commands: []commandI{},
+		},
+	}
+}
+
 type cmdGet struct {
 	*commandBase
 	fields map[string]*proto.Field
@@ -63,8 +83,9 @@ func (this *cmdGet) prepare(task asynCmdTaskI) asynCmdTaskI {
 		}
 	} else {
 		getTask = task.(*asynCmdTaskGet)
-		getTask.commands = append(getTask, this)
 	}
+
+	getTask.commands = append(getTask, this)
 
 	return getTask
 }

@@ -11,6 +11,35 @@ import (
 	"time"
 )
 
+type asynCmdTaskCompareAndSet struct {
+	*asynCmdTaskBase
+}
+
+func (this *asynCmdTaskCompareAndSet) onSqlResp(errno int32) {
+	this.asynCmdTaskBase.onSqlResp(errno)
+	if errno == errcode.ERR_RECORD_NOTFOUND {
+		//向副本同步插入操作
+		//ckey.store.issueAddKv(ctx)
+	} else if errno == errcode.ERR_OK {
+		cmd := this.commands[0].(*cmdCompareAndSet)
+		if !cmd.checkVersion(this.version) {
+			this.errno = errcode.ERR_VERSION_MISMATCH
+		} else if !this.fields[cmd.oldV.GetName()].Equal(cmd.oldV) {
+			this.errno = errcode.ERR_CAS_NOT_EQUAL
+		} else {
+			this.fields[cmd.oldV.GetName()] = cmd.newV
+		}
+	}
+}
+
+func newAsynCmdTaskCompareAndSet(cmd commandI) *asynCmdTaskCompareAndSet {
+	return &asynCmdTaskCompareAndSet{
+		asynCmdTaskBase: &asynCmdTaskBase{
+			commands: []commandI{cmd},
+		},
+	}
+}
+
 type cmdCompareAndSet struct {
 	*commandBase
 	oldV *proto.Field
@@ -41,6 +70,40 @@ func (this *cmdCompareAndSet) makeResponse(errCode int32, fields map[string]*pro
 	}
 
 	return resp
+}
+
+func (this *cmdCompareAndSet) prepare(_ asynCmdTaskI) asynCmdTaskI {
+
+	status := this.kv.getStatus()
+
+	if status == cache_missing {
+		this.reply(errcode.ERR_NOTFOUND, nil, 0)
+		return nil
+	} else {
+
+		var task *asynCmdTaskCompareAndSet
+
+		if status == cache_ok {
+			if !this.checkVersion(kv.version) {
+				this.reply(errcode.ERR_VERSION, nil, kv.version)
+				return nil
+			}
+
+			if !this.kv.fields[this.oldV.GetName()].Equal(this.oldV) {
+				this.reply(errcode.ERR_CAS_NOT_EQUAL, nil, kv.version)
+				return nil
+			}
+
+			task = newAsynCmdTaskDel(this)
+			task.sqlFlag = sql_update
+			task.fields = map[string]*proto.Field{}
+			task.fields[this.newV.GetName()] = this.newV
+		} else {
+			task = newAsynCmdTaskDel(this)
+		}
+
+		return task
+	}
 }
 
 func compareAndSet(n *KVNode, cli *cliConn, msg *codec.Message) {
