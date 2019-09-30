@@ -82,7 +82,7 @@ func TestStr(t *testing.T) {
 		t.Fatal("get f5 failed")
 	}
 
-	str = NewStr(str.Bytes())
+	str = NewStr(str.Bytes(), str.Len())
 
 	offset = 0
 

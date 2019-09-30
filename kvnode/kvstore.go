@@ -30,11 +30,17 @@ type kvSlot struct {
 }
 
 func (this *kvSlot) removeTmpKv(k *kv) {
+	this.Lock()
+	defer this.Unlock()
 	delete(this.tmp, k.uniKey)
 }
 
+func (this *kvSlot) getRaftNode() *raftNode {
+	return this.store.rn
+}
+
 func (this *kvSlot) getKvNode() *kvnode {
-	return this.store.getKvNode()
+	return this.store.kvnode
 }
 
 func (this *kvSlot) issueReadReq(task asynTaskI) {
@@ -55,8 +61,7 @@ type kvstore struct {
 	kvKickingCount int //当前正在执行kicking的kv数量
 	kvNode         *kvnode
 	stop           func()
-
-	//rn *raftNode
+	rn             *raftNode
 }
 
 func (this *kvstore) getKvNode() *kvnode {
@@ -145,4 +150,8 @@ func (this *storeMgr) stop() {
 	for _, v := range this.stores {
 		v.stop()
 	}
+}
+
+func newStoreMgr(mutilRaft *mutilRaft) (*storeMgr, error) {
+
 }

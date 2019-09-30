@@ -38,7 +38,7 @@ func (this *cmdSet) makeResponse(errCode int32, fields map[string]*proto.Field, 
 	}
 }
 
-func set(n *kvnode, cli *cliConn, msg *codec.Message) {
+func set(n *KVNode, cli *cliConn, msg *codec.Message) {
 
 	req := msg.GetData().(*proto.SetReq)
 

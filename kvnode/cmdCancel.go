@@ -18,7 +18,7 @@ import (
  * cancel操作就是请求的所有seqno对应的replyer删除，使得isCancel返回false
  */
 
-func cancel(n *kvnode, cli *cliConn, msg *codec.Message) {
+func cancel(n *KVNode, cli *cliConn, msg *codec.Message) {
 	req := msg.GetData().(*proto.Cancel)
 	for _, v := range req.GetSeqs() {
 		cli.removeReplyerBySeqno(v)

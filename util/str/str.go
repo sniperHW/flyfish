@@ -6,6 +6,7 @@ import (
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/util"
 	"math"
+	"strconv"
 	"sync"
 	"unsafe"
 )
@@ -119,6 +120,25 @@ func (this *Str) ReadBytes(offset int, size int) ([]byte, error) {
 		return nil, fmt.Errorf("beyond size")
 	}
 	return this.data[offset : offset+size], nil
+}
+
+func (this *Str) AppendFieldStr(field *proto.Field, binaryToSqlStr func(*Str, []byte)) *Str {
+	tt := field.GetType()
+
+	switch tt {
+	case proto.ValueType_string:
+		this.AppendString(fmt.Sprintf("'%s'", field.GetString()))
+	case proto.ValueType_float:
+		this.AppendString(fmt.Sprintf("%f", field.GetFloat()))
+	case proto.ValueType_int:
+		this.AppendString(strconv.FormatInt(field.GetInt(), 10))
+	case proto.ValueType_uint:
+		this.AppendString(strconv.FormatUint(field.GetUint(), 10))
+	case proto.ValueType_blob:
+		binaryToSqlStr(this, field.GetBlob())
+	}
+
+	return this
 }
 
 func (this *Str) AppendField(field *proto.Field) *Str {
@@ -289,11 +309,11 @@ func (this *Str) Join(other []*Str, sep string) *Str {
 	return this
 }
 
-func NewStr(buff []byte) *Str {
+func NewStr(buff []byte, len int) *Str {
 	return &Str{
 		data: buff,
 		cap:  cap(buff),
-		len:  len(buff),
+		len:  len,
 	}
 }
 

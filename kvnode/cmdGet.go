@@ -49,7 +49,7 @@ func (this *cmdGet) makeResponse(errCode int32, fields map[string]*proto.Field, 
 	return resp
 }
 
-func get(n *kvnode, cli *cliConn, msg *codec.Message) {
+func get(n *KVNode, cli *cliConn, msg *codec.Message) {
 	req := msg.GetData().(*proto.GetReq)
 	head := req.GetHead()
 	op := &cmdGet{

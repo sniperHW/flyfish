@@ -44,7 +44,7 @@ func (this *cmdIncr) makeResponse(errCode int32, fields map[string]*proto.Field,
 	return resp
 }
 
-func incrBy(n *kvnode, cli *cliConn, msg *codec.Message) {
+func incrBy(n *KVNode, cli *cliConn, msg *codec.Message) {
 
 	req := msg.GetData().(*proto.IncrByReq)
 

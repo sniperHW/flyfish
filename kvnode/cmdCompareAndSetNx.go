@@ -43,7 +43,7 @@ func (this *cmdCompareAndSetNx) makeResponse(errCode int32, fields map[string]*p
 	return resp
 }
 
-func compareAndSetNx(n *kvnode, cli *cliConn, msg *codec.Message) {
+func compareAndSetNx(n *KVNode, cli *cliConn, msg *codec.Message) {
 
 	req := msg.GetData().(*proto.CompareAndSetNxReq)
 

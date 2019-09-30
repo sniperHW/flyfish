@@ -43,7 +43,7 @@ func (this *cmdCompareAndSet) makeResponse(errCode int32, fields map[string]*pro
 	return resp
 }
 
-func compareAndSet(n *kvnode, cli *cliConn, msg *codec.Message) {
+func compareAndSet(n *KVNode, cli *cliConn, msg *codec.Message) {
 
 	req := msg.GetData().(*proto.CompareAndSetReq)
 

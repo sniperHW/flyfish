@@ -89,6 +89,7 @@ type kv struct {
 	sync.Mutex
 	uniKey       string
 	key          string
+	table        string
 	version      int64
 	cmdQueue     *cmdQueue //待执行的操作请求
 	meta         *dbmeta.TableMeta
@@ -107,44 +108,30 @@ func (this *kv) appendCmd(op commandI) bool {
 	return this.cmdQueue.append(op)
 }
 
-func (this *kv) removeTmp(err int32) bool {
-
+//设置remove,清空cmdQueue,向队列内的cmd响应错误码err
+func (this *kv) setRemoveAndClearCmdQueue(err int) {
 	this.setStatus(cache_remove)
-
-	this.slot.Lock()
-
-	this.slot.removeTmpKv(this)
-
 	for cmd := this.cmdQueue.popFront(); nil != cmd; {
 		cmd.reply(err, nil, 0)
 	}
-
-	this.slot.Unlock()
 }
 
 func (this *kv) tryRemoveTmp(err int32) bool {
 	this.Lock()
 	isTmp := this.isTmp()
-	this.Unlock()
 	if isTmp {
+		this.Unlock()
 		return false
 	} else {
-		//为了防止死锁，必须先锁外层容器再锁this
-		this.slot.Lock()
-		this.Lock()
-
-		this.setStatus(cache_remove)
-
-		this.slot.removeTmpKv(this)
-
-		for cmd := this.cmdQueue.popFront(); nil != cmd; {
-			cmd.reply(err, nil, 0)
-		}
-
+		this.setRemoveAndClearCmdQueue(err)
 		this.Unlock()
-		this.slot.Unlock()
+		this.slot.removeTmpKv(this)
 		return true
 	}
+}
+
+func (this *kv) getMeta() *dbmeta.TableMeta {
+	return (*dbmeta.TableMeta)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&this.meta))))
 }
 
 func (this *kv) setSqlFlag(sqlFlag uint32) {
@@ -217,6 +204,7 @@ func newkv(slot *kvSlot, tableMeta *dbmeta.TableMeta, key string, uniKey string,
 		uniKey: uniKey,
 		key:    key,
 		meta:   tableMeta,
+		table:  tableMeta.GetTable(),
 		cmdQueue: &cmdQueue{
 			queue: ringqueue.New(100),
 		},
@@ -271,14 +259,9 @@ loopEnd:
 
 	if nil == asynTask {
 		if this.isTmp() {
-			this.setStatus(cache_remove)
-			for cmd := this.cmdQueue.popFront(); nil != cmd; {
-				cmd.reply(errcode.ERR_BUSY, nil, 0)
-			}
+			this.setRemoveAndClearCmdQueue(errcode.ERR_BUSY)
 			this.Unlock()
-			this.slot.Lock()
 			this.slot.removeTmpKv(this)
-			this.slot.Unlock()
 		} else {
 			this.Unlock()
 		}
@@ -292,18 +275,9 @@ loopEnd:
 				for _, v := range asynTask.getCommands() {
 					v.reply(errcode.ERR_BUSY, nil, -1)
 				}
-
-				this.setStatus(cache_remove)
-
-				for cmd := this.cmdQueue.popFront(); nil != cmd; {
-					cmd.reply(errcode.ERR_BUSY, nil, 0)
-				}
-
+				this.setRemoveAndClearCmdQueue(errcode.ERR_BUSY)
 				this.Unlock()
-
-				this.slot.Lock()
 				this.slot.removeTmpKv(this)
-				this.slot.Unlock()
 			}
 		} else {
 			this.cmdQueue.lock()

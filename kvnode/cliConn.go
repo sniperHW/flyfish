@@ -12,6 +12,12 @@ type cliConn struct {
 	replyers map[int64]*replyer
 }
 
+func (this *cliConn) clear() {
+	this.Lock()
+	defer this.Unlock()
+	this.replyers = map[int64]*replyer{}
+}
+
 func (this *cliConn) send(o interface{}) error {
 	return this.session.Send(o)
 }

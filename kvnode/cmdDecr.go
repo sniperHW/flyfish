@@ -44,7 +44,7 @@ func (this *cmdDecr) makeResponse(errCode int32, fields map[string]*proto.Field,
 	return resp
 }
 
-func decrBy(n *kvnode, cli *cliConn, msg *codec.Message) {
+func decrBy(n *KVNode, cli *cliConn, msg *codec.Message) {
 
 	req := msg.GetData().(*proto.DecrByReq)
 

@@ -38,7 +38,7 @@ func (this *cmdSetNx) makeResponse(errCode int32, fields map[string]*proto.Field
 	}
 }
 
-func setNx(n *kvnode, cli *cliConn, msg *codec.Message) {
+func setNx(n *KVNode, cli *cliConn, msg *codec.Message) {
 
 	req := msg.GetData().(*proto.SetNxReq)
 

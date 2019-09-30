@@ -52,16 +52,17 @@ func (this *DBMeta) CheckMetaVersion(version int64) bool {
 
 //表查询元数据
 type QueryMeta struct {
-	field_names    []string             //所有的字段名
-	field_receiver []func() interface{} //用于接收查询返回值
-	receiver_pool  sync.Pool
-	field_convter  []func(interface{}) interface{}
+	field_names []string //所有的字段名
+	//field_receiver []func() interface{} //用于接收查询返回值
+	receiver_pool sync.Pool
+	field_convter []func(interface{}) interface{}
 }
 
 func (this *QueryMeta) GetFieldNames() []string {
 	return this.field_names
 }
 
+/*
 func (this *QueryMeta) GetReceiverByName(name string) interface{} {
 	for i := 0; i < len(this.field_names); i++ {
 		if this.field_names[i] == name {
@@ -69,7 +70,7 @@ func (this *QueryMeta) GetReceiverByName(name string) interface{} {
 		}
 	}
 	return nil
-}
+}*/
 
 func (this *QueryMeta) GetConvetorByName(name string) func(interface{}) interface{} {
 	for i := 0; i < len(this.field_names); i++ {
@@ -78,6 +79,10 @@ func (this *QueryMeta) GetConvetorByName(name string) func(interface{}) interfac
 		}
 	}
 	return nil
+}
+
+func (this *QueryMeta) GetFieldConvter() []func(interface{}) interface{} {
+	return this.field_convter
 }
 
 func (this *QueryMeta) GetReceivers() []interface{} {
@@ -114,6 +119,10 @@ type TableMeta struct {
 	version          int64
 }
 
+func (this *TableMeta) GetInsertOrder() []string {
+	return this.insertFieldOrder
+}
+
 func (this *TableMeta) Version() int64 {
 	return this.version
 }
@@ -124,6 +133,14 @@ func (this *TableMeta) GetQueryMeta() *QueryMeta {
 
 func (this *TableMeta) GetTable() string {
 	return this.table
+}
+
+func (this *TableMeta) GetSelectPrefix() string {
+	return this.selectPrefix
+}
+
+func (this *TableMeta) GetInsertPrefix() string {
+	return this.insertPrefix
 }
 
 //获取字段默认值

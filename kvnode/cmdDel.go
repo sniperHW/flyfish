@@ -37,7 +37,7 @@ func (this *cmdDel) makeResponse(errCode int32, fields map[string]*proto.Field, 
 	}
 }
 
-func del(n *kvnode, cli *cliConn, msg *codec.Message) {
+func del(n *KVNode, cli *cliConn, msg *codec.Message) {
 
 	req := msg.GetData().(*proto.DelReq)
 
