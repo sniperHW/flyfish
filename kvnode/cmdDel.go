@@ -37,6 +37,23 @@ func (this *cmdDel) makeResponse(errCode int32, fields map[string]*proto.Field, 
 	}
 }
 
+func (this *cmdDel) prepare(_ asynCmdTaskI) asynCmdTaskI {
+
+	status := this.kv.getStatus()
+
+	if status == cache_missing {
+		this.reply(errcode.ERR_NOTFOUND, nil, 0)
+		return nil
+	} else {
+		if !this.checkVersion(kv.version) {
+			this.reply(errcode.ERR_VERSION, nil, kv.version)
+			return nil
+		}
+
+		return newAsynCmdTaskDel(this, sql_delete)
+	}
+}
+
 func del(n *KVNode, cli *cliConn, msg *codec.Message) {
 
 	req := msg.GetData().(*proto.DelReq)
@@ -54,21 +71,21 @@ func del(n *KVNode, cli *cliConn, msg *codec.Message) {
 	err := checkReqCommon(head)
 
 	if err != errcode.ERR_OK {
-		op.reply(err, nil, -1)
+		op.reply(err, nil, 0)
 		return
 	}
 
 	kv, _ := n.storeMgr.getkv(head.GetTable(), head.GetKey())
 
 	if nil == kv {
-		op.reply(errcode.ERR_INVAILD_TABLE, nil, -1)
+		op.reply(errcode.ERR_INVAILD_TABLE, nil, 0)
 		return
 	}
 
 	op.kv = kv
 
 	if !kv.appendCmd(op) {
-		op.reply(errcode.ERR_BUSY, nil, -1)
+		op.reply(errcode.ERR_BUSY, nil, 0)
 		return
 	}
 

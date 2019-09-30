@@ -49,6 +49,26 @@ func (this *cmdGet) makeResponse(errCode int32, fields map[string]*proto.Field, 
 	return resp
 }
 
+func (this *cmdGet) prepare(task asynCmdTaskI) asynCmdTaskI {
+
+	status := this.kv.getStatus()
+
+	var getTask *asynCmdTaskGet
+
+	if nil == task {
+		getTask = newAsynCmdTaskGet()
+		if status == cache_missing || status == cache_ok {
+			getTask.fields = this.kv.fields
+			getTask.version = this.kv.version
+		}
+	} else {
+		getTask = task.(*asynCmdTaskGet)
+		getTask.commands = append(getTask, this)
+	}
+
+	return getTask
+}
+
 func get(n *KVNode, cli *cliConn, msg *codec.Message) {
 	req := msg.GetData().(*proto.GetReq)
 	head := req.GetHead()
@@ -63,14 +83,14 @@ func get(n *KVNode, cli *cliConn, msg *codec.Message) {
 	err := checkReqCommon(head)
 
 	if err != errcode.ERR_OK {
-		op.reply(err, nil, -1)
+		op.reply(err, nil, 0)
 		return
 	}
 
 	kv, _ := n.storeMgr.getkv(head.GetTable(), head.GetKey())
 
 	if nil == kv {
-		op.reply(errcode.ERR_INVAILD_TABLE, nil, -1)
+		op.reply(errcode.ERR_INVAILD_TABLE, nil, 0)
 		return
 	}
 
@@ -89,12 +109,12 @@ func get(n *KVNode, cli *cliConn, msg *codec.Message) {
 	}
 
 	if err := kv.meta.CheckGet(op.fields); nil != err {
-		op.reply(errcode.ERR_INVAILD_FIELD, nil, -1)
+		op.reply(errcode.ERR_INVAILD_FIELD, nil, 0)
 		return
 	}
 
 	if !kv.appendCmd(op) {
-		op.reply(errcode.ERR_BUSY, nil, -1)
+		op.reply(errcode.ERR_BUSY, nil, 0)
 		return
 	}
 

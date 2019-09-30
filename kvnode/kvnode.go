@@ -250,9 +250,9 @@ func (this *KVNode) initHandler() {
 	this.dispatcher.Register(&protocol.PingReq{}, ping)
 	this.dispatcher.Register(&protocol.IncrByReq{}, incrBy)
 	this.dispatcher.Register(&protocol.DecrByReq{}, decrBy)
-	this.dispatcher.Register(&protocol.ScanReq{}, scan)
-	this.dispatcher.Register(&protocol.ReloadTableConfReq{}, reloadTableConf)
-	this.dispatcher.Register(&protocol.ReloadConfigReq{}, reloadConf)
+	//this.dispatcher.Register(&protocol.ScanReq{}, scan)
+	//this.dispatcher.Register(&protocol.ReloadTableConfReq{}, reloadTableConf)
+	//this.dispatcher.Register(&protocol.ReloadConfigReq{}, reloadConf)
 }
 
 func NewKvNode() *KVNode {

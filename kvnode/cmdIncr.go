@@ -62,31 +62,31 @@ func incrBy(n *KVNode, cli *cliConn, msg *codec.Message) {
 	err := checkReqCommon(head)
 
 	if err != errcode.ERR_OK {
-		op.reply(err, nil, -1)
+		op.reply(err, nil, 0)
 		return
 	}
 
 	if nil == op.incr {
-		op.reply(errcode.ERR_MISSING_FIELDS, nil, -1)
+		op.reply(errcode.ERR_MISSING_FIELDS, nil, 0)
 		return
 	}
 
 	kv, _ := n.storeMgr.getkv(head.GetTable(), head.GetKey())
 
 	if nil == kv {
-		op.reply(errcode.ERR_INVAILD_TABLE, nil, -1)
+		op.reply(errcode.ERR_INVAILD_TABLE, nil, 0)
 		return
 	}
 
 	op.kv = kv
 
 	if err := kv.meta.CheckField(op.incr); nil != err {
-		op.reply(errcode.ERR_INVAILD_FIELD, nil, -1)
+		op.reply(errcode.ERR_INVAILD_FIELD, nil, 0)
 		return
 	}
 
 	if !kv.appendCmd(op) {
-		op.reply(errcode.ERR_BUSY, nil, -1)
+		op.reply(errcode.ERR_BUSY, nil, 0)
 		return
 	}
 

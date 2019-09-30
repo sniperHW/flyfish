@@ -129,10 +129,11 @@ func (this *asynCmdTaskDel) onSqlResp(errno int32) {
 	}
 }
 
-func newAsynCmdTaskDel(cmd commandI) *asynCmdTaskDel {
+func newAsynCmdTaskDel(cmd commandI, sqlFlag uint32) *asynCmdTaskDel {
 	return &asynCmdTaskDel{
 		asynCmdTaskBase: &asynCmdTaskBase{
 			commands: []commandI{cmdI},
+			sqlFlag:  sqlFlag,
 		},
 	}
 }
