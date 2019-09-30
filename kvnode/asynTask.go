@@ -4,6 +4,7 @@ import (
 	"github.com/sniperHW/flyfish/dbmeta"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
+	"sync/atomic"
 )
 
 type asynTaskI interface {
@@ -25,6 +26,7 @@ type asynCmdTaskBase struct {
 	sqlFlag  uint32
 	version  int64
 	errno    int32
+	replyed  int64
 }
 
 func (this *asynCmdTaskBase) getCommands() []commandI {
@@ -36,14 +38,18 @@ func (this *asynCmdTaskBase) getKV() *kv {
 }
 
 func (this *asynCmdTaskBase) reply() {
-	for _, v := range this.commands {
-		v.reply(this.errno, this.fields, this.version)
+	if atomic.CompareAndSwapInt64(&this.replyed, 0, 1) {
+		for _, v := range this.commands {
+			v.reply(this.errno, this.fields, this.version)
+		}
 	}
 }
 
 func (this *asynCmdTaskBase) dontReply() {
-	for _, v := range this.commands {
-		v.dontReply()
+	if atomic.CompareAndSwapInt64(&this.replyed, 0, 1) {
+		for _, v := range this.commands {
+			v.dontReply()
+		}
 	}
 }
 
@@ -58,12 +64,10 @@ func (this *asynCmdTaskBase) onSqlResp(errno int32) {
 	this.errno = errno
 	if errno == errcode.ERR_OK {
 		this.version = this.fields["__version__"].GetInt()
-	} else if errno == errcode.ERR_RECORD_NOTFOUND {
-		this.reply()
-	} else {
+	} else if errno == errcode.ERR_SQLERROR {
 		this.reply()
 		kv := this.getKV()
-		if !kv.tryRemoveTmpKey(errcode.ERR_SQLERROR) {
+		if !kv.tryRemoveTmpKey(this.errno) {
 			kv.processQueueCmd()
 		}
 	}
