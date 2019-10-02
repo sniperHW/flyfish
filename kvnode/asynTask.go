@@ -29,6 +29,47 @@ type asynCmdTaskBase struct {
 	replyed  int64
 }
 
+type asynKickTask struct {
+	kv *kv
+}
+
+func (this *asynCmdTaskBase) done() {
+	kv.slot.RemoveKv(kv)
+	kv.Lock()
+	kv.setRemoveAndClearCmdQueue(errcode.ERR_RETRY)
+	kv.Unlock()
+	/*
+		queueCmdSize := 0
+		ckey := v.getCacheKey()
+		ckey.mtx.Lock()
+		queueCmdSize = ckey.cmdQueue.Len()
+		if queueCmdSize > 0 {
+			/*
+			 *   kick执行完之后，对这个key又有新的访问请求
+			 *   此时必须把snapshoted设置为true,这样后面的变更请求才能以snapshot记录到日志中
+			 *   否则，重放日志时因为kick先执行，变更重放将因为找不到key出错
+			 * /
+			ckey.snapshoted = false
+			ckey.kicking = false
+		}
+		ckey.mtx.Unlock()
+		s.mtx.Lock()
+		s.kickingCount--
+		s.mtx.Unlock()
+		if queueCmdSize > 0 {
+			ckey.processQueueCmd()
+		} else {
+			s.mtx.Lock()
+			s.removeLRU(ckey)
+			s.keySize--
+			s.mtx.Unlock()
+			ckey.slot.mtx.Lock()
+			delete(ckey.slot.kv, ckey.uniKey)
+			ckey.slot.mtx.Unlock()
+		}
+	*/
+}
+
 func (this *asynCmdTaskBase) getCommands() []commandI {
 	return this.commands
 }
@@ -74,7 +115,26 @@ func (this *asynCmdTaskBase) onSqlResp(errno int32) {
 }
 
 func (this *asynCmdTaskBase) done() {
-
+	kv := this.getKV()
+	kv.Lock()
+	kv.setSnapshoted(true)
+	isTmp := kv.isTmp()
+	sqlFlag := kv.getSqlFlag()
+	switch sqlFlag {
+	case sql_insert, sql_update, sql_insert_update:
+		kv.setOK(this.version, this.fields)
+	case sql_delete:
+		kv.setMissing()
+	}
+	if sqlFlag != sql_none && !kv.isWriteBack() {
+		kv.setWriteBack(true)
+		kv.slot.getKvNode().sqlMgr.pushUpdateReq(kv)
+	}
+	kv.Unlock()
+	if isTmp {
+		kv.slot.moveTmp2OK(kv)
+	}
+	kv.processQueueCmd(true)
 }
 
 func fillDefaultValue(meta *dbmeta.TableMeta, fields *map[string]*proto.Field) {

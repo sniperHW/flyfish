@@ -99,13 +99,22 @@ type kv struct {
 	slot         *kvSlot
 }
 
-func (this *kv) appendCmd(op commandI) bool {
+func (this *kv) appendCmd(op commandI) uint32 {
 	this.Lock()
 	defer this.Unlock()
 	if this.getStatus() == cache_remove {
-		return false
+		return errcode.ERR_RETRY
 	}
-	return this.cmdQueue.append(op)
+
+	if this.isKicking() {
+		return errcode.ERR_RETRY
+	}
+
+	if this.cmdQueue.append(op) {
+		return errcode.ERR_OK
+	} else {
+		return errcode.ERR_BUSY
+	}
 }
 
 //设置remove,清空cmdQueue,向队列内的cmd响应错误码err

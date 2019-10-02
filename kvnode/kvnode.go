@@ -21,6 +21,7 @@ type KVNode struct {
 	stoped     int64
 	listener   *tcp.Listener
 	dispatcher *dispatcher
+	sqlMgr     *sqlMgr
 }
 
 func sendLoginResp(session kendynet.StreamSession, loginResp *protocol.LoginResp) bool {

@@ -2,6 +2,7 @@ package errcode
 
 const (
 	ERR_OK = int32(iota)
+	ERR_RETRY
 	ERR_BUSY
 	ERR_VERSION_MISMATCH
 	ERR_RECORD_EXIST //key已经存在

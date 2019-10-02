@@ -108,8 +108,8 @@ func del(n *KVNode, cli *cliConn, msg *codec.Message) {
 
 	op.kv = kv
 
-	if !kv.appendCmd(op) {
-		op.reply(errcode.ERR_BUSY, nil, 0)
+	if err = kv.appendCmd(op); err != errcode.ERR_OK {
+		op.reply(err, nil, 0)
 		return
 	}
 
