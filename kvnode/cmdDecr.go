@@ -11,6 +11,38 @@ import (
 	"time"
 )
 
+type asynCmdTaskDecr struct {
+	*asynCmdTaskBase
+}
+
+func (this *asynCmdTaskDecr) onSqlResp(errno int32) {
+	this.asynCmdTaskBase.onSqlResp(errno)
+	cmd := this.commands[0].(*cmdDecr)
+
+	if !cmd.checkVersion(this.version) {
+		this.errno = errcode.ERR_VERSION_MISMATCH
+	} else {
+		if errno == errcode.ERR_RECORD_NOTFOUND {
+			fillDefaultValue(cmd.getKV().meta, &this.fields)
+			this.sqlFlag = sql_insert
+		} else if errno == errcode.ERR_OK {
+			this.sqlFlag = sql_update
+		}
+		oldV := this.fields[cmd.decr.GetName()]
+		newV := proto.PackField(oldV.GetName(), oldV.GetInt()-cmd.decr.GetInt())
+		this.fields[oldV.GetName()] = newV
+		this.version++
+	}
+}
+
+func newAsynCmdTaskDecr(cmd commandI) *asynCmdTaskDecr {
+	return &asynCmdTaskDecr{
+		asynCmdTaskBase: &asynCmdTaskBase{
+			commands: []commandI{cmd},
+		},
+	}
+}
+
 type cmdDecr struct {
 	*commandBase
 	decr *proto.Field
@@ -42,6 +74,37 @@ func (this *cmdDecr) makeResponse(errCode int32, fields map[string]*proto.Field,
 	}
 
 	return resp
+}
+
+func (this *cmdDecr) prepare(_ asynCmdTaskI) asynCmdTaskI {
+
+	kv := this.kv
+	status := kv.getStatus()
+
+	if !this.checkVersion(kv.version) {
+		this.reply(errcode.ERR_VERSION, nil, kv.version)
+		return nil
+	}
+
+	task := newAsynCmdTaskDecr(this)
+
+	if status == cache_missing {
+		fillDefaultValue(kv.meta, &task.fields)
+		task.sqlFlag = sql_insert
+	} else if status == cache_ok {
+		task.sqlFlag = sql_update
+	}
+
+	if status != cache_new {
+
+		oldV := task.fields[cmd.decr.GetName()]
+		newV := proto.PackField(oldV.GetName(), oldV.GetInt()-cmd.decr.GetInt())
+		task.fields[oldV.GetName()] = newV
+		task.version++
+	}
+
+	return task
+
 }
 
 func decrBy(n *KVNode, cli *cliConn, msg *codec.Message) {

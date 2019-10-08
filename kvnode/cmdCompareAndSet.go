@@ -29,6 +29,7 @@ func (this *asynCmdTaskCompareAndSet) onSqlResp(errno int32) {
 			this.errno = errcode.ERR_CAS_NOT_EQUAL
 		} else {
 			this.fields[cmd.oldV.GetName()] = cmd.newV
+			this.version++
 		}
 	}
 }
@@ -75,7 +76,9 @@ func (this *cmdCompareAndSet) makeResponse(errCode int32, fields map[string]*pro
 
 func (this *cmdCompareAndSet) prepare(_ asynCmdTaskI) asynCmdTaskI {
 
-	status := this.kv.getStatus()
+	kv := this.kv
+
+	status := kv.getStatus()
 
 	if status == cache_missing {
 		this.reply(errcode.ERR_NOTFOUND, nil, 0)
@@ -95,12 +98,13 @@ func (this *cmdCompareAndSet) prepare(_ asynCmdTaskI) asynCmdTaskI {
 				return nil
 			}
 
-			task = newAsynCmdTaskDel(this)
+			task = newAsynCmdTaskCompareAndSet(this)
 			task.sqlFlag = sql_update
 			task.fields = map[string]*proto.Field{}
 			task.fields[this.newV.GetName()] = this.newV
+			task.version = kv.version + 1
 		} else {
-			task = newAsynCmdTaskDel(this)
+			task = newAsynCmdTaskCompareAndSet(this)
 		}
 
 		return task

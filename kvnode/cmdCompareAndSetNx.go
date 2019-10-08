@@ -30,6 +30,7 @@ func (this *asynCmdTaskCompareAndSetNx) onSqlResp(errno int32) {
 		} else {
 			this.sqlFlag = sql_update
 			this.fields[cmd.oldV.GetName()] = cmd.newV
+			this.version++
 		}
 	}
 }
@@ -76,7 +77,9 @@ func (this *cmdCompareAndSetNx) makeResponse(errCode int32, fields map[string]*p
 
 func (this *cmdCompareAndSetNx) prepare(_ asynCmdTaskI) asynCmdTaskI {
 
-	status := this.kv.getStatus()
+	kv := this.kv
+
+	status := kv.getStatus()
 
 	if status == cache_ok {
 		if !this.checkVersion(kv.version) {
@@ -98,7 +101,9 @@ func (this *cmdCompareAndSetNx) prepare(_ asynCmdTaskI) asynCmdTaskI {
 		task.sqlFlag = sql_update
 		task.fields = map[string]*proto.Field{}
 		task.fields[this.newV.GetName()] = this.newV
+		task.version = kv.version + 1
 	} else if status == cache_missing {
+		task.version = 1
 		task.sqlFlag = sql_insert
 		task.fields = map[string]*proto.Field{}
 		fillDefaultValue(this.getKV().meta, &task.fields)

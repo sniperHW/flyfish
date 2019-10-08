@@ -11,6 +11,35 @@ import (
 	"time"
 )
 
+type asynCmdTaskSetNx struct {
+	*asynCmdTaskBase
+}
+
+func (this *asynCmdTaskSetNx) onSqlResp(errno int32) {
+	this.asynCmdTaskBase.onSqlResp(errno)
+	cmd := this.commands[0].(*cmdSet)
+
+	if errno == errcode.ERR_RECORD_NOTFOUND {
+		fillDefaultValue(cmd.getKV().meta, &this.fields)
+		for k, v := range cmd.fields {
+			this.fields[k] = v
+		}
+		this.sqlFlag = sql_insert
+		this.version = 1
+	} else {
+		this.errno = errcode.ERR_RECORD_EXIST
+		this.reply()
+	}
+}
+
+func newAsynCmdTaskSetNx(cmd commandI) *asynCmdTaskSetNx {
+	return &asynCmdTaskSetNx{
+		asynCmdTaskBase: &asynCmdTaskBase{
+			commands: []commandI{cmd},
+		},
+	}
+}
+
 type cmdSetNx struct {
 	*commandBase
 	fields map[string]*proto.Field
@@ -36,6 +65,30 @@ func (this *cmdSetNx) makeResponse(errCode int32, fields map[string]*proto.Field
 			Version: pb.Int64(version),
 		},
 	}
+}
+
+func (this *cmdSet) prepare(_ asynCmdTaskI) asynCmdTaskI {
+
+	kv := this.kv
+	status := kv.getStatus()
+
+	if status == cache_ok {
+		this.reply(errcode.ERR_RECORD_EXIST, nil, kv.version)
+		return nil
+	}
+
+	task := newAsynCmdTaskSetNx(this)
+
+	if status == cache_missing {
+		fillDefaultValue(kv.meta, &task.fields)
+		task.sqlFlag = sql_insert
+		for k, v := range this.fields {
+			task.fields[k] = v
+		}
+		task.version++
+	}
+
+	return task
 }
 
 func setNx(n *KVNode, cli *cliConn, msg *codec.Message) {
