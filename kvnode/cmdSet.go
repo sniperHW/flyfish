@@ -31,7 +31,15 @@ func (this *asynCmdTaskSet) onSqlResp(errno int32) {
 		for k, v := range cmd.fields {
 			this.fields[k] = v
 		}
+		this.errno = errcode.ERR_OK
 		this.version++
+	}
+
+	if this.errno != errcode.ERR_OK {
+		this.reply()
+		this.getKV().slot.issueAddkv(this)
+	} else {
+		this.getKV().slot.issueUpdate(this)
 	}
 }
 

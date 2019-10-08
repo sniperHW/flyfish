@@ -26,9 +26,11 @@ func (this *asynCmdTaskSetNx) onSqlResp(errno int32) {
 		}
 		this.sqlFlag = sql_insert
 		this.version = 1
+		this.getKV().slot.issueUpdate(this)
 	} else {
 		this.errno = errcode.ERR_RECORD_EXIST
 		this.reply()
+		this.getKV().slot.issueAddkv(this)
 	}
 }
 

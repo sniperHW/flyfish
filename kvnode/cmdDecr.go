@@ -28,10 +28,18 @@ func (this *asynCmdTaskDecr) onSqlResp(errno int32) {
 		} else if errno == errcode.ERR_OK {
 			this.sqlFlag = sql_update
 		}
+		this.errno = errcode.ERR_OK
 		oldV := this.fields[cmd.decr.GetName()]
 		newV := proto.PackField(oldV.GetName(), oldV.GetInt()-cmd.decr.GetInt())
 		this.fields[oldV.GetName()] = newV
 		this.version++
+	}
+
+	if this.errno != errcode.ERR_OK {
+		this.reply()
+		this.getKV().slot.issueAddkv(this)
+	} else {
+		this.getKV().slot.issueUpdate(this)
 	}
 }
 

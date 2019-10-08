@@ -17,6 +17,7 @@ import (
 	"sync"
 	"sync/atomic"
 	//	"time"
+	"github.com/sniperHW/flyfish/errcode"
 	"unsafe"
 )
 
@@ -43,11 +44,19 @@ func (this *kvSlot) getKvNode() *kvnode {
 	return this.store.kvnode
 }
 
+//发起一致读请求
 func (this *kvSlot) issueReadReq(task asynTaskI) {
-
+	this.store.issueReadReq(task)
 }
 
+//发起更新请求
 func (this *kvSlot) issueUpdate(task asynTaskI) {
+	this.store.issueUpdate(task)
+}
+
+//请求向所有副本中新增kv
+func (this *kvSlot) issueAddkv(task asynTaskI) {
+	this.store.issueAddkv(task)
 }
 
 // a key-value store backed by raft
@@ -70,6 +79,27 @@ func (this *kvstore) getKvNode() *kvnode {
 
 func (this *kvstore) getSlot(uniKey string) *kvSlot {
 	return this.slots[futil.StringHash(uniKey)%len(this.slots)]
+}
+
+//发起一致读请求
+func (this *kvstore) issueReadReq(task asynTaskI) {
+	if err := this.readReqC.AddNoWait(c); nil != err {
+		task.onError(errcode.ERR_SERVER_STOPED)
+	}
+}
+
+//发起更新请求
+func (this *kvstore) issueUpdate(task asynTaskI) {
+	if err := this.proposeC.AddNoWait(c); nil != err {
+		task.onError(errcode.ERR_SERVER_STOPED)
+	}
+}
+
+//请求向所有副本中新增kv
+func (this *kvstore) issueAddkv(task asynTaskI) {
+	if err := this.proposeC.AddNoWait(c); nil != err {
+		task.onError(errcode.ERR_SERVER_STOPED)
+	}
 }
 
 type storeMgr struct {

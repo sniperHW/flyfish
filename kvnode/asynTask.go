@@ -9,6 +9,7 @@ import (
 
 type asynTaskI interface {
 	done()
+	onError(errno int32)
 }
 
 type asynCmdTaskI interface {
@@ -31,43 +32,6 @@ type asynCmdTaskBase struct {
 
 type asynKickTask struct {
 	kv *kv
-}
-
-func (this *asynCmdTaskBase) done() {
-	kv.slot.RemoveKv(kv)
-	kv.Lock()
-	kv.setRemoveAndClearCmdQueue(errcode.ERR_RETRY)
-	kv.Unlock()
-	/*
-		queueCmdSize := 0
-		ckey := v.getCacheKey()
-		ckey.mtx.Lock()
-		queueCmdSize = ckey.cmdQueue.Len()
-		if queueCmdSize > 0 {
-			/*
-			 *   kick执行完之后，对这个key又有新的访问请求
-			 *   此时必须把snapshoted设置为true,这样后面的变更请求才能以snapshot记录到日志中
-			 *   否则，重放日志时因为kick先执行，变更重放将因为找不到key出错
-			 * /
-			ckey.snapshoted = false
-			ckey.kicking = false
-		}
-		ckey.mtx.Unlock()
-		s.mtx.Lock()
-		s.kickingCount--
-		s.mtx.Unlock()
-		if queueCmdSize > 0 {
-			ckey.processQueueCmd()
-		} else {
-			s.mtx.Lock()
-			s.removeLRU(ckey)
-			s.keySize--
-			s.mtx.Unlock()
-			ckey.slot.mtx.Lock()
-			delete(ckey.slot.kv, ckey.uniKey)
-			ckey.slot.mtx.Unlock()
-		}
-	*/
 }
 
 func (this *asynCmdTaskBase) getCommands() []commandI {
@@ -109,8 +73,17 @@ func (this *asynCmdTaskBase) onSqlResp(errno int32) {
 		this.reply()
 		kv := this.getKV()
 		if !kv.tryRemoveTmpKey(this.errno) {
-			kv.processQueueCmd()
+			kv.processQueueCmd(true)
 		}
+	}
+}
+
+func (this *asynCmdTaskBase) onError(errno int32) {
+	this.errno = errno
+	this.reply()
+	kv := this.getKV()
+	if !kv.tryRemoveTmpKey(this.errno) {
+		kv.processQueueCmd(true)
 	}
 }
 

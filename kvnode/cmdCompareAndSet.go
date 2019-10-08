@@ -19,8 +19,7 @@ func (this *asynCmdTaskCompareAndSet) onSqlResp(errno int32) {
 	this.asynCmdTaskBase.onSqlResp(errno)
 	if errno == errcode.ERR_RECORD_NOTFOUND {
 		this.reply()
-		//向副本同步插入操作
-		//ckey.store.issueAddKv(ctx)
+		this.getKV().slot.issueAddkv(this)
 	} else if errno == errcode.ERR_OK {
 		cmd := this.commands[0].(*cmdCompareAndSet)
 		if !cmd.checkVersion(this.version) {
@@ -30,6 +29,12 @@ func (this *asynCmdTaskCompareAndSet) onSqlResp(errno int32) {
 		} else {
 			this.fields[cmd.oldV.GetName()] = cmd.newV
 			this.version++
+		}
+		if this.errno != errcode.ERR_OK {
+			this.reply()
+			this.getKV().slot.issueAddkv(this)
+		} else {
+			this.getKV().slot.issueUpdate(this)
 		}
 	}
 }

@@ -19,7 +19,7 @@ func (this *asynCmdTaskGet) onSqlResp(errno int32) {
 	this.asynCmdTaskBase.onSqlResp(errno)
 	if errno == errcode.ERR_OK || errno == errcode.ERR_RECORD_NOTFOUND {
 		//向副本同步插入操作
-		//ckey.store.issueAddKv(ctx)
+		this.getKV().slot.issueAddkv(this)
 	}
 }
 

@@ -20,9 +20,9 @@ func (this *asynCmdTaskDel) onSqlResp(errno int32) {
 	if errno == errcode.ERR_RECORD_NOTFOUND {
 		this.reply()
 		//向副本同步插入操作
-		//ckey.store.issueAddKv(ctx)
+		this.getKV().slot.issueAddkv(this)
 	} else if errno == errcode.ERR_OK {
-
+		this.getKV().slot.issueUpdate(this)
 	}
 }
 
