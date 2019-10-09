@@ -96,6 +96,8 @@ type kv struct {
 	modifyFields map[string]*proto.Field //发生变更尚未更新到sql数据库的字段
 	flag         bitfield.BitField32
 	slot         *kvSlot
+	nnext        *kv
+	pprev        *kv
 }
 
 func (this *kv) appendCmd(op commandI) uint32 {
@@ -192,6 +194,10 @@ func (this *kv) setWriteBack(writeback bool) {
 
 func (this *kv) isWriteBack() bool {
 	return this.flag.Get(mask_kv_writeback, kv_writeback_offset) == 1
+}
+
+func (this *kv) kickable() bool {
+
 }
 
 /*

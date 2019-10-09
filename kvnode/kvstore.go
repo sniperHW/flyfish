@@ -25,11 +25,14 @@ type asynTaskKick struct {
 }
 
 func (this *asynTaskKick) done() {
-
+	this.kv.slot.removeKv(this.kv)
 }
 
 func (this *asynTaskKick) onError(errno int32) {
-
+	this.kv.Lock()
+	this.kv.setKicking(false)
+	this.kv.Unlock()
+	this.kv.slot.onKickError()
 }
 
 func (this *asynTaskKick) append2Str(s *str.Str) {
@@ -47,6 +50,24 @@ type kvSlot struct {
 	tmp      map[string]*kv
 	elements map[string]*kv
 	store    *kvstore
+}
+
+func (this *kvSlot) onKickError() {
+	this.store.Lock()
+	this.store.kvKickingCount--
+	this.store.Unlock()
+}
+
+func (this *kvSlot) removeKv(k *kv) {
+	this.store.Lock()
+	this.store.kvKickingCount--
+	this.store.kvcount--
+	this.store.removeLRU(k)
+	this.store.Unlock()
+
+	this.Lock()
+	delete(this.elements, k.uniKey)
+	this.Unlock()
 }
 
 func (this *kvSlot) removeTmpKv(k *kv) {
@@ -78,6 +99,18 @@ func (this *kvSlot) issueAddkv(task asynCmdTaskI) {
 	this.store.issueAddkv(task)
 }
 
+func (this *kvSlot) moveTmpkv2OK(kv *kv) {
+	this.Lock()
+	delete(this.tmp, kv.uniKey)
+	this.elements[kv.uniKey] = kv
+	this.Unlock()
+
+	this.store.Lock()
+	this.store.kvcount++
+	this.store.updateLRU(kv)
+	this.store.Unlock()
+}
+
 // a key-value store backed by raft
 type kvstore struct {
 	sync.Mutex
@@ -90,6 +123,8 @@ type kvstore struct {
 	kvNode         *kvnode
 	stop           func()
 	rn             *raftNode
+	lruHead        kv
+	lruTail        kv
 }
 
 func (this *kvstore) getKvNode() *kvnode {
@@ -104,6 +139,80 @@ func (this *kvstore) getSlot(uniKey string) *kvSlot {
 func (this *kvstore) issueReadReq(task asynCmdTaskI) {
 	if err := this.readReqC.AddNoWait(task); nil != err {
 		task.onError(errcode.ERR_SERVER_STOPED)
+	}
+}
+
+func (this *kvstore) updateLRU(kv *kv) {
+
+	if kv.nnext != nil || kv.pprev != nil {
+		//先移除
+		kv.pprev.nnext = kv.nnext
+		kv.nnext.pprev = kv.pprev
+		kv.nnext = nil
+		kv.pprev = nil
+	}
+
+	//插入头部
+	kv.nnext = s.lruHead.nnext
+	kv.nnext.pprev = kv
+	kv.pprev = &this.lruHead
+	this.lruHead.nnext = kv
+
+}
+
+func (this *kvstore) removeLRU(kv *kv) {
+	kv.pprev.nnext = kv.nnext
+	kv.nnext.pprev = kv.pprev
+	kv.nnext = nil
+	kv.pprev = nil
+}
+
+func (this *kvstore) doLRU() {
+	if this.rn.isLeader() {
+		MaxCachePerGroupSize := conf.GetConfig().MaxCachePerGroupSize
+		if this.lruHead.nnext != &this.lruTail {
+			kv := this.lruTail.pprev
+			for (this.kvcount - this.kvKickingCount) > MaxCachePerGroupSize {
+				if kv == &this.lruHead {
+					return
+				}
+				if !this.tryKick(kv) {
+					return
+				}
+				kv = kv.pprev
+			}
+		}
+	}
+}
+
+func (this *kvstore) tryKick(kv *kv) bool {
+	kv.Lock()
+	if kv.isKicking() {
+		kv.Unlock()
+		return true
+	}
+
+	kickAble := kv.kickable()
+	if kickAble {
+		kv.setKicking(true)
+	}
+
+	kv.Unlock()
+
+	if !kickAble {
+		return false
+	}
+
+	if err := this.proposeC.AddNoWait(&asynTaskKick{kv: kv}); nil != err {
+		this.Lock()
+		this.kvKickingCount++
+		this.Unlock()
+		return true
+	} else {
+		kv.Lock()
+		kv.setKicking(false)
+		kv.Unlock()
+		return false
 	}
 }
 
