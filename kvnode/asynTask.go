@@ -4,12 +4,23 @@ import (
 	"github.com/sniperHW/flyfish/dbmeta"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
+	"github.com/sniperHW/flyfish/util/str"
 	"sync/atomic"
+)
+
+const (
+	proposal_none     = 0
+	proposal_snapshot = 1
+	proposal_update   = 2
+	proposal_kick     = 3
+	proposal_lease    = 4
 )
 
 type asynTaskI interface {
 	done()
 	onError(errno int32)
+	append2Str(*str.Str)
+	onPorposeTimeout()
 }
 
 type asynCmdTaskI interface {
@@ -19,19 +30,39 @@ type asynCmdTaskI interface {
 	onLoadField(*proto.Field)
 	onSqlResp(errno int32)
 	getCommands() []commandI
+	getSqlFlag() uint32
+	setSqlFlag(uint32)
+	setProposalType(int)
 }
 
 type asynCmdTaskBase struct {
-	commands []commandI
-	fields   map[string]*proto.Field
-	sqlFlag  uint32
-	version  int64
-	errno    int32
-	replyed  int64
+	commands     []commandI
+	fields       map[string]*proto.Field
+	sqlFlag      uint32
+	version      int64
+	errno        int32
+	replyed      int64
+	proposalType int
 }
 
 type asynKickTask struct {
 	kv *kv
+}
+
+func (this *asynCmdTaskBase) append2Str(s *str.Str) {
+
+}
+
+func (this *asynCmdTaskBase) getSqlFlag() uint32 {
+	return this.sqlFlag
+}
+
+func (this *asynCmdTaskBase) setSqlFlag(flag uint32) {
+	this.sqlFlag = flag
+}
+
+func (this *asynCmdTaskBase) setProposalType(tt int) {
+	this.proposalType = tt
 }
 
 func (this *asynCmdTaskBase) getCommands() []commandI {
@@ -85,6 +116,11 @@ func (this *asynCmdTaskBase) onError(errno int32) {
 	if !kv.tryRemoveTmpKey(this.errno) {
 		kv.processQueueCmd(true)
 	}
+}
+
+func (this *asynCmdTaskBase) onPorposeTimeout() {
+	this.errno = errcode.ERR_TIMEOUT
+	this.reply()
 }
 
 func (this *asynCmdTaskBase) done() {

@@ -49,6 +49,14 @@ func (this *FixedArray) Append(v interface{}) bool {
 	}
 }
 
+func (this *FixedArray) Full() bool {
+	return this.len == cap(this.array)
+}
+
+func (this *FixedArray) Empty() bool {
+	return this.len == 0
+}
+
 func (this *FixedArray) Len() int {
 	return this.len
 }

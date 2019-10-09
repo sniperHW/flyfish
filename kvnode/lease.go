@@ -2,7 +2,7 @@
  * sql回写权租约
  */
 
-package server
+package kvnode
 
 import (
 	"sync"
@@ -20,11 +20,12 @@ import (
 const (
 	leaseTimeout      = 20 //租约时效20秒
 	leaseOwnerTimeout = 10 //当前获得租约的leader的组约时效
+	renewTime         = 2  //续约间隔
 )
 
 type lease struct {
 	sync.Mutex
-	owner     int
+	owner     int //当前租约持有者
 	startTime time.Time
 	stop      chan struct{}
 }
@@ -48,6 +49,7 @@ func (l *lease) isTimeout() bool {
 	return true
 }
 
+//返回当前raftNode是否持有租约
 func (l *lease) hasLease(rn *raftNode) bool {
 	l.Lock()
 	defer l.Unlock()
@@ -61,6 +63,7 @@ func (l *lease) hasLease(rn *raftNode) bool {
 	return true
 }
 
+//更新租约
 func (l *lease) update(id int) int {
 	l.Lock()
 	defer l.Unlock()
@@ -95,13 +98,13 @@ func (l *lease) startLeaseRoutine(rn *raftNode) {
 				if owner != 0 && owner != rn.id {
 					if !l.isTimeout() {
 						//等待超时
-						l.wait(l.stop, 1*time.Second)
+						l.wait(l.stop, time.Second)
 						continue
 					}
 				}
 				//续租
 				rn.lease()
-				l.wait(l.stop, 1*time.Second)
+				l.wait(l.stop, renewTime*time.Second)
 			}
 			Infoln("break")
 		}()

@@ -22,6 +22,8 @@ import (
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/rafthttp"
+	"github.com/sniperHW/flyfish/util/fixedarray"
+	"github.com/sniperHW/flyfish/util/str"
 	"github.com/sniperHW/kendynet/timer"
 	"github.com/sniperHW/kendynet/util"
 	"go.etcd.io/etcd/etcdserver/api/snap"
@@ -33,7 +35,7 @@ import (
 	"go.etcd.io/etcd/wal"
 	"go.etcd.io/etcd/wal/walpb"
 	"go.uber.org/zap"
-	"log"
+	//"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -42,37 +44,6 @@ import (
 	"sync/atomic"
 	"time"
 )
-
-var replayOK *commitedBatchProposal = &commitedBatchProposal{}
-var replaySnapshot *commitedBatchProposal = &commitedBatchProposal{}
-
-type readBatchSt struct {
-	readIndex int64 //for linearizableRead
-	ctxs      *ctxArray
-	deadline  time.Time
-}
-
-func (this *readBatchSt) onError(err int) {
-	for i := 0; i < this.ctxs.count; i++ {
-		v := this.ctxs.ctxs[i]
-		v.reply(int32(err), nil, -1)
-		v.getCacheKey().processQueueCmd()
-	}
-	ctxArrayPut(this.ctxs)
-}
-
-func (this *readBatchSt) reply() {
-	for i := 0; i < this.ctxs.count; i++ {
-		v := this.ctxs.ctxs[i]
-		if v.fields == nil {
-			v.reply(errcode.ERR_NOTFOUND, nil, -1)
-		} else {
-			v.reply(errcode.ERR_OK, v.fields, v.version)
-		}
-		v.getCacheKey().processQueueCmd()
-	}
-	ctxArrayPut(this.ctxs)
-}
 
 // A key-value stream backed by raft
 type raftNode struct {
@@ -114,7 +85,7 @@ type raftNode struct {
 	snapshottingOK chan struct{}
 
 	muPendingPropose sync.Mutex
-	pendingPropose   *list.List //[]*batchProposal
+	pendingPropose   *list.List
 	proposeIndex     int64
 
 	muLeader sync.Mutex
@@ -126,9 +97,9 @@ type raftNode struct {
 
 	muPendingRead sync.Mutex
 	pendingRead   *list.List
-	readC         <-chan *cmdContext
-	readIndex     int64
-	l             *lease
+
+	readIndex int64
+	l         *lease
 
 	cbBecomeLeader   func()
 	cbLoseLeaderShip func()
@@ -157,7 +128,6 @@ func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSna
 	region := id & 0xFFFF
 
 	rc := &raftNode{
-		//proposeC:         proposeC,
 		confChangeC:      confChangeC,
 		commitC:          commitC,
 		errorC:           errorC,
@@ -177,10 +147,9 @@ func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSna
 		region:           region,
 
 		pendingRead: list.New(),
-		//readC:       readC,
 
-		proposePipeline: proposeC, //util.NewBlockQueue(),
-		readPipeline:    readC,    //util.NewBlockQueue(),
+		proposePipeline: proposeC,
+		readPipeline:    readC,
 		l:               &lease{stop: nil},
 
 		cbBecomeLeader:   onBecomeLeader,
@@ -319,7 +288,7 @@ func (rc *raftNode) entriesToApply(ents []raftpb.Entry) (nents []raftpb.Entry) {
 	}
 	firstIdx := ents[0].Index
 	if firstIdx > rc.appliedIndex+1 {
-		log.Fatalf("first index of committed entry[%d] should <= progress.appliedIndex[%d]+1", firstIdx, rc.appliedIndex)
+		Fatalf("first index of committed entry[%d] should <= progress.appliedIndex[%d]+1", firstIdx, rc.appliedIndex)
 	}
 	if rc.appliedIndex-firstIdx+1 < uint64(len(ents)) {
 		nents = ents[rc.appliedIndex-firstIdx+1:]
@@ -346,7 +315,8 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 			front := rc.pendingPropose.Front()
 			if nil != front {
 				if front.Value.(*batchProposal).index == index {
-					committedEntry.ctxs = front.Value.(*batchProposal).onCommit()
+					committedEntry.tasks = front.Value.(*batchProposal).tasks
+					str.Put(front.Value.(*batchProposal).proposalStr)
 					rc.pendingPropose.Remove(front)
 				} else {
 					Infoln("index not match", index, front.Value.(*batchProposal).index)
@@ -372,7 +342,7 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 				}
 			case raftpb.ConfChangeRemoveNode:
 				if cc.NodeID == uint64(rc.id) {
-					log.Println("I've been removed from the cluster! Shutting down.")
+					Infoln("I've been removed from the cluster! Shutting down.")
 					return false
 				}
 				rc.transport.RemovePeer(types.ID(cc.NodeID))
@@ -398,7 +368,7 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 func (rc *raftNode) loadSnapshot() *raftpb.Snapshot {
 	snapshot, err := rc.snapshotter.Load()
 	if err != nil && err != snap.ErrNoSnapshot {
-		log.Fatalf("raftexample: error loading snapshot (%v)", err)
+		Fatalf("raftexample: error loading snapshot (%v)", err)
 	}
 	return snapshot
 }
@@ -407,12 +377,12 @@ func (rc *raftNode) loadSnapshot() *raftpb.Snapshot {
 func (rc *raftNode) openWAL(snapshot *raftpb.Snapshot) *wal.WAL {
 	if !wal.Exist(rc.waldir) {
 		if err := os.Mkdir(rc.waldir, 0750); err != nil {
-			log.Fatalf("raftexample: cannot create dir for wal (%v)", err)
+			Fatalf("raftexample: cannot create dir for wal (%v)", err)
 		}
 
 		w, err := wal.Create(zap.NewExample(), rc.waldir, nil)
 		if err != nil {
-			log.Fatalf("raftexample: create wal error (%v)", err)
+			Fatalf("raftexample: create wal error (%v)", err)
 		}
 		w.Close()
 	}
@@ -420,13 +390,12 @@ func (rc *raftNode) openWAL(snapshot *raftpb.Snapshot) *wal.WAL {
 	walsnap := walpb.Snapshot{}
 	if snapshot != nil {
 		walsnap.Index, walsnap.Term = snapshot.Metadata.Index, snapshot.Metadata.Term
-	} else {
-		log.Printf("snapshot == nil")
 	}
-	log.Printf("loading WAL at term %d and index %d", walsnap.Term, walsnap.Index)
+
+	Infof("loading WAL at term %d and index %d", walsnap.Term, walsnap.Index)
 	w, err := wal.Open(zap.NewExample(), rc.waldir, walsnap)
 	if err != nil {
-		log.Fatalf("raftexample: error loading wal (%v)", err)
+		Fatalf("raftexample: error loading wal (%v)", err)
 	}
 
 	return w
@@ -434,14 +403,14 @@ func (rc *raftNode) openWAL(snapshot *raftpb.Snapshot) *wal.WAL {
 
 // replayWAL replays WAL entries into the raft instance.
 func (rc *raftNode) replayWAL() *wal.WAL {
-	log.Printf("replaying WAL of member %d", rc.id)
+	Infof("replaying WAL of member %d", rc.id)
 	snapshot := rc.loadSnapshot()
 	w := rc.openWAL(snapshot)
 	_, st, ents, err := w.ReadAll()
 	if err != nil {
-		log.Fatalf("raftexample: failed to read WAL (%v)", err)
+		Fatalf("raftexample: failed to read WAL (%v)", err)
 	} else {
-		log.Printf("ents:%d", len(ents))
+		Infof("ents:%d", len(ents))
 	}
 	rc.raftStorage = raft.NewMemoryStorage()
 	if snapshot != nil {
@@ -477,7 +446,7 @@ func (rc *raftNode) writeError(err error) {
 func (rc *raftNode) startRaft() {
 	if !fileutil.Exist(rc.snapdir) {
 		if err := os.Mkdir(rc.snapdir, 0750); err != nil {
-			log.Fatalf("raftexample: cannot create dir for snapshot (%v)", err)
+			Fatalf("raftexample: cannot create dir for snapshot (%v)", err)
 		}
 	}
 	rc.snapshotter = snap.New(zap.NewExample(), rc.snapdir)
@@ -552,11 +521,11 @@ func (rc *raftNode) publishSnapshot(snapshotToSave raftpb.Snapshot) {
 		return
 	}
 
-	log.Printf("publishing snapshot at index %d", rc.snapshotIndex)
-	defer log.Printf("finished publishing snapshot at index %d", rc.snapshotIndex)
+	Infof("publishing snapshot at index %d", rc.snapshotIndex)
+	defer Infof("finished publishing snapshot at index %d", rc.snapshotIndex)
 
 	if snapshotToSave.Metadata.Index <= rc.appliedIndex {
-		log.Fatalf("snapshot index [%d] should > progress.appliedIndex [%d]", snapshotToSave.Metadata.Index, rc.appliedIndex)
+		Fatalf("snapshot index [%d] should > progress.appliedIndex [%d]", snapshotToSave.Metadata.Index, rc.appliedIndex)
 	}
 	rc.commitC <- replaySnapshot // trigger kvstore to load snapshot
 
@@ -600,7 +569,7 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 
 	rc.snapshotting = true
 
-	log.Printf("start snapshot [applied index: %d | last snapshot index: %d]", rc.appliedIndex, rc.snapshotIndex)
+	Infof("start snapshot [applied index: %d | last snapshot index: %d]", rc.appliedIndex, rc.snapshotIndex)
 
 	appliedIndex := rc.appliedIndex
 	confState := rc.confState
@@ -663,13 +632,13 @@ func (rc *raftNode) onLoseLeadership() {
 	}
 }
 
-func (rc *raftNode) issueRead(ctxs *ctxArray) {
+func (rc *raftNode) issueRead(tasks *fixedarray.FixedArray) {
 
 	ctxToSend := make([]byte, 8)
 	c := &readBatchSt{
 		readIndex: atomic.AddInt64(&rc.readIndex, 1),
 		deadline:  time.Now().Add(time.Second * 5),
-		ctxs:      ctxs,
+		tasks:     tasks,
 	}
 
 	binary.BigEndian.PutUint64(ctxToSend, uint64(c.readIndex))
@@ -714,28 +683,25 @@ func (rc *raftNode) startReadPipeline() {
 
 	go func() {
 
-		ctxs := ctxArrayGet()
+		tasks := fixedArrayPool.Get()
 
 		for {
 			closed, localList := rc.readPipeline.Get()
 
 			for _, vv := range localList {
 				if vv == nil {
-					if !ctxs.empty() {
-						rc.issueRead(ctxs)
-						ctxs = ctxArrayGet()
+					if !tasks.Empty() {
+						rc.issueRead(tasks)
+						tasks = fixedArrayPool.Get()
 					}
 				} else {
-
-					ctx := vv.(*cmdContext)
 					if !rc.isLeader() {
-						ctx.reply(errcode.ERR_NOT_LEADER, nil, -1)
-						ctx.getCacheKey().processQueueCmd()
+						vv.(asynTaskI).onError(errcode.ERR_NOT_LEADER)
 					} else {
-						ctxs.append(ctx)
-						if ctxs.full() {
-							rc.issueRead(ctxs)
-							ctxs = ctxArrayGet()
+						tasks.Append(vv)
+						if tasks.Full() {
+							rc.issueRead(tasks)
+							tasks = fixedArrayPool.Get()
 						}
 					}
 				}
@@ -791,7 +757,7 @@ func (rc *raftNode) newBatchProposal() *batchProposal {
 
 	return &batchProposal{
 		index:       index,
-		ctxs:        ctxArrayGet(),
+		tasks:       fixedArrayPool.Get(),
 		proposalStr: strGet().appendInt64(index),
 	}
 }
@@ -818,37 +784,26 @@ func (rc *raftNode) startProposePipeline() {
 			closed, localList := rc.proposePipeline.Get()
 			for _, vv := range localList {
 				if nil == vv {
-					if !batch.ctxs.empty() {
+					if !batch.tasks.Empty() {
 						rc.issuePropose(batch)
 						batch = rc.newBatchProposal()
 					}
 				} else {
-
-					prop := vv.(*proposal)
 					if !rc.isLeader() {
-						if nil == prop.ctx.lease {
-							ckey := prop.ctx.getCacheKey()
-							if prop.ctx.getCmdType() != cmdKick {
-								prop.ctx.reply(int32(errcode.ERR_NOT_LEADER), nil, 0)
-							} else {
-								ckey.clearKicking()
-							}
-							if !ckey.tryRemoveTmpKey(errcode.ERR_NOT_LEADER) {
-								ckey.processQueueCmd()
-							}
-						}
+						vv.(*asynTaskI).onError(errcode.ERR_NOT_LEADER)
 					} else {
-						batch.ctxs.append(prop.ctx)
-						if nil == prop.ctx.lease {
-							batch.proposalStr.appendProposal(prop.op, prop.ctx.getUniKey(), prop.ctx.fields, prop.ctx.version)
-							if batch.ctxs.full() {
+						batch.tasks.Append(vv)
+						vv.(*asynTaskI).append2Str(batch.proposalStr)
+
+						switch vv.(type) {
+						case asynTaskLease:
+							rc.issuePropose(batch)
+							batch = rc.newBatchProposal()
+						default:
+							if batch.tasks.Full() {
 								rc.issuePropose(batch)
 								batch = rc.newBatchProposal()
 							}
-						} else {
-							batch.proposalStr.appendLease(int(*prop.ctx.lease))
-							rc.issuePropose(batch)
-							batch = rc.newBatchProposal()
 						}
 					}
 				}
@@ -1007,12 +962,12 @@ func (rc *raftNode) serveChannels() {
 }
 
 func (rc *raftNode) lease() {
-	rc.proposePipeline.AddNoWait(&proposal{
+	/*rc.proposePipeline.AddNoWait(&proposal{
 		op: proposal_lease,
 		ctx: &cmdContext{
 			lease: &rc.id,
 		},
-	})
+	})*/
 }
 
 func (rc *raftNode) Process(ctx context.Context, m raftpb.Message) error {

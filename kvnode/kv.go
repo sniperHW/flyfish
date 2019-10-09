@@ -20,26 +20,25 @@ const (
 )
 
 const (
-	sql_none          = uint32(0)
-	sql_insert        = uint32(1)
-	sql_update        = uint32(2)
-	sql_delete        = uint32(3)
-	sql_insert_update = uint32(4)
+	sql_none   = uint32(0)
+	sql_insert = uint32(1)
+	sql_update = uint32(2)
+	sql_delete = uint32(3)
 )
 
 const (
-	kv_status_offset     = uint32(0)
-	mask_kv_status       = uint32(0xF << kv_status_offset) //1-4位kv状态
-	kv_sql_flag_offset   = uint32(4)
-	mask_kv_sql_flag     = uint32(0xF << kv_sql_flag_offset) //5-8位sql回写标记
-	kv_writeback_offset  = uint32(8)
-	mask_kv_writeback    = uint32(0xF << kv_writeback_offset) //9-12位当前是否正在执行sql回写
-	kv_snapshoted_offset = uint32(12)
-	mask_kv_snapshoted   = uint32(0xF << kv_snapshoted_offset) //13-16位是否已经建立过快照
-	kv_tmp_offset        = uint32(16)
-	mask_kv_tmp          = uint32(0xF << kv_tmp_offset) //17-20位,是否临时kv
-	kv_kicking_offset    = uint32(20)
-	mask_kv_kicking      = uint32(0xF << kv_kicking_offset) //21-24位,是否正在被踢除
+	kv_status_offset    = uint32(0)
+	mask_kv_status      = uint32(0xF << kv_status_offset) //1-4位kv状态
+	kv_sql_flag_offset  = uint32(4)
+	mask_kv_sql_flag    = uint32(0xF << kv_sql_flag_offset) //5-8位sql回写标记
+	kv_writeback_offset = uint32(8)
+	mask_kv_writeback   = uint32(0xF << kv_writeback_offset) //9-12位当前是否正在执行sql回写
+	//kv_snapshoted_offset = uint32(12)
+	//mask_kv_snapshoted   = uint32(0xF << kv_snapshoted_offset) //13-16位是否已经建立过快照
+	kv_tmp_offset     = uint32(16)
+	mask_kv_tmp       = uint32(0xF << kv_tmp_offset) //17-20位,是否临时kv
+	kv_kicking_offset = uint32(20)
+	mask_kv_kicking   = uint32(0xF << kv_kicking_offset) //21-24位,是否正在被踢除
 )
 
 type cmdQueue struct {
@@ -195,6 +194,7 @@ func (this *kv) isWriteBack() bool {
 	return this.flag.Get(mask_kv_writeback, kv_writeback_offset) == 1
 }
 
+/*
 func (this *kv) setSnapshoted(snapshoted bool) {
 	if snapshoted {
 		this.flag.Set(mask_kv_snapshoted, kv_snapshoted_offset, uint32(1))
@@ -206,6 +206,7 @@ func (this *kv) setSnapshoted(snapshoted bool) {
 func (this *kv) isSnapshoted() bool {
 	return this.flag.Get(mask_kv_snapshoted, kv_snapshoted_offset) == 1
 }
+*/
 
 func newkv(slot *kvSlot, tableMeta *dbmeta.TableMeta, key string, uniKey string, isTmp bool) *kv {
 

@@ -11,7 +11,6 @@ import (
 	"github.com/sniperHW/kendynet/util"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	//"go.etcd.io/etcd/raft/raftpb"
-	//"log"
 	//	"math"
 	//	"strings"
 	"sync"
@@ -45,17 +44,17 @@ func (this *kvSlot) getKvNode() *kvnode {
 }
 
 //发起一致读请求
-func (this *kvSlot) issueReadReq(task asynTaskI) {
+func (this *kvSlot) issueReadReq(task asynCmdTaskI) {
 	this.store.issueReadReq(task)
 }
 
 //发起更新请求
-func (this *kvSlot) issueUpdate(task asynTaskI) {
+func (this *kvSlot) issueUpdate(task asynCmdTaskI) {
 	this.store.issueUpdate(task)
 }
 
 //请求向所有副本中新增kv
-func (this *kvSlot) issueAddkv(task asynTaskI) {
+func (this *kvSlot) issueAddkv(task asynCmdTaskI) {
 	this.store.issueAddkv(task)
 }
 
@@ -82,23 +81,49 @@ func (this *kvstore) getSlot(uniKey string) *kvSlot {
 }
 
 //发起一致读请求
-func (this *kvstore) issueReadReq(task asynTaskI) {
-	if err := this.readReqC.AddNoWait(c); nil != err {
+func (this *kvstore) issueReadReq(task asynCmdTaskI) {
+	if err := this.readReqC.AddNoWait(task); nil != err {
 		task.onError(errcode.ERR_SERVER_STOPED)
 	}
 }
 
-//发起更新请求
-func (this *kvstore) issueUpdate(task asynTaskI) {
-	if err := this.proposeC.AddNoWait(c); nil != err {
-		task.onError(errcode.ERR_SERVER_STOPED)
-	}
-}
+func (this *kvstore) readCommits(once bool, commitC <-chan interface{}, errorC <-chan error) {
 
-//请求向所有副本中新增kv
-func (this *kvstore) issueAddkv(task asynTaskI) {
-	if err := this.proposeC.AddNoWait(c); nil != err {
-		task.onError(errcode.ERR_SERVER_STOPED)
+	for e := range commitC {
+		switch e.(type) {
+		case *commitedBatchProposal:
+			data := e.(*commitedBatchProposal)
+			if data == replaySnapshot {
+				// done replaying log; new data incoming
+				// OR signaled to load snapshot
+				snapshot, err := s.snapshotter.Load()
+				if err == snap.ErrNoSnapshot {
+					return
+				}
+				if err != nil {
+					Fatalln(err)
+				}
+				Infof("loading snapshot at term %d and index %d", snapshot.Metadata.Term, snapshot.Metadata.Index)
+				if !this.apply(snapshot.Data[8:]) {
+					Fatalln("recoverFromSnapshot failed")
+				}
+			} else if data == replayOK {
+				if once {
+					Infoln("apply ok,keycount", this.keySize)
+					return
+				} else {
+					continue
+				}
+			} else {
+				data.apply(this)
+			}
+		case *readBatchSt:
+			e.(*readBatchSt).reply()
+		}
+	}
+
+	if err, ok := <-errorC; ok {
+		log.Fatal(err)
 	}
 }
 
@@ -162,7 +187,7 @@ func (this *storeMgr) getStore(uniKey string) *kvstore {
 
 func (this *storeMgr) addStore(index int, store *kvstore) bool {
 	if 0 == index || nil == store {
-		panic("0 == index || nil == store")
+		Fatalln("0 == index || nil == store")
 	}
 	this.Lock()
 	defer this.Unlock()

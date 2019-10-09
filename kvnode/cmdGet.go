@@ -17,7 +17,7 @@ type asynCmdTaskGet struct {
 
 func (this *asynCmdTaskGet) onSqlResp(errno int32) {
 	this.asynCmdTaskBase.onSqlResp(errno)
-	if errno == errcode.ERR_OK || errno == errcode.ERR_RECORD_NOTFOUND {
+	if errno == errcode.ERR_OK || errno == errcode.ERR_RECORD_NOTEXIST {
 		//向副本同步插入操作
 		this.getKV().slot.issueAddkv(this)
 	}
@@ -80,6 +80,9 @@ func (this *cmdGet) prepare(task asynCmdTaskI) asynCmdTaskI {
 		if status == cache_missing || status == cache_ok {
 			getTask.fields = this.kv.fields
 			getTask.version = this.kv.version
+			if status == cache_missing {
+				getTask.errno = errcode.ERR_RECORD_NOTEXIST
+			}
 		}
 	} else {
 		getTask = task.(*asynCmdTaskGet)
