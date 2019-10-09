@@ -25,7 +25,10 @@ type asynTaskKick struct {
 }
 
 func (this *asynTaskKick) done() {
-	this.kv.slot.removeKv(this.kv)
+	this.kv.Lock()
+	this.kv.setStatus(cache_remove)
+	this.kv.Unlock()
+	this.kv.slot.removeKv(this.kv, true)
 }
 
 func (this *asynTaskKick) onError(errno int32) {
@@ -58,9 +61,11 @@ func (this *kvSlot) onKickError() {
 	this.store.Unlock()
 }
 
-func (this *kvSlot) removeKv(k *kv) {
+func (this *kvSlot) removeKv(k *kv, decKickingCount bool) {
 	this.store.Lock()
-	this.store.kvKickingCount--
+	if decKickingCount {
+		this.store.kvKickingCount--
+	}
 	this.store.kvcount--
 	this.store.removeLRU(k)
 	this.store.Unlock()
