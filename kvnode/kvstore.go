@@ -20,6 +20,26 @@ import (
 	"unsafe"
 )
 
+type asynTaskKick struct {
+	kv *kv
+}
+
+func (this *asynTaskKick) done() {
+
+}
+
+func (this *asynTaskKick) onError(errno int32) {
+
+}
+
+func (this *asynTaskKick) append2Str(s *str.Str) {
+
+}
+
+func (this *asynTaskKick) onPorposeTimeout() {
+
+}
+
 var kvSlotSize int = 129
 
 type kvSlot struct {

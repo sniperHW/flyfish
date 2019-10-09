@@ -45,10 +45,6 @@ type asynCmdTaskBase struct {
 	proposalType int
 }
 
-type asynKickTask struct {
-	kv *kv
-}
-
 func (this *asynCmdTaskBase) append2Str(s *str.Str) {
 
 }
@@ -126,7 +122,7 @@ func (this *asynCmdTaskBase) onPorposeTimeout() {
 func (this *asynCmdTaskBase) done() {
 	kv := this.getKV()
 	kv.Lock()
-	kv.setSnapshoted(true)
+	//kv.setSnapshoted(true)
 	isTmp := kv.isTmp()
 	sqlFlag := kv.getSqlFlag()
 	switch sqlFlag {

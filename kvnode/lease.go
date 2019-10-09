@@ -23,6 +23,26 @@ const (
 	renewTime         = 2  //续约间隔
 )
 
+type asynTaskLease struct {
+	id int
+}
+
+func (this *asynTaskLease) done() {
+
+}
+
+func (this *asynTaskLease) onError(errno int32) {
+
+}
+
+func (this *asynTaskLease) append2Str(s *str.Str) {
+
+}
+
+func (this *asynTaskLease) onPorposeTimeout() {
+
+}
+
 type lease struct {
 	sync.Mutex
 	owner     int //当前租约持有者

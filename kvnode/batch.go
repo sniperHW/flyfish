@@ -63,5 +63,18 @@ func (this *batchProposal) onPorposeTimeout() {
 }
 
 func (this *commitedBatchProposal) apply(store *kvstore) {
+	if nil != this.tasks {
+		this.tasks.ForEach(func(v interface{}) {
+			switch v.(type) {
+			case asynCmdTaskI:
+				v.(asynCmdTaskI).reply()
+			}
+		})
 
+		this.tasks.ForEach(func(v interface{}) {
+			v.(asynTaskI).done()
+		})
+	} else {
+
+	}
 }
