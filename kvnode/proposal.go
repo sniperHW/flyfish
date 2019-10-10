@@ -44,8 +44,7 @@ func appendProposal2Str(s *str.Str, tt int, vaules ...interface{}) {
 	}
 }
 
-func readProposal(s *str.Str) (*proposal, int) {
-	offset := 0
+func readProposal(s *str.Str, offset int) (*proposal, int) {
 	var err error
 	var tt byte
 	tt, offset, err = s.ReadByte(offset)

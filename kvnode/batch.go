@@ -75,6 +75,8 @@ func (this *commitedBatchProposal) apply(store *kvstore) {
 			v.(asynTaskI).done()
 		})
 	} else {
-
+		if !store.apply(this.data) {
+			Fatalln("apply commitedBatchProposal failed")
+		}
 	}
 }

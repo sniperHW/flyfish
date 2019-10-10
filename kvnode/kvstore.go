@@ -12,9 +12,9 @@ import (
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	//"go.etcd.io/etcd/raft/raftpb"
 	//	"math"
-	//	"strings"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/util/str"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -29,7 +29,7 @@ func (this *asynTaskKick) done() {
 	this.kv.Lock()
 	this.kv.setStatus(cache_remove)
 	this.kv.Unlock()
-	this.kv.slot.removeKv(this.kv, true)
+	this.kv.slot.removeKv(this.kv)
 }
 
 func (this *asynTaskKick) onError(errno int32) {
@@ -62,11 +62,9 @@ func (this *kvSlot) onKickError() {
 	this.store.Unlock()
 }
 
-func (this *kvSlot) removeKv(k *kv, decKickingCount bool) {
+func (this *kvSlot) removeKv(k *kv) {
 	this.store.Lock()
-	if decKickingCount {
-		this.store.kvKickingCount--
-	}
+	this.store.kvKickingCount--
 	this.store.kvcount--
 	this.store.removeLRU(k)
 	this.store.Unlock()
@@ -131,6 +129,7 @@ type kvstore struct {
 	rn             *raftNode
 	lruHead        kv
 	lruTail        kv
+	storeMgr       *storeMgr
 }
 
 func (this *kvstore) getKvNode() *KVNode {
@@ -222,177 +221,83 @@ func (this *kvstore) tryKick(kv *kv) bool {
 	}
 }
 
-/*
-func readBinLog(buffer []byte, offset int) (int, int, string, int64, map[string]*proto.Field) {
-	tt := int(buffer[offset])
-	offset += 1
-	l := int(binary.BigEndian.Uint32(buffer[offset : offset+4]))
-	offset += 4
-
-	if tt == proposal_lease {
-		return offset, tt, "", int64(l), nil
-	}
-
-	uniKey := string(buffer[offset : offset+l])
-	offset += l
-	version := int64(binary.BigEndian.Uint64(buffer[offset : offset+8]))
-	offset += 8
-
-	var values map[string]*proto.Field
-
-	valueSize := int(binary.BigEndian.Uint32(buffer[offset : offset+4]))
-	offset += 4
-
-	//Infoln(unikey, version, valueSize)
-
-	if valueSize > 0 {
-		values = map[string]*proto.Field{}
-		for i := 0; i < valueSize; i++ {
-			l := int(binary.BigEndian.Uint32(buffer[offset : offset+4]))
-			offset += 4
-			name := string(buffer[offset : offset+l])
-			offset += l
-
-			vType := proto.ValueType(int(buffer[offset]))
-			offset += 1
-
-			switch vType {
-			case proto.ValueType_string:
-				l = int(binary.BigEndian.Uint32(buffer[offset : offset+4]))
-				offset += 4
-				values[name] = proto.PackField(name, string(buffer[offset:offset+l]))
-				offset += l
-			case proto.ValueType_float:
-				u64 := binary.BigEndian.Uint64(buffer[offset : offset+8])
-				values[name] = proto.PackField(name, math.Float64frombits(u64))
-				offset += 8
-			case proto.ValueType_int:
-				values[name] = proto.PackField(name, int64(binary.BigEndian.Uint64(buffer[offset:offset+8])))
-				offset += 8
-			case proto.ValueType_uint:
-				values[name] = proto.PackField(name, uint64(binary.BigEndian.Uint64(buffer[offset:offset+8])))
-				offset += 8
-			case proto.ValueType_blob:
-				l = int(binary.BigEndian.Uint32(buffer[offset : offset+4]))
-				offset += 4
-				v := make([]byte, l)
-				copy(v, buffer[offset:offset+l])
-				values[name] = proto.PackField(name, v)
-				offset += l
-			default:
-				panic("invaild value type")
-			}
-		}
-	}
-
-	return offset, tt, uniKey, version, values
-}
-
-func (s *kvstore) apply(data []byte) bool {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-
+func (this *kvstore) apply(data []byte) bool {
+	this.Lock()
+	defer this.Unlock()
+	s := str.NewStr(data, len(data))
 	offset := 0
-	recordCount := 0
-	n := len(data)
+	var p *proposal
+	for offset < s.Len() {
+		p, offset = readProposal(s, offset)
+		if nil == p {
+			return false
+		}
 
-	for offset < n {
-
-		newOffset, tt, unikey, version, values := readBinLog(data, offset)
-
-		offset = newOffset
-
-		if tt == proposal_lease {
-			owner := int(version)
-			s.updateLease(owner)
-		} else {
-
-			slot := s.slots[StringHash(unikey)%len(s.slots)]
-
-			slot.mtx.Lock()
-
-			ckey, _ := slot.kv[unikey]
-			recordCount++
-
-			Debugln(tt, unikey)
-
-			if tt == proposal_snapshot {
-				if nil == ckey {
-					Debugln("newCacheKey", unikey)
-					tmp := strings.Split(unikey, ":")
-					ckey = newCacheKey(s, slot, tmp[0], strings.Join(tmp[1:], ""), unikey, false)
-					s.keySize++
-					slot.kv[unikey] = ckey
-					s.updateLRU(ckey)
-				}
-				ckey.mtx.Lock()
-				ckey.values = values
-				ckey.version = version
-				ckey.snapshoted = true
-				if ckey.version == 0 {
-					ckey.sqlFlag = write_back_delete
-					ckey.status = cache_missing
+		switch p.tt {
+		case proposal_lease:
+			this.rn.lease.update(p.values[0].(int))
+		case proposal_snapshot, proposal_update, proposal_kick:
+			unikey := p.values[0].(string)
+			slot := this.slots[futil.StringHash(unikey)%len(this.slots)]
+			if p.tt == proposal_kick {
+				slot.Lock()
+				kv, ok := slot.elements[unikey]
+				if !ok {
+					slot.Unlock()
+					return false
 				} else {
-					ckey.sqlFlag = write_back_insert_update
-					ckey.status = cache_ok
-				}
-				ckey.mtx.Unlock()
-			} else if tt == proposal_update {
-				if ckey != nil {
-					if ckey.status != cache_ok || ckey.values == nil {
-						Fatalln("invaild tt", unikey, tt, recordCount, offset)
-						slot.mtx.Unlock()
-						return false
-					}
-					ckey.mtx.Lock()
-					for k, v := range values {
-						ckey.values[k] = v
-					}
-					ckey.version = version
-					ckey.sqlFlag = write_back_insert_update
-					ckey.mtx.Unlock()
-					s.updateLRU(ckey)
-				} else {
-					panic("binlog_update key == nil")
-				}
-			} else if tt == proposal_delete {
-				if ckey != nil {
-					if ckey.status != cache_ok {
-						slot.mtx.Unlock()
-						Fatalln("invaild tt", unikey, tt, recordCount, offset)
-						return false
-					}
-					ckey.mtx.Lock()
-					ckey.values = nil
-					ckey.version = version
-					ckey.status = cache_missing
-					ckey.sqlFlag = write_back_delete
-					ckey.mtx.Unlock()
-					s.updateLRU(ckey)
-				} else {
-					panic("binlog_delete key == nil")
-				}
-			} else if tt == proposal_kick {
-				if ckey != nil {
-					s.keySize--
-					s.removeLRU(ckey)
-					delete(slot.kv, unikey)
-				} else {
-					panic("proposal_kick key == nil")
+					kv.Lock()
+					kv.setStatus(cache_remove)
+					kv.Unlock()
+					this.kvcount--
+					this.removeLRU(kv)
+					delete(slot.elements, unikey)
+					slot.Unlock()
 				}
 			} else {
-				slot.mtx.Unlock()
-				Fatalln("invaild tt", unikey, tt, recordCount, offset)
-				return false
+				slot.Lock()
+				kv, ok := slot.elements[unikey]
+				if p.tt == proposal_update && !ok {
+					slot.Unlock()
+					return false
+				}
+				version := p.values[1].(int64)
+
+				if !ok {
+
+					tmp := strings.Split(unikey, ":")
+					meta := this.storeMgr.dbmeta.GetTableMeta(tmp[0])
+					if nil == meta {
+						slot.Unlock()
+						return false
+					}
+					kv = newkv(slot, meta, tmp[1], unikey, false)
+
+					this.kvcount++
+					slot.elements[unikey] = kv
+				}
+
+				kv.Lock()
+
+				if version == 0 {
+					kv.setStatus(cache_missing)
+				} else {
+					kv.setStatus(cache_ok)
+					kv.version = version
+					fields := p.values[2].([]*proto.Field)
+					kv.fields = map[string]*proto.Field{}
+					for _, v := range fields {
+						kv.fields[v.GetName()] = v
+					}
+				}
+				kv.Unlock()
+				slot.Unlock()
+				this.updateLRU(kv)
 			}
-			slot.mtx.Unlock()
+		default:
+			return false
 		}
 	}
-	return true
-}
-*/
-
-func (s *kvstore) apply(data []byte) bool {
 	return true
 }
 
