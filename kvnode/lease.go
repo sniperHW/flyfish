@@ -5,6 +5,7 @@
 package kvnode
 
 import (
+	"github.com/sniperHW/flyfish/util/str"
 	"sync"
 	"time"
 )
@@ -24,11 +25,11 @@ const (
 )
 
 type asynTaskLease struct {
-	id int
+	rn *raftNode
 }
 
 func (this *asynTaskLease) done() {
-
+	this.rn.lease.update(this.rn.id)
 }
 
 func (this *asynTaskLease) onError(errno int32) {
@@ -36,7 +37,7 @@ func (this *asynTaskLease) onError(errno int32) {
 }
 
 func (this *asynTaskLease) append2Str(s *str.Str) {
-
+	appendProposal2Str(s, proposal_lease, this.rn.id)
 }
 
 func (this *asynTaskLease) onPorposeTimeout() {
@@ -123,7 +124,7 @@ func (l *lease) startLeaseRoutine(rn *raftNode) {
 					}
 				}
 				//续租
-				rn.lease()
+				rn.renew()
 				l.wait(l.stop, renewTime*time.Second)
 			}
 			Infoln("break")

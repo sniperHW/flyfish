@@ -22,7 +22,8 @@ func (this *asynCmdTaskSet) onSqlResp(errno int32) {
 	if !cmd.checkVersion(this.version) {
 		this.errno = errcode.ERR_VERSION_MISMATCH
 	} else {
-		if errno == errcode.ERR_RECORD_NOTFOUND {
+		if errno == errcode.ERR_RECORD_NOTEXIST {
+			this.fields = map[string]*proto.Field{}
 			fillDefaultValue(cmd.getKV().meta, &this.fields)
 			this.sqlFlag = sql_insert
 		} else if errno == errcode.ERR_OK {
@@ -84,13 +85,14 @@ func (this *cmdSet) prepare(_ asynCmdTaskI) asynCmdTaskI {
 	status := kv.getStatus()
 
 	if !this.checkVersion(kv.version) {
-		this.reply(errcode.ERR_VERSION, nil, kv.version)
+		this.reply(errcode.ERR_VERSION_MISMATCH, nil, kv.version)
 		return nil
 	}
 
 	task := newAsynCmdTaskSet(this)
 
 	if status == cache_missing {
+		task.fields = map[string]*proto.Field{}
 		fillDefaultValue(kv.meta, &task.fields)
 		task.sqlFlag = sql_insert
 	} else if status == cache_ok {
@@ -98,9 +100,7 @@ func (this *cmdSet) prepare(_ asynCmdTaskI) asynCmdTaskI {
 	}
 
 	if status != cache_new {
-		for k, v := range this.fields {
-			task.fields[k] = v
-		}
+		task.fields = this.fields
 		task.version++
 	}
 

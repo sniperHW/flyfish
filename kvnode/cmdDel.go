@@ -17,7 +17,7 @@ type asynCmdTaskDel struct {
 
 func (this *asynCmdTaskDel) onSqlResp(errno int32) {
 	this.asynCmdTaskBase.onSqlResp(errno)
-	if errno == errcode.ERR_RECORD_NOTFOUND {
+	if errno == errcode.ERR_RECORD_NOTEXIST {
 		this.reply()
 		//向副本同步插入操作
 		this.getKV().slot.issueAddkv(this)
@@ -29,7 +29,7 @@ func (this *asynCmdTaskDel) onSqlResp(errno int32) {
 func newAsynCmdTaskDel(cmd commandI, sqlFlag uint32) *asynCmdTaskDel {
 	return &asynCmdTaskDel{
 		asynCmdTaskBase: &asynCmdTaskBase{
-			commands: []commandI{cmdI},
+			commands: []commandI{cmd},
 			sqlFlag:  sqlFlag,
 		},
 	}
@@ -66,11 +66,11 @@ func (this *cmdDel) prepare(_ asynCmdTaskI) asynCmdTaskI {
 	status := this.kv.getStatus()
 
 	if status == cache_missing {
-		this.reply(errcode.ERR_NOTFOUND, nil, 0)
+		this.reply(errcode.ERR_RECORD_NOTEXIST, nil, 0)
 		return nil
 	} else {
-		if status == cache_ok && !this.checkVersion(kv.version) {
-			this.reply(errcode.ERR_VERSION, nil, kv.version)
+		if status == cache_ok && !this.checkVersion(this.kv.version) {
+			this.reply(errcode.ERR_VERSION_MISMATCH, nil, this.kv.version)
 			return nil
 		}
 

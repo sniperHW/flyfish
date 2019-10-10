@@ -19,7 +19,8 @@ func (this *asynCmdTaskSetNx) onSqlResp(errno int32) {
 	this.asynCmdTaskBase.onSqlResp(errno)
 	cmd := this.commands[0].(*cmdSet)
 
-	if errno == errcode.ERR_RECORD_NOTFOUND {
+	if errno == errcode.ERR_RECORD_NOTEXIST {
+		this.fields = map[string]*proto.Field{}
 		fillDefaultValue(cmd.getKV().meta, &this.fields)
 		for k, v := range cmd.fields {
 			this.fields[k] = v
@@ -69,7 +70,7 @@ func (this *cmdSetNx) makeResponse(errCode int32, fields map[string]*proto.Field
 	}
 }
 
-func (this *cmdSet) prepare(_ asynCmdTaskI) asynCmdTaskI {
+func (this *cmdSetNx) prepare(_ asynCmdTaskI) asynCmdTaskI {
 
 	kv := this.kv
 	status := kv.getStatus()
@@ -82,6 +83,7 @@ func (this *cmdSet) prepare(_ asynCmdTaskI) asynCmdTaskI {
 	task := newAsynCmdTaskSetNx(this)
 
 	if status == cache_missing {
+		task.fields = map[string]*proto.Field{}
 		fillDefaultValue(kv.meta, &task.fields)
 		task.sqlFlag = sql_insert
 		for k, v := range this.fields {

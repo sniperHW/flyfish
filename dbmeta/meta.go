@@ -52,10 +52,10 @@ func (this *DBMeta) CheckMetaVersion(version int64) bool {
 
 //表查询元数据
 type QueryMeta struct {
-	field_names []string //所有的字段名
-	//field_receiver []func() interface{} //用于接收查询返回值
-	receiver_pool sync.Pool
-	field_convter []func(interface{}) interface{}
+	field_names    []string             //所有的字段名
+	field_receiver []func() interface{} //用于接收查询返回值
+	receiver_pool  sync.Pool
+	field_convter  []func(interface{}) interface{}
 }
 
 func (this *QueryMeta) GetFieldNames() []string {

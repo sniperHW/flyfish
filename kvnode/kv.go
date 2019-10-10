@@ -2,13 +2,14 @@ package kvnode
 
 import (
 	"github.com/sniperHW/flyfish/dbmeta"
+	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/util/bitfield"
 	"github.com/sniperHW/flyfish/util/ringqueue"
 	//"strconv"
 	"sync"
-	//"sync/atomic"
-	//"unsafe"
+	"sync/atomic"
+	"unsafe"
 	//"time"
 )
 
@@ -100,7 +101,7 @@ type kv struct {
 	pprev        *kv
 }
 
-func (this *kv) appendCmd(op commandI) uint32 {
+func (this *kv) appendCmd(op commandI) int32 {
 	this.Lock()
 	defer this.Unlock()
 	if this.getStatus() == cache_remove {
@@ -119,7 +120,7 @@ func (this *kv) appendCmd(op commandI) uint32 {
 }
 
 //设置remove,清空cmdQueue,向队列内的cmd响应错误码err
-func (this *kv) setRemoveAndClearCmdQueue(err int) {
+func (this *kv) setRemoveAndClearCmdQueue(err int32) {
 	this.setStatus(cache_remove)
 	for cmd := this.cmdQueue.popFront(); nil != cmd; {
 		cmd.reply(err, nil, 0)
@@ -197,7 +198,35 @@ func (this *kv) isWriteBack() bool {
 }
 
 func (this *kv) kickable() bool {
+	return false
+}
 
+func (this *kv) setMissing() {
+	this.version = 0
+	this.setStatus(cache_missing)
+	this.fields = nil
+	this.modifyFields = map[string]*proto.Field{}
+}
+
+func (this *kv) setOK(version int64, fields map[string]*proto.Field) {
+	this.version = version
+	this.setStatus(cache_ok)
+	modify := false
+
+	if nil == this.fields {
+		this.fields = map[string]*proto.Field{}
+	} else {
+		modify = true
+	}
+
+	for k, v := range fields {
+		if !(k == "__version__" || k == "__key__") {
+			this.fields[k] = v
+			if modify {
+				this.modifyFields[k] = v
+			}
+		}
+	}
 }
 
 /*
@@ -256,13 +285,13 @@ func (this *kv) processQueueCmd(unlockOpQueue ...bool) {
 			switch cmd.(type) {
 			case *cmdGet:
 				this.cmdQueue.popFront()
-				asynCmdTaskI = cmd.prepare(asynCmdTaskI)
-			case *cmdCompareAndSet, *cmdCompareAndSetNx, *cmdDecr, *cmdDel, *Incr, *Set, *SetNx:
+				asynTask = cmd.prepare(asynTask)
+			case *cmdCompareAndSet, *cmdCompareAndSetNx, *cmdDecr, *cmdDel, *cmdIncr, *cmdSet, *cmdSetNx:
 				if nil != asynTask {
 					goto loopEnd
 				}
 				this.cmdQueue.popFront()
-				asynCmdTaskI = cmd.prepare(asynCmdTaskI)
+				asynTask = cmd.prepare(asynTask)
 				goto loopEnd
 			default:
 				this.cmdQueue.popFront()
@@ -286,7 +315,7 @@ loopEnd:
 
 	if this.getStatus() == cache_new {
 		fullReturn := len(unlockOpQueue) == 0
-		if !this.slot.getKvNode().pushSqlLoadReq(asynTask, fullReturn) {
+		if !this.slot.getKvNode().sqlMgr.pushLoadReq(asynTask, fullReturn) {
 			if this.isTmp() {
 				for _, v := range asynTask.getCommands() {
 					v.reply(errcode.ERR_BUSY, nil, -1)

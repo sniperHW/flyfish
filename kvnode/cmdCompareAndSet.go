@@ -17,7 +17,7 @@ type asynCmdTaskCompareAndSet struct {
 
 func (this *asynCmdTaskCompareAndSet) onSqlResp(errno int32) {
 	this.asynCmdTaskBase.onSqlResp(errno)
-	if errno == errcode.ERR_RECORD_NOTFOUND {
+	if errno == errcode.ERR_RECORD_NOTEXIST {
 		this.reply()
 		this.getKV().slot.issueAddkv(this)
 	} else if errno == errcode.ERR_OK {
@@ -86,7 +86,7 @@ func (this *cmdCompareAndSet) prepare(_ asynCmdTaskI) asynCmdTaskI {
 	status := kv.getStatus()
 
 	if status == cache_missing {
-		this.reply(errcode.ERR_NOTFOUND, nil, 0)
+		this.reply(errcode.ERR_RECORD_NOTEXIST, nil, 0)
 		return nil
 	} else {
 
@@ -94,7 +94,7 @@ func (this *cmdCompareAndSet) prepare(_ asynCmdTaskI) asynCmdTaskI {
 
 		if status == cache_ok {
 			if !this.checkVersion(kv.version) {
-				this.reply(errcode.ERR_VERSION, nil, kv.version)
+				this.reply(errcode.ERR_VERSION_MISMATCH, nil, kv.version)
 				return nil
 			}
 

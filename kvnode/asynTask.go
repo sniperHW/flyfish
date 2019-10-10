@@ -33,6 +33,7 @@ type asynCmdTaskI interface {
 	getSqlFlag() uint32
 	setSqlFlag(uint32)
 	setProposalType(int)
+	onError(errno int32)
 }
 
 type asynCmdTaskBase struct {
@@ -46,7 +47,7 @@ type asynCmdTaskBase struct {
 }
 
 func (this *asynCmdTaskBase) append2Str(s *str.Str) {
-
+	appendProposal2Str(s, this.proposalType, this.getKV().uniKey, this.version, this.fields)
 }
 
 func (this *asynCmdTaskBase) getSqlFlag() uint32 {
@@ -99,7 +100,7 @@ func (this *asynCmdTaskBase) onSqlResp(errno int32) {
 	} else if errno == errcode.ERR_SQLERROR {
 		this.reply()
 		kv := this.getKV()
-		if !kv.tryRemoveTmpKey(this.errno) {
+		if !kv.tryRemoveTmp(this.errno) {
 			kv.processQueueCmd(true)
 		}
 	}
@@ -109,7 +110,7 @@ func (this *asynCmdTaskBase) onError(errno int32) {
 	this.errno = errno
 	this.reply()
 	kv := this.getKV()
-	if !kv.tryRemoveTmpKey(this.errno) {
+	if !kv.tryRemoveTmp(this.errno) {
 		kv.processQueueCmd(true)
 	}
 }
@@ -126,7 +127,7 @@ func (this *asynCmdTaskBase) done() {
 	isTmp := kv.isTmp()
 	sqlFlag := kv.getSqlFlag()
 	switch sqlFlag {
-	case sql_insert, sql_update, sql_insert_update:
+	case sql_insert, sql_update:
 		kv.setOK(this.version, this.fields)
 	case sql_delete:
 		kv.setMissing()
@@ -137,7 +138,7 @@ func (this *asynCmdTaskBase) done() {
 	}
 	kv.Unlock()
 	if isTmp {
-		kv.slot.moveTmp2OK(kv)
+		kv.slot.moveTmpkv2OK(kv)
 	}
 	kv.processQueueCmd(true)
 }

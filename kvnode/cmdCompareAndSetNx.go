@@ -18,7 +18,8 @@ type asynCmdTaskCompareAndSetNx struct {
 func (this *asynCmdTaskCompareAndSetNx) onSqlResp(errno int32) {
 	this.asynCmdTaskBase.onSqlResp(errno)
 	cmd := this.commands[0].(*cmdCompareAndSetNx)
-	if errno == errcode.ERR_RECORD_NOTFOUND {
+	if errno == errcode.ERR_RECORD_NOTEXIST {
+		this.fields = map[string]*proto.Field{}
 		fillDefaultValue(cmd.getKV().meta, &this.fields)
 		this.sqlFlag = sql_insert
 		this.fields[cmd.newV.GetName()] = cmd.newV
@@ -92,7 +93,7 @@ func (this *cmdCompareAndSetNx) prepare(_ asynCmdTaskI) asynCmdTaskI {
 
 	if status == cache_ok {
 		if !this.checkVersion(kv.version) {
-			this.reply(errcode.ERR_VERSION, nil, kv.version)
+			this.reply(errcode.ERR_VERSION_MISMATCH, nil, kv.version)
 			return nil
 		}
 
@@ -101,8 +102,6 @@ func (this *cmdCompareAndSetNx) prepare(_ asynCmdTaskI) asynCmdTaskI {
 			return nil
 		}
 	}
-
-	var sqlFlag uint32
 
 	task := newAsynCmdTaskCompareAndSetNx(this)
 
@@ -116,7 +115,7 @@ func (this *cmdCompareAndSetNx) prepare(_ asynCmdTaskI) asynCmdTaskI {
 		task.sqlFlag = sql_insert
 		task.fields = map[string]*proto.Field{}
 		fillDefaultValue(this.getKV().meta, &task.fields)
-		task.fields[cmd.newV.GetName()] = cmd.newV
+		task.fields[this.newV.GetName()] = this.newV
 	}
 	return task
 }

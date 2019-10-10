@@ -88,7 +88,7 @@ func (this *cmdGet) prepare(task asynCmdTaskI) asynCmdTaskI {
 		getTask = task.(*asynCmdTaskGet)
 	}
 
-	getTask.commands = append(getTask, this)
+	getTask.commands = append(getTask.commands, this)
 
 	return getTask
 }

@@ -1,4 +1,4 @@
-package server
+package kvnode
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/sniperHW/flyfish/conf"
 	futil "github.com/sniperHW/flyfish/util"
+	"github.com/sniperHW/flyfish/util/str"
 	"github.com/sniperHW/kendynet/timer"
 	"github.com/sniperHW/kendynet/util"
 	"sync"
@@ -42,12 +43,12 @@ type sqlMgr struct {
 	stoped              int64
 	totalUpdateSqlCount int64
 
-	BinaryToSqlStr          func(s *str.Str, bytes []byte)
+	binaryToSqlStr          func(s *str.Str, bytes []byte)
 	buildInsertUpdateString func(s *str.Str, kv *kv)
 }
 
 func (this *sqlMgr) pushLoadReq(task asynCmdTaskI, fullReturn ...bool) bool {
-	l := this.sqlLoaders[futil.StringHash(task.getKV().uniKey)%len(sqlLoaders)]
+	l := this.sqlLoaders[futil.StringHash(task.getKV().uniKey)%len(this.sqlLoaders)]
 	err := l.queue.AddNoWait(task, fullReturn...)
 	if nil == err {
 		return true
@@ -57,8 +58,8 @@ func (this *sqlMgr) pushLoadReq(task asynCmdTaskI, fullReturn ...bool) bool {
 }
 
 func (this *sqlMgr) pushUpdateReq(kv *kv) {
-	u := this.sqlUpdaters[futil.StringHash(kv.uniKey)%len(sqlUpdaters)]
-	u.queue.AddNoWait(ckey)
+	u := this.sqlUpdaters[futil.StringHash(kv.uniKey)%len(this.sqlUpdaters)]
+	u.queue.AddNoWait(kv)
 }
 
 func (this *sqlMgr) stop() {
@@ -75,8 +76,8 @@ func (this *sqlMgr) stop() {
 	}
 }
 
-func (this *sqlMgr) isStoped() {
-	return atomic.LoadInt64(&this.stoped)
+func (this *sqlMgr) isStoped() bool {
+	return atomic.LoadInt64(&this.stoped) == 1
 }
 
 func newSqlMgr() (*sqlMgr, error) {
@@ -86,14 +87,17 @@ func newSqlMgr() (*sqlMgr, error) {
 	sqlMgr := &sqlMgr{}
 
 	if dbConfig.SqlType == "mysql" {
-		sqlMgr.BinaryToSqlStr = sqlMgr.mysqlBinaryToPgsqlStr
+		sqlMgr.binaryToSqlStr = mysqlBinaryToPgsqlStr
 		sqlMgr.buildInsertUpdateString = sqlMgr.buildInsertUpdateStringMySql
 	} else {
-		sqlMgr.BinaryToSqlStr = sqlMgr.pgsqlBinaryToPgsqlStr
+		sqlMgr.binaryToSqlStr = pgsqlBinaryToPgsqlStr
 		sqlMgr.buildInsertUpdateString = sqlMgr.buildInsertUpdateStringPgSql
 	}
 
-	sqlLoaders = []*sqlLoader{}
+	sqlLoaders := []*sqlLoader{}
+
+	ping := sqlPing{}
+
 	for i := 0; i < config.SqlLoaderCount; i++ {
 		lname := fmt.Sprintf("sqlLoad:%d", i)
 		var loadDB *sqlx.DB
@@ -107,13 +111,13 @@ func newSqlMgr() (*sqlMgr, error) {
 		sqlLoaders = append(sqlLoaders, l)
 		go l.run()
 		timer.Repeat(time.Second*60, nil, func(t *timer.Timer) {
-			if sqlMgr.isStoped() || util.ErrQueueClosed == l.queue.AddNoWait(sqlPing) {
+			if sqlMgr.isStoped() || util.ErrQueueClosed == l.queue.AddNoWait(ping) {
 				t.Cancel()
 			}
 		})
 	}
 
-	sqlUpdaters = []*sqlUpdater{}
+	sqlUpdaters := []*sqlUpdater{}
 
 	for i := 0; i < config.SqlUpdaterCount; i++ {
 		wname := fmt.Sprintf("sqlUpdater:%d", i)
@@ -128,7 +132,7 @@ func newSqlMgr() (*sqlMgr, error) {
 		sqlUpdaters = append(sqlUpdaters, u)
 		go u.run()
 		timer.Repeat(time.Second*60, nil, func(t *timer.Timer) {
-			if sqlMgr.isStoped() || util.ErrQueueClosed == u.queue.AddNoWait(sqlPing) {
+			if sqlMgr.isStoped() || util.ErrQueueClosed == u.queue.AddNoWait(ping) {
 				t.Cancel()
 			}
 		})

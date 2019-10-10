@@ -35,7 +35,6 @@ import (
 	"go.etcd.io/etcd/wal"
 	"go.etcd.io/etcd/wal/walpb"
 	"go.uber.org/zap"
-	//"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -60,7 +59,7 @@ type raftNode struct {
 	join        bool     // node is joining an existing cluster
 	waldir      string   // path to WAL directory
 	snapdir     string   // path to snapshot directory
-	getSnapshot func() [][]kvsnap
+	getSnapshot func() [][]*kvsnap
 	lastIndex   uint64 // index of log at start
 
 	confState     raftpb.ConfState
@@ -99,7 +98,7 @@ type raftNode struct {
 	pendingRead   *list.List
 
 	readIndex int64
-	l         *lease
+	lease     *lease
 
 	cbBecomeLeader   func()
 	cbLoseLeaderShip func()
@@ -112,7 +111,7 @@ var defaultSnapshotCount uint64 = 10000
 // provided the proposal channel. All log entries are replayed over the
 // commit channel, followed by a nil message (to indicate the channel is
 // current), then new log entries. To shutdown, close proposeC and read errorC.
-func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSnapshot func() [][]kvsnap, proposeC *util.BlockQueue,
+func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSnapshot func() [][]*kvsnap, proposeC *util.BlockQueue,
 	confChangeC <-chan raftpb.ConfChange, readC *util.BlockQueue, onBecomeLeader func(), onLoseLeadership func()) (*raftNode, <-chan interface{}, <-chan error, <-chan *snap.Snapshotter) {
 
 	/*
@@ -150,7 +149,7 @@ func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSna
 
 		proposePipeline: proposeC,
 		readPipeline:    readC,
-		l:               &lease{stop: nil},
+		lease:           &lease{stop: nil},
 
 		cbBecomeLeader:   onBecomeLeader,
 		cbLoseLeaderShip: onLoseLeadership,
@@ -576,18 +575,19 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 
 	go func() {
 
-		ss := strGet()
-		ss.appendInt64(0)
+		ss := str.Get()
+		ss.AppendInt64(0)
 
 		for _, v := range clone {
 			for _, vv := range v {
-				ss.appendProposal(proposal_snapshot, vv.uniKey, vv.values, vv.version)
+				vv.append2Str(ss)
+				//ss.appendProposal(proposal_snapshot, vv.uniKey, vv.values, vv.version)
 			}
 		}
 
 		beg := time.Now()
 
-		snap, err := rc.raftStorage.CreateSnapshot(appliedIndex, &confState, ss.bytes())
+		snap, err := rc.raftStorage.CreateSnapshot(appliedIndex, &confState, ss.Bytes())
 		if err != nil {
 			panic(err)
 		}
@@ -596,7 +596,7 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 			panic(err)
 		}
 
-		strPut(ss)
+		str.Put(ss)
 
 		Infoln("save snapshot time", time.Now().Sub(beg))
 
@@ -608,7 +608,7 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 
 func (rc *raftNode) onLoseLeadership() {
 
-	rc.l.loseLeaderShip()
+	rc.lease.loseLeaderShip()
 	rc.cbLoseLeaderShip()
 
 	rc.muPendingPropose.Lock()
@@ -721,7 +721,7 @@ func (rc *raftNode) issuePropose(batch *batchProposal) {
 	rc.muPendingPropose.Unlock()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	err := rc.node.Propose(ctx, batch.proposalStr.bytes())
+	err := rc.node.Propose(ctx, batch.proposalStr.Bytes())
 	cancel()
 
 	if nil != err {
@@ -733,7 +733,7 @@ func (rc *raftNode) issuePropose(batch *batchProposal) {
 			rc.pendingPropose.Remove(e)
 			rc.muPendingPropose.Unlock()
 
-			errCode := 0
+			var errCode int32
 
 			switch err {
 			case raft.ErrStopped:
@@ -758,7 +758,7 @@ func (rc *raftNode) newBatchProposal() *batchProposal {
 	return &batchProposal{
 		index:       index,
 		tasks:       fixedArrayPool.Get(),
-		proposalStr: strGet().appendInt64(index),
+		proposalStr: str.Get().AppendInt64(index),
 	}
 }
 
@@ -790,10 +790,10 @@ func (rc *raftNode) startProposePipeline() {
 					}
 				} else {
 					if !rc.isLeader() {
-						vv.(*asynTaskI).onError(errcode.ERR_NOT_LEADER)
+						vv.(asynTaskI).onError(errcode.ERR_NOT_LEADER)
 					} else {
 						batch.tasks.Append(vv)
-						vv.(*asynTaskI).append2Str(batch.proposalStr)
+						vv.(asynTaskI).append2Str(batch.proposalStr)
 
 						switch vv.(type) {
 						case asynTaskLease:
@@ -913,7 +913,7 @@ func (rc *raftNode) serveChannels() {
 				Infoln(rd.SoftState.Lead>>16, "is leader")
 
 				if rc.leader == rc.id {
-					rc.l.becomeLeader(rc)
+					rc.lease.becomeLeader(rc)
 					rc.cbBecomeLeader()
 				}
 
@@ -961,13 +961,14 @@ func (rc *raftNode) serveChannels() {
 	}
 }
 
-func (rc *raftNode) lease() {
-	/*rc.proposePipeline.AddNoWait(&proposal{
-		op: proposal_lease,
-		ctx: &cmdContext{
-			lease: &rc.id,
-		},
-	})*/
+func (rc *raftNode) renew() {
+	rc.proposePipeline.AddNoWait(&asynTaskLease{
+		rn: rc,
+	})
+}
+
+func (rc *raftNode) hasLease() bool {
+	return rc.lease.hasLease(rc)
 }
 
 func (rc *raftNode) Process(ctx context.Context, m raftpb.Message) error {

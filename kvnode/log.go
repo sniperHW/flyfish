@@ -1,4 +1,4 @@
-package server
+package kvnode
 
 import (
 	"fmt"

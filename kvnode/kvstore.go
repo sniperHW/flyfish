@@ -3,20 +3,21 @@ package kvnode
 import (
 	"fmt"
 	//"encoding/binary"
-	//"github.com/sniperHW/flyfish/conf"
+	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/dbmeta"
+	"github.com/sniperHW/flyfish/proto"
 	futil "github.com/sniperHW/flyfish/util"
-	//"github.com/sniperHW/flyfish/proto"
 	//"github.com/sniperHW/kendynet/timer"
 	"github.com/sniperHW/kendynet/util"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	//"go.etcd.io/etcd/raft/raftpb"
 	//	"math"
 	//	"strings"
+	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/util/str"
 	"sync"
 	"sync/atomic"
-	//	"time"
-	"github.com/sniperHW/flyfish/errcode"
+	"time"
 	"unsafe"
 )
 
@@ -39,7 +40,7 @@ func (this *asynTaskKick) onError(errno int32) {
 }
 
 func (this *asynTaskKick) append2Str(s *str.Str) {
-
+	appendProposal2Str(s, proposal_kick, this.kv.uniKey)
 }
 
 func (this *asynTaskKick) onPorposeTimeout() {
@@ -85,8 +86,8 @@ func (this *kvSlot) getRaftNode() *raftNode {
 	return this.store.rn
 }
 
-func (this *kvSlot) getKvNode() *kvnode {
-	return this.store.kvnode
+func (this *kvSlot) getKvNode() *KVNode {
+	return this.store.kvNode
 }
 
 //发起一致读请求
@@ -125,14 +126,14 @@ type kvstore struct {
 	slots          []*kvSlot
 	kvcount        int //所有slot中len(elements)的总和
 	kvKickingCount int //当前正在执行kicking的kv数量
-	kvNode         *kvnode
+	kvNode         *KVNode
 	stop           func()
 	rn             *raftNode
 	lruHead        kv
 	lruTail        kv
 }
 
-func (this *kvstore) getKvNode() *kvnode {
+func (this *kvstore) getKvNode() *KVNode {
 	return this.kvNode
 }
 
@@ -158,7 +159,7 @@ func (this *kvstore) updateLRU(kv *kv) {
 	}
 
 	//插入头部
-	kv.nnext = s.lruHead.nnext
+	kv.nnext = this.lruHead.nnext
 	kv.nnext.pprev = kv
 	kv.pprev = &this.lruHead
 	this.lruHead.nnext = kv
@@ -221,6 +222,180 @@ func (this *kvstore) tryKick(kv *kv) bool {
 	}
 }
 
+/*
+func readBinLog(buffer []byte, offset int) (int, int, string, int64, map[string]*proto.Field) {
+	tt := int(buffer[offset])
+	offset += 1
+	l := int(binary.BigEndian.Uint32(buffer[offset : offset+4]))
+	offset += 4
+
+	if tt == proposal_lease {
+		return offset, tt, "", int64(l), nil
+	}
+
+	uniKey := string(buffer[offset : offset+l])
+	offset += l
+	version := int64(binary.BigEndian.Uint64(buffer[offset : offset+8]))
+	offset += 8
+
+	var values map[string]*proto.Field
+
+	valueSize := int(binary.BigEndian.Uint32(buffer[offset : offset+4]))
+	offset += 4
+
+	//Infoln(unikey, version, valueSize)
+
+	if valueSize > 0 {
+		values = map[string]*proto.Field{}
+		for i := 0; i < valueSize; i++ {
+			l := int(binary.BigEndian.Uint32(buffer[offset : offset+4]))
+			offset += 4
+			name := string(buffer[offset : offset+l])
+			offset += l
+
+			vType := proto.ValueType(int(buffer[offset]))
+			offset += 1
+
+			switch vType {
+			case proto.ValueType_string:
+				l = int(binary.BigEndian.Uint32(buffer[offset : offset+4]))
+				offset += 4
+				values[name] = proto.PackField(name, string(buffer[offset:offset+l]))
+				offset += l
+			case proto.ValueType_float:
+				u64 := binary.BigEndian.Uint64(buffer[offset : offset+8])
+				values[name] = proto.PackField(name, math.Float64frombits(u64))
+				offset += 8
+			case proto.ValueType_int:
+				values[name] = proto.PackField(name, int64(binary.BigEndian.Uint64(buffer[offset:offset+8])))
+				offset += 8
+			case proto.ValueType_uint:
+				values[name] = proto.PackField(name, uint64(binary.BigEndian.Uint64(buffer[offset:offset+8])))
+				offset += 8
+			case proto.ValueType_blob:
+				l = int(binary.BigEndian.Uint32(buffer[offset : offset+4]))
+				offset += 4
+				v := make([]byte, l)
+				copy(v, buffer[offset:offset+l])
+				values[name] = proto.PackField(name, v)
+				offset += l
+			default:
+				panic("invaild value type")
+			}
+		}
+	}
+
+	return offset, tt, uniKey, version, values
+}
+
+func (s *kvstore) apply(data []byte) bool {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	offset := 0
+	recordCount := 0
+	n := len(data)
+
+	for offset < n {
+
+		newOffset, tt, unikey, version, values := readBinLog(data, offset)
+
+		offset = newOffset
+
+		if tt == proposal_lease {
+			owner := int(version)
+			s.updateLease(owner)
+		} else {
+
+			slot := s.slots[StringHash(unikey)%len(s.slots)]
+
+			slot.mtx.Lock()
+
+			ckey, _ := slot.kv[unikey]
+			recordCount++
+
+			Debugln(tt, unikey)
+
+			if tt == proposal_snapshot {
+				if nil == ckey {
+					Debugln("newCacheKey", unikey)
+					tmp := strings.Split(unikey, ":")
+					ckey = newCacheKey(s, slot, tmp[0], strings.Join(tmp[1:], ""), unikey, false)
+					s.keySize++
+					slot.kv[unikey] = ckey
+					s.updateLRU(ckey)
+				}
+				ckey.mtx.Lock()
+				ckey.values = values
+				ckey.version = version
+				ckey.snapshoted = true
+				if ckey.version == 0 {
+					ckey.sqlFlag = write_back_delete
+					ckey.status = cache_missing
+				} else {
+					ckey.sqlFlag = write_back_insert_update
+					ckey.status = cache_ok
+				}
+				ckey.mtx.Unlock()
+			} else if tt == proposal_update {
+				if ckey != nil {
+					if ckey.status != cache_ok || ckey.values == nil {
+						Fatalln("invaild tt", unikey, tt, recordCount, offset)
+						slot.mtx.Unlock()
+						return false
+					}
+					ckey.mtx.Lock()
+					for k, v := range values {
+						ckey.values[k] = v
+					}
+					ckey.version = version
+					ckey.sqlFlag = write_back_insert_update
+					ckey.mtx.Unlock()
+					s.updateLRU(ckey)
+				} else {
+					panic("binlog_update key == nil")
+				}
+			} else if tt == proposal_delete {
+				if ckey != nil {
+					if ckey.status != cache_ok {
+						slot.mtx.Unlock()
+						Fatalln("invaild tt", unikey, tt, recordCount, offset)
+						return false
+					}
+					ckey.mtx.Lock()
+					ckey.values = nil
+					ckey.version = version
+					ckey.status = cache_missing
+					ckey.sqlFlag = write_back_delete
+					ckey.mtx.Unlock()
+					s.updateLRU(ckey)
+				} else {
+					panic("binlog_delete key == nil")
+				}
+			} else if tt == proposal_kick {
+				if ckey != nil {
+					s.keySize--
+					s.removeLRU(ckey)
+					delete(slot.kv, unikey)
+				} else {
+					panic("proposal_kick key == nil")
+				}
+			} else {
+				slot.mtx.Unlock()
+				Fatalln("invaild tt", unikey, tt, recordCount, offset)
+				return false
+			}
+			slot.mtx.Unlock()
+		}
+	}
+	return true
+}
+*/
+
+func (s *kvstore) apply(data []byte) bool {
+	return true
+}
+
 func (this *kvstore) readCommits(once bool, commitC <-chan interface{}, errorC <-chan error) {
 
 	for e := range commitC {
@@ -230,7 +405,7 @@ func (this *kvstore) readCommits(once bool, commitC <-chan interface{}, errorC <
 			if data == replaySnapshot {
 				// done replaying log; new data incoming
 				// OR signaled to load snapshot
-				snapshot, err := s.snapshotter.Load()
+				snapshot, err := this.snapshotter.Load()
 				if err == snap.ErrNoSnapshot {
 					return
 				}
@@ -243,7 +418,7 @@ func (this *kvstore) readCommits(once bool, commitC <-chan interface{}, errorC <
 				}
 			} else if data == replayOK {
 				if once {
-					Infoln("apply ok,keycount", this.keySize)
+					Infoln("apply ok,keycount", this.kvcount)
 					return
 				} else {
 					continue
@@ -257,8 +432,66 @@ func (this *kvstore) readCommits(once bool, commitC <-chan interface{}, errorC <
 	}
 
 	if err, ok := <-errorC; ok {
-		log.Fatal(err)
+		Fatalln(err)
 	}
+}
+
+type kvsnap struct {
+	uniKey  string
+	fields  map[string]*proto.Field
+	version int64
+}
+
+func (this *kvsnap) append2Str(s *str.Str) {
+
+}
+
+func (this *kvstore) getSnapshot() [][]*kvsnap {
+
+	beg := time.Now()
+
+	ret := make([][]*kvsnap, 0, len(this.slots))
+
+	ch := make(chan []*kvsnap)
+
+	for i := 0; i < len(this.slots); i++ {
+		go func(i int) {
+			slot := this.slots[i]
+			slot.Lock()
+			kvsnaps := make([]*kvsnap, 0, len(slot.elements))
+			for _, v := range slot.elements {
+				v.Lock()
+				status := v.getStatus()
+				if status == cache_ok || status == cache_missing {
+					snap := &kvsnap{
+						uniKey:  v.uniKey,
+						version: v.version,
+					}
+
+					if v.fields != nil {
+						snap.fields = map[string]*proto.Field{}
+						for kk, vv := range v.fields {
+							snap.fields[kk] = vv
+						}
+					}
+					kvsnaps = append(kvsnaps, snap)
+				}
+				v.Unlock()
+			}
+			slot.Unlock()
+			ch <- kvsnaps
+		}(i)
+	}
+
+	for i := 0; i < len(this.slots); i++ {
+		v := <-ch
+		ret = append(ret, v)
+	}
+
+	Infoln("clone time", time.Now().Sub(beg))
+
+	return ret
+
 }
 
 type storeMgr struct {
@@ -342,5 +575,5 @@ func (this *storeMgr) stop() {
 }
 
 func newStoreMgr(mutilRaft *mutilRaft) (*storeMgr, error) {
-
+	return nil, nil
 }

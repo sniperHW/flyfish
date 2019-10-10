@@ -57,11 +57,11 @@ func (this *Str) AppendInt64(i int64) *Str {
 	return this
 }
 
-func (this *Str) ReadInt64(offset int) (int64, error) {
+func (this *Str) ReadInt64(offset int) (int64, int, error) {
 	if offset+8 > this.len {
-		return 0, fmt.Errorf("beyond size")
+		return 0, 0, fmt.Errorf("beyond size")
 	}
-	return int64(binary.BigEndian.Uint64(this.data[offset : offset+8])), nil
+	return int64(binary.BigEndian.Uint64(this.data[offset : offset+8])), offset + 8, nil
 }
 
 func (this *Str) AppendInt32(i int32) *Str {
@@ -75,11 +75,19 @@ func (this *Str) AppendInt32(i int32) *Str {
 	return this
 }
 
-func (this *Str) ReadInt32(offset int) (int32, error) {
+func (this *Str) SetInt32(offset int, i int32) error {
 	if offset+4 > this.len {
-		return 0, fmt.Errorf("beyond size")
+		return fmt.Errorf("beyond size")
 	}
-	return int32(binary.BigEndian.Uint32(this.data[offset : offset+4])), nil
+	binary.BigEndian.PutUint32(this.data[offset:offset+4], uint32(i))
+	return nil
+}
+
+func (this *Str) ReadInt32(offset int) (int32, int, error) {
+	if offset+4 > this.len {
+		return 0, 0, fmt.Errorf("beyond size")
+	}
+	return int32(binary.BigEndian.Uint32(this.data[offset : offset+4])), offset + 4, nil
 }
 
 func (this *Str) AppendByte(i byte) *Str {
@@ -93,11 +101,11 @@ func (this *Str) AppendByte(i byte) *Str {
 	return this
 }
 
-func (this *Str) ReadByte(offset int) (byte, error) {
+func (this *Str) ReadByte(offset int) (byte, int, error) {
 	if offset+1 > this.len {
-		return 0, fmt.Errorf("beyond size")
+		return 0, 0, fmt.Errorf("beyond size")
 	}
-	return this.data[offset], nil
+	return this.data[offset], offset + 1, nil
 }
 
 func (this *Str) AppendBytes(bytes ...byte) *Str {
@@ -115,11 +123,11 @@ func (this *Str) AppendBytes(bytes ...byte) *Str {
 	}
 }
 
-func (this *Str) ReadBytes(offset int, size int) ([]byte, error) {
+func (this *Str) ReadBytes(offset int, size int) ([]byte, int, error) {
 	if offset+size > this.len {
-		return nil, fmt.Errorf("beyond size")
+		return nil, 0, fmt.Errorf("beyond size")
 	}
-	return this.data[offset : offset+size], nil
+	return this.data[offset : offset+size], offset + size, nil
 }
 
 func (this *Str) AppendFieldStr(field *proto.Field, binaryToSqlStr func(*Str, []byte)) *Str {
@@ -175,68 +183,75 @@ func (this *Str) AppendField(field *proto.Field) *Str {
 }
 
 func (this *Str) ReadField(offset int) (*proto.Field, int, error) {
-	nameLen, err := this.ReadInt32(offset)
-	if nil != err {
-		return nil, 0, err
-	}
-	offset += 4
-	name, err := this.ReadString(offset, int(nameLen))
-	if nil != err {
-		return nil, 0, err
-	}
-	offset += int(nameLen)
+	var err error
+	var nameLen int32
 
-	tt, err := this.ReadByte(offset)
+	nameLen, offset, err = this.ReadInt32(offset)
 	if nil != err {
 		return nil, 0, err
 	}
-	offset += 1
+
+	var name string
+	name, offset, err = this.ReadString(offset, int(nameLen))
+	if nil != err {
+		return nil, 0, err
+	}
+
+	var tt byte
+
+	tt, offset, err = this.ReadByte(offset)
+	if nil != err {
+		return nil, 0, err
+	}
 
 	switch proto.ValueType(tt) {
 	case proto.ValueType_string:
-		strLen, err := this.ReadInt32(offset)
+		var strLen int32
+		strLen, offset, err = this.ReadInt32(offset)
 		if nil != err {
 			return nil, 0, err
 		}
-		offset += 4
-		str, err := this.ReadString(offset, int(strLen))
+		var str string
+		str, offset, err = this.ReadString(offset, int(strLen))
 		if nil != err {
 			return nil, 0, err
 		}
-		offset += int(strLen)
+
 		return proto.PackField(name, str), offset, nil
 	case proto.ValueType_float:
-		i64, err := this.ReadInt64(offset)
+		var i64 int64
+		i64, offset, err = this.ReadInt64(offset)
 		if nil != err {
 			return nil, 0, err
 		}
-		offset += 8
 		return proto.PackField(name, math.Float64frombits(uint64(i64))), offset, nil
 	case proto.ValueType_int:
-		i64, err := this.ReadInt64(offset)
+		var i64 int64
+		i64, offset, err = this.ReadInt64(offset)
 		if nil != err {
 			return nil, 0, err
 		}
-		offset += 8
 		return proto.PackField(name, i64), offset, nil
 	case proto.ValueType_uint:
-		i64, err := this.ReadInt64(offset)
+		var i64 int64
+		i64, offset, err = this.ReadInt64(offset)
 		if nil != err {
 			return nil, 0, err
 		}
-		offset += 8
 		return proto.PackField(name, uint64(i64)), offset, nil
 	case proto.ValueType_blob:
-		bytesLen, err := this.ReadInt32(offset)
+		var bytesLen int32
+		bytesLen, offset, err = this.ReadInt32(offset)
 		if nil != err {
 			return nil, 0, err
 		}
-		offset += 4
-		bytes, err := this.ReadBytes(offset, int(bytesLen))
+
+		var bytes []byte
+		bytes, offset, err = this.ReadBytes(offset, int(bytesLen))
 		if nil != err {
 			return nil, 0, err
 		}
-		offset += int(bytesLen)
+
 		return proto.PackField(name, bytes), offset, nil
 	default:
 		return nil, 0, fmt.Errorf("invaild tt")
@@ -254,47 +269,12 @@ func (this *Str) AppendString(in string) *Str {
 	return this
 }
 
-func (this *Str) ReadString(offset int, size int) (string, error) {
+func (this *Str) ReadString(offset int, size int) (string, int, error) {
 	if offset+size > this.len {
-		return "", fmt.Errorf("beyond size")
+		return "", 0, fmt.Errorf("beyond size")
 	}
-	return string(this.data[offset : offset+size]), nil
+	return string(this.data[offset : offset+size]), offset + size, nil
 }
-
-/*
-func (this *str) appendLease(id int) {
-	this.appendByte(byte(proposal_lease))
-	this.appendInt32(int32(id))
-}
-
-func (this *str) appendProposal(tt int, unikey string, fields map[string]*proto.Field, version int64) {
-
-	//写操作码1byte
-	this.appendByte(byte(tt))
-	//写unikey
-	this.appendInt32(int32(len(unikey)))
-	this.append(unikey)
-	//写version
-	this.appendInt64(version)
-	if tt == proposal_snapshot || tt == proposal_update {
-		pos := this.len
-		this.appendInt32(int32(0))
-		if nil != fields {
-			c := 0
-			for n, v := range fields {
-				if n != "__version__" {
-					c++
-					this.appendField(v)
-				}
-			}
-			if c > 0 {
-				binary.BigEndian.PutUint32(this.data[pos:pos+4], uint32(c))
-			}
-		}
-	} else {
-		this.appendInt32(int32(0))
-	}
-}*/
 
 func (this *Str) Join(other []*Str, sep string) *Str {
 	if len(other) > 0 {

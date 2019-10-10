@@ -7,7 +7,8 @@ import (
 	"github.com/sniperHW/flyfish/util/str"
 	"github.com/sniperHW/kendynet/util"
 	"net"
-	"sync"
+	//"sync"
+	"github.com/sniperHW/flyfish/proto"
 	"sync/atomic"
 	"time"
 )
@@ -90,9 +91,9 @@ func (this *sqlUpdater) exec(v interface{}) {
 	case asynCmdTaskI:
 		task := v.(asynCmdTaskI)
 		kv := task.getKV()
-		rn := ckey.slot.getRaftNode()
+		rn := kv.slot.getRaftNode()
 
-		if !rn.hasLease(rn) {
+		if !rn.hasLease() {
 			//没有持有租约,不能执行sql操作。
 			kv.Lock()
 			kv.setWriteBack(false)
@@ -100,23 +101,21 @@ func (this *sqlUpdater) exec(v interface{}) {
 			return
 		}
 
-		meta := kv.getMeta()
-
 		kv.Lock()
 
 		tt := kv.getSqlFlag()
-		if tt == sql_insert || tt == sql_insert_update {
-			this.sqlMgr.buildInsertUpdateString(ckey)
+		if tt == sql_insert {
+			this.sqlMgr.buildInsertUpdateString(this.sqlStr, kv)
 			atomic.AddInt64(&this.sqlMgr.totalUpdateSqlCount, 1)
 		} else if tt == sql_update {
-			this.sqlMgr.buildUpdateString(this.sqlStr, ckey)
+			this.sqlMgr.buildUpdateString(this.sqlStr, kv)
 			atomic.AddInt64(&this.sqlMgr.totalUpdateSqlCount, 1)
 		} else if tt == sql_delete {
-			this.sqlMgr.buildDeleteString(this.sqlStr, ckey)
+			this.sqlMgr.buildDeleteString(this.sqlStr, kv)
 			atomic.AddInt64(&this.sqlMgr.totalUpdateSqlCount, 1)
 		}
 
-		kv.setSqlFlag(sql_node)
+		kv.setSqlFlag(sql_none)
 
 		if len(kv.modifyFields) > 0 {
 			kv.modifyFields = map[string]*proto.Field{}
@@ -131,7 +130,7 @@ func (this *sqlUpdater) exec(v interface{}) {
 			if nil == err {
 				break
 			} else {
-				Errorln(this.sqlStr.toString(), err)
+				Errorln(this.sqlStr.ToString(), err)
 				if isRetryError(err) {
 					Errorln("sqlUpdater exec error:", err)
 					if this.sqlMgr.isStoped() {
@@ -139,7 +138,7 @@ func (this *sqlUpdater) exec(v interface{}) {
 						break
 					}
 
-					if !rn.hasLease(rn) {
+					if !rn.hasLease() {
 						//已经失去租约，不能再执行
 						err = errLoseLease
 						break

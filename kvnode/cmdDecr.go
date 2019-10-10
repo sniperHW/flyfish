@@ -22,7 +22,8 @@ func (this *asynCmdTaskDecr) onSqlResp(errno int32) {
 	if !cmd.checkVersion(this.version) {
 		this.errno = errcode.ERR_VERSION_MISMATCH
 	} else {
-		if errno == errcode.ERR_RECORD_NOTFOUND {
+		if errno == errcode.ERR_RECORD_NOTEXIST {
+			this.fields = map[string]*proto.Field{}
 			fillDefaultValue(cmd.getKV().meta, &this.fields)
 			this.sqlFlag = sql_insert
 		} else if errno == errcode.ERR_OK {
@@ -30,7 +31,14 @@ func (this *asynCmdTaskDecr) onSqlResp(errno int32) {
 		}
 		this.errno = errcode.ERR_OK
 		oldV := this.fields[cmd.decr.GetName()]
-		newV := proto.PackField(oldV.GetName(), oldV.GetInt()-cmd.decr.GetInt())
+		var newV *proto.Field
+
+		if oldV.IsInt() {
+			newV = proto.PackField(oldV.GetName(), oldV.GetInt()-cmd.decr.GetInt())
+		} else {
+			newV = proto.PackField(oldV.GetName(), oldV.GetUint()-cmd.decr.GetUint())
+		}
+
 		this.fields[oldV.GetName()] = newV
 		this.version++
 	}
@@ -90,23 +98,29 @@ func (this *cmdDecr) prepare(_ asynCmdTaskI) asynCmdTaskI {
 	status := kv.getStatus()
 
 	if !this.checkVersion(kv.version) {
-		this.reply(errcode.ERR_VERSION, nil, kv.version)
+		this.reply(errcode.ERR_VERSION_MISMATCH, nil, kv.version)
 		return nil
 	}
 
 	task := newAsynCmdTaskDecr(this)
 
 	if status == cache_missing {
+		task.fields = map[string]*proto.Field{}
 		fillDefaultValue(kv.meta, &task.fields)
 		task.sqlFlag = sql_insert
 	} else if status == cache_ok {
+		task.fields = map[string]*proto.Field{}
 		task.sqlFlag = sql_update
 	}
 
 	if status != cache_new {
-
-		oldV := task.fields[cmd.decr.GetName()]
-		newV := proto.PackField(oldV.GetName(), oldV.GetInt()-cmd.decr.GetInt())
+		oldV := kv.fields[this.decr.GetName()]
+		var newV *proto.Field
+		if oldV.IsInt() {
+			newV = proto.PackField(oldV.GetName(), oldV.GetInt()-this.decr.GetInt())
+		} else {
+			newV = proto.PackField(oldV.GetName(), oldV.GetUint()-this.decr.GetUint())
+		}
 		task.fields[oldV.GetName()] = newV
 		task.version++
 	}

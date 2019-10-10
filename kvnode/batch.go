@@ -33,7 +33,7 @@ type commitedBatchProposal struct {
 	tasks *fixedarray.FixedArray
 }
 
-func (this *readBatchSt) onError(err int) {
+func (this *readBatchSt) onError(err int32) {
 	this.tasks.ForEach(func(v interface{}) {
 		v.(asynCmdTaskI).onError(err)
 	})
@@ -48,7 +48,7 @@ func (this *readBatchSt) reply() {
 	fixedArrayPool.Put(this.tasks)
 }
 
-func (this *batchProposal) onError(err int) {
+func (this *batchProposal) onError(err int32) {
 	this.tasks.ForEach(func(v interface{}) {
 		v.(asynTaskI).onError(err)
 	})

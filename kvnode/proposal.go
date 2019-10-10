@@ -3,7 +3,115 @@ package kvnode
 import (
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
+	"github.com/sniperHW/flyfish/util/str"
 )
+
+type proposal struct {
+	tt     int
+	values []interface{}
+}
+
+func appendProposal2Str(s *str.Str, tt int, vaules ...interface{}) {
+	switch tt {
+	case proposal_lease:
+		s.AppendByte(byte(tt))
+		s.AppendInt32(int32(vaules[0].(int)))
+	case proposal_snapshot, proposal_update, proposal_kick:
+		s.AppendByte(byte(tt))
+		unikey := vaules[0].(string)
+		s.AppendInt32(int32(len(unikey)))
+		s.AppendString(unikey)
+		if tt != proposal_kick {
+			version := vaules[1].(int64)
+			s.AppendInt64(version)
+			//fields数量
+			pos := s.Len()
+			s.AppendInt32(int32(0))
+			if len(vaules) == 3 && nil != vaules[2] {
+				fields := vaules[2].(map[string]*proto.Field)
+				c := int32(0)
+				for n, v := range fields {
+					if n != "__version__" {
+						c++
+						s.AppendField(v)
+					}
+				}
+				if c > 0 {
+					s.SetInt32(pos, c)
+				}
+			}
+		}
+	}
+}
+
+func readProposal(s *str.Str) (*proposal, int) {
+	offset := 0
+	var err error
+	var tt byte
+	tt, offset, err = s.ReadByte(offset)
+	if nil != err {
+		return nil, 0
+	}
+
+	p := &proposal{
+		tt: int(tt),
+	}
+
+	switch int(tt) {
+	case proposal_lease:
+		var id int32
+		id, offset, err = s.ReadInt32(offset)
+		if nil != err {
+			return nil, 0
+		}
+		p.values = append(p.values, id)
+		return p, offset
+	case proposal_snapshot, proposal_update, proposal_kick:
+		var unikeyLen int32
+		unikeyLen, offset, err = s.ReadInt32(offset)
+		if nil != err {
+			return nil, 0
+		}
+		var unikey string
+		unikey, offset, err = s.ReadString(offset, int(unikeyLen))
+		if nil != err {
+			return nil, 0
+		}
+		p.values = append(p.values, unikey)
+		if int(tt) == proposal_kick {
+			return p, offset
+		} else {
+			var version int64
+			version, offset, err = s.ReadInt64(offset)
+			if nil != err {
+				return nil, 0
+			}
+			p.values = append(p.values, version)
+			var fieldCount int32
+			fieldCount, offset, err = s.ReadInt32(offset)
+			if nil != err {
+				return nil, 0
+			}
+
+			if fieldCount > 0 {
+				fields := make([]*proto.Field, int(fieldCount))
+				for i := 0; i < int(fieldCount); i++ {
+					var v *proto.Field
+					v, offset, err = s.ReadField(offset)
+					if nil != err {
+						return nil, 0
+					}
+					fields[i] = v
+				}
+				p.values = append(p.values, fields)
+			}
+			return p, offset
+		}
+	default:
+		return nil, 0
+	}
+
+}
 
 func checkAsynCmdTask(task asynCmdTaskI) bool {
 	kv := task.getKV()
@@ -25,11 +133,11 @@ func checkAsynCmdTask(task asynCmdTaskI) bool {
 		}
 	case sql_delete:
 		if taskSqlFlag == sql_insert {
-			sqlFlag == taskSqlFlag
+			sqlFlag = taskSqlFlag
 		} else {
 			return false
 		}
-	case write_back_update:
+	case sql_update:
 		if taskSqlFlag == sql_update || taskSqlFlag == sql_delete {
 			sqlFlag = taskSqlFlag
 		} else {

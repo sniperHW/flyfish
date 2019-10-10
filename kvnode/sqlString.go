@@ -1,10 +1,10 @@
 package kvnode
 
 import (
-	"fmt"
+	//"fmt"
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/util/str"
-	"strconv"
+	//"strconv"
 )
 
 var mysqlByteToString = []string{
@@ -554,32 +554,32 @@ func (this *sqlMgr) buildInsertUpdateStringPgSql(s *str.Str, kv *kv) {
 
 	version := proto.PackField("__version__", kv.version)
 
-	s.AppendString(meta.GetInsertPrefix()).AppendString("'").AppendString(ckey.key).AppendString("',") //add __key__
-	s.AppendFieldStr(version, this.BinaryToSqlStr).AppendString(",")                                   //add __version__
+	s.AppendString(meta.GetInsertPrefix()).AppendString("'").AppendString(kv.key).AppendString("',") //add __key__
+	s.AppendFieldStr(version, this.binaryToSqlStr).AppendString(",")                                 //add __version__
 
-	//add other fileds
+	//add other fields
 	i := 0
 
 	for _, name := range meta.GetInsertOrder() {
-		s.AppendFieldStr(kv.fileds[name], this.BinaryToSqlStr)
-		if i != len(ckey.values)-1 {
+		s.AppendFieldStr(kv.fields[name], this.binaryToSqlStr)
+		if i != len(kv.fields)-1 {
 			s.AppendString(",")
 		}
 		i++
 	}
 	s.AppendString(") ON conflict(__key__)  DO UPDATE SET ")
 	i = 0
-	for _, v := range ckey.fileds {
+	for _, v := range kv.fields {
 		if i == 0 {
-			s.AppendString(v.GetName()).AppendString("=").AppendFieldStr(v, this.BinaryToSqlStr)
+			s.AppendString(v.GetName()).AppendString("=").AppendFieldStr(v, this.binaryToSqlStr)
 		} else {
-			s.AppendString(",").AppendString(v.GetName()).AppendString("=").AppendFieldStr(v, this.BinaryToSqlStr)
+			s.AppendString(",").AppendString(v.GetName()).AppendString("=").AppendFieldStr(v, this.binaryToSqlStr)
 		}
 		i++
 	}
-	s.AppendString(",__version__=").AppendFieldStr(version, this.BinaryToSqlStr)
-	s.AppendString(" where ").AppendString(ckey.table).AppendString(".__key__ = '").AppendString(ckey.key).AppendString("';")
-	Debugln(s.toString())
+	s.AppendString(",__version__=").AppendFieldStr(version, this.binaryToSqlStr)
+	s.AppendString(" where ").AppendString(kv.table).AppendString(".__key__ = '").AppendString(kv.key).AppendString("';")
+	Debugln(s.ToString())
 }
 
 /*
@@ -592,16 +592,16 @@ func (this *sqlMgr) buildInsertUpdateStringMySql(s *str.Str, kv *kv) {
 
 	meta := kv.getMeta()
 
-	version := proto.PackField("__version__", ckey.version)
+	version := proto.PackField("__version__", kv.version)
 
-	s.AppendString(meta.GetInsertPrefix()).AppendString("'").AppendString(ckey.key).AppendString("',") //add __key__
-	s.AppendFieldStr(version, this.BinaryToSqlStr).AppendString(",")                                   //add __version__
+	s.AppendString(meta.GetInsertPrefix()).AppendString("'").AppendString(kv.key).AppendString("',") //add __key__
+	s.AppendFieldStr(version, this.binaryToSqlStr).AppendString(",")                                 //add __version__
 
-	//add other fileds
+	//add other fields
 	i := 0
 	for _, name := range meta.GetInsertOrder() {
-		s.AppendFieldStr(kv.fileds[name], this.BinaryToSqlStr)
-		if i != len(kv.fileds)-1 {
+		s.AppendFieldStr(kv.fields[name], this.binaryToSqlStr)
+		if i != len(kv.fields)-1 {
 			s.AppendString(",")
 		}
 		i++
@@ -610,29 +610,29 @@ func (this *sqlMgr) buildInsertUpdateStringMySql(s *str.Str, kv *kv) {
 	s.AppendString(") on duplicate key update ")
 
 	i = 0
-	for _, v := range ckey.values {
+	for _, v := range kv.fields {
 		if i == 0 {
-			s.AppendString(v.GetName()).AppendString("=").AppendFieldStr(v, this.BinaryToSqlStr)
+			s.AppendString(v.GetName()).AppendString("=").AppendFieldStr(v, this.binaryToSqlStr)
 		} else {
-			s.AppendString(",").AppendString(v.GetName()).AppendString("=").AppendFieldStr(v, this.BinaryToSqlStr)
+			s.AppendString(",").AppendString(v.GetName()).AppendString("=").AppendFieldStr(v, this.binaryToSqlStr)
 		}
 		i++
 	}
-	s.AppendString(",__version__=").AppendFieldStr(version, this.BinaryToSqlStr)
+	s.AppendString(",__version__=").AppendFieldStr(version, this.binaryToSqlStr)
 	s.AppendString(";")
-	Debugln(s.toString())
+	Debugln(s.ToString())
 }
 
 func (this *sqlMgr) buildInsertString(s *str.Str, kv *kv) {
 	meta := kv.getMeta()
 	version := proto.PackField("__version__", kv.version)
 	s.AppendString(meta.GetInsertPrefix()).AppendString("'").AppendString(kv.key).AppendString("',") //add __key__
-	s.AppendFieldStr(version, this.BinaryToSqlStr).AppendString(",")                                 //add __version__
+	s.AppendFieldStr(version, this.binaryToSqlStr).AppendString(",")                                 //add __version__
 
 	i := 0
 	for _, name := range meta.GetInsertOrder() {
-		s.AppendFieldStr(ckey.fileds[name], this.BinaryToSqlStr)
-		if i != len(ckey.fileds)-1 {
+		s.AppendFieldStr(kv.fields[name], this.binaryToSqlStr)
+		if i != len(kv.fields)-1 {
 			s.AppendString(",")
 		}
 		i++
@@ -648,29 +648,29 @@ func (this *sqlMgr) buildUpdateString(s *str.Str, kv *kv) {
 	if len(kv.modifyFields) > 0 {
 		for k, v := range kv.modifyFields {
 			if i == 0 {
-				s.AppendString(k).AppendString("=").AppendFieldStr(v, this.BinaryToSqlStr)
+				s.AppendString(k).AppendString("=").AppendFieldStr(v, this.binaryToSqlStr)
 			} else {
-				s.AppendString(",").AppendString(k).AppendString("=").AppendFieldStr(v, this.BinaryToSqlStr)
+				s.AppendString(",").AppendString(k).AppendString("=").AppendFieldStr(v, this.binaryToSqlStr)
 			}
 			i++
 		}
 	} else {
 
-		for _, v := range kv.fileds {
+		for _, v := range kv.fields {
 			if i == 0 {
-				s.AppendString(v.GetName()).AppendString("=").AppendFieldStr(v, this.BinaryToSqlStr)
+				s.AppendString(v.GetName()).AppendString("=").AppendFieldStr(v, this.binaryToSqlStr)
 			} else {
-				s.AppendString(",").AppendString(v.GetName()).AppendString("=").AppendFieldStr(v, this.BinaryToSqlStr)
+				s.AppendString(",").AppendString(v.GetName()).AppendString("=").AppendFieldStr(v, this.binaryToSqlStr)
 			}
 			i++
 		}
 
 	}
 
-	s.AppendString(",__version__=").AppendFieldStr(version, sqlMgr.BinaryToSqlStr)
+	s.AppendString(",__version__=").AppendFieldStr(version, this.binaryToSqlStr)
 	s.AppendString(" where __key__ = '").AppendString(kv.key).AppendString("';")
 
-	Debugln(s.toString())
+	Debugln(s.ToString())
 }
 
 func (this *sqlMgr) buildDeleteString(s *str.Str, ckey *kv) {

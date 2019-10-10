@@ -3,6 +3,7 @@ package kvnode
 import (
 	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/conf"
+	"github.com/sniperHW/flyfish/dbmeta"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/util/str"
@@ -16,7 +17,7 @@ import (
  */
 type sqlGet struct {
 	table  string
-	meta   *table_meta
+	meta   *dbmeta.TableMeta
 	sqlStr *str.Str
 	tasks  map[string]asynCmdTaskI
 }
@@ -66,14 +67,14 @@ func (this *sqlLoader) append(v interface{}) {
 		if !ok {
 			s = &sqlGet{
 				table:  table,
-				sqlStr: strGet(),
+				sqlStr: str.Get(),
 				tasks:  map[string]asynCmdTaskI{},
 				meta:   kv.getMeta(),
 			}
 			this.sqlGets[table] = s
 		}
 
-		if s.sqlStr.len == 0 {
+		if s.sqlStr.Len() == 0 {
 			s.sqlStr.AppendString(s.meta.GetSelectPrefix()).AppendString("'").AppendString(key).AppendString("'")
 		} else {
 			s.sqlStr.AppendString(",'").AppendString(key).AppendString("'")
@@ -89,7 +90,7 @@ func (this *sqlLoader) append(v interface{}) {
 	}
 }
 
-func (this *sqlLoader) onScanError() {
+func (this *sqlLoader) onSqlError() {
 	for _, v := range this.sqlGets {
 		for _, vv := range v.tasks {
 			vv.onSqlResp(errcode.ERR_SQLERROR)
@@ -109,13 +110,13 @@ func (this *sqlLoader) exec() {
 
 	for _, v := range this.sqlGets {
 		v.sqlStr.AppendString(");")
-		str := v.sqlStr.ToString()
+		s := v.sqlStr.ToString()
 
 		beg := time.Now()
 
-		rows, err := this.db.Query(str)
+		rows, err := this.db.Query(s)
 
-		strPut(v.sqlStr)
+		str.Put(v.sqlStr)
 
 		elapse := time.Now().Sub(beg)
 
@@ -125,9 +126,7 @@ func (this *sqlLoader) exec() {
 
 		if nil != err {
 			Errorln("sqlQueryer exec error:", err, reflect.TypeOf(err).String())
-			for _, vv := range v.ctxs {
-				onSqlExecError(vv)
-			}
+			this.onSqlError()
 		} else {
 
 			defer rows.Close()
@@ -142,8 +141,8 @@ func (this *sqlLoader) exec() {
 				err := rows.Scan(filed_receiver...)
 				if err != nil {
 					Errorln("rows.Scan err", err)
-					queryMeta.PutReceiver(filed_receiver)
-					this.onScanError()
+					queryMeta.PutReceivers(filed_receiver)
+					this.onSqlError()
 					return
 				} else {
 					key := field_convter[0](filed_receiver[0]).(string)
@@ -163,7 +162,7 @@ func (this *sqlLoader) exec() {
 
 			for _, vv := range v.tasks {
 				//无结果
-				vv.onSqlResp(errcode.ERR_NOTFOUND)
+				vv.onSqlResp(errcode.ERR_RECORD_NOTEXIST)
 			}
 			queryMeta.PutReceivers(filed_receiver)
 		}
