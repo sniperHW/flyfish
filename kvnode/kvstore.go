@@ -7,10 +7,10 @@ import (
 	"github.com/sniperHW/flyfish/dbmeta"
 	"github.com/sniperHW/flyfish/proto"
 	futil "github.com/sniperHW/flyfish/util"
-	//"github.com/sniperHW/kendynet/timer"
+	"github.com/sniperHW/kendynet/timer"
 	"github.com/sniperHW/kendynet/util"
 	"go.etcd.io/etcd/etcdserver/api/snap"
-	//"go.etcd.io/etcd/raft/raftpb"
+	"go.etcd.io/etcd/raft/raftpb"
 	//	"math"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/util/str"
@@ -26,9 +26,6 @@ type asynTaskKick struct {
 }
 
 func (this *asynTaskKick) done() {
-	this.kv.Lock()
-	this.kv.setStatus(cache_remove)
-	this.kv.Unlock()
 	this.kv.slot.removeKv(this.kv)
 }
 
@@ -70,6 +67,9 @@ func (this *kvSlot) removeKv(k *kv) {
 	this.store.Unlock()
 
 	this.Lock()
+	k.Lock()
+	k.setStatus(cache_remove)
+	k.Unlock()
 	delete(this.elements, k.uniKey)
 	this.Unlock()
 }
@@ -130,6 +130,7 @@ type kvstore struct {
 	lruHead        kv
 	lruTail        kv
 	storeMgr       *storeMgr
+	lruTimer       *timer.Timer
 }
 
 func (this *kvstore) getKvNode() *KVNode {
@@ -173,7 +174,10 @@ func (this *kvstore) removeLRU(kv *kv) {
 }
 
 func (this *kvstore) doLRU() {
-	if this.rn.isLeader() {
+	this.Lock()
+	defer this.Unlock()
+	//未取得租约时不得执行kick
+	if this.rn.hasLease() {
 		MaxCachePerGroupSize := conf.GetConfig().MaxCachePerGroupSize
 		if this.lruHead.nnext != &this.lruTail {
 			kv := this.lruTail.pprev
@@ -209,9 +213,7 @@ func (this *kvstore) tryKick(kv *kv) bool {
 	}
 
 	if err := this.proposeC.AddNoWait(&asynTaskKick{kv: kv}); nil != err {
-		this.Lock()
 		this.kvKickingCount++
-		this.Unlock()
 		return true
 	} else {
 		kv.Lock()
@@ -235,7 +237,7 @@ func (this *kvstore) apply(data []byte) bool {
 
 		switch p.tt {
 		case proposal_lease:
-			this.rn.lease.update(p.values[0].(int))
+			this.rn.lease.update(this.rn, p.values[0].(int), p.values[1].(uint64))
 		case proposal_snapshot, proposal_update, proposal_kick:
 			unikey := p.values[0].(string)
 			slot := this.slots[futil.StringHash(unikey)%len(this.slots)]
@@ -348,7 +350,7 @@ type kvsnap struct {
 }
 
 func (this *kvsnap) append2Str(s *str.Str) {
-
+	appendProposal2Str(s, proposal_snapshot, this.uniKey, this.version, this.fields)
 }
 
 func (this *kvstore) getSnapshot() [][]*kvsnap {
@@ -479,6 +481,101 @@ func (this *storeMgr) stop() {
 	}
 }
 
-func newStoreMgr(mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta) (*storeMgr, error) {
-	return nil, nil
+func newKVStore(kvNode *KVNode, rn *raftNode, snapshotter *snap.Snapshotter, proposeC *util.BlockQueue, commitC <-chan interface{}, errorC <-chan error, readReqC *util.BlockQueue) *kvstore {
+
+	s := &kvstore{
+		proposeC:    proposeC,
+		slots:       []*kvSlot{},
+		snapshotter: snapshotter,
+		readReqC:    readReqC,
+		rn:          rn,
+		kvNode:      kvNode,
+	}
+
+	for i := 0; i < kvSlotSize; i++ {
+		s.slots = append(s.slots, &kvSlot{
+			elements: map[string]*kv{},
+			tmp:      map[string]*kv{},
+		})
+	}
+
+	s.lruHead.nnext = &s.lruTail
+	s.lruTail.pprev = &s.lruHead
+
+	// replay log into key-value map
+	s.readCommits(true, commitC, errorC)
+	// read commits from raft into kvStore map until error
+
+	s.lruTimer = timer.Repeat(time.Second, nil, func(t *timer.Timer) {
+		s.doLRU()
+	})
+
+	go s.readCommits(false, commitC, errorC)
+	return s
+}
+
+func newStoreMgr(kvnode *KVNode, mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta, id *int, cluster *string, mask int) *storeMgr {
+	mgr := &storeMgr{
+		stores: map[int]*kvstore{},
+		mask:   mask,
+		dbmeta: dbmeta,
+	}
+
+	for i := 1; i <= mask; i++ {
+
+		proposeC := util.NewBlockQueue()
+		confChangeC := make(chan raftpb.ConfChange)
+		readC := util.NewBlockQueue()
+
+		var store *kvstore
+
+		// raft provides a commit stream for the proposals from the http api
+		getSnapshot := func() [][]*kvsnap {
+			if nil == store {
+				return nil
+			}
+			return store.getSnapshot()
+		}
+
+		gotLeaseCb := func() {
+			//获得租约,强制store对所有kv执行一次sql回写
+			for _, v := range store.slots {
+				v.Lock()
+				for _, vv := range v.elements {
+					vv.Lock()
+					if !vv.isWriteBack() {
+						status := vv.getStatus()
+						if status == cache_ok || status == cache_missing {
+							vv.setWriteBack(true)
+							if status == cache_ok {
+								vv.setSqlFlag(sql_insert_update)
+							} else if status == cache_missing {
+								vv.setSqlFlag(sql_delete)
+							}
+							vv.slot.getKvNode().sqlMgr.pushUpdateReq(vv)
+						} else {
+							Errorln("on gotLeaseCb kv in invaild status", vv.uniKey, status)
+						}
+					}
+					vv.Unlock()
+				}
+				v.Unlock()
+			}
+		}
+
+		rn, commitC, errorC, snapshotterReady := newRaftNode(mutilRaft, (*id<<16)+i, strings.Split(*cluster, ","), false, getSnapshot, proposeC, confChangeC, readC, gotLeaseCb)
+
+		store = newKVStore(kvnode, rn, <-snapshotterReady, proposeC, commitC, errorC, readC)
+
+		store.stop = func() {
+			proposeC.Close()
+			close(confChangeC)
+			readC.Close()
+			store.lruTimer.Cancel()
+		}
+
+		mgr.addStore(i, store)
+	}
+
+	return mgr
 }

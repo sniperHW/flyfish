@@ -11,24 +11,25 @@ type proposal struct {
 	values []interface{}
 }
 
-func appendProposal2Str(s *str.Str, tt int, vaules ...interface{}) {
+func appendProposal2Str(s *str.Str, tt int, values ...interface{}) {
 	switch tt {
 	case proposal_lease:
 		s.AppendByte(byte(tt))
-		s.AppendInt32(int32(vaules[0].(int)))
+		s.AppendInt32(int32(values[0].(int)))
+		s.AppendInt64(int64(values[1].(uint64)))
 	case proposal_snapshot, proposal_update, proposal_kick:
 		s.AppendByte(byte(tt))
-		unikey := vaules[0].(string)
+		unikey := values[0].(string)
 		s.AppendInt32(int32(len(unikey)))
 		s.AppendString(unikey)
 		if tt != proposal_kick {
-			version := vaules[1].(int64)
+			version := values[1].(int64)
 			s.AppendInt64(version)
 			//fields数量
 			pos := s.Len()
 			s.AppendInt32(int32(0))
-			if len(vaules) == 3 && nil != vaules[2] {
-				fields := vaules[2].(map[string]*proto.Field)
+			if len(values) == 3 && nil != values[2] {
+				fields := values[2].(map[string]*proto.Field)
 				c := int32(0)
 				for n, v := range fields {
 					if n != "__version__" {
@@ -64,6 +65,15 @@ func readProposal(s *str.Str, offset int) (*proposal, int) {
 			return nil, 0
 		}
 		p.values = append(p.values, id)
+
+		var i64 int64
+		i64, offset, err = s.ReadInt64(offset)
+		if nil != err {
+			return nil, 0
+		}
+
+		p.values = append(p.values, uint64(i64))
+
 		return p, offset
 	case proposal_snapshot, proposal_update, proposal_kick:
 		var unikeyLen int32
@@ -122,16 +132,16 @@ func checkAsynCmdTask(task asynCmdTaskI) bool {
 	switch kv.getSqlFlag() {
 	case sql_none:
 		sqlFlag = taskSqlFlag
-	case sql_insert:
+	case sql_insert_update:
 		if taskSqlFlag == sql_update {
-			sqlFlag = sql_insert
+			sqlFlag = sql_insert_update
 		} else if taskSqlFlag == sql_delete {
 			sqlFlag = sql_delete
 		} else {
 			return false
 		}
 	case sql_delete:
-		if taskSqlFlag == sql_insert {
+		if taskSqlFlag == sql_insert_update {
 			sqlFlag = taskSqlFlag
 		} else {
 			return false
@@ -147,7 +157,7 @@ func checkAsynCmdTask(task asynCmdTaskI) bool {
 	}
 
 	switch sqlFlag {
-	case sql_delete, sql_insert:
+	case sql_delete, sql_insert_update:
 		task.setProposalType(proposal_snapshot)
 	case sql_update:
 		task.setProposalType(proposal_update)

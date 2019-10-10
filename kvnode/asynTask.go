@@ -127,7 +127,7 @@ func (this *asynCmdTaskBase) done() {
 	isTmp := kv.isTmp()
 	sqlFlag := kv.getSqlFlag()
 	switch sqlFlag {
-	case sql_insert, sql_update:
+	case sql_insert_update, sql_update:
 		kv.setOK(this.version, this.fields)
 	case sql_delete:
 		kv.setMissing()

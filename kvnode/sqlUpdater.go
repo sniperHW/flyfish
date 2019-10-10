@@ -104,7 +104,7 @@ func (this *sqlUpdater) exec(v interface{}) {
 		kv.Lock()
 
 		tt := kv.getSqlFlag()
-		if tt == sql_insert {
+		if tt == sql_insert_update {
 			this.sqlMgr.buildInsertUpdateString(this.sqlStr, kv)
 			atomic.AddInt64(&this.sqlMgr.totalUpdateSqlCount, 1)
 		} else if tt == sql_update {

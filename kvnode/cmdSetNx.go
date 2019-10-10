@@ -25,7 +25,7 @@ func (this *asynCmdTaskSetNx) onSqlResp(errno int32) {
 		for k, v := range cmd.fields {
 			this.fields[k] = v
 		}
-		this.sqlFlag = sql_insert
+		this.sqlFlag = sql_insert_update
 		this.version = 1
 		this.getKV().slot.issueUpdate(this)
 	} else {
@@ -85,7 +85,7 @@ func (this *cmdSetNx) prepare(_ asynCmdTaskI) asynCmdTaskI {
 	if status == cache_missing {
 		task.fields = map[string]*proto.Field{}
 		fillDefaultValue(kv.meta, &task.fields)
-		task.sqlFlag = sql_insert
+		task.sqlFlag = sql_insert_update
 		for k, v := range this.fields {
 			task.fields[k] = v
 		}

@@ -163,11 +163,7 @@ func (this *KVNode) Start(id *int, cluster *string) error {
 
 	mutilRaft := newMutilRaft()
 
-	this.storeMgr, err = newStoreMgr(mutilRaft, dbmeta)
-
-	if nil != err {
-		return err
-	}
+	this.storeMgr = newStoreMgr(this, mutilRaft, dbmeta, id, cluster, config.CacheGroupSize)
 
 	go mutilRaft.serveMutilRaft(clusterArray[*id-1])
 

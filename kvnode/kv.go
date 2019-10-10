@@ -21,10 +21,10 @@ const (
 )
 
 const (
-	sql_none   = uint32(0)
-	sql_insert = uint32(1)
-	sql_update = uint32(2)
-	sql_delete = uint32(3)
+	sql_none          = uint32(0)
+	sql_insert_update = uint32(1)
+	sql_update        = uint32(2)
+	sql_delete        = uint32(3)
 )
 
 const (

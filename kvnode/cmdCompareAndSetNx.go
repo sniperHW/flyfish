@@ -21,7 +21,7 @@ func (this *asynCmdTaskCompareAndSetNx) onSqlResp(errno int32) {
 	if errno == errcode.ERR_RECORD_NOTEXIST {
 		this.fields = map[string]*proto.Field{}
 		fillDefaultValue(cmd.getKV().meta, &this.fields)
-		this.sqlFlag = sql_insert
+		this.sqlFlag = sql_insert_update
 		this.fields[cmd.newV.GetName()] = cmd.newV
 		this.getKV().slot.issueUpdate(this)
 	} else if errno == errcode.ERR_OK {
@@ -112,7 +112,7 @@ func (this *cmdCompareAndSetNx) prepare(_ asynCmdTaskI) asynCmdTaskI {
 		task.version = kv.version + 1
 	} else if status == cache_missing {
 		task.version = 1
-		task.sqlFlag = sql_insert
+		task.sqlFlag = sql_insert_update
 		task.fields = map[string]*proto.Field{}
 		fillDefaultValue(this.getKV().meta, &task.fields)
 		task.fields[this.newV.GetName()] = this.newV

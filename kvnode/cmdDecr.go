@@ -25,7 +25,7 @@ func (this *asynCmdTaskDecr) onSqlResp(errno int32) {
 		if errno == errcode.ERR_RECORD_NOTEXIST {
 			this.fields = map[string]*proto.Field{}
 			fillDefaultValue(cmd.getKV().meta, &this.fields)
-			this.sqlFlag = sql_insert
+			this.sqlFlag = sql_insert_update
 		} else if errno == errcode.ERR_OK {
 			this.sqlFlag = sql_update
 		}
@@ -107,7 +107,7 @@ func (this *cmdDecr) prepare(_ asynCmdTaskI) asynCmdTaskI {
 	if status == cache_missing {
 		task.fields = map[string]*proto.Field{}
 		fillDefaultValue(kv.meta, &task.fields)
-		task.sqlFlag = sql_insert
+		task.sqlFlag = sql_insert_update
 	} else if status == cache_ok {
 		task.fields = map[string]*proto.Field{}
 		task.sqlFlag = sql_update

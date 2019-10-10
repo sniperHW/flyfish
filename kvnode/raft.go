@@ -100,8 +100,12 @@ type raftNode struct {
 	readIndex int64
 	lease     *lease
 
-	cbBecomeLeader   func()
-	cbLoseLeaderShip func()
+	term uint64
+
+	gotLeaseCb func()
+
+	//cbBecomeLeader   func()
+	//cbLoseLeaderShip func()
 }
 
 var defaultSnapshotCount uint64 = 10000
@@ -112,7 +116,7 @@ var defaultSnapshotCount uint64 = 10000
 // commit channel, followed by a nil message (to indicate the channel is
 // current), then new log entries. To shutdown, close proposeC and read errorC.
 func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSnapshot func() [][]*kvsnap, proposeC *util.BlockQueue,
-	confChangeC <-chan raftpb.ConfChange, readC *util.BlockQueue, onBecomeLeader func(), onLoseLeadership func()) (*raftNode, <-chan interface{}, <-chan error, <-chan *snap.Snapshotter) {
+	confChangeC <-chan raftpb.ConfChange, readC *util.BlockQueue, gotLeaseCb func()) (*raftNode, <-chan interface{}, <-chan error, <-chan *snap.Snapshotter) {
 
 	/*
 	 *  如果commitC设置成无缓冲，则raftNode会等待上层提取commitedEntry之后才继续后续处理。
@@ -150,9 +154,7 @@ func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSna
 		proposePipeline: proposeC,
 		readPipeline:    readC,
 		lease:           &lease{stop: nil},
-
-		cbBecomeLeader:   onBecomeLeader,
-		cbLoseLeaderShip: onLoseLeadership,
+		gotLeaseCb:      gotLeaseCb,
 
 		// rest of structure populated after WAL replay
 	}
@@ -167,6 +169,12 @@ func (rc *raftNode) isLeader() bool {
 	defer rc.muLeader.Unlock()
 	//Infoln("isLeader", rc.leader == rc.id, rc.leader, rc.id)
 	return rc.leader == rc.id
+}
+
+func (rc *raftNode) getTerm() uint64 {
+	rc.muLeader.Lock()
+	defer rc.muLeader.Unlock()
+	return rc.term
 }
 
 func readWALNames(dirpath string) []string {
@@ -609,7 +617,7 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 func (rc *raftNode) onLoseLeadership() {
 
 	rc.lease.loseLeaderShip()
-	rc.cbLoseLeaderShip()
+	//rc.cbLoseLeaderShip()
 
 	rc.muPendingPropose.Lock()
 	pendingPropose := rc.pendingPropose
@@ -905,6 +913,7 @@ func (rc *raftNode) serveChannels() {
 				rc.muLeader.Lock()
 				oldLeader := rc.leader
 				rc.leader = int(rd.SoftState.Lead)
+				rc.term = rd.HardState.Term
 				rc.muLeader.Unlock()
 
 				if oldLeader == rc.id && rc.leader != rc.id {
@@ -914,7 +923,7 @@ func (rc *raftNode) serveChannels() {
 
 				if rc.leader == rc.id {
 					rc.lease.becomeLeader(rc)
-					rc.cbBecomeLeader()
+					//rc.cbBecomeLeader()
 				}
 
 			}
@@ -963,12 +972,17 @@ func (rc *raftNode) serveChannels() {
 
 func (rc *raftNode) renew() {
 	rc.proposePipeline.AddNoWait(&asynTaskLease{
-		rn: rc,
+		rn:   rc,
+		term: rc.getTerm(),
 	})
 }
 
 func (rc *raftNode) hasLease() bool {
 	return rc.lease.hasLease(rc)
+}
+
+func (rc *raftNode) gotLease() {
+	rc.gotLeaseCb()
 }
 
 func (rc *raftNode) Process(ctx context.Context, m raftpb.Message) error {

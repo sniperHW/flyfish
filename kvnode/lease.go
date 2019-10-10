@@ -25,11 +25,14 @@ const (
 )
 
 type asynTaskLease struct {
-	rn *raftNode
+	rn   *raftNode
+	term uint64
 }
 
 func (this *asynTaskLease) done() {
-	this.rn.lease.update(this.rn.id)
+	if this.rn.lease.update(this.rn, this.rn.id, this.term) {
+		this.rn.gotLease()
+	}
 }
 
 func (this *asynTaskLease) onError(errno int32) {
@@ -37,7 +40,7 @@ func (this *asynTaskLease) onError(errno int32) {
 }
 
 func (this *asynTaskLease) append2Str(s *str.Str) {
-	appendProposal2Str(s, proposal_lease, this.rn.id)
+	appendProposal2Str(s, proposal_lease, this.rn.id, this.rn.getTerm())
 }
 
 func (this *asynTaskLease) onPorposeTimeout() {
@@ -46,6 +49,7 @@ func (this *asynTaskLease) onPorposeTimeout() {
 
 type lease struct {
 	sync.Mutex
+	term      uint64
 	owner     int //当前租约持有者
 	startTime time.Time
 	stop      chan struct{}
@@ -74,7 +78,7 @@ func (l *lease) isTimeout() bool {
 func (l *lease) hasLease(rn *raftNode) bool {
 	l.Lock()
 	defer l.Unlock()
-	if l.owner != rn.id {
+	if l.owner != rn.id || l.term != rn.getTerm() {
 		return false
 	}
 	elapse := time.Now().Sub(l.startTime)
@@ -84,14 +88,15 @@ func (l *lease) hasLease(rn *raftNode) bool {
 	return true
 }
 
-//更新租约
-func (l *lease) update(id int) int {
+//更新租约,返回rn是否获得租约(非续约)
+func (l *lease) update(rn *raftNode, id int, term uint64) bool {
 	l.Lock()
 	defer l.Unlock()
-	old := l.owner
+	oldTerm := l.term
+	l.term = term
 	l.owner = id
 	l.startTime = time.Now()
-	return old
+	return rn.id == id && oldTerm != term
 }
 
 func (l *lease) wait(stop chan struct{}, second time.Duration) {
