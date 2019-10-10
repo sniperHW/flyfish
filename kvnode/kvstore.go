@@ -26,6 +26,9 @@ type asynTaskKick struct {
 }
 
 func (this *asynTaskKick) done() {
+	k.Lock()
+	k.setStatus(cache_remove)
+	k.Unlock()
 	this.kv.slot.removeKv(this.kv)
 }
 
@@ -67,9 +70,6 @@ func (this *kvSlot) removeKv(k *kv) {
 	this.store.Unlock()
 
 	this.Lock()
-	k.Lock()
-	k.setStatus(cache_remove)
-	k.Unlock()
 	delete(this.elements, k.uniKey)
 	this.Unlock()
 }
@@ -553,8 +553,6 @@ func newStoreMgr(kvnode *KVNode, mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta, id
 								vv.setSqlFlag(sql_delete)
 							}
 							vv.slot.getKvNode().sqlMgr.pushUpdateReq(vv)
-						} else {
-							Errorln("on gotLeaseCb kv in invaild status", vv.uniKey, status)
 						}
 					}
 					vv.Unlock()
