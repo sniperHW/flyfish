@@ -143,3 +143,41 @@ func newSqlMgr() (*sqlMgr, error) {
 
 	return sqlMgr, nil
 }
+
+func loadMetaString() ([]string, error) {
+	var db *sqlx.DB
+	var err error
+	dbConfig := conf.GetConfig().DBConfig
+
+	db, err = sqlOpen(dbConfig.SqlType, dbConfig.ConfDbHost, dbConfig.ConfDbPort, dbConfig.ConfDataBase, dbConfig.ConfDbUser, dbConfig.ConfDbPassword)
+
+	if nil != err {
+		return nil, err
+	} else {
+
+		rows, err := db.Query("select __table__,__conf__ from table_conf")
+
+		if nil != err {
+			return nil, err
+		}
+		defer rows.Close()
+
+		metaString := []string{}
+
+		for rows.Next() {
+			var __table__ string
+			var __conf__ string
+
+			err := rows.Scan(&__table__, &__conf__)
+
+			if nil != err {
+				return nil, err
+			}
+
+			metaString = append(metaString, fmt.Sprintf("%s@%s", __table__, __conf__))
+		}
+
+		return metaString, nil
+	}
+
+}

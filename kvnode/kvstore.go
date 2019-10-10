@@ -479,6 +479,6 @@ func (this *storeMgr) stop() {
 	}
 }
 
-func newStoreMgr(mutilRaft *mutilRaft) (*storeMgr, error) {
+func newStoreMgr(mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta) (*storeMgr, error) {
 	return nil, nil
 }

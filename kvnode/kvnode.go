@@ -6,6 +6,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	codec "github.com/sniperHW/flyfish/codec"
 	"github.com/sniperHW/flyfish/conf"
+	"github.com/sniperHW/flyfish/dbmeta"
 	protocol "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/socket/listener/tcp"
@@ -135,6 +136,17 @@ func (this *KVNode) Start(id *int, cluster *string) error {
 
 	config := conf.GetConfig()
 
+	dbMetaStr, err := loadMetaString()
+	if nil != err {
+		return err
+	}
+
+	dbmeta, err := dbmeta.NewDBMeta(dbMetaStr)
+
+	if nil != err {
+		return err
+	}
+
 	this.listener, err = tcp.New("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort))
 
 	if nil != err {
@@ -151,7 +163,7 @@ func (this *KVNode) Start(id *int, cluster *string) error {
 
 	mutilRaft := newMutilRaft()
 
-	this.storeMgr, err = newStoreMgr(mutilRaft)
+	this.storeMgr, err = newStoreMgr(mutilRaft, dbmeta)
 
 	if nil != err {
 		return err

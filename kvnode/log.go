@@ -16,7 +16,7 @@ func InitLogger() {
 	if !logConfig.EnableLogStdout {
 		golog.DisableStdOut()
 	}
-	fullname := "flyfishd"
+	fullname := "kvserver"
 
 	fmt.Println(logConfig.LogDir, logConfig.LogPrefix)
 
