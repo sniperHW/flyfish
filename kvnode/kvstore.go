@@ -2,18 +2,16 @@ package kvnode
 
 import (
 	"fmt"
-	//"encoding/binary"
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/dbmeta"
+	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
 	futil "github.com/sniperHW/flyfish/util"
+	"github.com/sniperHW/flyfish/util/str"
 	"github.com/sniperHW/kendynet/timer"
 	"github.com/sniperHW/kendynet/util"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	"go.etcd.io/etcd/raft/raftpb"
-	//	"math"
-	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/util/str"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -75,9 +73,14 @@ func (this *kvSlot) removeKv(k *kv) {
 }
 
 func (this *kvSlot) removeTmpKv(k *kv) {
+
+	this.store.Lock()
+	this.store.tmpkvcount--
+	this.store.Unlock()
+
 	this.Lock()
-	defer this.Unlock()
 	delete(this.tmp, k.uniKey)
+	this.Unlock()
 }
 
 func (this *kvSlot) getRaftNode() *raftNode {
@@ -111,6 +114,7 @@ func (this *kvSlot) moveTmpkv2OK(kv *kv) {
 
 	this.store.Lock()
 	this.store.kvcount++
+	this.store.tmpkvcount--
 	this.store.updateLRU(kv)
 	this.store.Unlock()
 }
@@ -118,11 +122,12 @@ func (this *kvSlot) moveTmpkv2OK(kv *kv) {
 // a key-value store backed by raft
 type kvstore struct {
 	sync.Mutex
-	proposeC       *util.BlockQueue
-	readReqC       *util.BlockQueue
-	snapshotter    *snap.Snapshotter
+	proposeC *util.BlockQueue
+	readReqC *util.BlockQueue
+	//snapshotter    *snap.Snapshotter
 	slots          []*kvSlot
 	kvcount        int //所有slot中len(elements)的总和
+	tmpkvcount     int
 	kvKickingCount int //当前正在执行kicking的kv数量
 	kvNode         *KVNode
 	stop           func()
@@ -314,7 +319,7 @@ func (this *kvstore) apply(data []byte) bool {
 	return true
 }
 
-func (this *kvstore) readCommits(once bool, commitC <-chan interface{}, errorC <-chan error) {
+func (this *kvstore) readCommits(once bool, snapshotter *snap.Snapshotter, commitC <-chan interface{}, errorC <-chan error) {
 
 	for e := range commitC {
 		switch e.(type) {
@@ -323,7 +328,7 @@ func (this *kvstore) readCommits(once bool, commitC <-chan interface{}, errorC <
 			if data == replaySnapshot {
 				// done replaying log; new data incoming
 				// OR signaled to load snapshot
-				snapshot, err := this.snapshotter.Load()
+				snapshot, err := snapshotter.Load()
 				if err == snap.ErrNoSnapshot {
 					return
 				}
@@ -351,6 +356,18 @@ func (this *kvstore) readCommits(once bool, commitC <-chan interface{}, errorC <
 
 	if err, ok := <-errorC; ok {
 		Fatalln(err)
+	}
+}
+
+func (this *kvstore) checkKvCount() bool {
+	MaxCachePerGroupSize := conf.GetConfig().MaxCachePerGroupSize
+	this.Lock()
+	defer this.Unlock()
+
+	if this.kvcount+this.tmpkvcount > MaxCachePerGroupSize+MaxCachePerGroupSize/4 {
+		return false
+	} else {
+		return true
 	}
 }
 
@@ -412,6 +429,34 @@ func (this *kvstore) getSnapshot() [][]*kvsnap {
 
 }
 
+func (this *kvstore) gotLease() {
+	this.Lock()
+	Infoln("got lease", this.kvcount)
+	this.Unlock()
+	//获得租约,强制store对所有kv执行一次sql回写
+	for _, v := range this.slots {
+		v.Lock()
+		for _, vv := range v.elements {
+			vv.Lock()
+			if !vv.isWriteBack() {
+				status := vv.getStatus()
+				if status == cache_ok || status == cache_missing {
+					vv.setWriteBack(true)
+					if status == cache_ok {
+						vv.setSqlFlag(sql_insert_update)
+					} else if status == cache_missing {
+						vv.setSqlFlag(sql_delete)
+					}
+					Debugln("pushUpdateReq")
+					this.kvNode.sqlMgr.pushUpdateReq(vv)
+				}
+			}
+			vv.Unlock()
+		}
+		v.Unlock()
+	}
+}
+
 type storeMgr struct {
 	sync.RWMutex
 	stores map[int]*kvstore
@@ -419,12 +464,12 @@ type storeMgr struct {
 	dbmeta *dbmeta.DBMeta
 }
 
-func (this *storeMgr) getkv(table string, key string) (*kv, error) {
+func (this *storeMgr) getkv(table string, key string) (*kv, int32) {
 
 	uniKey := makeUniKey(table, key)
 
 	var k *kv
-	var err error
+	var err int32 = errcode.ERR_OK
 	var ok bool
 
 	store := this.getStore(uniKey)
@@ -444,19 +489,28 @@ func (this *storeMgr) getkv(table string, key string) (*kv, error) {
 					atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&k.meta)), unsafe.Pointer(newMeta))
 				} else {
 					//log error
-					err = fmt.Errorf("missing table meta")
+					err = errcode.ERR_INVAILD_TABLE
 				}
 			}
 		} else {
-			meta := this.dbmeta.GetTableMeta(table)
-			if meta == nil {
-				err = fmt.Errorf("missing table meta")
+			if !store.checkKvCount() {
+				//容量限制，不允许再插入新的kv
+				err = errcode.ERR_BUSY
 			} else {
-				k = newkv(slot, meta, key, uniKey, true)
-				slot.tmp[uniKey] = k
+
+				meta := this.dbmeta.GetTableMeta(table)
+				if meta == nil {
+					//err = fmt.Errorf("missing table meta")
+					err = errcode.ERR_INVAILD_TABLE
+				} else {
+					k = newkv(slot, meta, key, uniKey, true)
+					slot.tmp[uniKey] = k
+					store.Lock()
+					store.tmpkvcount++
+					store.Unlock()
+				}
 			}
 		}
-
 		slot.Unlock()
 	} else {
 		fmt.Println("store == nil")
@@ -494,6 +548,44 @@ func (this *storeMgr) stop() {
 	}
 }
 
+func newKVStore(storeMgr *storeMgr, kvNode *KVNode, proposeC *util.BlockQueue, readReqC *util.BlockQueue) *kvstore {
+
+	s := &kvstore{
+		proposeC: proposeC,
+		slots:    []*kvSlot{},
+		//snapshotter: snapshotter,
+		readReqC: readReqC,
+		//rn:          rn,
+		kvNode:   kvNode,
+		storeMgr: storeMgr,
+	}
+
+	for i := 0; i < kvSlotSize; i++ {
+		s.slots = append(s.slots, &kvSlot{
+			elements: map[string]*kv{},
+			tmp:      map[string]*kv{},
+			store:    s,
+		})
+	}
+
+	s.lruHead.nnext = &s.lruTail
+	s.lruTail.pprev = &s.lruHead
+
+	return s
+
+	// replay log into key-value map
+	//s.readCommits(true, commitC, errorC)
+	// read commits from raft into kvStore map until error
+
+	//s.lruTimer = timer.Repeat(time.Second, nil, func(t *timer.Timer) {
+	//	s.doLRU()
+	//})
+
+	//go s.readCommits(false, commitC, errorC)
+	//return s
+}
+
+/*
 func newKVStore(storeMgr *storeMgr, kvNode *KVNode, rn *raftNode, snapshotter *snap.Snapshotter, proposeC *util.BlockQueue, commitC <-chan interface{}, errorC <-chan error, readReqC *util.BlockQueue) *kvstore {
 
 	s := &kvstore{
@@ -527,7 +619,7 @@ func newKVStore(storeMgr *storeMgr, kvNode *KVNode, rn *raftNode, snapshotter *s
 
 	go s.readCommits(false, commitC, errorC)
 	return s
-}
+}*/
 
 func newStoreMgr(kvnode *KVNode, mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta, id *int, cluster *string, mask int) *storeMgr {
 	mgr := &storeMgr{
@@ -542,45 +634,15 @@ func newStoreMgr(kvnode *KVNode, mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta, id
 		confChangeC := make(chan raftpb.ConfChange)
 		readC := util.NewBlockQueue()
 
-		var store *kvstore
+		store := newKVStore(mgr, kvnode, proposeC, readC)
 
-		// raft provides a commit stream for the proposals from the http api
-		getSnapshot := func() [][]*kvsnap {
-			if nil == store {
-				return nil
-			}
-			return store.getSnapshot()
-		}
+		rn, commitC, errorC, snapshotterReady := newRaftNode(store, mutilRaft, (*id<<16)+i, strings.Split(*cluster, ","), false, proposeC, confChangeC, readC)
 
-		gotLeaseCb := func() {
-			Infoln("got lease")
-			//获得租约,强制store对所有kv执行一次sql回写
-			for _, v := range store.slots {
-				v.Lock()
-				for _, vv := range v.elements {
-					vv.Lock()
-					if !vv.isWriteBack() {
-						status := vv.getStatus()
-						if status == cache_ok || status == cache_missing {
-							vv.setWriteBack(true)
-							if status == cache_ok {
-								vv.setSqlFlag(sql_insert_update)
-							} else if status == cache_missing {
-								vv.setSqlFlag(sql_delete)
-							}
-							Debugln("pushUpdateReq")
-							vv.slot.getKvNode().sqlMgr.pushUpdateReq(vv)
-						}
-					}
-					vv.Unlock()
-				}
-				v.Unlock()
-			}
-		}
+		store.rn = rn
 
-		rn, commitC, errorC, snapshotterReady := newRaftNode(mutilRaft, (*id<<16)+i, strings.Split(*cluster, ","), false, getSnapshot, proposeC, confChangeC, readC, gotLeaseCb)
-
-		store = newKVStore(mgr, kvnode, rn, <-snapshotterReady, proposeC, commitC, errorC, readC)
+		store.lruTimer = timer.Repeat(time.Second, nil, func(t *timer.Timer) {
+			store.doLRU()
+		})
 
 		store.stop = func() {
 			proposeC.Close()
@@ -588,6 +650,12 @@ func newStoreMgr(kvnode *KVNode, mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta, id
 			readC.Close()
 			store.lruTimer.Cancel()
 		}
+
+		snapshotter := <-snapshotterReady
+
+		store.readCommits(true, snapshotter, commitC, errorC)
+
+		go store.readCommits(false, snapshotter, commitC, errorC)
 
 		mgr.addStore(i, store)
 	}

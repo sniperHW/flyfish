@@ -18,8 +18,6 @@ ReplyBusyOnQueueFull    = false                #当处理队列满时是否用bu
 
 Compress                = false                #是否开启通信压缩
 
-BatchByteSize           = 148576
-BatchCount              = 200 
 ProposalFlushInterval   = 100
 ReadFlushInterval       = 10
 

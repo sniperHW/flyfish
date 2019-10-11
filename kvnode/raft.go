@@ -54,13 +54,12 @@ type raftNode struct {
 	nodeID int
 	region int
 
-	id          int      // client ID for raft session
-	peers       []string // raft peer URLs
-	join        bool     // node is joining an existing cluster
-	waldir      string   // path to WAL directory
-	snapdir     string   // path to snapshot directory
-	getSnapshot func() [][]*kvsnap
-	lastIndex   uint64 // index of log at start
+	id        int      // client ID for raft session
+	peers     []string // raft peer URLs
+	join      bool     // node is joining an existing cluster
+	waldir    string   // path to WAL directory
+	snapdir   string   // path to snapshot directory
+	lastIndex uint64   // index of log at start
 
 	confState     raftpb.ConfState
 	snapshotIndex uint64
@@ -104,6 +103,8 @@ type raftNode struct {
 
 	gotLeaseCb func()
 
+	kvstore *kvstore
+
 	//cbBecomeLeader   func()
 	//cbLoseLeaderShip func()
 }
@@ -115,8 +116,8 @@ var defaultSnapshotCount uint64 = 10000
 // provided the proposal channel. All log entries are replayed over the
 // commit channel, followed by a nil message (to indicate the channel is
 // current), then new log entries. To shutdown, close proposeC and read errorC.
-func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSnapshot func() [][]*kvsnap, proposeC *util.BlockQueue,
-	confChangeC <-chan raftpb.ConfChange, readC *util.BlockQueue, gotLeaseCb func()) (*raftNode, <-chan interface{}, <-chan error, <-chan *snap.Snapshotter) {
+func newRaftNode(kvstore *kvstore, mutilRaft *mutilRaft, id int, peers []string, join bool, proposeC *util.BlockQueue,
+	confChangeC <-chan raftpb.ConfChange, readC *util.BlockQueue) (*raftNode, <-chan interface{}, <-chan error, <-chan *snap.Snapshotter) {
 
 	/*
 	 *  如果commitC设置成无缓冲，则raftNode会等待上层提取commitedEntry之后才继续后续处理。
@@ -139,7 +140,6 @@ func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSna
 		join:             join,
 		waldir:           fmt.Sprintf("kv-%d-%d", nodeID, region),
 		snapdir:          fmt.Sprintf("kv-%d-%d-snap", nodeID, region),
-		getSnapshot:      getSnapshot,
 		snapCount:        defaultSnapshotCount,
 		stopc:            make(chan struct{}),
 		snapshotterReady: make(chan *snap.Snapshotter, 1),
@@ -148,13 +148,13 @@ func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSna
 		mutilRaft:        mutilRaft,
 		nodeID:           nodeID,
 		region:           region,
+		kvstore:          kvstore,
 
 		pendingRead: list.New(),
 
 		proposePipeline: proposeC,
 		readPipeline:    readC,
 		lease:           &lease{stop: nil},
-		gotLeaseCb:      gotLeaseCb,
 
 		// rest of structure populated after WAL replay
 	}
@@ -325,8 +325,6 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 					committedEntry.tasks = front.Value.(*batchProposal).tasks
 					str.Put(front.Value.(*batchProposal).proposalStr)
 					rc.pendingPropose.Remove(front)
-				} else {
-					Infoln("index not match", index, front.Value.(*batchProposal).index)
 				}
 			}
 			rc.muPendingPropose.Unlock()
@@ -568,7 +566,7 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 		return
 	}
 
-	clone := rc.getSnapshot()
+	clone := rc.kvstore.getSnapshot()
 
 	if nil == clone {
 		return

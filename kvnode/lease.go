@@ -31,8 +31,8 @@ type asynTaskLease struct {
 
 func (this *asynTaskLease) done() {
 	if this.rn.lease.update(this.rn, this.rn.id, this.term) {
-		Debugln("asynTaskLease.done()", this.rn.hasLease())
-		this.rn.gotLease()
+		this.rn.hasLease()
+		this.rn.kvstore.gotLease()
 	}
 }
 

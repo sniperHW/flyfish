@@ -138,11 +138,12 @@ func set(n *KVNode, cli *cliConn, msg *codec.Message) {
 		return
 	}
 
-	kv, _ := n.storeMgr.getkv(head.GetTable(), head.GetKey())
+	var kv *kv
 
-	if nil == kv {
-		Errorln(head.GetTable(), head.GetKey())
-		op.reply(errcode.ERR_INVAILD_TABLE, nil, 0)
+	kv, err = n.storeMgr.getkv(head.GetTable(), head.GetKey())
+
+	if errcode.ERR_OK != err {
+		op.reply(err, nil, 0)
 		return
 	}
 
