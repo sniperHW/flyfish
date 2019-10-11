@@ -429,6 +429,34 @@ func (this *kvstore) getSnapshot() [][]*kvsnap {
 
 }
 
+func (this *kvstore) gotLease() {
+	this.Lock()
+	Infoln("got lease", this.kvcount)
+	this.Unlock()
+	//获得租约,强制store对所有kv执行一次sql回写
+	for _, v := range this.slots {
+		v.Lock()
+		for _, vv := range v.elements {
+			vv.Lock()
+			if !vv.isWriteBack() {
+				status := vv.getStatus()
+				if status == cache_ok || status == cache_missing {
+					vv.setWriteBack(true)
+					if status == cache_ok {
+						vv.setSqlFlag(sql_insert_update)
+					} else if status == cache_missing {
+						vv.setSqlFlag(sql_delete)
+					}
+					Debugln("pushUpdateReq")
+					this.kvNode.sqlMgr.pushUpdateReq(vv)
+				}
+			}
+			vv.Unlock()
+		}
+		v.Unlock()
+	}
+}
+
 type storeMgr struct {
 	sync.RWMutex
 	stores map[int]*kvstore
@@ -608,43 +636,7 @@ func newStoreMgr(kvnode *KVNode, mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta, id
 
 		store := newKVStore(mgr, kvnode, proposeC, readC)
 
-		// raft provides a commit stream for the proposals from the http api
-		getSnapshot := func() [][]*kvsnap {
-			if nil == store {
-				return nil
-			}
-			return store.getSnapshot()
-		}
-
-		gotLeaseCb := func() {
-			store.Lock()
-			Infoln("got lease", store.kvcount)
-			store.Unlock()
-			//获得租约,强制store对所有kv执行一次sql回写
-			for _, v := range store.slots {
-				v.Lock()
-				for _, vv := range v.elements {
-					vv.Lock()
-					if !vv.isWriteBack() {
-						status := vv.getStatus()
-						if status == cache_ok || status == cache_missing {
-							vv.setWriteBack(true)
-							if status == cache_ok {
-								vv.setSqlFlag(sql_insert_update)
-							} else if status == cache_missing {
-								vv.setSqlFlag(sql_delete)
-							}
-							Debugln("pushUpdateReq")
-							vv.slot.getKvNode().sqlMgr.pushUpdateReq(vv)
-						}
-					}
-					vv.Unlock()
-				}
-				v.Unlock()
-			}
-		}
-
-		rn, commitC, errorC, snapshotterReady := newRaftNode(mutilRaft, (*id<<16)+i, strings.Split(*cluster, ","), false, getSnapshot, proposeC, confChangeC, readC, gotLeaseCb)
+		rn, commitC, errorC, snapshotterReady := newRaftNode(store, mutilRaft, (*id<<16)+i, strings.Split(*cluster, ","), false, proposeC, confChangeC, readC)
 
 		store.rn = rn
 
