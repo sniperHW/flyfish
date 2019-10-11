@@ -4,11 +4,10 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"github.com/jmoiron/sqlx"
+	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/util/str"
 	"github.com/sniperHW/kendynet/util"
 	"net"
-	//"sync"
-	"github.com/sniperHW/flyfish/proto"
 	"sync/atomic"
 	"time"
 )
@@ -31,7 +30,7 @@ func newSqlUpdater(sqlMgr *sqlMgr, db *sqlx.DB, name string) *sqlUpdater {
 		db:        db,
 		sqlMgr:    sqlMgr,
 		localList: []interface{}{},
-		sqlStr:    str.NewStr(make([]byte, 1024*1024), 1024*1024),
+		sqlStr:    str.NewStr(make([]byte, 1024*1024), 0),
 	}
 }
 
@@ -88,9 +87,10 @@ func (this *sqlUpdater) exec(v interface{}) {
 			}
 			this.lastTime = time.Now()
 		}
-	case asynCmdTaskI:
-		task := v.(asynCmdTaskI)
-		kv := task.getKV()
+	case *kv:
+
+		kv := v.(*kv)
+
 		rn := kv.slot.getRaftNode()
 
 		if !rn.hasLease() {
@@ -98,6 +98,9 @@ func (this *sqlUpdater) exec(v interface{}) {
 			kv.Lock()
 			kv.setWriteBack(false)
 			kv.Unlock()
+
+			Debugln("no lease")
+
 			return
 		}
 
@@ -126,11 +129,12 @@ func (this *sqlUpdater) exec(v interface{}) {
 		var err error
 
 		for {
-			_, err = this.db.Exec(this.sqlStr.ToString())
+			str := this.sqlStr.ToString()
+			_, err = this.db.Exec(str)
 			if nil == err {
 				break
 			} else {
-				Errorln(this.sqlStr.ToString(), err)
+				Errorln(str, err)
 				if isRetryError(err) {
 					Errorln("sqlUpdater exec error:", err)
 					if this.sqlMgr.isStoped() {
@@ -153,6 +157,8 @@ func (this *sqlUpdater) exec(v interface{}) {
 			}
 		}
 
+		Debugln("onSqlResult", err)
+
 		this.onSqlResult(kv, err)
 	}
 }
@@ -160,6 +166,7 @@ func (this *sqlUpdater) exec(v interface{}) {
 func (this *sqlUpdater) run() {
 	for {
 		closed, localList := this.queue.Get()
+
 		for _, v := range localList {
 			this.exec(v)
 		}

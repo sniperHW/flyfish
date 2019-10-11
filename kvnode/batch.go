@@ -6,13 +6,9 @@ import (
 	"time"
 )
 
-var fixedArrayPool *fixedarray.FixedArrayPool
+var fixedArrayPool *fixedarray.FixedArrayPool = fixedarray.NewPool(100)
 var replayOK *commitedBatchProposal = &commitedBatchProposal{}
 var replaySnapshot *commitedBatchProposal = &commitedBatchProposal{}
-
-func initFixedArrayPool(size int) {
-	fixedArrayPool = fixedarray.NewPool(size)
-}
 
 //for linearizableRead
 
@@ -43,7 +39,7 @@ func (this *readBatchSt) onError(err int32) {
 func (this *readBatchSt) reply() {
 	this.tasks.ForEach(func(v interface{}) {
 		v.(asynCmdTaskI).reply()
-		v.(asynCmdTaskI).getKV().processQueueCmd()
+		v.(asynCmdTaskI).getKV().processQueueCmd(true)
 	})
 	fixedArrayPool.Put(this.tasks)
 }

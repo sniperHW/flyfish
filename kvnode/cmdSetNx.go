@@ -89,7 +89,7 @@ func (this *cmdSetNx) prepare(_ asynCmdTaskI) asynCmdTaskI {
 		for k, v := range this.fields {
 			task.fields[k] = v
 		}
-		task.version++
+		task.version = 1
 	}
 
 	return task

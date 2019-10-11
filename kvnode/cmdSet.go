@@ -26,12 +26,14 @@ func (this *asynCmdTaskSet) onSqlResp(errno int32) {
 			this.fields = map[string]*proto.Field{}
 			fillDefaultValue(cmd.getKV().meta, &this.fields)
 			this.sqlFlag = sql_insert_update
-		} else if errno == errcode.ERR_OK {
+		} else {
 			this.sqlFlag = sql_update
 		}
+
 		for k, v := range cmd.fields {
 			this.fields[k] = v
 		}
+
 		this.errno = errcode.ERR_OK
 		this.version++
 	}
@@ -58,6 +60,7 @@ type cmdSet struct {
 }
 
 func (this *cmdSet) reply(errCode int32, fields map[string]*proto.Field, version int64) {
+	Debugln("cmdSet reply")
 	this.replyer.reply(this, errCode, fields, version)
 }
 
@@ -101,7 +104,8 @@ func (this *cmdSet) prepare(_ asynCmdTaskI) asynCmdTaskI {
 
 	if status != cache_new {
 		task.fields = this.fields
-		task.version++
+		task.version = kv.version + 1
+		Debugln("task version", task.version)
 	}
 
 	return task
@@ -137,6 +141,7 @@ func set(n *KVNode, cli *cliConn, msg *codec.Message) {
 	kv, _ := n.storeMgr.getkv(head.GetTable(), head.GetKey())
 
 	if nil == kv {
+		Errorln(head.GetTable(), head.GetKey())
 		op.reply(errcode.ERR_INVAILD_TABLE, nil, 0)
 		return
 	}

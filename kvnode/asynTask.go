@@ -34,6 +34,7 @@ type asynCmdTaskI interface {
 	setSqlFlag(uint32)
 	setProposalType(int)
 	onError(errno int32)
+	fillMissingFields(map[string]*proto.Field)
 }
 
 type asynCmdTaskBase struct {
@@ -44,6 +45,16 @@ type asynCmdTaskBase struct {
 	errno        int32
 	replyed      int64
 	proposalType int
+}
+
+func (this *asynCmdTaskBase) fillMissingFields(fields map[string]*proto.Field) {
+	if nil != this.fields {
+		for k, v := range fields {
+			if _, ok := this.fields[k]; !ok {
+				this.fields[k] = v
+			}
+		}
+	}
 }
 
 func (this *asynCmdTaskBase) append2Str(s *str.Str) {
@@ -123,23 +134,35 @@ func (this *asynCmdTaskBase) onPorposeTimeout() {
 func (this *asynCmdTaskBase) done() {
 	kv := this.getKV()
 	kv.Lock()
-	//kv.setSnapshoted(true)
-	isTmp := kv.isTmp()
-	sqlFlag := kv.getSqlFlag()
-	switch sqlFlag {
-	case sql_insert_update, sql_update:
+
+	if this.proposalType == proposal_snapshot {
+		kv.setSnapshoted(true)
+	}
+
+	if this.version > 0 {
 		kv.setOK(this.version, this.fields)
-	case sql_delete:
+	} else {
 		kv.setMissing()
 	}
-	if sqlFlag != sql_none && !kv.isWriteBack() {
+
+	kv.setSqlFlag(this.sqlFlag)
+
+	Debugln(this.sqlFlag, kv.isWriteBack())
+
+	if kv.getSqlFlag() != sql_none && !kv.isWriteBack() {
 		kv.setWriteBack(true)
+		Debugln("pushUpdateReq")
 		kv.slot.getKvNode().sqlMgr.pushUpdateReq(kv)
 	}
+
+	isTmp := kv.isTmp()
+
 	kv.Unlock()
+
 	if isTmp {
 		kv.slot.moveTmpkv2OK(kv)
 	}
+
 	kv.processQueueCmd(true)
 }
 

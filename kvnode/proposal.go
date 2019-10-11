@@ -64,7 +64,7 @@ func readProposal(s *str.Str, offset int) (*proposal, int) {
 		if nil != err {
 			return nil, 0
 		}
-		p.values = append(p.values, id)
+		p.values = append(p.values, int(id))
 
 		var i64 int64
 		i64, offset, err = s.ReadInt64(offset)
@@ -160,7 +160,12 @@ func checkAsynCmdTask(task asynCmdTaskI) bool {
 	case sql_delete, sql_insert_update:
 		task.setProposalType(proposal_snapshot)
 	case sql_update:
-		task.setProposalType(proposal_update)
+		if kv.isSnapshoted() {
+			task.setProposalType(proposal_update)
+		} else {
+			task.setProposalType(proposal_snapshot)
+			task.fillMissingFields(kv.fields)
+		}
 	}
 
 	return true

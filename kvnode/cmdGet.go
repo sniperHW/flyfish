@@ -37,6 +37,7 @@ type cmdGet struct {
 }
 
 func (this *cmdGet) reply(errCode int32, fields map[string]*proto.Field, version int64) {
+	Debugln("cmdGet reply", errCode, version)
 	this.replyer.reply(this, errCode, fields, version)
 }
 
@@ -80,9 +81,6 @@ func (this *cmdGet) prepare(task asynCmdTaskI) asynCmdTaskI {
 		if status == cache_missing || status == cache_ok {
 			getTask.fields = this.kv.fields
 			getTask.version = this.kv.version
-			if status == cache_missing {
-				getTask.errno = errcode.ERR_RECORD_NOTEXIST
-			}
 		}
 	} else {
 		getTask = task.(*asynCmdTaskGet)
@@ -94,6 +92,9 @@ func (this *cmdGet) prepare(task asynCmdTaskI) asynCmdTaskI {
 }
 
 func get(n *KVNode, cli *cliConn, msg *codec.Message) {
+
+	Debugln("get")
+
 	req := msg.GetData().(*proto.GetReq)
 	head := req.GetHead()
 	op := &cmdGet{
@@ -141,6 +142,8 @@ func get(n *KVNode, cli *cliConn, msg *codec.Message) {
 		op.reply(err, nil, 0)
 		return
 	}
+
+	Debugln("get1")
 
 	kv.processQueueCmd()
 

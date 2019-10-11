@@ -137,8 +137,8 @@ func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, getSna
 		id:               id,
 		peers:            peers,
 		join:             join,
-		waldir:           fmt.Sprintf("raftexample-%d-%d", nodeID, region),
-		snapdir:          fmt.Sprintf("raftexample-%d-%d-snap", nodeID, region),
+		waldir:           fmt.Sprintf("kv-%d-%d", nodeID, region),
+		snapdir:          fmt.Sprintf("kv-%d-%d-snap", nodeID, region),
 		getSnapshot:      getSnapshot,
 		snapCount:        defaultSnapshotCount,
 		stopc:            make(chan struct{}),
@@ -642,6 +642,8 @@ func (rc *raftNode) onLoseLeadership() {
 
 func (rc *raftNode) issueRead(tasks *fixedarray.FixedArray) {
 
+	Debugln("issueRead")
+
 	ctxToSend := make([]byte, 8)
 	c := &readBatchSt{
 		readIndex: atomic.AddInt64(&rc.readIndex, 1),
@@ -839,6 +841,7 @@ func (rc *raftNode) processTimeoutReadReq(_ *timer.Timer) {
 			c := e.Value.(*readBatchSt)
 			rc.pendingRead.Remove(e)
 			rc.muPendingRead.Unlock()
+			Debugln("read timeout")
 			c.onError(errcode.ERR_TIMEOUT)
 		} else {
 			rc.muPendingRead.Unlock()
@@ -859,6 +862,7 @@ func (rc *raftNode) processReadStates(readStates []raft.ReadState) {
 			c := e.Value.(*readBatchSt)
 			rc.pendingRead.Remove(e)
 			rc.muPendingRead.Unlock()
+			Debugln("readStates")
 			select {
 			case rc.commitC <- c:
 			case <-rc.stopc:

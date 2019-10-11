@@ -19,9 +19,9 @@ import (
  */
 
 const (
-	leaseTimeout      = 20 //租约时效20秒
-	leaseOwnerTimeout = 10 //当前获得租约的leader的组约时效
-	renewTime         = 2  //续约间隔
+	leaseTimeout      = 20 * time.Second //租约时效20秒
+	leaseOwnerTimeout = 10 * time.Second //当前获得租约的leader的组约时效
+	renewTime         = 2 * time.Second  //续约间隔
 )
 
 type asynTaskLease struct {
@@ -31,6 +31,7 @@ type asynTaskLease struct {
 
 func (this *asynTaskLease) done() {
 	if this.rn.lease.update(this.rn, this.rn.id, this.term) {
+		Debugln("asynTaskLease.done()", this.rn.hasLease())
 		this.rn.gotLease()
 	}
 }
@@ -130,7 +131,7 @@ func (l *lease) startLeaseRoutine(rn *raftNode) {
 				}
 				//续租
 				rn.renew()
-				l.wait(l.stop, renewTime*time.Second)
+				l.wait(l.stop, renewTime)
 			}
 			Infoln("break")
 		}()

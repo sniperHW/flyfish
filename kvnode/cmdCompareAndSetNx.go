@@ -30,7 +30,6 @@ func (this *asynCmdTaskCompareAndSetNx) onSqlResp(errno int32) {
 		} else if !this.fields[cmd.oldV.GetName()].Equal(cmd.oldV) {
 			this.errno = errcode.ERR_CAS_NOT_EQUAL
 		} else {
-			this.sqlFlag = sql_update
 			this.fields[cmd.oldV.GetName()] = cmd.newV
 			this.version++
 		}
@@ -39,6 +38,7 @@ func (this *asynCmdTaskCompareAndSetNx) onSqlResp(errno int32) {
 			this.reply()
 			this.getKV().slot.issueAddkv(this)
 		} else {
+			this.sqlFlag = sql_update
 			this.getKV().slot.issueUpdate(this)
 		}
 

@@ -525,7 +525,7 @@ var pgsqlByteToString = []string{
 	"\\377",
 }
 
-func pgsqlBinaryToPgsqlStr(s *str.Str, bytes []byte) {
+func binaryTopgSqlStr(s *str.Str, bytes []byte) {
 	s.AppendString("'")
 	for _, v := range bytes {
 		s.AppendString(pgsqlByteToString[int(v)])
@@ -533,7 +533,7 @@ func pgsqlBinaryToPgsqlStr(s *str.Str, bytes []byte) {
 	s.AppendString("'::bytea")
 }
 
-func mysqlBinaryToPgsqlStr(s *str.Str, bytes []byte) {
+func binaryTomySqlStr(s *str.Str, bytes []byte) {
 	s.AppendString("unhex('")
 	for _, v := range bytes {
 		s.AppendString(mysqlByteToString[int(v)])

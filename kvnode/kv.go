@@ -28,18 +28,18 @@ const (
 )
 
 const (
-	kv_status_offset    = uint32(0)
-	mask_kv_status      = uint32(0xF << kv_status_offset) //1-4位kv状态
-	kv_sql_flag_offset  = uint32(4)
-	mask_kv_sql_flag    = uint32(0xF << kv_sql_flag_offset) //5-8位sql回写标记
-	kv_writeback_offset = uint32(8)
-	mask_kv_writeback   = uint32(0xF << kv_writeback_offset) //9-12位当前是否正在执行sql回写
-	//kv_snapshoted_offset = uint32(12)
-	//mask_kv_snapshoted   = uint32(0xF << kv_snapshoted_offset) //13-16位是否已经建立过快照
-	kv_tmp_offset     = uint32(16)
-	mask_kv_tmp       = uint32(0xF << kv_tmp_offset) //17-20位,是否临时kv
-	kv_kicking_offset = uint32(20)
-	mask_kv_kicking   = uint32(0xF << kv_kicking_offset) //21-24位,是否正在被踢除
+	kv_status_offset     = uint32(0)
+	mask_kv_status       = uint32(0xF << kv_status_offset) //1-4位kv状态
+	kv_sql_flag_offset   = uint32(4)
+	mask_kv_sql_flag     = uint32(0xF << kv_sql_flag_offset) //5-8位sql回写标记
+	kv_writeback_offset  = uint32(8)
+	mask_kv_writeback    = uint32(0xF << kv_writeback_offset) //9-12位当前是否正在执行sql回写
+	kv_snapshoted_offset = uint32(12)
+	mask_kv_snapshoted   = uint32(0xF << kv_snapshoted_offset) //13-16位是否已经建立过快照
+	kv_tmp_offset        = uint32(16)
+	mask_kv_tmp          = uint32(0xF << kv_tmp_offset) //17-20位,是否临时kv
+	kv_kicking_offset    = uint32(20)
+	mask_kv_kicking      = uint32(0xF << kv_kicking_offset) //21-24位,是否正在被踢除
 )
 
 type cmdQueue struct {
@@ -146,11 +146,11 @@ func (this *kv) getMeta() *dbmeta.TableMeta {
 }
 
 func (this *kv) setSqlFlag(sqlFlag uint32) {
-	this.flag.Set(mask_kv_status, kv_sql_flag_offset, sqlFlag)
+	this.flag.Set(mask_kv_sql_flag, kv_sql_flag_offset, sqlFlag)
 }
 
 func (this *kv) getSqlFlag() uint32 {
-	return this.flag.Get(mask_kv_status, kv_sql_flag_offset)
+	return this.flag.Get(mask_kv_sql_flag, kv_sql_flag_offset)
 }
 
 func (this *kv) setStatus(status uint32) {
@@ -158,7 +158,8 @@ func (this *kv) setStatus(status uint32) {
 }
 
 func (this *kv) getStatus() uint32 {
-	return this.flag.Get(mask_kv_status, kv_status_offset)
+	status := this.flag.Get(mask_kv_status, kv_status_offset)
+	return status
 }
 
 func (this *kv) setTmp(tmp bool) {
@@ -175,9 +176,9 @@ func (this *kv) isTmp() bool {
 
 func (this *kv) setKicking(kicking bool) {
 	if kicking {
-		this.flag.Set(mask_kv_tmp, kv_tmp_offset, uint32(1))
+		this.flag.Set(mask_kv_kicking, kv_tmp_offset, uint32(1))
 	} else {
-		this.flag.Set(mask_kv_tmp, kv_tmp_offset, uint32(0))
+		this.flag.Set(mask_kv_kicking, kv_tmp_offset, uint32(0))
 	}
 }
 
@@ -229,7 +230,6 @@ func (this *kv) setOK(version int64, fields map[string]*proto.Field) {
 	}
 }
 
-/*
 func (this *kv) setSnapshoted(snapshoted bool) {
 	if snapshoted {
 		this.flag.Set(mask_kv_snapshoted, kv_snapshoted_offset, uint32(1))
@@ -241,7 +241,6 @@ func (this *kv) setSnapshoted(snapshoted bool) {
 func (this *kv) isSnapshoted() bool {
 	return this.flag.Get(mask_kv_snapshoted, kv_snapshoted_offset) == 1
 }
-*/
 
 func newkv(slot *kvSlot, tableMeta *dbmeta.TableMeta, key string, uniKey string, isTmp bool) *kv {
 
@@ -276,8 +275,8 @@ func (this *kv) processQueueCmd(unlockOpQueue ...bool) {
 	}
 
 	var asynTask asynCmdTaskI
-
-	for cmd := this.cmdQueue.front(); nil != cmd; {
+	cmd := this.cmdQueue.front()
+	for ; nil != cmd; cmd = this.cmdQueue.front() {
 		if cmd.isCancel() || cmd.isTimeout() {
 			this.cmdQueue.popFront()
 			cmd.dontReply()
@@ -333,6 +332,7 @@ loopEnd:
 		this.Unlock()
 		switch asynTask.(type) {
 		case *asynCmdTaskGet:
+			Debugln("issueReadReq")
 			this.slot.issueReadReq(asynTask)
 		default:
 			this.slot.issueUpdate(asynTask)

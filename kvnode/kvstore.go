@@ -26,9 +26,9 @@ type asynTaskKick struct {
 }
 
 func (this *asynTaskKick) done() {
-	k.Lock()
-	k.setStatus(cache_remove)
-	k.Unlock()
+	this.kv.Lock()
+	this.kv.setStatus(cache_remove)
+	this.kv.Unlock()
 	this.kv.slot.removeKv(this.kv)
 }
 
@@ -231,6 +231,7 @@ func (this *kvstore) apply(data []byte) bool {
 	var p *proposal
 	for offset < s.Len() {
 		p, offset = readProposal(s, offset)
+
 		if nil == p {
 			return false
 		}
@@ -263,6 +264,7 @@ func (this *kvstore) apply(data []byte) bool {
 					slot.Unlock()
 					return false
 				}
+
 				version := p.values[1].(int64)
 
 				if !ok {
@@ -283,15 +285,24 @@ func (this *kvstore) apply(data []byte) bool {
 
 				if version == 0 {
 					kv.setStatus(cache_missing)
+					kv.fields = nil
+					Debugln(p.tt, unikey, version, "cache_missing")
 				} else {
 					kv.setStatus(cache_ok)
 					kv.version = version
 					fields := p.values[2].([]*proto.Field)
-					kv.fields = map[string]*proto.Field{}
+					Debugln(p.tt, unikey, version, "cache_ok", kv.getStatus(), kv.isWriteBack())
+
+					if nil == kv.fields {
+						kv.fields = map[string]*proto.Field{}
+					}
+
 					for _, v := range fields {
 						kv.fields[v.GetName()] = v
 					}
 				}
+				kv.setSnapshoted(true)
+
 				kv.Unlock()
 				slot.Unlock()
 				this.updateLRU(kv)
@@ -412,15 +423,16 @@ func (this *storeMgr) getkv(table string, key string) (*kv, error) {
 
 	uniKey := makeUniKey(table, key)
 
-	var k *kv = nil
+	var k *kv
 	var err error
+	var ok bool
 
 	store := this.getStore(uniKey)
 	if nil != store {
 		slot := store.getSlot(uniKey)
 		slot.Lock()
 
-		k, ok := slot.elements[uniKey]
+		k, ok = slot.elements[uniKey]
 		if !ok {
 			k, ok = slot.tmp[uniKey]
 		}
@@ -436,7 +448,6 @@ func (this *storeMgr) getkv(table string, key string) (*kv, error) {
 				}
 			}
 		} else {
-
 			meta := this.dbmeta.GetTableMeta(table)
 			if meta == nil {
 				err = fmt.Errorf("missing table meta")
@@ -447,6 +458,8 @@ func (this *storeMgr) getkv(table string, key string) (*kv, error) {
 		}
 
 		slot.Unlock()
+	} else {
+		fmt.Println("store == nil")
 	}
 
 	return k, err
@@ -481,7 +494,7 @@ func (this *storeMgr) stop() {
 	}
 }
 
-func newKVStore(kvNode *KVNode, rn *raftNode, snapshotter *snap.Snapshotter, proposeC *util.BlockQueue, commitC <-chan interface{}, errorC <-chan error, readReqC *util.BlockQueue) *kvstore {
+func newKVStore(storeMgr *storeMgr, kvNode *KVNode, rn *raftNode, snapshotter *snap.Snapshotter, proposeC *util.BlockQueue, commitC <-chan interface{}, errorC <-chan error, readReqC *util.BlockQueue) *kvstore {
 
 	s := &kvstore{
 		proposeC:    proposeC,
@@ -490,12 +503,14 @@ func newKVStore(kvNode *KVNode, rn *raftNode, snapshotter *snap.Snapshotter, pro
 		readReqC:    readReqC,
 		rn:          rn,
 		kvNode:      kvNode,
+		storeMgr:    storeMgr,
 	}
 
 	for i := 0; i < kvSlotSize; i++ {
 		s.slots = append(s.slots, &kvSlot{
 			elements: map[string]*kv{},
 			tmp:      map[string]*kv{},
+			store:    s,
 		})
 	}
 
@@ -538,6 +553,7 @@ func newStoreMgr(kvnode *KVNode, mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta, id
 		}
 
 		gotLeaseCb := func() {
+			Infoln("got lease")
 			//获得租约,强制store对所有kv执行一次sql回写
 			for _, v := range store.slots {
 				v.Lock()
@@ -552,6 +568,7 @@ func newStoreMgr(kvnode *KVNode, mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta, id
 							} else if status == cache_missing {
 								vv.setSqlFlag(sql_delete)
 							}
+							Debugln("pushUpdateReq")
 							vv.slot.getKvNode().sqlMgr.pushUpdateReq(vv)
 						}
 					}
@@ -563,7 +580,7 @@ func newStoreMgr(kvnode *KVNode, mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta, id
 
 		rn, commitC, errorC, snapshotterReady := newRaftNode(mutilRaft, (*id<<16)+i, strings.Split(*cluster, ","), false, getSnapshot, proposeC, confChangeC, readC, gotLeaseCb)
 
-		store = newKVStore(kvnode, rn, <-snapshotterReady, proposeC, commitC, errorC, readC)
+		store = newKVStore(mgr, kvnode, rn, <-snapshotterReady, proposeC, commitC, errorC, readC)
 
 		store.stop = func() {
 			proposeC.Close()

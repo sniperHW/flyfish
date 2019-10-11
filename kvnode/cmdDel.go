@@ -22,6 +22,7 @@ func (this *asynCmdTaskDel) onSqlResp(errno int32) {
 		//向副本同步插入操作
 		this.getKV().slot.issueAddkv(this)
 	} else if errno == errcode.ERR_OK {
+		this.sqlFlag = sql_delete
 		this.getKV().slot.issueUpdate(this)
 	}
 }

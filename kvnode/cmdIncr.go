@@ -26,9 +26,10 @@ func (this *asynCmdTaskIncr) onSqlResp(errno int32) {
 			this.fields = map[string]*proto.Field{}
 			fillDefaultValue(cmd.getKV().meta, &this.fields)
 			this.sqlFlag = sql_insert_update
-		} else if errno == errcode.ERR_OK {
+		} else {
 			this.sqlFlag = sql_update
 		}
+
 		this.errno = errcode.ERR_OK
 		oldV := this.fields[cmd.incr.GetName()]
 		var newV *proto.Field
@@ -120,7 +121,7 @@ func (this *cmdIncr) prepare(_ asynCmdTaskI) asynCmdTaskI {
 			newV = proto.PackField(oldV.GetName(), oldV.GetUint()+this.incr.GetUint())
 		}
 		task.fields[oldV.GetName()] = newV
-		task.version++
+		task.version = kv.version + 1
 	}
 
 	return task

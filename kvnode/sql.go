@@ -37,7 +37,7 @@ type sqlPing struct {
 }
 
 type sqlMgr struct {
-	sqlUpdateWg         *sync.WaitGroup
+	sqlUpdateWg         sync.WaitGroup
 	sqlLoaders          []*sqlLoader
 	sqlUpdaters         []*sqlUpdater
 	stoped              int64
@@ -59,7 +59,7 @@ func (this *sqlMgr) pushLoadReq(task asynCmdTaskI, fullReturn ...bool) bool {
 
 func (this *sqlMgr) pushUpdateReq(kv *kv) {
 	u := this.sqlUpdaters[futil.StringHash(kv.uniKey)%len(this.sqlUpdaters)]
-	u.queue.AddNoWait(kv)
+	Debugln("pushUpdateReq", u.queue.AddNoWait(kv))
 }
 
 func (this *sqlMgr) stop() {
@@ -87,10 +87,10 @@ func newSqlMgr() (*sqlMgr, error) {
 	sqlMgr := &sqlMgr{}
 
 	if dbConfig.SqlType == "mysql" {
-		sqlMgr.binaryToSqlStr = mysqlBinaryToPgsqlStr
+		sqlMgr.binaryToSqlStr = binaryTomySqlStr
 		sqlMgr.buildInsertUpdateString = sqlMgr.buildInsertUpdateStringMySql
 	} else {
-		sqlMgr.binaryToSqlStr = pgsqlBinaryToPgsqlStr
+		sqlMgr.binaryToSqlStr = binaryTopgSqlStr
 		sqlMgr.buildInsertUpdateString = sqlMgr.buildInsertUpdateStringPgSql
 	}
 

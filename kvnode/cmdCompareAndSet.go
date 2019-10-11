@@ -34,6 +34,7 @@ func (this *asynCmdTaskCompareAndSet) onSqlResp(errno int32) {
 			this.reply()
 			this.getKV().slot.issueAddkv(this)
 		} else {
+			this.sqlFlag = sql_update
 			this.getKV().slot.issueUpdate(this)
 		}
 	}
