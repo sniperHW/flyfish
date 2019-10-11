@@ -581,7 +581,7 @@ func newStoreMgr(kvnode *KVNode, mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta, id
 		gotLeaseCb := func() {
 			Infoln("got lease")
 			//获得租约,强制store对所有kv执行一次sql回写
-			for _, v := range store.slots {
+			/*for _, v := range store.slots {
 				v.Lock()
 				for _, vv := range v.elements {
 					vv.Lock()
@@ -601,7 +601,7 @@ func newStoreMgr(kvnode *KVNode, mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta, id
 					vv.Unlock()
 				}
 				v.Unlock()
-			}
+			}*/
 		}
 
 		rn, commitC, errorC, snapshotterReady := newRaftNode(mutilRaft, (*id<<16)+i, strings.Split(*cluster, ","), false, getSnapshot, proposeC, confChangeC, readC, gotLeaseCb)
