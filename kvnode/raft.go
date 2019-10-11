@@ -325,8 +325,6 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 					committedEntry.tasks = front.Value.(*batchProposal).tasks
 					str.Put(front.Value.(*batchProposal).proposalStr)
 					rc.pendingPropose.Remove(front)
-				} else {
-					Infoln("index not match", index, front.Value.(*batchProposal).index)
 				}
 			}
 			rc.muPendingPropose.Unlock()
