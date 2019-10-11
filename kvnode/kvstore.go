@@ -2,18 +2,16 @@ package kvnode
 
 import (
 	"fmt"
-	//"encoding/binary"
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/dbmeta"
+	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
 	futil "github.com/sniperHW/flyfish/util"
+	"github.com/sniperHW/flyfish/util/str"
 	"github.com/sniperHW/kendynet/timer"
 	"github.com/sniperHW/kendynet/util"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	"go.etcd.io/etcd/raft/raftpb"
-	//	"math"
-	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/util/str"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -75,9 +73,14 @@ func (this *kvSlot) removeKv(k *kv) {
 }
 
 func (this *kvSlot) removeTmpKv(k *kv) {
+
+	this.store.Lock()
+	this.store.tmpkvcount--
+	this.store.Unlock()
+
 	this.Lock()
-	defer this.Unlock()
 	delete(this.tmp, k.uniKey)
+	this.Unlock()
 }
 
 func (this *kvSlot) getRaftNode() *raftNode {
@@ -111,6 +114,7 @@ func (this *kvSlot) moveTmpkv2OK(kv *kv) {
 
 	this.store.Lock()
 	this.store.kvcount++
+	this.store.tmpkvcount--
 	this.store.updateLRU(kv)
 	this.store.Unlock()
 }
@@ -123,6 +127,7 @@ type kvstore struct {
 	snapshotter    *snap.Snapshotter
 	slots          []*kvSlot
 	kvcount        int //所有slot中len(elements)的总和
+	tmpkvcount     int
 	kvKickingCount int //当前正在执行kicking的kv数量
 	kvNode         *KVNode
 	stop           func()
@@ -354,6 +359,18 @@ func (this *kvstore) readCommits(once bool, commitC <-chan interface{}, errorC <
 	}
 }
 
+func (this *kvstore) checkKvCount() bool {
+	MaxCachePerGroupSize := conf.GetConfig().MaxCachePerGroupSize
+	this.Lock()
+	defer this.Unlock()
+
+	if this.kvcount+this.tmpkvcount > MaxCachePerGroupSize+MaxCachePerGroupSize/4 {
+		return false
+	} else {
+		return true
+	}
+}
+
 type kvsnap struct {
 	uniKey  string
 	fields  map[string]*proto.Field
@@ -419,12 +436,12 @@ type storeMgr struct {
 	dbmeta *dbmeta.DBMeta
 }
 
-func (this *storeMgr) getkv(table string, key string) (*kv, error) {
+func (this *storeMgr) getkv(table string, key string) (*kv, int32) {
 
 	uniKey := makeUniKey(table, key)
 
 	var k *kv
-	var err error
+	var err int32 = errcode.ERR_OK
 	var ok bool
 
 	store := this.getStore(uniKey)
@@ -444,19 +461,28 @@ func (this *storeMgr) getkv(table string, key string) (*kv, error) {
 					atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&k.meta)), unsafe.Pointer(newMeta))
 				} else {
 					//log error
-					err = fmt.Errorf("missing table meta")
+					err = errcode.ERR_INVAILD_TABLE
 				}
 			}
 		} else {
-			meta := this.dbmeta.GetTableMeta(table)
-			if meta == nil {
-				err = fmt.Errorf("missing table meta")
+			if !store.checkKvCount() {
+				//容量限制，不允许再插入新的kv
+				err = errcode.ERR_BUSY
 			} else {
-				k = newkv(slot, meta, key, uniKey, true)
-				slot.tmp[uniKey] = k
+
+				meta := this.dbmeta.GetTableMeta(table)
+				if meta == nil {
+					//err = fmt.Errorf("missing table meta")
+					err = errcode.ERR_INVAILD_TABLE
+				} else {
+					k = newkv(slot, meta, key, uniKey, true)
+					slot.tmp[uniKey] = k
+					store.Lock()
+					store.tmpkvcount++
+					store.Unlock()
+				}
 			}
 		}
-
 		slot.Unlock()
 	} else {
 		fmt.Println("store == nil")
