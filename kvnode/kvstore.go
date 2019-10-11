@@ -553,9 +553,7 @@ func newKVStore(storeMgr *storeMgr, kvNode *KVNode, proposeC *util.BlockQueue, r
 	s := &kvstore{
 		proposeC: proposeC,
 		slots:    []*kvSlot{},
-		//snapshotter: snapshotter,
 		readReqC: readReqC,
-		//rn:          rn,
 		kvNode:   kvNode,
 		storeMgr: storeMgr,
 	}
@@ -572,54 +570,7 @@ func newKVStore(storeMgr *storeMgr, kvNode *KVNode, proposeC *util.BlockQueue, r
 	s.lruTail.pprev = &s.lruHead
 
 	return s
-
-	// replay log into key-value map
-	//s.readCommits(true, commitC, errorC)
-	// read commits from raft into kvStore map until error
-
-	//s.lruTimer = timer.Repeat(time.Second, nil, func(t *timer.Timer) {
-	//	s.doLRU()
-	//})
-
-	//go s.readCommits(false, commitC, errorC)
-	//return s
 }
-
-/*
-func newKVStore(storeMgr *storeMgr, kvNode *KVNode, rn *raftNode, snapshotter *snap.Snapshotter, proposeC *util.BlockQueue, commitC <-chan interface{}, errorC <-chan error, readReqC *util.BlockQueue) *kvstore {
-
-	s := &kvstore{
-		proposeC:    proposeC,
-		slots:       []*kvSlot{},
-		snapshotter: snapshotter,
-		readReqC:    readReqC,
-		rn:          rn,
-		kvNode:      kvNode,
-		storeMgr:    storeMgr,
-	}
-
-	for i := 0; i < kvSlotSize; i++ {
-		s.slots = append(s.slots, &kvSlot{
-			elements: map[string]*kv{},
-			tmp:      map[string]*kv{},
-			store:    s,
-		})
-	}
-
-	s.lruHead.nnext = &s.lruTail
-	s.lruTail.pprev = &s.lruHead
-
-	// replay log into key-value map
-	s.readCommits(true, commitC, errorC)
-	// read commits from raft into kvStore map until error
-
-	s.lruTimer = timer.Repeat(time.Second, nil, func(t *timer.Timer) {
-		s.doLRU()
-	})
-
-	go s.readCommits(false, commitC, errorC)
-	return s
-}*/
 
 func newStoreMgr(kvnode *KVNode, mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta, id *int, cluster *string, mask int) *storeMgr {
 	mgr := &storeMgr{
