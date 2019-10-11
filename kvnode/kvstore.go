@@ -122,9 +122,9 @@ func (this *kvSlot) moveTmpkv2OK(kv *kv) {
 // a key-value store backed by raft
 type kvstore struct {
 	sync.Mutex
-	proposeC       *util.BlockQueue
-	readReqC       *util.BlockQueue
-	snapshotter    *snap.Snapshotter
+	proposeC *util.BlockQueue
+	readReqC *util.BlockQueue
+	//snapshotter    *snap.Snapshotter
 	slots          []*kvSlot
 	kvcount        int //所有slot中len(elements)的总和
 	tmpkvcount     int
@@ -319,7 +319,7 @@ func (this *kvstore) apply(data []byte) bool {
 	return true
 }
 
-func (this *kvstore) readCommits(once bool, commitC <-chan interface{}, errorC <-chan error) {
+func (this *kvstore) readCommits(once bool, snapshotter *snap.Snapshotter, commitC <-chan interface{}, errorC <-chan error) {
 
 	for e := range commitC {
 		switch e.(type) {
@@ -328,7 +328,7 @@ func (this *kvstore) readCommits(once bool, commitC <-chan interface{}, errorC <
 			if data == replaySnapshot {
 				// done replaying log; new data incoming
 				// OR signaled to load snapshot
-				snapshot, err := this.snapshotter.Load()
+				snapshot, err := snapshotter.Load()
 				if err == snap.ErrNoSnapshot {
 					return
 				}
@@ -520,6 +520,44 @@ func (this *storeMgr) stop() {
 	}
 }
 
+func newKVStore(storeMgr *storeMgr, kvNode *KVNode, proposeC *util.BlockQueue, readReqC *util.BlockQueue) *kvstore {
+
+	s := &kvstore{
+		proposeC: proposeC,
+		slots:    []*kvSlot{},
+		//snapshotter: snapshotter,
+		readReqC: readReqC,
+		//rn:          rn,
+		kvNode:   kvNode,
+		storeMgr: storeMgr,
+	}
+
+	for i := 0; i < kvSlotSize; i++ {
+		s.slots = append(s.slots, &kvSlot{
+			elements: map[string]*kv{},
+			tmp:      map[string]*kv{},
+			store:    s,
+		})
+	}
+
+	s.lruHead.nnext = &s.lruTail
+	s.lruTail.pprev = &s.lruHead
+
+	return s
+
+	// replay log into key-value map
+	//s.readCommits(true, commitC, errorC)
+	// read commits from raft into kvStore map until error
+
+	//s.lruTimer = timer.Repeat(time.Second, nil, func(t *timer.Timer) {
+	//	s.doLRU()
+	//})
+
+	//go s.readCommits(false, commitC, errorC)
+	//return s
+}
+
+/*
 func newKVStore(storeMgr *storeMgr, kvNode *KVNode, rn *raftNode, snapshotter *snap.Snapshotter, proposeC *util.BlockQueue, commitC <-chan interface{}, errorC <-chan error, readReqC *util.BlockQueue) *kvstore {
 
 	s := &kvstore{
@@ -553,7 +591,7 @@ func newKVStore(storeMgr *storeMgr, kvNode *KVNode, rn *raftNode, snapshotter *s
 
 	go s.readCommits(false, commitC, errorC)
 	return s
-}
+}*/
 
 func newStoreMgr(kvnode *KVNode, mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta, id *int, cluster *string, mask int) *storeMgr {
 	mgr := &storeMgr{
@@ -568,7 +606,7 @@ func newStoreMgr(kvnode *KVNode, mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta, id
 		confChangeC := make(chan raftpb.ConfChange)
 		readC := util.NewBlockQueue()
 
-		var store *kvstore
+		store := newKVStore(mgr, kvnode, proposeC, readC)
 
 		// raft provides a commit stream for the proposals from the http api
 		getSnapshot := func() [][]*kvsnap {
@@ -581,7 +619,7 @@ func newStoreMgr(kvnode *KVNode, mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta, id
 		gotLeaseCb := func() {
 			Infoln("got lease")
 			//获得租约,强制store对所有kv执行一次sql回写
-			/*for _, v := range store.slots {
+			for _, v := range store.slots {
 				v.Lock()
 				for _, vv := range v.elements {
 					vv.Lock()
@@ -601,19 +639,24 @@ func newStoreMgr(kvnode *KVNode, mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta, id
 					vv.Unlock()
 				}
 				v.Unlock()
-			}*/
+			}
 		}
 
 		rn, commitC, errorC, snapshotterReady := newRaftNode(mutilRaft, (*id<<16)+i, strings.Split(*cluster, ","), false, getSnapshot, proposeC, confChangeC, readC, gotLeaseCb)
 
-		store = newKVStore(mgr, kvnode, rn, <-snapshotterReady, proposeC, commitC, errorC, readC)
-
+		store.rn = rn
 		store.stop = func() {
 			proposeC.Close()
 			close(confChangeC)
 			readC.Close()
 			store.lruTimer.Cancel()
 		}
+
+		snapshotter := <-snapshotterReady
+
+		store.readCommits(true, snapshotter, commitC, errorC)
+
+		go store.readCommits(false, snapshotter, commitC, errorC)
 
 		mgr.addStore(i, store)
 	}
