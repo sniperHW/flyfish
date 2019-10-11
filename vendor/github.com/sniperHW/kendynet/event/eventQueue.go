@@ -3,6 +3,7 @@ package event
 import (
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/util"
+	"reflect"
 	"sync/atomic"
 )
 
@@ -44,6 +45,10 @@ func (this *EventQueue) preparePost(fn interface{}, args ...interface{}) *elemen
 	return e
 }
 
+func (this *EventQueue) PostFullReturn(fn interface{}, args ...interface{}) error {
+	return this.eventQueue.AddNoWait(this.preparePost(fn, args...), true)
+}
+
 func (this *EventQueue) PostNoWait(fn interface{}, args ...interface{}) error {
 	return this.eventQueue.AddNoWait(this.preparePost(fn, args...))
 }
@@ -65,6 +70,8 @@ func pcall(fn interface{}, args []interface{}) {
 	case func([]interface{}):
 		fn.(func([]interface{}))(args)
 		break
+	default:
+		panic("invaild fn type:" + reflect.TypeOf(fn).Name())
 	}
 }
 

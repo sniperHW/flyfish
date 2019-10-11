@@ -17,7 +17,7 @@ import (
 
 type result struct {
 	latency time.Duration
-	err     int
+	err     int32
 }
 
 type ByTime []result
@@ -45,7 +45,7 @@ func Set(c *kclient.Client) bool {
 
 	fields := map[string]interface{}{}
 	fields["age"] = 37
-	fields["phone"] = strings.Repeat("a", 1024)
+	fields["phone"] = strings.Repeat("a", 64)
 	//fields["name"] = "sniperHW"
 	key := fmt.Sprintf("%s:%d", "huangwei", nextID%keyrange)
 	set := c.Set("users1", key, fields)
@@ -104,7 +104,7 @@ func main() {
 						return
 					}
 				}
-				time.Sleep(time.Millisecond * 100)
+				time.Sleep(time.Millisecond * 200)
 			}
 		}()
 	}

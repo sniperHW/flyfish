@@ -12,6 +12,23 @@ import (
 const (
 	EventTypeMessage = 1
 	EventTypeError   = 2
+
+	/*
+	 *   发送线程从待发送队列取出buff后(发送线程一次性将待发送队列中的buff取出后遍历)，将buff添加到sendbuff中，
+	 *   当sendbuff满或者buff的遍历结束，执行flush。
+	 *
+	 *   SendBufferSize在这里起到了合并包以及控制tcp包大小的作用
+	 *
+	 *   考虑场景1) 内网通信，希望提高吞吐，减少send系统调用次数。
+	 *   第一次发送1个buff,后续又添加了10个buff。
+	 *   发送线程第一次取出1个buff,在阻塞到send时，后面10个buff被添加进队列
+	 *   发送线程第二次取出10个buff(字节大小不超过SendBufferSize),这10个buff被一次send调用发出。
+	 *
+	 *
+	 *   场景2）通信链路MTU限制，此时可将SendBufferSize设置为MTU减去ip包头，这样所有发出去的包都满足MTU限制。
+	 *
+	 */
+	SendBufferSize = 65535 //64k
 )
 
 type Event struct {
@@ -39,6 +56,8 @@ type StreamSession interface {
 		无论何种情况，调用Close之后SendXXX操作都将返回错误
 	*/
 	Close(reason string, timeout time.Duration)
+
+	IsClosed() bool
 
 	/*
 		关闭读
@@ -93,4 +112,9 @@ type StreamSession interface {
 	SetRecvTimeout(time.Duration)
 
 	SetSendTimeout(time.Duration)
+
+	/*
+	 *   设置异步发送队列大小,必须在调用Start前设置
+	 */
+	SetSendQueueSize(int)
 }

@@ -88,9 +88,9 @@ func main() {
 
 	bar = progressbar.New(int(total))
 
-	for j := 0; j < 10; j++ {
+	for j := 0; j < 100; j++ {
 		c := kclient.OpenClient(services)
-		for i := 0; i < 10; i++ {
+		for i := 0; i < 50; i++ {
 			Get(c)
 		}
 	}

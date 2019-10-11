@@ -50,7 +50,16 @@ func (this *Listener) Serve(onNewClient func(kendynet.StreamSession)) error {
             if atomic.LoadInt32(&this.closed) == 1 {
                 return nil
             }
+
+            if ne, ok := err.(net.Error); ok && ne.Temporary() {
+                kendynet.Errorf("accept temp err: %v", ne)
+                continue
+            } else {
+                return err
+            }
+
         } else {
+
             onNewClient(socket.NewStreamSocket(conn))
         }
     }

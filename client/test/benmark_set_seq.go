@@ -24,7 +24,7 @@ var (
 func Set(c *kclient.Client) {
 	fields := map[string]interface{}{}
 	fields["age"] = 37
-	fields["phone"] = strings.Repeat("a", 1024)
+	fields["phone"] = strings.Repeat("a", 64)
 	fields["name"] = "sniperHW"
 	nextID := atomic.AddInt64(&id, 1)
 	key := fmt.Sprintf("%s:%d", "huangwei", nextID%keyrange)

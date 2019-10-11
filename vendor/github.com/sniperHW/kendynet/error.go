@@ -18,6 +18,7 @@ var (
 	ErrNoReceiver          = fmt.Errorf("receiver == nil")
 	ErrInvaildObject       = fmt.Errorf("object == nil")
 	ErrInvaildEncoder      = fmt.Errorf("encoder == nil")
+	ErrNotStart            = fmt.Errorf("not start yet")
 )
 
 func IsNetTimeout(err error) bool {

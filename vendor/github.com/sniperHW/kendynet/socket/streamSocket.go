@@ -6,9 +6,9 @@ package socket
 
 import (
 	"bufio"
+	//"fmt"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/util"
-	"io"
 	"net"
 	"time"
 )
@@ -96,13 +96,13 @@ func (this *StreamSocket) sendMessage(msg kendynet.Message) error {
 
 func (this *StreamSocket) sendThreadFunc() {
 
-	var err error
-
 	defer func() {
 		this.sendCloseChan <- 1
 	}()
 
-	writer := bufio.NewWriterSize(this.conn, 65535*2)
+	var err error
+
+	writer := bufio.NewWriterSize(this.conn, kendynet.SendBufferSize)
 
 	for {
 		closed, localList := this.sendQue.Get()
@@ -127,7 +127,6 @@ func (this *StreamSocket) sendThreadFunc() {
 
 					if s != len(data) {
 						data = data[s:]
-						//kendynet.Errorln("s != len(data)")
 					} else {
 						data = nil
 					}
@@ -143,7 +142,7 @@ func (this *StreamSocket) sendThreadFunc() {
 					} else {
 						err = writer.Flush()
 					}
-					if err != nil && err != io.ErrShortWrite {
+					if err != nil {
 						if this.sendQue.Closed() {
 							return
 						}
@@ -167,7 +166,7 @@ func (this *StreamSocket) sendThreadFunc() {
 	}
 }
 
-func NewStreamSocket(conn net.Conn, sendQueueSize ...int) kendynet.StreamSession {
+func NewStreamSocket(conn net.Conn) kendynet.StreamSession {
 	if nil == conn {
 		return nil
 	} else {
@@ -185,7 +184,7 @@ func NewStreamSocket(conn net.Conn, sendQueueSize ...int) kendynet.StreamSession
 			conn: conn,
 		}
 		s.SocketBase = &SocketBase{
-			sendQue:       util.NewBlockQueue(sendQueueSize...),
+			sendQue:       util.NewBlockQueue(1024),
 			sendCloseChan: make(chan int, 1),
 			imp:           s,
 		}
