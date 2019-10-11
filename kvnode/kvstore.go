@@ -648,8 +648,8 @@ func newStoreMgr(kvnode *KVNode, mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta, id
 
 		store.rn = rn
 
-		s.lruTimer = timer.Repeat(time.Second, nil, func(t *timer.Timer) {
-			s.doLRU()
+		store.lruTimer = timer.Repeat(time.Second, nil, func(t *timer.Timer) {
+			store.doLRU()
 		})
 
 		store.stop = func() {
