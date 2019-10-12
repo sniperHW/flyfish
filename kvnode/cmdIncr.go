@@ -76,12 +76,7 @@ func (this *cmdIncr) makeResponse(errCode int32, fields map[string]*proto.Field,
 	}
 
 	resp := &proto.IncrByResp{
-		Head: &proto.RespCommon{
-			Key:     key,                //pb.String(key),
-			Seqno:   this.replyer.seqno, //pb.Int64(this.replyer.seqno),
-			ErrCode: errCode,            //pb.Int32(errCode),
-			Version: version,            //pb.Int64(version),
-		},
+		Head: makeRespCommon(key, this.replyer.seqno, errCode, version),
 	}
 
 	if errCode == errcode.ERR_OK {

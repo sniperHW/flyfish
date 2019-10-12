@@ -4,6 +4,7 @@
 package proto
 
 import (
+	bytes "bytes"
 	encoding_binary "encoding/binary"
 	fmt "fmt"
 	_ "github.com/gogo/protobuf/gogoproto"
@@ -12,6 +13,9 @@ import (
 	io "io"
 	math "math"
 	math_bits "math/bits"
+	reflect "reflect"
+	strconv "strconv"
+	strings "strings"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -114,8 +118,8 @@ func (x CmdType) Enum() *CmdType {
 	return p
 }
 
-func (x CmdType) String() string {
-	return proto.EnumName(CmdType_name, int32(x))
+func (x CmdType) MarshalJSON() ([]byte, error) {
+	return proto.MarshalJSONEnum(CmdType_name, int32(x))
 }
 
 func (x *CmdType) UnmarshalJSON(data []byte) error {
@@ -169,8 +173,8 @@ func (x ValueType) Enum() *ValueType {
 	return p
 }
 
-func (x ValueType) String() string {
-	return proto.EnumName(ValueType_name, int32(x))
+func (x ValueType) MarshalJSON() ([]byte, error) {
+	return proto.MarshalJSONEnum(ValueType_name, int32(x))
 }
 
 func (x *ValueType) UnmarshalJSON(data []byte) error {
@@ -190,9 +194,8 @@ type LoginReq struct {
 	Compress bool `protobuf:"varint,1,opt,name=compress" json:"compress"`
 }
 
-func (m *LoginReq) Reset()         { *m = LoginReq{} }
-func (m *LoginReq) String() string { return proto.CompactTextString(m) }
-func (*LoginReq) ProtoMessage()    {}
+func (m *LoginReq) Reset()      { *m = LoginReq{} }
+func (*LoginReq) ProtoMessage() {}
 func (*LoginReq) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{0}
 }
@@ -235,9 +238,8 @@ type LoginResp struct {
 	Compress bool `protobuf:"varint,2,opt,name=compress" json:"compress"`
 }
 
-func (m *LoginResp) Reset()         { *m = LoginResp{} }
-func (m *LoginResp) String() string { return proto.CompactTextString(m) }
-func (*LoginResp) ProtoMessage()    {}
+func (m *LoginResp) Reset()      { *m = LoginResp{} }
+func (*LoginResp) ProtoMessage() {}
 func (*LoginResp) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{1}
 }
@@ -285,9 +287,8 @@ func (m *LoginResp) GetCompress() bool {
 type ReloadTableConfReq struct {
 }
 
-func (m *ReloadTableConfReq) Reset()         { *m = ReloadTableConfReq{} }
-func (m *ReloadTableConfReq) String() string { return proto.CompactTextString(m) }
-func (*ReloadTableConfReq) ProtoMessage()    {}
+func (m *ReloadTableConfReq) Reset()      { *m = ReloadTableConfReq{} }
+func (*ReloadTableConfReq) ProtoMessage() {}
 func (*ReloadTableConfReq) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{2}
 }
@@ -322,9 +323,8 @@ type ReloadTableConfResp struct {
 	Ok bool `protobuf:"varint,1,opt,name=ok" json:"ok"`
 }
 
-func (m *ReloadTableConfResp) Reset()         { *m = ReloadTableConfResp{} }
-func (m *ReloadTableConfResp) String() string { return proto.CompactTextString(m) }
-func (*ReloadTableConfResp) ProtoMessage()    {}
+func (m *ReloadTableConfResp) Reset()      { *m = ReloadTableConfResp{} }
+func (*ReloadTableConfResp) ProtoMessage() {}
 func (*ReloadTableConfResp) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{3}
 }
@@ -366,9 +366,8 @@ type ReloadConfigReq struct {
 	Path string `protobuf:"bytes,1,opt,name=path" json:"path"`
 }
 
-func (m *ReloadConfigReq) Reset()         { *m = ReloadConfigReq{} }
-func (m *ReloadConfigReq) String() string { return proto.CompactTextString(m) }
-func (*ReloadConfigReq) ProtoMessage()    {}
+func (m *ReloadConfigReq) Reset()      { *m = ReloadConfigReq{} }
+func (*ReloadConfigReq) ProtoMessage() {}
 func (*ReloadConfigReq) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{4}
 }
@@ -410,9 +409,8 @@ type ReloadConfigResp struct {
 	Err string `protobuf:"bytes,1,opt,name=err" json:"err"`
 }
 
-func (m *ReloadConfigResp) Reset()         { *m = ReloadConfigResp{} }
-func (m *ReloadConfigResp) String() string { return proto.CompactTextString(m) }
-func (*ReloadConfigResp) ProtoMessage()    {}
+func (m *ReloadConfigResp) Reset()      { *m = ReloadConfigResp{} }
+func (*ReloadConfigResp) ProtoMessage() {}
 func (*ReloadConfigResp) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{5}
 }
@@ -459,9 +457,8 @@ type Value struct {
 	B    []byte    `protobuf:"bytes,6,opt,name=b" json:"b"`
 }
 
-func (m *Value) Reset()         { *m = Value{} }
-func (m *Value) String() string { return proto.CompactTextString(m) }
-func (*Value) ProtoMessage()    {}
+func (m *Value) Reset()      { *m = Value{} }
+func (*Value) ProtoMessage() {}
 func (*Value) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{6}
 }
@@ -539,9 +536,8 @@ type Field struct {
 	V    *Value `protobuf:"bytes,2,opt,name=v" json:"v,omitempty"`
 }
 
-func (m *Field) Reset()         { *m = Field{} }
-func (m *Field) String() string { return proto.CompactTextString(m) }
-func (*Field) ProtoMessage()    {}
+func (m *Field) Reset()      { *m = Field{} }
+func (*Field) ProtoMessage() {}
 func (*Field) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{7}
 }
@@ -590,9 +586,8 @@ type PingReq struct {
 	Timestamp int64 `protobuf:"varint,1,opt,name=timestamp" json:"timestamp"`
 }
 
-func (m *PingReq) Reset()         { *m = PingReq{} }
-func (m *PingReq) String() string { return proto.CompactTextString(m) }
-func (*PingReq) ProtoMessage()    {}
+func (m *PingReq) Reset()      { *m = PingReq{} }
+func (*PingReq) ProtoMessage() {}
 func (*PingReq) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{8}
 }
@@ -634,9 +629,8 @@ type PingResp struct {
 	Timestamp int64 `protobuf:"varint,2,opt,name=timestamp" json:"timestamp"`
 }
 
-func (m *PingResp) Reset()         { *m = PingResp{} }
-func (m *PingResp) String() string { return proto.CompactTextString(m) }
-func (*PingResp) ProtoMessage()    {}
+func (m *PingResp) Reset()      { *m = PingResp{} }
+func (*PingResp) ProtoMessage() {}
 func (*PingResp) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{9}
 }
@@ -683,9 +677,8 @@ type ReqCommon struct {
 	RespTimeout int64  `protobuf:"varint,6,opt,name=respTimeout" json:"respTimeout"`
 }
 
-func (m *ReqCommon) Reset()         { *m = ReqCommon{} }
-func (m *ReqCommon) String() string { return proto.CompactTextString(m) }
-func (*ReqCommon) ProtoMessage()    {}
+func (m *ReqCommon) Reset()      { *m = ReqCommon{} }
+func (*ReqCommon) ProtoMessage() {}
 func (*ReqCommon) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{10}
 }
@@ -765,9 +758,8 @@ type RespCommon struct {
 	Version int64  `protobuf:"varint,4,opt,name=version" json:"version"`
 }
 
-func (m *RespCommon) Reset()         { *m = RespCommon{} }
-func (m *RespCommon) String() string { return proto.CompactTextString(m) }
-func (*RespCommon) ProtoMessage()    {}
+func (m *RespCommon) Reset()      { *m = RespCommon{} }
+func (*RespCommon) ProtoMessage() {}
 func (*RespCommon) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{11}
 }
@@ -833,9 +825,8 @@ type GetReq struct {
 	All    bool       `protobuf:"varint,3,opt,name=all" json:"all"`
 }
 
-func (m *GetReq) Reset()         { *m = GetReq{} }
-func (m *GetReq) String() string { return proto.CompactTextString(m) }
-func (*GetReq) ProtoMessage()    {}
+func (m *GetReq) Reset()      { *m = GetReq{} }
+func (*GetReq) ProtoMessage() {}
 func (*GetReq) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{12}
 }
@@ -892,9 +883,8 @@ type GetResp struct {
 	Fields []*Field    `protobuf:"bytes,2,rep,name=fields" json:"fields,omitempty"`
 }
 
-func (m *GetResp) Reset()         { *m = GetResp{} }
-func (m *GetResp) String() string { return proto.CompactTextString(m) }
-func (*GetResp) ProtoMessage()    {}
+func (m *GetResp) Reset()      { *m = GetResp{} }
+func (*GetResp) ProtoMessage() {}
 func (*GetResp) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{13}
 }
@@ -947,9 +937,8 @@ type SetReq struct {
 	Fields []*Field   `protobuf:"bytes,2,rep,name=fields" json:"fields,omitempty"`
 }
 
-func (m *SetReq) Reset()         { *m = SetReq{} }
-func (m *SetReq) String() string { return proto.CompactTextString(m) }
-func (*SetReq) ProtoMessage()    {}
+func (m *SetReq) Reset()      { *m = SetReq{} }
+func (*SetReq) ProtoMessage() {}
 func (*SetReq) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{14}
 }
@@ -998,9 +987,8 @@ type SetResp struct {
 	Head *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
 }
 
-func (m *SetResp) Reset()         { *m = SetResp{} }
-func (m *SetResp) String() string { return proto.CompactTextString(m) }
-func (*SetResp) ProtoMessage()    {}
+func (m *SetResp) Reset()      { *m = SetResp{} }
+func (*SetResp) ProtoMessage() {}
 func (*SetResp) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{15}
 }
@@ -1045,9 +1033,8 @@ type SetNxReq struct {
 	Fields []*Field   `protobuf:"bytes,2,rep,name=fields" json:"fields,omitempty"`
 }
 
-func (m *SetNxReq) Reset()         { *m = SetNxReq{} }
-func (m *SetNxReq) String() string { return proto.CompactTextString(m) }
-func (*SetNxReq) ProtoMessage()    {}
+func (m *SetNxReq) Reset()      { *m = SetNxReq{} }
+func (*SetNxReq) ProtoMessage() {}
 func (*SetNxReq) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{16}
 }
@@ -1096,9 +1083,8 @@ type SetNxResp struct {
 	Head *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
 }
 
-func (m *SetNxResp) Reset()         { *m = SetNxResp{} }
-func (m *SetNxResp) String() string { return proto.CompactTextString(m) }
-func (*SetNxResp) ProtoMessage()    {}
+func (m *SetNxResp) Reset()      { *m = SetNxResp{} }
+func (*SetNxResp) ProtoMessage() {}
 func (*SetNxResp) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{17}
 }
@@ -1144,9 +1130,8 @@ type IncrByReq struct {
 	Field *Field     `protobuf:"bytes,2,req,name=field" json:"field,omitempty"`
 }
 
-func (m *IncrByReq) Reset()         { *m = IncrByReq{} }
-func (m *IncrByReq) String() string { return proto.CompactTextString(m) }
-func (*IncrByReq) ProtoMessage()    {}
+func (m *IncrByReq) Reset()      { *m = IncrByReq{} }
+func (*IncrByReq) ProtoMessage() {}
 func (*IncrByReq) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{18}
 }
@@ -1196,9 +1181,8 @@ type IncrByResp struct {
 	NewValue *Field      `protobuf:"bytes,4,opt,name=newValue" json:"newValue,omitempty"`
 }
 
-func (m *IncrByResp) Reset()         { *m = IncrByResp{} }
-func (m *IncrByResp) String() string { return proto.CompactTextString(m) }
-func (*IncrByResp) ProtoMessage()    {}
+func (m *IncrByResp) Reset()      { *m = IncrByResp{} }
+func (*IncrByResp) ProtoMessage() {}
 func (*IncrByResp) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{19}
 }
@@ -1251,9 +1235,8 @@ type DecrByReq struct {
 	Field *Field     `protobuf:"bytes,2,req,name=field" json:"field,omitempty"`
 }
 
-func (m *DecrByReq) Reset()         { *m = DecrByReq{} }
-func (m *DecrByReq) String() string { return proto.CompactTextString(m) }
-func (*DecrByReq) ProtoMessage()    {}
+func (m *DecrByReq) Reset()      { *m = DecrByReq{} }
+func (*DecrByReq) ProtoMessage() {}
 func (*DecrByReq) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{20}
 }
@@ -1303,9 +1286,8 @@ type DecrByResp struct {
 	NewValue *Field      `protobuf:"bytes,2,opt,name=newValue" json:"newValue,omitempty"`
 }
 
-func (m *DecrByResp) Reset()         { *m = DecrByResp{} }
-func (m *DecrByResp) String() string { return proto.CompactTextString(m) }
-func (*DecrByResp) ProtoMessage()    {}
+func (m *DecrByResp) Reset()      { *m = DecrByResp{} }
+func (*DecrByResp) ProtoMessage() {}
 func (*DecrByResp) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{21}
 }
@@ -1359,9 +1341,8 @@ type CompareAndSetReq struct {
 	Old  *Field     `protobuf:"bytes,3,req,name=old" json:"old,omitempty"`
 }
 
-func (m *CompareAndSetReq) Reset()         { *m = CompareAndSetReq{} }
-func (m *CompareAndSetReq) String() string { return proto.CompactTextString(m) }
-func (*CompareAndSetReq) ProtoMessage()    {}
+func (m *CompareAndSetReq) Reset()      { *m = CompareAndSetReq{} }
+func (*CompareAndSetReq) ProtoMessage() {}
 func (*CompareAndSetReq) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{22}
 }
@@ -1418,9 +1399,8 @@ type CompareAndSetResp struct {
 	Value *Field      `protobuf:"bytes,2,opt,name=value" json:"value,omitempty"`
 }
 
-func (m *CompareAndSetResp) Reset()         { *m = CompareAndSetResp{} }
-func (m *CompareAndSetResp) String() string { return proto.CompactTextString(m) }
-func (*CompareAndSetResp) ProtoMessage()    {}
+func (m *CompareAndSetResp) Reset()      { *m = CompareAndSetResp{} }
+func (*CompareAndSetResp) ProtoMessage() {}
 func (*CompareAndSetResp) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{23}
 }
@@ -1474,9 +1454,8 @@ type CompareAndSetNxReq struct {
 	Old  *Field     `protobuf:"bytes,3,req,name=old" json:"old,omitempty"`
 }
 
-func (m *CompareAndSetNxReq) Reset()         { *m = CompareAndSetNxReq{} }
-func (m *CompareAndSetNxReq) String() string { return proto.CompactTextString(m) }
-func (*CompareAndSetNxReq) ProtoMessage()    {}
+func (m *CompareAndSetNxReq) Reset()      { *m = CompareAndSetNxReq{} }
+func (*CompareAndSetNxReq) ProtoMessage() {}
 func (*CompareAndSetNxReq) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{24}
 }
@@ -1533,9 +1512,8 @@ type CompareAndSetNxResp struct {
 	Value *Field      `protobuf:"bytes,4,opt,name=value" json:"value,omitempty"`
 }
 
-func (m *CompareAndSetNxResp) Reset()         { *m = CompareAndSetNxResp{} }
-func (m *CompareAndSetNxResp) String() string { return proto.CompactTextString(m) }
-func (*CompareAndSetNxResp) ProtoMessage()    {}
+func (m *CompareAndSetNxResp) Reset()      { *m = CompareAndSetNxResp{} }
+func (*CompareAndSetNxResp) ProtoMessage() {}
 func (*CompareAndSetNxResp) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{25}
 }
@@ -1585,9 +1563,8 @@ type DelReq struct {
 	Head *ReqCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
 }
 
-func (m *DelReq) Reset()         { *m = DelReq{} }
-func (m *DelReq) String() string { return proto.CompactTextString(m) }
-func (*DelReq) ProtoMessage()    {}
+func (m *DelReq) Reset()      { *m = DelReq{} }
+func (*DelReq) ProtoMessage() {}
 func (*DelReq) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{26}
 }
@@ -1629,9 +1606,8 @@ type DelResp struct {
 	Head *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
 }
 
-func (m *DelResp) Reset()         { *m = DelResp{} }
-func (m *DelResp) String() string { return proto.CompactTextString(m) }
-func (*DelResp) ProtoMessage()    {}
+func (m *DelResp) Reset()      { *m = DelResp{} }
+func (*DelResp) ProtoMessage() {}
 func (*DelResp) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{27}
 }
@@ -1675,9 +1651,8 @@ type Row struct {
 	Fields  []*Field `protobuf:"bytes,3,rep,name=fields" json:"fields,omitempty"`
 }
 
-func (m *Row) Reset()         { *m = Row{} }
-func (m *Row) String() string { return proto.CompactTextString(m) }
-func (*Row) ProtoMessage()    {}
+func (m *Row) Reset()      { *m = Row{} }
+func (*Row) ProtoMessage() {}
 func (*Row) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{28}
 }
@@ -1736,9 +1711,8 @@ type ScanReq struct {
 	Count  int32      `protobuf:"varint,5,opt,name=count" json:"count"`
 }
 
-func (m *ScanReq) Reset()         { *m = ScanReq{} }
-func (m *ScanReq) String() string { return proto.CompactTextString(m) }
-func (*ScanReq) ProtoMessage()    {}
+func (m *ScanReq) Reset()      { *m = ScanReq{} }
+func (*ScanReq) ProtoMessage() {}
 func (*ScanReq) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{29}
 }
@@ -1802,9 +1776,8 @@ type ScanResp struct {
 	Rows []*Row      `protobuf:"bytes,3,rep,name=rows" json:"rows,omitempty"`
 }
 
-func (m *ScanResp) Reset()         { *m = ScanResp{} }
-func (m *ScanResp) String() string { return proto.CompactTextString(m) }
-func (*ScanResp) ProtoMessage()    {}
+func (m *ScanResp) Reset()      { *m = ScanResp{} }
+func (*ScanResp) ProtoMessage() {}
 func (*ScanResp) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{30}
 }
@@ -1853,9 +1826,8 @@ type Cancel struct {
 	Seqs []int64 `protobuf:"varint,1,rep,name=seqs" json:"seqs,omitempty"`
 }
 
-func (m *Cancel) Reset()         { *m = Cancel{} }
-func (m *Cancel) String() string { return proto.CompactTextString(m) }
-func (*Cancel) ProtoMessage()    {}
+func (m *Cancel) Reset()      { *m = Cancel{} }
+func (*Cancel) ProtoMessage() {}
 func (*Cancel) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2fcc84b9998d60d8, []int{31}
 }
@@ -1933,77 +1905,1451 @@ func init() {
 func init() { proto.RegisterFile("proto.proto", fileDescriptor_2fcc84b9998d60d8) }
 
 var fileDescriptor_2fcc84b9998d60d8 = []byte{
-	// 1081 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x56, 0xcd, 0x6e, 0xdb, 0x46,
-	0x17, 0xd5, 0x88, 0x94, 0x44, 0x5d, 0x39, 0xf1, 0x78, 0xac, 0xd8, 0x82, 0xf1, 0x81, 0x9f, 0x30,
-	0x68, 0x03, 0xc1, 0x29, 0x9c, 0xc2, 0x40, 0x97, 0x5d, 0xd4, 0x0e, 0x10, 0x74, 0x53, 0x14, 0xb4,
-	0x1b, 0xa4, 0x2b, 0x87, 0x12, 0xc7, 0x0a, 0x61, 0x6a, 0x86, 0xe2, 0x50, 0x76, 0x04, 0xb4, 0x28,
-	0xfa, 0x06, 0xdd, 0x75, 0xd9, 0x97, 0xe9, 0xc2, 0x4b, 0x2f, 0xbb, 0x2a, 0x1a, 0xfb, 0x45, 0x8a,
-	0x3b, 0x24, 0x25, 0x4b, 0x96, 0x83, 0xd0, 0x6d, 0x37, 0xd2, 0xcc, 0x39, 0x97, 0xf7, 0x9e, 0x33,
-	0xff, 0xd0, 0x8a, 0x13, 0x95, 0xaa, 0x3d, 0xf3, 0xcb, 0x6a, 0xe6, 0x6f, 0xa7, 0x3d, 0x54, 0x43,
-	0x65, 0x9a, 0xcf, 0xb1, 0x95, 0x91, 0xfc, 0x33, 0x70, 0x22, 0x35, 0x0c, 0xa5, 0x27, 0xc6, 0xac,
-	0x0b, 0xce, 0x40, 0x8d, 0xe2, 0x44, 0x68, 0xdd, 0x21, 0x5d, 0xd2, 0x73, 0x0e, 0xec, 0xcb, 0x3f,
-	0xff, 0x5f, 0xf1, 0x66, 0x28, 0x3f, 0x84, 0x66, 0x1e, 0xad, 0x63, 0xd6, 0x86, 0xaa, 0x3a, 0x5b,
-	0x08, 0xac, 0xaa, 0xb3, 0x85, 0x24, 0xd5, 0x95, 0x49, 0xda, 0xc0, 0x12, 0x11, 0x29, 0x3f, 0x38,
-	0xf6, 0xfb, 0x91, 0x38, 0x54, 0xf2, 0xd4, 0x13, 0x63, 0xfe, 0x0c, 0x36, 0xef, 0xa0, 0xf7, 0x15,
-	0xe1, 0xcf, 0x60, 0x3d, 0x0b, 0xc6, 0xb8, 0x70, 0x88, 0xe2, 0x3b, 0x60, 0xc7, 0x7e, 0xfa, 0xd6,
-	0x84, 0x36, 0xf3, 0x50, 0x83, 0xf0, 0x5d, 0xa0, 0x8b, 0xc1, 0x3a, 0x66, 0x5b, 0x60, 0x89, 0x24,
-	0x59, 0x08, 0x46, 0x80, 0xff, 0x4a, 0xa0, 0x76, 0xee, 0x47, 0x13, 0xc1, 0x76, 0xc1, 0x4e, 0xa7,
-	0xb1, 0xe8, 0x90, 0x6e, 0xb5, 0xf7, 0x78, 0x9f, 0x66, 0xc3, 0xb5, 0xf7, 0x0a, 0xb9, 0xe3, 0x69,
-	0x2c, 0x8a, 0x0a, 0x18, 0xc3, 0x18, 0x90, 0xd0, 0x98, 0xb5, 0x72, 0x98, 0x84, 0x88, 0x4d, 0x3a,
-	0x56, 0x97, 0xf4, 0xec, 0x02, 0x9b, 0x20, 0x76, 0xda, 0xb1, 0xbb, 0xa4, 0x47, 0x0a, 0xec, 0x14,
-	0x31, 0xdd, 0xa9, 0xdd, 0xd2, 0x41, 0x34, 0x62, 0xfd, 0x4e, 0xbd, 0x4b, 0x7a, 0x6b, 0x05, 0xd6,
-	0xe7, 0x5f, 0x42, 0xed, 0x34, 0x14, 0x51, 0x80, 0x46, 0xa5, 0x3f, 0x12, 0x8b, 0x46, 0x11, 0x61,
-	0x3b, 0x40, 0xce, 0x8d, 0x8c, 0xd6, 0xfe, 0x5a, 0xae, 0xd7, 0x78, 0xf1, 0xc8, 0x39, 0xdf, 0x03,
-	0x27, 0x0e, 0xe5, 0xf0, 0x24, 0x11, 0x63, 0xc6, 0xa1, 0x99, 0x86, 0x23, 0xa1, 0x53, 0x7f, 0x14,
-	0x9b, 0x34, 0x85, 0xec, 0x39, 0xcc, 0x9f, 0x43, 0x33, 0x8f, 0xd7, 0xf1, 0xe2, 0x07, 0xd5, 0xd5,
-	0x1f, 0xfc, 0x4e, 0x00, 0x12, 0x31, 0x3e, 0x19, 0xa8, 0xd1, 0x48, 0x49, 0xb6, 0x03, 0x35, 0x2d,
-	0xc6, 0x52, 0x99, 0xf1, 0x2b, 0xc2, 0x33, 0x08, 0xb9, 0x14, 0x27, 0xd9, 0xa4, 0x2a, 0x2c, 0x64,
-	0x10, 0x4e, 0xcc, 0x99, 0x98, 0x9a, 0x81, 0x9b, 0x4d, 0xcc, 0x99, 0x98, 0x32, 0x17, 0x1a, 0xe7,
-	0x22, 0xd1, 0xa1, 0x92, 0x66, 0x00, 0xb3, 0x8c, 0xc4, 0x2b, 0x40, 0xe4, 0x51, 0x8b, 0x9a, 0xa4,
-	0x66, 0x30, 0x8b, 0x8a, 0x05, 0xc8, 0x9e, 0x42, 0x0b, 0xad, 0x1c, 0xe7, 0x31, 0xf5, 0x5b, 0x31,
-	0xb7, 0x09, 0xfe, 0x33, 0xc9, 0x02, 0x3f, 0xc6, 0x87, 0x0b, 0x0d, 0x91, 0x24, 0x87, 0x2a, 0x40,
-	0x27, 0xd5, 0x5e, 0xad, 0xa8, 0x99, 0x83, 0xe5, 0xbc, 0x54, 0x66, 0x5e, 0xf8, 0x1b, 0x68, 0x0c,
-	0x45, 0x6a, 0xa6, 0xea, 0x53, 0xb0, 0xdf, 0x0a, 0x3f, 0x30, 0xd5, 0x5b, 0xfb, 0x1b, 0xf9, 0xac,
-	0xce, 0xc7, 0xd9, 0x33, 0x34, 0xdb, 0x82, 0xba, 0x59, 0x1c, 0xb8, 0xe5, 0xac, 0x5e, 0xd3, 0xcb,
-	0x7b, 0xa8, 0xc0, 0x8f, 0x22, 0xa3, 0xa0, 0xd8, 0x3e, 0x08, 0xf0, 0xd7, 0xe0, 0x64, 0x15, 0x74,
-	0xcc, 0x9e, 0x2e, 0x94, 0x60, 0xb3, 0x12, 0xb3, 0x31, 0xc8, 0x6b, 0x7c, 0xb2, 0x50, 0x63, 0xbe,
-	0xc4, 0x0c, 0x58, 0x54, 0xe4, 0xaf, 0xa0, 0xa1, 0xcb, 0x69, 0xff, 0xb8, 0xbc, 0xfb, 0xe0, 0xe8,
-	0x92, 0x8a, 0xf9, 0xf7, 0x00, 0xf8, 0x8d, 0x7c, 0xf7, 0xef, 0xcb, 0xf9, 0x02, 0x5a, 0xb3, 0xd4,
-	0x25, 0x14, 0xbd, 0x86, 0x56, 0x28, 0x07, 0xc9, 0x49, 0x7f, 0x5a, 0x46, 0x12, 0xcf, 0xb7, 0xbe,
-	0x59, 0x65, 0xcb, 0x8a, 0x32, 0x8a, 0xbf, 0x81, 0xb5, 0x79, 0xe6, 0x12, 0xb3, 0xda, 0x03, 0x47,
-	0x8a, 0x0b, 0x73, 0xac, 0x99, 0xc5, 0xb8, 0x9c, 0x7e, 0xc6, 0xa2, 0xf6, 0x40, 0xfc, 0x57, 0xda,
-	0xe7, 0x99, 0x1f, 0xa8, 0xbd, 0xfa, 0x41, 0xed, 0x3f, 0xc0, 0x26, 0x5e, 0x3f, 0x7e, 0x22, 0x4e,
-	0x7c, 0x19, 0x9c, 0x94, 0x5c, 0xa1, 0x2e, 0x58, 0x52, 0x5c, 0xac, 0x74, 0x80, 0x04, 0xf2, 0x2a,
-	0x0a, 0x3a, 0xd6, 0x2a, 0x5e, 0x45, 0x01, 0xef, 0x43, 0xfb, 0x6e, 0xf5, 0x12, 0x3e, 0x79, 0x7e,
-	0x27, 0xad, 0x34, 0x99, 0x51, 0xfc, 0x27, 0xd8, 0x5a, 0xae, 0x51, 0x6e, 0xdd, 0xff, 0x53, 0x93,
-	0x02, 0xb6, 0x57, 0x0a, 0x78, 0x88, 0x4f, 0xfb, 0x7e, 0x9f, 0x9f, 0x43, 0x23, 0x10, 0x51, 0x09,
-	0x63, 0x78, 0x72, 0x64, 0x5f, 0x94, 0xd8, 0xa7, 0x03, 0xb0, 0x12, 0x75, 0x51, 0x1c, 0xe0, 0x18,
-	0x7d, 0xdf, 0x01, 0x5e, 0xbd, 0x75, 0x2d, 0xcc, 0x2e, 0xa3, 0xf9, 0x19, 0x62, 0x7d, 0xe0, 0x0c,
-	0xf9, 0x11, 0x1c, 0x3d, 0xf0, 0xe5, 0xc3, 0xce, 0x79, 0x6b, 0xd5, 0x39, 0x6f, 0x2f, 0x9d, 0xf3,
-	0x78, 0x7b, 0x0d, 0xd4, 0x44, 0x66, 0x77, 0x62, 0x71, 0x3f, 0x65, 0x10, 0x3f, 0x82, 0x66, 0x5e,
-	0xbe, 0xc4, 0x14, 0xb9, 0x60, 0x27, 0xea, 0xa2, 0xf0, 0x05, 0x45, 0x9c, 0xba, 0xf0, 0x0c, 0xce,
-	0xff, 0x07, 0xf5, 0x81, 0x2f, 0x07, 0x22, 0x62, 0x0c, 0x6c, 0x2d, 0xc6, 0xf8, 0x90, 0xb4, 0x7a,
-	0x96, 0x67, 0xda, 0xbb, 0xbf, 0x59, 0xd0, 0x38, 0x1c, 0x05, 0xf8, 0x7e, 0x62, 0x2d, 0x68, 0x7c,
-	0x1b, 0x4a, 0x7c, 0xba, 0x51, 0xc2, 0xd6, 0xc0, 0xc9, 0x3a, 0x3a, 0xa6, 0x55, 0x06, 0x50, 0x3f,
-	0x12, 0x29, 0x32, 0x16, 0x86, 0x99, 0xb6, 0x8e, 0xa9, 0x8d, 0xc4, 0xcb, 0x8c, 0xa8, 0x21, 0xf1,
-	0x32, 0x27, 0xea, 0x48, 0xbc, 0x10, 0x11, 0x12, 0x0d, 0x24, 0x4c, 0x5b, 0xc7, 0xd4, 0x61, 0x8f,
-	0xa0, 0xf9, 0xb5, 0x1c, 0x24, 0x07, 0x53, 0xe4, 0x9a, 0xec, 0x31, 0x40, 0xd1, 0xd5, 0x31, 0x05,
-	0xa4, 0x5f, 0x88, 0x82, 0x6e, 0x21, 0x5d, 0x74, 0x75, 0x4c, 0xd7, 0x50, 0xd6, 0x91, 0x48, 0xbf,
-	0x79, 0x87, 0xec, 0x23, 0x0c, 0xce, 0x7b, 0x3a, 0xa6, 0x8f, 0x59, 0x1b, 0xe8, 0x61, 0xb6, 0xe0,
-	0xbf, 0x92, 0x41, 0xae, 0x77, 0x9d, 0x3d, 0x81, 0x8d, 0x25, 0x54, 0xc7, 0x94, 0xb2, 0x2d, 0x60,
-	0x0b, 0x70, 0x96, 0x73, 0x83, 0x6d, 0xc3, 0xe6, 0x1d, 0x5c, 0xc7, 0x94, 0x19, 0xdf, 0x03, 0x1f,
-	0x9f, 0xe5, 0x74, 0xd3, 0xe8, 0x30, 0x1d, 0x1d, 0xd3, 0x36, 0xe6, 0xf2, 0xee, 0xbc, 0x9f, 0xe9,
-	0x13, 0xcc, 0xe5, 0xdd, 0x7d, 0x41, 0xd3, 0x2d, 0xb6, 0x09, 0xeb, 0xde, 0xe2, 0x6b, 0x99, 0x6e,
-	0xa3, 0x7c, 0x6f, 0xe9, 0x55, 0x4c, 0x3b, 0xbb, 0xdf, 0x41, 0x73, 0xf6, 0xc4, 0x45, 0x0d, 0xa1,
-	0x3c, 0xf7, 0xc3, 0x28, 0xa0, 0x15, 0xd6, 0x00, 0x4b, 0x86, 0x11, 0x25, 0x38, 0xd6, 0x3a, 0x4d,
-	0x42, 0x39, 0xa4, 0x55, 0x04, 0x43, 0x99, 0x52, 0x8b, 0x39, 0x60, 0x4f, 0xb0, 0x65, 0xb3, 0x26,
-	0xd4, 0x4e, 0x23, 0xe5, 0xa7, 0xb4, 0x86, 0x60, 0x3f, 0x52, 0x7d, 0x5a, 0x3f, 0xe8, 0x5e, 0xbe,
-	0x77, 0xc9, 0xd5, 0x7b, 0x97, 0x5c, 0x5e, 0xbb, 0xe4, 0xea, 0xda, 0x25, 0x7f, 0x5d, 0xbb, 0xe4,
-	0x97, 0x1b, 0xb7, 0x72, 0x75, 0xe3, 0x56, 0xfe, 0xb8, 0x71, 0x2b, 0x7f, 0x07, 0x00, 0x00, 0xff,
-	0xff, 0xba, 0x2e, 0xb6, 0x6f, 0xb2, 0x0c, 0x00, 0x00,
+	// 1108 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x56, 0xcf, 0x6f, 0xe3, 0x44,
+	0x14, 0xce, 0xc4, 0x4e, 0xe2, 0xbc, 0x74, 0xdb, 0xe9, 0x34, 0xdb, 0x46, 0x15, 0x32, 0x91, 0x05,
+	0xab, 0xa8, 0x8b, 0xba, 0xa8, 0x12, 0x12, 0x17, 0x0e, 0xb4, 0x2b, 0xad, 0xb8, 0x20, 0xe4, 0x96,
+	0xd5, 0x72, 0xea, 0x3a, 0xf1, 0x34, 0x6b, 0xd5, 0x99, 0x71, 0x3c, 0x4e, 0xbb, 0x91, 0x40, 0xc0,
+	0x7f, 0xc0, 0x8d, 0x23, 0x57, 0xfe, 0x10, 0x0e, 0x3d, 0xf6, 0xb8, 0x27, 0x44, 0xd3, 0x0b, 0xc7,
+	0xfd, 0x13, 0xd0, 0x1b, 0xdb, 0x49, 0x93, 0xa6, 0xab, 0x75, 0x81, 0x4b, 0x32, 0xf3, 0x7d, 0xcf,
+	0xef, 0x7d, 0xdf, 0xfc, 0x86, 0x46, 0x14, 0xcb, 0x44, 0xee, 0xea, 0x5f, 0x56, 0xd1, 0x7f, 0xdb,
+	0xcd, 0xbe, 0xec, 0x4b, 0xdd, 0x7c, 0x82, 0xad, 0x94, 0x74, 0x3e, 0x01, 0x2b, 0x94, 0xfd, 0x40,
+	0xb8, 0x7c, 0xc8, 0xda, 0x60, 0xf5, 0xe4, 0x20, 0x8a, 0xb9, 0x52, 0x2d, 0xd2, 0x26, 0x1d, 0x6b,
+	0xdf, 0xbc, 0xf8, 0xf3, 0xc3, 0x92, 0x3b, 0x45, 0x9d, 0x03, 0xa8, 0x67, 0xd1, 0x2a, 0x62, 0x4d,
+	0x28, 0xcb, 0xd3, 0xb9, 0xc0, 0xb2, 0x3c, 0x9d, 0x4b, 0x52, 0x5e, 0x9a, 0xa4, 0x09, 0x2c, 0xe6,
+	0xa1, 0xf4, 0xfc, 0x23, 0xaf, 0x1b, 0xf2, 0x03, 0x29, 0x4e, 0x5c, 0x3e, 0x74, 0x1e, 0xc3, 0xc6,
+	0x2d, 0xf4, 0xae, 0x22, 0xce, 0x63, 0x58, 0x4b, 0x83, 0x31, 0x2e, 0xe8, 0xa3, 0xf8, 0x16, 0x98,
+	0x91, 0x97, 0xbc, 0xd2, 0xa1, 0xf5, 0x2c, 0x54, 0x23, 0xce, 0x0e, 0xd0, 0xf9, 0x60, 0x15, 0xb1,
+	0x4d, 0x30, 0x78, 0x1c, 0xcf, 0x05, 0x23, 0xe0, 0xfc, 0x4a, 0xa0, 0x72, 0xe6, 0x85, 0x23, 0xce,
+	0x76, 0xc0, 0x4c, 0xc6, 0x11, 0x6f, 0x91, 0x76, 0xb9, 0xb3, 0xba, 0x47, 0xd3, 0xe1, 0xda, 0x7d,
+	0x8e, 0xdc, 0xd1, 0x38, 0xe2, 0x79, 0x05, 0x8c, 0x61, 0x0c, 0x48, 0xa0, 0xcd, 0x1a, 0x19, 0x4c,
+	0x02, 0xc4, 0x46, 0x2d, 0xa3, 0x4d, 0x3a, 0x66, 0x8e, 0x8d, 0x10, 0x3b, 0x69, 0x99, 0x6d, 0xd2,
+	0x21, 0x39, 0x76, 0x82, 0x98, 0x6a, 0x55, 0x6e, 0xe8, 0x20, 0x0a, 0xb1, 0x6e, 0xab, 0xda, 0x26,
+	0x9d, 0x95, 0x1c, 0xeb, 0x3a, 0x5f, 0x40, 0xe5, 0x24, 0xe0, 0xa1, 0x8f, 0x46, 0x85, 0x37, 0xe0,
+	0xf3, 0x46, 0x11, 0x61, 0xdb, 0x40, 0xce, 0xb4, 0x8c, 0xc6, 0xde, 0x4a, 0xa6, 0x57, 0x7b, 0x71,
+	0xc9, 0x99, 0xb3, 0x0b, 0x56, 0x14, 0x88, 0xfe, 0x71, 0xcc, 0x87, 0xcc, 0x81, 0x7a, 0x12, 0x0c,
+	0xb8, 0x4a, 0xbc, 0x41, 0xa4, 0xd3, 0xe4, 0xb2, 0x67, 0xb0, 0xf3, 0x04, 0xea, 0x59, 0xbc, 0x8a,
+	0xe6, 0x3f, 0x28, 0x2f, 0xff, 0xe0, 0x0f, 0x02, 0x10, 0xf3, 0xe1, 0x71, 0x4f, 0x0e, 0x06, 0x52,
+	0xb0, 0x6d, 0xa8, 0x28, 0x3e, 0x14, 0x52, 0x8f, 0x5f, 0x1e, 0x9e, 0x42, 0xc8, 0x25, 0x38, 0xc9,
+	0x3a, 0x55, 0x6e, 0x21, 0x85, 0x70, 0x62, 0x4e, 0xf9, 0x58, 0x0f, 0xdc, 0x74, 0x62, 0x4e, 0xf9,
+	0x98, 0xd9, 0x50, 0x3b, 0xe3, 0xb1, 0x0a, 0xa4, 0xd0, 0x03, 0x98, 0x66, 0x24, 0x6e, 0x0e, 0x22,
+	0x8f, 0x5a, 0xe4, 0x28, 0xd1, 0x83, 0x99, 0x57, 0xcc, 0x41, 0xf6, 0x08, 0x1a, 0x68, 0xe5, 0x28,
+	0x8b, 0xa9, 0xde, 0x88, 0xb9, 0x49, 0x38, 0x3f, 0x93, 0x34, 0xf0, 0x7d, 0x7c, 0xd8, 0x50, 0xe3,
+	0x71, 0x7c, 0x20, 0x7d, 0x74, 0x52, 0xee, 0x54, 0xf2, 0x9a, 0x19, 0x58, 0xcc, 0x4b, 0x69, 0xea,
+	0xc5, 0x79, 0x09, 0xb5, 0x3e, 0x4f, 0xf4, 0x54, 0x7d, 0x0c, 0xe6, 0x2b, 0xee, 0xf9, 0xba, 0x7a,
+	0x63, 0x6f, 0x3d, 0x9b, 0xd5, 0xd9, 0x38, 0xbb, 0x9a, 0x66, 0x9b, 0x50, 0xd5, 0x8b, 0x03, 0xb7,
+	0x9c, 0xd1, 0xa9, 0xbb, 0x59, 0x0f, 0x15, 0x78, 0x61, 0xa8, 0x15, 0xe4, 0xdb, 0x07, 0x01, 0xe7,
+	0x05, 0x58, 0x69, 0x05, 0x15, 0xb1, 0x47, 0x73, 0x25, 0xd8, 0xb4, 0xc4, 0x74, 0x0c, 0xb2, 0x1a,
+	0x1f, 0xcd, 0xd5, 0x98, 0x2d, 0x31, 0x0d, 0xe6, 0x15, 0x9d, 0xe7, 0x50, 0x53, 0xc5, 0xb4, 0xbf,
+	0x5f, 0xde, 0x3d, 0xb0, 0x54, 0x41, 0xc5, 0xce, 0x77, 0x00, 0xf8, 0x8d, 0x78, 0xfd, 0xdf, 0xcb,
+	0xf9, 0x0c, 0x1a, 0xd3, 0xd4, 0x05, 0x14, 0xbd, 0x80, 0x46, 0x20, 0x7a, 0xf1, 0x71, 0x77, 0x5c,
+	0x44, 0x92, 0x93, 0x6d, 0x7d, 0xbd, 0xca, 0x16, 0x15, 0xa5, 0x94, 0xf3, 0x12, 0x56, 0x66, 0x99,
+	0x0b, 0xcc, 0x6a, 0x07, 0x2c, 0xc1, 0xcf, 0xf5, 0xb1, 0xa6, 0x17, 0xe3, 0x62, 0xfa, 0x29, 0x8b,
+	0xda, 0x7d, 0xfe, 0x7f, 0x69, 0x9f, 0x65, 0xbe, 0xa7, 0xf6, 0xf2, 0x3b, 0xb5, 0x7f, 0x0f, 0x1b,
+	0x78, 0xfd, 0x78, 0x31, 0x3f, 0xf6, 0x84, 0x7f, 0x5c, 0x70, 0x85, 0xda, 0x60, 0x08, 0x7e, 0xbe,
+	0xd4, 0x01, 0x12, 0xc8, 0xcb, 0xd0, 0x6f, 0x19, 0xcb, 0x78, 0x19, 0xfa, 0x4e, 0x17, 0x9a, 0xb7,
+	0xab, 0x17, 0xf0, 0xe9, 0x64, 0x77, 0xd2, 0x52, 0x93, 0x29, 0xe5, 0xfc, 0x08, 0x9b, 0x8b, 0x35,
+	0x8a, 0xad, 0xfb, 0x7f, 0x6b, 0x92, 0xc3, 0xd6, 0x52, 0x01, 0xf7, 0xf1, 0x69, 0xde, 0xed, 0xf3,
+	0x53, 0xa8, 0xf9, 0x3c, 0x2c, 0x60, 0x0c, 0x4f, 0x8e, 0xf4, 0x8b, 0x02, 0xfb, 0xb4, 0x07, 0x46,
+	0x2c, 0xcf, 0xf3, 0x03, 0x1c, 0xa3, 0xef, 0x3a, 0xc0, 0xcb, 0x37, 0xae, 0x85, 0xe9, 0x65, 0x34,
+	0x3b, 0x43, 0x8c, 0x77, 0x9c, 0x21, 0x3f, 0x80, 0xa5, 0x7a, 0x9e, 0xb8, 0xdf, 0x39, 0x6f, 0x2c,
+	0x3b, 0xe7, 0xcd, 0x85, 0x73, 0x1e, 0x6f, 0xaf, 0x9e, 0x1c, 0x89, 0xf4, 0x4e, 0xcc, 0xef, 0xa7,
+	0x14, 0x72, 0x0e, 0xa1, 0x9e, 0x95, 0x2f, 0x30, 0x45, 0x36, 0x98, 0xb1, 0x3c, 0xcf, 0x7d, 0x41,
+	0x1e, 0x27, 0xcf, 0x5d, 0x8d, 0x3b, 0x1f, 0x40, 0xb5, 0xe7, 0x89, 0x1e, 0x0f, 0x19, 0x03, 0x53,
+	0xf1, 0x21, 0x3e, 0x24, 0x8d, 0x8e, 0xe1, 0xea, 0xf6, 0xce, 0x6f, 0x06, 0xd4, 0x0e, 0x06, 0x3e,
+	0xbe, 0x9f, 0x58, 0x03, 0x6a, 0xdf, 0x04, 0x02, 0x9f, 0x6e, 0x94, 0xb0, 0x15, 0xb0, 0xd2, 0x8e,
+	0x8a, 0x68, 0x99, 0x01, 0x54, 0x0f, 0x79, 0x82, 0x8c, 0x81, 0x61, 0xba, 0xad, 0x22, 0x6a, 0x22,
+	0xf1, 0x2c, 0x25, 0x2a, 0x48, 0x3c, 0xcb, 0x88, 0x2a, 0x12, 0x4f, 0x79, 0x88, 0x44, 0x0d, 0x09,
+	0xdd, 0x56, 0x11, 0xb5, 0xd8, 0x03, 0xa8, 0x7f, 0x25, 0x7a, 0xf1, 0xfe, 0x18, 0xb9, 0x3a, 0x5b,
+	0x05, 0xc8, 0xbb, 0x2a, 0xa2, 0x80, 0xf4, 0x53, 0x9e, 0xd3, 0x0d, 0xa4, 0xf3, 0xae, 0x8a, 0xe8,
+	0x0a, 0xca, 0x3a, 0xe4, 0xc9, 0xd7, 0xaf, 0x91, 0x7d, 0x80, 0xc1, 0x59, 0x4f, 0x45, 0x74, 0x95,
+	0x35, 0x81, 0x1e, 0xa4, 0x0b, 0xfe, 0x4b, 0xe1, 0x67, 0x7a, 0xd7, 0xd8, 0x43, 0x58, 0x5f, 0x40,
+	0x55, 0x44, 0x29, 0xdb, 0x04, 0x36, 0x07, 0xa7, 0x39, 0xd7, 0xd9, 0x16, 0x6c, 0xdc, 0xc2, 0x55,
+	0x44, 0x99, 0xf6, 0xdd, 0xf3, 0xf0, 0x59, 0x4e, 0x37, 0xb4, 0x0e, 0xdd, 0x51, 0x11, 0x6d, 0x62,
+	0x2e, 0xf7, 0xd6, 0xfb, 0x99, 0x3e, 0xc4, 0x5c, 0xee, 0xed, 0x17, 0x34, 0xdd, 0x64, 0x1b, 0xb0,
+	0xe6, 0xce, 0xbf, 0x96, 0xe9, 0x16, 0xca, 0x77, 0x17, 0x5e, 0xc5, 0xb4, 0xb5, 0xf3, 0x2d, 0xd4,
+	0xa7, 0x4f, 0x5c, 0xd4, 0x10, 0x88, 0x33, 0x2f, 0x08, 0x7d, 0x5a, 0x62, 0x35, 0x30, 0x44, 0x10,
+	0x52, 0x82, 0x63, 0xad, 0x92, 0x38, 0x10, 0x7d, 0x5a, 0x46, 0x30, 0x10, 0x09, 0x35, 0x98, 0x05,
+	0xe6, 0x08, 0x5b, 0x26, 0xab, 0x43, 0xe5, 0x24, 0x94, 0x5e, 0x42, 0x2b, 0x08, 0x76, 0x43, 0xd9,
+	0xa5, 0xd5, 0xfd, 0xcf, 0x2f, 0xae, 0x6c, 0x72, 0x79, 0x65, 0x93, 0x37, 0x57, 0x76, 0xe9, 0xed,
+	0x95, 0x4d, 0x7e, 0x9a, 0xd8, 0xe4, 0xf7, 0x89, 0x4d, 0x2e, 0x26, 0x36, 0xb9, 0x9c, 0xd8, 0xe4,
+	0xaf, 0x89, 0x4d, 0xfe, 0x9e, 0xd8, 0xa5, 0xb7, 0x13, 0x9b, 0xfc, 0x72, 0x6d, 0x97, 0x2e, 0xaf,
+	0xed, 0xd2, 0x9b, 0x6b, 0xbb, 0xf4, 0x4f, 0x00, 0x00, 0x00, 0xff, 0xff, 0xf5, 0x21, 0xe8, 0x69,
+	0xca, 0x0c, 0x00, 0x00,
 }
 
+func (x CmdType) String() string {
+	s, ok := CmdType_name[int32(x)]
+	if ok {
+		return s
+	}
+	return strconv.Itoa(int(x))
+}
+func (x ValueType) String() string {
+	s, ok := ValueType_name[int32(x)]
+	if ok {
+		return s
+	}
+	return strconv.Itoa(int(x))
+}
+func (this *LoginReq) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*LoginReq)
+	if !ok {
+		that2, ok := that.(LoginReq)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Compress != that1.Compress {
+		return false
+	}
+	return true
+}
+func (this *LoginResp) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*LoginResp)
+	if !ok {
+		that2, ok := that.(LoginResp)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Ok != that1.Ok {
+		return false
+	}
+	if this.Compress != that1.Compress {
+		return false
+	}
+	return true
+}
+func (this *ReloadTableConfReq) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ReloadTableConfReq)
+	if !ok {
+		that2, ok := that.(ReloadTableConfReq)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *ReloadTableConfResp) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ReloadTableConfResp)
+	if !ok {
+		that2, ok := that.(ReloadTableConfResp)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Ok != that1.Ok {
+		return false
+	}
+	return true
+}
+func (this *ReloadConfigReq) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ReloadConfigReq)
+	if !ok {
+		that2, ok := that.(ReloadConfigReq)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Path != that1.Path {
+		return false
+	}
+	return true
+}
+func (this *ReloadConfigResp) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ReloadConfigResp)
+	if !ok {
+		that2, ok := that.(ReloadConfigResp)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Err != that1.Err {
+		return false
+	}
+	return true
+}
+func (this *Value) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Value)
+	if !ok {
+		that2, ok := that.(Value)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Type != that1.Type {
+		return false
+	}
+	if this.I != that1.I {
+		return false
+	}
+	if this.U != that1.U {
+		return false
+	}
+	if this.F != that1.F {
+		return false
+	}
+	if this.S != that1.S {
+		return false
+	}
+	if !bytes.Equal(this.B, that1.B) {
+		return false
+	}
+	return true
+}
+func (this *Field) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Field)
+	if !ok {
+		that2, ok := that.(Field)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Name != that1.Name {
+		return false
+	}
+	if !this.V.Equal(that1.V) {
+		return false
+	}
+	return true
+}
+func (this *PingReq) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*PingReq)
+	if !ok {
+		that2, ok := that.(PingReq)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Timestamp != that1.Timestamp {
+		return false
+	}
+	return true
+}
+func (this *PingResp) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*PingResp)
+	if !ok {
+		that2, ok := that.(PingResp)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Timestamp != that1.Timestamp {
+		return false
+	}
+	return true
+}
+func (this *ReqCommon) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ReqCommon)
+	if !ok {
+		that2, ok := that.(ReqCommon)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Seqno != that1.Seqno {
+		return false
+	}
+	if this.Table != that1.Table {
+		return false
+	}
+	if this.Key != that1.Key {
+		return false
+	}
+	if this.Version != nil && that1.Version != nil {
+		if *this.Version != *that1.Version {
+			return false
+		}
+	} else if this.Version != nil {
+		return false
+	} else if that1.Version != nil {
+		return false
+	}
+	if this.Timeout != that1.Timeout {
+		return false
+	}
+	if this.RespTimeout != that1.RespTimeout {
+		return false
+	}
+	return true
+}
+func (this *RespCommon) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*RespCommon)
+	if !ok {
+		that2, ok := that.(RespCommon)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Seqno != that1.Seqno {
+		return false
+	}
+	if this.ErrCode != that1.ErrCode {
+		return false
+	}
+	if this.Key != that1.Key {
+		return false
+	}
+	if this.Version != that1.Version {
+		return false
+	}
+	return true
+}
+func (this *GetReq) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*GetReq)
+	if !ok {
+		that2, ok := that.(GetReq)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Head.Equal(that1.Head) {
+		return false
+	}
+	if len(this.Fields) != len(that1.Fields) {
+		return false
+	}
+	for i := range this.Fields {
+		if this.Fields[i] != that1.Fields[i] {
+			return false
+		}
+	}
+	if this.All != that1.All {
+		return false
+	}
+	return true
+}
+func (this *GetResp) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*GetResp)
+	if !ok {
+		that2, ok := that.(GetResp)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Head.Equal(that1.Head) {
+		return false
+	}
+	if len(this.Fields) != len(that1.Fields) {
+		return false
+	}
+	for i := range this.Fields {
+		if !this.Fields[i].Equal(that1.Fields[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *SetReq) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SetReq)
+	if !ok {
+		that2, ok := that.(SetReq)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Head.Equal(that1.Head) {
+		return false
+	}
+	if len(this.Fields) != len(that1.Fields) {
+		return false
+	}
+	for i := range this.Fields {
+		if !this.Fields[i].Equal(that1.Fields[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *SetResp) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SetResp)
+	if !ok {
+		that2, ok := that.(SetResp)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Head.Equal(that1.Head) {
+		return false
+	}
+	return true
+}
+func (this *SetNxReq) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SetNxReq)
+	if !ok {
+		that2, ok := that.(SetNxReq)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Head.Equal(that1.Head) {
+		return false
+	}
+	if len(this.Fields) != len(that1.Fields) {
+		return false
+	}
+	for i := range this.Fields {
+		if !this.Fields[i].Equal(that1.Fields[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *SetNxResp) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SetNxResp)
+	if !ok {
+		that2, ok := that.(SetNxResp)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Head.Equal(that1.Head) {
+		return false
+	}
+	return true
+}
+func (this *IncrByReq) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*IncrByReq)
+	if !ok {
+		that2, ok := that.(IncrByReq)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Head.Equal(that1.Head) {
+		return false
+	}
+	if !this.Field.Equal(that1.Field) {
+		return false
+	}
+	return true
+}
+func (this *IncrByResp) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*IncrByResp)
+	if !ok {
+		that2, ok := that.(IncrByResp)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Head.Equal(that1.Head) {
+		return false
+	}
+	if !this.NewValue.Equal(that1.NewValue) {
+		return false
+	}
+	return true
+}
+func (this *DecrByReq) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*DecrByReq)
+	if !ok {
+		that2, ok := that.(DecrByReq)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Head.Equal(that1.Head) {
+		return false
+	}
+	if !this.Field.Equal(that1.Field) {
+		return false
+	}
+	return true
+}
+func (this *DecrByResp) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*DecrByResp)
+	if !ok {
+		that2, ok := that.(DecrByResp)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Head.Equal(that1.Head) {
+		return false
+	}
+	if !this.NewValue.Equal(that1.NewValue) {
+		return false
+	}
+	return true
+}
+func (this *CompareAndSetReq) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*CompareAndSetReq)
+	if !ok {
+		that2, ok := that.(CompareAndSetReq)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Head.Equal(that1.Head) {
+		return false
+	}
+	if !this.New.Equal(that1.New) {
+		return false
+	}
+	if !this.Old.Equal(that1.Old) {
+		return false
+	}
+	return true
+}
+func (this *CompareAndSetResp) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*CompareAndSetResp)
+	if !ok {
+		that2, ok := that.(CompareAndSetResp)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Head.Equal(that1.Head) {
+		return false
+	}
+	if !this.Value.Equal(that1.Value) {
+		return false
+	}
+	return true
+}
+func (this *CompareAndSetNxReq) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*CompareAndSetNxReq)
+	if !ok {
+		that2, ok := that.(CompareAndSetNxReq)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Head.Equal(that1.Head) {
+		return false
+	}
+	if !this.New.Equal(that1.New) {
+		return false
+	}
+	if !this.Old.Equal(that1.Old) {
+		return false
+	}
+	return true
+}
+func (this *CompareAndSetNxResp) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*CompareAndSetNxResp)
+	if !ok {
+		that2, ok := that.(CompareAndSetNxResp)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Head.Equal(that1.Head) {
+		return false
+	}
+	if !this.Value.Equal(that1.Value) {
+		return false
+	}
+	return true
+}
+func (this *DelReq) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*DelReq)
+	if !ok {
+		that2, ok := that.(DelReq)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Head.Equal(that1.Head) {
+		return false
+	}
+	return true
+}
+func (this *DelResp) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*DelResp)
+	if !ok {
+		that2, ok := that.(DelResp)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Head.Equal(that1.Head) {
+		return false
+	}
+	return true
+}
+func (this *Row) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Row)
+	if !ok {
+		that2, ok := that.(Row)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Key != that1.Key {
+		return false
+	}
+	if this.Version != that1.Version {
+		return false
+	}
+	if len(this.Fields) != len(that1.Fields) {
+		return false
+	}
+	for i := range this.Fields {
+		if !this.Fields[i].Equal(that1.Fields[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *ScanReq) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ScanReq)
+	if !ok {
+		that2, ok := that.(ScanReq)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Head.Equal(that1.Head) {
+		return false
+	}
+	if len(this.Fields) != len(that1.Fields) {
+		return false
+	}
+	for i := range this.Fields {
+		if this.Fields[i] != that1.Fields[i] {
+			return false
+		}
+	}
+	if this.All != that1.All {
+		return false
+	}
+	if this.Count != that1.Count {
+		return false
+	}
+	return true
+}
+func (this *ScanResp) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ScanResp)
+	if !ok {
+		that2, ok := that.(ScanResp)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Head.Equal(that1.Head) {
+		return false
+	}
+	if len(this.Rows) != len(that1.Rows) {
+		return false
+	}
+	for i := range this.Rows {
+		if !this.Rows[i].Equal(that1.Rows[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *Cancel) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Cancel)
+	if !ok {
+		that2, ok := that.(Cancel)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Seqs) != len(that1.Seqs) {
+		return false
+	}
+	for i := range this.Seqs {
+		if this.Seqs[i] != that1.Seqs[i] {
+			return false
+		}
+	}
+	return true
+}
+func (this *LoginReq) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&proto.LoginReq{")
+	s = append(s, "Compress: "+fmt.Sprintf("%#v", this.Compress)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *LoginResp) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&proto.LoginResp{")
+	s = append(s, "Ok: "+fmt.Sprintf("%#v", this.Ok)+",\n")
+	s = append(s, "Compress: "+fmt.Sprintf("%#v", this.Compress)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ReloadTableConfReq) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&proto.ReloadTableConfReq{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ReloadTableConfResp) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&proto.ReloadTableConfResp{")
+	s = append(s, "Ok: "+fmt.Sprintf("%#v", this.Ok)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ReloadConfigReq) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&proto.ReloadConfigReq{")
+	s = append(s, "Path: "+fmt.Sprintf("%#v", this.Path)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ReloadConfigResp) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&proto.ReloadConfigResp{")
+	s = append(s, "Err: "+fmt.Sprintf("%#v", this.Err)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *Value) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 10)
+	s = append(s, "&proto.Value{")
+	s = append(s, "Type: "+fmt.Sprintf("%#v", this.Type)+",\n")
+	s = append(s, "I: "+fmt.Sprintf("%#v", this.I)+",\n")
+	s = append(s, "U: "+fmt.Sprintf("%#v", this.U)+",\n")
+	s = append(s, "F: "+fmt.Sprintf("%#v", this.F)+",\n")
+	s = append(s, "S: "+fmt.Sprintf("%#v", this.S)+",\n")
+	s = append(s, "B: "+fmt.Sprintf("%#v", this.B)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *Field) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&proto.Field{")
+	s = append(s, "Name: "+fmt.Sprintf("%#v", this.Name)+",\n")
+	if this.V != nil {
+		s = append(s, "V: "+fmt.Sprintf("%#v", this.V)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *PingReq) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&proto.PingReq{")
+	s = append(s, "Timestamp: "+fmt.Sprintf("%#v", this.Timestamp)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *PingResp) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&proto.PingResp{")
+	s = append(s, "Timestamp: "+fmt.Sprintf("%#v", this.Timestamp)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ReqCommon) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 10)
+	s = append(s, "&proto.ReqCommon{")
+	s = append(s, "Seqno: "+fmt.Sprintf("%#v", this.Seqno)+",\n")
+	s = append(s, "Table: "+fmt.Sprintf("%#v", this.Table)+",\n")
+	s = append(s, "Key: "+fmt.Sprintf("%#v", this.Key)+",\n")
+	if this.Version != nil {
+		s = append(s, "Version: "+valueToGoStringProto(this.Version, "int64")+",\n")
+	}
+	s = append(s, "Timeout: "+fmt.Sprintf("%#v", this.Timeout)+",\n")
+	s = append(s, "RespTimeout: "+fmt.Sprintf("%#v", this.RespTimeout)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *RespCommon) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 8)
+	s = append(s, "&proto.RespCommon{")
+	s = append(s, "Seqno: "+fmt.Sprintf("%#v", this.Seqno)+",\n")
+	s = append(s, "ErrCode: "+fmt.Sprintf("%#v", this.ErrCode)+",\n")
+	s = append(s, "Key: "+fmt.Sprintf("%#v", this.Key)+",\n")
+	s = append(s, "Version: "+fmt.Sprintf("%#v", this.Version)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *GetReq) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&proto.GetReq{")
+	if this.Head != nil {
+		s = append(s, "Head: "+fmt.Sprintf("%#v", this.Head)+",\n")
+	}
+	if this.Fields != nil {
+		s = append(s, "Fields: "+fmt.Sprintf("%#v", this.Fields)+",\n")
+	}
+	s = append(s, "All: "+fmt.Sprintf("%#v", this.All)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *GetResp) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&proto.GetResp{")
+	if this.Head != nil {
+		s = append(s, "Head: "+fmt.Sprintf("%#v", this.Head)+",\n")
+	}
+	if this.Fields != nil {
+		s = append(s, "Fields: "+fmt.Sprintf("%#v", this.Fields)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SetReq) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&proto.SetReq{")
+	if this.Head != nil {
+		s = append(s, "Head: "+fmt.Sprintf("%#v", this.Head)+",\n")
+	}
+	if this.Fields != nil {
+		s = append(s, "Fields: "+fmt.Sprintf("%#v", this.Fields)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SetResp) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&proto.SetResp{")
+	if this.Head != nil {
+		s = append(s, "Head: "+fmt.Sprintf("%#v", this.Head)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SetNxReq) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&proto.SetNxReq{")
+	if this.Head != nil {
+		s = append(s, "Head: "+fmt.Sprintf("%#v", this.Head)+",\n")
+	}
+	if this.Fields != nil {
+		s = append(s, "Fields: "+fmt.Sprintf("%#v", this.Fields)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SetNxResp) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&proto.SetNxResp{")
+	if this.Head != nil {
+		s = append(s, "Head: "+fmt.Sprintf("%#v", this.Head)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *IncrByReq) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&proto.IncrByReq{")
+	if this.Head != nil {
+		s = append(s, "Head: "+fmt.Sprintf("%#v", this.Head)+",\n")
+	}
+	if this.Field != nil {
+		s = append(s, "Field: "+fmt.Sprintf("%#v", this.Field)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *IncrByResp) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&proto.IncrByResp{")
+	if this.Head != nil {
+		s = append(s, "Head: "+fmt.Sprintf("%#v", this.Head)+",\n")
+	}
+	if this.NewValue != nil {
+		s = append(s, "NewValue: "+fmt.Sprintf("%#v", this.NewValue)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *DecrByReq) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&proto.DecrByReq{")
+	if this.Head != nil {
+		s = append(s, "Head: "+fmt.Sprintf("%#v", this.Head)+",\n")
+	}
+	if this.Field != nil {
+		s = append(s, "Field: "+fmt.Sprintf("%#v", this.Field)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *DecrByResp) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&proto.DecrByResp{")
+	if this.Head != nil {
+		s = append(s, "Head: "+fmt.Sprintf("%#v", this.Head)+",\n")
+	}
+	if this.NewValue != nil {
+		s = append(s, "NewValue: "+fmt.Sprintf("%#v", this.NewValue)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *CompareAndSetReq) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&proto.CompareAndSetReq{")
+	if this.Head != nil {
+		s = append(s, "Head: "+fmt.Sprintf("%#v", this.Head)+",\n")
+	}
+	if this.New != nil {
+		s = append(s, "New: "+fmt.Sprintf("%#v", this.New)+",\n")
+	}
+	if this.Old != nil {
+		s = append(s, "Old: "+fmt.Sprintf("%#v", this.Old)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *CompareAndSetResp) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&proto.CompareAndSetResp{")
+	if this.Head != nil {
+		s = append(s, "Head: "+fmt.Sprintf("%#v", this.Head)+",\n")
+	}
+	if this.Value != nil {
+		s = append(s, "Value: "+fmt.Sprintf("%#v", this.Value)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *CompareAndSetNxReq) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&proto.CompareAndSetNxReq{")
+	if this.Head != nil {
+		s = append(s, "Head: "+fmt.Sprintf("%#v", this.Head)+",\n")
+	}
+	if this.New != nil {
+		s = append(s, "New: "+fmt.Sprintf("%#v", this.New)+",\n")
+	}
+	if this.Old != nil {
+		s = append(s, "Old: "+fmt.Sprintf("%#v", this.Old)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *CompareAndSetNxResp) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&proto.CompareAndSetNxResp{")
+	if this.Head != nil {
+		s = append(s, "Head: "+fmt.Sprintf("%#v", this.Head)+",\n")
+	}
+	if this.Value != nil {
+		s = append(s, "Value: "+fmt.Sprintf("%#v", this.Value)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *DelReq) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&proto.DelReq{")
+	if this.Head != nil {
+		s = append(s, "Head: "+fmt.Sprintf("%#v", this.Head)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *DelResp) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&proto.DelResp{")
+	if this.Head != nil {
+		s = append(s, "Head: "+fmt.Sprintf("%#v", this.Head)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *Row) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&proto.Row{")
+	s = append(s, "Key: "+fmt.Sprintf("%#v", this.Key)+",\n")
+	s = append(s, "Version: "+fmt.Sprintf("%#v", this.Version)+",\n")
+	if this.Fields != nil {
+		s = append(s, "Fields: "+fmt.Sprintf("%#v", this.Fields)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ScanReq) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 8)
+	s = append(s, "&proto.ScanReq{")
+	if this.Head != nil {
+		s = append(s, "Head: "+fmt.Sprintf("%#v", this.Head)+",\n")
+	}
+	if this.Fields != nil {
+		s = append(s, "Fields: "+fmt.Sprintf("%#v", this.Fields)+",\n")
+	}
+	s = append(s, "All: "+fmt.Sprintf("%#v", this.All)+",\n")
+	s = append(s, "Count: "+fmt.Sprintf("%#v", this.Count)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ScanResp) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&proto.ScanResp{")
+	if this.Head != nil {
+		s = append(s, "Head: "+fmt.Sprintf("%#v", this.Head)+",\n")
+	}
+	if this.Rows != nil {
+		s = append(s, "Rows: "+fmt.Sprintf("%#v", this.Rows)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *Cancel) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&proto.Cancel{")
+	if this.Seqs != nil {
+		s = append(s, "Seqs: "+fmt.Sprintf("%#v", this.Seqs)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func valueToGoStringProto(v interface{}, typ string) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("func(v %v) *%v { return &v } ( %#v )", typ, typ, pv)
+}
 func (m *LoginReq) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
@@ -3884,6 +5230,394 @@ func sovProto(x uint64) (n int) {
 }
 func sozProto(x uint64) (n int) {
 	return sovProto(uint64((x << 1) ^ uint64((int64(x) >> 63))))
+}
+func (this *LoginReq) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&LoginReq{`,
+		`Compress:` + fmt.Sprintf("%v", this.Compress) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *LoginResp) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&LoginResp{`,
+		`Ok:` + fmt.Sprintf("%v", this.Ok) + `,`,
+		`Compress:` + fmt.Sprintf("%v", this.Compress) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ReloadTableConfReq) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ReloadTableConfReq{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ReloadTableConfResp) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ReloadTableConfResp{`,
+		`Ok:` + fmt.Sprintf("%v", this.Ok) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ReloadConfigReq) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ReloadConfigReq{`,
+		`Path:` + fmt.Sprintf("%v", this.Path) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ReloadConfigResp) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ReloadConfigResp{`,
+		`Err:` + fmt.Sprintf("%v", this.Err) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *Value) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&Value{`,
+		`Type:` + fmt.Sprintf("%v", this.Type) + `,`,
+		`I:` + fmt.Sprintf("%v", this.I) + `,`,
+		`U:` + fmt.Sprintf("%v", this.U) + `,`,
+		`F:` + fmt.Sprintf("%v", this.F) + `,`,
+		`S:` + fmt.Sprintf("%v", this.S) + `,`,
+		`B:` + fmt.Sprintf("%v", this.B) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *Field) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&Field{`,
+		`Name:` + fmt.Sprintf("%v", this.Name) + `,`,
+		`V:` + strings.Replace(fmt.Sprintf("%v", this.V), "Value", "Value", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *PingReq) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&PingReq{`,
+		`Timestamp:` + fmt.Sprintf("%v", this.Timestamp) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *PingResp) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&PingResp{`,
+		`Timestamp:` + fmt.Sprintf("%v", this.Timestamp) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ReqCommon) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ReqCommon{`,
+		`Seqno:` + fmt.Sprintf("%v", this.Seqno) + `,`,
+		`Table:` + fmt.Sprintf("%v", this.Table) + `,`,
+		`Key:` + fmt.Sprintf("%v", this.Key) + `,`,
+		`Version:` + valueToStringProto(this.Version) + `,`,
+		`Timeout:` + fmt.Sprintf("%v", this.Timeout) + `,`,
+		`RespTimeout:` + fmt.Sprintf("%v", this.RespTimeout) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *RespCommon) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&RespCommon{`,
+		`Seqno:` + fmt.Sprintf("%v", this.Seqno) + `,`,
+		`ErrCode:` + fmt.Sprintf("%v", this.ErrCode) + `,`,
+		`Key:` + fmt.Sprintf("%v", this.Key) + `,`,
+		`Version:` + fmt.Sprintf("%v", this.Version) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *GetReq) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&GetReq{`,
+		`Head:` + strings.Replace(fmt.Sprintf("%v", this.Head), "ReqCommon", "ReqCommon", 1) + `,`,
+		`Fields:` + fmt.Sprintf("%v", this.Fields) + `,`,
+		`All:` + fmt.Sprintf("%v", this.All) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *GetResp) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForFields := "[]*Field{"
+	for _, f := range this.Fields {
+		repeatedStringForFields += strings.Replace(fmt.Sprintf("%v", f), "Field", "Field", 1) + ","
+	}
+	repeatedStringForFields += "}"
+	s := strings.Join([]string{`&GetResp{`,
+		`Head:` + strings.Replace(fmt.Sprintf("%v", this.Head), "RespCommon", "RespCommon", 1) + `,`,
+		`Fields:` + repeatedStringForFields + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SetReq) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForFields := "[]*Field{"
+	for _, f := range this.Fields {
+		repeatedStringForFields += strings.Replace(fmt.Sprintf("%v", f), "Field", "Field", 1) + ","
+	}
+	repeatedStringForFields += "}"
+	s := strings.Join([]string{`&SetReq{`,
+		`Head:` + strings.Replace(fmt.Sprintf("%v", this.Head), "ReqCommon", "ReqCommon", 1) + `,`,
+		`Fields:` + repeatedStringForFields + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SetResp) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&SetResp{`,
+		`Head:` + strings.Replace(fmt.Sprintf("%v", this.Head), "RespCommon", "RespCommon", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SetNxReq) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForFields := "[]*Field{"
+	for _, f := range this.Fields {
+		repeatedStringForFields += strings.Replace(fmt.Sprintf("%v", f), "Field", "Field", 1) + ","
+	}
+	repeatedStringForFields += "}"
+	s := strings.Join([]string{`&SetNxReq{`,
+		`Head:` + strings.Replace(fmt.Sprintf("%v", this.Head), "ReqCommon", "ReqCommon", 1) + `,`,
+		`Fields:` + repeatedStringForFields + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SetNxResp) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&SetNxResp{`,
+		`Head:` + strings.Replace(fmt.Sprintf("%v", this.Head), "RespCommon", "RespCommon", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *IncrByReq) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&IncrByReq{`,
+		`Head:` + strings.Replace(fmt.Sprintf("%v", this.Head), "ReqCommon", "ReqCommon", 1) + `,`,
+		`Field:` + strings.Replace(fmt.Sprintf("%v", this.Field), "Field", "Field", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *IncrByResp) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&IncrByResp{`,
+		`Head:` + strings.Replace(fmt.Sprintf("%v", this.Head), "RespCommon", "RespCommon", 1) + `,`,
+		`NewValue:` + strings.Replace(fmt.Sprintf("%v", this.NewValue), "Field", "Field", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *DecrByReq) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&DecrByReq{`,
+		`Head:` + strings.Replace(fmt.Sprintf("%v", this.Head), "ReqCommon", "ReqCommon", 1) + `,`,
+		`Field:` + strings.Replace(fmt.Sprintf("%v", this.Field), "Field", "Field", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *DecrByResp) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&DecrByResp{`,
+		`Head:` + strings.Replace(fmt.Sprintf("%v", this.Head), "RespCommon", "RespCommon", 1) + `,`,
+		`NewValue:` + strings.Replace(fmt.Sprintf("%v", this.NewValue), "Field", "Field", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *CompareAndSetReq) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&CompareAndSetReq{`,
+		`Head:` + strings.Replace(fmt.Sprintf("%v", this.Head), "ReqCommon", "ReqCommon", 1) + `,`,
+		`New:` + strings.Replace(fmt.Sprintf("%v", this.New), "Field", "Field", 1) + `,`,
+		`Old:` + strings.Replace(fmt.Sprintf("%v", this.Old), "Field", "Field", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *CompareAndSetResp) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&CompareAndSetResp{`,
+		`Head:` + strings.Replace(fmt.Sprintf("%v", this.Head), "RespCommon", "RespCommon", 1) + `,`,
+		`Value:` + strings.Replace(fmt.Sprintf("%v", this.Value), "Field", "Field", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *CompareAndSetNxReq) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&CompareAndSetNxReq{`,
+		`Head:` + strings.Replace(fmt.Sprintf("%v", this.Head), "ReqCommon", "ReqCommon", 1) + `,`,
+		`New:` + strings.Replace(fmt.Sprintf("%v", this.New), "Field", "Field", 1) + `,`,
+		`Old:` + strings.Replace(fmt.Sprintf("%v", this.Old), "Field", "Field", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *CompareAndSetNxResp) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&CompareAndSetNxResp{`,
+		`Head:` + strings.Replace(fmt.Sprintf("%v", this.Head), "RespCommon", "RespCommon", 1) + `,`,
+		`Value:` + strings.Replace(fmt.Sprintf("%v", this.Value), "Field", "Field", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *DelReq) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&DelReq{`,
+		`Head:` + strings.Replace(fmt.Sprintf("%v", this.Head), "ReqCommon", "ReqCommon", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *DelResp) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&DelResp{`,
+		`Head:` + strings.Replace(fmt.Sprintf("%v", this.Head), "RespCommon", "RespCommon", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *Row) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForFields := "[]*Field{"
+	for _, f := range this.Fields {
+		repeatedStringForFields += strings.Replace(fmt.Sprintf("%v", f), "Field", "Field", 1) + ","
+	}
+	repeatedStringForFields += "}"
+	s := strings.Join([]string{`&Row{`,
+		`Key:` + fmt.Sprintf("%v", this.Key) + `,`,
+		`Version:` + fmt.Sprintf("%v", this.Version) + `,`,
+		`Fields:` + repeatedStringForFields + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ScanReq) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ScanReq{`,
+		`Head:` + strings.Replace(fmt.Sprintf("%v", this.Head), "ReqCommon", "ReqCommon", 1) + `,`,
+		`Fields:` + fmt.Sprintf("%v", this.Fields) + `,`,
+		`All:` + fmt.Sprintf("%v", this.All) + `,`,
+		`Count:` + fmt.Sprintf("%v", this.Count) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ScanResp) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForRows := "[]*Row{"
+	for _, f := range this.Rows {
+		repeatedStringForRows += strings.Replace(fmt.Sprintf("%v", f), "Row", "Row", 1) + ","
+	}
+	repeatedStringForRows += "}"
+	s := strings.Join([]string{`&ScanResp{`,
+		`Head:` + strings.Replace(fmt.Sprintf("%v", this.Head), "RespCommon", "RespCommon", 1) + `,`,
+		`Rows:` + repeatedStringForRows + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *Cancel) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&Cancel{`,
+		`Seqs:` + fmt.Sprintf("%v", this.Seqs) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func valueToStringProto(v interface{}) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("*%v", pv)
 }
 func (m *LoginReq) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)

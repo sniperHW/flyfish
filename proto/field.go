@@ -119,7 +119,7 @@ func (m *Field) SetBlob(v []byte) {
 	m.V.B = v
 }
 
-func (m *Field) Equal(o *Field) bool {
+func (m *Field) IsEqual(o *Field) bool {
 	if nil == o {
 		return false
 	} else if m.GetType() != o.GetType() {
