@@ -134,6 +134,7 @@ func (this *sqlUpdater) append(v interface{}) {
 		}
 
 		if this.pending.rn != nil && this.pending.rn != rn {
+			//遇到不同的raftNode,先将前面累积的执行掉
 			this.exec()
 		}
 

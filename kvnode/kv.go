@@ -1,16 +1,14 @@
 package kvnode
 
 import (
+	"container/list"
 	"github.com/sniperHW/flyfish/dbmeta"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/util/bitfield"
-	"github.com/sniperHW/flyfish/util/ringqueue"
-	//"strconv"
 	"sync"
 	"sync/atomic"
 	"unsafe"
-	//"time"
 )
 
 const (
@@ -36,49 +34,35 @@ var (
 	field_kicking    = bitfield.MakeFiled32(0xF00000)
 )
 
-/*const (
-	kv_status_offset     = uint32(0)
-	mask_kv_status       = uint32(0xF << kv_status_offset) //1-4位kv状态
-	kv_sql_flag_offset   = uint32(4)
-	mask_kv_sql_flag     = uint32(0xF << kv_sql_flag_offset) //5-8位sql回写标记
-	kv_writeback_offset  = uint32(8)
-	mask_kv_writeback    = uint32(0xF << kv_writeback_offset) //9-12位当前是否正在执行sql回写
-	kv_snapshoted_offset = uint32(12)
-	mask_kv_snapshoted   = uint32(0xF << kv_snapshoted_offset) //13-16位是否已经建立过快照
-	kv_tmp_offset        = uint32(16)
-	mask_kv_tmp          = uint32(0xF << kv_tmp_offset) //17-20位,是否临时kv
-	kv_kicking_offset    = uint32(20)
-	mask_kv_kicking      = uint32(0xF << kv_kicking_offset) //21-24位,是否正在被踢除
-)*/
-
 type cmdQueue struct {
-	queue  *ringqueue.Queue //待执行的操作请求
-	locked bool             //队列是否被锁定（前面有op尚未完成）
+	queue  *list.List
+	locked bool //队列是否被锁定（前面有op尚未完成）
 }
 
 func (this *cmdQueue) empty() bool {
-	return this.queue.Front() == nil
+	return this.queue.Len() == 0
 }
 
-func (this *cmdQueue) append(op commandI) bool {
-	return this.queue.Append(op)
+func (this *cmdQueue) append(op commandI) {
+	this.queue.PushBack(op)
 }
 
 func (this *cmdQueue) front() commandI {
-	o := this.queue.Front()
-	if nil == o {
+	if this.empty() {
 		return nil
 	} else {
-		return o.(commandI)
+		return this.queue.Front().Value.(commandI)
 	}
 }
 
 func (this *cmdQueue) popFront() commandI {
-	o := this.queue.PopFront()
-	if nil == o {
+	if this.empty() {
 		return nil
 	} else {
-		return o.(commandI)
+		e := this.queue.Front()
+		cmd := e.Value.(commandI)
+		this.queue.Remove(e)
+		return cmd
 	}
 }
 
@@ -110,7 +94,15 @@ type kv struct {
 	pprev        *kv
 }
 
+var maxPendingCmdCount int64 = int64(500000) //整个物理节点待处理的命令上限
+var maxPendingCmdCountPerKv int = 1000       //单个kv待处理命令上限
+
 func (this *kv) appendCmd(op commandI) int32 {
+
+	if atomic.LoadInt64(&wait4ReplyCount) > 500000 {
+		return errcode.ERR_BUSY
+	}
+
 	this.Lock()
 	defer this.Unlock()
 	if this.getStatus() == cache_remove {
@@ -121,11 +113,12 @@ func (this *kv) appendCmd(op commandI) int32 {
 		return errcode.ERR_RETRY
 	}
 
-	if this.cmdQueue.append(op) {
-		return errcode.ERR_OK
-	} else {
+	if this.cmdQueue.queue.Len() > maxPendingCmdCountPerKv {
 		return errcode.ERR_BUSY
 	}
+
+	this.cmdQueue.append(op)
+	return errcode.ERR_OK
 }
 
 //设置remove,清空cmdQueue,向队列内的cmd响应错误码err
@@ -283,7 +276,7 @@ func newkv(slot *kvSlot, tableMeta *dbmeta.TableMeta, key string, uniKey string,
 		meta:   tableMeta,
 		table:  tableMeta.GetTable(),
 		cmdQueue: &cmdQueue{
-			queue: ringqueue.New(100),
+			queue: list.New(), //ringqueue.New(100),
 		},
 		modifyFields: map[string]*proto.Field{},
 		slot:         slot,
