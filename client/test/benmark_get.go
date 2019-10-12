@@ -38,11 +38,11 @@ func Get(c *kclient.Client) {
 			getAvaDelay = (time.Now().Sub(beg) + getAvaDelay) / 2
 		}
 
-		if ret.ErrCode != errcode.ERR_OK && ret.ErrCode != errcode.ERR_NOTFOUND {
+		if ret.ErrCode != errcode.ERR_OK && ret.ErrCode != errcode.ERR_RECORD_NOTEXIST {
 			fmt.Println("get err:", ret.ErrCode)
 		}
 
-		if ret.ErrCode == errcode.ERR_NOTFOUND {
+		if ret.ErrCode == errcode.ERR_RECORD_NOTEXIST {
 			fmt.Println("notfound", key)
 		}
 

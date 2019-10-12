@@ -16,7 +16,7 @@ import (
 
 type result struct {
 	latency time.Duration
-	err     int
+	err     int32
 }
 
 type ByTime []result
