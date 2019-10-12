@@ -18,7 +18,7 @@ import (
 
 type result struct {
 	latency time.Duration
-	err     int
+	err     int32
 }
 
 type ByTime []result
@@ -107,7 +107,7 @@ func main() {
 						return
 					}
 				}
-				time.Sleep(time.Millisecond * 200)
+				time.Sleep(time.Millisecond * 100)
 			}
 		}()
 	}
