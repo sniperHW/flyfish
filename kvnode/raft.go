@@ -70,6 +70,8 @@ type raftNode struct {
 	raftStorage *raft.MemoryStorage
 	wal         *wal.WAL
 
+	getSnapshot func() [][]*kvsnap
+
 	snapshotter      *snap.Snapshotter
 	snapshotterReady chan *snap.Snapshotter // signals when snapshotter is ready
 
@@ -116,8 +118,8 @@ var defaultSnapshotCount uint64 = 10000
 // provided the proposal channel. All log entries are replayed over the
 // commit channel, followed by a nil message (to indicate the channel is
 // current), then new log entries. To shutdown, close proposeC and read errorC.
-func newRaftNode(kvstore *kvstore, mutilRaft *mutilRaft, id int, peers []string, join bool, proposeC *util.BlockQueue,
-	confChangeC <-chan raftpb.ConfChange, readC *util.BlockQueue) (*raftNode, <-chan interface{}, <-chan error, <-chan *snap.Snapshotter) {
+func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, proposeC *util.BlockQueue,
+	confChangeC <-chan raftpb.ConfChange, readC *util.BlockQueue, getSnapshot func() [][]*kvsnap) (*raftNode, <-chan interface{}, <-chan error, <-chan *snap.Snapshotter) {
 
 	/*
 	 *  如果commitC设置成无缓冲，则raftNode会等待上层提取commitedEntry之后才继续后续处理。
@@ -148,7 +150,7 @@ func newRaftNode(kvstore *kvstore, mutilRaft *mutilRaft, id int, peers []string,
 		mutilRaft:        mutilRaft,
 		nodeID:           nodeID,
 		region:           region,
-		kvstore:          kvstore,
+		getSnapshot:      getSnapshot,
 
 		pendingRead: list.New(),
 
@@ -566,7 +568,7 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 		return
 	}
 
-	clone := rc.kvstore.getSnapshot()
+	clone := rc.getSnapshot()
 
 	if nil == clone {
 		return

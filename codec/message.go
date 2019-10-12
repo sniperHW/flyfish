@@ -26,40 +26,40 @@ func (this *Message) GetName() string {
 
 func init() {
 
-	pb.Register(&protocol.PingReq{}, 1)
-	pb.Register(&protocol.PingResp{}, 2)
+	pb.Register(&protocol.PingReq{}, uint32(protocol.CmdType_PingReq))
+	pb.Register(&protocol.PingResp{}, uint32(protocol.CmdType_PingResp))
 
-	pb.Register(&protocol.SetReq{}, 3)
-	pb.Register(&protocol.SetResp{}, 4)
+	pb.Register(&protocol.SetReq{}, uint32(protocol.CmdType_SetReq))
+	pb.Register(&protocol.SetResp{}, uint32(protocol.CmdType_SetResp))
 
-	pb.Register(&protocol.GetReq{}, 5)
-	pb.Register(&protocol.GetResp{}, 6)
+	pb.Register(&protocol.GetReq{}, uint32(protocol.CmdType_GetReq))
+	pb.Register(&protocol.GetResp{}, uint32(protocol.CmdType_GetResp))
 
-	pb.Register(&protocol.DelReq{}, 9)
-	pb.Register(&protocol.DelResp{}, 10)
+	pb.Register(&protocol.DelReq{}, uint32(protocol.CmdType_DelReq))
+	pb.Register(&protocol.DelResp{}, uint32(protocol.CmdType_DelResp))
 
-	pb.Register(&protocol.IncrByReq{}, 11)
-	pb.Register(&protocol.IncrByResp{}, 12)
+	pb.Register(&protocol.IncrByReq{}, uint32(protocol.CmdType_IncrByReq))
+	pb.Register(&protocol.IncrByResp{}, uint32(protocol.CmdType_IncrByResp))
 
-	pb.Register(&protocol.DecrByReq{}, 13)
-	pb.Register(&protocol.DecrByResp{}, 14)
+	pb.Register(&protocol.DecrByReq{}, uint32(protocol.CmdType_DecrByReq))
+	pb.Register(&protocol.DecrByResp{}, uint32(protocol.CmdType_DecrByResp))
 
-	pb.Register(&protocol.SetNxReq{}, 15)
-	pb.Register(&protocol.SetNxResp{}, 16)
+	pb.Register(&protocol.SetNxReq{}, uint32(protocol.CmdType_SetNxReq))
+	pb.Register(&protocol.SetNxResp{}, uint32(protocol.CmdType_SetNxResp))
 
-	pb.Register(&protocol.CompareAndSetReq{}, 17)
-	pb.Register(&protocol.CompareAndSetResp{}, 18)
+	pb.Register(&protocol.CompareAndSetReq{}, uint32(protocol.CmdType_CompareAndSetReq))
+	pb.Register(&protocol.CompareAndSetResp{}, uint32(protocol.CmdType_CompareAndSetResp))
 
-	pb.Register(&protocol.CompareAndSetNxReq{}, 19)
-	pb.Register(&protocol.CompareAndSetNxResp{}, 20)
+	pb.Register(&protocol.CompareAndSetNxReq{}, uint32(protocol.CmdType_CompareAndSetNxReq))
+	pb.Register(&protocol.CompareAndSetNxResp{}, uint32(protocol.CmdType_CompareAndSetNxResp))
 
-	pb.Register(&protocol.ScanReq{}, 21)
-	pb.Register(&protocol.ScanResp{}, 22)
+	pb.Register(&protocol.ScanReq{}, uint32(protocol.CmdType_ScanReq))
+	pb.Register(&protocol.ScanResp{}, uint32(protocol.CmdType_ScanResp))
 
-	pb.Register(&protocol.ReloadTableConfReq{}, 23)
-	pb.Register(&protocol.ReloadTableConfResp{}, 24)
+	pb.Register(&protocol.ReloadTableConfReq{}, uint32(protocol.CmdType_ReloadTableConfReq))
+	pb.Register(&protocol.ReloadTableConfResp{}, uint32(protocol.CmdType_ReloadTableConfResp))
 
-	pb.Register(&protocol.ReloadConfigReq{}, 25)
-	pb.Register(&protocol.ReloadConfigResp{}, 26)
+	pb.Register(&protocol.ReloadConfigReq{}, uint32(protocol.CmdType_ReloadConfigReq))
+	pb.Register(&protocol.ReloadConfigResp{}, uint32(protocol.CmdType_ReloadConfigResp))
 
 }

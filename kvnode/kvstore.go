@@ -47,6 +47,8 @@ func (this *asynTaskKick) onPorposeTimeout() {
 
 var kvSlotSize int = 129
 
+type leaseNotify int
+
 type kvSlot struct {
 	sync.Mutex
 	tmp      map[string]*kv
@@ -351,7 +353,10 @@ func (this *kvstore) readCommits(once bool, snapshotter *snap.Snapshotter, commi
 			}
 		case *readBatchSt:
 			e.(*readBatchSt).reply()
+		case leaseNotify:
+			this.gotLease()
 		}
+
 	}
 
 	if err, ok := <-errorC; ok {
@@ -587,7 +592,7 @@ func newStoreMgr(kvnode *KVNode, mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta, id
 
 		store := newKVStore(mgr, kvnode, proposeC, readC)
 
-		rn, commitC, errorC, snapshotterReady := newRaftNode(store, mutilRaft, (*id<<16)+i, strings.Split(*cluster, ","), false, proposeC, confChangeC, readC)
+		rn, commitC, errorC, snapshotterReady := newRaftNode(mutilRaft, (*id<<16)+i, strings.Split(*cluster, ","), false, proposeC, confChangeC, readC, store.getSnapshot)
 
 		store.rn = rn
 

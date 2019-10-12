@@ -3,6 +3,36 @@ package proto;
 
 
 
+
+enum CmdType {
+  PingReq = 1;
+  PingResp = 2;
+  SetReq = 3;
+  SetResp = 4;
+  GetReq = 5;
+  GetResp = 6;
+  DelReq = 7;
+  DelResp = 8;
+  IncrByReq = 9;
+  IncrByResp = 10;
+  DecrByReq = 11;
+  DecrByResp = 12;
+  SetNxReq = 13;
+  SetNxResp = 14;
+  CompareAndSetReq = 15;
+  CompareAndSetResp = 16;
+  CompareAndSetNxReq = 17;
+  CompareAndSetNxResp = 18;
+  ScanReq = 19;
+  ScanResp = 20;
+  ReloadTableConfReq = 21;
+  ReloadTableConfResp = 22;
+  ReloadConfigReq = 23;
+  ReloadConfigResp = 24; 
+}
+
+
+
 message loginReq {
   optional bool compress = 1; //客户端是否支持压缩
 }

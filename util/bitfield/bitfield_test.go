@@ -18,58 +18,66 @@ const (
 	sql_delete        = uint32(3)
 )
 
-const (
-	kv_status_offset    = uint32(0)
-	mask_kv_status      = uint32(0xF << kv_status_offset) //1-4位kv状态
-	kv_sql_flag_offset  = uint32(4)
-	mask_kv_sql_flag    = uint32(0xF << kv_sql_flag_offset) //5-8位sql回写标记
-	kv_writeback_offset = uint32(8)
-	mask_kv_writeback   = uint32(0xF << kv_writeback_offset) //9-12位当前是否正在执行sql回写
-	//kv_snapshoted_offset = uint32(12)
-	//mask_kv_snapshoted   = uint32(0xF << kv_snapshoted_offset) //13-16位是否已经建立过快照
-	kv_tmp_offset     = uint32(16)
-	mask_kv_tmp       = uint32(0xF << kv_tmp_offset) //17-20位,是否临时kv
-	kv_kicking_offset = uint32(20)
-	mask_kv_kicking   = uint32(0xF << kv_kicking_offset) //21-24位,是否正在被踢除
+var (
+	field_status     = MakeFiled32(0xF)
+	field_sql_flag   = MakeFiled32(0xF0)
+	field_writeback  = MakeFiled32(0xF00)
+	field_snapshoted = MakeFiled32(0xF000)
+	field_tmp        = MakeFiled32(0xF0000)
+	field_kicking    = MakeFiled32(0xF00000)
 )
 
 func TestBitField(t *testing.T) {
-	var b32 BitField32
+	{
+		b32 := NewBitField32(field_status, field_sql_flag, field_writeback, field_snapshoted, field_tmp, field_kicking)
+		if nil == b32 {
+			t.Fatal("failed11")
+		}
 
-	b32.Set(mask_kv_status, kv_status_offset, cache_new)
+		if nil != b32.Set(field_status, cache_ok) {
+			t.Fatal("failed12")
+		}
 
-	b32.Set(mask_kv_status, kv_status_offset, cache_ok)
+		if status, err := b32.Get(field_status); nil != err || status != cache_ok {
+			t.Fatal("failed13")
+		}
 
-	if cache_ok != b32.Get(mask_kv_status, kv_status_offset) {
-		t.Fatal("failed1")
+		if nil != b32.Set(field_status, cache_missing) {
+			t.Fatal("failed14")
+		}
+
+		if status, err := b32.Get(field_status); nil != err || status != cache_missing {
+			t.Fatal("failed15")
+		}
+
+		if nil != b32.Set(field_sql_flag, sql_update) {
+			t.Fatal("failed16")
+		}
+
+		if sqlflag, err := b32.Get(field_sql_flag); nil != err || sqlflag != sql_update {
+			t.Fatal("failed17")
+		}
+
+		if status, err := b32.Get(field_status); nil != err || status != cache_missing {
+			t.Fatal("failed18")
+		}
+
 	}
 
-	b32.Set(mask_kv_sql_flag, kv_sql_flag_offset, sql_delete)
+	{
+		b32 := NewBitField32(field_status, MakeFiled32(0x7))
+		if nil != b32 {
+			t.Fatal("failed21")
+		}
 
-	if sql_delete != b32.Get(mask_kv_sql_flag, kv_sql_flag_offset) {
-		t.Fatal("failed2")
+		b32 = NewBitField32(field_status)
+		if nil == b32 {
+			t.Fatal("failed22")
+		}
+
+		if nil == b32.Set(field_sql_flag, sql_update) {
+			t.Fatal("failed32")
+		}
 	}
-
-	b32.Set(mask_kv_sql_flag, kv_sql_flag_offset, sql_update)
-
-	if sql_update != b32.Get(mask_kv_sql_flag, kv_sql_flag_offset) {
-		t.Fatal("failed3")
-	}
-
-	if cache_ok != b32.Get(mask_kv_status, kv_status_offset) {
-		t.Fatal("failed4")
-	}
-
-	/*b32.Set(mask_kv_tmp, kv_tmp_offset, uint32(1))
-
-	if uint32(1) != b32.Get(mask_kv_tmp, kv_tmp_offset) {
-		t.Fatal("failed1", b32.data)
-	}
-
-	b32.Set(mask_kv_status, kv_status_offset, uint32(3))
-
-	if uint32(3) != b32.Get(mask_kv_status, kv_status_offset) {
-		t.Fatal("failed2", b32.data)
-	}*/
 
 }

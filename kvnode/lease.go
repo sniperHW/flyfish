@@ -31,7 +31,8 @@ type asynTaskLease struct {
 
 func (this *asynTaskLease) done() {
 	if this.rn.lease.update(this.rn, this.rn.id, this.term) {
-		this.rn.kvstore.gotLease()
+		var notify leaseNotify
+		this.rn.commitC <- notify
 	}
 }
 

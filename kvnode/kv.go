@@ -27,7 +27,16 @@ const (
 	sql_delete        = uint32(3)
 )
 
-const (
+var (
+	field_status     = bitfield.MakeFiled32(0xF)
+	field_sql_flag   = bitfield.MakeFiled32(0xF0)
+	field_writeback  = bitfield.MakeFiled32(0xF00)
+	field_snapshoted = bitfield.MakeFiled32(0xF000)
+	field_tmp        = bitfield.MakeFiled32(0xF0000)
+	field_kicking    = bitfield.MakeFiled32(0xF00000)
+)
+
+/*const (
 	kv_status_offset     = uint32(0)
 	mask_kv_status       = uint32(0xF << kv_status_offset) //1-4位kv状态
 	kv_sql_flag_offset   = uint32(4)
@@ -40,7 +49,7 @@ const (
 	mask_kv_tmp          = uint32(0xF << kv_tmp_offset) //17-20位,是否临时kv
 	kv_kicking_offset    = uint32(20)
 	mask_kv_kicking      = uint32(0xF << kv_kicking_offset) //21-24位,是否正在被踢除
-)
+)*/
 
 type cmdQueue struct {
 	queue  *ringqueue.Queue //待执行的操作请求
@@ -95,7 +104,7 @@ type kv struct {
 	meta         *dbmeta.TableMeta
 	fields       map[string]*proto.Field //字段
 	modifyFields map[string]*proto.Field //发生变更尚未更新到sql数据库的字段
-	flag         bitfield.BitField32
+	flag         *bitfield.BitField32
 	slot         *kvSlot
 	nnext        *kv
 	pprev        *kv
@@ -146,60 +155,96 @@ func (this *kv) getMeta() *dbmeta.TableMeta {
 }
 
 func (this *kv) setSqlFlag(sqlFlag uint32) {
-	this.flag.Set(mask_kv_sql_flag, kv_sql_flag_offset, sqlFlag)
+	this.flag.Set(field_sql_flag, sqlFlag)
 }
 
 func (this *kv) getSqlFlag() uint32 {
-	return this.flag.Get(mask_kv_sql_flag, kv_sql_flag_offset)
+	v, _ := this.flag.Get(field_sql_flag)
+	return v
 }
 
 func (this *kv) setStatus(status uint32) {
-	this.flag.Set(mask_kv_status, kv_status_offset, status)
+	this.flag.Set(field_status, status)
 }
 
 func (this *kv) getStatus() uint32 {
-	status := this.flag.Get(mask_kv_status, kv_status_offset)
+	status, _ := this.flag.Get(field_status)
 	return status
 }
 
 func (this *kv) setTmp(tmp bool) {
 	if tmp {
-		this.flag.Set(mask_kv_tmp, kv_tmp_offset, uint32(1))
+		this.flag.Set(field_tmp, uint32(1))
 	} else {
-		this.flag.Set(mask_kv_tmp, kv_tmp_offset, uint32(0))
+		this.flag.Set(field_tmp, uint32(0))
 	}
 }
 
 func (this *kv) isTmp() bool {
-	return this.flag.Get(mask_kv_tmp, kv_tmp_offset) == 1
+	v, _ := this.flag.Get(field_tmp)
+	return v == uint32(1)
 }
 
 func (this *kv) setKicking(kicking bool) {
 	if kicking {
-		this.flag.Set(mask_kv_kicking, kv_tmp_offset, uint32(1))
+		this.flag.Set(field_kicking, uint32(1))
 	} else {
-		this.flag.Set(mask_kv_kicking, kv_tmp_offset, uint32(0))
+		this.flag.Set(field_kicking, uint32(0))
 	}
 }
 
 func (this *kv) isKicking() bool {
-	return this.flag.Get(mask_kv_kicking, kv_kicking_offset) == 1
+	v, _ := this.flag.Get(field_kicking)
+	return v == uint32(1)
 }
 
 func (this *kv) setWriteBack(writeback bool) {
 	if writeback {
-		this.flag.Set(mask_kv_writeback, kv_writeback_offset, uint32(1))
+		this.flag.Set(field_writeback, uint32(1))
 	} else {
-		this.flag.Set(mask_kv_writeback, kv_writeback_offset, uint32(0))
+		this.flag.Set(field_writeback, uint32(0))
 	}
 }
 
 func (this *kv) isWriteBack() bool {
-	return this.flag.Get(mask_kv_writeback, kv_writeback_offset) == 1
+	v, _ := this.flag.Get(field_writeback)
+	return v == uint32(1)
+}
+
+func (this *kv) setSnapshoted(snapshoted bool) {
+	if snapshoted {
+		this.flag.Set(field_snapshoted, uint32(1))
+	} else {
+		this.flag.Set(field_snapshoted, uint32(0))
+	}
+}
+
+func (this *kv) isSnapshoted() bool {
+	v, _ := this.flag.Get(field_snapshoted)
+	return v == uint32(1)
 }
 
 func (this *kv) kickable() bool {
-	return false
+
+	status := this.getStatus()
+
+	if !(status == cache_ok || status == cache_missing) {
+		return false
+	}
+
+	if this.cmdQueue.isLocked() {
+		return false
+	}
+
+	if !this.cmdQueue.empty() {
+		return false
+	}
+
+	if this.isWriteBack() {
+		return false
+	}
+
+	return true
 }
 
 func (this *kv) setMissing() {
@@ -230,18 +275,6 @@ func (this *kv) setOK(version int64, fields map[string]*proto.Field) {
 	}
 }
 
-func (this *kv) setSnapshoted(snapshoted bool) {
-	if snapshoted {
-		this.flag.Set(mask_kv_snapshoted, kv_snapshoted_offset, uint32(1))
-	} else {
-		this.flag.Set(mask_kv_snapshoted, kv_snapshoted_offset, uint32(0))
-	}
-}
-
-func (this *kv) isSnapshoted() bool {
-	return this.flag.Get(mask_kv_snapshoted, kv_snapshoted_offset) == 1
-}
-
 func newkv(slot *kvSlot, tableMeta *dbmeta.TableMeta, key string, uniKey string, isTmp bool) *kv {
 
 	k := &kv{
@@ -254,6 +287,7 @@ func newkv(slot *kvSlot, tableMeta *dbmeta.TableMeta, key string, uniKey string,
 		},
 		modifyFields: map[string]*proto.Field{},
 		slot:         slot,
+		flag:         bitfield.NewBitField32(field_status, field_sql_flag, field_writeback, field_snapshoted, field_tmp, field_kicking),
 	}
 
 	k.setStatus(cache_new)
