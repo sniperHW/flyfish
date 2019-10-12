@@ -43,6 +43,9 @@ func NewFixedArray(size int) *FixedArray {
 }
 
 func (this *FixedArray) Reset() {
+	for i := 0; i < this.len; i++ {
+		this.array[i] = nil
+	}
 	this.len = 0
 }
 

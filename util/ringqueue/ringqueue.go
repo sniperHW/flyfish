@@ -41,6 +41,7 @@ func (this *Queue) PopFront() interface{} {
 		return nil
 	} else {
 		v := this.data[this.r]
+		this.data[this.r] = nil
 		this.r = (this.r + 1) % cap(this.data)
 		return v
 	}
