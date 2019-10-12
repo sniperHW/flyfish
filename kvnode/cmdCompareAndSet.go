@@ -68,10 +68,10 @@ func (this *cmdCompareAndSet) makeResponse(errCode int32, fields map[string]*pro
 
 	resp := &proto.CompareAndSetResp{
 		Head: &proto.RespCommon{
-			Key:     pb.String(key),
-			Seqno:   pb.Int64(this.replyer.seqno),
-			ErrCode: pb.Int32(errCode),
-			Version: pb.Int64(version),
+			Key:     key,                //pb.String(key),
+			Seqno:   this.replyer.seqno, //pb.Int64(this.replyer.seqno),
+			ErrCode: errCode,            //pb.Int32(errCode),
+			Version: version,            //pb.Int64(version),
 		}}
 	if nil != fields {
 		resp.Value = fields[this.oldV.GetName()]

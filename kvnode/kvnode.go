@@ -99,8 +99,8 @@ func (this *KVNode) startListener() error {
 			}
 
 			loginResp := &protocol.LoginResp{
-				Ok:       proto.Bool(true),
-				Compress: proto.Bool(config.Compress && loginReq.GetCompress()),
+				Ok:       true,                                      //proto.Bool(true),
+				Compress: config.Compress && loginReq.GetCompress(), //proto.Bool(config.Compress && loginReq.GetCompress()),
 			}
 
 			if !sendLoginResp(session, loginResp) {

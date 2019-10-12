@@ -7,10 +7,11 @@ import (
 	encoding_binary "encoding/binary"
 	fmt "fmt"
 	_ "github.com/gogo/protobuf/gogoproto"
-	github_com_golang_protobuf_proto "github.com/golang/protobuf/proto"
-	proto "github.com/golang/protobuf/proto"
+	github_com_gogo_protobuf_proto "github.com/gogo/protobuf/proto"
+	proto "github.com/gogo/protobuf/proto"
 	io "io"
 	math "math"
+	math_bits "math/bits"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -22,7 +23,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.GoGoProtoPackageIsVersion2 // please upgrade the proto package
 
 type CmdType int32
 
@@ -186,10 +187,7 @@ func (ValueType) EnumDescriptor() ([]byte, []int) {
 }
 
 type LoginReq struct {
-	Compress             *bool    `protobuf:"varint,1,opt,name=compress" json:"compress,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Compress bool `protobuf:"varint,1,opt,name=compress" json:"compress"`
 }
 
 func (m *LoginReq) Reset()         { *m = LoginReq{} }
@@ -206,7 +204,7 @@ func (m *LoginReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_LoginReq.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -226,18 +224,15 @@ func (m *LoginReq) XXX_DiscardUnknown() {
 var xxx_messageInfo_LoginReq proto.InternalMessageInfo
 
 func (m *LoginReq) GetCompress() bool {
-	if m != nil && m.Compress != nil {
-		return *m.Compress
+	if m != nil {
+		return m.Compress
 	}
 	return false
 }
 
 type LoginResp struct {
-	Ok                   *bool    `protobuf:"varint,1,opt,name=ok" json:"ok,omitempty"`
-	Compress             *bool    `protobuf:"varint,2,opt,name=compress" json:"compress,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Ok       bool `protobuf:"varint,1,opt,name=ok" json:"ok"`
+	Compress bool `protobuf:"varint,2,opt,name=compress" json:"compress"`
 }
 
 func (m *LoginResp) Reset()         { *m = LoginResp{} }
@@ -254,7 +249,7 @@ func (m *LoginResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_LoginResp.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -274,23 +269,20 @@ func (m *LoginResp) XXX_DiscardUnknown() {
 var xxx_messageInfo_LoginResp proto.InternalMessageInfo
 
 func (m *LoginResp) GetOk() bool {
-	if m != nil && m.Ok != nil {
-		return *m.Ok
+	if m != nil {
+		return m.Ok
 	}
 	return false
 }
 
 func (m *LoginResp) GetCompress() bool {
-	if m != nil && m.Compress != nil {
-		return *m.Compress
+	if m != nil {
+		return m.Compress
 	}
 	return false
 }
 
 type ReloadTableConfReq struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
 func (m *ReloadTableConfReq) Reset()         { *m = ReloadTableConfReq{} }
@@ -307,7 +299,7 @@ func (m *ReloadTableConfReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, 
 		return xxx_messageInfo_ReloadTableConfReq.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -327,10 +319,7 @@ func (m *ReloadTableConfReq) XXX_DiscardUnknown() {
 var xxx_messageInfo_ReloadTableConfReq proto.InternalMessageInfo
 
 type ReloadTableConfResp struct {
-	Ok                   *bool    `protobuf:"varint,1,opt,name=ok" json:"ok,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Ok bool `protobuf:"varint,1,opt,name=ok" json:"ok"`
 }
 
 func (m *ReloadTableConfResp) Reset()         { *m = ReloadTableConfResp{} }
@@ -347,7 +336,7 @@ func (m *ReloadTableConfResp) XXX_Marshal(b []byte, deterministic bool) ([]byte,
 		return xxx_messageInfo_ReloadTableConfResp.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -367,17 +356,14 @@ func (m *ReloadTableConfResp) XXX_DiscardUnknown() {
 var xxx_messageInfo_ReloadTableConfResp proto.InternalMessageInfo
 
 func (m *ReloadTableConfResp) GetOk() bool {
-	if m != nil && m.Ok != nil {
-		return *m.Ok
+	if m != nil {
+		return m.Ok
 	}
 	return false
 }
 
 type ReloadConfigReq struct {
-	Path                 *string  `protobuf:"bytes,1,opt,name=path" json:"path,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Path string `protobuf:"bytes,1,opt,name=path" json:"path"`
 }
 
 func (m *ReloadConfigReq) Reset()         { *m = ReloadConfigReq{} }
@@ -394,7 +380,7 @@ func (m *ReloadConfigReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, err
 		return xxx_messageInfo_ReloadConfigReq.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -414,17 +400,14 @@ func (m *ReloadConfigReq) XXX_DiscardUnknown() {
 var xxx_messageInfo_ReloadConfigReq proto.InternalMessageInfo
 
 func (m *ReloadConfigReq) GetPath() string {
-	if m != nil && m.Path != nil {
-		return *m.Path
+	if m != nil {
+		return m.Path
 	}
 	return ""
 }
 
 type ReloadConfigResp struct {
-	Err                  *string  `protobuf:"bytes,1,opt,name=err" json:"err,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Err string `protobuf:"bytes,1,opt,name=err" json:"err"`
 }
 
 func (m *ReloadConfigResp) Reset()         { *m = ReloadConfigResp{} }
@@ -441,7 +424,7 @@ func (m *ReloadConfigResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, er
 		return xxx_messageInfo_ReloadConfigResp.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -461,22 +444,19 @@ func (m *ReloadConfigResp) XXX_DiscardUnknown() {
 var xxx_messageInfo_ReloadConfigResp proto.InternalMessageInfo
 
 func (m *ReloadConfigResp) GetErr() string {
-	if m != nil && m.Err != nil {
-		return *m.Err
+	if m != nil {
+		return m.Err
 	}
 	return ""
 }
 
 type Value struct {
-	Type                 *ValueType `protobuf:"varint,1,req,name=type,enum=proto.ValueType" json:"type,omitempty"`
-	I                    *int64     `protobuf:"varint,2,opt,name=i" json:"i,omitempty"`
-	U                    *uint64    `protobuf:"varint,3,opt,name=u" json:"u,omitempty"`
-	F                    *float64   `protobuf:"fixed64,4,opt,name=f" json:"f,omitempty"`
-	S                    *string    `protobuf:"bytes,5,opt,name=s" json:"s,omitempty"`
-	B                    []byte     `protobuf:"bytes,6,opt,name=b" json:"b,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
-	XXX_unrecognized     []byte     `json:"-"`
-	XXX_sizecache        int32      `json:"-"`
+	Type ValueType `protobuf:"varint,1,req,name=type,enum=proto.ValueType" json:"type"`
+	I    int64     `protobuf:"varint,2,opt,name=i" json:"i"`
+	U    uint64    `protobuf:"varint,3,opt,name=u" json:"u"`
+	F    float64   `protobuf:"fixed64,4,opt,name=f" json:"f"`
+	S    string    `protobuf:"bytes,5,opt,name=s" json:"s"`
+	B    []byte    `protobuf:"bytes,6,opt,name=b" json:"b"`
 }
 
 func (m *Value) Reset()         { *m = Value{} }
@@ -493,7 +473,7 @@ func (m *Value) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_Value.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -513,36 +493,36 @@ func (m *Value) XXX_DiscardUnknown() {
 var xxx_messageInfo_Value proto.InternalMessageInfo
 
 func (m *Value) GetType() ValueType {
-	if m != nil && m.Type != nil {
-		return *m.Type
+	if m != nil {
+		return m.Type
 	}
 	return ValueType_invaild
 }
 
 func (m *Value) GetI() int64 {
-	if m != nil && m.I != nil {
-		return *m.I
+	if m != nil {
+		return m.I
 	}
 	return 0
 }
 
 func (m *Value) GetU() uint64 {
-	if m != nil && m.U != nil {
-		return *m.U
+	if m != nil {
+		return m.U
 	}
 	return 0
 }
 
 func (m *Value) GetF() float64 {
-	if m != nil && m.F != nil {
-		return *m.F
+	if m != nil {
+		return m.F
 	}
 	return 0
 }
 
 func (m *Value) GetS() string {
-	if m != nil && m.S != nil {
-		return *m.S
+	if m != nil {
+		return m.S
 	}
 	return ""
 }
@@ -555,11 +535,8 @@ func (m *Value) GetB() []byte {
 }
 
 type Field struct {
-	Name                 *string  `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
-	V                    *Value   `protobuf:"bytes,2,opt,name=v" json:"v,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Name string `protobuf:"bytes,1,opt,name=name" json:"name"`
+	V    *Value `protobuf:"bytes,2,opt,name=v" json:"v,omitempty"`
 }
 
 func (m *Field) Reset()         { *m = Field{} }
@@ -576,7 +553,7 @@ func (m *Field) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_Field.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -596,8 +573,8 @@ func (m *Field) XXX_DiscardUnknown() {
 var xxx_messageInfo_Field proto.InternalMessageInfo
 
 func (m *Field) GetName() string {
-	if m != nil && m.Name != nil {
-		return *m.Name
+	if m != nil {
+		return m.Name
 	}
 	return ""
 }
@@ -610,10 +587,7 @@ func (m *Field) GetV() *Value {
 }
 
 type PingReq struct {
-	Timestamp            *int64   `protobuf:"varint,1,opt,name=timestamp" json:"timestamp,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Timestamp int64 `protobuf:"varint,1,opt,name=timestamp" json:"timestamp"`
 }
 
 func (m *PingReq) Reset()         { *m = PingReq{} }
@@ -630,7 +604,7 @@ func (m *PingReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_PingReq.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -650,17 +624,14 @@ func (m *PingReq) XXX_DiscardUnknown() {
 var xxx_messageInfo_PingReq proto.InternalMessageInfo
 
 func (m *PingReq) GetTimestamp() int64 {
-	if m != nil && m.Timestamp != nil {
-		return *m.Timestamp
+	if m != nil {
+		return m.Timestamp
 	}
 	return 0
 }
 
 type PingResp struct {
-	Timestamp            *int64   `protobuf:"varint,2,opt,name=timestamp" json:"timestamp,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Timestamp int64 `protobuf:"varint,2,opt,name=timestamp" json:"timestamp"`
 }
 
 func (m *PingResp) Reset()         { *m = PingResp{} }
@@ -677,7 +648,7 @@ func (m *PingResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_PingResp.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -697,22 +668,19 @@ func (m *PingResp) XXX_DiscardUnknown() {
 var xxx_messageInfo_PingResp proto.InternalMessageInfo
 
 func (m *PingResp) GetTimestamp() int64 {
-	if m != nil && m.Timestamp != nil {
-		return *m.Timestamp
+	if m != nil {
+		return m.Timestamp
 	}
 	return 0
 }
 
 type ReqCommon struct {
-	Seqno                *int64   `protobuf:"varint,1,req,name=seqno" json:"seqno,omitempty"`
-	Table                *string  `protobuf:"bytes,2,opt,name=table" json:"table,omitempty"`
-	Key                  *string  `protobuf:"bytes,3,opt,name=key" json:"key,omitempty"`
-	Version              *int64   `protobuf:"varint,4,opt,name=version" json:"version,omitempty"`
-	Timeout              *int64   `protobuf:"varint,5,opt,name=timeout" json:"timeout,omitempty"`
-	RespTimeout          *int64   `protobuf:"varint,6,opt,name=respTimeout" json:"respTimeout,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Seqno       int64  `protobuf:"varint,1,req,name=seqno" json:"seqno"`
+	Table       string `protobuf:"bytes,2,opt,name=table" json:"table"`
+	Key         string `protobuf:"bytes,3,opt,name=key" json:"key"`
+	Version     *int64 `protobuf:"varint,4,opt,name=version" json:"version,omitempty"`
+	Timeout     int64  `protobuf:"varint,5,opt,name=timeout" json:"timeout"`
+	RespTimeout int64  `protobuf:"varint,6,opt,name=respTimeout" json:"respTimeout"`
 }
 
 func (m *ReqCommon) Reset()         { *m = ReqCommon{} }
@@ -729,7 +697,7 @@ func (m *ReqCommon) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_ReqCommon.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -749,22 +717,22 @@ func (m *ReqCommon) XXX_DiscardUnknown() {
 var xxx_messageInfo_ReqCommon proto.InternalMessageInfo
 
 func (m *ReqCommon) GetSeqno() int64 {
-	if m != nil && m.Seqno != nil {
-		return *m.Seqno
+	if m != nil {
+		return m.Seqno
 	}
 	return 0
 }
 
 func (m *ReqCommon) GetTable() string {
-	if m != nil && m.Table != nil {
-		return *m.Table
+	if m != nil {
+		return m.Table
 	}
 	return ""
 }
 
 func (m *ReqCommon) GetKey() string {
-	if m != nil && m.Key != nil {
-		return *m.Key
+	if m != nil {
+		return m.Key
 	}
 	return ""
 }
@@ -777,27 +745,24 @@ func (m *ReqCommon) GetVersion() int64 {
 }
 
 func (m *ReqCommon) GetTimeout() int64 {
-	if m != nil && m.Timeout != nil {
-		return *m.Timeout
+	if m != nil {
+		return m.Timeout
 	}
 	return 0
 }
 
 func (m *ReqCommon) GetRespTimeout() int64 {
-	if m != nil && m.RespTimeout != nil {
-		return *m.RespTimeout
+	if m != nil {
+		return m.RespTimeout
 	}
 	return 0
 }
 
 type RespCommon struct {
-	Seqno                *int64   `protobuf:"varint,1,req,name=seqno" json:"seqno,omitempty"`
-	ErrCode              *int32   `protobuf:"varint,2,req,name=errCode" json:"errCode,omitempty"`
-	Key                  *string  `protobuf:"bytes,3,opt,name=key" json:"key,omitempty"`
-	Version              *int64   `protobuf:"varint,4,opt,name=version" json:"version,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Seqno   int64  `protobuf:"varint,1,req,name=seqno" json:"seqno"`
+	ErrCode int32  `protobuf:"varint,2,req,name=errCode" json:"errCode"`
+	Key     string `protobuf:"bytes,3,opt,name=key" json:"key"`
+	Version int64  `protobuf:"varint,4,opt,name=version" json:"version"`
 }
 
 func (m *RespCommon) Reset()         { *m = RespCommon{} }
@@ -814,7 +779,7 @@ func (m *RespCommon) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_RespCommon.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -834,41 +799,38 @@ func (m *RespCommon) XXX_DiscardUnknown() {
 var xxx_messageInfo_RespCommon proto.InternalMessageInfo
 
 func (m *RespCommon) GetSeqno() int64 {
-	if m != nil && m.Seqno != nil {
-		return *m.Seqno
+	if m != nil {
+		return m.Seqno
 	}
 	return 0
 }
 
 func (m *RespCommon) GetErrCode() int32 {
-	if m != nil && m.ErrCode != nil {
-		return *m.ErrCode
+	if m != nil {
+		return m.ErrCode
 	}
 	return 0
 }
 
 func (m *RespCommon) GetKey() string {
-	if m != nil && m.Key != nil {
-		return *m.Key
+	if m != nil {
+		return m.Key
 	}
 	return ""
 }
 
 func (m *RespCommon) GetVersion() int64 {
-	if m != nil && m.Version != nil {
-		return *m.Version
+	if m != nil {
+		return m.Version
 	}
 	return 0
 }
 
 //获取记录的指定字段
 type GetReq struct {
-	Head                 *ReqCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
-	Fields               []string   `protobuf:"bytes,2,rep,name=fields" json:"fields,omitempty"`
-	All                  *bool      `protobuf:"varint,3,opt,name=all" json:"all,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
-	XXX_unrecognized     []byte     `json:"-"`
-	XXX_sizecache        int32      `json:"-"`
+	Head   *ReqCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	Fields []string   `protobuf:"bytes,2,rep,name=fields" json:"fields,omitempty"`
+	All    bool       `protobuf:"varint,3,opt,name=all" json:"all"`
 }
 
 func (m *GetReq) Reset()         { *m = GetReq{} }
@@ -885,7 +847,7 @@ func (m *GetReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_GetReq.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -919,18 +881,15 @@ func (m *GetReq) GetFields() []string {
 }
 
 func (m *GetReq) GetAll() bool {
-	if m != nil && m.All != nil {
-		return *m.All
+	if m != nil {
+		return m.All
 	}
 	return false
 }
 
 type GetResp struct {
-	Head                 *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
-	Fields               []*Field    `protobuf:"bytes,2,rep,name=fields" json:"fields,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
-	XXX_unrecognized     []byte      `json:"-"`
-	XXX_sizecache        int32       `json:"-"`
+	Head   *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	Fields []*Field    `protobuf:"bytes,2,rep,name=fields" json:"fields,omitempty"`
 }
 
 func (m *GetResp) Reset()         { *m = GetResp{} }
@@ -947,7 +906,7 @@ func (m *GetResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_GetResp.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -984,11 +943,8 @@ func (m *GetResp) GetFields() []*Field {
 //  设置记录的指定字段，如果version被指定则只有当存储数据的版本号与指定的version一致时才执行设置
 //  (注:未指定版本好的情况下，如果记录不存在则新增记录，新增记录时如果有未设定的字段，将会用设定的默认值初始化)
 type SetReq struct {
-	Head                 *ReqCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
-	Fields               []*Field   `protobuf:"bytes,2,rep,name=fields" json:"fields,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
-	XXX_unrecognized     []byte     `json:"-"`
-	XXX_sizecache        int32      `json:"-"`
+	Head   *ReqCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	Fields []*Field   `protobuf:"bytes,2,rep,name=fields" json:"fields,omitempty"`
 }
 
 func (m *SetReq) Reset()         { *m = SetReq{} }
@@ -1005,7 +961,7 @@ func (m *SetReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_SetReq.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -1039,10 +995,7 @@ func (m *SetReq) GetFields() []*Field {
 }
 
 type SetResp struct {
-	Head                 *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
-	XXX_unrecognized     []byte      `json:"-"`
-	XXX_sizecache        int32       `json:"-"`
+	Head *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
 }
 
 func (m *SetResp) Reset()         { *m = SetResp{} }
@@ -1059,7 +1012,7 @@ func (m *SetResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_SetResp.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -1088,11 +1041,8 @@ func (m *SetResp) GetHead() *RespCommon {
 //
 //  与set指令类似，只有当记录不存在时才能成功设置
 type SetNxReq struct {
-	Head                 *ReqCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
-	Fields               []*Field   `protobuf:"bytes,2,rep,name=fields" json:"fields,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
-	XXX_unrecognized     []byte     `json:"-"`
-	XXX_sizecache        int32      `json:"-"`
+	Head   *ReqCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	Fields []*Field   `protobuf:"bytes,2,rep,name=fields" json:"fields,omitempty"`
 }
 
 func (m *SetNxReq) Reset()         { *m = SetNxReq{} }
@@ -1109,7 +1059,7 @@ func (m *SetNxReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_SetNxReq.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -1143,10 +1093,7 @@ func (m *SetNxReq) GetFields() []*Field {
 }
 
 type SetNxResp struct {
-	Head                 *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
-	XXX_unrecognized     []byte      `json:"-"`
-	XXX_sizecache        int32       `json:"-"`
+	Head *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
 }
 
 func (m *SetNxResp) Reset()         { *m = SetNxResp{} }
@@ -1163,7 +1110,7 @@ func (m *SetNxResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_SetNxResp.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -1193,11 +1140,8 @@ func (m *SetNxResp) GetHead() *RespCommon {
 //  将记录的field.name字段增加field.value,并返回增加后的值(field.value只支持int类型，如果记录不存在会用
 //  记录的默认值初始化记录，int类型默认值为0，并在此基础上增加)
 type IncrByReq struct {
-	Head                 *ReqCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
-	Field                *Field     `protobuf:"bytes,2,req,name=field" json:"field,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
-	XXX_unrecognized     []byte     `json:"-"`
-	XXX_sizecache        int32      `json:"-"`
+	Head  *ReqCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	Field *Field     `protobuf:"bytes,2,req,name=field" json:"field,omitempty"`
 }
 
 func (m *IncrByReq) Reset()         { *m = IncrByReq{} }
@@ -1214,7 +1158,7 @@ func (m *IncrByReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_IncrByReq.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -1248,11 +1192,8 @@ func (m *IncrByReq) GetField() *Field {
 }
 
 type IncrByResp struct {
-	Head                 *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
-	NewValue             *Field      `protobuf:"bytes,4,opt,name=newValue" json:"newValue,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
-	XXX_unrecognized     []byte      `json:"-"`
-	XXX_sizecache        int32       `json:"-"`
+	Head     *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	NewValue *Field      `protobuf:"bytes,4,opt,name=newValue" json:"newValue,omitempty"`
 }
 
 func (m *IncrByResp) Reset()         { *m = IncrByResp{} }
@@ -1269,7 +1210,7 @@ func (m *IncrByResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_IncrByResp.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -1306,11 +1247,8 @@ func (m *IncrByResp) GetNewValue() *Field {
 //  将记录的field.name字段减少field.value,并返回减少后的值(field.value只支持int类型，如果记录不存在会用
 //  记录的默认值初始化记录，int类型默认值为0，并在此基础上减少)
 type DecrByReq struct {
-	Head                 *ReqCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
-	Field                *Field     `protobuf:"bytes,2,req,name=field" json:"field,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
-	XXX_unrecognized     []byte     `json:"-"`
-	XXX_sizecache        int32      `json:"-"`
+	Head  *ReqCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	Field *Field     `protobuf:"bytes,2,req,name=field" json:"field,omitempty"`
 }
 
 func (m *DecrByReq) Reset()         { *m = DecrByReq{} }
@@ -1327,7 +1265,7 @@ func (m *DecrByReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_DecrByReq.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -1361,11 +1299,8 @@ func (m *DecrByReq) GetField() *Field {
 }
 
 type DecrByResp struct {
-	Head                 *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
-	NewValue             *Field      `protobuf:"bytes,2,opt,name=newValue" json:"newValue,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
-	XXX_unrecognized     []byte      `json:"-"`
-	XXX_sizecache        int32       `json:"-"`
+	Head     *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	NewValue *Field      `protobuf:"bytes,2,opt,name=newValue" json:"newValue,omitempty"`
 }
 
 func (m *DecrByResp) Reset()         { *m = DecrByResp{} }
@@ -1382,7 +1317,7 @@ func (m *DecrByResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_DecrByResp.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -1419,12 +1354,9 @@ func (m *DecrByResp) GetNewValue() *Field {
 //  如果记录存在且old.name的值与old.value相等，将其设定为new.value
 //  只要记录存在，无论替换是否成功都将返回old.name的当前值。
 type CompareAndSetReq struct {
-	Head                 *ReqCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
-	New                  *Field     `protobuf:"bytes,2,req,name=new" json:"new,omitempty"`
-	Old                  *Field     `protobuf:"bytes,3,req,name=old" json:"old,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
-	XXX_unrecognized     []byte     `json:"-"`
-	XXX_sizecache        int32      `json:"-"`
+	Head *ReqCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	New  *Field     `protobuf:"bytes,2,req,name=new" json:"new,omitempty"`
+	Old  *Field     `protobuf:"bytes,3,req,name=old" json:"old,omitempty"`
 }
 
 func (m *CompareAndSetReq) Reset()         { *m = CompareAndSetReq{} }
@@ -1441,7 +1373,7 @@ func (m *CompareAndSetReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, er
 		return xxx_messageInfo_CompareAndSetReq.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -1482,11 +1414,8 @@ func (m *CompareAndSetReq) GetOld() *Field {
 }
 
 type CompareAndSetResp struct {
-	Head                 *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
-	Value                *Field      `protobuf:"bytes,2,opt,name=value" json:"value,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
-	XXX_unrecognized     []byte      `json:"-"`
-	XXX_sizecache        int32       `json:"-"`
+	Head  *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	Value *Field      `protobuf:"bytes,2,opt,name=value" json:"value,omitempty"`
 }
 
 func (m *CompareAndSetResp) Reset()         { *m = CompareAndSetResp{} }
@@ -1503,7 +1432,7 @@ func (m *CompareAndSetResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, e
 		return xxx_messageInfo_CompareAndSetResp.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -1540,12 +1469,9 @@ func (m *CompareAndSetResp) GetValue() *Field {
 //  如果记录不存在，或old.name的值与old.value相等，将其设定为new.value
 //  无论替换是否成功都将返回old.name的当前值。(注意:如果记录不存在，old.name以外的字段将被设置为初始值)
 type CompareAndSetNxReq struct {
-	Head                 *ReqCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
-	New                  *Field     `protobuf:"bytes,2,req,name=new" json:"new,omitempty"`
-	Old                  *Field     `protobuf:"bytes,3,req,name=old" json:"old,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
-	XXX_unrecognized     []byte     `json:"-"`
-	XXX_sizecache        int32      `json:"-"`
+	Head *ReqCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	New  *Field     `protobuf:"bytes,2,req,name=new" json:"new,omitempty"`
+	Old  *Field     `protobuf:"bytes,3,req,name=old" json:"old,omitempty"`
 }
 
 func (m *CompareAndSetNxReq) Reset()         { *m = CompareAndSetNxReq{} }
@@ -1562,7 +1488,7 @@ func (m *CompareAndSetNxReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, 
 		return xxx_messageInfo_CompareAndSetNxReq.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -1603,11 +1529,8 @@ func (m *CompareAndSetNxReq) GetOld() *Field {
 }
 
 type CompareAndSetNxResp struct {
-	Head                 *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
-	Value                *Field      `protobuf:"bytes,4,opt,name=value" json:"value,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
-	XXX_unrecognized     []byte      `json:"-"`
-	XXX_sizecache        int32       `json:"-"`
+	Head  *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	Value *Field      `protobuf:"bytes,4,opt,name=value" json:"value,omitempty"`
 }
 
 func (m *CompareAndSetNxResp) Reset()         { *m = CompareAndSetNxResp{} }
@@ -1624,7 +1547,7 @@ func (m *CompareAndSetNxResp) XXX_Marshal(b []byte, deterministic bool) ([]byte,
 		return xxx_messageInfo_CompareAndSetNxResp.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -1659,10 +1582,7 @@ func (m *CompareAndSetNxResp) GetValue() *Field {
 
 //删除命令(只支持删除整个记录，不支持删除记录的字段)
 type DelReq struct {
-	Head                 *ReqCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
-	XXX_unrecognized     []byte     `json:"-"`
-	XXX_sizecache        int32      `json:"-"`
+	Head *ReqCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
 }
 
 func (m *DelReq) Reset()         { *m = DelReq{} }
@@ -1679,7 +1599,7 @@ func (m *DelReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_DelReq.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -1706,10 +1626,7 @@ func (m *DelReq) GetHead() *ReqCommon {
 }
 
 type DelResp struct {
-	Head                 *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
-	XXX_unrecognized     []byte      `json:"-"`
-	XXX_sizecache        int32       `json:"-"`
+	Head *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
 }
 
 func (m *DelResp) Reset()         { *m = DelResp{} }
@@ -1726,7 +1643,7 @@ func (m *DelResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_DelResp.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -1753,12 +1670,9 @@ func (m *DelResp) GetHead() *RespCommon {
 }
 
 type Row struct {
-	Key                  *string  `protobuf:"bytes,1,req,name=key" json:"key,omitempty"`
-	Version              *int64   `protobuf:"varint,2,req,name=version" json:"version,omitempty"`
-	Fields               []*Field `protobuf:"bytes,3,rep,name=fields" json:"fields,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Key     string   `protobuf:"bytes,1,req,name=key" json:"key"`
+	Version int64    `protobuf:"varint,2,req,name=version" json:"version"`
+	Fields  []*Field `protobuf:"bytes,3,rep,name=fields" json:"fields,omitempty"`
 }
 
 func (m *Row) Reset()         { *m = Row{} }
@@ -1775,7 +1689,7 @@ func (m *Row) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_Row.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -1795,15 +1709,15 @@ func (m *Row) XXX_DiscardUnknown() {
 var xxx_messageInfo_Row proto.InternalMessageInfo
 
 func (m *Row) GetKey() string {
-	if m != nil && m.Key != nil {
-		return *m.Key
+	if m != nil {
+		return m.Key
 	}
 	return ""
 }
 
 func (m *Row) GetVersion() int64 {
-	if m != nil && m.Version != nil {
-		return *m.Version
+	if m != nil {
+		return m.Version
 	}
 	return 0
 }
@@ -1816,13 +1730,10 @@ func (m *Row) GetFields() []*Field {
 }
 
 type ScanReq struct {
-	Head                 *ReqCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
-	Fields               []string   `protobuf:"bytes,3,rep,name=fields" json:"fields,omitempty"`
-	All                  *bool      `protobuf:"varint,4,opt,name=all" json:"all,omitempty"`
-	Count                *int32     `protobuf:"varint,5,opt,name=count" json:"count,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
-	XXX_unrecognized     []byte     `json:"-"`
-	XXX_sizecache        int32      `json:"-"`
+	Head   *ReqCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	Fields []string   `protobuf:"bytes,3,rep,name=fields" json:"fields,omitempty"`
+	All    bool       `protobuf:"varint,4,opt,name=all" json:"all"`
+	Count  int32      `protobuf:"varint,5,opt,name=count" json:"count"`
 }
 
 func (m *ScanReq) Reset()         { *m = ScanReq{} }
@@ -1839,7 +1750,7 @@ func (m *ScanReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_ScanReq.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -1873,25 +1784,22 @@ func (m *ScanReq) GetFields() []string {
 }
 
 func (m *ScanReq) GetAll() bool {
-	if m != nil && m.All != nil {
-		return *m.All
+	if m != nil {
+		return m.All
 	}
 	return false
 }
 
 func (m *ScanReq) GetCount() int32 {
-	if m != nil && m.Count != nil {
-		return *m.Count
+	if m != nil {
+		return m.Count
 	}
 	return 0
 }
 
 type ScanResp struct {
-	Head                 *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
-	Rows                 []*Row      `protobuf:"bytes,3,rep,name=rows" json:"rows,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
-	XXX_unrecognized     []byte      `json:"-"`
-	XXX_sizecache        int32       `json:"-"`
+	Head *RespCommon `protobuf:"bytes,1,req,name=head" json:"head,omitempty"`
+	Rows []*Row      `protobuf:"bytes,3,rep,name=rows" json:"rows,omitempty"`
 }
 
 func (m *ScanResp) Reset()         { *m = ScanResp{} }
@@ -1908,7 +1816,7 @@ func (m *ScanResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_ScanResp.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -1942,10 +1850,7 @@ func (m *ScanResp) GetRows() []*Row {
 }
 
 type Cancel struct {
-	Seqs                 []int64  `protobuf:"varint,1,rep,name=seqs" json:"seqs,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Seqs []int64 `protobuf:"varint,1,rep,name=seqs" json:"seqs,omitempty"`
 }
 
 func (m *Cancel) Reset()         { *m = Cancel{} }
@@ -1962,7 +1867,7 @@ func (m *Cancel) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_Cancel.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
@@ -2028,78 +1933,81 @@ func init() {
 func init() { proto.RegisterFile("proto.proto", fileDescriptor_2fcc84b9998d60d8) }
 
 var fileDescriptor_2fcc84b9998d60d8 = []byte{
-	// 1038 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x56, 0xc1, 0x6e, 0xdb, 0x46,
-	0x13, 0xce, 0x8a, 0x94, 0x44, 0x8e, 0x14, 0x67, 0xbd, 0x56, 0x6c, 0xc2, 0x08, 0x04, 0x61, 0x61,
-	0x07, 0xfa, 0x73, 0xc8, 0x5f, 0x18, 0x28, 0x72, 0x6e, 0x1c, 0x20, 0xe8, 0xa5, 0x28, 0xd6, 0x6e,
-	0x9a, 0xf6, 0xe2, 0x52, 0xe2, 0x5a, 0x21, 0x4c, 0xed, 0x52, 0x5c, 0xca, 0x8e, 0x81, 0x02, 0x7d,
-	0x8d, 0xde, 0xda, 0xc7, 0xc9, 0x31, 0x8f, 0xd0, 0xb8, 0x2f, 0x52, 0xcc, 0x92, 0x94, 0x2a, 0xc9,
-	0x35, 0x4a, 0xb7, 0xbd, 0xd8, 0x33, 0xf3, 0xcd, 0xce, 0x7c, 0x33, 0xbb, 0x1a, 0x0e, 0x74, 0xd2,
-	0x4c, 0xe7, 0xfa, 0xb9, 0xfd, 0xcb, 0x9a, 0xf6, 0xdf, 0x7e, 0x6f, 0xa2, 0x27, 0xda, 0x8a, 0xff,
-	0x47, 0xa9, 0x00, 0xf9, 0x53, 0xf0, 0x12, 0x3d, 0x89, 0x95, 0x90, 0x33, 0xb6, 0x0f, 0xde, 0x58,
-	0x4f, 0xd3, 0x4c, 0x1a, 0x13, 0x90, 0x01, 0x19, 0x7a, 0x62, 0xa1, 0xf3, 0x17, 0xe0, 0x97, 0x7e,
-	0x26, 0x65, 0x5b, 0xd0, 0xd0, 0x17, 0xa5, 0x4b, 0x43, 0x5f, 0xac, 0x1c, 0x6c, 0xac, 0x1d, 0xec,
-	0x01, 0xcb, 0x64, 0xa2, 0xc3, 0xe8, 0x34, 0x1c, 0x25, 0xf2, 0x58, 0xab, 0x73, 0x21, 0x67, 0xfc,
-	0x10, 0x76, 0x36, 0xac, 0x9b, 0x81, 0xf9, 0x21, 0x3c, 0x2a, 0xdc, 0xd0, 0x23, 0x9e, 0x20, 0x49,
-	0x06, 0x6e, 0x1a, 0xe6, 0xef, 0xac, 0x93, 0x2f, 0xac, 0xcc, 0x0f, 0x80, 0xae, 0xba, 0x99, 0x94,
-	0x51, 0x70, 0x64, 0x96, 0x95, 0x6e, 0x28, 0x72, 0x03, 0xcd, 0xcb, 0x30, 0x99, 0x4b, 0x76, 0x00,
-	0x6e, 0x7e, 0x9d, 0xca, 0x80, 0x0c, 0x1a, 0xc3, 0xad, 0x23, 0x5a, 0x74, 0xe2, 0xf9, 0x1b, 0xc4,
-	0x4e, 0xaf, 0x53, 0x29, 0x2c, 0xca, 0xba, 0x40, 0x62, 0x5b, 0x8d, 0x23, 0x48, 0x8c, 0xda, 0x3c,
-	0x70, 0x06, 0x64, 0xe8, 0x0a, 0x32, 0x47, 0xed, 0x3c, 0x70, 0x07, 0x64, 0x48, 0x04, 0x39, 0x47,
-	0xcd, 0x04, 0x4d, 0x9b, 0x88, 0x18, 0xd4, 0x46, 0x41, 0x6b, 0x40, 0x86, 0x5d, 0x41, 0x46, 0xfc,
-	0x05, 0x34, 0xcf, 0x63, 0x99, 0x44, 0xc8, 0x5b, 0x85, 0x53, 0x59, 0xf1, 0x46, 0x99, 0xed, 0x03,
-	0xb9, 0xb4, 0x29, 0x3a, 0x47, 0xdd, 0x92, 0x85, 0x65, 0x28, 0xc8, 0x25, 0x1f, 0x82, 0x97, 0xc6,
-	0x6a, 0x72, 0x96, 0xc9, 0x19, 0x7b, 0x02, 0x7e, 0x1e, 0x4f, 0xa5, 0xc9, 0xc3, 0x69, 0x6a, 0x03,
-	0x38, 0x62, 0x69, 0xe0, 0xff, 0x03, 0xbf, 0xf4, 0x34, 0xe9, 0xaa, 0x6b, 0x63, 0xdd, 0xf5, 0x57,
-	0x02, 0x90, 0xc9, 0xd9, 0xd9, 0x58, 0x4f, 0xa7, 0x5a, 0xb1, 0x1e, 0x34, 0x8d, 0x9c, 0x29, 0x6d,
-	0x3b, 0xe1, 0x88, 0x42, 0x41, 0x6b, 0x8e, 0xb7, 0x62, 0x8f, 0xfb, 0xa2, 0x50, 0xb0, 0x9f, 0x17,
-	0xf2, 0xda, 0xb6, 0xc0, 0x17, 0x28, 0xb2, 0x00, 0xda, 0x97, 0x32, 0x33, 0xb1, 0x56, 0xb6, 0x15,
-	0x8e, 0xa8, 0x54, 0x44, 0x30, 0xa7, 0x9e, 0xe7, 0xb6, 0x2d, 0x8e, 0xa8, 0x54, 0x36, 0x80, 0x0e,
-	0xd2, 0x3c, 0x2d, 0xd1, 0x96, 0x45, 0xff, 0x6c, 0xe2, 0x71, 0xe1, 0x71, 0x37, 0xc5, 0x00, 0xda,
-	0x32, 0xcb, 0x8e, 0x75, 0x84, 0x24, 0x1b, 0xc3, 0xa6, 0xa8, 0xd4, 0x3a, 0x34, 0xf9, 0xf7, 0xd0,
-	0x9e, 0xc8, 0xdc, 0x76, 0xf8, 0x10, 0xdc, 0x77, 0x32, 0x8c, 0x6c, 0x96, 0xce, 0xd1, 0x76, 0x79,
-	0x19, 0xcb, 0x56, 0x09, 0x0b, 0xb3, 0x5d, 0x68, 0xd9, 0xdb, 0xc4, 0x67, 0xee, 0x0c, 0x7d, 0x51,
-	0x6a, 0x98, 0x35, 0x4c, 0x12, 0x9b, 0xd5, 0x13, 0x28, 0xf2, 0xb7, 0xe0, 0x15, 0xb1, 0x4d, 0xca,
-	0x9e, 0xae, 0x04, 0x67, 0x8b, 0xe0, 0x8b, 0x2a, 0xcb, 0xe8, 0x07, 0x2b, 0xd1, 0x97, 0x6f, 0xc2,
-	0x1a, 0xab, 0x5c, 0xfc, 0x0d, 0xb4, 0x4d, 0x3d, 0xd6, 0x7f, 0x2f, 0xee, 0x11, 0x78, 0xa6, 0x26,
-	0x63, 0xfe, 0x1d, 0x00, 0x9e, 0x51, 0xef, 0xff, 0x7d, 0x3a, 0x9f, 0x43, 0x67, 0x11, 0xba, 0x06,
-	0xa3, 0xb7, 0xd0, 0x89, 0xd5, 0x38, 0x3b, 0x1b, 0x5d, 0xd7, 0xa1, 0xc4, 0xcb, 0x5f, 0xa9, 0x7d,
-	0x4d, 0xeb, 0x8c, 0x0a, 0x88, 0xff, 0x00, 0xdd, 0x65, 0xe4, 0x1a, 0xb7, 0x3a, 0x04, 0x4f, 0xc9,
-	0x2b, 0x3b, 0x5d, 0xec, 0x03, 0x5c, 0x0f, 0xbf, 0x40, 0x91, 0x7b, 0x24, 0xff, 0x2b, 0xee, 0xcb,
-	0xc8, 0xf7, 0xe4, 0xde, 0xb8, 0x93, 0xfb, 0x8f, 0xb0, 0x83, 0x23, 0x3f, 0xcc, 0xe4, 0x59, 0xa8,
-	0xa2, 0xb3, 0x9a, 0x2f, 0xb4, 0x0f, 0x8e, 0x92, 0x57, 0xb7, 0x56, 0x80, 0x00, 0xe2, 0x3a, 0x89,
-	0x02, 0xe7, 0x36, 0x5c, 0x27, 0x11, 0x1f, 0x41, 0x6f, 0x33, 0x7b, 0x8d, 0x3a, 0x79, 0xf9, 0x69,
-	0xb8, 0xb5, 0xc8, 0x02, 0xe2, 0x3f, 0xc1, 0xee, 0x7a, 0x8e, 0x7a, 0xef, 0xfe, 0x9f, 0x16, 0x29,
-	0x61, 0xef, 0x56, 0x02, 0xf7, 0xa9, 0xd3, 0xfd, 0xeb, 0x3a, 0x3f, 0x83, 0x76, 0x24, 0x93, 0x1a,
-	0x85, 0xe1, 0xe4, 0x28, 0x4e, 0xd4, 0xf8, 0x9d, 0x7e, 0x0b, 0x4e, 0xa6, 0xaf, 0xaa, 0x71, 0x8d,
-	0xde, 0x9b, 0xe3, 0xba, 0x61, 0x47, 0xfe, 0xe2, 0xab, 0xb2, 0x9c, 0x1b, 0xce, 0x1d, 0x73, 0x63,
-	0x06, 0x9e, 0x19, 0x87, 0xea, 0x7e, 0x53, 0xdd, 0xb9, 0x6d, 0xaa, 0xbb, 0x8b, 0xa9, 0x8e, 0x5f,
-	0xa3, 0xb1, 0x9e, 0xab, 0xe2, 0xb3, 0xd6, 0x14, 0x85, 0xc2, 0x4f, 0xc0, 0x2f, 0x53, 0xd6, 0xb8,
-	0x8a, 0x3e, 0xb8, 0x99, 0xbe, 0xaa, 0x6a, 0x81, 0xca, 0x4f, 0x5f, 0x09, 0x6b, 0xe7, 0x4f, 0xa0,
-	0x35, 0x0e, 0xd5, 0x58, 0x26, 0xb8, 0x39, 0x18, 0x39, 0xc3, 0x95, 0xcc, 0x19, 0x3a, 0xc2, 0xca,
-	0xcf, 0x7e, 0x71, 0xa0, 0x7d, 0x3c, 0x8d, 0x70, 0x5d, 0x61, 0x1d, 0x68, 0x7f, 0x1d, 0x2b, 0x5c,
-	0x8e, 0x28, 0x61, 0x5d, 0xf0, 0x0a, 0xc5, 0xa4, 0xb4, 0xc1, 0x00, 0x5a, 0x27, 0x32, 0x47, 0xc4,
-	0x41, 0x37, 0x2b, 0x9b, 0x94, 0xba, 0x08, 0xbc, 0x2e, 0x80, 0x26, 0x02, 0xaf, 0x4b, 0xa0, 0x85,
-	0xc0, 0x2b, 0x99, 0x20, 0xd0, 0x46, 0xc0, 0xca, 0x26, 0xa5, 0x1e, 0x7b, 0x08, 0xfe, 0x97, 0x6a,
-	0x9c, 0xbd, 0xbc, 0x46, 0xcc, 0x67, 0x5b, 0x00, 0x95, 0x6a, 0x52, 0x0a, 0x08, 0xbf, 0x92, 0x15,
-	0xdc, 0x41, 0xb8, 0x52, 0x4d, 0x4a, 0xbb, 0x48, 0xeb, 0x44, 0xe6, 0x5f, 0xbd, 0x47, 0xf4, 0x21,
-	0x3a, 0x97, 0x9a, 0x49, 0xe9, 0x16, 0xeb, 0x01, 0x3d, 0x2e, 0x1e, 0xf6, 0x17, 0x2a, 0x2a, 0xf9,
-	0x3e, 0x62, 0x8f, 0x61, 0x7b, 0xcd, 0x6a, 0x52, 0x4a, 0xd9, 0x2e, 0xb0, 0x15, 0x73, 0x11, 0x73,
-	0x9b, 0xed, 0xc1, 0xce, 0x86, 0xdd, 0xa4, 0x94, 0xd9, 0xba, 0xc7, 0x21, 0x2e, 0xb8, 0x74, 0xc7,
-	0xf2, 0xb0, 0x8a, 0x49, 0x69, 0x0f, 0x63, 0x89, 0x8d, 0xdd, 0x94, 0x3e, 0xc6, 0x58, 0x62, 0x73,
-	0x3b, 0xa5, 0xbb, 0x6c, 0x07, 0x1e, 0x89, 0xd5, 0x7d, 0x94, 0xee, 0x21, 0x7d, 0xb1, 0xb6, 0x7d,
-	0xd2, 0xe0, 0xd9, 0x37, 0xe0, 0x2f, 0x36, 0x4a, 0xe4, 0x10, 0xab, 0xcb, 0x30, 0x4e, 0x22, 0xfa,
-	0x80, 0xb5, 0xc1, 0x51, 0x71, 0x42, 0x09, 0xf6, 0xda, 0xe4, 0x59, 0xac, 0x26, 0xb4, 0x81, 0xc6,
-	0x58, 0xe5, 0xd4, 0x61, 0x1e, 0xb8, 0x73, 0x94, 0x5c, 0xe6, 0x43, 0xf3, 0x3c, 0xd1, 0x61, 0x4e,
-	0x9b, 0x68, 0x1c, 0x25, 0x7a, 0x44, 0x5b, 0x2f, 0x83, 0x0f, 0x9f, 0xfa, 0xe4, 0xe3, 0xa7, 0x3e,
-	0xf9, 0x70, 0xd3, 0x27, 0x1f, 0x6f, 0xfa, 0xe4, 0xb7, 0x9b, 0x3e, 0xf9, 0xf9, 0xf7, 0xfe, 0x83,
-	0x3f, 0x02, 0x00, 0x00, 0xff, 0xff, 0x87, 0xb9, 0x59, 0xcd, 0xf4, 0x0b, 0x00, 0x00,
+	// 1081 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x56, 0xcd, 0x6e, 0xdb, 0x46,
+	0x17, 0xd5, 0x88, 0x94, 0x44, 0x5d, 0x39, 0xf1, 0x78, 0xac, 0xd8, 0x82, 0xf1, 0x81, 0x9f, 0x30,
+	0x68, 0x03, 0xc1, 0x29, 0x9c, 0xc2, 0x40, 0x97, 0x5d, 0xd4, 0x0e, 0x10, 0x74, 0x53, 0x14, 0xb4,
+	0x1b, 0xa4, 0x2b, 0x87, 0x12, 0xc7, 0x0a, 0x61, 0x6a, 0x86, 0xe2, 0x50, 0x76, 0x04, 0xb4, 0x28,
+	0xfa, 0x06, 0xdd, 0x75, 0xd9, 0x97, 0xe9, 0xc2, 0x4b, 0x2f, 0xbb, 0x2a, 0x1a, 0xfb, 0x45, 0x8a,
+	0x3b, 0x24, 0x25, 0x4b, 0x96, 0x83, 0xd0, 0x6d, 0x37, 0xd2, 0xcc, 0x39, 0x97, 0xf7, 0x9e, 0x33,
+	0xff, 0xd0, 0x8a, 0x13, 0x95, 0xaa, 0x3d, 0xf3, 0xcb, 0x6a, 0xe6, 0x6f, 0xa7, 0x3d, 0x54, 0x43,
+	0x65, 0x9a, 0xcf, 0xb1, 0x95, 0x91, 0xfc, 0x33, 0x70, 0x22, 0x35, 0x0c, 0xa5, 0x27, 0xc6, 0xac,
+	0x0b, 0xce, 0x40, 0x8d, 0xe2, 0x44, 0x68, 0xdd, 0x21, 0x5d, 0xd2, 0x73, 0x0e, 0xec, 0xcb, 0x3f,
+	0xff, 0x5f, 0xf1, 0x66, 0x28, 0x3f, 0x84, 0x66, 0x1e, 0xad, 0x63, 0xd6, 0x86, 0xaa, 0x3a, 0x5b,
+	0x08, 0xac, 0xaa, 0xb3, 0x85, 0x24, 0xd5, 0x95, 0x49, 0xda, 0xc0, 0x12, 0x11, 0x29, 0x3f, 0x38,
+	0xf6, 0xfb, 0x91, 0x38, 0x54, 0xf2, 0xd4, 0x13, 0x63, 0xfe, 0x0c, 0x36, 0xef, 0xa0, 0xf7, 0x15,
+	0xe1, 0xcf, 0x60, 0x3d, 0x0b, 0xc6, 0xb8, 0x70, 0x88, 0xe2, 0x3b, 0x60, 0xc7, 0x7e, 0xfa, 0xd6,
+	0x84, 0x36, 0xf3, 0x50, 0x83, 0xf0, 0x5d, 0xa0, 0x8b, 0xc1, 0x3a, 0x66, 0x5b, 0x60, 0x89, 0x24,
+	0x59, 0x08, 0x46, 0x80, 0xff, 0x4a, 0xa0, 0x76, 0xee, 0x47, 0x13, 0xc1, 0x76, 0xc1, 0x4e, 0xa7,
+	0xb1, 0xe8, 0x90, 0x6e, 0xb5, 0xf7, 0x78, 0x9f, 0x66, 0xc3, 0xb5, 0xf7, 0x0a, 0xb9, 0xe3, 0x69,
+	0x2c, 0x8a, 0x0a, 0x18, 0xc3, 0x18, 0x90, 0xd0, 0x98, 0xb5, 0x72, 0x98, 0x84, 0x88, 0x4d, 0x3a,
+	0x56, 0x97, 0xf4, 0xec, 0x02, 0x9b, 0x20, 0x76, 0xda, 0xb1, 0xbb, 0xa4, 0x47, 0x0a, 0xec, 0x14,
+	0x31, 0xdd, 0xa9, 0xdd, 0xd2, 0x41, 0x34, 0x62, 0xfd, 0x4e, 0xbd, 0x4b, 0x7a, 0x6b, 0x05, 0xd6,
+	0xe7, 0x5f, 0x42, 0xed, 0x34, 0x14, 0x51, 0x80, 0x46, 0xa5, 0x3f, 0x12, 0x8b, 0x46, 0x11, 0x61,
+	0x3b, 0x40, 0xce, 0x8d, 0x8c, 0xd6, 0xfe, 0x5a, 0xae, 0xd7, 0x78, 0xf1, 0xc8, 0x39, 0xdf, 0x03,
+	0x27, 0x0e, 0xe5, 0xf0, 0x24, 0x11, 0x63, 0xc6, 0xa1, 0x99, 0x86, 0x23, 0xa1, 0x53, 0x7f, 0x14,
+	0x9b, 0x34, 0x85, 0xec, 0x39, 0xcc, 0x9f, 0x43, 0x33, 0x8f, 0xd7, 0xf1, 0xe2, 0x07, 0xd5, 0xd5,
+	0x1f, 0xfc, 0x4e, 0x00, 0x12, 0x31, 0x3e, 0x19, 0xa8, 0xd1, 0x48, 0x49, 0xb6, 0x03, 0x35, 0x2d,
+	0xc6, 0x52, 0x99, 0xf1, 0x2b, 0xc2, 0x33, 0x08, 0xb9, 0x14, 0x27, 0xd9, 0xa4, 0x2a, 0x2c, 0x64,
+	0x10, 0x4e, 0xcc, 0x99, 0x98, 0x9a, 0x81, 0x9b, 0x4d, 0xcc, 0x99, 0x98, 0x32, 0x17, 0x1a, 0xe7,
+	0x22, 0xd1, 0xa1, 0x92, 0x66, 0x00, 0xb3, 0x8c, 0xc4, 0x2b, 0x40, 0xe4, 0x51, 0x8b, 0x9a, 0xa4,
+	0x66, 0x30, 0x8b, 0x8a, 0x05, 0xc8, 0x9e, 0x42, 0x0b, 0xad, 0x1c, 0xe7, 0x31, 0xf5, 0x5b, 0x31,
+	0xb7, 0x09, 0xfe, 0x33, 0xc9, 0x02, 0x3f, 0xc6, 0x87, 0x0b, 0x0d, 0x91, 0x24, 0x87, 0x2a, 0x40,
+	0x27, 0xd5, 0x5e, 0xad, 0xa8, 0x99, 0x83, 0xe5, 0xbc, 0x54, 0x66, 0x5e, 0xf8, 0x1b, 0x68, 0x0c,
+	0x45, 0x6a, 0xa6, 0xea, 0x53, 0xb0, 0xdf, 0x0a, 0x3f, 0x30, 0xd5, 0x5b, 0xfb, 0x1b, 0xf9, 0xac,
+	0xce, 0xc7, 0xd9, 0x33, 0x34, 0xdb, 0x82, 0xba, 0x59, 0x1c, 0xb8, 0xe5, 0xac, 0x5e, 0xd3, 0xcb,
+	0x7b, 0xa8, 0xc0, 0x8f, 0x22, 0xa3, 0xa0, 0xd8, 0x3e, 0x08, 0xf0, 0xd7, 0xe0, 0x64, 0x15, 0x74,
+	0xcc, 0x9e, 0x2e, 0x94, 0x60, 0xb3, 0x12, 0xb3, 0x31, 0xc8, 0x6b, 0x7c, 0xb2, 0x50, 0x63, 0xbe,
+	0xc4, 0x0c, 0x58, 0x54, 0xe4, 0xaf, 0xa0, 0xa1, 0xcb, 0x69, 0xff, 0xb8, 0xbc, 0xfb, 0xe0, 0xe8,
+	0x92, 0x8a, 0xf9, 0xf7, 0x00, 0xf8, 0x8d, 0x7c, 0xf7, 0xef, 0xcb, 0xf9, 0x02, 0x5a, 0xb3, 0xd4,
+	0x25, 0x14, 0xbd, 0x86, 0x56, 0x28, 0x07, 0xc9, 0x49, 0x7f, 0x5a, 0x46, 0x12, 0xcf, 0xb7, 0xbe,
+	0x59, 0x65, 0xcb, 0x8a, 0x32, 0x8a, 0xbf, 0x81, 0xb5, 0x79, 0xe6, 0x12, 0xb3, 0xda, 0x03, 0x47,
+	0x8a, 0x0b, 0x73, 0xac, 0x99, 0xc5, 0xb8, 0x9c, 0x7e, 0xc6, 0xa2, 0xf6, 0x40, 0xfc, 0x57, 0xda,
+	0xe7, 0x99, 0x1f, 0xa8, 0xbd, 0xfa, 0x41, 0xed, 0x3f, 0xc0, 0x26, 0x5e, 0x3f, 0x7e, 0x22, 0x4e,
+	0x7c, 0x19, 0x9c, 0x94, 0x5c, 0xa1, 0x2e, 0x58, 0x52, 0x5c, 0xac, 0x74, 0x80, 0x04, 0xf2, 0x2a,
+	0x0a, 0x3a, 0xd6, 0x2a, 0x5e, 0x45, 0x01, 0xef, 0x43, 0xfb, 0x6e, 0xf5, 0x12, 0x3e, 0x79, 0x7e,
+	0x27, 0xad, 0x34, 0x99, 0x51, 0xfc, 0x27, 0xd8, 0x5a, 0xae, 0x51, 0x6e, 0xdd, 0xff, 0x53, 0x93,
+	0x02, 0xb6, 0x57, 0x0a, 0x78, 0x88, 0x4f, 0xfb, 0x7e, 0x9f, 0x9f, 0x43, 0x23, 0x10, 0x51, 0x09,
+	0x63, 0x78, 0x72, 0x64, 0x5f, 0x94, 0xd8, 0xa7, 0x03, 0xb0, 0x12, 0x75, 0x51, 0x1c, 0xe0, 0x18,
+	0x7d, 0xdf, 0x01, 0x5e, 0xbd, 0x75, 0x2d, 0xcc, 0x2e, 0xa3, 0xf9, 0x19, 0x62, 0x7d, 0xe0, 0x0c,
+	0xf9, 0x11, 0x1c, 0x3d, 0xf0, 0xe5, 0xc3, 0xce, 0x79, 0x6b, 0xd5, 0x39, 0x6f, 0x2f, 0x9d, 0xf3,
+	0x78, 0x7b, 0x0d, 0xd4, 0x44, 0x66, 0x77, 0x62, 0x71, 0x3f, 0x65, 0x10, 0x3f, 0x82, 0x66, 0x5e,
+	0xbe, 0xc4, 0x14, 0xb9, 0x60, 0x27, 0xea, 0xa2, 0xf0, 0x05, 0x45, 0x9c, 0xba, 0xf0, 0x0c, 0xce,
+	0xff, 0x07, 0xf5, 0x81, 0x2f, 0x07, 0x22, 0x62, 0x0c, 0x6c, 0x2d, 0xc6, 0xf8, 0x90, 0xb4, 0x7a,
+	0x96, 0x67, 0xda, 0xbb, 0xbf, 0x59, 0xd0, 0x38, 0x1c, 0x05, 0xf8, 0x7e, 0x62, 0x2d, 0x68, 0x7c,
+	0x1b, 0x4a, 0x7c, 0xba, 0x51, 0xc2, 0xd6, 0xc0, 0xc9, 0x3a, 0x3a, 0xa6, 0x55, 0x06, 0x50, 0x3f,
+	0x12, 0x29, 0x32, 0x16, 0x86, 0x99, 0xb6, 0x8e, 0xa9, 0x8d, 0xc4, 0xcb, 0x8c, 0xa8, 0x21, 0xf1,
+	0x32, 0x27, 0xea, 0x48, 0xbc, 0x10, 0x11, 0x12, 0x0d, 0x24, 0x4c, 0x5b, 0xc7, 0xd4, 0x61, 0x8f,
+	0xa0, 0xf9, 0xb5, 0x1c, 0x24, 0x07, 0x53, 0xe4, 0x9a, 0xec, 0x31, 0x40, 0xd1, 0xd5, 0x31, 0x05,
+	0xa4, 0x5f, 0x88, 0x82, 0x6e, 0x21, 0x5d, 0x74, 0x75, 0x4c, 0xd7, 0x50, 0xd6, 0x91, 0x48, 0xbf,
+	0x79, 0x87, 0xec, 0x23, 0x0c, 0xce, 0x7b, 0x3a, 0xa6, 0x8f, 0x59, 0x1b, 0xe8, 0x61, 0xb6, 0xe0,
+	0xbf, 0x92, 0x41, 0xae, 0x77, 0x9d, 0x3d, 0x81, 0x8d, 0x25, 0x54, 0xc7, 0x94, 0xb2, 0x2d, 0x60,
+	0x0b, 0x70, 0x96, 0x73, 0x83, 0x6d, 0xc3, 0xe6, 0x1d, 0x5c, 0xc7, 0x94, 0x19, 0xdf, 0x03, 0x1f,
+	0x9f, 0xe5, 0x74, 0xd3, 0xe8, 0x30, 0x1d, 0x1d, 0xd3, 0x36, 0xe6, 0xf2, 0xee, 0xbc, 0x9f, 0xe9,
+	0x13, 0xcc, 0xe5, 0xdd, 0x7d, 0x41, 0xd3, 0x2d, 0xb6, 0x09, 0xeb, 0xde, 0xe2, 0x6b, 0x99, 0x6e,
+	0xa3, 0x7c, 0x6f, 0xe9, 0x55, 0x4c, 0x3b, 0xbb, 0xdf, 0x41, 0x73, 0xf6, 0xc4, 0x45, 0x0d, 0xa1,
+	0x3c, 0xf7, 0xc3, 0x28, 0xa0, 0x15, 0xd6, 0x00, 0x4b, 0x86, 0x11, 0x25, 0x38, 0xd6, 0x3a, 0x4d,
+	0x42, 0x39, 0xa4, 0x55, 0x04, 0x43, 0x99, 0x52, 0x8b, 0x39, 0x60, 0x4f, 0xb0, 0x65, 0xb3, 0x26,
+	0xd4, 0x4e, 0x23, 0xe5, 0xa7, 0xb4, 0x86, 0x60, 0x3f, 0x52, 0x7d, 0x5a, 0x3f, 0xe8, 0x5e, 0xbe,
+	0x77, 0xc9, 0xd5, 0x7b, 0x97, 0x5c, 0x5e, 0xbb, 0xe4, 0xea, 0xda, 0x25, 0x7f, 0x5d, 0xbb, 0xe4,
+	0x97, 0x1b, 0xb7, 0x72, 0x75, 0xe3, 0x56, 0xfe, 0xb8, 0x71, 0x2b, 0x7f, 0x07, 0x00, 0x00, 0xff,
+	0xff, 0xba, 0x2e, 0xb6, 0x6f, 0xb2, 0x0c, 0x00, 0x00,
 }
 
 func (m *LoginReq) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -2107,30 +2015,30 @@ func (m *LoginReq) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *LoginReq) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *LoginReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Compress != nil {
-		dAtA[i] = 0x8
-		i++
-		if *m.Compress {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i++
+	i--
+	if m.Compress {
+		dAtA[i] = 1
+	} else {
+		dAtA[i] = 0
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	return i, nil
+	i--
+	dAtA[i] = 0x8
+	return len(dAtA) - i, nil
 }
 
 func (m *LoginResp) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -2138,40 +2046,38 @@ func (m *LoginResp) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *LoginResp) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *LoginResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Ok != nil {
-		dAtA[i] = 0x8
-		i++
-		if *m.Ok {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i++
+	i--
+	if m.Compress {
+		dAtA[i] = 1
+	} else {
+		dAtA[i] = 0
 	}
-	if m.Compress != nil {
-		dAtA[i] = 0x10
-		i++
-		if *m.Compress {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i++
+	i--
+	dAtA[i] = 0x10
+	i--
+	if m.Ok {
+		dAtA[i] = 1
+	} else {
+		dAtA[i] = 0
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	return i, nil
+	i--
+	dAtA[i] = 0x8
+	return len(dAtA) - i, nil
 }
 
 func (m *ReloadTableConfReq) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -2179,20 +2085,22 @@ func (m *ReloadTableConfReq) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *ReloadTableConfReq) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ReloadTableConfReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *ReloadTableConfResp) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -2200,30 +2108,30 @@ func (m *ReloadTableConfResp) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *ReloadTableConfResp) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ReloadTableConfResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Ok != nil {
-		dAtA[i] = 0x8
-		i++
-		if *m.Ok {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i++
+	i--
+	if m.Ok {
+		dAtA[i] = 1
+	} else {
+		dAtA[i] = 0
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	return i, nil
+	i--
+	dAtA[i] = 0x8
+	return len(dAtA) - i, nil
 }
 
 func (m *ReloadConfigReq) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -2231,26 +2139,27 @@ func (m *ReloadConfigReq) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *ReloadConfigReq) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ReloadConfigReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Path != nil {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(len(*m.Path)))
-		i += copy(dAtA[i:], *m.Path)
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	return i, nil
+	i -= len(m.Path)
+	copy(dAtA[i:], m.Path)
+	i = encodeVarintProto(dAtA, i, uint64(len(m.Path)))
+	i--
+	dAtA[i] = 0xa
+	return len(dAtA) - i, nil
 }
 
 func (m *ReloadConfigResp) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -2258,26 +2167,27 @@ func (m *ReloadConfigResp) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *ReloadConfigResp) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ReloadConfigResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Err != nil {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(len(*m.Err)))
-		i += copy(dAtA[i:], *m.Err)
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	return i, nil
+	i -= len(m.Err)
+	copy(dAtA[i:], m.Err)
+	i = encodeVarintProto(dAtA, i, uint64(len(m.Err)))
+	i--
+	dAtA[i] = 0xa
+	return len(dAtA) - i, nil
 }
 
 func (m *Value) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -2285,55 +2195,47 @@ func (m *Value) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *Value) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *Value) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Type == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
-	} else {
-		dAtA[i] = 0x8
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(*m.Type))
-	}
-	if m.I != nil {
-		dAtA[i] = 0x10
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(*m.I))
-	}
-	if m.U != nil {
-		dAtA[i] = 0x18
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(*m.U))
-	}
-	if m.F != nil {
-		dAtA[i] = 0x21
-		i++
-		encoding_binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(*m.F))))
-		i += 8
-	}
-	if m.S != nil {
-		dAtA[i] = 0x2a
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(len(*m.S)))
-		i += copy(dAtA[i:], *m.S)
-	}
 	if m.B != nil {
-		dAtA[i] = 0x32
-		i++
+		i -= len(m.B)
+		copy(dAtA[i:], m.B)
 		i = encodeVarintProto(dAtA, i, uint64(len(m.B)))
-		i += copy(dAtA[i:], m.B)
+		i--
+		dAtA[i] = 0x32
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	return i, nil
+	i -= len(m.S)
+	copy(dAtA[i:], m.S)
+	i = encodeVarintProto(dAtA, i, uint64(len(m.S)))
+	i--
+	dAtA[i] = 0x2a
+	i -= 8
+	encoding_binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.F))))
+	i--
+	dAtA[i] = 0x21
+	i = encodeVarintProto(dAtA, i, uint64(m.U))
+	i--
+	dAtA[i] = 0x18
+	i = encodeVarintProto(dAtA, i, uint64(m.I))
+	i--
+	dAtA[i] = 0x10
+	i = encodeVarintProto(dAtA, i, uint64(m.Type))
+	i--
+	dAtA[i] = 0x8
+	return len(dAtA) - i, nil
 }
 
 func (m *Field) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -2341,36 +2243,39 @@ func (m *Field) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *Field) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *Field) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Name != nil {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(len(*m.Name)))
-		i += copy(dAtA[i:], *m.Name)
-	}
 	if m.V != nil {
-		dAtA[i] = 0x12
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.V.Size()))
-		n1, err := m.V.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		{
+			size, err := m.V.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
 		}
-		i += n1
+		i--
+		dAtA[i] = 0x12
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	return i, nil
+	i -= len(m.Name)
+	copy(dAtA[i:], m.Name)
+	i = encodeVarintProto(dAtA, i, uint64(len(m.Name)))
+	i--
+	dAtA[i] = 0xa
+	return len(dAtA) - i, nil
 }
 
 func (m *PingReq) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -2378,25 +2283,25 @@ func (m *PingReq) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *PingReq) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *PingReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Timestamp != nil {
-		dAtA[i] = 0x8
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(*m.Timestamp))
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	return i, nil
+	i = encodeVarintProto(dAtA, i, uint64(m.Timestamp))
+	i--
+	dAtA[i] = 0x8
+	return len(dAtA) - i, nil
 }
 
 func (m *PingResp) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -2404,25 +2309,25 @@ func (m *PingResp) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *PingResp) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *PingResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Timestamp != nil {
-		dAtA[i] = 0x10
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(*m.Timestamp))
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	return i, nil
+	i = encodeVarintProto(dAtA, i, uint64(m.Timestamp))
+	i--
+	dAtA[i] = 0x10
+	return len(dAtA) - i, nil
 }
 
 func (m *ReqCommon) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -2430,54 +2335,46 @@ func (m *ReqCommon) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *ReqCommon) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ReqCommon) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Seqno == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
-	} else {
-		dAtA[i] = 0x8
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(*m.Seqno))
-	}
-	if m.Table != nil {
-		dAtA[i] = 0x12
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(len(*m.Table)))
-		i += copy(dAtA[i:], *m.Table)
-	}
-	if m.Key != nil {
-		dAtA[i] = 0x1a
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(len(*m.Key)))
-		i += copy(dAtA[i:], *m.Key)
-	}
+	i = encodeVarintProto(dAtA, i, uint64(m.RespTimeout))
+	i--
+	dAtA[i] = 0x30
+	i = encodeVarintProto(dAtA, i, uint64(m.Timeout))
+	i--
+	dAtA[i] = 0x28
 	if m.Version != nil {
-		dAtA[i] = 0x20
-		i++
 		i = encodeVarintProto(dAtA, i, uint64(*m.Version))
+		i--
+		dAtA[i] = 0x20
 	}
-	if m.Timeout != nil {
-		dAtA[i] = 0x28
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(*m.Timeout))
-	}
-	if m.RespTimeout != nil {
-		dAtA[i] = 0x30
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(*m.RespTimeout))
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	return i, nil
+	i -= len(m.Key)
+	copy(dAtA[i:], m.Key)
+	i = encodeVarintProto(dAtA, i, uint64(len(m.Key)))
+	i--
+	dAtA[i] = 0x1a
+	i -= len(m.Table)
+	copy(dAtA[i:], m.Table)
+	i = encodeVarintProto(dAtA, i, uint64(len(m.Table)))
+	i--
+	dAtA[i] = 0x12
+	i = encodeVarintProto(dAtA, i, uint64(m.Seqno))
+	i--
+	dAtA[i] = 0x8
+	return len(dAtA) - i, nil
 }
 
 func (m *RespCommon) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -2485,45 +2382,36 @@ func (m *RespCommon) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *RespCommon) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *RespCommon) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Seqno == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
-	} else {
-		dAtA[i] = 0x8
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(*m.Seqno))
-	}
-	if m.ErrCode == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
-	} else {
-		dAtA[i] = 0x10
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(*m.ErrCode))
-	}
-	if m.Key != nil {
-		dAtA[i] = 0x1a
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(len(*m.Key)))
-		i += copy(dAtA[i:], *m.Key)
-	}
-	if m.Version != nil {
-		dAtA[i] = 0x20
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(*m.Version))
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	return i, nil
+	i = encodeVarintProto(dAtA, i, uint64(m.Version))
+	i--
+	dAtA[i] = 0x20
+	i -= len(m.Key)
+	copy(dAtA[i:], m.Key)
+	i = encodeVarintProto(dAtA, i, uint64(len(m.Key)))
+	i--
+	dAtA[i] = 0x1a
+	i = encodeVarintProto(dAtA, i, uint64(m.ErrCode))
+	i--
+	dAtA[i] = 0x10
+	i = encodeVarintProto(dAtA, i, uint64(m.Seqno))
+	i--
+	dAtA[i] = 0x8
+	return len(dAtA) - i, nil
 }
 
 func (m *GetReq) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -2531,57 +2419,53 @@ func (m *GetReq) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *GetReq) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Head == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
+	i--
+	if m.All {
+		dAtA[i] = 1
 	} else {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.Head.Size()))
-		n2, err := m.Head.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n2
+		dAtA[i] = 0
 	}
+	i--
+	dAtA[i] = 0x18
 	if len(m.Fields) > 0 {
-		for _, s := range m.Fields {
+		for iNdEx := len(m.Fields) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Fields[iNdEx])
+			copy(dAtA[i:], m.Fields[iNdEx])
+			i = encodeVarintProto(dAtA, i, uint64(len(m.Fields[iNdEx])))
+			i--
 			dAtA[i] = 0x12
-			i++
-			l = len(s)
-			for l >= 1<<7 {
-				dAtA[i] = uint8(uint64(l)&0x7f | 0x80)
-				l >>= 7
-				i++
+		}
+	}
+	if m.Head == nil {
+		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
+	} else {
+		{
+			size, err := m.Head.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
 			}
-			dAtA[i] = uint8(l)
-			i++
-			i += copy(dAtA[i:], s)
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
 		}
+		i--
+		dAtA[i] = 0xa
 	}
-	if m.All != nil {
-		dAtA[i] = 0x18
-		i++
-		if *m.All {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i++
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *GetResp) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -2589,44 +2473,50 @@ func (m *GetResp) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *GetResp) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Head == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
-	} else {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.Head.Size()))
-		n3, err := m.Head.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n3
-	}
 	if len(m.Fields) > 0 {
-		for _, msg := range m.Fields {
+		for iNdEx := len(m.Fields) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Fields[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintProto(dAtA, i, uint64(size))
+			}
+			i--
 			dAtA[i] = 0x12
-			i++
-			i = encodeVarintProto(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
+		}
+	}
+	if m.Head == nil {
+		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
+	} else {
+		{
+			size, err := m.Head.MarshalToSizedBuffer(dAtA[:i])
 			if err != nil {
 				return 0, err
 			}
-			i += n
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
 		}
+		i--
+		dAtA[i] = 0xa
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *SetReq) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -2634,44 +2524,50 @@ func (m *SetReq) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *SetReq) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *SetReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Head == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
-	} else {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.Head.Size()))
-		n4, err := m.Head.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n4
-	}
 	if len(m.Fields) > 0 {
-		for _, msg := range m.Fields {
+		for iNdEx := len(m.Fields) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Fields[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintProto(dAtA, i, uint64(size))
+			}
+			i--
 			dAtA[i] = 0x12
-			i++
-			i = encodeVarintProto(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
+		}
+	}
+	if m.Head == nil {
+		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
+	} else {
+		{
+			size, err := m.Head.MarshalToSizedBuffer(dAtA[:i])
 			if err != nil {
 				return 0, err
 			}
-			i += n
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
 		}
+		i--
+		dAtA[i] = 0xa
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *SetResp) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -2679,32 +2575,36 @@ func (m *SetResp) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *SetResp) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *SetResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if m.Head == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
 	} else {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.Head.Size()))
-		n5, err := m.Head.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		{
+			size, err := m.Head.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
 		}
-		i += n5
+		i--
+		dAtA[i] = 0xa
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *SetNxReq) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -2712,44 +2612,50 @@ func (m *SetNxReq) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *SetNxReq) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *SetNxReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Head == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
-	} else {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.Head.Size()))
-		n6, err := m.Head.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n6
-	}
 	if len(m.Fields) > 0 {
-		for _, msg := range m.Fields {
+		for iNdEx := len(m.Fields) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Fields[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintProto(dAtA, i, uint64(size))
+			}
+			i--
 			dAtA[i] = 0x12
-			i++
-			i = encodeVarintProto(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
+		}
+	}
+	if m.Head == nil {
+		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
+	} else {
+		{
+			size, err := m.Head.MarshalToSizedBuffer(dAtA[:i])
 			if err != nil {
 				return 0, err
 			}
-			i += n
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
 		}
+		i--
+		dAtA[i] = 0xa
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *SetNxResp) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -2757,32 +2663,36 @@ func (m *SetNxResp) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *SetNxResp) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *SetNxResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if m.Head == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
 	} else {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.Head.Size()))
-		n7, err := m.Head.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		{
+			size, err := m.Head.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
 		}
-		i += n7
+		i--
+		dAtA[i] = 0xa
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *IncrByReq) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -2790,44 +2700,50 @@ func (m *IncrByReq) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *IncrByReq) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *IncrByReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Head == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
-	} else {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.Head.Size()))
-		n8, err := m.Head.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n8
-	}
 	if m.Field == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("field")
 	} else {
-		dAtA[i] = 0x12
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.Field.Size()))
-		n9, err := m.Field.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		{
+			size, err := m.Field.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
 		}
-		i += n9
+		i--
+		dAtA[i] = 0x12
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
+	if m.Head == nil {
+		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
+	} else {
+		{
+			size, err := m.Head.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *IncrByResp) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -2835,42 +2751,48 @@ func (m *IncrByResp) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *IncrByResp) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *IncrByResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Head == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
-	} else {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.Head.Size()))
-		n10, err := m.Head.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n10
-	}
 	if m.NewValue != nil {
-		dAtA[i] = 0x22
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.NewValue.Size()))
-		n11, err := m.NewValue.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		{
+			size, err := m.NewValue.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
 		}
-		i += n11
+		i--
+		dAtA[i] = 0x22
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
+	if m.Head == nil {
+		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
+	} else {
+		{
+			size, err := m.Head.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *DecrByReq) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -2878,44 +2800,50 @@ func (m *DecrByReq) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *DecrByReq) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *DecrByReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Head == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
-	} else {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.Head.Size()))
-		n12, err := m.Head.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n12
-	}
 	if m.Field == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("field")
 	} else {
-		dAtA[i] = 0x12
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.Field.Size()))
-		n13, err := m.Field.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		{
+			size, err := m.Field.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
 		}
-		i += n13
+		i--
+		dAtA[i] = 0x12
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
+	if m.Head == nil {
+		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
+	} else {
+		{
+			size, err := m.Head.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *DecrByResp) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -2923,42 +2851,48 @@ func (m *DecrByResp) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *DecrByResp) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *DecrByResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Head == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
-	} else {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.Head.Size()))
-		n14, err := m.Head.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n14
-	}
 	if m.NewValue != nil {
-		dAtA[i] = 0x12
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.NewValue.Size()))
-		n15, err := m.NewValue.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		{
+			size, err := m.NewValue.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
 		}
-		i += n15
+		i--
+		dAtA[i] = 0x12
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
+	if m.Head == nil {
+		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
+	} else {
+		{
+			size, err := m.Head.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *CompareAndSetReq) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -2966,56 +2900,64 @@ func (m *CompareAndSetReq) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *CompareAndSetReq) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *CompareAndSetReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Head == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
+	if m.Old == nil {
+		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("old")
 	} else {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.Head.Size()))
-		n16, err := m.Head.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		{
+			size, err := m.Old.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
 		}
-		i += n16
+		i--
+		dAtA[i] = 0x1a
 	}
 	if m.New == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("new")
 	} else {
+		{
+			size, err := m.New.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
+		}
+		i--
 		dAtA[i] = 0x12
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.New.Size()))
-		n17, err := m.New.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n17
 	}
-	if m.Old == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
+	if m.Head == nil {
+		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
 	} else {
-		dAtA[i] = 0x1a
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.Old.Size()))
-		n18, err := m.Old.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		{
+			size, err := m.Head.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
 		}
-		i += n18
+		i--
+		dAtA[i] = 0xa
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *CompareAndSetResp) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3023,42 +2965,48 @@ func (m *CompareAndSetResp) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *CompareAndSetResp) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *CompareAndSetResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Head == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
-	} else {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.Head.Size()))
-		n19, err := m.Head.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n19
-	}
 	if m.Value != nil {
-		dAtA[i] = 0x12
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.Value.Size()))
-		n20, err := m.Value.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		{
+			size, err := m.Value.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
 		}
-		i += n20
+		i--
+		dAtA[i] = 0x12
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
+	if m.Head == nil {
+		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
+	} else {
+		{
+			size, err := m.Head.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *CompareAndSetNxReq) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3066,56 +3014,64 @@ func (m *CompareAndSetNxReq) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *CompareAndSetNxReq) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *CompareAndSetNxReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Head == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
+	if m.Old == nil {
+		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("old")
 	} else {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.Head.Size()))
-		n21, err := m.Head.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		{
+			size, err := m.Old.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
 		}
-		i += n21
+		i--
+		dAtA[i] = 0x1a
 	}
 	if m.New == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("new")
 	} else {
+		{
+			size, err := m.New.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
+		}
+		i--
 		dAtA[i] = 0x12
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.New.Size()))
-		n22, err := m.New.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n22
 	}
-	if m.Old == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
+	if m.Head == nil {
+		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
 	} else {
-		dAtA[i] = 0x1a
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.Old.Size()))
-		n23, err := m.Old.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		{
+			size, err := m.Head.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
 		}
-		i += n23
+		i--
+		dAtA[i] = 0xa
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *CompareAndSetNxResp) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3123,42 +3079,48 @@ func (m *CompareAndSetNxResp) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *CompareAndSetNxResp) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *CompareAndSetNxResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Head == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
-	} else {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.Head.Size()))
-		n24, err := m.Head.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n24
-	}
 	if m.Value != nil {
-		dAtA[i] = 0x22
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.Value.Size()))
-		n25, err := m.Value.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		{
+			size, err := m.Value.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
 		}
-		i += n25
+		i--
+		dAtA[i] = 0x22
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
+	if m.Head == nil {
+		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
+	} else {
+		{
+			size, err := m.Head.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *DelReq) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3166,32 +3128,36 @@ func (m *DelReq) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *DelReq) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *DelReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if m.Head == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
 	} else {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.Head.Size()))
-		n26, err := m.Head.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		{
+			size, err := m.Head.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
 		}
-		i += n26
+		i--
+		dAtA[i] = 0xa
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *DelResp) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3199,32 +3165,36 @@ func (m *DelResp) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *DelResp) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *DelResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if m.Head == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
 	} else {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.Head.Size()))
-		n27, err := m.Head.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		{
+			size, err := m.Head.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
 		}
-		i += n27
+		i--
+		dAtA[i] = 0xa
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *Row) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3232,47 +3202,44 @@ func (m *Row) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *Row) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *Row) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Key == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
-	} else {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(len(*m.Key)))
-		i += copy(dAtA[i:], *m.Key)
-	}
-	if m.Version == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
-	} else {
-		dAtA[i] = 0x10
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(*m.Version))
-	}
 	if len(m.Fields) > 0 {
-		for _, msg := range m.Fields {
-			dAtA[i] = 0x1a
-			i++
-			i = encodeVarintProto(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
+		for iNdEx := len(m.Fields) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Fields[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintProto(dAtA, i, uint64(size))
 			}
-			i += n
+			i--
+			dAtA[i] = 0x1a
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	return i, nil
+	i = encodeVarintProto(dAtA, i, uint64(m.Version))
+	i--
+	dAtA[i] = 0x10
+	i -= len(m.Key)
+	copy(dAtA[i:], m.Key)
+	i = encodeVarintProto(dAtA, i, uint64(len(m.Key)))
+	i--
+	dAtA[i] = 0xa
+	return len(dAtA) - i, nil
 }
 
 func (m *ScanReq) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3280,62 +3247,56 @@ func (m *ScanReq) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *ScanReq) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ScanReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Head == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
+	i = encodeVarintProto(dAtA, i, uint64(m.Count))
+	i--
+	dAtA[i] = 0x28
+	i--
+	if m.All {
+		dAtA[i] = 1
 	} else {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.Head.Size()))
-		n28, err := m.Head.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n28
+		dAtA[i] = 0
 	}
+	i--
+	dAtA[i] = 0x20
 	if len(m.Fields) > 0 {
-		for _, s := range m.Fields {
+		for iNdEx := len(m.Fields) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Fields[iNdEx])
+			copy(dAtA[i:], m.Fields[iNdEx])
+			i = encodeVarintProto(dAtA, i, uint64(len(m.Fields[iNdEx])))
+			i--
 			dAtA[i] = 0x1a
-			i++
-			l = len(s)
-			for l >= 1<<7 {
-				dAtA[i] = uint8(uint64(l)&0x7f | 0x80)
-				l >>= 7
-				i++
+		}
+	}
+	if m.Head == nil {
+		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
+	} else {
+		{
+			size, err := m.Head.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
 			}
-			dAtA[i] = uint8(l)
-			i++
-			i += copy(dAtA[i:], s)
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
 		}
+		i--
+		dAtA[i] = 0xa
 	}
-	if m.All != nil {
-		dAtA[i] = 0x20
-		i++
-		if *m.All {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i++
-	}
-	if m.Count != nil {
-		dAtA[i] = 0x28
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(*m.Count))
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *ScanResp) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3343,44 +3304,50 @@ func (m *ScanResp) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *ScanResp) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ScanResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Head == nil {
-		return 0, new(github_com_golang_protobuf_proto.RequiredNotSetError)
-	} else {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintProto(dAtA, i, uint64(m.Head.Size()))
-		n29, err := m.Head.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n29
-	}
 	if len(m.Rows) > 0 {
-		for _, msg := range m.Rows {
+		for iNdEx := len(m.Rows) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Rows[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintProto(dAtA, i, uint64(size))
+			}
+			i--
 			dAtA[i] = 0x1a
-			i++
-			i = encodeVarintProto(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
+		}
+	}
+	if m.Head == nil {
+		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
+	} else {
+		{
+			size, err := m.Head.MarshalToSizedBuffer(dAtA[:i])
 			if err != nil {
 				return 0, err
 			}
-			i += n
+			i -= size
+			i = encodeVarintProto(dAtA, i, uint64(size))
 		}
+		i--
+		dAtA[i] = 0xa
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *Cancel) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -3388,31 +3355,35 @@ func (m *Cancel) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *Cancel) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *Cancel) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if len(m.Seqs) > 0 {
-		for _, num := range m.Seqs {
+		for iNdEx := len(m.Seqs) - 1; iNdEx >= 0; iNdEx-- {
+			i = encodeVarintProto(dAtA, i, uint64(m.Seqs[iNdEx]))
+			i--
 			dAtA[i] = 0x8
-			i++
-			i = encodeVarintProto(dAtA, i, uint64(num))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func encodeVarintProto(dAtA []byte, offset int, v uint64) int {
+	offset -= sovProto(v)
+	base := offset
 	for v >= 1<<7 {
 		dAtA[offset] = uint8(v&0x7f | 0x80)
 		v >>= 7
 		offset++
 	}
 	dAtA[offset] = uint8(v)
-	return offset + 1
+	return base
 }
 func (m *LoginReq) Size() (n int) {
 	if m == nil {
@@ -3420,12 +3391,7 @@ func (m *LoginReq) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Compress != nil {
-		n += 2
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
+	n += 2
 	return n
 }
 
@@ -3435,15 +3401,8 @@ func (m *LoginResp) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Ok != nil {
-		n += 2
-	}
-	if m.Compress != nil {
-		n += 2
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
+	n += 2
+	n += 2
 	return n
 }
 
@@ -3453,9 +3412,6 @@ func (m *ReloadTableConfReq) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -3465,12 +3421,7 @@ func (m *ReloadTableConfResp) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Ok != nil {
-		n += 2
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
+	n += 2
 	return n
 }
 
@@ -3480,13 +3431,8 @@ func (m *ReloadConfigReq) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Path != nil {
-		l = len(*m.Path)
-		n += 1 + l + sovProto(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
+	l = len(m.Path)
+	n += 1 + l + sovProto(uint64(l))
 	return n
 }
 
@@ -3496,13 +3442,8 @@ func (m *ReloadConfigResp) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Err != nil {
-		l = len(*m.Err)
-		n += 1 + l + sovProto(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
+	l = len(m.Err)
+	n += 1 + l + sovProto(uint64(l))
 	return n
 }
 
@@ -3512,28 +3453,15 @@ func (m *Value) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Type != nil {
-		n += 1 + sovProto(uint64(*m.Type))
-	}
-	if m.I != nil {
-		n += 1 + sovProto(uint64(*m.I))
-	}
-	if m.U != nil {
-		n += 1 + sovProto(uint64(*m.U))
-	}
-	if m.F != nil {
-		n += 9
-	}
-	if m.S != nil {
-		l = len(*m.S)
-		n += 1 + l + sovProto(uint64(l))
-	}
+	n += 1 + sovProto(uint64(m.Type))
+	n += 1 + sovProto(uint64(m.I))
+	n += 1 + sovProto(uint64(m.U))
+	n += 9
+	l = len(m.S)
+	n += 1 + l + sovProto(uint64(l))
 	if m.B != nil {
 		l = len(m.B)
 		n += 1 + l + sovProto(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -3544,16 +3472,11 @@ func (m *Field) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Name != nil {
-		l = len(*m.Name)
-		n += 1 + l + sovProto(uint64(l))
-	}
+	l = len(m.Name)
+	n += 1 + l + sovProto(uint64(l))
 	if m.V != nil {
 		l = m.V.Size()
 		n += 1 + l + sovProto(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -3564,12 +3487,7 @@ func (m *PingReq) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Timestamp != nil {
-		n += 1 + sovProto(uint64(*m.Timestamp))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
+	n += 1 + sovProto(uint64(m.Timestamp))
 	return n
 }
 
@@ -3579,12 +3497,7 @@ func (m *PingResp) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Timestamp != nil {
-		n += 1 + sovProto(uint64(*m.Timestamp))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
+	n += 1 + sovProto(uint64(m.Timestamp))
 	return n
 }
 
@@ -3594,29 +3507,16 @@ func (m *ReqCommon) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Seqno != nil {
-		n += 1 + sovProto(uint64(*m.Seqno))
-	}
-	if m.Table != nil {
-		l = len(*m.Table)
-		n += 1 + l + sovProto(uint64(l))
-	}
-	if m.Key != nil {
-		l = len(*m.Key)
-		n += 1 + l + sovProto(uint64(l))
-	}
+	n += 1 + sovProto(uint64(m.Seqno))
+	l = len(m.Table)
+	n += 1 + l + sovProto(uint64(l))
+	l = len(m.Key)
+	n += 1 + l + sovProto(uint64(l))
 	if m.Version != nil {
 		n += 1 + sovProto(uint64(*m.Version))
 	}
-	if m.Timeout != nil {
-		n += 1 + sovProto(uint64(*m.Timeout))
-	}
-	if m.RespTimeout != nil {
-		n += 1 + sovProto(uint64(*m.RespTimeout))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
+	n += 1 + sovProto(uint64(m.Timeout))
+	n += 1 + sovProto(uint64(m.RespTimeout))
 	return n
 }
 
@@ -3626,22 +3526,11 @@ func (m *RespCommon) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Seqno != nil {
-		n += 1 + sovProto(uint64(*m.Seqno))
-	}
-	if m.ErrCode != nil {
-		n += 1 + sovProto(uint64(*m.ErrCode))
-	}
-	if m.Key != nil {
-		l = len(*m.Key)
-		n += 1 + l + sovProto(uint64(l))
-	}
-	if m.Version != nil {
-		n += 1 + sovProto(uint64(*m.Version))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
+	n += 1 + sovProto(uint64(m.Seqno))
+	n += 1 + sovProto(uint64(m.ErrCode))
+	l = len(m.Key)
+	n += 1 + l + sovProto(uint64(l))
+	n += 1 + sovProto(uint64(m.Version))
 	return n
 }
 
@@ -3661,12 +3550,7 @@ func (m *GetReq) Size() (n int) {
 			n += 1 + l + sovProto(uint64(l))
 		}
 	}
-	if m.All != nil {
-		n += 2
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
+	n += 2
 	return n
 }
 
@@ -3685,9 +3569,6 @@ func (m *GetResp) Size() (n int) {
 			l = e.Size()
 			n += 1 + l + sovProto(uint64(l))
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -3708,9 +3589,6 @@ func (m *SetReq) Size() (n int) {
 			n += 1 + l + sovProto(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -3723,9 +3601,6 @@ func (m *SetResp) Size() (n int) {
 	if m.Head != nil {
 		l = m.Head.Size()
 		n += 1 + l + sovProto(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -3746,9 +3621,6 @@ func (m *SetNxReq) Size() (n int) {
 			n += 1 + l + sovProto(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -3761,9 +3633,6 @@ func (m *SetNxResp) Size() (n int) {
 	if m.Head != nil {
 		l = m.Head.Size()
 		n += 1 + l + sovProto(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -3782,9 +3651,6 @@ func (m *IncrByReq) Size() (n int) {
 		l = m.Field.Size()
 		n += 1 + l + sovProto(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -3801,9 +3667,6 @@ func (m *IncrByResp) Size() (n int) {
 	if m.NewValue != nil {
 		l = m.NewValue.Size()
 		n += 1 + l + sovProto(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -3822,9 +3685,6 @@ func (m *DecrByReq) Size() (n int) {
 		l = m.Field.Size()
 		n += 1 + l + sovProto(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -3841,9 +3701,6 @@ func (m *DecrByResp) Size() (n int) {
 	if m.NewValue != nil {
 		l = m.NewValue.Size()
 		n += 1 + l + sovProto(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -3866,9 +3723,6 @@ func (m *CompareAndSetReq) Size() (n int) {
 		l = m.Old.Size()
 		n += 1 + l + sovProto(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -3885,9 +3739,6 @@ func (m *CompareAndSetResp) Size() (n int) {
 	if m.Value != nil {
 		l = m.Value.Size()
 		n += 1 + l + sovProto(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -3910,9 +3761,6 @@ func (m *CompareAndSetNxReq) Size() (n int) {
 		l = m.Old.Size()
 		n += 1 + l + sovProto(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -3930,9 +3778,6 @@ func (m *CompareAndSetNxResp) Size() (n int) {
 		l = m.Value.Size()
 		n += 1 + l + sovProto(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -3945,9 +3790,6 @@ func (m *DelReq) Size() (n int) {
 	if m.Head != nil {
 		l = m.Head.Size()
 		n += 1 + l + sovProto(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -3962,9 +3804,6 @@ func (m *DelResp) Size() (n int) {
 		l = m.Head.Size()
 		n += 1 + l + sovProto(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -3974,21 +3813,14 @@ func (m *Row) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Key != nil {
-		l = len(*m.Key)
-		n += 1 + l + sovProto(uint64(l))
-	}
-	if m.Version != nil {
-		n += 1 + sovProto(uint64(*m.Version))
-	}
+	l = len(m.Key)
+	n += 1 + l + sovProto(uint64(l))
+	n += 1 + sovProto(uint64(m.Version))
 	if len(m.Fields) > 0 {
 		for _, e := range m.Fields {
 			l = e.Size()
 			n += 1 + l + sovProto(uint64(l))
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -4009,15 +3841,8 @@ func (m *ScanReq) Size() (n int) {
 			n += 1 + l + sovProto(uint64(l))
 		}
 	}
-	if m.All != nil {
-		n += 2
-	}
-	if m.Count != nil {
-		n += 1 + sovProto(uint64(*m.Count))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
+	n += 2
+	n += 1 + sovProto(uint64(m.Count))
 	return n
 }
 
@@ -4037,9 +3862,6 @@ func (m *ScanResp) Size() (n int) {
 			n += 1 + l + sovProto(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -4054,21 +3876,11 @@ func (m *Cancel) Size() (n int) {
 			n += 1 + sovProto(uint64(e))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
 func sovProto(x uint64) (n int) {
-	for {
-		n++
-		x >>= 7
-		if x == 0 {
-			break
-		}
-	}
-	return n
+	return (math_bits.Len64(x|1) + 6) / 7
 }
 func sozProto(x uint64) (n int) {
 	return sovProto(uint64((x << 1) ^ uint64((int64(x) >> 63))))
@@ -4088,7 +3900,7 @@ func (m *LoginReq) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -4116,13 +3928,12 @@ func (m *LoginReq) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int(b) & 0x7F) << shift
+				v |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			b := bool(v != 0)
-			m.Compress = &b
+			m.Compress = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skipProto(dAtA[iNdEx:])
@@ -4132,10 +3943,12 @@ func (m *LoginReq) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4160,7 +3973,7 @@ func (m *LoginResp) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -4188,13 +4001,12 @@ func (m *LoginResp) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int(b) & 0x7F) << shift
+				v |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			b := bool(v != 0)
-			m.Ok = &b
+			m.Ok = bool(v != 0)
 		case 2:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Compress", wireType)
@@ -4209,13 +4021,12 @@ func (m *LoginResp) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int(b) & 0x7F) << shift
+				v |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			b := bool(v != 0)
-			m.Compress = &b
+			m.Compress = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skipProto(dAtA[iNdEx:])
@@ -4225,10 +4036,12 @@ func (m *LoginResp) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4253,7 +4066,7 @@ func (m *ReloadTableConfReq) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -4276,10 +4089,12 @@ func (m *ReloadTableConfReq) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4304,7 +4119,7 @@ func (m *ReloadTableConfResp) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -4332,13 +4147,12 @@ func (m *ReloadTableConfResp) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int(b) & 0x7F) << shift
+				v |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			b := bool(v != 0)
-			m.Ok = &b
+			m.Ok = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skipProto(dAtA[iNdEx:])
@@ -4348,10 +4162,12 @@ func (m *ReloadTableConfResp) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4376,7 +4192,7 @@ func (m *ReloadConfigReq) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -4404,7 +4220,7 @@ func (m *ReloadConfigReq) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -4414,11 +4230,13 @@ func (m *ReloadConfigReq) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.Path = &s
+			m.Path = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -4429,10 +4247,12 @@ func (m *ReloadConfigReq) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4457,7 +4277,7 @@ func (m *ReloadConfigResp) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -4485,7 +4305,7 @@ func (m *ReloadConfigResp) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -4495,11 +4315,13 @@ func (m *ReloadConfigResp) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.Err = &s
+			m.Err = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -4510,10 +4332,12 @@ func (m *ReloadConfigResp) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4539,7 +4363,7 @@ func (m *Value) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -4557,7 +4381,7 @@ func (m *Value) Unmarshal(dAtA []byte) error {
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Type", wireType)
 			}
-			var v ValueType
+			m.Type = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowProto
@@ -4567,18 +4391,17 @@ func (m *Value) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (ValueType(b) & 0x7F) << shift
+				m.Type |= ValueType(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			m.Type = &v
 			hasFields[0] |= uint64(0x00000001)
 		case 2:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field I", wireType)
 			}
-			var v int64
+			m.I = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowProto
@@ -4588,17 +4411,16 @@ func (m *Value) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int64(b) & 0x7F) << shift
+				m.I |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			m.I = &v
 		case 3:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field U", wireType)
 			}
-			var v uint64
+			m.U = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowProto
@@ -4608,12 +4430,11 @@ func (m *Value) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (uint64(b) & 0x7F) << shift
+				m.U |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			m.U = &v
 		case 4:
 			if wireType != 1 {
 				return fmt.Errorf("proto: wrong wireType = %d for field F", wireType)
@@ -4624,8 +4445,7 @@ func (m *Value) Unmarshal(dAtA []byte) error {
 			}
 			v = uint64(encoding_binary.LittleEndian.Uint64(dAtA[iNdEx:]))
 			iNdEx += 8
-			v2 := float64(math.Float64frombits(v))
-			m.F = &v2
+			m.F = float64(math.Float64frombits(v))
 		case 5:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field S", wireType)
@@ -4640,7 +4460,7 @@ func (m *Value) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -4650,11 +4470,13 @@ func (m *Value) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.S = &s
+			m.S = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 6:
 			if wireType != 2 {
@@ -4670,7 +4492,7 @@ func (m *Value) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				byteLen |= (int(b) & 0x7F) << shift
+				byteLen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -4679,6 +4501,9 @@ func (m *Value) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -4696,15 +4521,17 @@ func (m *Value) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
 	if hasFields[0]&uint64(0x00000001) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("type")
 	}
 
 	if iNdEx > l {
@@ -4727,7 +4554,7 @@ func (m *Field) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -4755,7 +4582,7 @@ func (m *Field) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -4765,11 +4592,13 @@ func (m *Field) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.Name = &s
+			m.Name = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 2:
 			if wireType != 2 {
@@ -4785,7 +4614,7 @@ func (m *Field) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -4794,6 +4623,9 @@ func (m *Field) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -4813,10 +4645,12 @@ func (m *Field) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4841,7 +4675,7 @@ func (m *PingReq) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -4859,7 +4693,7 @@ func (m *PingReq) Unmarshal(dAtA []byte) error {
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Timestamp", wireType)
 			}
-			var v int64
+			m.Timestamp = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowProto
@@ -4869,12 +4703,11 @@ func (m *PingReq) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int64(b) & 0x7F) << shift
+				m.Timestamp |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			m.Timestamp = &v
 		default:
 			iNdEx = preIndex
 			skippy, err := skipProto(dAtA[iNdEx:])
@@ -4884,10 +4717,12 @@ func (m *PingReq) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4912,7 +4747,7 @@ func (m *PingResp) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -4930,7 +4765,7 @@ func (m *PingResp) Unmarshal(dAtA []byte) error {
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Timestamp", wireType)
 			}
-			var v int64
+			m.Timestamp = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowProto
@@ -4940,12 +4775,11 @@ func (m *PingResp) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int64(b) & 0x7F) << shift
+				m.Timestamp |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			m.Timestamp = &v
 		default:
 			iNdEx = preIndex
 			skippy, err := skipProto(dAtA[iNdEx:])
@@ -4955,10 +4789,12 @@ func (m *PingResp) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4984,7 +4820,7 @@ func (m *ReqCommon) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -5002,7 +4838,7 @@ func (m *ReqCommon) Unmarshal(dAtA []byte) error {
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Seqno", wireType)
 			}
-			var v int64
+			m.Seqno = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowProto
@@ -5012,12 +4848,11 @@ func (m *ReqCommon) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int64(b) & 0x7F) << shift
+				m.Seqno |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			m.Seqno = &v
 			hasFields[0] |= uint64(0x00000001)
 		case 2:
 			if wireType != 2 {
@@ -5033,7 +4868,7 @@ func (m *ReqCommon) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -5043,11 +4878,13 @@ func (m *ReqCommon) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.Table = &s
+			m.Table = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 3:
 			if wireType != 2 {
@@ -5063,7 +4900,7 @@ func (m *ReqCommon) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -5073,11 +4910,13 @@ func (m *ReqCommon) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.Key = &s
+			m.Key = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 4:
 			if wireType != 0 {
@@ -5093,7 +4932,7 @@ func (m *ReqCommon) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int64(b) & 0x7F) << shift
+				v |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -5103,7 +4942,7 @@ func (m *ReqCommon) Unmarshal(dAtA []byte) error {
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Timeout", wireType)
 			}
-			var v int64
+			m.Timeout = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowProto
@@ -5113,17 +4952,16 @@ func (m *ReqCommon) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int64(b) & 0x7F) << shift
+				m.Timeout |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			m.Timeout = &v
 		case 6:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field RespTimeout", wireType)
 			}
-			var v int64
+			m.RespTimeout = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowProto
@@ -5133,12 +4971,11 @@ func (m *ReqCommon) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int64(b) & 0x7F) << shift
+				m.RespTimeout |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			m.RespTimeout = &v
 		default:
 			iNdEx = preIndex
 			skippy, err := skipProto(dAtA[iNdEx:])
@@ -5148,15 +4985,17 @@ func (m *ReqCommon) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
 	if hasFields[0]&uint64(0x00000001) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("seqno")
 	}
 
 	if iNdEx > l {
@@ -5180,7 +5019,7 @@ func (m *RespCommon) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -5198,7 +5037,7 @@ func (m *RespCommon) Unmarshal(dAtA []byte) error {
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Seqno", wireType)
 			}
-			var v int64
+			m.Seqno = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowProto
@@ -5208,18 +5047,17 @@ func (m *RespCommon) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int64(b) & 0x7F) << shift
+				m.Seqno |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			m.Seqno = &v
 			hasFields[0] |= uint64(0x00000001)
 		case 2:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ErrCode", wireType)
 			}
-			var v int32
+			m.ErrCode = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowProto
@@ -5229,12 +5067,11 @@ func (m *RespCommon) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int32(b) & 0x7F) << shift
+				m.ErrCode |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			m.ErrCode = &v
 			hasFields[0] |= uint64(0x00000002)
 		case 3:
 			if wireType != 2 {
@@ -5250,7 +5087,7 @@ func (m *RespCommon) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -5260,17 +5097,19 @@ func (m *RespCommon) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.Key = &s
+			m.Key = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 4:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
 			}
-			var v int64
+			m.Version = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowProto
@@ -5280,12 +5119,11 @@ func (m *RespCommon) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int64(b) & 0x7F) << shift
+				m.Version |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			m.Version = &v
 		default:
 			iNdEx = preIndex
 			skippy, err := skipProto(dAtA[iNdEx:])
@@ -5295,18 +5133,20 @@ func (m *RespCommon) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
 	if hasFields[0]&uint64(0x00000001) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("seqno")
 	}
 	if hasFields[0]&uint64(0x00000002) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("errCode")
 	}
 
 	if iNdEx > l {
@@ -5330,7 +5170,7 @@ func (m *GetReq) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -5358,7 +5198,7 @@ func (m *GetReq) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -5367,6 +5207,9 @@ func (m *GetReq) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -5392,7 +5235,7 @@ func (m *GetReq) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -5402,6 +5245,9 @@ func (m *GetReq) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -5421,13 +5267,12 @@ func (m *GetReq) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int(b) & 0x7F) << shift
+				v |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			b := bool(v != 0)
-			m.All = &b
+			m.All = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skipProto(dAtA[iNdEx:])
@@ -5437,15 +5282,17 @@ func (m *GetReq) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
 	if hasFields[0]&uint64(0x00000001) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
 	}
 
 	if iNdEx > l {
@@ -5469,7 +5316,7 @@ func (m *GetResp) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -5497,7 +5344,7 @@ func (m *GetResp) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -5506,6 +5353,9 @@ func (m *GetResp) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -5531,7 +5381,7 @@ func (m *GetResp) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -5540,6 +5390,9 @@ func (m *GetResp) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -5557,15 +5410,17 @@ func (m *GetResp) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
 	if hasFields[0]&uint64(0x00000001) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
 	}
 
 	if iNdEx > l {
@@ -5589,7 +5444,7 @@ func (m *SetReq) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -5617,7 +5472,7 @@ func (m *SetReq) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -5626,6 +5481,9 @@ func (m *SetReq) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -5651,7 +5509,7 @@ func (m *SetReq) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -5660,6 +5518,9 @@ func (m *SetReq) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -5677,15 +5538,17 @@ func (m *SetReq) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
 	if hasFields[0]&uint64(0x00000001) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
 	}
 
 	if iNdEx > l {
@@ -5709,7 +5572,7 @@ func (m *SetResp) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -5737,7 +5600,7 @@ func (m *SetResp) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -5746,6 +5609,9 @@ func (m *SetResp) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -5766,15 +5632,17 @@ func (m *SetResp) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
 	if hasFields[0]&uint64(0x00000001) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
 	}
 
 	if iNdEx > l {
@@ -5798,7 +5666,7 @@ func (m *SetNxReq) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -5826,7 +5694,7 @@ func (m *SetNxReq) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -5835,6 +5703,9 @@ func (m *SetNxReq) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -5860,7 +5731,7 @@ func (m *SetNxReq) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -5869,6 +5740,9 @@ func (m *SetNxReq) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -5886,15 +5760,17 @@ func (m *SetNxReq) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
 	if hasFields[0]&uint64(0x00000001) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
 	}
 
 	if iNdEx > l {
@@ -5918,7 +5794,7 @@ func (m *SetNxResp) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -5946,7 +5822,7 @@ func (m *SetNxResp) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -5955,6 +5831,9 @@ func (m *SetNxResp) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -5975,15 +5854,17 @@ func (m *SetNxResp) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
 	if hasFields[0]&uint64(0x00000001) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
 	}
 
 	if iNdEx > l {
@@ -6007,7 +5888,7 @@ func (m *IncrByReq) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -6035,7 +5916,7 @@ func (m *IncrByReq) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -6044,6 +5925,9 @@ func (m *IncrByReq) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -6069,7 +5953,7 @@ func (m *IncrByReq) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -6078,6 +5962,9 @@ func (m *IncrByReq) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -6098,18 +5985,20 @@ func (m *IncrByReq) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
 	if hasFields[0]&uint64(0x00000001) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
 	}
 	if hasFields[0]&uint64(0x00000002) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("field")
 	}
 
 	if iNdEx > l {
@@ -6133,7 +6022,7 @@ func (m *IncrByResp) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -6161,7 +6050,7 @@ func (m *IncrByResp) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -6170,6 +6059,9 @@ func (m *IncrByResp) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -6195,7 +6087,7 @@ func (m *IncrByResp) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -6204,6 +6096,9 @@ func (m *IncrByResp) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -6223,15 +6118,17 @@ func (m *IncrByResp) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
 	if hasFields[0]&uint64(0x00000001) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
 	}
 
 	if iNdEx > l {
@@ -6255,7 +6152,7 @@ func (m *DecrByReq) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -6283,7 +6180,7 @@ func (m *DecrByReq) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -6292,6 +6189,9 @@ func (m *DecrByReq) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -6317,7 +6217,7 @@ func (m *DecrByReq) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -6326,6 +6226,9 @@ func (m *DecrByReq) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -6346,18 +6249,20 @@ func (m *DecrByReq) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
 	if hasFields[0]&uint64(0x00000001) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
 	}
 	if hasFields[0]&uint64(0x00000002) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("field")
 	}
 
 	if iNdEx > l {
@@ -6381,7 +6286,7 @@ func (m *DecrByResp) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -6409,7 +6314,7 @@ func (m *DecrByResp) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -6418,6 +6323,9 @@ func (m *DecrByResp) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -6443,7 +6351,7 @@ func (m *DecrByResp) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -6452,6 +6360,9 @@ func (m *DecrByResp) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -6471,15 +6382,17 @@ func (m *DecrByResp) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
 	if hasFields[0]&uint64(0x00000001) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
 	}
 
 	if iNdEx > l {
@@ -6503,7 +6416,7 @@ func (m *CompareAndSetReq) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -6531,7 +6444,7 @@ func (m *CompareAndSetReq) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -6540,6 +6453,9 @@ func (m *CompareAndSetReq) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -6565,7 +6481,7 @@ func (m *CompareAndSetReq) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -6574,6 +6490,9 @@ func (m *CompareAndSetReq) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -6599,7 +6518,7 @@ func (m *CompareAndSetReq) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -6608,6 +6527,9 @@ func (m *CompareAndSetReq) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -6628,21 +6550,23 @@ func (m *CompareAndSetReq) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
 	if hasFields[0]&uint64(0x00000001) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
 	}
 	if hasFields[0]&uint64(0x00000002) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("new")
 	}
 	if hasFields[0]&uint64(0x00000004) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("old")
 	}
 
 	if iNdEx > l {
@@ -6666,7 +6590,7 @@ func (m *CompareAndSetResp) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -6694,7 +6618,7 @@ func (m *CompareAndSetResp) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -6703,6 +6627,9 @@ func (m *CompareAndSetResp) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -6728,7 +6655,7 @@ func (m *CompareAndSetResp) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -6737,6 +6664,9 @@ func (m *CompareAndSetResp) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -6756,15 +6686,17 @@ func (m *CompareAndSetResp) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
 	if hasFields[0]&uint64(0x00000001) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
 	}
 
 	if iNdEx > l {
@@ -6788,7 +6720,7 @@ func (m *CompareAndSetNxReq) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -6816,7 +6748,7 @@ func (m *CompareAndSetNxReq) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -6825,6 +6757,9 @@ func (m *CompareAndSetNxReq) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -6850,7 +6785,7 @@ func (m *CompareAndSetNxReq) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -6859,6 +6794,9 @@ func (m *CompareAndSetNxReq) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -6884,7 +6822,7 @@ func (m *CompareAndSetNxReq) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -6893,6 +6831,9 @@ func (m *CompareAndSetNxReq) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -6913,21 +6854,23 @@ func (m *CompareAndSetNxReq) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
 	if hasFields[0]&uint64(0x00000001) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
 	}
 	if hasFields[0]&uint64(0x00000002) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("new")
 	}
 	if hasFields[0]&uint64(0x00000004) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("old")
 	}
 
 	if iNdEx > l {
@@ -6951,7 +6894,7 @@ func (m *CompareAndSetNxResp) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -6979,7 +6922,7 @@ func (m *CompareAndSetNxResp) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -6988,6 +6931,9 @@ func (m *CompareAndSetNxResp) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -7013,7 +6959,7 @@ func (m *CompareAndSetNxResp) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -7022,6 +6968,9 @@ func (m *CompareAndSetNxResp) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -7041,15 +6990,17 @@ func (m *CompareAndSetNxResp) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
 	if hasFields[0]&uint64(0x00000001) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
 	}
 
 	if iNdEx > l {
@@ -7073,7 +7024,7 @@ func (m *DelReq) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -7101,7 +7052,7 @@ func (m *DelReq) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -7110,6 +7061,9 @@ func (m *DelReq) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -7130,15 +7084,17 @@ func (m *DelReq) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
 	if hasFields[0]&uint64(0x00000001) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
 	}
 
 	if iNdEx > l {
@@ -7162,7 +7118,7 @@ func (m *DelResp) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -7190,7 +7146,7 @@ func (m *DelResp) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -7199,6 +7155,9 @@ func (m *DelResp) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -7219,15 +7178,17 @@ func (m *DelResp) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
 	if hasFields[0]&uint64(0x00000001) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
 	}
 
 	if iNdEx > l {
@@ -7251,7 +7212,7 @@ func (m *Row) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -7279,7 +7240,7 @@ func (m *Row) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -7289,18 +7250,20 @@ func (m *Row) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			s := string(dAtA[iNdEx:postIndex])
-			m.Key = &s
+			m.Key = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 			hasFields[0] |= uint64(0x00000001)
 		case 2:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
 			}
-			var v int64
+			m.Version = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowProto
@@ -7310,12 +7273,11 @@ func (m *Row) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int64(b) & 0x7F) << shift
+				m.Version |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			m.Version = &v
 			hasFields[0] |= uint64(0x00000002)
 		case 3:
 			if wireType != 2 {
@@ -7331,7 +7293,7 @@ func (m *Row) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -7340,6 +7302,9 @@ func (m *Row) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -7357,18 +7322,20 @@ func (m *Row) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
 	if hasFields[0]&uint64(0x00000001) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("key")
 	}
 	if hasFields[0]&uint64(0x00000002) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("version")
 	}
 
 	if iNdEx > l {
@@ -7392,7 +7359,7 @@ func (m *ScanReq) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -7420,7 +7387,7 @@ func (m *ScanReq) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -7429,6 +7396,9 @@ func (m *ScanReq) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -7454,7 +7424,7 @@ func (m *ScanReq) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -7464,6 +7434,9 @@ func (m *ScanReq) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -7483,18 +7456,17 @@ func (m *ScanReq) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int(b) & 0x7F) << shift
+				v |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			b := bool(v != 0)
-			m.All = &b
+			m.All = bool(v != 0)
 		case 5:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Count", wireType)
 			}
-			var v int32
+			m.Count = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowProto
@@ -7504,12 +7476,11 @@ func (m *ScanReq) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int32(b) & 0x7F) << shift
+				m.Count |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			m.Count = &v
 		default:
 			iNdEx = preIndex
 			skippy, err := skipProto(dAtA[iNdEx:])
@@ -7519,15 +7490,17 @@ func (m *ScanReq) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
 	if hasFields[0]&uint64(0x00000001) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
 	}
 
 	if iNdEx > l {
@@ -7551,7 +7524,7 @@ func (m *ScanResp) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -7579,7 +7552,7 @@ func (m *ScanResp) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -7588,6 +7561,9 @@ func (m *ScanResp) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -7613,7 +7589,7 @@ func (m *ScanResp) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -7622,6 +7598,9 @@ func (m *ScanResp) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthProto
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthProto
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -7639,15 +7618,17 @@ func (m *ScanResp) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
 	if hasFields[0]&uint64(0x00000001) == 0 {
-		return new(github_com_golang_protobuf_proto.RequiredNotSetError)
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("head")
 	}
 
 	if iNdEx > l {
@@ -7670,7 +7651,7 @@ func (m *Cancel) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -7696,7 +7677,7 @@ func (m *Cancel) Unmarshal(dAtA []byte) error {
 					}
 					b := dAtA[iNdEx]
 					iNdEx++
-					v |= (int64(b) & 0x7F) << shift
+					v |= int64(b&0x7F) << shift
 					if b < 0x80 {
 						break
 					}
@@ -7713,7 +7694,7 @@ func (m *Cancel) Unmarshal(dAtA []byte) error {
 					}
 					b := dAtA[iNdEx]
 					iNdEx++
-					packedLen |= (int(b) & 0x7F) << shift
+					packedLen |= int(b&0x7F) << shift
 					if b < 0x80 {
 						break
 					}
@@ -7722,12 +7703,15 @@ func (m *Cancel) Unmarshal(dAtA []byte) error {
 					return ErrInvalidLengthProto
 				}
 				postIndex := iNdEx + packedLen
+				if postIndex < 0 {
+					return ErrInvalidLengthProto
+				}
 				if postIndex > l {
 					return io.ErrUnexpectedEOF
 				}
 				var elementCount int
 				var count int
-				for _, integer := range dAtA {
+				for _, integer := range dAtA[iNdEx:postIndex] {
 					if integer < 128 {
 						count++
 					}
@@ -7747,7 +7731,7 @@ func (m *Cancel) Unmarshal(dAtA []byte) error {
 						}
 						b := dAtA[iNdEx]
 						iNdEx++
-						v |= (int64(b) & 0x7F) << shift
+						v |= int64(b&0x7F) << shift
 						if b < 0x80 {
 							break
 						}
@@ -7766,10 +7750,12 @@ func (m *Cancel) Unmarshal(dAtA []byte) error {
 			if skippy < 0 {
 				return ErrInvalidLengthProto
 			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthProto
+			}
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -7833,8 +7819,11 @@ func skipProto(dAtA []byte) (n int, err error) {
 					break
 				}
 			}
-			iNdEx += length
 			if length < 0 {
+				return 0, ErrInvalidLengthProto
+			}
+			iNdEx += length
+			if iNdEx < 0 {
 				return 0, ErrInvalidLengthProto
 			}
 			return iNdEx, nil
@@ -7865,6 +7854,9 @@ func skipProto(dAtA []byte) (n int, err error) {
 					return 0, err
 				}
 				iNdEx = start + next
+				if iNdEx < 0 {
+					return 0, ErrInvalidLengthProto
+				}
 			}
 			return iNdEx, nil
 		case 4:

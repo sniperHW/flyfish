@@ -6,7 +6,7 @@ import (
 	protocol "github.com/sniperHW/flyfish/proto"
 	"sync/atomic"
 
-	"github.com/golang/protobuf/proto"
+	//"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/kendynet/event"
 	"github.com/sniperHW/kendynet/util"
 )
@@ -54,27 +54,27 @@ func (this *Scaner) AsyncNext(count int32, cb func(*Scaner, *MutiResult)) error 
 
 	req := &protocol.ScanReq{
 		Head: &protocol.ReqCommon{
-			Seqno:       proto.Int64(atomic.AddInt64(&this.conn.seqno, 1)),
-			Timeout:     proto.Int64(int64(ServerTimeout)),
-			RespTimeout: proto.Int64(int64(ClientTimeout)),
+			Seqno:       atomic.AddInt64(&this.conn.seqno, 1), //proto.Int64(atomic.AddInt64(&this.conn.seqno, 1)),
+			Timeout:     int64(ServerTimeout),                 //proto.Int64(int64(ServerTimeout)),
+			RespTimeout: int64(ClientTimeout),                 //proto.Int64(int64(ClientTimeout)),
 		},
 	}
 	if atomic.CompareAndSwapInt32(&this.first, 0, 1) {
-		req.Head.Table = proto.String(this.table)
+		req.Head.Table = this.table //proto.String(this.table)
 		if this.getAll {
-			req.All = proto.Bool(true)
+			req.All = true //proto.Bool(true)
 		} else {
-			req.All = proto.Bool(false)
+			req.All = false //proto.Bool(false)
 			req.Fields = []string{}
 			for _, v := range this.fileds {
 				req.Fields = append(req.Fields, v)
 			}
 			if len(req.Fields) == 0 {
-				req.All = proto.Bool(true)
+				req.All = true //proto.Bool(true)
 			}
 		}
 	}
-	req.Count = proto.Int32(count)
+	req.Count = count //proto.Int32(count)
 
 	context := &cmdContext{
 		seqno: req.Head.GetSeqno(),

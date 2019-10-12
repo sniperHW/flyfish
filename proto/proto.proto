@@ -104,7 +104,7 @@ message req_common {
   required int64  seqno   = 1;
   optional string table   = 2;
   optional string key     = 3;
-  optional int64  version = 4;  
+  optional int64  version = 4[(gogoproto.nullable) = true];  
   optional int64  timeout = 5;
   optional int64  respTimeout = 6;
 }
