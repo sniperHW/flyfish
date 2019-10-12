@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/proto"
-	//"github.com/sniperHW/flyfish/util/fixedarray"
+	"github.com/sniperHW/flyfish/util/fixedarray"
 	"github.com/sniperHW/flyfish/util/str"
 	"github.com/sniperHW/kendynet/util"
 	"net"
@@ -17,8 +17,6 @@ var (
 	errServerStop = fmt.Errorf("errServerStop")
 	errLoseLease  = fmt.Errorf("errLoseLease")
 )
-
-/*
 
 type updatePending struct {
 	sqlStr *str.Str
@@ -241,8 +239,9 @@ func (this *sqlUpdater) exec() {
 		kv := v.(*kv)
 		this.onSqlResult(kv, err)
 	})
-}*/
+}
 
+/*
 type sqlUpdater struct {
 	db        *sqlx.DB
 	name      string
@@ -419,4 +418,4 @@ func (this *sqlUpdater) run() {
 			return
 		}
 	}
-}
+}*/
