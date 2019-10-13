@@ -2,10 +2,8 @@ package kvnode
 
 import (
 	"fmt"
-	//codec "github.com/sniperHW/flyfish/codec"
 	pb "github.com/golang/protobuf/proto"
 	"github.com/sniperHW/flyfish/errcode"
-	//"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/flyfish/proto"
 	"sync/atomic"
 	"time"
