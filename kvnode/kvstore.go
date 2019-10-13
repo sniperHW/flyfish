@@ -321,7 +321,7 @@ func (this *kvstore) apply(data []byte) bool {
 	return true
 }
 
-func (this *kvstore) readCommits(once bool, snapshotter *snap.Snapshotter, commitC <-chan interface{}, errorC <-chan error) {
+func (this *kvstore) readCommits( /*once bool, */ snapshotter *snap.Snapshotter, commitC <-chan interface{}, errorC <-chan error) {
 
 	for e := range commitC {
 		switch e.(type) {
@@ -331,23 +331,23 @@ func (this *kvstore) readCommits(once bool, snapshotter *snap.Snapshotter, commi
 				// done replaying log; new data incoming
 				// OR signaled to load snapshot
 				snapshot, err := snapshotter.Load()
-				if err == snap.ErrNoSnapshot {
-					return
-				}
 				if err != nil {
 					Fatalln(err)
-				}
-				Infof("loading snapshot at term %d and index %d", snapshot.Metadata.Term, snapshot.Metadata.Index)
-				if !this.apply(snapshot.Data[8:]) {
-					Fatalln("recoverFromSnapshot failed")
+				} else {
+					Infof("loading snapshot at term %d and index %d", snapshot.Metadata.Term, snapshot.Metadata.Index)
+					if !this.apply(snapshot.Data[8:]) {
+						Fatalln("recoverFromSnapshot failed")
+					}
 				}
 			} else if data == replayOK {
-				if once {
+				Infoln("reply ok,keycount", this.kvcount)
+				return
+				/*if once {
 					Infoln("apply ok,keycount", this.kvcount)
 					return
 				} else {
 					continue
-				}
+				}*/
 			} else {
 				data.apply(this)
 			}
@@ -609,9 +609,9 @@ func newStoreMgr(kvnode *KVNode, mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta, id
 
 		snapshotter := <-snapshotterReady
 
-		store.readCommits(true, snapshotter, commitC, errorC)
+		store.readCommits( /*true,*/ snapshotter, commitC, errorC)
 
-		go store.readCommits(false, snapshotter, commitC, errorC)
+		go store.readCommits( /*false,*/ snapshotter, commitC, errorC)
 
 		mgr.addStore(i, store)
 	}
