@@ -89,20 +89,6 @@ func main() {
 	}
 
 	bar = progressbar.New(int(total))
-
-	/*	for j := 0; j < 100; j++ {
-			c := kclient.OpenClient(services)
-			for i := 0; i < 50; i++ {
-				if !Get(c) {
-					return
-				}
-			}
-			time.Sleep(time.Millisecond * 100)
-			//for i := 0; i < 50; i++ {
-			//	Get(c)
-			//}
-		}
-	*/
 	for j := 0; j < 100; j++ {
 		c := kclient.OpenClient(services)
 		go func() {
@@ -112,7 +98,7 @@ func main() {
 						return
 					}
 				}
-				time.Sleep(time.Millisecond * 100)
+				time.Sleep(time.Millisecond * 50)
 			}
 		}()
 	}
