@@ -25,7 +25,6 @@ func main() {
 	fields["phone"] = "123456"
 	fields["name"] = "sniperHW"
 
-	//不存在技术sniperHW SetNx成功
 	r2 := c.Set("users1", "sniperHW", fields).Exec()
 	if r2.ErrCode != errcode.ERR_OK {
 		fmt.Println("Set error:", errcode.GetErrorStr(r2.ErrCode))

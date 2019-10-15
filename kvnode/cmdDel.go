@@ -38,6 +38,7 @@ type cmdDel struct {
 }
 
 func (this *cmdDel) reply(errCode int32, fields map[string]*proto.Field, version int64) {
+	Debugln("cmdDel.reply", errCode)
 	this.replyer.reply(this, errCode, fields, version)
 }
 
@@ -58,6 +59,8 @@ func (this *cmdDel) makeResponse(errCode int32, fields map[string]*proto.Field, 
 func (this *cmdDel) prepare(_ asynCmdTaskI) asynCmdTaskI {
 
 	status := this.kv.getStatus()
+
+	Debugln("cmdDel", this.kv.uniKey, status, this.kv.version, this.version)
 
 	if status == cache_missing {
 		this.reply(errcode.ERR_RECORD_NOTEXIST, nil, 0)

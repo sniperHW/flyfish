@@ -90,12 +90,16 @@ func (this *cmdSet) prepare(_ asynCmdTaskI) asynCmdTaskI {
 		task.fields = map[string]*proto.Field{}
 		fillDefaultValue(kv.meta, &task.fields)
 		task.sqlFlag = sql_insert_update
+		for k, v := range this.fields {
+			task.fields[k] = v
+		}
+		Debugln("set cache_missing", this.kv.uniKey)
 	} else if status == cache_ok {
 		task.sqlFlag = sql_update
+		task.fields = this.fields
 	}
 
 	if status != cache_new {
-		task.fields = this.fields
 		task.version = kv.version + 1
 		Debugln("task version", task.version)
 	}

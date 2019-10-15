@@ -151,11 +151,13 @@ func (this *asynCmdTaskBase) done() {
 
 	if kv.getSqlFlag() != sql_none && !kv.isWriteBack() {
 		kv.setWriteBack(true)
-		Debugln("pushUpdateReq")
 		kv.slot.getKvNode().sqlMgr.pushUpdateReq(kv)
 	}
 
 	isTmp := kv.isTmp()
+	if isTmp {
+		kv.setTmp(false)
+	}
 
 	kv.Unlock()
 

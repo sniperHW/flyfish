@@ -73,6 +73,10 @@ func (this *cmdGet) prepare(task asynCmdTaskI) asynCmdTaskI {
 		if status == cache_missing || status == cache_ok {
 			getTask.fields = this.kv.fields
 			getTask.version = this.kv.version
+			if status == cache_missing {
+				getTask.errno = errcode.ERR_RECORD_NOTEXIST
+				Debugln(getTask.fields, this.kv.fields)
+			}
 		}
 	} else {
 		getTask = task.(*asynCmdTaskGet)
@@ -85,8 +89,6 @@ func (this *cmdGet) prepare(task asynCmdTaskI) asynCmdTaskI {
 
 func get(n *KVNode, cli *cliConn, msg *codec.Message) {
 
-	Debugln("get")
-
 	req := msg.GetData().(*proto.GetReq)
 	head := req.GetHead()
 	op := &cmdGet{
@@ -96,6 +98,8 @@ func get(n *KVNode, cli *cliConn, msg *codec.Message) {
 		},
 		fields: map[string]*proto.Field{},
 	}
+
+	Debugln("get", head.GetTable(), head.GetKey())
 
 	err := checkReqCommon(head)
 

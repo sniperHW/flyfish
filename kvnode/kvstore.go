@@ -24,6 +24,7 @@ type asynTaskKick struct {
 }
 
 func (this *asynTaskKick) done() {
+	Debugln("kick done set cache_remove", this.kv.uniKey)
 	this.kv.Lock()
 	this.kv.setStatus(cache_remove)
 	this.kv.Unlock()
@@ -293,7 +294,7 @@ func (this *kvstore) apply(data []byte) bool {
 				if version == 0 {
 					kv.setStatus(cache_missing)
 					kv.fields = nil
-					Debugln(p.tt, unikey, version, "cache_missing")
+					Debugln(p.tt, unikey, version, "cache_missing", kv.fields)
 				} else {
 					kv.setStatus(cache_ok)
 					kv.version = version
@@ -452,7 +453,7 @@ func (this *kvstore) gotLease() {
 					} else if status == cache_missing {
 						vv.setSqlFlag(sql_delete)
 					}
-					Debugln("pushUpdateReq")
+					Debugln("pushUpdateReq", vv.uniKey, status, vv.fields)
 					this.kvNode.sqlMgr.pushUpdateReq(vv)
 				}
 			}

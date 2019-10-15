@@ -125,7 +125,7 @@ message get_req {
 
 message get_resp {
   required resp_common head = 1;    
-  repeated field  fields = 2;
+  repeated field  fields = 2; 
 }
 
 //更改系列命令

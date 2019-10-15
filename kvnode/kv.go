@@ -6,6 +6,7 @@ import (
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/util/bitfield"
+	//"github.com/sniperHW/kendynet/util"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -106,10 +107,12 @@ func (this *kv) appendCmd(op commandI) int32 {
 	this.Lock()
 	defer this.Unlock()
 	if this.getStatus() == cache_remove {
+		Debugln(this.uniKey, "cache_remove", "retry")
 		return errcode.ERR_RETRY
 	}
 
 	if this.isKicking() {
+		Debugln(this.uniKey, "kicking", "retry")
 		return errcode.ERR_RETRY
 	}
 
@@ -123,6 +126,7 @@ func (this *kv) appendCmd(op commandI) int32 {
 
 //设置remove,清空cmdQueue,向队列内的cmd响应错误码err
 func (this *kv) setRemoveAndClearCmdQueue(err int32) {
+	//Debugln("setRemoveAndClearCmdQueue", this.uniKey, err, util.CallStack(100))
 	this.setStatus(cache_remove)
 	for cmd := this.cmdQueue.popFront(); nil != cmd; {
 		cmd.reply(err, nil, 0)
@@ -266,6 +270,9 @@ func (this *kv) setOK(version int64, fields map[string]*proto.Field) {
 			}
 		}
 	}
+
+	Debugln("set ok", this.uniKey, this.fields)
+
 }
 
 func newkv(slot *kvSlot, tableMeta *dbmeta.TableMeta, key string, uniKey string, isTmp bool) *kv {
