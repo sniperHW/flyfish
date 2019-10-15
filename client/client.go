@@ -132,3 +132,7 @@ func (this *Client) IncrBy(table, key, field string, value int64) *SliceCmd {
 func (this *Client) DecrBy(table, key, field string, value int64) *SliceCmd {
 	return this.selectConn(key).DecrBy(table, key, field, value)
 }
+
+func (this *Client) Kick(table, key string) *StatusCmd {
+	return this.selectConn(key).Kick(table, key)
+}

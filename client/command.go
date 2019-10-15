@@ -317,6 +317,17 @@ func (this *Conn) DecrBy(table, key, field string, value int64, version ...int64
 	}
 }
 
+func (this *Conn) Kick(table, key string) *StatusCmd {
+	req := &protocol.KickReq{
+		Head: makeReqCommon(table, key, atomic.AddInt64(&this.seqno, 1), int64(ServerTimeout), int64(ClientTimeout)),
+	}
+	return &StatusCmd{
+		conn:  this,
+		req:   req,
+		seqno: req.Head.GetSeqno(),
+	}
+}
+
 func (this *Conn) onGetResp(resp *protocol.GetResp) {
 	c := this.removeContext(resp.Head.GetSeqno())
 	if nil != c {
@@ -455,6 +466,19 @@ func (this *Conn) onDecrByResp(resp *protocol.DecrByResp) {
 	}
 }
 
+func (this *Conn) onKickResp(resp *protocol.KickResp) {
+	c := this.removeContext(resp.Head.GetSeqno())
+	if nil != c {
+		ret := StatusResult{
+			Key:     resp.Head.GetKey(),
+			ErrCode: resp.Head.GetErrCode(),
+			Version: resp.Head.GetVersion(),
+		}
+
+		this.c.doCallBack(c.cb, &ret)
+	}
+}
+
 func (this *Conn) onMessage(msg *codec.Message) {
 	this.eventQueue.Post(func() {
 		name := msg.GetName()
@@ -478,6 +502,8 @@ func (this *Conn) onMessage(msg *codec.Message) {
 			this.onDecrByResp(msg.GetData().(*protocol.DecrByResp))
 		case "*proto.ScanResp":
 			this.onScanResp(msg.GetData().(*protocol.ScanResp))
+		case "*proto.KickResp":
+			this.onKickResp(msg.GetData().(*protocol.KickResp))
 		default:
 		}
 	})

@@ -30,12 +30,14 @@ enum CmdType {
   CompareAndSetResp = 16;
   CompareAndSetNxReq = 17;
   CompareAndSetNxResp = 18;
-  ScanReq = 19;
-  ScanResp = 20;
-  ReloadTableConfReq = 21;
-  ReloadTableConfResp = 22;
-  ReloadConfigReq = 23;
-  ReloadConfigResp = 24; 
+  KickReq = 19;
+  KickResp = 20;
+  ScanReq = 21;
+  ScanResp = 22;
+  ReloadTableConfReq = 23;
+  ReloadTableConfResp = 24;
+  ReloadConfigReq = 25;
+  ReloadConfigResp = 26; 
 }
 
 
@@ -224,6 +226,13 @@ message del_resp {
   required resp_common head = 1; 
 }
 
+message kick_req {
+  required req_common head = 1; 
+}
+
+message kick_resp {
+  required resp_common head = 1; 
+}
 
 message row {
   required string key = 1;

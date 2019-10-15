@@ -53,6 +53,12 @@ func init() {
 	pb.Register(&protocol.CompareAndSetNxReq{}, uint32(protocol.CmdType_CompareAndSetNxReq))
 	pb.Register(&protocol.CompareAndSetNxResp{}, uint32(protocol.CmdType_CompareAndSetNxResp))
 
+	pb.Register(&protocol.CompareAndSetNxReq{}, uint32(protocol.CmdType_CompareAndSetNxReq))
+	pb.Register(&protocol.CompareAndSetNxResp{}, uint32(protocol.CmdType_CompareAndSetNxResp))
+
+	pb.Register(&protocol.KickReq{}, uint32(protocol.CmdType_KickReq))
+	pb.Register(&protocol.KickResp{}, uint32(protocol.CmdType_KickResp))
+
 	pb.Register(&protocol.ScanReq{}, uint32(protocol.CmdType_ScanReq))
 	pb.Register(&protocol.ScanResp{}, uint32(protocol.CmdType_ScanResp))
 

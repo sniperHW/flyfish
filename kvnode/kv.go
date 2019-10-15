@@ -326,6 +326,13 @@ func (this *kv) processQueueCmd(unlockOpQueue ...bool) {
 				this.cmdQueue.popFront()
 				asynTask = cmd.prepare(asynTask)
 				goto loopEnd
+			case *cmdKick:
+				if nil != asynTask {
+					goto loopEnd
+				}
+				this.cmdQueue.popFront()
+				asynTask = cmd.prepare(asynTask)
+				goto loopEnd
 			default:
 				this.cmdQueue.popFront()
 				//记录日志
@@ -368,6 +375,11 @@ loopEnd:
 		case *asynCmdTaskGet:
 			Debugln("issueReadReq")
 			this.slot.issueReadReq(asynTask)
+		case *asynCmdTaskKick:
+			if !this.slot.store.kick(asynTask.(*asynCmdTaskKick)) {
+				asynTask.reply(errcode.ERR_OTHER)
+				this.processQueueCmd(true)
+			}
 		default:
 			this.slot.issueUpdate(asynTask)
 		}

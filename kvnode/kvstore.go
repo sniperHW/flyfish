@@ -202,6 +202,25 @@ func (this *kvstore) doLRU() {
 	}
 }
 
+func (this *kvstore) kick(taskKick *asynCmdTaskKick) bool {
+	this.Lock()
+	kv := taskKick.getKV()
+	kv.Lock()
+	kv.setKicking(true)
+	kv.Unlock()
+	if err := this.proposeC.AddNoWait(taskKick); nil == err {
+		this.kvKickingCount++
+		this.Unlock()
+		return true
+	} else {
+		kv.Lock()
+		kv.setKicking(false)
+		kv.Unlock()
+		this.Unlock()
+		return false
+	}
+}
+
 func (this *kvstore) tryKick(kv *kv) bool {
 	kv.Lock()
 	if kv.isKicking() {
@@ -220,7 +239,7 @@ func (this *kvstore) tryKick(kv *kv) bool {
 		return false
 	}
 
-	if err := this.proposeC.AddNoWait(&asynTaskKick{kv: kv}); nil != err {
+	if err := this.proposeC.AddNoWait(&asynTaskKick{kv: kv}); nil == err {
 		this.kvKickingCount++
 		return true
 	} else {
@@ -249,6 +268,7 @@ func (this *kvstore) apply(data []byte) bool {
 			this.rn.lease.update(this.rn, p.values[0].(int), p.values[1].(uint64))
 		case proposal_snapshot, proposal_update, proposal_kick:
 			unikey := p.values[0].(string)
+			Debugln(unikey, "cache_kick")
 			slot := this.slots[futil.StringHash(unikey)%len(this.slots)]
 			if p.tt == proposal_kick {
 				slot.Lock()
@@ -468,6 +488,26 @@ type storeMgr struct {
 	stores map[int]*kvstore
 	mask   int
 	dbmeta *dbmeta.DBMeta
+}
+
+func (this *storeMgr) getkvOnly(table string, key string) *kv {
+	uniKey := makeUniKey(table, key)
+	store := this.getStore(uniKey)
+	if store != nil {
+		var k *kv
+		var ok bool
+		slot := store.getSlot(uniKey)
+		slot.Lock()
+
+		k, ok = slot.elements[uniKey]
+		if !ok {
+			k, ok = slot.tmp[uniKey]
+		}
+		slot.Unlock()
+		return k
+	} else {
+		return nil
+	}
 }
 
 func (this *storeMgr) getkv(table string, key string) (*kv, int32) {
