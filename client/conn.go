@@ -104,7 +104,7 @@ func (this *Conn) ping(now *time.Time) {
 	if nil != this.session && now.After(this.nextPing) {
 		this.nextPing = now.Add(protocol.PingTime)
 		req := &protocol.PingReq{
-			Timestamp: proto.Int64(now.UnixNano()),
+			Timestamp: now.UnixNano(), //proto.Int64(now.UnixNano()),
 		}
 		this.session.Send(req)
 	}
@@ -179,7 +179,7 @@ func recvLoginResp(session kendynet.StreamSession) (*protocol.LoginResp, error) 
 }
 
 func (this *Conn) onConnected(session kendynet.StreamSession) {
-	loginReq := &protocol.LoginReq{Compress: proto.Bool(true)}
+	loginReq := &protocol.LoginReq{Compress: true} //proto.Bool(true)}
 	if !sendLoginReq(session, loginReq) {
 		session.Close("login failed", 0)
 		this.eventQueue.Post(func() {

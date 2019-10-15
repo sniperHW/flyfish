@@ -1,16 +1,15 @@
 package kvnode
 
 import (
+	"container/list"
 	"github.com/sniperHW/flyfish/dbmeta"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/util/bitfield"
-	"github.com/sniperHW/flyfish/util/ringqueue"
-	//"strconv"
+	//"github.com/sniperHW/kendynet/util"
 	"sync"
 	"sync/atomic"
 	"unsafe"
-	//"time"
 )
 
 const (
@@ -27,49 +26,44 @@ const (
 	sql_delete        = uint32(3)
 )
 
-const (
-	kv_status_offset     = uint32(0)
-	mask_kv_status       = uint32(0xF << kv_status_offset) //1-4位kv状态
-	kv_sql_flag_offset   = uint32(4)
-	mask_kv_sql_flag     = uint32(0xF << kv_sql_flag_offset) //5-8位sql回写标记
-	kv_writeback_offset  = uint32(8)
-	mask_kv_writeback    = uint32(0xF << kv_writeback_offset) //9-12位当前是否正在执行sql回写
-	kv_snapshoted_offset = uint32(12)
-	mask_kv_snapshoted   = uint32(0xF << kv_snapshoted_offset) //13-16位是否已经建立过快照
-	kv_tmp_offset        = uint32(16)
-	mask_kv_tmp          = uint32(0xF << kv_tmp_offset) //17-20位,是否临时kv
-	kv_kicking_offset    = uint32(20)
-	mask_kv_kicking      = uint32(0xF << kv_kicking_offset) //21-24位,是否正在被踢除
+var (
+	field_status     = bitfield.MakeFiled32(0xF)
+	field_sql_flag   = bitfield.MakeFiled32(0xF0)
+	field_writeback  = bitfield.MakeFiled32(0xF00)
+	field_snapshoted = bitfield.MakeFiled32(0xF000)
+	field_tmp        = bitfield.MakeFiled32(0xF0000)
+	field_kicking    = bitfield.MakeFiled32(0xF00000)
 )
 
 type cmdQueue struct {
-	queue  *ringqueue.Queue //待执行的操作请求
-	locked bool             //队列是否被锁定（前面有op尚未完成）
+	queue  *list.List
+	locked bool //队列是否被锁定（前面有op尚未完成）
 }
 
 func (this *cmdQueue) empty() bool {
-	return this.queue.Front() == nil
+	return this.queue.Len() == 0
 }
 
-func (this *cmdQueue) append(op commandI) bool {
-	return this.queue.Append(op)
+func (this *cmdQueue) append(op commandI) {
+	this.queue.PushBack(op)
 }
 
 func (this *cmdQueue) front() commandI {
-	o := this.queue.Front()
-	if nil == o {
+	if this.empty() {
 		return nil
 	} else {
-		return o.(commandI)
+		return this.queue.Front().Value.(commandI)
 	}
 }
 
 func (this *cmdQueue) popFront() commandI {
-	o := this.queue.PopFront()
-	if nil == o {
+	if this.empty() {
 		return nil
 	} else {
-		return o.(commandI)
+		e := this.queue.Front()
+		cmd := e.Value.(commandI)
+		this.queue.Remove(e)
+		return cmd
 	}
 }
 
@@ -95,32 +89,44 @@ type kv struct {
 	meta         *dbmeta.TableMeta
 	fields       map[string]*proto.Field //字段
 	modifyFields map[string]*proto.Field //发生变更尚未更新到sql数据库的字段
-	flag         bitfield.BitField32
+	flag         *bitfield.BitField32
 	slot         *kvSlot
 	nnext        *kv
 	pprev        *kv
 }
 
+var maxPendingCmdCount int64 = int64(500000) //整个物理节点待处理的命令上限
+var maxPendingCmdCountPerKv int = 1000       //单个kv待处理命令上限
+
 func (this *kv) appendCmd(op commandI) int32 {
+
+	if atomic.LoadInt64(&wait4ReplyCount) > 500000 {
+		return errcode.ERR_BUSY
+	}
+
 	this.Lock()
 	defer this.Unlock()
 	if this.getStatus() == cache_remove {
+		Debugln(this.uniKey, "cache_remove", "retry")
 		return errcode.ERR_RETRY
 	}
 
 	if this.isKicking() {
+		Debugln(this.uniKey, "kicking", "retry")
 		return errcode.ERR_RETRY
 	}
 
-	if this.cmdQueue.append(op) {
-		return errcode.ERR_OK
-	} else {
+	if this.cmdQueue.queue.Len() > maxPendingCmdCountPerKv {
 		return errcode.ERR_BUSY
 	}
+
+	this.cmdQueue.append(op)
+	return errcode.ERR_OK
 }
 
 //设置remove,清空cmdQueue,向队列内的cmd响应错误码err
 func (this *kv) setRemoveAndClearCmdQueue(err int32) {
+	//Debugln("setRemoveAndClearCmdQueue", this.uniKey, err, util.CallStack(100))
 	this.setStatus(cache_remove)
 	for cmd := this.cmdQueue.popFront(); nil != cmd; {
 		cmd.reply(err, nil, 0)
@@ -146,60 +152,96 @@ func (this *kv) getMeta() *dbmeta.TableMeta {
 }
 
 func (this *kv) setSqlFlag(sqlFlag uint32) {
-	this.flag.Set(mask_kv_sql_flag, kv_sql_flag_offset, sqlFlag)
+	this.flag.Set(field_sql_flag, sqlFlag)
 }
 
 func (this *kv) getSqlFlag() uint32 {
-	return this.flag.Get(mask_kv_sql_flag, kv_sql_flag_offset)
+	v, _ := this.flag.Get(field_sql_flag)
+	return v
 }
 
 func (this *kv) setStatus(status uint32) {
-	this.flag.Set(mask_kv_status, kv_status_offset, status)
+	this.flag.Set(field_status, status)
 }
 
 func (this *kv) getStatus() uint32 {
-	status := this.flag.Get(mask_kv_status, kv_status_offset)
+	status, _ := this.flag.Get(field_status)
 	return status
 }
 
 func (this *kv) setTmp(tmp bool) {
 	if tmp {
-		this.flag.Set(mask_kv_tmp, kv_tmp_offset, uint32(1))
+		this.flag.Set(field_tmp, uint32(1))
 	} else {
-		this.flag.Set(mask_kv_tmp, kv_tmp_offset, uint32(0))
+		this.flag.Set(field_tmp, uint32(0))
 	}
 }
 
 func (this *kv) isTmp() bool {
-	return this.flag.Get(mask_kv_tmp, kv_tmp_offset) == 1
+	v, _ := this.flag.Get(field_tmp)
+	return v == uint32(1)
 }
 
 func (this *kv) setKicking(kicking bool) {
 	if kicking {
-		this.flag.Set(mask_kv_kicking, kv_tmp_offset, uint32(1))
+		this.flag.Set(field_kicking, uint32(1))
 	} else {
-		this.flag.Set(mask_kv_kicking, kv_tmp_offset, uint32(0))
+		this.flag.Set(field_kicking, uint32(0))
 	}
 }
 
 func (this *kv) isKicking() bool {
-	return this.flag.Get(mask_kv_kicking, kv_kicking_offset) == 1
+	v, _ := this.flag.Get(field_kicking)
+	return v == uint32(1)
 }
 
 func (this *kv) setWriteBack(writeback bool) {
 	if writeback {
-		this.flag.Set(mask_kv_writeback, kv_writeback_offset, uint32(1))
+		this.flag.Set(field_writeback, uint32(1))
 	} else {
-		this.flag.Set(mask_kv_writeback, kv_writeback_offset, uint32(0))
+		this.flag.Set(field_writeback, uint32(0))
 	}
 }
 
 func (this *kv) isWriteBack() bool {
-	return this.flag.Get(mask_kv_writeback, kv_writeback_offset) == 1
+	v, _ := this.flag.Get(field_writeback)
+	return v == uint32(1)
+}
+
+func (this *kv) setSnapshoted(snapshoted bool) {
+	if snapshoted {
+		this.flag.Set(field_snapshoted, uint32(1))
+	} else {
+		this.flag.Set(field_snapshoted, uint32(0))
+	}
+}
+
+func (this *kv) isSnapshoted() bool {
+	v, _ := this.flag.Get(field_snapshoted)
+	return v == uint32(1)
 }
 
 func (this *kv) kickable() bool {
-	return false
+
+	status := this.getStatus()
+
+	if !(status == cache_ok || status == cache_missing) {
+		return false
+	}
+
+	if this.cmdQueue.isLocked() {
+		return false
+	}
+
+	if !this.cmdQueue.empty() {
+		return false
+	}
+
+	if this.isWriteBack() {
+		return false
+	}
+
+	return true
 }
 
 func (this *kv) setMissing() {
@@ -228,18 +270,9 @@ func (this *kv) setOK(version int64, fields map[string]*proto.Field) {
 			}
 		}
 	}
-}
 
-func (this *kv) setSnapshoted(snapshoted bool) {
-	if snapshoted {
-		this.flag.Set(mask_kv_snapshoted, kv_snapshoted_offset, uint32(1))
-	} else {
-		this.flag.Set(mask_kv_snapshoted, kv_snapshoted_offset, uint32(0))
-	}
-}
+	Debugln("set ok", this.uniKey, this.fields)
 
-func (this *kv) isSnapshoted() bool {
-	return this.flag.Get(mask_kv_snapshoted, kv_snapshoted_offset) == 1
 }
 
 func newkv(slot *kvSlot, tableMeta *dbmeta.TableMeta, key string, uniKey string, isTmp bool) *kv {
@@ -250,10 +283,11 @@ func newkv(slot *kvSlot, tableMeta *dbmeta.TableMeta, key string, uniKey string,
 		meta:   tableMeta,
 		table:  tableMeta.GetTable(),
 		cmdQueue: &cmdQueue{
-			queue: ringqueue.New(100),
+			queue: list.New(), //ringqueue.New(100),
 		},
 		modifyFields: map[string]*proto.Field{},
 		slot:         slot,
+		flag:         bitfield.NewBitField32(field_status, field_sql_flag, field_writeback, field_snapshoted, field_tmp, field_kicking),
 	}
 
 	k.setStatus(cache_new)
@@ -286,6 +320,13 @@ func (this *kv) processQueueCmd(unlockOpQueue ...bool) {
 				this.cmdQueue.popFront()
 				asynTask = cmd.prepare(asynTask)
 			case *cmdCompareAndSet, *cmdCompareAndSetNx, *cmdDecr, *cmdDel, *cmdIncr, *cmdSet, *cmdSetNx:
+				if nil != asynTask {
+					goto loopEnd
+				}
+				this.cmdQueue.popFront()
+				asynTask = cmd.prepare(asynTask)
+				goto loopEnd
+			case *cmdKick:
 				if nil != asynTask {
 					goto loopEnd
 				}
@@ -334,6 +375,11 @@ loopEnd:
 		case *asynCmdTaskGet:
 			Debugln("issueReadReq")
 			this.slot.issueReadReq(asynTask)
+		case *asynCmdTaskKick:
+			if !this.slot.store.kick(asynTask.(*asynCmdTaskKick)) {
+				asynTask.reply(errcode.ERR_OTHER)
+				this.processQueueCmd(true)
+			}
 		default:
 			this.slot.issueUpdate(asynTask)
 		}

@@ -22,7 +22,7 @@ func main() {
 
 	r1 := c.Del("users1", "sniperHW").Exec()
 
-	if !(r1.ErrCode == errcode.ERR_OK || r1.ErrCode == errcode.ERR_NOTFOUND) {
+	if !(r1.ErrCode == errcode.ERR_OK || r1.ErrCode == errcode.ERR_RECORD_NOTEXIST) {
 		fmt.Println("Del error:", errcode.GetErrorStr(r1.ErrCode), r1)
 		return
 	}

@@ -1,13 +1,10 @@
 package kvnode
 
 import (
-	//"fmt"
 	pb "github.com/golang/protobuf/proto"
 	codec "github.com/sniperHW/flyfish/codec"
-	//"github.com/sniperHW/flyfish/dbmeta"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
-	//"github.com/sniperHW/kendynet"
 	"time"
 )
 
@@ -50,12 +47,7 @@ func (this *cmdGet) makeResponse(errCode int32, fields map[string]*proto.Field, 
 	}
 
 	resp := &proto.GetResp{
-		Head: &proto.RespCommon{
-			Key:     pb.String(key),
-			Seqno:   pb.Int64(this.replyer.seqno),
-			ErrCode: pb.Int32(errCode),
-			Version: pb.Int64(version),
-		},
+		Head: makeRespCommon(key, this.replyer.seqno, errCode, version),
 	}
 
 	if errcode.ERR_OK == errCode {
@@ -81,6 +73,10 @@ func (this *cmdGet) prepare(task asynCmdTaskI) asynCmdTaskI {
 		if status == cache_missing || status == cache_ok {
 			getTask.fields = this.kv.fields
 			getTask.version = this.kv.version
+			if status == cache_missing {
+				getTask.errno = errcode.ERR_RECORD_NOTEXIST
+				Debugln(getTask.fields, this.kv.fields)
+			}
 		}
 	} else {
 		getTask = task.(*asynCmdTaskGet)
@@ -93,8 +89,6 @@ func (this *cmdGet) prepare(task asynCmdTaskI) asynCmdTaskI {
 
 func get(n *KVNode, cli *cliConn, msg *codec.Message) {
 
-	Debugln("get")
-
 	req := msg.GetData().(*proto.GetReq)
 	head := req.GetHead()
 	op := &cmdGet{
@@ -104,6 +98,8 @@ func get(n *KVNode, cli *cliConn, msg *codec.Message) {
 		},
 		fields: map[string]*proto.Field{},
 	}
+
+	Debugln("get", head.GetTable(), head.GetKey())
 
 	err := checkReqCommon(head)
 

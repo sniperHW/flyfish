@@ -25,7 +25,7 @@ type asynTaskI interface {
 
 type asynCmdTaskI interface {
 	getKV() *kv
-	reply()
+	reply(errno ...int32)
 	dontReply()
 	onLoadField(*proto.Field)
 	onSqlResp(errno int32)
@@ -81,10 +81,19 @@ func (this *asynCmdTaskBase) getKV() *kv {
 	return this.commands[0].getKV()
 }
 
-func (this *asynCmdTaskBase) reply() {
+func (this *asynCmdTaskBase) reply(errno ...int32) {
+
+	var errCode int32
+
+	if len(errno) > 0 {
+		errCode = errno[0]
+	} else {
+		errCode = this.errno
+	}
+
 	if atomic.CompareAndSwapInt64(&this.replyed, 0, 1) {
 		for _, v := range this.commands {
-			v.reply(this.errno, this.fields, this.version)
+			v.reply(errCode, this.fields, this.version)
 		}
 	}
 }
@@ -151,11 +160,13 @@ func (this *asynCmdTaskBase) done() {
 
 	if kv.getSqlFlag() != sql_none && !kv.isWriteBack() {
 		kv.setWriteBack(true)
-		Debugln("pushUpdateReq")
 		kv.slot.getKvNode().sqlMgr.pushUpdateReq(kv)
 	}
 
 	isTmp := kv.isTmp()
+	if isTmp {
+		kv.setTmp(false)
+	}
 
 	kv.Unlock()
 

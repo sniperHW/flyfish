@@ -20,19 +20,13 @@ func main() {
 
 	c := kclient.OpenClient(services)
 
-	r1 := c.Del("users1", "sniperHW").Exec()
+	c.Get("users1", "sniperHW", "name", "age", "phone").Exec()
 
-	if !(r1.ErrCode == errcode.ERR_OK || r1.ErrCode == errcode.ERR_RECORD_NOTEXIST) {
-		fmt.Println("Del error:", errcode.GetErrorStr(r1.ErrCode), r1)
-		return
-	}
+	r1 := c.Kick("users1", "sniperHW").Exec()
+	fmt.Println(errcode.GetErrorStr(r1.ErrCode))
 
-	//不存在技术sniperHW,所以CompareAndSetNx成功
-	r2 := c.CompareAndSetNx("users1", "sniperHW", "age", 1, 10).Exec()
-	if r2.ErrCode != errcode.ERR_OK {
-		fmt.Println("CompareAndSetNx1 error:", errcode.GetErrorStr(r2.ErrCode), r2)
-		return
-	}
+	r2 := c.Kick("users1", "sniperHW").Exec()
+	fmt.Println(errcode.GetErrorStr(r2.ErrCode))
 
 	r3 := c.Get("users1", "sniperHW", "name", "age", "phone").Exec()
 	if r3.ErrCode != errcode.ERR_OK {
@@ -42,10 +36,4 @@ func main() {
 
 	fmt.Println(r3.Fields["name"].GetValue(), r3.Fields["age"].GetValue(), r3.Fields["phone"].GetValue())
 
-	//记录sniperHW存在，age != 1所以执行失败
-	r4 := c.CompareAndSetNx("users1", "sniperHW", "age", 1, 10).Exec()
-	if r4.ErrCode != errcode.ERR_OK {
-		fmt.Println("CompareAndSetNx2 error:", errcode.GetErrorStr(r4.ErrCode), r4.Fields["age"].GetValue())
-		return
-	}
 }

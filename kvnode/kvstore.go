@@ -24,6 +24,7 @@ type asynTaskKick struct {
 }
 
 func (this *asynTaskKick) done() {
+	Debugln("kick done set cache_remove", this.kv.uniKey)
 	this.kv.Lock()
 	this.kv.setStatus(cache_remove)
 	this.kv.Unlock()
@@ -46,6 +47,8 @@ func (this *asynTaskKick) onPorposeTimeout() {
 }
 
 var kvSlotSize int = 129
+
+type leaseNotify int
 
 type kvSlot struct {
 	sync.Mutex
@@ -199,6 +202,25 @@ func (this *kvstore) doLRU() {
 	}
 }
 
+func (this *kvstore) kick(taskKick *asynCmdTaskKick) bool {
+	this.Lock()
+	kv := taskKick.getKV()
+	kv.Lock()
+	kv.setKicking(true)
+	kv.Unlock()
+	if err := this.proposeC.AddNoWait(taskKick); nil == err {
+		this.kvKickingCount++
+		this.Unlock()
+		return true
+	} else {
+		kv.Lock()
+		kv.setKicking(false)
+		kv.Unlock()
+		this.Unlock()
+		return false
+	}
+}
+
 func (this *kvstore) tryKick(kv *kv) bool {
 	kv.Lock()
 	if kv.isKicking() {
@@ -217,7 +239,7 @@ func (this *kvstore) tryKick(kv *kv) bool {
 		return false
 	}
 
-	if err := this.proposeC.AddNoWait(&asynTaskKick{kv: kv}); nil != err {
+	if err := this.proposeC.AddNoWait(&asynTaskKick{kv: kv}); nil == err {
 		this.kvKickingCount++
 		return true
 	} else {
@@ -246,6 +268,7 @@ func (this *kvstore) apply(data []byte) bool {
 			this.rn.lease.update(this.rn, p.values[0].(int), p.values[1].(uint64))
 		case proposal_snapshot, proposal_update, proposal_kick:
 			unikey := p.values[0].(string)
+			Debugln(unikey, "cache_kick")
 			slot := this.slots[futil.StringHash(unikey)%len(this.slots)]
 			if p.tt == proposal_kick {
 				slot.Lock()
@@ -291,7 +314,7 @@ func (this *kvstore) apply(data []byte) bool {
 				if version == 0 {
 					kv.setStatus(cache_missing)
 					kv.fields = nil
-					Debugln(p.tt, unikey, version, "cache_missing")
+					Debugln(p.tt, unikey, version, "cache_missing", kv.fields)
 				} else {
 					kv.setStatus(cache_ok)
 					kv.version = version
@@ -319,7 +342,7 @@ func (this *kvstore) apply(data []byte) bool {
 	return true
 }
 
-func (this *kvstore) readCommits(once bool, snapshotter *snap.Snapshotter, commitC <-chan interface{}, errorC <-chan error) {
+func (this *kvstore) readCommits( /*once bool, */ snapshotter *snap.Snapshotter, commitC <-chan interface{}, errorC <-chan error) {
 
 	for e := range commitC {
 		switch e.(type) {
@@ -329,29 +352,32 @@ func (this *kvstore) readCommits(once bool, snapshotter *snap.Snapshotter, commi
 				// done replaying log; new data incoming
 				// OR signaled to load snapshot
 				snapshot, err := snapshotter.Load()
-				if err == snap.ErrNoSnapshot {
-					return
-				}
 				if err != nil {
 					Fatalln(err)
-				}
-				Infof("loading snapshot at term %d and index %d", snapshot.Metadata.Term, snapshot.Metadata.Index)
-				if !this.apply(snapshot.Data[8:]) {
-					Fatalln("recoverFromSnapshot failed")
+				} else {
+					Infof("loading snapshot at term %d and index %d", snapshot.Metadata.Term, snapshot.Metadata.Index)
+					if !this.apply(snapshot.Data[8:]) {
+						Fatalln("recoverFromSnapshot failed")
+					}
 				}
 			} else if data == replayOK {
-				if once {
+				Infoln("reply ok,keycount", this.kvcount)
+				return
+				/*if once {
 					Infoln("apply ok,keycount", this.kvcount)
 					return
 				} else {
 					continue
-				}
+				}*/
 			} else {
 				data.apply(this)
 			}
 		case *readBatchSt:
 			e.(*readBatchSt).reply()
+		case leaseNotify:
+			this.gotLease()
 		}
+
 	}
 
 	if err, ok := <-errorC; ok {
@@ -447,7 +473,7 @@ func (this *kvstore) gotLease() {
 					} else if status == cache_missing {
 						vv.setSqlFlag(sql_delete)
 					}
-					Debugln("pushUpdateReq")
+					Debugln("pushUpdateReq", vv.uniKey, status, vv.fields)
 					this.kvNode.sqlMgr.pushUpdateReq(vv)
 				}
 			}
@@ -462,6 +488,26 @@ type storeMgr struct {
 	stores map[int]*kvstore
 	mask   int
 	dbmeta *dbmeta.DBMeta
+}
+
+func (this *storeMgr) getkvOnly(table string, key string) *kv {
+	uniKey := makeUniKey(table, key)
+	store := this.getStore(uniKey)
+	if store != nil {
+		var k *kv
+		var ok bool
+		slot := store.getSlot(uniKey)
+		slot.Lock()
+
+		k, ok = slot.elements[uniKey]
+		if !ok {
+			k, ok = slot.tmp[uniKey]
+		}
+		slot.Unlock()
+		return k
+	} else {
+		return nil
+	}
 }
 
 func (this *storeMgr) getkv(table string, key string) (*kv, int32) {
@@ -553,9 +599,7 @@ func newKVStore(storeMgr *storeMgr, kvNode *KVNode, proposeC *util.BlockQueue, r
 	s := &kvstore{
 		proposeC: proposeC,
 		slots:    []*kvSlot{},
-		//snapshotter: snapshotter,
 		readReqC: readReqC,
-		//rn:          rn,
 		kvNode:   kvNode,
 		storeMgr: storeMgr,
 	}
@@ -572,54 +616,7 @@ func newKVStore(storeMgr *storeMgr, kvNode *KVNode, proposeC *util.BlockQueue, r
 	s.lruTail.pprev = &s.lruHead
 
 	return s
-
-	// replay log into key-value map
-	//s.readCommits(true, commitC, errorC)
-	// read commits from raft into kvStore map until error
-
-	//s.lruTimer = timer.Repeat(time.Second, nil, func(t *timer.Timer) {
-	//	s.doLRU()
-	//})
-
-	//go s.readCommits(false, commitC, errorC)
-	//return s
 }
-
-/*
-func newKVStore(storeMgr *storeMgr, kvNode *KVNode, rn *raftNode, snapshotter *snap.Snapshotter, proposeC *util.BlockQueue, commitC <-chan interface{}, errorC <-chan error, readReqC *util.BlockQueue) *kvstore {
-
-	s := &kvstore{
-		proposeC:    proposeC,
-		slots:       []*kvSlot{},
-		snapshotter: snapshotter,
-		readReqC:    readReqC,
-		rn:          rn,
-		kvNode:      kvNode,
-		storeMgr:    storeMgr,
-	}
-
-	for i := 0; i < kvSlotSize; i++ {
-		s.slots = append(s.slots, &kvSlot{
-			elements: map[string]*kv{},
-			tmp:      map[string]*kv{},
-			store:    s,
-		})
-	}
-
-	s.lruHead.nnext = &s.lruTail
-	s.lruTail.pprev = &s.lruHead
-
-	// replay log into key-value map
-	s.readCommits(true, commitC, errorC)
-	// read commits from raft into kvStore map until error
-
-	s.lruTimer = timer.Repeat(time.Second, nil, func(t *timer.Timer) {
-		s.doLRU()
-	})
-
-	go s.readCommits(false, commitC, errorC)
-	return s
-}*/
 
 func newStoreMgr(kvnode *KVNode, mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta, id *int, cluster *string, mask int) *storeMgr {
 	mgr := &storeMgr{
@@ -636,7 +633,7 @@ func newStoreMgr(kvnode *KVNode, mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta, id
 
 		store := newKVStore(mgr, kvnode, proposeC, readC)
 
-		rn, commitC, errorC, snapshotterReady := newRaftNode(store, mutilRaft, (*id<<16)+i, strings.Split(*cluster, ","), false, proposeC, confChangeC, readC)
+		rn, commitC, errorC, snapshotterReady := newRaftNode(mutilRaft, (*id<<16)+i, strings.Split(*cluster, ","), false, proposeC, confChangeC, readC, store.getSnapshot)
 
 		store.rn = rn
 
@@ -653,9 +650,9 @@ func newStoreMgr(kvnode *KVNode, mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta, id
 
 		snapshotter := <-snapshotterReady
 
-		store.readCommits(true, snapshotter, commitC, errorC)
+		store.readCommits( /*true,*/ snapshotter, commitC, errorC)
 
-		go store.readCommits(false, snapshotter, commitC, errorC)
+		go store.readCommits( /*false,*/ snapshotter, commitC, errorC)
 
 		mgr.addStore(i, store)
 	}

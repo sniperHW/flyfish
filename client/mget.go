@@ -21,7 +21,7 @@ func (this *MGetCmd) AsyncExec(cb func(*MutiResult)) {
 				if nil == this.cb {
 					return
 				}
-				if ret.ErrCode == errcode.ERR_OK || ret.ErrCode == errcode.ERR_RECORD_EXIST {
+				if ret.ErrCode == errcode.ERR_OK || ret.ErrCode == errcode.ERR_RECORD_NOTEXIST {
 
 					this.respCount++
 					if nil == this.rows {

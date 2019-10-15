@@ -2,6 +2,45 @@ syntax = "proto2";
 package proto;
 
 
+import "gogoproto/gogo.proto";
+
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+option (gogoproto.unmarshaler_all) = true;
+option (gogoproto.goproto_getters_all) = true;
+option (gogoproto.goproto_enum_prefix_all) = true;
+
+
+enum CmdType {
+  PingReq = 1;
+  PingResp = 2;
+  SetReq = 3;
+  SetResp = 4;
+  GetReq = 5;
+  GetResp = 6;
+  DelReq = 7;
+  DelResp = 8;
+  IncrByReq = 9;
+  IncrByResp = 10;
+  DecrByReq = 11;
+  DecrByResp = 12;
+  SetNxReq = 13;
+  SetNxResp = 14;
+  CompareAndSetReq = 15;
+  CompareAndSetResp = 16;
+  CompareAndSetNxReq = 17;
+  CompareAndSetNxResp = 18;
+  KickReq = 19;
+  KickResp = 20;
+  ScanReq = 21;
+  ScanResp = 22;
+  ReloadTableConfReq = 23;
+  ReloadTableConfResp = 24;
+  ReloadConfigReq = 25;
+  ReloadConfigResp = 26; 
+}
+
+
 
 message loginReq {
   optional bool compress = 1; //客户端是否支持压缩
@@ -67,7 +106,7 @@ message req_common {
   required int64  seqno   = 1;
   optional string table   = 2;
   optional string key     = 3;
-  optional int64  version = 4;  
+  optional int64  version = 4[(gogoproto.nullable) = true];  
   optional int64  timeout = 5;
   optional int64  respTimeout = 6;
 }
@@ -88,7 +127,7 @@ message get_req {
 
 message get_resp {
   required resp_common head = 1;    
-  repeated field  fields = 2;
+  repeated field  fields = 2; 
 }
 
 //更改系列命令
@@ -187,6 +226,13 @@ message del_resp {
   required resp_common head = 1; 
 }
 
+message kick_req {
+  required req_common head = 1; 
+}
+
+message kick_resp {
+  required resp_common head = 1; 
+}
 
 message row {
   required string key = 1;

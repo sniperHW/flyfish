@@ -35,7 +35,17 @@ type FixedArray struct {
 	array []interface{}
 }
 
+func NewFixedArray(size int) *FixedArray {
+	return &FixedArray{
+		array: make([]interface{}, size),
+		len:   0,
+	}
+}
+
 func (this *FixedArray) Reset() {
+	for i := 0; i < this.len; i++ {
+		this.array[i] = nil
+	}
 	this.len = 0
 }
 

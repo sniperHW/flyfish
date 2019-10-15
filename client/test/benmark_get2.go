@@ -16,7 +16,7 @@ import (
 
 type result struct {
 	latency time.Duration
-	err     int
+	err     int32
 }
 
 type ByTime []result
@@ -35,11 +35,11 @@ var (
 	bar      *progressbar.ProgressBar
 )
 
-func Get(c *kclient.Client) {
+func Get(c *kclient.Client) bool {
 
 	nextID := atomic.AddInt64(&id, 1)
 	if nextID > total {
-		return
+		return false
 	}
 
 	key := fmt.Sprintf("%s:%d", "huangwei", nextID%keyrange)
@@ -61,8 +61,10 @@ func Get(c *kclient.Client) {
 		if int64(n) == total {
 			sigStop <- true
 		}
-		Get(c)
+		//Get(c)
 	})
+
+	return true
 }
 
 func main() {
@@ -87,12 +89,18 @@ func main() {
 	}
 
 	bar = progressbar.New(int(total))
-
 	for j := 0; j < 100; j++ {
 		c := kclient.OpenClient(services)
-		for i := 0; i < 50; i++ {
-			Get(c)
-		}
+		go func() {
+			for {
+				for i := 0; i < 50; i++ {
+					if !Get(c) {
+						return
+					}
+				}
+				time.Sleep(time.Millisecond * 50)
+			}
+		}()
 	}
 
 	sigStop = make(chan bool)

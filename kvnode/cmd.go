@@ -2,10 +2,8 @@ package kvnode
 
 import (
 	"fmt"
-	//codec "github.com/sniperHW/flyfish/codec"
 	pb "github.com/golang/protobuf/proto"
 	"github.com/sniperHW/flyfish/errcode"
-	//"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/flyfish/proto"
 	"sync/atomic"
 	"time"
@@ -14,6 +12,15 @@ import (
 var (
 	wait4ReplyCount int64
 )
+
+func makeRespCommon(key string, seqno int64, errCode int32, version int64) *proto.RespCommon {
+	return &proto.RespCommon{
+		Key:     key,     //pb.String(key),
+		Seqno:   seqno,   //pb.Int64(this.replyer.seqno),
+		ErrCode: errCode, //pb.Int32(errCode),
+		Version: version, //pb.Int64(version),
+	}
+}
 
 func checkReqCommon(reqCommon *proto.ReqCommon) int32 {
 	if "" == reqCommon.GetTable() {

@@ -1,10 +1,8 @@
 package kvnode
 
 import (
-	//"fmt"
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/util/str"
-	//"strconv"
 )
 
 var mysqlByteToString = []string{
@@ -592,7 +590,7 @@ func (this *sqlMgr) buildInsertUpdateStringPgSql(s *str.Str, kv *kv) {
 	}
 	s.AppendString(",__version__=").AppendFieldStr(version, this.binaryToSqlStr)
 	s.AppendString(" where ").AppendString(kv.table).AppendString(".__key__ = '").AppendString(kv.key).AppendString("';")
-	Debugln(s.ToString())
+	//Debugln(s.ToString())
 }
 
 /*
@@ -637,7 +635,7 @@ func (this *sqlMgr) buildInsertUpdateStringMySql(s *str.Str, kv *kv) {
 	}
 	s.AppendString(",__version__=").AppendFieldStr(version, this.binaryToSqlStr)
 	s.AppendString(";")
-	Debugln(s.ToString())
+	//Debugln(s.ToString())
 }
 
 <<<<<<< HEAD:server/sqlString.go
@@ -700,7 +698,7 @@ func (this *sqlMgr) buildUpdateString(s *str.Str, kv *kv) {
 	s.AppendString(",__version__=").AppendFieldStr(version, this.binaryToSqlStr)
 	s.AppendString(" where __key__ = '").AppendString(kv.key).AppendString("';")
 
-	Debugln(s.ToString())
+	//Debugln(s.ToString())
 }
 
 <<<<<<< HEAD:server/sqlString.go

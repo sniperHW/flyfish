@@ -3,8 +3,7 @@ package proto
 import (
 	"fmt"
 	"reflect"
-
-	"github.com/golang/protobuf/proto"
+	//"github.com/golang/protobuf/proto"
 )
 
 func (m *Field) GetType() ValueType {
@@ -89,28 +88,28 @@ func (m *Field) SetInt(v int64) {
 	if !m.IsInt() {
 		panic("v is not int")
 	}
-	m.V.I = proto.Int64(v)
+	m.V.I = v //proto.Int64(v)
 }
 
 func (m *Field) SetUint(v uint64) {
 	if !m.IsUint() {
 		panic("v is not uint")
 	}
-	m.V.U = proto.Uint64(v)
+	m.V.U = v //proto.Uint64(v)
 }
 
 func (m *Field) SetString(v string) {
 	if !m.IsString() {
 		panic("v is not string")
 	}
-	m.V.S = proto.String(v)
+	m.V.S = v //proto.String(v)
 }
 
 func (m *Field) SetFloat(v float64) {
 	if !m.IsFloat() {
 		panic("v is not float")
 	}
-	m.V.F = proto.Float64(v)
+	m.V.F = v //proto.Float64(v)
 }
 
 func (m *Field) SetBlob(v []byte) {
@@ -120,7 +119,7 @@ func (m *Field) SetBlob(v []byte) {
 	m.V.B = v
 }
 
-func (m *Field) Equal(o *Field) bool {
+func (m *Field) IsEqual(o *Field) bool {
 	if nil == o {
 		return false
 	} else if m.GetType() != o.GetType() {
@@ -180,11 +179,11 @@ func PackField(name string, v interface{}) *Field {
 
 	field := &Field{
 		V:    &Value{},
-		Name: proto.String(name),
+		Name: name, //proto.String(name),
 	}
 
 	if nil == v {
-		field.V.Type = ValueType(ValueType_nil).Enum()
+		field.V.Type = ValueType_nil //ValueType(ValueType_nil).Enum()
 		return field
 	}
 
@@ -195,58 +194,58 @@ func PackField(name string, v interface{}) *Field {
 	switch v.(type) {
 	case []byte:
 		field.V.B = v.([]byte)
-		field.V.Type = ValueType(ValueType_blob).Enum()
+		field.V.Type = ValueType_blob //ValueType(ValueType_blob).Enum()
 		return field
 	case string:
-		field.V.S = proto.String(v.(string))
-		field.V.Type = ValueType(ValueType_string).Enum()
+		field.V.S = v.(string)          //proto.String(v.(string))
+		field.V.Type = ValueType_string //ValueType(ValueType_string).Enum()
 		return field
 	case int:
-		field.V.Type = ValueType(ValueType_int).Enum()
+		field.V.Type = ValueType_int //ValueType(ValueType_int).Enum()
 		vvI = int64(v.(int))
 		break
 	case int8:
-		field.V.Type = ValueType(ValueType_int).Enum()
+		field.V.Type = ValueType_int //ValueType(ValueType_int).Enum()
 		vvI = int64(v.(int8))
 		break
 	case int16:
-		field.V.Type = ValueType(ValueType_int).Enum()
+		field.V.Type = ValueType_int //ValueType(ValueType_int).Enum()
 		vvI = int64(v.(int16))
 		break
 	case int32:
-		field.V.Type = ValueType(ValueType_int).Enum()
+		field.V.Type = ValueType_int //ValueType(ValueType_int).Enum()
 		vvI = int64(v.(int32))
 		break
 	case int64:
-		field.V.Type = ValueType(ValueType_int).Enum()
+		field.V.Type = ValueType_int //ValueType(ValueType_int).Enum()
 		vvI = int64(v.(int64))
 		break
 	case uint:
-		field.V.Type = ValueType(ValueType_int).Enum()
+		field.V.Type = ValueType_int //ValueType(ValueType_int).Enum()
 		vvI = int64(v.(uint))
 		break
 	case uint8:
-		field.V.Type = ValueType(ValueType_uint).Enum()
+		field.V.Type = ValueType_uint //ValueType(ValueType_uint).Enum()
 		vvU = uint64(v.(uint8))
 		break
 	case uint16:
-		field.V.Type = ValueType(ValueType_uint).Enum()
+		field.V.Type = ValueType_uint //ValueType(ValueType_uint).Enum()
 		vvU = uint64(v.(uint16))
 		break
 	case uint32:
-		field.V.Type = ValueType(ValueType_uint).Enum()
+		field.V.Type = ValueType_uint //ValueType(ValueType_uint).Enum()
 		vvU = uint64(v.(uint32))
 		break
 	case uint64:
-		field.V.Type = ValueType(ValueType_uint).Enum()
+		field.V.Type = ValueType_uint //ValueType(ValueType_uint).Enum()
 		vvU = uint64(v.(uint64))
 		break
 	case float32:
-		field.V.Type = ValueType(ValueType_float).Enum()
+		field.V.Type = ValueType_float //ValueType(ValueType_float).Enum()
 		vvF = float64(v.(float32))
 		break
 	case float64:
-		field.V.Type = ValueType(ValueType_float).Enum()
+		field.V.Type = ValueType_float //ValueType(ValueType_float).Enum()
 		vvF = float64(v.(float64))
 		break
 	default:
@@ -257,11 +256,11 @@ func PackField(name string, v interface{}) *Field {
 	}
 
 	if field.GetType() == ValueType_float {
-		field.V.F = proto.Float64(vvF)
+		field.V.F = vvF //proto.Float64(vvF)
 	} else if field.GetType() == ValueType_uint {
-		field.V.U = proto.Uint64(vvU)
+		field.V.U = vvU //proto.Uint64(vvU)
 	} else {
-		field.V.I = proto.Int64(vvI)
+		field.V.I = vvI //proto.Int64(vvI)
 	}
 	return field
 }

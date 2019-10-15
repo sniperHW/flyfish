@@ -6,14 +6,18 @@ import (
 	"github.com/sniperHW/flyfish/conf"
 	kvnode "github.com/sniperHW/flyfish/kvnode"
 	futil "github.com/sniperHW/flyfish/util"
-	//"net/http"
-	//_ "net/http/pprof"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
 )
 
 func main() {
+
+	go func() {
+		http.ListenAndServe("0.0.0.0:8899", nil)
+	}()
 
 	cluster := flag.String("cluster", "http://127.0.0.1:12379", "comma separated cluster peers")
 	id := flag.Int("id", 1, "node ID")

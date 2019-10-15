@@ -1,13 +1,10 @@
 package kvnode
 
 import (
-	//"fmt"
 	pb "github.com/golang/protobuf/proto"
 	codec "github.com/sniperHW/flyfish/codec"
-	//"github.com/sniperHW/flyfish/dbmeta"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
-	//"github.com/sniperHW/kendynet"
 	"time"
 )
 
@@ -73,12 +70,7 @@ func (this *cmdSet) makeResponse(errCode int32, fields map[string]*proto.Field, 
 	}
 
 	return &proto.SetResp{
-		Head: &proto.RespCommon{
-			Key:     pb.String(key),
-			Seqno:   pb.Int64(this.replyer.seqno),
-			ErrCode: pb.Int32(errCode),
-			Version: pb.Int64(version),
-		},
+		Head: makeRespCommon(key, this.replyer.seqno, errCode, version),
 	}
 }
 
@@ -98,12 +90,16 @@ func (this *cmdSet) prepare(_ asynCmdTaskI) asynCmdTaskI {
 		task.fields = map[string]*proto.Field{}
 		fillDefaultValue(kv.meta, &task.fields)
 		task.sqlFlag = sql_insert_update
+		for k, v := range this.fields {
+			task.fields[k] = v
+		}
+		Debugln("set cache_missing", this.kv.uniKey)
 	} else if status == cache_ok {
 		task.sqlFlag = sql_update
+		task.fields = this.fields
 	}
 
 	if status != cache_new {
-		task.fields = this.fields
 		task.version = kv.version + 1
 		Debugln("task version", task.version)
 	}

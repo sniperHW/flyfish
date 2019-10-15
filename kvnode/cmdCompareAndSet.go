@@ -1,13 +1,10 @@
 package kvnode
 
 import (
-	//"fmt"
 	pb "github.com/golang/protobuf/proto"
 	codec "github.com/sniperHW/flyfish/codec"
-	//"github.com/sniperHW/flyfish/dbmeta"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
-	//"github.com/sniperHW/kendynet"
 	"time"
 )
 
@@ -16,6 +13,7 @@ type asynCmdTaskCompareAndSet struct {
 }
 
 func (this *asynCmdTaskCompareAndSet) onSqlResp(errno int32) {
+
 	this.asynCmdTaskBase.onSqlResp(errno)
 	if errno == errcode.ERR_RECORD_NOTEXIST {
 		this.reply()
@@ -24,7 +22,7 @@ func (this *asynCmdTaskCompareAndSet) onSqlResp(errno int32) {
 		cmd := this.commands[0].(*cmdCompareAndSet)
 		if !cmd.checkVersion(this.version) {
 			this.errno = errcode.ERR_VERSION_MISMATCH
-		} else if !this.fields[cmd.oldV.GetName()].Equal(cmd.oldV) {
+		} else if !this.fields[cmd.oldV.GetName()].IsEqual(cmd.oldV) {
 			this.errno = errcode.ERR_CAS_NOT_EQUAL
 		} else {
 			this.fields[cmd.oldV.GetName()] = cmd.newV
@@ -67,12 +65,9 @@ func (this *cmdCompareAndSet) makeResponse(errCode int32, fields map[string]*pro
 	}
 
 	resp := &proto.CompareAndSetResp{
-		Head: &proto.RespCommon{
-			Key:     pb.String(key),
-			Seqno:   pb.Int64(this.replyer.seqno),
-			ErrCode: pb.Int32(errCode),
-			Version: pb.Int64(version),
-		}}
+		Head: makeRespCommon(key, this.replyer.seqno, errCode, version),
+	}
+
 	if nil != fields {
 		resp.Value = fields[this.oldV.GetName()]
 	}
@@ -99,7 +94,7 @@ func (this *cmdCompareAndSet) prepare(_ asynCmdTaskI) asynCmdTaskI {
 				return nil
 			}
 
-			if !this.kv.fields[this.oldV.GetName()].Equal(this.oldV) {
+			if !this.kv.fields[this.oldV.GetName()].IsEqual(this.oldV) {
 				this.reply(errcode.ERR_CAS_NOT_EQUAL, nil, kv.version)
 				return nil
 			}
