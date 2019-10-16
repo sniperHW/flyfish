@@ -95,8 +95,9 @@ type raftNode struct {
 	readPipeline    *util.BlockQueue
 	mutilRaft       *mutilRaft
 
-	muPendingRead sync.Mutex
-	pendingRead   *list.List
+	muPendingRead  sync.Mutex
+	pendingRead    *list.List
+	readIndexTimer *timer.Timer
 
 	readIndex int64
 	lease     *lease
@@ -509,13 +510,14 @@ func (rc *raftNode) startRaft() {
 
 	//go rc.serveRaft()
 
-	timer.Repeat(time.Second, nil, rc.processTimeoutReadReq)
+	rc.readIndexTimer = timer.Repeat(time.Second, nil, rc.processTimeoutReadReq)
 
 	go rc.serveChannels()
 }
 
 // stop closes http, closes all channels, and stops raft.
 func (rc *raftNode) stop() {
+	rc.readIndexTimer.Cancel()
 	rc.transport.Stop()
 	rc.mutilRaft.removeTransport(types.ID(rc.id))
 	close(rc.commitC)
