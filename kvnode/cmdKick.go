@@ -101,7 +101,7 @@ func kick(n *KVNode, cli *cliConn, msg *codec.Message) {
 	kv = n.storeMgr.getkvOnly(head.GetTable(), head.GetKey())
 
 	if nil == kv {
-		op.reply(errcode.ERR_RECORD_NOTEXIST, nil, 0)
+		op.reply(errcode.ERR_OK, nil, 0)
 		return
 	}
 

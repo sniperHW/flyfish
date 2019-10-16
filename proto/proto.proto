@@ -37,7 +37,8 @@ enum CmdType {
   ReloadTableConfReq = 23;
   ReloadTableConfResp = 24;
   ReloadConfigReq = 25;
-  ReloadConfigResp = 26; 
+  ReloadConfigResp = 26;
+  CancelReq = 27; 
 }
 
 
