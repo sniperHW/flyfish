@@ -260,6 +260,7 @@ func (this *KVNode) initHandler() {
 	this.dispatcher.Register(&protocol.IncrByReq{}, incrBy)
 	this.dispatcher.Register(&protocol.DecrByReq{}, decrBy)
 	this.dispatcher.Register(&protocol.KickReq{}, kick)
+	this.dispatcher.Register(&protocol.Cancel{}, cancel)
 
 	//this.dispatcher.Register(&protocol.ScanReq{}, scan)
 	//this.dispatcher.Register(&protocol.ReloadTableConfReq{}, reloadTableConf)

@@ -68,4 +68,6 @@ func init() {
 	pb.Register(&protocol.ReloadConfigReq{}, uint32(protocol.CmdType_ReloadConfigReq))
 	pb.Register(&protocol.ReloadConfigResp{}, uint32(protocol.CmdType_ReloadConfigResp))
 
+	pb.Register(&protocol.Cancel{}, uint32(protocol.CmdType_CancelReq))
+
 }
