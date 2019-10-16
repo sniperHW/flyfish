@@ -7,3 +7,7 @@ main/main
 config.conf
 flyfishd
 config.toml
+*.o
+*.so
+*.lib
+*.dylib
