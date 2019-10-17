@@ -16,8 +16,9 @@ addr:close()
 protobuf.register(pb_buffer)
 
 
-local ip
-local port
+local M = {
+	
+}
 
 local CmdToProto = {
 	[1] = "proto.ping_req",
@@ -131,15 +132,15 @@ local function wrapResult(r)
 		result.fields = {}
 		for i, v in ipairs(r.fields) do
 			if v.v.type == "int" then
-				result.fields[v.name] = v.v.i
+				result.fields[v.name] = {type=v.v.type,value=v.v.i}
 			elseif v.v.type == "uint" then
-				result.fields[v.name] = v.v.u
+				result.fields[v.name] = {type=v.v.type,value=v.v.u}
 			elseif v.v.type == "float" then
-				result.fields[v.name] = v.v.f
+				result.fields[v.name] = {type=v.v.type,value=v.v.f}
 			elseif v.v.type == "string" then
-				result.fields[v.name] = v.v.s
+				result.fields[v.name] = {type=v.v.type,value=v.v.s}
 			elseif v.v.type == "blob" then
-				result.fields[v.name] = v.v.b
+				result.fields[v.name] = {type=v.v.type,value=v.v.b}
 			end					
 		end
 	end
@@ -156,7 +157,7 @@ local function doCmd(cmd)
 	local timeout = 5000
 	local result 
 
-	PromiseSocket.connect(ip,port,timeout):andThen(function (conn)
+	PromiseSocket.connect(M.ip,M.port,timeout):andThen(function (conn)
 		c = conn
 		conn:OnClose(function ()
 			ok = true
@@ -192,39 +193,40 @@ local function doCmd(cmd)
 		event_loop:Run(10)
 	end
 
-	return dump.print(wrapResult(result),"resp",10)
+	return wrapResult(result)
+	--return dump.print(wrapResult(result),"resp",10)
 end
 
 
-function String(name,value)
+function M.String(name,value)
 	return {
 		name = name,
 		v = {type='string',s=value},
 	}	
 end
 
-function Int(name,value)
+function M.Int(name,value)
 	return {
 		name = name,
 		v = {type='int',i=value},
 	}	
 end
 
-function Uint(name,value)
+function M.Uint(name,value)
 	return {
 		name = name,
 		v = {type='uint',u=value},
 	}	
 end
 
-function Float(name,value)
+function M.Float(name,value)
 	return {
 		name = name,
 		v = {type='float',f=value},
 	}	
 end
 
-function Blob(name,value)
+function M.Blob(name,value)
 	return {
 		name = name,
 		v = {type='blob',b=value},
@@ -232,7 +234,7 @@ function Blob(name,value)
 end
 
 --get("users1","huangwei:1015")
-function get(table,key,fields)
+function M.get(table,key,fields)
 	local cmd = {
 		cmd = 5,
 		req = {
@@ -256,7 +258,7 @@ end
 
 --set("users1","ak1",{String('name','ak1'))})
 --set("game_user","huangwei",{String('userdata','{"Name":"huangwei","Level":2}')})
-function set(table,key,fields,version)
+function M.set(table,key,fields,version)
 	local cmd = {
 		cmd = 3,
 		req = {
@@ -274,7 +276,7 @@ function set(table,key,fields,version)
 	return doCmd(cmd)	
 end
 
-function del(table,key,version)
+function M.del(table,key,version)
 	local cmd = {
 		cmd = 9,
 		req = {
@@ -291,7 +293,7 @@ function del(table,key,version)
 	return doCmd(cmd)		
 end
 
-function reloadTableConfig()
+function M.reloadTableConfig()
 	local cmd = {
 		cmd = 23,
 		req = {}		
@@ -299,7 +301,7 @@ function reloadTableConfig()
 	return doCmd(cmd)		
 end
 
-function reloadConfig(path)
+function M.reloadConfig(path)
 	local cmd = {
 		cmd = 25,
 		req = {path=path}		
@@ -307,59 +309,11 @@ function reloadConfig(path)
 	return doCmd(cmd)		
 end
 
-
-local function execute_chunk(str)
-	local func,err = load(str)
-	if func then
-		local ret,err = pcall(func)
-		if not ret then
-			print("command error:" .. err)
-		end
-	elseif err then
-		print("command error:" .. err)
-	end
+function M.init(ip,port)
+	M.ip = ip
+	M.port = port
 end
 
-local function repl()
-	local chunk = ""
-
-	local prompt = ">>"
-
-	while true do
-		local cmd_line = readline(prompt)
-		if #cmd_line > 1 then
-			if string.byte(cmd_line,#cmd_line) ~= 92 then
-				chunk = chunk .. cmd_line
-				break
-			else
-			  	chunk = chunk .. string.sub(cmd_line,1,#cmd_line-1) .. "\n"
-				prompt = ">>>"
-			end
-		else
-			break
-		end	
-	end
-
-	if chunk ~= "" then
-		if chunk == "exit" then
-			return false
-		else
-			execute_chunk(chunk)
-		end
-	end
-
-	return true
-end
-
-if arg == nil or #arg ~= 2 then
-	print("useage:lua flyfish.lua ip port")
-else
-   ip,port = arg[1],arg[2]
-   while true do
-   		if not repl() then
-   			return		
-   		end	
-   end
-end
+return M
 
 
