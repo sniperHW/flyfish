@@ -39,7 +39,7 @@ local CmdToProto = {
 	[16] = "proto.compare_and_set_resp",	
 	[17] = "proto.compare_and_set_nx_req",
 	[18] = "proto.compare_and_set_nx_resp",	
-	[19] = "proto.kick_resp",
+	[19] = "proto.kick_req",
 	[20] = "proto.kick_resp",
 	[21] = "proto.scan_req",
 	[22] = "proto.scan_resp",
@@ -109,7 +109,7 @@ end
 
 
 local function pack(cmd,data) 
-	local code = protobuf.encode(CmdToProto[cmd], data)
+	local code = protobuf.encode(CmdToProto[cmd], data)	
 	local len = 1 + 2 + #code
 	return _set_byte4(len) .. _set_byte1(0) ..  _set_byte2(cmd) .. code 
 end
@@ -127,6 +127,21 @@ end
 
 local loginReq = protobuf.encode("proto.loginReq", {compress=0})
 
+
+local function unpackFiled(v)
+	if v.v.type == "int" then
+		return {type=v.v.type,value=v.v.i}
+	elseif v.v.type == "uint" then
+		return {type=v.v.type,value=v.v.u}
+	elseif v.v.type == "float" then
+		return {type=v.v.type,value=v.v.f}
+	elseif v.v.type == "string" then
+		return {type=v.v.type,value=v.v.s}
+	elseif v.v.type == "blob" then
+		return {type=v.v.type,value=v.v.b}
+	end	
+end
+
 local function wrapResult(r)
 
 	if nil == r then
@@ -141,20 +156,19 @@ local function wrapResult(r)
 		version = resp.head.version,
 	}
 
-	if resp.fields ~= nil then
-		result.fields = {}
-		for i, v in ipairs(resp.fields) do
-			if v.v.type == "int" then
-				result.fields[v.name] = {type=v.v.type,value=v.v.i}
-			elseif v.v.type == "uint" then
-				result.fields[v.name] = {type=v.v.type,value=v.v.u}
-			elseif v.v.type == "float" then
-				result.fields[v.name] = {type=v.v.type,value=v.v.f}
-			elseif v.v.type == "string" then
-				result.fields[v.name] = {type=v.v.type,value=v.v.s}
-			elseif v.v.type == "blob" then
-				result.fields[v.name] = {type=v.v.type,value=v.v.b}
-			end					
+
+	local cmd = CmdToProto[r.cmd]
+
+	if cmd == "proto.compare_and_set_resp" or cmd == "proto.compare_and_set_nx_resp" then
+		result.value = unpackFiled(resp.value)
+	elseif cmd == "proto.incr_by_resp" or cmd == "proto.decr_by_resp" then
+		result.value = unpackFiled(resp.newValue)
+	elseif cmd == "proto.get_resp" then
+		if resp.fields ~= nil then
+			result.fields = {}
+			for i, v in ipairs(resp.fields) do
+				result.fields[v.name] = unpackFiled(v)					
+			end
 		end
 	end
 
@@ -307,6 +321,46 @@ function M.setNX(table,key,fields,version)
 	return doCmd(cmd)	
 end
 
+function M.compareAndSet(table,key,old,new,version)
+	local cmd = {
+		cmd = ProtoToCmd["proto.compare_and_set_req"],
+		req = {
+			head = {
+				seqno = 1,
+				table = table,
+				key = key,
+				timeout = 5000000000,
+				respTimeout = 10000000000,				
+			},
+			version = version,
+			old = old,
+			new = new,
+		}		
+	}
+	return doCmd(cmd)	
+end
+
+
+function M.compareAndSetNX(table,key,old,new,version)
+	local cmd = {
+		cmd = ProtoToCmd["proto.compare_and_set_nx_req"],
+		req = {
+			head = {
+				seqno = 1,
+				table = table,
+				key = key,
+				timeout = 5000000000,
+				respTimeout = 10000000000,				
+			},
+			version = version,
+			old = old,
+			new = new,
+		}		
+	}
+	return doCmd(cmd)
+end
+
+
 function M.del(table,key,version)
 	local cmd = {
 		cmd = ProtoToCmd["proto.del_req"],
@@ -325,25 +379,64 @@ function M.del(table,key,version)
 end
 
 
+function M.kick(table,key)
+	local cmd = {
+		cmd = ProtoToCmd["proto.kick_req"],
+		req = {
+			head = {
+				seqno = 1,
+				table = table,
+				key = key,
+				timeout = 5000000000,
+				respTimeout = 10000000000,				
+			},
+		}		
+	}
+	return doCmd(cmd)		
+end
+
+
+function M.incrBy(table,key,v,version)
+	local cmd = {
+		cmd = ProtoToCmd["proto.incr_by_req"],
+		req = {
+			head = {
+				seqno = 1,
+				table = table,
+				key = key,
+				timeout = 5000000000,
+				respTimeout = 10000000000,				
+			},
+			version = version,
+			field = v,
+		}		
+	}
+	return doCmd(cmd)
+end
+
+function M.decrBy(table,key,v,version)
+	local cmd = {
+		cmd = ProtoToCmd["proto.decr_by_req"],
+		req = {
+			head = {
+				seqno = 1,
+				table = table,
+				key = key,
+				timeout = 5000000000,
+				respTimeout = 10000000000,				
+			},
+			version = version,
+			field = v,
+		}		
+	}
+	return doCmd(cmd)
+end
+
+
 --[[
-	[3] = "proto.set_req",
-	[4] = "proto.set_resp",
-	[5] = "proto.get_req",
-	[6] = "proto.get_resp",
-	[7] = "proto.del_req",
-	[8] = "proto.del_resp",
-	[9] = "proto.incr_by_req",
+
 	[10] = "proto.incr_by_resp",
-	[11] = "proto.decr_by_req",
-	[12] = "proto.decr_by_resp",
-	[13] = "proto.set_nx_req",
-	[14] = "proto.set_nx_resp",
-	[15] = "proto.compare_and_set_req",
-	[16] = "proto.compare_and_set_resp",	
-	[17] = "proto.compare_and_set_nx_req",
-	[18] = "proto.compare_and_set_nx_resp",	
-	[19] = "proto.kick_resp",
-	[20] = "proto.kick_resp",
+	[12] = "proto.decr_by_resp",	
 	[21] = "proto.scan_req",
 	[22] = "proto.scan_resp",
 	[23] = "proto.reloadTableConfReq",
