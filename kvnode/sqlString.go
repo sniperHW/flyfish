@@ -523,17 +523,8 @@ var pgsqlByteToString = []string{
 	"\\377",
 }
 
-<<<<<<< HEAD:server/sqlString.go
-var BinaryToSqlStr func(s *str, bytes []byte)
-
-var buildInsertUpdateString func(s *str, ckey *kv)
-
-func pgsqlBinaryToPgsqlStr(s *str, bytes []byte) {
-	s.append("'")
-=======
 func binaryTopgSqlStr(s *str.Str, bytes []byte) {
 	s.AppendString("'")
->>>>>>> raft:kvnode/sqlString.go
 	for _, v := range bytes {
 		s.AppendString(pgsqlByteToString[int(v)])
 	}
@@ -553,12 +544,7 @@ func binaryTomySqlStr(s *str.Str, bytes []byte) {
  *INSERT INTO %s(%s) VALUES(%s) ON conflict(__key__)  DO UPDATE SET %s;
  */
 
-<<<<<<< HEAD:server/sqlString.go
-func buildInsertUpdateStringPgSql(s *str, ckey *kv) {
-=======
 func (this *sqlMgr) buildInsertUpdateStringPgSql(s *str.Str, kv *kv) {
->>>>>>> raft:kvnode/sqlString.go
-
 	Debugln("buildInsertUpdateStringPgSql")
 
 	meta := kv.getMeta()
@@ -597,11 +583,7 @@ func (this *sqlMgr) buildInsertUpdateStringPgSql(s *str.Str, kv *kv) {
  *insert into %s(%s) values(%s) on duplicate key update %s;
  */
 
-<<<<<<< HEAD:server/sqlString.go
-func buildInsertUpdateStringMySql(s *str, ckey *kv) {
-=======
 func (this *sqlMgr) buildInsertUpdateStringMySql(s *str.Str, kv *kv) {
->>>>>>> raft:kvnode/sqlString.go
 
 	Debugln("buildInsertUpdateStringMySql")
 
@@ -638,19 +620,11 @@ func (this *sqlMgr) buildInsertUpdateStringMySql(s *str.Str, kv *kv) {
 	//Debugln(s.ToString())
 }
 
-<<<<<<< HEAD:server/sqlString.go
-func buildInsertString(s *str, ckey *kv) {
-	meta := ckey.getMeta()
-	version := proto.PackField("__version__", ckey.version)
-	s.append(meta.insertPrefix).append("'").append(ckey.key).append("',") //add __key__
-	s.appendFieldStr(version).append(",")                                 //add __version__
-=======
 func (this *sqlMgr) buildInsertString(s *str.Str, kv *kv) {
 	meta := kv.getMeta()
 	version := proto.PackField("__version__", kv.version)
 	s.AppendString(meta.GetInsertPrefix()).AppendString("'").AppendString(kv.key).AppendString("',") //add __key__
 	s.AppendFieldStr(version, this.binaryToSqlStr).AppendString(",")                                 //add __version__
->>>>>>> raft:kvnode/sqlString.go
 
 	i := 0
 	for _, name := range meta.GetInsertOrder() {
@@ -664,13 +638,8 @@ func (this *sqlMgr) buildInsertString(s *str.Str, kv *kv) {
 	s.AppendString(");")
 }
 
-<<<<<<< HEAD:server/sqlString.go
-func buildUpdateString(s *str, ckey *kv) {
-	s.append("update ").append(ckey.table).append(" set ")
-=======
 func (this *sqlMgr) buildUpdateString(s *str.Str, kv *kv) {
 	s.AppendString("update ").AppendString(kv.table).AppendString(" set ")
->>>>>>> raft:kvnode/sqlString.go
 	i := 0
 	version := proto.PackField("__version__", kv.version)
 	if len(kv.modifyFields) > 0 {
@@ -701,11 +670,6 @@ func (this *sqlMgr) buildUpdateString(s *str.Str, kv *kv) {
 	//Debugln(s.ToString())
 }
 
-<<<<<<< HEAD:server/sqlString.go
-func buildDeleteString(s *str, ckey *kv) {
-	s.append("delete from ").append(ckey.table).append(" where __key__ = '").append(ckey.key).append("';")
-=======
 func (this *sqlMgr) buildDeleteString(s *str.Str, ckey *kv) {
 	s.AppendString("delete from ").AppendString(ckey.table).AppendString(" where __key__ = '").AppendString(ckey.key).AppendString("';")
->>>>>>> raft:kvnode/sqlString.go
 }

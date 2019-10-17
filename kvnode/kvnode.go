@@ -161,15 +161,9 @@ func (this *KVNode) Start(id *int, cluster *string) error {
 
 	clusterArray := strings.Split(*cluster, ",")
 
-<<<<<<< HEAD:server/server.go
-	if !initKvStore() {
-		return fmt.Errorf("initKvStore failed")
-	}
-=======
 	mutilRaft := newMutilRaft()
 
 	this.storeMgr = newStoreMgr(this, mutilRaft, dbmeta, id, cluster, config.CacheGroupSize)
->>>>>>> raft:kvnode/kvnode.go
 
 	go mutilRaft.serveMutilRaft(clusterArray[*id-1])
 

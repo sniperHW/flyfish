@@ -51,6 +51,14 @@ local CmdToProto = {
 
 }
 
+
+local ProtoToCmd = {}
+
+for k,v in ipairs(CmdToProto) do
+	ProtoToCmd[v] = k
+end
+
+
 local errCodeToStr = {
 	[0] = "ERR_OK",
 	[1] = "ERR_RETRY",
@@ -109,7 +117,10 @@ end
 local function unpack(buff)
 	_get_byte1(buff,1)
 	local cmd = _get_byte2(buff,2)
-	return protobuf.decode(CmdToProto[cmd] , string.sub(buff,4))
+	return {
+		cmd = cmd,
+		resp = protobuf.decode(CmdToProto[cmd] , string.sub(buff,4)),
+	}
 end
 
 
@@ -122,15 +133,17 @@ local function wrapResult(r)
 		return r
 	end
 
+	local resp = r.resp
+
 	local result = {
-		errCode = errCodeToStr[r.head.errCode],
-		key = r.head.key,
-		version = r.head.version,
+		errCode = errCodeToStr[resp.head.errCode],
+		key = resp.head.key,
+		version = resp.head.version,
 	}
 
-	if r.fields ~= nil then
+	if resp.fields ~= nil then
 		result.fields = {}
-		for i, v in ipairs(r.fields) do
+		for i, v in ipairs(resp.fields) do
 			if v.v.type == "int" then
 				result.fields[v.name] = {type=v.v.type,value=v.v.i}
 			elseif v.v.type == "uint" then
@@ -236,7 +249,7 @@ end
 --get("users1","huangwei:1015")
 function M.get(table,key,fields)
 	local cmd = {
-		cmd = 5,
+		cmd = ProtoToCmd["proto.get_req"],
 		req = {
 			head = {
 				seqno = 1,
@@ -260,7 +273,25 @@ end
 --set("game_user","huangwei",{String('userdata','{"Name":"huangwei","Level":2}')})
 function M.set(table,key,fields,version)
 	local cmd = {
-		cmd = 3,
+		cmd = ProtoToCmd["proto.set_req"],
+		req = {
+			head = {
+				seqno = 1,
+				table = table,
+				key = key,
+				timeout = 5000000000,
+				respTimeout = 10000000000,				
+			},
+			version = version,
+			fields = fields,
+		}		
+	}
+	return doCmd(cmd)	
+end
+
+function M.setNX(table,key,fields,version)
+	local cmd = {
+		cmd = ProtoToCmd["proto.set_nx_req"],
 		req = {
 			head = {
 				seqno = 1,
@@ -278,7 +309,7 @@ end
 
 function M.del(table,key,version)
 	local cmd = {
-		cmd = 9,
+		cmd = ProtoToCmd["proto.del_req"],
 		req = {
 			head = {
 				seqno = 1,
@@ -293,9 +324,39 @@ function M.del(table,key,version)
 	return doCmd(cmd)		
 end
 
+
+--[[
+	[3] = "proto.set_req",
+	[4] = "proto.set_resp",
+	[5] = "proto.get_req",
+	[6] = "proto.get_resp",
+	[7] = "proto.del_req",
+	[8] = "proto.del_resp",
+	[9] = "proto.incr_by_req",
+	[10] = "proto.incr_by_resp",
+	[11] = "proto.decr_by_req",
+	[12] = "proto.decr_by_resp",
+	[13] = "proto.set_nx_req",
+	[14] = "proto.set_nx_resp",
+	[15] = "proto.compare_and_set_req",
+	[16] = "proto.compare_and_set_resp",	
+	[17] = "proto.compare_and_set_nx_req",
+	[18] = "proto.compare_and_set_nx_resp",	
+	[19] = "proto.kick_resp",
+	[20] = "proto.kick_resp",
+	[21] = "proto.scan_req",
+	[22] = "proto.scan_resp",
+	[23] = "proto.reloadTableConfReq",
+	[24] = "proto.reloadTableConfResp",
+	[25] = "proto.reloadConfigReq",
+	[26] = "proto.reloadConfigResp",
+	[27] = "proto.cancel"	
+
+]]
+
 function M.reloadTableConfig()
 	local cmd = {
-		cmd = 23,
+		cmd = ProtoToCmd["proto.reloadTableConfReq"],
 		req = {}		
 	}
 	return doCmd(cmd)		
@@ -303,7 +364,7 @@ end
 
 function M.reloadConfig(path)
 	local cmd = {
-		cmd = 25,
+		cmd = ProtoToCmd["proto.reloadConfigReq"],
 		req = {path=path}		
 	}
 	return doCmd(cmd)		
