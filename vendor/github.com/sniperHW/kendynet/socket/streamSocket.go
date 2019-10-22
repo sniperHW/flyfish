@@ -139,7 +139,7 @@ func (this *StreamSocket) sendThreadFunc() {
 					if timeout > 0 {
 						this.conn.SetWriteDeadline(time.Now().Add(timeout))
 						err = writer.Flush()
-						//this.conn.SetWriteDeadline(time.Time{})
+						this.conn.SetWriteDeadline(time.Time{})
 					} else {
 						err = writer.Flush()
 					}

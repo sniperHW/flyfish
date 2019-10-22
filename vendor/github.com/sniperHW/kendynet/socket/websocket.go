@@ -79,7 +79,7 @@ func (this *WebSocket) sendThreadFunc() {
 				if timeout > 0 {
 					this.conn.SetWriteDeadline(time.Now().Add(timeout))
 					err = this.conn.WriteMessage(msg.Type(), msg.Bytes())
-					//this.conn.SetWriteDeadline(time.Time{})
+					this.conn.SetWriteDeadline(time.Time{})
 				} else {
 					err = this.conn.WriteMessage(msg.Type(), msg.Bytes())
 				}

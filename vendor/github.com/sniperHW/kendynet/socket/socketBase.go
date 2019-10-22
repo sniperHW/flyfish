@@ -205,7 +205,7 @@ func (this *SocketBase) recvThreadFunc() {
 		if recvTimeout > 0 {
 			conn.SetReadDeadline(time.Now().Add(recvTimeout))
 			p, err = this.receiver.ReceiveAndUnpack(this.imp)
-			//conn.SetReadDeadline(time.Time{})
+			conn.SetReadDeadline(time.Time{})
 		} else {
 			p, err = this.receiver.ReceiveAndUnpack(this.imp)
 		}
