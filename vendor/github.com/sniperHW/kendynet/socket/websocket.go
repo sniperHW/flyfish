@@ -64,6 +64,7 @@ func (this *WebSocket) sendMessage(msg kendynet.Message) error {
 }
 
 func (this *WebSocket) sendThreadFunc() {
+	timeout := this.sendTimeout
 	for {
 		closed, localList := this.sendQue.Get()
 		size := len(localList)
@@ -74,12 +75,11 @@ func (this *WebSocket) sendThreadFunc() {
 		for i := 0; i < size; i++ {
 			var err error
 			msg := localList[i].(*message.WSMessage)
-			timeout := this.sendTimeout
 			if msg.Type() == message.WSBinaryMessage || msg.Type() == message.WSTextMessage {
 				if timeout > 0 {
 					this.conn.SetWriteDeadline(time.Now().Add(timeout))
 					err = this.conn.WriteMessage(msg.Type(), msg.Bytes())
-					this.conn.SetWriteDeadline(time.Time{})
+					//this.conn.SetWriteDeadline(time.Time{})
 				} else {
 					err = this.conn.WriteMessage(msg.Type(), msg.Bytes())
 				}

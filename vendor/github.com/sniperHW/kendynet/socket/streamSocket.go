@@ -102,6 +102,8 @@ func (this *StreamSocket) sendThreadFunc() {
 
 	var err error
 
+	timeout := this.sendTimeout
+
 	writer := bufio.NewWriterSize(this.conn, kendynet.SendBufferSize)
 
 	for {
@@ -134,11 +136,10 @@ func (this *StreamSocket) sendThreadFunc() {
 
 				if writer.Available() == 0 || i == (size-1) {
 
-					timeout := this.sendTimeout
 					if timeout > 0 {
 						this.conn.SetWriteDeadline(time.Now().Add(timeout))
 						err = writer.Flush()
-						this.conn.SetWriteDeadline(time.Time{})
+						//this.conn.SetWriteDeadline(time.Time{})
 					} else {
 						err = writer.Flush()
 					}

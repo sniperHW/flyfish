@@ -67,13 +67,6 @@ func (this *SocketBase) GetUserData() (ud interface{}) {
 	return this.ud
 }
 
-func (this *SocketBase) isClosed() (ret bool) {
-	this.mutex.Lock()
-	ret = (this.flag & closed) > 0
-	this.mutex.Unlock()
-	return
-}
-
 func (this *SocketBase) doClose() {
 	this.imp.getNetConn().Close()
 	this.mutex.Lock()
@@ -199,8 +192,9 @@ func (this *SocketBase) SendMessage(msg kendynet.Message) error {
 func (this *SocketBase) recvThreadFunc() {
 
 	conn := this.imp.getNetConn()
+	recvTimeout := this.recvTimeout
 
-	for !this.isClosed() {
+	for !this.IsClosed() {
 
 		var (
 			p     interface{}
@@ -208,17 +202,15 @@ func (this *SocketBase) recvThreadFunc() {
 			event kendynet.Event
 		)
 
-		recvTimeout := this.recvTimeout
-
 		if recvTimeout > 0 {
 			conn.SetReadDeadline(time.Now().Add(recvTimeout))
 			p, err = this.receiver.ReceiveAndUnpack(this.imp)
-			conn.SetReadDeadline(time.Time{})
+			//conn.SetReadDeadline(time.Time{})
 		} else {
 			p, err = this.receiver.ReceiveAndUnpack(this.imp)
 		}
 
-		if this.isClosed() {
+		if this.IsClosed() {
 			//上层已经调用关闭，所有事件都不再传递上去
 			break
 		}
