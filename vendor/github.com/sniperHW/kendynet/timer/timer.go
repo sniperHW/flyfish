@@ -89,7 +89,6 @@ func loop() {
 			sleepTime = min.(*timer).expired.Sub(now)
 		}
 		if nil != tt {
-			tt.Stop()
 			tt.Reset(sleepTime)
 		} else {
 			tt = time.AfterFunc(sleepTime, func() {
@@ -98,6 +97,7 @@ func loop() {
 		}
 
 		notiChan.Wait()
+		tt.Stop()
 	}
 }
 
