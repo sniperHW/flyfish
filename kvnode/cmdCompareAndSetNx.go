@@ -20,7 +20,7 @@ func (this *asynCmdTaskCompareAndSetNx) onSqlResp(errno int32) {
 		fillDefaultValue(cmd.getKV().meta, &this.fields)
 		this.sqlFlag = sql_insert_update
 		this.fields[cmd.newV.GetName()] = cmd.newV
-		this.getKV().slot.issueUpdate(this)
+		this.getKV().store.issueUpdate(this)
 	} else if errno == errcode.ERR_OK {
 		if !cmd.checkVersion(this.version) {
 			this.errno = errcode.ERR_VERSION_MISMATCH
@@ -33,10 +33,10 @@ func (this *asynCmdTaskCompareAndSetNx) onSqlResp(errno int32) {
 
 		if this.errno != errcode.ERR_OK {
 			this.reply()
-			this.getKV().slot.issueAddkv(this)
+			this.getKV().store.issueAddkv(this)
 		} else {
 			this.sqlFlag = sql_update
-			this.getKV().slot.issueUpdate(this)
+			this.getKV().store.issueUpdate(this)
 		}
 
 	}

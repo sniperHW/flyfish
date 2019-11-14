@@ -17,10 +17,10 @@ func (this *asynCmdTaskDel) onSqlResp(errno int32) {
 	if errno == errcode.ERR_RECORD_NOTEXIST {
 		this.reply()
 		//向副本同步插入操作
-		this.getKV().slot.issueAddkv(this)
+		this.getKV().store.issueAddkv(this)
 	} else if errno == errcode.ERR_OK {
 		this.sqlFlag = sql_delete
-		this.getKV().slot.issueUpdate(this)
+		this.getKV().store.issueUpdate(this)
 	}
 }
 

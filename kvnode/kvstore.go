@@ -28,14 +28,14 @@ func (this *asynTaskKick) done() {
 	this.kv.Lock()
 	this.kv.setStatus(cache_remove)
 	this.kv.Unlock()
-	this.kv.slot.removeKv(this.kv)
+	this.kv.store.removeKv(this.kv)
 }
 
 func (this *asynTaskKick) onError(errno int32) {
 	this.kv.Lock()
 	this.kv.setKicking(false)
 	this.kv.Unlock()
-	this.kv.slot.onKickError()
+	this.kv.store.onKickError()
 }
 
 func (this *asynTaskKick) append2Str(s *str.Str) {
@@ -46,91 +46,17 @@ func (this *asynTaskKick) onPorposeTimeout() {
 
 }
 
-var kvSlotSize int = 129
-
 type leaseNotify int
 
-type kvSlot struct {
-	sync.Mutex
-	tmp      map[string]*kv
-	elements map[string]*kv
-	store    *kvstore
-}
-
-func (this *kvSlot) onKickError() {
-	this.store.Lock()
-	this.store.kvKickingCount--
-	this.store.Unlock()
-}
-
-func (this *kvSlot) removeKv(k *kv) {
-	this.store.Lock()
-	this.store.kvKickingCount--
-	this.store.kvcount--
-	this.store.removeLRU(k)
-	this.store.Unlock()
-
-	this.Lock()
-	delete(this.elements, k.uniKey)
-	this.Unlock()
-}
-
-func (this *kvSlot) removeTmpKv(k *kv) {
-
-	this.store.Lock()
-	this.store.tmpkvcount--
-	this.store.Unlock()
-
-	this.Lock()
-	delete(this.tmp, k.uniKey)
-	this.Unlock()
-}
-
-func (this *kvSlot) getRaftNode() *raftNode {
-	return this.store.rn
-}
-
-func (this *kvSlot) getKvNode() *KVNode {
-	return this.store.kvNode
-}
-
-//发起一致读请求
-func (this *kvSlot) issueReadReq(task asynCmdTaskI) {
-	this.store.issueReadReq(task)
-}
-
-//发起更新请求
-func (this *kvSlot) issueUpdate(task asynCmdTaskI) {
-	this.store.issueUpdate(task)
-}
-
-//请求向所有副本中新增kv
-func (this *kvSlot) issueAddkv(task asynCmdTaskI) {
-	this.store.issueAddkv(task)
-}
-
-func (this *kvSlot) moveTmpkv2OK(kv *kv) {
-	this.Lock()
-	delete(this.tmp, kv.uniKey)
-	this.elements[kv.uniKey] = kv
-	this.Unlock()
-
-	this.store.Lock()
-	this.store.kvcount++
-	this.store.tmpkvcount--
-	this.store.updateLRU(kv)
-	this.store.Unlock()
-}
+var snapGroupSize int = 129
 
 // a key-value store backed by raft
 type kvstore struct {
 	sync.Mutex
-	proposeC *util.BlockQueue
-	readReqC *util.BlockQueue
-	//snapshotter    *snap.Snapshotter
-	slots          []*kvSlot
-	kvcount        int //所有slot中len(elements)的总和
-	tmpkvcount     int
+	proposeC       *util.BlockQueue
+	readReqC       *util.BlockQueue
+	tmp            map[string]*kv
+	elements       map[string]*kv
 	kvKickingCount int //当前正在执行kicking的kv数量
 	kvNode         *KVNode
 	stop           func()
@@ -145,8 +71,37 @@ func (this *kvstore) getKvNode() *KVNode {
 	return this.kvNode
 }
 
-func (this *kvstore) getSlot(uniKey string) *kvSlot {
-	return this.slots[futil.StringHash(uniKey)%len(this.slots)]
+func (this *kvstore) getRaftNode() *raftNode {
+	return this.rn
+}
+
+func (this *kvstore) onKickError() {
+	this.Lock()
+	defer this.Unlock()
+	this.kvKickingCount--
+}
+
+func (this *kvstore) removeKv(k *kv) {
+	this.Lock()
+	defer this.Unlock()
+	this.removeLRU(k)
+	delete(this.elements, k.uniKey)
+}
+
+func (this *kvstore) removeTmpKv(k *kv) {
+	this.Lock()
+	defer this.Unlock()
+	delete(this.tmp, k.uniKey)
+}
+
+func (this *kvstore) moveTmpkv2OK(kv *kv) {
+
+	this.Lock()
+	defer this.Unlock()
+
+	delete(this.tmp, kv.uniKey)
+	this.elements[kv.uniKey] = kv
+	this.updateLRU(kv)
 }
 
 //发起一致读请求
@@ -189,7 +144,7 @@ func (this *kvstore) doLRU() {
 		MaxCachePerGroupSize := conf.GetConfig().MaxCachePerGroupSize
 		if this.lruHead.nnext != &this.lruTail {
 			kv := this.lruTail.pprev
-			for (this.kvcount - this.kvKickingCount) > MaxCachePerGroupSize {
+			for (len(this.elements) - this.kvKickingCount) > MaxCachePerGroupSize {
 				if kv == &this.lruHead {
 					return
 				}
@@ -269,27 +224,20 @@ func (this *kvstore) apply(data []byte) bool {
 		case proposal_snapshot, proposal_update, proposal_kick:
 			unikey := p.values[0].(string)
 			Debugln(unikey, "cache_kick")
-			slot := this.slots[futil.StringHash(unikey)%len(this.slots)]
 			if p.tt == proposal_kick {
-				slot.Lock()
-				kv, ok := slot.elements[unikey]
+				kv, ok := this.elements[unikey]
 				if !ok {
-					slot.Unlock()
 					return false
 				} else {
 					kv.Lock()
 					kv.setStatus(cache_remove)
 					kv.Unlock()
-					this.kvcount--
 					this.removeLRU(kv)
-					delete(slot.elements, unikey)
-					slot.Unlock()
+					delete(this.elements, unikey)
 				}
 			} else {
-				slot.Lock()
-				kv, ok := slot.elements[unikey]
+				kv, ok := this.elements[unikey]
 				if p.tt == proposal_update && !ok {
-					slot.Unlock()
 					return false
 				}
 
@@ -300,13 +248,10 @@ func (this *kvstore) apply(data []byte) bool {
 					tmp := strings.Split(unikey, ":")
 					meta := this.storeMgr.dbmeta.GetTableMeta(tmp[0])
 					if nil == meta {
-						slot.Unlock()
 						return false
 					}
-					kv = newkv(slot, meta, tmp[1], unikey, false)
-
-					this.kvcount++
-					slot.elements[unikey] = kv
+					kv = newkv(this, meta, tmp[1], unikey, false)
+					this.elements[unikey] = kv
 				}
 
 				kv.Lock()
@@ -332,7 +277,6 @@ func (this *kvstore) apply(data []byte) bool {
 				kv.setSnapshoted(true)
 
 				kv.Unlock()
-				slot.Unlock()
 				this.updateLRU(kv)
 			}
 		default:
@@ -342,7 +286,7 @@ func (this *kvstore) apply(data []byte) bool {
 	return true
 }
 
-func (this *kvstore) readCommits( /*once bool, */ snapshotter *snap.Snapshotter, commitC <-chan interface{}, errorC <-chan error) {
+func (this *kvstore) readCommits(snapshotter *snap.Snapshotter, commitC <-chan interface{}, errorC <-chan error) {
 
 	for e := range commitC {
 		switch e.(type) {
@@ -361,14 +305,8 @@ func (this *kvstore) readCommits( /*once bool, */ snapshotter *snap.Snapshotter,
 					}
 				}
 			} else if data == replayOK {
-				Infoln("reply ok,keycount", this.kvcount)
+				Infoln("reply ok,keycount", len(this.elements))
 				return
-				/*if once {
-					Infoln("apply ok,keycount", this.kvcount)
-					return
-				} else {
-					continue
-				}*/
 			} else {
 				data.apply(this)
 			}
@@ -387,10 +325,7 @@ func (this *kvstore) readCommits( /*once bool, */ snapshotter *snap.Snapshotter,
 
 func (this *kvstore) checkKvCount() bool {
 	MaxCachePerGroupSize := conf.GetConfig().MaxCachePerGroupSize
-	this.Lock()
-	defer this.Unlock()
-
-	if this.kvcount+this.tmpkvcount > MaxCachePerGroupSize+MaxCachePerGroupSize/4 {
+	if len(this.elements)+len(this.tmp) > MaxCachePerGroupSize+MaxCachePerGroupSize/4 {
 		return false
 	} else {
 		return true
@@ -411,16 +346,26 @@ func (this *kvstore) getSnapshot() [][]*kvsnap {
 
 	beg := time.Now()
 
-	ret := make([][]*kvsnap, 0, len(this.slots))
+	ret := make([][]*kvsnap, 0, snapGroupSize)
 
-	ch := make(chan []*kvsnap)
+	snapGroup := make([][]*kv, 0, snapGroupSize)
 
-	for i := 0; i < len(this.slots); i++ {
+	ch := make(chan []*kvsnap, snapGroupSize)
+
+	this.Lock()
+	defer this.Unlock()
+
+	//根据key对kv分组
+	for k, v := range this.elements {
+		i := futil.StringHash(k) % snapGroupSize
+		snapGroup[i] = append(snapGroup[i], v)
+	}
+
+	//并行序列化每组中的kv
+	for i := 0; i < snapGroupSize; i++ {
 		go func(i int) {
-			slot := this.slots[i]
-			slot.Lock()
-			kvsnaps := make([]*kvsnap, 0, len(slot.elements))
-			for _, v := range slot.elements {
+			kvsnaps := make([]*kvsnap, 0, len(this.elements))
+			for _, v := range snapGroup[i] {
 				v.Lock()
 				status := v.getStatus()
 				if status == cache_ok || status == cache_missing {
@@ -439,12 +384,11 @@ func (this *kvstore) getSnapshot() [][]*kvsnap {
 				}
 				v.Unlock()
 			}
-			slot.Unlock()
 			ch <- kvsnaps
 		}(i)
 	}
 
-	for i := 0; i < len(this.slots); i++ {
+	for i := 0; i < snapGroupSize; i++ {
 		v := <-ch
 		ret = append(ret, v)
 	}
@@ -457,29 +401,24 @@ func (this *kvstore) getSnapshot() [][]*kvsnap {
 
 func (this *kvstore) gotLease() {
 	this.Lock()
-	Infoln("got lease", this.kvcount)
-	this.Unlock()
+	defer this.Unlock()
 	//获得租约,强制store对所有kv执行一次sql回写
-	for _, v := range this.slots {
-		v.Lock()
-		for _, vv := range v.elements {
-			vv.Lock()
-			if !vv.isWriteBack() {
-				status := vv.getStatus()
-				if status == cache_ok || status == cache_missing {
-					vv.setWriteBack(true)
-					if status == cache_ok {
-						vv.setSqlFlag(sql_insert_update)
-					} else if status == cache_missing {
-						vv.setSqlFlag(sql_delete)
-					}
-					Debugln("pushUpdateReq", vv.uniKey, status, vv.fields)
-					this.kvNode.sqlMgr.pushUpdateReq(vv)
+	for _, vv := range this.elements {
+		vv.Lock()
+		if !vv.isWriteBack() {
+			status := vv.getStatus()
+			if status == cache_ok || status == cache_missing {
+				vv.setWriteBack(true)
+				if status == cache_ok {
+					vv.setSqlFlag(sql_insert_update)
+				} else if status == cache_missing {
+					vv.setSqlFlag(sql_delete)
 				}
+				Debugln("pushUpdateReq", vv.uniKey, status, vv.fields)
+				this.kvNode.sqlMgr.pushUpdateReq(vv)
 			}
-			vv.Unlock()
 		}
-		v.Unlock()
+		vv.Unlock()
 	}
 }
 
@@ -496,14 +435,12 @@ func (this *storeMgr) getkvOnly(table string, key string) *kv {
 	if store != nil {
 		var k *kv
 		var ok bool
-		slot := store.getSlot(uniKey)
-		slot.Lock()
-
-		k, ok = slot.elements[uniKey]
+		store.Lock()
+		k, ok = store.elements[uniKey]
 		if !ok {
-			k, ok = slot.tmp[uniKey]
+			k, ok = store.tmp[uniKey]
 		}
-		slot.Unlock()
+		store.Unlock()
 		return k
 	} else {
 		return nil
@@ -520,12 +457,12 @@ func (this *storeMgr) getkv(table string, key string) (*kv, int32) {
 
 	store := this.getStore(uniKey)
 	if nil != store {
-		slot := store.getSlot(uniKey)
-		slot.Lock()
 
-		k, ok = slot.elements[uniKey]
+		store.Lock()
+
+		k, ok = store.elements[uniKey]
 		if !ok {
-			k, ok = slot.tmp[uniKey]
+			k, ok = store.tmp[uniKey]
 		}
 
 		if ok {
@@ -549,15 +486,12 @@ func (this *storeMgr) getkv(table string, key string) (*kv, int32) {
 					//err = fmt.Errorf("missing table meta")
 					err = errcode.ERR_INVAILD_TABLE
 				} else {
-					k = newkv(slot, meta, key, uniKey, true)
-					slot.tmp[uniKey] = k
-					store.Lock()
-					store.tmpkvcount++
-					store.Unlock()
+					k = newkv(store, meta, key, uniKey, true)
+					store.tmp[uniKey] = k
 				}
 			}
 		}
-		slot.Unlock()
+		store.Unlock()
 	} else {
 		fmt.Println("store == nil")
 	}
@@ -598,18 +532,11 @@ func newKVStore(storeMgr *storeMgr, kvNode *KVNode, proposeC *util.BlockQueue, r
 
 	s := &kvstore{
 		proposeC: proposeC,
-		slots:    []*kvSlot{},
+		elements: map[string]*kv{},
+		tmp:      map[string]*kv{},
 		readReqC: readReqC,
 		kvNode:   kvNode,
 		storeMgr: storeMgr,
-	}
-
-	for i := 0; i < kvSlotSize; i++ {
-		s.slots = append(s.slots, &kvSlot{
-			elements: map[string]*kv{},
-			tmp:      map[string]*kv{},
-			store:    s,
-		})
 	}
 
 	s.lruHead.nnext = &s.lruTail
@@ -650,9 +577,9 @@ func newStoreMgr(kvnode *KVNode, mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta, id
 
 		snapshotter := <-snapshotterReady
 
-		store.readCommits( /*true,*/ snapshotter, commitC, errorC)
+		store.readCommits(snapshotter, commitC, errorC)
 
-		go store.readCommits( /*false,*/ snapshotter, commitC, errorC)
+		go store.readCommits(snapshotter, commitC, errorC)
 
 		mgr.addStore(i, store)
 	}

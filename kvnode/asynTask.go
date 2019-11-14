@@ -160,7 +160,7 @@ func (this *asynCmdTaskBase) done() {
 
 	if kv.getSqlFlag() != sql_none && !kv.isWriteBack() {
 		kv.setWriteBack(true)
-		kv.slot.getKvNode().sqlMgr.pushUpdateReq(kv)
+		kv.store.getKvNode().sqlMgr.pushUpdateReq(kv)
 	}
 
 	isTmp := kv.isTmp()
@@ -171,7 +171,7 @@ func (this *asynCmdTaskBase) done() {
 	kv.Unlock()
 
 	if isTmp {
-		kv.slot.moveTmpkv2OK(kv)
+		kv.store.moveTmpkv2OK(kv)
 	}
 
 	kv.processQueueCmd(true)

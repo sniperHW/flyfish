@@ -37,9 +37,9 @@ func (this *asynCmdTaskSet) onSqlResp(errno int32) {
 
 	if this.errno != errcode.ERR_OK {
 		this.reply()
-		this.getKV().slot.issueAddkv(this)
+		this.getKV().store.issueAddkv(this)
 	} else {
-		this.getKV().slot.issueUpdate(this)
+		this.getKV().store.issueUpdate(this)
 	}
 }
 

@@ -16,7 +16,7 @@ func (this *asynCmdTaskGet) onSqlResp(errno int32) {
 	this.asynCmdTaskBase.onSqlResp(errno)
 	if errno == errcode.ERR_OK || errno == errcode.ERR_RECORD_NOTEXIST {
 		//向副本同步插入操作
-		this.getKV().slot.issueAddkv(this)
+		this.getKV().store.issueAddkv(this)
 	}
 }
 

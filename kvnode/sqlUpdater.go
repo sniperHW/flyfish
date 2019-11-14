@@ -124,7 +124,7 @@ func (this *sqlUpdater) append(v interface{}) {
 		}
 	case *kv:
 		kv := v.(*kv)
-		rn := kv.slot.getRaftNode()
+		rn := kv.store.getRaftNode()
 
 		if !rn.hasLease() {
 			kv.Lock()

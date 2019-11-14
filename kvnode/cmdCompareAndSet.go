@@ -17,7 +17,7 @@ func (this *asynCmdTaskCompareAndSet) onSqlResp(errno int32) {
 	this.asynCmdTaskBase.onSqlResp(errno)
 	if errno == errcode.ERR_RECORD_NOTEXIST {
 		this.reply()
-		this.getKV().slot.issueAddkv(this)
+		this.getKV().store.issueAddkv(this)
 	} else if errno == errcode.ERR_OK {
 		cmd := this.commands[0].(*cmdCompareAndSet)
 		if !cmd.checkVersion(this.version) {
@@ -30,10 +30,10 @@ func (this *asynCmdTaskCompareAndSet) onSqlResp(errno int32) {
 		}
 		if this.errno != errcode.ERR_OK {
 			this.reply()
-			this.getKV().slot.issueAddkv(this)
+			this.getKV().store.issueAddkv(this)
 		} else {
 			this.sqlFlag = sql_update
-			this.getKV().slot.issueUpdate(this)
+			this.getKV().store.issueUpdate(this)
 		}
 	}
 }

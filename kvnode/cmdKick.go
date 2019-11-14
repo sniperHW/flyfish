@@ -25,7 +25,7 @@ func (this *asynCmdTaskKick) done() {
 	kv := this.getKV()
 	Debugln("asynCmdTaskKick.done()", kv.uniKey)
 	kv.setRemoveAndClearCmdQueue(errcode.ERR_RETRY)
-	kv.slot.removeKv(kv)
+	kv.store.removeKv(kv)
 }
 
 func newAsynCmdTaskKick(cmd commandI) *asynCmdTaskKick {

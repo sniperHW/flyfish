@@ -90,7 +90,7 @@ type kv struct {
 	fields       map[string]*proto.Field //字段
 	modifyFields map[string]*proto.Field //发生变更尚未更新到sql数据库的字段
 	flag         *bitfield.BitField32
-	slot         *kvSlot
+	store        *kvstore
 	nnext        *kv
 	pprev        *kv
 }
@@ -142,7 +142,7 @@ func (this *kv) tryRemoveTmp(err int32) bool {
 	} else {
 		this.setRemoveAndClearCmdQueue(err)
 		this.Unlock()
-		this.slot.removeTmpKv(this)
+		this.store.removeTmpKv(this)
 		return true
 	}
 }
@@ -275,7 +275,7 @@ func (this *kv) setOK(version int64, fields map[string]*proto.Field) {
 
 }
 
-func newkv(slot *kvSlot, tableMeta *dbmeta.TableMeta, key string, uniKey string, isTmp bool) *kv {
+func newkv(store *kvstore, tableMeta *dbmeta.TableMeta, key string, uniKey string, isTmp bool) *kv {
 
 	k := &kv{
 		uniKey: uniKey,
@@ -286,7 +286,7 @@ func newkv(slot *kvSlot, tableMeta *dbmeta.TableMeta, key string, uniKey string,
 			queue: list.New(), //ringqueue.New(100),
 		},
 		modifyFields: map[string]*proto.Field{},
-		slot:         slot,
+		store:        store,
 		flag:         bitfield.NewBitField32(field_status, field_sql_flag, field_writeback, field_snapshoted, field_tmp, field_kicking),
 	}
 
@@ -346,7 +346,7 @@ loopEnd:
 		if this.isTmp() {
 			this.setRemoveAndClearCmdQueue(errcode.ERR_BUSY)
 			this.Unlock()
-			this.slot.removeTmpKv(this)
+			this.store.removeTmpKv(this)
 		} else {
 			this.Unlock()
 		}
@@ -355,14 +355,14 @@ loopEnd:
 
 	if this.getStatus() == cache_new {
 		fullReturn := len(unlockOpQueue) == 0
-		if !this.slot.getKvNode().sqlMgr.pushLoadReq(asynTask, fullReturn) {
+		if !this.store.getKvNode().sqlMgr.pushLoadReq(asynTask, fullReturn) {
 			if this.isTmp() {
 				for _, v := range asynTask.getCommands() {
 					v.reply(errcode.ERR_BUSY, nil, -1)
 				}
 				this.setRemoveAndClearCmdQueue(errcode.ERR_BUSY)
 				this.Unlock()
-				this.slot.removeTmpKv(this)
+				this.store.removeTmpKv(this)
 			}
 		} else {
 			this.cmdQueue.lock()
@@ -374,14 +374,14 @@ loopEnd:
 		switch asynTask.(type) {
 		case *asynCmdTaskGet:
 			Debugln("issueReadReq")
-			this.slot.issueReadReq(asynTask)
+			this.store.issueReadReq(asynTask)
 		case *asynCmdTaskKick:
-			if !this.slot.store.kick(asynTask.(*asynCmdTaskKick)) {
+			if !this.store.kick(asynTask.(*asynCmdTaskKick)) {
 				asynTask.reply(errcode.ERR_OTHER)
 				this.processQueueCmd(true)
 			}
 		default:
-			this.slot.issueUpdate(asynTask)
+			this.store.issueUpdate(asynTask)
 		}
 	}
 }
