@@ -348,7 +348,7 @@ func (this *kvstore) getSnapshot() [][]*kvsnap {
 
 	ret := make([][]*kvsnap, 0, snapGroupSize)
 
-	snapGroup := make([][]*kv, 0, snapGroupSize)
+	snapGroup := make([][]*kv, snapGroupSize, snapGroupSize)
 
 	ch := make(chan []*kvsnap, snapGroupSize)
 
