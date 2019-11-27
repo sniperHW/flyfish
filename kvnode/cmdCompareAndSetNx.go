@@ -90,7 +90,16 @@ func (this *cmdCompareAndSetNx) prepare(_ asynCmdTaskI) asynCmdTaskI {
 			return nil
 		}
 
-		if !this.kv.fields[this.oldV.GetName()].IsEqual(this.oldV) {
+		v := kv.fields[this.oldV.GetName()]
+
+		if nil == v {
+			/*
+			 * 表格新增加了列，但未设置过，使用默认值
+			 */
+			v = proto.PackField(this.oldV.GetName(), kv.meta.GetDefaultV(this.oldV.GetName()))
+		}
+
+		if !this.oldV.IsEqual(v) {
 			this.reply(errcode.ERR_CAS_NOT_EQUAL, nil, kv.version)
 			return nil
 		}

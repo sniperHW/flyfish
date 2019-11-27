@@ -108,6 +108,18 @@ func (this *cmdDecr) prepare(_ asynCmdTaskI) asynCmdTaskI {
 
 	if status != cache_new {
 		oldV := kv.fields[this.decr.GetName()]
+		if nil == oldV {
+			/*
+			 * 表格新增加了列，但未设置过，使用默认值
+			 */
+			v := kv.meta.GetDefaultV(this.decr.GetName())
+			if nil == v {
+				this.reply(errcode.ERR_INVAILD_FIELD, nil, kv.version)
+				return nil
+			} else {
+				oldV = proto.PackField(this.decr.GetName(), kv.meta.GetDefaultV(this.decr.GetName()))
+			}
+		}
 		var newV *proto.Field
 		if oldV.IsInt() {
 			newV = proto.PackField(oldV.GetName(), oldV.GetInt()-this.decr.GetInt())

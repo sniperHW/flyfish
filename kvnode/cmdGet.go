@@ -55,6 +55,14 @@ func (this *cmdGet) makeResponse(errCode int32, fields map[string]*proto.Field, 
 			v := fields[field.GetName()]
 			if nil != v {
 				resp.Fields = append(resp.Fields, v)
+			} else {
+				/*
+				 * 表格新增加了列，但未设置过，使用默认值
+				 */
+				vv := this.kv.meta.GetDefaultV(field.GetName())
+				if nil != vv {
+					resp.Fields = append(resp.Fields, proto.PackField(field.GetName(), vv))
+				}
 			}
 		}
 	}
