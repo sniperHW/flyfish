@@ -8,7 +8,7 @@ import (
 
 func reloadTableMeta(n *KVNode, cli *cliConn, msg *codec.Message) {
 	dbMetaStr, err := loadMetaString()
-	req := msg.GetData().(*proto.ReloadTableConfResp)
+	req := msg.GetData().(*proto.ReloadTableConfReq)
 	resp := &proto.ReloadTableConfResp{
 		Seqno: req.Seqno,
 	}
