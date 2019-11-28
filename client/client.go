@@ -113,24 +113,24 @@ func (this *Client) SetNx(table, key string, fields map[string]interface{}) *Sta
 	return this.selectConn(key).SetNx(table, key, fields)
 }
 
-func (this *Client) CompareAndSet(table, key, field string, oldV, newV interface{}) *SliceCmd {
-	return this.selectConn(key).CompareAndSet(table, key, field, oldV, newV)
+func (this *Client) CompareAndSet(table, key, field string, oldV, newV interface{}, version ...int64) *SliceCmd {
+	return this.selectConn(key).CompareAndSet(table, key, field, oldV, newV, version...)
 }
 
-func (this *Client) CompareAndSetNx(table, key, field string, oldV, newV interface{}) *SliceCmd {
-	return this.selectConn(key).CompareAndSetNx(table, key, field, oldV, newV)
+func (this *Client) CompareAndSetNx(table, key, field string, oldV, newV interface{}, version ...int64) *SliceCmd {
+	return this.selectConn(key).CompareAndSetNx(table, key, field, oldV, newV, version...)
 }
 
 func (this *Client) Del(table, key string, version ...int64) *StatusCmd {
 	return this.selectConn(key).Del(table, key, version...)
 }
 
-func (this *Client) IncrBy(table, key, field string, value int64) *SliceCmd {
-	return this.selectConn(key).IncrBy(table, key, field, value)
+func (this *Client) IncrBy(table, key, field string, value int64, version ...int64) *SliceCmd {
+	return this.selectConn(key).IncrBy(table, key, field, value, version...)
 }
 
-func (this *Client) DecrBy(table, key, field string, value int64) *SliceCmd {
-	return this.selectConn(key).DecrBy(table, key, field, value)
+func (this *Client) DecrBy(table, key, field string, value int64, version ...int64) *SliceCmd {
+	return this.selectConn(key).DecrBy(table, key, field, value, version...)
 }
 
 func (this *Client) Kick(table, key string) *StatusCmd {
