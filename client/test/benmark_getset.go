@@ -97,14 +97,8 @@ func main() {
 
 	id = 0
 
-	services := []string{}
-
-	for i := 2; i < len(os.Args); i++ {
-		services = append(services, os.Args[i])
-	}
-
 	for j := 0; j < 100; j++ {
-		c := kclient.OpenClient(services) //eventQueue)
+		c := kclient.OpenClient(os.Args[2]) //eventQueue)
 		for i := 0; i < 10; i++ {
 			Set(c)
 		}

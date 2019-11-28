@@ -439,12 +439,13 @@ func loadMeta(def []string) (*map[string]*TableMeta, error) {
 	return &table_metas, nil
 }
 
-func (this *DBMeta) Reload(def []string) {
+func (this *DBMeta) Reload(def []string) error {
 	table_metas, err := loadMeta(def)
 	if nil == err {
 		atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&this.table_metas)), unsafe.Pointer(table_metas))
 		atomic.AddInt64(&this.version, 1)
 	}
+	return err
 }
 
 //tablename@field1:type:defaultValue,field2:type:defaultValue,field3:type:defaultValue...

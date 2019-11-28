@@ -47,8 +47,7 @@ func main() {
 
 	kclient.InitLogger(golog.New("flyfish client", golog.NewOutputLogger("log", "flyfish client", 1024*1024*50)))
 
-	services := []string{"127.0.0.1:10012"}
-	c := kclient.OpenClient(services) //eventQueue)
+	c := kclient.OpenClient("127.0.0.1:10012")
 
 	/*Set(c, 1)
 	Set(c, 2)

@@ -53,11 +53,13 @@ message loginResp {
 }
 
 message reloadTableConfReq {
-  
+  required int64  seqno   = 1;  
 }
 
 message reloadTableConfResp {
-  optional bool ok = 1;
+  required int64  seqno   = 1;
+  required int32  errCode = 2;
+  optional string err     = 3;   
 }
 
 message reloadConfigReq {

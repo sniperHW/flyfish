@@ -16,13 +16,7 @@ func main() {
 
 	kclient.InitLogger(golog.New("flyfish client", golog.NewOutputLogger("log", "flyfish client", 1024*1024*50)))
 
-	services := []string{}
-
-	for i := 1; i < len(os.Args); i++ {
-		services = append(services, os.Args[i])
-	}
-
-	c := kclient.OpenClient(services)
+	c := kclient.OpenClient(os.Args[1])
 
 	scaner := c.Scaner("users1", "age")
 

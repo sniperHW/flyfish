@@ -70,14 +70,8 @@ func main() {
 
 	keyrange, _ = strconv.ParseInt(os.Args[1], 10, 32)
 
-	services := []string{}
-
-	for i := 2; i < len(os.Args); i++ {
-		services = append(services, os.Args[i])
-	}
-
 	for j := 0; j < 50; j++ {
-		c := kclient.OpenClient(services)
+		c := kclient.OpenClient(os.Args[2])
 		for i := 0; i < 50; i++ {
 			Set(c)
 		}

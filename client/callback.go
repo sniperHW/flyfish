@@ -4,6 +4,7 @@ type StatusResult struct {
 	ErrCode int32
 	Key     string
 	Version int64
+	ErrStr  string
 }
 
 type SliceResult struct {

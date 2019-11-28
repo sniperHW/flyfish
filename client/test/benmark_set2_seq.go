@@ -87,16 +87,10 @@ func main() {
 
 	id = 0
 
-	services := []string{}
-
-	for i := 3; i < len(os.Args); i++ {
-		services = append(services, os.Args[i])
-	}
-
 	bar = progressbar.New(int(total))
 
 	for j := 0; j < 100; j++ {
-		c := kclient.OpenClient(services)
+		c := kclient.OpenClient(os.Args[3])
 		go func() {
 			for {
 				for i := 0; i < 50; i++ {

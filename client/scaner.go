@@ -31,7 +31,7 @@ func (this *Client) Scaner(table string, fileds ...string) *Scaner {
 	if len(fileds) == 0 {
 		s.getAll = true
 	}
-	s.conn = openConn(this, this.services[0])
+	s.conn = openConn(this, this.service)
 	return s
 }
 

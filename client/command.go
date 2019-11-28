@@ -328,6 +328,17 @@ func (this *Conn) Kick(table, key string) *StatusCmd {
 	}
 }
 
+func (this *Conn) ReloadTableConf() *StatusCmd {
+	req := &protocol.ReloadTableConfReq{
+		Seqno: atomic.AddInt64(&this.seqno, 1),
+	}
+	return &StatusCmd{
+		conn:  this,
+		req:   req,
+		seqno: req.Seqno,
+	}
+}
+
 func (this *Conn) onGetResp(resp *protocol.GetResp) {
 	c := this.removeContext(resp.Head.GetSeqno())
 	if nil != c {
@@ -479,6 +490,17 @@ func (this *Conn) onKickResp(resp *protocol.KickResp) {
 	}
 }
 
+func (this *Conn) onReloadTableConfResp(resp *protocol.ReloadTableConfResp) {
+	c := this.removeContext(resp.Seqno)
+	if nil != c {
+		ret := StatusResult{
+			ErrCode: resp.ErrCode,
+			ErrStr:  resp.Err,
+		}
+		this.c.doCallBack(c.cb, &ret)
+	}
+}
+
 func (this *Conn) onMessage(msg *codec.Message) {
 	this.eventQueue.Post(func() {
 		name := msg.GetName()
@@ -504,6 +526,8 @@ func (this *Conn) onMessage(msg *codec.Message) {
 			this.onScanResp(msg.GetData().(*protocol.ScanResp))
 		case "*proto.KickResp":
 			this.onKickResp(msg.GetData().(*protocol.KickResp))
+		case "*proto.ReloadTableConfResp":
+			this.onReloadTableConfResp(msg.GetData().(*protocol.ReloadTableConfResp))
 		default:
 		}
 	})
