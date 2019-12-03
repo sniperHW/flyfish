@@ -1,5 +1,6 @@
 package client
 
+/*
 import (
 	"fmt"
 	"github.com/sniperHW/flyfish/errcode"
@@ -132,4 +133,4 @@ func (this *Conn) onScanResp(resp *protocol.ScanResp) {
 		}
 		this.c.doCallBack(c.cb, &ret)
 	}
-}
+}*/

@@ -7,17 +7,28 @@ import (
 	"github.com/golang/protobuf/proto"
 )
 
+type CommonHead struct {
+	Seqno   int64
+	UniKey  string
+	ErrCode int32
+}
+
 type Message struct {
 	name string
 	data proto.Message
+	head CommonHead
 }
 
-func NewMessage(name string, data proto.Message) *Message {
-	return &Message{name: name, data: data}
+func NewMessage(name string, head CommonHead, data proto.Message) *Message {
+	return &Message{name: name, head: head, data: data}
 }
 
 func (this *Message) GetData() proto.Message {
 	return this.data
+}
+
+func (this *Message) GetHead() CommonHead {
+	return this.head
 }
 
 func (this *Message) GetName() string {
@@ -59,8 +70,8 @@ func init() {
 	pb.Register(&protocol.KickReq{}, uint32(protocol.CmdType_KickReq))
 	pb.Register(&protocol.KickResp{}, uint32(protocol.CmdType_KickResp))
 
-	pb.Register(&protocol.ScanReq{}, uint32(protocol.CmdType_ScanReq))
-	pb.Register(&protocol.ScanResp{}, uint32(protocol.CmdType_ScanResp))
+	//pb.Register(&protocol.ScanReq{}, uint32(protocol.CmdType_ScanReq))
+	//pb.Register(&protocol.ScanResp{}, uint32(protocol.CmdType_ScanResp))
 
 	pb.Register(&protocol.ReloadTableConfReq{}, uint32(protocol.CmdType_ReloadTableConfReq))
 	pb.Register(&protocol.ReloadTableConfResp{}, uint32(protocol.CmdType_ReloadTableConfResp))

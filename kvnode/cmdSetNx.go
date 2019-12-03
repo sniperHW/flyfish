@@ -1,7 +1,6 @@
 package kvnode
 
 import (
-	pb "github.com/golang/protobuf/proto"
 	codec "github.com/sniperHW/flyfish/codec"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
@@ -49,17 +48,13 @@ func (this *cmdSetNx) reply(errCode int32, fields map[string]*proto.Field, versi
 	this.replyer.reply(this, errCode, fields, version)
 }
 
-func (this *cmdSetNx) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) pb.Message {
-
-	var key string
-
-	if nil != this.kv {
-		key = this.kv.key
-	}
-
-	return &proto.SetNxResp{
-		Head: makeRespCommon(key, this.replyer.seqno, errCode, version),
-	}
+func (this *cmdSetNx) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) *codec.Message {
+	return codec.NewMessage("", codec.CommonHead{
+		Seqno:   this.replyer.seqno,
+		ErrCode: errCode,
+	}, &proto.SetNxResp{
+		Version: version,
+	})
 }
 
 func (this *cmdSetNx) prepare(_ asynCmdTaskI) asynCmdTaskI {
@@ -96,7 +91,7 @@ func setNx(n *KVNode, cli *cliConn, msg *codec.Message) {
 	op := &cmdSetNx{
 		commandBase: &commandBase{
 			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
-			replyer:  newReplyer(cli, head.GetSeqno(), time.Now().Add(time.Duration(head.GetRespTimeout()))),
+			replyer:  newReplyer(cli, msg.GetHead().Seqno, time.Now().Add(time.Duration(head.GetRespTimeout()))),
 			version:  head.Version,
 		},
 		fields: map[string]*proto.Field{},

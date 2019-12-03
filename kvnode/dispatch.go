@@ -73,9 +73,10 @@ func (this *dispatcher) OnNewClient(session kendynet.StreamSession) {
 }
 
 func ping(kvnode *KVNode, conn *cliConn, msg *codec.Message) {
+	head := msg.GetHead()
 	req := msg.GetData().(*proto.PingReq)
-	resp := &proto.PingResp{
-		Timestamp: req.GetTimestamp(), //pb.Int64(req.GetTimestamp()),
-	}
+	resp := codec.NewMessage("", head, &proto.PingResp{
+		Timestamp: req.GetTimestamp(),
+	})
 	conn.send(resp)
 }

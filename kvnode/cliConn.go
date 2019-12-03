@@ -1,6 +1,7 @@
 package kvnode
 
 import (
+	codec "github.com/sniperHW/flyfish/codec"
 	"github.com/sniperHW/kendynet"
 	"sync"
 	"time"
@@ -18,8 +19,8 @@ func (this *cliConn) clear() {
 	this.replyers = map[int64]*replyer{}
 }
 
-func (this *cliConn) send(o interface{}) error {
-	return this.session.Send(o)
+func (this *cliConn) send(msg *codec.Message) error {
+	return this.session.Send(msg)
 }
 
 func (this *cliConn) isClosed() bool {

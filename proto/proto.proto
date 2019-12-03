@@ -106,20 +106,13 @@ message ping_resp {
 ///get系列命令
 
 message req_common {
-  required int64  seqno   = 1;
-  optional string table   = 2;
-  optional string key     = 3;
-  optional int64  version = 4[(gogoproto.nullable) = true];  
-  optional int64  timeout = 5;
-  optional int64  respTimeout = 6;
+  optional string table   = 1;
+  optional string key     = 2;
+  optional int64  version = 3[(gogoproto.nullable) = true];  
+  optional int64  timeout = 4;
+  optional int64  respTimeout = 5;
 }
 
-message resp_common {
-  required int64  seqno   = 1;
-  required int32  errCode = 2;
-  optional string key     = 3;
-  optional int64  version = 4;  
-}
 
 //获取记录的指定字段
 message get_req {
@@ -129,7 +122,7 @@ message get_req {
 }
 
 message get_resp {
-  required resp_common head = 1;    
+  optional int64  version = 1;    
   repeated field  fields = 2; 
 }
 
@@ -145,7 +138,7 @@ message set_req {
 }
 
 message set_resp {
-  required resp_common head = 1; 
+  optional int64  version = 1;   
 }
 
 /*
@@ -157,7 +150,7 @@ message set_nx_req {
 }
 
 message set_nx_resp {
-  required resp_common head = 1; 
+  optional int64  version = 1;   
 }
 
 
@@ -171,7 +164,7 @@ message incr_by_req {
 }
 
 message incr_by_resp {
-  required resp_common head = 1;
+  optional int64  version = 1;   
   optional field  newValue = 4;
 }
 
@@ -185,7 +178,7 @@ message decr_by_req {
 }
 
 message decr_by_resp {
-  required resp_common head = 1; 
+  optional int64  version = 1;   
   optional field  newValue = 2;
 }
 
@@ -200,7 +193,7 @@ message compare_and_set_req {
 }
 
 message compare_and_set_resp {
-  required resp_common head = 1;  
+  optional int64  version = 1;   
   optional field  value = 2;  
 }
 
@@ -215,8 +208,8 @@ message compare_and_set_nx_req {
 }
 
 message compare_and_set_nx_resp {
-  required resp_common head = 1;  
-  optional field  value = 4;  
+  optional int64  version = 1;   
+  optional field  value = 2;  
 }
 
 
@@ -226,7 +219,7 @@ message del_req {
 }
 
 message del_resp {
-  required resp_common head = 1; 
+  optional int64  version = 1;     
 }
 
 message kick_req {
@@ -234,9 +227,10 @@ message kick_req {
 }
 
 message kick_resp {
-  required resp_common head = 1; 
+  
 }
 
+/*
 message row {
   required string key = 1;
   required int64 version = 2;
@@ -254,7 +248,7 @@ message scan_req {
 message scan_resp {
   required resp_common head = 1;  
   repeated row    rows     = 3;
-}
+}*/
 
 message cancel {
   repeated int64 seqs = 1;//所有需要取消的seqno 

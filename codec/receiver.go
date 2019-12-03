@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	minSize        uint64 = sizeLen + sizeCmd + sizeFlag
+	minSize        uint64 = sizeLen
 	initBufferSize uint64 = 1024 * 256
 )
 
@@ -50,8 +50,7 @@ func NewReceiver(compress bool) *Receiver {
 
 func (this *Receiver) unPack() (ret interface{}, err error) {
 	unpackSize := uint64(this.w - this.r)
-	if unpackSize >= minSize {
-
+	if unpackSize > minSize {
 		var payload uint32
 		var cmd uint16
 		var buff []byte
@@ -84,11 +83,34 @@ func (this *Receiver) unPack() (ret interface{}, err error) {
 				return
 			}
 
+			//read head
+			var head CommonHead
+			var sizeOfUniKey int16
+
+			if head.Seqno, err = reader.GetInt64(); err != nil {
+				return
+			}
+
+			if head.ErrCode, err = reader.GetInt32(); err != nil {
+				return
+			}
+
+			if sizeOfUniKey, err = reader.GetInt16(); err != nil {
+				return
+			}
+
+			if sizeOfUniKey > 0 {
+				if head.UniKey, err = reader.GetString(uint64(sizeOfUniKey)); err != nil {
+					return
+				}
+			}
+
 			if cmd, err = reader.GetUint16(); err != nil {
 				return
 			}
+			sizeOfHead := 8 + 4 + 2 + uint32(sizeOfUniKey)
 			//普通消息
-			size := payload - sizeCmd - sizeFlag
+			size := payload - sizeCmd - sizeFlag - sizeOfHead
 			if buff, err = reader.GetBytes(uint64(size)); err != nil {
 				return
 			}
@@ -109,7 +131,7 @@ func (this *Receiver) unPack() (ret interface{}, err error) {
 			}
 			this.nextPacketSize = 0
 			this.r += totalSize
-			ret = NewMessage(pb.GetNameByID(uint32(cmd)), msg)
+			ret = NewMessage(pb.GetNameByID(uint32(cmd)), head, msg)
 		}
 	}
 	return
@@ -151,7 +173,6 @@ func (this *Receiver) ReceiveAndUnpack(sess kendynet.StreamSession) (interface{}
 	var err error
 	for {
 		msg, err = this.unPack()
-
 		if nil != msg {
 			return msg, nil
 		} else if err == nil {

@@ -2,7 +2,8 @@ package kvnode
 
 import (
 	"fmt"
-	pb "github.com/golang/protobuf/proto"
+	//pb "github.com/golang/protobuf/proto"
+	codec "github.com/sniperHW/flyfish/codec"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
 	"sync/atomic"
@@ -13,14 +14,14 @@ var (
 	wait4ReplyCount int64
 )
 
-func makeRespCommon(key string, seqno int64, errCode int32, version int64) *proto.RespCommon {
-	return &proto.RespCommon{
-		Key:     key,     //pb.String(key),
-		Seqno:   seqno,   //pb.Int64(this.replyer.seqno),
-		ErrCode: errCode, //pb.Int32(errCode),
-		Version: version, //pb.Int64(version),
-	}
-}
+//func makeRespCommon(key string /*seqno int64, errCode int32,*/, version int64) *proto.RespCommon {
+//	return &proto.RespCommon{
+//		Key: key, //pb.String(key),
+//Seqno:   seqno,   //pb.Int64(this.replyer.seqno),
+//ErrCode: errCode, //pb.Int32(errCode),
+//		Version: version, //pb.Int64(version),
+//	}
+//}
 
 func checkReqCommon(reqCommon *proto.ReqCommon) int32 {
 	if "" == reqCommon.GetTable() {
@@ -39,7 +40,7 @@ func makeUniKey(table string, key string) string {
 }
 
 type commandI interface {
-	makeResponse(errCode int32, fields map[string]*proto.Field, version int64) pb.Message
+	makeResponse(errCode int32, fields map[string]*proto.Field, version int64) *codec.Message //pb.Message
 	reply(errCode int32, fields map[string]*proto.Field, version int64)
 	dontReply()
 	isCancel() bool  //操作是否被取消(客户端连接断开或主动发送取消请求)
@@ -117,8 +118,7 @@ func (this *replyer) reply(cmd commandI, errCode int32, fields map[string]*proto
 	if atomic.CompareAndSwapInt64(&this.replyed, 0, 1) {
 		atomic.AddInt64(&wait4ReplyCount, -1)
 		if this.peer.removeReplyer(this) && !time.Now().After(this.respDeadline) {
-			resp := cmd.makeResponse(errCode, fields, version)
-			this.peer.send(resp)
+			this.peer.send(cmd.makeResponse(errCode, fields, version))
 		}
 	}
 }

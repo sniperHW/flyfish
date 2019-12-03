@@ -48,14 +48,12 @@ const (
 )
 
 type cmdContext struct {
-	seqno     int64
 	deadline  time.Time
 	timestamp int64
 	status    int
 	cb        callback
-	req       proto.Message
+	req       *codec.Message
 	heapIdx   uint32
-	key       string
 }
 
 func (this *cmdContext) Less(o util.HeapElement) bool {
@@ -79,14 +77,12 @@ func (this *cmdContext) onResult(r interface{}) {
 }
 
 type StatusCmd struct {
-	conn  *Conn
-	req   proto.Message
-	seqno int64
+	conn *Conn
+	req  *codec.Message
 }
 
 func (this *StatusCmd) AsyncExec(cb func(*StatusResult)) {
 	context := &cmdContext{
-		seqno: this.seqno,
 		cb: callback{
 			tt: cb_status,
 			cb: cb,
@@ -105,14 +101,12 @@ func (this *StatusCmd) Exec() *StatusResult {
 }
 
 type SliceCmd struct {
-	conn  *Conn
-	req   proto.Message
-	seqno int64
+	conn *Conn
+	req  *codec.Message
 }
 
 func (this *SliceCmd) AsyncExec(cb func(*SliceResult)) {
 	context := &cmdContext{
-		seqno: this.seqno,
 		cb: callback{
 			tt: cb_slice,
 			cb: cb,
@@ -130,13 +124,12 @@ func (this *SliceCmd) Exec() *SliceResult {
 	return <-respChan
 }
 
-func makeReqCommon(table string, key string, seqno int64, timeout int64, respTimeout int64) *protocol.ReqCommon {
+func makeReqCommon(table string, key string /*seqno int64,*/, timeout int64, respTimeout int64) *protocol.ReqCommon {
 	return &protocol.ReqCommon{
-		Seqno:       seqno,       //proto.Int64(atomic.AddInt64(&this.seqno, 1)),
-		Table:       table,       //proto.String(table),
-		Key:         key,         // proto.String(key),
-		Timeout:     timeout,     //proto.Int64(int64(ServerTimeout)),
-		RespTimeout: respTimeout, //proto.Int64(int64(ClientTimeout)),
+		Table:       table,
+		Key:         key,
+		Timeout:     timeout,
+		RespTimeout: respTimeout,
 	}
 }
 
@@ -146,30 +139,36 @@ func (this *Conn) Get(table, key string, fields ...string) *SliceCmd {
 		return nil
 	}
 
-	req := &protocol.GetReq{
-		Head:   makeReqCommon(table, key, atomic.AddInt64(&this.seqno, 1), int64(ServerTimeout), int64(ClientTimeout)),
+	req := codec.NewMessage("", codec.CommonHead{
+		Seqno:  atomic.AddInt64(&this.seqno, 1),
+		UniKey: table + ":" + key,
+	}, &protocol.GetReq{
+		Head:   makeReqCommon(table, key, int64(ServerTimeout), int64(ClientTimeout)),
 		Fields: fields,
-		All:    false, //proto.Bool(false),
-	}
+		All:    false,
+	})
 
 	return &SliceCmd{
-		conn:  this,
-		req:   req,
-		seqno: req.Head.GetSeqno(),
+		conn: this,
+		req:  req,
 	}
 }
 
 func (this *Conn) GetAll(table, key string) *SliceCmd {
-	req := &protocol.GetReq{
-		Head: makeReqCommon(table, key, atomic.AddInt64(&this.seqno, 1), int64(ServerTimeout), int64(ClientTimeout)),
-		All:  true, //proto.Bool(true),
-	}
+
+	req := codec.NewMessage("", codec.CommonHead{
+		Seqno:  atomic.AddInt64(&this.seqno, 1),
+		UniKey: table + ":" + key,
+	}, &protocol.GetReq{
+		Head: makeReqCommon(table, key, int64(ServerTimeout), int64(ClientTimeout)),
+		All:  true,
+	})
 
 	return &SliceCmd{
-		conn:  this,
-		req:   req,
-		seqno: req.Head.GetSeqno(),
+		conn: this,
+		req:  req,
 	}
+
 }
 
 func (this *Conn) Set(table, key string, fields map[string]interface{}, version ...int64) *StatusCmd {
@@ -178,22 +177,26 @@ func (this *Conn) Set(table, key string, fields map[string]interface{}, version 
 		return nil
 	}
 
-	req := &protocol.SetReq{
-		Head: makeReqCommon(table, key, atomic.AddInt64(&this.seqno, 1), int64(ServerTimeout), int64(ClientTimeout)),
+	pbdata := &protocol.SetReq{
+		Head: makeReqCommon(table, key, int64(ServerTimeout), int64(ClientTimeout)),
 	}
 
 	if len(version) > 0 {
-		req.Head.Version = proto.Int64(version[0])
+		pbdata.Head.Version = proto.Int64(version[0])
 	}
 
 	for k, v := range fields {
-		req.Fields = append(req.Fields, protocol.PackField(k, v))
+		pbdata.Fields = append(pbdata.Fields, protocol.PackField(k, v))
 	}
 
+	req := codec.NewMessage("", codec.CommonHead{
+		Seqno:  atomic.AddInt64(&this.seqno, 1),
+		UniKey: table + ":" + key,
+	}, pbdata)
+
 	return &StatusCmd{
-		conn:  this,
-		req:   req,
-		seqno: req.Head.GetSeqno(),
+		conn: this,
+		req:  req,
 	}
 }
 
@@ -202,18 +205,22 @@ func (this *Conn) SetNx(table, key string, fields map[string]interface{}) *Statu
 		return nil
 	}
 
-	req := &protocol.SetNxReq{
-		Head: makeReqCommon(table, key, atomic.AddInt64(&this.seqno, 1), int64(ServerTimeout), int64(ClientTimeout)),
+	pbdata := &protocol.SetNxReq{
+		Head: makeReqCommon(table, key, int64(ServerTimeout), int64(ClientTimeout)),
 	}
 
 	for k, v := range fields {
-		req.Fields = append(req.Fields, protocol.PackField(k, v))
+		pbdata.Fields = append(pbdata.Fields, protocol.PackField(k, v))
 	}
 
+	req := codec.NewMessage("", codec.CommonHead{
+		Seqno:  atomic.AddInt64(&this.seqno, 1),
+		UniKey: table + ":" + key,
+	}, pbdata)
+
 	return &StatusCmd{
-		conn:  this,
-		req:   req,
-		seqno: req.Head.GetSeqno(),
+		conn: this,
+		req:  req,
 	}
 }
 
@@ -224,22 +231,25 @@ func (this *Conn) CompareAndSet(table, key, field string, oldV, newV interface{}
 		return nil
 	}
 
-	req := &protocol.CompareAndSetReq{
-		Head: makeReqCommon(table, key, atomic.AddInt64(&this.seqno, 1), int64(ServerTimeout), int64(ClientTimeout)),
+	pbdata := &protocol.CompareAndSetReq{
+		Head: makeReqCommon(table, key, int64(ServerTimeout), int64(ClientTimeout)),
 		New:  protocol.PackField(field, newV),
 		Old:  protocol.PackField(field, oldV),
 	}
 
 	if len(version) > 0 {
-		req.Head.Version = proto.Int64(version[0])
+		pbdata.Head.Version = proto.Int64(version[0])
 	}
+
+	req := codec.NewMessage("", codec.CommonHead{
+		Seqno:  atomic.AddInt64(&this.seqno, 1),
+		UniKey: table + ":" + key,
+	}, pbdata)
 
 	return &SliceCmd{
-		conn:  this,
-		req:   req,
-		seqno: req.Head.GetSeqno(),
+		conn: this,
+		req:  req,
 	}
-
 }
 
 //当记录不存在或记录的field == old时，将其设置为new.并返回field的实际值(如果记录存在且filed != old,将返回filed的原值)
@@ -248,287 +258,279 @@ func (this *Conn) CompareAndSetNx(table, key, field string, oldV, newV interface
 		return nil
 	}
 
-	req := &protocol.CompareAndSetNxReq{
-		Head: makeReqCommon(table, key, atomic.AddInt64(&this.seqno, 1), int64(ServerTimeout), int64(ClientTimeout)),
+	pbdata := &protocol.CompareAndSetNxReq{
+		Head: makeReqCommon(table, key, int64(ServerTimeout), int64(ClientTimeout)),
 		New:  protocol.PackField(field, newV),
 		Old:  protocol.PackField(field, oldV),
 	}
 
 	if len(version) > 0 {
-		req.Head.Version = proto.Int64(version[0])
+		pbdata.Head.Version = proto.Int64(version[0])
 	}
 
+	req := codec.NewMessage("", codec.CommonHead{
+		Seqno:  atomic.AddInt64(&this.seqno, 1),
+		UniKey: table + ":" + key,
+	}, pbdata)
+
 	return &SliceCmd{
-		conn:  this,
-		req:   req,
-		seqno: req.Head.GetSeqno(),
+		conn: this,
+		req:  req,
 	}
 }
 
 func (this *Conn) Del(table, key string, version ...int64) *StatusCmd {
 
-	req := &protocol.DelReq{
-		Head: makeReqCommon(table, key, atomic.AddInt64(&this.seqno, 1), int64(ServerTimeout), int64(ClientTimeout)),
+	pbdata := &protocol.DelReq{
+		Head: makeReqCommon(table, key, int64(ServerTimeout), int64(ClientTimeout)),
 	}
 
 	if len(version) > 0 {
-		req.Head.Version = proto.Int64(version[0])
+		pbdata.Head.Version = proto.Int64(version[0])
 	}
 
+	req := codec.NewMessage("", codec.CommonHead{
+		Seqno:  atomic.AddInt64(&this.seqno, 1),
+		UniKey: table + ":" + key,
+	}, pbdata)
+
 	return &StatusCmd{
-		conn:  this,
-		req:   req,
-		seqno: req.Head.GetSeqno(),
+		conn: this,
+		req:  req,
 	}
 
 }
 
 func (this *Conn) IncrBy(table, key, field string, value int64, version ...int64) *SliceCmd {
-	req := &protocol.IncrByReq{
-		Head:  makeReqCommon(table, key, atomic.AddInt64(&this.seqno, 1), int64(ServerTimeout), int64(ClientTimeout)),
+	pbdata := &protocol.IncrByReq{
+		Head:  makeReqCommon(table, key, int64(ServerTimeout), int64(ClientTimeout)),
 		Field: protocol.PackField(field, value),
 	}
 
 	if len(version) > 0 {
-		req.Head.Version = proto.Int64(version[0])
+		pbdata.Head.Version = proto.Int64(version[0])
 	}
 
+	req := codec.NewMessage("", codec.CommonHead{
+		Seqno:  atomic.AddInt64(&this.seqno, 1),
+		UniKey: table + ":" + key,
+	}, pbdata)
+
 	return &SliceCmd{
-		conn:  this,
-		req:   req,
-		seqno: req.Head.GetSeqno(),
+		conn: this,
+		req:  req,
 	}
 }
 
 func (this *Conn) DecrBy(table, key, field string, value int64, version ...int64) *SliceCmd {
-	req := &protocol.DecrByReq{
-		Head:  makeReqCommon(table, key, atomic.AddInt64(&this.seqno, 1), int64(ServerTimeout), int64(ClientTimeout)),
+	pbdata := &protocol.DecrByReq{
+		Head:  makeReqCommon(table, key, int64(ServerTimeout), int64(ClientTimeout)),
 		Field: protocol.PackField(field, value),
 	}
 
 	if len(version) > 0 {
-		req.Head.Version = proto.Int64(version[0])
+		pbdata.Head.Version = proto.Int64(version[0])
 	}
 
+	req := codec.NewMessage("", codec.CommonHead{
+		Seqno:  atomic.AddInt64(&this.seqno, 1),
+		UniKey: table + ":" + key,
+	}, pbdata)
+
 	return &SliceCmd{
-		conn:  this,
-		req:   req,
-		seqno: req.Head.GetSeqno(),
+		conn: this,
+		req:  req,
 	}
 }
 
 func (this *Conn) Kick(table, key string) *StatusCmd {
-	req := &protocol.KickReq{
-		Head: makeReqCommon(table, key, atomic.AddInt64(&this.seqno, 1), int64(ServerTimeout), int64(ClientTimeout)),
+	pbdata := &protocol.KickReq{
+		Head: makeReqCommon(table, key, int64(ServerTimeout), int64(ClientTimeout)),
 	}
+
+	req := codec.NewMessage("", codec.CommonHead{
+		Seqno:  atomic.AddInt64(&this.seqno, 1),
+		UniKey: table + ":" + key,
+	}, pbdata)
+
 	return &StatusCmd{
-		conn:  this,
-		req:   req,
-		seqno: req.Head.GetSeqno(),
+		conn: this,
+		req:  req,
 	}
 }
 
 func (this *Conn) ReloadTableConf() *StatusCmd {
-	req := &protocol.ReloadTableConfReq{
+	pbdata := &protocol.ReloadTableConfReq{}
+
+	req := codec.NewMessage("", codec.CommonHead{
 		Seqno: atomic.AddInt64(&this.seqno, 1),
-	}
+	}, pbdata)
+
 	return &StatusCmd{
-		conn:  this,
-		req:   req,
-		seqno: req.Seqno,
+		conn: this,
+		req:  req,
 	}
 }
 
-func (this *Conn) onGetResp(resp *protocol.GetResp) {
-	c := this.removeContext(resp.Head.GetSeqno())
-	if nil != c {
-		ret := SliceResult{
-			Key:     resp.Head.GetKey(),
-			ErrCode: resp.Head.GetErrCode(),
-			Version: resp.Head.GetVersion(),
-		}
+func (this *Conn) onGetResp(c *cmdContext, errCode int32, resp *protocol.GetResp) {
 
-		if ret.ErrCode == errcode.ERR_OK {
-			ret.Fields = map[string]*Field{}
-			for _, v := range resp.Fields {
-				ret.Fields[v.GetName()] = (*Field)(v)
-			}
-		}
-
-		this.c.doCallBack(c.cb, &ret)
+	ret := SliceResult{
+		ErrCode: errCode,
+		Version: resp.GetVersion(),
 	}
+
+	if ret.ErrCode == errcode.ERR_OK {
+		ret.Fields = map[string]*Field{}
+		for _, v := range resp.Fields {
+			ret.Fields[v.GetName()] = (*Field)(v)
+		}
+	}
+
+	this.c.doCallBack(c.cb, &ret)
+
 }
 
-func (this *Conn) onSetResp(resp *protocol.SetResp) {
-	c := this.removeContext(resp.Head.GetSeqno())
-	if nil != c {
-
-		ret := StatusResult{
-			Key:     resp.Head.GetKey(),
-			ErrCode: resp.Head.GetErrCode(),
-			Version: resp.Head.GetVersion(),
-		}
-
-		this.c.doCallBack(c.cb, &ret)
+func (this *Conn) onSetResp(c *cmdContext, errCode int32, resp *protocol.SetResp) {
+	ret := StatusResult{
+		ErrCode: errCode,
+		Version: resp.GetVersion(),
 	}
+	this.c.doCallBack(c.cb, &ret)
 }
 
-func (this *Conn) onSetNxResp(resp *protocol.SetNxResp) {
-	c := this.removeContext(resp.Head.GetSeqno())
-	if nil != c {
+func (this *Conn) onSetNxResp(c *cmdContext, errCode int32, resp *protocol.SetNxResp) {
 
-		ret := StatusResult{
-			Key:     resp.Head.GetKey(),
-			ErrCode: resp.Head.GetErrCode(),
-			Version: resp.Head.GetVersion(),
-		}
-
-		this.c.doCallBack(c.cb, &ret)
+	ret := StatusResult{
+		ErrCode: errCode,
+		Version: resp.GetVersion(),
 	}
+
+	this.c.doCallBack(c.cb, &ret)
+
 }
 
-func (this *Conn) onCompareAndSetResp(resp *protocol.CompareAndSetResp) {
-	c := this.removeContext(resp.Head.GetSeqno())
-	if nil != c {
+func (this *Conn) onCompareAndSetResp(c *cmdContext, errCode int32, resp *protocol.CompareAndSetResp) {
 
-		ret := SliceResult{
-			Key:     resp.Head.GetKey(),
-			ErrCode: resp.Head.GetErrCode(),
-			Version: resp.Head.GetVersion(),
-		}
-
-		if ret.ErrCode == errcode.ERR_OK || ret.ErrCode == errcode.ERR_CAS_NOT_EQUAL {
-			ret.Fields = map[string]*Field{}
-			ret.Fields[resp.GetValue().GetName()] = (*Field)(resp.GetValue())
-		}
-
-		this.c.doCallBack(c.cb, &ret)
+	ret := SliceResult{
+		ErrCode: errCode,
+		Version: resp.GetVersion(),
 	}
+
+	if ret.ErrCode == errcode.ERR_OK || ret.ErrCode == errcode.ERR_CAS_NOT_EQUAL {
+		ret.Fields = map[string]*Field{}
+		ret.Fields[resp.GetValue().GetName()] = (*Field)(resp.GetValue())
+	}
+
+	this.c.doCallBack(c.cb, &ret)
+
 }
 
-func (this *Conn) onCompareAndSetNxResp(resp *protocol.CompareAndSetNxResp) {
-	c := this.removeContext(resp.Head.GetSeqno())
-	if nil != c {
+func (this *Conn) onCompareAndSetNxResp(c *cmdContext, errCode int32, resp *protocol.CompareAndSetNxResp) {
 
-		ret := SliceResult{
-			Key:     resp.Head.GetKey(),
-			ErrCode: resp.Head.GetErrCode(),
-			Version: resp.Head.GetVersion(),
-		}
-
-		if ret.ErrCode == errcode.ERR_OK || ret.ErrCode == errcode.ERR_CAS_NOT_EQUAL {
-			ret.Fields = map[string]*Field{}
-			ret.Fields[resp.GetValue().GetName()] = (*Field)(resp.GetValue())
-		}
-
-		this.c.doCallBack(c.cb, &ret)
+	ret := SliceResult{
+		ErrCode: errCode,
+		Version: resp.GetVersion(),
 	}
+
+	if ret.ErrCode == errcode.ERR_OK || ret.ErrCode == errcode.ERR_CAS_NOT_EQUAL {
+		ret.Fields = map[string]*Field{}
+		ret.Fields[resp.GetValue().GetName()] = (*Field)(resp.GetValue())
+	}
+
+	this.c.doCallBack(c.cb, &ret)
+
 }
 
-func (this *Conn) onDelResp(resp *protocol.DelResp) {
-	c := this.removeContext(resp.Head.GetSeqno())
-	if nil != c {
+func (this *Conn) onDelResp(c *cmdContext, errCode int32, resp *protocol.DelResp) {
 
-		ret := StatusResult{
-			Key:     resp.Head.GetKey(),
-			ErrCode: resp.Head.GetErrCode(),
-			Version: resp.Head.GetVersion(),
-		}
-
-		this.c.doCallBack(c.cb, &ret)
+	ret := StatusResult{
+		ErrCode: errCode,
+		Version: resp.GetVersion(),
 	}
+
+	this.c.doCallBack(c.cb, &ret)
+
 }
 
-func (this *Conn) onIncrByResp(resp *protocol.IncrByResp) {
-	c := this.removeContext(resp.Head.GetSeqno())
-	if nil != c {
+func (this *Conn) onIncrByResp(c *cmdContext, errCode int32, resp *protocol.IncrByResp) {
 
-		ret := SliceResult{
-			Key:     resp.Head.GetKey(),
-			ErrCode: resp.Head.GetErrCode(),
-			Version: resp.Head.GetVersion(),
-		}
-
-		if errcode.ERR_OK == ret.ErrCode {
-			ret.Fields = map[string]*Field{}
-			ret.Fields[resp.NewValue.GetName()] = (*Field)(resp.NewValue)
-		}
-
-		this.c.doCallBack(c.cb, &ret)
+	ret := SliceResult{
+		ErrCode: errCode,
+		Version: resp.GetVersion(),
 	}
+
+	if errcode.ERR_OK == ret.ErrCode {
+		ret.Fields = map[string]*Field{}
+		ret.Fields[resp.NewValue.GetName()] = (*Field)(resp.NewValue)
+	}
+
+	this.c.doCallBack(c.cb, &ret)
+
 }
 
-func (this *Conn) onDecrByResp(resp *protocol.DecrByResp) {
-	c := this.removeContext(resp.Head.GetSeqno())
-	if nil != c {
+func (this *Conn) onDecrByResp(c *cmdContext, errCode int32, resp *protocol.DecrByResp) {
 
-		ret := SliceResult{
-			Key:     resp.Head.GetKey(),
-			ErrCode: resp.Head.GetErrCode(),
-			Version: resp.Head.GetVersion(),
-		}
-
-		if errcode.ERR_OK == ret.ErrCode {
-			ret.Fields = map[string]*Field{}
-			ret.Fields[resp.NewValue.GetName()] = (*Field)(resp.NewValue)
-		}
-
-		this.c.doCallBack(c.cb, &ret)
+	ret := SliceResult{
+		ErrCode: errCode,
+		Version: resp.GetVersion(),
 	}
+
+	if errcode.ERR_OK == ret.ErrCode {
+		ret.Fields = map[string]*Field{}
+		ret.Fields[resp.NewValue.GetName()] = (*Field)(resp.NewValue)
+	}
+
+	this.c.doCallBack(c.cb, &ret)
+
 }
 
-func (this *Conn) onKickResp(resp *protocol.KickResp) {
-	c := this.removeContext(resp.Head.GetSeqno())
-	if nil != c {
-		ret := StatusResult{
-			Key:     resp.Head.GetKey(),
-			ErrCode: resp.Head.GetErrCode(),
-			Version: resp.Head.GetVersion(),
-		}
+func (this *Conn) onKickResp(c *cmdContext, errCode int32, resp *protocol.KickResp) {
 
-		this.c.doCallBack(c.cb, &ret)
+	ret := StatusResult{
+		ErrCode: errCode,
 	}
+
+	this.c.doCallBack(c.cb, &ret)
+
 }
 
-func (this *Conn) onReloadTableConfResp(resp *protocol.ReloadTableConfResp) {
-	c := this.removeContext(resp.Seqno)
-	if nil != c {
-		ret := StatusResult{
-			ErrCode: resp.ErrCode,
-			ErrStr:  resp.Err,
-		}
-		this.c.doCallBack(c.cb, &ret)
+func (this *Conn) onReloadTableConfResp(c *cmdContext, errCode int32, resp *protocol.ReloadTableConfResp) {
+	ret := StatusResult{
+		ErrCode: errCode,
+		ErrStr:  resp.Err,
 	}
+	this.c.doCallBack(c.cb, &ret)
 }
 
 func (this *Conn) onMessage(msg *codec.Message) {
 	this.eventQueue.Post(func() {
-		name := msg.GetName()
-		switch name {
-		//case "*proto.PingResp":
-		case "*proto.GetResp":
-			this.onGetResp(msg.GetData().(*protocol.GetResp))
-		case "*proto.SetResp":
-			this.onSetResp(msg.GetData().(*protocol.SetResp))
-		case "*proto.SetNxResp":
-			this.onSetNxResp(msg.GetData().(*protocol.SetNxResp))
-		case "*proto.CompareAndSetResp":
-			this.onCompareAndSetResp(msg.GetData().(*protocol.CompareAndSetResp))
-		case "*proto.CompareAndSetNxResp":
-			this.onCompareAndSetNxResp(msg.GetData().(*protocol.CompareAndSetNxResp))
-		case "*proto.DelResp":
-			this.onDelResp(msg.GetData().(*protocol.DelResp))
-		case "*proto.IncrByResp":
-			this.onIncrByResp(msg.GetData().(*protocol.IncrByResp))
-		case "*proto.DecrByResp":
-			this.onDecrByResp(msg.GetData().(*protocol.DecrByResp))
-		case "*proto.ScanResp":
-			this.onScanResp(msg.GetData().(*protocol.ScanResp))
-		case "*proto.KickResp":
-			this.onKickResp(msg.GetData().(*protocol.KickResp))
-		case "*proto.ReloadTableConfResp":
-			this.onReloadTableConfResp(msg.GetData().(*protocol.ReloadTableConfResp))
-		default:
+		head := msg.GetHead()
+		c := this.removeContext(head.Seqno)
+		if nil != c {
+			name := msg.GetName()
+			switch name {
+			case "*proto.GetResp":
+				this.onGetResp(c, head.ErrCode, msg.GetData().(*protocol.GetResp))
+			case "*proto.SetResp":
+				this.onSetResp(c, head.ErrCode, msg.GetData().(*protocol.SetResp))
+			case "*proto.SetNxResp":
+				this.onSetNxResp(c, head.ErrCode, msg.GetData().(*protocol.SetNxResp))
+			case "*proto.CompareAndSetResp":
+				this.onCompareAndSetResp(c, head.ErrCode, msg.GetData().(*protocol.CompareAndSetResp))
+			case "*proto.CompareAndSetNxResp":
+				this.onCompareAndSetNxResp(c, head.ErrCode, msg.GetData().(*protocol.CompareAndSetNxResp))
+			case "*proto.DelResp":
+				this.onDelResp(c, head.ErrCode, msg.GetData().(*protocol.DelResp))
+			case "*proto.IncrByResp":
+				this.onIncrByResp(c, head.ErrCode, msg.GetData().(*protocol.IncrByResp))
+			case "*proto.DecrByResp":
+				this.onDecrByResp(c, head.ErrCode, msg.GetData().(*protocol.DecrByResp))
+			case "*proto.KickResp":
+				this.onKickResp(c, head.ErrCode, msg.GetData().(*protocol.KickResp))
+			case "*proto.ReloadTableConfResp":
+				this.onReloadTableConfResp(c, head.ErrCode, msg.GetData().(*protocol.ReloadTableConfResp))
+			default:
+			}
 		}
 	})
 

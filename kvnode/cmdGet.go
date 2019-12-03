@@ -1,7 +1,6 @@
 package kvnode
 
 import (
-	pb "github.com/golang/protobuf/proto"
 	codec "github.com/sniperHW/flyfish/codec"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
@@ -38,36 +37,32 @@ func (this *cmdGet) reply(errCode int32, fields map[string]*proto.Field, version
 	this.replyer.reply(this, errCode, fields, version)
 }
 
-func (this *cmdGet) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) pb.Message {
-
-	var key string
-
-	if nil != this.kv {
-		key = this.kv.key
-	}
-
-	resp := &proto.GetResp{
-		Head: makeRespCommon(key, this.replyer.seqno, errCode, version),
+func (this *cmdGet) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) *codec.Message {
+	pbdata := &proto.GetResp{
+		Version: version,
 	}
 
 	if errcode.ERR_OK == errCode {
 		for _, field := range this.fields {
 			v := fields[field.GetName()]
 			if nil != v {
-				resp.Fields = append(resp.Fields, v)
+				pbdata.Fields = append(pbdata.Fields, v)
 			} else {
 				/*
 				 * 表格新增加了列，但未设置过，使用默认值
 				 */
 				vv := this.kv.meta.GetDefaultV(field.GetName())
 				if nil != vv {
-					resp.Fields = append(resp.Fields, proto.PackField(field.GetName(), vv))
+					pbdata.Fields = append(pbdata.Fields, proto.PackField(field.GetName(), vv))
 				}
 			}
 		}
 	}
 
-	return resp
+	return codec.NewMessage("", codec.CommonHead{
+		Seqno:   this.replyer.seqno,
+		ErrCode: errCode,
+	}, pbdata)
 }
 
 func (this *cmdGet) prepare(task asynCmdTaskI) asynCmdTaskI {
@@ -102,7 +97,7 @@ func get(n *KVNode, cli *cliConn, msg *codec.Message) {
 	op := &cmdGet{
 		commandBase: &commandBase{
 			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
-			replyer:  newReplyer(cli, head.GetSeqno(), time.Now().Add(time.Duration(head.GetRespTimeout()))),
+			replyer:  newReplyer(cli, msg.GetHead().Seqno, time.Now().Add(time.Duration(head.GetRespTimeout()))),
 		},
 		fields: map[string]*proto.Field{},
 	}

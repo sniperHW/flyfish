@@ -86,11 +86,14 @@ func (this *Conn) checkTimeout(now *time.Time) {
 				c.status = wait_remove
 				this.c.doCallBack(c.cb, errcode.ERR_TIMEOUT)
 			} else {
-				if _, ok := this.waitResp[c.seqno]; !ok {
+
+				seqno := c.req.GetHead().Seqno
+
+				if _, ok := this.waitResp[seqno]; !ok {
 					//Infof("timeout cmdContext:%d not found\n", c.seqno)
 				} else {
 					//Infof("timeout cmdContext:%d\n", c.seqno)
-					delete(this.waitResp, c.seqno)
+					delete(this.waitResp, seqno)
 					this.c.doCallBack(c.cb, errcode.ERR_TIMEOUT)
 				}
 			}
@@ -103,9 +106,9 @@ func (this *Conn) checkTimeout(now *time.Time) {
 func (this *Conn) ping(now *time.Time) {
 	if nil != this.session && now.After(this.nextPing) {
 		this.nextPing = now.Add(protocol.PingTime)
-		req := &protocol.PingReq{
-			Timestamp: now.UnixNano(), //proto.Int64(now.UnixNano()),
-		}
+		req := codec.NewMessage("", codec.CommonHead{}, &protocol.PingReq{
+			Timestamp: now.UnixNano(),
+		})
 		this.session.Send(req)
 	}
 }
@@ -236,10 +239,15 @@ func (this *Conn) onDisconnected() {
 		this.session = nil
 		this.minheap.Clear()
 
-		for _, c := range this.waitResp {
+		waitResp := this.waitResp
+		this.waitResp = map[int64]*cmdContext{}
+
+		for _, c := range waitResp {
 			this.c.doCallBack(c.cb, errcode.ERR_CONNECTION)
 		}
+
 		this.dial()
+
 	})
 }
 
@@ -269,7 +277,7 @@ func (this *Conn) sendReq(c *cmdContext) {
 	err := this.session.Send(c.req)
 	if nil == err {
 		c.status = wait_resp
-		this.waitResp[c.seqno] = c
+		this.waitResp[c.req.GetHead().Seqno] = c
 	} else {
 		//记录日志
 		this.minheap.Remove(c)

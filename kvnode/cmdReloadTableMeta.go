@@ -8,22 +8,22 @@ import (
 
 func reloadTableMeta(n *KVNode, cli *cliConn, msg *codec.Message) {
 	dbMetaStr, err := loadMetaString()
-	req := msg.GetData().(*proto.ReloadTableConfReq)
-	resp := &proto.ReloadTableConfResp{
-		Seqno: req.Seqno,
-	}
+	head := msg.GetHead()
+	errStr := ""
+
 	if nil == err {
 		err = n.storeMgr.dbmeta.Reload(dbMetaStr)
 		if nil != err {
-			resp.ErrCode = errcode.ERR_OTHER
-			resp.Err = err.Error()
+			head.ErrCode = errcode.ERR_OTHER
+			errStr = err.Error()
 		} else {
-			resp.ErrCode = errcode.ERR_OK
+			head.ErrCode = errcode.ERR_OK
 		}
 	} else {
-		resp.ErrCode = errcode.ERR_OTHER
-		resp.Err = err.Error()
+		head.ErrCode = errcode.ERR_OTHER
+		errStr = err.Error()
 	}
 
-	cli.send(resp)
+	cli.send(codec.NewMessage("", head, &proto.ReloadTableConfResp{Err: errStr}))
+
 }
