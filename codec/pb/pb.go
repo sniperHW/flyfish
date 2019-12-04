@@ -2,9 +2,8 @@ package pb
 
 import (
 	"fmt"
-	"reflect"
-
 	"github.com/golang/protobuf/proto"
+	"reflect"
 )
 
 type reflectInfo struct {
@@ -12,11 +11,13 @@ type reflectInfo struct {
 	name string
 }
 
-var nameToID = map[string]uint32{}
-var idToMeta = map[uint32]reflectInfo{}
+type Namespace struct {
+	nameToID map[string]uint32
+	idToMeta map[uint32]reflectInfo
+}
 
-func newMessage(id uint32) (msg proto.Message, err error) {
-	if mt, ok := idToMeta[id]; ok {
+func (this *Namespace) newMessage(id uint32) (msg proto.Message, err error) {
+	if mt, ok := this.idToMeta[id]; ok {
 		msg = reflect.New(mt.tt.Elem()).Interface().(proto.Message)
 	} else {
 		err = fmt.Errorf("invaild id:%d", id)
@@ -24,8 +25,8 @@ func newMessage(id uint32) (msg proto.Message, err error) {
 	return
 }
 
-func GetNameByID(id uint32) string {
-	if mt, ok := idToMeta[id]; ok {
+func (this *Namespace) GetNameByID(id uint32) string {
+	if mt, ok := this.idToMeta[id]; ok {
 		return mt.name
 	} else {
 		return ""
@@ -33,24 +34,24 @@ func GetNameByID(id uint32) string {
 }
 
 //根据名字注册实例(注意函数非线程安全，需要在初始化阶段完成所有消息的Register)
-func Register(msg proto.Message, id uint32) error {
+func (this *Namespace) Register(msg proto.Message, id uint32) error {
 	tt := reflect.TypeOf(msg)
 	name := tt.String()
 
-	if _, ok := nameToID[name]; ok {
+	if _, ok := this.nameToID[name]; ok {
 		return fmt.Errorf("%s already register", name)
 	}
 
-	nameToID[name] = id
-	idToMeta[id] = reflectInfo{tt: tt, name: name}
+	this.nameToID[name] = id
+	this.idToMeta[id] = reflectInfo{tt: tt, name: name}
 	return nil
 }
 
-func Marshal(o interface{}) ([]byte, uint32, error) {
+func (this *Namespace) Marshal(o interface{}) ([]byte, uint32, error) {
 	var id uint32
 	var ok bool
 
-	if id, ok = nameToID[reflect.TypeOf(o).String()]; !ok {
+	if id, ok = this.nameToID[reflect.TypeOf(o).String()]; !ok {
 		return nil, 0, fmt.Errorf("unregister type:%s", reflect.TypeOf(o).String())
 	}
 
@@ -63,12 +64,17 @@ func Marshal(o interface{}) ([]byte, uint32, error) {
 	return data, id, nil
 }
 
-func Unmarshal(id uint32, buff []byte) (proto.Message, error) {
+func (this *Namespace) Unmarshal(id uint32, buff []byte) (proto.Message, error) {
 	var msg proto.Message
 	var err error
 
-	if msg, err = newMessage(id); err != nil {
+	if msg, err = this.newMessage(id); err != nil {
 		return nil, err
+	}
+
+	if nil == buff || len(buff) == 0 {
+		//返回默认消息体
+		return msg, nil
 	}
 
 	if err = proto.Unmarshal(buff, msg); err != nil {
@@ -76,4 +82,31 @@ func Unmarshal(id uint32, buff []byte) (proto.Message, error) {
 	}
 
 	return msg, nil
+}
+
+var requestSpace *Namespace
+var responseSpace *Namespace
+
+func GetNamespace(space string) *Namespace {
+	if space == "request" {
+		return requestSpace
+	} else if space == "response" {
+		return responseSpace
+	} else {
+		return nil
+	}
+}
+
+func init() {
+
+	requestSpace = &Namespace{
+		nameToID: map[string]uint32{},
+		idToMeta: map[uint32]reflectInfo{},
+	}
+
+	responseSpace = &Namespace{
+		nameToID: map[string]uint32{},
+		idToMeta: map[uint32]reflectInfo{},
+	}
+
 }

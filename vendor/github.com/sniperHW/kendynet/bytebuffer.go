@@ -366,6 +366,14 @@ func (this *ByteBuffer) GetUint16(idx uint64) (ret uint16, err error) {
 	return
 }
 
+func (this *ByteBuffer) GetInt16(idx uint64) (ret int16, err error) {
+	u16, err := this.GetUint16(idx)
+	if nil == err {
+		ret = int16(u16)
+	}
+	return
+}
+
 func (this *ByteBuffer) GetUint32(idx uint64) (ret uint32, err error) {
 	err = nil
 	size := (uint64)(4)
@@ -381,6 +389,14 @@ func (this *ByteBuffer) GetUint32(idx uint64) (ret uint32, err error) {
 	return
 }
 
+func (this *ByteBuffer) GetInt32(idx uint64) (ret int32, err error) {
+	u32, err := this.GetUint32(idx)
+	if nil == err {
+		ret = int32(u32)
+	}
+	return
+}
+
 func (this *ByteBuffer) GetUint64(idx uint64) (ret uint64, err error) {
 	err = nil
 	size := (uint64)(8)
@@ -393,6 +409,14 @@ func (this *ByteBuffer) GetUint64(idx uint64) (ret uint64, err error) {
 		return
 	}
 	ret = binary.BigEndian.Uint64(this.buffer[idx : idx+size])
+	return
+}
+
+func (this *ByteBuffer) GetInt64(idx uint64) (ret int64, err error) {
+	u64, err := this.GetUint64(idx)
+	if nil == err {
+		ret = int64(u64)
+	}
 	return
 }
 

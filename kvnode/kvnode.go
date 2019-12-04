@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	codec "github.com/sniperHW/flyfish/codec"
+	"github.com/sniperHW/flyfish/codec/pb"
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/dbmeta"
 	protocol "github.com/sniperHW/flyfish/proto"
@@ -85,7 +86,7 @@ func (this *KVNode) startListener() error {
 	return this.listener.Serve(func(session kendynet.StreamSession) {
 		go func() {
 
-			config := conf.GetConfig()
+			//config := conf.GetConfig()
 
 			loginReq, err := recvLoginReq(session)
 			if nil != err {
@@ -99,8 +100,8 @@ func (this *KVNode) startListener() error {
 			}
 
 			loginResp := &protocol.LoginResp{
-				Ok:       true,                                      //proto.Bool(true),
-				Compress: config.Compress && loginReq.GetCompress(), //proto.Bool(config.Compress && loginReq.GetCompress()),
+				Ok:       true,                   //proto.Bool(true),
+				Compress: loginReq.GetCompress(), //proto.Bool(config.Compress && loginReq.GetCompress()),
 			}
 
 			if !sendLoginResp(session, loginResp) {
@@ -108,11 +109,11 @@ func (this *KVNode) startListener() error {
 				return
 			}
 
-			session.SetRecvTimeout(protocol.PingTime * 2)
+			//session.SetRecvTimeout(protocol.PingTime * 2)
 
 			//只有配置了压缩开启同时客户端支持压缩才开启通信压缩
-			session.SetReceiver(codec.NewReceiver(config.Compress && loginReq.GetCompress()))
-			session.SetEncoder(codec.NewEncoder(config.Compress && loginReq.GetCompress()))
+			session.SetReceiver(codec.NewReceiver(pb.GetNamespace("request"), loginReq.GetCompress()))
+			session.SetEncoder(codec.NewEncoder(pb.GetNamespace("response"), loginReq.GetCompress()))
 
 			session.SetCloseCallBack(func(sess kendynet.StreamSession, reason string) {
 				this.dispatcher.OnClose(sess, reason)

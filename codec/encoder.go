@@ -10,18 +10,20 @@ import (
 )
 
 const (
-	sizeLen  = 4
-	sizeFlag = 1
-	sizeHead = 2
-	sizeCmd  = 2
+	SizeLen  = 4
+	SizeFlag = 1
+	SizeCmd  = 2
 )
 
 type Encoder struct {
 	compressor CompressorI
+	pbSpace    *pb.Namespace
 }
 
-func NewEncoder(compress bool) *Encoder {
-	e := &Encoder{}
+func NewEncoder(pbSpace *pb.Namespace, compress bool) *Encoder {
+	e := &Encoder{
+		pbSpace: pbSpace,
+	}
 	if compress {
 		e.compressor = &ZipCompressor{}
 	}
@@ -33,6 +35,7 @@ type outMessage struct {
 	compressor CompressorI
 	head       CommonHead
 	msg        proto.Message
+	pbSpace    *pb.Namespace
 }
 
 /*
@@ -46,7 +49,7 @@ func (this *outMessage) Bytes() []byte {
 	var payloadLen int
 	var totalLen int
 	var flag byte
-	if pbbytes, cmd, err = pb.Marshal(this.msg); err != nil {
+	if pbbytes, cmd, err = this.pbSpace.Marshal(this.msg); err != nil {
 		kendynet.Errorln("outMessage encode err:", err)
 		return nil
 	}
@@ -60,8 +63,8 @@ func (this *outMessage) Bytes() []byte {
 
 	sizeOfHead := 8 + 4 + 4 + 2 + sizeOfUniKey //int64 + int32 + uint32 + int16
 
-	payloadLen = sizeFlag + sizeCmd + len(pbbytes) + sizeOfHead
-	totalLen = sizeLen + payloadLen
+	payloadLen = SizeFlag + SizeCmd + len(pbbytes) + sizeOfHead
+	totalLen = SizeLen + payloadLen
 	if uint64(totalLen) > conf.MaxPacketSize {
 		kendynet.Errorln("packet too large totalLen", totalLen)
 		return nil
@@ -93,5 +96,6 @@ func (this *Encoder) EnCode(o interface{}) (kendynet.Message, error) {
 		msg:        msg.GetData(),
 		head:       msg.GetHead(),
 		compressor: this.compressor,
+		pbSpace:    this.pbSpace,
 	}, nil
 }

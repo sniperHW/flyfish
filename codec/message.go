@@ -47,48 +47,34 @@ func (this *Message) GetName() string {
 
 func init() {
 
-	pb.Register(&protocol.PingReq{}, uint32(protocol.CmdType_PingReq))
-	pb.Register(&protocol.PingResp{}, uint32(protocol.CmdType_PingResp))
+	requestSpace := pb.GetNamespace("request")
 
-	pb.Register(&protocol.SetReq{}, uint32(protocol.CmdType_SetReq))
-	pb.Register(&protocol.SetResp{}, uint32(protocol.CmdType_SetResp))
+	requestSpace.Register(&protocol.PingReq{}, uint32(protocol.CmdType_Ping))
+	requestSpace.Register(&protocol.SetReq{}, uint32(protocol.CmdType_Set))
+	requestSpace.Register(&protocol.GetReq{}, uint32(protocol.CmdType_Get))
+	requestSpace.Register(&protocol.DelReq{}, uint32(protocol.CmdType_Del))
+	requestSpace.Register(&protocol.IncrByReq{}, uint32(protocol.CmdType_IncrBy))
+	requestSpace.Register(&protocol.DecrByReq{}, uint32(protocol.CmdType_DecrBy))
+	requestSpace.Register(&protocol.SetNxReq{}, uint32(protocol.CmdType_SetNx))
+	requestSpace.Register(&protocol.CompareAndSetReq{}, uint32(protocol.CmdType_CompareAndSet))
+	requestSpace.Register(&protocol.CompareAndSetNxReq{}, uint32(protocol.CmdType_CompareAndSetNx))
+	requestSpace.Register(&protocol.KickReq{}, uint32(protocol.CmdType_Kick))
+	requestSpace.Register(&protocol.ReloadTableConfReq{}, uint32(protocol.CmdType_ReloadTableConf))
+	requestSpace.Register(&protocol.Cancel{}, uint32(protocol.CmdType_Cancel))
 
-	pb.Register(&protocol.GetReq{}, uint32(protocol.CmdType_GetReq))
-	pb.Register(&protocol.GetResp{}, uint32(protocol.CmdType_GetResp))
+	responseSpace := pb.GetNamespace("response")
 
-	pb.Register(&protocol.DelReq{}, uint32(protocol.CmdType_DelReq))
-	pb.Register(&protocol.DelResp{}, uint32(protocol.CmdType_DelResp))
-
-	pb.Register(&protocol.IncrByReq{}, uint32(protocol.CmdType_IncrByReq))
-	pb.Register(&protocol.IncrByResp{}, uint32(protocol.CmdType_IncrByResp))
-
-	pb.Register(&protocol.DecrByReq{}, uint32(protocol.CmdType_DecrByReq))
-	pb.Register(&protocol.DecrByResp{}, uint32(protocol.CmdType_DecrByResp))
-
-	pb.Register(&protocol.SetNxReq{}, uint32(protocol.CmdType_SetNxReq))
-	pb.Register(&protocol.SetNxResp{}, uint32(protocol.CmdType_SetNxResp))
-
-	pb.Register(&protocol.CompareAndSetReq{}, uint32(protocol.CmdType_CompareAndSetReq))
-	pb.Register(&protocol.CompareAndSetResp{}, uint32(protocol.CmdType_CompareAndSetResp))
-
-	pb.Register(&protocol.CompareAndSetNxReq{}, uint32(protocol.CmdType_CompareAndSetNxReq))
-	pb.Register(&protocol.CompareAndSetNxResp{}, uint32(protocol.CmdType_CompareAndSetNxResp))
-
-	pb.Register(&protocol.CompareAndSetNxReq{}, uint32(protocol.CmdType_CompareAndSetNxReq))
-	pb.Register(&protocol.CompareAndSetNxResp{}, uint32(protocol.CmdType_CompareAndSetNxResp))
-
-	pb.Register(&protocol.KickReq{}, uint32(protocol.CmdType_KickReq))
-	pb.Register(&protocol.KickResp{}, uint32(protocol.CmdType_KickResp))
-
-	//pb.Register(&protocol.ScanReq{}, uint32(protocol.CmdType_ScanReq))
-	//pb.Register(&protocol.ScanResp{}, uint32(protocol.CmdType_ScanResp))
-
-	pb.Register(&protocol.ReloadTableConfReq{}, uint32(protocol.CmdType_ReloadTableConfReq))
-	pb.Register(&protocol.ReloadTableConfResp{}, uint32(protocol.CmdType_ReloadTableConfResp))
-
-	pb.Register(&protocol.ReloadConfigReq{}, uint32(protocol.CmdType_ReloadConfigReq))
-	pb.Register(&protocol.ReloadConfigResp{}, uint32(protocol.CmdType_ReloadConfigResp))
-
-	pb.Register(&protocol.Cancel{}, uint32(protocol.CmdType_CancelReq))
+	responseSpace.Register(&protocol.PingResp{}, uint32(protocol.CmdType_Ping))
+	responseSpace.Register(&protocol.SetResp{}, uint32(protocol.CmdType_Set))
+	responseSpace.Register(&protocol.GetResp{}, uint32(protocol.CmdType_Get))
+	responseSpace.Register(&protocol.DelResp{}, uint32(protocol.CmdType_Del))
+	responseSpace.Register(&protocol.IncrByResp{}, uint32(protocol.CmdType_IncrBy))
+	responseSpace.Register(&protocol.DecrByResp{}, uint32(protocol.CmdType_DecrBy))
+	responseSpace.Register(&protocol.SetNxResp{}, uint32(protocol.CmdType_SetNx))
+	responseSpace.Register(&protocol.CompareAndSetResp{}, uint32(protocol.CmdType_CompareAndSet))
+	responseSpace.Register(&protocol.CompareAndSetNxResp{}, uint32(protocol.CmdType_CompareAndSetNx))
+	responseSpace.Register(&protocol.CompareAndSetNxResp{}, uint32(protocol.CmdType_CompareAndSetNx))
+	responseSpace.Register(&protocol.KickResp{}, uint32(protocol.CmdType_Kick))
+	responseSpace.Register(&protocol.ReloadTableConfResp{}, uint32(protocol.CmdType_ReloadTableConf))
 
 }

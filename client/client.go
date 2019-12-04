@@ -3,7 +3,6 @@ package client
 import (
 	"github.com/sniperHW/kendynet/event"
 	"github.com/sniperHW/kendynet/util"
-	//"time"
 )
 
 var ClientTimeout uint32 = 6000 //6sec

@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	minSize        uint64 = sizeLen
+	minSize        uint64 = SizeLen
 	initBufferSize uint64 = 1024 * 256
 )
 
@@ -37,10 +37,13 @@ type Receiver struct {
 	r              uint64
 	nextPacketSize uint64
 	unCompressor   UnCompressorI
+	pbSpace        *pb.Namespace
 }
 
-func NewReceiver(compress bool) *Receiver {
-	receiver := &Receiver{}
+func NewReceiver(pbSpace *pb.Namespace, compress bool) *Receiver {
+	receiver := &Receiver{
+		pbSpace: pbSpace,
+	}
 	receiver.buffer = make([]byte, initBufferSize) //conf.MaxPacketSize*2)
 	if compress {
 		receiver.unCompressor = &ZipUnCompressor{}
@@ -68,12 +71,12 @@ func (this *Receiver) unPack() (ret interface{}, err error) {
 			return
 		}
 
-		if uint64(payload)+sizeLen > conf.MaxPacketSize {
-			err = fmt.Errorf("large packet %d", uint64(payload)+sizeLen)
+		if uint64(payload)+SizeLen > conf.MaxPacketSize {
+			err = fmt.Errorf("large packet %d", uint64(payload)+SizeLen)
 			return
 		}
 
-		totalSize = uint64(payload + sizeLen)
+		totalSize = uint64(payload + SizeLen)
 
 		this.nextPacketSize = totalSize
 
@@ -114,7 +117,7 @@ func (this *Receiver) unPack() (ret interface{}, err error) {
 			}
 			sizeOfHead := 8 + 4 + 4 + 2 + uint32(sizeOfUniKey)
 			//普通消息
-			size := payload - sizeCmd - sizeFlag - sizeOfHead
+			size := payload - SizeCmd - SizeFlag - sizeOfHead
 			if buff, err = reader.GetBytes(uint64(size)); err != nil {
 				return
 			}
@@ -130,12 +133,12 @@ func (this *Receiver) unPack() (ret interface{}, err error) {
 				}
 			}
 
-			if msg, err = pb.Unmarshal(uint32(cmd), buff); err != nil {
+			if msg, err = this.pbSpace.Unmarshal(uint32(cmd), buff); err != nil {
 				return
 			}
 			this.nextPacketSize = 0
 			this.r += totalSize
-			ret = NewMessage(pb.GetNameByID(uint32(cmd)), head, msg)
+			ret = NewMessage(this.pbSpace.GetNameByID(uint32(cmd)), head, msg)
 		}
 	}
 	return

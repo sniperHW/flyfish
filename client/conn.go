@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/flyfish/codec"
+	"github.com/sniperHW/flyfish/codec/pb"
 	"github.com/sniperHW/flyfish/errcode"
 	protocol "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet"
@@ -207,8 +208,8 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 		this.session = session
 		this.nextPing = time.Now().Add(protocol.PingTime)
 		//session.SetRecvTimeout(protocol.PingTime * 2)
-		this.session.SetReceiver(codec.NewReceiver(loginResp.GetCompress()))
-		this.session.SetEncoder(codec.NewEncoder(loginResp.GetCompress()))
+		this.session.SetReceiver(codec.NewReceiver(pb.GetNamespace("response"), loginResp.GetCompress()))
+		this.session.SetEncoder(codec.NewEncoder(pb.GetNamespace("request"), loginResp.GetCompress()))
 		this.session.SetCloseCallBack(func(sess kendynet.StreamSession, reason string) {
 			if atomic.LoadInt32(&this.closed) == 0 {
 				this.onDisconnected()
