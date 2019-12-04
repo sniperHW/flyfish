@@ -3,12 +3,12 @@ package client
 import (
 	"github.com/sniperHW/kendynet/event"
 	"github.com/sniperHW/kendynet/util"
-	"time"
+	//"time"
 )
 
-var ClientTimeout time.Duration = 6 * time.Second
+var ClientTimeout uint32 = 6000 //6sec
 
-var ServerTimeout time.Duration = 3 * time.Second
+//var ServerTimeout time.Duration = 3 * time.Second
 
 type Client struct {
 	service       string

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	//pb "github.com/golang/protobuf/proto"
 	codec "github.com/sniperHW/flyfish/codec"
-	"github.com/sniperHW/flyfish/errcode"
+	//"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
 	"sync/atomic"
 	"time"
@@ -23,7 +23,7 @@ var (
 //	}
 //}
 
-func checkReqCommon(reqCommon *proto.ReqCommon) int32 {
+/*func checkReqCommon(reqCommon *proto.ReqCommon) int32 {
 	if "" == reqCommon.GetTable() {
 		return errcode.ERR_MISSING_TABLE
 	}
@@ -33,7 +33,7 @@ func checkReqCommon(reqCommon *proto.ReqCommon) int32 {
 	}
 
 	return errcode.ERR_OK
-}
+}*/
 
 func makeUniKey(table string, key string) string {
 	return fmt.Sprintf("%s:%s", table, key)

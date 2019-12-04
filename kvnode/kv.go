@@ -9,6 +9,7 @@ import (
 	//"github.com/sniperHW/kendynet/util"
 	"sync"
 	"sync/atomic"
+	"time"
 	"unsafe"
 )
 
@@ -34,6 +35,14 @@ var (
 	field_tmp        = bitfield.MakeFiled32(0xF0000)
 	field_kicking    = bitfield.MakeFiled32(0xF00000)
 )
+
+func getDeadline(timeout uint32) (time.Time, time.Time) {
+	now := time.Now()
+	t := time.Duration(timeout) * time.Millisecond
+	processDeadline := now.Add(t / 2)
+	respDeadline := now.Add(t)
+	return processDeadline, respDeadline
+}
 
 type cmdQueue struct {
 	queue  *list.List

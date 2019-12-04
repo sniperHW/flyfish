@@ -105,18 +105,19 @@ message ping_resp {
 
 ///get系列命令
 
-message req_common {
+/*message req_common {
   optional string table   = 1;
   optional string key     = 2;
   optional int64  version = 3[(gogoproto.nullable) = true];  
   optional int64  timeout = 4;
   optional int64  respTimeout = 5;
-}
+}*/
 
 
 //获取记录的指定字段
 message get_req {
-  required req_common head = 1;
+  //required req_common head = 1;
+  optional int64  version = 1[(gogoproto.nullable) = true];
   repeated string fields  = 2;
   optional bool all = 3;
 }
@@ -133,7 +134,8 @@ message get_resp {
 *  (注:未指定版本好的情况下，如果记录不存在则新增记录，新增记录时如果有未设定的字段，将会用设定的默认值初始化)
 */
 message set_req {
-  required req_common head = 1;
+  //required req_common head = 1;
+  optional int64  version = 1[(gogoproto.nullable) = true];
   repeated field  fields  = 2;  
 }
 
@@ -145,7 +147,8 @@ message set_resp {
 *  与set指令类似，只有当记录不存在时才能成功设置
 */
 message set_nx_req {
-  required req_common head = 1;
+  //required req_common head = 1;
+  optional int64  version = 1[(gogoproto.nullable) = true];
   repeated field  fields  = 2;
 }
 
@@ -159,7 +162,8 @@ message set_nx_resp {
 *  记录的默认值初始化记录，int类型默认值为0，并在此基础上增加)  
 */
 message incr_by_req {
-  required req_common head = 1;
+  //required req_common head = 1;
+  optional int64 version = 1[(gogoproto.nullable) = true];
   required field field = 2;
 }
 
@@ -173,7 +177,8 @@ message incr_by_resp {
 *  记录的默认值初始化记录，int类型默认值为0，并在此基础上减少)  
 */
 message decr_by_req {
-  required req_common head = 1;
+  //required req_common head = 1;
+  optional int64  version = 1[(gogoproto.nullable) = true];
   required field  field   = 2;  
 }
 
@@ -187,7 +192,8 @@ message decr_by_resp {
 *  只要记录存在，无论替换是否成功都将返回old.name的当前值。     
 */
 message compare_and_set_req {
-  required req_common head = 1;
+  //required req_common head = 1;
+  optional int64  version = 1[(gogoproto.nullable) = true];
   required field  new = 2;
   required field  old = 3;  
 }
@@ -202,7 +208,8 @@ message compare_and_set_resp {
 *  无论替换是否成功都将返回old.name的当前值。(注意:如果记录不存在，old.name以外的字段将被设置为初始值)
 */ 
 message compare_and_set_nx_req {
-  required req_common head = 1;
+//  required req_common head = 1;
+  optional int64  version = 1[(gogoproto.nullable) = true];
   required field  new = 2;
   required field  old = 3;  
 }
@@ -215,7 +222,8 @@ message compare_and_set_nx_resp {
 
 //删除命令(只支持删除整个记录，不支持删除记录的字段)
 message del_req {
-  required req_common head = 1;
+  //required req_common head = 1;
+  optional int64  version = 1[(gogoproto.nullable) = true];
 }
 
 message del_resp {
@@ -223,7 +231,7 @@ message del_resp {
 }
 
 message kick_req {
-  required req_common head = 1; 
+  //required req_common head = 1; 
 }
 
 message kick_resp {

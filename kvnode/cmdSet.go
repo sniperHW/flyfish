@@ -4,7 +4,6 @@ import (
 	codec "github.com/sniperHW/flyfish/codec"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
-	"time"
 )
 
 type asynCmdTaskSet struct {
@@ -107,22 +106,17 @@ func set(n *KVNode, cli *cliConn, msg *codec.Message) {
 
 	req := msg.GetData().(*proto.SetReq)
 
-	head := req.GetHead()
+	head := msg.GetHead()
+
+	processDeadline, respDeadline := getDeadline(head.Timeout)
 
 	op := &cmdSet{
 		commandBase: &commandBase{
-			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
-			replyer:  newReplyer(cli, msg.GetHead().Seqno, time.Now().Add(time.Duration(head.GetRespTimeout()))),
-			version:  head.Version,
+			deadline: processDeadline,
+			replyer:  newReplyer(cli, msg.GetHead().Seqno, respDeadline),
+			version:  req.Version,
 		},
 		fields: map[string]*proto.Field{},
-	}
-
-	err := checkReqCommon(head)
-
-	if err != errcode.ERR_OK {
-		op.reply(err, nil, 0)
-		return
 	}
 
 	if len(req.GetFields()) == 0 {
@@ -130,11 +124,13 @@ func set(n *KVNode, cli *cliConn, msg *codec.Message) {
 		return
 	}
 
+	var err int32
+
 	var kv *kv
 
-	kv, err = n.storeMgr.getkv(head.GetTable(), head.GetKey())
+	table, key := head.SplitUniKey()
 
-	if errcode.ERR_OK != err {
+	if kv, err = n.storeMgr.getkv(table, key, head.UniKey); errcode.ERR_OK != err {
 		op.reply(err, nil, 0)
 		return
 	}
@@ -145,7 +141,7 @@ func set(n *KVNode, cli *cliConn, msg *codec.Message) {
 		op.fields[v.GetName()] = v
 	}
 
-	if err := kv.meta.CheckSet(op.fields); nil != err {
+	if !kv.meta.CheckSet(op.fields) {
 		op.reply(errcode.ERR_INVAILD_FIELD, nil, 0)
 		return
 	}

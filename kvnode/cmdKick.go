@@ -5,7 +5,6 @@ import (
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/util/str"
-	"time"
 )
 
 type asynCmdTaskKick struct {
@@ -72,30 +71,25 @@ func (this *cmdKick) prepare(_ asynCmdTaskI) asynCmdTaskI {
 
 func kick(n *KVNode, cli *cliConn, msg *codec.Message) {
 
-	req := msg.GetData().(*proto.KickReq)
+	head := msg.GetHead()
 
-	head := req.GetHead()
+	processDeadline, respDeadline := getDeadline(head.Timeout)
 
 	op := &cmdKick{
 		commandBase: &commandBase{
-			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
-			replyer:  newReplyer(cli, msg.GetHead().Seqno, time.Now().Add(time.Duration(head.GetRespTimeout()))),
+			deadline: processDeadline,
+			replyer:  newReplyer(cli, msg.GetHead().Seqno, respDeadline),
 		},
 	}
 
-	err := checkReqCommon(head)
-
-	if err != errcode.ERR_OK {
-		op.reply(err, nil, 0)
-		return
-	}
+	var err int32
 
 	var kv *kv
 
-	kv = n.storeMgr.getkvOnly(head.GetTable(), head.GetKey())
+	table, key := head.SplitUniKey()
 
-	if nil == kv {
-		op.reply(errcode.ERR_OK, nil, 0)
+	if kv, err = n.storeMgr.getkv(table, key, head.UniKey); errcode.ERR_OK != err {
+		op.reply(err, nil, 0)
 		return
 	}
 

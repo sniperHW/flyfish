@@ -429,8 +429,8 @@ type storeMgr struct {
 	dbmeta *dbmeta.DBMeta
 }
 
-func (this *storeMgr) getkvOnly(table string, key string) *kv {
-	uniKey := makeUniKey(table, key)
+func (this *storeMgr) getkvOnly(table string, key string, uniKey string) *kv {
+	//uniKey := makeUniKey(table, key)
 	store := this.getStore(uniKey)
 	if store != nil {
 		var k *kv
@@ -447,9 +447,9 @@ func (this *storeMgr) getkvOnly(table string, key string) *kv {
 	}
 }
 
-func (this *storeMgr) getkv(table string, key string) (*kv, int32) {
+func (this *storeMgr) getkv(table string, key string, uniKey string) (*kv, int32) {
 
-	uniKey := makeUniKey(table, key)
+	//uniKey := makeUniKey(table, key)
 
 	var k *kv
 	var err int32 = errcode.ERR_OK

@@ -95,6 +95,10 @@ func (this *Receiver) unPack() (ret interface{}, err error) {
 				return
 			}
 
+			if head.Timeout, err = reader.GetUint32(); err != nil {
+				return
+			}
+
 			if sizeOfUniKey, err = reader.GetInt16(); err != nil {
 				return
 			}
@@ -108,7 +112,7 @@ func (this *Receiver) unPack() (ret interface{}, err error) {
 			if cmd, err = reader.GetUint16(); err != nil {
 				return
 			}
-			sizeOfHead := 8 + 4 + 2 + uint32(sizeOfUniKey)
+			sizeOfHead := 8 + 4 + 4 + 2 + uint32(sizeOfUniKey)
 			//普通消息
 			size := payload - sizeCmd - sizeFlag - sizeOfHead
 			if buff, err = reader.GetBytes(uint64(size)); err != nil {

@@ -1,16 +1,26 @@
 package codec
 
 import (
+	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/flyfish/codec/pb"
 	protocol "github.com/sniperHW/flyfish/proto"
-
-	"github.com/golang/protobuf/proto"
+	"strings"
 )
 
 type CommonHead struct {
 	Seqno   int64
 	UniKey  string
 	ErrCode int32
+	Timeout uint32
+}
+
+func (this *CommonHead) SplitUniKey() (table string, key string) {
+	r := strings.SplitN(this.UniKey, ":", 2)
+	if len(r) == 2 {
+		table = r[0]
+		key = r[1]
+	}
+	return
 }
 
 type Message struct {

@@ -162,87 +162,97 @@ func (this *TableMeta) GetDefaultV(name string) interface{} {
 }
 
 //检查要获取的字段是否符合表配置
-func (this *TableMeta) CheckGet(fields map[string]*proto.Field) error {
+func (this *TableMeta) CheckGet(fields map[string]*proto.Field) bool {
 	for _, v := range fields {
 		_, ok := this.fieldMetas[v.GetName()]
 		if !ok {
-			return fmt.Errorf("checkGet failed:%s", v.GetName())
-
+			return false
 		}
 	}
-	return nil
+	return true
 }
 
-func (this *TableMeta) CheckField(field *proto.Field) error {
+func (this *TableMeta) CheckField(field *proto.Field) bool {
 	m, ok := this.fieldMetas[field.GetName()]
 	if !ok {
-		return fmt.Errorf("checkField failed:%s", field.GetName())
+		return false
+		//return fmt.Errorf("checkField failed:%s", field.GetName())
 	}
 
 	if m.tt == proto.ValueType_blob {
 		if !field.IsBlob() && !field.IsString() {
-			return fmt.Errorf("checkField failed:%s", field.GetName())
-
+			return false
+			//return fmt.Errorf("checkField failed:%s", field.GetName())
 		}
 	} else if field.GetType() != m.tt {
-		return fmt.Errorf("checkField failed:%s", field.GetName())
+		return false
+		//return fmt.Errorf("checkField failed:%s", field.GetName())
 	}
 
-	return nil
+	return true
 }
 
 //检查要设置的字段是否符合表配置
-func (this *TableMeta) CheckSet(fields map[string]*proto.Field) error {
+func (this *TableMeta) CheckSet(fields map[string]*proto.Field) bool {
 	for _, v := range fields {
 		m, ok := this.fieldMetas[v.GetName()]
 		if !ok {
-			return fmt.Errorf("checkSet failed:%s", v.GetName())
+			//return fmt.Errorf("checkSet failed:%s", v.GetName())
+			return false
 		}
 
 		if m.tt == proto.ValueType_blob {
 			if !v.IsBlob() && !v.IsString() {
-				return fmt.Errorf("checkSet failed:%s", v.GetName())
+				return false
+				//return fmt.Errorf("checkSet failed:%s", v.GetName())
 			}
 		} else if v.GetType() != m.tt {
-			return fmt.Errorf("checkSet failed:%s", v.GetName())
+			return false
+			//return fmt.Errorf("checkSet failed:%s", v.GetName())
 		}
 	}
-	return nil
+	return true
 }
 
 //检查要设置的新老值是否符合表配置
-func (this *TableMeta) CheckCompareAndSet(newV *proto.Field, oldV *proto.Field) error {
+func (this *TableMeta) CheckCompareAndSet(newV *proto.Field, oldV *proto.Field) bool {
 
 	if newV == nil || oldV == nil {
-		return fmt.Errorf("newV == nil || oldV == nil")
+		return false
+		//return fmt.Errorf("newV == nil || oldV == nil")
 	}
 
 	if newV.GetName() != oldV.GetName() {
-		return fmt.Errorf("newV.GetName() != oldV.GetName()")
+		return false
+		//return fmt.Errorf("newV.GetName() != oldV.GetName()")
 	}
 
 	m, ok := this.fieldMetas[oldV.GetName()]
 	if !ok {
-		return fmt.Errorf("invaild filed %s", oldV.GetName())
+		return false
+		//return fmt.Errorf("invaild filed %s", oldV.GetName())
 	}
 
 	if m.tt == proto.ValueType_blob {
 
 		if !newV.IsBlob() && !newV.IsString() {
-			return fmt.Errorf("newV is not blob:%s", newV.GetName())
+			return false
+			//return fmt.Errorf("newV is not blob:%s", newV.GetName())
 		}
 
 		if !oldV.IsBlob() && !oldV.IsString() {
-			return fmt.Errorf("oldV is not blob:%s", oldV.GetName())
+			return false
+			//return fmt.Errorf("oldV is not blob:%s", oldV.GetName())
 		}
 
 	} else {
 		if newV.GetType() != m.tt || oldV.GetType() != m.tt {
-			return fmt.Errorf("newV.GetType() != m.tt || oldV.GetType() != m.tt")
+			return false
+			//return fmt.Errorf("newV.GetType() != m.tt || oldV.GetType() != m.tt")
 		}
 	}
 
-	return nil
+	return true
 }
 
 func loadMeta(def []string) (*map[string]*TableMeta, error) {

@@ -4,7 +4,6 @@ import (
 	codec "github.com/sniperHW/flyfish/codec"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
-	"time"
 )
 
 type asynCmdTaskCompareAndSetNx struct {
@@ -121,24 +120,21 @@ func compareAndSetNx(n *KVNode, cli *cliConn, msg *codec.Message) {
 
 	req := msg.GetData().(*proto.CompareAndSetNxReq)
 
-	head := req.GetHead()
+	head := msg.GetHead()
+
+	processDeadline, respDeadline := getDeadline(head.Timeout)
 
 	op := &cmdCompareAndSetNx{
 		commandBase: &commandBase{
-			deadline: time.Now().Add(time.Duration(head.GetTimeout())),
-			replyer:  newReplyer(cli, msg.GetHead().Seqno, time.Now().Add(time.Duration(head.GetRespTimeout()))),
-			version:  head.Version,
+			deadline: processDeadline,
+			replyer:  newReplyer(cli, msg.GetHead().Seqno, respDeadline),
+			version:  req.Version,
 		},
 		oldV: req.GetOld(),
 		newV: req.GetNew(),
 	}
 
-	err := checkReqCommon(head)
-
-	if err != errcode.ERR_OK {
-		op.reply(err, nil, 0)
-		return
-	}
+	var err int32
 
 	if nil == op.newV || nil == op.oldV {
 		op.reply(errcode.ERR_MISSING_FIELDS, nil, 0)
@@ -147,16 +143,16 @@ func compareAndSetNx(n *KVNode, cli *cliConn, msg *codec.Message) {
 
 	var kv *kv
 
-	kv, err = n.storeMgr.getkv(head.GetTable(), head.GetKey())
+	table, key := head.SplitUniKey()
 
-	if errcode.ERR_OK != err {
+	if kv, err = n.storeMgr.getkv(table, key, head.UniKey); errcode.ERR_OK != err {
 		op.reply(err, nil, 0)
 		return
 	}
 
 	op.kv = kv
 
-	if err := kv.meta.CheckCompareAndSet(op.newV, op.oldV); nil != err {
+	if !kv.meta.CheckCompareAndSet(op.newV, op.oldV) {
 		op.reply(errcode.ERR_INVAILD_FIELD, nil, 0)
 		return
 	}

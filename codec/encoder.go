@@ -56,11 +56,9 @@ func (this *outMessage) Bytes() []byte {
 		flag = byte(1)
 	}
 
-	sizeOfUniKey := 0
-	if "" == this.head.UniKey {
-		sizeOfUniKey = len(this.head.UniKey)
-	}
-	sizeOfHead := 8 + 4 + 2 + sizeOfUniKey //int64 + int32 + int16
+	sizeOfUniKey := len(this.head.UniKey)
+
+	sizeOfHead := 8 + 4 + 4 + 2 + sizeOfUniKey //int64 + int32 + uint32 + int16
 
 	payloadLen = sizeFlag + sizeCmd + len(pbbytes) + sizeOfHead
 	totalLen = sizeLen + payloadLen
@@ -77,6 +75,7 @@ func (this *outMessage) Bytes() []byte {
 	//写head
 	buff.AppendInt64(this.head.Seqno)
 	buff.AppendInt32(this.head.ErrCode)
+	buff.AppendUint32(this.head.Timeout)
 	buff.AppendInt16(int16(sizeOfUniKey))
 	if sizeOfUniKey > 0 {
 		buff.AppendString(this.head.UniKey)

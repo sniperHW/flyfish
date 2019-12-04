@@ -124,15 +124,6 @@ func (this *SliceCmd) Exec() *SliceResult {
 	return <-respChan
 }
 
-func makeReqCommon(table string, key string /*seqno int64,*/, timeout int64, respTimeout int64) *protocol.ReqCommon {
-	return &protocol.ReqCommon{
-		Table:       table,
-		Key:         key,
-		Timeout:     timeout,
-		RespTimeout: respTimeout,
-	}
-}
-
 func (this *Conn) Get(table, key string, fields ...string) *SliceCmd {
 
 	if len(fields) == 0 {
@@ -140,10 +131,10 @@ func (this *Conn) Get(table, key string, fields ...string) *SliceCmd {
 	}
 
 	req := codec.NewMessage("", codec.CommonHead{
-		Seqno:  atomic.AddInt64(&this.seqno, 1),
-		UniKey: table + ":" + key,
+		Seqno:   atomic.AddInt64(&this.seqno, 1),
+		UniKey:  table + ":" + key,
+		Timeout: ClientTimeout,
 	}, &protocol.GetReq{
-		Head:   makeReqCommon(table, key, int64(ServerTimeout), int64(ClientTimeout)),
 		Fields: fields,
 		All:    false,
 	})
@@ -157,11 +148,11 @@ func (this *Conn) Get(table, key string, fields ...string) *SliceCmd {
 func (this *Conn) GetAll(table, key string) *SliceCmd {
 
 	req := codec.NewMessage("", codec.CommonHead{
-		Seqno:  atomic.AddInt64(&this.seqno, 1),
-		UniKey: table + ":" + key,
+		Seqno:   atomic.AddInt64(&this.seqno, 1),
+		UniKey:  table + ":" + key,
+		Timeout: ClientTimeout,
 	}, &protocol.GetReq{
-		Head: makeReqCommon(table, key, int64(ServerTimeout), int64(ClientTimeout)),
-		All:  true,
+		All: true,
 	})
 
 	return &SliceCmd{
@@ -177,12 +168,10 @@ func (this *Conn) Set(table, key string, fields map[string]interface{}, version 
 		return nil
 	}
 
-	pbdata := &protocol.SetReq{
-		Head: makeReqCommon(table, key, int64(ServerTimeout), int64(ClientTimeout)),
-	}
+	pbdata := &protocol.SetReq{}
 
 	if len(version) > 0 {
-		pbdata.Head.Version = proto.Int64(version[0])
+		pbdata.Version = proto.Int64(version[0])
 	}
 
 	for k, v := range fields {
@@ -190,8 +179,9 @@ func (this *Conn) Set(table, key string, fields map[string]interface{}, version 
 	}
 
 	req := codec.NewMessage("", codec.CommonHead{
-		Seqno:  atomic.AddInt64(&this.seqno, 1),
-		UniKey: table + ":" + key,
+		Seqno:   atomic.AddInt64(&this.seqno, 1),
+		UniKey:  table + ":" + key,
+		Timeout: ClientTimeout,
 	}, pbdata)
 
 	return &StatusCmd{
@@ -205,17 +195,16 @@ func (this *Conn) SetNx(table, key string, fields map[string]interface{}) *Statu
 		return nil
 	}
 
-	pbdata := &protocol.SetNxReq{
-		Head: makeReqCommon(table, key, int64(ServerTimeout), int64(ClientTimeout)),
-	}
+	pbdata := &protocol.SetNxReq{}
 
 	for k, v := range fields {
 		pbdata.Fields = append(pbdata.Fields, protocol.PackField(k, v))
 	}
 
 	req := codec.NewMessage("", codec.CommonHead{
-		Seqno:  atomic.AddInt64(&this.seqno, 1),
-		UniKey: table + ":" + key,
+		Seqno:   atomic.AddInt64(&this.seqno, 1),
+		UniKey:  table + ":" + key,
+		Timeout: ClientTimeout,
 	}, pbdata)
 
 	return &StatusCmd{
@@ -232,18 +221,18 @@ func (this *Conn) CompareAndSet(table, key, field string, oldV, newV interface{}
 	}
 
 	pbdata := &protocol.CompareAndSetReq{
-		Head: makeReqCommon(table, key, int64(ServerTimeout), int64(ClientTimeout)),
-		New:  protocol.PackField(field, newV),
-		Old:  protocol.PackField(field, oldV),
+		New: protocol.PackField(field, newV),
+		Old: protocol.PackField(field, oldV),
 	}
 
 	if len(version) > 0 {
-		pbdata.Head.Version = proto.Int64(version[0])
+		pbdata.Version = proto.Int64(version[0])
 	}
 
 	req := codec.NewMessage("", codec.CommonHead{
-		Seqno:  atomic.AddInt64(&this.seqno, 1),
-		UniKey: table + ":" + key,
+		Seqno:   atomic.AddInt64(&this.seqno, 1),
+		UniKey:  table + ":" + key,
+		Timeout: ClientTimeout,
 	}, pbdata)
 
 	return &SliceCmd{
@@ -259,18 +248,18 @@ func (this *Conn) CompareAndSetNx(table, key, field string, oldV, newV interface
 	}
 
 	pbdata := &protocol.CompareAndSetNxReq{
-		Head: makeReqCommon(table, key, int64(ServerTimeout), int64(ClientTimeout)),
-		New:  protocol.PackField(field, newV),
-		Old:  protocol.PackField(field, oldV),
+		New: protocol.PackField(field, newV),
+		Old: protocol.PackField(field, oldV),
 	}
 
 	if len(version) > 0 {
-		pbdata.Head.Version = proto.Int64(version[0])
+		pbdata.Version = proto.Int64(version[0])
 	}
 
 	req := codec.NewMessage("", codec.CommonHead{
-		Seqno:  atomic.AddInt64(&this.seqno, 1),
-		UniKey: table + ":" + key,
+		Seqno:   atomic.AddInt64(&this.seqno, 1),
+		UniKey:  table + ":" + key,
+		Timeout: ClientTimeout,
 	}, pbdata)
 
 	return &SliceCmd{
@@ -281,17 +270,16 @@ func (this *Conn) CompareAndSetNx(table, key, field string, oldV, newV interface
 
 func (this *Conn) Del(table, key string, version ...int64) *StatusCmd {
 
-	pbdata := &protocol.DelReq{
-		Head: makeReqCommon(table, key, int64(ServerTimeout), int64(ClientTimeout)),
-	}
+	pbdata := &protocol.DelReq{}
 
 	if len(version) > 0 {
-		pbdata.Head.Version = proto.Int64(version[0])
+		pbdata.Version = proto.Int64(version[0])
 	}
 
 	req := codec.NewMessage("", codec.CommonHead{
-		Seqno:  atomic.AddInt64(&this.seqno, 1),
-		UniKey: table + ":" + key,
+		Seqno:   atomic.AddInt64(&this.seqno, 1),
+		UniKey:  table + ":" + key,
+		Timeout: ClientTimeout,
 	}, pbdata)
 
 	return &StatusCmd{
@@ -303,17 +291,17 @@ func (this *Conn) Del(table, key string, version ...int64) *StatusCmd {
 
 func (this *Conn) IncrBy(table, key, field string, value int64, version ...int64) *SliceCmd {
 	pbdata := &protocol.IncrByReq{
-		Head:  makeReqCommon(table, key, int64(ServerTimeout), int64(ClientTimeout)),
 		Field: protocol.PackField(field, value),
 	}
 
 	if len(version) > 0 {
-		pbdata.Head.Version = proto.Int64(version[0])
+		pbdata.Version = proto.Int64(version[0])
 	}
 
 	req := codec.NewMessage("", codec.CommonHead{
-		Seqno:  atomic.AddInt64(&this.seqno, 1),
-		UniKey: table + ":" + key,
+		Seqno:   atomic.AddInt64(&this.seqno, 1),
+		UniKey:  table + ":" + key,
+		Timeout: ClientTimeout,
 	}, pbdata)
 
 	return &SliceCmd{
@@ -324,17 +312,17 @@ func (this *Conn) IncrBy(table, key, field string, value int64, version ...int64
 
 func (this *Conn) DecrBy(table, key, field string, value int64, version ...int64) *SliceCmd {
 	pbdata := &protocol.DecrByReq{
-		Head:  makeReqCommon(table, key, int64(ServerTimeout), int64(ClientTimeout)),
 		Field: protocol.PackField(field, value),
 	}
 
 	if len(version) > 0 {
-		pbdata.Head.Version = proto.Int64(version[0])
+		pbdata.Version = proto.Int64(version[0])
 	}
 
 	req := codec.NewMessage("", codec.CommonHead{
-		Seqno:  atomic.AddInt64(&this.seqno, 1),
-		UniKey: table + ":" + key,
+		Seqno:   atomic.AddInt64(&this.seqno, 1),
+		UniKey:  table + ":" + key,
+		Timeout: ClientTimeout,
 	}, pbdata)
 
 	return &SliceCmd{
@@ -344,13 +332,12 @@ func (this *Conn) DecrBy(table, key, field string, value int64, version ...int64
 }
 
 func (this *Conn) Kick(table, key string) *StatusCmd {
-	pbdata := &protocol.KickReq{
-		Head: makeReqCommon(table, key, int64(ServerTimeout), int64(ClientTimeout)),
-	}
+	pbdata := &protocol.KickReq{}
 
 	req := codec.NewMessage("", codec.CommonHead{
-		Seqno:  atomic.AddInt64(&this.seqno, 1),
-		UniKey: table + ":" + key,
+		Seqno:   atomic.AddInt64(&this.seqno, 1),
+		UniKey:  table + ":" + key,
+		Timeout: ClientTimeout,
 	}, pbdata)
 
 	return &StatusCmd{
