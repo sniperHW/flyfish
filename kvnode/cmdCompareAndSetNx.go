@@ -11,12 +11,19 @@ type asynCmdTaskCompareAndSetNx struct {
 }
 
 func (this *asynCmdTaskCompareAndSetNx) onSqlResp(errno int32) {
-	this.asynCmdTaskBase.onSqlResp(errno)
+	Debugln(errno)
+
+	if errno != errcode.ERR_RECORD_NOTEXIST {
+		this.asynCmdTaskBase.onSqlResp(errno)
+	}
+
 	cmd := this.commands[0].(*cmdCompareAndSetNx)
+
 	if errno == errcode.ERR_RECORD_NOTEXIST {
 		this.fields = map[string]*proto.Field{}
 		fillDefaultValue(cmd.getKV().meta, &this.fields)
 		this.sqlFlag = sql_insert_update
+		this.version++
 		this.fields[cmd.newV.GetName()] = cmd.newV
 		this.getKV().store.issueUpdate(this)
 	} else if errno == errcode.ERR_OK {
@@ -55,6 +62,7 @@ type cmdCompareAndSetNx struct {
 }
 
 func (this *cmdCompareAndSetNx) reply(errCode int32, fields map[string]*proto.Field, version int64) {
+	Debugln("cmdCompareAndSetNx reply", fields)
 	this.replyer.reply(this, errCode, fields, version)
 }
 
