@@ -65,7 +65,7 @@ func main() {
 	keyrange, _ = strconv.ParseInt(os.Args[1], 10, 32)
 
 	for j := 0; j < 50; j++ {
-		c := kclient.OpenClient(os.Args[2]) //eventQueue)
+		c := kclient.OpenClient(os.Args[2], false) //eventQueue)
 		for i := 0; i < 50; i++ {
 			Get(c)
 		}

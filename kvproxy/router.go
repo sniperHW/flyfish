@@ -1,7 +1,10 @@
 package kvproxy
 
 import (
+	//"fmt"
 	"github.com/sniperHW/kendynet"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -16,10 +19,38 @@ type reqRouter struct {
 	kvnodes []*kvnode
 }
 
-func newReqRounter(kvnodes []string) *reqRouter {
+func newReqRounter(proxy *kvproxy, kvnodes []string) *reqRouter {
+
+	if len(kvnodes) == 0 {
+		panic("len(kvnodes) == 0")
+	}
+
 	r := &reqRouter{
 		kvnodes: []*kvnode{},
 	}
+
+	for _, v := range kvnodes {
+
+		t := strings.Split(v, ":")
+
+		if len(t) != 3 {
+			panic("invaild nodes")
+		}
+
+		id, err := strconv.Atoi(t[0])
+
+		if nil != err {
+			panic("invaild id")
+		}
+
+		r.kvnodes = append(r.kvnodes, &kvnode{
+			serverID:     id,
+			addr:         t[1] + ":" + t[2],
+			compressConn: openConn(proxy, id, t[1]+":"+t[2], true),
+			conn:         openConn(proxy, id, t[1]+":"+t[2], false),
+		})
+	}
+
 	return r
 }
 

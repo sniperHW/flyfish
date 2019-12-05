@@ -183,7 +183,7 @@ func recvLoginResp(session kendynet.StreamSession) (*protocol.LoginResp, error) 
 }
 
 func (this *Conn) onConnected(session kendynet.StreamSession) {
-	loginReq := &protocol.LoginReq{Compress: true} //proto.Bool(true)}
+	loginReq := &protocol.LoginReq{Compress: this.c.compress} //proto.Bool(true)}
 	if !sendLoginReq(session, loginReq) {
 		session.Close("login failed", 0)
 		this.eventQueue.Post(func() {

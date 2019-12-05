@@ -15,6 +15,7 @@ type Client struct {
 	closed        int32
 	mGetQueue     *event.EventQueue
 	callbackQueue *event.EventQueue //响应回调的事件队列
+	compress      bool
 }
 
 /*
@@ -55,11 +56,12 @@ func (this *Client) doCallBack(cb callback, a interface{}) {
 	}
 }
 
-func OpenClient(service string, callbackQueue ...*event.EventQueue) *Client {
+func OpenClient(service string, compress bool, callbackQueue ...*event.EventQueue) *Client {
 
 	c := &Client{
 		mGetQueue: event.NewEventQueue(),
 		service:   service,
+		compress:  compress,
 	}
 
 	if len(callbackQueue) > 0 {

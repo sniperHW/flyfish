@@ -12,7 +12,7 @@ func main() {
 
 	kclient.InitLogger(golog.New("flyfish client", golog.NewOutputLogger("log", "flyfish client", 1024*1024*50)))
 
-	c := kclient.OpenClient(os.Args[1])
+	c := kclient.OpenClient(os.Args[1], false)
 
 	fields := map[string]interface{}{}
 

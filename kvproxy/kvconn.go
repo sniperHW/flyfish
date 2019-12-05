@@ -3,14 +3,9 @@ package kvproxy
 import (
 	"encoding/binary"
 	"github.com/golang/protobuf/proto"
-	"github.com/sniperHW/flyfish/codec"
-	"github.com/sniperHW/flyfish/codec/pb"
-	//"github.com/sniperHW/flyfish/errcode"
 	protocol "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet"
-	//"github.com/sniperHW/kendynet/event"
 	connector "github.com/sniperHW/kendynet/socket/connector/tcp"
-	//"github.com/sniperHW/kendynet/util"
 	"net"
 	"sync"
 	"time"
@@ -122,9 +117,11 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 	this.Lock()
 	this.session = session
 
-	this.session.SetReceiver(codec.NewReceiver(pb.GetNamespace("response"), loginResp.GetCompress()))
+	//this.session.SetReceiver(codec.NewReceiver(pb.GetNamespace("response"), loginResp.GetCompress()))
 
-	this.session.SetEncoder(codec.NewEncoder(pb.GetNamespace("request"), loginResp.GetCompress()))
+	//this.session.SetEncoder(codec.NewEncoder(pb.GetNamespace("request"), loginResp.GetCompress()))
+
+	this.session.SetReceiver(NewReceiver())
 
 	this.session.SetCloseCallBack(func(sess kendynet.StreamSession, reason string) {
 		this.Lock()
@@ -143,7 +140,7 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 	now := time.Now()
 
 	for _, v := range this.pendingSend {
-		if !v.sendDeadline.After(now) {
+		if !now.After(v.sendDeadline) {
 			this.session.SendMessage(v.msg)
 		}
 	}

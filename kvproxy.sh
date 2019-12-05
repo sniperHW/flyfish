@@ -1,0 +1,1 @@
+go run kvproxy/main/kvproxy.go --addr localhost:8110 --kvnodes 1:localhost:10012

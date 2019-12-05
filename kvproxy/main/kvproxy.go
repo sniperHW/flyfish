@@ -13,6 +13,11 @@ import (
 func main() {
 	addr := flag.String("addr", "0.0.0.0:8080", "addr of proxy")
 	kvnodes := flag.String("kvnodes", "", "kvnodes id1:ip1:port1,id2:ip2:port2...")
+
+	flag.Parse()
+
+	fmt.Println(*addr, *kvnodes, strings.Split(*kvnodes, ","))
+
 	proxy := kvproxy.NewKVProxy(*addr, 4, strings.Split(*kvnodes, ","))
 	if nil != proxy && nil == proxy.Start() {
 		c := make(chan os.Signal)

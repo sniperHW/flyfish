@@ -99,6 +99,7 @@ func (this *reqProcessor) onReq(seqno int64, session kendynet.StreamSession, req
 
 	if nil != err {
 		//返回错误响应
+		fmt.Println(err)
 	}
 }
 
@@ -178,7 +179,7 @@ func NewKVProxy(addr string, processorCount int, kvnodes []string) *kvproxy {
 		return nil
 	}
 
-	proxy.router = newReqRounter(kvnodes)
+	proxy.router = newReqRounter(proxy, kvnodes)
 	proxy.processors = []*reqProcessor{}
 	for i := 0; i < processorCount; i++ {
 		proxy.processors = append(proxy.processors, newReqProcessor(proxy.router))
@@ -221,6 +222,8 @@ func (this *kvproxy) Start() error {
 				session.Close("login failed", 0)
 				return
 			}
+
+			fmt.Println("a new connection")
 
 			session.SetUserData(loginReq.GetCompress())
 

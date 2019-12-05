@@ -98,7 +98,7 @@ func main() {
 	id = 0
 
 	for j := 0; j < 100; j++ {
-		c := kclient.OpenClient(os.Args[2]) //eventQueue)
+		c := kclient.OpenClient(os.Args[2], false) //eventQueue)
 		for i := 0; i < 10; i++ {
 			Set(c)
 		}
