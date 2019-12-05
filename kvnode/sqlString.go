@@ -558,7 +558,13 @@ func (this *sqlMgr) buildInsertUpdateStringPgSql(s *str.Str, kv *kv) {
 	i := 0
 
 	for _, name := range meta.GetInsertOrder() {
-		s.AppendFieldStr(kv.fields[name], this.binaryToSqlStr)
+		v, ok := kv.fields[name]
+
+		if !ok {
+			v = meta.GetDefaultV(name)
+		}
+
+		s.AppendFieldStr(v, this.binaryToSqlStr)
 		if i != len(kv.fields)-1 {
 			s.AppendString(",")
 		}
