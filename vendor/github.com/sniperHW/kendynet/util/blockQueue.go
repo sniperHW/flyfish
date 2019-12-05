@@ -164,7 +164,6 @@ func (self *BlockQueue) Clear() {
 }
 
 func (self *BlockQueue) SetFullSize(newSize int) {
-	self.listGuard.Lock()
 	if newSize > 0 {
 		needSignal := false
 		self.listGuard.Lock()
