@@ -166,22 +166,18 @@ func verifyLogin(loginReq *protocol.LoginReq) bool {
 	return true
 }
 
-func NewKVProxy(addr string, processorCount int, kvnodes []string) *kvproxy {
-
-	if processorCount == 0 || len(kvnodes) == 0 {
-		return nil
-	}
+func NewKVProxy() *kvproxy {
 
 	var err error
 	proxy := &kvproxy{}
 
-	if proxy.listener, err = tcp.New("tcp", addr); nil != err {
+	if proxy.listener, err = tcp.New("tcp", GetConfig().Host); nil != err {
 		return nil
 	}
 
-	proxy.router = newReqRounter(proxy, kvnodes)
+	proxy.router = newReqRounter(proxy)
 	proxy.processors = []*reqProcessor{}
-	for i := 0; i < processorCount; i++ {
+	for i := 0; i < 31; i++ {
 		proxy.processors = append(proxy.processors, newReqProcessor(proxy.router))
 	}
 
