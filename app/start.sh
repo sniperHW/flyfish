@@ -1,0 +1,1 @@
+ nohup bin/flyweb conf/conf.toml > flyweb.log 2>&1 &
