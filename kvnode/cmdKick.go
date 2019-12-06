@@ -51,22 +51,26 @@ func (this *cmdKick) makeResponse(errCode int32, fields map[string]*proto.Field,
 
 }
 
-func (this *cmdKick) prepare(_ asynCmdTaskI) asynCmdTaskI {
+func (this *cmdKick) prepare(t asynCmdTaskI) (asynCmdTaskI, bool) {
+
+	if t != nil {
+		return t, false
+	}
 
 	kv := this.kv
 	status := kv.getStatus()
 
 	if !(status == cache_ok || status == cache_missing) {
 		this.reply(errcode.ERR_OTHER, nil, 0)
-		return nil
+		return nil, true
 	}
 
 	if kv.isWriteBack() {
 		this.reply(errcode.ERR_RETRY, nil, 0)
-		return nil
+		return nil, true
 	}
 
-	return newAsynCmdTaskKick(this)
+	return newAsynCmdTaskKick(this), true
 }
 
 func kick(n *KVNode, cli *cliConn, msg *codec.Message) {

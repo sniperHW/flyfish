@@ -41,10 +41,10 @@ func (this *asynCmdTaskSet) onSqlResp(errno int32) {
 	}
 }
 
-func newAsynCmdTaskSet(cmd commandI) *asynCmdTaskSet {
+func newAsynCmdTaskSet() *asynCmdTaskSet {
 	return &asynCmdTaskSet{
 		asynCmdTaskBase: &asynCmdTaskBase{
-			commands: []commandI{cmd},
+			commands: []commandI{},
 		},
 	}
 }
@@ -69,37 +69,59 @@ func (this *cmdSet) makeResponse(errCode int32, fields map[string]*proto.Field, 
 
 }
 
-func (this *cmdSet) prepare(_ asynCmdTaskI) asynCmdTaskI {
+func (this *cmdSet) prepare(t asynCmdTaskI) (asynCmdTaskI, bool) {
+
+	task, ok := t.(*asynCmdTaskSet)
+
+	if t != nil && !ok {
+		//不同类命令不能合并
+		return t, false
+	}
+
+	if t != nil && this.version != nil {
+		//同类命令但需要检查版本号，不能跟之前的命令合并
+		return t, false
+	}
 
 	kv := this.kv
 	status := kv.getStatus()
 
-	if status != cache_new && !this.checkVersion(kv.version) {
-		this.reply(errcode.ERR_VERSION_MISMATCH, nil, kv.version)
-		return nil
+	if t != nil && status == cache_new {
+		//需要从数据库加载，不合并
+		return t, false
 	}
 
-	task := newAsynCmdTaskSet(this)
+	if status != cache_new && !this.checkVersion(kv.version) {
+		this.reply(errcode.ERR_VERSION_MISMATCH, nil, kv.version)
+		return t, true
+	}
 
-	if status == cache_missing {
+	if nil == t {
+		task = newAsynCmdTaskSet()
 		task.fields = map[string]*proto.Field{}
-		fillDefaultValue(kv.meta, &task.fields)
-		task.sqlFlag = sql_insert_update
-		for k, v := range this.fields {
-			task.fields[k] = v
+
+		if status == cache_missing {
+			fillDefaultValue(kv.meta, &task.fields)
+			task.sqlFlag = sql_insert_update
+		} else if status == cache_ok {
+			task.sqlFlag = sql_update
 		}
-		Debugln("set cache_missing", this.kv.uniKey)
-	} else if status == cache_ok {
-		task.sqlFlag = sql_update
-		task.fields = this.fields
+	}
+
+	task.commands = append(task.commands, this)
+
+	for k, v := range this.fields {
+		task.fields[k] = v
 	}
 
 	if status != cache_new {
-		task.version = kv.version + 1
+		if t == nil {
+			task.version = kv.version + 1
+		}
 		Debugln("task version", task.version)
 	}
 
-	return task
+	return task, true
 }
 
 func set(n *KVNode, cli *cliConn, msg *codec.Message) {

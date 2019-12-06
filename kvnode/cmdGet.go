@@ -64,29 +64,31 @@ func (this *cmdGet) makeResponse(errCode int32, fields map[string]*proto.Field, 
 	}, pbdata)
 }
 
-func (this *cmdGet) prepare(task asynCmdTaskI) asynCmdTaskI {
+func (this *cmdGet) prepare(t asynCmdTaskI) (asynCmdTaskI, bool) {
+
+	task, ok := t.(*asynCmdTaskGet)
+
+	if t != nil && !ok {
+		//不同类命令不能合并
+		return t, false
+	}
 
 	status := this.kv.getStatus()
 
-	var getTask *asynCmdTaskGet
-
-	if nil == task {
-		getTask = newAsynCmdTaskGet()
+	if nil == t {
+		task = newAsynCmdTaskGet()
 		if status == cache_missing || status == cache_ok {
-			getTask.fields = this.kv.fields
-			getTask.version = this.kv.version
+			task.fields = this.kv.fields
+			task.version = this.kv.version
 			if status == cache_missing {
-				getTask.errno = errcode.ERR_RECORD_NOTEXIST
-				Debugln(getTask.fields, this.kv.fields)
+				task.errno = errcode.ERR_RECORD_NOTEXIST
 			}
 		}
-	} else {
-		getTask = task.(*asynCmdTaskGet)
 	}
 
-	getTask.commands = append(getTask.commands, this)
+	task.commands = append(task.commands, this)
 
-	return getTask
+	return task, true
 }
 
 func get(n *KVNode, cli *cliConn, msg *codec.Message) {

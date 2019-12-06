@@ -47,7 +47,7 @@ type commandI interface {
 	getKV() *kv      //获取op操作的目标
 	isTimeout() bool //命令已经超时
 	checkVersion(version int64) bool
-	prepare(asynCmdTaskI) asynCmdTaskI
+	prepare(asynCmdTaskI) (asynCmdTaskI, bool)
 }
 
 type commandBase struct {

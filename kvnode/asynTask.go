@@ -92,6 +92,7 @@ func (this *asynCmdTaskBase) reply(errno ...int32) {
 	}
 
 	if atomic.CompareAndSwapInt64(&this.replyed, 0, 1) {
+		Infoln("reply count", len(this.commands))
 		for _, v := range this.commands {
 			v.reply(errCode, this.fields, this.version)
 		}

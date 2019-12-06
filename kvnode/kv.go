@@ -49,6 +49,10 @@ type cmdQueue struct {
 	locked bool //队列是否被锁定（前面有op尚未完成）
 }
 
+func (this *cmdQueue) len() int {
+	return this.queue.Len()
+}
+
 func (this *cmdQueue) empty() bool {
 	return this.queue.Len() == 0
 }
@@ -292,7 +296,7 @@ func newkv(store *kvstore, tableMeta *dbmeta.TableMeta, key string, uniKey strin
 		meta:   tableMeta,
 		table:  tableMeta.GetTable(),
 		cmdQueue: &cmdQueue{
-			queue: list.New(), //ringqueue.New(100),
+			queue: list.New(),
 		},
 		modifyFields: map[string]*proto.Field{},
 		store:        store,
@@ -318,6 +322,8 @@ func (this *kv) processQueueCmd(unlockOpQueue ...bool) {
 	}
 
 	var asynTask asynCmdTaskI
+	flagPop := false
+
 	cmd := this.cmdQueue.front()
 	for ; nil != cmd; cmd = this.cmdQueue.front() {
 		if cmd.isCancel() || cmd.isTimeout() {
@@ -327,25 +333,19 @@ func (this *kv) processQueueCmd(unlockOpQueue ...bool) {
 			switch cmd.(type) {
 			case *cmdGet:
 				this.cmdQueue.popFront()
-				asynTask = cmd.prepare(asynTask)
-			case *cmdCompareAndSet, *cmdCompareAndSetNx, *cmdDecr, *cmdDel, *cmdIncr, *cmdSet, *cmdSetNx:
-				if nil != asynTask {
+				asynTask, _ = cmd.prepare(asynTask)
+			case *cmdCompareAndSet, *cmdCompareAndSetNx, *cmdIncrDecr, *cmdDel, *cmdSet, *cmdSetNx, *cmdKick:
+				asynTask, flagPop = cmd.prepare(asynTask)
+
+				if flagPop {
+					this.cmdQueue.popFront()
+				}
+
+				if nil != asynTask && !flagPop {
+					//后面的命令无法再合并
 					goto loopEnd
 				}
-				this.cmdQueue.popFront()
-				asynTask = cmd.prepare(asynTask)
-				if nil != asynTask {
-					goto loopEnd
-				}
-			case *cmdKick:
-				if nil != asynTask {
-					goto loopEnd
-				}
-				this.cmdQueue.popFront()
-				asynTask = cmd.prepare(asynTask)
-				if nil != asynTask {
-					goto loopEnd
-				}
+
 			default:
 				this.cmdQueue.popFront()
 				//记录日志
@@ -386,7 +386,6 @@ loopEnd:
 		this.Unlock()
 		switch asynTask.(type) {
 		case *asynCmdTaskGet:
-			Debugln("issueReadReq")
 			this.store.issueReadReq(asynTask)
 		case *asynCmdTaskKick:
 			if !this.store.kick(asynTask.(*asynCmdTaskKick)) {

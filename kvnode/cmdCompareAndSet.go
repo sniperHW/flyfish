@@ -71,7 +71,11 @@ func (this *cmdCompareAndSet) makeResponse(errCode int32, fields map[string]*pro
 	}, pbdata)
 }
 
-func (this *cmdCompareAndSet) prepare(_ asynCmdTaskI) asynCmdTaskI {
+func (this *cmdCompareAndSet) prepare(t asynCmdTaskI) (asynCmdTaskI, bool) {
+
+	if t != nil {
+		return t, false
+	}
 
 	kv := this.kv
 
@@ -79,7 +83,7 @@ func (this *cmdCompareAndSet) prepare(_ asynCmdTaskI) asynCmdTaskI {
 
 	if status == cache_missing {
 		this.reply(errcode.ERR_RECORD_NOTEXIST, nil, 0)
-		return nil
+		return t, true
 	} else {
 
 		var task *asynCmdTaskCompareAndSet
@@ -87,7 +91,7 @@ func (this *cmdCompareAndSet) prepare(_ asynCmdTaskI) asynCmdTaskI {
 		if status == cache_ok {
 			if !this.checkVersion(kv.version) {
 				this.reply(errcode.ERR_VERSION_MISMATCH, nil, kv.version)
-				return nil
+				return t, true
 			}
 
 			v := kv.fields[this.oldV.GetName()]
@@ -101,7 +105,7 @@ func (this *cmdCompareAndSet) prepare(_ asynCmdTaskI) asynCmdTaskI {
 
 			if !this.oldV.IsEqual(v) {
 				this.reply(errcode.ERR_CAS_NOT_EQUAL, nil, kv.version)
-				return nil
+				return t, true
 			}
 
 			task = newAsynCmdTaskCompareAndSet(this)
@@ -113,7 +117,7 @@ func (this *cmdCompareAndSet) prepare(_ asynCmdTaskI) asynCmdTaskI {
 			task = newAsynCmdTaskCompareAndSet(this)
 		}
 
-		return task
+		return task, true
 	}
 }
 

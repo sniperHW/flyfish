@@ -75,7 +75,11 @@ func (this *cmdCompareAndSetNx) makeResponse(errCode int32, fields map[string]*p
 	}, pbdata)
 }
 
-func (this *cmdCompareAndSetNx) prepare(_ asynCmdTaskI) asynCmdTaskI {
+func (this *cmdCompareAndSetNx) prepare(t asynCmdTaskI) (asynCmdTaskI, bool) {
+
+	if t != nil {
+		return t, false
+	}
 
 	kv := this.kv
 
@@ -84,7 +88,7 @@ func (this *cmdCompareAndSetNx) prepare(_ asynCmdTaskI) asynCmdTaskI {
 	if status == cache_ok {
 		if !this.checkVersion(kv.version) {
 			this.reply(errcode.ERR_VERSION_MISMATCH, nil, kv.version)
-			return nil
+			return t, true
 		}
 
 		v := kv.fields[this.oldV.GetName()]
@@ -98,7 +102,7 @@ func (this *cmdCompareAndSetNx) prepare(_ asynCmdTaskI) asynCmdTaskI {
 
 		if !this.oldV.IsEqual(v) {
 			this.reply(errcode.ERR_CAS_NOT_EQUAL, nil, kv.version)
-			return nil
+			return t, true
 		}
 	}
 
@@ -116,7 +120,7 @@ func (this *cmdCompareAndSetNx) prepare(_ asynCmdTaskI) asynCmdTaskI {
 		fillDefaultValue(this.getKV().meta, &task.fields)
 		task.fields[this.newV.GetName()] = this.newV
 	}
-	return task
+	return task, true
 }
 
 func compareAndSetNx(n *KVNode, cli *cliConn, msg *codec.Message) {

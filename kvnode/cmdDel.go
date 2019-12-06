@@ -48,7 +48,11 @@ func (this *cmdDel) makeResponse(errCode int32, fields map[string]*proto.Field, 
 
 }
 
-func (this *cmdDel) prepare(_ asynCmdTaskI) asynCmdTaskI {
+func (this *cmdDel) prepare(t asynCmdTaskI) (asynCmdTaskI, bool) {
+
+	if t != nil {
+		return t, false
+	}
 
 	status := this.kv.getStatus()
 
@@ -56,14 +60,14 @@ func (this *cmdDel) prepare(_ asynCmdTaskI) asynCmdTaskI {
 
 	if status == cache_missing {
 		this.reply(errcode.ERR_RECORD_NOTEXIST, nil, 0)
-		return nil
+		return t, true
 	} else {
 		if status == cache_ok && !this.checkVersion(this.kv.version) {
 			this.reply(errcode.ERR_VERSION_MISMATCH, nil, this.kv.version)
-			return nil
+			return t, true
 		}
 
-		return newAsynCmdTaskDel(this, sql_delete)
+		return newAsynCmdTaskDel(this, sql_delete), false
 	}
 }
 

@@ -56,14 +56,18 @@ func (this *cmdSetNx) makeResponse(errCode int32, fields map[string]*proto.Field
 	})
 }
 
-func (this *cmdSetNx) prepare(_ asynCmdTaskI) asynCmdTaskI {
+func (this *cmdSetNx) prepare(t asynCmdTaskI) (asynCmdTaskI, bool) {
+
+	if t != nil {
+		return t, false
+	}
 
 	kv := this.kv
 	status := kv.getStatus()
 
 	if status == cache_ok {
 		this.reply(errcode.ERR_RECORD_EXIST, nil, kv.version)
-		return nil
+		return nil, true
 	}
 
 	task := newAsynCmdTaskSetNx(this)
@@ -78,7 +82,7 @@ func (this *cmdSetNx) prepare(_ asynCmdTaskI) asynCmdTaskI {
 		task.version = 1
 	}
 
-	return task
+	return task, true
 }
 
 func setNx(n *KVNode, cli *cliConn, msg *codec.Message) {
