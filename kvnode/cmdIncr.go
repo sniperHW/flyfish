@@ -82,7 +82,7 @@ func (this *cmdIncr) prepare(_ asynCmdTaskI) asynCmdTaskI {
 	kv := this.kv
 	status := kv.getStatus()
 
-	if !this.checkVersion(kv.version) {
+	if status != cache_new && !this.checkVersion(kv.version) {
 		this.reply(errcode.ERR_VERSION_MISMATCH, nil, kv.version)
 		return nil
 	}
