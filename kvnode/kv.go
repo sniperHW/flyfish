@@ -334,14 +334,18 @@ func (this *kv) processQueueCmd(unlockOpQueue ...bool) {
 				}
 				this.cmdQueue.popFront()
 				asynTask = cmd.prepare(asynTask)
-				goto loopEnd
+				if nil != asynTask {
+					goto loopEnd
+				}
 			case *cmdKick:
 				if nil != asynTask {
 					goto loopEnd
 				}
 				this.cmdQueue.popFront()
 				asynTask = cmd.prepare(asynTask)
-				goto loopEnd
+				if nil != asynTask {
+					goto loopEnd
+				}
 			default:
 				this.cmdQueue.popFront()
 				//记录日志
