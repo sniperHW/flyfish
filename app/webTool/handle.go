@@ -3,8 +3,8 @@ package webTool
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/sniperHW/flyfish/app/webTool/pgsql"
 	"github.com/sniperHW/flyfish/errcode"
-	"github.com/yddeng/flyfish/app/webTool/pgsql"
 	"io/ioutil"
 	"net/http"
 	"net/url"

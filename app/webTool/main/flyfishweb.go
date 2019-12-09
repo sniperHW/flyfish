@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
+	"github.com/sniperHW/flyfish/app/webTool"
+	"github.com/sniperHW/flyfish/app/webTool/conf"
 	"github.com/sniperHW/kendynet/golog"
-	"github.com/yddeng/flyfish/app/webTool"
-	"github.com/yddeng/flyfish/app/webTool/conf"
 	"os"
 )
 
