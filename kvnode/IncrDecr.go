@@ -78,21 +78,13 @@ func (this *cmdIncrDecr) makeResponse(errCode int32, fields map[string]*proto.Fi
 
 	var pbdata pb.Message
 
-	var newValue *proto.Field
-
-	if errCode == errcode.ERR_OK {
-		newValue = fields[this.field.GetName()]
-	}
-
 	if this.isIncr {
 		pbdata = &proto.IncrByResp{
-			Version:  version,
-			NewValue: newValue,
+			Version: version,
 		}
 	} else {
 		pbdata = &proto.DecrByResp{
-			Version:  version,
-			NewValue: newValue,
+			Version: version,
 		}
 	}
 
@@ -145,10 +137,10 @@ func (this *cmdIncrDecr) prepare(t asynCmdTaskI) (asynCmdTaskI, bool) {
 		var newV *proto.Field
 		var oldV *proto.Field
 
-		if nil == t {
+		oldV = task.fields[this.field.GetName()]
+
+		if nil == oldV {
 			oldV = kv.fields[this.field.GetName()]
-		} else {
-			oldV = task.fields[this.field.GetName()]
 		}
 
 		if nil == oldV {

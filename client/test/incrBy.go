@@ -32,6 +32,8 @@ func main() {
 		return
 	}
 
-	fmt.Println(r3.Fields["age"].GetValue())
+	r4 := c.Get("users1", "sniperHW", "age").Exec()
+
+	fmt.Println(r4.Fields["age"].GetInt())
 
 }

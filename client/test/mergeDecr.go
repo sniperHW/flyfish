@@ -9,10 +9,10 @@ import (
 )
 
 func Decr(c *kclient.Client) {
-	c.DecrBy("users1", "sniperHW", "age", 1).AsyncExec(func(ret *kclient.SliceResult) {
+	c.DecrBy("users1", "sniperHW", "age", 1).AsyncExec(func(ret *kclient.StatusResult) {
 
 		if ret.ErrCode == errcode.ERR_OK {
-			fmt.Println(errcode.GetErrorStr(ret.ErrCode), ret.Version, "age:", ret.Fields["age"].GetValue())
+			fmt.Println(errcode.GetErrorStr(ret.ErrCode), ret.Version)
 		}
 	})
 }
@@ -25,7 +25,7 @@ func main() {
 
 	Decr(c)
 
-	//这三次调用将被合并成一次操作即-3,所以后面这三次返回的version和age应该是一样的
+	//这三次调用将被合并成一次操作即-3,所以后面这三次返回的version应该是一样的
 	Decr(c)
 	Decr(c)
 	Decr(c)

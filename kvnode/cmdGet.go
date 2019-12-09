@@ -42,17 +42,21 @@ func (this *cmdGet) makeResponse(errCode int32, fields map[string]*proto.Field, 
 	}
 
 	if errcode.ERR_OK == errCode {
-		for _, field := range this.fields {
-			v := fields[field.GetName()]
-			if nil != v {
-				pbdata.Fields = append(pbdata.Fields, v)
-			} else {
-				/*
-				 * 表格新增加了列，但未设置过，使用默认值
-				 */
-				vv := this.kv.meta.GetDefaultV(field.GetName())
-				if nil != vv {
-					pbdata.Fields = append(pbdata.Fields, proto.PackField(field.GetName(), vv))
+		if this.version != nil && *this.version == version {
+			errCode = errcode.ERR_RECORD_UNCHANGE
+		} else {
+			for _, field := range this.fields {
+				v := fields[field.GetName()]
+				if nil != v {
+					pbdata.Fields = append(pbdata.Fields, v)
+				} else {
+					/*
+					 * 表格新增加了列，但未设置过，使用默认值
+					 */
+					vv := this.kv.meta.GetDefaultV(field.GetName())
+					if nil != vv {
+						pbdata.Fields = append(pbdata.Fields, proto.PackField(field.GetName(), vv))
+					}
 				}
 			}
 		}
@@ -73,7 +77,15 @@ func (this *cmdGet) prepare(t asynCmdTaskI) (asynCmdTaskI, bool) {
 		return t, false
 	}
 
-	status := this.kv.getStatus()
+	kv := this.kv
+
+	status := kv.getStatus()
+
+	if status == cache_ok && this.version != nil && *this.version == kv.version {
+		//kv跟cmdGet提交请求的版本一致，且没有新加过未设置的列，直接返回ERR_RECORD_UNCHANGE
+		this.reply(errcode.ERR_RECORD_UNCHANGE, nil, kv.version)
+		return t, true
+	}
 
 	if nil == t {
 		task = newAsynCmdTaskGet()
@@ -103,6 +115,7 @@ func get(n *KVNode, cli *cliConn, msg *codec.Message) {
 		commandBase: &commandBase{
 			deadline: processDeadline,
 			replyer:  newReplyer(cli, msg.GetHead().Seqno, respDeadline),
+			version:  req.Version,
 		},
 		fields: map[string]*proto.Field{},
 	}

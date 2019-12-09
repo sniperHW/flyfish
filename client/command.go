@@ -124,7 +124,7 @@ func (this *SliceCmd) Exec() *SliceResult {
 	return <-respChan
 }
 
-func (this *Conn) Get(table, key string, fields ...string) *SliceCmd {
+func (this *Conn) Get(table, key string, version *int64, fields ...string) *SliceCmd {
 
 	if len(fields) == 0 {
 		return nil
@@ -135,8 +135,9 @@ func (this *Conn) Get(table, key string, fields ...string) *SliceCmd {
 		UniKey:  table + ":" + key,
 		Timeout: ClientTimeout,
 	}, &protocol.GetReq{
-		Fields: fields,
-		All:    false,
+		Version: version,
+		Fields:  fields,
+		All:     false,
 	})
 
 	return &SliceCmd{
@@ -145,14 +146,15 @@ func (this *Conn) Get(table, key string, fields ...string) *SliceCmd {
 	}
 }
 
-func (this *Conn) GetAll(table, key string) *SliceCmd {
+func (this *Conn) GetAll(table, key string, version *int64) *SliceCmd {
 
 	req := codec.NewMessage("", codec.CommonHead{
 		Seqno:   atomic.AddInt64(&this.seqno, 1),
 		UniKey:  table + ":" + key,
 		Timeout: ClientTimeout,
 	}, &protocol.GetReq{
-		All: true,
+		Version: version,
+		All:     true,
 	})
 
 	return &SliceCmd{
@@ -289,7 +291,7 @@ func (this *Conn) Del(table, key string, version ...int64) *StatusCmd {
 
 }
 
-func (this *Conn) IncrBy(table, key, field string, value int64, version ...int64) *SliceCmd {
+func (this *Conn) IncrBy(table, key, field string, value int64, version ...int64) *StatusCmd {
 	pbdata := &protocol.IncrByReq{
 		Field: protocol.PackField(field, value),
 	}
@@ -304,13 +306,13 @@ func (this *Conn) IncrBy(table, key, field string, value int64, version ...int64
 		Timeout: ClientTimeout,
 	}, pbdata)
 
-	return &SliceCmd{
+	return &StatusCmd{
 		conn: this,
 		req:  req,
 	}
 }
 
-func (this *Conn) DecrBy(table, key, field string, value int64, version ...int64) *SliceCmd {
+func (this *Conn) DecrBy(table, key, field string, value int64, version ...int64) *StatusCmd {
 	pbdata := &protocol.DecrByReq{
 		Field: protocol.PackField(field, value),
 	}
@@ -325,7 +327,7 @@ func (this *Conn) DecrBy(table, key, field string, value int64, version ...int64
 		Timeout: ClientTimeout,
 	}, pbdata)
 
-	return &SliceCmd{
+	return &StatusCmd{
 		conn: this,
 		req:  req,
 	}
@@ -441,30 +443,19 @@ func (this *Conn) onDelResp(c *cmdContext, errCode int32, resp *protocol.DelResp
 
 func (this *Conn) onIncrByResp(c *cmdContext, errCode int32, resp *protocol.IncrByResp) {
 
-	ret := SliceResult{
+	ret := StatusResult{
 		ErrCode: errCode,
 		Version: resp.GetVersion(),
 	}
 
-	if errcode.ERR_OK == ret.ErrCode {
-		ret.Fields = map[string]*Field{}
-		ret.Fields[resp.NewValue.GetName()] = (*Field)(resp.NewValue)
-	}
-
 	this.c.doCallBack(c.cb, &ret)
-
 }
 
 func (this *Conn) onDecrByResp(c *cmdContext, errCode int32, resp *protocol.DecrByResp) {
 
-	ret := SliceResult{
+	ret := StatusResult{
 		ErrCode: errCode,
 		Version: resp.GetVersion(),
-	}
-
-	if errcode.ERR_OK == ret.ErrCode {
-		ret.Fields = map[string]*Field{}
-		ret.Fields[resp.NewValue.GetName()] = (*Field)(resp.NewValue)
 	}
 
 	this.c.doCallBack(c.cb, &ret)

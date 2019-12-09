@@ -61,7 +61,8 @@ func (this *cmdCompareAndSet) makeResponse(errCode int32, fields map[string]*pro
 		Version: version,
 	}
 
-	if nil != fields {
+	//ok时只返回状态不返回字段值
+	if errCode != errcode.ERR_OK && nil != fields {
 		pbdata.Value = fields[this.oldV.GetName()]
 	}
 

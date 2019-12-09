@@ -331,10 +331,7 @@ func (this *kv) processQueueCmd(unlockOpQueue ...bool) {
 			cmd.dontReply()
 		} else {
 			switch cmd.(type) {
-			case *cmdGet:
-				this.cmdQueue.popFront()
-				asynTask, _ = cmd.prepare(asynTask)
-			case *cmdCompareAndSet, *cmdCompareAndSetNx, *cmdIncrDecr, *cmdDel, *cmdSet, *cmdSetNx, *cmdKick:
+			case *cmdGet, *cmdCompareAndSet, *cmdCompareAndSetNx, *cmdIncrDecr, *cmdDel, *cmdSet, *cmdSetNx, *cmdKick:
 				asynTask, flagPop = cmd.prepare(asynTask)
 
 				if flagPop {
