@@ -28,7 +28,6 @@ func (this *dispatcher) Register(cmd uint16, h handler) {
 
 func (this *dispatcher) Dispatch(kvnode *KVNode, session kendynet.StreamSession, cmd uint16, msg *codec.Message) {
 	if nil != msg {
-		Infoln("recv", cmd)
 		handler, ok := this.handlers[cmd]
 		if ok {
 			handler(kvnode, session.GetUserData().(*cliConn), msg)

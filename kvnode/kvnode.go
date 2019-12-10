@@ -11,12 +11,16 @@ import (
 	protocol "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/socket/listener/tcp"
+	"github.com/sniperHW/kendynet/timer"
 	"net"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 )
+
+var reqCount int64
+var respCount int64
 
 type KVNode struct {
 	storeMgr   *storeMgr
@@ -109,8 +113,6 @@ func (this *KVNode) startListener() error {
 				return
 			}
 
-			Infoln("on new client")
-
 			//session.SetRecvTimeout(protocol.PingTime * 2)
 
 			//只有配置了压缩开启同时客户端支持压缩才开启通信压缩
@@ -122,7 +124,6 @@ func (this *KVNode) startListener() error {
 			})
 			this.dispatcher.OnNewClient(session)
 			session.Start(func(event *kendynet.Event) {
-				Infoln("on message")
 				if event.EventType == kendynet.EventTypeError {
 					event.Session.Close(event.Data.(error).Error(), 0)
 				} else {
@@ -273,4 +274,10 @@ func NewKvNode() *KVNode {
 	s := &KVNode{}
 	s.initHandler()
 	return s
+}
+
+func init() {
+	timer.Repeat(time.Second, nil, func(_ *timer.Timer) {
+		Infoln("dontReplyCount", atomic.LoadInt64(&dontReplyCount))
+	})
 }

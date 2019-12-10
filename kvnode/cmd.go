@@ -57,7 +57,10 @@ type commandBase struct {
 	version  *int64
 }
 
+var dontReplyCount int64
+
 func (this *commandBase) dontReply() {
+	atomic.AddInt64(&dontReplyCount, 1)
 	this.replyer.dontReply()
 }
 
