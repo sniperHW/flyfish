@@ -204,8 +204,6 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 		return
 	}
 
-	Infoln("onConnected")
-
 	this.eventQueue.Post(func() {
 		this.dialing = false
 		this.session = session
@@ -227,7 +225,6 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 		})
 
 		//发送被排队的请求
-		Infoln("pendingSend", len(this.pendingSend))
 		for _, v := range this.pendingSend {
 			if v.status != wait_remove {
 				this.sendReq(v)
@@ -281,7 +278,6 @@ func (this *Conn) dial() {
 func (this *Conn) sendReq(c *cmdContext) {
 	err := this.session.Send(c.req)
 	if nil == err {
-		Infoln("sendReq ok")
 		c.status = wait_resp
 		this.waitResp[c.req.GetHead().Seqno] = c
 	} else {

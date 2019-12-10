@@ -91,7 +91,6 @@ func (this *outMessage) Bytes() []byte {
 }
 
 func (this *Encoder) EnCode(o interface{}) (kendynet.Message, error) {
-	kendynet.Infoln("Encoder")
 	msg := o.(*Message)
 	return &outMessage{
 		msg:        msg.GetData(),
