@@ -71,12 +71,11 @@ func stringHash(s string) int {
 
 //根据unikey将req转发到合适的kvnode
 func (this *reqRouter) forward2kvnode(unikey string, sendDeadline time.Time, req *kendynet.ByteBuffer, compress bool) error {
-	return nil
-	/*code := stringHash(unikey)
+	code := stringHash(unikey)
 	node := this.kvnodes[code%len(this.kvnodes)]
 	if compress {
 		return node.compressConn.SendReq(sendDeadline, req)
 	} else {
 		return node.conn.SendReq(sendDeadline, req)
-	}*/
+	}
 }
