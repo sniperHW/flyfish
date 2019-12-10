@@ -6,7 +6,6 @@ import (
 	kclient "github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/kendynet/golog"
-	"math/rand"
 	"os"
 	"sort"
 	"strconv"
@@ -98,7 +97,7 @@ func main() {
 	bar = progressbar.New(int(total))
 
 	for j := 0; j < 100; j++ {
-		c := clients[rand.Int()%len(clients)]
+		c := clients[i%len(clients)]
 		go func() {
 			for {
 				for i := 0; i < 50; i++ {
