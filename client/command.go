@@ -509,6 +509,8 @@ func (this *Conn) onMessage(msg *codec.Message) {
 				this.onReloadTableConfResp(c, head.ErrCode, msg.GetData().(*protocol.ReloadTableConfResp))
 			default:
 			}
+		} else {
+			Infoln("got response but ret timeout remove")
 		}
 	})
 
