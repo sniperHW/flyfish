@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+const maxSendQueueSize = 50000
+
 //存放连接建立前待发送的消息
 type pendingMsg struct {
 	sendDeadline time.Time
@@ -116,11 +118,7 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 
 	this.Lock()
 	this.session = session
-
-	//this.session.SetReceiver(codec.NewReceiver(pb.GetNamespace("response"), loginResp.GetCompress()))
-
-	//this.session.SetEncoder(codec.NewEncoder(pb.GetNamespace("request"), loginResp.GetCompress()))
-
+	this.session.SetSendQueueSize(maxSendQueueSize)
 	this.session.SetReceiver(NewReceiver())
 
 	this.session.SetCloseCallBack(func(sess kendynet.StreamSession, reason string) {
@@ -177,11 +175,19 @@ func (this *Conn) SendReq(sendDeadline time.Time, req *kendynet.ByteBuffer) erro
 	if nil != this.session {
 		return this.session.SendMessage(req)
 	} else {
-		this.pendingSend = append(this.pendingSend, &pendingMsg{
-			sendDeadline: sendDeadline,
-			msg:          req,
-		})
+		var err error
+
+		if len(this.pendingSend) >= maxSendQueueSize {
+			err = kendynet.ErrSendQueFull
+		} else {
+			this.pendingSend = append(this.pendingSend, &pendingMsg{
+				sendDeadline: sendDeadline,
+				msg:          req,
+			})
+		}
+
 		this.dial()
-		return nil
+
+		return err
 	}
 }
