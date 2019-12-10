@@ -22,6 +22,9 @@ type pendingReq struct {
 	processor     *reqProcessor
 }
 
+var reqCount int64
+var respCount int64
+
 type kvproxy struct {
 	router     *reqRouter
 	processors []*reqProcessor
@@ -52,6 +55,9 @@ func newReqProcessor(router *reqRouter) *reqProcessor {
 }
 
 func (this *reqProcessor) onReq(seqno int64, session kendynet.StreamSession, req *kendynet.ByteBuffer) {
+
+	atomic.AddInt64(&reqCount, 1)
+
 	var err error
 	var oriSeqno int64
 	var lenUnikey int16
@@ -192,9 +198,12 @@ func NewKVProxy() *kvproxy {
 }
 
 func (this *kvproxy) onResp(resp *kendynet.ByteBuffer) {
+	atomic.AddInt64(&respCount, 1)
 	if seqno, err := resp.GetInt64(5); nil == err {
 		processor := this.processors[seqno%int64(len(this.processors))]
 		processor.onResp(seqno, resp)
+	} else {
+		Infoln("onResp but get seqno failed")
 	}
 }
 
@@ -240,5 +249,11 @@ func (this *kvproxy) Start() error {
 				}
 			})
 		}()
+	})
+}
+
+func init() {
+	timer.Repeat(time.Second, nil, func(_ *timer.Timer) {
+		Infoln("reqCount", atomic.LoadInt64(&reqCount), "respCount", atomic.LoadInt64(&respCount))
 	})
 }
