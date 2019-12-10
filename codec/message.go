@@ -4,7 +4,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/flyfish/codec/pb"
 	protocol "github.com/sniperHW/flyfish/proto"
-	"strings"
 )
 
 type CommonHead struct {
