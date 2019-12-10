@@ -70,14 +70,9 @@ func main() {
 	keyrange, _ = strconv.ParseInt(os.Args[1], 10, 32)
 
 	services := strings.Split(os.Args[2], ",")
-	clients := []*kclient.Client{}
-
-	for _, v := range services {
-		clients = append(clients, kclient.OpenClient(v, false))
-	}
 
 	for j := 0; j < 50; j++ {
-		c := clients[j%len(clients)]
+		c := kclient.OpenClient(services[j%len(services)], false)
 		for i := 0; i < 50; i++ {
 			Set(c)
 		}
