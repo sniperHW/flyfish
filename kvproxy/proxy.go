@@ -32,6 +32,7 @@ type kvproxy struct {
 func (this *pendingReq) onTimeout(_ *timer.Timer) {
 	this.processor.Lock()
 	defer this.processor.Unlock()
+	Infoln("remove timeout req", this.seqno)
 	delete(this.processor.pendingReqs, this.seqno)
 }
 
@@ -114,6 +115,8 @@ func (this *reqProcessor) onResp(seqno int64, resp *kendynet.ByteBuffer) {
 			//用oriSeqno替换seqno
 			resp.PutInt64(5, req.oriSeqno)
 			req.session.SendMessage(resp)
+		} else {
+			Infoln("cancel timer failed")
 		}
 	} else {
 		Infoln("on kvnode response but req timeout", seqno)
