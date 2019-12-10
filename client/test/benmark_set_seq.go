@@ -5,6 +5,7 @@ import (
 	kclient "github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/kendynet/golog"
+	"math/rand"
 	"os"
 	"strconv"
 	"strings"
@@ -69,8 +70,15 @@ func main() {
 
 	keyrange, _ = strconv.ParseInt(os.Args[1], 10, 32)
 
+	services := strings.Split(os.Args[2], ",")
+	clients := []*kclient.Client{}
+
+	for _, v := range services {
+		clients = append(clients, kclient.OpenClient(v, false))
+	}
+
 	for j := 0; j < 50; j++ {
-		c := kclient.OpenClient(os.Args[2], false)
+		c := clients[rand.Int()%len(clients)]
 		for i := 0; i < 50; i++ {
 			Set(c)
 		}
