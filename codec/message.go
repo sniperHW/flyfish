@@ -15,11 +15,19 @@ type CommonHead struct {
 }
 
 func (this *CommonHead) SplitUniKey() (table string, key string) {
-	r := strings.SplitN(this.UniKey, ":", 2)
-	if len(r) == 2 {
-		table = r[0]
-		key = r[1]
+	i := -1
+	for k, v := range this.UniKey {
+		if v == 58 {
+			i = k
+			break
+		}
 	}
+
+	if i >= 0 {
+		table = this.UniKey[:i]
+		key = this.UniKey[i+1:]
+	}
+
 	return
 }
 
