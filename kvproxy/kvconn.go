@@ -139,6 +139,7 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 
 	for _, v := range this.pendingSend {
 		if !now.After(v.sendDeadline) {
+			Infoln("sendDeadline")
 			this.session.SendMessage(v.msg)
 		}
 	}

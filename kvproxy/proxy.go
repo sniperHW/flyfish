@@ -99,7 +99,7 @@ func (this *reqProcessor) onReq(seqno int64, session kendynet.StreamSession, req
 
 	if nil != err {
 		//返回错误响应
-		fmt.Println(err)
+		Infoln("send to kvnode error", err.Error())
 	}
 }
 
@@ -115,6 +115,8 @@ func (this *reqProcessor) onResp(seqno int64, resp *kendynet.ByteBuffer) {
 			resp.PutInt64(5, req.oriSeqno)
 			req.session.SendMessage(resp)
 		}
+	} else {
+		Infoln("on kvnode response but req timeout", seqno)
 	}
 }
 
@@ -218,8 +220,6 @@ func (this *kvproxy) Start() error {
 				session.Close("login failed", 0)
 				return
 			}
-
-			fmt.Println("a new connection")
 
 			session.SetUserData(loginReq.GetCompress())
 
