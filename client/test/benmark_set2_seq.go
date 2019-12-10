@@ -97,7 +97,7 @@ func main() {
 	bar = progressbar.New(int(total))
 
 	for j := 0; j < 100; j++ {
-		c := clients[i%len(clients)]
+		c := clients[j%len(clients)]
 		go func() {
 			for {
 				for i := 0; i < 50; i++ {

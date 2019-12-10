@@ -77,7 +77,7 @@ func main() {
 	}
 
 	for j := 0; j < 50; j++ {
-		c := clients[i%len(clients)]
+		c := clients[j%len(clients)]
 		for i := 0; i < 50; i++ {
 			Set(c)
 		}
