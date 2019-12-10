@@ -114,7 +114,9 @@ func (this *reqProcessor) onResp(seqno int64, resp *kendynet.ByteBuffer) {
 			delete(this.pendingReqs, seqno)
 			//用oriSeqno替换seqno
 			resp.PutInt64(5, req.oriSeqno)
-			req.session.SendMessage(resp)
+			if err := req.session.SendMessage(resp); nil != err {
+				Infoln("send resp to client error", err.Error())
+			}
 		} else {
 			Infoln("cancel timer failed")
 		}
