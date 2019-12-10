@@ -88,7 +88,7 @@ func (this *cmdIncrDecr) makeResponse(errCode int32, fields map[string]*proto.Fi
 		}
 	}
 
-	return codec.NewMessage("", codec.CommonHead{
+	return codec.NewMessage(codec.CommonHead{
 		Seqno:   this.replyer.seqno,
 		ErrCode: errCode,
 	}, pbdata)

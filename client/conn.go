@@ -26,8 +26,8 @@ type Conn struct {
 	eventQueue  *event.EventQueue     //此客户端的主处理队列
 	dialing     bool
 	closed      int32
-	nextPing    time.Time
-	c           *Client
+	//nextPing    time.Time
+	c *Client
 }
 
 func openConn(cli *Client, addr string) *Conn {
@@ -104,15 +104,15 @@ func (this *Conn) checkTimeout(now *time.Time) {
 	}
 }
 
-func (this *Conn) ping(now *time.Time) {
+/*func (this *Conn) ping(now *time.Time) {
 	if nil != this.session && now.After(this.nextPing) {
 		this.nextPing = now.Add(protocol.PingTime)
-		req := codec.NewMessage("", codec.CommonHead{}, &protocol.PingReq{
+		req := codec.NewMessage(codec.CommonHead{}, &protocol.PingReq{
 			Timestamp: now.UnixNano(),
 		})
 		this.session.Send(req)
 	}
-}
+}*/
 
 func (this *Conn) startTimeoutChecker() {
 	go func() {
@@ -120,7 +120,7 @@ func (this *Conn) startTimeoutChecker() {
 			time.Sleep(time.Duration(1) * time.Millisecond)
 			this.eventQueue.Post(func() {
 				now := time.Now()
-				this.ping(&now)
+				//this.ping(&now)
 				this.checkTimeout(&now)
 			})
 		}
@@ -183,6 +183,7 @@ func recvLoginResp(session kendynet.StreamSession) (*protocol.LoginResp, error) 
 }
 
 func (this *Conn) onConnected(session kendynet.StreamSession) {
+
 	loginReq := &protocol.LoginReq{Compress: this.c.compress} //proto.Bool(true)}
 	if !sendLoginReq(session, loginReq) {
 		session.Close("login failed", 0)
@@ -203,10 +204,12 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 		return
 	}
 
+	Infoln("onConnected")
+
 	this.eventQueue.Post(func() {
 		this.dialing = false
 		this.session = session
-		this.nextPing = time.Now().Add(protocol.PingTime)
+		//this.nextPing = time.Now().Add(protocol.PingTime)
 		//session.SetRecvTimeout(protocol.PingTime * 2)
 		this.session.SetReceiver(codec.NewReceiver(pb.GetNamespace("response"), loginResp.GetCompress()))
 		this.session.SetEncoder(codec.NewEncoder(pb.GetNamespace("request"), loginResp.GetCompress()))
@@ -224,6 +227,7 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 		})
 
 		//发送被排队的请求
+		Infoln("pendingSend", len(this.pendingSend))
 		for _, v := range this.pendingSend {
 			if v.status != wait_remove {
 				this.sendReq(v)
@@ -277,6 +281,7 @@ func (this *Conn) dial() {
 func (this *Conn) sendReq(c *cmdContext) {
 	err := this.session.Send(c.req)
 	if nil == err {
+		Infoln("sendReq ok")
 		c.status = wait_resp
 		this.waitResp[c.req.GetHead().Seqno] = c
 	} else {

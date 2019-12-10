@@ -12,6 +12,7 @@ type reflectInfo struct {
 }
 
 type Namespace struct {
+	name     string
 	nameToID map[string]uint32
 	idToMeta map[uint32]reflectInfo
 }
@@ -25,6 +26,11 @@ func (this *Namespace) newMessage(id uint32) (msg proto.Message, err error) {
 	return
 }
 
+func (this *Namespace) Name() string {
+	return this.name
+}
+
+/*
 func (this *Namespace) GetNameByID(id uint32) string {
 	if mt, ok := this.idToMeta[id]; ok {
 		return mt.name
@@ -32,14 +38,15 @@ func (this *Namespace) GetNameByID(id uint32) string {
 		return ""
 	}
 }
+*/
 
 //根据名字注册实例(注意函数非线程安全，需要在初始化阶段完成所有消息的Register)
 func (this *Namespace) Register(msg proto.Message, id uint32) error {
 	tt := reflect.TypeOf(msg)
 	name := tt.String()
 
-	if _, ok := this.nameToID[name]; ok {
-		return fmt.Errorf("%s already register", name)
+	if _, ok := this.idToMeta[id]; ok {
+		return fmt.Errorf("id already register", id, name)
 	}
 
 	this.nameToID[name] = id
@@ -100,13 +107,15 @@ func GetNamespace(space string) *Namespace {
 func init() {
 
 	requestSpace = &Namespace{
-		nameToID: map[string]uint32{},
+		name:     "request",
 		idToMeta: map[uint32]reflectInfo{},
+		nameToID: map[string]uint32{},
 	}
 
 	responseSpace = &Namespace{
-		nameToID: map[string]uint32{},
+		name:     "response",
 		idToMeta: map[uint32]reflectInfo{},
+		nameToID: map[string]uint32{},
 	}
 
 }

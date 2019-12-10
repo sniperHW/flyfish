@@ -60,7 +60,7 @@ func (this *cmdSet) reply(errCode int32, fields map[string]*proto.Field, version
 }
 
 func (this *cmdSet) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) *codec.Message {
-	return codec.NewMessage("", codec.CommonHead{
+	return codec.NewMessage(codec.CommonHead{
 		Seqno:   this.replyer.seqno,
 		ErrCode: errCode,
 	}, &proto.SetResp{

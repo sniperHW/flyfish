@@ -138,7 +138,7 @@ func (this *Receiver) unPack() (ret interface{}, err error) {
 			}
 			this.nextPacketSize = 0
 			this.r += totalSize
-			ret = NewMessage(this.pbSpace.GetNameByID(uint32(cmd)), head, msg)
+			ret = NewMessageWithCmd(uint16(cmd), head, msg)
 		}
 	}
 	return

@@ -7,6 +7,7 @@ import (
 
 	//"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/golog"
+	"os"
 )
 
 func Get(c *kclient.Client, i int) {
@@ -47,7 +48,7 @@ func main() {
 
 	kclient.InitLogger(golog.New("flyfish client", golog.NewOutputLogger("log", "flyfish client", 1024*1024*50)))
 
-	c := kclient.OpenClient("127.0.0.1:10012", false)
+	c := kclient.OpenClient(os.Args[1], false)
 
 	/*Set(c, 1)
 	Set(c, 2)

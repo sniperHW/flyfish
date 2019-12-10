@@ -66,7 +66,7 @@ func (this *cmdCompareAndSet) makeResponse(errCode int32, fields map[string]*pro
 		pbdata.Value = fields[this.oldV.GetName()]
 	}
 
-	return codec.NewMessage("", codec.CommonHead{
+	return codec.NewMessage(codec.CommonHead{
 		Seqno:   this.replyer.seqno,
 		ErrCode: errCode,
 	}, pbdata)

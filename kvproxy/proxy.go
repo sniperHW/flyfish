@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/golang/protobuf/proto"
+	"github.com/sniperHW/flyfish/codec"
+	"github.com/sniperHW/flyfish/codec/pb"
 	protocol "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/socket/listener/tcp"
@@ -56,13 +58,12 @@ func newReqProcessor(router *reqRouter) *reqProcessor {
 
 func (this *reqProcessor) onReq(seqno int64, session kendynet.StreamSession, req *kendynet.ByteBuffer) {
 
-	atomic.AddInt64(&reqCount, 1)
-
 	var err error
 	var oriSeqno int64
 	var lenUnikey int16
 	var unikey string
 	var timeout uint32
+	var cmd uint16
 
 	if oriSeqno, err = req.GetInt64(5); nil != err {
 		return
@@ -80,9 +81,25 @@ func (this *reqProcessor) onReq(seqno int64, session kendynet.StreamSession, req
 		return
 	}
 
-	if timeout, err = req.GetUint32(19); nil != err {
+	if timeout, err = req.GetUint32(17); nil != err {
 		return
 	}
+
+	if cmd, err = req.GetUint16(23 + uint64(lenUnikey)); nil != err {
+		return
+	}
+
+	if cmd == uint16(protocol.CmdType_Ping) {
+		//返回心跳
+		//pbdata,
+		//resp := codec.NewMessage(codec.CommonHead{Seqno: oriSeqno}, &protocol.PingResp{
+		//	Timestamp: req.GetTimestamp(),
+		//})
+		//session.Send(resp)
+		return
+	}
+
+	atomic.AddInt64(&reqCount, 1)
 
 	//用seqno替换oriSeqno
 	req.PutInt64(5, seqno)
@@ -238,6 +255,7 @@ func (this *kvproxy) Start() error {
 			session.SetUserData(loginReq.GetCompress())
 
 			session.SetReceiver(NewReceiver())
+			session.SetEncoder(codec.NewEncoder(pb.GetNamespace("response"), loginResp.GetCompress()))
 
 			session.Start(func(event *kendynet.Event) {
 				if event.EventType == kendynet.EventTypeError {

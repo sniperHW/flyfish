@@ -24,6 +24,6 @@ func reloadTableMeta(n *KVNode, cli *cliConn, msg *codec.Message) {
 		errStr = err.Error()
 	}
 
-	cli.send(codec.NewMessage("", head, &proto.ReloadTableConfResp{Err: errStr}))
+	cli.send(codec.NewMessage(head, &proto.ReloadTableConfResp{Err: errStr}))
 
 }

@@ -109,6 +109,8 @@ func (this *KVNode) startListener() error {
 				return
 			}
 
+			Infoln("on new client")
+
 			//session.SetRecvTimeout(protocol.PingTime * 2)
 
 			//只有配置了压缩开启同时客户端支持压缩才开启通信压缩
@@ -120,11 +122,12 @@ func (this *KVNode) startListener() error {
 			})
 			this.dispatcher.OnNewClient(session)
 			session.Start(func(event *kendynet.Event) {
+				Infoln("on message")
 				if event.EventType == kendynet.EventTypeError {
 					event.Session.Close(event.Data.(error).Error(), 0)
 				} else {
 					msg := event.Data.(*codec.Message)
-					this.dispatcher.Dispatch(this, session, msg)
+					this.dispatcher.Dispatch(this, session, msg.GetCmd(), msg)
 				}
 			})
 		}()
@@ -248,25 +251,22 @@ func (this *KVNode) Stop() {
 func (this *KVNode) initHandler() {
 
 	this.dispatcher = &dispatcher{
-		handlers: map[string]handler{},
+		handlers: map[uint16]handler{},
 	}
 
-	this.dispatcher.Register(&protocol.DelReq{}, del)
-	this.dispatcher.Register(&protocol.GetReq{}, get)
-	this.dispatcher.Register(&protocol.SetReq{}, set)
-	this.dispatcher.Register(&protocol.SetNxReq{}, setNx)
-	this.dispatcher.Register(&protocol.CompareAndSetReq{}, compareAndSet)
-	this.dispatcher.Register(&protocol.CompareAndSetNxReq{}, compareAndSetNx)
-	this.dispatcher.Register(&protocol.PingReq{}, ping)
-	this.dispatcher.Register(&protocol.IncrByReq{}, incrBy)
-	this.dispatcher.Register(&protocol.DecrByReq{}, decrBy)
-	this.dispatcher.Register(&protocol.KickReq{}, kick)
-	this.dispatcher.Register(&protocol.Cancel{}, cancel)
-	this.dispatcher.Register(&protocol.ReloadTableConfReq{}, reloadTableMeta)
+	this.dispatcher.Register(uint16(protocol.CmdType_Del), del)
+	this.dispatcher.Register(uint16(protocol.CmdType_Get), get)
+	this.dispatcher.Register(uint16(protocol.CmdType_Set), set)
+	this.dispatcher.Register(uint16(protocol.CmdType_SetNx), setNx)
+	this.dispatcher.Register(uint16(protocol.CmdType_CompareAndSet), compareAndSet)
+	this.dispatcher.Register(uint16(protocol.CmdType_CompareAndSetNx), compareAndSetNx)
+	this.dispatcher.Register(uint16(protocol.CmdType_Ping), ping)
+	this.dispatcher.Register(uint16(protocol.CmdType_IncrBy), incrBy)
+	this.dispatcher.Register(uint16(protocol.CmdType_DecrBy), decrBy)
+	this.dispatcher.Register(uint16(protocol.CmdType_Kick), kick)
+	this.dispatcher.Register(uint16(protocol.CmdType_Cancel), cancel)
+	this.dispatcher.Register(uint16(protocol.CmdType_ReloadTableConf), reloadTableMeta)
 
-	//this.dispatcher.Register(&protocol.ScanReq{}, scan)
-	//this.dispatcher.Register(&protocol.ReloadTableConfReq{}, reloadTableMeta)
-	//this.dispatcher.Register(&protocol.ReloadConfigReq{}, reloadConf)
 }
 
 func NewKvNode() *KVNode {

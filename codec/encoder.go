@@ -50,7 +50,7 @@ func (this *outMessage) Bytes() []byte {
 	var totalLen int
 	var flag byte
 	if pbbytes, cmd, err = this.pbSpace.Marshal(this.msg); err != nil {
-		kendynet.Errorln("outMessage encode err:", err)
+		kendynet.Errorln("outMessage encode err:", err, this.pbSpace.Name())
 		return nil
 	}
 
@@ -91,6 +91,7 @@ func (this *outMessage) Bytes() []byte {
 }
 
 func (this *Encoder) EnCode(o interface{}) (kendynet.Message, error) {
+	kendynet.Infoln("Encoder")
 	msg := o.(*Message)
 	return &outMessage{
 		msg:        msg.GetData(),

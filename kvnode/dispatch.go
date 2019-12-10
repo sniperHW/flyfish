@@ -1,11 +1,9 @@
 package kvnode
 
 import (
-	pb "github.com/golang/protobuf/proto"
 	codec "github.com/sniperHW/flyfish/codec"
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet"
-	"reflect"
 	"sync"
 	"sync/atomic"
 )
@@ -16,29 +14,29 @@ var clientCount int64
 type handler func(*KVNode, *cliConn, *codec.Message)
 
 type dispatcher struct {
-	handlers map[string]handler
+	handlers map[uint16]handler
 }
 
-func (this *dispatcher) Register(msg pb.Message, h handler) {
-	msgName := reflect.TypeOf(msg).String()
-	if nil == h {
-		return
-	}
-	_, ok := this.handlers[msgName]
+func (this *dispatcher) Register(cmd uint16, h handler) {
+	_, ok := this.handlers[cmd]
 	if ok {
 		return
 	}
 
-	this.handlers[msgName] = h
+	this.handlers[cmd] = h
 }
 
-func (this *dispatcher) Dispatch(kvnode *KVNode, session kendynet.StreamSession, msg *codec.Message) {
+func (this *dispatcher) Dispatch(kvnode *KVNode, session kendynet.StreamSession, cmd uint16, msg *codec.Message) {
 	if nil != msg {
-		name := msg.GetName()
-		handler, ok := this.handlers[name]
+		Infoln("recv", cmd)
+		handler, ok := this.handlers[cmd]
 		if ok {
 			handler(kvnode, session.GetUserData().(*cliConn), msg)
+		} else {
+			Errorln("invaild cmd", cmd)
 		}
+	} else {
+		Errorln("msg is nil")
 	}
 }
 
@@ -75,7 +73,7 @@ func (this *dispatcher) OnNewClient(session kendynet.StreamSession) {
 func ping(kvnode *KVNode, conn *cliConn, msg *codec.Message) {
 	head := msg.GetHead()
 	req := msg.GetData().(*proto.PingReq)
-	resp := codec.NewMessage("", head, &proto.PingResp{
+	resp := codec.NewMessage(head, &proto.PingResp{
 		Timestamp: req.GetTimestamp(),
 	})
 	conn.send(resp)

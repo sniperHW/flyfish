@@ -24,13 +24,21 @@ func (this *CommonHead) SplitUniKey() (table string, key string) {
 }
 
 type Message struct {
-	name string
 	data proto.Message
 	head CommonHead
+	cmd  uint16
 }
 
-func NewMessage(name string, head CommonHead, data proto.Message) *Message {
-	return &Message{name: name, head: head, data: data}
+func NewMessage(head CommonHead, data proto.Message) *Message {
+	return &Message{head: head, data: data}
+}
+
+func NewMessageWithCmd(cmd uint16, head CommonHead, data proto.Message) *Message {
+	return &Message{head: head, data: data, cmd: cmd}
+}
+
+func (this *Message) GetCmd() uint16 {
+	return this.cmd
 }
 
 func (this *Message) GetData() proto.Message {
@@ -39,10 +47,6 @@ func (this *Message) GetData() proto.Message {
 
 func (this *Message) GetHead() CommonHead {
 	return this.head
-}
-
-func (this *Message) GetName() string {
-	return this.name
 }
 
 func init() {

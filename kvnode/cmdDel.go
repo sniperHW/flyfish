@@ -41,7 +41,7 @@ func (this *cmdDel) reply(errCode int32, fields map[string]*proto.Field, version
 }
 
 func (this *cmdDel) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) *codec.Message {
-	return codec.NewMessage("", codec.CommonHead{
+	return codec.NewMessage(codec.CommonHead{
 		Seqno:   this.replyer.seqno,
 		ErrCode: errCode,
 	}, &proto.DelResp{Version: version})
