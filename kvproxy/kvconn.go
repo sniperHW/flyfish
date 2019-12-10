@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const maxSendQueueSize = 50000
+const maxSendQueueSize = 10000
 
 //存放连接建立前待发送的消息
 type pendingMsg struct {

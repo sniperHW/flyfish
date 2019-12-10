@@ -57,10 +57,7 @@ type commandBase struct {
 	version  *int64
 }
 
-var dontReplyCount int64
-
 func (this *commandBase) dontReply() {
-	atomic.AddInt64(&dontReplyCount, 1)
 	this.replyer.dontReply()
 }
 
@@ -121,7 +118,10 @@ func (this *replyer) reply(cmd commandI, errCode int32, fields map[string]*proto
 	if atomic.CompareAndSwapInt64(&this.replyed, 0, 1) {
 		atomic.AddInt64(&wait4ReplyCount, -1)
 		if this.peer.removeReplyer(this) && !time.Now().After(this.respDeadline) {
-			this.peer.send(cmd.makeResponse(errCode, fields, version))
+			err := this.peer.send(cmd.makeResponse(errCode, fields, version))
+			if nil != err {
+				Errorln("send resp error", err.Error())
+			}
 		}
 	}
 }
