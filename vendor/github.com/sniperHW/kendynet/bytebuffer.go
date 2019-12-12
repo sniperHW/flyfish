@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"reflect"
-	"unsafe"
+	//"unsafe"
 )
 
 func IsPow2(size uint64) bool {
@@ -316,7 +316,8 @@ func (this *ByteBuffer) GetString(idx uint64, size uint64) (ret string, err erro
 	var bytes []byte
 	bytes, err = this.GetBytes(idx, size)
 	if bytes != nil {
-		ret = *(*string)(unsafe.Pointer(&bytes))
+		ret = string(bytes)
+		//ret = *(*string)(unsafe.Pointer(&bytes))
 	}
 	return
 }
