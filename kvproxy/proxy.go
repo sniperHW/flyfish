@@ -53,7 +53,6 @@ func newReqProcessor(router *reqRouter) *reqProcessor {
 		pendingReqs: map[int64]*pendingReq{},
 		timerMgr:    timer.NewTimerMgr(),
 		router:      router,
-		respChan:    make(chan *kendynet.ByteBuffer, 10000),
 	}
 }
 
@@ -202,7 +201,9 @@ func verifyLogin(loginReq *protocol.LoginReq) bool {
 func NewKVProxy() *kvproxy {
 
 	var err error
-	proxy := &kvproxy{}
+	proxy := &kvproxy{
+		respChan: make(chan *kendynet.ByteBuffer, 10000),
+	}
 
 	if proxy.listener, err = tcp.New("tcp", GetConfig().Host); nil != err {
 		return nil
@@ -241,7 +242,7 @@ func (this *kvproxy) Start() error {
 				}
 				if seqno, err := v.GetInt64(5); nil == err {
 					processor := this.processors[seqno%int64(len(this.processors))]
-					processor.onResp(v, resp)
+					processor.onResp(seqno, v)
 				} else {
 					Infoln("onResp but get seqno failed")
 				}
