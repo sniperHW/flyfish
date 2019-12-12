@@ -12,18 +12,27 @@ import (
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/socket/listener/tcp"
 	"net"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
+type netCmd struct {
+	h    handler
+	conn *cliConn
+	msg  *codec.Message
+}
+
 type KVNode struct {
-	storeMgr   *storeMgr
-	stoped     int64
-	listener   *tcp.Listener
-	dispatcher *dispatcher
-	sqlMgr     *sqlMgr
+	storeMgr      *storeMgr
+	stoped        int64
+	listener      *tcp.Listener
+	dispatcher    *dispatcher
+	sqlMgr        *sqlMgr
+	cmdChan       chan *netCmd
+	poolStopChans []chan interface{}
 }
 
 func sendLoginResp(session kendynet.StreamSession, loginResp *protocol.LoginResp) bool {
@@ -72,6 +81,14 @@ func recvLoginReq(session kendynet.StreamSession) (*protocol.LoginReq, error) {
 
 func verifyLogin(loginReq *protocol.LoginReq) bool {
 	return true
+}
+
+func (this *KVNode) pushNetCmd(h handler, conn *cliConn, msg *codec.Message) {
+	this.cmdChan <- &netCmd{
+		h:    h,
+		conn: conn,
+		msg:  msg,
+	}
 }
 
 func (this *KVNode) isStoped() bool {
@@ -133,6 +150,16 @@ func (this *KVNode) startListener() error {
 	})
 }
 
+func poolRoutine(kvnode *KVNode) {
+	for {
+		v, ok := <-kvnode.cmdChan
+		if !ok {
+			return
+		}
+		v.h(kvnode, v.conn, v.msg)
+	}
+}
+
 func (this *KVNode) Start(id *int, cluster *string) error {
 
 	var err error
@@ -169,6 +196,14 @@ func (this *KVNode) Start(id *int, cluster *string) error {
 	this.storeMgr = newStoreMgr(this, mutilRaft, dbmeta, id, cluster, config.CacheGroupSize)
 
 	go mutilRaft.serveMutilRaft(clusterArray[*id-1])
+
+	this.cmdChan = make(chan *netCmd, 10000)
+
+	cpuNum := runtime.NumCPU()
+
+	for i := 0; i < cpuNum*2; i++ {
+		go poolRoutine(this)
+	}
 
 	go func() {
 		err := this.startListener()
@@ -241,6 +276,8 @@ func (this *KVNode) Stop() {
 		})
 
 		this.storeMgr.stop()
+
+		close(this.cmdChan)
 
 		Infoln("flyfish stop ok")
 
