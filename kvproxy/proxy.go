@@ -53,7 +53,7 @@ func newReqProcessor(router *reqRouter) *reqProcessor {
 		pendingReqs: map[int64]*pendingReq{},
 		timerMgr:    timer.NewTimerMgr(),
 		router:      router,
-		respChan : make(chan *kendynet.ByteBuffer,10000)
+		respChan:    make(chan *kendynet.ByteBuffer, 10000),
 	}
 }
 
