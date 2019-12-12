@@ -131,7 +131,7 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 		if event.EventType == kendynet.EventTypeError {
 			event.Session.Close(event.Data.(error).Error(), 0)
 		} else {
-			this.proxy.onResp(event.Data.(*kendynet.ByteBuffer))
+			this.proxy.respChan <- event.Data.(*kendynet.ByteBuffer)
 		}
 	})
 

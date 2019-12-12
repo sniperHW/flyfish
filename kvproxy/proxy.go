@@ -211,21 +211,11 @@ func NewKVProxy() *kvproxy {
 
 	proxy.router = newReqRounter(proxy)
 	proxy.processors = []*reqProcessor{}
-	for i := 0; i < 31; i++ {
+	for i := 0; i < runtime.NumCPU()*2; i++ {
 		proxy.processors = append(proxy.processors, newReqProcessor(proxy.router))
 	}
 
 	return proxy
-}
-
-func (this *kvproxy) onResp(resp *kendynet.ByteBuffer) {
-	this.respChan <- resp
-	/*if seqno, err := resp.GetInt64(5); nil == err {
-		processor := this.processors[seqno%int64(len(this.processors))]
-		processor.onResp(seqno, resp)
-	} else {
-		Infoln("onResp but get seqno failed")
-	}*/
 }
 
 func (this *kvproxy) Start() error {
