@@ -7,29 +7,13 @@ import (
 
 var ClientTimeout uint32 = 6000 //6sec
 
-//var ServerTimeout time.Duration = 3 * time.Second
-
 type Client struct {
-	service       string
 	conn          *Conn
 	closed        int32
 	mGetQueue     *event.EventQueue
 	callbackQueue *event.EventQueue //响应回调的事件队列
 	compress      bool
 }
-
-/*
-func stringHash(s string) int {
-	var hash uint16
-	for _, c := range s {
-
-		ch := uint16(c)
-
-		hash = hash + ((hash) << 5) + ch + (ch << 7)
-	}
-
-	return int(hash)
-}*/
 
 func (this *Client) pcall(cb callback, a interface{}) {
 	defer util.Recover(logger)
@@ -60,7 +44,6 @@ func OpenClient(service string, compress bool, callbackQueue ...*event.EventQueu
 
 	c := &Client{
 		mGetQueue: event.NewEventQueue(),
-		service:   service,
 		compress:  compress,
 	}
 
@@ -80,17 +63,6 @@ func (this *Client) startMGetQueue() {
 		this.mGetQueue.Run()
 	}()
 }
-
-/*
-func (this *Client) selectConn(key string) *Conn {
-	var conn *Conn
-	if len(this.conns) == 1 {
-		conn = this.conns[0]
-	} else {
-		conn = this.conns[stringHash(key)%len(this.conns)]
-	}
-	return conn
-}*/
 
 func (this *Client) Get(table, key string, fields ...string) *SliceCmd {
 	return this.conn.Get(table, key, nil, fields...)

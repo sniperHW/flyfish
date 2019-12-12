@@ -10,11 +10,13 @@ import (
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/event"
 	connector "github.com/sniperHW/kendynet/socket/connector/tcp"
+	"github.com/sniperHW/kendynet/timer"
 	"github.com/sniperHW/kendynet/util"
 	"net"
-	"sync/atomic"
 	"time"
 )
+
+const maxPendingSize int = 10000
 
 type Conn struct {
 	session     kendynet.StreamSession
@@ -25,9 +27,7 @@ type Conn struct {
 	waitResp    map[int64]*cmdContext //等待响应的消息
 	eventQueue  *event.EventQueue     //此客户端的主处理队列
 	dialing     bool
-	closed      int32
-	//nextPing    time.Time
-	c *Client
+	c           *Client
 }
 
 func openConn(cli *Client, addr string) *Conn {
@@ -39,42 +39,12 @@ func openConn(cli *Client, addr string) *Conn {
 		pendingSend: []*cmdContext{},
 		c:           cli,
 	}
-
-	c.startEventQueue()
-	c.dial()
-	c.startTimeoutChecker()
+	go c.eventQueue.Run()
+	timer.Repeat(time.Duration(100)*time.Millisecond, c.eventQueue, func(_ *timer.Timer) {
+		now := time.Now()
+		c.checkTimeout(&now)
+	})
 	return c
-}
-
-func (this *Conn) onClose() {
-	if nil != this.session {
-		this.session.Close("", 0)
-		this.minheap.Clear()
-		this.eventQueue.Close()
-
-		for _, c := range this.pendingSend {
-			if c.status != wait_remove {
-				this.c.doCallBack(c.cb, errcode.ERR_CONNECTION)
-			}
-		}
-		for _, c := range this.waitResp {
-			this.c.doCallBack(c.cb, errcode.ERR_CONNECTION)
-		}
-	}
-}
-
-func (this *Conn) Close() {
-	if atomic.CompareAndSwapInt32(&this.closed, 0, 1) {
-		this.eventQueue.Post(func() {
-			this.onClose()
-		})
-	}
-}
-
-func (this *Conn) startEventQueue() {
-	go func() {
-		this.eventQueue.Run()
-	}()
 }
 
 func (this *Conn) checkTimeout(now *time.Time) {
@@ -90,10 +60,7 @@ func (this *Conn) checkTimeout(now *time.Time) {
 
 				seqno := c.req.GetHead().Seqno
 
-				if _, ok := this.waitResp[seqno]; !ok {
-					//Infof("timeout cmdContext:%d not found\n", c.seqno)
-				} else {
-					//Infof("timeout cmdContext:%d\n", c.seqno)
+				if _, ok := this.waitResp[seqno]; ok {
 					delete(this.waitResp, seqno)
 					this.c.doCallBack(c.cb, errcode.ERR_TIMEOUT)
 				}
@@ -113,19 +80,6 @@ func (this *Conn) checkTimeout(now *time.Time) {
 		this.session.Send(req)
 	}
 }*/
-
-func (this *Conn) startTimeoutChecker() {
-	go func() {
-		for atomic.LoadInt32(&this.closed) == 0 {
-			time.Sleep(time.Duration(1) * time.Millisecond)
-			this.eventQueue.Post(func() {
-				now := time.Now()
-				//this.ping(&now)
-				this.checkTimeout(&now)
-			})
-		}
-	}()
-}
 
 func (this *Conn) removeContext(seqno int64) *cmdContext {
 	c := this.waitResp[seqno]
@@ -184,7 +138,7 @@ func recvLoginResp(session kendynet.StreamSession) (*protocol.LoginResp, error) 
 
 func (this *Conn) onConnected(session kendynet.StreamSession) {
 
-	loginReq := &protocol.LoginReq{Compress: this.c.compress} //proto.Bool(true)}
+	loginReq := &protocol.LoginReq{Compress: this.c.compress}
 	if !sendLoginReq(session, loginReq) {
 		session.Close("login failed", 0)
 		this.eventQueue.Post(func() {
@@ -207,14 +161,11 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 	this.eventQueue.Post(func() {
 		this.dialing = false
 		this.session = session
-		//this.nextPing = time.Now().Add(protocol.PingTime)
-		//session.SetRecvTimeout(protocol.PingTime * 2)
+		this.session.SetSendQueueSize(maxPendingSize)
 		this.session.SetReceiver(codec.NewReceiver(pb.GetNamespace("response"), loginResp.GetCompress()))
 		this.session.SetEncoder(codec.NewEncoder(pb.GetNamespace("request"), loginResp.GetCompress()))
 		this.session.SetCloseCallBack(func(sess kendynet.StreamSession, reason string) {
-			if atomic.LoadInt32(&this.closed) == 0 {
-				this.onDisconnected()
-			}
+			this.onDisconnected()
 		})
 		this.session.Start(func(event *kendynet.Event) {
 			if event.EventType == kendynet.EventTypeError {
@@ -224,32 +175,28 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 			}
 		})
 
+		pendingSend := this.pendingSend
+		this.pendingSend = []*cmdContext{}
+
 		//发送被排队的请求
-		for _, v := range this.pendingSend {
+		for _, v := range pendingSend {
 			if v.status != wait_remove {
 				this.sendReq(v)
 			}
 		}
-		this.pendingSend = []*cmdContext{}
+
 	})
 }
 
 func (this *Conn) onDisconnected() {
-
 	this.eventQueue.Post(func() {
-		this.dialing = false
 		this.session = nil
 		this.minheap.Clear()
-
 		waitResp := this.waitResp
 		this.waitResp = map[int64]*cmdContext{}
-
 		for _, c := range waitResp {
 			this.c.doCallBack(c.cb, errcode.ERR_CONNECTION)
 		}
-
-		this.dial()
-
 	})
 }
 
@@ -293,17 +240,22 @@ func (this *Conn) sendReq(c *cmdContext) {
 
 func (this *Conn) exec(c *cmdContext) {
 	this.eventQueue.Post(func() {
-		if atomic.LoadInt32(&this.closed) == 1 {
-			this.c.doCallBack(c.cb, errcode.ERR_CONNECTION)
-		} else {
-			c.deadline = time.Now().Add(time.Duration(ClientTimeout) * time.Millisecond)
-			this.minheap.Insert(c)
-			if nil == this.session || this.dialing {
+		c.deadline = time.Now().Add(time.Duration(ClientTimeout) * time.Millisecond)
+		if nil == this.session && !this.dialing {
+			this.dial()
+		}
+
+		if this.dialing {
+			if len(this.pendingSend) < maxPendingSize {
+				this.minheap.Insert(c)
 				c.status = wait_send
 				this.pendingSend = append(this.pendingSend, c)
 			} else {
-				this.sendReq(c)
+				this.c.doCallBack(c.cb, errcode.ERR_BUSY)
 			}
+		} else {
+			this.minheap.Insert(c)
+			this.sendReq(c)
 		}
 	})
 }

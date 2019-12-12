@@ -48,12 +48,11 @@ const (
 )
 
 type cmdContext struct {
-	deadline  time.Time
-	timestamp int64
-	status    int
-	cb        callback
-	req       *codec.Message
-	heapIdx   uint32
+	deadline time.Time
+	status   int
+	cb       callback
+	req      *codec.Message
+	heapIdx  uint32
 }
 
 func (this *cmdContext) Less(o util.HeapElement) bool {
