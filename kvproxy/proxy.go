@@ -11,6 +11,7 @@ import (
 	"github.com/sniperHW/kendynet/socket/listener/tcp"
 	"github.com/sniperHW/kendynet/timer"
 	"net"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -30,6 +31,7 @@ type kvproxy struct {
 	processors []*reqProcessor
 	listener   *tcp.Listener
 	seqno      int64
+	respChan   chan *kendynet.ByteBuffer
 }
 
 func (this *pendingReq) onTimeout(_ *timer.Timer) {
@@ -51,6 +53,7 @@ func newReqProcessor(router *reqRouter) *reqProcessor {
 		pendingReqs: map[int64]*pendingReq{},
 		timerMgr:    timer.NewTimerMgr(),
 		router:      router,
+		respChan : make(chan *kendynet.ByteBuffer,10000)
 	}
 }
 
@@ -215,17 +218,35 @@ func NewKVProxy() *kvproxy {
 }
 
 func (this *kvproxy) onResp(resp *kendynet.ByteBuffer) {
-	if seqno, err := resp.GetInt64(5); nil == err {
+	this.respChan <- resp
+	/*if seqno, err := resp.GetInt64(5); nil == err {
 		processor := this.processors[seqno%int64(len(this.processors))]
 		processor.onResp(seqno, resp)
 	} else {
 		Infoln("onResp but get seqno failed")
-	}
+	}*/
 }
 
 func (this *kvproxy) Start() error {
 	if nil == this.listener {
 		return fmt.Errorf("invaild listener")
+	}
+
+	for i := 0; i < runtime.NumCPU()*2; i++ {
+		go func() {
+			for {
+				v, ok := <-this.respChan
+				if !ok {
+					return
+				}
+				if seqno, err := v.GetInt64(5); nil == err {
+					processor := this.processors[seqno%int64(len(this.processors))]
+					processor.onResp(v, resp)
+				} else {
+					Infoln("onResp but get seqno failed")
+				}
+			}
+		}()
 	}
 
 	return this.listener.Serve(func(session kendynet.StreamSession) {
