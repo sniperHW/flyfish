@@ -62,7 +62,7 @@ func (this *reqProcessor) onReq(seqno int64, session kendynet.StreamSession, req
 	var unikey string
 	var timeout uint32
 	var cmd uint16
-	var b bytes
+	var b []byte
 
 	if oriSeqno, err = req.GetInt64(5); nil != err {
 		return
