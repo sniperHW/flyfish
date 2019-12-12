@@ -7,6 +7,7 @@ import (
 	"github.com/sniperHW/kendynet/golog"
 	"os"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -64,8 +65,10 @@ func main() {
 
 	keyrange, _ = strconv.ParseInt(os.Args[1], 10, 32)
 
+	services := strings.Split(os.Args[2], ",")
+
 	for j := 0; j < 50; j++ {
-		c := kclient.OpenClient(os.Args[2], false) //eventQueue)
+		c := kclient.OpenClient(services[j%len(services)], false)
 		for i := 0; i < 50; i++ {
 			Get(c)
 		}
