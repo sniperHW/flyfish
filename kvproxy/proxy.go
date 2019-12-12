@@ -14,6 +14,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 )
 
 type pendingReq struct {
@@ -61,6 +62,7 @@ func (this *reqProcessor) onReq(seqno int64, session kendynet.StreamSession, req
 	var unikey string
 	var timeout uint32
 	var cmd uint16
+	var b bytes
 
 	if oriSeqno, err = req.GetInt64(5); nil != err {
 		return
@@ -74,9 +76,12 @@ func (this *reqProcessor) onReq(seqno int64, session kendynet.StreamSession, req
 		return
 	}
 
-	if unikey, err = req.GetString(23, uint64(lenUnikey)); nil != err {
+	if b, err = req.GetBytes(23, uint64(lenUnikey)); nil != err {
 		return
 	}
+
+	//unikey不会在函数作用域以外被使用,unsafe强转是安全的
+	unikey = *(*string)(unsafe.Pointer(&b))
 
 	if timeout, err = req.GetUint32(17); nil != err {
 		return
