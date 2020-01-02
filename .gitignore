@@ -11,3 +11,6 @@ config.toml
 *.so
 *.lib
 *.dylib
+
+kv-1-1
+kv-1-1-snap

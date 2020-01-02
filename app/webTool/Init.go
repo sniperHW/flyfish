@@ -5,18 +5,29 @@ import (
 	"github.com/sniperHW/flyfish/app/webTool/conf"
 	"github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/kendynet/golog"
+	"github.com/yddeng/flyfish/app/webTool/db"
 	"net/http"
 	"strings"
+	"time"
 )
 
 var (
 	logger     *golog.Logger
-	flyClients map[string]*client.Client
+	flyClients = map[string]*FlyfishClient{}
+	timeout    = time.Hour * 1
 )
 
-func GetFlyClient(flyConfig string) (*client.Client, error) {
+type FlyfishClient struct {
+	*client.Client
+	deadline time.Time
+}
+
+func GetFlyClient(flyConfig string) (*FlyfishClient, error) {
+	now := time.Now()
+
 	c, ok := flyClients[flyConfig]
 	if ok {
+		c.deadline = now.Add(timeout)
 		return c, nil
 	}
 
@@ -25,14 +36,16 @@ func GetFlyClient(flyConfig string) (*client.Client, error) {
 		return nil, fmt.Errorf("%s is failed", flyConfig)
 	}
 
-	c = client.OpenClient(fmt.Sprintf("%s:%s", s[0], s[1]), false)
-	flyClients[flyConfig] = c
+	client := client.OpenClient(fmt.Sprintf("%s:%s", s[0], s[1]), false)
+
+	flyClients[flyConfig] = &FlyfishClient{
+		Client:   client,
+		deadline: now.Add(timeout),
+	}
 	return c, nil
 }
 
 func Init(config *conf.Config) error {
-	flyClients = map[string]*client.Client{}
-
 	outLogger := golog.NewOutputLogger("log", "flyfish_tool", 1024*1024*50)
 	logger = golog.New("flyfish_tool", outLogger)
 	logger.Debugf("%s logger init", "flyfish_tool")
@@ -49,5 +62,20 @@ func Init(config *conf.Config) error {
 	http.HandleFunc("/del", HandleDel)
 	//http.HandleFunc("/truncate", HandleTruncate)
 	err := http.ListenAndServe(config.HttpAddr, nil)
+
+	go Loop()
 	return err
+}
+
+func Loop() {
+	timer := time.NewTicker(time.Minute)
+	for {
+		now := <-timer.C
+		db.Tick(now)
+		for k, c := range flyClients {
+			if now.After(c.deadline) {
+				delete(flyClients, k)
+			}
+		}
+	}
 }

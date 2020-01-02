@@ -3,7 +3,7 @@ package webTool
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/sniperHW/flyfish/app/webTool/pgsql"
+	"github.com/sniperHW/flyfish/app/webTool/db"
 	"github.com/sniperHW/flyfish/errcode"
 	"io/ioutil"
 	"net/http"
@@ -28,7 +28,7 @@ func HandleTestConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := pgsql.GetClient(args["dbConfig"])
+	_, err := db.GetClient(args["dbConfig"])
 	if err != nil {
 		httpErr(err.Error(), w)
 		return
@@ -67,7 +67,7 @@ func HandleCreateTable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, err := pgsql.GetClient(args["dbConfig"])
+	client, err := db.GetClient(args["dbConfig"])
 	if err != nil {
 		httpErr(err.Error(), w)
 		return
@@ -134,7 +134,7 @@ func HandleAddColumn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, err := pgsql.GetClient(args["dbConfig"])
+	client, err := db.GetClient(args["dbConfig"])
 	if err != nil {
 		httpErr(err.Error(), w)
 		return
@@ -203,7 +203,7 @@ func HandleTruncate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, err := pgsql.GetClient(args["dbConfig"])
+	client, err := db.GetClient(args["dbConfig"])
 	if err != nil {
 		httpErr(err.Error(), w)
 		return
@@ -238,7 +238,7 @@ func HandleTableInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, err := pgsql.GetClient(args["dbConfig"])
+	client, err := db.GetClient(args["dbConfig"])
 	if err != nil {
 		httpErr(err.Error(), w)
 		return
