@@ -73,7 +73,7 @@ func HandleCreateTable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fields, err := processFields(args["fields"])
+	fields, err := db.ProcessFields(client.GetType(), args["fields"])
 	if err != nil {
 		httpErr(err.Error(), w)
 		return
@@ -140,7 +140,7 @@ func HandleAddColumn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fields, err := processFields(args["fields"])
+	fields, err := db.ProcessFields(client.GetType(), args["fields"])
 	if err != nil {
 		httpErr(err.Error(), w)
 		return
@@ -178,6 +178,42 @@ func HandleAddColumn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
+		"ok": 1,
+	}); err != nil {
+		logger.Errorln("http resp err:", err)
+	}
+}
+
+/*
+ * 导出数据库表结构
+ * dbConfig:string,tableName:string,isGetData:bool
+ */
+func HandleDumpSql(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	logger.Infoln("HandleDumpSql request", r.Method, r.Form)
+	httpHeader(&w) //跨域
+
+	args := map[string]string{
+		"dbConfig":  "",
+		"tableName": "",
+	}
+	if err := checkForm(r.Form, args); err != nil {
+		httpErr(err.Error(), w)
+		return
+	}
+
+	client, err := db.GetClient(args["dbConfig"])
+	if err != nil {
+		httpErr(err.Error(), w)
+		return
+	}
+
+	err = client.Truncate(args["tableName"])
+	if err != nil {
+		httpErr(err.Error(), w)
+		return
+	}
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"ok": 1,
 	}); err != nil {

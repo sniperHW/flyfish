@@ -3,9 +3,9 @@ package webTool
 import (
 	"fmt"
 	"github.com/sniperHW/flyfish/app/webTool/conf"
+	"github.com/sniperHW/flyfish/app/webTool/db"
 	"github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/kendynet/golog"
-	"github.com/yddeng/flyfish/app/webTool/db"
 	"net/http"
 	"strings"
 	"time"
@@ -60,6 +60,8 @@ func Init(config *conf.Config) error {
 	http.HandleFunc("/set", HandleSet)
 	http.HandleFunc("/get", HandleGet)
 	http.HandleFunc("/del", HandleDel)
+
+	http.HandleFunc("/dumpSql", HandleDumpSql)
 	//http.HandleFunc("/truncate", HandleTruncate)
 	err := http.ListenAndServe(config.HttpAddr, nil)
 

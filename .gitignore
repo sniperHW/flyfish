@@ -12,5 +12,6 @@ config.toml
 *.lib
 *.dylib
 
+app/webTool/conf/conf.toml
 kv-1-1
 kv-1-1-snap
