@@ -80,6 +80,7 @@
 
 <!-------------------------------------- 查询数据 ------------------------------------------>
 <div id="queryData" class="table">
+    <p id="queryData-tableName-show"></p>
     <input id="queryData-key" style="width: 300px;height: 30px" type="text" autofocus="true" placeholder="__key__">
     <button onclick="queryData_()" style="width: 80px">查询</button>
     <button onclick="delData_()" style="width: 80px">删除</button>
@@ -93,12 +94,28 @@
 </div>
 <!-------------------------------------- 查询数据 ------------------------------------------>
 
+<!-------------------------------------- 表结构 ------------------------------------------>
+<div id="structure" class="structure">
+    <a href = "javascript:void(0)" style="margin-left: 90%" onclick = "document.getElementById('structure').style.display='none';">X</a>
+    <p id="structure-innerHtml"></p>
+</div>
+<!-------------------------------------- 表结构 ------------------------------------------>
+
+<!-------------------------------------- 表结构 ------------------------------------------>
+<div id="structure" class="structure">
+    <a href = "javascript:void(0)" style="margin-left: 90%" onclick = "document.getElementById('structure').style.display='none';">X</a>
+    <p id="structure-innerHtml"></p>
+</div>
+<!-------------------------------------- 表结构 ------------------------------------------>
+
 <div id="header">
     <div id="header-show"></div>
 </div>
 <div>
     <div id="menu">
-        <div class="nav" ><button onclick="showCreateTable()" >新建表</button></div>
+        <div class="nav" ><button onclick="showCreateTable()" >New Table</button></div>
+        <div class="nav" ><button onclick="dumpSql(false)" >Dump Sql: Structure only</button></div>
+        <div class="nav" ><button onclick="dumpSql(true)" >Dump Sql: Structure + Data</button></div>
 
     </div>
     <div id="list">
@@ -397,6 +414,7 @@
     /********************************** queryData end ******************************************************/
     function queryData(tableName) {
         document.getElementById('queryData').style.display = "block";
+        document.getElementById('queryData-tableName-show').innerHTML = tableName;
         document.getElementById('queryData-tableName').value = tableName;
         let context = document.getElementById('queryData-table');
         context.innerHTML = "";
@@ -465,6 +483,31 @@
             if(res.ok === 1){
                 showTips("删除成功",2000)
                 tableInfo()
+            }else{
+                showTips(res.msg,2000)
+            }
+        },function (e){
+            showTips("网络错误",2000)
+        })
+    }
+
+    function dumpSql(b) {
+        if (dbConfig === "" || flyfishConfig === ""){
+            showTips("还未配置数据库",2000);
+            return;
+        }
+        let url = httpAddr + "/dumpSql";
+        let data = {dbConfig:dbConfig,flyfishConfig:flyfishConfig,isGetData:b};
+        util.httpPost(url,data,function (res) {
+            if(res.ok === 1){
+                let str = "";
+                console.log(res.ret);
+                $.each(res.ret,function (k,v) {
+                    str += util.format(`\n{0}\n`,v);
+                    console.log(k,v)
+                });
+                document.getElementById('structure').style.display = "block";
+                document.getElementById('structure-innerHtml').innerText = str;
             }else{
                 showTips(res.msg,2000)
             }

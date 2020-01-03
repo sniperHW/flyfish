@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strconv"
 )
 
 /*
@@ -187,7 +188,7 @@ func HandleAddColumn(w http.ResponseWriter, r *http.Request) {
 
 /*
  * 导出数据库表结构
- * dbConfig:string,tableName:string,isGetData:bool
+ * dbConfig:string,isGetData:bool
  */
 func HandleDumpSql(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
@@ -195,9 +196,14 @@ func HandleDumpSql(w http.ResponseWriter, r *http.Request) {
 	httpHeader(&w) //跨域
 
 	args := map[string]string{
-		"dbConfig":  "",
-		"tableName": "",
+		"dbConfig": "",
 	}
+	if err := checkForm(r.Form, args); err != nil {
+		httpErr(err.Error(), w)
+		return
+	}
+
+	isGetData, err := strconv.ParseBool(r.Form.Get("isGetData"))
 	if err := checkForm(r.Form, args); err != nil {
 		httpErr(err.Error(), w)
 		return
@@ -209,13 +215,14 @@ func HandleDumpSql(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = client.Truncate(args["tableName"])
+	ret, err := client.DumpSql(isGetData)
 	if err != nil {
 		httpErr(err.Error(), w)
 		return
 	}
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
-		"ok": 1,
+		"ok":  1,
+		"ret": ret,
 	}); err != nil {
 		logger.Errorln("http resp err:", err)
 	}

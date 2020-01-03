@@ -1,2 +1,2 @@
 
-const httpAddr = "http://10.128.2.123:9999";
+const httpAddr = "http://127.0.0.1:9999";

@@ -16,6 +16,7 @@ func (this *Client) DumpSql(IsGetData bool) (map[string]string, error) {
 	}
 
 	table_conf := `
+DROP TABLE IF EXISTS "table_conf";
 CREATE TABLE "table_conf" (
 "__table__" varchar(255) NOT NULL DEFAULT '',
 "__conf__" varchar(65535) NOT NULL DEFAULT '',
@@ -78,6 +79,7 @@ func (this *Client) getAll(tableName string) (ret []map[string]interface{}, err 
 
 func makeCreateSql(tableName string, fields []string) string {
 	sqlStr := `
+DROP TABLE IF EXISTS "%s";
 CREATE TABLE "%s" (
   "__key__" varchar(255) NOT NULL,
   "__version__" int8 NOT NULL,
@@ -90,7 +92,7 @@ CREATE TABLE "%s" (
 		columns += field + ","
 	}
 
-	sqlStatement := fmt.Sprintf(sqlStr, tableName, columns)
+	sqlStatement := fmt.Sprintf(sqlStr, tableName, tableName, columns)
 	return sqlStatement
 }
 
