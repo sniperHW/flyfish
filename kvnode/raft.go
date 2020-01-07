@@ -113,8 +113,8 @@ type raftNode struct {
 	snapshotCompressor *codec.ZipCompressor
 }
 
-var defaultSnapshotCount uint64 = 10000
-var snapshotCatchUpEntriesN uint64 = 10000
+var defaultSnapshotCount uint64 = 3000
+var snapshotCatchUpEntriesN uint64 = 3000
 
 // newRaftNode initiates a raft instance and returns a committed log entry
 // channel and error channel. Proposals for log updates are sent over the

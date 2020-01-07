@@ -73,9 +73,9 @@ func main() {
 
 	services := strings.Split(os.Args[2], ",")
 
-	for j := 0; j < 50; j++ {
+	for j := 0; j < 10; j++ {
 		c := kclient.OpenClient(services[j%len(services)], false)
-		for i := 0; i < 50; i++ {
+		for i := 0; i < 500; i++ {
 			Set(c)
 		}
 	}
