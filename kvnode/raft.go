@@ -734,6 +734,7 @@ func (rc *raftNode) issuePropose(batch *batchProposal) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	err := rc.node.Propose(ctx, batch.proposalStr.Bytes())
+	Infoln("issuePropose", batch.tasks.Len(), len(batch.proposalStr.Bytes()))
 	cancel()
 
 	if nil != err {
