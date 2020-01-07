@@ -112,7 +112,8 @@ type raftNode struct {
 	//cbLoseLeaderShip func()
 }
 
-var defaultSnapshotCount uint64 = 10000
+var defaultSnapshotCount uint64 = 1000
+var snapshotCatchUpEntriesN uint64 = 1000
 
 // newRaftNode initiates a raft instance and returns a committed log entry
 // channel and error channel. Proposals for log updates are sent over the
@@ -542,8 +543,6 @@ func (rc *raftNode) publishSnapshot(snapshotToSave raftpb.Snapshot) {
 	rc.snapshotIndex = snapshotToSave.Metadata.Index
 	rc.appliedIndex = snapshotToSave.Metadata.Index
 }
-
-var snapshotCatchUpEntriesN uint64 = 10000
 
 func (rc *raftNode) onTriggerSnapshotOK() {
 
