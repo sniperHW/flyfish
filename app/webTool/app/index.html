@@ -8,138 +8,7 @@
     <script src="database.js"></script>
     <script src="dist/jquery.min.js"></script>
     <title>flyfish</title>
-    <style>
-        #header{
-            width: 100%;
-            height: 50px;
-        }
-        #header-show{
-            position: absolute;
-            left: 10%;
-            width: 80%;
-            height: 50px;
-            line-height: 50px;
-        }
-        #db{
-            background-color: #C09853;
-        }
-        #flyfish{
-            background-color: #e38d13;
-        }
-        #menu{
-            margin-left: 10%;
-            width: 80%;
-            height: 50px;
-        }
-        .nav{
-            float: left;
-            line-height: 50px;
-            margin-right: 5px;
-        }
-        #list{
-            margin-left: 10%;
-            width: 80%;
-        }
-        .item-name{
-            width: 10%;
-            float: left;
-        }
-        .item-conf{
-            width: 65%;
-            float: left;
-            white-space: nowrap;
-            text-overflow: ellipsis;
-            overflow: hidden;
-            cursor: pointer;
-        }
-        .item-number{
-            width: 5%;
-            float: left;
-        }
-        .item-action{
-            width: 20%;
-            float: left;
-        }
-        #item-header{
-            height: 50px;
-            line-height: 50px;
-        }
-        .item{
-            height: 40px;
-            line-height: 40px;
-        }
-        .item:hover{
-            background-color: #E5E7E9;
-        }
-        button{
-            height: 30px;
-            cursor: pointer;
-        }
-        .tips{
-            display: none;
-            position: fixed;
-            top: 25%;
-            left: 40%;
-            max-width: 20%;
-            max-height: 50%;
-            padding: 10px;
-            background-color: #95A5A6;
-            z-index: 1010;
-            overflow: auto;
-        }
-        .canvas{
-            display: none;
-            position: fixed;
-            top: 20%;
-            left: 30%;
-            max-width: 50%;
-            max-height: 60%;
-            padding: 20px;
-            border: 1px solid #A6ACAF;
-            background-color: white;
-            z-index: 1002;
-            overflow: auto;
-        }
-
-        .table{
-            display: none;
-            position: fixed;
-            top: 20%;
-            left: 20%;
-            max-width: 60%;
-            max-height: 70%;
-            padding: 20px;
-            border: 1px solid #A6ACAF;
-            background-color: white;
-            z-index: 1002;
-            overflow: auto;
-        }
-        table{
-            font-family: verdana,arial,sans-serif;
-            font-size:16px;
-            color:#333333;
-            border-width: 1px;
-            border-color: #666666;
-            border-collapse: collapse;
-        }
-        th{
-            border-width: 1px;
-            padding: 2px;
-            border-style: solid;
-            border-color: #666666;
-            background-color: #dedede;
-            min-width: 54px;
-            white-space: nowrap;
-        }
-        td {
-            white-space: nowrap;
-            border-width: 1px;
-            padding: 2px;
-            border-style: solid;
-            border-color: #666666;
-            background-color: #ffffff;
-        }
-    </style>
+    <link rel="stylesheet" type="text/css" href="css/index.css">
 </head>
 <body>
 <div id="tips" class="tips"><span id="tips-msg"></span></div>
@@ -211,6 +80,7 @@
 
 <!-------------------------------------- 查询数据 ------------------------------------------>
 <div id="queryData" class="table">
+    <p id="queryData-tableName-show"></p>
     <input id="queryData-key" style="width: 300px;height: 30px" type="text" autofocus="true" placeholder="__key__">
     <button onclick="queryData_()" style="width: 80px">查询</button>
     <button onclick="delData_()" style="width: 80px">删除</button>
@@ -224,12 +94,28 @@
 </div>
 <!-------------------------------------- 查询数据 ------------------------------------------>
 
+<!-------------------------------------- 表结构 ------------------------------------------>
+<div id="structure" class="structure">
+    <a href = "javascript:void(0)" style="margin-left: 90%" onclick = "document.getElementById('structure').style.display='none';">X</a>
+    <p id="structure-innerHtml"></p>
+</div>
+<!-------------------------------------- 表结构 ------------------------------------------>
+
+<!-------------------------------------- 表结构 ------------------------------------------>
+<div id="structure" class="structure">
+    <a href = "javascript:void(0)" style="margin-left: 90%" onclick = "document.getElementById('structure').style.display='none';">X</a>
+    <p id="structure-innerHtml"></p>
+</div>
+<!-------------------------------------- 表结构 ------------------------------------------>
+
 <div id="header">
     <div id="header-show"></div>
 </div>
 <div>
     <div id="menu">
-        <div class="nav" ><button onclick="showCreateTable()" >新建表</button></div>
+        <div class="nav" ><button onclick="showCreateTable()" >New Table</button></div>
+        <div class="nav" ><button onclick="dumpSql(false)" >Dump Sql: Structure only</button></div>
+        <div class="nav" ><button onclick="dumpSql(true)" >Dump Sql: Structure + Data</button></div>
 
     </div>
     <div id="list">
@@ -267,8 +153,8 @@
             tableInfo();
         }else {
             let elem = document.getElementById("header-show");
-            let str = `未配置数据库参数
-<button onclick=\"document.getElementById('dbConfig').style.display='block';\">配置</button>`;
+            let str = `
+<button onclick=\"document.getElementById('dbConfig').style.display='block';\" style="width: 100px;height: 23px;">配置数据库参数</button>`;
             elem.innerHTML = str;
         }
 
@@ -280,8 +166,8 @@
         let elem = document.getElementById("header-show");
         let s = dbConfig.split("@");
         let f = flyfishConfig.split("@");
-        let str = `<span id="db"> db : {0} </span><span id="flyfish"> flyfish : {1}</span>
-        <button onclick=\"document.getElementById('dbConfig').style.display='block';\">配置</button>`;
+        let str = `<span id="db" style="font-size: 20px"> db : {0} | </span><span id="flyfish" style="font-size: 20px"> flyfish : {1}</span>
+        <button onclick=\"document.getElementById('dbConfig').style.display='block';\" style="width: 70px;height: 22px;">重新配置</button>`;
         elem.innerHTML = util.format(str,util.format("{0} > {1} > {2} > {3}",s[0],util.format("{0}:{1}",s[1],s[2]),s[3],s[4]),
             util.format("{0}:{1}",f[0],f[1]));
     }
@@ -361,7 +247,7 @@
             return
         }
         let url = httpAddr + "/testConnection";
-        util.httpPost(url,{dbConfig:dbc,flyfishConfig:flyfishConfig}, function (res) {
+        util.httpPost(url,{dbConfig:dbc,flyfishConfig:flyc}, function (res) {
             if(res.ok === 1){
                 showTips("connection ok",2000)
             }else{
@@ -528,6 +414,7 @@
     /********************************** queryData end ******************************************************/
     function queryData(tableName) {
         document.getElementById('queryData').style.display = "block";
+        document.getElementById('queryData-tableName-show').innerHTML = tableName;
         document.getElementById('queryData-tableName').value = tableName;
         let context = document.getElementById('queryData-table');
         context.innerHTML = "";
@@ -596,6 +483,31 @@
             if(res.ok === 1){
                 showTips("删除成功",2000)
                 tableInfo()
+            }else{
+                showTips(res.msg,2000)
+            }
+        },function (e){
+            showTips("网络错误",2000)
+        })
+    }
+
+    function dumpSql(b) {
+        if (dbConfig === "" || flyfishConfig === ""){
+            showTips("还未配置数据库",2000);
+            return;
+        }
+        let url = httpAddr + "/dumpSql";
+        let data = {dbConfig:dbConfig,flyfishConfig:flyfishConfig,isGetData:b};
+        util.httpPost(url,data,function (res) {
+            if(res.ok === 1){
+                let str = "";
+                console.log(res.ret);
+                $.each(res.ret,function (k,v) {
+                    str += util.format(`\n{0}\n`,v);
+                    console.log(k,v)
+                });
+                document.getElementById('structure').style.display = "block";
+                document.getElementById('structure-innerHtml').innerText = str;
             }else{
                 showTips(res.msg,2000)
             }

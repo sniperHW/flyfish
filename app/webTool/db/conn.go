@@ -1,4 +1,4 @@
-package pgsql
+package db
 
 import (
 	"database/sql"
@@ -10,19 +10,26 @@ import (
 )
 
 type Client struct {
-	tt     string
-	dbConn *sql.DB
+	tt       string
+	dbConn   *sql.DB
+	deadline time.Time
 }
 
 var (
-	clients map[string]*Client
-	once    = sync.Once{}
+	mtx     = sync.Mutex{}
+	clients = map[string]*Client{}
+	timeout = time.Hour * 1 //
 )
 
 // postgres/mysql@127.0.0.1@5432@deng@dbuser@123456
 func GetClient(dbConfig string) (*Client, error) {
+	now := time.Now()
+
+	mtx.Lock()
+	defer mtx.Unlock()
 	c, ok := clients[dbConfig]
 	if ok {
+		c.deadline = now.Add(timeout)
 		return c, nil
 	}
 
@@ -52,12 +59,16 @@ func GetClient(dbConfig string) (*Client, error) {
 	}
 
 	c = &Client{
-		tt:     tt,
-		dbConn: db,
+		tt:       tt,
+		dbConn:   db,
+		deadline: now.Add(timeout),
 	}
 	clients[dbConfig] = c
-
 	return c, nil
+}
+
+func (this *Client) GetType() string {
+	return this.tt
 }
 
 func pgsqlOpen(host string, port string, dbname string, user string, password string) (*sql.DB, error) {
@@ -70,16 +81,13 @@ func mysqlOpen(host string, port string, dbname string, user string, password st
 	return sql.Open("mysql", connStr)
 }
 
-func init() {
-	once.Do(func() {
-		clients = map[string]*Client{}
-		go func() {
-			for {
-				for k, c := range clients {
-					fmt.Println(k, c)
-				}
-				time.Sleep(time.Hour)
-			}
-		}()
-	})
+func Tick(now time.Time) {
+	mtx.Lock()
+	defer mtx.Unlock()
+	for k, c := range clients {
+		if now.After(c.deadline) {
+			_ = c.dbConn.Close()
+			delete(clients, k)
+		}
+	}
 }

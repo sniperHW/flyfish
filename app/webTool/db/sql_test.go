@@ -1,4 +1,4 @@
-package pgsql
+package db
 
 import (
 	"fmt"
@@ -52,5 +52,15 @@ func TestGet(t *testing.T) {
 		return
 	}
 	ret, err := client.GetAll("table_conf", []string{"__table__", "__conf__"})
+	fmt.Println(ret, err)
+}
+
+func TestClient_DumpSql(t *testing.T) {
+	client, err := GetClient("postgres@10.128.2.166@5432@deng@dbuser@123456")
+	if err != nil {
+		fmt.Println(1, err)
+		return
+	}
+	ret, err := client.DumpSql(true)
 	fmt.Println(ret, err)
 }

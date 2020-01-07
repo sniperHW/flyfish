@@ -31,15 +31,15 @@ DbUser			= "dbuser"
 DbPassword      = "123456"
 DbDataBase      = "wei"
 
-ConfDbHost      = "10.128.2.166"                (可动态重加载)
-ConfDbPort      = 5432                          (可动态重加载)
-ConfDbUser      = "dbuser"                      (可动态重加载)
-ConfDbPassword  = "123456"                      (可动态重加载) 
-ConfDataBase    = "wei"                         (可动态重加载)
+ConfDbHost      = "10.128.2.166"                #(可动态重加载)
+ConfDbPort      = 5432                          #(可动态重加载)
+ConfDbUser      = "dbuser"                      #(可动态重加载)
+ConfDbPassword  = "123456"                      #(可动态重加载)
+ConfDataBase    = "wei"                         #(可动态重加载)
 
 [Log]
 MaxLogfileSize  = 104857600 # 100mb
 LogDir          = "log"
 LogPrefix       = "github.com/sniperHW/flyfish"
-LogLevel        = "debug"                       (可动态重加载)
-EnableLogStdout = true                          (可动态重加载)
+LogLevel        = "debug"                       #(可动态重加载)
+EnableLogStdout = true                          #(可动态重加载)

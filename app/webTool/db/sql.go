@@ -1,4 +1,4 @@
-package pgsql
+package db
 
 import (
 	"fmt"
@@ -167,7 +167,7 @@ func (this *Client) GetAll(tableName string, fields []string) (ret []map[string]
 }
 
 func (this *Client) Create(tableName string, fields []string) error {
-	sqlStr := `CREATE TABLE "public"."%s" (
+	sqlStr := `CREATE TABLE "%s" (
   "__key__" varchar(255) NOT NULL,
   "__version__" int8 NOT NULL,
   %s
@@ -197,7 +197,7 @@ func (this *Client) Alter(tableName, action string, fields []string) error {
 		return fmt.Errorf("action only ADD or DROP")
 	}
 	sqlStr := `
-ALTER TABLE "public"."%s"`
+ALTER TABLE "%s"`
 	if len(fields) == 0 {
 		return fmt.Errorf("fields length is 0")
 	}
