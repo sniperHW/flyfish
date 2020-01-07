@@ -1,7 +1,9 @@
 package kvnode
 
 import (
+	"encoding/binary"
 	"fmt"
+	"github.com/sniperHW/flyfish/codec"
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/dbmeta"
 	"github.com/sniperHW/flyfish/errcode"
@@ -65,6 +67,7 @@ type kvstore struct {
 	lruTail        kv
 	storeMgr       *storeMgr
 	lruTimer       *timer.Timer
+	unCompressor   *codec.ZipUnCompressor
 }
 
 func (this *kvstore) getKvNode() *KVNode {
@@ -208,6 +211,20 @@ func (this *kvstore) tryKick(kv *kv) bool {
 func (this *kvstore) apply(data []byte) bool {
 	this.Lock()
 	defer this.Unlock()
+
+	compressFlag := binary.BigEndian.Uint16(data[:2])
+
+	if compressFlag == 12765 {
+		var err error
+		data, err = this.unCompressor.UnCompress(data[2:])
+		if nil != err {
+			Errorln("uncompress error")
+			return false
+		}
+	} else {
+		data = data[2:]
+	}
+
 	s := str.NewStr(data, len(data))
 	offset := 0
 	var p *proposal
@@ -531,12 +548,13 @@ func (this *storeMgr) stop() {
 func newKVStore(storeMgr *storeMgr, kvNode *KVNode, proposeC *util.BlockQueue, readReqC *util.BlockQueue) *kvstore {
 
 	s := &kvstore{
-		proposeC: proposeC,
-		elements: map[string]*kv{},
-		tmp:      map[string]*kv{},
-		readReqC: readReqC,
-		kvNode:   kvNode,
-		storeMgr: storeMgr,
+		proposeC:     proposeC,
+		elements:     map[string]*kv{},
+		tmp:          map[string]*kv{},
+		readReqC:     readReqC,
+		kvNode:       kvNode,
+		storeMgr:     storeMgr,
+		unCompressor: &codec.ZipUnCompressor{},
 	}
 
 	s.lruHead.nnext = &s.lruTail

@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"github.com/sniperHW/flyfish/codec"
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/rafthttp"
@@ -108,8 +109,8 @@ type raftNode struct {
 
 	kvstore *kvstore
 
-	//cbBecomeLeader   func()
-	//cbLoseLeaderShip func()
+	proposalCompressor *codec.ZipCompressor
+	snapshotCompressor *codec.ZipCompressor
 }
 
 var defaultSnapshotCount uint64 = 1000
@@ -159,6 +160,9 @@ func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, propos
 		proposePipeline: proposeC,
 		readPipeline:    readC,
 		lease:           &lease{stop: nil},
+
+		proposalCompressor: &codec.ZipCompressor{},
+		snapshotCompressor: &codec.ZipCompressor{},
 
 		// rest of structure populated after WAL replay
 	}
@@ -590,13 +594,33 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 		for _, v := range clone {
 			for _, vv := range v {
 				vv.append2Str(ss)
-				//ss.appendProposal(proposal_snapshot, vv.uniKey, vv.values, vv.version)
 			}
 		}
 
 		beg := time.Now()
 
-		snap, err := rc.raftStorage.CreateSnapshot(appliedIndex, &confState, ss.Bytes())
+		indexBuff := ss.Bytes()[:8]
+		bytes := ss.Bytes()[8:]
+		compressFlag := false
+
+		if len(bytes) > 4096 {
+			compressFlag = true
+			bytes, _ = rc.snapshotCompressor.Compress(bytes)
+		}
+
+		snapshotBuf := make([]byte, len(bytes)+2+8)
+		copy(snapshotBuf, indexBuff)
+		if compressFlag {
+			binary.BigEndian.PutUint16(snapshotBuf[8:], uint16(12765))
+		} else {
+			binary.BigEndian.PutUint16(snapshotBuf[8:], uint16(0))
+		}
+
+		copy(snapshotBuf[10:], bytes)
+
+		str.Put(ss)
+
+		snap, err := rc.raftStorage.CreateSnapshot(appliedIndex, &confState, snapshotBuf)
 		if err != nil {
 			panic(err)
 		}
@@ -604,8 +628,6 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 		if err := rc.saveSnap(snap); err != nil {
 			panic(err)
 		}
-
-		str.Put(ss)
 
 		Infoln("save snapshot time", time.Now().Sub(beg))
 
@@ -618,8 +640,6 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 func (rc *raftNode) onLoseLeadership() {
 
 	rc.lease.loseLeaderShip()
-	//rc.cbLoseLeaderShip()
-
 	rc.muPendingPropose.Lock()
 	pendingPropose := rc.pendingPropose
 	rc.pendingPropose = list.New()
@@ -752,10 +772,28 @@ func (rc *raftNode) issuePropose(batch *batchProposal) {
 	e := rc.pendingPropose.PushBack(batch)
 	rc.muPendingPropose.Unlock()
 
+	indexBuff := batch.proposalStr.Bytes()[:8]
+	bytes := batch.proposalStr.Bytes()[8:]
+	compressFlag := false
+
+	if len(bytes) > 4096 {
+		compressFlag = true
+		bytes, _ = rc.proposalCompressor.Compress(bytes)
+	}
+
+	proposalBuf := make([]byte, len(bytes)+2+8)
+	copy(proposalBuf, indexBuff)
+	if compressFlag {
+		binary.BigEndian.PutUint16(proposalBuf[8:], uint16(12765))
+	} else {
+		binary.BigEndian.PutUint16(proposalBuf[8:], uint16(0))
+	}
+
+	copy(proposalBuf[10:], bytes)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	err := rc.node.Propose(ctx, batch.proposalStr.Bytes())
-	g_metric.add(len(batch.proposalStr.Bytes()))
-	//Infoln("issuePropose", batch.tasks.Len(), len(batch.proposalStr.Bytes()))
+	err := rc.node.Propose(ctx, proposalBuf) //batch.proposalStr.Bytes())
+	g_metric.add(len(proposalBuf))           //batch.proposalStr.Bytes()))
 	cancel()
 
 	if nil != err {
