@@ -726,6 +726,27 @@ func (rc *raftNode) startReadPipeline() {
 	}()
 }
 
+type metric struct {
+	sync.Mutex
+	bytes int64
+	last  time.Time
+}
+
+func (m *metric) add(count int) {
+	now := time.Now()
+	m.Lock()
+	defer m.Unlock()
+	m.bytes += int64(count)
+	elapsed := now.Sub(m.last)
+	if elapsed >= time.Second {
+		Infoln("proposals bytes", (m.bytes*int64(time.Second))/int64(elapsed)/1024/1024, "mb")
+		m.bytes = 0
+		m.last = now
+	}
+}
+
+var g_metric = &metric{}
+
 func (rc *raftNode) issuePropose(batch *batchProposal) {
 
 	rc.muPendingPropose.Lock()
@@ -734,7 +755,8 @@ func (rc *raftNode) issuePropose(batch *batchProposal) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	err := rc.node.Propose(ctx, batch.proposalStr.Bytes())
-	Infoln("issuePropose", batch.tasks.Len(), len(batch.proposalStr.Bytes()))
+	g_metric.add(len(batch.proposalStr.Bytes()))
+	//Infoln("issuePropose", batch.tasks.Len(), len(batch.proposalStr.Bytes()))
 	cancel()
 
 	if nil != err {
