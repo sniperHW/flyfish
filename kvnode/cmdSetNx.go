@@ -12,7 +12,7 @@ type asynCmdTaskSetNx struct {
 
 func (this *asynCmdTaskSetNx) onSqlResp(errno int32) {
 	this.asynCmdTaskBase.onSqlResp(errno)
-	cmd := this.commands[0].(*cmdSet)
+	cmd := this.commands[0].(*cmdSetNx)
 
 	if errno == errcode.ERR_RECORD_NOTEXIST {
 		this.fields = map[string]*proto.Field{}
@@ -20,6 +20,7 @@ func (this *asynCmdTaskSetNx) onSqlResp(errno int32) {
 		for k, v := range cmd.fields {
 			this.fields[k] = v
 		}
+		this.errno = errcode.ERR_OK
 		this.sqlFlag = sql_insert_update
 		this.version = 1
 		this.getKV().store.issueUpdate(this)
