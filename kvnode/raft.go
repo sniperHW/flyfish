@@ -109,8 +109,8 @@ type raftNode struct {
 
 	kvstore *kvstore
 
-	proposalCompressor *codec.CompressorI
-	snapshotCompressor *codec.CompressorI
+	proposalCompressor codec.CompressorI
+	snapshotCompressor codec.CompressorI
 }
 
 var defaultSnapshotCount uint64 = 3000
