@@ -275,7 +275,7 @@ func (this *Str) ReadString(offset int, size int) (string, int, error) {
 		return "", 0, fmt.Errorf("beyond size")
 	}
 
-	b := strings.Builder
+	var b strings.Builder
 	b.Write(this.data[offset : offset+size])
 	return b.String(), offset + size, nil
 
