@@ -295,7 +295,7 @@ func (this *kvstore) apply(data []byte, fromSnapshot ...bool) bool {
 				} else {
 					kv.setStatus(cache_ok)
 					kv.version = version
-					/*fields := p.values[2].([]*proto.Field)
+					fields := p.values[2].([]*proto.Field)
 					Debugln(p.tt, unikey, version, "cache_ok", kv.getStatus(), kv.isWriteBack())
 
 					if nil == kv.fields {
@@ -304,7 +304,7 @@ func (this *kvstore) apply(data []byte, fromSnapshot ...bool) bool {
 
 					for _, v := range fields {
 						kv.fields[v.GetName()] = v
-					}*/
+					}
 				}
 				kv.setSnapshoted(true)
 
