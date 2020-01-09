@@ -212,8 +212,6 @@ func makeSlice(cap int) []byte {
 	return make([]byte, cap)
 }
 
-var ff []interface{} = []interface{}{}
-
 func (this *kvstore) apply(data []byte, fromSnapshot ...bool) bool {
 
 	compressFlag := binary.BigEndian.Uint16(data[:2])
@@ -298,9 +296,8 @@ func (this *kvstore) apply(data []byte, fromSnapshot ...bool) bool {
 					kv.setStatus(cache_ok)
 					kv.version = version
 					fields := p.values[2].([]*proto.Field)
-					ff = append(ff, fields)
 
-					/*Debugln(p.tt, unikey, version, "cache_ok", kv.getStatus(), kv.isWriteBack())
+					Debugln(p.tt, unikey, version, "cache_ok", kv.getStatus(), kv.isWriteBack())
 
 					if nil == kv.fields {
 						kv.fields = map[string]*proto.Field{}
@@ -308,7 +305,7 @@ func (this *kvstore) apply(data []byte, fromSnapshot ...bool) bool {
 
 					for _, v := range fields {
 						kv.fields[v.GetName()] = v
-					}*/
+					}
 				}
 				kv.setSnapshoted(true)
 
@@ -436,7 +433,7 @@ func (this *kvstore) getSnapshot() [][]*kvsnap {
 }
 
 func (this *kvstore) gotLease() {
-	/*this.Lock()
+	this.Lock()
 	defer this.Unlock()
 	//获得租约,强制store对所有kv执行一次sql回写
 	for _, vv := range this.elements {
@@ -455,7 +452,7 @@ func (this *kvstore) gotLease() {
 			}
 		}
 		vv.Unlock()
-	}*/
+	}
 }
 
 type storeMgr struct {
