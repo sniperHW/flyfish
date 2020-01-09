@@ -14,6 +14,7 @@ type CompressorI interface {
 
 type UnCompressorI interface {
 	UnCompress(in []byte) ([]byte, error)
+	ResetBuffer()
 }
 
 type ZipCompressor struct {
@@ -39,6 +40,10 @@ func (this *ZipCompressor) Compress(in []byte) ([]byte, error) {
 
 type ZipUnCompressor struct {
 	zipBuff bytes.Buffer
+}
+
+func (this *ZipUnCompressor) ResetBuffer() {
+	this.zipBuff = bytes.Buffer{}
 }
 
 func (this *ZipUnCompressor) UnCompress(in []byte) ([]byte, error) {
@@ -87,6 +92,10 @@ func (this *GZipCompressor) Compress(in []byte) ([]byte, error) {
 type GZipUnCompressor struct {
 	zipBuff   bytes.Buffer
 	zipReader *gzip.Reader
+}
+
+func (this *GZipUnCompressor) ResetBuffer() {
+	this.zipBuff = bytes.Buffer{}
 }
 
 func (this *GZipUnCompressor) UnCompress(in []byte) ([]byte, error) {

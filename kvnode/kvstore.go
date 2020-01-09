@@ -14,7 +14,6 @@ import (
 	"github.com/sniperHW/kendynet/util"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	"go.etcd.io/etcd/raft/raftpb"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -217,8 +216,7 @@ func (this *kvstore) apply(data []byte) bool {
 
 	if compressFlag == 12765 {
 		var err error
-		unCompressor := &codec.ZipUnCompressor{}
-		data, err = unCompressor.UnCompress(data[2:])
+		data, err = this.unCompressor.UnCompress(data[2:])
 		if nil != err {
 			Errorln("uncompress error")
 			return false
@@ -324,7 +322,7 @@ func (this *kvstore) readCommits(snapshotter *snap.Snapshotter, commitC <-chan i
 					}
 				}
 			} else if data == replayOK {
-				runtime.GC()
+				this.unCompressor.ResetBuffer()
 				Infoln("reply ok,keycount", len(this.elements))
 				return
 			} else {

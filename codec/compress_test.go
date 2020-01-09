@@ -41,6 +41,10 @@ func TestCompress(t *testing.T) {
 			t.Fatal(unzipOut)
 		}
 
+		fmt.Println(zipUnCompressor.zipBuff.Len(), zipUnCompressor.zipBuff.Cap())
+		zipUnCompressor.ResetBuffer()
+		fmt.Println(zipUnCompressor.zipBuff.Len(), zipUnCompressor.zipBuff.Cap())
+
 	}()
 
 	func() {
