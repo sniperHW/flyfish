@@ -225,7 +225,10 @@ func (this *kvstore) apply(data []byte) bool {
 		data = data[2:]
 	}
 
-	s := str.NewStr(data, len(data))
+	b := make([]byte, len(data))
+	copy(b, data)
+
+	s := str.NewStr(b, len(b)) //data, len(data))
 	offset := 0
 	var p *proposal
 	for offset < s.Len() {
