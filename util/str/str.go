@@ -127,7 +127,9 @@ func (this *Str) ReadBytes(offset int, size int) ([]byte, int, error) {
 	if offset+size > this.len {
 		return nil, 0, fmt.Errorf("beyond size")
 	}
-	return this.data[offset : offset+size], offset + size, nil
+	out := make([]byte, size)
+	copy(out, this.data[offset:offset+size])
+	return out, offset + size, nil
 }
 
 func (this *Str) AppendFieldStr(field *proto.Field, binaryToSqlStr func(*Str, []byte)) *Str {
