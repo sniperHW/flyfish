@@ -250,7 +250,7 @@ func (this *kvstore) apply(data []byte, fromSnapshot ...bool) bool {
 			return false
 		}
 
-		/*switch p.tt {
+		switch p.tt {
 		case proposal_lease:
 			this.rn.lease.update(this.rn, p.values[0].(int), p.values[1].(uint64))
 		case proposal_snapshot, proposal_update, proposal_kick:
@@ -295,7 +295,7 @@ func (this *kvstore) apply(data []byte, fromSnapshot ...bool) bool {
 				} else {
 					kv.setStatus(cache_ok)
 					kv.version = version
-					fields := p.values[2].([]*proto.Field)
+					/*fields := p.values[2].([]*proto.Field)
 					Debugln(p.tt, unikey, version, "cache_ok", kv.getStatus(), kv.isWriteBack())
 
 					if nil == kv.fields {
@@ -304,7 +304,7 @@ func (this *kvstore) apply(data []byte, fromSnapshot ...bool) bool {
 
 					for _, v := range fields {
 						kv.fields[v.GetName()] = v
-					}
+					}*/
 				}
 				kv.setSnapshoted(true)
 
@@ -313,7 +313,7 @@ func (this *kvstore) apply(data []byte, fromSnapshot ...bool) bool {
 			}
 		default:
 			return false
-		}*/
+		}
 	}
 	return true
 }
