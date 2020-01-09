@@ -213,8 +213,6 @@ func makeSlice(cap int) []byte {
 }
 
 func (this *kvstore) apply(data []byte) bool {
-	this.Lock()
-	defer this.Unlock()
 
 	compressFlag := binary.BigEndian.Uint16(data[:2])
 
@@ -234,6 +232,13 @@ func (this *kvstore) apply(data []byte) bool {
 
 	s := str.NewStr(b, len(b)) //data, len(data))
 	offset := 0
+
+	this.Lock()
+	defer this.Unlock()
+	defer func() {
+		s = nil
+	}()
+
 	var p *proposal
 	for offset < s.Len() {
 		p, offset = readProposal(s, offset)
