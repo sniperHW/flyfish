@@ -241,9 +241,6 @@ func (this *kvstore) apply(data []byte, fromSnapshot ...bool) bool {
 
 	this.Lock()
 	defer this.Unlock()
-	defer func() {
-		s = nil
-	}()
 
 	var p *proposal
 	for offset < s.Len() {
@@ -253,7 +250,7 @@ func (this *kvstore) apply(data []byte, fromSnapshot ...bool) bool {
 			return false
 		}
 
-		switch p.tt {
+		/*switch p.tt {
 		case proposal_lease:
 			this.rn.lease.update(this.rn, p.values[0].(int), p.values[1].(uint64))
 		case proposal_snapshot, proposal_update, proposal_kick:
@@ -316,7 +313,7 @@ func (this *kvstore) apply(data []byte, fromSnapshot ...bool) bool {
 			}
 		default:
 			return false
-		}
+		}*/
 	}
 	return true
 }
