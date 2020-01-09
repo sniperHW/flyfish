@@ -436,7 +436,7 @@ func (this *kvstore) getSnapshot() [][]*kvsnap {
 }
 
 func (this *kvstore) gotLease() {
-	this.Lock()
+	/*this.Lock()
 	defer this.Unlock()
 	//获得租约,强制store对所有kv执行一次sql回写
 	for _, vv := range this.elements {
@@ -455,7 +455,7 @@ func (this *kvstore) gotLease() {
 			}
 		}
 		vv.Unlock()
-	}
+	}*/
 }
 
 type storeMgr struct {
