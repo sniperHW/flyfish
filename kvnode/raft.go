@@ -755,7 +755,7 @@ type metric struct {
 func (m *metric) addNewKVCount() {
 	m.Lock()
 	defer m.Unlock()
-	newKvCount++
+	m.newKvCount++
 }
 
 func (m *metric) add(count int) {
