@@ -7,6 +7,7 @@ import (
 	"github.com/sniperHW/flyfish/util"
 	"math"
 	"strconv"
+	"strings"
 	"sync"
 	"unsafe"
 )
@@ -274,7 +275,11 @@ func (this *Str) ReadString(offset int, size int) (string, int, error) {
 		return "", 0, fmt.Errorf("beyond size")
 	}
 
-	return string(this.data[offset : offset+size]), offset + size, nil
+	b := strings.Builder
+	b.Write(this.data[offset : offset+size])
+	return b.String(), offset + size, nil
+
+	//return string(this.data[offset : offset+size]), offset + size, nil
 }
 
 func (this *Str) Join(other []*Str, sep string) *Str {
