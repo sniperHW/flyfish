@@ -273,7 +273,12 @@ func (this *Str) ReadString(offset int, size int) (string, int, error) {
 	if offset+size > this.len {
 		return "", 0, fmt.Errorf("beyond size")
 	}
-	return string(this.data[offset : offset+size]), offset + size, nil
+
+	b := make([]byte, size)
+	copy(b, this.data[offset:offset+size])
+	return string(b), offset + size, nil
+
+	//return string(this.data[offset : offset+size]), offset + size, nil
 }
 
 func (this *Str) Join(other []*Str, sep string) *Str {
