@@ -137,7 +137,7 @@ func (this *Str) AppendFieldStr(field *proto.Field, binaryToSqlStr func(*Str, []
 
 	switch tt {
 	case proto.ValueType_string:
-		this.AppendString(fmt.Sprintf("'%s'", field.GetString()))
+		this.AppendString("'").AppendString(field.GetString()).AppendString("'")
 	case proto.ValueType_float:
 		this.AppendString(fmt.Sprintf("%f", field.GetFloat()))
 	case proto.ValueType_int:
@@ -314,6 +314,6 @@ func Get() *Str {
 }
 
 func Put(s *Str) {
-	s.Reset()
-	strPool.Put(s)
+	//s.Reset()
+	//strPool.Put(s)
 }

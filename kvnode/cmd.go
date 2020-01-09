@@ -1,10 +1,8 @@
 package kvnode
 
 import (
-	"fmt"
-	//pb "github.com/golang/protobuf/proto"
+	//"fmt"
 	codec "github.com/sniperHW/flyfish/codec"
-	//"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
 	"sync/atomic"
 	"time"
@@ -14,29 +12,8 @@ var (
 	wait4ReplyCount int64
 )
 
-//func makeRespCommon(key string /*seqno int64, errCode int32,*/, version int64) *proto.RespCommon {
-//	return &proto.RespCommon{
-//		Key: key, //pb.String(key),
-//Seqno:   seqno,   //pb.Int64(this.replyer.seqno),
-//ErrCode: errCode, //pb.Int32(errCode),
-//		Version: version, //pb.Int64(version),
-//	}
-//}
-
-/*func checkReqCommon(reqCommon *proto.ReqCommon) int32 {
-	if "" == reqCommon.GetTable() {
-		return errcode.ERR_MISSING_TABLE
-	}
-
-	if "" == reqCommon.GetKey() {
-		return errcode.ERR_MISSING_KEY
-	}
-
-	return errcode.ERR_OK
-}*/
-
 func makeUniKey(table string, key string) string {
-	return fmt.Sprintf("%s:%s", table, key)
+	return table + ":" + key //fmt.Sprintf("%s:%s", table, key)
 }
 
 type commandI interface {
