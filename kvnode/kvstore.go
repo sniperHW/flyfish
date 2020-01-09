@@ -208,6 +208,10 @@ func (this *kvstore) tryKick(kv *kv) bool {
 	}
 }
 
+func makeSlice(cap int) []byte {
+	return make([]byte, cap)
+}
+
 func (this *kvstore) apply(data []byte) bool {
 	this.Lock()
 	defer this.Unlock()
@@ -225,7 +229,7 @@ func (this *kvstore) apply(data []byte) bool {
 		data = data[2:]
 	}
 
-	b := make([]byte, len(data))
+	b := makeSlice(len(data)) //make([]byte, len(data))
 	copy(b, data)
 
 	s := str.NewStr(b, len(b)) //data, len(data))
