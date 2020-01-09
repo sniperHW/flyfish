@@ -274,12 +274,7 @@ func (this *Str) ReadString(offset int, size int) (string, int, error) {
 	if offset+size > this.len {
 		return "", 0, fmt.Errorf("beyond size")
 	}
-
-	var b strings.Builder
-	b.Write(this.data[offset : offset+size])
-	return b.String(), offset + size, nil
-
-	//return string(this.data[offset : offset+size]), offset + size, nil
+	return string(this.data[offset : offset+size]), offset + size, nil
 }
 
 func (this *Str) Join(other []*Str, sep string) *Str {

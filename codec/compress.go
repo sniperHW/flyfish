@@ -38,27 +38,23 @@ func (this *ZipCompressor) Compress(in []byte) ([]byte, error) {
 }
 
 type ZipUnCompressor struct {
+	zipBuff bytes.Buffer
 }
 
 func (this *ZipUnCompressor) UnCompress(in []byte) ([]byte, error) {
-	var err error
-	var out []byte
-
-	r, err := zlib.NewReader(bytes.NewReader(in))
+	/*r, err := zlib.NewReader(bytes.NewReader(in))
 	if nil != err {
+		return nil, err
+	}*/
+
+	this.zipBuff.Reset()
+	this.zipBuff.Write(in)
+	r, err := zlib.NewReader(&this.zipBuff)
+	if err != nil {
 		return nil, err
 	}
 
-	/*
-		this.zipBuff.Reset()
-		this.zipBuff.Write(in)
-		var r io.ReadCloser
-		r, err = zlib.NewReader(&this.zipBuff)
-		if err != nil {
-			return nil, err
-		}*/
-
-	out, err = ioutil.ReadAll(r)
+	out, err := ioutil.ReadAll(r)
 	r.Close()
 	if err != nil {
 		if err != io.ErrUnexpectedEOF && err != io.EOF {
