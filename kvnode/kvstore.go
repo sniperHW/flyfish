@@ -67,7 +67,7 @@ type kvstore struct {
 	lruTail        kv
 	storeMgr       *storeMgr
 	lruTimer       *timer.Timer
-	unCompressor   *codec.ZipUnCompressor
+	unCompressor   *codec.GZipUnCompressor
 }
 
 func (this *kvstore) getKvNode() *KVNode {
