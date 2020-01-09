@@ -588,7 +588,7 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 
 	go func() {
 
-		ss := str.Get()
+		ss := str.NewStr(make([]byte, 64*1024*1024), 0)
 		ss.AppendInt64(0)
 
 		for _, v := range clone {
@@ -617,8 +617,6 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 		}
 
 		copy(snapshotBuf[10:], bytes)
-
-		str.Put(ss)
 
 		snap, err := rc.raftStorage.CreateSnapshot(appliedIndex, &confState, snapshotBuf)
 		if err != nil {

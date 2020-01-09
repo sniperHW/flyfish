@@ -314,6 +314,6 @@ func Get() *Str {
 }
 
 func Put(s *Str) {
-	//s.Reset()
-	//strPool.Put(s)
+	s.Reset()
+	strPool.Put(s)
 }
