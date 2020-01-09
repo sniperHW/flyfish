@@ -208,11 +208,7 @@ func (this *kvstore) tryKick(kv *kv) bool {
 	}
 }
 
-func makeSlice(cap int) []byte {
-	return make([]byte, cap)
-}
-
-func (this *kvstore) apply(data []byte, fromSnapshot ...bool) bool {
+func (this *kvstore) apply(data []byte) bool {
 
 	compressFlag := binary.BigEndian.Uint16(data[:2])
 
@@ -227,15 +223,7 @@ func (this *kvstore) apply(data []byte, fromSnapshot ...bool) bool {
 		data = data[2:]
 	}
 
-	var s *str.Str
-
-	if len(fromSnapshot) > 0 {
-		b := makeSlice(len(data)) //make([]byte, len(data))
-		copy(b, data)
-		s = str.NewStr(b, len(b)) //data, len(data))
-	} else {
-		s = str.NewStr(data, len(data))
-	}
+	s := str.NewStr(data, len(data))
 
 	offset := 0
 
@@ -333,7 +321,7 @@ func (this *kvstore) readCommits(snapshotter *snap.Snapshotter, commitC <-chan i
 					Fatalln(err)
 				} else {
 					Infof("loading snapshot at term %d and index %d", snapshot.Metadata.Term, snapshot.Metadata.Index)
-					if !this.apply(snapshot.Data[8:], true) {
+					if !this.apply(snapshot.Data[8:]) {
 						Fatalln("recoverFromSnapshot failed")
 					}
 				}
