@@ -14,6 +14,7 @@ import (
 	"github.com/sniperHW/kendynet/util"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	"go.etcd.io/etcd/raft/raftpb"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -211,12 +212,14 @@ func (this *kvstore) tryKick(kv *kv) bool {
 func (this *kvstore) apply(data []byte) bool {
 	this.Lock()
 	defer this.Unlock()
+	defer runtime.GC()
 
 	compressFlag := binary.BigEndian.Uint16(data[:2])
 
 	if compressFlag == 12765 {
 		var err error
-		data, err = this.unCompressor.UnCompress(data[2:])
+		unCompressor := &codec.ZipUnCompressor{}
+		data, err = unCompressor.UnCompress(data[2:])
 		if nil != err {
 			Errorln("uncompress error")
 			return false
