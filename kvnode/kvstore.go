@@ -322,7 +322,6 @@ func (this *kvstore) readCommits(snapshotter *snap.Snapshotter, commitC <-chan i
 					}
 				}
 			} else if data == replayOK {
-				this.unCompressor.ResetBuffer()
 				Infoln("reply ok,keycount", len(this.elements))
 				return
 			} else {

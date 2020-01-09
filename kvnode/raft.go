@@ -747,8 +747,15 @@ func (rc *raftNode) startReadPipeline() {
 
 type metric struct {
 	sync.Mutex
-	bytes int64
-	last  time.Time
+	bytes      int64
+	last       time.Time
+	newKvCount int
+}
+
+func (m *metric) addNewKVCount() {
+	m.Lock()
+	defer m.Unlock()
+	newKvCount++
 }
 
 func (m *metric) add(count int) {
@@ -758,7 +765,9 @@ func (m *metric) add(count int) {
 	m.bytes += int64(count)
 	elapsed := now.Sub(m.last)
 	if elapsed >= time.Second {
-		Infoln("proposals bytes", (m.bytes*int64(time.Second))/int64(elapsed)/1024/1024, "mb")
+		//if m.bytes > 1024 {
+		Infoln("proposals bytes", (m.bytes*int64(time.Second))/int64(elapsed)/1024/1024, "mb", m.newKvCount)
+		//}
 		m.bytes = 0
 		m.last = now
 	}

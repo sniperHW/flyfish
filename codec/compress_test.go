@@ -8,11 +8,15 @@ import (
 
 func TestCompress(t *testing.T) {
 
+	s := strings.Repeat("a", 4096)
+
+	ss := []byte(s)
+
 	func() {
 
 		zipCompressor := &ZipCompressor{}
 
-		zipOut, err := zipCompressor.Compress([]byte("abcdefg"))
+		zipOut, err := zipCompressor.Compress(ss)
 		if nil != err {
 			t.Fatal(err)
 		}
@@ -27,7 +31,7 @@ func TestCompress(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if string(unzipOut) != "abcdefg" {
+		if string(unzipOut) != s {
 			t.Fatal(unzipOut)
 		}
 
@@ -37,13 +41,9 @@ func TestCompress(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if string(unzipOut) != "abcdefg" {
+		if string(unzipOut) != s {
 			t.Fatal(unzipOut)
 		}
-
-		fmt.Println(zipUnCompressor.zipBuff.Len(), zipUnCompressor.zipBuff.Cap())
-		zipUnCompressor.ResetBuffer()
-		fmt.Println(zipUnCompressor.zipBuff.Len(), zipUnCompressor.zipBuff.Cap())
 
 	}()
 
@@ -51,7 +51,7 @@ func TestCompress(t *testing.T) {
 
 		gzipCompressor := &GZipCompressor{}
 
-		zipOut, err := gzipCompressor.Compress([]byte("abcdefg"))
+		zipOut, err := gzipCompressor.Compress(ss)
 		if nil != err {
 			t.Fatal(err)
 		}
@@ -66,7 +66,7 @@ func TestCompress(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if string(unzipOut) != "abcdefg" {
+		if string(unzipOut) != s {
 			t.Fatal(unzipOut)
 		}
 
@@ -76,7 +76,7 @@ func TestCompress(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if string(unzipOut) != "abcdefg" {
+		if string(unzipOut) != s {
 			t.Fatal(unzipOut)
 		}
 

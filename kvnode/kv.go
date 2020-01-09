@@ -289,7 +289,7 @@ func (this *kv) setOK(version int64, fields map[string]*proto.Field) {
 }
 
 func newkv(store *kvstore, tableMeta *dbmeta.TableMeta, key string, uniKey string, isTmp bool) *kv {
-
+	g_metric.addNewKVCount()
 	k := &kv{
 		uniKey: uniKey,
 		key:    key,
