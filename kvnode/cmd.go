@@ -2,6 +2,7 @@ package kvnode
 
 import (
 	//"fmt"
+	"bytes"
 	codec "github.com/sniperHW/flyfish/codec"
 	"github.com/sniperHW/flyfish/proto"
 	"sync/atomic"
@@ -13,7 +14,12 @@ var (
 )
 
 func makeUniKey(table string, key string) string {
-	return table + ":" + key //fmt.Sprintf("%s:%s", table, key)
+	var b bytes.Buffer
+	b.WriteString(table)
+	b.WriteString(":")
+	b.WriteString(key)
+	return b.String()
+	//return table + ":" + key //fmt.Sprintf("%s:%s", table, key)
 }
 
 type commandI interface {
