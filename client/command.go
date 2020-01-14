@@ -80,30 +80,27 @@ type StatusCmd struct {
 	req  *codec.Message
 }
 
-func (this *StatusCmd) AsyncExec(cb func(*StatusResult)) {
+func (this *StatusCmd) asyncExec(syncFlag bool, cb func(*StatusResult)) {
 	context := &cmdContext{
 		cb: callback{
-			tt: cb_status,
-			cb: cb,
+			tt:   cb_status,
+			cb:   cb,
+			sync: syncFlag,
 		},
 		req: this.req,
 	}
 	this.conn.exec(context)
 }
 
+func (this *StatusCmd) AsyncExec(cb func(*StatusResult)) {
+	this.asyncExec(false, cb)
+}
+
 func (this *StatusCmd) Exec() *StatusResult {
 	respChan := make(chan *StatusResult)
-	context := &cmdContext{
-		cb: callback{
-			tt: cb_status,
-			cb: func(r *StatusResult) {
-				respChan <- r
-			},
-			sync: true,
-		},
-		req: this.req,
-	}
-	this.conn.exec(context)
+	this.asyncExec(true, func(r *StatusResult) {
+		respChan <- r
+	})
 	return <-respChan
 }
 
@@ -112,30 +109,27 @@ type SliceCmd struct {
 	req  *codec.Message
 }
 
-func (this *SliceCmd) AsyncExec(cb func(*SliceResult)) {
+func (this *SliceCmd) asyncExec(syncFlag bool, cb func(*SliceResult)) {
 	context := &cmdContext{
 		cb: callback{
-			tt: cb_slice,
-			cb: cb,
+			tt:   cb_slice,
+			cb:   cb,
+			sync: syncFlag,
 		},
 		req: this.req,
 	}
 	this.conn.exec(context)
 }
 
+func (this *SliceCmd) AsyncExec(cb func(*SliceResult)) {
+	this.asyncExec(false, cb)
+}
+
 func (this *SliceCmd) Exec() *SliceResult {
 	respChan := make(chan *SliceResult)
-	context := &cmdContext{
-		cb: callback{
-			tt: cb_slice,
-			cb: func(r *SliceResult) {
-				respChan <- r
-			},
-			sync: true,
-		},
-		req: this.req,
-	}
-	this.conn.exec(context)
+	this.asyncExec(true, func(r *SliceResult) {
+		respChan <- r
+	})
 	return <-respChan
 }
 

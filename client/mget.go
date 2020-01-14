@@ -13,6 +13,10 @@ type MGetCmd struct {
 }
 
 func (this *MGetCmd) AsyncExec(cb func(*MutiResult)) {
+	this.asyncExec(false, cb)
+}
+
+func (this *MGetCmd) asyncExec(syncFlag bool, cb func(*MutiResult)) {
 	this.cb = cb
 	for k, v := range this.cmds {
 		key := k
@@ -44,8 +48,9 @@ func (this *MGetCmd) AsyncExec(cb func(*MutiResult)) {
 
 					if this.respCount == len(this.cmds) {
 						cb := callback{
-							tt: cb_muti,
-							cb: this.cb,
+							tt:   cb_muti,
+							cb:   this.cb,
+							sync: syncFlag,
 						}
 						this.cb = nil
 						this.c.doCallBack(cb, &MutiResult{
@@ -56,8 +61,9 @@ func (this *MGetCmd) AsyncExec(cb func(*MutiResult)) {
 
 				} else {
 					cb := callback{
-						tt: cb_muti,
-						cb: this.cb,
+						tt:   cb_muti,
+						cb:   this.cb,
+						sync: syncFlag,
 					}
 					this.cb = nil
 					this.c.doCallBack(cb, ret.ErrCode)
@@ -69,7 +75,7 @@ func (this *MGetCmd) AsyncExec(cb func(*MutiResult)) {
 
 func (this *MGetCmd) Exec() *MutiResult {
 	respChan := make(chan *MutiResult)
-	this.AsyncExec(func(r *MutiResult) {
+	this.asyncExec(true, func(r *MutiResult) {
 		respChan <- r
 	})
 	return <-respChan
