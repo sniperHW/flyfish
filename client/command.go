@@ -93,9 +93,17 @@ func (this *StatusCmd) AsyncExec(cb func(*StatusResult)) {
 
 func (this *StatusCmd) Exec() *StatusResult {
 	respChan := make(chan *StatusResult)
-	this.AsyncExec(func(r *StatusResult) {
-		respChan <- r
-	})
+	context := &cmdContext{
+		cb: callback{
+			tt: cb_status,
+			cb: func(r *StatusResult) {
+				respChan <- r
+			},
+			sync: true,
+		},
+		req: this.req,
+	}
+	this.conn.exec(context)
 	return <-respChan
 }
 
@@ -117,9 +125,17 @@ func (this *SliceCmd) AsyncExec(cb func(*SliceResult)) {
 
 func (this *SliceCmd) Exec() *SliceResult {
 	respChan := make(chan *SliceResult)
-	this.AsyncExec(func(r *SliceResult) {
-		respChan <- r
-	})
+	context := &cmdContext{
+		cb: callback{
+			tt: cb_slice,
+			cb: func(r *SliceResult) {
+				respChan <- r
+			},
+			sync: true,
+		},
+		req: this.req,
+	}
+	this.conn.exec(context)
 	return <-respChan
 }
 

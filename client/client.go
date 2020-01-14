@@ -26,7 +26,7 @@ func (this *Client) pcall(cb callback, a interface{}) {
 }
 
 func (this *Client) doCallBack(cb callback, a interface{}) {
-	if nil != this.callbackQueue {
+	if nil != this.callbackQueue && cb.sync == false {
 		this.callbackQueue.Post(func() {
 			switch a.(type) {
 			case int32:

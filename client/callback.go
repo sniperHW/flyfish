@@ -32,8 +32,9 @@ const (
 )
 
 type callback struct {
-	tt int32
-	cb interface{}
+	tt   int32
+	cb   interface{}
+	sync bool
 }
 
 func (this *callback) onError(errCode int32) {
