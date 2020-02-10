@@ -194,10 +194,10 @@
 			"revisionTime": "2019-06-04T15:29:10Z"
 		},
 		{
-			"checksumSHA1": "aB1GFGPeNc6pJMLOKwpTrGggsCU=",
+			"checksumSHA1": "/cAk43d5LtWNJX26OvCo0YauWl0=",
 			"path": "github.com/sniperHW/kendynet",
-			"revision": "828e7c3354593222f5da9fa11fedee0878bd92d4",
-			"revisionTime": "2019-12-31T01:13:38Z"
+			"revision": "1096c50a6d785b85f2f7c4e7b9402accd6d25002",
+			"revisionTime": "2020-02-09T09:47:40Z"
 		},
 		{
 			"checksumSHA1": "eFvDkPB3uNfjyUcjgTO9ocrhF0Y=",
@@ -214,14 +214,14 @@
 		{
 			"checksumSHA1": "fQ6WtEsUGFzMSfbchZFYbL8fBBw=",
 			"path": "github.com/sniperHW/kendynet/message",
-			"revision": "0cd8ab5535d67c6c209c161e8dc6a9c4620ce48d",
-			"revisionTime": "2019-07-24T10:31:35Z"
+			"revision": "1096c50a6d785b85f2f7c4e7b9402accd6d25002",
+			"revisionTime": "2020-02-09T09:47:40Z"
 		},
 		{
-			"checksumSHA1": "7QpLTSi3i7rFu8+xJ62xroFLtwI=",
+			"checksumSHA1": "9EjbiK36+unGYu/ufJBeKg9hYzc=",
 			"path": "github.com/sniperHW/kendynet/socket",
-			"revision": "8fc466d3a4de6f39903c1b1a31d5634909e0facc",
-			"revisionTime": "2019-10-22T02:35:03Z"
+			"revision": "1096c50a6d785b85f2f7c4e7b9402accd6d25002",
+			"revisionTime": "2020-02-09T09:47:40Z"
 		},
 		{
 			"checksumSHA1": "1Ki2d2XkGJtfPpigDs7mv8Sl/nA=",
@@ -236,16 +236,16 @@
 			"revisionTime": "2019-07-24T10:31:35Z"
 		},
 		{
-			"checksumSHA1": "CR93E+Sq3cpuyqb4N1Wm/3m7nW0=",
+			"checksumSHA1": "21UKpDwWb1PM2lsNMw1/NktApgU=",
 			"path": "github.com/sniperHW/kendynet/timer",
-			"revision": "c4b601f629591c88e291a6ab688e8cad53a01a87",
-			"revisionTime": "2019-12-03T08:26:40Z"
+			"revision": "1096c50a6d785b85f2f7c4e7b9402accd6d25002",
+			"revisionTime": "2020-02-09T09:47:40Z"
 		},
 		{
-			"checksumSHA1": "A2yhgoi8qol+q3hn1Xj7MltZ3Uk=",
+			"checksumSHA1": "3ZUXcOyFAV9n+fTF7nANcT57y30=",
 			"path": "github.com/sniperHW/kendynet/util",
-			"revision": "3f9f034fa04d73685083b0942f80c7ae300cbb7d",
-			"revisionTime": "2019-12-31T15:53:10Z"
+			"revision": "1096c50a6d785b85f2f7c4e7b9402accd6d25002",
+			"revisionTime": "2020-02-09T09:47:40Z"
 		},
 		{
 			"checksumSHA1": "FavASzhzj5uawgAyMG+00Vcx0po=",

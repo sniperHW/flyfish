@@ -515,7 +515,7 @@ func (rc *raftNode) startRaft() {
 
 	//go rc.serveRaft()
 
-	rc.readIndexTimer = timer.Repeat(time.Second, nil, rc.processTimeoutReadReq)
+	rc.readIndexTimer = timer.Repeat(time.Second, nil, rc.processTimeoutReadReq, nil)
 
 	go rc.serveChannels()
 }
@@ -896,7 +896,7 @@ func (rc *raftNode) startProposePipeline() {
 	}()
 }
 
-func (rc *raftNode) processTimeoutReadReq(_ *timer.Timer) {
+func (rc *raftNode) processTimeoutReadReq(_ *timer.Timer, _ interface{}) {
 	for {
 		rc.muPendingRead.Lock()
 		e := rc.pendingRead.Front()

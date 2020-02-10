@@ -110,6 +110,21 @@ func (self *BlockQueue) Get() (closed bool, datas []interface{}) {
 	return
 }
 
+func (self *BlockQueue) GetNoWait() (closed bool, datas []interface{}) {
+	self.listGuard.Lock()
+	if len(self.list) > 0 {
+		datas = self.list
+		self.list = make([]interface{}, 0, initCap)
+	}
+	needSignal := self.fullWaited > 0
+	closed = self.closed
+	self.listGuard.Unlock()
+	if needSignal {
+		self.fullCond.Broadcast()
+	}
+	return
+}
+
 func (self *BlockQueue) Swap(swaped []interface{}) (closed bool, datas []interface{}) {
 	swaped = swaped[0:0]
 	self.listGuard.Lock()

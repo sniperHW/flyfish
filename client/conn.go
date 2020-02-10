@@ -22,7 +22,7 @@ type Conn struct {
 	session     kendynet.StreamSession
 	seqno       int64
 	addr        string
-	minheap     *util.MinHeap         //超时小根堆
+	minheap     util.MinHeap          //超时小根堆
 	pendingSend []*cmdContext         //等待发送的消息
 	waitResp    map[int64]*cmdContext //等待响应的消息
 	eventQueue  *event.EventQueue     //此客户端的主处理队列
@@ -40,10 +40,10 @@ func openConn(cli *Client, addr string) *Conn {
 		c:           cli,
 	}
 	go c.eventQueue.Run()
-	timer.Repeat(time.Duration(100)*time.Millisecond, c.eventQueue, func(_ *timer.Timer) {
+	timer.Repeat(time.Duration(100)*time.Millisecond, c.eventQueue, func(_ *timer.Timer, _ interface{}) {
 		now := time.Now()
 		c.checkTimeout(&now)
-	})
+	}, nil)
 	return c
 }
 

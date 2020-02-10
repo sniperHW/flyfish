@@ -64,6 +64,11 @@ func (this *WebSocket) sendMessage(msg kendynet.Message) error {
 }
 
 func (this *WebSocket) sendThreadFunc() {
+
+	defer func() {
+		close(this.sendCloseChan)
+	}()
+
 	timeout := this.sendTimeout
 	for {
 		closed, localList := this.sendQue.Get()
@@ -111,7 +116,6 @@ func (this *WebSocket) sendThreadFunc() {
 			}
 		}
 	}
-	this.sendCloseChan <- 1
 }
 
 func (this *WebSocket) Close(reason string, delay time.Duration) {
@@ -168,7 +172,7 @@ func NewWSSocket(conn *gorilla.Conn) kendynet.StreamSession {
 		}
 		s.SocketBase = &SocketBase{
 			sendQue:       util.NewBlockQueue(1024),
-			sendCloseChan: make(chan int, 1),
+			sendCloseChan: make(chan struct{}),
 			imp:           s,
 		}
 		return s

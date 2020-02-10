@@ -13,6 +13,7 @@ var (
 	ErrSocketClose         = fmt.Errorf("socket close")
 	ErrSendQueFull         = fmt.Errorf("send queue full")
 	ErrSendTimeout         = fmt.Errorf("send timeout")
+	ErrRecvTimeout         = fmt.Errorf("recv timeout")
 	ErrStarted             = fmt.Errorf("already started")
 	ErrInvaildBuff         = fmt.Errorf("buff is nil")
 	ErrNoReceiver          = fmt.Errorf("receiver == nil")

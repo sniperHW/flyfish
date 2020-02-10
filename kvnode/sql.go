@@ -110,11 +110,11 @@ func newSqlMgr() (*sqlMgr, error) {
 		l := newSqlLoader(loadDB, lname)
 		sqlLoaders = append(sqlLoaders, l)
 		go l.run()
-		timer.Repeat(time.Second*60, nil, func(t *timer.Timer) {
+		timer.Repeat(time.Second*60, nil, func(t *timer.Timer, _ interface{}) {
 			if sqlMgr.isStoped() || util.ErrQueueClosed == l.queue.AddNoWait(ping) {
 				t.Cancel()
 			}
-		})
+		}, nil)
 	}
 
 	sqlUpdaters := []*sqlUpdater{}
@@ -131,11 +131,11 @@ func newSqlMgr() (*sqlMgr, error) {
 		u := newSqlUpdater(sqlMgr, writeBackDB, wname)
 		sqlUpdaters = append(sqlUpdaters, u)
 		go u.run()
-		timer.Repeat(time.Second*60, nil, func(t *timer.Timer) {
+		timer.Repeat(time.Second*60, nil, func(t *timer.Timer, _ interface{}) {
 			if sqlMgr.isStoped() || util.ErrQueueClosed == u.queue.AddNoWait(ping) {
 				t.Cancel()
 			}
-		})
+		}, nil)
 	}
 
 	sqlMgr.sqlUpdaters = sqlUpdaters

@@ -34,7 +34,7 @@ type kvproxy struct {
 	respChan   chan *kendynet.ByteBuffer
 }
 
-func (this *pendingReq) onTimeout(_ *timer.Timer) {
+func (this *pendingReq) onTimeout(_ *timer.Timer, _ interface{}) {
 	this.processor.Lock()
 	defer this.processor.Unlock()
 	Infoln("remove timeout req", this.seqno)
@@ -117,7 +117,7 @@ func (this *reqProcessor) onReq(seqno int64, session kendynet.StreamSession, req
 				session:   session,
 				processor: this,
 			}
-			pReq.deadlineTimer = this.timerMgr.Once(time.Duration(timeout)*time.Millisecond, nil, pReq.onTimeout)
+			pReq.deadlineTimer = this.timerMgr.Once(time.Duration(timeout)*time.Millisecond, nil, pReq.onTimeout, nil)
 			this.pendingReqs[seqno] = pReq
 		}
 		return err

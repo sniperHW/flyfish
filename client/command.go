@@ -52,18 +52,18 @@ type cmdContext struct {
 	status   int
 	cb       callback
 	req      *codec.Message
-	heapIdx  uint32
+	heapIdx  int
 }
 
 func (this *cmdContext) Less(o util.HeapElement) bool {
 	return o.(*cmdContext).deadline.After(this.deadline)
 }
 
-func (this *cmdContext) GetIndex() uint32 {
+func (this *cmdContext) GetIndex() int {
 	return this.heapIdx
 }
 
-func (this *cmdContext) SetIndex(idx uint32) {
+func (this *cmdContext) SetIndex(idx int) {
 	this.heapIdx = idx
 }
 

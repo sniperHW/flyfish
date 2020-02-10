@@ -6,7 +6,9 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
+	"unsafe"
 )
 
 const (
@@ -29,7 +31,7 @@ type SocketBase struct {
 	ud            interface{}
 	sendQue       *util.BlockQueue
 	receiver      kendynet.Receiver
-	encoder       kendynet.EnCoder
+	encoder       *kendynet.EnCoder
 	flag          int32
 	sendTimeout   time.Duration
 	recvTimeout   time.Duration
@@ -37,7 +39,7 @@ type SocketBase struct {
 	onClose       func(kendynet.StreamSession, string)
 	onEvent       func(*kendynet.Event)
 	closeReason   string
-	sendCloseChan chan int
+	sendCloseChan chan struct{}
 	imp           SocketImpl
 }
 
@@ -143,9 +145,10 @@ func (this *SocketBase) SetCloseCallBack(cb func(kendynet.StreamSession, string)
 }
 
 func (this *SocketBase) SetEncoder(encoder kendynet.EnCoder) {
-	this.mutex.Lock()
-	defer this.mutex.Unlock()
-	this.encoder = encoder
+	//this.mutex.Lock()
+	//defer this.mutex.Unlock()
+	//this.encoder = encoder
+	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&this.encoder)), unsafe.Pointer(&encoder))
 }
 
 func (this *SocketBase) SetReceiver(r kendynet.Receiver) {
@@ -166,27 +169,29 @@ func (this *SocketBase) Send(o interface{}) error {
 		return kendynet.ErrInvaildObject
 	}
 
-	this.mutex.Lock()
-	defer this.mutex.Unlock()
+	encoder := (*kendynet.EnCoder)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&this.encoder))))
 
-	if this.encoder == nil {
+	if nil == *encoder {
 		return kendynet.ErrInvaildEncoder
 	}
 
-	msg, err := this.encoder.EnCode(o)
+	msg, err := (*encoder).EnCode(o)
 
 	if err != nil {
 		return err
 	}
 
-	return this.imp.sendMessage(msg)
+	this.mutex.Lock()
+	err = this.imp.sendMessage(msg)
+	this.mutex.Unlock()
+	return err
 }
 
 func (this *SocketBase) SendMessage(msg kendynet.Message) error {
 	this.mutex.Lock()
-	defer this.mutex.Unlock()
-
-	return this.imp.sendMessage(msg)
+	err := this.imp.sendMessage(msg)
+	this.mutex.Unlock()
+	return err
 }
 
 func (this *SocketBase) recvThreadFunc() {
@@ -222,7 +227,9 @@ func (this *SocketBase) recvThreadFunc() {
 				this.mutex.Lock()
 				if err == io.EOF {
 					this.flag |= rclosed
-				} else if !kendynet.IsNetTimeout(err) {
+				} else if kendynet.IsNetTimeout(err) {
+					event.Data = kendynet.ErrRecvTimeout
+				} else {
 					kendynet.Errorf("ReceiveAndUnpack error:%s\n", err.Error())
 					this.flag |= (rclosed | wclosed)
 				}
