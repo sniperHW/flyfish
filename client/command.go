@@ -48,6 +48,7 @@ const (
 )
 
 type cmdContext struct {
+	unikey   string
 	deadline time.Time
 	status   int
 	cb       callback
@@ -68,11 +69,11 @@ func (this *cmdContext) SetIndex(idx int) {
 }
 
 func (this *cmdContext) onError(errCode int32) {
-	this.cb.onError(errCode)
+	this.cb.onError(this.unikey, errCode)
 }
 
 func (this *cmdContext) onResult(r interface{}) {
-	this.cb.onResult(r)
+	this.cb.onResult(this.unikey, r)
 }
 
 type StatusCmd struct {
@@ -87,7 +88,8 @@ func (this *StatusCmd) asyncExec(syncFlag bool, cb func(*StatusResult)) {
 			cb:   cb,
 			sync: syncFlag,
 		},
-		req: this.req,
+		unikey: this.req.GetHead().UniKey,
+		req:    this.req,
 	}
 	this.conn.exec(context)
 }
@@ -116,7 +118,8 @@ func (this *SliceCmd) asyncExec(syncFlag bool, cb func(*SliceResult)) {
 			cb:   cb,
 			sync: syncFlag,
 		},
-		req: this.req,
+		unikey: this.req.GetHead().UniKey,
+		req:    this.req,
 	}
 	this.conn.exec(context)
 }
@@ -384,7 +387,7 @@ func (this *Conn) onGetResp(c *cmdContext, errCode int32, resp *protocol.GetResp
 		}
 	}
 
-	this.c.doCallBack(c.cb, &ret)
+	this.c.doCallBack(c.unikey, c.cb, &ret)
 
 }
 
@@ -393,7 +396,7 @@ func (this *Conn) onSetResp(c *cmdContext, errCode int32, resp *protocol.SetResp
 		ErrCode: errCode,
 		Version: resp.GetVersion(),
 	}
-	this.c.doCallBack(c.cb, &ret)
+	this.c.doCallBack(c.unikey, c.cb, &ret)
 }
 
 func (this *Conn) onSetNxResp(c *cmdContext, errCode int32, resp *protocol.SetNxResp) {
@@ -403,7 +406,7 @@ func (this *Conn) onSetNxResp(c *cmdContext, errCode int32, resp *protocol.SetNx
 		Version: resp.GetVersion(),
 	}
 
-	this.c.doCallBack(c.cb, &ret)
+	this.c.doCallBack(c.unikey, c.cb, &ret)
 
 }
 
@@ -419,7 +422,7 @@ func (this *Conn) onCompareAndSetResp(c *cmdContext, errCode int32, resp *protoc
 		ret.Fields[resp.GetValue().GetName()] = (*Field)(resp.GetValue())
 	}
 
-	this.c.doCallBack(c.cb, &ret)
+	this.c.doCallBack(c.unikey, c.cb, &ret)
 
 }
 
@@ -435,7 +438,7 @@ func (this *Conn) onCompareAndSetNxResp(c *cmdContext, errCode int32, resp *prot
 		ret.Fields[resp.GetValue().GetName()] = (*Field)(resp.GetValue())
 	}
 
-	this.c.doCallBack(c.cb, &ret)
+	this.c.doCallBack(c.unikey, c.cb, &ret)
 
 }
 
@@ -446,7 +449,7 @@ func (this *Conn) onDelResp(c *cmdContext, errCode int32, resp *protocol.DelResp
 		Version: resp.GetVersion(),
 	}
 
-	this.c.doCallBack(c.cb, &ret)
+	this.c.doCallBack(c.unikey, c.cb, &ret)
 
 }
 
@@ -457,7 +460,7 @@ func (this *Conn) onIncrByResp(c *cmdContext, errCode int32, resp *protocol.Incr
 		Version: resp.GetVersion(),
 	}
 
-	this.c.doCallBack(c.cb, &ret)
+	this.c.doCallBack(c.unikey, c.cb, &ret)
 }
 
 func (this *Conn) onDecrByResp(c *cmdContext, errCode int32, resp *protocol.DecrByResp) {
@@ -467,7 +470,7 @@ func (this *Conn) onDecrByResp(c *cmdContext, errCode int32, resp *protocol.Decr
 		Version: resp.GetVersion(),
 	}
 
-	this.c.doCallBack(c.cb, &ret)
+	this.c.doCallBack(c.unikey, c.cb, &ret)
 
 }
 
@@ -477,7 +480,7 @@ func (this *Conn) onKickResp(c *cmdContext, errCode int32, resp *protocol.KickRe
 		ErrCode: errCode,
 	}
 
-	this.c.doCallBack(c.cb, &ret)
+	this.c.doCallBack(c.unikey, c.cb, &ret)
 
 }
 
@@ -486,7 +489,7 @@ func (this *Conn) onReloadTableConfResp(c *cmdContext, errCode int32, resp *prot
 		ErrCode: errCode,
 		ErrStr:  resp.Err,
 	}
-	this.c.doCallBack(c.cb, &ret)
+	this.c.doCallBack(c.unikey, c.cb, &ret)
 }
 
 func (this *Conn) onMessage(msg *codec.Message) {

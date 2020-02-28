@@ -55,14 +55,14 @@ func (this *Conn) checkTimeout(now *time.Time) {
 			c := cc.(*cmdContext)
 			if c.status == wait_send {
 				c.status = wait_remove
-				this.c.doCallBack(c.cb, errcode.ERR_TIMEOUT)
+				this.c.doCallBack(c.unikey, c.cb, errcode.ERR_TIMEOUT)
 			} else {
 
 				seqno := c.req.GetHead().Seqno
 
 				if _, ok := this.waitResp[seqno]; ok {
 					delete(this.waitResp, seqno)
-					this.c.doCallBack(c.cb, errcode.ERR_TIMEOUT)
+					this.c.doCallBack(c.unikey, c.cb, errcode.ERR_TIMEOUT)
 				}
 			}
 		} else {
@@ -195,7 +195,7 @@ func (this *Conn) onDisconnected() {
 		waitResp := this.waitResp
 		this.waitResp = map[int64]*cmdContext{}
 		for _, c := range waitResp {
-			this.c.doCallBack(c.cb, errcode.ERR_CONNECTION)
+			this.c.doCallBack(c.unikey, c.cb, errcode.ERR_CONNECTION)
 		}
 	})
 }
@@ -231,9 +231,9 @@ func (this *Conn) sendReq(c *cmdContext) {
 		//记录日志
 		this.minheap.Remove(c)
 		if err == kendynet.ErrSendQueFull {
-			this.c.doCallBack(c.cb, errcode.ERR_BUSY)
+			this.c.doCallBack(c.unikey, c.cb, errcode.ERR_BUSY)
 		} else {
-			this.c.doCallBack(c.cb, errcode.ERR_CONNECTION)
+			this.c.doCallBack(c.unikey, c.cb, errcode.ERR_CONNECTION)
 		}
 	}
 }
@@ -251,7 +251,7 @@ func (this *Conn) exec(c *cmdContext) {
 				c.status = wait_send
 				this.pendingSend = append(this.pendingSend, c)
 			} else {
-				this.c.doCallBack(c.cb, errcode.ERR_BUSY)
+				this.c.doCallBack(c.unikey, c.cb, errcode.ERR_BUSY)
 			}
 		} else {
 			this.minheap.Insert(c)

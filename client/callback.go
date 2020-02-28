@@ -2,33 +2,25 @@ package client
 
 type StatusResult struct {
 	ErrCode int32
+	Table   string
 	Key     string
 	Version int64
 	ErrStr  string
+	unikey  string
 }
 
 type SliceResult struct {
 	ErrCode int32
+	Table   string
 	Key     string
 	Version int64
 	Fields  map[string]*Field
-}
-
-type Row struct {
-	Key     string
-	Version int64
-	Fields  map[string]*Field
-}
-
-type MutiResult struct {
-	ErrCode int32
-	Rows    []*Row
+	unikey  string
 }
 
 const (
 	cb_status = 1
 	cb_slice  = 2
-	cb_muti   = 3
 )
 
 type callback struct {
@@ -37,17 +29,38 @@ type callback struct {
 	sync bool
 }
 
-func (this *callback) onError(errCode int32) {
+func splitUniKey(unikey string) (table string, key string) {
+	i := -1
+	for k, v := range unikey {
+		if v == 58 {
+			i = k
+			break
+		}
+	}
+
+	if i >= 0 {
+		table = unikey[:i]
+		key = unikey[i+1:]
+	}
+
+	return
+}
+
+func (this *callback) onError(unikey string, errCode int32) {
 	if this.tt == cb_status {
+		table, key := splitUniKey(unikey)
 		this.cb.(func(*StatusResult))(&StatusResult{
+			Key:     key,
+			Table:   table,
+			unikey:  unikey,
 			ErrCode: errCode,
 		})
 	} else if this.tt == cb_slice {
+		table, key := splitUniKey(unikey)
 		this.cb.(func(*SliceResult))(&SliceResult{
-			ErrCode: errCode,
-		})
-	} else if this.tt == cb_muti {
-		this.cb.(func(*MutiResult))(&MutiResult{
+			Key:     key,
+			Table:   table,
+			unikey:  unikey,
 			ErrCode: errCode,
 		})
 	} else {
@@ -55,13 +68,21 @@ func (this *callback) onError(errCode int32) {
 	}
 }
 
-func (this *callback) onResult(r interface{}) {
+func (this *callback) onResult(unikey string, r interface{}) {
 	if this.tt == cb_status {
-		this.cb.(func(*StatusResult))(r.(*StatusResult))
+		table, key := splitUniKey(unikey)
+		ret := r.(*StatusResult)
+		ret.Key = key
+		ret.Table = table
+		ret.unikey = unikey
+		this.cb.(func(*StatusResult))(ret)
 	} else if this.tt == cb_slice {
-		this.cb.(func(*SliceResult))(r.(*SliceResult))
-	} else if this.tt == cb_muti {
-		this.cb.(func(*MutiResult))(r.(*MutiResult))
+		table, key := splitUniKey(unikey)
+		ret := r.(*SliceResult)
+		ret.Key = key
+		ret.Table = table
+		ret.unikey = unikey
+		this.cb.(func(*SliceResult))(ret)
 	} else {
 		panic("invaild cb_type")
 	}

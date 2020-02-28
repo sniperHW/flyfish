@@ -10,41 +10,39 @@ var ClientTimeout uint32 = 6000 //6sec
 type Client struct {
 	conn          *Conn
 	closed        int32
-	mGetQueue     *event.EventQueue
 	callbackQueue *event.EventQueue //响应回调的事件队列
 	compress      bool
 }
 
-func (this *Client) pcall(cb callback, a interface{}) {
+func (this *Client) pcall(unikey string, cb callback, a interface{}) {
 	defer util.Recover(logger)
 	switch a.(type) {
 	case int32:
-		cb.onError(a.(int32))
+		cb.onError(unikey, a.(int32))
 	default:
-		cb.onResult(a)
+		cb.onResult(unikey, a)
 	}
 }
 
-func (this *Client) doCallBack(cb callback, a interface{}) {
+func (this *Client) doCallBack(unikey string, cb callback, a interface{}) {
 	if nil != this.callbackQueue && cb.sync == false {
 		this.callbackQueue.Post(func() {
 			switch a.(type) {
 			case int32:
-				cb.onError(a.(int32))
+				cb.onError(unikey, a.(int32))
 			default:
-				cb.onResult(a)
+				cb.onResult(unikey, a)
 			}
 		})
 	} else {
-		this.pcall(cb, a)
+		this.pcall(unikey, cb, a)
 	}
 }
 
 func OpenClient(service string, compress bool, callbackQueue ...*event.EventQueue) *Client {
 
 	c := &Client{
-		mGetQueue: event.NewEventQueue(),
-		compress:  compress,
+		compress: compress,
 	}
 
 	if len(callbackQueue) > 0 {
@@ -53,15 +51,7 @@ func OpenClient(service string, compress bool, callbackQueue ...*event.EventQueu
 
 	c.conn = openConn(c, service)
 
-	c.startMGetQueue()
-
 	return c
-}
-
-func (this *Client) startMGetQueue() {
-	go func() {
-		this.mGetQueue.Run()
-	}()
 }
 
 func (this *Client) Get(table, key string, fields ...string) *SliceCmd {

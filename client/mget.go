@@ -1,134 +1,81 @@
 package client
 
 import (
-	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/kendynet/event"
+	"github.com/sniperHW/kendynet/util"
 )
 
 type MGetCmd struct {
-	c         *Client
-	cmds      map[string]*SliceCmd
-	rows      []*Row
-	cb        func(*MutiResult)
-	respCount int
+	callbackQueue *event.EventQueue
+	cmds          []*SliceCmd
 }
 
-func (this *MGetCmd) AsyncExec(cb func(*MutiResult)) {
-	this.asyncExec(false, cb)
-}
-
-func (this *MGetCmd) asyncExec(syncFlag bool, cb func(*MutiResult)) {
-	this.cb = cb
-	for k, v := range this.cmds {
-		key := k
-		v.AsyncExec(func(ret *SliceResult) {
-			this.c.mGetQueue.PostNoWait(func() {
-				if nil == this.cb {
-					return
-				}
-				if ret.ErrCode == errcode.ERR_OK || ret.ErrCode == errcode.ERR_RECORD_NOTEXIST {
-
-					this.respCount++
-					if nil == this.rows {
-						this.rows = []*Row{}
-					}
-
-					if ret.ErrCode == errcode.ERR_OK {
-						row := &Row{
-							Key:     key,
-							Version: ret.Version,
-							Fields:  ret.Fields,
-						}
-						this.rows = append(this.rows, row)
-					} else {
-						row := &Row{
-							Key: key,
-						}
-						this.rows = append(this.rows, row)
-					}
-
-					if this.respCount == len(this.cmds) {
-						cb := callback{
-							tt:   cb_muti,
-							cb:   this.cb,
-							sync: syncFlag,
-						}
-						this.cb = nil
-						this.c.doCallBack(cb, &MutiResult{
-							ErrCode: errcode.ERR_OK,
-							Rows:    this.rows,
-						})
-					}
-
-				} else {
-					cb := callback{
-						tt:   cb_muti,
-						cb:   this.cb,
-						sync: syncFlag,
-					}
-					this.cb = nil
-					this.c.doCallBack(cb, ret.ErrCode)
-				}
-			})
-		})
+func MGet(callbackQueue *event.EventQueue, cmds ...*SliceCmd) *MGetCmd {
+	return &MGetCmd{
+		callbackQueue: callbackQueue,
+		cmds:          cmds,
 	}
 }
 
-func (this *MGetCmd) Exec() *MutiResult {
-	respChan := make(chan *MutiResult)
-	this.asyncExec(true, func(r *MutiResult) {
+func (this *MGetCmd) doCallBack(sync bool, cb func([]*SliceResult), rets []*SliceResult) {
+	if !sync && nil != this.callbackQueue {
+		this.callbackQueue.Post(func() {
+			cb(rets)
+		})
+	} else {
+		defer util.Recover(logger)
+		cb(rets)
+	}
+}
+
+func (this *MGetCmd) Exec() []*SliceResult {
+	respChan := make(chan []*SliceResult)
+	this.asyncExec(true, func(r []*SliceResult) {
 		respChan <- r
 	})
 	return <-respChan
 }
 
-func (this *Client) MGet(table string, keys []string, fields ...string) *MGetCmd {
-	l := len(keys)
-	if l == 0 {
-		return nil
-	}
-
-	if l > 200 {
-		return nil
-	}
-
-	cmd := &MGetCmd{
-		c:    this,
-		cmds: map[string]*SliceCmd{},
-	}
-
-	for _, key := range keys {
-		c := this.Get(table, key, fields...)
-		if nil == c {
-			return nil
-		}
-		cmd.cmds[key] = c
-	}
-
-	return cmd
+func (this *MGetCmd) AsyncExec(cb func([]*SliceResult)) {
+	this.asyncExec(false, cb)
 }
 
-func (this *Client) MGetAll(table string, keys ...string) *MGetCmd {
-	l := len(keys)
-	if l == 0 {
-		return nil
+func (this *MGetCmd) asyncExec(sync bool, cb func([]*SliceResult)) {
+	respCount := 0
+	wantCount := len(this.cmds)
+	die := make(chan struct{})
+	retChan := make(chan func() bool, wantCount)
+	results := make([]*SliceResult, wantCount)
+
+	for _, v := range this.cmds {
+		v.AsyncExec(func(ret *SliceResult) {
+			select {
+			case <-die:
+			case retChan <- func() bool {
+				for k, v := range this.cmds {
+					if v.req.GetHead().UniKey == ret.unikey {
+						results[k] = ret
+						respCount++
+					}
+				}
+				if respCount == wantCount {
+					this.doCallBack(sync, cb, results)
+					return true
+				} else {
+					return false
+				}
+			}:
+			}
+		})
 	}
 
-	if l > 200 {
-		return nil
-	}
-
-	cmd := &MGetCmd{
-		c:    this,
-		cmds: map[string]*SliceCmd{},
-	}
-
-	for _, key := range keys {
-		c := this.GetAll(table, key)
-		if nil == c {
-			return nil
+	go func() {
+		defer close(die)
+		for {
+			fn := <-retChan
+			if fn() {
+				return
+			}
 		}
-		cmd.cmds[key] = c
-	}
-
-	return cmd
+	}()
 }

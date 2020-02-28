@@ -46,18 +46,14 @@ func main() {
 		return
 	}
 
-	r4 := c.MGetAll("users1", "sniperHW1", "sniperHW2", "sniperHW3", "sniperHW4").Exec()
+	r4 := kclient.MGet(nil, c.GetAll("users1", "sniperHW1"), c.GetAll("users1", "sniperHW2"), c.GetAll("users1", "sniperHW3"), c.GetAll("users1", "sniperHW4")).Exec()
 
-	if r4.ErrCode == errcode.ERR_OK {
-		for _, v := range r4.Rows {
-			if nil == v.Fields {
-				fmt.Println(v.Key, "not exist")
-			} else {
-				fmt.Println(v.Key, v.Fields["age"].GetInt())
-			}
+	for _, v := range r4 {
+		if v.ErrCode == errcode.ERR_OK {
+			fmt.Println(v.Table, v.Key, "age:", v.Fields["age"].GetInt())
+		} else {
+			fmt.Println(v.Table, v.Key, errcode.GetErrorStr(v.ErrCode))
 		}
-	} else {
-		fmt.Println(errcode.GetErrorStr(r4.ErrCode))
 	}
 
 }
