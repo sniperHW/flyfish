@@ -1,12 +1,10 @@
 package kvproxy
 
 import (
-	"encoding/binary"
-	"github.com/golang/protobuf/proto"
 	protocol "github.com/sniperHW/flyfish/proto"
+	"github.com/sniperHW/flyfish/proto/login"
 	"github.com/sniperHW/kendynet"
 	connector "github.com/sniperHW/kendynet/socket/connector/tcp"
-	"net"
 	"sync"
 	"time"
 )
@@ -52,50 +50,6 @@ func (this *Conn) Close() {
 	}
 }
 
-func sendLoginReq(session kendynet.StreamSession, loginReq *protocol.LoginReq) bool {
-	conn := session.GetUnderConn().(*net.TCPConn)
-	buffer := kendynet.NewByteBuffer(64)
-	data, _ := proto.Marshal(loginReq)
-	buffer.AppendUint16(uint16(len(data)))
-	buffer.AppendBytes(data)
-
-	conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
-	_, err := conn.Write(buffer.Bytes())
-	conn.SetWriteDeadline(time.Time{})
-	return nil == err
-}
-
-func recvLoginResp(session kendynet.StreamSession) (*protocol.LoginResp, error) {
-	conn := session.GetUnderConn().(*net.TCPConn)
-	buffer := make([]byte, 1024)
-	w := 0
-	pbsize := 0
-	for {
-		conn.SetReadDeadline(time.Now().Add(time.Second * 5))
-		n, err := conn.Read(buffer[w:])
-		conn.SetReadDeadline(time.Time{})
-
-		if nil != err {
-			return nil, err
-		}
-
-		w = w + n
-
-		if w >= 2 {
-			pbsize = int(binary.BigEndian.Uint16(buffer[:2]))
-		}
-
-		if w >= pbsize+2 {
-			loginResp := &protocol.LoginResp{}
-			if err = proto.Unmarshal(buffer[2:w], loginResp); err != nil {
-				return nil, err
-			} else {
-				return loginResp, nil
-			}
-		}
-	}
-}
-
 func (this *Conn) onConnected(session kendynet.StreamSession) {
 
 	defer func() {
@@ -104,13 +58,12 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 		this.Unlock()
 	}()
 
-	loginReq := &protocol.LoginReq{Compress: true}
-	if !sendLoginReq(session, loginReq) {
+	if !login.SendLoginReq(session, &protocol.LoginReq{Compress: this.compress}) {
 		session.Close("login failed", 0)
 		return
 	}
 
-	loginResp, err := recvLoginResp(session)
+	loginResp, err := login.RecvLoginResp(session)
 	if nil != err || !loginResp.GetOk() {
 		session.Close("login failed", 0)
 		return

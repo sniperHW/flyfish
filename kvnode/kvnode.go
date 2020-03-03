@@ -1,17 +1,15 @@
 package kvnode
 
 import (
-	"encoding/binary"
 	"fmt"
-	"github.com/golang/protobuf/proto"
 	codec "github.com/sniperHW/flyfish/codec"
 	"github.com/sniperHW/flyfish/codec/pb"
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/dbmeta"
 	protocol "github.com/sniperHW/flyfish/proto"
+	"github.com/sniperHW/flyfish/proto/login"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/socket/listener/tcp"
-	"net"
 	"runtime"
 	"strings"
 	"sync"
@@ -33,50 +31,6 @@ type KVNode struct {
 	sqlMgr        *sqlMgr
 	cmdChan       chan *netCmd
 	poolStopChans []chan interface{}
-}
-
-func sendLoginResp(session kendynet.StreamSession, loginResp *protocol.LoginResp) bool {
-	conn := session.GetUnderConn().(*net.TCPConn)
-	buffer := kendynet.NewByteBuffer(64)
-	data, _ := proto.Marshal(loginResp)
-	buffer.AppendUint16(uint16(len(data)))
-	buffer.AppendBytes(data)
-
-	conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
-	_, err := conn.Write(buffer.Bytes())
-	conn.SetWriteDeadline(time.Time{})
-	return nil == err
-}
-
-func recvLoginReq(session kendynet.StreamSession) (*protocol.LoginReq, error) {
-	conn := session.GetUnderConn().(*net.TCPConn)
-	buffer := make([]byte, 1024)
-	w := 0
-	pbsize := 0
-	for {
-		conn.SetReadDeadline(time.Now().Add(time.Second * 5))
-		n, err := conn.Read(buffer[w:])
-		conn.SetReadDeadline(time.Time{})
-
-		if nil != err {
-			return nil, err
-		}
-
-		w = w + n
-
-		if w >= 2 {
-			pbsize = int(binary.BigEndian.Uint16(buffer[:2]))
-		}
-
-		if w >= pbsize+2 {
-			loginReq := &protocol.LoginReq{}
-			if err = proto.Unmarshal(buffer[2:w], loginReq); err != nil {
-				return loginReq, nil
-			} else {
-				return nil, err
-			}
-		}
-	}
 }
 
 func verifyLogin(loginReq *protocol.LoginReq) bool {
@@ -105,7 +59,7 @@ func (this *KVNode) startListener() error {
 
 			//config := conf.GetConfig()
 
-			loginReq, err := recvLoginReq(session)
+			loginReq, err := login.RecvLoginReq(session)
 			if nil != err {
 				session.Close("login failed", 0)
 				return
@@ -121,7 +75,7 @@ func (this *KVNode) startListener() error {
 				Compress: loginReq.GetCompress(), //proto.Bool(config.Compress && loginReq.GetCompress()),
 			}
 
-			if !sendLoginResp(session, loginResp) {
+			if !login.SendLoginResp(session, loginResp) {
 				session.Close("login failed", 0)
 				return
 			}
