@@ -15,3 +15,12 @@ config.toml
 app/webTool/conf/conf.toml
 kv-1-1
 kv-1-1-snap
+cluster1.sh
+cluster2.sh
+cluster3.sh
+config1.toml
+config2.toml
+config3.toml
+etcd_raft.txt
+kvserver
+log1/
