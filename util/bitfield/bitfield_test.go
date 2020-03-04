@@ -1,6 +1,7 @@
 package bitfield
 
 import (
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
@@ -30,54 +31,47 @@ var (
 func TestBitField(t *testing.T) {
 	{
 		b32 := NewBitField32(field_status, field_sql_flag, field_writeback, field_snapshoted, field_tmp, field_kicking)
-		if nil == b32 {
-			t.Fatal("failed11")
-		}
+		assert.NotNil(t, b32)
 
-		if nil != b32.Set(field_status, cache_ok) {
-			t.Fatal("failed12")
-		}
+		assert.Nil(t, b32.Set(field_status, cache_ok))
 
-		if status, err := b32.Get(field_status); nil != err || status != cache_ok {
-			t.Fatal("failed13")
-		}
+		var status uint32
+		var sqlflag uint32
+		var err error
 
-		if nil != b32.Set(field_status, cache_missing) {
-			t.Fatal("failed14")
-		}
+		status, err = b32.Get(field_status)
 
-		if status, err := b32.Get(field_status); nil != err || status != cache_missing {
-			t.Fatal("failed15")
-		}
+		assert.Nil(t, err)
+		assert.Equal(t, status, cache_ok)
 
-		if nil != b32.Set(field_sql_flag, sql_update) {
-			t.Fatal("failed16")
-		}
+		assert.Nil(t, b32.Set(field_status, cache_missing))
 
-		if sqlflag, err := b32.Get(field_sql_flag); nil != err || sqlflag != sql_update {
-			t.Fatal("failed17")
-		}
+		status, err = b32.Get(field_status)
 
-		if status, err := b32.Get(field_status); nil != err || status != cache_missing {
-			t.Fatal("failed18")
-		}
+		assert.Nil(t, err)
+		assert.Equal(t, status, cache_missing)
+
+		assert.Nil(t, b32.Set(field_sql_flag, sql_update))
+
+		sqlflag, err = b32.Get(field_sql_flag)
+
+		assert.Nil(t, err)
+		assert.Equal(t, sqlflag, sql_update)
+
+		status, err = b32.Get(field_status)
+
+		assert.Nil(t, err)
+		assert.Equal(t, status, cache_missing)
 
 	}
 
 	{
 		b32 := NewBitField32(field_status, MakeFiled32(0x7))
-		if nil != b32 {
-			t.Fatal("failed21")
-		}
-
+		assert.Nil(t, b32)
 		b32 = NewBitField32(field_status)
-		if nil == b32 {
-			t.Fatal("failed22")
-		}
+		assert.NotNil(t, b32)
 
-		if nil == b32.Set(field_sql_flag, sql_update) {
-			t.Fatal("failed32")
-		}
+		assert.NotNil(t, b32.Set(field_sql_flag, sql_update))
 	}
 
 }

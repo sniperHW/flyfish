@@ -62,16 +62,6 @@ func (this *QueryMeta) GetFieldNames() []string {
 	return this.field_names
 }
 
-/*
-func (this *QueryMeta) GetReceiverByName(name string) interface{} {
-	for i := 0; i < len(this.field_names); i++ {
-		if this.field_names[i] == name {
-			return this.field_receiver[i]()
-		}
-	}
-	return nil
-}*/
-
 func (this *QueryMeta) GetConvetorByName(name string) func(interface{}) interface{} {
 	for i := 0; i < len(this.field_names); i++ {
 		if this.field_names[i] == name {
@@ -176,17 +166,14 @@ func (this *TableMeta) CheckField(field *proto.Field) bool {
 	m, ok := this.fieldMetas[field.GetName()]
 	if !ok {
 		return false
-		//return fmt.Errorf("checkField failed:%s", field.GetName())
 	}
 
 	if m.tt == proto.ValueType_blob {
 		if !field.IsBlob() && !field.IsString() {
 			return false
-			//return fmt.Errorf("checkField failed:%s", field.GetName())
 		}
 	} else if field.GetType() != m.tt {
 		return false
-		//return fmt.Errorf("checkField failed:%s", field.GetName())
 	}
 
 	return true
@@ -197,18 +184,15 @@ func (this *TableMeta) CheckSet(fields map[string]*proto.Field) bool {
 	for _, v := range fields {
 		m, ok := this.fieldMetas[v.GetName()]
 		if !ok {
-			//return fmt.Errorf("checkSet failed:%s", v.GetName())
 			return false
 		}
 
 		if m.tt == proto.ValueType_blob {
 			if !v.IsBlob() && !v.IsString() {
 				return false
-				//return fmt.Errorf("checkSet failed:%s", v.GetName())
 			}
 		} else if v.GetType() != m.tt {
 			return false
-			//return fmt.Errorf("checkSet failed:%s", v.GetName())
 		}
 	}
 	return true
@@ -219,36 +203,30 @@ func (this *TableMeta) CheckCompareAndSet(newV *proto.Field, oldV *proto.Field) 
 
 	if newV == nil || oldV == nil {
 		return false
-		//return fmt.Errorf("newV == nil || oldV == nil")
 	}
 
 	if newV.GetName() != oldV.GetName() {
 		return false
-		//return fmt.Errorf("newV.GetName() != oldV.GetName()")
 	}
 
 	m, ok := this.fieldMetas[oldV.GetName()]
 	if !ok {
 		return false
-		//return fmt.Errorf("invaild filed %s", oldV.GetName())
 	}
 
 	if m.tt == proto.ValueType_blob {
 
 		if !newV.IsBlob() && !newV.IsString() {
 			return false
-			//return fmt.Errorf("newV is not blob:%s", newV.GetName())
 		}
 
 		if !oldV.IsBlob() && !oldV.IsString() {
 			return false
-			//return fmt.Errorf("oldV is not blob:%s", oldV.GetName())
 		}
 
 	} else {
 		if newV.GetType() != m.tt || oldV.GetType() != m.tt {
 			return false
-			//return fmt.Errorf("newV.GetType() != m.tt || oldV.GetType() != m.tt")
 		}
 	}
 

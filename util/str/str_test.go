@@ -1,24 +1,26 @@
 package str
 
 import (
+	//"fmt"
 	"github.com/sniperHW/flyfish/proto"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
 func TestStr(t *testing.T) {
+
+	//force str to expand
+	strThreshold = 32
+
 	str := Get()
 
 	str.AppendInt64(100)
 
-	if str.len != 8 {
-		t.Fatal("str.len != 8")
-	}
+	assert.Equal(t, str.Len(), 8)
 
-	i64, err := str.ReadInt64(0)
+	i64, _, err := str.ReadInt64(0)
 
-	if nil != err || i64 != 100 {
-		t.Fatal("get i64 failed")
-	}
+	assert.Equal(t, i64, int64(100))
 
 	f1 := proto.PackField("int", 100)
 	f2 := proto.PackField("uint", uint64(200))
@@ -34,53 +36,53 @@ func TestStr(t *testing.T) {
 
 	f1, offset, err = str.ReadField(offset)
 
-	if nil != err {
-		t.Fatal("get f1 failed")
-	}
+	assert.Nil(t, err)
 
-	if f1.GetInt() != 100 {
-		t.Fatal("get f1 failed")
-	}
+	assert.Equal(t, f1.GetInt(), int64(100))
 
 	f2, offset, err = str.ReadField(offset)
 
-	if nil != err {
-		t.Fatal("get f2 failed")
-	}
+	assert.Nil(t, err)
 
-	if f2.GetUint() != 200 {
-		t.Fatal("get f2 failed")
-	}
+	assert.Equal(t, f2.GetUint(), uint64(200))
 
 	f3, offset, err = str.ReadField(offset)
 
-	if nil != err || f3 == nil {
-		t.Fatal("get f3 failed")
-	}
+	assert.Nil(t, err)
+	assert.NotNil(t, f3)
 
-	if f3.GetFloat() != 0.1 {
-		t.Fatal("get f3 failed")
-	}
+	assert.Equal(t, f3.GetFloat(), float64(0.1))
 
 	f4, offset, err = str.ReadField(offset)
 
-	if nil != err || f4 == nil {
-		t.Fatal("get f4 failed")
-	}
-
-	if f4.GetString() != "hello" {
-		t.Fatal("get f3 failed")
-	}
+	assert.Nil(t, err)
+	assert.NotNil(t, f4)
+	assert.Equal(t, f4.GetString(), "hello")
 
 	f5, offset, err = str.ReadField(offset)
 
-	if nil != err || f5 == nil {
-		t.Fatal("get f5 failed")
-	}
+	assert.Nil(t, err)
+	assert.NotNil(t, f5)
+	assert.Equal(t, string(f5.GetBlob()), "world")
 
-	if string(f5.GetBlob()) != "world" {
-		t.Fatal("get f5 failed")
-	}
+	str.AppendInt32(32)
+
+	offset = str.Len() - 4
+
+	f6, offset, err := str.ReadInt32(offset)
+
+	assert.Nil(t, err)
+	assert.Equal(t, f6, int32(32))
+
+	offset = str.Len() - 4
+	str.SetInt32(offset, 64)
+	f6, offset, err = str.ReadInt32(offset)
+
+	assert.Nil(t, err)
+	assert.Equal(t, f6, int32(64))
+
+	_, _, err = str.ReadInt32(offset)
+	assert.NotNil(t, err)
 
 	str = NewStr(str.Bytes(), str.Len())
 
@@ -88,52 +90,68 @@ func TestStr(t *testing.T) {
 
 	f1, offset, err = str.ReadField(offset)
 
-	if nil != err {
-		t.Fatal("get f1 failed")
-	}
+	assert.Nil(t, err)
 
-	if f1.GetInt() != 100 {
-		t.Fatal("get f1 failed")
-	}
+	assert.Equal(t, f1.GetInt(), int64(100))
 
 	f2, offset, err = str.ReadField(offset)
 
-	if nil != err {
-		t.Fatal("get f2 failed")
-	}
+	assert.Nil(t, err)
 
-	if f2.GetUint() != 200 {
-		t.Fatal("get f2 failed")
-	}
+	assert.Equal(t, f2.GetUint(), uint64(200))
 
 	f3, offset, err = str.ReadField(offset)
 
-	if nil != err || f3 == nil {
-		t.Fatal("get f3 failed")
-	}
+	assert.Nil(t, err)
+	assert.NotNil(t, f3)
 
-	if f3.GetFloat() != 0.1 {
-		t.Fatal("get f3 failed")
-	}
+	assert.Equal(t, f3.GetFloat(), float64(0.1))
 
 	f4, offset, err = str.ReadField(offset)
 
-	if nil != err || f4 == nil {
-		t.Fatal("get f4 failed")
-	}
-
-	if f4.GetString() != "hello" {
-		t.Fatal("get f3 failed")
-	}
+	assert.Nil(t, err)
+	assert.NotNil(t, f4)
+	assert.Equal(t, f4.GetString(), "hello")
 
 	f5, offset, err = str.ReadField(offset)
 
-	if nil != err || f5 == nil {
-		t.Fatal("get f5 failed")
+	assert.Nil(t, err)
+	assert.NotNil(t, f5)
+	assert.Equal(t, string(f5.GetBlob()), "world")
+
+	{
+		str := Get()
+		str_a := Get()
+		str_b := Get()
+		str_c := Get()
+
+		str_a.AppendString("a")
+		str_b.AppendString("b")
+		str_c.AppendString("c")
+
+		str.Join(",", str_a, str_b, str_c)
+
+		assert.Equal(t, string(str.Bytes()), "a,b,c")
+
 	}
 
-	if string(f5.GetBlob()) != "world" {
-		t.Fatal("get f5 failed")
+	{
+		str := Get()
+
+		f := proto.PackField("blog", []byte("world"))
+
+		str.AppendFieldStr(f, func(s *Str, b []byte) {
+			s.AppendString("this is blob")
+		})
+
+		s, _, err := str.ReadString(0, len(string("this is blob")))
+		assert.Nil(t, err)
+		assert.Equal(t, s, "this is blob")
+
+		str.Reset()
+		assert.Equal(t, str.Len(), 0)
+		Put(str)
+
 	}
 
 }

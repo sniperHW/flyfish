@@ -1,6 +1,7 @@
 package ringqueue
 
 import (
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
@@ -8,56 +9,36 @@ func TestRingQueue(t *testing.T) {
 
 	queue := New(8)
 
-	if nil != queue.Front() {
-		t.Fatal("nil != queue.Front()")
-	}
+	assert.Nil(t, queue.Front())
 
 	for i := 0; i < 8; i++ {
-		if !queue.Append(i) {
-			t.Fatal("Append failed", i)
-		}
+		assert.Equal(t, queue.Append(i), true)
 	}
 
-	if queue.Append(9) {
-		t.Fatal("queue is full,but append ok")
-	}
+	assert.Equal(t, queue.Append(9), false)
 
 	//出列4个元素
 	for i := 0; i < 4; i++ {
-		if nil == queue.PopFront() {
-			t.Fatal("pop failed")
-		}
+		assert.NotNil(t, queue.PopFront())
 	}
 
 	//再次压入4个元素
 	for i := 0; i < 4; i++ {
-		if !queue.Append(i) {
-			t.Fatal("Append failed", i)
-		}
+		assert.Equal(t, queue.Append(i), true)
 	}
 
 	//此时队列满，添加不应该成功
-	if queue.Append(9) {
-		t.Fatal("queue is full,but append ok")
-	}
+	assert.Equal(t, queue.Append(9), false)
 
-	if queue.w+1 != queue.r {
-		t.Fatal("queue.w+1 != queue.r")
-	}
+	assert.Equal(t, queue.w+1, queue.r)
 
 	//出列8个元素
 	for i := 0; i < 8; i++ {
-		if nil == queue.PopFront() {
-			t.Fatal("pop failed")
-		}
+		assert.NotNil(t, queue.PopFront())
 	}
 
-	if nil != queue.Front() {
-		t.Fatal("queue should be empty")
-	}
+	assert.Nil(t, queue.Front())
 
-	if queue.w != queue.r {
-		t.Fatal("queue.w != queue.r")
-	}
+	assert.Equal(t, queue.w, queue.r)
 
 }

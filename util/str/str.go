@@ -11,7 +11,7 @@ import (
 	"unsafe"
 )
 
-const strThreshold = 1024 * 128 //128k
+var strThreshold = 1024 * 128 //128k
 
 type Str struct {
 	data []byte
@@ -278,7 +278,7 @@ func (this *Str) ReadString(offset int, size int) (string, int, error) {
 	return string(this.data[offset : offset+size]), offset + size, nil
 }
 
-func (this *Str) Join(other []*Str, sep string) *Str {
+func (this *Str) Join(sep string, other ...*Str) *Str {
 	if len(other) > 0 {
 		for i, v := range other {
 			if i != 0 {

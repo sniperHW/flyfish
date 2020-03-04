@@ -2,6 +2,7 @@ package dbmeta
 
 import (
 	"github.com/sniperHW/flyfish/proto"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
@@ -14,34 +15,22 @@ func TestLoadDef(t *testing.T) {
 
 	meta, _ := NewDBMeta(defs)
 
-	if nil == meta {
-		t.Fatal("NewDBMeta failed")
-	}
+	assert.NotNil(t, meta)
 
 	meta.Reload(defs)
 
-	if meta.version != 2 {
-		t.Fatal("Reload failed")
-	}
+	assert.Equal(t, meta.CheckMetaVersion(int64(2)), true)
 
 	users1_meta := meta.GetTableMeta("users1")
 
-	if nil == users1_meta {
-		t.Fatal("GetTableMeta users1 failed")
-	}
+	assert.NotNil(t, users1_meta)
 
 	age_meta, ok := users1_meta.fieldMetas["age"]
 
-	if !ok {
-		t.Fatal("get age meta failed")
-	}
+	assert.Equal(t, ok, true)
 
-	if age_meta.tt != proto.ValueType_int {
-		t.Fatal("age tt error")
-	}
+	assert.Equal(t, age_meta.tt, proto.ValueType_int)
 
-	if nil != meta.GetTableMeta("users2") {
-		t.Fatal("GetTableMeta users2 should failed")
-	}
+	assert.Nil(t, meta.GetTableMeta("users2"))
 
 }
