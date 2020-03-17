@@ -27,9 +27,6 @@ type asynTaskKick struct {
 
 func (this *asynTaskKick) done() {
 	Debugln("kick done set cache_remove", this.kv.uniKey)
-	this.kv.Lock()
-	this.kv.setStatus(cache_remove)
-	this.kv.Unlock()
 	this.kv.store.removeKv(this.kv)
 }
 
@@ -37,7 +34,6 @@ func (this *asynTaskKick) onError(errno int32) {
 	this.kv.Lock()
 	this.kv.setKicking(false)
 	this.kv.Unlock()
-	this.kv.store.onKickError()
 }
 
 func (this *asynTaskKick) append2Str(s *str.Str) {
@@ -45,7 +41,7 @@ func (this *asynTaskKick) append2Str(s *str.Str) {
 }
 
 func (this *asynTaskKick) onPorposeTimeout() {
-
+	this.onError(errcode.ERR_TIMEOUT)
 }
 
 type leaseNotify int
@@ -55,19 +51,18 @@ var snapGroupSize int = 129
 // a key-value store backed by raft
 type kvstore struct {
 	sync.Mutex
-	proposeC       *util.BlockQueue
-	readReqC       *util.BlockQueue
-	tmp            map[string]*kv
-	elements       map[string]*kv
-	kvKickingCount int //当前正在执行kicking的kv数量
-	kvNode         *KVNode
-	stop           func()
-	rn             *raftNode
-	lruHead        kv
-	lruTail        kv
-	storeMgr       *storeMgr
-	lruTimer       *timer.Timer
-	unCompressor   codec.UnCompressorI
+	proposeC     *util.BlockQueue
+	readReqC     *util.BlockQueue
+	tmp          map[string]*kv
+	elements     map[string]*kv
+	kvNode       *KVNode
+	stop         func()
+	rn           *raftNode
+	lruHead      kv
+	lruTail      kv
+	storeMgr     *storeMgr
+	lruTimer     *timer.Timer
+	unCompressor codec.UnCompressorI
 }
 
 func (this *kvstore) getKvNode() *KVNode {
@@ -78,27 +73,49 @@ func (this *kvstore) getRaftNode() *raftNode {
 	return this.rn
 }
 
-func (this *kvstore) onKickError() {
-	this.Lock()
-	defer this.Unlock()
-	this.kvKickingCount--
-}
-
 func (this *kvstore) removeKv(k *kv) {
 	this.Lock()
-	defer this.Unlock()
+	k.Lock()
+	defer func() {
+		k.Unlock()
+		this.Unlock()
+	}()
+
+	k.setStatus(cache_remove)
+	for cmd := k.cmdQueue.popFront(); nil != cmd; {
+		cmd.reply(errcode.ERR_RETRY, nil, 0)
+	}
+
 	this.removeLRU(k)
 	delete(this.elements, k.uniKey)
 }
 
+func (this *kvstore) removeTmpKvNoLock(k *kv) {
+	k.setStatus(cache_remove)
+	for cmd := k.cmdQueue.popFront(); nil != cmd; {
+		cmd.reply(errcode.ERR_RETRY, nil, 0)
+	}
+	delete(this.tmp, k.uniKey)
+}
+
 func (this *kvstore) removeTmpKv(k *kv) {
 	this.Lock()
-	defer this.Unlock()
+	k.Lock()
+
+	defer func() {
+		k.Unlock()
+		this.Unlock()
+	}()
+
+	k.setStatus(cache_remove)
+	for cmd := k.cmdQueue.popFront(); nil != cmd; {
+		cmd.reply(errcode.ERR_RETRY, nil, 0)
+	}
+
 	delete(this.tmp, k.uniKey)
 }
 
 func (this *kvstore) moveTmpkv2OK(kv *kv) {
-
 	this.Lock()
 	defer this.Unlock()
 
@@ -147,7 +164,8 @@ func (this *kvstore) doLRU() {
 		MaxCachePerGroupSize := conf.GetConfig().MaxCachePerGroupSize
 		if this.lruHead.nnext != &this.lruTail {
 			kv := this.lruTail.pprev
-			for (len(this.elements) - this.kvKickingCount) > MaxCachePerGroupSize {
+			count := 0
+			for len(this.elements)-count > MaxCachePerGroupSize {
 				if kv == &this.lruHead {
 					return
 				}
@@ -155,55 +173,39 @@ func (this *kvstore) doLRU() {
 					return
 				}
 				kv = kv.pprev
+				count++
 			}
 		}
 	}
 }
 
-func (this *kvstore) kick(taskKick *asynCmdTaskKick) bool {
-	this.Lock()
+func (this *kvstore) kickNoLock(taskKick *asynCmdTaskKick) bool {
 	kv := taskKick.getKV()
-	kv.Lock()
 	kv.setKicking(true)
-	kv.Unlock()
 	if err := this.proposeC.AddNoWait(taskKick); nil == err {
-		this.kvKickingCount++
-		this.Unlock()
 		return true
 	} else {
-		kv.Lock()
-		kv.setKicking(false)
-		kv.Unlock()
-		this.Unlock()
 		return false
 	}
 }
 
 func (this *kvstore) tryKick(kv *kv) bool {
 	kv.Lock()
+	defer kv.Unlock()
 	if kv.isKicking() {
-		kv.Unlock()
 		return true
 	}
 
-	kickAble := kv.kickable()
-	if kickAble {
+	if kv.kickable() {
 		kv.setKicking(true)
-	}
-
-	kv.Unlock()
-
-	if !kickAble {
+	} else {
 		return false
 	}
 
 	if err := this.proposeC.AddNoWait(&asynTaskKick{kv: kv}); nil == err {
-		this.kvKickingCount++
 		return true
 	} else {
-		kv.Lock()
 		kv.setKicking(false)
-		kv.Unlock()
 		return false
 	}
 }
@@ -243,15 +245,13 @@ func (this *kvstore) apply(data []byte) bool {
 			this.rn.lease.update(this.rn, p.values[0].(int), p.values[1].(uint64))
 		case proposal_snapshot, proposal_update, proposal_kick:
 			unikey := p.values[0].(string)
-			Debugln(unikey, "cache_kick")
+
 			if p.tt == proposal_kick {
+				Debugln(unikey, "cache_kick")
 				kv, ok := this.elements[unikey]
 				if !ok {
 					return false
 				} else {
-					kv.Lock()
-					kv.setStatus(cache_remove)
-					kv.Unlock()
 					this.removeLRU(kv)
 					delete(this.elements, unikey)
 				}
@@ -451,7 +451,6 @@ type storeMgr struct {
 }
 
 func (this *storeMgr) getkvOnly(table string, key string, uniKey string) *kv {
-	//uniKey := makeUniKey(table, key)
 	store := this.getStore(uniKey)
 	if store != nil {
 		var k *kv
@@ -469,9 +468,6 @@ func (this *storeMgr) getkvOnly(table string, key string, uniKey string) *kv {
 }
 
 func (this *storeMgr) getkv(table string, key string, uniKey string) (*kv, int32) {
-
-	//uniKey := makeUniKey(table, key)
-
 	var k *kv
 	var err int32 = errcode.ERR_OK
 	var ok bool
@@ -504,7 +500,6 @@ func (this *storeMgr) getkv(table string, key string, uniKey string) (*kv, int32
 
 				meta := this.dbmeta.GetTableMeta(table)
 				if meta == nil {
-					//err = fmt.Errorf("missing table meta")
 					err = errcode.ERR_INVAILD_TABLE
 				} else {
 					k = newkv(store, meta, key, uniKey, true)

@@ -39,7 +39,7 @@ func (this *readBatchSt) onError(err int32) {
 func (this *readBatchSt) reply() {
 	this.tasks.ForEach(func(v interface{}) {
 		v.(asynCmdTaskI).reply()
-		v.(asynCmdTaskI).getKV().processQueueCmd(true)
+		v.(asynCmdTaskI).getKV().processCmd(nil)
 	})
 	fixedArrayPool.Put(this.tasks)
 }

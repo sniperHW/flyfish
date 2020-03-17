@@ -6,7 +6,6 @@ import (
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/util/bitfield"
-	//"github.com/sniperHW/kendynet/util"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -14,6 +13,7 @@ import (
 )
 
 const (
+	cache_invaild = uint32(0)
 	cache_new     = uint32(1) //正在从数据库加载
 	cache_ok      = uint32(2) //
 	cache_missing = uint32(3)
@@ -111,50 +111,13 @@ type kv struct {
 var maxPendingCmdCount int64 = int64(500000) //整个物理节点待处理的命令上限
 var maxPendingCmdCountPerKv int = 1000       //单个kv待处理命令上限
 
-func (this *kv) appendCmd(op commandI) int32 {
-
-	if atomic.LoadInt64(&wait4ReplyCount) > 500000 {
-		return errcode.ERR_BUSY
-	}
-
-	this.Lock()
-	defer this.Unlock()
-	if this.getStatus() == cache_remove {
-		Debugln(this.uniKey, "cache_remove", "retry")
-		return errcode.ERR_RETRY
-	}
-
-	if this.isKicking() {
-		Debugln(this.uniKey, "kicking", "retry")
-		return errcode.ERR_RETRY
-	}
-
-	if this.cmdQueue.queue.Len() > maxPendingCmdCountPerKv {
-		return errcode.ERR_BUSY
-	}
-
-	this.cmdQueue.append(op)
-	return errcode.ERR_OK
-}
-
-//设置remove,清空cmdQueue,向队列内的cmd响应错误码err
-func (this *kv) setRemoveAndClearCmdQueue(err int32) {
-	//Debugln("setRemoveAndClearCmdQueue", this.uniKey, err, util.CallStack(100))
-	this.setStatus(cache_remove)
-	for cmd := this.cmdQueue.popFront(); nil != cmd; {
-		cmd.reply(err, nil, 0)
-	}
-}
-
 func (this *kv) tryRemoveTmp(err int32) bool {
 	this.Lock()
 	isTmp := this.isTmp()
+	this.Unlock()
 	if isTmp {
-		this.Unlock()
 		return false
 	} else {
-		this.setRemoveAndClearCmdQueue(err)
-		this.Unlock()
 		this.store.removeTmpKv(this)
 		return true
 	}
@@ -309,15 +272,54 @@ func newkv(store *kvstore, tableMeta *dbmeta.TableMeta, key string, uniKey strin
 	return k
 }
 
-func (this *kv) processQueueCmd(unlockOpQueue ...bool) {
+func (this *kv) processCmd(op commandI) {
 
-	this.Lock()
-	if len(unlockOpQueue) > 0 {
-		this.cmdQueue.unlock()
+	k := this
+	store := this.store
+	callProcessAgain := false
+	fullReturn := false
+
+	store.Lock()
+	k.Lock()
+
+	defer func() {
+		k.Unlock()
+		store.Unlock()
+		if callProcessAgain {
+			k.processCmd(nil)
+		}
+	}()
+
+	if nil != op {
+
+		if atomic.LoadInt64(&wait4ReplyCount) > 500000 {
+			op.reply(errcode.ERR_RETRY, nil, 0)
+			return
+		}
+
+		if k.getStatus() == cache_remove {
+			Debugln(k.uniKey, "cache_remove", "retry")
+			op.reply(errcode.ERR_RETRY, nil, 0)
+		}
+
+		if k.isKicking() {
+			Debugln(k.uniKey, "kicking", "retry")
+			op.reply(errcode.ERR_RETRY, nil, 0)
+		}
+
+		if k.cmdQueue.queue.Len() > maxPendingCmdCountPerKv {
+			op.reply(errcode.ERR_RETRY, nil, 0)
+		}
+
+		k.cmdQueue.append(op)
+
+		fullReturn = true
+
+	} else {
+		k.cmdQueue.unlock()
 	}
 
-	if this.cmdQueue.isLocked() || this.cmdQueue.empty() {
-		this.Unlock()
+	if k.cmdQueue.isLocked() || k.cmdQueue.empty() {
 		return
 	}
 
@@ -354,43 +356,35 @@ loopEnd:
 
 	if nil == asynTask {
 		if this.isTmp() {
-			this.setRemoveAndClearCmdQueue(errcode.ERR_BUSY)
-			this.Unlock()
-			this.store.removeTmpKv(this)
-		} else {
-			this.Unlock()
+			this.store.removeTmpKvNoLock(this)
 		}
 		return
 	}
 
 	if this.getStatus() == cache_new {
-		fullReturn := len(unlockOpQueue) == 0
 		if !this.store.getKvNode().sqlMgr.pushLoadReq(asynTask, fullReturn) {
 			if this.isTmp() {
 				for _, v := range asynTask.getCommands() {
 					v.reply(errcode.ERR_BUSY, nil, -1)
 				}
-				this.setRemoveAndClearCmdQueue(errcode.ERR_BUSY)
-				this.Unlock()
-				this.store.removeTmpKv(this)
+				this.store.removeTmpKvNoLock(this)
 			}
 		} else {
 			this.cmdQueue.lock()
-			this.Unlock()
 		}
 	} else {
 		this.cmdQueue.lock()
-		this.Unlock()
 		switch asynTask.(type) {
 		case *asynCmdTaskGet:
 			this.store.issueReadReq(asynTask)
 		case *asynCmdTaskKick:
-			if !this.store.kick(asynTask.(*asynCmdTaskKick)) {
+			if !this.store.kickNoLock(asynTask.(*asynCmdTaskKick)) {
 				asynTask.reply(errcode.ERR_OTHER)
-				this.processQueueCmd(true)
+				callProcessAgain = true
 			}
 		default:
 			this.store.issueUpdate(asynTask)
 		}
 	}
+
 }

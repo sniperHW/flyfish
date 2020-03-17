@@ -22,7 +22,9 @@ func (this *asynCmdTaskKick) onSqlResp(errno int32) {
 func (this *asynCmdTaskKick) done() {
 	kv := this.getKV()
 	Debugln("asynCmdTaskKick.done()", kv.uniKey)
-	kv.setRemoveAndClearCmdQueue(errcode.ERR_RETRY)
+	//kv.Lock()
+	//kv.setRemoveAndClearCmdQueue(errcode.ERR_RETRY)
+	//kv.Unlock()
 	kv.store.removeKv(kv)
 }
 
@@ -99,11 +101,6 @@ func kick(n *KVNode, cli *cliConn, msg *codec.Message) {
 
 	op.kv = kv
 
-	if err = kv.appendCmd(op); err != errcode.ERR_OK {
-		op.reply(err, nil, 0)
-		return
-	}
-
-	kv.processQueueCmd()
+	kv.processCmd(op)
 
 }

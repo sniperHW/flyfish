@@ -121,7 +121,7 @@ func (this *asynCmdTaskBase) onSqlResp(errno int32) {
 		this.reply()
 		kv := this.getKV()
 		if !kv.tryRemoveTmp(this.errno) {
-			kv.processQueueCmd(true)
+			kv.processCmd(nil)
 		}
 	}
 }
@@ -131,7 +131,7 @@ func (this *asynCmdTaskBase) onError(errno int32) {
 	this.reply()
 	kv := this.getKV()
 	if !kv.tryRemoveTmp(this.errno) {
-		kv.processQueueCmd(true)
+		kv.processCmd(nil)
 	}
 }
 
@@ -174,7 +174,7 @@ func (this *asynCmdTaskBase) done() {
 		kv.store.moveTmpkv2OK(kv)
 	}
 
-	kv.processQueueCmd(true)
+	kv.processCmd(nil)
 }
 
 func fillDefaultValue(meta *dbmeta.TableMeta, fields *map[string]*proto.Field) {
