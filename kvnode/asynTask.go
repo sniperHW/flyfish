@@ -120,9 +120,7 @@ func (this *asynCmdTaskBase) onSqlResp(errno int32) {
 	} else if errno == errcode.ERR_SQLERROR {
 		this.reply()
 		kv := this.getKV()
-		if !kv.tryRemoveTmp(this.errno) {
-			kv.processCmd(nil)
-		}
+		kv.processCmd(nil)
 	}
 }
 
@@ -130,9 +128,7 @@ func (this *asynCmdTaskBase) onError(errno int32) {
 	this.errno = errno
 	this.reply()
 	kv := this.getKV()
-	if !kv.tryRemoveTmp(this.errno) {
-		kv.processCmd(nil)
-	}
+	kv.processCmd(nil)
 }
 
 func (this *asynCmdTaskBase) onPorposeTimeout() {
@@ -163,16 +159,7 @@ func (this *asynCmdTaskBase) done() {
 		kv.store.getKvNode().sqlMgr.pushUpdateReq(kv)
 	}
 
-	isTmp := kv.isTmp()
-	if isTmp {
-		kv.setTmp(false)
-	}
-
 	kv.Unlock()
-
-	if isTmp {
-		kv.store.moveTmpkv2OK(kv)
-	}
 
 	kv.processCmd(nil)
 }

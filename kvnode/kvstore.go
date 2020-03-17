@@ -53,7 +53,6 @@ type kvstore struct {
 	sync.Mutex
 	proposeC     *util.BlockQueue
 	readReqC     *util.BlockQueue
-	tmp          map[string]*kv
 	elements     map[string]*kv
 	kvNode       *KVNode
 	stop         func()
@@ -88,40 +87,6 @@ func (this *kvstore) removeKv(k *kv) {
 
 	this.removeLRU(k)
 	delete(this.elements, k.uniKey)
-}
-
-func (this *kvstore) removeTmpKvNoLock(k *kv) {
-	k.setStatus(cache_remove)
-	for cmd := k.cmdQueue.popFront(); nil != cmd; {
-		cmd.reply(errcode.ERR_RETRY, nil, 0)
-	}
-	delete(this.tmp, k.uniKey)
-}
-
-func (this *kvstore) removeTmpKv(k *kv) {
-	this.Lock()
-	k.Lock()
-
-	defer func() {
-		k.Unlock()
-		this.Unlock()
-	}()
-
-	k.setStatus(cache_remove)
-	for cmd := k.cmdQueue.popFront(); nil != cmd; {
-		cmd.reply(errcode.ERR_RETRY, nil, 0)
-	}
-
-	delete(this.tmp, k.uniKey)
-}
-
-func (this *kvstore) moveTmpkv2OK(kv *kv) {
-	this.Lock()
-	defer this.Unlock()
-
-	delete(this.tmp, kv.uniKey)
-	this.elements[kv.uniKey] = kv
-	this.updateLRU(kv)
 }
 
 //发起一致读请求
@@ -346,7 +311,7 @@ func (this *kvstore) readCommits(snapshotter *snap.Snapshotter, commitC <-chan i
 
 func (this *kvstore) checkKvCount() bool {
 	MaxCachePerGroupSize := conf.GetConfig().MaxCachePerGroupSize
-	if len(this.elements)+len(this.tmp) > MaxCachePerGroupSize+MaxCachePerGroupSize/4 {
+	if len(this.elements) > MaxCachePerGroupSize {
 		return false
 	} else {
 		return true
@@ -453,15 +418,9 @@ type storeMgr struct {
 func (this *storeMgr) getkvOnly(table string, key string, uniKey string) *kv {
 	store := this.getStore(uniKey)
 	if store != nil {
-		var k *kv
-		var ok bool
 		store.Lock()
-		k, ok = store.elements[uniKey]
-		if !ok {
-			k, ok = store.tmp[uniKey]
-		}
-		store.Unlock()
-		return k
+		defer store.Unlock()
+		return store.elements[uniKey]
 	} else {
 		return nil
 	}
@@ -469,19 +428,13 @@ func (this *storeMgr) getkvOnly(table string, key string, uniKey string) *kv {
 
 func (this *storeMgr) getkv(table string, key string, uniKey string) (*kv, int32) {
 	var k *kv
-	var err int32 = errcode.ERR_OK
 	var ok bool
-
+	var err int32 = errcode.ERR_OK
 	store := this.getStore(uniKey)
 	if nil != store {
-
 		store.Lock()
-
+		defer store.Unlock()
 		k, ok = store.elements[uniKey]
-		if !ok {
-			k, ok = store.tmp[uniKey]
-		}
-
 		if ok {
 			if !this.dbmeta.CheckMetaVersion(k.meta.Version()) {
 				newMeta := this.dbmeta.GetTableMeta(table)
@@ -503,11 +456,11 @@ func (this *storeMgr) getkv(table string, key string, uniKey string) (*kv, int32
 					err = errcode.ERR_INVAILD_TABLE
 				} else {
 					k = newkv(store, meta, key, uniKey, true)
-					store.tmp[uniKey] = k
+					store.elements[uniKey] = k
+					store.updateLRU(k)
 				}
 			}
 		}
-		store.Unlock()
 	} else {
 		fmt.Println("store == nil")
 	}
@@ -549,7 +502,6 @@ func newKVStore(storeMgr *storeMgr, kvNode *KVNode, proposeC *util.BlockQueue, r
 	s := &kvstore{
 		proposeC:     proposeC,
 		elements:     map[string]*kv{},
-		tmp:          map[string]*kv{},
 		readReqC:     readReqC,
 		kvNode:       kvNode,
 		storeMgr:     storeMgr,
