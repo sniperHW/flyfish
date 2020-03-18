@@ -51,8 +51,9 @@ var snapGroupSize int = 129
 // a key-value store backed by raft
 type kvstore struct {
 	sync.Mutex
-	proposeC     *util.BlockQueue
-	readReqC     *util.BlockQueue
+	proposeC *util.BlockQueue
+	readReqC *util.BlockQueue
+	//tmp          map[string]*kv
 	elements     map[string]*kv
 	kvNode       *KVNode
 	stop         func()
@@ -88,6 +89,50 @@ func (this *kvstore) removeKv(k *kv) {
 	this.removeLRU(k)
 	delete(this.elements, k.uniKey)
 }
+
+func (this *kvstore) removeKvNoLock(k *kv) {
+	k.setStatus(cache_remove)
+	for cmd := k.cmdQueue.popFront(); nil != cmd; {
+		cmd.reply(errcode.ERR_RETRY, nil, 0)
+	}
+
+	this.removeLRU(k)
+	delete(this.elements, k.uniKey)
+}
+
+/*func (this *kvstore) removeTmpKvNoLock(k *kv) {
+	k.setStatus(cache_remove)
+	for cmd := k.cmdQueue.popFront(); nil != cmd; {
+		cmd.reply(errcode.ERR_RETRY, nil, 0)
+	}
+	delete(this.tmp, k.uniKey)
+}
+
+func (this *kvstore) removeTmpKv(k *kv) {
+	this.Lock()
+	k.Lock()
+
+	defer func() {
+		k.Unlock()
+		this.Unlock()
+	}()
+
+	k.setStatus(cache_remove)
+	for cmd := k.cmdQueue.popFront(); nil != cmd; {
+		cmd.reply(errcode.ERR_RETRY, nil, 0)
+	}
+
+	delete(this.tmp, k.uniKey)
+}
+
+func (this *kvstore) moveTmpkv2OK(kv *kv) {
+	this.Lock()
+	defer this.Unlock()
+
+	delete(this.tmp, kv.uniKey)
+	this.elements[kv.uniKey] = kv
+	this.updateLRU(kv)
+}*/
 
 //发起一致读请求
 func (this *kvstore) issueReadReq(task asynCmdTaskI) {

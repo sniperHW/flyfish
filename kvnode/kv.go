@@ -111,6 +111,18 @@ type kv struct {
 var maxPendingCmdCount int64 = int64(500000) //整个物理节点待处理的命令上限
 var maxPendingCmdCountPerKv int = 1000       //单个kv待处理命令上限
 
+/*func (this *kv) tryRemoveTmp(err int32) bool {
+	this.Lock()
+	isTmp := this.isTmp()
+	this.Unlock()
+	if isTmp {
+		return false
+	} else {
+		this.store.removeTmpKv(this)
+		return true
+	}
+}*/
+
 func (this *kv) getMeta() *dbmeta.TableMeta {
 	return (*dbmeta.TableMeta)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&this.meta))))
 }
@@ -132,6 +144,25 @@ func (this *kv) getStatus() uint32 {
 	status, _ := this.flag.Get(field_status)
 	return status
 }
+
+func (this *kv) isNew() bool {
+	this.Lock()
+	defer this.Unlock()
+	return this.getStatus() == cache_new
+}
+
+/*func (this *kv) setTmp(tmp bool) {
+	if tmp {
+		this.flag.Set(field_tmp, uint32(1))
+	} else {
+		this.flag.Set(field_tmp, uint32(0))
+	}
+}
+
+func (this *kv) isTmp() bool {
+	v, _ := this.flag.Get(field_tmp)
+	return v == uint32(1)
+}*/
 
 func (this *kv) setKicking(kicking bool) {
 	if kicking {
@@ -328,13 +359,19 @@ func (this *kv) processCmd(op commandI) {
 loopEnd:
 
 	if nil == asynTask {
+		if this.getStatus() == cache_new {
+			this.store.removeKvNoLock(this)
+		}
 		return
 	}
 
 	if this.getStatus() == cache_new {
 		if !this.store.getKvNode().sqlMgr.pushLoadReq(asynTask, fullReturn) {
-			for _, v := range asynTask.getCommands() {
-				v.reply(errcode.ERR_RETRY, nil, -1)
+			if this.getStatus() == cache_new {
+				for _, v := range asynTask.getCommands() {
+					v.reply(errcode.ERR_RETRY, nil, -1)
+				}
+				this.store.removeKvNoLock(this)
 			}
 		} else {
 			this.cmdQueue.lock()

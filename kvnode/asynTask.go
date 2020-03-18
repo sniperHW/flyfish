@@ -128,7 +128,11 @@ func (this *asynCmdTaskBase) onError(errno int32) {
 	this.errno = errno
 	this.reply()
 	kv := this.getKV()
-	kv.processCmd(nil)
+	if kv.isNew() {
+		kv.store.removeKv(kv)
+	} else {
+		kv.processCmd(nil)
+	}
 }
 
 func (this *asynCmdTaskBase) onPorposeTimeout() {

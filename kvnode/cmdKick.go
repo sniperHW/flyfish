@@ -88,14 +88,12 @@ func kick(n *KVNode, cli *cliConn, msg *codec.Message) {
 		},
 	}
 
-	var err int32
-
 	var kv *kv
 
 	table, key := head.SplitUniKey()
 
-	if kv, err = n.storeMgr.getkv(table, key, head.UniKey); errcode.ERR_OK != err {
-		op.reply(err, nil, 0)
+	if kv = n.storeMgr.getkvOnly(table, key, head.UniKey); nil == kv {
+		op.reply(errcode.ERR_OK, nil, 0)
 		return
 	}
 
