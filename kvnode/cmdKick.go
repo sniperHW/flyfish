@@ -17,15 +17,13 @@ func (this *asynCmdTaskKick) append2Str(s *str.Str) {
 
 func (this *asynCmdTaskKick) onSqlResp(errno int32) {
 	Errorln("should not reach here", this.getKV().uniKey)
+	panic("asynCmdTaskKick should not reach here")
 }
 
 func (this *asynCmdTaskKick) done() {
 	kv := this.getKV()
 	Debugln("asynCmdTaskKick.done()", kv.uniKey)
-	//kv.Lock()
-	//kv.setRemoveAndClearCmdQueue(errcode.ERR_RETRY)
-	//kv.Unlock()
-	kv.store.removeKv(kv)
+	kv.store.removeKv(kv, true)
 }
 
 func newAsynCmdTaskKick(cmd commandI) *asynCmdTaskKick {
@@ -62,8 +60,8 @@ func (this *cmdKick) prepare(t asynCmdTaskI) (asynCmdTaskI, bool) {
 	kv := this.kv
 	status := kv.getStatus()
 
-	if !(status == cache_ok || status == cache_missing) {
-		this.reply(errcode.ERR_OTHER, nil, 0)
+	if status == cache_remove {
+		this.reply(errcode.ERR_OK, nil, 0)
 		return nil, true
 	}
 
@@ -91,6 +89,8 @@ func kick(n *KVNode, cli *cliConn, msg *codec.Message) {
 	var kv *kv
 
 	table, key := head.SplitUniKey()
+
+	Debugln("cmdKick")
 
 	if kv = n.storeMgr.getkvOnly(table, key, head.UniKey); nil == kv {
 		op.reply(errcode.ERR_OK, nil, 0)

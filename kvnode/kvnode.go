@@ -8,6 +8,7 @@ import (
 	"github.com/sniperHW/flyfish/dbmeta"
 	protocol "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/login"
+	"github.com/sniperHW/flyfish/util"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/socket/listener/tcp"
 	"runtime"
@@ -29,7 +30,7 @@ type KVNode struct {
 	listener      *tcp.Listener
 	dispatcher    *dispatcher
 	sqlMgr        *sqlMgr
-	cmdChan       chan *netCmd
+	cmdChan       []chan *netCmd
 	poolStopChans []chan interface{}
 }
 
@@ -38,7 +39,9 @@ func verifyLogin(loginReq *protocol.LoginReq) bool {
 }
 
 func (this *KVNode) pushNetCmd(h handler, conn *cliConn, msg *codec.Message) {
-	this.cmdChan <- &netCmd{
+	uniKey := msg.GetHead().UniKey
+	i := util.StringHash(uniKey) % len(this.cmdChan)
+	this.cmdChan[i] <- &netCmd{
 		h:    h,
 		conn: conn,
 		msg:  msg,
@@ -56,9 +59,6 @@ func (this *KVNode) startListener() error {
 
 	return this.listener.Serve(func(session kendynet.StreamSession) {
 		go func() {
-
-			//config := conf.GetConfig()
-
 			loginReq, err := login.RecvLoginReq(session)
 			if nil != err {
 				session.Close("login failed", 0)
@@ -104,9 +104,9 @@ func (this *KVNode) startListener() error {
 	})
 }
 
-func poolRoutine(kvnode *KVNode) {
+func poolRoutine(kvnode *KVNode, cmdChan chan *netCmd) {
 	for {
-		v, ok := <-kvnode.cmdChan
+		v, ok := <-cmdChan
 		if !ok {
 			return
 		}
@@ -151,12 +151,13 @@ func (this *KVNode) Start(id *int, cluster *string) error {
 
 	go mutilRaft.serveMutilRaft(clusterArray[*id-1])
 
-	this.cmdChan = make(chan *netCmd, 10000)
-
+	this.cmdChan = []chan *netCmd{}
 	cpuNum := runtime.NumCPU()
 
 	for i := 0; i < cpuNum*2; i++ {
-		go poolRoutine(this)
+		cmdChan := make(chan *netCmd, 10000/(cpuNum*2))
+		this.cmdChan = append(this.cmdChan, cmdChan)
+		go poolRoutine(this, cmdChan)
 	}
 
 	go func() {
@@ -231,7 +232,9 @@ func (this *KVNode) Stop() {
 
 		this.storeMgr.stop()
 
-		close(this.cmdChan)
+		for _, v := range this.cmdChan {
+			close(v)
+		}
 
 		Infoln("flyfish stop ok")
 

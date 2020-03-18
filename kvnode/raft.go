@@ -764,7 +764,7 @@ func (m *metric) add(count int) {
 	elapsed := now.Sub(m.last)
 	if elapsed >= time.Second {
 		//if m.bytes > 1024 {
-		Infoln("proposals bytes", (m.bytes*int64(time.Second))/int64(elapsed)/1024/1024, "mb", m.newKvCount)
+		//Infoln("proposals bytes", (m.bytes*int64(time.Second))/int64(elapsed)/1024/1024, "mb", m.newKvCount)
 		//}
 		m.bytes = 0
 		m.last = now

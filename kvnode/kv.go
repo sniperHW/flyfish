@@ -111,17 +111,12 @@ type kv struct {
 var maxPendingCmdCount int64 = int64(500000) //整个物理节点待处理的命令上限
 var maxPendingCmdCountPerKv int = 1000       //单个kv待处理命令上限
 
-/*func (this *kv) tryRemoveTmp(err int32) bool {
-	this.Lock()
-	isTmp := this.isTmp()
-	this.Unlock()
-	if isTmp {
-		return false
-	} else {
-		this.store.removeTmpKv(this)
-		return true
-	}
-}*/
+func (this *kv) resetStatus() {
+	this.modifyFields = map[string]*proto.Field{}
+	this.fields = nil
+	this.flag = bitfield.NewBitField32(field_status, field_sql_flag, field_writeback, field_snapshoted, field_tmp, field_kicking)
+	this.setStatus(cache_new)
+}
 
 func (this *kv) getMeta() *dbmeta.TableMeta {
 	return (*dbmeta.TableMeta)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&this.meta))))
@@ -144,25 +139,6 @@ func (this *kv) getStatus() uint32 {
 	status, _ := this.flag.Get(field_status)
 	return status
 }
-
-func (this *kv) isNew() bool {
-	this.Lock()
-	defer this.Unlock()
-	return this.getStatus() == cache_new
-}
-
-/*func (this *kv) setTmp(tmp bool) {
-	if tmp {
-		this.flag.Set(field_tmp, uint32(1))
-	} else {
-		this.flag.Set(field_tmp, uint32(0))
-	}
-}
-
-func (this *kv) isTmp() bool {
-	v, _ := this.flag.Get(field_tmp)
-	return v == uint32(1)
-}*/
 
 func (this *kv) setKicking(kicking bool) {
 	if kicking {
@@ -207,7 +183,7 @@ func (this *kv) kickable() bool {
 
 	status := this.getStatus()
 
-	if !(status == cache_ok || status == cache_missing) {
+	if !(status == cache_ok || status == cache_missing || status == cache_new) {
 		return false
 	}
 
@@ -278,19 +254,23 @@ func newkv(store *kvstore, tableMeta *dbmeta.TableMeta, key string, uniKey strin
 
 func (this *kv) processCmd(op commandI) {
 
-	k := this
-	store := this.store
-	callProcessAgain := false
-	fullReturn := false
+	var asynTask asynCmdTaskI
 
-	store.Lock()
-	k.Lock()
+	callKick := false
+	removeKv := false
+
+	this.Lock()
 
 	defer func() {
-		k.Unlock()
-		store.Unlock()
-		if callProcessAgain {
-			k.processCmd(nil)
+		this.Unlock()
+		if removeKv {
+			asynTask.reply(errcode.ERR_OK)
+			this.store.removeKv(this, true)
+		} else if callKick {
+			if !this.store.kick(asynTask.(*asynCmdTaskKick)) {
+				asynTask.reply(errcode.ERR_RETRY)
+				this.processCmd(nil)
+			}
 		}
 	}()
 
@@ -301,33 +281,27 @@ func (this *kv) processCmd(op commandI) {
 			return
 		}
 
-		if k.getStatus() == cache_remove {
-			Debugln(k.uniKey, "cache_remove", "retry")
+		if this.getStatus() == cache_remove {
+			Debugln(this.uniKey, "cache_remove", "retry")
 			op.reply(errcode.ERR_RETRY, nil, 0)
+			return
 		}
 
-		if k.isKicking() {
-			Debugln(k.uniKey, "kicking", "retry")
+		if this.cmdQueue.queue.Len() > maxPendingCmdCountPerKv {
 			op.reply(errcode.ERR_RETRY, nil, 0)
+			return
 		}
 
-		if k.cmdQueue.queue.Len() > maxPendingCmdCountPerKv {
-			op.reply(errcode.ERR_RETRY, nil, 0)
-		}
-
-		k.cmdQueue.append(op)
-
-		fullReturn = true
+		this.cmdQueue.append(op)
 
 	} else {
-		k.cmdQueue.unlock()
+		this.cmdQueue.unlock()
 	}
 
-	if k.cmdQueue.isLocked() || k.cmdQueue.empty() {
+	if this.cmdQueue.isLocked() || this.cmdQueue.empty() {
 		return
 	}
 
-	var asynTask asynCmdTaskI
 	flagPop := false
 
 	cmd := this.cmdQueue.front()
@@ -359,19 +333,17 @@ func (this *kv) processCmd(op commandI) {
 loopEnd:
 
 	if nil == asynTask {
-		if this.getStatus() == cache_new {
-			this.store.removeKvNoLock(this)
-		}
 		return
 	}
 
 	if this.getStatus() == cache_new {
-		if !this.store.getKvNode().sqlMgr.pushLoadReq(asynTask, fullReturn) {
-			if this.getStatus() == cache_new {
-				for _, v := range asynTask.getCommands() {
-					v.reply(errcode.ERR_RETRY, nil, -1)
-				}
-				this.store.removeKvNoLock(this)
+		/*
+		 *   op != nil表示调用直接来自网络连接
+		 *   此时如果load队列满会直接返回false,向客户端返回retry
+		 */
+		if !this.store.getKvNode().sqlMgr.pushLoadReq(asynTask, op != nil) {
+			for _, v := range asynTask.getCommands() {
+				v.reply(errcode.ERR_RETRY, nil, -1)
 			}
 		} else {
 			this.cmdQueue.lock()
@@ -382,9 +354,11 @@ loopEnd:
 		case *asynCmdTaskGet:
 			this.store.issueReadReq(asynTask)
 		case *asynCmdTaskKick:
-			if !this.store.kickNoLock(asynTask.(*asynCmdTaskKick)) {
-				asynTask.reply(errcode.ERR_RETRY)
-				callProcessAgain = true
+			if this.getStatus() == cache_new {
+				removeKv = true
+				this.setStatus(cache_remove)
+			} else {
+				callKick = true
 			}
 		default:
 			this.store.issueUpdate(asynTask)

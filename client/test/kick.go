@@ -14,9 +14,20 @@ func main() {
 
 	c := kclient.OpenClient(os.Args[1], false)
 
-	c.Get("users1", "sniperHW", "name", "age", "phone").Exec()
+	//c.GetAll("users1", "sniperHW").Exec()
 
-	r1 := c.Kick("users1", "sniperHW").Exec()
+	c.Kick("users1", "sniperHW").AsyncExec(func(r *kclient.StatusResult) {
+		fmt.Println("kick", errcode.GetErrorStr(r.ErrCode))
+	})
+
+	//c.GetAll("users1", "sniperHW").AsyncExec(func(r *kclient.SliceResult) {
+	//	fmt.Println(errcode.GetErrorStr(r.ErrCode))
+	//})
+
+	r := c.GetAll("users1", "sniperHW").Exec()
+	fmt.Println("get", errcode.GetErrorStr(r.ErrCode))
+
+	/*r1 := c.Kick("users1", "sniperHW").Exec()
 	fmt.Println(errcode.GetErrorStr(r1.ErrCode))
 
 	r2 := c.Kick("users1", "sniperHW").Exec()
@@ -29,5 +40,6 @@ func main() {
 	}
 
 	fmt.Println(r3.Fields["name"].GetValue(), r3.Fields["age"].GetValue(), r3.Fields["phone"].GetValue())
+	*/
 
 }

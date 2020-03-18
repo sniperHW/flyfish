@@ -150,6 +150,8 @@ func get(n *KVNode, cli *cliConn, msg *codec.Message) {
 		return
 	}
 
+	Debugln("cmdGet")
+
 	kv.processCmd(op)
 
 }

@@ -27,7 +27,7 @@ type asynTaskKick struct {
 
 func (this *asynTaskKick) done() {
 	Debugln("kick done set cache_remove", this.kv.uniKey)
-	this.kv.store.removeKv(this.kv)
+	this.kv.store.removeKv(this.kv, true)
 }
 
 func (this *asynTaskKick) onError(errno int32) {
@@ -51,9 +51,8 @@ var snapGroupSize int = 129
 // a key-value store backed by raft
 type kvstore struct {
 	sync.Mutex
-	proposeC *util.BlockQueue
-	readReqC *util.BlockQueue
-	//tmp          map[string]*kv
+	proposeC     *util.BlockQueue
+	readReqC     *util.BlockQueue
 	elements     map[string]*kv
 	kvNode       *KVNode
 	stop         func()
@@ -73,66 +72,39 @@ func (this *kvstore) getRaftNode() *raftNode {
 	return this.rn
 }
 
-func (this *kvstore) removeKv(k *kv) {
+func (this *kvstore) removeKv(k *kv, callByKick bool) {
+
+	callProcessAgain := false
+
 	this.Lock()
 	k.Lock()
 	defer func() {
 		k.Unlock()
 		this.Unlock()
+		if callProcessAgain {
+			Debugln("callProcessAgain")
+			k.processCmd(nil)
+		}
 	}()
 
-	k.setStatus(cache_remove)
-	for cmd := k.cmdQueue.popFront(); nil != cmd; {
-		cmd.reply(errcode.ERR_RETRY, nil, 0)
+	if callByKick {
+		if !k.cmdQueue.empty() {
+			k.resetStatus()
+			callProcessAgain = true
+		} else {
+			k.setStatus(cache_remove)
+			this.removeLRU(k)
+			delete(this.elements, k.uniKey)
+		}
+	} else {
+		k.setStatus(cache_remove)
+		for cmd := k.cmdQueue.popFront(); nil != cmd; {
+			cmd.reply(errcode.ERR_RETRY, nil, 0)
+		}
+		this.removeLRU(k)
+		delete(this.elements, k.uniKey)
 	}
-
-	this.removeLRU(k)
-	delete(this.elements, k.uniKey)
 }
-
-func (this *kvstore) removeKvNoLock(k *kv) {
-	k.setStatus(cache_remove)
-	for cmd := k.cmdQueue.popFront(); nil != cmd; {
-		cmd.reply(errcode.ERR_RETRY, nil, 0)
-	}
-
-	this.removeLRU(k)
-	delete(this.elements, k.uniKey)
-}
-
-/*func (this *kvstore) removeTmpKvNoLock(k *kv) {
-	k.setStatus(cache_remove)
-	for cmd := k.cmdQueue.popFront(); nil != cmd; {
-		cmd.reply(errcode.ERR_RETRY, nil, 0)
-	}
-	delete(this.tmp, k.uniKey)
-}
-
-func (this *kvstore) removeTmpKv(k *kv) {
-	this.Lock()
-	k.Lock()
-
-	defer func() {
-		k.Unlock()
-		this.Unlock()
-	}()
-
-	k.setStatus(cache_remove)
-	for cmd := k.cmdQueue.popFront(); nil != cmd; {
-		cmd.reply(errcode.ERR_RETRY, nil, 0)
-	}
-
-	delete(this.tmp, k.uniKey)
-}
-
-func (this *kvstore) moveTmpkv2OK(kv *kv) {
-	this.Lock()
-	defer this.Unlock()
-
-	delete(this.tmp, kv.uniKey)
-	this.elements[kv.uniKey] = kv
-	this.updateLRU(kv)
-}*/
 
 //发起一致读请求
 func (this *kvstore) issueReadReq(task asynCmdTaskI) {
@@ -174,22 +146,33 @@ func (this *kvstore) doLRU() {
 		MaxCachePerGroupSize := conf.GetConfig().MaxCachePerGroupSize
 		if this.lruHead.nnext != &this.lruTail {
 			kv := this.lruTail.pprev
+			prev := kv.pprev
 			count := 0
 			for len(this.elements)-count > MaxCachePerGroupSize {
 				if kv == &this.lruHead {
 					return
 				}
-				if !this.tryKick(kv) {
+
+				ok, removeDirect := this.tryKick(kv)
+				if !ok {
 					return
 				}
-				kv = kv.pprev
-				count++
+
+				if removeDirect {
+					this.removeLRU(kv)
+					kv.setStatus(cache_remove)
+					delete(this.elements, kv.uniKey)
+				} else {
+					count++
+				}
+
+				kv = prev
 			}
 		}
 	}
 }
 
-func (this *kvstore) kickNoLock(taskKick *asynCmdTaskKick) bool {
+func (this *kvstore) kick(taskKick *asynCmdTaskKick) bool {
 	kv := taskKick.getKV()
 	kv.setKicking(true)
 	if err := this.proposeC.AddNoWait(taskKick); nil == err {
@@ -199,28 +182,36 @@ func (this *kvstore) kickNoLock(taskKick *asynCmdTaskKick) bool {
 	}
 }
 
-func (this *kvstore) tryKick(kv *kv) bool {
+func (this *kvstore) tryKick(kv *kv) (bool, bool) {
+
+	removeDirect := false
+
 	kv.Lock()
 	defer kv.Unlock()
 	if kv.isKicking() {
-		return true
+		return true, removeDirect
 	}
 
 	if kv.kickable() {
 		kv.setKicking(true)
 	} else {
-		return false
+		return false, removeDirect
+	}
+
+	if kv.getStatus() == cache_new {
+		removeDirect = true
+		return true, removeDirect
 	}
 
 	if err := this.proposeC.AddNoWait(&asynTaskKick{kv: kv}); nil == err {
-		return true
+		return true, removeDirect
 	} else {
 		kv.setKicking(false)
-		return false
+		return false, removeDirect
 	}
 }
 
-func (this *kvstore) apply(data []byte) bool {
+func (this *kvstore) apply(data []byte, snapshot bool) bool {
 
 	compressFlag := binary.BigEndian.Uint16(data[:2])
 
@@ -241,6 +232,12 @@ func (this *kvstore) apply(data []byte) bool {
 
 	this.Lock()
 	defer this.Unlock()
+
+	if snapshot {
+		this.elements = map[string]*kv{}
+		this.lruHead.nnext = &this.lruTail
+		this.lruTail.pprev = &this.lruHead
+	}
 
 	var p *proposal
 	for offset < s.Len() {
@@ -284,8 +281,6 @@ func (this *kvstore) apply(data []byte) bool {
 					this.elements[unikey] = kv
 				}
 
-				kv.Lock()
-
 				if version == 0 {
 					kv.setStatus(cache_missing)
 					kv.fields = nil
@@ -307,7 +302,6 @@ func (this *kvstore) apply(data []byte) bool {
 				}
 				kv.setSnapshoted(true)
 
-				kv.Unlock()
 				this.updateLRU(kv)
 			}
 		default:
@@ -331,7 +325,7 @@ func (this *kvstore) readCommits(snapshotter *snap.Snapshotter, commitC <-chan i
 					Fatalln(err)
 				} else {
 					Infof("loading snapshot at term %d and index %d", snapshot.Metadata.Term, snapshot.Metadata.Index)
-					if !this.apply(snapshot.Data[8:]) {
+					if !this.apply(snapshot.Data[8:], true) {
 						Fatalln("recoverFromSnapshot failed")
 					}
 				}
