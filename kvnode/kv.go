@@ -274,7 +274,7 @@ func (this *kv) processCmd(op commandI) {
 				this.processCmd(nil)
 			}
 		} else if issueUpdate {
-			this.store.issueReadReq(asynTask)
+			this.store.issueUpdate(asynTask)
 		} else if issueReadReq {
 			this.store.issueReadReq(asynTask)
 		}
