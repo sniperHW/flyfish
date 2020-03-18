@@ -108,7 +108,7 @@ type kv struct {
 	pprev        *kv
 }
 
-var maxPendingCmdCount int64 = int64(500000) //整个物理节点待处理的命令上限
+var maxPendingCmdCount int64 = int64(200000) //整个物理节点待处理的命令上限
 var maxPendingCmdCountPerKv int = 1000       //单个kv待处理命令上限
 
 func (this *kv) resetStatus() {
@@ -276,13 +276,13 @@ func (this *kv) processCmd(op commandI) {
 
 	if nil != op {
 
-		if atomic.LoadInt64(&wait4ReplyCount) > 500000 {
+		if this.getStatus() == cache_remove {
+			Debugln(this.uniKey, "cache_remove", "retry")
 			op.reply(errcode.ERR_RETRY, nil, 0)
 			return
 		}
 
-		if this.getStatus() == cache_remove {
-			Debugln(this.uniKey, "cache_remove", "retry")
+		if atomic.LoadInt64(&wait4ReplyCount) > 500000 {
 			op.reply(errcode.ERR_RETRY, nil, 0)
 			return
 		}
