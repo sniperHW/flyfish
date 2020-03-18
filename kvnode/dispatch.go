@@ -32,6 +32,7 @@ func (this *dispatcher) Dispatch(kvnode *KVNode, session kendynet.StreamSession,
 		if ok {
 			//投递给线程池处理
 			kvnode.pushNetCmd(handler, session.GetUserData().(*cliConn), msg)
+			//Infoln("pushNetCmd ok")
 			//handler(kvnode, session.GetUserData().(*cliConn), msg)
 		} else {
 			Errorln("invaild cmd", cmd)

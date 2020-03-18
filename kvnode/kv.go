@@ -258,6 +258,8 @@ func (this *kv) processCmd(op commandI) {
 
 	callKick := false
 	removeKv := false
+	issueUpdate := false
+	issueReadReq := false
 
 	this.Lock()
 
@@ -271,6 +273,10 @@ func (this *kv) processCmd(op commandI) {
 				asynTask.reply(errcode.ERR_RETRY)
 				this.processCmd(nil)
 			}
+		} else if issueUpdate {
+			this.store.issueReadReq(asynTask)
+		} else if issueReadReq {
+			this.store.issueReadReq(asynTask)
 		}
 	}()
 
@@ -352,7 +358,7 @@ loopEnd:
 		this.cmdQueue.lock()
 		switch asynTask.(type) {
 		case *asynCmdTaskGet:
-			this.store.issueReadReq(asynTask)
+			issueReadReq = true
 		case *asynCmdTaskKick:
 			if this.getStatus() == cache_new {
 				removeKv = true
@@ -361,7 +367,7 @@ loopEnd:
 				callKick = true
 			}
 		default:
-			this.store.issueUpdate(asynTask)
+			issueUpdate = true
 		}
 	}
 

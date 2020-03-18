@@ -160,6 +160,8 @@ func (this *KVNode) Start(id *int, cluster *string) error {
 		go poolRoutine(this, cmdChan)
 	}
 
+	Infoln("len(cmdChan)", len(this.cmdChan))
+
 	go func() {
 		err := this.startListener()
 		if nil != err {
