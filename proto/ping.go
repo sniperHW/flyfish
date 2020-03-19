@@ -4,4 +4,4 @@ import (
 	"time"
 )
 
-const PingTime = 5 * time.Second
+const PingTime = 15 * time.Second

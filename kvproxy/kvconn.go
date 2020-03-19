@@ -1,10 +1,12 @@
 package kvproxy
 
 import (
+	"github.com/sniperHW/flyfish/codec"
 	protocol "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/login"
 	"github.com/sniperHW/kendynet"
 	connector "github.com/sniperHW/kendynet/socket/connector/tcp"
+	"github.com/sniperHW/kendynet/timer"
 	"sync"
 	"time"
 )
@@ -26,6 +28,8 @@ type Conn struct {
 	pendingSend []*pendingMsg
 	compress    bool
 	proxy       *kvproxy
+	timer       *timer.Timer
+	nextPing    time.Time
 }
 
 func openConn(proxy *kvproxy, serverID int, addr string, compress bool) *Conn {
@@ -35,6 +39,7 @@ func openConn(proxy *kvproxy, serverID int, addr string, compress bool) *Conn {
 		pendingSend: []*pendingMsg{},
 		compress:    compress,
 		proxy:       proxy,
+		nextPing:    time.Now().Add(protocol.PingTime),
 	}
 	return c
 }
@@ -71,6 +76,7 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 
 	this.Lock()
 	this.session = session
+	session.SetRecvTimeout(protocol.PingTime * 2)
 	this.session.SetSendQueueSize(maxSendQueueSize)
 	this.session.SetReceiver(NewReceiver())
 
@@ -78,6 +84,10 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 		this.Lock()
 		defer this.Unlock()
 		this.session = nil
+		if nil != this.timer {
+			this.timer.Cancel()
+			this.timer = nil
+		}
 	})
 
 	this.session.Start(func(event *kendynet.Event) {
@@ -100,7 +110,18 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 
 	this.pendingSend = []*pendingMsg{}
 
+	//不主动发心跳，如果空闲就让服务器释放连接
+	/*this.timer = timer.Repeat(time.Second, nil, func(t *timer.Timer, _ interface{}) {
+		now := time.Now()
+		this.nextPing = now.Add(protocol.PingTime)
+		req := codec.NewMessage(codec.CommonHead{}, &protocol.PingReq{
+			Timestamp: now.UnixNano(),
+		})
+		session.Send(req)
+	}, nil)*/
+
 	this.Unlock()
+
 }
 
 func (this *Conn) dial() {

@@ -86,19 +86,16 @@ func kick(n *KVNode, cli *cliConn, msg *codec.Message) {
 		},
 	}
 
-	var kv *kv
-
 	table, key := head.SplitUniKey()
 
-	Debugln("cmdKick")
-
-	if kv = n.storeMgr.getkvOnly(table, key, head.UniKey); nil == kv {
+	if kv := n.storeMgr.getkvOnly(table, key, head.UniKey); nil == kv {
 		op.reply(errcode.ERR_OK, nil, 0)
 		return
+	} else {
+
+		op.kv = kv
+
+		kv.processCmd(op)
 	}
-
-	op.kv = kv
-
-	kv.processCmd(op)
 
 }

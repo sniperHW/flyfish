@@ -495,9 +495,9 @@ func (this *Conn) onReloadTableConfResp(c *cmdContext, errCode int32, resp *prot
 func (this *Conn) onMessage(msg *codec.Message) {
 	this.eventQueue.Post(func() {
 		head := msg.GetHead()
+		cmd := protocol.CmdType(msg.GetCmd())
 		c := this.removeContext(head.Seqno)
 		if nil != c {
-			cmd := protocol.CmdType(msg.GetCmd())
 			switch cmd {
 			case protocol.CmdType_Get:
 				this.onGetResp(c, head.ErrCode, msg.GetData().(*protocol.GetResp))
@@ -522,7 +522,9 @@ func (this *Conn) onMessage(msg *codec.Message) {
 			default:
 			}
 		} else {
-			Infoln("got response but ret timeout remove")
+			if cmd != protocol.CmdType_Ping {
+				Infoln("got response but ret timeout remove")
+			}
 		}
 	})
 

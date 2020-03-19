@@ -120,38 +120,33 @@ func get(n *KVNode, cli *cliConn, msg *codec.Message) {
 		fields: map[string]*proto.Field{},
 	}
 
-	var err int32
-
-	var kv *kv
-
 	table, key := head.SplitUniKey()
 
-	if kv, err = n.storeMgr.getkv(table, key, head.UniKey); errcode.ERR_OK != err {
+	if kv, err := n.storeMgr.getkv(table, key, head.UniKey); errcode.ERR_OK != err {
 		op.reply(err, nil, 0)
 		return
-	}
+	} else {
 
-	op.kv = kv
+		op.kv = kv
 
-	if req.GetAll() {
-		for _, name := range op.kv.meta.GetQueryMeta().GetFieldNames() {
-			if name != "__key__" && name != "__version__" {
+		if req.GetAll() {
+			for _, name := range op.kv.meta.GetQueryMeta().GetFieldNames() {
+				if name != "__key__" && name != "__version__" {
+					op.fields[name] = proto.PackField(name, nil)
+				}
+			}
+		} else {
+			for _, name := range req.GetFields() {
 				op.fields[name] = proto.PackField(name, nil)
 			}
 		}
-	} else {
-		for _, name := range req.GetFields() {
-			op.fields[name] = proto.PackField(name, nil)
+
+		if !kv.meta.CheckGet(op.fields) {
+			op.reply(errcode.ERR_INVAILD_FIELD, nil, 0)
+			return
 		}
+
+		kv.processCmd(op)
 	}
-
-	if !kv.meta.CheckGet(op.fields) {
-		op.reply(errcode.ERR_INVAILD_FIELD, nil, 0)
-		return
-	}
-
-	Debugln("cmdGet")
-
-	kv.processCmd(op)
 
 }

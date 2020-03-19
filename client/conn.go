@@ -27,6 +27,8 @@ type Conn struct {
 	eventQueue  *event.EventQueue     //此客户端的主处理队列
 	dialing     bool
 	c           *Client
+	nextPing    time.Time
+	timer       *timer.Timer
 }
 
 func openConn(cli *Client, addr string) *Conn {
@@ -37,10 +39,13 @@ func openConn(cli *Client, addr string) *Conn {
 		minheap:     util.NewMinHeap(1024),
 		pendingSend: []*cmdContext{},
 		c:           cli,
+		nextPing:    time.Now().Add(protocol.PingTime),
 	}
 	go c.eventQueue.Run()
-	timer.Repeat(time.Duration(100)*time.Millisecond, c.eventQueue, func(_ *timer.Timer, _ interface{}) {
+	c.timer = timer.Repeat(time.Duration(100)*time.Millisecond, c.eventQueue, func(_ *timer.Timer, _ interface{}) {
 		now := time.Now()
+		//不主动发心跳，如果空闲就让服务器释放连接
+		//c.ping(&now)
 		c.checkTimeout(&now)
 	}, nil)
 	return c
@@ -70,15 +75,17 @@ func (this *Conn) checkTimeout(now *time.Time) {
 	}
 }
 
-/*func (this *Conn) ping(now *time.Time) {
+func (this *Conn) ping(now *time.Time) {
 	if nil != this.session && now.After(this.nextPing) {
 		this.nextPing = now.Add(protocol.PingTime)
+
 		req := codec.NewMessage(codec.CommonHead{}, &protocol.PingReq{
 			Timestamp: now.UnixNano(),
 		})
+
 		this.session.Send(req)
 	}
-}*/
+}
 
 func (this *Conn) removeContext(seqno int64) *cmdContext {
 	c := this.waitResp[seqno]

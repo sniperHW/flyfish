@@ -16,9 +16,9 @@ func main() {
 
 	//c.GetAll("users1", "sniperHW").Exec()
 
-	c.Kick("users1", "sniperHW").AsyncExec(func(r *kclient.StatusResult) {
-		fmt.Println("kick", errcode.GetErrorStr(r.ErrCode))
-	})
+	//c.Kick("users1", "sniperHW").AsyncExec(func(r *kclient.StatusResult) {
+	//	fmt.Println("kick", errcode.GetErrorStr(r.ErrCode))
+	//})
 
 	//c.GetAll("users1", "sniperHW").AsyncExec(func(r *kclient.SliceResult) {
 	//	fmt.Println(errcode.GetErrorStr(r.ErrCode))
@@ -26,6 +26,10 @@ func main() {
 
 	r := c.GetAll("users1", "sniperHW").Exec()
 	fmt.Println("get", errcode.GetErrorStr(r.ErrCode))
+
+	cc := make(chan struct{})
+
+	_ = <-cc
 
 	/*r1 := c.Kick("users1", "sniperHW").Exec()
 	fmt.Println(errcode.GetErrorStr(r1.ErrCode))

@@ -95,11 +95,10 @@ func (this *reqProcessor) onReq(seqno int64, session kendynet.StreamSession, req
 
 	if cmd == uint16(protocol.CmdType_Ping) {
 		//返回心跳
-		//pbdata,
-		//resp := codec.NewMessage(codec.CommonHead{Seqno: oriSeqno}, &protocol.PingResp{
-		//	Timestamp: req.GetTimestamp(),
-		//})
-		//session.Send(resp)
+		resp := codec.NewMessage(codec.CommonHead{}, &protocol.PingResp{
+			Timestamp: time.Now().UnixNano(),
+		})
+		session.Send(resp)
 		return
 	}
 
@@ -262,6 +261,8 @@ func (this *kvproxy) Start() error {
 				session.Close("login failed", 0)
 				return
 			}
+
+			session.SetRecvTimeout(protocol.PingTime * 2)
 
 			session.SetUserData(loginReq.GetCompress())
 

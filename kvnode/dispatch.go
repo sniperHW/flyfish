@@ -6,6 +6,7 @@ import (
 	"github.com/sniperHW/kendynet"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 var sessions sync.Map
@@ -28,12 +29,18 @@ func (this *dispatcher) Register(cmd uint16, h handler) {
 
 func (this *dispatcher) Dispatch(kvnode *KVNode, session kendynet.StreamSession, cmd uint16, msg *codec.Message) {
 	if nil != msg {
+		if cmd == uint16(proto.CmdType_Ping) {
+			resp := codec.NewMessage(codec.CommonHead{}, &proto.PingResp{
+				Timestamp: time.Now().UnixNano(),
+			})
+			session.Send(resp)
+			return
+		}
+
 		handler, ok := this.handlers[cmd]
 		if ok {
 			//投递给线程池处理
 			kvnode.pushNetCmd(handler, session.GetUserData().(*cliConn), msg)
-			//Infoln("pushNetCmd ok")
-			//handler(kvnode, session.GetUserData().(*cliConn), msg)
 		} else {
 			Errorln("invaild cmd", cmd)
 		}

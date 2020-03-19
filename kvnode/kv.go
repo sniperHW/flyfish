@@ -118,6 +118,11 @@ func (this *kv) resetStatus() {
 	this.setStatus(cache_new)
 }
 
+func (this *kv) getFlagValue(field bitfield.Field32) uint32 {
+	v, _ := this.flag.Get(field)
+	return v
+}
+
 func (this *kv) getMeta() *dbmeta.TableMeta {
 	return (*dbmeta.TableMeta)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&this.meta))))
 }
@@ -127,8 +132,7 @@ func (this *kv) setSqlFlag(sqlFlag uint32) {
 }
 
 func (this *kv) getSqlFlag() uint32 {
-	v, _ := this.flag.Get(field_sql_flag)
-	return v
+	return this.getFlagValue(field_sql_flag)
 }
 
 func (this *kv) setStatus(status uint32) {
@@ -136,8 +140,7 @@ func (this *kv) setStatus(status uint32) {
 }
 
 func (this *kv) getStatus() uint32 {
-	status, _ := this.flag.Get(field_status)
-	return status
+	return this.getFlagValue(field_status)
 }
 
 func (this *kv) setKicking(kicking bool) {
@@ -149,8 +152,7 @@ func (this *kv) setKicking(kicking bool) {
 }
 
 func (this *kv) isKicking() bool {
-	v, _ := this.flag.Get(field_kicking)
-	return v == uint32(1)
+	return this.getFlagValue(field_kicking) == uint32(1)
 }
 
 func (this *kv) setWriteBack(writeback bool) {
@@ -162,8 +164,7 @@ func (this *kv) setWriteBack(writeback bool) {
 }
 
 func (this *kv) isWriteBack() bool {
-	v, _ := this.flag.Get(field_writeback)
-	return v == uint32(1)
+	return this.getFlagValue(field_writeback) == uint32(1)
 }
 
 func (this *kv) setSnapshoted(snapshoted bool) {
@@ -175,15 +176,14 @@ func (this *kv) setSnapshoted(snapshoted bool) {
 }
 
 func (this *kv) isSnapshoted() bool {
-	v, _ := this.flag.Get(field_snapshoted)
-	return v == uint32(1)
+	return this.getFlagValue(field_snapshoted) == uint32(1)
 }
 
 func (this *kv) kickable() bool {
 
 	status := this.getStatus()
 
-	if !(status == cache_ok || status == cache_missing || status == cache_new) {
+	if status == cache_remove {
 		return false
 	}
 

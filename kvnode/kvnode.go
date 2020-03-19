@@ -80,8 +80,7 @@ func (this *KVNode) startListener() error {
 				return
 			}
 
-			//session.SetRecvTimeout(protocol.PingTime * 2)
-
+			session.SetRecvTimeout(protocol.PingTime * 2)
 			session.SetSendQueueSize(10000)
 
 			//只有配置了压缩开启同时客户端支持压缩才开启通信压缩
