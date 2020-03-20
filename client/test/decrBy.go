@@ -19,8 +19,8 @@ func main() {
 	fields["phone"] = "123456"
 	fields["name"] = "sniperHW"
 
-	r2 := c.Set("users1", "sniperHW", fields).Exec()
-	if r2.ErrCode != errcode.ERR_OK {
+	r2 := c.SetNx("users1", "sniperHW", fields).Exec()
+	if !(r2.ErrCode == errcode.ERR_OK || r2.ErrCode == errcode.ERR_RECORD_EXIST) {
 		fmt.Println("Set error:", errcode.GetErrorStr(r2.ErrCode))
 		return
 	}
@@ -32,7 +32,7 @@ func main() {
 	}
 
 	r4 := c.Get("users1", "sniperHW", "age").Exec()
-
+	fmt.Println(r3.Fields["age"].GetInt())
 	fmt.Println(r4.Fields["age"].GetInt())
 
 }

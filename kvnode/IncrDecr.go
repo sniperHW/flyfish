@@ -77,14 +77,21 @@ func (this *cmdIncrDecr) reply(errCode int32, fields map[string]*proto.Field, ve
 func (this *cmdIncrDecr) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) *codec.Message {
 
 	var pbdata pb.Message
+	var field *proto.Field
+
+	if errcode.ERR_OK == errCode {
+		field = fields[this.field.GetName()]
+	}
 
 	if this.isIncr {
 		pbdata = &proto.IncrByResp{
 			Version: version,
+			Field:   field,
 		}
 	} else {
 		pbdata = &proto.DecrByResp{
 			Version: version,
+			Field:   field,
 		}
 	}
 

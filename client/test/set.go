@@ -21,7 +21,7 @@ func main() {
 
 	fields := map[string]interface{}{}
 	fields["age"] = 12
-	fields["blob"] = buff
+	//go fields["blob"] = buff
 	fields["name"] = "sniperHW"
 
 	r2 := c.Set("users1", "sniperHW", fields).Exec()
@@ -29,7 +29,7 @@ func main() {
 		fmt.Println("Set error:", errcode.GetErrorStr(r2.ErrCode))
 	}
 
-	r3 := c.Get("users1", "sniperHW", "name", "phone", "age", "blob").Exec()
+	r3 := c.Get("users1", "sniperHW", "name", "phone", "age").Exec()
 
 	if r3.ErrCode != errcode.ERR_OK {
 		fmt.Println("Get error:", errcode.GetErrorStr(r3.ErrCode))
@@ -37,7 +37,7 @@ func main() {
 		fmt.Println(r3.Fields["name"].GetString())
 		fmt.Println(r3.Fields["phone"].GetString())
 		fmt.Println(r3.Fields["age"].GetInt())
-		fmt.Println(binary.BigEndian.Uint32(r3.Fields["blob"].GetBlob()))
+		//fmt.Println(binary.BigEndian.Uint32(r3.Fields["blob"].GetBlob()))
 		fmt.Println("version", r3.Version)
 	}
 

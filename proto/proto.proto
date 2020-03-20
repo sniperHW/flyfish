@@ -138,7 +138,8 @@ message incr_by_req {
 }
 
 message incr_by_resp {
-  optional int64  version = 1;   
+  optional int64  version = 1;
+  optional field  field   = 2;    
 }
 
 /*
@@ -151,7 +152,8 @@ message decr_by_req {
 }
 
 message decr_by_resp {
-  optional int64  version = 1;   
+  optional int64  version = 1;  
+  optional field  field   = 2; 
 }
 
 /*

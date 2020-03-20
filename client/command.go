@@ -303,7 +303,7 @@ func (this *Conn) Del(table, key string, version ...int64) *StatusCmd {
 
 }
 
-func (this *Conn) IncrBy(table, key, field string, value int64, version ...int64) *StatusCmd {
+func (this *Conn) IncrBy(table, key, field string, value int64, version ...int64) *SliceCmd {
 	pbdata := &protocol.IncrByReq{
 		Field: protocol.PackField(field, value),
 	}
@@ -318,13 +318,13 @@ func (this *Conn) IncrBy(table, key, field string, value int64, version ...int64
 		Timeout: ClientTimeout,
 	}, pbdata)
 
-	return &StatusCmd{
+	return &SliceCmd{
 		conn: this,
 		req:  req,
 	}
 }
 
-func (this *Conn) DecrBy(table, key, field string, value int64, version ...int64) *StatusCmd {
+func (this *Conn) DecrBy(table, key, field string, value int64, version ...int64) *SliceCmd {
 	pbdata := &protocol.DecrByReq{
 		Field: protocol.PackField(field, value),
 	}
@@ -339,7 +339,7 @@ func (this *Conn) DecrBy(table, key, field string, value int64, version ...int64
 		Timeout: ClientTimeout,
 	}, pbdata)
 
-	return &StatusCmd{
+	return &SliceCmd{
 		conn: this,
 		req:  req,
 	}
@@ -455,9 +455,14 @@ func (this *Conn) onDelResp(c *cmdContext, errCode int32, resp *protocol.DelResp
 
 func (this *Conn) onIncrByResp(c *cmdContext, errCode int32, resp *protocol.IncrByResp) {
 
-	ret := StatusResult{
+	ret := SliceResult{
 		ErrCode: errCode,
 		Version: resp.GetVersion(),
+	}
+
+	if ret.ErrCode == errcode.ERR_OK {
+		ret.Fields = map[string]*Field{}
+		ret.Fields[resp.GetField().GetName()] = (*Field)(resp.GetField())
 	}
 
 	this.c.doCallBack(c.unikey, c.cb, &ret)
@@ -465,9 +470,14 @@ func (this *Conn) onIncrByResp(c *cmdContext, errCode int32, resp *protocol.Incr
 
 func (this *Conn) onDecrByResp(c *cmdContext, errCode int32, resp *protocol.DecrByResp) {
 
-	ret := StatusResult{
+	ret := SliceResult{
 		ErrCode: errCode,
 		Version: resp.GetVersion(),
+	}
+
+	if ret.ErrCode == errcode.ERR_OK {
+		ret.Fields = map[string]*Field{}
+		ret.Fields[resp.GetField().GetName()] = (*Field)(resp.GetField())
 	}
 
 	this.c.doCallBack(c.unikey, c.cb, &ret)

@@ -20,8 +20,8 @@ func main() {
 	fields["name"] = "sniperHW"
 
 	//不存在技术sniperHW SetNx成功
-	r2 := c.Set("users1", "sniperHW", fields).Exec()
-	if r2.ErrCode != errcode.ERR_OK {
+	r2 := c.SetNx("users1", "sniperHW", fields).Exec()
+	if !(r2.ErrCode == errcode.ERR_OK || r2.ErrCode == errcode.ERR_RECORD_EXIST) {
 		fmt.Println("Set error:", errcode.GetErrorStr(r2.ErrCode))
 		return
 	}
@@ -31,6 +31,7 @@ func main() {
 		fmt.Println("IncrBy1 error:", errcode.GetErrorStr(r3.ErrCode))
 		return
 	}
+	fmt.Println(r3.Fields["age"].GetInt())
 
 	r4 := c.Get("users1", "sniperHW", "age").Exec()
 

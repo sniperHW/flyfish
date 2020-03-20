@@ -104,12 +104,12 @@ func (this *mutilRaft) Handler() http.Handler {
 func (this *mutilRaft) serveMutilRaft(urlStr string) {
 	url, err := url.Parse(urlStr)
 	if err != nil {
-		Fatalln("raftexample: Failed parsing URL (%v)", err)
+		Fatalln("raftexample: Failed parsing URL", err)
 	}
 
 	ln, err := newStoppableListener(url.Host, this.httpstopc)
 	if err != nil {
-		Fatalln("raftexample: Failed to listen rafthttp (%v)", err)
+		Fatalln("raftexample: Failed to listen rafthttp", err)
 	}
 
 	Infoln("serve", urlStr)
@@ -119,7 +119,7 @@ func (this *mutilRaft) serveMutilRaft(urlStr string) {
 	select {
 	case <-this.httpstopc:
 	default:
-		Fatalln("raftexample: Failed to serve rafthttp (%v)", err)
+		Fatalln("raftexample: Failed to serve rafthttp", err)
 	}
 
 	close(this.httpdonec)

@@ -14,6 +14,17 @@ var (
 	defConfig *Config
 )
 
+func LoadConfigStr(str string) error {
+	config := &Config{}
+	_, err := toml.Decode(str, config)
+	if nil != err {
+		return err
+	} else {
+		atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&defConfig)), unsafe.Pointer(config))
+		return nil
+	}
+}
+
 func LoadConfig(path string) error {
 	config := &Config{}
 	_, err := toml.DecodeFile(path, config)

@@ -90,11 +90,11 @@ func (this *Client) Del(table, key string, version ...int64) *StatusCmd {
 	return this.conn.Del(table, key, version...)
 }
 
-func (this *Client) IncrBy(table, key, field string, value int64, version ...int64) *StatusCmd {
+func (this *Client) IncrBy(table, key, field string, value int64, version ...int64) *SliceCmd {
 	return this.conn.IncrBy(table, key, field, value, version...)
 }
 
-func (this *Client) DecrBy(table, key, field string, value int64, version ...int64) *StatusCmd {
+func (this *Client) DecrBy(table, key, field string, value int64, version ...int64) *SliceCmd {
 	return this.conn.DecrBy(table, key, field, value, version...)
 }
 
