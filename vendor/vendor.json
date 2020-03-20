@@ -37,6 +37,12 @@
 			"revisionTime": "2019-08-24T19:27:53Z"
 		},
 		{
+			"checksumSHA1": "CSPbwbyzqA6sfORicn4HFtIhF/c=",
+			"path": "github.com/davecgh/go-spew/spew",
+			"revision": "d8f796af33cc11cb798c1aaeb27a4ebc5099927d",
+			"revisionTime": "2018-08-30T19:11:22Z"
+		},
+		{
 			"checksumSHA1": "m0aZ8GAvw057iz4XwVjcFHKiBxA=",
 			"origin": "go.etcd.io/etcd/vendor/github.com/dustin/go-humanize",
 			"path": "github.com/dustin/go-humanize",
@@ -130,6 +136,12 @@
 			"path": "github.com/mitchellh/colorstring",
 			"revision": "d06e56a500db4d08c33db0b79461e7c9beafca2d",
 			"revisionTime": "2019-02-13T21:29:51Z"
+		},
+		{
+			"checksumSHA1": "LuFv4/jlrmFNnDb/5SCSEPAM9vU=",
+			"path": "github.com/pmezard/go-difflib/difflib",
+			"revision": "5d4384ee4fb2527b0a1256a821ebfc92f91efefc",
+			"revisionTime": "2018-12-26T10:54:42Z"
 		},
 		{
 			"checksumSHA1": "icmn1g0Wk8XKxq9mmnaQ5dctY9E=",
@@ -246,6 +258,12 @@
 			"path": "github.com/sniperHW/kendynet/util",
 			"revision": "1096c50a6d785b85f2f7c4e7b9402accd6d25002",
 			"revisionTime": "2020-02-09T09:47:40Z"
+		},
+		{
+			"checksumSHA1": "uqTJVsJ/tb7FA5JpHtwlAF0ELCk=",
+			"path": "github.com/stretchr/testify/assert",
+			"revision": "b7d60e3a8c98f214225821e939174e8cf76d51ef",
+			"revisionTime": "2020-02-05T20:43:46Z"
 		},
 		{
 			"checksumSHA1": "FavASzhzj5uawgAyMG+00Vcx0po=",
@@ -525,6 +543,12 @@
 			"path": "google.golang.org/grpc/grpclog",
 			"revision": "6f0ae78b399ff5e365c3646e92121e18d5d1a01e",
 			"revisionTime": "2019-08-24T19:27:53Z"
+		},
+		{
+			"checksumSHA1": "mspriBK28mrdRiQNHoThnYEFaeQ=",
+			"path": "gopkg.in/yaml.v2",
+			"revision": "1f64d6156d11335c3f22d9330b0ad14fc1e789ce",
+			"revisionTime": "2019-11-19T21:27:36Z"
 		}
 	],
 	"rootPath": "github.com/sniperHW/flyfish"
