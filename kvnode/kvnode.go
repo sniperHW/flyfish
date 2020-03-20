@@ -231,11 +231,11 @@ func (this *KVNode) Stop() {
 			}
 		})
 
-		this.storeMgr.stop()
-
 		for _, v := range this.cmdChan {
 			close(v)
 		}
+
+		this.storeMgr.stop()
 
 		Infoln("flyfish stop ok")
 

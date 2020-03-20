@@ -81,7 +81,7 @@ type raftNode struct {
 	stopc     chan struct{} // signals proposal channel closed
 
 	//muSnapshotting sync.Mutex
-	snapshotting   bool             //当前是否正在做快照
+	snapshotting   int32            //当前是否正在做快照
 	entries        [][]raftpb.Entry //快照期间无法添加到storage中的[]raftpb.Entry
 	snapshottingOK chan struct{}
 
@@ -522,6 +522,11 @@ func (rc *raftNode) startRaft() {
 
 // stop closes http, closes all channels, and stops raft.
 func (rc *raftNode) stop() {
+
+	for atomic.LoadInt32(&rc.snapshotting) == 1 {
+		time.Sleep(time.Millisecond * 100)
+	}
+
 	rc.readIndexTimer.Cancel()
 	rc.transport.Stop()
 	rc.mutilRaft.removeTransport(types.ID(rc.id))
@@ -559,27 +564,18 @@ func (rc *raftNode) onTriggerSnapshotOK() {
 	}
 	rc.snapshotIndex = rc.appliedIndex
 
-	rc.snapshotting = false
+	rc.snapshotting = 0
 
 }
 
-func (rc *raftNode) maybeTriggerSnapshot() {
-
-	if rc.snapshotting {
-		return
-	}
-
-	if rc.appliedIndex-rc.snapshotIndex <= rc.snapCount {
-		return
-	}
-
+func (rc *raftNode) triggerSnapshot() {
 	clone := rc.getSnapshot()
 
 	if nil == clone {
 		return
 	}
 
-	rc.snapshotting = true
+	rc.snapshotting = 1
 
 	Infof("start snapshot [applied index: %d | last snapshot index: %d]", rc.appliedIndex, rc.snapshotIndex)
 
@@ -632,6 +628,19 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 		rc.snapshottingOK <- struct{}{}
 
 	}()
+}
+
+func (rc *raftNode) maybeTriggerSnapshot() {
+
+	if rc.snapshotting == 1 {
+		return
+	}
+
+	if rc.appliedIndex-rc.snapshotIndex <= rc.snapCount {
+		return
+	}
+
+	rc.triggerSnapshot()
 
 }
 

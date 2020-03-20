@@ -1,6 +1,6 @@
 package kvnode
 
-//go test -run=.
+//go test -covermode=count -v -run=.
 
 import (
 	"encoding/binary"
@@ -9,6 +9,7 @@ import (
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/stretchr/testify/assert"
+	"os"
 	"testing"
 )
 
@@ -16,8 +17,8 @@ import (
 var _sqltype string = "pgsal" //or mysql
 var _host string = "localhost"
 var _port int = 5432
-var _user string = "xxxxx"
-var _password string = "xxxxx"
+var _user string = "sniper"
+var _password string = "802802"
 var _db string = "test"
 
 var configStr string = `
@@ -73,9 +74,16 @@ LogLevel        = "info"
 EnableLogStdout = true	
 `
 
-func init() {
+func TestKvnode(t *testing.T) {
+
+	//先删除所有kv文件
+	os.RemoveAll("./kv-1-1")
+	os.RemoveAll("./kv-1-1-snap")
+
 	conf.LoadConfigStr(fmt.Sprintf(configStr, _sqltype, _host, _port, _user, _password, _db, _host, _port, _user, _password, _db))
+
 	InitLogger()
+
 	cluster := "http://127.0.0.1:12378"
 	id := 1
 
@@ -96,9 +104,6 @@ func init() {
 		}
 		return true
 	})
-}
-
-func TestKvnode(t *testing.T) {
 
 	c := client.OpenClient("localhost:10018", false)
 
@@ -202,5 +207,13 @@ func TestKvnode(t *testing.T) {
 		assert.Equal(t, errcode.ERR_VERSION_MISMATCH, r4.ErrCode)
 
 	}
+
+	node.storeMgr.RLock()
+	for _, v := range node.storeMgr.stores {
+		v.rn.triggerSnapshot()
+	}
+	node.storeMgr.RUnlock()
+
+	node.Stop()
 
 }
