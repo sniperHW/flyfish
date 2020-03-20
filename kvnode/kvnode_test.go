@@ -4,12 +4,21 @@ package kvnode
 
 import (
 	"encoding/binary"
+	"fmt"
 	"github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
+
+//fixed the var below first
+var _sqltype string = "pgsal" //or mysql
+var _host string = "localhost"
+var _port int = 5432
+var _user string = "xxxxx"
+var _password string = "xxxxx"
+var _db string = "test"
 
 var configStr string = `
 CacheGroupSize          = 1                  #cache分组数量，每一个cache组单独管理，以降低处理冲突
@@ -40,33 +49,20 @@ ReadFlushInterval       = 10
 
 
 [DBConfig]
-SqlType         = "pgsql"
+SqlType         = "%s"
 
 
-DbHost          = "localhost"
-DbPort          = 5432
-DbUser			= "sniper"
-DbPassword      = "802802"
-DbDataBase      = "test"
+DbHost          = "%s"
+DbPort          = %d
+DbUser			= "%s"
+DbPassword      = "%s"
+DbDataBase      = "%s"
 
-ConfDbHost      = "localhost"
-ConfDbPort      = 5432
-ConfDbUser      = "sniper"
-ConfDbPassword  = "802802"
-ConfDataBase    = "test"
-
-
-#DbHost          = "10.128.2.166"
-#DbPort          = 5432
-#DbUser			= "dbuser"
-#DbPassword      = "123456"
-#DbDataBase      = "wei"
-
-#ConfDbHost      = "10.128.2.166"
-#ConfDbPort      = 5432
-#ConfDbUser      = "dbuser"
-#ConfDbPassword  = "123456"
-#ConfDataBase    = "wei"
+ConfDbHost      = "%s"
+ConfDbPort      = %d
+ConfDbUser      = "%s"
+ConfDbPassword  = "%s"
+ConfDataBase    = "%s"
 
 
 [Log]
@@ -78,7 +74,7 @@ EnableLogStdout = true
 `
 
 func init() {
-	conf.LoadConfigStr(configStr)
+	conf.LoadConfigStr(fmt.Sprintf(configStr, _sqltype, _host, _port, _user, _password, _db, _host, _port, _user, _password, _db))
 	InitLogger()
 	cluster := "http://127.0.0.1:12378"
 	id := 1
@@ -181,6 +177,29 @@ func TestKvnode(t *testing.T) {
 		r3 := c.DecrBy("users1", "sniperHW", "age", 1).Exec()
 		assert.Equal(t, errcode.ERR_OK, r3.ErrCode)
 		assert.Equal(t, age-1, r3.Fields["age"].GetInt())
+
+	}
+
+	{
+		//version
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		fields["name"] = "sniperHW"
+
+		c.SetNx("users1", "sniperHW", fields).Exec()
+		r1 := c.GetAll("users1", "sniperHW").Exec()
+		assert.Equal(t, errcode.ERR_OK, r1.ErrCode)
+		version := r1.Version
+
+		r2 := c.Set("users1", "sniperHW", fields).Exec()
+		assert.Equal(t, errcode.ERR_OK, r2.ErrCode)
+		assert.Equal(t, version+1, r2.Version)
+
+		r3 := c.GetAllWithVersion("users1", "sniperHW", version+1).Exec()
+		assert.Equal(t, errcode.ERR_RECORD_UNCHANGE, r3.ErrCode)
+
+		r4 := c.Set("users1", "sniperHW", fields, version).Exec()
+		assert.Equal(t, errcode.ERR_VERSION_MISMATCH, r4.ErrCode)
 
 	}
 
