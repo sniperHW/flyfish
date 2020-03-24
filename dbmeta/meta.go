@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"unsafe"
+	//"unsafe"
 )
 
 func convert_string(in interface{}) interface{} {
@@ -32,13 +32,13 @@ func convert_blob(in interface{}) interface{} {
 
 type DBMeta struct {
 	version     int64
-	table_metas *map[string]*TableMeta
+	table_metas atomic.Value
 }
 
 //根据表名获取表格元数据
 func (this *DBMeta) GetTableMeta(table string) *TableMeta {
-	p := (*map[string]*TableMeta)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&this.table_metas))))
-	meta, ok := (*p)[table]
+	p := this.table_metas.Load().(map[string]*TableMeta)
+	meta, ok := p[table]
 	if ok {
 		return meta
 	} else {
@@ -233,7 +233,7 @@ func (this *TableMeta) CheckCompareAndSet(newV *proto.Field, oldV *proto.Field) 
 	return true
 }
 
-func loadMeta(def []string) (*map[string]*TableMeta, error) {
+func loadMeta(def []string) (map[string]*TableMeta, error) {
 	getType := func(str string) proto.ValueType {
 		if str == "int" {
 			return proto.ValueType_int
@@ -424,13 +424,13 @@ func loadMeta(def []string) (*map[string]*TableMeta, error) {
 
 	}
 
-	return &table_metas, nil
+	return table_metas, nil
 }
 
 func (this *DBMeta) Reload(def []string) error {
 	table_metas, err := loadMeta(def)
 	if nil == err {
-		atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&this.table_metas)), unsafe.Pointer(table_metas))
+		this.table_metas.Store(table_metas)
 		atomic.AddInt64(&this.version, 1)
 	}
 	return err
@@ -445,8 +445,8 @@ func NewDBMeta(def []string) (*DBMeta, error) {
 		return nil, err
 	}
 
-	return &DBMeta{
-		version:     1,
-		table_metas: table_metas,
-	}, nil
+	dbmeta := &DBMeta{version: 1}
+	dbmeta.table_metas.Store(table_metas)
+	return dbmeta, nil
+
 }
