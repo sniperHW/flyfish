@@ -35,6 +35,21 @@ kvnode拒绝请求，kvproxy再次向kvpd获取更新信息。
 
 key被计算成一个64位整形值N。kvpd负责把N映射到region。
 
+###kvpd作为kvnode集群控制器
+
+* kvnode向kvpd上报自己的region,以及服务地址。
+* kvpd根据上报的region找到raftgroup,让新的kvnode加入raftgroup(走raft本身的配置变更流程)。
+* kvpd应该尽量让leader均匀分布在不同的节点上，当kvpd发现leader过于集中，选择一个空闲节点，请求原leader通过raft leader转让流程将leader转让到空闲节点上。
+
+###key到region的映射
+
+
+
+
+
+
+
+
 
 
 

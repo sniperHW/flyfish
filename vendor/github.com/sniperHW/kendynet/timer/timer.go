@@ -261,3 +261,17 @@ func Repeat(timeout time.Duration, eventQue *event.EventQueue, callback func(*Ti
 	})
 	return globalMgr.Repeat(timeout, eventQue, callback, ctx)
 }
+
+func OnceWithIndex(timeout time.Duration, eventQue *event.EventQueue, callback func(*Timer, interface{}), ctx interface{}, index uint64) *Timer {
+	once.Do(func() {
+		globalMgr = NewTimerMgr()
+	})
+	return globalMgr.OnceWithIndex(timeout, eventQue, callback, ctx, index)
+}
+
+func GetTimerByIndex(index uint64) *Timer {
+	once.Do(func() {
+		globalMgr = NewTimerMgr()
+	})
+	return globalMgr.GetTimerByIndex(index)
+}

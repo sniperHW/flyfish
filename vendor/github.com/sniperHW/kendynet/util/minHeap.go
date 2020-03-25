@@ -48,7 +48,12 @@ func (h *MinHeap) Insert(e HeapElement) {
 }
 
 func (h *MinHeap) Remove(e HeapElement) {
-	heap.Remove(h, e.GetIndex())
+	index := e.GetIndex()
+	if index >= 0 && len(*h) > index && (*h)[index] == e {
+		heap.Remove(h, index)
+	} else {
+		panic("invaild HeapElement")
+	}
 }
 
 func (h *MinHeap) Min() HeapElement {
