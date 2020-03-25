@@ -1,7 +1,7 @@
 package kvproxy
 
 import (
-	"github.com/sniperHW/flyfish/codec"
+	//"github.com/sniperHW/flyfish/codec"
 	protocol "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/login"
 	"github.com/sniperHW/kendynet"
@@ -104,7 +104,7 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 		if !now.After(v.sendDeadline) {
 			this.session.SendMessage(v.msg)
 		} else {
-			Infoln("sendDeadline")
+			logger.Infoln("sendDeadline")
 		}
 	}
 

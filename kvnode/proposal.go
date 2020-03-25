@@ -178,7 +178,7 @@ func (this *kvstore) issueUpdate(task asynCmdTaskI) {
 		panic("sqlflag == sql_none")
 	}
 
-	Debugln("issueUpdate")
+	logger.Debugln("issueUpdate")
 
 	if !checkAsynCmdTask(task) {
 		task.onError(errcode.ERR_OTHER)

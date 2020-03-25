@@ -26,6 +26,7 @@ func InitLogger() {
 
 }
 
+/*
 func Debugf(format string, v ...interface{}) {
 	if nil != logger {
 		logger.Debugf(format, v...)
@@ -84,4 +85,4 @@ func Fatalln(v ...interface{}) {
 	if nil != logger {
 		logger.Fatalln(v...)
 	}
-}
+}*/

@@ -236,11 +236,11 @@ func (self *Logger) Log(c Color, level Level, format string, v ...interface{}) {
 	}
 
 	if enableStdOut {
-		self.Output(4, prefix, text, c, stdOutLogger)
+		self.Output(3, prefix, text, c, stdOutLogger)
 	}
 
 	if self.fileOutput != nil {
-		self.Output(4, prefix, text, NoColor, self.fileOutput)
+		self.Output(3, prefix, text, NoColor, self.fileOutput)
 	}
 
 	if int(level) >= int(self.panicLevel) {

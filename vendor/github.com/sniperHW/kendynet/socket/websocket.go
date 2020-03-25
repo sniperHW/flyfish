@@ -105,7 +105,7 @@ func (this *WebSocket) sendThreadFunc() {
 				if kendynet.IsNetTimeout(err) {
 					err = kendynet.ErrSendTimeout
 				} else {
-					kendynet.Errorf("websocket write error:%s\n", err.Error())
+					kendynet.GetLogger().Errorf("websocket write error:%s\n", err.Error())
 					this.mutex.Lock()
 					this.flag |= wclosed
 					this.mutex.Unlock()

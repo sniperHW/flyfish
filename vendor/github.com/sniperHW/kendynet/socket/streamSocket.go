@@ -229,7 +229,7 @@ func (this *StreamSocket) sendThreadFunc() {
 						if kendynet.IsNetTimeout(err) {
 							err = kendynet.ErrSendTimeout
 						} else {
-							kendynet.Errorf("writer.Flush error:%s\n", err.Error())
+							kendynet.GetLogger().Errorf("writer.Flush error:%s\n", err.Error())
 							this.mutex.Lock()
 							this.flag |= wclosed
 							this.mutex.Unlock()
@@ -345,7 +345,7 @@ func NewStreamSocket(conn net.Conn) kendynet.StreamSession {
 		case *net.UnixConn:
 			break
 		default:
-			kendynet.Errorf("NewStreamSocket() invaild conn type\n")
+			kendynet.GetLogger().Errorf("NewStreamSocket() invaild conn type\n")
 			return nil
 		}
 

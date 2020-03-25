@@ -13,7 +13,7 @@ func InitLogger(l golog.LoggerI) {
 	kendynet.InitLogger(l)
 }
 
-func Debugf(format string, v ...interface{}) {
+/*func Debugf(format string, v ...interface{}) {
 	if nil != logger {
 		logger.Debugf(format, v...)
 	}
@@ -71,4 +71,4 @@ func Fatalln(v ...interface{}) {
 	if nil != logger {
 		logger.Fatalln(v...)
 	}
-}
+}*/

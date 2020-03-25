@@ -42,10 +42,10 @@ func (this *dispatcher) Dispatch(kvnode *KVNode, session kendynet.StreamSession,
 			//投递给线程池处理
 			kvnode.pushNetCmd(handler, session.GetUserData().(*cliConn), msg)
 		} else {
-			Errorln("invaild cmd", cmd)
+			logger.Errorln("invaild cmd", cmd)
 		}
 	} else {
-		Errorln("msg is nil")
+		logger.Errorln("msg is nil")
 	}
 }
 

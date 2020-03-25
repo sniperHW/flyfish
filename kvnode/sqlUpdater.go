@@ -104,7 +104,7 @@ func (this *sqlUpdater) run() {
 		}
 
 		if closed {
-			Infoln(this.name, "stoped")
+			logger.Infoln(this.name, "stoped")
 			this.sqlMgr.sqlUpdateWg.Done()
 			return
 		}
@@ -118,7 +118,7 @@ func (this *sqlUpdater) append(v interface{}) {
 			//空闲超过5分钟发送ping
 			err := this.db.Ping()
 			if nil != err {
-				Errorln("ping error", err)
+				logger.Errorln("ping error", err)
 			}
 			this.lastTime = time.Now()
 		}
@@ -211,9 +211,9 @@ func (this *sqlUpdater) exec() {
 		if nil == err {
 			break
 		} else {
-			Errorln(str, err)
+			logger.Errorln(str, err)
 			if isRetryError(err) {
-				Errorln("sqlUpdater exec error:", err)
+				logger.Errorln("sqlUpdater exec error:", err)
 				if this.sqlMgr.isStoped() {
 					err = errServerStop
 					break
@@ -228,13 +228,13 @@ func (this *sqlUpdater) exec() {
 				//休眠一秒重试
 				time.Sleep(time.Second)
 			} else {
-				Errorln("sqlUpdater exec error:", err)
+				logger.Errorln("sqlUpdater exec error:", err)
 				break
 			}
 		}
 	}
 
-	Debugln("onSqlResult", err)
+	logger.Debugln("onSqlResult", err)
 
 	this.pending.kvs.ForEach(func(v interface{}) {
 		kv := v.(*kv)

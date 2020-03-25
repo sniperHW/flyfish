@@ -57,7 +57,7 @@ type cmdCompareAndSetNx struct {
 }
 
 func (this *cmdCompareAndSetNx) reply(errCode int32, fields map[string]*proto.Field, version int64) {
-	Debugln("cmdCompareAndSetNx reply", fields)
+	logger.Debugln("cmdCompareAndSetNx reply", fields)
 	this.replyer.reply(this, errCode, fields, version)
 }
 

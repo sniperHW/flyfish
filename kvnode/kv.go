@@ -229,7 +229,7 @@ func (this *kv) setOK(version int64, fields map[string]*proto.Field) {
 		}
 	}
 
-	Debugln("set ok", this.uniKey, this.fields)
+	logger.Debugln("set ok", this.uniKey, this.fields)
 
 }
 
@@ -283,7 +283,7 @@ func (this *kv) processCmd(op commandI) {
 	if nil != op {
 
 		if this.getStatus() == cache_remove {
-			Debugln(this.uniKey, "cache_remove", "retry")
+			logger.Debugln(this.uniKey, "cache_remove", "retry")
 			op.reply(errcode.ERR_RETRY, nil, 0)
 			return
 		}

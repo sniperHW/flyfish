@@ -26,7 +26,7 @@ type asynTaskKick struct {
 }
 
 func (this *asynTaskKick) done() {
-	Debugln("kick done set cache_remove", this.kv.uniKey)
+	logger.Debugln("kick done set cache_remove", this.kv.uniKey)
 	this.kv.store.removeKv(this.kv, true)
 }
 
@@ -82,7 +82,7 @@ func (this *kvstore) removeKv(k *kv, callByKick bool) {
 		k.Unlock()
 		this.Unlock()
 		if callProcessAgain {
-			Debugln("callProcessAgain")
+			logger.Debugln("callProcessAgain")
 			k.processCmd(nil)
 		}
 	}()
@@ -219,7 +219,7 @@ func (this *kvstore) apply(data []byte, snapshot bool) bool {
 		var err error
 		data, err = this.unCompressor.UnCompress(data[2:])
 		if nil != err {
-			Errorln("uncompress error")
+			logger.Errorln("uncompress error")
 			return false
 		}
 	} else {
@@ -254,7 +254,7 @@ func (this *kvstore) apply(data []byte, snapshot bool) bool {
 			unikey := p.values[0].(string)
 
 			if p.tt == proposal_kick {
-				Debugln(unikey, "cache_kick")
+				logger.Debugln(unikey, "cache_kick")
 				kv, ok := this.elements[unikey]
 				if !ok {
 					return false
@@ -284,13 +284,13 @@ func (this *kvstore) apply(data []byte, snapshot bool) bool {
 				if version == 0 {
 					kv.setStatus(cache_missing)
 					kv.fields = nil
-					Debugln(p.tt, unikey, version, "cache_missing", kv.fields)
+					logger.Debugln(p.tt, unikey, version, "cache_missing", kv.fields)
 				} else {
 					kv.setStatus(cache_ok)
 					kv.version = version
 					fields := p.values[2].([]*proto.Field)
 
-					Debugln(p.tt, unikey, version, "cache_ok", kv.getStatus(), kv.isWriteBack())
+					logger.Debugln(p.tt, unikey, version, "cache_ok", kv.getStatus(), kv.isWriteBack())
 
 					if nil == kv.fields {
 						kv.fields = map[string]*proto.Field{}
@@ -322,15 +322,15 @@ func (this *kvstore) readCommits(snapshotter *snap.Snapshotter, commitC <-chan i
 				// OR signaled to load snapshot
 				snapshot, err := snapshotter.Load()
 				if err != nil {
-					Fatalln(err)
+					logger.Fatalln(err)
 				} else {
-					Infof("loading snapshot at term %d and index %d", snapshot.Metadata.Term, snapshot.Metadata.Index)
+					logger.Infof("loading snapshot at term %d and index %d", snapshot.Metadata.Term, snapshot.Metadata.Index)
 					if !this.apply(snapshot.Data[8:], true) {
-						Fatalln("recoverFromSnapshot failed")
+						logger.Fatalln("recoverFromSnapshot failed")
 					}
 				}
 			} else if data == replayOK {
-				Infoln("reply ok,keycount", len(this.elements))
+				logger.Infoln("reply ok,keycount", len(this.elements))
 				return
 			} else {
 				data.apply(this)
@@ -344,7 +344,7 @@ func (this *kvstore) readCommits(snapshotter *snap.Snapshotter, commitC <-chan i
 	}
 
 	if err, ok := <-errorC; ok {
-		Fatalln(err)
+		logger.Fatalln(err)
 	}
 }
 
@@ -418,7 +418,7 @@ func (this *kvstore) getSnapshot() [][]*kvsnap {
 		ret = append(ret, v)
 	}
 
-	Infoln("clone time", time.Now().Sub(beg))
+	logger.Infoln("clone time", time.Now().Sub(beg))
 
 	return ret
 
@@ -439,7 +439,7 @@ func (this *kvstore) gotLease() {
 				} else if status == cache_missing {
 					vv.setSqlFlag(sql_delete)
 				}
-				Debugln("pushUpdateReq", vv.uniKey, status, vv.fields)
+				logger.Debugln("pushUpdateReq", vv.uniKey, status, vv.fields)
 				this.kvNode.sqlMgr.pushUpdateReq(vv)
 			}
 		}
@@ -516,7 +516,7 @@ func (this *storeMgr) getStore(uniKey string) *kvstore {
 
 func (this *storeMgr) addStore(index int, store *kvstore) bool {
 	if 0 == index || nil == store {
-		Fatalln("0 == index || nil == store")
+		logger.Fatalln("0 == index || nil == store")
 	}
 	this.Lock()
 	defer this.Unlock()

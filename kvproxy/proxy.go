@@ -37,7 +37,7 @@ type kvproxy struct {
 func (this *pendingReq) onTimeout(_ *timer.Timer, _ interface{}) {
 	this.processor.Lock()
 	defer this.processor.Unlock()
-	Infoln("remove timeout req", this.seqno)
+	logger.Infoln("remove timeout req", this.seqno)
 	delete(this.processor.pendingReqs, this.seqno)
 }
 
@@ -124,7 +124,7 @@ func (this *reqProcessor) onReq(seqno int64, session kendynet.StreamSession, req
 
 	if nil != err {
 		//返回错误响应
-		Infoln("send to kvnode error", err.Error())
+		logger.Infoln("send to kvnode error", err.Error())
 	}
 }
 
@@ -139,13 +139,13 @@ func (this *reqProcessor) onResp(seqno int64, resp *kendynet.ByteBuffer) {
 			//用oriSeqno替换seqno
 			resp.PutInt64(5, req.oriSeqno)
 			if err := req.session.SendMessage(resp); nil != err {
-				Infoln("send resp to client error", err.Error())
+				logger.Infoln("send resp to client error", err.Error())
 			}
 		} else {
-			Infoln("cancel timer failed")
+			logger.Infoln("cancel timer failed")
 		}
 	} else {
-		Infoln("on kvnode response but req timeout", seqno)
+		logger.Infoln("on kvnode response but req timeout", seqno)
 	}
 }
 
@@ -233,7 +233,7 @@ func (this *kvproxy) Start() error {
 					processor := this.processors[seqno%int64(len(this.processors))]
 					processor.onResp(seqno, v)
 				} else {
-					Infoln("onResp but get seqno failed")
+					logger.Infoln("onResp but get seqno failed")
 				}
 			}
 		}()

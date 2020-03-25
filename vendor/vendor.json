@@ -206,22 +206,22 @@
 			"revisionTime": "2019-06-04T15:29:10Z"
 		},
 		{
-			"checksumSHA1": "/cAk43d5LtWNJX26OvCo0YauWl0=",
+			"checksumSHA1": "g8COsXEG0eSQSpDjPbIxbY67ZvY=",
 			"path": "github.com/sniperHW/kendynet",
-			"revision": "a5a6465293a536777d30551a6dc0d20e411b9e99",
-			"revisionTime": "2020-03-25T05:39:47Z"
+			"revision": "eaf87079daf69fa16a5517f6d65b61a115c12329",
+			"revisionTime": "2020-03-25T08:48:01Z"
 		},
 		{
 			"checksumSHA1": "eFvDkPB3uNfjyUcjgTO9ocrhF0Y=",
 			"path": "github.com/sniperHW/kendynet/event",
-			"revision": "0cd8ab5535d67c6c209c161e8dc6a9c4620ce48d",
-			"revisionTime": "2019-07-24T10:31:35Z"
+			"revision": "eaf87079daf69fa16a5517f6d65b61a115c12329",
+			"revisionTime": "2020-03-25T08:48:01Z"
 		},
 		{
-			"checksumSHA1": "GbOwtuKtJMXAx8osvZ1jwbFTZs8=",
+			"checksumSHA1": "WKTN99w3LqRkic8uDQ1oBiiUurg=",
 			"path": "github.com/sniperHW/kendynet/golog",
-			"revision": "0cd8ab5535d67c6c209c161e8dc6a9c4620ce48d",
-			"revisionTime": "2019-07-24T10:31:35Z"
+			"revision": "eaf87079daf69fa16a5517f6d65b61a115c12329",
+			"revisionTime": "2020-03-25T08:48:01Z"
 		},
 		{
 			"checksumSHA1": "fQ6WtEsUGFzMSfbchZFYbL8fBBw=",
@@ -230,10 +230,10 @@
 			"revisionTime": "2020-02-09T09:47:40Z"
 		},
 		{
-			"checksumSHA1": "9EjbiK36+unGYu/ufJBeKg9hYzc=",
+			"checksumSHA1": "EUTiQ2TgykYpCuJvw0GdTL9lKjY=",
 			"path": "github.com/sniperHW/kendynet/socket",
-			"revision": "1096c50a6d785b85f2f7c4e7b9402accd6d25002",
-			"revisionTime": "2020-02-09T09:47:40Z"
+			"revision": "eaf87079daf69fa16a5517f6d65b61a115c12329",
+			"revisionTime": "2020-03-25T08:48:01Z"
 		},
 		{
 			"checksumSHA1": "1Ki2d2XkGJtfPpigDs7mv8Sl/nA=",
@@ -242,10 +242,10 @@
 			"revisionTime": "2019-07-24T10:31:35Z"
 		},
 		{
-			"checksumSHA1": "HgHQCz6QFA+7P0rC+DT/9ECLzIs=",
+			"checksumSHA1": "7ZvMikiIlLJ0YEt+GzTd0ezIhDo=",
 			"path": "github.com/sniperHW/kendynet/socket/listener/tcp",
-			"revision": "0cd8ab5535d67c6c209c161e8dc6a9c4620ce48d",
-			"revisionTime": "2019-07-24T10:31:35Z"
+			"revision": "eaf87079daf69fa16a5517f6d65b61a115c12329",
+			"revisionTime": "2020-03-25T08:48:01Z"
 		},
 		{
 			"checksumSHA1": "9SCyc28qaTKrO126z4wz92ToZ44=",

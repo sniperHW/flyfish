@@ -20,7 +20,7 @@ func New(nettype, service string) (*Listener, error) {
     }
     listener, err := net.ListenTCP(nettype, tcpAddr)
     if err != nil {
-        kendynet.Errorf("ListenTCP service:%s error:%s\n", service, err.Error())
+        kendynet.GetLogger().Errorf("ListenTCP service:%s error:%s\n", service, err.Error())
         return nil, err
     }
     return &Listener{listener: listener}, nil
@@ -52,7 +52,7 @@ func (this *Listener) Serve(onNewClient func(kendynet.StreamSession)) error {
             }
 
             if ne, ok := err.(net.Error); ok && ne.Temporary() {
-                kendynet.Errorf("accept temp err: %v", ne)
+                kendynet.GetLogger().Errorf("accept temp err: %v", ne)
                 continue
             } else {
                 return err

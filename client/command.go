@@ -533,7 +533,7 @@ func (this *Conn) onMessage(msg *codec.Message) {
 			}
 		} else {
 			if cmd != protocol.CmdType_Ping {
-				Infoln("got response but ret timeout remove")
+				logger.Infoln("got response but ret timeout remove")
 			}
 		}
 	})

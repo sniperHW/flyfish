@@ -230,7 +230,7 @@ func (this *SocketBase) recvThreadFunc() {
 				} else if kendynet.IsNetTimeout(err) {
 					event.Data = kendynet.ErrRecvTimeout
 				} else {
-					kendynet.Errorf("ReceiveAndUnpack error:%s\n", err.Error())
+					kendynet.GetLogger().Errorf("ReceiveAndUnpack error:%s\n", err.Error())
 					this.flag |= (rclosed | wclosed)
 				}
 				this.mutex.Unlock()

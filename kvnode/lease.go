@@ -111,7 +111,7 @@ func (l *lease) startLeaseRoutine(rn *raftNode) {
 	l.Lock()
 	defer l.Unlock()
 	if nil == l.stop {
-		Infoln("startLeaseRoutine")
+		logger.Infoln("startLeaseRoutine")
 		l.stop = make(chan struct{})
 		go func() {
 			for rn.isLeader() {
@@ -133,7 +133,7 @@ func (l *lease) startLeaseRoutine(rn *raftNode) {
 				rn.renew()
 				l.wait(l.stop, renewTime)
 			}
-			Infoln("break")
+			logger.Infoln("break")
 		}()
 	}
 }
@@ -151,6 +151,6 @@ func (l *lease) loseLeaderShip() {
 }
 
 func (l *lease) becomeLeader(rn *raftNode) {
-	Infoln("becomeLeader")
+	logger.Infoln("becomeLeader")
 	l.startLeaseRoutine(rn)
 }

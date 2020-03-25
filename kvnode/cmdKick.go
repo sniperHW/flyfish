@@ -16,13 +16,13 @@ func (this *asynCmdTaskKick) append2Str(s *str.Str) {
 }
 
 func (this *asynCmdTaskKick) onSqlResp(errno int32) {
-	Errorln("should not reach here", this.getKV().uniKey)
+	logger.Errorln("should not reach here", this.getKV().uniKey)
 	panic("asynCmdTaskKick should not reach here")
 }
 
 func (this *asynCmdTaskKick) done() {
 	kv := this.getKV()
-	Debugln("asynCmdTaskKick.done()", kv.uniKey)
+	logger.Debugln("asynCmdTaskKick.done()", kv.uniKey)
 	kv.store.removeKv(kv, true)
 }
 
@@ -39,7 +39,7 @@ type cmdKick struct {
 }
 
 func (this *cmdKick) reply(errCode int32, fields map[string]*proto.Field, version int64) {
-	Debugln("cmdKick reply")
+	logger.Debugln("cmdKick reply")
 	this.replyer.reply(this, errCode, fields, version)
 }
 

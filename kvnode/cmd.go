@@ -103,7 +103,7 @@ func (this *replyer) reply(cmd commandI, errCode int32, fields map[string]*proto
 		if this.peer.removeReplyer(this) && !time.Now().After(this.respDeadline) {
 			err := this.peer.send(cmd.makeResponse(errCode, fields, version))
 			if nil != err {
-				Errorln("send resp error", err.Error())
+				logger.Errorln("send resp error", err.Error())
 			}
 		}
 	}

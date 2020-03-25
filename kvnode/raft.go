@@ -240,7 +240,7 @@ func (rc *raftNode) removeOldWal(index uint64) {
 	if ok {
 		for _, v := range names[:nameIndex] {
 			os.Remove(rc.waldir + "/" + v)
-			Infoln("remove old wal", v)
+			logger.Infoln("remove old wal", v)
 		}
 	}
 }
@@ -262,7 +262,7 @@ func (rc *raftNode) removeOldSnapAndWal(term uint64, index uint64) {
 					if nil == err && n == 2 {
 						if _term <= term && _index < index {
 							os.Remove(path)
-							Infoln("remove old snap", path)
+							logger.Infoln("remove old snap", path)
 							rc.removeOldWal(_index)
 						}
 					}
@@ -303,7 +303,7 @@ func (rc *raftNode) entriesToApply(ents []raftpb.Entry) (nents []raftpb.Entry) {
 	}
 	firstIdx := ents[0].Index
 	if firstIdx > rc.appliedIndex+1 {
-		Fatalf("first index of committed entry[%d] should <= progress.appliedIndex[%d]+1", firstIdx, rc.appliedIndex)
+		logger.Fatalf("first index of committed entry[%d] should <= progress.appliedIndex[%d]+1", firstIdx, rc.appliedIndex)
 	}
 	if rc.appliedIndex-firstIdx+1 < uint64(len(ents)) {
 		nents = ents[rc.appliedIndex-firstIdx+1:]
@@ -347,7 +347,7 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 			var cc raftpb.ConfChange
 			cc.Unmarshal(ents[i].Data)
 			rc.confState = *rc.node.ApplyConfChange(cc)
-			Infoln("raftpb.EntryConfChange", cc.Type, cc)
+			logger.Infoln("raftpb.EntryConfChange", cc.Type, cc)
 			switch cc.Type {
 			case raftpb.ConfChangeAddNode:
 				if len(cc.Context) > 0 {
@@ -355,7 +355,7 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 				}
 			case raftpb.ConfChangeRemoveNode:
 				if cc.NodeID == uint64(rc.id) {
-					Infoln("I've been removed from the cluster! Shutting down.")
+					logger.Infoln("I've been removed from the cluster! Shutting down.")
 					return false
 				}
 				rc.transport.RemovePeer(types.ID(cc.NodeID))
@@ -369,7 +369,7 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 		if ents[i].Index == rc.lastIndex {
 			select {
 			case rc.commitC <- replayOK:
-				Infoln("send replayOK")
+				logger.Infoln("send replayOK")
 			case <-rc.stopc:
 				return false
 			}
@@ -381,7 +381,7 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 func (rc *raftNode) loadSnapshot() *raftpb.Snapshot {
 	snapshot, err := rc.snapshotter.Load()
 	if err != nil && err != snap.ErrNoSnapshot {
-		Fatalf("raftexample: error loading snapshot (%v)", err)
+		logger.Fatalf("raftexample: error loading snapshot (%v)", err)
 	}
 	return snapshot
 }
@@ -390,12 +390,12 @@ func (rc *raftNode) loadSnapshot() *raftpb.Snapshot {
 func (rc *raftNode) openWAL(snapshot *raftpb.Snapshot) *wal.WAL {
 	if !wal.Exist(rc.waldir) {
 		if err := os.Mkdir(rc.waldir, 0750); err != nil {
-			Fatalf("raftexample: cannot create dir for wal (%v)", err)
+			logger.Fatalf("raftexample: cannot create dir for wal (%v)", err)
 		}
 
 		w, err := wal.Create(zap.NewExample(), rc.waldir, nil)
 		if err != nil {
-			Fatalf("raftexample: create wal error (%v)", err)
+			logger.Fatalf("raftexample: create wal error (%v)", err)
 		}
 		w.Close()
 	}
@@ -405,10 +405,10 @@ func (rc *raftNode) openWAL(snapshot *raftpb.Snapshot) *wal.WAL {
 		walsnap.Index, walsnap.Term = snapshot.Metadata.Index, snapshot.Metadata.Term
 	}
 
-	Infof("loading WAL at term %d and index %d", walsnap.Term, walsnap.Index)
+	logger.Infof("loading WAL at term %d and index %d", walsnap.Term, walsnap.Index)
 	w, err := wal.Open(zap.NewExample(), rc.waldir, walsnap)
 	if err != nil {
-		Fatalf("raftexample: error loading wal (%v)", err)
+		logger.Fatalf("raftexample: error loading wal (%v)", err)
 	}
 
 	return w
@@ -416,14 +416,14 @@ func (rc *raftNode) openWAL(snapshot *raftpb.Snapshot) *wal.WAL {
 
 // replayWAL replays WAL entries into the raft instance.
 func (rc *raftNode) replayWAL() *wal.WAL {
-	Infof("replaying WAL of member %d", rc.id)
+	logger.Infof("replaying WAL of member %d", rc.id)
 	snapshot := rc.loadSnapshot()
 	w := rc.openWAL(snapshot)
 	_, st, ents, err := w.ReadAll()
 	if err != nil {
-		Fatalf("raftexample: failed to read WAL (%v)", err)
+		logger.Fatalf("raftexample: failed to read WAL (%v)", err)
 	} else {
-		Infof("ents:%d", len(ents))
+		logger.Infof("ents:%d", len(ents))
 	}
 	rc.raftStorage = raft.NewMemoryStorage()
 	if snapshot != nil {
@@ -432,7 +432,7 @@ func (rc *raftNode) replayWAL() *wal.WAL {
 	rc.raftStorage.SetHardState(st)
 
 	if snapshot != nil {
-		Infoln("send replaySnapshot")
+		logger.Infoln("send replaySnapshot")
 		rc.commitC <- replaySnapshot
 	}
 
@@ -459,7 +459,7 @@ func (rc *raftNode) writeError(err error) {
 func (rc *raftNode) startRaft() {
 	if !fileutil.Exist(rc.snapdir) {
 		if err := os.Mkdir(rc.snapdir, 0750); err != nil {
-			Fatalf("raftexample: cannot create dir for snapshot (%v)", err)
+			logger.Fatalf("raftexample: cannot create dir for snapshot (%v)", err)
 		}
 	}
 	rc.snapshotter = snap.New(zap.NewExample(), rc.snapdir)
@@ -508,7 +508,7 @@ func (rc *raftNode) startRaft() {
 	for i := range rc.peers {
 		id := (i+1)<<16 + rc.region
 		if id != rc.id {
-			Infoln("AddPeer", types.ID(id).String())
+			logger.Infoln("AddPeer", types.ID(id).String())
 			rc.transport.AddPeer(types.ID(id), []string{rc.peers[i]})
 		}
 	}
@@ -540,11 +540,11 @@ func (rc *raftNode) publishSnapshot(snapshotToSave raftpb.Snapshot) {
 		return
 	}
 
-	Infof("publishing snapshot at index %d", rc.snapshotIndex)
-	defer Infof("finished publishing snapshot at index %d", rc.snapshotIndex)
+	logger.Infof("publishing snapshot at index %d", rc.snapshotIndex)
+	defer logger.Infof("finished publishing snapshot at index %d", rc.snapshotIndex)
 
 	if snapshotToSave.Metadata.Index <= rc.appliedIndex {
-		Fatalf("snapshot index [%d] should > progress.appliedIndex [%d]", snapshotToSave.Metadata.Index, rc.appliedIndex)
+		logger.Fatalf("snapshot index [%d] should > progress.appliedIndex [%d]", snapshotToSave.Metadata.Index, rc.appliedIndex)
 	}
 	rc.commitC <- replaySnapshot // trigger kvstore to load snapshot
 
@@ -577,7 +577,7 @@ func (rc *raftNode) triggerSnapshot() {
 
 	rc.snapshotting = 1
 
-	Infof("start snapshot [applied index: %d | last snapshot index: %d]", rc.appliedIndex, rc.snapshotIndex)
+	logger.Infof("start snapshot [applied index: %d | last snapshot index: %d]", rc.appliedIndex, rc.snapshotIndex)
 
 	appliedIndex := rc.appliedIndex
 	confState := rc.confState
@@ -623,7 +623,7 @@ func (rc *raftNode) triggerSnapshot() {
 			panic(err)
 		}
 
-		Infoln("save snapshot time", time.Now().Sub(beg))
+		logger.Infoln("save snapshot time", time.Now().Sub(beg))
 
 		rc.snapshottingOK <- struct{}{}
 
@@ -670,7 +670,7 @@ func (rc *raftNode) onLoseLeadership() {
 
 func (rc *raftNode) issueRead(tasks *fixedarray.FixedArray) {
 
-	Debugln("issueRead")
+	logger.Debugln("issueRead")
 
 	ctxToSend := make([]byte, 8)
 	c := &readBatchSt{
@@ -919,7 +919,7 @@ func (rc *raftNode) processTimeoutReadReq(_ *timer.Timer, _ interface{}) {
 			c := e.Value.(*readBatchSt)
 			rc.pendingRead.Remove(e)
 			rc.muPendingRead.Unlock()
-			Debugln("read timeout")
+			logger.Debugln("read timeout")
 			c.onError(errcode.ERR_TIMEOUT)
 		} else {
 			rc.muPendingRead.Unlock()
@@ -940,7 +940,7 @@ func (rc *raftNode) processReadStates(readStates []raft.ReadState) {
 			c := e.Value.(*readBatchSt)
 			rc.pendingRead.Remove(e)
 			rc.muPendingRead.Unlock()
-			Debugln("readStates")
+			logger.Debugln("readStates")
 			select {
 			case rc.commitC <- c:
 			case <-rc.stopc:
@@ -1001,7 +1001,7 @@ func (rc *raftNode) serveChannels() {
 				if oldLeader == rc.id && rc.leader != rc.id {
 					loseLeadership = true
 				}
-				Infoln(rd.SoftState.Lead>>16, "is leader")
+				logger.Infoln(rd.SoftState.Lead>>16, "is leader")
 
 				if rc.leader == rc.id {
 					rc.lease.becomeLeader(rc)
