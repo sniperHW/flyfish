@@ -30,7 +30,7 @@ func NewTimerMgr() *TimerMgr {
 	return mgr
 }
 
-func (this *TimerMgr) setTimer(t *Timer, inloop bool) {
+func (this *TimerMgr) setTimer(t *Timer) {
 	t.expired = time.Now().Add(t.timeout)
 	this.Lock()
 	if t.index > 0 {
@@ -38,7 +38,7 @@ func (this *TimerMgr) setTimer(t *Timer, inloop bool) {
 	}
 	this.minheap.Insert(t)
 	min := this.minheap.Min().(*Timer)
-	if (min == t || min.expired.After(t.expired)) && !inloop {
+	if min == t || min.expired.After(t.expired) {
 		this.notiChan.Notify()
 	}
 	this.Unlock()
@@ -52,6 +52,34 @@ func (this *TimerMgr) GetTimerByIndex(index uint64) *Timer {
 	} else {
 		this.Unlock()
 		return nil
+	}
+}
+
+func (this *TimerMgr) resetFireTime(t *Timer, timeout time.Duration) {
+	t.timeout = timeout
+	t.expired = time.Now().Add(t.timeout)
+	this.Lock()
+	this.minheap.Fix(t)
+	min := this.minheap.Min().(*Timer)
+	if min == t || min.expired.After(t.expired) {
+		this.notiChan.Notify()
+	}
+	this.Unlock()
+}
+
+func (this *TimerMgr) resetDuration(t *Timer, duration time.Duration) {
+	t.timeout = duration
+	t.expired = time.Now().Add(t.timeout)
+	if t.firing {
+		return
+	} else {
+		this.Lock()
+		this.minheap.Fix(t)
+		min := this.minheap.Min().(*Timer)
+		if min == t || min.expired.After(t.expired) {
+			this.notiChan.Notify()
+		}
+		this.Unlock()
 	}
 }
 
@@ -112,7 +140,7 @@ func (this *TimerMgr) newTimer(timeout time.Duration, repeat bool, eventQue *eve
 			ctx:      ctx,
 			index:    index,
 		}
-		this.setTimer(t, false)
+		this.setTimer(t)
 		return t
 	} else {
 		return nil
@@ -133,8 +161,8 @@ func (this *TimerMgr) OnceWithIndex(timeout time.Duration, eventQue *event.Event
 }
 
 //重复定时器
-func (this *TimerMgr) Repeat(timeout time.Duration, eventQue *event.EventQueue, callback func(*Timer, interface{}), ctx interface{}) *Timer {
-	return this.newTimer(timeout, true, eventQue, callback, ctx, 0)
+func (this *TimerMgr) Repeat(duration time.Duration, eventQue *event.EventQueue, callback func(*Timer, interface{}), ctx interface{}) *Timer {
+	return this.newTimer(duration, true, eventQue, callback, ctx, 0)
 }
 
 func (this *TimerMgr) remove(t *Timer) {
@@ -194,7 +222,7 @@ func (this *Timer) preCall() bool {
 	}
 }
 
-func (this *Timer) call_(inloop bool) {
+func (this *Timer) call_() {
 
 	this.Lock()
 	if this.canceled {
@@ -211,17 +239,17 @@ func (this *Timer) call_(inloop bool) {
 		defer this.Unlock()
 		if !this.canceled {
 			this.firing = false
-			this.mgr.setTimer(this, inloop)
+			this.mgr.setTimer(this)
 		}
 	}
 }
 
 func (this *Timer) call() {
 	if nil == this.eventQue {
-		this.call_(true)
+		this.call_()
 	} else {
 		this.eventQue.PostNoWait(func() {
-			this.call_(false)
+			this.call_()
 		})
 	}
 }
@@ -233,17 +261,50 @@ func (this *Timer) call() {
  */
 func (this *Timer) Cancel() bool {
 	this.Lock()
+	defer this.Unlock()
 	if this.canceled {
-		this.Unlock()
 		return false
 	}
 	this.canceled = true
 	if !this.firing {
 		this.mgr.remove(this)
 	}
-	firing := this.firing
-	this.Unlock()
-	return firing == false
+	return this.firing == false
+}
+
+//只对一次性定时器有效
+func (this *Timer) ResetFireTime(timeout time.Duration) bool {
+	this.Lock()
+	defer this.Unlock()
+	if this.canceled {
+		return false
+	}
+
+	if this.repeat {
+		return false
+	}
+
+	if !this.firing {
+		this.mgr.resetFireTime(this, timeout)
+	}
+
+	return this.firing == false
+}
+
+//只对重复定时器有效
+func (this *Timer) ResetDuration(duration time.Duration) bool {
+	this.Lock()
+	defer this.Unlock()
+	if this.canceled {
+		return false
+	}
+
+	if !this.repeat {
+		return false
+	}
+
+	this.mgr.resetDuration(this, duration)
+	return true
 }
 
 //一次性定时器
@@ -255,11 +316,11 @@ func Once(timeout time.Duration, eventQue *event.EventQueue, callback func(*Time
 }
 
 //重复定时器
-func Repeat(timeout time.Duration, eventQue *event.EventQueue, callback func(*Timer, interface{}), ctx interface{}) *Timer {
+func Repeat(duration time.Duration, eventQue *event.EventQueue, callback func(*Timer, interface{}), ctx interface{}) *Timer {
 	once.Do(func() {
 		globalMgr = NewTimerMgr()
 	})
-	return globalMgr.Repeat(timeout, eventQue, callback, ctx)
+	return globalMgr.Repeat(duration, eventQue, callback, ctx)
 }
 
 func OnceWithIndex(timeout time.Duration, eventQue *event.EventQueue, callback func(*Timer, interface{}), ctx interface{}, index uint64) *Timer {

@@ -47,6 +47,10 @@ func (h *MinHeap) Insert(e HeapElement) {
 	heap.Push(h, e)
 }
 
+func (h *MinHeap) Fix(e HeapElement) {
+	heap.Fix(h, e.GetIndex())
+}
+
 func (h *MinHeap) Remove(e HeapElement) {
 	index := e.GetIndex()
 	if index >= 0 && len(*h) > index && (*h)[index] == e {
