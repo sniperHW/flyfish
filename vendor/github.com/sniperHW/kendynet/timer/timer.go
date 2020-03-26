@@ -1,6 +1,7 @@
 package timer
 
 import (
+	"fmt"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/event"
 	"github.com/sniperHW/kendynet/util"
@@ -205,11 +206,6 @@ func (this *Timer) GetCTX() interface{} {
 	return this.ctx
 }
 
-func pcall(callback func(*Timer, interface{}), t *Timer) {
-	defer util.Recover(kendynet.GetLogger())
-	callback(t, t.ctx)
-}
-
 func (this *Timer) preCall() bool {
 	this.Lock()
 	if this.canceled {
@@ -233,7 +229,15 @@ func (this *Timer) call_() {
 		this.Unlock()
 	}
 
-	pcall(this.callback, this)
+	if _, err := util.ProtectCall(this.callback, this, this.ctx); nil != err {
+		logger := kendynet.GetLogger()
+		if nil != logger {
+			logger.Errorln("error on timer:", err.Error())
+		} else {
+			fmt.Println("error on timer:", err.Error())
+		}
+	}
+
 	if this.repeat {
 		this.Lock()
 		defer this.Unlock()

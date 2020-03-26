@@ -34,14 +34,10 @@ func CallStack(maxStack int) string {
 
 func RecoverAndCall(fn func(), logger ...golog.LoggerI) {
 	if r := recover(); r != nil {
-		var logger_ golog.LoggerI
-		if len(logger) > 0 {
-			logger_ = logger[0]
-		}
-		if nil != logger_ {
+		if len(logger) > 0 && logger[0] != nil {
 			buf := make([]byte, 65535)
 			l := runtime.Stack(buf, false)
-			logger_.Errorf(FormatFileLine("%s\n", fmt.Sprintf("%v: %s", r, buf[:l])))
+			logger[0].Errorf(FormatFileLine("%s\n", fmt.Sprintf("%v: %s", r, buf[:l])))
 		}
 		if fn != nil {
 			fn()
@@ -51,19 +47,15 @@ func RecoverAndCall(fn func(), logger ...golog.LoggerI) {
 
 func Recover(logger ...golog.LoggerI) {
 	if r := recover(); r != nil {
-		var logger_ golog.LoggerI
-		if len(logger) > 0 {
-			logger_ = logger[0]
-		}
-		if nil != logger_ {
+		if len(logger) > 0 && logger[0] != nil {
 			buf := make([]byte, 65535)
 			l := runtime.Stack(buf, false)
-			logger_.Errorf(FormatFileLine("%s\n", fmt.Sprintf("%v: %s", r, buf[:l])))
+			logger[0].Errorf(FormatFileLine("%s\n", fmt.Sprintf("%v: %s", r, buf[:l])))
 		}
 	}
 }
 
-func PCall(fn interface{}, args ...interface{}) (err error, ret []interface{}) {
+func ProtectCall(fn interface{}, args ...interface{}) (ret []interface{}, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			buf := make([]byte, 65535)
@@ -80,16 +72,22 @@ func PCall(fn interface{}, args ...interface{}) (err error, ret []interface{}) {
 		return
 	}
 
-	in := []reflect.Value{}
-	for _, v := range args {
-		in = append(in, reflect.ValueOf(v))
+	fnType := reflect.TypeOf(fn)
+
+	in := make([]reflect.Value, len(args))
+	for i, v := range args {
+		if v == nil {
+			in[i] = reflect.Zero(fnType.In(i))
+		} else {
+			in[i] = reflect.ValueOf(v)
+		}
 	}
 
 	out := oriF.Call(in)
 	if len(out) > 0 {
-		ret = make([]interface{}, len(out))[0:0]
-		for _, v := range out {
-			ret = append(ret, v.Interface())
+		ret = make([]interface{}, len(out))
+		for i, v := range out {
+			ret[i] = v.Interface()
 		}
 	}
 	return
