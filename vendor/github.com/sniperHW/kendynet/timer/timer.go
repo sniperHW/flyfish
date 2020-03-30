@@ -31,18 +31,20 @@ func NewTimerMgr() *TimerMgr {
 	return mgr
 }
 
-func (this *TimerMgr) setTimer(t *Timer) {
-	t.expired = time.Now().Add(t.timeout)
+func (this *TimerMgr) setTimer(t *Timer, index uint64) {
 	this.Lock()
-	if t.index > 0 {
-		this.index2Timer[t.index] = t
+	defer this.Unlock()
+	if !t.canceled {
+		t.expired = time.Now().Add(t.timeout)
+		if index > 0 {
+			this.index2Timer[index] = t
+		}
+		this.minheap.Insert(t)
+		min := this.minheap.Min().(*Timer)
+		if min == t || min.expired.After(t.expired) {
+			this.notiChan.Notify()
+		}
 	}
-	this.minheap.Insert(t)
-	min := this.minheap.Min().(*Timer)
-	if min == t || min.expired.After(t.expired) {
-		this.notiChan.Notify()
-	}
-	this.Unlock()
 }
 
 func (this *TimerMgr) GetTimerByIndex(index uint64) *Timer {
@@ -56,31 +58,39 @@ func (this *TimerMgr) GetTimerByIndex(index uint64) *Timer {
 	}
 }
 
-func (this *TimerMgr) resetFireTime(t *Timer, timeout time.Duration) {
-	t.timeout = timeout
-	t.expired = time.Now().Add(t.timeout)
+func (this *TimerMgr) resetFireTime(t *Timer, timeout time.Duration) bool {
 	this.Lock()
-	this.minheap.Fix(t)
-	min := this.minheap.Min().(*Timer)
-	if min == t || min.expired.After(t.expired) {
-		this.notiChan.Notify()
-	}
-	this.Unlock()
-}
-
-func (this *TimerMgr) resetDuration(t *Timer, duration time.Duration) {
-	t.timeout = duration
-	t.expired = time.Now().Add(t.timeout)
-	if t.firing {
-		return
+	defer this.Unlock()
+	if t.canceled || t.GetIndex() == -1 {
+		return false
 	} else {
-		this.Lock()
+		t.timeout = timeout
+		t.expired = time.Now().Add(t.timeout)
 		this.minheap.Fix(t)
 		min := this.minheap.Min().(*Timer)
 		if min == t || min.expired.After(t.expired) {
 			this.notiChan.Notify()
 		}
-		this.Unlock()
+		return true
+	}
+}
+
+func (this *TimerMgr) resetDuration(t *Timer, duration time.Duration) bool {
+	this.Lock()
+	defer this.Unlock()
+	if t.canceled {
+		return false
+	} else {
+		t.timeout = duration
+		t.expired = time.Now().Add(t.timeout)
+		if t.GetIndex() != -1 {
+			this.minheap.Fix(t)
+			min := this.minheap.Min().(*Timer)
+			if min == t || min.expired.After(t.expired) {
+				this.notiChan.Notify()
+			}
+		}
+		return true
 	}
 }
 
@@ -96,9 +106,11 @@ func (this *TimerMgr) loop() {
 			if nil != min && now.After(min.(*Timer).expired) {
 				t := min.(*Timer)
 				this.minheap.PopMin()
-				if t.index > 0 {
+
+				if !t.repeat && t.index > 0 {
 					delete(this.index2Timer, t.index)
 				}
+
 				this.Unlock()
 				t.call()
 			} else {
@@ -141,7 +153,7 @@ func (this *TimerMgr) newTimer(timeout time.Duration, repeat bool, eventQue *eve
 			ctx:      ctx,
 			index:    index,
 		}
-		this.setTimer(t)
+		this.setTimer(t, index)
 		return t
 	} else {
 		return nil
@@ -166,23 +178,32 @@ func (this *TimerMgr) Repeat(duration time.Duration, eventQue *event.EventQueue,
 	return this.newTimer(duration, true, eventQue, callback, ctx, 0)
 }
 
-func (this *TimerMgr) remove(t *Timer) {
+func (this *TimerMgr) remove(t *Timer) bool {
 	this.Lock()
 	defer this.Unlock()
-	if t.index > 0 {
-		delete(this.index2Timer, t.index)
+
+	if t.canceled {
+		return false
 	}
-	this.minheap.Remove(t)
+
+	t.canceled = true
+	if t.GetIndex() == -1 {
+		return false
+	} else {
+		if t.index > 0 {
+			delete(this.index2Timer, t.index)
+		}
+		this.minheap.Remove(t)
+		return true
+	}
 }
 
 type Timer struct {
-	sync.Mutex
 	heapIdx  int
 	expired  time.Time //到期时间
 	eventQue *event.EventQueue
 	timeout  time.Duration
 	repeat   bool //是否重复定时器
-	firing   bool
 	canceled bool
 	callback func(*Timer, interface{})
 	mgr      *TimerMgr
@@ -206,28 +227,7 @@ func (this *Timer) GetCTX() interface{} {
 	return this.ctx
 }
 
-func (this *Timer) preCall() bool {
-	this.Lock()
-	if this.canceled {
-		this.Unlock()
-		return false
-	} else {
-		this.firing = true
-		this.Unlock()
-		return true
-	}
-}
-
 func (this *Timer) call_() {
-
-	this.Lock()
-	if this.canceled {
-		this.Unlock()
-		return
-	} else {
-		this.firing = true
-		this.Unlock()
-	}
 
 	if _, err := util.ProtectCall(this.callback, this, this.ctx); nil != err {
 		logger := kendynet.GetLogger()
@@ -239,12 +239,7 @@ func (this *Timer) call_() {
 	}
 
 	if this.repeat {
-		this.Lock()
-		defer this.Unlock()
-		if !this.canceled {
-			this.firing = false
-			this.mgr.setTimer(this)
-		}
+		this.mgr.setTimer(this, 0)
 	}
 }
 
@@ -264,51 +259,17 @@ func (this *Timer) call() {
  *        一个go程中调用Cancel），对于重复定时器，可以保证定时器最多在执行一次之后终止。
  */
 func (this *Timer) Cancel() bool {
-	this.Lock()
-	defer this.Unlock()
-	if this.canceled {
-		return false
-	}
-	this.canceled = true
-	if !this.firing {
-		this.mgr.remove(this)
-	}
-	return this.firing == false
+	return this.mgr.remove(this)
 }
 
 //只对一次性定时器有效
 func (this *Timer) ResetFireTime(timeout time.Duration) bool {
-	this.Lock()
-	defer this.Unlock()
-	if this.canceled {
-		return false
-	}
-
-	if this.repeat {
-		return false
-	}
-
-	if !this.firing {
-		this.mgr.resetFireTime(this, timeout)
-	}
-
-	return this.firing == false
+	return this.mgr.resetFireTime(this, timeout)
 }
 
 //只对重复定时器有效
 func (this *Timer) ResetDuration(duration time.Duration) bool {
-	this.Lock()
-	defer this.Unlock()
-	if this.canceled {
-		return false
-	}
-
-	if !this.repeat {
-		return false
-	}
-
-	this.mgr.resetDuration(this, duration)
-	return true
+	return this.mgr.resetDuration(this, duration)
 }
 
 //一次性定时器

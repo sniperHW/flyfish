@@ -55,6 +55,7 @@ func (h *MinHeap) Remove(e HeapElement) {
 	index := e.GetIndex()
 	if index >= 0 && len(*h) > index && (*h)[index] == e {
 		heap.Remove(h, index)
+		e.SetIndex(-1)
 	} else {
 		panic("invaild HeapElement")
 	}
@@ -73,6 +74,7 @@ func (h *MinHeap) PopMin() HeapElement {
 	if len(*h) > 0 {
 		m := (*h)[0]
 		heap.Pop(h)
+		m.SetIndex(-1)
 		return m
 	} else {
 		return nil
@@ -81,6 +83,9 @@ func (h *MinHeap) PopMin() HeapElement {
 
 func (h *MinHeap) Clear() {
 	for i, _ := range *h {
+		if nil != (*h)[i] {
+			(*h)[i].SetIndex(-1)
+		}
 		(*h)[i] = nil
 	}
 	*h = (*h)[0:0]
