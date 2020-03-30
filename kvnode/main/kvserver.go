@@ -15,13 +15,14 @@ import (
 
 func main() {
 
-	go func() {
-		http.ListenAndServe("0.0.0.0:8899", nil)
-	}()
-
 	cluster := flag.String("cluster", "http://127.0.0.1:12379", "comma separated cluster peers")
 	id := flag.Int("id", 1, "node ID")
+	pprof := flag.String("pprof", "localhost:8899", "pprof")
 	config := flag.String("config", "config.toml", "config")
+
+	go func() {
+		http.ListenAndServe(*pprof, nil)
+	}()
 
 	flag.Parse()
 
