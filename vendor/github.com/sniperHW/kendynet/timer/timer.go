@@ -40,8 +40,7 @@ func (this *TimerMgr) setTimer(t *Timer, index uint64) {
 			this.index2Timer[index] = t
 		}
 		this.minheap.Insert(t)
-		min := this.minheap.Min().(*Timer)
-		if min == t || min.expired.After(t.expired) {
+		if t == this.minheap.Min().(*Timer) {
 			this.notiChan.Notify()
 		}
 	}
@@ -49,11 +48,10 @@ func (this *TimerMgr) setTimer(t *Timer, index uint64) {
 
 func (this *TimerMgr) GetTimerByIndex(index uint64) *Timer {
 	this.Lock()
+	defer this.Unlock()
 	if t, ok := this.index2Timer[index]; ok {
-		this.Unlock()
 		return t
 	} else {
-		this.Unlock()
 		return nil
 	}
 }
@@ -67,8 +65,7 @@ func (this *TimerMgr) resetFireTime(t *Timer, timeout time.Duration) bool {
 		t.timeout = timeout
 		t.expired = time.Now().Add(t.timeout)
 		this.minheap.Fix(t)
-		min := this.minheap.Min().(*Timer)
-		if min == t || min.expired.After(t.expired) {
+		if t == this.minheap.Min().(*Timer) {
 			this.notiChan.Notify()
 		}
 		return true
@@ -85,8 +82,7 @@ func (this *TimerMgr) resetDuration(t *Timer, duration time.Duration) bool {
 		t.expired = time.Now().Add(t.timeout)
 		if t.GetIndex() != -1 {
 			this.minheap.Fix(t)
-			min := this.minheap.Min().(*Timer)
-			if min == t || min.expired.After(t.expired) {
+			if t == this.minheap.Min().(*Timer) {
 				this.notiChan.Notify()
 			}
 		}
@@ -100,21 +96,19 @@ func (this *TimerMgr) loop() {
 	var min util.HeapElement
 	for {
 		now := time.Now()
+		this.Lock()
 		for {
-			this.Lock()
 			min = this.minheap.Min()
 			if nil != min && now.After(min.(*Timer).expired) {
 				t := min.(*Timer)
 				this.minheap.PopMin()
-
 				if !t.repeat && t.index > 0 {
 					delete(this.index2Timer, t.index)
 				}
-
 				this.Unlock()
 				t.call()
+				this.Lock()
 			} else {
-				this.Unlock()
 				break
 			}
 		}
@@ -130,6 +124,7 @@ func (this *TimerMgr) loop() {
 				this.notiChan.Notify()
 			})
 		}
+		this.Unlock()
 
 		this.notiChan.Wait()
 		tt.Stop()
