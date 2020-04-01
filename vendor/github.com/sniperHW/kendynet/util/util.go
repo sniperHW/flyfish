@@ -1,12 +1,15 @@
 package util
 
 import (
+	"errors"
 	"fmt"
 	"github.com/sniperHW/kendynet/golog"
 	"reflect"
 	"runtime"
 	"strings"
 )
+
+var ErrArgIsNotFunc error = errors.New("the 1st arg of ProtectCall is not a func")
 
 func FormatFileLine(format string, v ...interface{}) string {
 	_, file, line, ok := runtime.Caller(1)
@@ -68,7 +71,7 @@ func ProtectCall(fn interface{}, args ...interface{}) (ret []interface{}, err er
 	oriF := reflect.ValueOf(fn)
 
 	if oriF.Kind() != reflect.Func {
-		err = fmt.Errorf("fn is not Func")
+		err = ErrArgIsNotFunc
 		return
 	}
 

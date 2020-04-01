@@ -1,13 +1,13 @@
 package util
 
 import (
-	"fmt"
+	"errors"
 	"sync"
 )
 
 var (
-	ErrQueueClosed = fmt.Errorf("queue closed")
-	ErrQueueFull   = fmt.Errorf("queue full")
+	ErrQueueClosed = errors.New("queue closed")
+	ErrQueueFull   = errors.New("queue full")
 )
 
 const (
@@ -61,9 +61,7 @@ func (self *BlockQueue) Add(item interface{}) error {
 
 	for len(self.list) >= self.fullSize {
 		self.fullWaited++
-		fmt.Println("wait full", self.name, self.fullSize)
 		self.fullCond.Wait()
-		fmt.Println("wait full awake", self.name)
 		self.fullWaited--
 		if self.closed {
 			self.listGuard.Unlock()
@@ -175,6 +173,7 @@ func (self *BlockQueue) Clear() {
 	self.listGuard.Lock()
 	defer self.listGuard.Unlock()
 	self.list = self.list[0:0]
+	self.fullCond.Broadcast()
 }
 
 func (self *BlockQueue) SetFullSize(newSize int) {
@@ -193,7 +192,7 @@ func (self *BlockQueue) SetFullSize(newSize int) {
 	}
 }
 
-func NewBlockQueueWithName(name string, fullSize ...int) *BlockQueue {
+func newBlockQueue(name string, fullSize ...int) *BlockQueue {
 	self := &BlockQueue{}
 	self.name = name
 	self.closed = false
@@ -213,21 +212,10 @@ func NewBlockQueueWithName(name string, fullSize ...int) *BlockQueue {
 	return self
 }
 
+func NewBlockQueueWithName(name string, fullSize ...int) *BlockQueue {
+	return newBlockQueue(name, fullSize...)
+}
+
 func NewBlockQueue(fullSize ...int) *BlockQueue {
-	self := &BlockQueue{}
-	self.closed = false
-	self.emptyCond = sync.NewCond(&self.listGuard)
-	self.fullCond = sync.NewCond(&self.listGuard)
-	self.list = make([]interface{}, 0, initCap)
-
-	if len(fullSize) > 0 {
-		if fullSize[0] <= 0 {
-			return nil
-		}
-		self.fullSize = fullSize[0]
-	} else {
-		self.fullSize = defaultFullSize
-	}
-
-	return self
+	return newBlockQueue("", fullSize...)
 }

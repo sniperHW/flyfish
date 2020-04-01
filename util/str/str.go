@@ -12,6 +12,7 @@ import (
 )
 
 var strThreshold = 1024 * 128 //128k
+var maxStrThreshold = 1024 * 1024
 
 type Str struct {
 	data []byte
@@ -314,6 +315,9 @@ func Get() *Str {
 }
 
 func Put(s *Str) {
-	s.Reset()
-	strPool.Put(s)
+	//太大的直接释放不放回池里
+	if s.cap() < maxStrThreshold {
+		s.Reset()
+		strPool.Put(s)
+	}
 }

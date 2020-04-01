@@ -1,8 +1,10 @@
 package util
 
 import (
-	"fmt"
+	"errors"
 )
+
+var ErrNotifyerClosed error = errors.New("closed")
 
 type Notifyer struct {
 	notiChan chan struct{}
@@ -15,9 +17,9 @@ func NewNotifyer() *Notifyer {
 }
 
 func (this *Notifyer) Wait() error {
-	_, isClose := <-this.notiChan
-	if isClose {
-		return fmt.Errorf("closed")
+	_, ok := <-this.notiChan
+	if !ok {
+		return ErrNotifyerClosed
 	} else {
 		return nil
 	}
