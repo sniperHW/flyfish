@@ -7,6 +7,8 @@ import (
 
 var ClientTimeout uint32 = 6000 //6sec
 
+var seqno int64
+
 type Client struct {
 	conn          *Conn
 	closed        int32

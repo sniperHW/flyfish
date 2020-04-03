@@ -316,7 +316,7 @@ func Get() *Str {
 
 func Put(s *Str) {
 	//太大的直接释放不放回池里
-	if s.cap() < maxStrThreshold {
+	if s.cap < maxStrThreshold {
 		s.Reset()
 		strPool.Put(s)
 	}
