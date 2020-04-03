@@ -97,7 +97,7 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 		//发送被排队的请求
 		for _, v := range pendingSend {
 			//已经超时或马上就要超时的请求不发送
-			if v.status != wait_remove && v.deadline.Sub(now) > 10*time.Millisecond {
+			if !v.isTimeouted && v.deadline.Sub(now) > 10*time.Millisecond {
 				this.sendReq(v)
 			}
 		}
@@ -134,15 +134,12 @@ func (this *Conn) dial() {
 }
 
 func (this *Conn) sendReq(c *cmdContext) {
-	err := this.session.Send(c.req)
-	if nil == err {
-		c.status = wait_resp
-	}
+	this.session.Send(c.req)
 }
 
 func (this *Conn) onTimeout(_ *timer.Timer, ctx interface{}) {
 	c := ctx.(*cmdContext)
-	c.status = wait_remove
+	c.isTimeouted = true
 	this.c.doCallBack(c.unikey, c.cb, errcode.ERR_TIMEOUT)
 }
 
@@ -156,7 +153,6 @@ func (this *Conn) exec(c *cmdContext) {
 		if this.dialing {
 			if len(this.pendingSend) < maxPendingSize {
 				this.timerMgr.OnceWithIndex(time.Duration(ClientTimeout)*time.Millisecond, this.eventQueue, this.onTimeout, c, uint64(c.req.GetHead().Seqno))
-				c.status = wait_send
 				this.pendingSend = append(this.pendingSend, c)
 			} else {
 				this.c.doCallBack(c.unikey, c.cb, errcode.ERR_BUSY)

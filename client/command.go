@@ -39,19 +39,12 @@ func (this *Field) GetValue() interface{} {
 	return (*protocol.Field)(this).GetValue()
 }
 
-const (
-	wait_none   = 0
-	wait_send   = 1
-	wait_resp   = 2
-	wait_remove = 3
-)
-
 type cmdContext struct {
-	unikey   string
-	deadline time.Time
-	status   int
-	cb       callback
-	req      *codec.Message
+	unikey      string
+	deadline    time.Time
+	isTimeouted bool
+	cb          callback
+	req         *codec.Message
 }
 
 func (this *cmdContext) onError(errCode int32) {
