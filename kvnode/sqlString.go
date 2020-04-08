@@ -557,14 +557,16 @@ func (this *sqlMgr) buildInsertUpdateStringPgSql(s *str.Str, kv *kv) {
 	//add other fields
 	i := 0
 
-	for _, name := range meta.GetInsertOrder() {
+	fields := meta.GetInsertOrder()
+
+	for _, name := range fields {
 		v, ok := kv.fields[name]
 		if !ok {
 			v = proto.PackField(name, kv.meta.GetDefaultV(name))
 		}
 
 		s.AppendFieldStr(v, this.binaryToSqlStr)
-		if i != len(kv.fields)-1 {
+		if i != len(fields)-1 {
 			s.AppendString(",")
 		}
 		i++
@@ -600,14 +602,15 @@ func (this *sqlMgr) buildInsertUpdateStringMySql(s *str.Str, kv *kv) {
 	s.AppendFieldStr(version, this.binaryToSqlStr).AppendString(",")                                 //add __version__
 
 	//add other fields
+	fields := meta.GetInsertOrder()
 	i := 0
-	for _, name := range meta.GetInsertOrder() {
+	for _, name := range fields {
 		v, ok := kv.fields[name]
 		if !ok {
 			v = proto.PackField(name, kv.meta.GetDefaultV(name))
 		}
 		s.AppendFieldStr(v, this.binaryToSqlStr)
-		if i != len(kv.fields)-1 {
+		if i != len(fields)-1 {
 			s.AppendString(",")
 		}
 		i++
@@ -626,7 +629,7 @@ func (this *sqlMgr) buildInsertUpdateStringMySql(s *str.Str, kv *kv) {
 	}
 	s.AppendString(",__version__=").AppendFieldStr(version, this.binaryToSqlStr)
 	s.AppendString(";")
-	//Debugln(s.ToString())
+
 }
 
 func (this *sqlMgr) buildInsertString(s *str.Str, kv *kv) {
@@ -636,7 +639,8 @@ func (this *sqlMgr) buildInsertString(s *str.Str, kv *kv) {
 	s.AppendFieldStr(version, this.binaryToSqlStr).AppendString(",")                                 //add __version__
 
 	i := 0
-	for _, name := range meta.GetInsertOrder() {
+	fields := meta.GetInsertOrder()
+	for _, name := range fields {
 
 		v, ok := kv.fields[name]
 		if !ok {
@@ -644,7 +648,7 @@ func (this *sqlMgr) buildInsertString(s *str.Str, kv *kv) {
 		}
 
 		s.AppendFieldStr(v, this.binaryToSqlStr)
-		if i != len(kv.fields)-1 {
+		if i != len(fields)-1 {
 			s.AppendString(",")
 		}
 		i++
