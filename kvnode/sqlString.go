@@ -572,16 +572,12 @@ func (this *sqlMgr) buildInsertUpdateStringPgSql(s *str.Str, kv *kv) {
 		i++
 	}
 	s.AppendString(") ON conflict(__key__)  DO UPDATE SET ")
-	i = 0
 	for _, v := range kv.fields {
-		if i == 0 {
-			s.AppendString(v.GetName()).AppendString("=").AppendFieldStr(v, this.binaryToSqlStr)
-		} else {
-			s.AppendString(",").AppendString(v.GetName()).AppendString("=").AppendFieldStr(v, this.binaryToSqlStr)
+		if meta.CheckFieldMeta(v) {
+			s.AppendString(v.GetName()).AppendString("=").AppendFieldStr(v, this.binaryToSqlStr).AppendString(",")
 		}
-		i++
 	}
-	s.AppendString(",__version__=").AppendFieldStr(version, this.binaryToSqlStr)
+	s.AppendString("__version__=").AppendFieldStr(version, this.binaryToSqlStr)
 	s.AppendString(" where ").AppendString(kv.table).AppendString(".__key__ = '").AppendString(kv.key).AppendString("';")
 	//Debugln(s.ToString())
 }
@@ -618,16 +614,12 @@ func (this *sqlMgr) buildInsertUpdateStringMySql(s *str.Str, kv *kv) {
 
 	s.AppendString(") on duplicate key update ")
 
-	i = 0
 	for _, v := range kv.fields {
-		if i == 0 {
-			s.AppendString(v.GetName()).AppendString("=").AppendFieldStr(v, this.binaryToSqlStr)
-		} else {
-			s.AppendString(",").AppendString(v.GetName()).AppendString("=").AppendFieldStr(v, this.binaryToSqlStr)
+		if meta.CheckFieldMeta(v) {
+			s.AppendString(v.GetName()).AppendString("=").AppendFieldStr(v, this.binaryToSqlStr).AppendString(",")
 		}
-		i++
 	}
-	s.AppendString(",__version__=").AppendFieldStr(version, this.binaryToSqlStr)
+	s.AppendString("__version__=").AppendFieldStr(version, this.binaryToSqlStr)
 	s.AppendString(";")
 
 }
@@ -658,32 +650,24 @@ func (this *sqlMgr) buildInsertString(s *str.Str, kv *kv) {
 }
 
 func (this *sqlMgr) buildUpdateString(s *str.Str, kv *kv) {
+	meta := kv.getMeta()
 	s.AppendString("update ").AppendString(kv.table).AppendString(" set ")
-	i := 0
 	version := proto.PackField("__version__", kv.version)
 	if len(kv.modifyFields) > 0 {
 		for k, v := range kv.modifyFields {
-			if i == 0 {
-				s.AppendString(k).AppendString("=").AppendFieldStr(v, this.binaryToSqlStr)
-			} else {
-				s.AppendString(",").AppendString(k).AppendString("=").AppendFieldStr(v, this.binaryToSqlStr)
+			if meta.CheckFieldMeta(v) {
+				s.AppendString(k).AppendString("=").AppendFieldStr(v, this.binaryToSqlStr).AppendString(",")
 			}
-			i++
 		}
 	} else {
-
 		for _, v := range kv.fields {
-			if i == 0 {
-				s.AppendString(v.GetName()).AppendString("=").AppendFieldStr(v, this.binaryToSqlStr)
-			} else {
-				s.AppendString(",").AppendString(v.GetName()).AppendString("=").AppendFieldStr(v, this.binaryToSqlStr)
+			if meta.CheckFieldMeta(v) {
+				s.AppendString(v.GetName()).AppendString("=").AppendFieldStr(v, this.binaryToSqlStr).AppendString(",")
 			}
-			i++
 		}
-
 	}
 
-	s.AppendString(",__version__=").AppendFieldStr(version, this.binaryToSqlStr)
+	s.AppendString("__version__=").AppendFieldStr(version, this.binaryToSqlStr)
 	s.AppendString(" where __key__ = '").AppendString(kv.key).AppendString("';")
 
 	//Debugln(s.ToString())

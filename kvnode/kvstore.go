@@ -297,7 +297,11 @@ func (this *kvstore) apply(data []byte, snapshot bool) bool {
 					}
 
 					for _, v := range fields {
-						kv.fields[v.GetName()] = v
+						//不一致表示数据库字段类型发生变更，老数据直接丢弃
+						if !kv.meta.CheckFieldMeta(v) {
+							logger.Debugln("drop field", v.GetName())
+							kv.fields[v.GetName()] = v
+						}
 					}
 				}
 				kv.setSnapshoted(true)

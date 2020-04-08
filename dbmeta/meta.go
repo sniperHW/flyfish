@@ -162,6 +162,17 @@ func (this *TableMeta) CheckGet(fields map[string]*proto.Field) bool {
 	return true
 }
 
+func (this *TableMeta) CheckFieldMeta(field *proto.Field) bool {
+	m, ok := this.fieldMetas[field.GetName()]
+	if !ok {
+		return false
+	}
+	if m.tt != field.GetType() {
+		return false
+	}
+	return true
+}
+
 func (this *TableMeta) CheckField(field *proto.Field) bool {
 	m, ok := this.fieldMetas[field.GetName()]
 	if !ok {
