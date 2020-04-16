@@ -2,7 +2,7 @@ package aiogo
 
 import (
 	"errors"
-	//"fmt"
+	"fmt"
 	"net"
 	"runtime"
 	"sync"
@@ -372,6 +372,10 @@ func (c *Conn) doWrite() {
 
 				for nw > 0 {
 					op := c.pendingWrite.front()
+					if nil == op {
+						str := fmt.Sprintf("nw:%d", nw)
+						panic(str)
+					}
 					pos := op.nextPos
 					if op.tt == Write {
 						b := op.buff.([]byte)
@@ -404,10 +408,10 @@ func (c *Conn) doWrite() {
 						for op.nextBuff < len(buffs) && nw > 0 {
 							b := buffs[op.nextBuff]
 							size := len(b) - pos
-
 							if nw >= size {
 								op.nextBuff++
 								op.nextPos = 0
+								pos = 0
 								op.size += size
 								nw -= size
 							} else {

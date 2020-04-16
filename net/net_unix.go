@@ -176,7 +176,7 @@ func NewReceiver(pbSpace *pb.Namespace, compress bool) *Receiver {
 	receiver := &Receiver{
 		pbSpace: pbSpace,
 	}
-	receiver.buffer = make([]byte, initBufferSize)
+	//receiver.buffer = make([]byte, initBufferSize)
 	if compress {
 		receiver.unCompressor = &ZipUnCompressor{}
 	}
@@ -184,7 +184,7 @@ func NewReceiver(pbSpace *pb.Namespace, compress bool) *Receiver {
 }
 
 func (this *Receiver) OnRecvOk(s kendynet.StreamSession, buff []byte) {
-	if nil == this.buffer {
+	if cap(this.buffer) == 0 {
 		this.buffer = buff
 		this.r = 0
 		this.w = uint64(len(buff))
@@ -194,19 +194,19 @@ func (this *Receiver) OnRecvOk(s kendynet.StreamSession, buff []byte) {
 		if space < l {
 			buffer := make([]byte, (this.w-this.r)+l)
 			copy(buffer, this.buffer[this.r:this.w])
-			copy(buffer[:this.w-this.r], buff[:l])
+			copy(buffer[this.w-this.r:], buff[:l])
 			buffPool.Put(this.buffer)
 			this.buffer = buffer
 			this.w = (this.w - this.r) + l
 			this.r = 0
 		} else {
 			if uint64(len(this.buffer))-this.w >= l {
-				copy(this.buffer[:this.w], buff[:l])
+				copy(this.buffer[this.w:], buff[:l])
 				this.w += l
 			} else {
 				copy(this.buffer, this.buffer[this.r:this.w])
 				this.w -= this.r
-				copy(this.buffer[:this.w], buff[:l])
+				copy(this.buffer[this.w:], buff[:l])
 				this.w += l
 				this.r = 0
 			}
@@ -238,6 +238,7 @@ func (this *Receiver) unPack() (ret interface{}, err error) {
 
 		reader := kendynet.NewReader(kendynet.NewByteBuffer(this.buffer[this.r:], unpackSize))
 		if payload, err = reader.GetUint32(); err != nil {
+			fmt.Println(err)
 			return
 		}
 
