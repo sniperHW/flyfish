@@ -211,6 +211,23 @@ func (this *kvstore) tryKick(kv *kv) (bool, bool) {
 	}
 }
 
+func splitUniKey(s string) (table string, key string) {
+	i := -1
+	for k, v := range s {
+		if v == 58 {
+			i = k
+			break
+		}
+	}
+
+	if i >= 0 {
+		table = s[:i]
+		key = s[i+1:]
+	}
+
+	return
+}
+
 func (this *kvstore) apply(data []byte, snapshot bool) bool {
 
 	compressFlag := binary.BigEndian.Uint16(data[:2])
@@ -272,12 +289,12 @@ func (this *kvstore) apply(data []byte, snapshot bool) bool {
 
 				if !ok {
 
-					tmp := strings.Split(unikey, ":")
-					meta := this.storeMgr.dbmeta.GetTableMeta(tmp[0])
+					table, key := splitUniKey(unikey)
+					meta := this.storeMgr.dbmeta.GetTableMeta(table)
 					if nil == meta {
 						return false
 					}
-					kv = newkv(this, meta, tmp[1], unikey, false)
+					kv = newkv(this, meta, key, unikey, false)
 					this.elements[unikey] = kv
 				}
 
@@ -290,7 +307,7 @@ func (this *kvstore) apply(data []byte, snapshot bool) bool {
 					kv.version = version
 					fields := p.values[2].([]*proto.Field)
 
-					logger.Debugln(p.tt, unikey, version, "cache_ok", kv.getStatus(), kv.isWriteBack())
+					logger.Debugln(p.tt, unikey, version, "cache_ok", kv.getStatus(), kv.isWriteBack(), fields)
 
 					if nil == kv.fields {
 						kv.fields = map[string]*proto.Field{}
@@ -300,6 +317,7 @@ func (this *kvstore) apply(data []byte, snapshot bool) bool {
 						//不一致表示数据库字段类型发生变更，老数据直接丢弃
 						if !kv.meta.CheckFieldMeta(v) {
 							logger.Debugln("drop field", v.GetName())
+						} else {
 							kv.fields[v.GetName()] = v
 						}
 					}
