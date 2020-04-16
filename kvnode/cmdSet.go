@@ -1,8 +1,8 @@
 package kvnode
 
 import (
-	codec "github.com/sniperHW/flyfish/codec"
 	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/proto"
 )
 
@@ -59,8 +59,8 @@ func (this *cmdSet) reply(errCode int32, fields map[string]*proto.Field, version
 	this.replyer.reply(this, errCode, fields, version)
 }
 
-func (this *cmdSet) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) *codec.Message {
-	return codec.NewMessage(codec.CommonHead{
+func (this *cmdSet) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) *net.Message {
+	return net.NewMessage(net.CommonHead{
 		Seqno:   this.replyer.seqno,
 		ErrCode: errCode,
 	}, &proto.SetResp{
@@ -124,7 +124,7 @@ func (this *cmdSet) prepare(t asynCmdTaskI) (asynCmdTaskI, bool) {
 	return task, true
 }
 
-func set(n *KVNode, cli *cliConn, msg *codec.Message) {
+func set(n *KVNode, cli *cliConn, msg *net.Message) {
 
 	req := msg.GetData().(*proto.SetReq)
 

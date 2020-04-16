@@ -2,8 +2,8 @@ package kvnode
 
 import (
 	pb "github.com/golang/protobuf/proto"
-	codec "github.com/sniperHW/flyfish/codec"
 	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/proto"
 )
 
@@ -74,7 +74,7 @@ func (this *cmdIncrDecr) reply(errCode int32, fields map[string]*proto.Field, ve
 	this.replyer.reply(this, errCode, fields, version)
 }
 
-func (this *cmdIncrDecr) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) *codec.Message {
+func (this *cmdIncrDecr) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) *net.Message {
 
 	var pbdata pb.Message
 	var field *proto.Field
@@ -95,7 +95,7 @@ func (this *cmdIncrDecr) makeResponse(errCode int32, fields map[string]*proto.Fi
 		}
 	}
 
-	return codec.NewMessage(codec.CommonHead{
+	return net.NewMessage(net.CommonHead{
 		Seqno:   this.replyer.seqno,
 		ErrCode: errCode,
 	}, pbdata)

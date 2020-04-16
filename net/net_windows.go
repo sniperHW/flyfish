@@ -1,6 +1,7 @@
 // +build windows
 package net
 
+/*
 import (
 	"fmt"
 	"github.com/golang/protobuf/proto"
@@ -12,14 +13,6 @@ import (
 	"github.com/sniperHW/kendynet/socket/listener/tcp"
 	"net"
 )
-
-func NewListener(nettype, service string) (kendynet.Listener, error) {
-	return tcp.New(nettype, service)
-}
-
-func NewConnector(nettype string, addr string) (kendynet.Connector, error) {
-	return connector.New(nettype, addr)
-}
 
 type Receiver struct {
 	buffer         []byte
@@ -34,7 +27,7 @@ func NewReceiver(pbSpace *pb.Namespace, compress bool) *Receiver {
 	receiver := &Receiver{
 		pbSpace: pbSpace,
 	}
-	receiver.buffer = make([]byte, initBufferSize) //conf.MaxPacketSize*2)
+	receiver.buffer = make([]byte, initBufferSize)
 	if compress {
 		receiver.unCompressor = &ZipUnCompressor{}
 	}
@@ -135,37 +128,6 @@ func (this *Receiver) unPack() (ret interface{}, err error) {
 }
 
 func (this *Receiver) ReceiveAndUnpack(sess kendynet.StreamSession) (interface{}, error) {
-	/*var msg interface{}
-	var err error
-	for {
-		msg, err = this.unPack()
-
-		if nil != msg {
-			return msg, nil
-		} else if err == nil {
-			if this.w == this.r {
-				this.w = 0
-				this.r = 0
-			} else if uint64(cap(this.buffer))-this.w < conf.MaxPacketSize/4 {
-				copy(this.buffer, this.buffer[this.r:this.w])
-				this.w = this.w - this.r
-				this.r = 0
-			}
-
-			conn := sess.GetUnderConn().(*net.TCPConn)
-			n, err := conn.Read(this.buffer[this.w:])
-
-			if n > 0 {
-				this.w += uint64(n) //增加待解包数据
-			}
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, err
-		}
-	}*/
-
 	var msg interface{}
 	var err error
 	for {
@@ -202,4 +164,4 @@ func (this *Receiver) ReceiveAndUnpack(sess kendynet.StreamSession) (interface{}
 			return nil, err
 		}
 	}
-}
+}*/

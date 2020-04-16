@@ -19,9 +19,9 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/sniperHW/flyfish/codec"
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/rafthttp"
 	"github.com/sniperHW/flyfish/util/fixedarray"
 	"github.com/sniperHW/flyfish/util/str"
@@ -109,8 +109,8 @@ type raftNode struct {
 
 	kvstore *kvstore
 
-	proposalCompressor codec.CompressorI
-	snapshotCompressor codec.CompressorI
+	proposalCompressor net.CompressorI
+	snapshotCompressor net.CompressorI
 }
 
 var defaultSnapshotCount uint64 = 3000
@@ -161,8 +161,8 @@ func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, propos
 		readPipeline:    readC,
 		lease:           &lease{stop: nil},
 
-		proposalCompressor: &codec.ZipCompressor{},
-		snapshotCompressor: &codec.ZipCompressor{},
+		proposalCompressor: &net.ZipCompressor{},
+		snapshotCompressor: &net.ZipCompressor{},
 
 		// rest of structure populated after WAL replay
 	}

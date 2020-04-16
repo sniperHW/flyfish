@@ -1,7 +1,7 @@
 package kvnode
 
 import (
-	codec "github.com/sniperHW/flyfish/codec"
+	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/kendynet"
 	"sync"
 	"time"
@@ -19,7 +19,7 @@ func (this *cliConn) clear() {
 	this.replyers = map[int64]*replyer{}
 }
 
-func (this *cliConn) send(msg *codec.Message) error {
+func (this *cliConn) send(msg *net.Message) error {
 	return this.session.Send(msg)
 }
 

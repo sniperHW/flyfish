@@ -10,11 +10,6 @@ import (
 )
 
 const (
-	minSize        uint64 = SizeLen
-	initBufferSize uint64 = 1024 * 256
-)
-
-const (
 	SizeLen               = 4
 	SizeFlag              = 1
 	SizeCmd               = 2

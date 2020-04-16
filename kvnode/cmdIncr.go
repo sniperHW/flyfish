@@ -1,12 +1,12 @@
 package kvnode
 
 import (
-	codec "github.com/sniperHW/flyfish/codec"
 	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/proto"
 )
 
-func incrBy(n *KVNode, cli *cliConn, msg *codec.Message) {
+func incrBy(n *KVNode, cli *cliConn, msg *net.Message) {
 
 	req := msg.GetData().(*proto.IncrByReq)
 

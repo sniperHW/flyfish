@@ -2,8 +2,8 @@ package kvnode
 
 import (
 	//pb "github.com/golang/protobuf/proto"
-	codec "github.com/sniperHW/flyfish/codec"
 	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/proto"
 	//"time"
 )
@@ -56,7 +56,7 @@ func (this *cmdCompareAndSet) reply(errCode int32, fields map[string]*proto.Fiel
 	this.replyer.reply(this, errCode, fields, version)
 }
 
-func (this *cmdCompareAndSet) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) *codec.Message {
+func (this *cmdCompareAndSet) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) *net.Message {
 	pbdata := &proto.CompareAndSetResp{
 		Version: version,
 	}
@@ -66,7 +66,7 @@ func (this *cmdCompareAndSet) makeResponse(errCode int32, fields map[string]*pro
 		pbdata.Value = fields[this.oldV.GetName()]
 	}
 
-	return codec.NewMessage(codec.CommonHead{
+	return net.NewMessage(net.CommonHead{
 		Seqno:   this.replyer.seqno,
 		ErrCode: errCode,
 	}, pbdata)
@@ -122,7 +122,7 @@ func (this *cmdCompareAndSet) prepare(t asynCmdTaskI) (asynCmdTaskI, bool) {
 	}
 }
 
-func compareAndSet(n *KVNode, cli *cliConn, msg *codec.Message) {
+func compareAndSet(n *KVNode, cli *cliConn, msg *net.Message) {
 
 	req := msg.GetData().(*proto.CompareAndSetReq)
 

@@ -1,7 +1,7 @@
 package kvnode
 
 import (
-	codec "github.com/sniperHW/flyfish/codec"
+	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet"
 	"sync"
@@ -12,7 +12,7 @@ import (
 var sessions sync.Map
 var clientCount int64
 
-type handler func(*KVNode, *cliConn, *codec.Message)
+type handler func(*KVNode, *cliConn, *net.Message)
 
 type dispatcher struct {
 	handlers map[uint16]handler
@@ -27,10 +27,10 @@ func (this *dispatcher) Register(cmd uint16, h handler) {
 	this.handlers[cmd] = h
 }
 
-func (this *dispatcher) Dispatch(kvnode *KVNode, session kendynet.StreamSession, cmd uint16, msg *codec.Message) {
+func (this *dispatcher) Dispatch(kvnode *KVNode, session kendynet.StreamSession, cmd uint16, msg *net.Message) {
 	if nil != msg {
 		if cmd == uint16(proto.CmdType_Ping) {
-			resp := codec.NewMessage(codec.CommonHead{}, &proto.PingResp{
+			resp := net.NewMessage(net.CommonHead{}, &proto.PingResp{
 				Timestamp: time.Now().UnixNano(),
 			})
 			session.Send(resp)
@@ -79,10 +79,10 @@ func (this *dispatcher) OnNewClient(session kendynet.StreamSession) {
 	sessions.Store(session, session)
 }
 
-func ping(kvnode *KVNode, conn *cliConn, msg *codec.Message) {
+func ping(kvnode *KVNode, conn *cliConn, msg *net.Message) {
 	head := msg.GetHead()
 	req := msg.GetData().(*proto.PingReq)
-	resp := codec.NewMessage(head, &proto.PingResp{
+	resp := net.NewMessage(head, &proto.PingResp{
 		Timestamp: req.GetTimestamp(),
 	})
 	conn.send(resp)
