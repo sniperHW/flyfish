@@ -11,11 +11,40 @@ import (
 	"github.com/sniperHW/kendynet/socket/aio"
 	"net"
 	"runtime"
+	"sync"
 )
 
+type BufferPool struct {
+	pool sync.Pool
+}
+
+const PoolBuffSize uint64 = 128 * 1024
+
+func NewBufferPool() *BufferPool {
+	return &BufferPool{
+		pool: sync.Pool{
+			New: func() interface{} {
+				return make([]byte, PoolBuffSize)
+			},
+		},
+	}
+}
+
+func (p *BufferPool) Get() []byte {
+	return p.pool.Get().([]byte)
+}
+
+func (p *BufferPool) Put(buff []byte) {
+	if uint64(cap(buff)) != PoolBuffSize {
+		p.pool.Put(buff[:cap(buff)])
+	}
+}
+
 var aioService *aio.AioService
+var buffPool *BufferPool
 
 func init() {
+	buffPool = NewBufferPool()
 	workerCount := 0
 	completeQueueCount := 0
 	cpuNum := runtime.NumCPU()
@@ -27,13 +56,14 @@ func init() {
 		completeQueueCount = cpuNum * 8
 	}
 
-	aioService = aio.NewAioService(1, workerCount, completeQueueCount, nil)
+	aioService = aio.NewAioService(1, workerCount, completeQueueCount, buffPool)
 }
 
 func createSession(conn net.Conn) kendynet.StreamSession {
 	return aio.NewAioSocket(aioService, conn)
 }
 
+/*
 type Receiver struct {
 	buffer         []byte
 	w              uint64
@@ -42,6 +72,7 @@ type Receiver struct {
 	unCompressor   UnCompressorI
 	pbSpace        *pb.Namespace
 }
+
 
 func NewReceiver(pbSpace *pb.Namespace, compress bool) *Receiver {
 	receiver := &Receiver{
@@ -188,72 +219,101 @@ func (this *Receiver) ReceiveAndUnpack(sess kendynet.StreamSession) (interface{}
 		}
 	}
 }
+*/
 
-/*
-type Receiver struct {
+type AioReceiverBase struct {
 	buffer         []byte
 	w              uint64
 	r              uint64
 	nextPacketSize uint64
-	unCompressor   UnCompressorI
-	pbSpace        *pb.Namespace
+	Unpack         func(buffer []byte, w uint64, r uint64) (ret interface{}, packetSize uint64, nextPacketSize uint64, err error)
+}
+
+type Receiver struct {
+	*AioReceiverBase
+	unCompressor UnCompressorI
+	pbSpace      *pb.Namespace
+}
+
+func (this *AioReceiverBase) OnRecvOk(s kendynet.StreamSession, buff []byte) {
+	if cap(this.buffer) == 0 {
+		this.buffer = buff[:cap(buff)]
+		this.r = 0
+		this.w = uint64(len(buff))
+	} else {
+		l := uint64(len(buff))
+		space := uint64(len(this.buffer)) - this.w
+		if space >= l {
+			copy(this.buffer[this.w:], buff[:l])
+			this.w += l
+		} else {
+			sizeWant := l + this.w
+			if sizeWant < this.nextPacketSize {
+				//下一个包是大包，需要准备足够的空间
+				sizeWant = this.nextPacketSize + PoolBuffSize
+			}
+			b := make([]byte, sizeWant)
+			copy(b, this.buffer[:this.w])
+			copy(b[this.w:], buff[:l])
+			this.w += l
+			buffPool.Put(this.buffer)
+			this.buffer = b
+		}
+		buffPool.Put(buff)
+	}
+}
+
+func (this *AioReceiverBase) StartReceive(s kendynet.StreamSession) {
+	s.(*aio.AioSocket).Recv(nil)
+}
+
+func (this *AioReceiverBase) OnClose() {
+	if cap(this.buffer) != 0 {
+		buffPool.Put(this.buffer)
+		this.buffer = nil
+	}
+}
+
+func (this *AioReceiverBase) ReceiveAndUnpack(s kendynet.StreamSession) (interface{}, error) {
+	msg, packetSize, nextPacketSize, err := this.Unpack(this.buffer, this.r, this.w)
+
+	this.r += packetSize
+	this.nextPacketSize = nextPacketSize
+
+	if this.r == this.w && cap(this.buffer) != 0 {
+		buffPool.Put(this.buffer)
+		this.buffer = nil
+	} else if nil == msg && this.r != this.w {
+		copy(this.buffer, this.buffer[this.r:this.w])
+		this.w = this.w - this.r
+		this.r = 0
+	}
+
+	if nil == msg && nil == err {
+		return nil, s.(*aio.AioSocket).Recv(nil)
+	} else {
+		return msg, err
+	}
 }
 
 func NewReceiver(pbSpace *pb.Namespace, compress bool) *Receiver {
 	receiver := &Receiver{
 		pbSpace: pbSpace,
 	}
+
+	receiver.AioReceiverBase = &AioReceiverBase{
+		Unpack: receiver.unpack,
+	}
+
 	if compress {
 		receiver.unCompressor = &ZipUnCompressor{}
 	}
 	return receiver
 }
 
-func (this *Receiver) OnRecvOk(s kendynet.StreamSession, buff []byte) {
-	if cap(this.buffer) == 0 {
-		this.buffer = buff
-		this.r = 0
-		this.w = uint64(len(buff))
-	} else {
-		l := uint64(len(buff))
-		space := uint64(len(this.buffer)) - (this.w - this.r)
-		if space < l {
-			buffer := make([]byte, (this.w-this.r)+l)
-			copy(buffer, this.buffer[this.r:this.w])
-			copy(buffer[this.w-this.r:], buff[:l])
-			buffPool.Put(this.buffer)
-			this.buffer = buffer
-			this.w = (this.w - this.r) + l
-			this.r = 0
-		} else {
-			if uint64(len(this.buffer))-this.w >= l {
-				copy(this.buffer[this.w:], buff[:l])
-				this.w += l
-			} else {
-				copy(this.buffer, this.buffer[this.r:this.w])
-				this.w -= this.r
-				copy(this.buffer[this.w:], buff[:l])
-				this.w += l
-				this.r = 0
-			}
-			buffPool.Put(buff)
-		}
-	}
-}
+func (this *Receiver) unpack(buffer []byte, r uint64, w uint64) (ret interface{}, packetSize uint64, nextPacketSize uint64, err error) {
 
-func (this *Receiver) StartReceive(s kendynet.StreamSession) {
-	s.(*aio.AioSocket).Recv(nil)
-}
-
-func (this *Receiver) OnClose() {
-	if nil != this.buffer {
-		buffPool.Put(this.buffer)
-		this.buffer = nil
-	}
-}
-
-func (this *Receiver) unPack() (ret interface{}, err error) {
-	unpackSize := uint64(this.w - this.r)
+	unpackSize := uint64(w - r)
 	if unpackSize > minSize {
 		var payload uint32
 		var cmd uint16
@@ -262,7 +322,7 @@ func (this *Receiver) unPack() (ret interface{}, err error) {
 		var totalSize uint64
 		var flag byte
 
-		reader := kendynet.NewReader(kendynet.NewByteBuffer(this.buffer[this.r:], unpackSize))
+		reader := kendynet.NewReader(kendynet.NewByteBuffer(buffer[r:], unpackSize))
 		if payload, err = reader.GetUint32(); err != nil {
 			fmt.Println(err)
 			return
@@ -280,7 +340,7 @@ func (this *Receiver) unPack() (ret interface{}, err error) {
 
 		totalSize = uint64(payload + SizeLen)
 
-		this.nextPacketSize = totalSize
+		nextPacketSize = totalSize
 
 		if totalSize <= unpackSize {
 
@@ -338,25 +398,10 @@ func (this *Receiver) unPack() (ret interface{}, err error) {
 			if msg, err = this.pbSpace.Unmarshal(uint32(cmd), buff); err != nil {
 				return
 			}
-			this.nextPacketSize = 0
-			this.r += totalSize
+			nextPacketSize = 0
+			packetSize = totalSize
 			ret = NewMessageWithCmd(uint16(cmd), head, msg)
 		}
 	}
 	return
 }
-
-func (this *Receiver) ReceiveAndUnpack(s kendynet.StreamSession) (interface{}, error) {
-	msg, err := this.unPack()
-	if nil == msg && nil == err {
-		return nil, s.(*aio.AioSocket).Recv(this.buffer)
-	}
-
-	if nil != msg && this.r == this.w {
-		buffPool.Put(this.buffer)
-		this.buffer = nil
-	}
-
-	return msg, err
-}
-*/

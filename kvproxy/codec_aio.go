@@ -7,9 +7,58 @@ import (
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/kendynet"
-	"github.com/sniperHW/kendynet/socket/aio"
 )
 
+type Receiver struct {
+	*net.AioReceiverBase
+}
+
+func NewReceiver() *Receiver {
+	receiver := &Receiver{}
+	receiver.AioReceiverBase = &net.AioReceiverBase{
+		Unpack: receiver.unpack,
+	}
+	return receiver
+}
+
+func (this *Receiver) unpack(buffer []byte, r uint64, w uint64) (ret interface{}, packetSize uint64, nextPacketSize uint64, err error) {
+	unpackSize := uint64(w - r)
+	if unpackSize > minSize {
+		var payload uint32
+		var totalSize uint64
+		reader := kendynet.NewReader(kendynet.NewByteBuffer(buffer[r:], unpackSize))
+		if payload, err = reader.GetUint32(); err != nil {
+			return
+		}
+
+		if uint64(payload) == 0 {
+			err = fmt.Errorf("zero payload")
+			return
+		}
+
+		if uint64(payload)+net.SizeLen > conf.MaxPacketSize {
+			err = fmt.Errorf("large packet %d", uint64(payload)+net.SizeLen)
+			return
+		}
+
+		totalSize = uint64(payload + net.SizeLen)
+
+		nextPacketSize = totalSize
+
+		if totalSize <= unpackSize {
+			msg := kendynet.NewByteBuffer(totalSize)
+			err = msg.AppendBytes(buffer[r : r+totalSize])
+			if nil == err {
+				nextPacketSize = 0
+				packetSize = totalSize
+				ret = msg
+			}
+		}
+	}
+	return
+}
+
+/*
 type Receiver struct {
 	buffer         []byte
 	w              uint64
@@ -103,3 +152,4 @@ func (this *Receiver) ReceiveAndUnpack(sess kendynet.StreamSession) (interface{}
 		}
 	}
 }
+*/

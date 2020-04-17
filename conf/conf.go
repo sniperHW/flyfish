@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	MaxPacketSize = 4 * 1024 * 1024 // 4mb
+	MaxPacketSize = 8 * 1024 * 1024 // 8mb
 )
 
 var (
