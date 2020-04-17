@@ -61,7 +61,7 @@ func RecvLoginReq(session kendynet.StreamSession) (*protocol.LoginReq, error) {
 
 		if w >= pbsize+2 {
 			loginReq := &protocol.LoginReq{}
-			if err = proto.Unmarshal(buffer[2:w], loginReq); err != nil {
+			if err = proto.Unmarshal(buffer[2:w], loginReq); err == nil {
 				return loginReq, nil
 			} else {
 				return nil, err
@@ -92,10 +92,10 @@ func RecvLoginResp(session kendynet.StreamSession) (*protocol.LoginResp, error) 
 
 		if w >= pbsize+2 {
 			loginResp := &protocol.LoginResp{}
-			if err = proto.Unmarshal(buffer[2:w], loginResp); err != nil {
-				return nil, err
-			} else {
+			if err = proto.Unmarshal(buffer[2:w], loginResp); err == nil {
 				return loginResp, nil
+			} else {
+				return nil, err
 			}
 		}
 	}
