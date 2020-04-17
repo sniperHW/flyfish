@@ -66,7 +66,7 @@ func (this *cmdCompareAndSetNx) makeResponse(errCode int32, fields map[string]*p
 		Version: version,
 	}
 	//ok时只返回状态不返回字段值
-	if errCode != errcode.ERR_OK && nil != fields {
+	if errCode != errcode.ERR_CAS_NOT_EQUAL && nil != fields {
 		pbdata.Value = fields[this.oldV.GetName()]
 	}
 
@@ -102,7 +102,7 @@ func (this *cmdCompareAndSetNx) prepare(t asynCmdTaskI) (asynCmdTaskI, bool) {
 		}
 
 		if !this.oldV.IsEqual(v) {
-			this.reply(errcode.ERR_CAS_NOT_EQUAL, nil, kv.version)
+			this.reply(errcode.ERR_CAS_NOT_EQUAL, kv.fields, kv.version)
 			return t, true
 		}
 	}
