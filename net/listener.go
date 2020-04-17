@@ -65,6 +65,7 @@ func (this *Listener) Serve(onNewClient func(kendynet.StreamSession, bool)) erro
 
 				loginReq, err := login.RecvLoginReq(conn.(*net.TCPConn))
 				if nil != err {
+					kendynet.GetLogger().Errorf("RecvLoginReq err: %v", err)
 					conn.Close()
 					return
 				}
