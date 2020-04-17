@@ -16,7 +16,18 @@ import (
 var aioService *aio.AioService
 
 func init() {
-	aioService = aio.NewAioService(1, runtime.NumCPU()*2, runtime.NumCPU()*2, nil)
+	workerCount := 0
+	completeQueueCount := 0
+	cpuNum := runtime.NumCPU()
+	if cpuNum <= 4 {
+		workerCount = 16
+		completeQueueCount = 32
+	} else {
+		workerCount = cpuNum * 4
+		completeQueueCount = cpuNum * 8
+	}
+
+	aioService = aio.NewAioService(1, workerCount, completeQueueCount, nil)
 }
 
 func createSession(conn net.Conn) kendynet.StreamSession {

@@ -2,7 +2,6 @@ package aiogo
 
 import (
 	"errors"
-	"fmt"
 	"net"
 	"runtime"
 	"sync"
@@ -134,6 +133,11 @@ func (o *op) remove() {
 const max_send_size = 1024 * 256
 const max_send_iovec_size = 512
 
+type sendContext struct {
+	cc    int
+	total int
+}
+
 type Conn struct {
 	fd            int
 	watchWrite    bool
@@ -151,6 +155,7 @@ type Conn struct {
 	recvTimeout   atomic.Value
 	closed        int32
 	pollerVersion int32
+	sContext      sendContext
 }
 
 func (c *Conn) Watcher() *Watcher {
@@ -287,34 +292,38 @@ func (c *Conn) doWrite() {
 
 	for op := c.pendingWrite.front(); c.writeable && nil != op && atomic.LoadInt32(&c.closed) == 0; op = c.pendingWrite.front() {
 
-		cc := 0
-		total := 0
-
-		for op != &c.pendingWrite.tail && total < max_send_size && cc < max_send_iovec_size {
-			if op.tt == Write {
-				b := op.buff.([]byte)
-				size := len(b) - op.nextPos
-				c.send_iovec[cc] = syscall.Iovec{&b[op.nextPos], uint64(size)}
-				total += size
-				cc++
-			} else {
-				buffs := op.buff.([][]byte)
-				for i := op.nextBuff; i < len(buffs) && total < max_send_size && cc < max_send_iovec_size; cc++ {
-					b := buffs[i]
-					var pos int
-					if i == op.nextBuff {
-						pos = op.nextPos
-					} else {
-						pos = 0
+		//如果cc !=0 表示上次发送遇到了EAGAIN
+		if c.sContext.cc == 0 {
+			c.sContext.total = 0
+			for op != &c.pendingWrite.tail && c.sContext.total < max_send_size && c.sContext.cc < max_send_iovec_size {
+				if op.tt == Write {
+					b := op.buff.([]byte)
+					size := len(b) - op.nextPos
+					c.send_iovec[c.sContext.cc] = syscall.Iovec{&b[op.nextPos], uint64(size)}
+					c.sContext.total += size
+					c.sContext.cc++
+				} else {
+					buffs := op.buff.([][]byte)
+					for i := op.nextBuff; i < len(buffs) && c.sContext.total < max_send_size && c.sContext.cc < max_send_iovec_size; c.sContext.cc++ {
+						b := buffs[i]
+						var pos int
+						if i == op.nextBuff {
+							pos = op.nextPos
+						} else {
+							pos = 0
+						}
+						size := len(b) - pos
+						c.send_iovec[c.sContext.cc] = syscall.Iovec{&b[pos], uint64(size)}
+						c.sContext.total += size
+						i++
 					}
-					size := len(b) - pos
-					c.send_iovec[cc] = syscall.Iovec{&b[pos], uint64(size)}
-					total += size
-					i++
 				}
+				op = op.nnext
 			}
-			op = op.nnext
 		}
+
+		total := c.sContext.total
+		cc := c.sContext.cc
 
 		for {
 
@@ -324,7 +333,7 @@ func (c *Conn) doWrite() {
 			if errno == syscall.EINTR {
 				continue
 			} else if errno != 0 && errno != syscall.EAGAIN {
-
+				c.sContext.cc = 0
 				for op := c.pendingWrite.front(); nil != op; op = c.pendingWrite.front() {
 					op.remove()
 					if nil != op.timer {
@@ -356,7 +365,7 @@ func (c *Conn) doWrite() {
 				}
 				return
 			} else {
-
+				c.sContext.cc = 0
 				if nw < total {
 					c.writeable = false
 					if !c.watchWrite {
@@ -372,10 +381,6 @@ func (c *Conn) doWrite() {
 
 				for nw > 0 {
 					op := c.pendingWrite.front()
-					if nil == op {
-						str := fmt.Sprintf("nw:%d", nw)
-						panic(str)
-					}
 					pos := op.nextPos
 					if op.tt == Write {
 						b := op.buff.([]byte)
