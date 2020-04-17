@@ -35,7 +35,7 @@ func (p *BufferPool) Get() []byte {
 }
 
 func (p *BufferPool) Put(buff []byte) {
-	if uint64(cap(buff)) != PoolBuffSize {
+	if uint64(cap(buff)) == PoolBuffSize {
 		p.pool.Put(buff[:cap(buff)])
 	}
 }
@@ -61,6 +61,192 @@ func init() {
 
 func createSession(conn net.Conn) kendynet.StreamSession {
 	return aio.NewAioSocket(aioService, conn)
+}
+
+type AioReceiverBase struct {
+	buffer         []byte
+	w              uint64
+	r              uint64
+	nextPacketSize uint64
+	Unpack         func(buffer []byte, w uint64, r uint64) (ret interface{}, packetSize uint64, nextPacketSize uint64, err error)
+}
+
+type Receiver struct {
+	*AioReceiverBase
+	unCompressor UnCompressorI
+	pbSpace      *pb.Namespace
+}
+
+func (this *AioReceiverBase) OnRecvOk(s kendynet.StreamSession, buff []byte) {
+	if cap(this.buffer) == 0 {
+		this.buffer = buff[:cap(buff)]
+		this.r = 0
+		this.w = uint64(len(buff))
+	} else {
+		l := uint64(len(buff))
+		space := uint64(len(this.buffer)) - this.w
+		if space >= l {
+			copy(this.buffer[this.w:], buff[:l])
+			this.w += l
+		} else {
+			sizeWant := l + this.w
+			if sizeWant < this.nextPacketSize {
+				//下一个包是大包，需要准备足够的空间
+				sizeWant = this.nextPacketSize + PoolBuffSize
+			}
+			b := make([]byte, sizeWant)
+			copy(b, this.buffer[:this.w])
+			copy(b[this.w:], buff[:l])
+			this.w += l
+			buffPool.Put(this.buffer)
+			this.buffer = b
+		}
+		buffPool.Put(buff)
+	}
+}
+
+func (this *AioReceiverBase) StartReceive(s kendynet.StreamSession) {
+	s.(*aio.AioSocket).Recv(nil)
+}
+
+func (this *AioReceiverBase) OnClose() {
+	if cap(this.buffer) != 0 {
+		buffPool.Put(this.buffer)
+		this.buffer = nil
+	}
+}
+
+func (this *AioReceiverBase) ReceiveAndUnpack(s kendynet.StreamSession) (interface{}, error) {
+	var msg interface{}
+	var err error
+	var packetSize uint64
+	msg, packetSize, this.nextPacketSize, err = this.Unpack(this.buffer, this.r, this.w)
+	this.r += packetSize
+
+	if this.r == this.w && cap(this.buffer) != 0 {
+		buffPool.Put(this.buffer)
+		this.buffer = nil
+	} else if nil == msg && this.r != this.w {
+		copy(this.buffer, this.buffer[this.r:this.w])
+		this.w = this.w - this.r
+		this.r = 0
+	}
+
+	if nil == msg && nil == err {
+		return nil, s.(*aio.AioSocket).Recv(nil)
+	} else {
+		return msg, err
+	}
+}
+
+func NewReceiver(pbSpace *pb.Namespace, compress bool) *Receiver {
+	receiver := &Receiver{
+		pbSpace: pbSpace,
+	}
+
+	receiver.AioReceiverBase = &AioReceiverBase{
+		Unpack: receiver.unpack,
+	}
+
+	if compress {
+		receiver.unCompressor = &ZipUnCompressor{}
+	}
+	return receiver
+}
+
+func (this *Receiver) unpack(buffer []byte, r uint64, w uint64) (ret interface{}, packetSize uint64, nextPacketSize uint64, err error) {
+
+	unpackSize := uint64(w - r)
+	if unpackSize > minSize {
+		var payload uint32
+		var cmd uint16
+		var buff []byte
+		var msg proto.Message
+		var totalSize uint64
+		var flag byte
+
+		reader := kendynet.NewReader(kendynet.NewByteBuffer(buffer[r:], unpackSize))
+		if payload, err = reader.GetUint32(); err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		if uint64(payload) == 0 {
+			err = fmt.Errorf("zero payload")
+			return
+		}
+
+		if uint64(payload)+SizeLen > conf.MaxPacketSize {
+			err = fmt.Errorf("large packet %d", uint64(payload)+SizeLen)
+			return
+		}
+
+		totalSize = uint64(payload + SizeLen)
+
+		nextPacketSize = totalSize
+
+		if totalSize <= unpackSize {
+
+			if flag, err = reader.GetByte(); err != nil {
+				return
+			}
+
+			//read head
+			var head CommonHead
+			var sizeOfUniKey int16
+
+			if head.Seqno, err = reader.GetInt64(); err != nil {
+				return
+			}
+
+			if head.ErrCode, err = reader.GetInt32(); err != nil {
+				return
+			}
+
+			if head.Timeout, err = reader.GetUint32(); err != nil {
+				return
+			}
+
+			if sizeOfUniKey, err = reader.GetInt16(); err != nil {
+				return
+			}
+
+			if sizeOfUniKey > 0 {
+				if head.UniKey, err = reader.GetString(uint64(sizeOfUniKey)); err != nil {
+					return
+				}
+			}
+
+			if cmd, err = reader.GetUint16(); err != nil {
+				return
+			}
+			sizeOfHead := 8 + 4 + 4 + 2 + uint32(sizeOfUniKey)
+			//普通消息
+			size := payload - SizeCmd - SizeFlag - sizeOfHead
+			if buff, err = reader.GetBytes(uint64(size)); err != nil {
+				return
+			}
+
+			if flag == byte(1) {
+				if nil == this.unCompressor {
+					err = fmt.Errorf("invaild compress packet")
+					return
+				}
+
+				if buff, err = this.unCompressor.UnCompress(buff); err != nil {
+					return
+				}
+			}
+
+			if msg, err = this.pbSpace.Unmarshal(uint32(cmd), buff); err != nil {
+				return
+			}
+			nextPacketSize = 0
+			packetSize = totalSize
+			ret = NewMessageWithCmd(uint16(cmd), head, msg)
+		}
+	}
+	return
 }
 
 /*
@@ -220,188 +406,3 @@ func (this *Receiver) ReceiveAndUnpack(sess kendynet.StreamSession) (interface{}
 	}
 }
 */
-
-type AioReceiverBase struct {
-	buffer         []byte
-	w              uint64
-	r              uint64
-	nextPacketSize uint64
-	Unpack         func(buffer []byte, w uint64, r uint64) (ret interface{}, packetSize uint64, nextPacketSize uint64, err error)
-}
-
-type Receiver struct {
-	*AioReceiverBase
-	unCompressor UnCompressorI
-	pbSpace      *pb.Namespace
-}
-
-func (this *AioReceiverBase) OnRecvOk(s kendynet.StreamSession, buff []byte) {
-	if cap(this.buffer) == 0 {
-		this.buffer = buff[:cap(buff)]
-		this.r = 0
-		this.w = uint64(len(buff))
-	} else {
-		l := uint64(len(buff))
-		space := uint64(len(this.buffer)) - this.w
-		if space >= l {
-			copy(this.buffer[this.w:], buff[:l])
-			this.w += l
-		} else {
-			sizeWant := l + this.w
-			if sizeWant < this.nextPacketSize {
-				//下一个包是大包，需要准备足够的空间
-				sizeWant = this.nextPacketSize + PoolBuffSize
-			}
-			b := make([]byte, sizeWant)
-			copy(b, this.buffer[:this.w])
-			copy(b[this.w:], buff[:l])
-			this.w += l
-			buffPool.Put(this.buffer)
-			this.buffer = b
-		}
-		buffPool.Put(buff)
-	}
-}
-
-func (this *AioReceiverBase) StartReceive(s kendynet.StreamSession) {
-	s.(*aio.AioSocket).Recv(nil)
-}
-
-func (this *AioReceiverBase) OnClose() {
-	if cap(this.buffer) != 0 {
-		buffPool.Put(this.buffer)
-		this.buffer = nil
-	}
-}
-
-func (this *AioReceiverBase) ReceiveAndUnpack(s kendynet.StreamSession) (interface{}, error) {
-	msg, packetSize, nextPacketSize, err := this.Unpack(this.buffer, this.r, this.w)
-
-	this.r += packetSize
-	this.nextPacketSize = nextPacketSize
-
-	if this.r == this.w && cap(this.buffer) != 0 {
-		buffPool.Put(this.buffer)
-		this.buffer = nil
-	} else if nil == msg && this.r != this.w {
-		copy(this.buffer, this.buffer[this.r:this.w])
-		this.w = this.w - this.r
-		this.r = 0
-	}
-
-	if nil == msg && nil == err {
-		return nil, s.(*aio.AioSocket).Recv(nil)
-	} else {
-		return msg, err
-	}
-}
-
-func NewReceiver(pbSpace *pb.Namespace, compress bool) *Receiver {
-	receiver := &Receiver{
-		pbSpace: pbSpace,
-	}
-
-	receiver.AioReceiverBase = &AioReceiverBase{
-		Unpack: receiver.unpack,
-	}
-
-	if compress {
-		receiver.unCompressor = &ZipUnCompressor{}
-	}
-	return receiver
-}
-
-func (this *Receiver) unpack(buffer []byte, r uint64, w uint64) (ret interface{}, packetSize uint64, nextPacketSize uint64, err error) {
-
-	unpackSize := uint64(w - r)
-	if unpackSize > minSize {
-		var payload uint32
-		var cmd uint16
-		var buff []byte
-		var msg proto.Message
-		var totalSize uint64
-		var flag byte
-
-		reader := kendynet.NewReader(kendynet.NewByteBuffer(buffer[r:], unpackSize))
-		if payload, err = reader.GetUint32(); err != nil {
-			fmt.Println(err)
-			return
-		}
-
-		if uint64(payload) == 0 {
-			err = fmt.Errorf("zero payload")
-			return
-		}
-
-		if uint64(payload)+SizeLen > conf.MaxPacketSize {
-			err = fmt.Errorf("large packet %d", uint64(payload)+SizeLen)
-			return
-		}
-
-		totalSize = uint64(payload + SizeLen)
-
-		nextPacketSize = totalSize
-
-		if totalSize <= unpackSize {
-
-			if flag, err = reader.GetByte(); err != nil {
-				return
-			}
-
-			//read head
-			var head CommonHead
-			var sizeOfUniKey int16
-
-			if head.Seqno, err = reader.GetInt64(); err != nil {
-				return
-			}
-
-			if head.ErrCode, err = reader.GetInt32(); err != nil {
-				return
-			}
-
-			if head.Timeout, err = reader.GetUint32(); err != nil {
-				return
-			}
-
-			if sizeOfUniKey, err = reader.GetInt16(); err != nil {
-				return
-			}
-
-			if sizeOfUniKey > 0 {
-				if head.UniKey, err = reader.GetString(uint64(sizeOfUniKey)); err != nil {
-					return
-				}
-			}
-
-			if cmd, err = reader.GetUint16(); err != nil {
-				return
-			}
-			sizeOfHead := 8 + 4 + 4 + 2 + uint32(sizeOfUniKey)
-			//普通消息
-			size := payload - SizeCmd - SizeFlag - sizeOfHead
-			if buff, err = reader.GetBytes(uint64(size)); err != nil {
-				return
-			}
-
-			if flag == byte(1) {
-				if nil == this.unCompressor {
-					err = fmt.Errorf("invaild compress packet")
-					return
-				}
-
-				if buff, err = this.unCompressor.UnCompress(buff); err != nil {
-					return
-				}
-			}
-
-			if msg, err = this.pbSpace.Unmarshal(uint32(cmd), buff); err != nil {
-				return
-			}
-			nextPacketSize = 0
-			packetSize = totalSize
-			ret = NewMessageWithCmd(uint16(cmd), head, msg)
-		}
-	}
-	return
-}
