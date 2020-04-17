@@ -1,22 +1,40 @@
 package kvproxy
 
 import (
-	"encoding/binary"
 	"fmt"
-	"github.com/golang/protobuf/proto"
-	"github.com/sniperHW/flyfish/codec"
-	"github.com/sniperHW/flyfish/codec/pb"
+	"github.com/sniperHW/flyfish/net"
+	"github.com/sniperHW/flyfish/net/pb"
 	protocol "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet"
-	"github.com/sniperHW/kendynet/socket/listener/tcp"
 	"github.com/sniperHW/kendynet/timer"
-	"net"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
 	"unsafe"
 )
+
+const (
+	minSize        uint64 = net.SizeLen
+	initBufferSize uint64 = 1024 * 256
+)
+
+func isPow2(size uint64) bool {
+	return (size & (size - 1)) == 0
+}
+
+func sizeofPow2(size uint64) uint64 {
+	if isPow2(size) {
+		return size
+	}
+	size = size - 1
+	size = size | (size >> 1)
+	size = size | (size >> 2)
+	size = size | (size >> 4)
+	size = size | (size >> 8)
+	size = size | (size >> 16)
+	return size + 1
+}
 
 type pendingReq struct {
 	seqno         int64
@@ -29,7 +47,7 @@ type pendingReq struct {
 type kvproxy struct {
 	router     *reqRouter
 	processors []*reqProcessor
-	listener   *tcp.Listener
+	listener   *net.Listener
 	seqno      int64
 	respChan   chan *kendynet.ByteBuffer
 }
@@ -51,7 +69,7 @@ type reqProcessor struct {
 func newReqProcessor(router *reqRouter) *reqProcessor {
 	return &reqProcessor{
 		pendingReqs: map[int64]*pendingReq{},
-		timerMgr:    timer.NewTimerMgr(),
+		timerMgr:    timer.NewTimerMgr(1),
 		router:      router,
 	}
 }
@@ -95,7 +113,7 @@ func (this *reqProcessor) onReq(seqno int64, session kendynet.StreamSession, req
 
 	if cmd == uint16(protocol.CmdType_Ping) {
 		//返回心跳
-		resp := codec.NewMessage(codec.CommonHead{}, &protocol.PingResp{
+		resp := net.NewMessage(net.CommonHead{}, &protocol.PingResp{
 			Timestamp: time.Now().UnixNano(),
 		})
 		session.Send(resp)
@@ -149,50 +167,6 @@ func (this *reqProcessor) onResp(seqno int64, resp *kendynet.ByteBuffer) {
 	}
 }
 
-func sendLoginResp(session kendynet.StreamSession, loginResp *protocol.LoginResp) bool {
-	conn := session.GetUnderConn().(*net.TCPConn)
-	buffer := kendynet.NewByteBuffer(64)
-	data, _ := proto.Marshal(loginResp)
-	buffer.AppendUint16(uint16(len(data)))
-	buffer.AppendBytes(data)
-
-	conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
-	_, err := conn.Write(buffer.Bytes())
-	conn.SetWriteDeadline(time.Time{})
-	return nil == err
-}
-
-func recvLoginReq(session kendynet.StreamSession) (*protocol.LoginReq, error) {
-	conn := session.GetUnderConn().(*net.TCPConn)
-	buffer := make([]byte, 1024)
-	w := 0
-	pbsize := 0
-	for {
-		conn.SetReadDeadline(time.Now().Add(time.Second * 5))
-		n, err := conn.Read(buffer[w:])
-		conn.SetReadDeadline(time.Time{})
-
-		if nil != err {
-			return nil, err
-		}
-
-		w = w + n
-
-		if w >= 2 {
-			pbsize = int(binary.BigEndian.Uint16(buffer[:2]))
-		}
-
-		if w >= pbsize+2 {
-			loginReq := &protocol.LoginReq{}
-			if err = proto.Unmarshal(buffer[2:w], loginReq); err != nil {
-				return loginReq, nil
-			} else {
-				return nil, err
-			}
-		}
-	}
-}
-
 func verifyLogin(loginReq *protocol.LoginReq) bool {
 	return true
 }
@@ -204,7 +178,7 @@ func NewKVProxy() *kvproxy {
 		respChan: make(chan *kendynet.ByteBuffer, 10000),
 	}
 
-	if proxy.listener, err = tcp.New("tcp", GetConfig().Host); nil != err {
+	if proxy.listener, err = net.NewListener("tcp", GetConfig().Host, verifyLogin); nil != err {
 		return nil
 	}
 
@@ -239,36 +213,12 @@ func (this *kvproxy) Start() error {
 		}()
 	}
 
-	return this.listener.Serve(func(session kendynet.StreamSession) {
+	return this.listener.Serve(func(session kendynet.StreamSession, compress bool) {
 		go func() {
-			loginReq, err := recvLoginReq(session)
-			if nil != err {
-				session.Close("login failed", 0)
-				return
-			}
-
-			if !verifyLogin(loginReq) {
-				session.Close("login failed", 0)
-				return
-			}
-
-			loginResp := &protocol.LoginResp{
-				Ok:       true,
-				Compress: loginReq.GetCompress(),
-			}
-
-			if !sendLoginResp(session, loginResp) {
-				session.Close("login failed", 0)
-				return
-			}
-
 			session.SetRecvTimeout(protocol.PingTime * 2)
-
-			session.SetUserData(loginReq.GetCompress())
-
+			session.SetUserData(compress)
 			session.SetReceiver(NewReceiver())
-			session.SetEncoder(codec.NewEncoder(pb.GetNamespace("response"), loginResp.GetCompress()))
-
+			session.SetEncoder(net.NewEncoder(pb.GetNamespace("response"), compress))
 			session.Start(func(event *kendynet.Event) {
 				if event.EventType == kendynet.EventTypeError {
 					event.Session.Close(event.Data.(error).Error(), 0)

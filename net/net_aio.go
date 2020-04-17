@@ -1,4 +1,5 @@
 // +build linux darwin netbsd freebsd openbsd dragonfly
+
 package net
 
 import (
@@ -6,163 +7,20 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/net/pb"
-	protocol "github.com/sniperHW/flyfish/proto"
-	"github.com/sniperHW/flyfish/proto/login"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/socket/aio"
 	"net"
 	"runtime"
-	//"sync"
-	"sync/atomic"
-	"time"
 )
-
-/*
-type BufferPool struct {
-	pool sync.Pool
-}
-
-func NewBufferPool() *BufferPool {
-	return &BufferPool{
-		pool: sync.Pool{
-			New: func() interface{} {
-				return make([]byte, 4*1024*1024)
-			},
-		},
-	}
-}
-
-func (p *BufferPool) Get() []byte {
-	return p.pool.Get().([]byte)
-}
-
-func (p *BufferPool) Put(buff []byte) {
-	if cap(buff) != 4*1024*1024 {
-		p.pool.Put(buff[:cap(buff)])
-	}
-}*/
 
 var aioService *aio.AioService
 
-//var buffPool *BufferPool
-
 func init() {
-	//buffPool = NewBufferPool()
 	aioService = aio.NewAioService(1, runtime.NumCPU()*2, runtime.NumCPU()*2, nil)
 }
 
-type Listener struct {
-	l           *net.TCPListener
-	started     int32
-	closed      int32
-	verifyLogin func(*protocol.LoginReq) bool
-}
-
-func NewListener(nettype, service string, verifyLogin func(*protocol.LoginReq) bool) (*Listener, error) {
-	tcpAddr, err := net.ResolveTCPAddr(nettype, service)
-	if err != nil {
-		return nil, err
-	}
-
-	l, err := net.ListenTCP(nettype, tcpAddr)
-	if err != nil {
-		return nil, err
-	}
-	return &Listener{l: l, verifyLogin: verifyLogin}, nil
-}
-
-func (this *Listener) Close() {
-	if atomic.CompareAndSwapInt32(&this.closed, 0, 1) {
-		if nil != this.l {
-			this.l.Close()
-		}
-	}
-}
-
-func (this *Listener) Serve(onNewClient func(kendynet.StreamSession, bool)) error {
-
-	if nil == onNewClient {
-		return kendynet.ErrInvaildNewClientCB
-	}
-
-	if !atomic.CompareAndSwapInt32(&this.started, 0, 1) {
-		return kendynet.ErrServerStarted
-	}
-
-	for {
-		conn, err := this.l.Accept()
-		if err != nil {
-			if atomic.LoadInt32(&this.closed) == 1 {
-				return nil
-			}
-
-			if ne, ok := err.(net.Error); ok && ne.Temporary() {
-				kendynet.GetLogger().Errorf("accept temp err: %v", ne)
-				continue
-			} else {
-				return err
-			}
-
-		} else {
-			go func() {
-
-				loginReq, err := login.RecvLoginReq(conn.(*net.TCPConn))
-				if nil != err {
-					conn.Close()
-					return
-				}
-
-				if !this.verifyLogin(loginReq) {
-					conn.Close()
-					return
-				}
-
-				loginResp := &protocol.LoginResp{
-					Ok:       true,
-					Compress: loginReq.GetCompress(),
-				}
-
-				if !login.SendLoginResp(conn.(*net.TCPConn), loginResp) {
-					conn.Close()
-					return
-				}
-
-				onNewClient(aio.NewAioSocket(aioService, conn), loginReq.GetCompress())
-
-			}()
-		}
-	}
-}
-
-type Connector struct {
-	nettype  string
-	addr     string
-	compress bool
-}
-
-func NewConnector(nettype string, addr string, compress bool) *Connector {
-	return &Connector{nettype: nettype, addr: addr, compress: compress}
-}
-
-func (this *Connector) Dial(timeout time.Duration) (kendynet.StreamSession, bool, error) {
-	dialer := &net.Dialer{Timeout: timeout}
-	conn, err := dialer.Dial(this.nettype, this.addr)
-	if err != nil {
-		return nil, false, err
-	}
-
-	if !login.SendLoginReq(conn.(*net.TCPConn), &protocol.LoginReq{Compress: this.compress}) {
-		conn.Close()
-		return nil, false, fmt.Errorf("login failed")
-	}
-
-	loginResp, err := login.RecvLoginResp(conn.(*net.TCPConn))
-	if nil != err || !loginResp.GetOk() {
-		conn.Close()
-		return nil, false, fmt.Errorf("login failed")
-	}
-
-	return aio.NewAioSocket(aioService, conn), loginResp.GetCompress(), nil
+func createSession(conn net.Conn) kendynet.StreamSession {
+	return aio.NewAioSocket(aioService, conn)
 }
 
 type Receiver struct {

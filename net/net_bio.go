@@ -1,34 +1,18 @@
-package codec
+// +build windows
+
+package net
 
 import (
 	"fmt"
 	"github.com/golang/protobuf/proto"
-	"github.com/sniperHW/flyfish/codec/pb"
 	"github.com/sniperHW/flyfish/conf"
+	"github.com/sniperHW/flyfish/net/pb"
 	"github.com/sniperHW/kendynet"
-	"net"
+	"github.com/sniperHW/kendynet/socket"
 )
 
-const (
-	minSize        uint64 = SizeLen
-	initBufferSize uint64 = 1024 * 256
-)
-
-func isPow2(size uint64) bool {
-	return (size & (size - 1)) == 0
-}
-
-func sizeofPow2(size uint64) uint64 {
-	if isPow2(size) {
-		return size
-	}
-	size = size - 1
-	size = size | (size >> 1)
-	size = size | (size >> 2)
-	size = size | (size >> 4)
-	size = size | (size >> 8)
-	size = size | (size >> 16)
-	return size + 1
+func createSession(conn net.Conn) kendynet.StreamSession {
+	return socket.NewStreamSocket(conn)
 }
 
 type Receiver struct {
@@ -44,7 +28,7 @@ func NewReceiver(pbSpace *pb.Namespace, compress bool) *Receiver {
 	receiver := &Receiver{
 		pbSpace: pbSpace,
 	}
-	receiver.buffer = make([]byte, initBufferSize) //conf.MaxPacketSize*2)
+	receiver.buffer = make([]byte, initBufferSize)
 	if compress {
 		receiver.unCompressor = &ZipUnCompressor{}
 	}
@@ -145,37 +129,6 @@ func (this *Receiver) unPack() (ret interface{}, err error) {
 }
 
 func (this *Receiver) ReceiveAndUnpack(sess kendynet.StreamSession) (interface{}, error) {
-	/*var msg interface{}
-	var err error
-	for {
-		msg, err = this.unPack()
-
-		if nil != msg {
-			return msg, nil
-		} else if err == nil {
-			if this.w == this.r {
-				this.w = 0
-				this.r = 0
-			} else if uint64(cap(this.buffer))-this.w < conf.MaxPacketSize/4 {
-				copy(this.buffer, this.buffer[this.r:this.w])
-				this.w = this.w - this.r
-				this.r = 0
-			}
-
-			conn := sess.GetUnderConn().(*net.TCPConn)
-			n, err := conn.Read(this.buffer[this.w:])
-
-			if n > 0 {
-				this.w += uint64(n) //增加待解包数据
-			}
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, err
-		}
-	}*/
-
 	var msg interface{}
 	var err error
 	for {
@@ -199,8 +152,7 @@ func (this *Receiver) ReceiveAndUnpack(sess kendynet.StreamSession) (interface{}
 				this.r = 0
 			}
 
-			conn := sess.GetUnderConn().(*net.TCPConn)
-			n, err := conn.Read(this.buffer[this.w:])
+			n, err := sess.(*socket.StreamSocket).Read(this.buffer[this.w:])
 
 			if n > 0 {
 				this.w += uint64(n) //增加待解包数据
