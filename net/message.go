@@ -1,8 +1,8 @@
-package codec
+package net
 
 import (
 	"github.com/golang/protobuf/proto"
-	"github.com/sniperHW/flyfish/codec/pb"
+	"github.com/sniperHW/flyfish/net/pb"
 	protocol "github.com/sniperHW/flyfish/proto"
 )
 

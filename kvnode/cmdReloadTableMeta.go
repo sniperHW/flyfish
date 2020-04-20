@@ -1,12 +1,12 @@
 package kvnode
 
 import (
-	codec "github.com/sniperHW/flyfish/codec"
 	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/proto"
 )
 
-func reloadTableMeta(n *KVNode, cli *cliConn, msg *codec.Message) {
+func reloadTableMeta(n *KVNode, cli *cliConn, msg *net.Message) {
 	dbMetaStr, err := loadMetaString()
 	head := msg.GetHead()
 	errStr := ""
@@ -24,6 +24,6 @@ func reloadTableMeta(n *KVNode, cli *cliConn, msg *codec.Message) {
 		errStr = err.Error()
 	}
 
-	cli.send(codec.NewMessage(head, &proto.ReloadTableConfResp{Err: errStr}))
+	cli.send(net.NewMessage(head, &proto.ReloadTableConfResp{Err: errStr}))
 
 }

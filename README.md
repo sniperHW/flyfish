@@ -140,6 +140,16 @@ __table__    __conf__
 
 	}
 
+##编译
+
+编译aio版本，此版本只能在linux,mac,freebsd下运行
+
+	go build -tags=aio xxx
+
+编译bio版本，此版本可在任何操作系统下运行
+
+	go build xxx
+
 
 
 

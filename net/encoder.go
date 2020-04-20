@@ -1,19 +1,38 @@
-package codec
+package net
 
 import (
 	//"fmt"
 	"github.com/golang/protobuf/proto"
-	"github.com/sniperHW/flyfish/codec/pb"
 	"github.com/sniperHW/flyfish/conf"
+	"github.com/sniperHW/flyfish/net/pb"
 	_ "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet"
 )
 
 const (
-	SizeLen  = 4
-	SizeFlag = 1
-	SizeCmd  = 2
+	SizeLen               = 4
+	SizeFlag              = 1
+	SizeCmd               = 2
+	minSize        uint64 = SizeLen
+	initBufferSize uint64 = 1024 * 256
 )
+
+func isPow2(size uint64) bool {
+	return (size & (size - 1)) == 0
+}
+
+func sizeofPow2(size uint64) uint64 {
+	if isPow2(size) {
+		return size
+	}
+	size = size - 1
+	size = size | (size >> 1)
+	size = size | (size >> 2)
+	size = size | (size >> 4)
+	size = size | (size >> 8)
+	size = size | (size >> 16)
+	return size + 1
+}
 
 type Encoder struct {
 	compressor CompressorI

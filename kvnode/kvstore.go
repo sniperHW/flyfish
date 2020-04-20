@@ -3,10 +3,10 @@ package kvnode
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/sniperHW/flyfish/codec"
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/dbmeta"
 	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/proto"
 	futil "github.com/sniperHW/flyfish/util"
 	"github.com/sniperHW/flyfish/util/str"
@@ -61,7 +61,7 @@ type kvstore struct {
 	lruTail      kv
 	storeMgr     *storeMgr
 	lruTimer     *timer.Timer
-	unCompressor codec.UnCompressorI
+	unCompressor net.UnCompressorI
 }
 
 func (this *kvstore) getKvNode() *KVNode {
@@ -566,7 +566,7 @@ func newKVStore(storeMgr *storeMgr, kvNode *KVNode, proposeC *util.BlockQueue, r
 		readReqC:     readReqC,
 		kvNode:       kvNode,
 		storeMgr:     storeMgr,
-		unCompressor: &codec.ZipUnCompressor{},
+		unCompressor: &net.ZipUnCompressor{},
 	}
 
 	s.lruHead.nnext = &s.lruTail

@@ -1,8 +1,8 @@
 package kvnode
 
 import (
-	codec "github.com/sniperHW/flyfish/codec"
 	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/proto"
 )
 
@@ -61,7 +61,7 @@ func (this *cmdCompareAndSetNx) reply(errCode int32, fields map[string]*proto.Fi
 	this.replyer.reply(this, errCode, fields, version)
 }
 
-func (this *cmdCompareAndSetNx) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) *codec.Message {
+func (this *cmdCompareAndSetNx) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) *net.Message {
 	pbdata := &proto.CompareAndSetNxResp{
 		Version: version,
 	}
@@ -70,7 +70,7 @@ func (this *cmdCompareAndSetNx) makeResponse(errCode int32, fields map[string]*p
 		pbdata.Value = fields[this.oldV.GetName()]
 	}
 
-	return codec.NewMessage(codec.CommonHead{
+	return net.NewMessage(net.CommonHead{
 		Seqno:   this.replyer.seqno,
 		ErrCode: errCode,
 	}, pbdata)
@@ -124,7 +124,7 @@ func (this *cmdCompareAndSetNx) prepare(t asynCmdTaskI) (asynCmdTaskI, bool) {
 	return task, true
 }
 
-func compareAndSetNx(n *KVNode, cli *cliConn, msg *codec.Message) {
+func compareAndSetNx(n *KVNode, cli *cliConn, msg *net.Message) {
 
 	req := msg.GetData().(*proto.CompareAndSetNxReq)
 

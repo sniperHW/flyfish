@@ -2,15 +2,16 @@ package kvnode
 
 import (
 	"fmt"
-	codec "github.com/sniperHW/flyfish/codec"
-	"github.com/sniperHW/flyfish/codec/pb"
+	//codec "github.com/sniperHW/flyfish/codec"
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/dbmeta"
+	"github.com/sniperHW/flyfish/net/pb"
 	protocol "github.com/sniperHW/flyfish/proto"
-	"github.com/sniperHW/flyfish/proto/login"
+	//"github.com/sniperHW/flyfish/proto/login"
 	"github.com/sniperHW/flyfish/util"
 	"github.com/sniperHW/kendynet"
-	"github.com/sniperHW/kendynet/socket/listener/tcp"
+	//"github.com/sniperHW/kendynet/socket/listener/tcp"
+	"github.com/sniperHW/flyfish/net"
 	"runtime"
 	"strings"
 	"sync"
@@ -21,13 +22,13 @@ import (
 type netCmd struct {
 	h    handler
 	conn *cliConn
-	msg  *codec.Message
+	msg  *net.Message
 }
 
 type KVNode struct {
 	storeMgr      *storeMgr
 	stoped        int64
-	listener      *tcp.Listener
+	listener      *net.Listener
 	dispatcher    *dispatcher
 	sqlMgr        *sqlMgr
 	cmdChan       []chan *netCmd
@@ -38,7 +39,7 @@ func verifyLogin(loginReq *protocol.LoginReq) bool {
 	return true
 }
 
-func (this *KVNode) pushNetCmd(h handler, conn *cliConn, msg *codec.Message) {
+func (this *KVNode) pushNetCmd(h handler, conn *cliConn, msg *net.Message) {
 	uniKey := msg.GetHead().UniKey
 	i := util.StringHash(uniKey) % len(this.cmdChan)
 	this.cmdChan[i] <- &netCmd{
@@ -57,35 +58,14 @@ func (this *KVNode) startListener() error {
 		return fmt.Errorf("invaild listener")
 	}
 
-	return this.listener.Serve(func(session kendynet.StreamSession) {
+	return this.listener.Serve(func(session kendynet.StreamSession, compress bool) {
 		go func() {
-			loginReq, err := login.RecvLoginReq(session)
-			if nil != err {
-				session.Close("login failed", 0)
-				return
-			}
-
-			if !verifyLogin(loginReq) {
-				session.Close("login failed", 0)
-				return
-			}
-
-			loginResp := &protocol.LoginResp{
-				Ok:       true,                   //proto.Bool(true),
-				Compress: loginReq.GetCompress(), //proto.Bool(config.Compress && loginReq.GetCompress()),
-			}
-
-			if !login.SendLoginResp(session, loginResp) {
-				session.Close("login failed", 0)
-				return
-			}
-
 			session.SetRecvTimeout(protocol.PingTime * 2)
 			session.SetSendQueueSize(10000)
 
 			//只有配置了压缩开启同时客户端支持压缩才开启通信压缩
-			session.SetReceiver(codec.NewReceiver(pb.GetNamespace("request"), loginReq.GetCompress()))
-			session.SetEncoder(codec.NewEncoder(pb.GetNamespace("response"), loginReq.GetCompress()))
+			session.SetReceiver(net.NewReceiver(pb.GetNamespace("request"), compress))
+			session.SetEncoder(net.NewEncoder(pb.GetNamespace("response"), compress))
 
 			session.SetCloseCallBack(func(sess kendynet.StreamSession, reason string) {
 				this.dispatcher.OnClose(sess, reason)
@@ -95,7 +75,7 @@ func (this *KVNode) startListener() error {
 				if event.EventType == kendynet.EventTypeError {
 					event.Session.Close(event.Data.(error).Error(), 0)
 				} else {
-					msg := event.Data.(*codec.Message)
+					msg := event.Data.(*net.Message)
 					this.dispatcher.Dispatch(this, session, msg.GetCmd(), msg)
 				}
 			})
@@ -130,7 +110,7 @@ func (this *KVNode) Start(id *int, cluster *string) error {
 		return err
 	}
 
-	this.listener, err = tcp.New("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort))
+	this.listener, err = net.NewListener("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort), verifyLogin)
 
 	if nil != err {
 		return err

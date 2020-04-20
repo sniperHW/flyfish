@@ -1,14 +1,15 @@
 package client
 
 import (
-	"github.com/sniperHW/flyfish/codec"
-	"github.com/sniperHW/flyfish/codec/pb"
+	//"github.com/sniperHW/flyfish/codec"
 	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/net/pb"
 	protocol "github.com/sniperHW/flyfish/proto"
-	"github.com/sniperHW/flyfish/proto/login"
+	//"github.com/sniperHW/flyfish/proto/login"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/event"
-	connector "github.com/sniperHW/kendynet/socket/connector/tcp"
+	//connector "github.com/sniperHW/kendynet/socket/connector/tcp"
+	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/kendynet/timer"
 	"time"
 )
@@ -43,7 +44,7 @@ func (this *Conn) ping(now *time.Time) {
 	if nil != this.session && now.After(this.nextPing) {
 		this.nextPing = now.Add(protocol.PingTime)
 
-		req := codec.NewMessage(codec.CommonHead{}, &protocol.PingReq{
+		req := net.NewMessage(net.CommonHead{}, &protocol.PingReq{
 			Timestamp: now.UnixNano(),
 		})
 
@@ -51,33 +52,13 @@ func (this *Conn) ping(now *time.Time) {
 	}
 }
 
-func (this *Conn) onConnected(session kendynet.StreamSession) {
-
-	if !login.SendLoginReq(session, &protocol.LoginReq{Compress: this.c.compress}) {
-		session.Close("login failed", 0)
-		this.eventQueue.Post(func() {
-			this.dialing = false
-			this.dial()
-		})
-		return
-	}
-
-	loginResp, err := login.RecvLoginResp(session)
-	if nil != err || !loginResp.GetOk() {
-		session.Close("login failed", 0)
-		this.eventQueue.Post(func() {
-			this.dialing = false
-			this.dial()
-		})
-		return
-	}
-
+func (this *Conn) onConnected(session kendynet.StreamSession, compress bool) {
 	this.eventQueue.Post(func() {
 		this.dialing = false
 		this.session = session
 		this.session.SetSendQueueSize(maxPendingSize)
-		this.session.SetReceiver(codec.NewReceiver(pb.GetNamespace("response"), loginResp.GetCompress()))
-		this.session.SetEncoder(codec.NewEncoder(pb.GetNamespace("request"), loginResp.GetCompress()))
+		this.session.SetReceiver(net.NewReceiver(pb.GetNamespace("response"), compress))
+		this.session.SetEncoder(net.NewEncoder(pb.GetNamespace("request"), compress))
 		this.session.SetCloseCallBack(func(sess kendynet.StreamSession, reason string) {
 			this.onDisconnected()
 		})
@@ -85,7 +66,7 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 			if event.EventType == kendynet.EventTypeError {
 				event.Session.Close(event.Data.(error).Error(), 0)
 			} else {
-				this.onMessage(event.Data.(*codec.Message))
+				this.onMessage(event.Data.(*net.Message))
 			}
 		})
 
@@ -119,11 +100,11 @@ func (this *Conn) dial() {
 	this.dialing = true
 
 	go func() {
-		c, _ := connector.New("tcp", this.addr)
+		c := net.NewConnector("tcp", this.addr, this.c.compress)
 		for {
-			session, err := c.Dial(time.Second * 5)
+			session, compress, err := c.Dial(time.Second * 5)
 			if nil == err {
-				this.onConnected(session)
+				this.onConnected(session, compress)
 				return
 			} else {
 				logger.Errorln("dial error", this.addr, err)

@@ -3,7 +3,7 @@ package kvnode
 import (
 	//"fmt"
 	"bytes"
-	codec "github.com/sniperHW/flyfish/codec"
+	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/proto"
 	"sync/atomic"
 	"time"
@@ -23,7 +23,7 @@ func makeUniKey(table string, key string) string {
 }
 
 type commandI interface {
-	makeResponse(errCode int32, fields map[string]*proto.Field, version int64) *codec.Message //pb.Message
+	makeResponse(errCode int32, fields map[string]*proto.Field, version int64) *net.Message //pb.Message
 	reply(errCode int32, fields map[string]*proto.Field, version int64)
 	dontReply()
 	isCancel() bool  //操作是否被取消(客户端连接断开或主动发送取消请求)

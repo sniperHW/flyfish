@@ -2,8 +2,8 @@ package client
 
 import (
 	"github.com/golang/protobuf/proto"
-	"github.com/sniperHW/flyfish/codec"
 	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/net"
 	protocol "github.com/sniperHW/flyfish/proto"
 	"sync/atomic"
 	"time"
@@ -44,7 +44,7 @@ type cmdContext struct {
 	deadline    time.Time
 	isTimeouted bool
 	cb          callback
-	req         *codec.Message
+	req         *net.Message
 }
 
 func (this *cmdContext) onError(errCode int32) {
@@ -57,7 +57,7 @@ func (this *cmdContext) onResult(r interface{}) {
 
 type StatusCmd struct {
 	conn *Conn
-	req  *codec.Message
+	req  *net.Message
 }
 
 func (this *StatusCmd) asyncExec(syncFlag bool, cb func(*StatusResult)) {
@@ -87,7 +87,7 @@ func (this *StatusCmd) Exec() *StatusResult {
 
 type SliceCmd struct {
 	conn *Conn
-	req  *codec.Message
+	req  *net.Message
 }
 
 func (this *SliceCmd) asyncExec(syncFlag bool, cb func(*SliceResult)) {
@@ -121,7 +121,7 @@ func (this *Conn) Get(table, key string, version *int64, fields ...string) *Slic
 		return nil
 	}
 
-	req := codec.NewMessage(codec.CommonHead{
+	req := net.NewMessage(net.CommonHead{
 		Seqno:   atomic.AddInt64(&seqno, 1),
 		UniKey:  table + ":" + key,
 		Timeout: ClientTimeout,
@@ -139,7 +139,7 @@ func (this *Conn) Get(table, key string, version *int64, fields ...string) *Slic
 
 func (this *Conn) GetAll(table, key string, version *int64) *SliceCmd {
 
-	req := codec.NewMessage(codec.CommonHead{
+	req := net.NewMessage(net.CommonHead{
 		Seqno:   atomic.AddInt64(&seqno, 1),
 		UniKey:  table + ":" + key,
 		Timeout: ClientTimeout,
@@ -171,7 +171,7 @@ func (this *Conn) Set(table, key string, fields map[string]interface{}, version 
 		pbdata.Fields = append(pbdata.Fields, protocol.PackField(k, v))
 	}
 
-	req := codec.NewMessage(codec.CommonHead{
+	req := net.NewMessage(net.CommonHead{
 		Seqno:   atomic.AddInt64(&seqno, 1),
 		UniKey:  table + ":" + key,
 		Timeout: ClientTimeout,
@@ -194,7 +194,7 @@ func (this *Conn) SetNx(table, key string, fields map[string]interface{}) *Statu
 		pbdata.Fields = append(pbdata.Fields, protocol.PackField(k, v))
 	}
 
-	req := codec.NewMessage(codec.CommonHead{
+	req := net.NewMessage(net.CommonHead{
 		Seqno:   atomic.AddInt64(&seqno, 1),
 		UniKey:  table + ":" + key,
 		Timeout: ClientTimeout,
@@ -222,7 +222,7 @@ func (this *Conn) CompareAndSet(table, key, field string, oldV, newV interface{}
 		pbdata.Version = proto.Int64(version[0])
 	}
 
-	req := codec.NewMessage(codec.CommonHead{
+	req := net.NewMessage(net.CommonHead{
 		Seqno:   atomic.AddInt64(&seqno, 1),
 		UniKey:  table + ":" + key,
 		Timeout: ClientTimeout,
@@ -249,7 +249,7 @@ func (this *Conn) CompareAndSetNx(table, key, field string, oldV, newV interface
 		pbdata.Version = proto.Int64(version[0])
 	}
 
-	req := codec.NewMessage(codec.CommonHead{
+	req := net.NewMessage(net.CommonHead{
 		Seqno:   atomic.AddInt64(&seqno, 1),
 		UniKey:  table + ":" + key,
 		Timeout: ClientTimeout,
@@ -269,7 +269,7 @@ func (this *Conn) Del(table, key string, version ...int64) *StatusCmd {
 		pbdata.Version = proto.Int64(version[0])
 	}
 
-	req := codec.NewMessage(codec.CommonHead{
+	req := net.NewMessage(net.CommonHead{
 		Seqno:   atomic.AddInt64(&seqno, 1),
 		UniKey:  table + ":" + key,
 		Timeout: ClientTimeout,
@@ -291,7 +291,7 @@ func (this *Conn) IncrBy(table, key, field string, value int64, version ...int64
 		pbdata.Version = proto.Int64(version[0])
 	}
 
-	req := codec.NewMessage(codec.CommonHead{
+	req := net.NewMessage(net.CommonHead{
 		Seqno:   atomic.AddInt64(&seqno, 1),
 		UniKey:  table + ":" + key,
 		Timeout: ClientTimeout,
@@ -312,7 +312,7 @@ func (this *Conn) DecrBy(table, key, field string, value int64, version ...int64
 		pbdata.Version = proto.Int64(version[0])
 	}
 
-	req := codec.NewMessage(codec.CommonHead{
+	req := net.NewMessage(net.CommonHead{
 		Seqno:   atomic.AddInt64(&seqno, 1),
 		UniKey:  table + ":" + key,
 		Timeout: ClientTimeout,
@@ -327,7 +327,7 @@ func (this *Conn) DecrBy(table, key, field string, value int64, version ...int64
 func (this *Conn) Kick(table, key string) *StatusCmd {
 	pbdata := &protocol.KickReq{}
 
-	req := codec.NewMessage(codec.CommonHead{
+	req := net.NewMessage(net.CommonHead{
 		Seqno:   atomic.AddInt64(&seqno, 1),
 		UniKey:  table + ":" + key,
 		Timeout: ClientTimeout,
@@ -342,7 +342,7 @@ func (this *Conn) Kick(table, key string) *StatusCmd {
 func (this *Conn) ReloadTableConf() *StatusCmd {
 	pbdata := &protocol.ReloadTableConfReq{}
 
-	req := codec.NewMessage(codec.CommonHead{
+	req := net.NewMessage(net.CommonHead{
 		Seqno: atomic.AddInt64(&seqno, 1),
 	}, pbdata)
 
@@ -481,7 +481,7 @@ func (this *Conn) onReloadTableConfResp(c *cmdContext, errCode int32, resp *prot
 	this.c.doCallBack(c.unikey, c.cb, &ret)
 }
 
-func (this *Conn) onMessage(msg *codec.Message) {
+func (this *Conn) onMessage(msg *net.Message) {
 	this.eventQueue.Post(func() {
 		head := msg.GetHead()
 		cmd := protocol.CmdType(msg.GetCmd())

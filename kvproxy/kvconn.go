@@ -1,11 +1,9 @@
 package kvproxy
 
 import (
-	//"github.com/sniperHW/flyfish/codec"
+	"github.com/sniperHW/flyfish/net"
 	protocol "github.com/sniperHW/flyfish/proto"
-	"github.com/sniperHW/flyfish/proto/login"
 	"github.com/sniperHW/kendynet"
-	connector "github.com/sniperHW/kendynet/socket/connector/tcp"
 	"github.com/sniperHW/kendynet/timer"
 	"sync"
 	"time"
@@ -56,25 +54,8 @@ func (this *Conn) Close() {
 }
 
 func (this *Conn) onConnected(session kendynet.StreamSession) {
-
-	defer func() {
-		this.Lock()
-		this.dialing = false
-		this.Unlock()
-	}()
-
-	if !login.SendLoginReq(session, &protocol.LoginReq{Compress: this.compress}) {
-		session.Close("login failed", 0)
-		return
-	}
-
-	loginResp, err := login.RecvLoginResp(session)
-	if nil != err || !loginResp.GetOk() {
-		session.Close("login failed", 0)
-		return
-	}
-
 	this.Lock()
+	this.dialing = false
 	this.session = session
 	session.SetRecvTimeout(protocol.PingTime * 2)
 	this.session.SetSendQueueSize(maxSendQueueSize)
@@ -132,17 +113,19 @@ func (this *Conn) dial() {
 	this.dialing = true
 
 	go func() {
-		c, _ := connector.New("tcp", this.addr)
+		c := net.NewConnector("tcp", this.addr, this.compress)
 		for {
-			session, err := c.Dial(time.Second * 5)
+			session, _, err := c.Dial(time.Second * 5)
 			if nil == err {
 				this.onConnected(session)
 				return
 			} else {
+				logger.Errorln("dial error", this.addr, err)
 				time.Sleep(1 * time.Second)
 			}
 		}
 	}()
+
 }
 
 func (this *Conn) SendReq(sendDeadline time.Time, req *kendynet.ByteBuffer) error {

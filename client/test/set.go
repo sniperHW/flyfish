@@ -21,7 +21,7 @@ func main() {
 
 	fields := map[string]interface{}{}
 	fields["age"] = 12
-	//go fields["blob"] = buff
+	fields["phone"] = "12345678"
 	fields["name"] = "sniperHW"
 
 	r2 := c.Set("users1", "sniperHW", fields).Exec()

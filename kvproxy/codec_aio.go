@@ -1,35 +1,64 @@
+// +build aio
+
 package kvproxy
 
 import (
 	"fmt"
-	"github.com/sniperHW/flyfish/codec"
 	"github.com/sniperHW/flyfish/conf"
+	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/kendynet"
-	"net"
 )
 
-const (
-	minSize        uint64 = codec.SizeLen
-	initBufferSize uint64 = 1024 * 256
-)
-
-func isPow2(size uint64) bool {
-	return (size & (size - 1)) == 0
+type Receiver struct {
+	*net.AioReceiverBase
 }
 
-func sizeofPow2(size uint64) uint64 {
-	if isPow2(size) {
-		return size
+func NewReceiver() *Receiver {
+	receiver := &Receiver{}
+	receiver.AioReceiverBase = &net.AioReceiverBase{
+		Unpack: receiver.unpack,
 	}
-	size = size - 1
-	size = size | (size >> 1)
-	size = size | (size >> 2)
-	size = size | (size >> 4)
-	size = size | (size >> 8)
-	size = size | (size >> 16)
-	return size + 1
+	return receiver
 }
 
+func (this *Receiver) unpack(buffer []byte, r uint64, w uint64) (ret interface{}, packetSize uint64, nextPacketSize uint64, err error) {
+	unpackSize := uint64(w - r)
+	if unpackSize > minSize {
+		var payload uint32
+		var totalSize uint64
+		reader := kendynet.NewReader(kendynet.NewByteBuffer(buffer[r:], unpackSize))
+		if payload, err = reader.GetUint32(); err != nil {
+			return
+		}
+
+		if uint64(payload) == 0 {
+			err = fmt.Errorf("zero payload")
+			return
+		}
+
+		if uint64(payload)+net.SizeLen > conf.MaxPacketSize {
+			err = fmt.Errorf("large packet %d", uint64(payload)+net.SizeLen)
+			return
+		}
+
+		totalSize = uint64(payload + net.SizeLen)
+
+		nextPacketSize = totalSize
+
+		if totalSize <= unpackSize {
+			msg := kendynet.NewByteBuffer(totalSize)
+			err = msg.AppendBytes(buffer[r : r+totalSize])
+			if nil == err {
+				nextPacketSize = 0
+				packetSize = totalSize
+				ret = msg
+			}
+		}
+	}
+	return
+}
+
+/*
 type Receiver struct {
 	buffer         []byte
 	w              uint64
@@ -41,6 +70,18 @@ func NewReceiver() *Receiver {
 	receiver := &Receiver{}
 	receiver.buffer = make([]byte, initBufferSize)
 	return receiver
+}
+
+func (this *Receiver) StartReceive(s kendynet.StreamSession) {
+	s.(*aio.AioSocket).Recv(this.buffer)
+}
+
+func (this *Receiver) OnClose() {
+
+}
+
+func (this *Receiver) OnRecvOk(s kendynet.StreamSession, buff []byte) {
+	this.w += uint64(len(buff))
 }
 
 func (this *Receiver) unPack() (ret interface{}, err error) {
@@ -58,12 +99,12 @@ func (this *Receiver) unPack() (ret interface{}, err error) {
 			return
 		}
 
-		if uint64(payload)+codec.SizeLen > conf.MaxPacketSize {
-			err = fmt.Errorf("large packet %d", uint64(payload)+codec.SizeLen)
+		if uint64(payload)+net.SizeLen > conf.MaxPacketSize {
+			err = fmt.Errorf("large packet %d", uint64(payload)+net.SizeLen)
 			return
 		}
 
-		totalSize = uint64(payload + codec.SizeLen)
+		totalSize = uint64(payload + net.SizeLen)
 
 		this.nextPacketSize = totalSize
 
@@ -104,17 +145,11 @@ func (this *Receiver) ReceiveAndUnpack(sess kendynet.StreamSession) (interface{}
 				this.r = 0
 			}
 
-			conn := sess.GetUnderConn().(*net.TCPConn)
-			n, err := conn.Read(this.buffer[this.w:])
+			return nil, sess.(*aio.AioSocket).Recv(this.buffer[this.w:])
 
-			if n > 0 {
-				this.w += uint64(n) //增加待解包数据
-			}
-			if err != nil {
-				return nil, err
-			}
 		} else {
 			return nil, err
 		}
 	}
 }
+*/

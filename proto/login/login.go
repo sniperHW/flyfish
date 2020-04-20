@@ -13,8 +13,7 @@ const (
 	timeout time.Duration = time.Second * 5
 )
 
-func SendLoginReq(session kendynet.StreamSession, loginReq *protocol.LoginReq) bool {
-	conn := session.GetUnderConn().(*net.TCPConn)
+func SendLoginReq(conn *net.TCPConn, loginReq *protocol.LoginReq) bool {
 	buffer := kendynet.NewByteBuffer(64)
 	data, _ := proto.Marshal(loginReq)
 	buffer.AppendUint16(uint16(len(data)))
@@ -26,8 +25,7 @@ func SendLoginReq(session kendynet.StreamSession, loginReq *protocol.LoginReq) b
 	return nil == err
 }
 
-func SendLoginResp(session kendynet.StreamSession, loginResp *protocol.LoginResp) bool {
-	conn := session.GetUnderConn().(*net.TCPConn)
+func SendLoginResp(conn *net.TCPConn, loginResp *protocol.LoginResp) bool {
 	buffer := kendynet.NewByteBuffer(64)
 	data, _ := proto.Marshal(loginResp)
 	buffer.AppendUint16(uint16(len(data)))
@@ -39,8 +37,7 @@ func SendLoginResp(session kendynet.StreamSession, loginResp *protocol.LoginResp
 	return nil == err
 }
 
-func RecvLoginReq(session kendynet.StreamSession) (*protocol.LoginReq, error) {
-	conn := session.GetUnderConn().(*net.TCPConn)
+func RecvLoginReq(conn *net.TCPConn) (*protocol.LoginReq, error) {
 	buffer := make([]byte, 1024)
 	w := 0
 	pbsize := 0
@@ -70,8 +67,7 @@ func RecvLoginReq(session kendynet.StreamSession) (*protocol.LoginReq, error) {
 	}
 }
 
-func RecvLoginResp(session kendynet.StreamSession) (*protocol.LoginResp, error) {
-	conn := session.GetUnderConn().(*net.TCPConn)
+func RecvLoginResp(conn *net.TCPConn) (*protocol.LoginResp, error) {
 	buffer := make([]byte, 1024)
 	w := 0
 	pbsize := 0

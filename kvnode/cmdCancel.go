@@ -1,7 +1,7 @@
 package kvnode
 
 import (
-	codec "github.com/sniperHW/flyfish/codec"
+	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/proto"
 )
 
@@ -12,7 +12,7 @@ import (
  * cancel操作就是请求的所有seqno对应的replyer删除，使得isCancel返回false
  */
 
-func cancel(n *KVNode, cli *cliConn, msg *codec.Message) {
+func cancel(n *KVNode, cli *cliConn, msg *net.Message) {
 	req := msg.GetData().(*proto.Cancel)
 	for _, v := range req.GetSeqs() {
 		cli.removeReplyerBySeqno(v)

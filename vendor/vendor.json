@@ -206,6 +206,12 @@
 			"revisionTime": "2019-06-04T15:29:10Z"
 		},
 		{
+			"checksumSHA1": "OIR4/MDeSSnifMq9cv5sVoJaUW4=",
+			"path": "github.com/sniperHW/aiogo",
+			"revision": "47e75189fcf3661497a2f6a3047a0f23b4db4b84",
+			"revisionTime": "2020-04-17T02:42:34Z"
+		},
+		{
 			"checksumSHA1": "g8COsXEG0eSQSpDjPbIxbY67ZvY=",
 			"path": "github.com/sniperHW/kendynet",
 			"revision": "eaf87079daf69fa16a5517f6d65b61a115c12329",
@@ -248,10 +254,22 @@
 			"revisionTime": "2020-03-25T08:48:01Z"
 		},
 		{
+			"checksumSHA1": "gcobTHLuH7mtHNTkynUBSOBzbRM=",
+			"path": "github.com/sniperHW/kendynet/socket/connector/aio",
+			"revision": "4c74556ef700e0462d92fd280d56cc5849078227",
+			"revisionTime": "2020-04-16T01:54:14Z"
+		},
+		{
 			"checksumSHA1": "1Ki2d2XkGJtfPpigDs7mv8Sl/nA=",
 			"path": "github.com/sniperHW/kendynet/socket/connector/tcp",
 			"revision": "0cd8ab5535d67c6c209c161e8dc6a9c4620ce48d",
 			"revisionTime": "2019-07-24T10:31:35Z"
+		},
+		{
+			"checksumSHA1": "qQ6YJEyf1GCrnIEHMNQjKS92720=",
+			"path": "github.com/sniperHW/kendynet/socket/listener/aio",
+			"revision": "4c74556ef700e0462d92fd280d56cc5849078227",
+			"revisionTime": "2020-04-16T01:54:14Z"
 		},
 		{
 			"checksumSHA1": "7ZvMikiIlLJ0YEt+GzTd0ezIhDo=",
