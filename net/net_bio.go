@@ -1,4 +1,4 @@
-// +build windows
+// +build !aio
 
 package net
 
@@ -9,6 +9,7 @@ import (
 	"github.com/sniperHW/flyfish/net/pb"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/socket"
+	"net"
 )
 
 func createSession(conn net.Conn) kendynet.StreamSession {

@@ -1,4 +1,4 @@
-// +build windows
+// +build !aio
 
 package kvproxy
 
@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/net"
+	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/socket"
 )
 
