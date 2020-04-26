@@ -146,7 +146,6 @@ func (this *kvstore) doLRU() {
 		MaxCachePerGroupSize := conf.GetConfig().MaxCachePerGroupSize
 		if this.lruHead.nnext != &this.lruTail {
 			kv := this.lruTail.pprev
-			prev := kv.pprev
 			count := 0
 			for len(this.elements)-count > MaxCachePerGroupSize {
 				if kv == &this.lruHead {
@@ -158,6 +157,7 @@ func (this *kvstore) doLRU() {
 					return
 				}
 
+				prev := kv.pprev
 				if removeDirect {
 					this.removeLRU(kv)
 					kv.setStatus(cache_remove)
