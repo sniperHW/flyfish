@@ -267,7 +267,7 @@ func (this *kv) processCmd(op commandI) {
 		this.Unlock()
 		if removeKv {
 			asynTask.reply(errcode.ERR_OK)
-			this.store.removeKv(this, true)
+			this.store.removeKv(this)
 		} else if callKick {
 			if !this.store.kick(asynTask.(*asynCmdTaskKick)) {
 				asynTask.reply(errcode.ERR_RETRY)
@@ -343,6 +343,12 @@ loopEnd:
 	}
 
 	if this.getStatus() == cache_new {
+		switch asynTask.(type) {
+		case *asynCmdTaskKick:
+			removeKv = true
+			return
+		}
+
 		/*
 		 *   op != nil表示调用直接来自网络连接
 		 *   此时如果load队列满会直接返回false,向客户端返回retry
@@ -360,12 +366,7 @@ loopEnd:
 		case *asynCmdTaskGet:
 			issueReadReq = true
 		case *asynCmdTaskKick:
-			if this.getStatus() == cache_new {
-				removeKv = true
-				this.setStatus(cache_remove)
-			} else {
-				callKick = true
-			}
+			callKick = true
 		default:
 			issueUpdate = true
 		}

@@ -2,7 +2,7 @@ package kvnode
 
 import (
 	//"fmt"
-	"bytes"
+	//"bytes"
 	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/proto"
 	"sync/atomic"
@@ -13,14 +13,14 @@ var (
 	wait4ReplyCount int64
 )
 
+/*
 func makeUniKey(table string, key string) string {
 	var b bytes.Buffer
 	b.WriteString(table)
 	b.WriteString(":")
 	b.WriteString(key)
 	return b.String()
-	//return table + ":" + key //fmt.Sprintf("%s:%s", table, key)
-}
+}*/
 
 type commandI interface {
 	makeResponse(errCode int32, fields map[string]*proto.Field, version int64) *net.Message //pb.Message

@@ -45,6 +45,7 @@ type asynCmdTaskBase struct {
 	errno        int32
 	replyed      int64
 	proposalType int
+	del          bool
 }
 
 func (this *asynCmdTaskBase) fillMissingFields(fields map[string]*proto.Field) {
@@ -152,7 +153,7 @@ func (this *asynCmdTaskBase) done() {
 
 	kv.setSqlFlag(this.sqlFlag)
 
-	logger.Debugln(this.sqlFlag, kv.isWriteBack())
+	logger.Debugln(this.sqlFlag, this.version, kv.isWriteBack())
 
 	if kv.getSqlFlag() != sql_none && !kv.isWriteBack() {
 		kv.setWriteBack(true)

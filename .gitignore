@@ -24,3 +24,4 @@ config3.toml
 etcd_raft.txt
 kvserver
 log1/
+coverage.out

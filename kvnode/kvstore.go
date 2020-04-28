@@ -27,7 +27,7 @@ type asynTaskKick struct {
 
 func (this *asynTaskKick) done() {
 	logger.Debugln("kick done set cache_remove", this.kv.uniKey)
-	this.kv.store.removeKv(this.kv, true)
+	this.kv.store.removeKv(this.kv)
 }
 
 func (this *asynTaskKick) onError(errno int32) {
@@ -72,38 +72,38 @@ func (this *kvstore) getRaftNode() *raftNode {
 	return this.rn
 }
 
-func (this *kvstore) removeKv(k *kv, callByKick bool) {
+func (this *kvstore) removeKv(k *kv) {
 
-	callProcessAgain := false
+	processAgain := false
 
 	this.Lock()
 	k.Lock()
-	defer func() {
-		k.Unlock()
-		this.Unlock()
-		if callProcessAgain {
-			logger.Debugln("callProcessAgain")
-			k.processCmd(nil)
-		}
-	}()
 
-	if callByKick {
-		if !k.cmdQueue.empty() {
-			k.resetStatus()
-			callProcessAgain = true
-		} else {
-			k.setStatus(cache_remove)
-			this.removeLRU(k)
-			delete(this.elements, k.uniKey)
-		}
+	if !k.cmdQueue.empty() {
+		k.resetStatus()
+		processAgain = true
 	} else {
 		k.setStatus(cache_remove)
-		for cmd := k.cmdQueue.popFront(); nil != cmd; {
+		this.removeLRU(k)
+		delete(this.elements, k.uniKey)
+	}
+
+	k.Unlock()
+	this.Unlock()
+
+	if processAgain {
+		logger.Debugln("processAgain")
+		k.processCmd(nil)
+	}
+
+	/*} else {
+		k.setStatus(cache_remove)
+		for cmd := k.cmdQueue.popFront(); nil != cmd; cmd = k.cmdQueue.popFront() {
 			cmd.reply(errcode.ERR_RETRY, nil, 0)
 		}
 		this.removeLRU(k)
 		delete(this.elements, k.uniKey)
-	}
+	}*/
 }
 
 //发起一致读请求
@@ -232,7 +232,7 @@ func (this *kvstore) apply(data []byte, snapshot bool) bool {
 
 	compressFlag := binary.BigEndian.Uint16(data[:2])
 
-	if compressFlag == 12765 {
+	if compressFlag == compressMagic {
 		var err error
 		data, err = this.unCompressor.UnCompress(data[2:])
 		if nil != err {

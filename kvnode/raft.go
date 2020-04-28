@@ -45,6 +45,8 @@ import (
 	"time"
 )
 
+var compressMagic uint16 = 12756
+
 // A key-value stream backed by raft
 type raftNode struct {
 	//proposeC    <-chan *proposal         //<-chan []byte            // proposed messages (k,v)
@@ -607,7 +609,7 @@ func (rc *raftNode) triggerSnapshot() {
 		snapshotBuf := make([]byte, len(bytes)+2+8)
 		copy(snapshotBuf, indexBuff)
 		if compressFlag {
-			binary.BigEndian.PutUint16(snapshotBuf[8:], uint16(12765))
+			binary.BigEndian.PutUint16(snapshotBuf[8:], uint16(compressMagic))
 		} else {
 			binary.BigEndian.PutUint16(snapshotBuf[8:], uint16(0))
 		}
@@ -800,7 +802,7 @@ func (rc *raftNode) issuePropose(batch *batchProposal) {
 	proposalBuf := make([]byte, len(bytes)+2+8)
 	copy(proposalBuf, indexBuff)
 	if compressFlag {
-		binary.BigEndian.PutUint16(proposalBuf[8:], uint16(12765))
+		binary.BigEndian.PutUint16(proposalBuf[8:], uint16(compressMagic))
 	} else {
 		binary.BigEndian.PutUint16(proposalBuf[8:], uint16(0))
 	}
@@ -808,8 +810,8 @@ func (rc *raftNode) issuePropose(batch *batchProposal) {
 	copy(proposalBuf[10:], bytes)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	err := rc.node.Propose(ctx, proposalBuf) //batch.proposalStr.Bytes())
-	g_metric.add(len(proposalBuf))           //batch.proposalStr.Bytes()))
+	err := rc.node.Propose(ctx, proposalBuf)
+	g_metric.add(len(proposalBuf))
 	cancel()
 
 	if nil != err {

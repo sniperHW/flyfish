@@ -18,6 +18,7 @@ func (this *asynCmdTaskDel) onSqlResp(errno int32) {
 		this.getKV().store.issueAddkv(this)
 	} else if errno == errcode.ERR_OK {
 		this.sqlFlag = sql_delete
+		this.version = 0
 		this.getKV().store.issueUpdate(this)
 	}
 }
