@@ -624,7 +624,7 @@ func (this *sqlMgr) buildInsertUpdateStringMySql(s *str.Str, kv *kv) {
 
 }
 
-func (this *sqlMgr) buildInsertString(s *str.Str, kv *kv) {
+/*func (this *sqlMgr) buildInsertString(s *str.Str, kv *kv) {
 	meta := kv.getMeta()
 	version := proto.PackField("__version__", kv.version)
 	s.AppendString(meta.GetInsertPrefix()).AppendString("'").AppendString(kv.key).AppendString("',") //add __key__
@@ -647,7 +647,7 @@ func (this *sqlMgr) buildInsertString(s *str.Str, kv *kv) {
 	}
 
 	s.AppendString(");")
-}
+}*/
 
 func (this *sqlMgr) buildUpdateString(s *str.Str, kv *kv) {
 	meta := kv.getMeta()

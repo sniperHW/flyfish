@@ -40,7 +40,7 @@ type sqlMgr struct {
 	sqlUpdateWg         sync.WaitGroup
 	sqlLoaders          []*sqlLoader
 	sqlUpdaters         []*sqlUpdater
-	stoped              int64
+	stoped              int32
 	totalUpdateSqlCount int64
 
 	binaryToSqlStr          func(s *str.Str, bytes []byte)
@@ -64,7 +64,7 @@ func (this *sqlMgr) pushUpdateReq(kv *kv) {
 
 func (this *sqlMgr) stop() {
 
-	if atomic.CompareAndSwapInt64(&this.stoped, 0, 1) {
+	if atomic.CompareAndSwapInt32(&this.stoped, 0, 1) {
 
 		for _, v := range this.sqlLoaders {
 			v.queue.Close()
@@ -77,7 +77,7 @@ func (this *sqlMgr) stop() {
 }
 
 func (this *sqlMgr) isStoped() bool {
-	return atomic.LoadInt64(&this.stoped) == 1
+	return atomic.LoadInt32(&this.stoped) == 1
 }
 
 func newSqlMgr() (*sqlMgr, error) {

@@ -27,7 +27,7 @@ type netCmd struct {
 
 type KVNode struct {
 	storeMgr      *storeMgr
-	stoped        int64
+	stoped        int32
 	listener      *net.Listener
 	dispatcher    *dispatcher
 	sqlMgr        *sqlMgr
@@ -55,7 +55,7 @@ func (this *KVNode) pushNetCmd(h handler, conn *cliConn, msg *net.Message) {
 }
 
 func (this *KVNode) isStoped() bool {
-	return atomic.LoadInt64(&this.stoped) == 1
+	return atomic.LoadInt32(&this.stoped) == 1
 }
 
 func (this *KVNode) startListener() error {
@@ -176,7 +176,7 @@ func waitCondition(fn func() bool) {
 
 func (this *KVNode) Stop() {
 
-	if atomic.CompareAndSwapInt64(&this.stoped, 0, 1) {
+	if atomic.CompareAndSwapInt32(&this.stoped, 0, 1) {
 		logger.Infoln("StopServer")
 		//关闭监听
 		this.listener.Close()

@@ -11,12 +11,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
 //fixed the var below first
-var _sqltype string = "pgsal" //or mysql
+var _sqltype string = "pgsql" //or mysql
 var _host string = "localhost"
 var _port int = 5432
 var _user string = "sniper"
@@ -519,6 +520,43 @@ func test(t *testing.T, c *client.Client) {
 
 }
 
+func TestMysql(t *testing.T) {
+	//先删除所有kv文件
+	os.RemoveAll("./kv-1-1")
+	os.RemoveAll("./kv-1-1-snap")
+
+	conf.LoadConfigStr(fmt.Sprintf(configStr, 10012, "mysql", "localhost", 3306, "root", "123456", "huangwei", "localhost", 3306, "root", "123456", "huangwei"))
+
+	InitLogger()
+	UpdateLogConfig()
+
+	cluster := "http://127.0.0.1:12376"
+	id := 1
+
+	node := NewKvNode()
+
+	if err := node.Start(&id, &cluster); nil != err {
+		panic(err)
+	}
+
+	//等到所有store都成为leader之后再发送指令
+	waitCondition(func() bool {
+		node.storeMgr.RLock()
+		defer node.storeMgr.RUnlock()
+		for _, v := range node.storeMgr.stores {
+			if !v.rn.isLeader() {
+				return false
+			}
+		}
+		return true
+	})
+
+	c := client.OpenClient("localhost:10012", false)
+	test(t, c)
+
+	node.Stop()
+}
+
 func TestKvnode2(t *testing.T) {
 	//先删除所有kv文件
 	os.RemoveAll("./kv-1-1")
@@ -690,6 +728,10 @@ func TestCluster(t *testing.T) {
 	}
 
 	isLeader1 := func() bool {
+		if atomic.LoadInt32(&node1.stoped) == 1 {
+			return false
+		}
+
 		node1.storeMgr.RLock()
 		defer node1.storeMgr.RUnlock()
 		for _, v := range node1.storeMgr.stores {
@@ -701,6 +743,11 @@ func TestCluster(t *testing.T) {
 	}
 
 	isLeader2 := func() bool {
+
+		if atomic.LoadInt32(&node2.stoped) == 1 {
+			return false
+		}
+
 		node2.storeMgr.RLock()
 		defer node2.storeMgr.RUnlock()
 		for _, v := range node2.storeMgr.stores {
@@ -712,6 +759,11 @@ func TestCluster(t *testing.T) {
 	}
 
 	isLeader3 := func() bool {
+
+		if atomic.LoadInt32(&node3.stoped) == 1 {
+			return false
+		}
+
 		node3.storeMgr.RLock()
 		defer node3.storeMgr.RUnlock()
 		for _, v := range node3.storeMgr.stores {
@@ -720,6 +772,22 @@ func TestCluster(t *testing.T) {
 			}
 		}
 		return false
+	}
+
+	getLeader := func() *KVNode {
+		for {
+			if isLeader1() {
+				return node1
+			}
+
+			if isLeader2() {
+				return node2
+			}
+
+			if isLeader3() {
+				return node3
+			}
+		}
 	}
 
 	c1 := client.OpenClient("localhost:20018", false)
@@ -791,6 +859,17 @@ func TestCluster(t *testing.T) {
 		fields["name"] = "sniperHW"
 		r := c.Set("users1", "sniperHW", fields).Exec()
 		assert.Equal(t, errcode.ERR_NOT_LEADER, r.ErrCode)
+	}
+
+	{
+		//模拟leader停机
+		leader := getLeader()
+		leader.Stop()
+
+		c := getClient()
+		r1 := c.GetAll("users1", "sniperHW").Exec()
+		assert.Equal(t, errcode.ERR_OK, r1.ErrCode)
+
 	}
 
 	node1.Stop()

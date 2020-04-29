@@ -190,6 +190,7 @@ func (this *sqlUpdater) exec() {
 	defer this.reset()
 
 	rn := this.pending.rn
+	this.pending.rn = nil
 
 	if !rn.hasLease() {
 		this.pending.kvs.ForEach(func(v interface{}) {
