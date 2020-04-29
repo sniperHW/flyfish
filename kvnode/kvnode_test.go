@@ -21,7 +21,7 @@ var _sqltype string = "pgsql" //or mysql
 var _host string = "localhost"
 var _port int = 5432
 var _user string = "sniper"
-var _password string = "802802"
+var _password string = "123456"
 var _db string = "test"
 
 var configStr string = `
