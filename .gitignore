@@ -15,6 +15,10 @@ config.toml
 app/webTool/conf/conf.toml
 kv-1-1
 kv-1-1-snap
+kv-2-1
+kv-3-1
+kv-2-1-snap
+kv-3-1-snap
 cluster1.sh
 cluster2.sh
 cluster3.sh

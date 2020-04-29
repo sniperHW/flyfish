@@ -754,7 +754,7 @@ func (rc *raftNode) startReadPipeline() {
 	}()
 }
 
-type metric struct {
+/*type metric struct {
 	sync.Mutex
 	bytes      int64
 	last       time.Time
@@ -774,15 +774,12 @@ func (m *metric) add(count int) {
 	m.bytes += int64(count)
 	elapsed := now.Sub(m.last)
 	if elapsed >= time.Second {
-		//if m.bytes > 1024 {
-		//Infoln("proposals bytes", (m.bytes*int64(time.Second))/int64(elapsed)/1024/1024, "mb", m.newKvCount)
-		//}
 		m.bytes = 0
 		m.last = now
 	}
 }
 
-var g_metric = &metric{}
+var g_metric = &metric{}*/
 
 func (rc *raftNode) issuePropose(batch *batchProposal) {
 
@@ -811,7 +808,7 @@ func (rc *raftNode) issuePropose(batch *batchProposal) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	err := rc.node.Propose(ctx, proposalBuf)
-	g_metric.add(len(proposalBuf))
+	//g_metric.add(len(proposalBuf))
 	cancel()
 
 	if nil != err {

@@ -33,6 +33,10 @@ type KVNode struct {
 	sqlMgr        *sqlMgr
 	cmdChan       []chan *netCmd
 	poolStopChans []chan interface{}
+	//
+	sessions        sync.Map
+	clientCount     int64
+	wait4ReplyCount int64
 }
 
 func verifyLogin(loginReq *protocol.LoginReq) bool {
@@ -76,7 +80,7 @@ func (this *KVNode) startListener() error {
 					event.Session.Close(event.Data.(error).Error(), 0)
 				} else {
 					msg := event.Data.(*net.Message)
-					this.dispatcher.Dispatch(this, session, msg.GetCmd(), msg)
+					this.dispatcher.Dispatch(session, msg.GetCmd(), msg)
 				}
 			})
 		}()
@@ -175,15 +179,15 @@ func (this *KVNode) Stop() {
 		this.listener.Close()
 
 		//关闭现有连接的读端
-		sessions.Range(func(key, value interface{}) bool {
+		this.sessions.Range(func(key, value interface{}) bool {
 			value.(kendynet.StreamSession).ShutdownRead()
 			return true
 		})
 
-		logger.Infoln("ShutdownRead ok", "wait4ReplyCount:", wait4ReplyCount)
+		logger.Infoln("ShutdownRead ok", "wait4ReplyCount:", this.wait4ReplyCount)
 
 		waitCondition(func() bool {
-			if atomic.LoadInt64(&wait4ReplyCount) == 0 {
+			if atomic.LoadInt64(&this.wait4ReplyCount) == 0 {
 				return true
 			} else {
 				return false
@@ -196,13 +200,13 @@ func (this *KVNode) Stop() {
 
 		//关闭所有客户连接
 
-		sessions.Range(func(key, value interface{}) bool {
+		this.sessions.Range(func(key, value interface{}) bool {
 			value.(kendynet.StreamSession).Close("", 1)
 			return true
 		})
 
 		waitCondition(func() bool {
-			if atomic.LoadInt64(&clientCount) == 0 {
+			if atomic.LoadInt64(&this.clientCount) == 0 {
 				return true
 			} else {
 				return false
@@ -224,6 +228,7 @@ func (this *KVNode) initHandler() {
 
 	this.dispatcher = &dispatcher{
 		handlers: map[uint16]handler{},
+		kvnode:   this,
 	}
 
 	this.dispatcher.Register(uint16(protocol.CmdType_Del), del)

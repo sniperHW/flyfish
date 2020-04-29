@@ -11,6 +11,7 @@ type cliConn struct {
 	sync.RWMutex
 	session  kendynet.StreamSession
 	replyers map[int64]*replyer
+	node     *KVNode
 }
 
 func (this *cliConn) clear() {

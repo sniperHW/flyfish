@@ -4,18 +4,19 @@ import (
 	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet"
-	"sync"
+	//"sync"
 	"sync/atomic"
 	"time"
 )
 
-var sessions sync.Map
-var clientCount int64
+//var sessions sync.Map
+//var clientCount int64
 
 type handler func(*KVNode, *cliConn, *net.Message)
 
 type dispatcher struct {
 	handlers map[uint16]handler
+	kvnode   *KVNode
 }
 
 func (this *dispatcher) Register(cmd uint16, h handler) {
@@ -27,7 +28,7 @@ func (this *dispatcher) Register(cmd uint16, h handler) {
 	this.handlers[cmd] = h
 }
 
-func (this *dispatcher) Dispatch(kvnode *KVNode, session kendynet.StreamSession, cmd uint16, msg *net.Message) {
+func (this *dispatcher) Dispatch(session kendynet.StreamSession, cmd uint16, msg *net.Message) {
 	if nil != msg {
 		if cmd == uint16(proto.CmdType_Ping) {
 			resp := net.NewMessage(net.CommonHead{}, &proto.PingResp{
@@ -40,7 +41,7 @@ func (this *dispatcher) Dispatch(kvnode *KVNode, session kendynet.StreamSession,
 		handler, ok := this.handlers[cmd]
 		if ok {
 			//投递给线程池处理
-			kvnode.pushNetCmd(handler, session.GetUserData().(*cliConn), msg)
+			this.kvnode.pushNetCmd(handler, session.GetUserData().(*cliConn), msg)
 		} else {
 			logger.Errorln("invaild cmd", cmd)
 		}
@@ -57,8 +58,8 @@ func (this *dispatcher) OnClose(session kendynet.StreamSession, reason string) {
 			u.(*cliConn).clear()
 		}
 	}
-	atomic.AddInt64(&clientCount, -1)
-	sessions.Delete(session)
+	atomic.AddInt64(&this.kvnode.clientCount, -1)
+	this.kvnode.sessions.Delete(session)
 
 	/*u := session.GetUserData()
 	if nil != u {
@@ -69,14 +70,15 @@ func (this *dispatcher) OnClose(session kendynet.StreamSession, reason string) {
 }
 
 func (this *dispatcher) OnNewClient(session kendynet.StreamSession) {
-	atomic.AddInt64(&clientCount, 1)
+	atomic.AddInt64(&this.kvnode.clientCount, 1)
 	session.SetUserData(
 		&cliConn{
 			session:  session,
 			replyers: map[int64]*replyer{},
+			node:     this.kvnode,
 		},
 	)
-	sessions.Store(session, session)
+	this.kvnode.sessions.Store(session, session)
 }
 
 func ping(kvnode *KVNode, conn *cliConn, msg *net.Message) {

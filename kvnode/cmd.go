@@ -9,9 +9,9 @@ import (
 	"time"
 )
 
-var (
-	wait4ReplyCount int64
-)
+//var (
+//	wait4ReplyCount int64
+//)
 
 /*
 func makeUniKey(table string, key string) string {
@@ -72,7 +72,7 @@ type replyer struct {
 }
 
 func newReplyer(peer *cliConn, seqno int64, respDeadline time.Time) *replyer {
-	atomic.AddInt64(&wait4ReplyCount, 1)
+	atomic.AddInt64(&peer.node.wait4ReplyCount, 1)
 
 	r := &replyer{
 		peer:         peer,
@@ -99,7 +99,7 @@ func (this *replyer) isCancel() bool {
 
 func (this *replyer) reply(cmd commandI, errCode int32, fields map[string]*proto.Field, version int64) {
 	if atomic.CompareAndSwapInt64(&this.replyed, 0, 1) {
-		atomic.AddInt64(&wait4ReplyCount, -1)
+		atomic.AddInt64(&this.peer.node.wait4ReplyCount, -1)
 		if this.peer.removeReplyer(this) && !time.Now().After(this.respDeadline) {
 			err := this.peer.send(cmd.makeResponse(errCode, fields, version))
 			if nil != err {
@@ -111,7 +111,7 @@ func (this *replyer) reply(cmd commandI, errCode int32, fields map[string]*proto
 
 func (this *replyer) dontReply() {
 	if atomic.CompareAndSwapInt64(&this.replyed, 0, 1) {
-		atomic.AddInt64(&wait4ReplyCount, -1)
+		atomic.AddInt64(&this.peer.node.wait4ReplyCount, -1)
 		this.peer.removeReplyer(this)
 	}
 }

@@ -39,7 +39,7 @@ StrInitCap              = 1048576 # 1mb
 
 ServiceHost             = "127.0.0.1"
 
-ServicePort             = 10018
+ServicePort             = %d
 
 ReplyBusyOnQueueFull    = false                #当处理队列满时是否用busy响应，如果填false,直接丢弃请求，让客户端超时 
 
@@ -477,7 +477,7 @@ func TestKvnode2(t *testing.T) {
 	os.RemoveAll("./kv-1-1")
 	os.RemoveAll("./kv-1-1-snap")
 
-	conf.LoadConfigStr(fmt.Sprintf(configStr, _sqltype, _host, _port, _user, _password, _db, _host, _port, _user, _password, _db))
+	conf.LoadConfigStr(fmt.Sprintf(configStr, 10018, _sqltype, _host, _port, _user, _password, _db, _host, _port, _user, _password, _db))
 
 	InitLogger()
 
@@ -537,7 +537,7 @@ func TestKvnode1(t *testing.T) {
 	os.RemoveAll("./kv-1-1")
 	os.RemoveAll("./kv-1-1-snap")
 
-	conf.LoadConfigStr(fmt.Sprintf(configStr, _sqltype, _host, _port, _user, _password, _db, _host, _port, _user, _password, _db))
+	conf.LoadConfigStr(fmt.Sprintf(configStr, 10018, _sqltype, _host, _port, _user, _password, _db, _host, _port, _user, _password, _db))
 
 	InitLogger()
 
@@ -597,5 +597,113 @@ func TestKvnode1(t *testing.T) {
 	node.storeMgr.RUnlock()
 
 	node.Stop()
+
+}
+
+func TestCluster(t *testing.T) {
+	os.RemoveAll("./kv-1-1")
+	os.RemoveAll("./kv-1-1-snap")
+	os.RemoveAll("./kv-2-1")
+	os.RemoveAll("./kv-2-1-snap")
+	os.RemoveAll("./kv-3-1")
+	os.RemoveAll("./kv-4-1-snap")
+
+	conf.LoadConfigStr(fmt.Sprintf(configStr, 20018, _sqltype, _host, _port, _user, _password, _db, _host, _port, _user, _password, _db))
+
+	InitLogger()
+
+	cluster := "http://127.0.0.1:22378,http://127.0.0.1:22379,http://127.0.0.1:22380"
+	id1 := 1
+
+	node1 := NewKvNode()
+
+	if err := node1.Start(&id1, &cluster); nil != err {
+		panic(err)
+	}
+
+	conf.LoadConfigStr(fmt.Sprintf(configStr, 20019, _sqltype, _host, _port, _user, _password, _db, _host, _port, _user, _password, _db))
+
+	id2 := 2
+
+	node2 := NewKvNode()
+
+	if err := node2.Start(&id2, &cluster); nil != err {
+		panic(err)
+	}
+
+	conf.LoadConfigStr(fmt.Sprintf(configStr, 20020, _sqltype, _host, _port, _user, _password, _db, _host, _port, _user, _password, _db))
+
+	id3 := 3
+
+	node3 := NewKvNode()
+
+	if err := node3.Start(&id3, &cluster); nil != err {
+		panic(err)
+	}
+
+	isLeader1 := func() bool {
+		node1.storeMgr.RLock()
+		defer node1.storeMgr.RUnlock()
+		for _, v := range node1.storeMgr.stores {
+			if v.rn.isLeader() {
+				return true
+			}
+		}
+		return false
+	}
+
+	isLeader2 := func() bool {
+		node2.storeMgr.RLock()
+		defer node2.storeMgr.RUnlock()
+		for _, v := range node2.storeMgr.stores {
+			if v.rn.isLeader() {
+				return true
+			}
+		}
+		return false
+	}
+
+	isLeader3 := func() bool {
+		node3.storeMgr.RLock()
+		defer node3.storeMgr.RUnlock()
+		for _, v := range node3.storeMgr.stores {
+			if v.rn.isLeader() {
+				return true
+			}
+		}
+		return false
+	}
+
+	c1 := client.OpenClient("localhost:20018", false)
+	c2 := client.OpenClient("localhost:20018", false)
+	c3 := client.OpenClient("localhost:20018", false)
+
+	getClient := func() *client.Client {
+		for {
+			if isLeader1() {
+				return c1
+			}
+
+			if isLeader2() {
+				return c2
+			}
+
+			if isLeader3() {
+				return c3
+			}
+		}
+	}
+
+	for i := 0; i < 20; i++ {
+		c := getClient()
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		fields["name"] = "sniperHW"
+		c.Set("users1", "sniperHW", fields).Exec()
+	}
+
+	node1.Stop()
+	node2.Stop()
+	node3.Stop()
 
 }
