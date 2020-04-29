@@ -104,6 +104,7 @@ func test(t *testing.T, c *client.Client) {
 
 		r1 = c.Set("users1", "sniperHW", fields).Exec()
 		assert.Equal(t, errcode.ERR_OK, r1.ErrCode)
+
 		//kick
 		for {
 			r := c.Kick("users1", "sniperHW").Exec()
@@ -136,6 +137,9 @@ func test(t *testing.T, c *client.Client) {
 		assert.Equal(t, "sniperHW", r2.Fields["name"].GetString())
 		assert.Equal(t, int64(12), r2.Fields["age"].GetInt())
 
+		r2 = c.Get("users1", "sniperHW", "aa").Exec()
+		assert.Equal(t, errcode.ERR_INVAILD_FIELD, r2.ErrCode)
+
 		//kick
 		for {
 			r := c.Kick("users1", "sniperHW").Exec()
@@ -159,6 +163,10 @@ func test(t *testing.T, c *client.Client) {
 
 		r1 = c.Set("users1", "sniperHW", fields, 100).Exec()
 		assert.Equal(t, errcode.ERR_VERSION_MISMATCH, r1.ErrCode)
+
+		fields["aa"] = "sniperHW"
+		r1 = c.Set("users1", "sniperHW", fields).Exec()
+		assert.Equal(t, errcode.ERR_INVAILD_FIELD, r1.ErrCode)
 
 	}
 
@@ -238,6 +246,9 @@ func test(t *testing.T, c *client.Client) {
 		r5 = c.CompareAndSetNx("users1", "sniperHW", "age", 12, 10).Exec()
 		assert.Equal(t, errcode.ERR_OK, r5.ErrCode)
 
+		r5 = c.CompareAndSetNx("users1", "sniperHW", "bb", 1, 10).Exec()
+		assert.Equal(t, errcode.ERR_INVAILD_FIELD, r5.ErrCode)
+
 	}
 
 	{
@@ -279,6 +290,10 @@ func test(t *testing.T, c *client.Client) {
 
 		r3 = c.SetNx("users1", "sniperHW", fields).Exec()
 		assert.Equal(t, errcode.ERR_RECORD_EXIST, r3.ErrCode)
+
+		fields["aa"] = "sniperHW"
+		r3 = c.SetNx("users1", "sniperHW", fields).Exec()
+		assert.Equal(t, errcode.ERR_INVAILD_FIELD, r3.ErrCode)
 
 	}
 
@@ -345,6 +360,35 @@ func test(t *testing.T, c *client.Client) {
 		r3 = c.DecrBy("users1", "sniperHW", "age", 1).Exec()
 		assert.Equal(t, errcode.ERR_OK, r3.ErrCode)
 
+		r3 = c.DecrBy("users1", "sniperHW", "a", 1).Exec()
+		assert.Equal(t, errcode.ERR_INVAILD_FIELD, r3.ErrCode)
+
+		r3 = c.IncrBy("users1", "sniperHW", "a", 1).Exec()
+		assert.Equal(t, errcode.ERR_INVAILD_FIELD, r3.ErrCode)
+
+		c.Del("users1", "sniperHW").Exec()
+
+		r3 = c.DecrBy("users1", "sniperHW", "age", 1).Exec()
+		assert.Equal(t, errcode.ERR_OK, r3.ErrCode)
+
+		c.Del("users1", "sniperHW").Exec()
+
+		r3 = c.IncrBy("users1", "sniperHW", "age", 1).Exec()
+		assert.Equal(t, errcode.ERR_OK, r3.ErrCode)
+
+		for {
+			r := c.Kick("users1", "sniperHW").Exec()
+			if r.ErrCode == errcode.ERR_OK {
+				break
+			}
+			time.Sleep(time.Millisecond * 100)
+		}
+
+		c.IncrBy("users1", "sniperHW", "age", 1).AsyncExec(func(_ *client.SliceResult) {})
+		c.IncrBy("users1", "sniperHW", "age", 1).AsyncExec(func(_ *client.SliceResult) {})
+		c.IncrBy("users1", "sniperHW", "age", 1).AsyncExec(func(_ *client.SliceResult) {})
+		r3 = c.IncrBy("users1", "sniperHW", "age", 1).Exec()
+		assert.Equal(t, errcode.ERR_OK, r3.ErrCode)
 	}
 
 	{
@@ -455,6 +499,9 @@ func test(t *testing.T, c *client.Client) {
 		r2 = c.CompareAndSet("users1", "sniperHW", "age", 12, 10).Exec()
 		assert.Equal(t, errcode.ERR_CAS_NOT_EQUAL, r2.ErrCode)
 
+		r2 = c.CompareAndSet("users1", "sniperHW", "bb", 12, 10).Exec()
+		assert.Equal(t, errcode.ERR_INVAILD_FIELD, r2.ErrCode)
+
 		//del and kick
 		c.Del("users1", "sniperHW").Exec()
 		for {
@@ -480,6 +527,7 @@ func TestKvnode2(t *testing.T) {
 	conf.LoadConfigStr(fmt.Sprintf(configStr, 10018, _sqltype, _host, _port, _user, _password, _db, _host, _port, _user, _password, _db))
 
 	InitLogger()
+	UpdateLogConfig()
 
 	cluster := "http://127.0.0.1:12377"
 	id := 1
@@ -675,8 +723,8 @@ func TestCluster(t *testing.T) {
 	}
 
 	c1 := client.OpenClient("localhost:20018", false)
-	c2 := client.OpenClient("localhost:20018", false)
-	c3 := client.OpenClient("localhost:20018", false)
+	c2 := client.OpenClient("localhost:20019", false)
+	c3 := client.OpenClient("localhost:20020", false)
 
 	getClient := func() *client.Client {
 		for {
@@ -694,12 +742,55 @@ func TestCluster(t *testing.T) {
 		}
 	}
 
+	getNoLeaderClient := func() *client.Client {
+		if !isLeader1() {
+			return c1
+		}
+
+		if !isLeader2() {
+			return c2
+		}
+
+		if !isLeader3() {
+			return c3
+		}
+
+		return nil
+	}
+
 	for i := 0; i < 20; i++ {
 		c := getClient()
 		fields := map[string]interface{}{}
 		fields["age"] = 12
 		fields["name"] = "sniperHW"
-		c.Set("users1", "sniperHW", fields).Exec()
+		r1 := c.Set("users1", "sniperHW", fields).Exec()
+		assert.Equal(t, errcode.ERR_OK, r1.ErrCode)
+	}
+
+	{
+		c := getClient()
+		for {
+			r := c.Kick("users1", "sniperHW").Exec()
+			if r.ErrCode == errcode.ERR_OK {
+				break
+			}
+			time.Sleep(time.Millisecond * 100)
+		}
+	}
+
+	{
+		c := getClient()
+		r1 := c.GetAll("users1", "sniperHW").Exec()
+		assert.Equal(t, errcode.ERR_OK, r1.ErrCode)
+	}
+
+	{
+		c := getNoLeaderClient()
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		fields["name"] = "sniperHW"
+		r := c.Set("users1", "sniperHW", fields).Exec()
+		assert.Equal(t, errcode.ERR_NOT_LEADER, r.ErrCode)
 	}
 
 	node1.Stop()

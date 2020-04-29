@@ -566,7 +566,7 @@ func (rc *raftNode) onTriggerSnapshotOK() {
 	}
 	rc.snapshotIndex = rc.appliedIndex
 
-	rc.snapshotting = 0
+	atomic.StoreInt32(&rc.snapshotting, 0)
 
 }
 
@@ -577,7 +577,7 @@ func (rc *raftNode) triggerSnapshot() {
 		return
 	}
 
-	rc.snapshotting = 1
+	atomic.StoreInt32(&rc.snapshotting, 1)
 
 	logger.Infof("start snapshot [applied index: %d | last snapshot index: %d]", rc.appliedIndex, rc.snapshotIndex)
 
@@ -634,7 +634,7 @@ func (rc *raftNode) triggerSnapshot() {
 
 func (rc *raftNode) maybeTriggerSnapshot() {
 
-	if rc.snapshotting == 1 {
+	if atomic.LoadInt32(&rc.snapshotting) == 1 {
 		return
 	}
 
@@ -1000,10 +1000,11 @@ func (rc *raftNode) serveChannels() {
 				if oldLeader == rc.id && rc.leader != rc.id {
 					loseLeadership = true
 				}
-				logger.Infoln(rd.SoftState.Lead>>16, "is leader")
+				//logger.Infoln(rd.SoftState.Lead>>16, "is leader")
 
 				if rc.leader == rc.id {
 					rc.lease.becomeLeader(rc)
+					logger.Infoln("becomeLeader id:", rd.SoftState.Lead>>16)
 					//rc.cbBecomeLeader()
 				}
 

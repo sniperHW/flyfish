@@ -37,6 +37,7 @@ type KVNode struct {
 	sessions        sync.Map
 	clientCount     int64
 	wait4ReplyCount int64
+	id              int
 }
 
 func verifyLogin(loginReq *protocol.LoginReq) bool {
@@ -113,6 +114,8 @@ func (this *KVNode) Start(id *int, cluster *string) error {
 	if nil != err {
 		return err
 	}
+
+	this.id = *id
 
 	this.listener, err = net.NewListener("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort), verifyLogin)
 
