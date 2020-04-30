@@ -555,9 +555,11 @@ func TestMysql(t *testing.T) {
 	test(t, c)
 
 	node.Stop()
+
+	time.Sleep(time.Second)
 }
 
-func TestKvnode2(t *testing.T) {
+func TestKvnode1(t *testing.T) {
 	//先删除所有kv文件
 	os.RemoveAll("./kv-1-1")
 	os.RemoveAll("./kv-1-1-snap")
@@ -615,9 +617,11 @@ func TestKvnode2(t *testing.T) {
 
 	node.Stop()
 
+	time.Sleep(time.Second)
+
 }
 
-func TestKvnode1(t *testing.T) {
+func TestKvnode2(t *testing.T) {
 
 	//先删除所有kv文件
 	os.RemoveAll("./kv-1-1")
@@ -683,6 +687,8 @@ func TestKvnode1(t *testing.T) {
 	node.storeMgr.RUnlock()
 
 	node.Stop()
+
+	time.Sleep(time.Second)
 
 }
 
@@ -870,10 +876,41 @@ func TestCluster(t *testing.T) {
 		r1 := c.GetAll("users1", "sniperHW").Exec()
 		assert.Equal(t, errcode.ERR_OK, r1.ErrCode)
 
+		//停机节点恢复
+
+		if leader == node1 {
+
+			conf.LoadConfigStr(fmt.Sprintf(configStr, 20018, _sqltype, _host, _port, _user, _password, _db, _host, _port, _user, _password, _db))
+
+			node1 = NewKvNode()
+
+			if err := node1.Start(&id1, &cluster); nil != err {
+				panic(err)
+			}
+		} else if leader == node2 {
+			conf.LoadConfigStr(fmt.Sprintf(configStr, 20019, _sqltype, _host, _port, _user, _password, _db, _host, _port, _user, _password, _db))
+
+			node2 = NewKvNode()
+
+			if err := node2.Start(&id2, &cluster); nil != err {
+				panic(err)
+			}
+		} else {
+			conf.LoadConfigStr(fmt.Sprintf(configStr, 20020, _sqltype, _host, _port, _user, _password, _db, _host, _port, _user, _password, _db))
+
+			node3 = NewKvNode()
+
+			if err := node3.Start(&id3, &cluster); nil != err {
+				panic(err)
+			}
+		}
+
 	}
 
 	node1.Stop()
 	node2.Stop()
 	node3.Stop()
+
+	time.Sleep(time.Second)
 
 }

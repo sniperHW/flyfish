@@ -38,6 +38,7 @@ type KVNode struct {
 	clientCount     int64
 	wait4ReplyCount int64
 	id              int
+	mutilRaft       *mutilRaft
 }
 
 func verifyLogin(loginReq *protocol.LoginReq) bool {
@@ -131,11 +132,11 @@ func (this *KVNode) Start(id *int, cluster *string) error {
 
 	clusterArray := strings.Split(*cluster, ",")
 
-	mutilRaft := newMutilRaft()
+	//mutilRaft := newMutilRaft()
 
-	this.storeMgr = newStoreMgr(this, mutilRaft, dbmeta, id, cluster, config.CacheGroupSize)
+	this.storeMgr = newStoreMgr(this, this.mutilRaft, dbmeta, id, cluster, config.CacheGroupSize)
 
-	go mutilRaft.serveMutilRaft(clusterArray[*id-1])
+	go this.mutilRaft.serveMutilRaft(clusterArray[*id-1])
 
 	this.cmdChan = []chan *netCmd{}
 	cpuNum := runtime.NumCPU()
@@ -221,6 +222,7 @@ func (this *KVNode) Stop() {
 		}
 
 		this.storeMgr.stop()
+		this.mutilRaft.stop()
 
 		logger.Infoln("flyfish stop ok")
 
@@ -250,7 +252,9 @@ func (this *KVNode) initHandler() {
 }
 
 func NewKvNode() *KVNode {
-	s := &KVNode{}
+	s := &KVNode{
+		mutilRaft: newMutilRaft(),
+	}
 	s.initHandler()
 	return s
 }

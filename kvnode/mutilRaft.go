@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 )
 
 type raftHandler struct {
@@ -107,9 +108,16 @@ func (this *mutilRaft) serveMutilRaft(urlStr string) {
 		logger.Fatalln("raftexample: Failed parsing URL", err)
 	}
 
-	ln, err := newStoppableListener(url.Host, this.httpstopc)
-	if err != nil {
-		logger.Fatalln("raftexample: Failed to listen rafthttp", err)
+	var ln *stoppableListener
+
+	for {
+		ln, err = newStoppableListener(url.Host, this.httpstopc)
+		if err != nil {
+			logger.Infoln("raftexample: Failed to listen rafthttp", err)
+			time.Sleep(time.Second)
+		} else {
+			break
+		}
 	}
 
 	logger.Infoln("serve", urlStr)
@@ -123,6 +131,11 @@ func (this *mutilRaft) serveMutilRaft(urlStr string) {
 	}
 
 	close(this.httpdonec)
+}
+
+func (this *mutilRaft) stop() {
+	close(this.httpstopc)
+	<-this.httpdonec
 }
 
 func newMutilRaft() *mutilRaft {
