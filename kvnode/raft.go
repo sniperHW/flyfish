@@ -105,10 +105,7 @@ type raftNode struct {
 	readIndex int64
 	lease     *lease
 
-	term uint64
-
-	gotLeaseCb func()
-
+	term    uint64
 	kvstore *kvstore
 
 	proposalCompressor net.CompressorI
@@ -1061,10 +1058,6 @@ func (rc *raftNode) renew() {
 
 func (rc *raftNode) hasLease() bool {
 	return rc.lease.hasLease(rc)
-}
-
-func (rc *raftNode) gotLease() {
-	rc.gotLeaseCb()
 }
 
 func (rc *raftNode) Process(ctx context.Context, m raftpb.Message) error {

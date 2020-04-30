@@ -242,12 +242,11 @@ func (this *KVNode) initHandler() {
 	this.dispatcher.Register(uint16(protocol.CmdType_SetNx), setNx)
 	this.dispatcher.Register(uint16(protocol.CmdType_CompareAndSet), compareAndSet)
 	this.dispatcher.Register(uint16(protocol.CmdType_CompareAndSetNx), compareAndSetNx)
-	this.dispatcher.Register(uint16(protocol.CmdType_Ping), ping)
 	this.dispatcher.Register(uint16(protocol.CmdType_IncrBy), incrBy)
 	this.dispatcher.Register(uint16(protocol.CmdType_DecrBy), decrBy)
 	this.dispatcher.Register(uint16(protocol.CmdType_Kick), kick)
-	this.dispatcher.Register(uint16(protocol.CmdType_Cancel), cancel)
-	this.dispatcher.Register(uint16(protocol.CmdType_ReloadTableConf), reloadTableMeta)
+	//this.dispatcher.Register(uint16(protocol.CmdType_Cancel), cancel)
+	//this.dispatcher.Register(uint16(protocol.CmdType_ReloadTableConf), reloadTableMeta)
 
 }
 

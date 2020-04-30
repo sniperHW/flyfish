@@ -138,6 +138,21 @@ func test(t *testing.T, c *client.Client) {
 		assert.Equal(t, "sniperHW", r2.Fields["name"].GetString())
 		assert.Equal(t, int64(12), r2.Fields["age"].GetInt())
 
+		r2 = c.GetAllWithVersion("users1", "sniperHW", r2.Version).Exec()
+		assert.Equal(t, errcode.ERR_RECORD_UNCHANGE, r2.ErrCode)
+
+		//kick
+		for {
+			r := c.Kick("users1", "sniperHW").Exec()
+			if r.ErrCode == errcode.ERR_OK {
+				break
+			}
+			time.Sleep(time.Millisecond * 100)
+		}
+
+		r2 = c.GetAllWithVersion("users1", "sniperHW", r2.Version).Exec()
+		assert.Equal(t, errcode.ERR_RECORD_UNCHANGE, r2.ErrCode)
+
 		r2 = c.Get("users1", "sniperHW", "aa").Exec()
 		assert.Equal(t, errcode.ERR_INVAILD_FIELD, r2.ErrCode)
 

@@ -49,9 +49,9 @@ type cmdQueue struct {
 	locked bool //队列是否被锁定（前面有op尚未完成）
 }
 
-func (this *cmdQueue) len() int {
+/*func (this *cmdQueue) len() int {
 	return this.queue.Len()
-}
+}*/
 
 func (this *cmdQueue) empty() bool {
 	return this.queue.Len() == 0
@@ -183,23 +183,11 @@ func (this *kv) kickable() bool {
 
 	status := this.getStatus()
 
-	if status == cache_remove {
+	if status == cache_remove || this.cmdQueue.isLocked() || !this.cmdQueue.empty() || this.isWriteBack() {
 		return false
+	} else {
+		return true
 	}
-
-	if this.cmdQueue.isLocked() {
-		return false
-	}
-
-	if !this.cmdQueue.empty() {
-		return false
-	}
-
-	if this.isWriteBack() {
-		return false
-	}
-
-	return true
 }
 
 func (this *kv) setMissing() {
@@ -282,18 +270,9 @@ func (this *kv) processCmd(op commandI) {
 
 	if nil != op {
 
-		if this.getStatus() == cache_remove {
-			logger.Debugln(this.uniKey, "cache_remove", "retry")
-			op.reply(errcode.ERR_RETRY, nil, 0)
-			return
-		}
-
-		if atomic.LoadInt64(&this.store.kvNode.wait4ReplyCount) > 500000 {
-			op.reply(errcode.ERR_RETRY, nil, 0)
-			return
-		}
-
-		if this.cmdQueue.queue.Len() > maxPendingCmdCountPerKv {
+		if this.getStatus() == cache_remove ||
+			atomic.LoadInt64(&this.store.kvNode.wait4ReplyCount) > 500000 ||
+			this.cmdQueue.queue.Len() > maxPendingCmdCountPerKv {
 			op.reply(errcode.ERR_RETRY, nil, 0)
 			return
 		}

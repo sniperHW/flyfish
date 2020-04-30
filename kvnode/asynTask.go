@@ -31,7 +31,7 @@ type asynCmdTaskI interface {
 	onSqlResp(errno int32)
 	getCommands() []commandI
 	getSqlFlag() uint32
-	setSqlFlag(uint32)
+	//setSqlFlag(uint32)
 	setProposalType(int)
 	onError(errno int32)
 	fillMissingFields(map[string]*proto.Field)
@@ -66,9 +66,9 @@ func (this *asynCmdTaskBase) getSqlFlag() uint32 {
 	return this.sqlFlag
 }
 
-func (this *asynCmdTaskBase) setSqlFlag(flag uint32) {
+/*func (this *asynCmdTaskBase) setSqlFlag(flag uint32) {
 	this.sqlFlag = flag
-}
+}*/
 
 func (this *asynCmdTaskBase) setProposalType(tt int) {
 	this.proposalType = tt

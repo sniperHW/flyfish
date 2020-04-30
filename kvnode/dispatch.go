@@ -4,13 +4,9 @@ import (
 	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet"
-	//"sync"
 	"sync/atomic"
 	"time"
 )
-
-//var sessions sync.Map
-//var clientCount int64
 
 type handler func(*KVNode, *cliConn, *net.Message)
 
@@ -20,39 +16,33 @@ type dispatcher struct {
 }
 
 func (this *dispatcher) Register(cmd uint16, h handler) {
-	_, ok := this.handlers[cmd]
-	if ok {
-		return
+	if _, ok := this.handlers[cmd]; !ok {
+		this.handlers[cmd] = h
 	}
-
-	this.handlers[cmd] = h
 }
 
 func (this *dispatcher) Dispatch(session kendynet.StreamSession, cmd uint16, msg *net.Message) {
 	if nil != msg {
-		if cmd == uint16(proto.CmdType_Ping) {
-			resp := net.NewMessage(net.CommonHead{}, &proto.PingResp{
+		switch cmd {
+		case uint16(proto.CmdType_Ping):
+			session.Send(net.NewMessage(net.CommonHead{}, &proto.PingResp{
 				Timestamp: time.Now().UnixNano(),
-			})
-			session.Send(resp)
-			return
+			}))
+		case uint16(proto.CmdType_Cancel):
+			cancel(this.kvnode, session.GetUserData().(*cliConn), msg)
+		case uint16(proto.CmdType_ReloadTableConf):
+			reloadTableMeta(this.kvnode, session.GetUserData().(*cliConn), msg)
+		default:
+			if handler, ok := this.handlers[cmd]; ok {
+				//投递给线程池处理
+				this.kvnode.pushNetCmd(handler, session.GetUserData().(*cliConn), msg)
+			}
 		}
-
-		handler, ok := this.handlers[cmd]
-		if ok {
-			//投递给线程池处理
-			this.kvnode.pushNetCmd(handler, session.GetUserData().(*cliConn), msg)
-		} else {
-			logger.Errorln("invaild cmd", cmd)
-		}
-	} else {
-		logger.Errorln("msg is nil")
 	}
 }
 
 func (this *dispatcher) OnClose(session kendynet.StreamSession, reason string) {
-	u := session.GetUserData()
-	if nil != u {
+	if u := session.GetUserData(); nil != u {
 		switch u.(type) {
 		case *cliConn:
 			u.(*cliConn).clear()
@@ -60,13 +50,6 @@ func (this *dispatcher) OnClose(session kendynet.StreamSession, reason string) {
 	}
 	atomic.AddInt64(&this.kvnode.clientCount, -1)
 	this.kvnode.sessions.Delete(session)
-
-	/*u := session.GetUserData()
-	if nil != u {
-		u.(*scaner).close()
-	}
-	atomic.AddInt64(&clientCount, -1)
-	sessions.Delete(session)*/
 }
 
 func (this *dispatcher) OnNewClient(session kendynet.StreamSession) {
@@ -79,13 +62,4 @@ func (this *dispatcher) OnNewClient(session kendynet.StreamSession) {
 		},
 	)
 	this.kvnode.sessions.Store(session, session)
-}
-
-func ping(kvnode *KVNode, conn *cliConn, msg *net.Message) {
-	head := msg.GetHead()
-	req := msg.GetData().(*proto.PingReq)
-	resp := net.NewMessage(head, &proto.PingResp{
-		Timestamp: req.GetTimestamp(),
-	})
-	conn.send(resp)
 }

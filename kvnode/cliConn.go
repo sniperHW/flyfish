@@ -4,7 +4,7 @@ import (
 	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/kendynet"
 	"sync"
-	"time"
+	//"time"
 )
 
 type cliConn struct {
@@ -28,9 +28,9 @@ func (this *cliConn) isClosed() bool {
 	return this.session.IsClosed()
 }
 
-func (this *cliConn) close(reason string, timeout time.Duration) {
+/*func (this *cliConn) close(reason string, timeout time.Duration) {
 	this.session.Close(reason, timeout)
-}
+}*/
 
 func (this *cliConn) addReplyer(replyer *replyer) {
 	this.Lock()

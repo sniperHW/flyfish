@@ -1,6 +1,7 @@
 package kvnode
 
 import (
+	"fmt"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/proto"
@@ -16,8 +17,7 @@ func (this *asynCmdTaskKick) append2Str(s *str.Str) {
 }
 
 func (this *asynCmdTaskKick) onSqlResp(errno int32) {
-	logger.Errorln("should not reach here", this.getKV().uniKey)
-	panic("asynCmdTaskKick should not reach here")
+	panic(fmt.Sprintf("asynCmdTaskKick should not reach here k:%s", this.getKV().uniKey))
 }
 
 func (this *asynCmdTaskKick) done() {
