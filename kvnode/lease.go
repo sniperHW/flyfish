@@ -19,9 +19,11 @@ import (
  */
 
 const (
-	leaseTimeout      = 20 * time.Second //租约时效20秒
-	leaseOwnerTimeout = 10 * time.Second //当前获得租约的leader的组约时效
-	renewTime         = 2 * time.Second  //续约间隔
+	leaseTimeout        = 20 * time.Second //租约时效20秒
+	leaseOwnerTimeout   = 10 * time.Second //当前获得租约的leader的组约时效
+	renewTime           = 2 * time.Second  //续约间隔
+	break_lease_routine = 1
+	wait_timeout        = 2
 )
 
 type asynTaskLease struct {
@@ -53,26 +55,7 @@ type lease struct {
 	term      uint64
 	owner     int //当前租约持有者
 	startTime time.Time
-	stop      chan struct{}
-}
-
-func (l *lease) getOwner() int {
-	l.Lock()
-	defer l.Unlock()
-	return l.owner
-}
-
-func (l *lease) isTimeout() bool {
-	l.Lock()
-	defer l.Unlock()
-	if l.owner == 0 {
-		return true
-	}
-	elapse := time.Now().Sub(l.startTime)
-	if elapse > leaseTimeout {
-		return false
-	}
-	return true
+	stopc     chan struct{}
 }
 
 //返回当前raftNode是否持有租约
@@ -81,12 +64,11 @@ func (l *lease) hasLease(rn *raftNode) bool {
 	defer l.Unlock()
 	if l.owner != rn.id || l.term != rn.getTerm() {
 		return false
-	}
-	elapse := time.Now().Sub(l.startTime)
-	if elapse > leaseOwnerTimeout {
+	} else if elapse := time.Now().Sub(l.startTime); elapse > leaseOwnerTimeout {
 		return false
+	} else {
+		return true
 	}
-	return true
 }
 
 //更新租约,返回rn是否获得租约(非续约)
@@ -100,57 +82,42 @@ func (l *lease) update(rn *raftNode, id int, term uint64) bool {
 	return rn.id == id && oldTerm != term
 }
 
-func (l *lease) wait(stop chan struct{}, second time.Duration) {
+func (l *lease) wait(stopc chan struct{}, second time.Duration) int {
 	select {
 	case <-time.After(second):
-	case <-stop:
+		return wait_timeout
+	case <-stopc:
+		return break_lease_routine
+	}
+}
+
+func (l *lease) stop() {
+	if nil != l.stopc {
+		close(l.stopc)
+		l.stopc = nil
 	}
 }
 
 func (l *lease) startLeaseRoutine(rn *raftNode) {
-	l.Lock()
-	defer l.Unlock()
-	if nil == l.stop {
-		logger.Infoln("startLeaseRoutine")
-		l.stop = make(chan struct{})
-		go func() {
-			for rn.isLeader() {
-				l.Lock()
-				stop := l.stop
-				owner := l.owner
-				l.Unlock()
-				if nil == stop {
+	stopc := make(chan struct{})
+	l.stopc = stopc
+	go func() {
+		for rn.isLeader() {
+			l.Lock()
+			waitLeaseTimeout := l.owner != 0 && l.owner != rn.id && !(time.Now().Sub(l.startTime) > leaseTimeout)
+			l.Unlock()
+			if waitLeaseTimeout {
+				//owner非自己，等待owner的lease过期
+				if l.wait(stopc, time.Second) == break_lease_routine {
 					return
 				}
-				if owner != 0 && owner != rn.id {
-					if !l.isTimeout() {
-						//等待超时
-						l.wait(l.stop, time.Second)
-						continue
-					}
-				}
+			} else {
 				//续租
 				rn.renew()
-				l.wait(l.stop, renewTime)
+				if l.wait(stopc, renewTime) == break_lease_routine {
+					return
+				}
 			}
-			logger.Infoln("break")
-		}()
-	}
-}
-
-func (l *lease) loseLeaderShip() {
-	l.Lock()
-	if nil != l.stop {
-		stop := l.stop
-		l.stop = nil
-		l.Unlock()
-		stop <- struct{}{}
-	} else {
-		l.Unlock()
-	}
-}
-
-func (l *lease) becomeLeader(rn *raftNode) {
-	logger.Infoln("becomeLeader")
-	l.startLeaseRoutine(rn)
+		}
+	}()
 }

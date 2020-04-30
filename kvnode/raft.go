@@ -158,7 +158,7 @@ func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, propos
 
 		proposePipeline: proposeC,
 		readPipeline:    readC,
-		lease:           &lease{stop: nil},
+		lease:           &lease{},
 
 		proposalCompressor: &net.ZipCompressor{},
 		snapshotCompressor: &net.ZipCompressor{},
@@ -531,6 +531,7 @@ func (rc *raftNode) stop() {
 	rc.mutilRaft.removeTransport(types.ID(rc.id))
 	close(rc.commitC)
 	close(rc.errorC)
+	rc.lease.stop()
 	rc.node.Stop()
 }
 
@@ -645,7 +646,7 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 
 func (rc *raftNode) onLoseLeadership() {
 
-	rc.lease.loseLeaderShip()
+	rc.lease.stop()
 	rc.muPendingPropose.Lock()
 	pendingPropose := rc.pendingPropose
 	rc.pendingPropose = list.New()
@@ -997,12 +998,9 @@ func (rc *raftNode) serveChannels() {
 				if oldLeader == rc.id && rc.leader != rc.id {
 					loseLeadership = true
 				}
-				//logger.Infoln(rd.SoftState.Lead>>16, "is leader")
-
 				if rc.leader == rc.id {
-					rc.lease.becomeLeader(rc)
+					rc.lease.startLeaseRoutine(rc)
 					logger.Infoln("becomeLeader id:", rd.SoftState.Lead>>16)
-					//rc.cbBecomeLeader()
 				}
 
 			}
