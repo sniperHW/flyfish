@@ -25,10 +25,6 @@ func (m *Field) IsInt() bool {
 	return m.GetType() == ValueType_int
 }
 
-func (m *Field) IsUint() bool {
-	return m.GetType() == ValueType_uint
-}
-
 func (m *Field) IsFloat() bool {
 	return m.GetType() == ValueType_float
 }
@@ -59,15 +55,6 @@ func (m *Field) GetBlob() []byte {
 	return m.V.GetB()
 }
 
-func (m *Field) GetUint() uint64 {
-
-	if !m.IsUint() {
-		panic("v is not uint")
-	}
-
-	return m.V.GetU()
-}
-
 func (m *Field) GetInt() int64 {
 	if !m.IsInt() {
 		panic("v is not int")
@@ -89,13 +76,6 @@ func (m *Field) SetInt(v int64) {
 		panic("v is not int")
 	}
 	m.V.I = v //proto.Int64(v)
-}
-
-func (m *Field) SetUint(v uint64) {
-	if !m.IsUint() {
-		panic("v is not uint")
-	}
-	m.V.U = v //proto.Uint64(v)
 }
 
 func (m *Field) SetString(v string) {
@@ -133,8 +113,6 @@ func (m *Field) IsEqual(o *Field) bool {
 		return m.GetFloat() == o.GetFloat()
 	case ValueType_int:
 		return m.GetInt() == o.GetInt()
-	case ValueType_uint:
-		return m.GetUint() == o.GetUint()
 	case ValueType_blob:
 		mm := m.GetBlob()
 		oo := o.GetBlob()
@@ -164,8 +142,6 @@ func UnpackField(filed *Field) interface{} {
 		return filed.GetString()
 	case ValueType_int:
 		return filed.GetInt()
-	case ValueType_uint:
-		return filed.GetUint()
 	case ValueType_float:
 		return filed.GetFloat()
 	case ValueType_blob:
@@ -189,7 +165,6 @@ func PackField(name string, v interface{}) *Field {
 
 	var vvI int64
 	var vvF float64
-	var vvU uint64
 
 	switch v.(type) {
 	case []byte:
@@ -220,26 +195,6 @@ func PackField(name string, v interface{}) *Field {
 		field.V.Type = ValueType_int //ValueType(ValueType_int).Enum()
 		vvI = int64(v.(int64))
 		break
-	case uint:
-		field.V.Type = ValueType_int //ValueType(ValueType_int).Enum()
-		vvI = int64(v.(uint))
-		break
-	case uint8:
-		field.V.Type = ValueType_uint //ValueType(ValueType_uint).Enum()
-		vvU = uint64(v.(uint8))
-		break
-	case uint16:
-		field.V.Type = ValueType_uint //ValueType(ValueType_uint).Enum()
-		vvU = uint64(v.(uint16))
-		break
-	case uint32:
-		field.V.Type = ValueType_uint //ValueType(ValueType_uint).Enum()
-		vvU = uint64(v.(uint32))
-		break
-	case uint64:
-		field.V.Type = ValueType_uint //ValueType(ValueType_uint).Enum()
-		vvU = uint64(v.(uint64))
-		break
 	case float32:
 		field.V.Type = ValueType_float //ValueType(ValueType_float).Enum()
 		vvF = float64(v.(float32))
@@ -257,8 +212,6 @@ func PackField(name string, v interface{}) *Field {
 
 	if field.GetType() == ValueType_float {
 		field.V.F = vvF //proto.Float64(vvF)
-	} else if field.GetType() == ValueType_uint {
-		field.V.U = vvU //proto.Uint64(vvU)
 	} else {
 		field.V.I = vvI //proto.Int64(vvI)
 	}

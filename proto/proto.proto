@@ -59,18 +59,16 @@ enum ValueType {
   nil      = 1;
   string   = 2;
   int      = 3;
-  uint     = 4;
-  float    = 5;
-  blob     = 6;
+  float    = 4;
+  blob     = 5;
 }
 
 message value {
     required ValueType type    = 1;
     optional int64     i       = 2;
-    optional uint64    u       = 3;
-    optional double    f       = 4;
-    optional string    s       = 5;
-    optional bytes     b       = 6;
+    optional double    f       = 3;
+    optional string    s       = 4;
+    optional bytes     b       = 5;
 }
 
 message field {

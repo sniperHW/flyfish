@@ -30,18 +30,10 @@ func (this *asynCmdTaskIncrDecr) onSqlResp(errno int32) {
 		oldV := this.fields[cmd.field.GetName()]
 		var newV *proto.Field
 
-		if oldV.IsInt() {
-			if cmd.isIncr {
-				newV = proto.PackField(oldV.GetName(), oldV.GetInt()+cmd.field.GetInt())
-			} else {
-				newV = proto.PackField(oldV.GetName(), oldV.GetInt()-cmd.field.GetInt())
-			}
+		if cmd.isIncr {
+			newV = proto.PackField(oldV.GetName(), oldV.GetInt()+cmd.field.GetInt())
 		} else {
-			if cmd.isIncr {
-				newV = proto.PackField(oldV.GetName(), oldV.GetUint()+cmd.field.GetUint())
-			} else {
-				newV = proto.PackField(oldV.GetName(), oldV.GetUint()-cmd.field.GetUint())
-			}
+			newV = proto.PackField(oldV.GetName(), oldV.GetInt()-cmd.field.GetInt())
 		}
 
 		this.fields[oldV.GetName()] = newV
@@ -160,18 +152,10 @@ func (this *cmdIncrDecr) prepare(t asynCmdTaskI) (asynCmdTaskI, bool) {
 			}
 		}
 
-		if oldV.IsInt() {
-			if this.isIncr {
-				newV = proto.PackField(oldV.GetName(), oldV.GetInt()+this.field.GetInt())
-			} else {
-				newV = proto.PackField(oldV.GetName(), oldV.GetInt()-this.field.GetInt())
-			}
+		if this.isIncr {
+			newV = proto.PackField(oldV.GetName(), oldV.GetInt()+this.field.GetInt())
 		} else {
-			if this.isIncr {
-				newV = proto.PackField(oldV.GetName(), oldV.GetUint()+this.field.GetUint())
-			} else {
-				newV = proto.PackField(oldV.GetName(), oldV.GetUint()-this.field.GetUint())
-			}
+			newV = proto.PackField(oldV.GetName(), oldV.GetInt()-this.field.GetInt())
 		}
 
 		task.fields[oldV.GetName()] = newV

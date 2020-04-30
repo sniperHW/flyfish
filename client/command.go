@@ -19,10 +19,6 @@ func (this *Field) GetString() string {
 	return (*protocol.Field)(this).GetString()
 }
 
-func (this *Field) GetUint() uint64 {
-	return (*protocol.Field)(this).GetUint()
-}
-
 func (this *Field) GetInt() int64 {
 	return (*protocol.Field)(this).GetInt()
 }

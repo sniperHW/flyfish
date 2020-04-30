@@ -143,8 +143,6 @@ func (this *Str) AppendFieldStr(field *proto.Field, binaryToSqlStr func(*Str, []
 		this.AppendString(fmt.Sprintf("%f", field.GetFloat()))
 	case proto.ValueType_int:
 		this.AppendString(strconv.FormatInt(field.GetInt(), 10))
-	case proto.ValueType_uint:
-		this.AppendString(strconv.FormatUint(field.GetUint(), 10))
 	case proto.ValueType_blob:
 		binaryToSqlStr(this, field.GetBlob())
 	}
@@ -171,9 +169,6 @@ func (this *Str) AppendField(field *proto.Field) *Str {
 	case proto.ValueType_int:
 		this.AppendByte(byte(proto.ValueType_int))
 		this.AppendInt64(field.GetInt())
-	case proto.ValueType_uint:
-		this.AppendByte(byte(proto.ValueType_uint))
-		this.AppendInt64(int64(field.GetUint()))
 	case proto.ValueType_blob:
 		this.AppendByte(byte(proto.ValueType_blob))
 		this.AppendInt32(int32(len(field.GetBlob())))
@@ -235,13 +230,6 @@ func (this *Str) ReadField(offset int) (*proto.Field, int, error) {
 			return nil, 0, err
 		}
 		return proto.PackField(name, i64), offset, nil
-	case proto.ValueType_uint:
-		var i64 int64
-		i64, offset, err = this.ReadInt64(offset)
-		if nil != err {
-			return nil, 0, err
-		}
-		return proto.PackField(name, uint64(i64)), offset, nil
 	case proto.ValueType_blob:
 		var bytesLen int32
 		bytesLen, offset, err = this.ReadInt32(offset)

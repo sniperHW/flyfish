@@ -793,6 +793,7 @@ func TestCluster(t *testing.T) {
 			if isLeader3() {
 				return node3
 			}
+			time.Sleep(time.Millisecond * 100)
 		}
 	}
 
@@ -813,6 +814,7 @@ func TestCluster(t *testing.T) {
 			if isLeader3() {
 				return c3
 			}
+			time.Sleep(time.Millisecond * 100)
 		}
 	}
 
@@ -868,13 +870,24 @@ func TestCluster(t *testing.T) {
 	}
 
 	{
-		//模拟leader停机
-		leader := getLeader()
-		leader.Stop()
 
 		c := getClient()
 		r1 := c.GetAll("users1", "sniperHW").Exec()
 		assert.Equal(t, errcode.ERR_OK, r1.ErrCode)
+		version := r1.Version
+
+		//模拟leader停机
+		leader := getLeader()
+		leader.Stop()
+
+		//取保从新leader取到的数据与之前的一致
+		c = getClient()
+		r1 = c.GetAll("users1", "sniperHW").Exec()
+		if r1.ErrCode == errcode.ERR_OK {
+			assert.Equal(t, version, r1.Version)
+		} else {
+			assert.Equal(t, errcode.ERR_TIMEOUT, r1.ErrCode)
+		}
 
 		//停机节点恢复
 

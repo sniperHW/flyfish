@@ -18,10 +18,6 @@ func convert_int64(in interface{}) interface{} {
 	return *(in.(*int64))
 }
 
-func convert_uint64(in interface{}) interface{} {
-	return *(in.(*uint64))
-}
-
 func convert_float(in interface{}) interface{} {
 	return *(in.(*float64))
 }
@@ -248,8 +244,6 @@ func loadMeta(def []string) (map[string]*TableMeta, error) {
 	getType := func(str string) proto.ValueType {
 		if str == "int" {
 			return proto.ValueType_int
-		} else if str == "uint" {
-			return proto.ValueType_uint
 		} else if str == "float" {
 			return proto.ValueType_float
 		} else if str == "string" {
@@ -264,8 +258,6 @@ func loadMeta(def []string) (map[string]*TableMeta, error) {
 	getReceiver := func(tt proto.ValueType) interface{} {
 		if tt == proto.ValueType_int {
 			return new(int64)
-		} else if tt == proto.ValueType_uint {
-			return new(uint64)
 		} else if tt == proto.ValueType_float {
 			return new(float64)
 		} else if tt == proto.ValueType_string {
@@ -281,8 +273,6 @@ func loadMeta(def []string) (map[string]*TableMeta, error) {
 	getConvetor := func(tt proto.ValueType) func(interface{}) interface{} {
 		if tt == proto.ValueType_int {
 			return convert_int64
-		} else if tt == proto.ValueType_uint {
-			return convert_uint64
 		} else if tt == proto.ValueType_float {
 			return convert_float
 		} else if tt == proto.ValueType_string {
@@ -306,17 +296,6 @@ func loadMeta(def []string) (map[string]*TableMeta, error) {
 					return nil
 				} else {
 					return i
-				}
-			}
-		} else if tt == proto.ValueType_uint {
-			if v == "" {
-				return uint64(0)
-			} else {
-				u, err := strconv.ParseUint(v, 10, 64)
-				if nil != err {
-					return nil
-				} else {
-					return u
 				}
 			}
 		} else if tt == proto.ValueType_float {
