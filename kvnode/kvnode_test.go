@@ -533,6 +533,14 @@ func test(t *testing.T, c *client.Client) {
 
 	}
 
+	{
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		fields["name"] = "sniperHW2"
+
+		c.SetNx("users1", "sniperHW2", fields).Exec()
+	}
+
 }
 
 func TestMysql(t *testing.T) {
