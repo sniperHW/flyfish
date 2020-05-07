@@ -1,0 +1,6 @@
+MysqlUser = "root" 
+MysqlPwd  = "123456"
+MysqlDb   = "huangwei"
+PgUser    = "sniper"
+PgPwd     = "123456"
+PgDB      = "test"

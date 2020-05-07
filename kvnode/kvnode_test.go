@@ -5,6 +5,7 @@ package kvnode
 
 import (
 	"fmt"
+	"github.com/BurntSushi/toml"
 	"github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/errcode"
@@ -16,13 +17,14 @@ import (
 	"time"
 )
 
-//fixed the var below first
-var _sqltype string = "pgsql" //or mysql
-var _host string = "localhost"
-var _port int = 5432
-var _user string = "sniper"
-var _password string = "123456"
-var _db string = "test"
+type dbconf struct {
+	MysqlUser string
+	MysqlPwd  string
+	MysqlDb   string
+	PgUser    string
+	PgPwd     string
+	PgDB      string
+}
 
 var configStr string = `
 CacheGroupSize          = 1                  #cache分组数量，每一个cache组单独管理，以降低处理冲突
@@ -276,7 +278,10 @@ func test(t *testing.T, c *client.Client) {
 		r1 := c.SetNx("users1", "sniperHW", fields).Exec()
 		assert.Equal(t, errcode.ERR_RECORD_EXIST, r1.ErrCode)
 
-		r2 := c.Del("users1", "sniperHW").Exec()
+		r2 := c.Del("users1", "sniperHW", 100).Exec()
+		assert.Equal(t, errcode.ERR_VERSION_MISMATCH, r2.ErrCode)
+
+		r2 = c.Del("users1", "sniperHW").Exec()
 		assert.Equal(t, errcode.ERR_OK, r2.ErrCode)
 
 		r3 := c.SetNx("users1", "sniperHW", fields).Exec()
@@ -461,6 +466,59 @@ func test(t *testing.T, c *client.Client) {
 	}
 
 	{
+
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		fields["name"] = "sniperHW"
+
+		c.Set("users1", "sniperHW", fields).AsyncExec(func(_ *client.StatusResult) {})
+		c.Set("users1", "sniperHW", fields).AsyncExec(func(_ *client.StatusResult) {})
+		c.Set("users1", "sniperHW", fields).AsyncExec(func(_ *client.StatusResult) {})
+		c.GetAll("users1", "sniperHW").AsyncExec(func(_ *client.SliceResult) {})
+		c.GetAll("users1", "sniperHW").AsyncExec(func(_ *client.SliceResult) {})
+		c.GetAll("users1", "sniperHW").Exec()
+
+		c.Set("users1", "sniperHW", fields).AsyncExec(func(_ *client.StatusResult) {})
+		c.Set("users1", "sniperHW", fields).AsyncExec(func(_ *client.StatusResult) {})
+		c.Set("users1", "sniperHW", fields).AsyncExec(func(_ *client.StatusResult) {})
+		c.IncrBy("users1", "sniperHW", "age", 1).AsyncExec(func(_ *client.SliceResult) {})
+		c.IncrBy("users1", "sniperHW", "age", 1).AsyncExec(func(_ *client.SliceResult) {})
+		c.GetAll("users1", "sniperHW").Exec()
+
+		c.IncrBy("users1", "sniperHW", "age", 1).AsyncExec(func(_ *client.SliceResult) {})
+		c.IncrBy("users1", "sniperHW", "age", 1).AsyncExec(func(_ *client.SliceResult) {})
+		c.IncrBy("users1", "sniperHW", "age", 1, 100).AsyncExec(func(_ *client.SliceResult) {})
+		c.GetAll("users1", "sniperHW").Exec()
+
+		c.GetAll("users1", "sniperHW").AsyncExec(func(_ *client.SliceResult) {})
+		c.GetAll("users1", "sniperHW").AsyncExec(func(_ *client.SliceResult) {})
+		c.Set("users1", "sniperHW", fields).AsyncExec(func(_ *client.StatusResult) {})
+		c.Set("users1", "sniperHW", fields, 100).AsyncExec(func(_ *client.StatusResult) {})
+		c.GetAll("users1", "sniperHW").Exec()
+
+		c.GetAll("users1", "sniperHW").AsyncExec(func(_ *client.SliceResult) {})
+		c.GetAll("users1", "sniperHW").AsyncExec(func(_ *client.SliceResult) {})
+		c.SetNx("users1", "sniperHW", fields).AsyncExec(func(_ *client.StatusResult) {})
+		c.GetAll("users1", "sniperHW").Exec()
+
+		c.GetAll("users1", "sniperHW").AsyncExec(func(_ *client.SliceResult) {})
+		c.GetAll("users1", "sniperHW").AsyncExec(func(_ *client.SliceResult) {})
+		c.CompareAndSet("users1", "sniperHW", "age", 12, 10).AsyncExec(func(_ *client.SliceResult) {})
+		c.GetAll("users1", "sniperHW").Exec()
+
+		c.GetAll("users1", "sniperHW").AsyncExec(func(_ *client.SliceResult) {})
+		c.GetAll("users1", "sniperHW").AsyncExec(func(_ *client.SliceResult) {})
+		c.CompareAndSetNx("users1", "sniperHW", "age", 12, 10).AsyncExec(func(_ *client.SliceResult) {})
+		c.GetAll("users1", "sniperHW").Exec()
+
+		c.GetAll("users1", "sniperHW").AsyncExec(func(_ *client.SliceResult) {})
+		c.GetAll("users1", "sniperHW").AsyncExec(func(_ *client.SliceResult) {})
+		c.Del("users1", "sniperHW").AsyncExec(func(_ *client.StatusResult) {})
+		c.GetAll("users1", "sniperHW").Exec()
+
+	}
+
+	{
 		//CompareAndSet
 		fields := map[string]interface{}{}
 		fields["age"] = 12
@@ -544,11 +602,19 @@ func test(t *testing.T, c *client.Client) {
 }
 
 func TestMysql(t *testing.T) {
+
+	dbConf := &dbconf{}
+	if _, err := toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
+		panic(err)
+	}
+
 	//先删除所有kv文件
 	os.RemoveAll("./kv-1-1")
 	os.RemoveAll("./kv-1-1-snap")
 
-	conf.LoadConfigStr(fmt.Sprintf(configStr, 10012, "mysql", "localhost", 3306, "root", "123456", "huangwei", "localhost", 3306, "root", "123456", "huangwei"))
+	//conf.LoadConfigStr(fmt.Sprintf(configStr, 10012, "mysql", "localhost", 3306, "root", "123456", "huangwei", "localhost", 3306, "root", "123456", "huangwei"))
+
+	conf.LoadConfigStr(fmt.Sprintf(configStr, 10012, "mysql", "localhost", 3306, dbConf.MysqlUser, dbConf.MysqlPwd, dbConf.MysqlDb, "localhost", 3306, dbConf.MysqlUser, dbConf.MysqlPwd, dbConf.MysqlDb))
 
 	InitLogger()
 	UpdateLogConfig()
@@ -583,11 +649,17 @@ func TestMysql(t *testing.T) {
 }
 
 func TestKvnode1(t *testing.T) {
+
+	dbConf := &dbconf{}
+	if _, err := toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
+		panic(err)
+	}
+
 	//先删除所有kv文件
 	os.RemoveAll("./kv-1-1")
 	os.RemoveAll("./kv-1-1-snap")
 
-	conf.LoadConfigStr(fmt.Sprintf(configStr, 10018, _sqltype, _host, _port, _user, _password, _db, _host, _port, _user, _password, _db))
+	conf.LoadConfigStr(fmt.Sprintf(configStr, 10018, "pgsql", "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB))
 
 	InitLogger()
 	UpdateLogConfig()
@@ -646,11 +718,16 @@ func TestKvnode1(t *testing.T) {
 
 func TestKvnode2(t *testing.T) {
 
+	dbConf := &dbconf{}
+	if _, err := toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
+		panic(err)
+	}
+
 	//先删除所有kv文件
 	os.RemoveAll("./kv-1-1")
 	os.RemoveAll("./kv-1-1-snap")
 
-	conf.LoadConfigStr(fmt.Sprintf(configStr, 10018, _sqltype, _host, _port, _user, _password, _db, _host, _port, _user, _password, _db))
+	conf.LoadConfigStr(fmt.Sprintf(configStr, 10018, "pgsql", "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB))
 
 	InitLogger()
 
@@ -716,6 +793,12 @@ func TestKvnode2(t *testing.T) {
 }
 
 func TestCluster(t *testing.T) {
+
+	dbConf := &dbconf{}
+	if _, err := toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
+		panic(err)
+	}
+
 	os.RemoveAll("./kv-1-1")
 	os.RemoveAll("./kv-1-1-snap")
 	os.RemoveAll("./kv-2-1")
@@ -723,7 +806,7 @@ func TestCluster(t *testing.T) {
 	os.RemoveAll("./kv-3-1")
 	os.RemoveAll("./kv-4-1-snap")
 
-	conf.LoadConfigStr(fmt.Sprintf(configStr, 20018, _sqltype, _host, _port, _user, _password, _db, _host, _port, _user, _password, _db))
+	conf.LoadConfigStr(fmt.Sprintf(configStr, 20018, "pgsql", "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB))
 
 	InitLogger()
 
@@ -736,7 +819,7 @@ func TestCluster(t *testing.T) {
 		panic(err)
 	}
 
-	conf.LoadConfigStr(fmt.Sprintf(configStr, 20019, _sqltype, _host, _port, _user, _password, _db, _host, _port, _user, _password, _db))
+	conf.LoadConfigStr(fmt.Sprintf(configStr, 20019, "pgsql", "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB))
 
 	id2 := 2
 
@@ -746,7 +829,7 @@ func TestCluster(t *testing.T) {
 		panic(err)
 	}
 
-	conf.LoadConfigStr(fmt.Sprintf(configStr, 20020, _sqltype, _host, _port, _user, _password, _db, _host, _port, _user, _password, _db))
+	conf.LoadConfigStr(fmt.Sprintf(configStr, 20020, "pgsql", "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB))
 
 	id3 := 3
 
@@ -916,7 +999,7 @@ func TestCluster(t *testing.T) {
 
 		if leader == node1 {
 
-			conf.LoadConfigStr(fmt.Sprintf(configStr, 20018, _sqltype, _host, _port, _user, _password, _db, _host, _port, _user, _password, _db))
+			conf.LoadConfigStr(fmt.Sprintf(configStr, 20018, "pgsql", "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB))
 
 			node1 = NewKvNode()
 
@@ -924,7 +1007,7 @@ func TestCluster(t *testing.T) {
 				panic(err)
 			}
 		} else if leader == node2 {
-			conf.LoadConfigStr(fmt.Sprintf(configStr, 20019, _sqltype, _host, _port, _user, _password, _db, _host, _port, _user, _password, _db))
+			conf.LoadConfigStr(fmt.Sprintf(configStr, 20019, "pgsql", "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB))
 
 			node2 = NewKvNode()
 
@@ -932,7 +1015,7 @@ func TestCluster(t *testing.T) {
 				panic(err)
 			}
 		} else {
-			conf.LoadConfigStr(fmt.Sprintf(configStr, 20020, _sqltype, _host, _port, _user, _password, _db, _host, _port, _user, _password, _db))
+			conf.LoadConfigStr(fmt.Sprintf(configStr, 20020, "pgsql", "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB))
 
 			node3 = NewKvNode()
 

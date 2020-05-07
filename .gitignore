@@ -29,3 +29,4 @@ etcd_raft.txt
 kvserver
 log1/
 coverage.out
+test_dbconf.toml
