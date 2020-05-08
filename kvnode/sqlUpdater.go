@@ -235,7 +235,7 @@ func (this *sqlUpdater) exec() {
 		}
 	}
 
-	logger.Debugln("onSqlResult", err)
+	//logger.Debugln("onSqlResult", err)
 
 	this.pending.kvs.ForEach(func(v interface{}) {
 		kv := v.(*kv)

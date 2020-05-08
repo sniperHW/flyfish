@@ -59,7 +59,7 @@ func (this *sqlMgr) pushLoadReq(task asynCmdTaskI, fullReturn ...bool) bool {
 
 func (this *sqlMgr) pushUpdateReq(kv *kv) {
 	u := this.sqlUpdaters[futil.StringHash(kv.uniKey)%len(this.sqlUpdaters)]
-	logger.Debugln("pushUpdateReq", u.queue.AddNoWait(kv))
+	u.queue.AddNoWait(kv)
 }
 
 func (this *sqlMgr) stop() {

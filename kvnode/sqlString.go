@@ -545,7 +545,6 @@ func binaryTomySqlStr(s *str.Str, bytes []byte) {
  */
 
 func (this *sqlMgr) buildInsertUpdateStringPgSql(s *str.Str, kv *kv) {
-	logger.Debugln("buildInsertUpdateStringPgSql")
 
 	meta := kv.getMeta()
 
@@ -587,8 +586,6 @@ func (this *sqlMgr) buildInsertUpdateStringPgSql(s *str.Str, kv *kv) {
  */
 
 func (this *sqlMgr) buildInsertUpdateStringMySql(s *str.Str, kv *kv) {
-
-	logger.Debugln("buildInsertUpdateStringMySql")
 
 	meta := kv.getMeta()
 

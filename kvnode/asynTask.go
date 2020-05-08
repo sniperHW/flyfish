@@ -153,7 +153,7 @@ func (this *asynCmdTaskBase) done() {
 
 	kv.setSqlFlag(this.sqlFlag)
 
-	logger.Debugln(this.sqlFlag, this.version, kv.isWriteBack())
+	//logger.Debugln(this.sqlFlag, this.version, kv.isWriteBack())
 
 	if kv.getSqlFlag() != sql_none && !kv.isWriteBack() {
 		kv.setWriteBack(true)

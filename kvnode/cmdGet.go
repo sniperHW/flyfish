@@ -32,7 +32,7 @@ type cmdGet struct {
 }
 
 func (this *cmdGet) reply(errCode int32, fields map[string]*proto.Field, version int64) {
-	logger.Debugln("cmdGet reply", errCode, version)
+	//logger.Debugln("cmdGet reply", errCode, version)
 	this.replyer.reply(this, errCode, fields, version)
 }
 

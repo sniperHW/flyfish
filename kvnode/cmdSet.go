@@ -55,7 +55,7 @@ type cmdSet struct {
 }
 
 func (this *cmdSet) reply(errCode int32, fields map[string]*proto.Field, version int64) {
-	logger.Debugln("cmdSet reply")
+	//logger.Debugln("cmdSet reply")
 	this.replyer.reply(this, errCode, fields, version)
 }
 
@@ -118,7 +118,7 @@ func (this *cmdSet) prepare(t asynCmdTaskI) (asynCmdTaskI, bool) {
 		if t == nil {
 			task.version = kv.version + 1
 		}
-		logger.Debugln("task version", task.version)
+		//logger.Debugln("task version", task.version)
 	}
 
 	return task, true

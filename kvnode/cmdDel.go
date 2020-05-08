@@ -37,7 +37,7 @@ type cmdDel struct {
 }
 
 func (this *cmdDel) reply(errCode int32, fields map[string]*proto.Field, version int64) {
-	logger.Debugln("cmdDel.reply", errCode)
+	//logger.Debugln("cmdDel.reply", errCode)
 	this.replyer.reply(this, errCode, fields, version)
 }
 

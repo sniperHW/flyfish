@@ -92,18 +92,8 @@ func (this *kvstore) removeKv(k *kv) {
 	this.Unlock()
 
 	if processAgain {
-		logger.Debugln("processAgain")
 		k.processCmd(nil)
 	}
-
-	/*} else {
-		k.setStatus(cache_remove)
-		for cmd := k.cmdQueue.popFront(); nil != cmd; cmd = k.cmdQueue.popFront() {
-			cmd.reply(errcode.ERR_RETRY, nil, 0)
-		}
-		this.removeLRU(k)
-		delete(this.elements, k.uniKey)
-	}*/
 }
 
 //发起一致读请求

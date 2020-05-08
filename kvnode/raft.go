@@ -671,8 +671,6 @@ func (rc *raftNode) onLoseLeadership() {
 
 func (rc *raftNode) issueRead(tasks *fixedarray.FixedArray) {
 
-	logger.Debugln("issueRead")
-
 	ctxToSend := make([]byte, 8)
 	c := &readBatchSt{
 		readIndex: atomic.AddInt64(&rc.readIndex, 1),
@@ -904,24 +902,21 @@ func (rc *raftNode) startProposePipeline() {
 }
 
 func (rc *raftNode) processTimeoutReadReq(_ *timer.Timer, _ interface{}) {
+	defer rc.muPendingRead.Unlock()
 	for {
 		rc.muPendingRead.Lock()
-		e := rc.pendingRead.Front()
-		if e == nil {
-			rc.muPendingRead.Unlock()
-			return
-		}
-
-		now := time.Now()
-		if now.After(e.Value.(*readBatchSt).deadline) {
-			c := e.Value.(*readBatchSt)
-			rc.pendingRead.Remove(e)
-			rc.muPendingRead.Unlock()
-			logger.Debugln("read timeout")
-			c.onError(errcode.ERR_TIMEOUT)
+		if e := rc.pendingRead.Front(); nil != e {
+			now := time.Now()
+			if now.After(e.Value.(*readBatchSt).deadline) {
+				c := e.Value.(*readBatchSt)
+				rc.pendingRead.Remove(e)
+				rc.muPendingRead.Unlock()
+				c.onError(errcode.ERR_TIMEOUT)
+			} else {
+				break
+			}
 		} else {
-			rc.muPendingRead.Unlock()
-			return
+			break
 		}
 	}
 }
@@ -938,7 +933,6 @@ func (rc *raftNode) processReadStates(readStates []raft.ReadState) {
 			c := e.Value.(*readBatchSt)
 			rc.pendingRead.Remove(e)
 			rc.muPendingRead.Unlock()
-			logger.Debugln("readStates")
 			select {
 			case rc.commitC <- c:
 			case <-rc.stopc:

@@ -39,7 +39,7 @@ type cmdKick struct {
 }
 
 func (this *cmdKick) reply(errCode int32, fields map[string]*proto.Field, version int64) {
-	logger.Debugln("cmdKick reply")
+	//logger.Debugln("cmdKick reply")
 	this.replyer.reply(this, errCode, fields, version)
 }
 
