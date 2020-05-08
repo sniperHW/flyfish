@@ -36,6 +36,7 @@ import (
 	"go.etcd.io/etcd/wal"
 	"go.etcd.io/etcd/wal/walpb"
 	"go.uber.org/zap"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -477,7 +478,7 @@ func (rc *raftNode) startRaft() {
 		ElectionTick:              10,
 		HeartbeatTick:             1,
 		Storage:                   rc.raftStorage,
-		MaxSizePerMsg:             1024 * 1024,
+		MaxSizePerMsg:             math.MaxUint64, //1024 * 1024,
 		MaxInflightMsgs:           256,
 		MaxUncommittedEntriesSize: 1 << 30,
 	}
