@@ -122,7 +122,8 @@ message set_nx_req {
 }
 
 message set_nx_resp {
-  optional int64  version = 1;   
+  optional int64  version = 1;  
+  repeated field  fields = 2; 
 }
 
 

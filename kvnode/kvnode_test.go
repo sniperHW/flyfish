@@ -277,6 +277,20 @@ func test(t *testing.T, c *client.Client) {
 
 		r1 := c.SetNx("users1", "sniperHW", fields).Exec()
 		assert.Equal(t, errcode.ERR_RECORD_EXIST, r1.ErrCode)
+		assert.Equal(t, "sniperHW", r1.Fields["name"].GetString())
+
+		//kick
+		for {
+			r := c.Kick("users1", "sniperHW").Exec()
+			if r.ErrCode == errcode.ERR_OK {
+				break
+			}
+			time.Sleep(time.Millisecond * 100)
+		}
+
+		r1 = c.SetNx("users1", "sniperHW", fields).Exec()
+		assert.Equal(t, errcode.ERR_RECORD_EXIST, r1.ErrCode)
+		assert.Equal(t, "sniperHW", r1.Fields["name"].GetString())
 
 		r2 := c.Del("users1", "sniperHW", 100).Exec()
 		assert.Equal(t, errcode.ERR_VERSION_MISMATCH, r2.ErrCode)
@@ -498,7 +512,7 @@ func test(t *testing.T, c *client.Client) {
 
 		c.GetAll("users1", "sniperHW").AsyncExec(func(_ *client.SliceResult) {})
 		c.GetAll("users1", "sniperHW").AsyncExec(func(_ *client.SliceResult) {})
-		c.SetNx("users1", "sniperHW", fields).AsyncExec(func(_ *client.StatusResult) {})
+		c.SetNx("users1", "sniperHW", fields).AsyncExec(func(_ *client.SliceResult) {})
 		c.GetAll("users1", "sniperHW").Exec()
 
 		c.GetAll("users1", "sniperHW").AsyncExec(func(_ *client.SliceResult) {})

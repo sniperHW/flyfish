@@ -76,7 +76,7 @@ func (this *Client) Set(table, key string, fields map[string]interface{}, versio
 	return this.conn.Set(table, key, fields, version...)
 }
 
-func (this *Client) SetNx(table, key string, fields map[string]interface{}) *StatusCmd {
+func (this *Client) SetNx(table, key string, fields map[string]interface{}) *SliceCmd {
 	return this.conn.SetNx(table, key, fields)
 }
 

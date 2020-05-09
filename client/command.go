@@ -179,7 +179,8 @@ func (this *Conn) Set(table, key string, fields map[string]interface{}, version 
 	}
 }
 
-func (this *Conn) SetNx(table, key string, fields map[string]interface{}) *StatusCmd {
+//如果不存在则设置,否则返回已存在的记录
+func (this *Conn) SetNx(table, key string, fields map[string]interface{}) *SliceCmd {
 	if len(fields) == 0 {
 		return nil
 	}
@@ -196,7 +197,7 @@ func (this *Conn) SetNx(table, key string, fields map[string]interface{}) *Statu
 		Timeout: ClientTimeout,
 	}, pbdata)
 
-	return &StatusCmd{
+	return &SliceCmd{
 		conn: this,
 		req:  req,
 	}
@@ -376,9 +377,16 @@ func (this *Conn) onSetResp(c *cmdContext, errCode int32, resp *protocol.SetResp
 
 func (this *Conn) onSetNxResp(c *cmdContext, errCode int32, resp *protocol.SetNxResp) {
 
-	ret := StatusResult{
+	ret := SliceResult{
 		ErrCode: errCode,
 		Version: resp.GetVersion(),
+	}
+
+	if ret.ErrCode == errcode.ERR_RECORD_EXIST {
+		ret.Fields = map[string]*Field{}
+		for _, v := range resp.Fields {
+			ret.Fields[v.GetName()] = (*Field)(v)
+		}
 	}
 
 	this.c.doCallBack(c.unikey, c.cb, &ret)

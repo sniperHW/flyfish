@@ -49,12 +49,33 @@ func (this *cmdSetNx) reply(errCode int32, fields map[string]*proto.Field, versi
 }
 
 func (this *cmdSetNx) makeResponse(errCode int32, fields map[string]*proto.Field, version int64) *net.Message {
+
+	pbdata := &proto.SetNxResp{
+		Version: version,
+	}
+
+	//ok时只返回状态不返回字段值
+	if errCode == errcode.ERR_RECORD_EXIST && nil != fields {
+		for _, field := range this.fields {
+			v := fields[field.GetName()]
+			if nil != v {
+				pbdata.Fields = append(pbdata.Fields, v)
+			} else {
+				/*
+				 * 表格新增加了列，但未设置过，使用默认值
+				 */
+				vv := this.kv.meta.GetDefaultV(field.GetName())
+				if nil != vv {
+					pbdata.Fields = append(pbdata.Fields, proto.PackField(field.GetName(), vv))
+				}
+			}
+		}
+	}
+
 	return net.NewMessage(net.CommonHead{
 		Seqno:   this.replyer.seqno,
 		ErrCode: errCode,
-	}, &proto.SetNxResp{
-		Version: version,
-	})
+	}, pbdata)
 }
 
 func (this *cmdSetNx) prepare(t asynCmdTaskI) (asynCmdTaskI, bool) {
@@ -67,7 +88,7 @@ func (this *cmdSetNx) prepare(t asynCmdTaskI) (asynCmdTaskI, bool) {
 	status := kv.getStatus()
 
 	if status == cache_ok {
-		this.reply(errcode.ERR_RECORD_EXIST, nil, kv.version)
+		this.reply(errcode.ERR_RECORD_EXIST, kv.fields, kv.version)
 		return nil, true
 	}
 
