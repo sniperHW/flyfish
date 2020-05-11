@@ -2,17 +2,15 @@ package kvnode
 
 import (
 	"fmt"
-	//codec "github.com/sniperHW/flyfish/codec"
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/dbmeta"
+	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/net/pb"
 	protocol "github.com/sniperHW/flyfish/proto"
-	//"github.com/sniperHW/flyfish/proto/login"
 	"github.com/sniperHW/flyfish/util"
 	"github.com/sniperHW/kendynet"
-	//"github.com/sniperHW/kendynet/socket/listener/tcp"
-	"github.com/sniperHW/flyfish/net"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -132,11 +130,28 @@ func (this *KVNode) Start(id *int, cluster *string) error {
 
 	clusterArray := strings.Split(*cluster, ",")
 
-	//mutilRaft := newMutilRaft()
+	peers := map[int]string{}
 
-	this.storeMgr = newStoreMgr(this, this.mutilRaft, dbmeta, id, cluster, config.CacheGroupSize)
+	var selfUrl string
 
-	go this.mutilRaft.serveMutilRaft(clusterArray[*id-1])
+	for _, v := range clusterArray {
+		t := strings.Split(v, "@")
+		if len(t) != 2 {
+			panic("invaild peer")
+		}
+		i, err := strconv.Atoi(t[0])
+		if nil != err {
+			panic(err)
+		}
+		peers[i] = t[1]
+		if i == *id {
+			selfUrl = t[1]
+		}
+	}
+
+	this.storeMgr = newStoreMgr(this, this.mutilRaft, dbmeta, id, peers, config.CacheGroupSize)
+
+	go this.mutilRaft.serveMutilRaft(selfUrl)
 
 	this.cmdChan = []chan *netCmd{}
 	cpuNum := runtime.NumCPU()

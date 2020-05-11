@@ -58,12 +58,13 @@ type raftNode struct {
 	nodeID int
 	region int
 
-	id        int      // client ID for raft session
-	peers     []string // raft peer URLs
-	join      bool     // node is joining an existing cluster
-	waldir    string   // path to WAL directory
-	snapdir   string   // path to snapshot directory
-	lastIndex uint64   // index of log at start
+	id int // client ID for raft session
+	//peers     []string // raft peer URLs
+	peers     map[int]string
+	join      bool   // node is joining an existing cluster
+	waldir    string // path to WAL directory
+	snapdir   string // path to snapshot directory
+	lastIndex uint64 // index of log at start
 
 	confState     raftpb.ConfState
 	snapshotIndex uint64
@@ -121,7 +122,7 @@ var snapshotCatchUpEntriesN uint64 = 3000
 // provided the proposal channel. All log entries are replayed over the
 // commit channel, followed by a nil message (to indicate the channel is
 // current), then new log entries. To shutdown, close proposeC and read errorC.
-func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, proposeC *util.BlockQueue,
+func newRaftNode(mutilRaft *mutilRaft, id int, peers map[int]string, join bool, proposeC *util.BlockQueue,
 	confChangeC <-chan raftpb.ConfChange, readC *util.BlockQueue, getSnapshot func() [][]*kvsnap) (*raftNode, <-chan interface{}, <-chan error, <-chan *snap.Snapshotter) {
 
 	/*
@@ -141,7 +142,7 @@ func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, propos
 		commitC:          commitC,
 		errorC:           errorC,
 		id:               id,
-		peers:            peers,
+		peers:            peers, //map[int]string{},
 		join:             join,
 		waldir:           fmt.Sprintf("kv-%d-%d", nodeID, region),
 		snapdir:          fmt.Sprintf("kv-%d-%d-snap", nodeID, region),
@@ -166,6 +167,7 @@ func newRaftNode(mutilRaft *mutilRaft, id int, peers []string, join bool, propos
 
 		// rest of structure populated after WAL replay
 	}
+
 	rc.startProposePipeline()
 	rc.startReadPipeline()
 	go rc.startRaft()
@@ -468,11 +470,18 @@ func (rc *raftNode) startRaft() {
 	oldwal := wal.Exist(rc.waldir)
 	rc.wal = rc.replayWAL()
 
-	rpeers := make([]raft.Peer, len(rc.peers))
-	for i := range rpeers {
-		id := (i+1)<<16 + rc.region
-		rpeers[i] = raft.Peer{ID: uint64(id)}
+	rpeers := []raft.Peer{} //make([]raft.Peer, len(rc.peers), 0)
+
+	//for i := range rpeers {
+	//	id := (i+1)<<16 + rc.region
+	//	rpeers[i] = raft.Peer{ID: uint64(id)}
+	//}
+
+	for k, _ := range rc.peers {
+		id := k<<16 + rc.region
+		rpeers = append(rpeers, raft.Peer{ID: uint64(id)})
 	}
+
 	c := &raft.Config{
 		ID:                        uint64(rc.id),
 		ElectionTick:              10,
@@ -505,13 +514,22 @@ func (rc *raftNode) startRaft() {
 
 	rc.mutilRaft.addTransport(types.ID(rc.id), rc.transport)
 	rc.transport.Start()
-	for i := range rc.peers {
+
+	for k, v := range rc.peers {
+		id := k<<16 + rc.region
+		if id != rc.id {
+			logger.Infoln("AddPeer", types.ID(id).String())
+			rc.transport.AddPeer(types.ID(id), []string{v})
+		}
+	}
+
+	/*for i := range rc.peers {
 		id := (i+1)<<16 + rc.region
 		if id != rc.id {
 			logger.Infoln("AddPeer", types.ID(id).String())
 			rc.transport.AddPeer(types.ID(id), []string{rc.peers[i]})
 		}
-	}
+	}*/
 
 	//go rc.serveRaft()
 

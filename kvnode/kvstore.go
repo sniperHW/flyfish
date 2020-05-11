@@ -14,7 +14,6 @@ import (
 	"github.com/sniperHW/kendynet/util"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	"go.etcd.io/etcd/raft/raftpb"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -565,7 +564,7 @@ func newKVStore(storeMgr *storeMgr, kvNode *KVNode, proposeC *util.BlockQueue, r
 	return s
 }
 
-func newStoreMgr(kvnode *KVNode, mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta, id *int, cluster *string, mask int) *storeMgr {
+func newStoreMgr(kvnode *KVNode, mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta, id *int, peers map[int]string, mask int) *storeMgr {
 	mgr := &storeMgr{
 		stores: map[int]*kvstore{},
 		mask:   mask,
@@ -580,7 +579,7 @@ func newStoreMgr(kvnode *KVNode, mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta, id
 
 		store := newKVStore(mgr, kvnode, proposeC, readC)
 
-		rn, commitC, errorC, snapshotterReady := newRaftNode(mutilRaft, (*id<<16)+i, strings.Split(*cluster, ","), false, proposeC, confChangeC, readC, store.getSnapshot)
+		rn, commitC, errorC, snapshotterReady := newRaftNode(mutilRaft, (*id<<16)+i, peers, false, proposeC, confChangeC, readC, store.getSnapshot)
 
 		store.rn = rn
 

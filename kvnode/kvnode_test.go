@@ -633,7 +633,7 @@ func TestMysql(t *testing.T) {
 	InitLogger()
 	UpdateLogConfig()
 
-	cluster := "http://127.0.0.1:12376"
+	cluster := "1@http://127.0.0.1:12376"
 	id := 1
 
 	node := NewKvNode()
@@ -678,7 +678,7 @@ func TestKvnode1(t *testing.T) {
 	InitLogger()
 	UpdateLogConfig()
 
-	cluster := "http://127.0.0.1:12377"
+	cluster := "1@http://127.0.0.1:12377"
 	id := 1
 
 	node := NewKvNode()
@@ -704,7 +704,7 @@ func TestKvnode1(t *testing.T) {
 
 	node.Stop()
 
-	cluster = "http://127.0.0.1:12378"
+	cluster = "1@http://127.0.0.1:12378"
 
 	node = NewKvNode()
 
@@ -745,7 +745,7 @@ func TestKvnode2(t *testing.T) {
 
 	InitLogger()
 
-	cluster := "http://127.0.0.1:12379"
+	cluster := "1@http://127.0.0.1:12379"
 	id := 1
 
 	node := NewKvNode()
@@ -824,7 +824,7 @@ func TestCluster(t *testing.T) {
 
 	InitLogger()
 
-	cluster := "http://127.0.0.1:22378,http://127.0.0.1:22379,http://127.0.0.1:22380"
+	cluster := "1@http://127.0.0.1:22378,2@http://127.0.0.1:22379,3@http://127.0.0.1:22380"
 	id1 := 1
 
 	node1 := NewKvNode()
