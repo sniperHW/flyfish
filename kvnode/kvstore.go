@@ -13,7 +13,7 @@ import (
 	"github.com/sniperHW/kendynet/timer"
 	"github.com/sniperHW/kendynet/util"
 	"go.etcd.io/etcd/etcdserver/api/snap"
-	"go.etcd.io/etcd/raft/raftpb"
+	//"go.etcd.io/etcd/raft/raftpb"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -52,6 +52,7 @@ type kvstore struct {
 	sync.Mutex
 	proposeC     *util.BlockQueue
 	readReqC     *util.BlockQueue
+	confChangeC  chan *asynTaskConfChange
 	elements     map[string]*kv
 	kvNode       *KVNode
 	stop         func()
@@ -100,6 +101,10 @@ func (this *kvstore) issueReadReq(task asynCmdTaskI) {
 	if err := this.readReqC.AddNoWait(task); nil != err {
 		task.onError(errcode.ERR_SERVER_STOPED)
 	}
+}
+
+func (this *kvstore) issueConfChange(task *asynTaskConfChange) {
+	this.confChangeC <- task
 }
 
 func (this *kvstore) updateLRU(kv *kv) {
@@ -518,6 +523,12 @@ func (this *storeMgr) getkv(table string, key string, uniKey string) (*kv, int32
 	return k, err
 }
 
+func (this *storeMgr) getStoreByIndex(index int) *kvstore {
+	this.RLock()
+	defer this.RUnlock()
+	return this.stores[index]
+}
+
 func (this *storeMgr) getStore(uniKey string) *kvstore {
 	this.RLock()
 	defer this.RUnlock()
@@ -547,10 +558,11 @@ func (this *storeMgr) stop() {
 	}
 }
 
-func newKVStore(storeMgr *storeMgr, kvNode *KVNode, proposeC *util.BlockQueue, readReqC *util.BlockQueue) *kvstore {
+func newKVStore(storeMgr *storeMgr, kvNode *KVNode, proposeC *util.BlockQueue, readReqC *util.BlockQueue, confChangeC chan *asynTaskConfChange) *kvstore {
 
 	s := &kvstore{
 		proposeC:     proposeC,
+		confChangeC:  confChangeC,
 		elements:     map[string]*kv{},
 		readReqC:     readReqC,
 		kvNode:       kvNode,
@@ -574,10 +586,10 @@ func newStoreMgr(kvnode *KVNode, mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta, id
 	for i := 1; i <= mask; i++ {
 
 		proposeC := util.NewBlockQueue()
-		confChangeC := make(chan raftpb.ConfChange)
+		confChangeC := make(chan *asynTaskConfChange)
 		readC := util.NewBlockQueue()
 
-		store := newKVStore(mgr, kvnode, proposeC, readC)
+		store := newKVStore(mgr, kvnode, proposeC, readC, confChangeC)
 
 		rn, commitC, errorC, snapshotterReady := newRaftNode(mutilRaft, (*id<<16)+i, peers, false, proposeC, confChangeC, readC, store.getSnapshot)
 

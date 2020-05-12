@@ -25,6 +25,7 @@ import (
 	"github.com/sniperHW/flyfish/rafthttp"
 	"github.com/sniperHW/flyfish/util/fixedarray"
 	"github.com/sniperHW/flyfish/util/str"
+	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/timer"
 	"github.com/sniperHW/kendynet/util"
 	"go.etcd.io/etcd/etcdserver/api/snap"
@@ -51,9 +52,9 @@ var compressMagic uint16 = 12756
 // A key-value stream backed by raft
 type raftNode struct {
 	//proposeC    <-chan *proposal         //<-chan []byte            // proposed messages (k,v)
-	confChangeC <-chan raftpb.ConfChange // proposed cluster config changes
-	commitC     chan<- interface{}       //chan<- *[]byte           // entries committed to log (k,v)
-	errorC      chan<- error             // errors from raft session
+	confChangeC <-chan *asynTaskConfChange //raftpb.ConfChange // proposed cluster config changes
+	commitC     chan<- interface{}         //chan<- *[]byte           // entries committed to log (k,v)
+	errorC      chan<- error               // errors from raft session
 
 	nodeID int
 	region int
@@ -93,6 +94,9 @@ type raftNode struct {
 	pendingPropose   *list.List
 	proposeIndex     int64
 
+	muPendingConfChange sync.Mutex
+	pendingConfChange   *list.List
+
 	muLeader sync.Mutex
 	leader   int
 
@@ -123,7 +127,7 @@ var snapshotCatchUpEntriesN uint64 = 3000
 // commit channel, followed by a nil message (to indicate the channel is
 // current), then new log entries. To shutdown, close proposeC and read errorC.
 func newRaftNode(mutilRaft *mutilRaft, id int, peers map[int]string, join bool, proposeC *util.BlockQueue,
-	confChangeC <-chan raftpb.ConfChange, readC *util.BlockQueue, getSnapshot func() [][]*kvsnap) (*raftNode, <-chan interface{}, <-chan error, <-chan *snap.Snapshotter) {
+	confChangeC <-chan *asynTaskConfChange, readC *util.BlockQueue, getSnapshot func() [][]*kvsnap) (*raftNode, <-chan interface{}, <-chan error, <-chan *snap.Snapshotter) {
 
 	/*
 	 *  如果commitC设置成无缓冲，则raftNode会等待上层提取commitedEntry之后才继续后续处理。
@@ -138,23 +142,24 @@ func newRaftNode(mutilRaft *mutilRaft, id int, peers map[int]string, join bool, 
 	region := id & 0xFFFF
 
 	rc := &raftNode{
-		confChangeC:      confChangeC,
-		commitC:          commitC,
-		errorC:           errorC,
-		id:               id,
-		peers:            peers, //map[int]string{},
-		join:             join,
-		waldir:           fmt.Sprintf("kv-%d-%d", nodeID, region),
-		snapdir:          fmt.Sprintf("kv-%d-%d-snap", nodeID, region),
-		snapCount:        defaultSnapshotCount,
-		stopc:            make(chan struct{}),
-		snapshotterReady: make(chan *snap.Snapshotter, 1),
-		snapshottingOK:   make(chan struct{}),
-		pendingPropose:   list.New(),
-		mutilRaft:        mutilRaft,
-		nodeID:           nodeID,
-		region:           region,
-		getSnapshot:      getSnapshot,
+		confChangeC:       confChangeC,
+		commitC:           commitC,
+		errorC:            errorC,
+		id:                id,
+		peers:             peers, //map[int]string{},
+		join:              join,
+		waldir:            fmt.Sprintf("kv-%d-%d", nodeID, region),
+		snapdir:           fmt.Sprintf("kv-%d-%d-snap", nodeID, region),
+		snapCount:         defaultSnapshotCount,
+		stopc:             make(chan struct{}),
+		snapshotterReady:  make(chan *snap.Snapshotter, 1),
+		snapshottingOK:    make(chan struct{}),
+		pendingPropose:    list.New(),
+		pendingConfChange: list.New(),
+		mutilRaft:         mutilRaft,
+		nodeID:            nodeID,
+		region:            region,
+		getSnapshot:       getSnapshot,
 
 		pendingRead: list.New(),
 
@@ -346,22 +351,39 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 			}
 
 		case raftpb.EntryConfChange:
+
 			var cc raftpb.ConfChange
 			cc.Unmarshal(ents[i].Data)
 			rc.confState = *rc.node.ApplyConfChange(cc)
+
 			logger.Infoln("raftpb.EntryConfChange", cc.Type, cc)
+			var url string
+			if len(cc.Context) > 0 {
+				url = string(cc.Context[4:])
+				if rc.isLeader() {
+					rc.muPendingConfChange.Lock()
+					e := rc.pendingConfChange.Front()
+					rc.pendingConfChange.Remove(e)
+					rc.muPendingConfChange.Unlock()
+					e.Value.(*asynTaskConfChange).done()
+				}
+			}
+
 			switch cc.Type {
 			case raftpb.ConfChangeAddNode:
-				if len(cc.Context) > 0 {
-					rc.transport.AddPeer(types.ID(cc.NodeID), []string{string(cc.Context)})
+				if url != "" {
+					logger.Infoln("ConfChangeAddNode", types.ID(cc.NodeID).String(), url)
+					rc.transport.AddPeer(types.ID(cc.NodeID), []string{url})
 				}
 			case raftpb.ConfChangeRemoveNode:
 				if cc.NodeID == uint64(rc.id) {
 					logger.Infoln("I've been removed from the cluster! Shutting down.")
 					return false
 				}
+				logger.Infoln("ConfChangeRemoveNode", types.ID(cc.NodeID).String())
 				rc.transport.RemovePeer(types.ID(cc.NodeID))
 			}
+
 		}
 
 		// after commit, update appliedIndex
@@ -470,12 +492,7 @@ func (rc *raftNode) startRaft() {
 	oldwal := wal.Exist(rc.waldir)
 	rc.wal = rc.replayWAL()
 
-	rpeers := []raft.Peer{} //make([]raft.Peer, len(rc.peers), 0)
-
-	//for i := range rpeers {
-	//	id := (i+1)<<16 + rc.region
-	//	rpeers[i] = raft.Peer{ID: uint64(id)}
-	//}
+	rpeers := []raft.Peer{}
 
 	for k, _ := range rc.peers {
 		id := k<<16 + rc.region
@@ -522,16 +539,6 @@ func (rc *raftNode) startRaft() {
 			rc.transport.AddPeer(types.ID(id), []string{v})
 		}
 	}
-
-	/*for i := range rc.peers {
-		id := (i+1)<<16 + rc.region
-		if id != rc.id {
-			logger.Infoln("AddPeer", types.ID(id).String())
-			rc.transport.AddPeer(types.ID(id), []string{rc.peers[i]})
-		}
-	}*/
-
-	//go rc.serveRaft()
 
 	rc.readIndexTimer = timer.Repeat(time.Second, nil, rc.processTimeoutReadReq, nil)
 
@@ -685,6 +692,17 @@ func (rc *raftNode) onLoseLeadership() {
 		c := e.Value.(*readBatchSt)
 		c.onError(errcode.ERR_NOT_LEADER)
 	}
+
+	rc.muPendingConfChange.Lock()
+	pendingConfChange := rc.pendingConfChange
+	rc.pendingConfChange = list.New()
+	rc.muPendingConfChange.Unlock()
+
+	for e := pendingConfChange.Front(); e != nil; e = e.Next() {
+		c := e.Value.(*asynTaskConfChange)
+		c.onError(errcode.ERR_NOT_LEADER)
+	}
+
 }
 
 func (rc *raftNode) issueRead(tasks *fixedarray.FixedArray) {
@@ -796,6 +814,56 @@ func (m *metric) add(count int) {
 
 var g_metric = &metric{}*/
 
+func (rc *raftNode) proposeConfChange(confChangeCount uint64, task *asynTaskConfChange) {
+
+	b := kendynet.NewByteBuffer()
+	b.AppendInt32(int32(task.changeType))
+	if task.changeType == raftpb.ConfChangeAddNode {
+		b.AppendString(task.url)
+	}
+
+	cfChange := raftpb.ConfChange{
+		ID:      confChangeCount,
+		Type:    task.changeType,
+		NodeID:  uint64(task.nodeid),
+		Context: b.Bytes(),
+	}
+
+	rc.muPendingConfChange.Lock()
+	e := rc.pendingConfChange.PushBack(task)
+	rc.muPendingConfChange.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	err := rc.node.ProposeConfChange(ctx, cfChange)
+	cancel()
+
+	if nil != err {
+
+		rc.muPendingConfChange.Lock()
+		rc.pendingConfChange.Remove(e)
+		rc.muPendingConfChange.Unlock()
+
+		if err == ctx.Err() {
+			task.onPorposeTimeout()
+		} else {
+			var errCode int32
+			switch err {
+			case raft.ErrStopped:
+				errCode = errcode.ERR_SERVER_STOPED
+			case raft.ErrProposalDropped:
+				if !rc.isLeader() {
+					errCode = errcode.ERR_NOT_LEADER
+				} else {
+					errCode = errcode.ERR_PROPOSAL_DROPPED
+				}
+			default:
+				errCode = errcode.ERR_RAFT
+			}
+			task.onError(errCode)
+		}
+	}
+}
+
 func (rc *raftNode) issuePropose(batch *batchProposal) {
 
 	rc.muPendingPropose.Lock()
@@ -827,14 +895,14 @@ func (rc *raftNode) issuePropose(batch *batchProposal) {
 	cancel()
 
 	if nil != err {
+
+		rc.muPendingPropose.Lock()
+		rc.pendingPropose.Remove(e)
+		rc.muPendingPropose.Unlock()
+
 		if err == ctx.Err() {
 			batch.onPorposeTimeout()
 		} else {
-
-			rc.muPendingPropose.Lock()
-			rc.pendingPropose.Remove(e)
-			rc.muPendingPropose.Unlock()
-
 			var errCode int32
 
 			switch err {
@@ -896,16 +964,9 @@ func (rc *raftNode) startProposePipeline() {
 					} else {
 						batch.tasks.Append(vv)
 						vv.(asynTaskI).append2Str(batch.proposalStr)
-
-						switch vv.(type) {
-						case asynTaskLease:
+						if _, ok := vv.(*asynTaskLease); ok || batch.tasks.Full() {
 							rc.issuePropose(batch)
 							batch = rc.newBatchProposal()
-						default:
-							if batch.tasks.Full() {
-								rc.issuePropose(batch)
-								batch = rc.newBatchProposal()
-							}
 						}
 					}
 				}
@@ -982,9 +1043,9 @@ func (rc *raftNode) serveChannels() {
 				if !ok {
 					rc.confChangeC = nil
 				} else {
+					logger.Infoln("proposeConfChange")
 					confChangeCount++
-					cc.ID = confChangeCount
-					rc.node.ProposeConfChange(context.TODO(), cc)
+					rc.proposeConfChange(confChangeCount, cc)
 				}
 			}
 		}

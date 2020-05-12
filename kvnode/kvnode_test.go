@@ -10,6 +10,7 @@ import (
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/stretchr/testify/assert"
+	"go.etcd.io/etcd/raft/raftpb"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -818,6 +819,8 @@ func TestCluster(t *testing.T) {
 	os.RemoveAll("./kv-2-1")
 	os.RemoveAll("./kv-2-1-snap")
 	os.RemoveAll("./kv-3-1")
+	os.RemoveAll("./kv-3-1-snap")
+	os.RemoveAll("./kv-4-1")
 	os.RemoveAll("./kv-4-1-snap")
 
 	conf.LoadConfigStr(fmt.Sprintf(configStr, 20018, "pgsql", "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB))
@@ -1037,6 +1040,53 @@ func TestCluster(t *testing.T) {
 				panic(err)
 			}
 		}
+
+	}
+
+	{
+		cluster := "1@http://127.0.0.1:22378,2@http://127.0.0.1:22379,3@http://127.0.0.1:22380,4@http://127.0.0.1:22381"
+
+		conf.LoadConfigStr(fmt.Sprintf(configStr, 20021, "pgsql", "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB))
+
+		id4 := 4
+
+		node4 := NewKvNode()
+
+		if err := node4.Start(&id4, &cluster); nil != err {
+			panic(err)
+		}
+
+		//请求leader添加一个新节点
+		leader := getLeader()
+
+		store := leader.storeMgr.getStoreByIndex(1)
+
+		retC := make(chan int32)
+
+		store.issueConfChange(&asynTaskConfChange{
+			nodeid:     (4 << 16) + 1,
+			changeType: raftpb.ConfChangeAddNode,
+			url:        "http://127.0.0.1:22381",
+			doneCB: func() {
+				retC <- int32(0)
+			},
+			errorCB: func(errno int32) {
+				retC <- errno
+			},
+		})
+
+		ok := <-retC
+
+		assert.Equal(t, int32(0), ok)
+
+		c := getClient()
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		fields["name"] = "sniperHW"
+		r1 := c.Set("users1", "sniperHW", fields).Exec()
+		assert.Equal(t, errcode.ERR_OK, r1.ErrCode)
+
+		node4.Stop()
 
 	}
 
