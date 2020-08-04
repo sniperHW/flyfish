@@ -15,7 +15,7 @@ import (
 
 func main() {
 
-	cluster := flag.String("cluster", "http://127.0.0.1:12379", "comma separated cluster peers")
+	cluster := flag.String("cluster", "1@http://127.0.0.1:12379", "comma separated cluster peers")
 	id := flag.Int("id", 1, "node ID")
 	pprof := flag.String("pprof", "localhost:8899", "pprof")
 	config := flag.String("config", "config.toml", "config")
