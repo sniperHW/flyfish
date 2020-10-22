@@ -1,0 +1,29 @@
+ServiceHost             = "127.0.0.1"
+
+ServicePort             = 10012
+
+DBConnections           = 10
+
+Compress                = false
+
+[DBConfig]
+SqlType         = "pgsql"
+
+DbHost          = "10.128.2.166"
+DbPort          = 5432
+DbUser			= "dbuser"
+DbPassword      = "123456"
+DbDataBase      = "wei"
+
+ConfDbHost      = "10.128.2.166"                #(可动态重加载)
+ConfDbPort      = 5432                          #(可动态重加载)
+ConfDbUser      = "dbuser"                      #(可动态重加载)
+ConfDbPassword  = "123456"                      #(可动态重加载)
+ConfDataBase    = "wei"                         #(可动态重加载)
+
+[Log]
+MaxLogfileSize  = 104857600 # 100mb
+LogDir          = "log"
+LogPrefix       = "github.com/sniperHW/flyfish"
+LogLevel        = "debug"                       #(可动态重加载)
+EnableLogStdout = true                          #(可动态重加载)
