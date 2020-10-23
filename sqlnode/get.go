@@ -10,91 +10,6 @@ import (
 )
 import "github.com/sniperHW/flyfish/proto"
 
-type cmdGet struct {
-	cmdBase
-	getAll  bool
-	fields  []string
-	version *int64
-}
-
-//func (c *cmdGet) getReq() *proto.GetReq {
-//	return c.msg.GetData().(*proto.GetReq)
-//}
-
-func (c *cmdGet) makeSqlTask() sqlTask {
-	tableFieldCount := getDBMeta().getTableMeta(c.table).getFieldCount()
-
-	task := &sqlTaskGet{
-		sqlTaskBase: newSqlTaskBase(c.uKey, c.table, c.key),
-		fields:      make(map[string]*proto.Field, tableFieldCount),
-	}
-
-	if c.getAll {
-		task.getAll = true
-	} else {
-		task.getFields = make([]string, 0, tableFieldCount)
-		for _, v := range c.fields {
-			task.getFields = append(task.getFields, v)
-			task.fields[v] = proto.PackField(v, nil)
-		}
-	}
-
-	//pVersion := c.version
-	//if pVersion != nil {
-	//	task.version = *pVersion
-	//	task.getWithVersion = true
-	//	task.versionOp = "!="
-	//} else {
-	//	task.version = 0
-	//	task.getWithVersion = false
-	//}
-
-	task.addCmd(c)
-
-	return task
-}
-
-func (c *cmdGet) reply(errCode int32, fields map[string]*proto.Field, version int64) {
-	if !c.isResponseTimeout() {
-		var resp = &proto.GetResp{
-			Version: version,
-			Fields:  nil,
-		}
-
-		if errCode == errcode.ERR_OK {
-			if c.version != nil && version == *c.version {
-				errCode = errcode.ERR_RECORD_UNCHANGE
-			} else {
-				if c.getAll {
-					resp.Fields = make([]*proto.Field, len(fields))
-					i := 0
-					for _, v := range fields {
-						resp.Fields[i] = v
-						i++
-					}
-				} else {
-					resp.Fields = make([]*proto.Field, len(c.fields))
-					for i, v := range c.fields {
-						if f := fields[v]; f == nil {
-							getLogger().Errorf("get table(%s) key(%s) lost field(%s).", c.table, c.key, v)
-						} else {
-							resp.Fields[i] = f
-						}
-					}
-				}
-			}
-		}
-
-		_ = c.conn.sendMessage(net.NewMessage(
-			net.CommonHead{
-				Seqno:   c.sqNo,
-				ErrCode: errCode,
-			},
-			resp,
-		))
-	}
-}
-
 type sqlTaskGet struct {
 	sqlTaskBase
 	getAll    bool
@@ -224,6 +139,91 @@ func (t *sqlTaskGet) do(db *sqlx.DB) {
 	}
 
 	t.reply(errCode, t.fields, version)
+}
+
+type cmdGet struct {
+	cmdBase
+	getAll  bool
+	fields  []string
+	version *int64
+}
+
+//func (c *cmdGet) getReq() *proto.GetReq {
+//	return c.msg.GetData().(*proto.GetReq)
+//}
+
+func (c *cmdGet) makeSqlTask() sqlTask {
+	tableFieldCount := getDBMeta().getTableMeta(c.table).getFieldCount()
+
+	task := &sqlTaskGet{
+		sqlTaskBase: newSqlTaskBase(c.uKey, c.table, c.key),
+		fields:      make(map[string]*proto.Field, tableFieldCount),
+	}
+
+	if c.getAll {
+		task.getAll = true
+	} else {
+		task.getFields = make([]string, 0, tableFieldCount)
+		for _, v := range c.fields {
+			task.getFields = append(task.getFields, v)
+			task.fields[v] = proto.PackField(v, nil)
+		}
+	}
+
+	//pVersion := c.version
+	//if pVersion != nil {
+	//	task.version = *pVersion
+	//	task.getWithVersion = true
+	//	task.versionOp = "!="
+	//} else {
+	//	task.version = 0
+	//	task.getWithVersion = false
+	//}
+
+	task.addCmd(c)
+
+	return task
+}
+
+func (c *cmdGet) reply(errCode int32, fields map[string]*proto.Field, version int64) {
+	if !c.isResponseTimeout() {
+		var resp = &proto.GetResp{
+			Version: version,
+			Fields:  nil,
+		}
+
+		if errCode == errcode.ERR_OK {
+			if c.version != nil && version == *c.version {
+				errCode = errcode.ERR_RECORD_UNCHANGE
+			} else {
+				if c.getAll {
+					resp.Fields = make([]*proto.Field, len(fields))
+					i := 0
+					for _, v := range fields {
+						resp.Fields[i] = v
+						i++
+					}
+				} else {
+					resp.Fields = make([]*proto.Field, len(c.fields))
+					for i, v := range c.fields {
+						if f := fields[v]; f == nil {
+							getLogger().Errorf("get table(%s) key(%s) lost field(%s).", c.table, c.key, v)
+						} else {
+							resp.Fields[i] = f
+						}
+					}
+				}
+			}
+		}
+
+		_ = c.conn.sendMessage(net.NewMessage(
+			net.CommonHead{
+				Seqno:   c.sqNo,
+				ErrCode: errCode,
+			},
+			resp,
+		))
+	}
 }
 
 func onGet(conn *cliConn, msg *net.Message) {
