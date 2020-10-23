@@ -41,8 +41,8 @@ func (p *cmdProcessor) process() {
 		for i < n {
 			switch c := list[i].(type) {
 			case *cmdGet:
-				if c.isCancel() || c.isProcessTimeout() {
-					getLogger().Infof("command %d is canceled or timeout, skip it.", c.seqNo())
+				if c.isProcessTimeout() {
+					getLogger().Infof("command %d is timeout, skip it.", c.seqNo())
 
 					// todo something else ?
 					break
@@ -60,7 +60,7 @@ func (p *cmdProcessor) process() {
 				}
 
 				task.do(p.db)
-				task.reply()
+				//task.reply()
 				task = nil
 
 			default:
