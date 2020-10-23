@@ -42,7 +42,7 @@ func Start(cfgFilePath string) bool {
 
 	initMessageHandler()
 	registerMessageHandlers()
-	initMessageRoutine()
+	//initMessageRoutine()
 	getLogger().Infoln("init message handler.")
 
 	initCmdProcessor()

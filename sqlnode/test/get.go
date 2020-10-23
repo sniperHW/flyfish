@@ -25,6 +25,7 @@ func main() {
 	var argi = 0
 
 	args := flag.Args()
+	nArgs := len(args)
 
 	if len(args) < 2 {
 		_, _ = fmt.Fprintln(os.Stderr, "no table or key")
@@ -38,8 +39,11 @@ func main() {
 	argi++
 
 	if *versionFlag {
-		if ver, err := strconv.ParseInt(args[argi], 10, 64); err != nil {
-			_, _ = fmt.Fprintln(os.Stderr, "invalid version")
+		if argi >= nArgs {
+			_, _ = fmt.Fprintln(os.Stderr, "no version")
+			os.Exit(1)
+		} else if ver, err := strconv.ParseInt(args[argi], 10, 64); err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "invalid version: %s\n", args[argi])
 			os.Exit(1)
 		} else {
 			version = ver
