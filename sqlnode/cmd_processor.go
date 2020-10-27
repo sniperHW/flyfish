@@ -40,7 +40,7 @@ func (p *cmdProcessor) process() {
 
 		for i < n {
 			switch c := list[i].(type) {
-			case *cmdGet:
+			case cmd:
 				if c.isProcessTimeout() {
 					getLogger().Infof("command %d is timeout, skip it.", c.seqNo())
 

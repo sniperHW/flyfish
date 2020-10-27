@@ -11,7 +11,7 @@ type sqlTask interface {
 	//reply()
 }
 
-type sqlTaskBase struct {
+type sqlCombinableTaskBase struct {
 	uniKey   string
 	table    string
 	key      string
@@ -21,8 +21,8 @@ type sqlTaskBase struct {
 	//version  int64
 }
 
-func newSqlTaskBase(uniKey, table, key string /*, maxFieldCount int*/) sqlTaskBase {
-	return sqlTaskBase{
+func newSqlCombinableTaskBase(uniKey, table, key string /*, maxFieldCount int*/) sqlCombinableTaskBase {
+	return sqlCombinableTaskBase{
 		uniKey:   uniKey,
 		table:    table,
 		key:      key,
@@ -33,7 +33,7 @@ func newSqlTaskBase(uniKey, table, key string /*, maxFieldCount int*/) sqlTaskBa
 	}
 }
 
-func (t *sqlTaskBase) addCmd(cmd cmd) {
+func (t *sqlCombinableTaskBase) addCmd(cmd cmd) {
 	if cmd == nil {
 		panic("cmd is nil")
 	}
@@ -41,7 +41,7 @@ func (t *sqlTaskBase) addCmd(cmd cmd) {
 	t.commands = append(t.commands, cmd)
 }
 
-func (t *sqlTaskBase) reply(errCode int32, fields map[string]*proto.Field, version int64) {
+func (t *sqlCombinableTaskBase) reply(errCode int32, fields map[string]*proto.Field, version int64) {
 	for _, cmd := range t.commands {
 		cmd.reply(errCode, fields, version)
 	}

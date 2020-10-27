@@ -22,6 +22,7 @@ func getStr() *str.Str {
 }
 
 func putStr(str *str.Str) {
+	str.Reset()
 	strPool.Put(str)
 }
 
