@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/util/str"
-	"sanguo/node/node_rank/util/field"
 	"strconv"
 )
 
@@ -565,6 +564,8 @@ func appendValue2SqlStr(str *str.Str, t proto.ValueType, v interface{}) *str.Str
 	case proto.ValueType_blob:
 		getBinary2SqlStrFunc()(str, v.([]byte))
 		return str
+	default:
+		panic("impossible")
 	}
 }
 
@@ -572,112 +573,83 @@ func appendFieldValue2SqlStr(str *str.Str, f *proto.Field) *str.Str {
 	return str.AppendFieldStr(f, getBinary2SqlStrFunc())
 }
 
-func appendInsertOrUpdateSqlStr(s *str.Str, table, key string, fields []*proto.Field) *str.Str {
-	s.AppendString("insert into ").AppendString(table)
+func appendInsertOrUpdatePgsqlStr(s *str.Str, tm *tableMeta, key string, version int64, fields map[string]*proto.Field) *str.Str {
+	s.AppendString(tm.getInsertPrefix()).AppendString("'").AppendString(key).AppendString("'").AppendString(",")
+	appendValue2SqlStr(s, versionFieldMeta.getType(), version)
 
-	s.AppendString(" (")
-	s.AppendString(keyFieldName).AppendString(",").AppendString(versionFieldName).AppendString(",")s.AppendString(fields[0].GetName())
-	for i := 1; i < len(fields); i++ {
-		s.AppendString(",").AppendString(fields[i].GetName())
-	}
-	s.AppendString(") ")
-
-	s.AppendString("values (")
-	appendValue2SqlStr(s, proto.ValueType_string, key)
-	appendValue2SqlStr(s, proto.ValueType_int, int64(0))
-	appendFieldValue2SqlStr(s, fields[0])
-	for i := 1; i < len(fields); i++ {
+	for _, v := range tm.getFieldInsertOrder() {
 		s.AppendString(",")
-		appendFieldValue2SqlStr(s, fields[i])
-	}
-	s.AppendString(")")
 
-	s.AppendString("on conflict(__key__) do update set ")
-	s.AppendString(fields[0].GetName()).AppendString("=")
-	appendFieldValue2SqlStr(s, fields[0])
-	for i := 1; i < len(fields); i++ {
-		s.AppendString(",").AppendString(fields[0].GetName()).AppendString("=")
-		appendFieldValue2SqlStr(s, fields[i])
+		f := fields[v]
+		if f != nil {
+			appendFieldValue2SqlStr(s, f)
+		} else {
+			fm := tm.getFieldMeta(v)
+			appendValue2SqlStr(s, fm.getType(), fm.getDefaultV())
+		}
 	}
-	s.AppendString(",").AppendString(versionFieldName).AppendString("=").AppendString(versionFieldName).AppendString("+1")
 
-	s.AppendString(" where ").AppendString(table).AppendString(".__key__=")
-	appendValue2SqlStr(s, proto.ValueType_string, key).AppendString(";")
+	s.AppendString(") on conflict(").AppendString(keyFieldName).AppendString(") do update set ")
+	s.AppendString(versionFieldName).AppendString("=").AppendString(tm.getName()).AppendString(".").AppendString(versionFieldName).AppendString("+1")
+	for k, v := range fields {
+		s.AppendString(",").AppendString(k).AppendString("=")
+		appendFieldValue2SqlStr(s, v)
+	}
+	return s.AppendString(" where ").AppendString(tm.getName()).AppendString(".").AppendString(keyFieldName).AppendString("='").AppendString(key).AppendString("';")
 }
 
-func (this *sqlMgr) buildInsertUpdateStringPgSql(s *str.Str, kv *kv) {
+func appendInsertOrUpdateMysqlStr(s *str.Str, tm *tableMeta, key string, version int64, fields map[string]*proto.Field) *str.Str {
+	s.AppendString(tm.getInsertPrefix()).AppendString("'").AppendString(key).AppendString("'").AppendString(",")
+	appendValue2SqlStr(s, versionFieldMeta.getType(), version)
 
-	meta := kv.getMeta()
+	for _, v := range tm.getFieldInsertOrder() {
+		s.AppendString(",")
 
-	version := proto.PackField("__version__", kv.version)
-
-	s.AppendString(meta.GetInsertPrefix()).AppendString("'").AppendString(kv.key).AppendString("',") //add __key__
-	s.AppendFieldStr(version, this.binaryToSqlStr).AppendString(",")                                 //add __version__
-
-	//add other fields
-	i := 0
-
-	fields := meta.GetInsertOrder()
-
-	for _, name := range fields {
-		v, ok := kv.fields[name]
-		if !ok {
-			v = proto.PackField(name, kv.meta.GetDefaultV(name))
+		f := fields[v]
+		if f != nil {
+			appendFieldValue2SqlStr(s, f)
+		} else {
+			fm := tm.getFieldMeta(v)
+			appendValue2SqlStr(s, fm.getType(), fm.getDefaultV())
 		}
-
-		s.AppendFieldStr(v, this.binaryToSqlStr)
-		if i != len(fields)-1 {
-			s.AppendString(",")
-		}
-		i++
-	}
-	s.AppendString(") ON conflict(__key__)  DO UPDATE SET ")
-	for _, v := range kv.fields {
-		if meta.CheckFieldMeta(v) {
-			s.AppendString(v.GetName()).AppendString("=").AppendFieldStr(v, this.binaryToSqlStr).AppendString(",")
-		}
-	}
-	s.AppendString("__version__=").AppendFieldStr(version, this.binaryToSqlStr)
-	s.AppendString(" where ").AppendString(kv.table).AppendString(".__key__ = '").AppendString(kv.key).AppendString("';")
-	logger.Debugln(s.ToString())
-}
-
-/*
- *insert into %s(%s) values(%s) on duplicate key update %s;
- */
-
-func (this *sqlMgr) buildInsertUpdateStringMySql(s *str.Str, kv *kv) {
-
-	meta := kv.getMeta()
-
-	version := proto.PackField("__version__", kv.version)
-
-	s.AppendString(meta.GetInsertPrefix()).AppendString("'").AppendString(kv.key).AppendString("',") //add __key__
-	s.AppendFieldStr(version, this.binaryToSqlStr).AppendString(",")                                 //add __version__
-
-	//add other fields
-	fields := meta.GetInsertOrder()
-	i := 0
-	for _, name := range fields {
-		v, ok := kv.fields[name]
-		if !ok {
-			v = proto.PackField(name, kv.meta.GetDefaultV(name))
-		}
-		s.AppendFieldStr(v, this.binaryToSqlStr)
-		if i != len(fields)-1 {
-			s.AppendString(",")
-		}
-		i++
 	}
 
 	s.AppendString(") on duplicate key update ")
-
-	for _, v := range kv.fields {
-		if meta.CheckFieldMeta(v) {
-			s.AppendString(v.GetName()).AppendString("=").AppendFieldStr(v, this.binaryToSqlStr).AppendString(",")
-		}
+	s.AppendString(versionFieldName).AppendString("=").AppendString(versionFieldName).AppendString("+1")
+	appendValue2SqlStr(s, versionFieldMeta.getType(), version)
+	for k, v := range fields {
+		s.AppendString(",").AppendString(k).AppendString("=")
+		appendFieldValue2SqlStr(s, v)
 	}
-	s.AppendString("__version__=").AppendFieldStr(version, this.binaryToSqlStr)
-	s.AppendString(";")
+	return s.AppendString(";")
+}
 
+func appendInsertOrUpdateSqlStr(s *str.Str, tm *tableMeta, key string, version int64, fields map[string]*proto.Field) *str.Str {
+	switch getConfig().DBConfig.SqlType {
+	case "pgsql":
+		return appendInsertOrUpdatePgsqlStr(s, tm, key, version, fields)
+
+	case "mysql":
+		return appendInsertOrUpdateMysqlStr(s, tm, key, version, fields)
+
+	default:
+		panic("impossible")
+	}
+}
+
+func appendUpdateSqlStr(s *str.Str, table, key string, version int64, fields map[string]*proto.Field) *str.Str {
+	// update 'table' set
+	s.AppendString("update ").AppendString(table).AppendString(" set ")
+
+	// field_name=field_value,...,field_name=field_value
+	s.AppendString(versionFieldName).AppendString("=").AppendString(versionFieldName).AppendString("+1")
+	for k, v := range fields {
+		s.AppendString(",").AppendString(k).AppendString("=")
+		appendFieldValue2SqlStr(s, v)
+	}
+
+	// where __key__='key' and __version__='version'
+	s.AppendString(" where ").AppendString(keyFieldName).AppendString("='").AppendString(key)
+	s.AppendString("' and ").AppendString(versionFieldName).AppendString("=")
+	return appendValue2SqlStr(s, versionFieldMeta.getType(), version).AppendString(";")
 }

@@ -104,6 +104,14 @@ type fieldMeta struct {
 	defaultV interface{}     // 字段默认值
 }
 
+func (f *fieldMeta) getType() proto.ValueType {
+	return f.typ
+}
+
+func (f *fieldMeta) getDefaultV() interface{} {
+	return f.defaultV
+}
+
 func (f *fieldMeta) getReceiver() interface{} {
 	return getFieldGetterByType(f.typ)()
 }
@@ -136,22 +144,51 @@ var (
 type tableMeta struct {
 	name               string                // 表名
 	fieldMetas         map[string]*fieldMeta // 字段meta
+	fieldInsertOrder   []string              // 字段插入排列
+	insertPrefix       string                // 记录掺入前缀 "insert into table_name(cols...) VALUES("
 	allFieldNames      []string              // 包括'__key__'和'__version__'字段
 	allFieldGetters    []func() interface{}  //
 	allFieldConverters []fieldConverter      //
+}
+
+func (t *tableMeta) getName() string {
+	return t.name
 }
 
 func (t *tableMeta) getFieldMeta(field string) *fieldMeta {
 	return t.fieldMetas[field]
 }
 
+func (t *tableMeta) getFieldMetas() map[string]*fieldMeta {
+	return t.fieldMetas
+}
+
+func (t *tableMeta) getFieldInsertOrder() []string {
+	return t.fieldInsertOrder
+}
+
+func (t *tableMeta) getInsertPrefix() string {
+	return t.insertPrefix
+}
+
 func (t *tableMeta) getFieldCount() int {
 	return len(t.fieldMetas)
 }
 
-func (t *tableMeta) checkFields(fields []string) (bool, int) {
+func (t *tableMeta) checkFieldNames(fields []string) (bool, int) {
 	for i, v := range fields {
 		if t.fieldMetas[v] == nil {
+			return false, i
+		}
+	}
+
+	return true, 0
+}
+
+func (t *tableMeta) checkFields(fields []*proto.Field) (bool, int) {
+	for i, v := range fields {
+		if t.fieldMetas[v.GetName()] == nil ||
+			t.fieldMetas[v.GetName()].typ != v.GetType() {
 			return false, i
 		}
 	}
@@ -237,7 +274,8 @@ func createTableMetasByTableDef(def []*tableDef) (map[string]*tableMeta, error) 
 		allFieldCount := fieldCount + 2
 		tMeta := &tableMeta{
 			name:               t.name,
-			fieldMetas:         make(map[string]*fieldMeta, len(fieldDefStr)),
+			fieldMetas:         make(map[string]*fieldMeta, fieldCount),
+			fieldInsertOrder:   make([]string, fieldCount),
 			allFieldNames:      make([]string, allFieldCount),
 			allFieldGetters:    make([]func() interface{}, allFieldCount),
 			allFieldConverters: make([]fieldConverter, allFieldCount),
@@ -289,12 +327,14 @@ func createTableMetasByTableDef(def []*tableDef) (map[string]*tableMeta, error) 
 				defaultV: fieldDefaultV,
 			}
 
+			tMeta.fieldInsertOrder[i] = fieldName
 			tMeta.allFieldNames[allFieldIndex] = fieldName
 			tMeta.allFieldGetters[allFieldIndex] = getFieldGetterByType(fieldType)
 			tMeta.allFieldConverters[allFieldIndex] = getFieldConverterByType(fieldType)
 			allFieldIndex++
 		}
 
+		tMeta.insertPrefix = fmt.Sprintf("insert into %s(%s,%s,%s) values(", t.name, keyFieldName, versionFieldName, strings.Join(tMeta.fieldInsertOrder, ","))
 		tableMetas[tMeta.name] = tMeta
 	}
 

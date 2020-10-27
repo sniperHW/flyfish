@@ -2,16 +2,15 @@ package sqlnode
 
 import (
 	"database/sql"
-	"fmt"
 	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/net"
-	"strings"
+	"time"
 )
 import "github.com/sniperHW/flyfish/proto"
 
 type sqlTaskGet struct {
-	sqlTaskBase
+	sqlCombinableTaskBase
 	getAll    bool
 	getFields []string
 	//version   int64
@@ -66,6 +65,7 @@ func (t *sqlTaskGet) do(db *sqlx.DB) {
 		versionIndex         int
 		errCode              int32
 		version              int64
+		sqlStr               = getStr()
 	)
 
 	if t.getAll {
@@ -96,27 +96,22 @@ func (t *sqlTaskGet) do(db *sqlx.DB) {
 		}
 	}
 
-	sb := strings.Builder{}
-
-	sb.WriteString("select ")
-	sb.WriteString(queryFields[0])
+	sqlStr.AppendString("select ")
+	sqlStr.AppendString(queryFields[0])
 	for i := 1; i < queryFieldCount; i++ {
-		sb.WriteString(",")
-		sb.WriteString(queryFields[i])
+		sqlStr.AppendString(",")
+		sqlStr.AppendString(queryFields[i])
 	}
+	sqlStr.AppendString(" from ").AppendString(t.table).AppendString(" where ").AppendString(keyFieldName).AppendString("='").AppendString(t.key).AppendString("';")
 
-	sb.WriteString(fmt.Sprintf(" from %s where %s = '%s';", t.table, keyFieldName, t.key))
+	s := sqlStr.ToString()
+	putStr(sqlStr)
 
-	//if t.getWithVersion {
-	//	sb.WriteString(fmt.Sprintf(" and %s %s %d;", versionFieldName, t.versionOp, t.version))
-	//} else {
-	//	sb.WriteString(";")
-	//}
+	getLogger().Debugf("task-get table(%s) key(%s): start query: \"%s\".", t.table, t.key, s)
 
-	sqlStr := sb.String()
-	getLogger().Debugf("task-get table(%s) key(%s): start query: %s.", t.table, t.key, sqlStr)
-
-	row := db.QueryRowx(sqlStr)
+	start := time.Now()
+	row := db.QueryRowx(s)
+	getLogger().Debugf("task-get: table(%s) key(%s): query cost %.3f sec.", t.table, t.key, time.Now().Sub(start).Seconds())
 
 	if err := row.Scan(queryFieldReceivers...); err == sql.ErrNoRows {
 		errCode = errcode.ERR_RECORD_NOTEXIST
@@ -156,8 +151,8 @@ func (c *cmdGet) makeSqlTask() sqlTask {
 	tableFieldCount := getDBMeta().getTableMeta(c.table).getFieldCount()
 
 	task := &sqlTaskGet{
-		sqlTaskBase: newSqlTaskBase(c.uKey, c.table, c.key),
-		fields:      make(map[string]*proto.Field, tableFieldCount),
+		sqlCombinableTaskBase: newSqlCombinableTaskBase(c.uKey, c.table, c.key),
+		fields:                make(map[string]*proto.Field, tableFieldCount),
 	}
 
 	if c.getAll {
@@ -241,10 +236,18 @@ func onGet(conn *cliConn, msg *net.Message) {
 		return
 	}
 
-	if b, i := tableMeta.checkFields(req.GetFields()); !b || len(req.GetFields()) == 0 {
-		getLogger().Errorf("get table(%s): invalid field(%s).", table, req.GetFields()[i])
-		_ = conn.sendMessage(newMessage(head.Seqno, errcode.ERR_INVAILD_FIELD, &proto.GetResp{}))
-		return
+	if !req.GetAll() {
+		if len(req.GetFields()) == 0 {
+			getLogger().Errorf("get table(%s): no fields.", table)
+			_ = conn.sendMessage(newMessage(head.Seqno, errcode.ERR_MISSING_FIELDS, &proto.GetResp{}))
+			return
+		}
+
+		if b, i := tableMeta.checkFieldNames(req.GetFields()); !b {
+			getLogger().Errorf("get table(%s): invalid field(%s).", table, req.GetFields()[i])
+			_ = conn.sendMessage(newMessage(head.Seqno, errcode.ERR_INVAILD_FIELD, &proto.GetResp{}))
+			return
+		}
 	}
 
 	processDeadline, respDeadline := getDeadline(head.Timeout)
