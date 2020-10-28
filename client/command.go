@@ -159,7 +159,7 @@ func (this *Conn) Set(table, key string, fields map[string]interface{}, version 
 
 	pbdata := &protocol.SetReq{}
 
-	if len(version) > 0 {
+	if len(version) > 0 && version[0] > 0 {
 		pbdata.Version = proto.Int64(version[0])
 	}
 
@@ -215,7 +215,7 @@ func (this *Conn) CompareAndSet(table, key, field string, oldV, newV interface{}
 		Old: protocol.PackField(field, oldV),
 	}
 
-	if len(version) > 0 {
+	if len(version) > 0 && version[0] > 0 {
 		pbdata.Version = proto.Int64(version[0])
 	}
 
@@ -242,7 +242,7 @@ func (this *Conn) CompareAndSetNx(table, key, field string, oldV, newV interface
 		Old: protocol.PackField(field, oldV),
 	}
 
-	if len(version) > 0 {
+	if len(version) > 0 && version[0] > 0 {
 		pbdata.Version = proto.Int64(version[0])
 	}
 
@@ -262,7 +262,7 @@ func (this *Conn) Del(table, key string, version ...int64) *StatusCmd {
 
 	pbdata := &protocol.DelReq{}
 
-	if len(version) > 0 {
+	if len(version) > 0 && version[0] > 0 {
 		pbdata.Version = proto.Int64(version[0])
 	}
 
@@ -284,7 +284,7 @@ func (this *Conn) IncrBy(table, key, field string, value int64, version ...int64
 		Field: protocol.PackField(field, value),
 	}
 
-	if len(version) > 0 {
+	if len(version) > 0 && version[0] > 0 {
 		pbdata.Version = proto.Int64(version[0])
 	}
 
@@ -305,7 +305,7 @@ func (this *Conn) DecrBy(table, key, field string, value int64, version ...int64
 		Field: protocol.PackField(field, value),
 	}
 
-	if len(version) > 0 {
+	if len(version) > 0 && version[0] > 0 {
 		pbdata.Version = proto.Int64(version[0])
 	}
 
