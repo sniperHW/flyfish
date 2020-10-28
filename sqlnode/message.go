@@ -8,30 +8,30 @@ import (
 	"time"
 )
 
-type message struct {
-	conn *cliConn
-	msg  *net.Message
-}
-
-var (
-	cNetCmd chan *message
-)
-
-func initMessageRoutine() {
-	cNetCmd = make(chan *message, 10000)
-
-	go func() {
-		for m := range cNetCmd {
-			h := messageHandlers[m.msg.GetCmd()]
-			// todo pcall?
-			h(m.conn, m.msg)
-		}
-	}()
-}
-
-func pushMessage(r *message) {
-	cNetCmd <- r
-}
+//type message struct {
+//	conn *cliConn
+//	msg  *net.Message
+//}
+//
+//var (
+//	cNetCmd chan *message
+//)
+//
+//func initMessageRoutine() {
+//	cNetCmd = make(chan *message, 10000)
+//
+//	go func() {
+//		for m := range cNetCmd {
+//			h := messageHandlers[m.msg.GetCmd()]
+//			// todo pcall?
+//			h(m.conn, m.msg)
+//		}
+//	}()
+//}
+//
+//func pushMessage(r *message) {
+//	cNetCmd <- r
+//}
 
 type messageHandler func(*cliConn, *net.Message)
 
@@ -42,7 +42,7 @@ var (
 func initMessageHandler() {
 	messageHandlers = make(map[uint16]messageHandler)
 	registerMessageHandler(uint16(protocol.CmdType_Ping), onPing)
-	registerMessageHandler(uint16(protocol.CmdType_Cancel), onCancel)
+	//registerMessageHandler(uint16(protocol.CmdType_Cancel), onCancel)
 }
 
 func registerMessageHandler(cmd uint16, h messageHandler) {
@@ -56,12 +56,15 @@ func registerMessageHandler(cmd uint16, h messageHandler) {
 }
 
 func dispatchMessage(session kendynet.StreamSession, cmd uint16, msg *net.Message) {
-	if _, ok := messageHandlers[cmd]; ok {
+	if h, ok := messageHandlers[cmd]; ok {
 		//投递给线程池处理
-		pushMessage(&message{
-			conn: session.GetUserData().(*cliConn),
-			msg:  msg,
-		})
+
+		h(session.GetUserData().(*cliConn), msg)
+
+		//pushMessage(&message{
+		//	conn: session.GetUserData().(*cliConn),
+		//	msg:  msg,
+		//})
 	} else {
 		getLogger().Errorf("message(%d) handler not found.", msg.GetCmd())
 	}
@@ -107,9 +110,9 @@ func onPing(cli *cliConn, msg *net.Message) {
 	}))
 }
 
-func onCancel(cli *cliConn, msg *net.Message) {
-	req := msg.GetData().(*protocol.Cancel)
-	for _, v := range req.GetSeqs() {
-		cli.remCmdBySeqNo(v)
-	}
-}
+//func onCancel(cli *cliConn, msg *net.Message) {
+//	req := msg.GetData().(*protocol.Cancel)
+//	for _, v := range req.GetSeqs() {
+//		cli.remCmdBySeqNo(v)
+//	}
+//}

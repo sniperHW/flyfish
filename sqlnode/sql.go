@@ -42,7 +42,7 @@ func Start(cfgFilePath string) bool {
 
 	initMessageHandler()
 	registerMessageHandlers()
-	initMessageRoutine()
+	//initMessageRoutine()
 	getLogger().Infoln("init message handler.")
 
 	initCmdProcessor()
@@ -64,6 +64,7 @@ func Stop() {
 func registerMessageHandlers() {
 	registerMessageHandler(uint16(protocol.CmdType_ReloadTableConf), onReloadTableConf)
 	registerMessageHandler(uint16(protocol.CmdType_Get), onGet)
+	registerMessageHandler(uint16(protocol.CmdType_Set), onSet)
 }
 
 func startListen() error {

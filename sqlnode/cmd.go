@@ -8,7 +8,7 @@ import (
 type cmd interface {
 	seqNo() int64
 	uniKey() string
-	isCancel() bool
+	//isCancel() bool
 	isProcessTimeout() bool
 	makeSqlTask() sqlTask
 	reply(errCode int32, fields map[string]*proto.Field, version int64)
@@ -63,9 +63,9 @@ func (c *cmdBase) uniKey() string {
 //	return
 //}
 
-func (c *cmdBase) isCancel() bool {
-	return !c.conn.isCmdExist(c.seqNo())
-}
+//func (c *cmdBase) isCancel() bool {
+//	return !c.conn.isCmdExist(c.seqNo())
+//}
 
 func (c *cmdBase) isProcessTimeout() bool {
 	return !c.processDeadline.After(time.Now())
@@ -75,12 +75,12 @@ func (c *cmdBase) isResponseTimeout() bool {
 	return !c.responseDeadline.After(time.Now())
 }
 
-func (c *cmdBase) beforeReply() bool {
-	if !c.isCancel() {
-		c.conn.remCmdBySeqNo(c.seqNo())
-
-		return !c.isResponseTimeout()
-	}
-
-	return false
-}
+//func (c *cmdBase) beforeReply() bool {
+//	if !c.isCancel() {
+//		c.conn.remCmdBySeqNo(c.seqNo())
+//
+//		return !c.isResponseTimeout()
+//	}
+//
+//	return false
+//}
