@@ -145,6 +145,7 @@ type tableMeta struct {
 	name               string                // 表名
 	fieldMetas         map[string]*fieldMeta // 字段meta
 	fieldInsertOrder   []string              // 字段插入排列
+	selectAllPrefix    string                // 查找记录所有字段前缀 "select allFieldNames... from table_name where keyFieldName="
 	insertPrefix       string                // 记录掺入前缀 "insert into table_name(cols...) VALUES("
 	allFieldNames      []string              // 包括'__key__'和'__version__'字段
 	allFieldGetters    []func() interface{}  //
@@ -171,6 +172,10 @@ func (t *tableMeta) getInsertPrefix() string {
 	return t.insertPrefix
 }
 
+func (t *tableMeta) getSelectAllPrefix() string {
+	return t.selectAllPrefix
+}
+
 func (t *tableMeta) getFieldCount() int {
 	return len(t.fieldMetas)
 }
@@ -187,8 +192,8 @@ func (t *tableMeta) checkFieldNames(fields []string) (bool, int) {
 
 func (t *tableMeta) checkFields(fields []*proto.Field) (bool, int) {
 	for i, v := range fields {
-		if t.fieldMetas[v.GetName()] == nil ||
-			t.fieldMetas[v.GetName()].typ != v.GetType() {
+		fm := t.fieldMetas[v.GetName()]
+		if fm == nil || fm.getType() != v.GetType() {
 			return false, i
 		}
 	}
@@ -335,6 +340,7 @@ func createTableMetasByTableDef(def []*tableDef) (map[string]*tableMeta, error) 
 		}
 
 		tMeta.insertPrefix = fmt.Sprintf("insert into %s(%s,%s,%s) values(", t.name, keyFieldName, versionFieldName, strings.Join(tMeta.fieldInsertOrder, ","))
+		tMeta.selectAllPrefix = fmt.Sprintf("select %s from %s where ", strings.Join(tMeta.allFieldNames, ","), t.name)
 		tableMetas[tMeta.name] = tMeta
 	}
 
