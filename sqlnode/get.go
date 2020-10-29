@@ -75,6 +75,8 @@ func (t *sqlTaskGet) do(db *sqlx.DB) {
 		queryFieldCount = len(queryFields)
 		getFieldOffset = 2
 		versionIndex = versionFieldIndex
+
+		appendSelectAllSqlStr(sqlStr, tableMeta, t.key, nil)
 	} else {
 		getFieldCount := len(t.getFields)
 		queryFieldCount = getFieldCount + 1
@@ -94,24 +96,22 @@ func (t *sqlTaskGet) do(db *sqlx.DB) {
 			queryFieldReceivers[i+getFieldOffset] = fieldMeta.getReceiver()
 			queryFieldConverters[i+getFieldOffset] = fieldMeta.getConverter()
 		}
-	}
 
-	sqlStr.AppendString("select ")
-	sqlStr.AppendString(queryFields[0])
-	for i := 1; i < queryFieldCount; i++ {
-		sqlStr.AppendString(",")
-		sqlStr.AppendString(queryFields[i])
+		sqlStr.AppendString("select ")
+		sqlStr.AppendString(queryFields[0])
+		for i := 1; i < queryFieldCount; i++ {
+			sqlStr.AppendString(",")
+			sqlStr.AppendString(queryFields[i])
+		}
+		sqlStr.AppendString(" from ").AppendString(t.table).AppendString(" where ").AppendString(keyFieldName).AppendString("='").AppendString(t.key).AppendString("';")
 	}
-	sqlStr.AppendString(" from ").AppendString(t.table).AppendString(" where ").AppendString(keyFieldName).AppendString("='").AppendString(t.key).AppendString("';")
 
 	s := sqlStr.ToString()
 	putStr(sqlStr)
 
-	getLogger().Debugf("task-get table(%s) key(%s): start query: \"%s\".", t.table, t.key, s)
-
 	start := time.Now()
 	row := db.QueryRowx(s)
-	getLogger().Debugf("task-get: table(%s) key(%s): query cost %.3f sec.", t.table, t.key, time.Now().Sub(start).Seconds())
+	getLogger().Debugf("task-get: table(%s) key(%s): query:\"%s\" cost:%.3fs.", t.table, t.key, s, time.Now().Sub(start).Seconds())
 
 	if err := row.Scan(queryFieldReceivers...); err == sql.ErrNoRows {
 		errCode = errcode.ERR_RECORD_NOTEXIST
@@ -231,20 +231,20 @@ func onGet(conn *cliConn, msg *net.Message) {
 	tableMeta := getDBMeta().getTableMeta(table)
 
 	if tableMeta == nil {
-		getLogger().Errorf("get table(%s): table not exist.", table)
+		getLogger().Errorf("get table(%s) key(%s): table not exist.", table, key)
 		_ = conn.sendMessage(newMessage(head.Seqno, errcode.ERR_INVAILD_TABLE, &proto.GetResp{}))
 		return
 	}
 
 	if !req.GetAll() {
 		if len(req.GetFields()) == 0 {
-			getLogger().Errorf("get table(%s): no fields.", table)
+			getLogger().Errorf("get table(%s) key(%s): no fields.", table, key)
 			_ = conn.sendMessage(newMessage(head.Seqno, errcode.ERR_MISSING_FIELDS, &proto.GetResp{}))
 			return
 		}
 
 		if b, i := tableMeta.checkFieldNames(req.GetFields()); !b {
-			getLogger().Errorf("get table(%s): invalid field(%s).", table, req.GetFields()[i])
+			getLogger().Errorf("get table(%s) key(%s): invalid field(%s).", table, key, req.GetFields()[i])
 			_ = conn.sendMessage(newMessage(head.Seqno, errcode.ERR_INVAILD_FIELD, &proto.GetResp{}))
 			return
 		}

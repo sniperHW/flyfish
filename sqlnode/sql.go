@@ -65,6 +65,7 @@ func registerMessageHandlers() {
 	registerMessageHandler(uint16(protocol.CmdType_ReloadTableConf), onReloadTableConf)
 	registerMessageHandler(uint16(protocol.CmdType_Get), onGet)
 	registerMessageHandler(uint16(protocol.CmdType_Set), onSet)
+	registerMessageHandler(uint16(protocol.CmdType_SetNx), onSetNx)
 }
 
 func startListen() error {
