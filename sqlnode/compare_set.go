@@ -134,10 +134,10 @@ func (t *sqlTaskCompareSet) do(db *sqlx.DB) {
 				} else {
 					valueField = proto.PackField(t.cmd.new.GetName(), fieldMeta.getConverter()(valueReceiver))
 
-					if !valueField.IsEqual(t.cmd.old) {
-						errCode = errcode.ERR_CAS_NOT_EQUAL
-					} else {
+					if t.cmd.version != nil && version != *t.cmd.version {
 						errCode = errcode.ERR_VERSION_MISMATCH
+					} else {
+						errCode = errcode.ERR_CAS_NOT_EQUAL
 					}
 				}
 			}
@@ -230,7 +230,7 @@ func onCompareSet(conn *cliConn, msg *net.Message) {
 	}
 
 	if !tableMeta.checkField(req.Old) {
-		getLogger().Errorf("set table(%s) key(%s): invalid field(%s).", table, key, req.Old.GetName())
+		getLogger().Errorf("compare-set table(%s) key(%s): invalid field(%s).", table, key, req.Old.GetName())
 		_ = conn.sendMessage(newMessage(head.Seqno, errcode.ERR_INVAILD_FIELD, &proto.GetResp{}))
 		return
 	}

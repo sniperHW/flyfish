@@ -635,7 +635,6 @@ func appendInsertOrUpdateMysqlStr(s *str.Str, tm *tableMeta, key string, version
 
 	s.AppendString(") on duplicate key update ")
 	s.AppendString(versionFieldName).AppendString("=").AppendString(versionFieldName).AppendString("+1")
-	appendValue2SqlStr(s, versionFieldMeta.getType(), version)
 	for k, v := range fields {
 		s.AppendString(",").AppendString(k).AppendString("=")
 		appendFieldValue2SqlStr(s, v)
