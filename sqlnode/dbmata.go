@@ -201,6 +201,11 @@ func (t *tableMeta) checkFields(fields []*proto.Field) (bool, int) {
 	return true, 0
 }
 
+func (t *tableMeta) checkField(field *proto.Field) bool {
+	fm := t.fieldMetas[field.GetName()]
+	return fm != nil && fm.getType() == field.GetType()
+}
+
 func (t *tableMeta) getAllFields() []string {
 	return t.allFieldNames
 }
