@@ -69,7 +69,7 @@ func (this *WebSocket) sendThreadFunc() {
 		close(this.sendCloseChan)
 	}()
 
-	timeout := this.sendTimeout
+	timeout := this.getSendTimeout()
 	for {
 		closed, localList := this.sendQue.Get()
 		size := len(localList)

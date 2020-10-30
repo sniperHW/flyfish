@@ -28,13 +28,14 @@ type SocketImpl interface {
 }
 
 type SocketBase struct {
-	ud            interface{}
-	sendQue       *util.BlockQueue
-	receiver      kendynet.Receiver
-	encoder       *kendynet.EnCoder
-	flag          int32
-	sendTimeout   time.Duration
-	recvTimeout   time.Duration
+	ud          interface{}
+	sendQue     *util.BlockQueue
+	receiver    kendynet.Receiver
+	encoder     *kendynet.EnCoder
+	flag        int32
+	sendTimeout atomic.Value
+	recvTimeout atomic.Value //time.Duration
+	//waitMode      atomic.Value
 	mutex         sync.Mutex
 	onClose       func(kendynet.StreamSession, string)
 	onEvent       func(*kendynet.Event)
@@ -131,11 +132,11 @@ func (this *SocketBase) Start(eventCB func(*kendynet.Event)) error {
 }
 
 func (this *SocketBase) SetRecvTimeout(timeout time.Duration) {
-	this.recvTimeout = timeout
+	this.recvTimeout.Store(timeout)
 }
 
 func (this *SocketBase) SetSendTimeout(timeout time.Duration) {
-	this.sendTimeout = timeout
+	this.sendTimeout.Store(timeout)
 }
 
 func (this *SocketBase) SetCloseCallBack(cb func(kendynet.StreamSession, string)) {
@@ -145,9 +146,6 @@ func (this *SocketBase) SetCloseCallBack(cb func(kendynet.StreamSession, string)
 }
 
 func (this *SocketBase) SetEncoder(encoder kendynet.EnCoder) {
-	//this.mutex.Lock()
-	//defer this.mutex.Unlock()
-	//this.encoder = encoder
 	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&this.encoder)), unsafe.Pointer(&encoder))
 }
 
@@ -197,7 +195,6 @@ func (this *SocketBase) SendMessage(msg kendynet.Message) error {
 func (this *SocketBase) recvThreadFunc() {
 
 	conn := this.imp.getNetConn()
-	recvTimeout := this.recvTimeout
 
 	for !this.IsClosed() {
 
@@ -206,6 +203,8 @@ func (this *SocketBase) recvThreadFunc() {
 			err   error
 			event kendynet.Event
 		)
+
+		recvTimeout := this.getRecvTimeout()
 
 		if recvTimeout > 0 {
 			conn.SetReadDeadline(time.Now().Add(recvTimeout))
@@ -238,10 +237,52 @@ func (this *SocketBase) recvThreadFunc() {
 				event.EventType = kendynet.EventTypeMessage
 				event.Data = p
 			}
+
 			/*出现错误不主动退出循环，除非用户调用了session.Close()
 			 * 避免用户遗漏调用Close(不调用Close会持续通告错误)
 			 */
+
+			//if this.isWaitMode() {
+			//	event.EventWaiter = kendynet.NewEventWaiter()
+			//	this.onEvent(&event)
+			//	event.EventWaiter.Wait()
+			//} else {
 			this.onEvent(&event)
+			//}
+
 		}
+	}
+}
+
+/*
+func (this *SocketBase) SetWaitMode(wait bool) {
+	this.waitMode.Store(wait)
+}
+
+func (this *SocketBase) isWaitMode() bool {
+	mode := this.waitMode.Load()
+	if nil == mode {
+		return false
+	} else {
+		return mode.(bool)
+	}
+}
+*/
+
+func (this *SocketBase) getRecvTimeout() time.Duration {
+	t := this.recvTimeout.Load()
+	if nil == t {
+		return 0
+	} else {
+		return t.(time.Duration)
+	}
+}
+
+func (this *SocketBase) getSendTimeout() time.Duration {
+	t := this.sendTimeout.Load()
+	if nil == t {
+		return 0
+	} else {
+		return t.(time.Duration)
 	}
 }

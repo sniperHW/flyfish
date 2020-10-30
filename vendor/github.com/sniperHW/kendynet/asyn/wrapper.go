@@ -29,12 +29,16 @@ func AsynWrap(queue *event.EventQueue, fn interface{}) wrapFunc {
 
 	return func(callback func([]interface{}), args ...interface{}) {
 		f := func() {
-			in := make([]reflect.Value, len(args))
-			for i, v := range args {
-				if v == nil {
-					in[i] = reflect.Zero(fnType.In(i))
-				} else {
-					in[i] = reflect.ValueOf(v)
+			var in []reflect.Value
+			numIn := fnType.NumIn()
+			if numIn > 0 {
+				in = make([]reflect.Value, numIn)
+				for i := 0; i < numIn; i++ {
+					if i >= len(args) || args[i] == nil {
+						in[i] = reflect.Zero(fnType.In(i))
+					} else {
+						in[i] = reflect.ValueOf(args[i])
+					}
 				}
 			}
 

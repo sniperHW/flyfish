@@ -17,7 +17,7 @@ type RPCReplyer struct {
 
 func (this *RPCReplyer) Reply(ret interface{}, err error) {
 	if this.req.NeedResp && atomic.CompareAndSwapInt32(&this.fired, 0, 1) {
-		response := &RPCResponse{Seq: this.req.Seq, Ret: ret}
+		response := &RPCResponse{Seq: this.req.Seq, Ret: ret, Err: err}
 		this.reply(response)
 	}
 }
@@ -87,7 +87,7 @@ func (this *RPCServer) callMethod(method RPCMethodHandler, replyer *RPCReplyer, 
 func (this *RPCServer) OnRPCMessage(channel RPCChannel, message interface{}) {
 	msg, err := this.decoder.Decode(message)
 	if nil != err {
-		kendynet.GetLogger().Errorf(util.FormatFileLine("RPCServer rpc message from(%s) decode err:%s\n", channel.Name, err.Error()))
+		kendynet.GetLogger().Errorln(util.FormatFileLine("RPCServer rpc message from(%s) decode err:%s\n", channel.Name(), err.Error()))
 		return
 	}
 
