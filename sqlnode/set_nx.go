@@ -29,6 +29,7 @@ func (t *sqlTaskSetNx) do(db *sqlx.DB) {
 	appendInsertSqlStr(sqlStr, tableMeta, t.cmd.key, 1, t.cmd.fields)
 
 	s := sqlStr.ToString()
+	putStr(sqlStr)
 
 	start := time.Now()
 	result, err := db.Exec(s)
@@ -45,7 +46,7 @@ func (t *sqlTaskSetNx) do(db *sqlx.DB) {
 	} else {
 		getLogger().Debugf("task-set-nx: table(%s) key(%s): insert: %s.", t.cmd.table, t.cmd.key, err)
 
-		sqlStr.Reset()
+		sqlStr = getStr()
 
 		var (
 			selectAll = len(t.cmd.fields) == tableMeta.getFieldCount()
@@ -100,6 +101,7 @@ func (t *sqlTaskSetNx) do(db *sqlx.DB) {
 		}
 
 		s = sqlStr.ToString()
+		putStr(sqlStr)
 
 		start = time.Now()
 		row := db.QueryRowx(s)
