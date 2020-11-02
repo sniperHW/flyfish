@@ -50,7 +50,7 @@ func (t *sqlTaskCompareSetNx) do(db *sqlx.DB) {
 		sqlStr = getStr()
 
 		sqlStr.AppendString(tableMeta.getInsertPrefix()).AppendString("'").AppendString(t.cmd.key).AppendString("'").AppendString(",")
-		appendValue2SqlStr(sqlStr, versionFieldMeta.getType(), version)
+		appendValue2SqlStr(sqlStr, versionFieldMeta.getType(), int64(1))
 
 		for _, v := range tableMeta.getFieldInsertOrder() {
 			sqlStr.AppendString(",")
@@ -72,8 +72,8 @@ func (t *sqlTaskCompareSetNx) do(db *sqlx.DB) {
 		}
 
 		sqlStr.AppendString(" where ").AppendString(tableMeta.getName()).AppendString(".").AppendString(keyFieldName).AppendString("='").AppendString(t.cmd.key)
-		sqlStr.AppendString(",").AppendString(t.cmd.new.GetName()).AppendString("=")
-		appendFieldValue2SqlStr(sqlStr, t.cmd.new).AppendString(";")
+		sqlStr.AppendString("' and ").AppendString(tableMeta.getName()).AppendString(".").AppendString(t.cmd.new.GetName()).AppendString("=")
+		appendFieldValue2SqlStr(sqlStr, t.cmd.old).AppendString(";")
 
 		var (
 			result  sql.Result
@@ -92,103 +92,65 @@ func (t *sqlTaskCompareSetNx) do(db *sqlx.DB) {
 		} else if n, err = result.RowsAffected(); err != nil {
 			getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): insert or update: %s.", t.cmd.table, t.cmd.key, err)
 			errCode = errcode.ERR_SQLERROR
-		} else if n > 0 {
-			// 更新成功
+		} else {
 
-			if t.cmd.version != nil {
-				errCode = errcode.ERR_OK
-				version = *t.cmd.version + 1
+			var (
+				fieldMeta     = tableMeta.getFieldMeta(t.cmd.old.GetName())
+				valueReceiver = fieldMeta.getReceiver()
+			)
+
+			sqlStr.Reset()
+			sqlStr.AppendString("select ").AppendString(versionFieldName).AppendString(",").AppendString(t.cmd.new.GetName()).AppendString(" from ").AppendString(t.cmd.table).AppendString(" where ")
+			sqlStr.AppendString(keyFieldName).AppendString("='").AppendString(t.cmd.key).AppendString("';")
+
+			s = sqlStr.ToString()
+			start := time.Now()
+			row := queryer.QueryRowx(s)
+			getLogger().Debugf("task-compare-set-nax: table(%s) key(%s): select query:\"%s\" cost:%.3fs.", t.cmd.table, t.cmd.key, s, time.Now().Sub(start).Seconds())
+
+			if err = row.Scan(&version, valueReceiver); err != nil {
+				if err == sql.ErrNoRows {
+					errCode = errcode.ERR_RECORD_NOTEXIST
+				} else {
+					getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): select: %s.", t.cmd.table, t.cmd.key, err)
+					errCode = errcode.ERR_SQLERROR
+				}
+			} else if n > 0 {
+				// 更新成功
+
 				valueField = t.cmd.new
 				success = true
+
 			} else {
-				// 查询 version
+				// 更新失败
 
-				sqlStr.Reset()
-				sqlStr.AppendString("select ").AppendString(versionFieldName).AppendString(" from ").AppendString(t.cmd.table).AppendString(" where ")
-				sqlStr.AppendString(keyFieldName).AppendString("='").AppendString(t.cmd.key).AppendString("';")
+				valueField = proto.PackField(t.cmd.new.GetName(), fieldMeta.getConverter()(valueReceiver))
 
-				s = sqlStr.ToString()
-
-				start := time.Now()
-				row := queryer.QueryRowx(s)
-				getLogger().Debugf("task-compare-set-nx: table(%s) key(%s): select version query:\"%s\" cost:%.3fs.", t.cmd.table, t.cmd.key, s, time.Now().Sub(start).Seconds())
-
-				if err = row.Scan(&version); err != nil {
-					if err == sql.ErrNoRows {
-						errCode = errcode.ERR_RECORD_NOTEXIST
-					} else {
-						getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): select version: %s.", t.cmd.table, t.cmd.key, err)
-						errCode = errcode.ERR_SQLERROR
-					}
+				if t.cmd.version != nil && version != *t.cmd.version {
+					errCode = errcode.ERR_VERSION_MISMATCH
 				} else {
-					success = true
+					errCode = errcode.ERR_CAS_NOT_EQUAL
 				}
 			}
-		} else {
-			// 更新失败，查询 version，字段值
 
 			if tx != nil {
-				if err = tx.Rollback(); err != nil {
+				if success {
+					if err = tx.Commit(); err != nil {
+						getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): transaction-commit: %s.", t.cmd.table, t.cmd.key, err)
+					} else {
+						getLogger().Infof("task-compare-set-nx: table(%s) key(%s): transaction-commit.", t.cmd.table, t.cmd.key)
+					}
+				} else if err = tx.Rollback(); err != nil {
 					getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): transaction-rollback: %s.", t.cmd.table, t.cmd.key, err)
-					errCode = errcode.ERR_SQLERROR
 				} else {
 					getLogger().Infof("task-compare-set-nx: table(%s) key(%s): transaction-rollback.", t.cmd.table, t.cmd.key)
-					execer = db
-					queryer = db
-					tx = nil
 				}
-			}
 
-			if err == nil {
-				fieldMeta := tableMeta.getFieldMeta(t.cmd.old.GetName())
-				valueReceiver := fieldMeta.getReceiver()
-
-				sqlStr.Reset()
-				sqlStr.AppendString("select ").AppendString(versionFieldName).AppendString(",").AppendString(t.cmd.new.GetName()).AppendString(" from ").AppendString(t.cmd.table).AppendString(" where ")
-				sqlStr.AppendString(keyFieldName).AppendString("='").AppendString(t.cmd.key).AppendString("';")
-
-				s = sqlStr.ToString()
-
-				start := time.Now()
-				row := db.QueryRowx(s)
-				getLogger().Debugf("task-compare-set: table(%s) key(%s): select query:\"%s\" cost:%.3fs.", t.cmd.table, t.cmd.key, s, time.Now().Sub(start).Seconds())
-
-				if err = row.Scan(&version, valueReceiver); err != nil {
-					if err == sql.ErrNoRows {
-						errCode = errcode.ERR_RECORD_NOTEXIST
-					} else {
-						getLogger().Errorf("task-compare-set: table(%s) key(%s): select: %s.", t.cmd.table, t.cmd.key, err)
-						errCode = errcode.ERR_SQLERROR
-					}
-				} else {
-					valueField = proto.PackField(t.cmd.new.GetName(), fieldMeta.getConverter()(valueReceiver))
-
-					if t.cmd.version != nil && version != *t.cmd.version {
-						errCode = errcode.ERR_VERSION_MISMATCH
-					} else {
-						errCode = errcode.ERR_CAS_NOT_EQUAL
-					}
+				if err != nil {
+					errCode = errcode.ERR_SQLERROR
+					version = 0
+					valueField = nil
 				}
-			}
-		}
-
-		if tx != nil {
-			if success {
-				if err = tx.Commit(); err != nil {
-					getLogger().Errorf("task-compare-set: table(%s) key(%s): transaction-commit: %s.", t.cmd.table, t.cmd.key, err)
-				} else {
-					getLogger().Infof("task-compare-set: table(%s) key(%s): transaction-commit.", t.cmd.table, t.cmd.key)
-				}
-			} else if err = tx.Rollback(); err != nil {
-				getLogger().Errorf("task-compare-set: table(%s) key(%s): transaction-rollback: %s.", t.cmd.table, t.cmd.key, err)
-			} else {
-				getLogger().Infof("task-compare-set: table(%s) key(%s): transaction-rollback.", t.cmd.table, t.cmd.key)
-			}
-
-			if err != nil {
-				errCode = errcode.ERR_SQLERROR
-				version = 0
-				valueField = nil
 			}
 		}
 	}
@@ -267,7 +229,7 @@ func onCompareSetNx(conn *cliConn, msg *net.Message) {
 
 	processDeadline, respDeadline := getDeadline(head.Timeout)
 
-	cmd := &cmdCompareSet{
+	cmd := &cmdCompareSetNx{
 		cmdBase: newCmdBase(conn, head.Seqno, head.UniKey, table, key, processDeadline, respDeadline),
 		version: req.Version,
 		old:     req.Old,
@@ -275,5 +237,4 @@ func onCompareSetNx(conn *cliConn, msg *net.Message) {
 	}
 
 	pushCmd(cmd)
-
 }
