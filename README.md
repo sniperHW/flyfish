@@ -9,9 +9,9 @@
 	                 |
 	 -------------------------------------
 	 |                                   |
-	 |						raft group             |
+	 |	      raft group             |
 	 |                                   |----kvpd 
-	 |	flyfishd(leader) flyfish flyfish |     |        
+	 |  flyfishd(leader) flyfish flyfish |     |        
 	 -------------------------------------     |         
 	                 |                         |        
 	              kvproxy-----------------------
