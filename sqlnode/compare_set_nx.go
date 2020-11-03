@@ -132,25 +132,25 @@ func (t *sqlTaskCompareSetNx) do(db *sqlx.DB) {
 					errCode = errcode.ERR_CAS_NOT_EQUAL
 				}
 			}
+		}
 
-			if tx != nil {
-				if success {
-					if err = tx.Commit(); err != nil {
-						getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): transaction-commit: %s.", t.cmd.table, t.cmd.key, err)
-					} else {
-						getLogger().Infof("task-compare-set-nx: table(%s) key(%s): transaction-commit.", t.cmd.table, t.cmd.key)
-					}
-				} else if err = tx.Rollback(); err != nil {
-					getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): transaction-rollback: %s.", t.cmd.table, t.cmd.key, err)
+		if tx != nil {
+			if success {
+				if err = tx.Commit(); err != nil {
+					getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): transaction-commit: %s.", t.cmd.table, t.cmd.key, err)
 				} else {
-					getLogger().Infof("task-compare-set-nx: table(%s) key(%s): transaction-rollback.", t.cmd.table, t.cmd.key)
+					getLogger().Infof("task-compare-set-nx: table(%s) key(%s): transaction-commit.", t.cmd.table, t.cmd.key)
 				}
+			} else if err = tx.Rollback(); err != nil {
+				getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): transaction-rollback: %s.", t.cmd.table, t.cmd.key, err)
+			} else {
+				getLogger().Infof("task-compare-set-nx: table(%s) key(%s): transaction-rollback.", t.cmd.table, t.cmd.key)
+			}
 
-				if err != nil {
-					errCode = errcode.ERR_SQLERROR
-					version = 0
-					valueField = nil
-				}
+			if err != nil {
+				errCode = errcode.ERR_SQLERROR
+				version = 0
+				valueField = nil
 			}
 		}
 	}
