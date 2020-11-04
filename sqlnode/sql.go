@@ -70,6 +70,7 @@ func registerMessageHandlers() {
 	registerMessageHandler(uint16(protocol.CmdType_CompareAndSetNx), onCompareSetNx)
 	registerMessageHandler(uint16(protocol.CmdType_IncrBy), onIncrBy)
 	registerMessageHandler(uint16(protocol.CmdType_DecrBy), onDecrBy)
+	registerMessageHandler(uint16(protocol.CmdType_Del), onDel)
 }
 
 func startListen() error {
