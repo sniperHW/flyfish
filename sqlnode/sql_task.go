@@ -6,6 +6,7 @@ import (
 )
 
 type sqlTask interface {
+	canCombine() bool
 	combine(cmd) bool
 	do(*sqlx.DB)
 	//reply()
@@ -31,6 +32,10 @@ func newSqlCombinableTaskBase(uniKey, table, key string /*, maxFieldCount int*/)
 		//fields:   make(map[string]*proto.Field, maxFieldCount),
 		//version:  0,
 	}
+}
+
+func (t *sqlCombinableTaskBase) canCombine() bool {
+	return true
 }
 
 func (t *sqlCombinableTaskBase) addCmd(cmd cmd) {

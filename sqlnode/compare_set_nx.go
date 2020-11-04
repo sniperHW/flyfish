@@ -14,6 +14,10 @@ type sqlTaskCompareSetNx struct {
 	cmd *cmdCompareSetNx
 }
 
+func (t *sqlTaskCompareSetNx) canCombine() bool {
+	return false
+}
+
 func (t *sqlTaskCompareSetNx) combine(cmd) bool {
 	return false
 }

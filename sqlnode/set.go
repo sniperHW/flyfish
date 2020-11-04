@@ -12,6 +12,10 @@ type sqlTaskSet struct {
 	cmd *cmdSet
 }
 
+func (t *sqlTaskSet) canCombine() bool {
+	return false
+}
+
 func (t *sqlTaskSet) combine(cmd) bool {
 	return false
 }

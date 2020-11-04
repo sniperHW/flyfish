@@ -13,6 +13,10 @@ type sqlTaskCompareSet struct {
 	cmd *cmdCompareSet
 }
 
+func (t *sqlTaskCompareSet) canCombine() bool {
+	return false
+}
+
 func (t *sqlTaskCompareSet) combine(cmd) bool {
 	return false
 }

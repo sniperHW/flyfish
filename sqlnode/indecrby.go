@@ -16,6 +16,10 @@ type sqlTaskInDeCrBy struct {
 	cmd *cmdInDeCrBy
 }
 
+func (t *sqlTaskInDeCrBy) canCombine() bool {
+	return false
+}
+
 func (t *sqlTaskInDeCrBy) combine(cmd) bool {
 	return false
 }

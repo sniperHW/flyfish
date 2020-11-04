@@ -1,6 +1,7 @@
 package sqlnode
 
 import (
+	"fmt"
 	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/net"
@@ -12,11 +13,18 @@ type sqlTaskDel struct {
 	cmd *cmdDel
 }
 
+func (t *sqlTaskDel) canCombine() bool {
+	return false
+}
+
 func (t *sqlTaskDel) combine(cmd) bool {
 	return false
 }
 
 func (t *sqlTaskDel) do(db *sqlx.DB) {
+	slice := []interface{}{}
+	fmt.Println(slice[100])
+
 	var (
 		table   = t.cmd.table
 		key     = t.cmd.key

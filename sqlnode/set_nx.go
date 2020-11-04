@@ -13,6 +13,10 @@ type sqlTaskSetNx struct {
 	cmd *cmdSetNx
 }
 
+func (t *sqlTaskSetNx) canCombine() bool {
+	return false
+}
+
 func (t *sqlTaskSetNx) combine(cmd) bool {
 	return false
 }
