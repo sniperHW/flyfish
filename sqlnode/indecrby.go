@@ -233,7 +233,7 @@ func onIncrBy(conn *cliConn, msg *net.Message) {
 }
 
 func onDecrBy(conn *cliConn, msg *net.Message) {
-	req := msg.GetData().(*proto.IncrByReq)
+	req := msg.GetData().(*proto.DecrByReq)
 
 	head := msg.GetHead()
 
