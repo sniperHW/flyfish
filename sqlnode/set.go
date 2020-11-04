@@ -71,11 +71,7 @@ func (t *sqlTaskSet) do(db *sqlx.DB) {
 		}
 	}
 
-	t.reply(errCode, version)
-}
-
-func (t *sqlTaskSet) reply(errCode int32, version int64) {
-	t.cmd.reply(errCode, nil, version)
+	t.cmd.reply(errCode, version, nil)
 }
 
 type cmdSet struct {
@@ -88,7 +84,7 @@ func (c *cmdSet) makeSqlTask() sqlTask {
 	return &sqlTaskSet{cmd: c}
 }
 
-func (c *cmdSet) reply(errCode int32, fields map[string]*proto.Field, version int64) {
+func (c *cmdSet) reply(errCode int32, version int64, fields map[string]*proto.Field) {
 	if !c.isResponseTimeout() {
 		resp := &proto.SetResp{Version: version}
 

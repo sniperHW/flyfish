@@ -133,7 +133,7 @@ func (t *sqlTaskGet) do(db *sqlx.DB) {
 		}
 	}
 
-	t.reply(errCode, t.fields, version)
+	t.reply(errCode, version, t.fields)
 }
 
 type cmdGet struct {
@@ -180,7 +180,7 @@ func (c *cmdGet) makeSqlTask() sqlTask {
 	return task
 }
 
-func (c *cmdGet) reply(errCode int32, fields map[string]*proto.Field, version int64) {
+func (c *cmdGet) reply(errCode int32, version int64, fields map[string]*proto.Field) {
 	if !c.isResponseTimeout() {
 		var resp = &proto.GetResp{
 			Version: version,

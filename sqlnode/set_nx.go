@@ -126,7 +126,7 @@ func (t *sqlTaskSetNx) do(db *sqlx.DB) {
 		}
 	}
 
-	t.cmd.reply(errCode, fields, version)
+	t.cmd.reply(errCode, version, fields)
 }
 
 type cmdSetNx struct {
@@ -139,7 +139,7 @@ func (c *cmdSetNx) makeSqlTask() sqlTask {
 	return &sqlTaskSetNx{cmd: c}
 }
 
-func (c *cmdSetNx) reply(errCode int32, fields map[string]*proto.Field, version int64) {
+func (c *cmdSetNx) reply(errCode int32, version int64, fields map[string]*proto.Field) {
 	if !c.isResponseTimeout() {
 		resp := &proto.SetNxResp{}
 

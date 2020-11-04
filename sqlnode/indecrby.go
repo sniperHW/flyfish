@@ -176,13 +176,14 @@ func (c *cmdInDeCrBy) makeSqlTask() sqlTask {
 	return &sqlTaskInDeCrBy{cmd: c}
 }
 
-func (c *cmdInDeCrBy) reply(errCode int32, fields map[string]*proto.Field, version int64) {
-
-}
-
-func (c *cmdInDeCrBy) reply_(errCode int32, field *proto.Field, version int64) {
+func (c *cmdInDeCrBy) reply(errCode int32, version int64, fields map[string]*proto.Field) {
 	if !c.isResponseTimeout() {
 		var resp pb.Message
+		var field *proto.Field
+
+		if len(fields) > 0 {
+			field = fields[c.delta.GetName()]
+		}
 
 		if c.incr {
 			resp = &proto.IncrByResp{
@@ -198,6 +199,10 @@ func (c *cmdInDeCrBy) reply_(errCode int32, field *proto.Field, version int64) {
 
 		_ = c.conn.sendMessage(newMessage(c.sqNo, errCode, resp))
 	}
+}
+
+func (c *cmdInDeCrBy) reply_(errCode int32, field *proto.Field, version int64) {
+
 }
 
 func onIncrBy(conn *cliConn, msg *net.Message) {

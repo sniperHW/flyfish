@@ -41,8 +41,8 @@ func (t *sqlCombinableTaskBase) addCmd(cmd cmd) {
 	t.commands = append(t.commands, cmd)
 }
 
-func (t *sqlCombinableTaskBase) reply(errCode int32, fields map[string]*proto.Field, version int64) {
+func (t *sqlCombinableTaskBase) reply(errCode int32, version int64, fields map[string]*proto.Field) {
 	for _, cmd := range t.commands {
-		cmd.reply(errCode, fields, version)
+		cmd.reply(errCode, version, fields)
 	}
 }
