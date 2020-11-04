@@ -30,7 +30,6 @@ func (p *cmdProcessor) pushCmd(c cmd) {
 }
 
 func (p *cmdProcessor) process() {
-
 	for {
 		var (
 			closed bool
