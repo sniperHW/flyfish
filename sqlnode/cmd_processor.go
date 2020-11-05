@@ -16,6 +16,7 @@ type cmdProcessor struct {
 
 func newCmdProcessor(no int, db *sqlx.DB) *cmdProcessor {
 	return &cmdProcessor{
+		no:       no,
 		db:       db,
 		cmdQueue: util.NewBlockQueue(),
 	}

@@ -107,8 +107,6 @@ func (t *sqlTaskGet) do(db *sqlx.DB) {
 	}
 
 	s := sqlStr.ToString()
-	putStr(sqlStr)
-
 	start := time.Now()
 	row := db.QueryRowx(s)
 	getLogger().Debugf("task-get: table(%s) key(%s): query:\"%s\" cost:%.3fs.", t.table, t.key, s, time.Now().Sub(start).Seconds())
@@ -133,6 +131,7 @@ func (t *sqlTaskGet) do(db *sqlx.DB) {
 		}
 	}
 
+	putStr(sqlStr)
 	t.reply(errCode, version, t.fields)
 }
 

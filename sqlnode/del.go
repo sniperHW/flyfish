@@ -62,6 +62,7 @@ func (t *sqlTaskDel) do(db *sqlx.DB) {
 		}
 	}
 
+	putStr(sqlStr)
 	t.cmd.reply(errCode, version, nil)
 }
 

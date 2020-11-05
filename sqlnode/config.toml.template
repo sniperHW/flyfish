@@ -24,6 +24,6 @@ ConfDataBase    = "wei"                         #(可动态重加载)
 [Log]
 MaxLogfileSize  = 104857600 # 100mb
 LogDir          = "log"
-LogPrefix       = "github.com/sniperHW/flyfish"
+LogPrefix       = "github.com/sniperHW/flyfish/sqlnode"
 LogLevel        = "debug"                       #(可动态重加载)
 EnableLogStdout = true                          #(可动态重加载)

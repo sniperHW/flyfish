@@ -33,8 +33,6 @@ func (t *sqlTaskSetNx) do(db *sqlx.DB) {
 	appendInsertSqlStr(sqlStr, tableMeta, t.cmd.key, 1, t.cmd.fields)
 
 	s := sqlStr.ToString()
-	putStr(sqlStr)
-
 	start := time.Now()
 	result, err := db.Exec(s)
 	getLogger().Debugf("task-set-nx: table(%s) key(%s): insert query:\"%s\" cost:%.3fs.", t.cmd.table, t.cmd.key, s, time.Now().Sub(start).Seconds())
@@ -105,8 +103,6 @@ func (t *sqlTaskSetNx) do(db *sqlx.DB) {
 		}
 
 		s = sqlStr.ToString()
-		putStr(sqlStr)
-
 		start = time.Now()
 		row := db.QueryRowx(s)
 		getLogger().Debugf("task-set-nx: table(%s) key(%s): select query:\"%s\" cost:%.3fs.", t.cmd.table, t.cmd.key, s, time.Now().Sub(start).Seconds())
@@ -130,6 +126,7 @@ func (t *sqlTaskSetNx) do(db *sqlx.DB) {
 		}
 	}
 
+	putStr(sqlStr)
 	t.cmd.reply(errCode, version, fields)
 }
 
