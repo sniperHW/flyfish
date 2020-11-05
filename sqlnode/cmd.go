@@ -11,7 +11,7 @@ type cmd interface {
 	//isCancel() bool
 	isProcessTimeout() bool
 	makeSqlTask() sqlTask
-	reply(errCode int32, fields map[string]*proto.Field, version int64)
+	reply(errCode int32, version int64, fields map[string]*proto.Field)
 }
 
 type cmdBase struct {

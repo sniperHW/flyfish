@@ -5,6 +5,7 @@ import (
 	"github.com/sniperHW/flyfish/net"
 	protocol "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet"
+	"runtime"
 	"time"
 )
 
@@ -58,6 +59,14 @@ func registerMessageHandler(cmd uint16, h messageHandler) {
 func dispatchMessage(session kendynet.StreamSession, cmd uint16, msg *net.Message) {
 	if h, ok := messageHandlers[cmd]; ok {
 		//投递给线程池处理
+
+		defer func() {
+			if err := recover(); err != nil {
+				buff := make([]byte, 1024)
+				n := runtime.Stack(buff, false)
+				getLogger().Errorf("dispatch message: %s.\n%s", err, buff[:n])
+			}
+		}()
 
 		h(session.GetUserData().(*cliConn), msg)
 

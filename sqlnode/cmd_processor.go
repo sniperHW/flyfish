@@ -5,14 +5,16 @@ import (
 	util2 "github.com/sniperHW/flyfish/util"
 	"github.com/sniperHW/kendynet/util"
 	"reflect"
+	"runtime"
 )
 
 type cmdProcessor struct {
+	no       int
 	db       *sqlx.DB
 	cmdQueue *util.BlockQueue
 }
 
-func newCmdProcessor(db *sqlx.DB) *cmdProcessor {
+func newCmdProcessor(no int, db *sqlx.DB) *cmdProcessor {
 	return &cmdProcessor{
 		db:       db,
 		cmdQueue: util.NewBlockQueue(),
@@ -29,51 +31,80 @@ func (p *cmdProcessor) pushCmd(c cmd) {
 
 func (p *cmdProcessor) process() {
 	for {
-		closed, list := p.cmdQueue.Get()
+		var (
+			closed bool
+			list   []interface{}
+			n      int
+			i      = 0
+			c      cmd
+			task   sqlTask
+		)
 
-		var n = len(list)
-		var task sqlTask
-		var combineNext = false
-		var i = 0
+		closed, list = p.cmdQueue.Get()
+		n = len(list)
 
-		getLogger().Debugf("cmd-processor: start process %d commands.", n)
+		getLogger().Debugf("cmd-processor %d: start process %d commands.", p.no, n)
 
 		for i < n {
-			switch c := list[i].(type) {
+			switch o := list[i].(type) {
 			case cmd:
-				if c.isProcessTimeout() {
-					getLogger().Infof("command %d is timeout, skip it.", c.seqNo())
-
-					// todo something else ?
-					break
-				}
-
-				if task == nil {
-					task = c.makeSqlTask()
-					combineNext = true
-				} else {
-					combineNext = task.combine(c)
-				}
-
-				if combineNext && i < n-1 {
-					break
-				}
-
-				task.do(p.db)
-				//task.reply()
-				task = nil
+				c = o
 
 			default:
-				getLogger().Errorln("invalid cmd type: %s.", reflect.TypeOf(list[i]))
+				getLogger().Errorln("cmd-processor %d: invalid cmd type: %s.", p.no, reflect.TypeOf(list[i]))
+				c = nil
+			}
+
+			if c != nil {
+				task = p.processCmd(c, task)
 			}
 
 			i++
+		}
+
+		if task != nil {
+			p.processCmd(nil, task)
 		}
 
 		if closed {
 			break
 		}
 	}
+}
+
+func (p *cmdProcessor) processCmd(cmd cmd, task sqlTask) sqlTask {
+	defer func() {
+		if err := recover(); err != nil {
+			buff := make([]byte, 1024)
+			n := runtime.Stack(buff, false)
+			getLogger().Errorf("cmd-processor %d process cmd: %s.\n%s", p.no, err, buff[:n])
+		}
+	}()
+
+	if cmd != nil && cmd.isProcessTimeout() {
+		getLogger().Infof("cmd-processor %d: command %d is timeout, skip it.", p.no, cmd.seqNo())
+		cmd = nil
+		// todo something else ?
+	}
+
+	if task != nil {
+		if cmd != nil && task.combine(cmd) {
+			return task
+		}
+
+		task.do(p.db)
+		task = nil
+	}
+
+	if cmd != nil {
+		task = cmd.makeSqlTask()
+		if !task.canCombine() {
+			task.do(p.db)
+			task = nil
+		}
+	}
+
+	return task
 }
 
 var (
@@ -85,7 +116,7 @@ func initCmdProcessor() {
 
 	globalCmdProcessors = make([]*cmdProcessor, nProcessors)
 	for i := 0; i < nProcessors; i++ {
-		globalCmdProcessors[i] = newCmdProcessor(getGlobalDB())
+		globalCmdProcessors[i] = newCmdProcessor(i, getGlobalDB())
 		globalCmdProcessors[i].start()
 	}
 }

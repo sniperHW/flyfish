@@ -573,6 +573,25 @@ func appendFieldValue2SqlStr(str *str.Str, f *proto.Field) *str.Str {
 	return str.AppendFieldStr(f, getBinary2SqlStrFunc())
 }
 
+func appendInsertSqlStr(s *str.Str, tm *tableMeta, key string, version int64, fields map[string]*proto.Field) *str.Str {
+	s.AppendString(tm.getInsertPrefix()).AppendString("'").AppendString(key).AppendString("'").AppendString(",")
+	appendValue2SqlStr(s, versionFieldMeta.getType(), version)
+
+	for _, v := range tm.getFieldInsertOrder() {
+		s.AppendString(",")
+
+		f := fields[v]
+		if f != nil {
+			appendFieldValue2SqlStr(s, f)
+		} else {
+			fm := tm.getFieldMeta(v)
+			appendValue2SqlStr(s, fm.getType(), fm.getDefaultV())
+		}
+	}
+
+	return s.AppendString(");")
+}
+
 func appendInsertOrUpdatePgsqlStr(s *str.Str, tm *tableMeta, key string, version int64, fields map[string]*proto.Field) *str.Str {
 	s.AppendString(tm.getInsertPrefix()).AppendString("'").AppendString(key).AppendString("'").AppendString(",")
 	appendValue2SqlStr(s, versionFieldMeta.getType(), version)
@@ -616,7 +635,6 @@ func appendInsertOrUpdateMysqlStr(s *str.Str, tm *tableMeta, key string, version
 
 	s.AppendString(") on duplicate key update ")
 	s.AppendString(versionFieldName).AppendString("=").AppendString(versionFieldName).AppendString("+1")
-	appendValue2SqlStr(s, versionFieldMeta.getType(), version)
 	for k, v := range fields {
 		s.AppendString(",").AppendString(k).AppendString("=")
 		appendFieldValue2SqlStr(s, v)
@@ -652,4 +670,17 @@ func appendUpdateSqlStr(s *str.Str, table, key string, version int64, fields map
 	s.AppendString(" where ").AppendString(keyFieldName).AppendString("='").AppendString(key)
 	s.AppendString("' and ").AppendString(versionFieldName).AppendString("=")
 	return appendValue2SqlStr(s, versionFieldMeta.getType(), version).AppendString(";")
+}
+
+func appendSelectAllSqlStr(s *str.Str, tm *tableMeta, key string, version *int64) *str.Str {
+	s.AppendString(tm.getSelectAllPrefix()).AppendString(keyFieldName).AppendString("='").AppendString(key).AppendString("'")
+
+	if version != nil {
+		s.AppendString(",").AppendString(versionFieldName).AppendString("=")
+		appendValue2SqlStr(s, versionFieldMeta.getType(), *version)
+	}
+
+	s.AppendString(";")
+
+	return s
 }

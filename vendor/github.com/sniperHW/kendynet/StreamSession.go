@@ -31,13 +31,34 @@ const (
 	SendBufferSize = 65535 //64k
 )
 
+/*
+type eventWaiter struct {
+	waiter chan struct{}
+}
+
+func (this *eventWaiter) Wait() {
+	<-this.waiter
+}
+
+func (this *eventWaiter) Notify() {
+	close(this.waiter)
+}
+
+func NewEventWaiter() *eventWaiter {
+	return &eventWaiter{
+		waiter: make(chan struct{}),
+	}
+}*/
+
 type Event struct {
 	EventType int16
 	Session   StreamSession
 	Data      interface{}
+	//EventWaiter *eventWaiter
 }
 
 type StreamSession interface {
+	//SetWaitMode(bool)
 
 	/*
 		发送一个对象，使用encoder将对象编码成一个Message调用SendMessage

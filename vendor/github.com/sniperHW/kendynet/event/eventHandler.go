@@ -3,63 +3,42 @@ package event
 import (
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/util"
-	"reflect"
 	"sync"
 	"sync/atomic"
 )
 
-type Handle int64
+type Handle *handle
 
 type handList struct {
 	head handle
 	tail handle
 }
 
-var handlePool = sync.Pool{
-	New: func() interface{} {
-		return &handle{}
-	},
-}
-
-func get() *handle {
-	h := handlePool.Get().(*handle)
-	h.status = status_ok
-	return h
-}
-
-func put(h *handle) {
-	handlePool.Put(h)
-}
-
-const (
-	status_ok       = 0
-	status_remove   = 1
-	status_register = 2
-)
-
 type handle struct {
-	h      Handle
-	pprev  *handle
-	nnext  *handle
-	fn     interface{}
-	once   bool
-	event  interface{}
-	slot   *handlerSlot
-	status int
+	pprev   *handle
+	nnext   *handle
+	fn      interface{}
+	once    bool
+	event   interface{}
+	slot    *handlerSlot
+	removed int32
+	version int64
 }
 
 type handlerSlot struct {
-	l       handList
+	sync.Mutex
+	l       []handList
 	emiting bool
-	eh      *EventHandler
+	removed int32
+	current int
+	version int64
 }
 
 type EventHandler struct {
-	mtx          sync.Mutex
-	c            int64
+	sync.RWMutex
 	slots        map[interface{}]*handlerSlot
-	hmap         map[Handle]*handle
 	processQueue *EventQueue
+	version      int64
 }
 
 func NewEventHandler(processQueue ...*EventQueue) *EventHandler {
@@ -69,22 +48,8 @@ func NewEventHandler(processQueue ...*EventQueue) *EventHandler {
 	}
 	return &EventHandler{
 		slots:        map[interface{}]*handlerSlot{},
-		hmap:         map[Handle]*handle{},
 		processQueue: q,
 	}
-}
-
-func (this *EventHandler) register_(h *handle) {
-	this.hmap[h.h] = h
-	slot, ok := this.slots[h.event]
-	if !ok {
-		slot = &handlerSlot{}
-		slot.eh = this
-		slot.l.head.nnext = &slot.l.tail
-		slot.l.tail.pprev = &slot.l.head
-		this.slots[h.event] = slot
-	}
-	slot.register(h)
 }
 
 func (this *EventHandler) register(event interface{}, once bool, fn interface{}) Handle {
@@ -93,30 +58,37 @@ func (this *EventHandler) register(event interface{}, once bool, fn interface{})
 	}
 
 	switch fn.(type) {
-	case func():
-		break
-	case func(...interface{}):
-		break
-	case func(Handle):
-		break
-	case func(Handle, ...interface{}):
-		break
+	case func(), func(...interface{}), func(Handle), func(Handle, ...interface{}):
 	default:
 		panic("invaild fn type")
-		break
 	}
 
-	h := get()
-	h.fn = fn
-	h.once = once
-	h.event = event
-	h.h = Handle(atomic.AddInt64(&this.c, 1))
+	h := &handle{
+		fn:    fn,
+		once:  once,
+		event: event,
+	}
 
-	this.mtx.Lock()
-	this.register_(h)
-	this.mtx.Unlock()
+	this.Lock()
+	defer this.Unlock()
+	slot, ok := this.slots[event]
+	if !ok {
+		slot = &handlerSlot{
+			l:       make([]handList, 2),
+			version: atomic.AddInt64(&this.version, 1),
+		}
 
-	return h.h
+		slot.l[0].head.nnext = &slot.l[0].tail
+		slot.l[0].tail.pprev = &slot.l[0].head
+
+		slot.l[1].head.nnext = &slot.l[1].tail
+		slot.l[1].tail.pprev = &slot.l[1].head
+
+		this.slots[h.event] = slot
+	}
+	slot.register(h)
+
+	return Handle(h)
 }
 
 func (this *EventHandler) RegisterOnce(event interface{}, fn interface{}) Handle {
@@ -127,135 +99,126 @@ func (this *EventHandler) Register(event interface{}, fn interface{}) Handle {
 	return this.register(event, false, fn)
 }
 
-func (this *EventHandler) remove_(h Handle) {
-	hh := this.hmap[h]
-	if nil != hh {
-		slot, ok := this.slots[hh.event]
-		if ok {
-			if slot.emiting {
-				hh.status = status_remove
-			} else {
-				slot.remove(hh)
-			}
-		}
-	}
-}
-
 func (this *EventHandler) Remove(h Handle) {
-	this.mtx.Lock()
-	defer this.mtx.Unlock()
-	this.remove_(h)
-}
-
-func (this *EventHandler) clear_(event interface{}) {
-	slot, ok := this.slots[event]
+	hh := (*handle)(h)
+	this.RLock()
+	slot, ok := this.slots[hh.event]
+	this.RUnlock()
 	if ok {
-		slot.clear()
+		slot.remove(h)
 	}
-}
-
-func (this *EventHandler) Clear(event interface{}) {
-	this.mtx.Lock()
-	defer this.mtx.Unlock()
-	this.clear_(event)
-}
-
-func (this *EventHandler) emit(event interface{}, args ...interface{}) {
-	this.mtx.Lock()
-	slot, ok := this.slots[event]
-	if ok {
-		slot.emit(args...)
-	}
-	this.mtx.Unlock()
 }
 
 //触发事件
 func (this *EventHandler) Emit(event interface{}, args ...interface{}) {
-	if this.processQueue != nil {
-		this.processQueue.PostNoWait(func() {
-			this.emit(event, args...)
-		})
-	} else {
-		this.emit(event, args...)
+	this.RLock()
+	slot, ok := this.slots[event]
+	this.RUnlock()
+	if ok {
+		if this.processQueue != nil {
+			this.processQueue.PostNoWait(slot.emit, args...)
+		} else {
+			slot.emit(args...)
+		}
+	}
+}
+
+func (this *EventHandler) Clear(event interface{}) {
+	this.Lock()
+	defer this.Unlock()
+	slot, ok := this.slots[event]
+	if ok {
+		atomic.StoreInt32(&slot.removed, 1)
+		delete(this.slots, event)
 	}
 }
 
 func (this *handlerSlot) register(h *handle) {
+	this.Lock()
+	defer this.Unlock()
+	l := &this.l[this.current]
 	h.slot = this
-	this.l.tail.pprev.nnext = h
-	h.nnext = &this.l.tail
-	h.pprev = this.l.tail.pprev
-	this.l.tail.pprev = h
-	if this.emiting {
-		//在emit回调中注册新的handler不会在本次emit中执行
-		h.status = status_register
+	h.version = this.version
+
+	(*l).tail.pprev.nnext = h
+	h.nnext = &(*l).tail
+	h.pprev = (*l).tail.pprev
+	(*l).tail.pprev = h
+}
+
+func (this *handlerSlot) remove(h *handle) {
+	if h.slot == this && h.version == this.version {
+		atomic.StoreInt32(&h.removed, 1)
+		this.Lock()
+		if !this.emiting {
+			h.pprev.nnext = h.nnext
+			h.nnext.pprev = h.pprev
+			h.slot = nil
+			h.version = 0
+		}
+		this.Unlock()
 	}
 }
 
-func (this *handlerSlot) pcall(fn interface{}, h Handle, args []interface{}) {
+func pcall2(h *handle, args []interface{}) {
 	defer util.Recover(kendynet.GetLogger())
-	switch fn.(type) {
+	switch h.fn.(type) {
 	case func():
-		fn.(func())()
+		h.fn.(func())()
 	case func(Handle):
-		fn.(func(Handle))(h)
-		break
+		h.fn.(func(Handle))((Handle)(h))
 	case func(...interface{}):
-		fn.(func(...interface{}))(args...)
-		break
+		h.fn.(func(...interface{}))(args...)
 	case func(Handle, ...interface{}):
-		fn.(func(Handle, ...interface{}))(h, args...)
-		break
-	default:
-		panic("invaild fn type:" + reflect.TypeOf(fn).Name())
+		h.fn.(func(Handle, ...interface{}))((Handle)(h), args...)
 	}
 }
 
 func (this *handlerSlot) emit(args ...interface{}) {
+	this.Lock()
 	this.emiting = true
-	//第一遍遍历,执行事件回调
-	cur := this.l.head.nnext
-	for cur != &this.l.tail {
+	l := &this.l[this.current]
+	this.current = (this.current + 1) % 2
+	this.Unlock()
+
+	cur := (*l).head.nnext
+	for cur != &(*l).tail {
+		if atomic.LoadInt32(&this.removed) == 1 {
+			//当前slot已经被清除
+			return
+		}
 		next := cur.nnext
-		if cur.status == status_ok {
-			this.eh.mtx.Unlock()
-			this.pcall(cur.fn, cur.h, args)
-			this.eh.mtx.Lock()
+		if atomic.LoadInt32(&cur.removed) == 0 {
+			pcall2(cur, args)
 		}
 		cur = next
 	}
-	this.emiting = false
 
-	//第二遍遍历执行清除以及status_register->status_ok
-	cur = this.l.head.nnext
-	for cur != &this.l.tail {
-		next := cur.nnext
-		if cur.status == status_remove || cur.status == status_ok && cur.once {
-			this.remove(cur)
-		} else if cur.status == status_register {
-			cur.status = status_ok
-		}
-		cur = next
-	}
-}
+	this.Lock()
 
-func (this *handlerSlot) clear() {
-	cur := this.l.head.nnext
-	for cur != &this.l.tail {
-		next := cur.nnext
-		if this.emiting {
-			cur.status = status_remove
+	ll := &this.l[this.current]
+
+	cur = (*l).tail.pprev
+
+	for cur != &(*l).head {
+		pprev := cur.pprev
+		if atomic.LoadInt32(&cur.removed) == 0 && !cur.once {
+			cur.nnext = nil
+			cur.pprev = nil
+			(*ll).head.nnext.pprev = cur
+			cur.nnext = (*ll).head.nnext
+			cur.pprev = &(*ll).head
+			(*ll).head.nnext = cur
 		} else {
-			this.remove(cur)
+			cur.slot = nil
+			cur.version = 0
 		}
-		cur = next
+		cur = pprev
 	}
-}
 
-func (this *handlerSlot) remove(h *handle) {
-	delete(this.eh.hmap, h.h)
-	h.pprev.nnext = h.nnext
-	h.nnext.pprev = h.pprev
-	h.slot = nil
-	put(h)
+	(*l).head.nnext = &(*l).tail
+	(*l).tail.pprev = &(*l).head
+
+	this.emiting = false
+	this.Unlock()
 }

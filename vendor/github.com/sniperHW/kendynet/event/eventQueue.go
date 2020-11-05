@@ -3,7 +3,6 @@ package event
 import (
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/util"
-	"reflect"
 	"sync/atomic"
 )
 
@@ -30,15 +29,11 @@ func NewEventQueue(fullSize ...int) *EventQueue {
 }
 
 func (this *EventQueue) preparePost(fn interface{}, args ...interface{}) *element {
-	e := &element{}
+	e := &element{fn: fn}
 	switch fn.(type) {
 	case func():
-		e.fn = fn
-		break
-	case func([]interface{}):
-		e.fn = fn
+	case func([]interface{}), func(...interface{}):
 		e.args = args
-		break
 	default:
 		panic("invaild callback type")
 	}
@@ -61,34 +56,29 @@ func (this *EventQueue) Close() {
 	this.eventQueue.Close()
 }
 
-func pcall(fn interface{}, args []interface{}) {
+func pcall1(fn interface{}, args []interface{}) {
 	defer util.Recover(kendynet.GetLogger())
 	switch fn.(type) {
 	case func():
 		fn.(func())()
-		break
 	case func([]interface{}):
 		fn.(func([]interface{}))(args)
-		break
-	default:
-		panic("invaild fn type:" + reflect.TypeOf(fn).Name())
+	case func(...interface{}):
+		fn.(func(...interface{}))(args...)
 	}
 }
 
 func (this *EventQueue) Run() {
-
-	if !atomic.CompareAndSwapInt32(&this.started, 0, 1) {
-		return
-	}
-
-	for {
-		closed, localList := this.eventQueue.Get()
-		for _, v := range localList {
-			e := v.(*element)
-			pcall(e.fn, e.args)
-		}
-		if closed {
-			return
+	if atomic.CompareAndSwapInt32(&this.started, 0, 1) {
+		for {
+			closed, localList := this.eventQueue.Get()
+			for _, v := range localList {
+				e := v.(*element)
+				pcall1(e.fn, e.args)
+			}
+			if closed {
+				return
+			}
 		}
 	}
 }
