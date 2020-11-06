@@ -31,8 +31,6 @@ func (t *sqlTaskSet) do(db *sqlx.DB) {
 
 	if t.cmd.version != nil {
 		s := appendUpdateSqlStr(sqlStr, t.cmd.table, t.cmd.key, *t.cmd.version, t.cmd.fields).ToString()
-		putStr(sqlStr)
-
 		start := time.Now()
 		result, err := db.Exec(s)
 		getLogger().Debugf("task-set-with-version: table(%s) key(%s): query:\"%s\" cost:%.3fs.", t.cmd.table, t.cmd.key, s, time.Now().Sub(start).Seconds())
@@ -60,8 +58,6 @@ func (t *sqlTaskSet) do(db *sqlx.DB) {
 		sqlStr.AppendString("end;")
 
 		s := sqlStr.ToString()
-		putStr(sqlStr)
-
 		start := time.Now()
 		row := db.QueryRowx(s)
 		getLogger().Debugf("task-set: table(%s) key(%s): query:\"%s\" cost:%.3fs.", t.cmd.table, t.cmd.key, s, time.Now().Sub(start).Seconds())
@@ -75,6 +71,7 @@ func (t *sqlTaskSet) do(db *sqlx.DB) {
 		}
 	}
 
+	putStr(sqlStr)
 	t.cmd.reply(errCode, version, nil)
 }
 
