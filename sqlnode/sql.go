@@ -58,7 +58,14 @@ func Start(cfgFilePath string) bool {
 }
 
 func Stop() {
+	if globalListener != nil {
+		getLogger().Infof("stop listen.")
+		globalListener.Close()
+		globalListener = nil
+	}
 
+	getLogger().Infof("stop processor.")
+	stopCmdProcessor()
 }
 
 func registerMessageHandlers() {
