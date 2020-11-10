@@ -54,9 +54,9 @@ func (t *sqlTaskInDeCrBy) do(db *sqlx.DB) {
 
 		sqlStr = getStr()
 
-		sqlStr.AppendString("select ").AppendString(versionFieldName).AppendString(",").AppendString(fieldName)
-		sqlStr.AppendString(" from ").AppendString(table)
-		sqlStr.AppendString(" where ").AppendString(keyFieldName).AppendString("='").AppendString(key).AppendString("'").AppendString(";")
+		sqlStr.AppendString("SELECT ").AppendString(versionFieldName).AppendString(",").AppendString(fieldName)
+		sqlStr.AppendString(" FROM ").AppendString(table)
+		sqlStr.AppendString(" WHERE ").AppendString(keyFieldName).AppendString("='").AppendString(key).AppendString("'").AppendString(";")
 
 		s = sqlStr.ToString()
 		start := time.Now()

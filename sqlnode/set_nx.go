@@ -81,7 +81,7 @@ func (t *sqlTaskSetNx) do(db *sqlx.DB) {
 			queryFieldConverters = make([]fieldConverter, queryFieldCount)
 			i := 0
 
-			sqlStr.AppendString("select ").AppendString(versionFieldName)
+			sqlStr.AppendString("SELECT ").AppendString(versionFieldName)
 			queryFields[i] = versionFieldName
 			queryFieldReceivers[i] = versionFieldMeta.getReceiver()
 			queryFieldConverters[i] = versionFieldMeta.getConverter()
@@ -98,7 +98,7 @@ func (t *sqlTaskSetNx) do(db *sqlx.DB) {
 				i++
 			}
 
-			sqlStr.AppendString(" from ").AppendString(t.cmd.table).AppendString(" where ").AppendString(keyFieldName)
+			sqlStr.AppendString(" FROM ").AppendString(t.cmd.table).AppendString(" WHERE ").AppendString(keyFieldName)
 			sqlStr.AppendString("='").AppendString(t.cmd.key).AppendString("';")
 		}
 

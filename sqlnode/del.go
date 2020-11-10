@@ -1,7 +1,6 @@
 package sqlnode
 
 import (
-	"fmt"
 	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/net"
@@ -22,9 +21,6 @@ func (t *sqlTaskDel) combine(cmd) bool {
 }
 
 func (t *sqlTaskDel) do(db *sqlx.DB) {
-	slice := []interface{}{}
-	fmt.Println(slice[100])
-
 	var (
 		table   = t.cmd.table
 		key     = t.cmd.key
@@ -33,10 +29,10 @@ func (t *sqlTaskDel) do(db *sqlx.DB) {
 		sqlStr  = getStr()
 	)
 
-	sqlStr.AppendString("delete from ").AppendString(table)
-	sqlStr.AppendString(" where ").AppendString(keyFieldName).AppendString("='").AppendString(key).AppendString("'")
+	sqlStr.AppendString("DELETE FROM ").AppendString(table)
+	sqlStr.AppendString(" WHERE ").AppendString(keyFieldName).AppendString("='").AppendString(key).AppendString("'")
 	if t.cmd.version != nil {
-		sqlStr.AppendString(" and ").AppendString(versionFieldName).AppendString("=")
+		sqlStr.AppendString(" AND ").AppendString(versionFieldName).AppendString("=")
 		appendValue2SqlStr(sqlStr, versionFieldMeta.getType(), *t.cmd.version)
 	}
 	sqlStr.AppendString(";")

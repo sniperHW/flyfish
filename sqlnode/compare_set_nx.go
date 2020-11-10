@@ -68,15 +68,15 @@ func (t *sqlTaskCompareSetNx) do(db *sqlx.DB) {
 			}
 		}
 
-		sqlStr.AppendString(") on conflict(").AppendString(keyFieldName).AppendString(") do update set ")
+		sqlStr.AppendString(") ON CONFLICT(").AppendString(keyFieldName).AppendString(") DO UPDATE SET ")
 		sqlStr.AppendString(versionFieldName).AppendString("=").AppendString(tableMeta.getName()).AppendString(".").AppendString(versionFieldName).AppendString("+1")
 		for k, v := range fields {
 			sqlStr.AppendString(",").AppendString(k).AppendString("=")
 			appendFieldValue2SqlStr(sqlStr, v)
 		}
 
-		sqlStr.AppendString(" where ").AppendString(tableMeta.getName()).AppendString(".").AppendString(keyFieldName).AppendString("='").AppendString(t.cmd.key)
-		sqlStr.AppendString("' and ").AppendString(tableMeta.getName()).AppendString(".").AppendString(t.cmd.new.GetName()).AppendString("=")
+		sqlStr.AppendString(" WHERE ").AppendString(tableMeta.getName()).AppendString(".").AppendString(keyFieldName).AppendString("='").AppendString(t.cmd.key)
+		sqlStr.AppendString("' AND ").AppendString(tableMeta.getName()).AppendString(".").AppendString(t.cmd.new.GetName()).AppendString("=")
 		appendFieldValue2SqlStr(sqlStr, t.cmd.old).AppendString(";")
 
 		var (
@@ -104,13 +104,13 @@ func (t *sqlTaskCompareSetNx) do(db *sqlx.DB) {
 			)
 
 			sqlStr.Reset()
-			sqlStr.AppendString("select ").AppendString(versionFieldName).AppendString(",").AppendString(t.cmd.new.GetName()).AppendString(" from ").AppendString(t.cmd.table).AppendString(" where ")
+			sqlStr.AppendString("SELECT ").AppendString(versionFieldName).AppendString(",").AppendString(t.cmd.new.GetName()).AppendString(" FROM ").AppendString(t.cmd.table).AppendString(" WHERE ")
 			sqlStr.AppendString(keyFieldName).AppendString("='").AppendString(t.cmd.key).AppendString("';")
 
 			s = sqlStr.ToString()
 			start := time.Now()
 			row := queryer.QueryRowx(s)
-			getLogger().Debugf("task-compare-set-nax: table(%s) key(%s): select query:\"%s\" cost:%.3fs.", t.cmd.table, t.cmd.key, s, time.Now().Sub(start).Seconds())
+			getLogger().Debugf("task-compare-set-nx: table(%s) key(%s): select query:\"%s\" cost:%.3fs.", t.cmd.table, t.cmd.key, s, time.Now().Sub(start).Seconds())
 
 			if err = row.Scan(&version, valueReceiver); err != nil {
 				if err == sql.ErrNoRows {

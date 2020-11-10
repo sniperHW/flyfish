@@ -608,13 +608,13 @@ func appendInsertOrUpdatePgsqlStr(s *str.Str, tm *tableMeta, key string, version
 		}
 	}
 
-	s.AppendString(") on conflict(").AppendString(keyFieldName).AppendString(") do update set ")
+	s.AppendString(") ON CONFLICT(").AppendString(keyFieldName).AppendString(") DO UPDATE SET ")
 	s.AppendString(versionFieldName).AppendString("=").AppendString(tm.getName()).AppendString(".").AppendString(versionFieldName).AppendString("+1")
 	for k, v := range fields {
 		s.AppendString(",").AppendString(k).AppendString("=")
 		appendFieldValue2SqlStr(s, v)
 	}
-	return s.AppendString(" where ").AppendString(tm.getName()).AppendString(".").AppendString(keyFieldName).AppendString("='").AppendString(key).AppendString("';")
+	return s.AppendString(" WHERE ").AppendString(tm.getName()).AppendString(".").AppendString(keyFieldName).AppendString("='").AppendString(key).AppendString("';")
 }
 
 func appendInsertOrUpdateMysqlStr(s *str.Str, tm *tableMeta, key string, version int64, fields map[string]*proto.Field) *str.Str {
@@ -633,7 +633,7 @@ func appendInsertOrUpdateMysqlStr(s *str.Str, tm *tableMeta, key string, version
 		}
 	}
 
-	s.AppendString(") on duplicate key update ")
+	s.AppendString(") ON DUPLICATE KEY UPDATE ")
 	s.AppendString(versionFieldName).AppendString("=").AppendString(versionFieldName).AppendString("+1")
 	for k, v := range fields {
 		s.AppendString(",").AppendString(k).AppendString("=")
@@ -657,7 +657,7 @@ func appendInsertOrUpdateSqlStr(s *str.Str, tm *tableMeta, key string, version i
 
 func appendUpdateSqlStr(s *str.Str, table, key string, version int64, fields map[string]*proto.Field) *str.Str {
 	// update 'table' set
-	s.AppendString("update ").AppendString(table).AppendString(" set ")
+	s.AppendString("UPDATE ").AppendString(table).AppendString(" SET ")
 
 	// field_name=field_value,...,field_name=field_value
 	s.AppendString(versionFieldName).AppendString("=").AppendString(versionFieldName).AppendString("+1")
@@ -667,8 +667,8 @@ func appendUpdateSqlStr(s *str.Str, table, key string, version int64, fields map
 	}
 
 	// where __key__='key' and __version__='version'
-	s.AppendString(" where ").AppendString(keyFieldName).AppendString("='").AppendString(key)
-	s.AppendString("' and ").AppendString(versionFieldName).AppendString("=")
+	s.AppendString(" WHERE ").AppendString(keyFieldName).AppendString("='").AppendString(key)
+	s.AppendString("' AND ").AppendString(versionFieldName).AppendString("=")
 	return appendValue2SqlStr(s, versionFieldMeta.getType(), version).AppendString(";")
 }
 

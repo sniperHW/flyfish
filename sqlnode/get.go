@@ -97,13 +97,13 @@ func (t *sqlTaskGet) do(db *sqlx.DB) {
 			queryFieldConverters[i+getFieldOffset] = fieldMeta.getConverter()
 		}
 
-		sqlStr.AppendString("select ")
+		sqlStr.AppendString("SELECT ")
 		sqlStr.AppendString(queryFields[0])
 		for i := 1; i < queryFieldCount; i++ {
 			sqlStr.AppendString(",")
 			sqlStr.AppendString(queryFields[i])
 		}
-		sqlStr.AppendString(" from ").AppendString(t.table).AppendString(" where ").AppendString(keyFieldName).AppendString("='").AppendString(t.key).AppendString("';")
+		sqlStr.AppendString(" FROM ").AppendString(t.table).AppendString(" WHERE ").AppendString(keyFieldName).AppendString("='").AppendString(t.key).AppendString("';")
 	}
 
 	s := sqlStr.ToString()

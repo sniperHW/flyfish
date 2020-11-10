@@ -45,15 +45,15 @@ func (t *sqlTaskCompareSet) do(db *sqlx.DB) {
 
 		getLogger().Infof("task-compare-set: table(%s) key(%s): begin-transaction.", t.cmd.table, t.cmd.key)
 
-		sqlStr.AppendString("update ").AppendString(t.cmd.table).AppendString(" set ")
+		sqlStr.AppendString("UPDATE ").AppendString(t.cmd.table).AppendString(" SET ")
 		sqlStr.AppendString(versionFieldName).AppendString("=").AppendString(versionFieldName).AppendString("+1,")
 		sqlStr.AppendString(t.cmd.new.GetName()).AppendString("=")
-		appendFieldValue2SqlStr(sqlStr, t.cmd.new).AppendString(" where ").AppendString(keyFieldName).AppendString("='").AppendString(t.cmd.key).AppendString("'")
+		appendFieldValue2SqlStr(sqlStr, t.cmd.new).AppendString(" WHERE ").AppendString(keyFieldName).AppendString("='").AppendString(t.cmd.key).AppendString("'")
 		if t.cmd.version != nil {
-			sqlStr.AppendString(" and ").AppendString(versionFieldName).AppendString("=")
+			sqlStr.AppendString(" AND ").AppendString(versionFieldName).AppendString("=")
 			appendValue2SqlStr(sqlStr, versionFieldMeta.getType(), *t.cmd.version)
 		}
-		sqlStr.AppendString(" and ").AppendString(t.cmd.old.GetName()).AppendString("=")
+		sqlStr.AppendString(" AND ").AppendString(t.cmd.old.GetName()).AppendString("=")
 		appendFieldValue2SqlStr(sqlStr, t.cmd.old).AppendString(";")
 
 		s = sqlStr.ToString()
@@ -85,7 +85,7 @@ func (t *sqlTaskCompareSet) do(db *sqlx.DB) {
 				// 查询 version
 
 				sqlStr.Reset()
-				sqlStr.AppendString("select ").AppendString(versionFieldName).AppendString(" from ").AppendString(t.cmd.table).AppendString(" where ")
+				sqlStr.AppendString("SELECT ").AppendString(versionFieldName).AppendString(" FROM ").AppendString(t.cmd.table).AppendString(" WHERE ")
 				sqlStr.AppendString(keyFieldName).AppendString("='").AppendString(t.cmd.key).AppendString("';")
 
 				s = sqlStr.ToString()
@@ -119,7 +119,7 @@ func (t *sqlTaskCompareSet) do(db *sqlx.DB) {
 				valueReceiver := fieldMeta.getReceiver()
 
 				sqlStr.Reset()
-				sqlStr.AppendString("select ").AppendString(versionFieldName).AppendString(",").AppendString(t.cmd.new.GetName()).AppendString(" from ").AppendString(t.cmd.table).AppendString(" where ")
+				sqlStr.AppendString("SELECT ").AppendString(versionFieldName).AppendString(",").AppendString(t.cmd.new.GetName()).AppendString(" FROM ").AppendString(t.cmd.table).AppendString(" WHERE ")
 				sqlStr.AppendString(keyFieldName).AppendString("='").AppendString(t.cmd.key).AppendString("';")
 
 				s = sqlStr.ToString()

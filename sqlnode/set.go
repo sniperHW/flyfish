@@ -48,14 +48,14 @@ func (t *sqlTaskSet) do(db *sqlx.DB) {
 			errCode = errcode.ERR_VERSION_MISMATCH
 		}
 	} else {
-		sqlStr.AppendString("begin;")
+		sqlStr.AppendString("BEGIN;")
 
 		appendInsertOrUpdateSqlStr(sqlStr, tableMeta, t.cmd.key, 1, t.cmd.fields)
 
-		sqlStr.AppendString("select ").AppendString(versionFieldName).AppendString(" from ").AppendString(t.cmd.table)
-		sqlStr.AppendString(" where ").AppendString(keyFieldName).AppendString("=").AppendString("'").AppendString(t.cmd.key).AppendString("';")
+		sqlStr.AppendString("SELECT ").AppendString(versionFieldName).AppendString(" FROM ").AppendString(t.cmd.table)
+		sqlStr.AppendString(" WHERE ").AppendString(keyFieldName).AppendString("=").AppendString("'").AppendString(t.cmd.key).AppendString("';")
 
-		sqlStr.AppendString("end;")
+		sqlStr.AppendString("END;")
 
 		s := sqlStr.ToString()
 		start := time.Now()
