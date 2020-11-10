@@ -35,17 +35,17 @@ var (
 	globalDB *sqlx.DB
 )
 
-func initDB() error {
+func initDB() {
 	var err error
 	if globalDB, err = dbOpenByConfig(); err != nil {
-		return err
+		getLogger().Fatalf("init db: %s.", err)
 	}
 
 	conf := getConfig()
 	globalDB.SetMaxIdleConns(conf.DBConnections)
 	globalDB.SetMaxOpenConns(conf.DBConnections)
 
-	return nil
+	getLogger().Infoln("init db.")
 }
 
 func getGlobalDB() *sqlx.DB {

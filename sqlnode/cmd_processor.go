@@ -153,6 +153,8 @@ func initCmdProcessor() {
 		globalCmdProcessors[i] = newCmdProcessor(i, getGlobalDB())
 		globalCmdProcessors[i].start()
 	}
+
+	getLogger().Infof("init processor: count=%d.", nProcessors)
 }
 
 func stopCmdProcessor() {
@@ -163,6 +165,8 @@ func stopCmdProcessor() {
 	}
 
 	wg.Wait()
+
+	getLogger().Infof("processor stop.")
 }
 
 func pushCmd(c cmd) {

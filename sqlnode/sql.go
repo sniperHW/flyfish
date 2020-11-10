@@ -5,7 +5,6 @@ import (
 	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/net/pb"
 	"github.com/sniperHW/kendynet"
-	"log"
 	"sync"
 	"sync/atomic"
 
@@ -18,74 +17,40 @@ var (
 	sessions       sync.Map
 )
 
-func Start(cfgFilePath string) bool {
-	var err error
-
-	if err = initConfig(cfgFilePath); err != nil {
-		log.Fatalf("init config: %s.\n", err)
-	}
+func Start(cfgFilePath string) {
+	initConfig(cfgFilePath)
 
 	initLog()
-	getLogger().Infoln("init config.")
 
-	if err = initDB(); err != nil {
-		getLogger().Fatalf("init db: %s.", err)
-		return false
-	}
-	getLogger().Infoln("init db.")
+	initDB()
 
-	if err = initDBMeta(); err != nil {
-		getLogger().Fatalf("init db-meta: %s.", err)
-		return false
-	}
-	getLogger().Infoln("init de-meta.")
+	initDBMeta()
 
 	initMessageHandler()
-	registerMessageHandlers()
-	//initMessageRoutine()
-	getLogger().Infoln("init message handler.")
 
 	initCmdProcessor()
-	getLogger().Infoln("init processor.")
 
-	if err = startListen(); err != nil {
-		getLogger().Fatalf("start listen: %s.", err)
-		return false
-	}
-	getLogger().Infof("start listen on %s:%d.", getConfig().ServiceHost, getConfig().ServicePort)
-
-	return true
+	startListen()
 }
 
 func Stop() {
-	if globalListener != nil {
-		getLogger().Infof("stop listen.")
-		globalListener.Close()
-		globalListener = nil
-	}
+	stopListen()
 
-	getLogger().Infof("stop processor.")
 	stopCmdProcessor()
+
+	sessions.Range(func(key, value interface{}) bool {
+		value.(kendynet.StreamSession).Close("shutdown", 0)
+		return true
+	})
+
 }
 
-func registerMessageHandlers() {
-	registerMessageHandler(uint16(protocol.CmdType_ReloadTableConf), onReloadTableConf)
-	registerMessageHandler(uint16(protocol.CmdType_Get), onGet)
-	registerMessageHandler(uint16(protocol.CmdType_Set), onSet)
-	registerMessageHandler(uint16(protocol.CmdType_SetNx), onSetNx)
-	registerMessageHandler(uint16(protocol.CmdType_CompareAndSet), onCompareSet)
-	registerMessageHandler(uint16(protocol.CmdType_CompareAndSetNx), onCompareSetNx)
-	registerMessageHandler(uint16(protocol.CmdType_IncrBy), onIncrBy)
-	registerMessageHandler(uint16(protocol.CmdType_DecrBy), onDecrBy)
-	registerMessageHandler(uint16(protocol.CmdType_Del), onDel)
-}
-
-func startListen() error {
+func startListen() {
 	var err error
 
 	config := getConfig()
 	if globalListener, err = net.NewListener("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort), verifyLogin); err != nil {
-		return err
+		getLogger().Fatalf("start listen: %s.", err)
 	}
 
 	go func() {
@@ -121,7 +86,15 @@ func startListen() error {
 		getLogger().Infoln("listen stop.")
 	}()
 
-	return nil
+	getLogger().Infof("start listen on %s:%d.", getConfig().ServiceHost, getConfig().ServicePort)
+}
+
+func stopListen() {
+	if globalListener != nil {
+		globalListener.Close()
+		globalListener = nil
+		getLogger().Infof("listen stop.")
+	}
 }
 
 func verifyLogin(loginReq *protocol.LoginReq) bool {

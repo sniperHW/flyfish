@@ -252,15 +252,15 @@ var (
 	globalDBMeta *dbMeta
 )
 
-func initDBMeta() error {
+func initDBMeta() {
 	tableDef, err := loadTableDef()
 	if err != nil {
-		return err
+		getLogger().Fatalf("init db-meta: load table def: %s.", err)
 	}
 
 	tableMetas, err := createTableMetasByTableDef(tableDef)
 	if err != nil {
-		return err
+		getLogger().Fatalf("init db-meta: create table meta: %s.", err)
 	}
 
 	globalDBMeta = &dbMeta{
@@ -268,7 +268,7 @@ func initDBMeta() error {
 	}
 	globalDBMeta.tableMetas.Store(tableMetas)
 
-	return nil
+	getLogger().Infoln("init de-meta.")
 }
 
 func createTableMetasByTableDef(def []*tableDef) (map[string]*tableMeta, error) {

@@ -44,6 +44,18 @@ func initMessageHandler() {
 	messageHandlers = make(map[uint16]messageHandler)
 	registerMessageHandler(uint16(protocol.CmdType_Ping), onPing)
 	//registerMessageHandler(uint16(protocol.CmdType_Cancel), onCancel)
+	registerMessageHandler(uint16(protocol.CmdType_ReloadTableConf), onReloadTableConf)
+	registerMessageHandler(uint16(protocol.CmdType_Get), onGet)
+	registerMessageHandler(uint16(protocol.CmdType_Set), onSet)
+	registerMessageHandler(uint16(protocol.CmdType_SetNx), onSetNx)
+	registerMessageHandler(uint16(protocol.CmdType_CompareAndSet), onCompareSet)
+	registerMessageHandler(uint16(protocol.CmdType_CompareAndSetNx), onCompareSetNx)
+	registerMessageHandler(uint16(protocol.CmdType_IncrBy), onIncrBy)
+	registerMessageHandler(uint16(protocol.CmdType_DecrBy), onDecrBy)
+	registerMessageHandler(uint16(protocol.CmdType_Del), onDel)
+
+	getLogger().Infoln("init message handler.")
+
 }
 
 func registerMessageHandler(cmd uint16, h messageHandler) {

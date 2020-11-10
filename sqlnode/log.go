@@ -22,6 +22,8 @@ func initLog() {
 	globalLogger = golog.New(fullname, golog.NewOutputLogger(logConfig.LogDir, logConfig.LogPrefix, logConfig.MaxLogfileSize))
 	globalLogger.SetLevelByString(logConfig.LogLevel)
 	kendynet.InitLogger(globalLogger)
+
+	globalLogger.Infoln("init log.")
 }
 
 func getLogger() golog.LoggerI {
