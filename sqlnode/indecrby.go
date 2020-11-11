@@ -166,7 +166,7 @@ func (t *sqlTaskInDeCrBy) do(db *sqlx.DB) {
 		}
 	}
 
-	t.cmd.reply_(errCode, field, version)
+	t.cmd.replyWithField(errCode, version, field)
 }
 
 type cmdInDeCrBy struct {
@@ -205,8 +205,14 @@ func (c *cmdInDeCrBy) reply(errCode int32, version int64, fields map[string]*pro
 	}
 }
 
-func (c *cmdInDeCrBy) reply_(errCode int32, field *proto.Field, version int64) {
-
+func (c *cmdInDeCrBy) replyWithField(errCode int32, version int64, field *proto.Field) {
+	if !c.isResponseTimeout() {
+		if field != nil {
+			c.reply(errCode, version, map[string]*proto.Field{field.GetName(): field})
+		} else {
+			c.reply(errCode, version, nil)
+		}
+	}
 }
 
 func onIncrBy(conn *cliConn, msg *net.Message) {

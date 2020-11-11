@@ -51,9 +51,7 @@ func (t *sqlTaskSetNx) do(db *sqlx.DB) {
 		sqlStr = getStr()
 
 		var (
-			selectAll = len(t.cmd.fields) == tableMeta.getFieldCount()
-			fields    map[string]*proto.Field
-
+			selectAll            = len(t.cmd.fields) == tableMeta.getFieldCount()
 			queryFieldCount      int
 			queryFields          []string
 			queryFieldReceivers  []interface{}
