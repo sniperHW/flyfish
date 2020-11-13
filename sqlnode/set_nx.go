@@ -96,8 +96,8 @@ func (t *sqlTaskSetNx) do(db *sqlx.DB) {
 				i++
 			}
 
-			sqlStr.AppendString(" FROM ").AppendString(t.cmd.table).AppendString(" WHERE ").AppendString(keyFieldName)
-			sqlStr.AppendString("='").AppendString(t.cmd.key).AppendString("';")
+			sqlStr.AppendString(" FROM ").AppendString(t.cmd.table).AppendString(" ")
+			sqlStr.AppendString("WHERE ").AppendString(keyFieldName).AppendString("='").AppendString(t.cmd.key).AppendString("';")
 		}
 
 		s = sqlStr.ToString()
@@ -132,6 +132,10 @@ type cmdSetNx struct {
 	cmdBase
 	fields  map[string]*proto.Field
 	version *int64
+}
+
+func (c *cmdSetNx) canCombine() bool {
+	return false
 }
 
 func (c *cmdSetNx) makeSqlTask() sqlTask {

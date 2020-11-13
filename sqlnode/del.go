@@ -59,7 +59,7 @@ func (t *sqlTaskDel) do(db *sqlx.DB) {
 	}
 
 	putStr(sqlStr)
-	t.cmd.reply(errCode, version, nil)
+	t.cmd.reply(errCode, version)
 }
 
 type cmdDel struct {
@@ -67,11 +67,15 @@ type cmdDel struct {
 	version *int64
 }
 
+func (c *cmdDel) canCombine() bool {
+	return false
+}
+
 func (c *cmdDel) makeSqlTask() sqlTask {
 	return &sqlTaskDel{cmd: c}
 }
 
-func (c *cmdDel) reply(errCode int32, version int64, fields map[string]*proto.Field) {
+func (c *cmdDel) reply(errCode int32, version int64) {
 	if !c.isResponseTimeout() {
 		_ = c.conn.sendMessage(newMessage(c.sqNo, errCode, new(proto.DelResp)))
 	}

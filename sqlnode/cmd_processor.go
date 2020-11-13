@@ -122,7 +122,7 @@ func (p *cmdProcessor) processCmd(cmd cmd, task sqlTask) sqlTask {
 	}
 
 	if task != nil {
-		if cmd != nil && task.combine(cmd) {
+		if cmd != nil && cmd.canCombine() && task.combine(cmd) {
 			return task
 		}
 

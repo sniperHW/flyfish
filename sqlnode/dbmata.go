@@ -344,7 +344,7 @@ func createTableMetasByTableDef(def []*tableDef) (map[string]*tableMeta, error) 
 			allFieldIndex++
 		}
 
-		tMeta.insertPrefix = fmt.Sprintf("INSERT INFO %s(%s,%s,%s) VALUES(", t.name, keyFieldName, versionFieldName, strings.Join(tMeta.fieldInsertOrder, ","))
+		tMeta.insertPrefix = fmt.Sprintf("INSERT INTO %s(%s,%s,%s) VALUES(", t.name, keyFieldName, versionFieldName, strings.Join(tMeta.fieldInsertOrder, ","))
 		tMeta.selectAllPrefix = fmt.Sprintf("SELECT %s FROM %s WHERE ", strings.Join(tMeta.allFieldNames, ","), t.name)
 		tableMetas[tMeta.name] = tMeta
 	}

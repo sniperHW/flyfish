@@ -655,21 +655,31 @@ func appendInsertOrUpdateSqlStr(s *str.Str, tm *tableMeta, key string, version i
 	}
 }
 
-func appendUpdateSqlStr(s *str.Str, table, key string, version int64, fields map[string]*proto.Field) *str.Str {
+func appendUpdateSqlStr(s *str.Str, table, key string, oldVersion, newVersion *int64, fields []*proto.Field) *str.Str {
 	// update 'table' set
-	s.AppendString("UPDATE ").AppendString(table).AppendString(" SET ")
+	s.AppendString("UPDATE ").AppendString(table).AppendString(" ")
 
+	s.AppendString("SET ")
 	// field_name=field_value,...,field_name=field_value
-	s.AppendString(versionFieldName).AppendString("=").AppendString(versionFieldName).AppendString("+1")
-	for k, v := range fields {
-		s.AppendString(",").AppendString(k).AppendString("=")
+	s.AppendString(versionFieldName).AppendString("=")
+	if newVersion == nil {
+		s.AppendString(versionFieldName).AppendString("+")
+	} else {
+		appendValue2SqlStr(s, versionFieldMeta.getType(), *newVersion)
+	}
+	for _, v := range fields {
+		s.AppendString(",").AppendString(v.GetName()).AppendString("=")
 		appendFieldValue2SqlStr(s, v)
 	}
+	s.AppendString("")
 
 	// where __key__='key' and __version__='version'
-	s.AppendString(" WHERE ").AppendString(keyFieldName).AppendString("='").AppendString(key)
-	s.AppendString("' AND ").AppendString(versionFieldName).AppendString("=")
-	return appendValue2SqlStr(s, versionFieldMeta.getType(), version).AppendString(";")
+	s.AppendString("WHERE ").AppendString(keyFieldName).AppendString("='").AppendString(key).AppendString("'")
+	if oldVersion != nil {
+		s.AppendString(" AND ").AppendString(versionFieldName).AppendString("=")
+		appendValue2SqlStr(s, versionFieldMeta.getType(), *oldVersion)
+	}
+	return s.AppendString(";")
 }
 
 func appendSelectAllSqlStr(s *str.Str, tm *tableMeta, key string, version *int64) *str.Str {

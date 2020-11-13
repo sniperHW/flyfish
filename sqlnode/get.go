@@ -10,13 +10,25 @@ import (
 import "github.com/sniperHW/flyfish/proto"
 
 type sqlTaskGet struct {
-	sqlCombinableTaskBase
+	uniKey    string
+	table     string
+	key       string
+	commands  []*cmdGet
 	getAll    bool
 	getFields []string
-	//version   int64
-	//getWithVersion bool
-	//versionOp      string
-	fields map[string]*proto.Field
+	fields    map[string]*proto.Field
+}
+
+func (t *sqlTaskGet) addCmd(cmd *cmdGet) {
+	if cmd == nil {
+		panic("cmd is nil")
+	}
+
+	t.commands = append(t.commands, cmd)
+}
+
+func (t *sqlTaskGet) canCombine() bool {
+	return true
 }
 
 func (t *sqlTaskGet) combine(c cmd) bool {
@@ -48,7 +60,7 @@ func (t *sqlTaskGet) combine(c cmd) bool {
 		}
 	}
 
-	t.addCmd(c)
+	t.addCmd(cmd)
 
 	return true
 }
@@ -113,11 +125,6 @@ func (t *sqlTaskGet) do(db *sqlx.DB) {
 
 	if err := row.Scan(queryFieldReceivers...); err == sql.ErrNoRows {
 		errCode = errcode.ERR_RECORD_NOTEXIST
-		//if t.getWithVersion {
-		//	t.errCode = errcode.ERR_RECORD_UNCHANGE
-		//} else {
-		//	t.errCode = errcode.ERR_RECORD_NOTEXIST
-		//}
 	} else if err != nil {
 		getLogger().Errorf("task-get table(%s) key(%s): %s.", t.table, t.key, err)
 		errCode = errcode.ERR_SQLERROR
@@ -135,6 +142,12 @@ func (t *sqlTaskGet) do(db *sqlx.DB) {
 	t.reply(errCode, version, t.fields)
 }
 
+func (t *sqlTaskGet) reply(errCode int32, version int64, fields map[string]*proto.Field) {
+	for _, cmd := range t.commands {
+		cmd.reply(errCode, version, fields)
+	}
+}
+
 type cmdGet struct {
 	cmdBase
 	getAll  bool
@@ -146,12 +159,19 @@ type cmdGet struct {
 //	return c.msg.GetData().(*proto.GetReq)
 //}
 
+func (c *cmdGet) canCombine() bool {
+	return true
+}
+
 func (c *cmdGet) makeSqlTask() sqlTask {
 	tableFieldCount := getDBMeta().getTableMeta(c.table).getFieldCount()
 
 	task := &sqlTaskGet{
-		sqlCombinableTaskBase: newSqlCombinableTaskBase(c.uKey, c.table, c.key),
-		fields:                make(map[string]*proto.Field, tableFieldCount),
+		uniKey:   c.uKey,
+		table:    c.table,
+		key:      c.key,
+		commands: make([]*cmdGet, 0, 1),
+		fields:   make(map[string]*proto.Field, tableFieldCount),
 	}
 
 	if c.getAll {

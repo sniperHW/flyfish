@@ -170,7 +170,7 @@ func (t *sqlTaskCompareSet) do(db *sqlx.DB) {
 
 reply:
 	putStr(sqlStr)
-	t.cmd.replyWithValue(errCode, version, valueField)
+	t.cmd.reply(errCode, version, valueField)
 }
 
 type cmdCompareSet struct {
@@ -180,18 +180,19 @@ type cmdCompareSet struct {
 	new     *proto.Field
 }
 
+func (c *cmdCompareSet) canCombine() bool {
+	return false
+}
+
 func (c *cmdCompareSet) makeSqlTask() sqlTask {
 	return &sqlTaskCompareSet{cmd: c}
 }
 
-func (c *cmdCompareSet) reply(errCode int32, version int64, fields map[string]*proto.Field) {
+func (c *cmdCompareSet) reply(errCode int32, version int64, value *proto.Field) {
 	if !c.isResponseTimeout() {
 		resp := &proto.CompareAndSetResp{
 			Version: version,
-		}
-
-		if len(fields) > 0 {
-			resp.Value = fields[c.old.GetName()]
+			Value:   value,
 		}
 
 		_ = c.conn.sendMessage(net.NewMessage(
@@ -201,16 +202,6 @@ func (c *cmdCompareSet) reply(errCode int32, version int64, fields map[string]*p
 			},
 			resp,
 		))
-	}
-}
-
-func (c *cmdCompareSet) replyWithValue(errCode int32, version int64, value *proto.Field) {
-	if !c.isResponseTimeout() {
-		if value != nil {
-			c.reply(errCode, version, map[string]*proto.Field{c.old.GetName(): value})
-		} else {
-			c.reply(errCode, version, nil)
-		}
 	}
 }
 
