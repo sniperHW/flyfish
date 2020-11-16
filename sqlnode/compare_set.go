@@ -63,7 +63,7 @@ func (t *sqlTaskCompareSet) do(db *sqlx.DB) {
 		result, err = tx.Exec(s)
 		getLogger().Debugf("task-compare-set: table(%s) key(%s): update query:\"%s\" cost:%.3fs.", t.cmd.table, t.cmd.key, s, time.Now().Sub(start).Seconds())
 
-		commit := false
+		success := false
 
 		if err != nil {
 			getLogger().Errorf("task-compare-set: table(%s) key(%s): update: %s.", t.cmd.table, t.cmd.key, err)
@@ -80,7 +80,7 @@ func (t *sqlTaskCompareSet) do(db *sqlx.DB) {
 				errCode = errcode.ERR_OK
 				version = *t.cmd.version + 1
 				valueField = t.cmd.new
-				commit = true
+				success = true
 			} else {
 				// 查询 version
 
@@ -102,7 +102,7 @@ func (t *sqlTaskCompareSet) do(db *sqlx.DB) {
 						errCode = errcode.ERR_SQLERROR
 					}
 				} else {
-					commit = true
+					success = true
 				}
 			}
 
@@ -149,7 +149,7 @@ func (t *sqlTaskCompareSet) do(db *sqlx.DB) {
 			goto reply
 		}
 
-		if commit {
+		if success {
 			if err = tx.Commit(); err != nil {
 				getLogger().Errorf("task-compare-set: table(%s) key(%s): transaction-commit: %s.", t.cmd.table, t.cmd.key, err)
 			} else {

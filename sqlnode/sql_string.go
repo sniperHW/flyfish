@@ -671,7 +671,7 @@ func appendUpdateSqlStr(s *str.Str, table, key string, oldVersion, newVersion *i
 		s.AppendString(",").AppendString(v.GetName()).AppendString("=")
 		appendFieldValue2SqlStr(s, v)
 	}
-	s.AppendString("")
+	s.AppendString(" ")
 
 	// where __key__='key' and __version__='version'
 	s.AppendString("WHERE ").AppendString(keyFieldName).AppendString("='").AppendString(key).AppendString("'")

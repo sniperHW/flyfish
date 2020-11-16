@@ -29,8 +29,8 @@ func (t *sqlTaskDel) do(db *sqlx.DB) {
 		sqlStr  = getStr()
 	)
 
-	sqlStr.AppendString("DELETE FROM ").AppendString(table)
-	sqlStr.AppendString(" WHERE ").AppendString(keyFieldName).AppendString("='").AppendString(key).AppendString("'")
+	sqlStr.AppendString("DELETE FROM ").AppendString(table).AppendString("")
+	sqlStr.AppendString("WHERE ").AppendString(keyFieldName).AppendString("='").AppendString(key).AppendString("'")
 	if t.cmd.version != nil {
 		sqlStr.AppendString(" AND ").AppendString(versionFieldName).AppendString("=")
 		appendValue2SqlStr(sqlStr, versionFieldMeta.getType(), *t.cmd.version)

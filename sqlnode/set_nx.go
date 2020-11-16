@@ -95,8 +95,9 @@ func (t *sqlTaskSetNx) do(db *sqlx.DB) {
 				queryFieldConverters[i] = fm.getConverter()
 				i++
 			}
+			sqlStr.AppendString(" ")
 
-			sqlStr.AppendString(" FROM ").AppendString(t.cmd.table).AppendString(" ")
+			sqlStr.AppendString("FROM ").AppendString(t.cmd.table).AppendString(" ")
 			sqlStr.AppendString("WHERE ").AppendString(keyFieldName).AppendString("='").AppendString(t.cmd.key).AppendString("';")
 		}
 

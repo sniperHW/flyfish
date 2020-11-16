@@ -16,7 +16,7 @@ func main() {
 	var (
 		table   = "user_module_data"
 		key     = "4540217385795583"
-		version = []int64{}
+		version = []int64{7}
 		field   = "rankdata"
 		old     = []byte{0}
 		new     = []byte{1}

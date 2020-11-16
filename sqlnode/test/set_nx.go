@@ -14,11 +14,12 @@ func main() {
 	flag.Parse()
 
 	var (
-		table = "user_module_data"
-		key   = "4540217385795583"
-		//version = []int64{87}
+		table = "test_indecr"
+		key   = "123455"
+		//version = []int64{2}
 		fields = map[string]interface{}{
-			"rankdata": make([]byte, 0),
+			//"rankdata": make([]byte, 0),
+			"n": int64(0),
 		}
 	)
 

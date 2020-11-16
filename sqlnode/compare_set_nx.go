@@ -57,7 +57,7 @@ func (t *sqlTaskCompareSetNx) do(db *sqlx.DB) {
 
 		sqlStr.AppendString("SELECT ").AppendString(versionFieldName).AppendString(",").AppendString(valueName).AppendString(" ")
 		sqlStr.AppendString("FROM ").AppendString(table).AppendString(" ")
-		sqlStr.AppendString("WHERE ").AppendString(keyFieldName).AppendString("=").AppendString(key).AppendString(";")
+		sqlStr.AppendString("WHERE ").AppendString(keyFieldName).AppendString("='").AppendString(key).AppendString("';")
 
 		s = sqlStr.ToString()
 		start := time.Now()
@@ -110,7 +110,7 @@ func (t *sqlTaskCompareSetNx) do(db *sqlx.DB) {
 				curValue = proto.PackField(valueName, fieldMeta.getConverter()(valueReceiver))
 			)
 
-			if t.cmd.version != nil && *t.cmd.version != version {
+			if t.cmd.version != nil && *t.cmd.version != curVersion {
 				// 版本不匹配
 
 				errCode = errcode.ERR_VERSION_MISMATCH

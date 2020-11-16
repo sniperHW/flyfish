@@ -76,7 +76,7 @@ func (t *sqlTaskSet) do(db *sqlx.DB) {
 			errCode = errcode.ERR_SQLERROR
 		} else {
 			errCode = errcode.ERR_OK
-			version = 1
+			//version = 1
 		}
 	}
 
