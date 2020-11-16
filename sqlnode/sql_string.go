@@ -694,3 +694,30 @@ func appendSelectAllSqlStr(s *str.Str, tm *tableMeta, key string, version *int64
 
 	return s
 }
+
+func appendCondSqlStr(s *str.Str, condField *proto.Field) *str.Str {
+	s.AppendString(condField.GetName()).AppendString("=")
+	return appendFieldValue2SqlStr(s, condField)
+}
+
+func appendSelectByKeySqlStr(s *str.Str, table, key string, fields []string, where []*proto.Field) *str.Str {
+	s.AppendString("SELECT ")
+	s.AppendString(fields[0])
+	for i := 1; i < len(fields); i++ {
+		s.AppendString(",").AppendString(fields[i])
+	}
+	s.AppendString(" ")
+
+	s.AppendString("FROM ").AppendString(table).AppendString(" ")
+
+	s.AppendString("WHERE ").AppendString(keyFieldName).AppendString("='").AppendString(key).AppendString("'")
+
+	if len(where) > 0 {
+		for _, v := range where {
+			s.AppendString(" AND ")
+			appendCondSqlStr(s, v)
+		}
+	}
+
+	s.AppendString(";")
+}
