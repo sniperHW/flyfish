@@ -65,10 +65,11 @@ func (t *sqlTaskCompareSet) do(db *sqlx.DB) {
 
 		success := false
 
+		if err == nil {
+			n, err = result.RowsAffected()
+		}
+
 		if err != nil {
-			getLogger().Errorf("task-compare-set: table(%s) key(%s): update: %s.", t.cmd.table, t.cmd.key, err)
-			errCode = errcode.ERR_SQLERROR
-		} else if n, err = result.RowsAffected(); err != nil {
 			getLogger().Errorf("task-compare-set: table(%s) key(%s): update: %s.", t.cmd.table, t.cmd.key, err)
 			errCode = errcode.ERR_SQLERROR
 		} else if n > 0 {
@@ -107,46 +108,35 @@ func (t *sqlTaskCompareSet) do(db *sqlx.DB) {
 			}
 
 		} else {
-			// 先回滚结束事务，再查询 version 和 字段值
+			fieldMeta := tableMeta.getFieldMeta(t.cmd.old.GetName())
+			valueReceiver := fieldMeta.getReceiver()
 
-			if err = tx.Rollback(); err != nil {
-				getLogger().Errorf("task-compare-set: table(%s) key(%s): transaction-rollback: %s.", t.cmd.table, t.cmd.key, err)
-				errCode = errcode.ERR_SQLERROR
-			} else {
-				getLogger().Infof("task-compare-set: table(%s) key(%s): transaction-rollback.", t.cmd.table, t.cmd.key)
+			sqlStr.Reset()
+			sqlStr.AppendString("SELECT ").AppendString(versionFieldName).AppendString(",").AppendString(t.cmd.new.GetName()).AppendString(" FROM ").AppendString(t.cmd.table).AppendString(" WHERE ")
+			sqlStr.AppendString(keyFieldName).AppendString("='").AppendString(t.cmd.key).AppendString("';")
 
-				fieldMeta := tableMeta.getFieldMeta(t.cmd.old.GetName())
-				valueReceiver := fieldMeta.getReceiver()
+			s = sqlStr.ToString()
 
-				sqlStr.Reset()
-				sqlStr.AppendString("SELECT ").AppendString(versionFieldName).AppendString(",").AppendString(t.cmd.new.GetName()).AppendString(" FROM ").AppendString(t.cmd.table).AppendString(" WHERE ")
-				sqlStr.AppendString(keyFieldName).AppendString("='").AppendString(t.cmd.key).AppendString("';")
+			start := time.Now()
+			row := db.QueryRowx(s)
+			getLogger().Debugf("task-compare-set: table(%s) key(%s): select query:\"%s\" cost:%.3fs.", t.cmd.table, t.cmd.key, s, time.Now().Sub(start).Seconds())
 
-				s = sqlStr.ToString()
-
-				start := time.Now()
-				row := db.QueryRowx(s)
-				getLogger().Debugf("task-compare-set: table(%s) key(%s): select query:\"%s\" cost:%.3fs.", t.cmd.table, t.cmd.key, s, time.Now().Sub(start).Seconds())
-
-				if err = row.Scan(&version, valueReceiver); err != nil {
-					if err == sql.ErrNoRows {
-						errCode = errcode.ERR_RECORD_NOTEXIST
-					} else {
-						getLogger().Errorf("task-compare-set: table(%s) key(%s): select: %s.", t.cmd.table, t.cmd.key, err)
-						errCode = errcode.ERR_SQLERROR
-					}
+			if err = row.Scan(&version, valueReceiver); err != nil {
+				if err == sql.ErrNoRows {
+					errCode = errcode.ERR_RECORD_NOTEXIST
 				} else {
-					valueField = proto.PackField(t.cmd.new.GetName(), fieldMeta.getConverter()(valueReceiver))
+					getLogger().Errorf("task-compare-set: table(%s) key(%s): select: %s.", t.cmd.table, t.cmd.key, err)
+					errCode = errcode.ERR_SQLERROR
+				}
+			} else {
+				valueField = proto.PackField(t.cmd.new.GetName(), fieldMeta.getConverter()(valueReceiver))
 
-					if t.cmd.version != nil && version != *t.cmd.version {
-						errCode = errcode.ERR_VERSION_MISMATCH
-					} else {
-						errCode = errcode.ERR_CAS_NOT_EQUAL
-					}
+				if t.cmd.version != nil && version != *t.cmd.version {
+					errCode = errcode.ERR_VERSION_MISMATCH
+				} else {
+					errCode = errcode.ERR_CAS_NOT_EQUAL
 				}
 			}
-
-			goto reply
 		}
 
 		if success {
@@ -168,7 +158,6 @@ func (t *sqlTaskCompareSet) do(db *sqlx.DB) {
 		}
 	}
 
-reply:
 	putStr(sqlStr)
 	t.cmd.reply(errCode, version, valueField)
 }
