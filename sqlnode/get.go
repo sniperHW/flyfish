@@ -85,22 +85,18 @@ func (t *sqlTaskGet) do(db *sqlx.DB) {
 		queryFieldReceivers = tableMeta.getAllFieldReceivers()
 		queryFieldConverters = tableMeta.getAllFieldConverter()
 		queryFieldCount = len(queryFields)
-		getFieldOffset = 2
 		versionIndex = versionFieldIndex
-
-		appendSelectAllSqlStr(sqlStr, tableMeta, t.key, nil)
+		getFieldOffset = FirstFieldIndex
 	} else {
 		getFieldCount := len(t.getFields)
 		queryFieldCount = getFieldCount + 1
 		queryFields = make([]string, queryFieldCount)
 		queryFieldReceivers = make([]interface{}, queryFieldCount)
 		queryFieldConverters = make([]fieldConverter, queryFieldCount)
-
 		queryFields[0] = versionFieldName
 		queryFieldReceivers[0] = versionFieldMeta.getReceiver()
 		queryFieldConverters[0] = versionFieldMeta.getConverter()
 		versionIndex = 0
-
 		getFieldOffset = 1
 		for i := 0; i < getFieldCount; i++ {
 			fieldMeta := tableMeta.getFieldMeta(t.getFields[i])
@@ -108,15 +104,9 @@ func (t *sqlTaskGet) do(db *sqlx.DB) {
 			queryFieldReceivers[i+getFieldOffset] = fieldMeta.getReceiver()
 			queryFieldConverters[i+getFieldOffset] = fieldMeta.getConverter()
 		}
-
-		sqlStr.AppendString("SELECT ")
-		sqlStr.AppendString(queryFields[0])
-		for i := 1; i < queryFieldCount; i++ {
-			sqlStr.AppendString(",")
-			sqlStr.AppendString(queryFields[i])
-		}
-		sqlStr.AppendString(" FROM ").AppendString(t.table).AppendString(" WHERE ").AppendString(keyFieldName).AppendString("='").AppendString(t.key).AppendString("';")
 	}
+
+	appendSingleSelectFieldsSqlStr(sqlStr, t.table, t.key, nil, queryFields)
 
 	s := sqlStr.ToString()
 	start := time.Now()

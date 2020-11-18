@@ -15,7 +15,7 @@ func main() {
 
 	var (
 		table = "test_indecr"
-		key   = "123455"
+		key   = "12345555"
 		//version = []int64{2}
 		fields = map[string]interface{}{
 			//"rankdata": make([]byte, 0),

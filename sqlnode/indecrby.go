@@ -55,9 +55,7 @@ func (t *sqlTaskInDeCrBy) do(db *sqlx.DB) {
 
 		sqlStr = getStr()
 
-		sqlStr.AppendString("SELECT ").AppendString(versionFieldName).AppendString(",").AppendString(fieldName).AppendString(" ")
-		sqlStr.AppendString("FROM ").AppendString(table).AppendString(" ")
-		sqlStr.AppendString("WHERE ").AppendString(keyFieldName).AppendString("='").AppendString(key).AppendString("'").AppendString(";")
+		appendSingleSelectFieldsSqlStr(sqlStr, table, key, nil, []string{versionFieldName, fieldName})
 
 		s = sqlStr.ToString()
 		start := time.Now()
@@ -134,7 +132,7 @@ func (t *sqlTaskInDeCrBy) do(db *sqlx.DB) {
 				if t.cmd.version != nil && *t.cmd.version != curVersion {
 					errCode = errcode.ERR_VERSION_MISMATCH
 				} else {
-					appendUpdateSqlStr(sqlStr, table, key, &curVersion, &newVersion, []*proto.Field{newValue})
+					appendSingleUpdateSqlStr(sqlStr, table, key, &curVersion, &newVersion, []*proto.Field{newValue})
 
 					s = sqlStr.ToString()
 					start = time.Now()

@@ -22,57 +22,59 @@ func (t *sqlTaskSet) combine(cmd) bool {
 }
 
 func (t *sqlTaskSet) do(db *sqlx.DB) {
-	tableMeta := getDBMeta().getTableMeta(t.cmd.table)
 
 	var (
-		errCode int32
-		version int64
-		err     error
-		sqlStr  = getStr()
+		table     = t.cmd.table
+		key       = t.cmd.key
+		tableMeta = getDBMeta().getTableMeta(table)
+		errCode   int32
+		version   int64
+		err       error
+		sqlStr    = getStr()
 	)
 
 	if t.cmd.version != nil {
 		var (
-			newVersion = *t.cmd.version + 1
+			curVersion = t.cmd.version
+			newVersion = *curVersion + 1
 			result     sql.Result
 			n          int64
 		)
 
-		s := appendUpdateSqlStr(sqlStr, t.cmd.table, t.cmd.key, t.cmd.version, &newVersion, t.cmd.fields).ToString()
+		s := appendSingleUpdateSqlStr(sqlStr, table, key, curVersion, &newVersion, t.cmd.fields).ToString()
 		start := time.Now()
 		result, err = db.Exec(s)
-		getLogger().Debugf("task-set-with-version: table(%s) key(%s): query:\"%s\" cost:%.3fs.", t.cmd.table, t.cmd.key, s, time.Now().Sub(start).Seconds())
+		getLogger().Debugf("task-set-with-version: table(%s) key(%s): query:\"%s\" cost:%.3fs.", table, key, s, time.Now().Sub(start).Seconds())
 
 		if err == nil {
 			n, err = result.RowsAffected()
 		}
 
 		if err != nil {
-			getLogger().Debugf("task-set-with-version: table(%s) key(%s): %s.", t.cmd.table, t.cmd.key, err)
+			getLogger().Debugf("task-set-with-version: table(%s) key(%s): %s.", table, key, err)
 			errCode = errcode.ERR_SQLERROR
 		} else if n > 0 {
 			errCode = errcode.ERR_OK
-			version = *t.cmd.version + 1
+			version = newVersion
 		} else {
 			errCode = errcode.ERR_VERSION_MISMATCH
 		}
 	} else {
 		sqlStr.AppendString("BEGIN;")
 
-		appendInsertOrUpdateSqlStr(sqlStr, tableMeta, t.cmd.key, 1, t.cmd.fieldMap)
+		appendInsertOrUpdateSqlStr(sqlStr, tableMeta, key, 1, t.cmd.fieldMap)
 
-		sqlStr.AppendString("SELECT ").AppendString(versionFieldName).AppendString(" FROM ").AppendString(t.cmd.table).AppendString(" ")
-		sqlStr.AppendString("WHERE ").AppendString(keyFieldName).AppendString("=").AppendString("'").AppendString(t.cmd.key).AppendString("';")
+		appendSingleSelectFieldsSqlStr(sqlStr, table, key, nil, []string{versionFieldName})
 
 		sqlStr.AppendString("END;")
 
 		s := sqlStr.ToString()
 		start := time.Now()
 		row := db.QueryRowx(s)
-		getLogger().Debugf("task-set: table(%s) key(%s): query:\"%s\" cost:%.3fs.", t.cmd.table, t.cmd.key, s, time.Now().Sub(start).Seconds())
+		getLogger().Debugf("task-set: table(%s) key(%s): query:\"%s\" cost:%.3fs.", table, key, s, time.Now().Sub(start).Seconds())
 
 		if err := row.Scan(&version); err != nil {
-			getLogger().Errorf("task-set: table(%s) key(%s): %s.", t.cmd.table, t.cmd.key, err)
+			getLogger().Errorf("task-set: table(%s) key(%s): %s.", table, key, err)
 			errCode = errcode.ERR_SQLERROR
 		} else {
 			errCode = errcode.ERR_OK

@@ -22,46 +22,35 @@ func (t *sqlTaskCompareSet) combine(cmd) bool {
 }
 
 func (t *sqlTaskCompareSet) do(db *sqlx.DB) {
-	tableMeta := getDBMeta().getTableMeta(t.cmd.table)
-
 	var (
+		table      = t.cmd.table
+		key        = t.cmd.key
+		tableMeta  = getDBMeta().getTableMeta(t.cmd.table)
 		errCode    int32
 		version    int64
 		valueField *proto.Field
 		tx         *sqlx.Tx
 		err        error
-		sqlStr     = getStr()
 	)
 
 	if tx, err = db.Beginx(); err != nil {
-		getLogger().Errorf("task-compare-set: table(%s) key(%s): begin-transaction: %s.", t.cmd.table, t.cmd.key, err)
+		getLogger().Errorf("task-compare-set: table(%s) key(%s): begin-transaction: %s.", table, key, err)
 		errCode = errcode.ERR_SQLERROR
 	} else {
 		var (
-			s      string
-			result sql.Result
-			n      int64
+			valueName = t.cmd.old.GetName()
+			sqlStr    = getStr()
+			s         string
+			result    sql.Result
+			n         int64
 		)
 
-		getLogger().Infof("task-compare-set: table(%s) key(%s): begin-transaction.", t.cmd.table, t.cmd.key)
-
-		sqlStr.AppendString("UPDATE ").AppendString(t.cmd.table).AppendString(" SET ")
-		sqlStr.AppendString(versionFieldName).AppendString("=").AppendString(versionFieldName).AppendString("+1,")
-		sqlStr.AppendString(t.cmd.new.GetName()).AppendString("=")
-		appendFieldValue2SqlStr(sqlStr, t.cmd.new).AppendString(" WHERE ").AppendString(keyFieldName).AppendString("='").AppendString(t.cmd.key).AppendString("'")
-		if t.cmd.version != nil {
-			sqlStr.AppendString(" AND ").AppendString(versionFieldName).AppendString("=")
-			appendValue2SqlStr(sqlStr, versionFieldMeta.getType(), *t.cmd.version)
-		}
-		sqlStr.AppendString(" AND ").AppendString(t.cmd.old.GetName()).AppendString("=")
-		appendFieldValue2SqlStr(sqlStr, t.cmd.old).AppendString(";")
+		appendSingleUpdateSqlStr(sqlStr, table, key, t.cmd.version, nil, []*proto.Field{t.cmd.new}, sqlCond{sqlCondEqual, t.cmd.old})
 
 		s = sqlStr.ToString()
-
-		// 尝试更新数据
 		start := time.Now()
 		result, err = tx.Exec(s)
-		getLogger().Debugf("task-compare-set: table(%s) key(%s): update query:\"%s\" cost:%.3fs.", t.cmd.table, t.cmd.key, s, time.Now().Sub(start).Seconds())
+		getLogger().Debugf("task-compare-set: table(%s) key(%s): update query:\"%s\" cost:%.3fs.", table, key, s, time.Now().Sub(start).Seconds())
 
 		success := false
 
@@ -70,7 +59,7 @@ func (t *sqlTaskCompareSet) do(db *sqlx.DB) {
 		}
 
 		if err != nil {
-			getLogger().Errorf("task-compare-set: table(%s) key(%s): update: %s.", t.cmd.table, t.cmd.key, err)
+			getLogger().Errorf("task-compare-set: table(%s) key(%s): update: %s.", table, key, err)
 			errCode = errcode.ERR_SQLERROR
 		} else if n > 0 {
 			// 更新成功
@@ -86,46 +75,46 @@ func (t *sqlTaskCompareSet) do(db *sqlx.DB) {
 				// 查询 version
 
 				sqlStr.Reset()
-				sqlStr.AppendString("SELECT ").AppendString(versionFieldName).AppendString(" FROM ").AppendString(t.cmd.table).AppendString(" WHERE ")
-				sqlStr.AppendString(keyFieldName).AppendString("='").AppendString(t.cmd.key).AppendString("';")
+				appendSingleSelectFieldsSqlStr(sqlStr, table, key, nil, []string{versionFieldName})
 
 				s = sqlStr.ToString()
-
 				start := time.Now()
 				row := tx.QueryRowx(s)
-				getLogger().Debugf("task-compare-set: table(%s) key(%s): select version query:\"%s\" cost:%.3fs.", t.cmd.table, t.cmd.key, s, time.Now().Sub(start).Seconds())
+				getLogger().Debugf("task-compare-set: table(%s) key(%s): select version query:\"%s\" cost:%.3fs.", table, key, s, time.Now().Sub(start).Seconds())
 
 				if err = row.Scan(&version); err != nil {
 					if err == sql.ErrNoRows {
 						errCode = errcode.ERR_RECORD_NOTEXIST
 					} else {
-						getLogger().Errorf("task-compare-set: table(%s) key(%s): select version: %s.", t.cmd.table, t.cmd.key, err)
+						getLogger().Errorf("task-compare-set: table(%s) key(%s): select version: %s.", table, key, err)
 						errCode = errcode.ERR_SQLERROR
 					}
 				} else {
+					errCode = errcode.ERR_OK
+					valueField = t.cmd.new
 					success = true
 				}
 			}
 
 		} else {
-			fieldMeta := tableMeta.getFieldMeta(t.cmd.old.GetName())
-			valueReceiver := fieldMeta.getReceiver()
+			var (
+				fieldMeta     = tableMeta.getFieldMeta(valueName)
+				valueReceiver = fieldMeta.getReceiver()
+			)
 
 			sqlStr.Reset()
-			sqlStr.AppendString("SELECT ").AppendString(versionFieldName).AppendString(",").AppendString(t.cmd.new.GetName()).AppendString(" FROM ").AppendString(t.cmd.table).AppendString(" WHERE ")
-			sqlStr.AppendString(keyFieldName).AppendString("='").AppendString(t.cmd.key).AppendString("';")
+			appendSingleSelectFieldsSqlStr(sqlStr, table, key, nil, []string{versionFieldName, valueName})
 
 			s = sqlStr.ToString()
-
 			start := time.Now()
 			row := db.QueryRowx(s)
-			getLogger().Debugf("task-compare-set: table(%s) key(%s): select query:\"%s\" cost:%.3fs.", t.cmd.table, t.cmd.key, s, time.Now().Sub(start).Seconds())
+			getLogger().Debugf("task-compare-set: table(%s) key(%s): select query:\"%s\" cost:%.3fs.", table, key, s, time.Now().Sub(start).Seconds())
 
 			if err = row.Scan(&version, valueReceiver); err != nil {
 				if err == sql.ErrNoRows {
 					errCode = errcode.ERR_RECORD_NOTEXIST
 				} else {
-					getLogger().Errorf("task-compare-set: table(%s) key(%s): select: %s.", t.cmd.table, t.cmd.key, err)
+					getLogger().Errorf("task-compare-set: table(%s) key(%s): select: %s.", table, key, err)
 					errCode = errcode.ERR_SQLERROR
 				}
 			} else {
@@ -141,14 +130,12 @@ func (t *sqlTaskCompareSet) do(db *sqlx.DB) {
 
 		if success {
 			if err = tx.Commit(); err != nil {
-				getLogger().Errorf("task-compare-set: table(%s) key(%s): transaction-commit: %s.", t.cmd.table, t.cmd.key, err)
-			} else {
-				getLogger().Infof("task-compare-set: table(%s) key(%s): transaction-commit.", t.cmd.table, t.cmd.key)
+				getLogger().Errorf("task-compare-set: table(%s) key(%s): transaction-commit: %s.", table, key, err)
 			}
-		} else if err = tx.Rollback(); err != nil {
-			getLogger().Errorf("task-compare-set: table(%s) key(%s): transaction-rollback: %s.", t.cmd.table, t.cmd.key, err)
 		} else {
-			getLogger().Infof("task-compare-set: table(%s) key(%s): transaction-rollback.", t.cmd.table, t.cmd.key)
+			if err = tx.Rollback(); err != nil {
+				getLogger().Errorf("task-compare-set: table(%s) key(%s): transaction-rollback: %s.", table, key, err)
+			}
 		}
 
 		if err != nil {
@@ -156,9 +143,10 @@ func (t *sqlTaskCompareSet) do(db *sqlx.DB) {
 			version = 0
 			valueField = nil
 		}
+
+		putStr(sqlStr)
 	}
 
-	putStr(sqlStr)
 	t.cmd.reply(errCode, version, valueField)
 }
 

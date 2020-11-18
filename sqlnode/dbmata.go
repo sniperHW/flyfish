@@ -124,7 +124,8 @@ const (
 	keyFieldName      = "__key__"
 	keyFieldIndex     = 0
 	versionFieldName  = "__version__"
-	versionFieldIndex = 1
+	versionFieldIndex = keyFieldIndex + 1
+	FirstFieldIndex   = versionFieldIndex + 1
 )
 
 var (
@@ -300,7 +301,7 @@ func createTableMetasByTableDef(def []*tableDef) (map[string]*tableMeta, error) 
 		tMeta.allFieldConverters[versionFieldIndex] = getFieldConverterByType(versionFieldMeta.typ)
 
 		var (
-			allFieldIndex = 2
+			allFieldIndex = FirstFieldIndex
 			fieldName     string
 			fieldType     proto.ValueType
 			fieldDefaultV interface{}

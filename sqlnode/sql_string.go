@@ -573,6 +573,39 @@ func appendFieldValue2SqlStr(str *str.Str, f *proto.Field) *str.Str {
 	return str.AppendFieldStr(f, getBinary2SqlStrFunc())
 }
 
+type sqlCondType int8
+
+const (
+	_ = sqlCondType(iota)
+	sqlCondEqual
+)
+
+type sqlCond struct {
+	typ   sqlCondType
+	value *proto.Field
+}
+
+func appendCondSqlStr(s *str.Str, cond *sqlCond) *str.Str {
+	if cond == nil {
+		panic("cond nil")
+	}
+
+	if cond.value == nil {
+		panic("value nil")
+	}
+
+	switch cond.typ {
+	case sqlCondEqual:
+		s.AppendString(cond.value.GetName()).AppendString("=")
+		appendFieldValue2SqlStr(s, cond.value)
+
+	default:
+		panic(fmt.Errorf("invalid sqlcond type %d", cond.typ))
+	}
+
+	return s
+}
+
 func appendInsertSqlStr(s *str.Str, tm *tableMeta, key string, version int64, fields map[string]*proto.Field) *str.Str {
 	s.AppendString(tm.getInsertPrefix()).AppendString("'").AppendString(key).AppendString("'").AppendString(",")
 	appendValue2SqlStr(s, versionFieldMeta.getType(), version)
@@ -655,7 +688,7 @@ func appendInsertOrUpdateSqlStr(s *str.Str, tm *tableMeta, key string, version i
 	}
 }
 
-func appendUpdateSqlStr(s *str.Str, table, key string, oldVersion, newVersion *int64, fields []*proto.Field) *str.Str {
+func appendSingleUpdateSqlStr(s *str.Str, table, key string, oldVersion, newVersion *int64, fields []*proto.Field, cond ...sqlCond) *str.Str {
 	// update 'table' set
 	s.AppendString("UPDATE ").AppendString(table).AppendString(" ")
 
@@ -663,7 +696,7 @@ func appendUpdateSqlStr(s *str.Str, table, key string, oldVersion, newVersion *i
 	// field_name=field_value,...,field_name=field_value
 	s.AppendString(versionFieldName).AppendString("=")
 	if newVersion == nil {
-		s.AppendString(versionFieldName).AppendString("+")
+		s.AppendString(versionFieldName).AppendString("+1")
 	} else {
 		appendValue2SqlStr(s, versionFieldMeta.getType(), *newVersion)
 	}
@@ -679,10 +712,38 @@ func appendUpdateSqlStr(s *str.Str, table, key string, oldVersion, newVersion *i
 		s.AppendString(" AND ").AppendString(versionFieldName).AppendString("=")
 		appendValue2SqlStr(s, versionFieldMeta.getType(), *oldVersion)
 	}
+
+	if len(cond) > 0 {
+		for _, v := range cond {
+			s.AppendString(" AND ")
+			appendCondSqlStr(s, &v)
+		}
+	}
+
 	return s.AppendString(";")
 }
 
-func appendSelectAllSqlStr(s *str.Str, tm *tableMeta, key string, version *int64) *str.Str {
+func appendSingleSelectFieldsSqlStr(s *str.Str, table, key string, version *int64, fields []string) *str.Str {
+	s.AppendString("SELECT ")
+	s.AppendString(fields[0])
+	for i := 1; i < len(fields); i++ {
+		s.AppendString(",").AppendString(fields[i])
+	}
+	s.AppendString(" ")
+
+	s.AppendString("FROM ").AppendString(table).AppendString(" ")
+
+	s.AppendString("WHERE ").AppendString(keyFieldName).AppendString("='").AppendString(key).AppendString("'")
+
+	if version != nil {
+		s.AppendString(" AND ").AppendString(versionFieldName).AppendString("=")
+		appendValue2SqlStr(s, versionFieldMeta.getType(), *version)
+	}
+
+	return s.AppendString(";")
+}
+
+func appendSingleSelectAllFieldsSqlStr(s *str.Str, tm *tableMeta, key string, version *int64) *str.Str {
 	s.AppendString(tm.getSelectAllPrefix()).AppendString(keyFieldName).AppendString("='").AppendString(key).AppendString("'")
 
 	if version != nil {
@@ -695,29 +756,12 @@ func appendSelectAllSqlStr(s *str.Str, tm *tableMeta, key string, version *int64
 	return s
 }
 
-func appendCondSqlStr(s *str.Str, condField *proto.Field) *str.Str {
-	s.AppendString(condField.GetName()).AppendString("=")
-	return appendFieldValue2SqlStr(s, condField)
-}
-
-func appendSelectByKeySqlStr(s *str.Str, table, key string, fields []string, where []*proto.Field) *str.Str {
-	s.AppendString("SELECT ")
-	s.AppendString(fields[0])
-	for i := 1; i < len(fields); i++ {
-		s.AppendString(",").AppendString(fields[i])
-	}
-	s.AppendString(" ")
-
-	s.AppendString("FROM ").AppendString(table).AppendString(" ")
-
+func appendSingleDeleteSqlStr(s *str.Str, table, key string, version *int64) *str.Str {
+	s.AppendString("DELETE FROM ").AppendString(table).AppendString(" ")
 	s.AppendString("WHERE ").AppendString(keyFieldName).AppendString("='").AppendString(key).AppendString("'")
-
-	if len(where) > 0 {
-		for _, v := range where {
-			s.AppendString(" AND ")
-			appendCondSqlStr(s, v)
-		}
+	if version != nil {
+		s.AppendString(" AND ").AppendString(versionFieldName).AppendString("=")
+		appendValue2SqlStr(s, versionFieldMeta.getType(), *version)
 	}
-
-	s.AppendString(";")
+	return s.AppendString(";")
 }

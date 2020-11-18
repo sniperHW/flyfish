@@ -29,13 +29,7 @@ func (t *sqlTaskDel) do(db *sqlx.DB) {
 		sqlStr  = getStr()
 	)
 
-	sqlStr.AppendString("DELETE FROM ").AppendString(table).AppendString("")
-	sqlStr.AppendString("WHERE ").AppendString(keyFieldName).AppendString("='").AppendString(key).AppendString("'")
-	if t.cmd.version != nil {
-		sqlStr.AppendString(" AND ").AppendString(versionFieldName).AppendString("=")
-		appendValue2SqlStr(sqlStr, versionFieldMeta.getType(), *t.cmd.version)
-	}
-	sqlStr.AppendString(";")
+	appendSingleDeleteSqlStr(sqlStr, table, key, t.cmd.version)
 
 	s := sqlStr.ToString()
 	start := time.Now()

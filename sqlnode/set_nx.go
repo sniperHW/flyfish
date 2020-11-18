@@ -23,109 +23,128 @@ func (t *sqlTaskSetNx) combine(cmd) bool {
 
 func (t *sqlTaskSetNx) do(db *sqlx.DB) {
 	var (
-		tableMeta = getDBMeta().getTableMeta(t.cmd.table)
-		sqlStr    = getStr()
+		table     = t.cmd.table
+		key       = t.cmd.key
+		tableMeta = getDBMeta().getTableMeta(table)
 		errCode   int32
 		version   int64
-		fields    map[string]*proto.Field
+		fields    []*proto.Field
+		tx        *sqlx.Tx
+		err       error
 	)
 
-	appendInsertSqlStr(sqlStr, tableMeta, t.cmd.key, 1, t.cmd.fields)
-
-	s := sqlStr.ToString()
-	start := time.Now()
-	result, err := db.Exec(s)
-	getLogger().Debugf("task-set-nx: table(%s) key(%s): insert query:\"%s\" cost:%.3fs.", t.cmd.table, t.cmd.key, s, time.Now().Sub(start).Seconds())
-
-	if err == nil {
-		if n, err := result.RowsAffected(); err != nil {
-			getLogger().Errorf("task-set-nx: table(%s) key(%s): insert: %s.", t.cmd.table, t.cmd.key, err)
-			errCode = errcode.ERR_SQLERROR
-		} else if n > 0 {
-			errCode = errcode.ERR_OK
-			version = 1
-		}
+	tx, err = db.Beginx()
+	if err != nil {
+		getLogger().Errorf("task-set-nx: table(%s) key(%s): begin-transaction: %s.", err)
+		errCode = errcode.ERR_SQLERROR
 	} else {
-		getLogger().Debugf("task-set-nx: table(%s) key(%s): insert: %s.", t.cmd.table, t.cmd.key, err)
-
-		sqlStr = getStr()
-
 		var (
-			selectAll            = len(t.cmd.fields) == tableMeta.getFieldCount()
+			sqlStr               = getStr()
+			getFieldCount        int
 			queryFieldCount      int
 			queryFields          []string
 			queryFieldReceivers  []interface{}
 			queryFieldConverters []fieldConverter
-			getFieldOffset       int
-			getFieldCount        int
-			versionIndex         int
+			i                    int
+			s                    string
+			start                time.Time
+			row                  *sqlx.Row
+			success              bool
 		)
 
-		if selectAll {
-			appendSelectAllSqlStr(sqlStr, tableMeta, t.cmd.key, nil).ToString()
-
-			queryFields = tableMeta.getAllFields()
-			queryFieldReceivers = tableMeta.getAllFieldReceivers()
-			queryFieldConverters = tableMeta.getAllFieldConverter()
-			queryFieldCount = len(queryFields)
-			getFieldOffset = 2
-			getFieldCount = tableMeta.getFieldCount()
-			versionIndex = versionFieldIndex
-		} else {
-			getFieldCount = len(t.cmd.fields)
-			queryFieldCount = getFieldCount + 1
-			queryFields = make([]string, queryFieldCount)
-			queryFieldReceivers = make([]interface{}, queryFieldCount)
-			queryFieldConverters = make([]fieldConverter, queryFieldCount)
-			i := 0
-
-			sqlStr.AppendString("SELECT ").AppendString(versionFieldName)
-			queryFields[i] = versionFieldName
-			queryFieldReceivers[i] = versionFieldMeta.getReceiver()
-			queryFieldConverters[i] = versionFieldMeta.getConverter()
-			versionIndex = i
+		getFieldCount = len(t.cmd.fields)
+		queryFieldCount = getFieldCount + 1
+		queryFields = make([]string, queryFieldCount)
+		queryFieldReceivers = make([]interface{}, queryFieldCount)
+		queryFieldConverters = make([]fieldConverter, queryFieldCount)
+		queryFields[0] = versionFieldName
+		queryFieldReceivers[0] = versionFieldMeta.getReceiver()
+		queryFieldConverters[0] = versionFieldMeta.getConverter()
+		i = 1
+		for k, _ := range t.cmd.fields {
+			fm := tableMeta.getFieldMeta(k)
+			queryFields[i] = k
+			queryFieldReceivers[i] = fm.getReceiver()
+			queryFieldConverters[i] = fm.getConverter()
 			i++
-			getFieldOffset = i
-
-			for k, _ := range t.cmd.fields {
-				sqlStr.AppendString(",").AppendString(k)
-				fm := tableMeta.getFieldMeta(k)
-				queryFields[i] = k
-				queryFieldReceivers[i] = fm.getReceiver()
-				queryFieldConverters[i] = fm.getConverter()
-				i++
-			}
-			sqlStr.AppendString(" ")
-
-			sqlStr.AppendString("FROM ").AppendString(t.cmd.table).AppendString(" ")
-			sqlStr.AppendString("WHERE ").AppendString(keyFieldName).AppendString("='").AppendString(t.cmd.key).AppendString("';")
 		}
+
+		appendSingleSelectFieldsSqlStr(sqlStr, table, key, nil, queryFields)
 
 		s = sqlStr.ToString()
 		start = time.Now()
-		row := db.QueryRowx(s)
-		getLogger().Debugf("task-set-nx: table(%s) key(%s): select query:\"%s\" cost:%.3fs.", t.cmd.table, t.cmd.key, s, time.Now().Sub(start).Seconds())
+		row = tx.QueryRowx(s)
+		getLogger().Debugf("task-set-nx: table(%s) key(%s): select query:\"%s\" cost:%.3fs.", table, key, s, time.Now().Sub(start).Seconds())
 
-		if err := row.Scan(queryFieldReceivers...); err != nil {
-			getLogger().Errorf("task-set-nx: table(%s) key(%s): select: %s.", t.cmd.table, t.cmd.key, err)
-			if err != sql.ErrNoRows {
-				errCode = errcode.ERR_RECORD_NOTEXIST
-			} else {
+		err = row.Scan(queryFieldReceivers...)
+
+		if err == nil {
+			// 记录存在
+
+			errCode = errcode.ERR_RECORD_EXIST
+			version = queryFieldConverters[0](queryFieldReceivers[0]).(int64)
+			fields = make([]*proto.Field, 0, getFieldCount)
+
+			for i = 1; i < queryFieldCount; i++ {
+				fieldName := queryFields[i]
+				fields = append(fields, proto.PackField(fieldName, queryFieldConverters[i](queryFieldReceivers[i])))
+			}
+
+			success = true
+
+		} else if err == sql.ErrNoRows {
+			// 记录不存在
+
+			var (
+				result sql.Result
+				n      int64
+			)
+
+			sqlStr.Reset()
+			appendInsertSqlStr(sqlStr, tableMeta, key, 1, t.cmd.fields)
+			s = sqlStr.ToString()
+			start = time.Now()
+			result, err = tx.Exec(s)
+			getLogger().Debugf("task-set-nx: table(%s) key(%s): insert query:\"%s\" cost:%.3fs.", table, key, s, time.Now().Sub(start).Seconds())
+
+			if err == nil {
+				n, err = result.RowsAffected()
+			}
+
+			if err != nil {
+				getLogger().Errorf("task-set-nx: table(%s) key(%s): insert: %s.", table, key, err)
 				errCode = errcode.ERR_SQLERROR
+			} else if n > 0 {
+				errCode = errcode.ERR_OK
+				version = 1
+				success = true
+			} else {
+				getLogger().Errorf("task-set-nx: table(%s) key(%s): record exist - impossible.", table, key)
+				errCode = errcode.ERR_RECORD_EXIST
+			}
+
+		} else {
+			getLogger().Errorf("task-set-nx: table(%s) key(%s): select: %s.", table, key, err)
+			errCode = errcode.ERR_SQLERROR
+		}
+
+		if success {
+			if err = tx.Commit(); err != nil {
+				getLogger().Errorf("task-set-nx: table(%s) key(%s): transaction-commit: %s.", table, key, err)
+				errCode = errcode.ERR_SQLERROR
+				version = 0
+				fields = nil
 			}
 		} else {
-			errCode = errcode.ERR_RECORD_EXIST
-			version = queryFieldConverters[versionIndex](queryFieldReceivers[versionIndex]).(int64)
-			fields = make(map[string]*proto.Field, getFieldCount)
-
-			for i := getFieldOffset; i < queryFieldCount; i++ {
-				fieldName := queryFields[i]
-				fields[fieldName] = proto.PackField(fieldName, queryFieldConverters[i](queryFieldReceivers[i]))
+			if err = tx.Rollback(); err != nil {
+				getLogger().Errorf("task-set-nx: table(%s) key(%s): transaction-rollback: %s.", table, key, err)
+				errCode = errcode.ERR_SQLERROR
 			}
 		}
+
+		putStr(sqlStr)
 	}
 
-	putStr(sqlStr)
 	t.cmd.reply(errCode, version, fields)
 }
 
@@ -143,7 +162,7 @@ func (c *cmdSetNx) makeSqlTask() sqlTask {
 	return &sqlTaskSetNx{cmd: c}
 }
 
-func (c *cmdSetNx) reply(errCode int32, version int64, fields map[string]*proto.Field) {
+func (c *cmdSetNx) reply(errCode int32, version int64, fields []*proto.Field) {
 	if !c.isResponseTimeout() {
 		resp := &proto.SetNxResp{}
 
@@ -151,19 +170,20 @@ func (c *cmdSetNx) reply(errCode int32, version int64, fields map[string]*proto.
 			resp.Version = version
 		} else if errCode == errcode.ERR_RECORD_EXIST {
 			resp.Version = version
-			resp.Fields = make([]*proto.Field, len(c.fields))
-			tableMeta := getDBMeta().getTableMeta(c.table)
-			i := 0
-			for k, _ := range c.fields {
-				f := fields[k]
-				if f != nil {
-					resp.Fields[i] = f
-				} else {
-					// todo impossible in current design.
-					resp.Fields[i] = proto.PackField(k, tableMeta.getFieldMeta(k).getDefaultV())
-				}
-				i++
-			}
+			resp.Fields = fields
+			//resp.Fields = make([]*proto.Field, len(c.fields))
+			//tableMeta := getDBMeta().getTableMeta(c.table)
+			//i := 0
+			//for k, _ := range c.fields {
+			//	f := fields[k]
+			//	if f != nil {
+			//		resp.Fields[i] = f
+			//	} else {
+			//		// todo impossible in current design.
+			//		resp.Fields[i] = proto.PackField(k, tableMeta.getFieldMeta(k).getDefaultV())
+			//	}
+			//	i++
+			//}
 		}
 
 		_ = c.conn.sendMessage(

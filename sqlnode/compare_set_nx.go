@@ -6,7 +6,6 @@ import (
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/proto"
-	"github.com/sniperHW/flyfish/util/str"
 	"time"
 )
 
@@ -35,7 +34,6 @@ func (t *sqlTaskCompareSetNx) do(db *sqlx.DB) {
 		retValue  *proto.Field
 		tx        *sqlx.Tx
 		err       error
-		sqlStr    *str.Str
 	)
 
 	if tx, err = db.Beginx(); err != nil {
@@ -43,6 +41,7 @@ func (t *sqlTaskCompareSetNx) do(db *sqlx.DB) {
 		errCode = errcode.ERR_SQLERROR
 	} else {
 		var (
+			sqlStr        = getStr()
 			curVersion    int64
 			fieldMeta     = tableMeta.getFieldMeta(valueName)
 			valueReceiver = fieldMeta.getReceiver()
@@ -53,12 +52,7 @@ func (t *sqlTaskCompareSetNx) do(db *sqlx.DB) {
 			n             int64
 		)
 
-		sqlStr = getStr()
-
-		sqlStr.AppendString("SELECT ").AppendString(versionFieldName).AppendString(",").AppendString(valueName).AppendString(" ")
-		sqlStr.AppendString("FROM ").AppendString(table).AppendString(" ")
-		sqlStr.AppendString("WHERE ").AppendString(keyFieldName).AppendString("='").AppendString(key).AppendString("';")
-
+		appendSingleSelectFieldsSqlStr(sqlStr, table, key, nil, []string{versionFieldName, valueName})
 		s = sqlStr.ToString()
 		start := time.Now()
 		row = tx.QueryRowx(s)
@@ -134,7 +128,7 @@ func (t *sqlTaskCompareSetNx) do(db *sqlx.DB) {
 				)
 
 				sqlStr.Reset()
-				appendUpdateSqlStr(sqlStr, table, key, &curVersion, &newVersion, []*proto.Field{newValue})
+				appendSingleUpdateSqlStr(sqlStr, table, key, &curVersion, &newVersion, []*proto.Field{newValue})
 
 				s = sqlStr.ToString()
 				start = time.Now()
@@ -171,13 +165,11 @@ func (t *sqlTaskCompareSetNx) do(db *sqlx.DB) {
 		if success {
 			if err = tx.Commit(); err != nil {
 				getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): transaction-commit: %s.", t.cmd.table, t.cmd.key, err)
-			} else {
-				getLogger().Infof("task-compare-set-nx: table(%s) key(%s): transaction-commit.", t.cmd.table, t.cmd.key)
 			}
-		} else if err = tx.Rollback(); err != nil {
-			getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): transaction-rollback: %s.", t.cmd.table, t.cmd.key, err)
 		} else {
-			getLogger().Infof("task-compare-set-nx: table(%s) key(%s): transaction-rollback.", t.cmd.table, t.cmd.key)
+			if err = tx.Rollback(); err != nil {
+				getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): transaction-rollback: %s.", t.cmd.table, t.cmd.key, err)
+			}
 		}
 
 		if err != nil {
