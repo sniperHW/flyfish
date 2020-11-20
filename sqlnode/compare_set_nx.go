@@ -6,7 +6,6 @@ import (
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/proto"
-	"github.com/sniperHW/flyfish/util/str"
 	"time"
 )
 
@@ -24,145 +23,165 @@ func (t *sqlTaskCompareSetNx) combine(cmd) bool {
 
 func (t *sqlTaskCompareSetNx) do(db *sqlx.DB) {
 	var (
-		execer     sqlx.Execer  = db
-		queryer    sqlx.Queryer = db
-		tableMeta               = getDBMeta().getTableMeta(t.cmd.table)
-		errCode    int32
-		version    int64
-		valueField *proto.Field
-		tx         *sqlx.Tx
-		err        error
-		sqlStr     *str.Str
+		tableMeta = getDBMeta().getTableMeta(t.cmd.table)
+		errCode   int32
+		version   int64
+		table     = t.cmd.table
+		key       = t.cmd.key
+		valueName = t.cmd.old.GetName()
+		oldValue  = t.cmd.old
+		newValue  = t.cmd.new
+		retValue  *proto.Field
+		tx        *sqlx.Tx
+		err       error
 	)
 
-	if t.cmd.version == nil {
-		if tx, err = db.Beginx(); err != nil {
-			getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): begin transaction: %s.", t.cmd.table, t.cmd.key, err)
-			errCode = errcode.ERR_SQLERROR
-		} else {
-			getLogger().Infof("task-compare-set-nx: table(%s) key(%s): begin transaction.", t.cmd.table, t.cmd.key)
-			execer = tx
-			queryer = tx
-		}
-	}
-
-	if err == nil {
-		fields := map[string]*proto.Field{
-			t.cmd.new.GetName(): t.cmd.new,
-		}
-
-		sqlStr = getStr()
-
-		sqlStr.AppendString(tableMeta.getInsertPrefix()).AppendString("'").AppendString(t.cmd.key).AppendString("'").AppendString(",")
-		appendValue2SqlStr(sqlStr, versionFieldMeta.getType(), int64(1))
-
-		for _, v := range tableMeta.getFieldInsertOrder() {
-			sqlStr.AppendString(",")
-
-			f := fields[v]
-			if f != nil {
-				appendFieldValue2SqlStr(sqlStr, f)
-			} else {
-				fm := tableMeta.getFieldMeta(v)
-				appendValue2SqlStr(sqlStr, fm.getType(), fm.getDefaultV())
-			}
-		}
-
-		sqlStr.AppendString(") on conflict(").AppendString(keyFieldName).AppendString(") do update set ")
-		sqlStr.AppendString(versionFieldName).AppendString("=").AppendString(tableMeta.getName()).AppendString(".").AppendString(versionFieldName).AppendString("+1")
-		for k, v := range fields {
-			sqlStr.AppendString(",").AppendString(k).AppendString("=")
-			appendFieldValue2SqlStr(sqlStr, v)
-		}
-
-		sqlStr.AppendString(" where ").AppendString(tableMeta.getName()).AppendString(".").AppendString(keyFieldName).AppendString("='").AppendString(t.cmd.key)
-		sqlStr.AppendString("' and ").AppendString(tableMeta.getName()).AppendString(".").AppendString(t.cmd.new.GetName()).AppendString("=")
-		appendFieldValue2SqlStr(sqlStr, t.cmd.old).AppendString(";")
-
+	if tx, err = db.Beginx(); err != nil {
+		getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): begin transaction: %s.", table, key, err)
+		errCode = errcode.ERR_SQLERROR
+	} else {
 		var (
-			result  sql.Result
-			n       int64
-			success = false
+			sqlStr        = getStr()
+			curVersion    int64
+			fieldMeta     = tableMeta.getFieldMeta(valueName)
+			valueReceiver = fieldMeta.getReceiver()
+			success       = false
+			s             string
+			row           *sqlx.Row
+			result        sql.Result
+			n             int64
 		)
 
-		s := sqlStr.ToString()
+		appendSingleSelectFieldsSqlStr(sqlStr, table, key, nil, []string{versionFieldName, valueName})
+		s = sqlStr.ToString()
 		start := time.Now()
-		result, err = execer.Exec(s)
-		getLogger().Debugf("task-compare-set-nx: table(%s) key(%s): insert or update query:\"%s\" cost:%.3fs.", t.cmd.table, t.cmd.key, s, time.Now().Sub(start).Seconds())
+		row = tx.QueryRowx(s)
+		getLogger().Debugf("task-compare-set-nx: table(%s) key(%s): select query:\"%s\" cost:%.3f.", table, key, s, time.Now().Sub(start).Seconds())
 
-		if err != nil {
-			getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): insert or update: %s.", t.cmd.table, t.cmd.key, err)
-			errCode = errcode.ERR_SQLERROR
-		} else if n, err = result.RowsAffected(); err != nil {
-			getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): insert or update: %s.", t.cmd.table, t.cmd.key, err)
-			errCode = errcode.ERR_SQLERROR
+		if err = row.Scan(&curVersion, valueReceiver); err != nil {
+			if err == sql.ErrNoRows {
+				// 记录不存在，插入新记录
+
+				sqlStr.Reset()
+				appendInsertSqlStr(sqlStr, tableMeta, key, 1, map[string]*proto.Field{valueName: newValue})
+
+				s = sqlStr.ToString()
+				start = time.Now()
+				result, err = tx.Exec(s)
+				getLogger().Debugf("task-compare-set-nx: table(%s) key(%s): insert query:\"%s\" cost:%.3f.", table, key, s, time.Now().Sub(start).Seconds())
+
+				if err == nil {
+					n, err = result.RowsAffected()
+				}
+
+				if err != nil {
+					getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): insert: %s.", table, key, err)
+					errCode = errcode.ERR_SQLERROR
+				} else if n > 0 {
+					// 插入成功
+
+					errCode = errcode.ERR_OK
+					version = 1
+					retValue = newValue
+					success = true
+
+				} else {
+					// 插入失败, impossible
+
+					getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): insert failed - impossible.", table, key)
+					errCode = errcode.ERR_OTHER
+
+				}
+
+			} else {
+				getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): select: %s.", table, key, err)
+				errCode = errcode.ERR_SQLERROR
+			}
 		} else {
+			// 记录存在
 
 			var (
-				fieldMeta     = tableMeta.getFieldMeta(t.cmd.old.GetName())
-				valueReceiver = fieldMeta.getReceiver()
+				curValue = proto.PackField(valueName, fieldMeta.getConverter()(valueReceiver))
 			)
 
-			sqlStr.Reset()
-			sqlStr.AppendString("select ").AppendString(versionFieldName).AppendString(",").AppendString(t.cmd.new.GetName()).AppendString(" from ").AppendString(t.cmd.table).AppendString(" where ")
-			sqlStr.AppendString(keyFieldName).AppendString("='").AppendString(t.cmd.key).AppendString("';")
+			if t.cmd.version != nil && *t.cmd.version != curVersion {
+				// 版本不匹配
 
-			s = sqlStr.ToString()
-			start := time.Now()
-			row := queryer.QueryRowx(s)
-			getLogger().Debugf("task-compare-set-nax: table(%s) key(%s): select query:\"%s\" cost:%.3fs.", t.cmd.table, t.cmd.key, s, time.Now().Sub(start).Seconds())
+				errCode = errcode.ERR_VERSION_MISMATCH
+				version = curVersion
+				retValue = curValue
 
-			if err = row.Scan(&version, valueReceiver); err != nil {
-				if err == sql.ErrNoRows {
-					errCode = errcode.ERR_RECORD_NOTEXIST
-				} else {
-					getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): select: %s.", t.cmd.table, t.cmd.key, err)
+			} else if !curValue.IsEqual(oldValue) {
+				// 值不匹配
+
+				errCode = errcode.ERR_CAS_NOT_EQUAL
+				version = curVersion
+				retValue = curValue
+
+			} else {
+				// 更新 value
+
+				var (
+					newVersion = curVersion + 1
+					result     sql.Result
+					n          int64
+				)
+
+				sqlStr.Reset()
+				appendSingleUpdateSqlStr(sqlStr, table, key, &curVersion, &newVersion, []*proto.Field{newValue})
+
+				s = sqlStr.ToString()
+				start = time.Now()
+				result, err = tx.Exec(s)
+				getLogger().Debugf("task-compare-set-nx: table(%s) key(%s): update query: %s cost:%.3f.", table, key, s, time.Now().Sub(start).Seconds())
+
+				if err == nil {
+					n, err = result.RowsAffected()
+				}
+
+				if err != nil {
+					getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): update: %s.", table, key, err)
 					errCode = errcode.ERR_SQLERROR
-				}
-			} else if n > 0 {
-				// 更新成功
+				} else if n > 0 {
+					// 更新成功
 
-				valueField = t.cmd.new
-				success = true
+					errCode = errcode.ERR_OK
+					version = newVersion
+					retValue = newValue
+					success = true
 
-			} else {
-				// 更新失败
-
-				valueField = proto.PackField(t.cmd.new.GetName(), fieldMeta.getConverter()(valueReceiver))
-
-				if t.cmd.version != nil && version != *t.cmd.version {
-					errCode = errcode.ERR_VERSION_MISMATCH
 				} else {
-					errCode = errcode.ERR_CAS_NOT_EQUAL
+					// 更新失败，理论上 impossible
+
+					getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): update failed - impossible.", table, key)
+					errCode = errcode.ERR_OTHER
+
 				}
+
 			}
+
 		}
 
-		if tx != nil {
-			if success {
-				if err = tx.Commit(); err != nil {
-					getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): transaction-commit: %s.", t.cmd.table, t.cmd.key, err)
-				} else {
-					getLogger().Infof("task-compare-set-nx: table(%s) key(%s): transaction-commit.", t.cmd.table, t.cmd.key)
-				}
-			} else if err = tx.Rollback(); err != nil {
+		if success {
+			if err = tx.Commit(); err != nil {
+				getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): transaction-commit: %s.", t.cmd.table, t.cmd.key, err)
+			}
+		} else {
+			if err = tx.Rollback(); err != nil {
 				getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): transaction-rollback: %s.", t.cmd.table, t.cmd.key, err)
-			} else {
-				getLogger().Infof("task-compare-set-nx: table(%s) key(%s): transaction-rollback.", t.cmd.table, t.cmd.key)
-			}
-
-			if err != nil {
-				errCode = errcode.ERR_SQLERROR
-				version = 0
-				valueField = nil
 			}
 		}
-	}
 
-	if sqlStr != nil {
+		if err != nil {
+			errCode = errcode.ERR_SQLERROR
+			version = 0
+			retValue = nil
+		}
+
 		putStr(sqlStr)
 	}
-	t.cmd.replyWithValue(errCode, version, valueField)
+
+	t.cmd.reply(errCode, version, retValue)
 }
 
 type cmdCompareSetNx struct {
@@ -172,18 +191,19 @@ type cmdCompareSetNx struct {
 	new     *proto.Field
 }
 
+func (c *cmdCompareSetNx) canCombine() bool {
+	return false
+}
+
 func (c *cmdCompareSetNx) makeSqlTask() sqlTask {
 	return &sqlTaskCompareSetNx{cmd: c}
 }
 
-func (c *cmdCompareSetNx) reply(errCode int32, version int64, fields map[string]*proto.Field) {
+func (c *cmdCompareSetNx) reply(errCode int32, version int64, value *proto.Field) {
 	if !c.isResponseTimeout() {
 		resp := &proto.CompareAndSetNxResp{
 			Version: version,
-		}
-
-		if len(fields) > 0 {
-			resp.Value = fields[c.old.GetName()]
+			Value:   value,
 		}
 
 		_ = c.conn.sendMessage(net.NewMessage(
@@ -193,16 +213,6 @@ func (c *cmdCompareSetNx) reply(errCode int32, version int64, fields map[string]
 			},
 			resp,
 		))
-	}
-}
-
-func (c *cmdCompareSetNx) replyWithValue(errCode int32, version int64, value *proto.Field) {
-	if !c.isResponseTimeout() {
-		if value != nil {
-			c.reply(errCode, version, map[string]*proto.Field{c.old.GetName(): value})
-		} else {
-			c.reply(errCode, version, nil)
-		}
 	}
 }
 

@@ -1,6 +1,7 @@
 package sqlnode
 
 import (
+	"database/sql"
 	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/net"
@@ -21,71 +22,86 @@ func (t *sqlTaskSet) combine(cmd) bool {
 }
 
 func (t *sqlTaskSet) do(db *sqlx.DB) {
-	tableMeta := getDBMeta().getTableMeta(t.cmd.table)
 
 	var (
-		errCode int32
-		version int64
-		sqlStr  = getStr()
+		table     = t.cmd.table
+		key       = t.cmd.key
+		tableMeta = getDBMeta().getTableMeta(table)
+		errCode   int32
+		version   int64
+		err       error
+		sqlStr    = getStr()
 	)
 
 	if t.cmd.version != nil {
-		s := appendUpdateSqlStr(sqlStr, t.cmd.table, t.cmd.key, *t.cmd.version, t.cmd.fields).ToString()
+		var (
+			curVersion = t.cmd.version
+			newVersion = *curVersion + 1
+			result     sql.Result
+			n          int64
+		)
+
+		s := appendSingleUpdateSqlStr(sqlStr, table, key, curVersion, &newVersion, t.cmd.fields).ToString()
 		start := time.Now()
-		result, err := db.Exec(s)
-		getLogger().Debugf("task-set-with-version: table(%s) key(%s): query:\"%s\" cost:%.3fs.", t.cmd.table, t.cmd.key, s, time.Now().Sub(start).Seconds())
+		result, err = db.Exec(s)
+		getLogger().Debugf("task-set-with-version: table(%s) key(%s): query:\"%s\" cost:%.3fs.", table, key, s, time.Now().Sub(start).Seconds())
+
+		if err == nil {
+			n, err = result.RowsAffected()
+		}
 
 		if err != nil {
-			getLogger().Debugf("task-set-with-version: table(%s) key(%s): %s.", t.cmd.table, t.cmd.key, err)
-			errCode = errcode.ERR_SQLERROR
-		} else if n, err := result.RowsAffected(); err != nil {
-			getLogger().Debugf("task-set-with-version: table(%s) key(%s): %s.", t.cmd.table, t.cmd.key, err)
+			getLogger().Debugf("task-set-with-version: table(%s) key(%s): %s.", table, key, err)
 			errCode = errcode.ERR_SQLERROR
 		} else if n > 0 {
 			errCode = errcode.ERR_OK
-			version = *t.cmd.version + 1
+			version = newVersion
 		} else {
 			errCode = errcode.ERR_VERSION_MISMATCH
 		}
 	} else {
-		sqlStr.AppendString("begin;")
+		sqlStr.AppendString("BEGIN;")
 
-		appendInsertOrUpdateSqlStr(sqlStr, tableMeta, t.cmd.key, 1, t.cmd.fields)
+		appendInsertOrUpdateSqlStr(sqlStr, tableMeta, key, 1, t.cmd.fieldMap)
 
-		sqlStr.AppendString("select ").AppendString(versionFieldName).AppendString(" from ").AppendString(t.cmd.table)
-		sqlStr.AppendString(" where ").AppendString(keyFieldName).AppendString("=").AppendString("'").AppendString(t.cmd.key).AppendString("';")
+		appendSingleSelectFieldsSqlStr(sqlStr, table, key, nil, []string{versionFieldName})
 
-		sqlStr.AppendString("end;")
+		sqlStr.AppendString("END;")
 
 		s := sqlStr.ToString()
 		start := time.Now()
 		row := db.QueryRowx(s)
-		getLogger().Debugf("task-set: table(%s) key(%s): query:\"%s\" cost:%.3fs.", t.cmd.table, t.cmd.key, s, time.Now().Sub(start).Seconds())
+		getLogger().Debugf("task-set: table(%s) key(%s): query:\"%s\" cost:%.3fs.", table, key, s, time.Now().Sub(start).Seconds())
 
 		if err := row.Scan(&version); err != nil {
-			getLogger().Errorf("task-set: table(%s) key(%s): %s.", t.cmd.table, t.cmd.key, err)
+			getLogger().Errorf("task-set: table(%s) key(%s): %s.", table, key, err)
 			errCode = errcode.ERR_SQLERROR
 		} else {
 			errCode = errcode.ERR_OK
-			version = 1
+			//version = 1
 		}
 	}
 
 	putStr(sqlStr)
-	t.cmd.reply(errCode, version, nil)
+	t.cmd.reply(errCode, version)
 }
 
 type cmdSet struct {
 	cmdBase
-	fields  map[string]*proto.Field
-	version *int64
+	fields   []*proto.Field
+	fieldMap map[string]*proto.Field
+	version  *int64
+}
+
+func (c *cmdSet) canCombine() bool {
+	return false
 }
 
 func (c *cmdSet) makeSqlTask() sqlTask {
 	return &sqlTaskSet{cmd: c}
 }
 
-func (c *cmdSet) reply(errCode int32, version int64, fields map[string]*proto.Field) {
+func (c *cmdSet) reply(errCode int32, version int64) {
 	if !c.isResponseTimeout() {
 		resp := &proto.SetResp{Version: version}
 
@@ -130,19 +146,24 @@ func onSet(conn *cliConn, msg *net.Message) {
 
 	cmd := &cmdSet{
 		cmdBase: newCmdBase(conn, head.Seqno, head.UniKey, table, key, processDeadline, respDeadline),
-		fields:  make(map[string]*proto.Field, len(req.GetFields())),
-		version: req.Version,
 	}
 
-	for _, v := range req.GetFields() {
-		// check repeated field
-		if cmd.fields[v.GetName()] != nil {
-			getLogger().Errorf("set table(%s) key(%s): field(%s) repeated.", table, key, v.GetName())
-			_ = conn.sendMessage(newMessage(head.Seqno, errcode.ERR_INVAILD_FIELD, &proto.GetResp{}))
-			return
-		}
+	if req.Version != nil {
+		cmd.fields = req.GetFields()
+		cmd.version = req.Version
+	} else {
+		fieldMap := make(map[string]*proto.Field, len(req.GetFields()))
+		for _, v := range req.GetFields() {
+			// check repeated field
+			if fieldMap[v.GetName()] != nil {
+				getLogger().Errorf("set table(%s) key(%s): field(%s) repeated.", table, key, v.GetName())
+				_ = conn.sendMessage(newMessage(head.Seqno, errcode.ERR_INVAILD_FIELD, &proto.GetResp{}))
+				return
+			}
 
-		cmd.fields[v.GetName()] = v
+			fieldMap[v.GetName()] = v
+		}
+		cmd.fieldMap = fieldMap
 	}
 
 	pushCmd(cmd)

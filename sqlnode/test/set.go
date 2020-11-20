@@ -16,7 +16,7 @@ func main() {
 	var (
 		table   = "user_module_data"
 		key     = "4540217385795585"
-		version = []int64{87}
+		version = []int64{}
 		fields  = map[string]interface{}{
 			"rankdata": make([]byte, 0),
 		}

@@ -1,7 +1,6 @@
 package sqlnode
 
 import (
-	"github.com/sniperHW/flyfish/proto"
 	"time"
 )
 
@@ -9,9 +8,9 @@ type cmd interface {
 	seqNo() int64
 	uniKey() string
 	//isCancel() bool
+	canCombine() bool
 	isProcessTimeout() bool
 	makeSqlTask() sqlTask
-	reply(errCode int32, version int64, fields map[string]*proto.Field)
 }
 
 type cmdBase struct {

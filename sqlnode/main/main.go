@@ -12,10 +12,10 @@ func main() {
 
 	flag.Parse()
 
-	if sqlnode.Start(*config) {
-		c := make(chan os.Signal)
-		signal.Notify(c, os.Interrupt)
-		_ = <-c
-		sqlnode.Stop()
-	}
+	sqlnode.Start(*config)
+
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt)
+	_ = <-c
+	sqlnode.Stop()
 }

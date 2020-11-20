@@ -124,7 +124,8 @@ const (
 	keyFieldName      = "__key__"
 	keyFieldIndex     = 0
 	versionFieldName  = "__version__"
-	versionFieldIndex = 1
+	versionFieldIndex = keyFieldIndex + 1
+	FirstFieldIndex   = versionFieldIndex + 1
 )
 
 var (
@@ -252,15 +253,15 @@ var (
 	globalDBMeta *dbMeta
 )
 
-func initDBMeta() error {
+func initDBMeta() {
 	tableDef, err := loadTableDef()
 	if err != nil {
-		return err
+		getLogger().Fatalf("init db-meta: load table def: %s.", err)
 	}
 
 	tableMetas, err := createTableMetasByTableDef(tableDef)
 	if err != nil {
-		return err
+		getLogger().Fatalf("init db-meta: create table meta: %s.", err)
 	}
 
 	globalDBMeta = &dbMeta{
@@ -268,7 +269,7 @@ func initDBMeta() error {
 	}
 	globalDBMeta.tableMetas.Store(tableMetas)
 
-	return nil
+	getLogger().Infoln("init de-meta.")
 }
 
 func createTableMetasByTableDef(def []*tableDef) (map[string]*tableMeta, error) {
@@ -300,7 +301,7 @@ func createTableMetasByTableDef(def []*tableDef) (map[string]*tableMeta, error) 
 		tMeta.allFieldConverters[versionFieldIndex] = getFieldConverterByType(versionFieldMeta.typ)
 
 		var (
-			allFieldIndex = 2
+			allFieldIndex = FirstFieldIndex
 			fieldName     string
 			fieldType     proto.ValueType
 			fieldDefaultV interface{}
@@ -344,8 +345,8 @@ func createTableMetasByTableDef(def []*tableDef) (map[string]*tableMeta, error) 
 			allFieldIndex++
 		}
 
-		tMeta.insertPrefix = fmt.Sprintf("insert into %s(%s,%s,%s) values(", t.name, keyFieldName, versionFieldName, strings.Join(tMeta.fieldInsertOrder, ","))
-		tMeta.selectAllPrefix = fmt.Sprintf("select %s from %s where ", strings.Join(tMeta.allFieldNames, ","), t.name)
+		tMeta.insertPrefix = fmt.Sprintf("INSERT INTO %s(%s,%s,%s) VALUES(", t.name, keyFieldName, versionFieldName, strings.Join(tMeta.fieldInsertOrder, ","))
+		tMeta.selectAllPrefix = fmt.Sprintf("SELECT %s FROM %s WHERE ", strings.Join(tMeta.allFieldNames, ","), t.name)
 		tableMetas[tMeta.name] = tMeta
 	}
 

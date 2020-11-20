@@ -16,17 +16,19 @@ func main() {
 	var (
 		table   = "user_module_data"
 		key     = "4540217385795583"
-		version = []int64{}
+		version = []int64{12}
 		field   = "rankdata"
-		old     = []byte{0}
-		new     = []byte{1}
+		old     = []byte{1}
+		new     = []byte{0}
 	)
 
 	client := client.OpenClient(*serverAddr, *compressFlag)
 
 	result := client.CompareAndSet(table, key, field, old, new, version...).Exec()
 	if result.ErrCode == errcode.ERR_OK {
-		fmt.Printf("compare-set successfully, version=%d.\n", result.Version)
+		fmt.Println("compare-set successfully")
+		fmt.Printf("\tversion=%d\n", result.Version)
+		fmt.Printf("\t%s=%v\n", field, result.Fields[field].GetValue())
 	} else {
 		fmt.Printf("compare-set failed, err: %s.\n", errcode.GetErrorStr(result.ErrCode))
 	}

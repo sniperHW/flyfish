@@ -1,7 +1,6 @@
 package sqlnode
 
 import (
-	"fmt"
 	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/net"
@@ -22,9 +21,6 @@ func (t *sqlTaskDel) combine(cmd) bool {
 }
 
 func (t *sqlTaskDel) do(db *sqlx.DB) {
-	slice := []interface{}{}
-	fmt.Println(slice[100])
-
 	var (
 		table   = t.cmd.table
 		key     = t.cmd.key
@@ -33,13 +29,7 @@ func (t *sqlTaskDel) do(db *sqlx.DB) {
 		sqlStr  = getStr()
 	)
 
-	sqlStr.AppendString("delete from ").AppendString(table)
-	sqlStr.AppendString(" where ").AppendString(keyFieldName).AppendString("='").AppendString(key).AppendString("'")
-	if t.cmd.version != nil {
-		sqlStr.AppendString(" and ").AppendString(versionFieldName).AppendString("=")
-		appendValue2SqlStr(sqlStr, versionFieldMeta.getType(), *t.cmd.version)
-	}
-	sqlStr.AppendString(";")
+	appendSingleDeleteSqlStr(sqlStr, table, key, t.cmd.version)
 
 	s := sqlStr.ToString()
 	start := time.Now()
@@ -63,7 +53,7 @@ func (t *sqlTaskDel) do(db *sqlx.DB) {
 	}
 
 	putStr(sqlStr)
-	t.cmd.reply(errCode, version, nil)
+	t.cmd.reply(errCode, version)
 }
 
 type cmdDel struct {
@@ -71,11 +61,15 @@ type cmdDel struct {
 	version *int64
 }
 
+func (c *cmdDel) canCombine() bool {
+	return false
+}
+
 func (c *cmdDel) makeSqlTask() sqlTask {
 	return &sqlTaskDel{cmd: c}
 }
 
-func (c *cmdDel) reply(errCode int32, version int64, fields map[string]*proto.Field) {
+func (c *cmdDel) reply(errCode int32, version int64) {
 	if !c.isResponseTimeout() {
 		_ = c.conn.sendMessage(newMessage(c.sqNo, errCode, new(proto.DelResp)))
 	}

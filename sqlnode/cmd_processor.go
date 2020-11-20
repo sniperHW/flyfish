@@ -6,9 +6,13 @@ import (
 	"github.com/sniperHW/kendynet/util"
 	"reflect"
 	"runtime"
+	"sync"
+	"sync/atomic"
+	"time"
 )
 
 type cmdProcessor struct {
+	state    int32
 	no       int
 	db       *sqlx.DB
 	cmdQueue *util.BlockQueue
@@ -23,7 +27,33 @@ func newCmdProcessor(no int, db *sqlx.DB) *cmdProcessor {
 }
 
 func (p *cmdProcessor) start() {
+	if !atomic.CompareAndSwapInt32(&p.state, 0, 1) {
+		panic("already started")
+	}
+
 	go p.process()
+}
+
+func (p *cmdProcessor) stop(wg *sync.WaitGroup) {
+	if !atomic.CompareAndSwapInt32(&p.state, 1, 2) {
+		panic("not started or already stopped")
+	}
+
+	p.cmdQueue.Close()
+
+	if wg != nil {
+		wg.Add(1)
+
+		go func() {
+			for atomic.LoadInt32(&p.state) != 3 {
+				time.Sleep(100 * time.Millisecond)
+			}
+
+			getLogger().Infof("cmd-processor %d: stop.", p.no)
+
+			wg.Done()
+		}()
+	}
 }
 
 func (p *cmdProcessor) pushCmd(c cmd) {
@@ -31,7 +61,7 @@ func (p *cmdProcessor) pushCmd(c cmd) {
 }
 
 func (p *cmdProcessor) process() {
-	for {
+	for atomic.LoadInt32(&p.state) != 2 {
 		var (
 			closed bool
 			list   []interface{}
@@ -46,7 +76,7 @@ func (p *cmdProcessor) process() {
 
 		getLogger().Debugf("cmd-processor %d: start process %d commands.", p.no, n)
 
-		for i < n {
+		for i < n && atomic.LoadInt32(&p.state) != 2 {
 			switch o := list[i].(type) {
 			case cmd:
 				c = o
@@ -71,6 +101,9 @@ func (p *cmdProcessor) process() {
 			break
 		}
 	}
+
+	getLogger().Debugf("cmd-processor %d: stop process.", p.no)
+	atomic.StoreInt32(&p.state, 3)
 }
 
 func (p *cmdProcessor) processCmd(cmd cmd, task sqlTask) sqlTask {
@@ -89,7 +122,7 @@ func (p *cmdProcessor) processCmd(cmd cmd, task sqlTask) sqlTask {
 	}
 
 	if task != nil {
-		if cmd != nil && task.combine(cmd) {
+		if cmd != nil && cmd.canCombine() && task.combine(cmd) {
 			return task
 		}
 
@@ -120,6 +153,20 @@ func initCmdProcessor() {
 		globalCmdProcessors[i] = newCmdProcessor(i, getGlobalDB())
 		globalCmdProcessors[i].start()
 	}
+
+	getLogger().Infof("init processor: count=%d.", nProcessors)
+}
+
+func stopCmdProcessor() {
+	var wg sync.WaitGroup
+
+	for _, v := range globalCmdProcessors {
+		v.stop(&wg)
+	}
+
+	wg.Wait()
+
+	getLogger().Infof("processor stop.")
 }
 
 func pushCmd(c cmd) {
