@@ -148,23 +148,21 @@ func onSet(conn *cliConn, msg *net.Message) {
 		cmdBase: newCmdBase(conn, head.Seqno, head.UniKey, table, key, processDeadline, respDeadline),
 	}
 
-	if req.Version != nil {
-		cmd.fields = req.GetFields()
-		cmd.version = req.Version
-	} else {
-		fieldMap := make(map[string]*proto.Field, len(req.GetFields()))
-		for _, v := range req.GetFields() {
-			// check repeated field
-			if fieldMap[v.GetName()] != nil {
-				getLogger().Errorf("set table(%s) key(%s): field(%s) repeated.", table, key, v.GetName())
-				_ = conn.sendMessage(newMessage(head.Seqno, errcode.ERR_INVAILD_FIELD, &proto.GetResp{}))
-				return
-			}
+	cmd.version = req.Version
+	cmd.fields = req.GetFields()
 
-			fieldMap[v.GetName()] = v
+	fieldMap := make(map[string]*proto.Field, len(req.GetFields()))
+	for _, v := range req.GetFields() {
+		// check repeated field
+		if fieldMap[v.GetName()] != nil {
+			getLogger().Errorf("set table(%s) key(%s): field(%s) repeated.", table, key, v.GetName())
+			_ = conn.sendMessage(newMessage(head.Seqno, errcode.ERR_INVAILD_FIELD, &proto.GetResp{}))
+			return
 		}
-		cmd.fieldMap = fieldMap
+
+		fieldMap[v.GetName()] = v
 	}
+	cmd.fieldMap = fieldMap
 
 	pushCmd(cmd)
 }
