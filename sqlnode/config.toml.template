@@ -6,7 +6,7 @@ DBConnections           = 10
 
 Compress                = false
 
-MaxRequestCount         = 5000
+MaxRequestCount         = 20000
 
 [DBConfig]
 SqlType         = "pgsql"
