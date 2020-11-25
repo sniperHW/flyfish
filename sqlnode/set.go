@@ -11,7 +11,9 @@ import (
 
 type sqlTaskSet struct {
 	sqlTaskBase
-	//cmd *cmdSet
+	fields   []*proto.Field
+	fieldMap map[string]*proto.Field
+	version  *int64
 }
 
 func (t *sqlTaskSet) canCombine() bool {
@@ -22,26 +24,25 @@ func (t *sqlTaskSet) combine(cmd) bool {
 	return false
 }
 
-func (t *sqlTaskSet) do(db *sqlx.DB) {
+func (t *sqlTaskSet) do(db *sqlx.DB) (errCode int32, version int64, fields map[string]*proto.Field) {
 
 	var (
-		cmd       = t.commands[0].(*cmdSet)
 		tableMeta = getDBMeta().getTableMeta(t.table)
-		errCode   int32
-		version   int64
 		err       error
 		sqlStr    = getStr()
 	)
 
-	if cmd.version != nil {
+	defer putStr(sqlStr)
+
+	if t.version != nil {
 		var (
-			curVersion = cmd.version
+			curVersion = t.version
 			newVersion = *curVersion + 1
 			result     sql.Result
 			n          int64
 		)
 
-		s := appendSingleUpdateSqlStr(sqlStr, t.table, t.key, curVersion, &newVersion, cmd.fields).ToString()
+		s := appendSingleUpdateSqlStr(sqlStr, t.table, t.key, curVersion, &newVersion, t.fields).ToString()
 		start := time.Now()
 		result, err = db.Exec(s)
 		getLogger().Debugf("task-set-with-version: table(%s) key(%s): query:\"%s\" cost:%.3fs.", t.table, t.key, s, time.Now().Sub(start).Seconds())
@@ -53,16 +54,22 @@ func (t *sqlTaskSet) do(db *sqlx.DB) {
 		if err != nil {
 			getLogger().Debugf("task-set-with-version: table(%s) key(%s): %s.", t.table, t.key, err)
 			errCode = errcode.ERR_SQLERROR
-		} else if n > 0 {
-			errCode = errcode.ERR_OK
-			version = newVersion
-		} else {
-			errCode = errcode.ERR_VERSION_MISMATCH
+			return
 		}
+
+		if n <= 0 {
+			errCode = errcode.ERR_VERSION_MISMATCH
+			return
+		}
+
+		errCode = errcode.ERR_OK
+		version = newVersion
+		return
+
 	} else {
 		sqlStr.AppendString("BEGIN;")
 
-		appendInsertOrUpdateSqlStr(sqlStr, tableMeta, t.key, 1, cmd.fieldMap)
+		appendInsertOrUpdateSqlStr(sqlStr, tableMeta, t.key, 1, t.fieldMap)
 
 		appendSingleSelectFieldsSqlStr(sqlStr, t.table, t.key, nil, []string{versionFieldName})
 
@@ -76,14 +83,14 @@ func (t *sqlTaskSet) do(db *sqlx.DB) {
 		if err := row.Scan(&version); err != nil {
 			getLogger().Errorf("task-set: table(%s) key(%s): %s.", t.table, t.key, err)
 			errCode = errcode.ERR_SQLERROR
-		} else {
-			errCode = errcode.ERR_OK
-			//version = 1
+			return
 		}
+
+		errCode = errcode.ERR_OK
+		return
 	}
 
-	putStr(sqlStr)
-	cmd.reply(errCode, version)
+	return
 }
 
 type cmdSet struct {
@@ -98,14 +105,19 @@ func (c *cmdSet) canCombine() bool {
 }
 
 func (c *cmdSet) makeSqlTask() sqlTask {
-	return &sqlTaskSet{sqlTaskBase: newSqlTaskBase(c.table, c.key, []cmd{c})}
+	return &sqlTaskSet{
+		sqlTaskBase: newSqlTaskBase(c.table, c.key),
+		fields:      c.fields,
+		fieldMap:    c.fieldMap,
+		version:     c.version,
+	}
 }
 
 func (c *cmdSet) replyError(errCode int32) {
-	c.reply(errCode, 0)
+	c.reply(errCode, 0, nil)
 }
 
-func (c *cmdSet) reply(errCode int32, version int64) {
+func (c *cmdSet) reply(errCode int32, version int64, fields map[string]*proto.Field) {
 	if !c.isResponseTimeout() {
 		resp := &proto.SetResp{Version: version}
 

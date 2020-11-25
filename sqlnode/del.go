@@ -1,6 +1,7 @@
 package sqlnode
 
 import (
+	"database/sql"
 	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/net"
@@ -10,7 +11,7 @@ import (
 
 type sqlTaskDel struct {
 	sqlTaskBase
-	//cmd *cmdDel
+	version *int64
 }
 
 func (t *sqlTaskDel) canCombine() bool {
@@ -21,39 +22,47 @@ func (t *sqlTaskDel) combine(cmd) bool {
 	return false
 }
 
-func (t *sqlTaskDel) do(db *sqlx.DB) {
+func (t *sqlTaskDel) do(db *sqlx.DB) (errCode int32, version int64, fields map[string]*proto.Field) {
 	var (
-		cmd     = t.commands[0].(*cmdDel)
-		errCode int32
-		version int64
-		sqlStr  = getStr()
+		sqlStr = getStr()
+		result sql.Result
+		n      int64
+		err    error
 	)
 
-	appendSingleDeleteSqlStr(sqlStr, t.table, t.key, cmd.version)
+	defer putStr(sqlStr)
+
+	appendSingleDeleteSqlStr(sqlStr, t.table, t.key, t.version)
 
 	s := sqlStr.ToString()
 	start := time.Now()
-	result, err := db.Exec(s)
+	result, err = db.Exec(s)
 	getLogger().Debugf("task-del: table(%s) key(%s): delete query:\"%s\" cost:%.3fs.", t.table, t.key, s, time.Now().Sub(start).Seconds())
 
 	if err != nil {
 		getLogger().Errorf("task-del: table(%s) key(%s): delete: %s.", t.table, t.key, err)
 		errCode = errcode.ERR_SQLERROR
-	} else if n, err := result.RowsAffected(); err != nil {
+		return
+	}
+
+	if n, err = result.RowsAffected(); err != nil {
 		getLogger().Errorf("task-del: table(%s) key(%s): delete: %s.", t.table, t.key, err)
 		errCode = errcode.ERR_SQLERROR
-	} else if n > 0 {
-		errCode = errcode.ERR_OK
-	} else {
-		if cmd.version != nil {
+		return
+	}
+
+	if n <= 0 {
+		if t.version != nil {
 			errCode = errcode.ERR_VERSION_MISMATCH
 		} else {
 			errCode = errcode.ERR_RECORD_NOTEXIST
 		}
+		return
 	}
 
-	putStr(sqlStr)
-	cmd.reply(errCode, version)
+	errCode = errcode.ERR_OK
+
+	return
 }
 
 type cmdDel struct {
@@ -66,18 +75,14 @@ func (c *cmdDel) canCombine() bool {
 }
 
 func (c *cmdDel) makeSqlTask() sqlTask {
-	return &sqlTaskDel{sqlTaskBase{
-		table:    c.table,
-		key:      c.key,
-		commands: []cmd{c},
-	}}
+	return &sqlTaskDel{sqlTaskBase: newSqlTaskBase(c.table, c.key), version: c.version}
 }
 
 func (c *cmdDel) replyError(errCode int32) {
-	c.reply(errCode, 0)
+	c.reply(errCode, 0, nil)
 }
 
-func (c *cmdDel) reply(errCode int32, version int64) {
+func (c *cmdDel) reply(errCode int32, version int64, fields map[string]*proto.Field) {
 	if !c.isResponseTimeout() {
 		_ = c.conn.sendMessage(newMessage(c.sqNo, errCode, new(proto.DelResp)))
 	}

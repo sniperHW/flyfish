@@ -1,23 +1,22 @@
 package sqlnode
 
 import (
+	"github.com/sniperHW/flyfish/proto"
 	"time"
 )
 
 type cmd interface {
 	seqNo() int64
 	uniKey() string
-	//isCancel() bool
 	canCombine() bool
 	isProcessTimeout() bool
 	makeSqlTask() sqlTask
-	//reply(int32, int64, map[string]*proto.Field)
+	reply(errCode int32, version int64, fields map[string]*proto.Field)
 	replyError(int32)
 }
 
 type cmdBase struct {
-	conn *cliConn
-	//msg  *net.Message
+	conn             *cliConn
 	sqNo             int64
 	uKey             string
 	table            string
@@ -38,35 +37,13 @@ func newCmdBase(conn *cliConn, sqNo int64, unikey, table, key string, procDeadli
 	}
 }
 
-//func newCmdBase(conn *cliConn, msg *net.Message) cmdBase {
-//	c := cmdBase{
-//		conn: conn,
-//		msg:  msg,
-//	}
-//
-//	c.processDeadline, c.responseDeadline = getDeadline(msg.GetHead().Timeout)
-//
-//	return c
-//}
-
 func (c *cmdBase) seqNo() int64 {
-	//return c.msg.GetHead().Seqno
 	return c.sqNo
 }
 
 func (c *cmdBase) uniKey() string {
-	//return c.msg.GetHead().UniKey
 	return c.uKey
 }
-
-//func (c *cmdBase) getTableKey() (table, key string) {
-//	table, key = c.msg.GetHead().SplitUniKey()
-//	return
-//}
-
-//func (c *cmdBase) isCancel() bool {
-//	return !c.conn.isCmdExist(c.seqNo())
-//}
 
 func (c *cmdBase) isProcessTimeout() bool {
 	return !c.processDeadline.After(time.Now())
@@ -75,13 +52,3 @@ func (c *cmdBase) isProcessTimeout() bool {
 func (c *cmdBase) isResponseTimeout() bool {
 	return !c.responseDeadline.After(time.Now())
 }
-
-//func (c *cmdBase) beforeReply() bool {
-//	if !c.isCancel() {
-//		c.conn.remCmdBySeqNo(c.seqNo())
-//
-//		return !c.isResponseTimeout()
-//	}
-//
-//	return false
-//}

@@ -1,6 +1,7 @@
 package sqlnode
 
 import (
+	"container/list"
 	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/errcode"
 	util2 "github.com/sniperHW/flyfish/util"
@@ -17,6 +18,9 @@ type cmdProcessor struct {
 	no       int
 	db       *sqlx.DB
 	cmdQueue *util.BlockQueue
+
+	curTask     sqlTask
+	curCommands list.List
 }
 
 func newCmdProcessor(no int, db *sqlx.DB) *cmdProcessor {
@@ -68,8 +72,6 @@ func (p *cmdProcessor) process() {
 			list   []interface{}
 			n      int
 			i      = 0
-			c      cmd
-			task   sqlTask
 		)
 
 		closed, list = p.cmdQueue.Get()
@@ -78,14 +80,14 @@ func (p *cmdProcessor) process() {
 		getLogger().Debugf("cmd-processor %d: start process %d commands.", p.no, n)
 
 		for i < n && atomic.LoadInt32(&p.state) != 2 {
-			switch o := list[i].(type) {
+			switch c := list[i].(type) {
 			case cmd:
-				c = o
 				if c.isProcessTimeout() {
 					// 超时
 					getLogger().Infof("cmd-processor %d: command %d is timeout, skip it.", p.no, c.seqNo())
 					completeCmd(c)
-					c = nil
+				} else {
+					p.processCmd(c)
 				}
 
 			default:
@@ -93,15 +95,11 @@ func (p *cmdProcessor) process() {
 				c = nil
 			}
 
-			if c != nil || task != nil {
-				task = p.processCmd(c, task)
-			}
-
 			i++
 		}
 
-		if task != nil {
-			p.processCmd(nil, task)
+		if p.curTask != nil {
+			p.processCmd(nil)
 		}
 
 		if closed {
@@ -113,37 +111,48 @@ func (p *cmdProcessor) process() {
 	atomic.StoreInt32(&p.state, 3)
 }
 
-func (p *cmdProcessor) processCmd(cmd cmd, t sqlTask) (task sqlTask) {
+func (p *cmdProcessor) processCmd(c cmd) {
 	defer func() {
 		if err := recover(); err != nil {
 			buff := make([]byte, 1024)
 			n := runtime.Stack(buff, false)
 			getLogger().Fatalf("cmd-processor %d process cmd: %s.\n%s", p.no, err, buff[:n])
 			//getLogger().Fatalf("cmd-processor %d process cmd: %s.\n", p.no, err)
-			task = nil
 		}
 	}()
 
-	task = t
-
-	if task != nil {
-		if cmd != nil && cmd.canCombine() && task.combine(cmd) {
-			return task
+	if p.curTask != nil {
+		if c != nil && c.canCombine() && p.curTask.combine(c) {
+			p.curCommands.PushBack(c)
+			return
 		}
 
-		doTask(task, p.db)
-		task = nil
-	}
+		errCode, version, fields := p.curTask.do(p.db)
 
-	if cmd != nil {
-		task = cmd.makeSqlTask()
-		if !task.canCombine() {
-			doTask(task, p.db)
-			task = nil
+		elem := p.curCommands.Front()
+		for elem != nil {
+			c := elem.Value.(cmd)
+			c.reply(errCode, version, fields)
+			completeCmd(c)
+			elem = elem.Next()
 		}
+
+		p.curTask = nil
+		p.curCommands.Init()
 	}
 
-	return task
+	if c != nil {
+		p.curTask = c.makeSqlTask()
+
+		if c.canCombine() {
+			p.curCommands.PushBack(c)
+			return
+		}
+
+		c.reply(p.curTask.do(p.db))
+		completeCmd(c)
+		p.curTask = nil
+	}
 }
 
 var globalCmdProcessors []*cmdProcessor
@@ -186,13 +195,4 @@ func processCmd(c cmd) {
 
 func completeCmd(c cmd) {
 	atomic.AddInt32(&commandCount, -1)
-}
-
-func doTask(t sqlTask, db *sqlx.DB) {
-	t.do(db)
-
-	//
-	for _, v := range t.getCommands() {
-		completeCmd(v)
-	}
 }
