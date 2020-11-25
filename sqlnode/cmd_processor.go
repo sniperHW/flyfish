@@ -2,6 +2,7 @@ package sqlnode
 
 import (
 	"github.com/jmoiron/sqlx"
+	"github.com/sniperHW/flyfish/errcode"
 	util2 "github.com/sniperHW/flyfish/util"
 	"github.com/sniperHW/kendynet/util"
 	"reflect"
@@ -80,13 +81,19 @@ func (p *cmdProcessor) process() {
 			switch o := list[i].(type) {
 			case cmd:
 				c = o
+				if c.isProcessTimeout() {
+					// 超时
+					getLogger().Infof("cmd-processor %d: command %d is timeout, skip it.", p.no, c.seqNo())
+					completeCmd(c)
+					c = nil
+				}
 
 			default:
 				getLogger().Errorln("cmd-processor %d: invalid cmd type: %s.", p.no, reflect.TypeOf(list[i]))
 				c = nil
 			}
 
-			if c != nil {
+			if c != nil || task != nil {
 				task = p.processCmd(c, task)
 			}
 
@@ -106,34 +113,32 @@ func (p *cmdProcessor) process() {
 	atomic.StoreInt32(&p.state, 3)
 }
 
-func (p *cmdProcessor) processCmd(cmd cmd, task sqlTask) sqlTask {
+func (p *cmdProcessor) processCmd(cmd cmd, t sqlTask) (task sqlTask) {
 	defer func() {
 		if err := recover(); err != nil {
 			buff := make([]byte, 1024)
 			n := runtime.Stack(buff, false)
-			getLogger().Errorf("cmd-processor %d process cmd: %s.\n%s", p.no, err, buff[:n])
+			getLogger().Fatalf("cmd-processor %d process cmd: %s.\n%s", p.no, err, buff[:n])
+			//getLogger().Fatalf("cmd-processor %d process cmd: %s.\n", p.no, err)
+			task = nil
 		}
 	}()
 
-	if cmd != nil && cmd.isProcessTimeout() {
-		getLogger().Infof("cmd-processor %d: command %d is timeout, skip it.", p.no, cmd.seqNo())
-		cmd = nil
-		// todo something else ?
-	}
+	task = t
 
 	if task != nil {
 		if cmd != nil && cmd.canCombine() && task.combine(cmd) {
 			return task
 		}
 
-		task.do(p.db)
+		doTask(task, p.db)
 		task = nil
 	}
 
 	if cmd != nil {
 		task = cmd.makeSqlTask()
 		if !task.canCombine() {
-			task.do(p.db)
+			doTask(task, p.db)
 			task = nil
 		}
 	}
@@ -141,9 +146,7 @@ func (p *cmdProcessor) processCmd(cmd cmd, task sqlTask) sqlTask {
 	return task
 }
 
-var (
-	globalCmdProcessors []*cmdProcessor
-)
+var globalCmdProcessors []*cmdProcessor
 
 func initCmdProcessor() {
 	nProcessors := getConfig().DBConnections
@@ -169,6 +172,27 @@ func stopCmdProcessor() {
 	getLogger().Infof("processor stop.")
 }
 
-func pushCmd(c cmd) {
+var commandCount int32
+
+func processCmd(c cmd) {
+	if atomic.LoadInt32(&commandCount) >= int32(getConfig().MaxRequestCount) {
+		c.replyError(errcode.ERR_RETRY)
+		return
+	}
+
+	atomic.AddInt32(&commandCount, 1)
 	globalCmdProcessors[util2.StringHash(c.uniKey())%len(globalCmdProcessors)].pushCmd(c)
+}
+
+func completeCmd(c cmd) {
+	atomic.AddInt32(&commandCount, -1)
+}
+
+func doTask(t sqlTask, db *sqlx.DB) {
+	t.do(db)
+
+	//
+	for _, v := range t.getCommands() {
+		completeCmd(v)
+	}
 }

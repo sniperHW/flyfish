@@ -10,7 +10,7 @@ import (
 )
 
 type sqlTaskCompareSetNx struct {
-	cmd *cmdCompareSetNx
+	sqlTaskBase
 }
 
 func (t *sqlTaskCompareSetNx) canCombine() bool {
@@ -23,21 +23,20 @@ func (t *sqlTaskCompareSetNx) combine(cmd) bool {
 
 func (t *sqlTaskCompareSetNx) do(db *sqlx.DB) {
 	var (
-		tableMeta = getDBMeta().getTableMeta(t.cmd.table)
+		cmd       = t.commands[0].(*cmdCompareSetNx)
+		tableMeta = getDBMeta().getTableMeta(t.table)
 		errCode   int32
 		version   int64
-		table     = t.cmd.table
-		key       = t.cmd.key
-		valueName = t.cmd.old.GetName()
-		oldValue  = t.cmd.old
-		newValue  = t.cmd.new
+		oldValue  = cmd.old
+		newValue  = cmd.new
+		valueName = oldValue.GetName()
 		retValue  *proto.Field
 		tx        *sqlx.Tx
 		err       error
 	)
 
 	if tx, err = db.Beginx(); err != nil {
-		getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): begin transaction: %s.", table, key, err)
+		getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): begin transaction: %s.", t.table, t.key, err)
 		errCode = errcode.ERR_SQLERROR
 	} else {
 		var (
@@ -52,30 +51,30 @@ func (t *sqlTaskCompareSetNx) do(db *sqlx.DB) {
 			n             int64
 		)
 
-		appendSingleSelectFieldsSqlStr(sqlStr, table, key, nil, []string{versionFieldName, valueName})
+		appendSingleSelectFieldsSqlStr(sqlStr, t.table, t.key, nil, []string{versionFieldName, valueName})
 		s = sqlStr.ToString()
 		start := time.Now()
 		row = tx.QueryRowx(s)
-		getLogger().Debugf("task-compare-set-nx: table(%s) key(%s): select query:\"%s\" cost:%.3f.", table, key, s, time.Now().Sub(start).Seconds())
+		getLogger().Debugf("task-compare-set-nx: table(%s) key(%s): select query:\"%s\" cost:%.3f.", t.table, t.key, s, time.Now().Sub(start).Seconds())
 
 		if err = row.Scan(&curVersion, valueReceiver); err != nil {
 			if err == sql.ErrNoRows {
 				// 记录不存在，插入新记录
 
 				sqlStr.Reset()
-				appendInsertSqlStr(sqlStr, tableMeta, key, 1, map[string]*proto.Field{valueName: newValue})
+				appendInsertSqlStr(sqlStr, tableMeta, t.key, 1, map[string]*proto.Field{valueName: newValue})
 
 				s = sqlStr.ToString()
 				start = time.Now()
 				result, err = tx.Exec(s)
-				getLogger().Debugf("task-compare-set-nx: table(%s) key(%s): insert query:\"%s\" cost:%.3f.", table, key, s, time.Now().Sub(start).Seconds())
+				getLogger().Debugf("task-compare-set-nx: table(%s) key(%s): insert query:\"%s\" cost:%.3f.", t.table, t.key, s, time.Now().Sub(start).Seconds())
 
 				if err == nil {
 					n, err = result.RowsAffected()
 				}
 
 				if err != nil {
-					getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): insert: %s.", table, key, err)
+					getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): insert: %s.", t.table, t.key, err)
 					errCode = errcode.ERR_SQLERROR
 				} else if n > 0 {
 					// 插入成功
@@ -88,13 +87,13 @@ func (t *sqlTaskCompareSetNx) do(db *sqlx.DB) {
 				} else {
 					// 插入失败, impossible
 
-					getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): insert failed - impossible.", table, key)
+					getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): insert failed - impossible.", t.table, t.key)
 					errCode = errcode.ERR_OTHER
 
 				}
 
 			} else {
-				getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): select: %s.", table, key, err)
+				getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): select: %s.", t.table, t.key, err)
 				errCode = errcode.ERR_SQLERROR
 			}
 		} else {
@@ -104,7 +103,7 @@ func (t *sqlTaskCompareSetNx) do(db *sqlx.DB) {
 				curValue = proto.PackField(valueName, fieldMeta.getConverter()(valueReceiver))
 			)
 
-			if t.cmd.version != nil && *t.cmd.version != curVersion {
+			if cmd.version != nil && *cmd.version != curVersion {
 				// 版本不匹配
 
 				errCode = errcode.ERR_VERSION_MISMATCH
@@ -128,19 +127,19 @@ func (t *sqlTaskCompareSetNx) do(db *sqlx.DB) {
 				)
 
 				sqlStr.Reset()
-				appendSingleUpdateSqlStr(sqlStr, table, key, &curVersion, &newVersion, []*proto.Field{newValue})
+				appendSingleUpdateSqlStr(sqlStr, t.table, t.key, &curVersion, &newVersion, []*proto.Field{newValue})
 
 				s = sqlStr.ToString()
 				start = time.Now()
 				result, err = tx.Exec(s)
-				getLogger().Debugf("task-compare-set-nx: table(%s) key(%s): update query: %s cost:%.3f.", table, key, s, time.Now().Sub(start).Seconds())
+				getLogger().Debugf("task-compare-set-nx: table(%s) key(%s): update query: %s cost:%.3f.", t.table, t.key, s, time.Now().Sub(start).Seconds())
 
 				if err == nil {
 					n, err = result.RowsAffected()
 				}
 
 				if err != nil {
-					getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): update: %s.", table, key, err)
+					getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): update: %s.", t.table, t.key, err)
 					errCode = errcode.ERR_SQLERROR
 				} else if n > 0 {
 					// 更新成功
@@ -153,7 +152,7 @@ func (t *sqlTaskCompareSetNx) do(db *sqlx.DB) {
 				} else {
 					// 更新失败，理论上 impossible
 
-					getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): update failed - impossible.", table, key)
+					getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): update failed - impossible.", t.table, t.key)
 					errCode = errcode.ERR_OTHER
 
 				}
@@ -164,11 +163,11 @@ func (t *sqlTaskCompareSetNx) do(db *sqlx.DB) {
 
 		if success {
 			if err = tx.Commit(); err != nil {
-				getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): transaction-commit: %s.", t.cmd.table, t.cmd.key, err)
+				getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): transaction-commit: %s.", t.table, t.key, err)
 			}
 		} else {
 			if err = tx.Rollback(); err != nil {
-				getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): transaction-rollback: %s.", t.cmd.table, t.cmd.key, err)
+				getLogger().Errorf("task-compare-set-nx: table(%s) key(%s): transaction-rollback: %s.", t.table, t.key, err)
 			}
 		}
 
@@ -181,7 +180,7 @@ func (t *sqlTaskCompareSetNx) do(db *sqlx.DB) {
 		putStr(sqlStr)
 	}
 
-	t.cmd.reply(errCode, version, retValue)
+	cmd.reply(errCode, version, retValue)
 }
 
 type cmdCompareSetNx struct {
@@ -196,7 +195,11 @@ func (c *cmdCompareSetNx) canCombine() bool {
 }
 
 func (c *cmdCompareSetNx) makeSqlTask() sqlTask {
-	return &sqlTaskCompareSetNx{cmd: c}
+	return &sqlTaskCompareSetNx{sqlTaskBase: newSqlTaskBase(c.table, c.key, []cmd{c})}
+}
+
+func (c *cmdCompareSetNx) replyError(errCode int32) {
+	c.reply(errCode, 0, nil)
 }
 
 func (c *cmdCompareSetNx) reply(errCode int32, version int64, value *proto.Field) {
@@ -258,5 +261,5 @@ func onCompareSetNx(conn *cliConn, msg *net.Message) {
 		new:     req.New,
 	}
 
-	pushCmd(cmd)
+	processCmd(cmd)
 }

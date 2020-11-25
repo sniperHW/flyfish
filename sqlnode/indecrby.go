@@ -13,7 +13,8 @@ import (
 )
 
 type sqlTaskInDeCrBy struct {
-	cmd *cmdInDeCrBy
+	sqlTaskBase
+	//cmd *cmdInDeCrBy
 }
 
 func (t *sqlTaskInDeCrBy) canCombine() bool {
@@ -26,8 +27,7 @@ func (t *sqlTaskInDeCrBy) combine(cmd) bool {
 
 func (t *sqlTaskInDeCrBy) do(db *sqlx.DB) {
 	var (
-		table    = t.cmd.table
-		key      = t.cmd.key
+		cmd      = t.commands[0].(*cmdInDeCrBy)
 		retValue *proto.Field
 		errCode  int32
 		version  int64
@@ -37,16 +37,16 @@ func (t *sqlTaskInDeCrBy) do(db *sqlx.DB) {
 
 	tx, err = db.Beginx()
 	if err != nil {
-		getLogger().Errorf("task-indecrby: table(%s) key(%s): begin-transaction: %s.", table, key, err)
+		getLogger().Errorf("task-indecrby: table(%s) key(%s): begin-transaction: %s.", t.table, t.key, err)
 		errCode = errcode.ERR_SQLERROR
 	} else {
 		var (
 			sqlStr         *str.Str
-			tableMeta      = getDBMeta().getTableMeta(t.cmd.table)
-			fieldName      = t.cmd.delta.GetName()
+			tableMeta      = getDBMeta().getTableMeta(t.table)
+			valueName      = cmd.delta.GetName()
 			success        bool
-			fieldMeta      = tableMeta.getFieldMeta(fieldName)
-			fieldReceiver  = fieldMeta.getReceiver()
+			valueMeta      = tableMeta.getFieldMeta(valueName)
+			valueReceiver  = valueMeta.getReceiver()
 			s              string
 			row            *sqlx.Row
 			recordNotExist bool
@@ -55,28 +55,27 @@ func (t *sqlTaskInDeCrBy) do(db *sqlx.DB) {
 
 		sqlStr = getStr()
 
-		appendSingleSelectFieldsSqlStr(sqlStr, table, key, nil, []string{versionFieldName, fieldName})
+		appendSingleSelectFieldsSqlStr(sqlStr, t.table, t.key, nil, []string{versionFieldName, valueName})
 
 		s = sqlStr.ToString()
 		start := time.Now()
 		fmt.Println(s)
 		row = tx.QueryRowx(s)
-		getLogger().Debugf("task-indecrby: table(%s) key(%s): select query:\"%s\" cost:%.3f.", table, key, s, time.Now().Sub(start).Seconds())
+		getLogger().Debugf("task-indecrby: table(%s) key(%s): select query:\"%s\" cost:%.3f.", t.table, t.key, s, time.Now().Sub(start).Seconds())
 
-		if err = row.Scan(&curVersion, fieldReceiver); err != nil {
+		if err = row.Scan(&curVersion, valueReceiver); err != nil {
 			if err == sql.ErrNoRows {
 				err = nil
 				recordNotExist = true
 			} else {
-				getLogger().Errorf("task-indecrby: table(%s) key(%s): select: %s.", table, key, err)
+				getLogger().Errorf("task-indecrby: table(%s) key(%s): select: %s.", t.table, t.key, err)
 				errCode = errcode.ERR_SQLERROR
 			}
 		}
 
 		if err == nil {
 			var (
-				valueDelta = t.cmd.delta
-				valueName  = t.cmd.delta.GetName()
+				valueDelta = cmd.delta
 				newValue   *proto.Field
 				result     sql.Result
 				n          int64
@@ -87,25 +86,25 @@ func (t *sqlTaskInDeCrBy) do(db *sqlx.DB) {
 			if recordNotExist {
 				// 插入
 
-				if t.cmd.incr {
-					newValue = proto.PackField(valueName, fieldMeta.getDefaultV().(int64)+valueDelta.GetInt())
+				if cmd.incr {
+					newValue = proto.PackField(valueName, valueMeta.getDefaultV().(int64)+valueDelta.GetInt())
 				} else {
-					newValue = proto.PackField(valueName, fieldMeta.getDefaultV().(int64)-valueDelta.GetInt())
+					newValue = proto.PackField(valueName, valueMeta.getDefaultV().(int64)-valueDelta.GetInt())
 				}
 
-				appendInsertSqlStr(sqlStr, tableMeta, key, 1, map[string]*proto.Field{valueName: newValue})
+				appendInsertSqlStr(sqlStr, tableMeta, t.key, 1, map[string]*proto.Field{valueName: newValue})
 
 				s = sqlStr.ToString()
 				start = time.Now()
 				result, err = tx.Exec(s)
-				getLogger().Debugf("task-indecrby: table(%s) key(%s): insert query:\"%s\" cost:%.3f.", table, key, s, time.Now().Sub(start).Seconds())
+				getLogger().Debugf("task-indecrby: table(%s) key(%s): insert query:\"%s\" cost:%.3f.", t.table, t.key, s, time.Now().Sub(start).Seconds())
 
 				if err == nil {
 					n, err = result.RowsAffected()
 				}
 
 				if err != nil {
-					getLogger().Errorf("task-indecrby: table(%s) key(%s): insert: %s.", table, key, err)
+					getLogger().Errorf("task-indecrby: table(%s) key(%s): insert: %s.", t.table, t.key, err)
 					errCode = errcode.ERR_SQLERROR
 				} else if n > 0 {
 					errCode = errcode.ERR_OK
@@ -113,7 +112,7 @@ func (t *sqlTaskInDeCrBy) do(db *sqlx.DB) {
 					retValue = newValue
 					success = true
 				} else {
-					getLogger().Errorf("task-indecrby: table(%s) key(%s): insert failed - impossible.", table, key)
+					getLogger().Errorf("task-indecrby: table(%s) key(%s): insert failed - impossible.", t.table, t.key)
 					errCode = errcode.ERR_OTHER
 				}
 			} else {
@@ -123,28 +122,28 @@ func (t *sqlTaskInDeCrBy) do(db *sqlx.DB) {
 					newVersion = curVersion + 1
 				)
 
-				if t.cmd.incr {
-					newValue = proto.PackField(valueName, fieldMeta.getConverter()(fieldReceiver).(int64)+valueDelta.GetInt())
+				if cmd.incr {
+					newValue = proto.PackField(valueName, valueMeta.getConverter()(valueReceiver).(int64)+valueDelta.GetInt())
 				} else {
-					newValue = proto.PackField(valueName, fieldMeta.getConverter()(fieldReceiver).(int64)-valueDelta.GetInt())
+					newValue = proto.PackField(valueName, valueMeta.getConverter()(valueReceiver).(int64)-valueDelta.GetInt())
 				}
 
-				if t.cmd.version != nil && *t.cmd.version != curVersion {
+				if cmd.version != nil && *cmd.version != curVersion {
 					errCode = errcode.ERR_VERSION_MISMATCH
 				} else {
-					appendSingleUpdateSqlStr(sqlStr, table, key, &curVersion, &newVersion, []*proto.Field{newValue})
+					appendSingleUpdateSqlStr(sqlStr, t.table, t.key, &curVersion, &newVersion, []*proto.Field{newValue})
 
 					s = sqlStr.ToString()
 					start = time.Now()
 					result, err = tx.Exec(s)
-					getLogger().Debugf("task-indecrby: table(%s) key(%s): update query:\"%s\" cost:%.3f.", table, key, s, time.Now().Sub(start).Seconds())
+					getLogger().Debugf("task-indecrby: table(%s) key(%s): update query:\"%s\" cost:%.3f.", t.table, t.key, s, time.Now().Sub(start).Seconds())
 
 					if err == nil {
 						n, err = result.RowsAffected()
 					}
 
 					if err != nil {
-						getLogger().Errorf("task-indecrby: table(%s) key(%s): update: %s.", table, key, err)
+						getLogger().Errorf("task-indecrby: table(%s) key(%s): update: %s.", t.table, t.key, err)
 						errCode = errcode.ERR_SQLERROR
 					} else if n > 0 {
 						errCode = errcode.ERR_OK
@@ -152,7 +151,7 @@ func (t *sqlTaskInDeCrBy) do(db *sqlx.DB) {
 						retValue = newValue
 						success = true
 					} else {
-						getLogger().Errorf("task-indecrby: table(%s) key(%s): update failed - impossible.", table, key)
+						getLogger().Errorf("task-indecrby: table(%s) key(%s): update failed - impossible.", t.table, t.key)
 						errCode = errcode.ERR_OTHER
 					}
 				}
@@ -164,19 +163,19 @@ func (t *sqlTaskInDeCrBy) do(db *sqlx.DB) {
 
 		if success {
 			if err = tx.Commit(); err != nil {
-				getLogger().Errorf("task-indecrby: table(%s) key(%s): commit-transaction: %s.", table, key, err)
+				getLogger().Errorf("task-indecrby: table(%s) key(%s): commit-transaction: %s.", t.table, t.key, err)
 				errCode = errcode.ERR_SQLERROR
 				version = 0
 				retValue = nil
 			}
 		} else {
 			if err = tx.Rollback(); err != nil {
-				getLogger().Errorf("task-indecrby: table(%s) key(%s): rollback-transaction: %s.", table, key, err)
+				getLogger().Errorf("task-indecrby: table(%s) key(%s): rollback-transaction: %s.", t.table, t.key, err)
 			}
 		}
 	}
 
-	t.cmd.reply(errCode, version, retValue)
+	cmd.reply(errCode, version, retValue)
 }
 
 type cmdInDeCrBy struct {
@@ -191,7 +190,11 @@ func (c *cmdInDeCrBy) canCombine() bool {
 }
 
 func (c *cmdInDeCrBy) makeSqlTask() sqlTask {
-	return &sqlTaskInDeCrBy{cmd: c}
+	return &sqlTaskInDeCrBy{sqlTaskBase: newSqlTaskBase(c.table, c.key, []cmd{c})}
+}
+
+func (c *cmdInDeCrBy) replyError(errCode int32) {
+	c.reply(errCode, 0, nil)
 }
 
 func (c *cmdInDeCrBy) reply(errCode int32, version int64, field *proto.Field) {
@@ -243,7 +246,7 @@ func onIncrBy(conn *cliConn, msg *net.Message) {
 		incr:    true,
 	}
 
-	pushCmd(cmd)
+	processCmd(cmd)
 }
 
 func onDecrBy(conn *cliConn, msg *net.Message) {
@@ -275,5 +278,5 @@ func onDecrBy(conn *cliConn, msg *net.Message) {
 		incr:    false,
 	}
 
-	pushCmd(cmd)
+	processCmd(cmd)
 }

@@ -7,8 +7,39 @@ import (
 type sqlTask interface {
 	canCombine() bool
 	combine(cmd) bool
+	getCommands() []cmd
 	do(*sqlx.DB)
 	//reply()
+}
+
+type sqlTaskBase struct {
+	table    string
+	key      string
+	commands []cmd
+}
+
+func newSqlTaskBase(table, key string, commands []cmd) sqlTaskBase {
+	return sqlTaskBase{
+		table:    table,
+		key:      key,
+		commands: commands,
+	}
+}
+
+func (t *sqlTaskBase) getCommands() []cmd {
+	return t.commands
+}
+
+//func (t *sqlTaskBase) reply(errCode int32, version int64, fields map[string]*proto.Field) {
+//	for _, v := range t.commands {
+//		v.reply(errCode, version, fields)
+//	}
+//}
+
+func (t *sqlTaskBase) replyError(errCode int32) {
+	for _, v := range t.commands {
+		v.replyError(errCode)
+	}
 }
 
 //type sqlCombinableTaskBase struct {

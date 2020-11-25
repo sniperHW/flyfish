@@ -16,6 +16,8 @@ type config struct {
 
 	Compress bool
 
+	MaxRequestCount int
+
 	DBConfig struct {
 		SqlType string
 

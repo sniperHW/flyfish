@@ -9,7 +9,8 @@ import (
 )
 
 type sqlTaskDel struct {
-	cmd *cmdDel
+	sqlTaskBase
+	//cmd *cmdDel
 }
 
 func (t *sqlTaskDel) canCombine() bool {
@@ -22,30 +23,29 @@ func (t *sqlTaskDel) combine(cmd) bool {
 
 func (t *sqlTaskDel) do(db *sqlx.DB) {
 	var (
-		table   = t.cmd.table
-		key     = t.cmd.key
+		cmd     = t.commands[0].(*cmdDel)
 		errCode int32
 		version int64
 		sqlStr  = getStr()
 	)
 
-	appendSingleDeleteSqlStr(sqlStr, table, key, t.cmd.version)
+	appendSingleDeleteSqlStr(sqlStr, t.table, t.key, cmd.version)
 
 	s := sqlStr.ToString()
 	start := time.Now()
 	result, err := db.Exec(s)
-	getLogger().Debugf("task-del: table(%s) key(%s): delete query:\"%s\" cost:%.3fs.", table, key, s, time.Now().Sub(start).Seconds())
+	getLogger().Debugf("task-del: table(%s) key(%s): delete query:\"%s\" cost:%.3fs.", t.table, t.key, s, time.Now().Sub(start).Seconds())
 
 	if err != nil {
-		getLogger().Errorf("task-del: table(%s) key(%s): delete: %s.", table, key, err)
+		getLogger().Errorf("task-del: table(%s) key(%s): delete: %s.", t.table, t.key, err)
 		errCode = errcode.ERR_SQLERROR
 	} else if n, err := result.RowsAffected(); err != nil {
-		getLogger().Errorf("task-del: table(%s) key(%s): delete: %s.", table, key, err)
+		getLogger().Errorf("task-del: table(%s) key(%s): delete: %s.", t.table, t.key, err)
 		errCode = errcode.ERR_SQLERROR
 	} else if n > 0 {
 		errCode = errcode.ERR_OK
 	} else {
-		if t.cmd.version != nil {
+		if cmd.version != nil {
 			errCode = errcode.ERR_VERSION_MISMATCH
 		} else {
 			errCode = errcode.ERR_RECORD_NOTEXIST
@@ -53,7 +53,7 @@ func (t *sqlTaskDel) do(db *sqlx.DB) {
 	}
 
 	putStr(sqlStr)
-	t.cmd.reply(errCode, version)
+	cmd.reply(errCode, version)
 }
 
 type cmdDel struct {
@@ -66,7 +66,15 @@ func (c *cmdDel) canCombine() bool {
 }
 
 func (c *cmdDel) makeSqlTask() sqlTask {
-	return &sqlTaskDel{cmd: c}
+	return &sqlTaskDel{sqlTaskBase{
+		table:    c.table,
+		key:      c.key,
+		commands: []cmd{c},
+	}}
+}
+
+func (c *cmdDel) replyError(errCode int32) {
+	c.reply(errCode, 0)
 }
 
 func (c *cmdDel) reply(errCode int32, version int64) {
@@ -96,5 +104,5 @@ func onDel(cli *cliConn, msg *net.Message) {
 		version: req.Version,
 	}
 
-	pushCmd(cmd)
+	processCmd(cmd)
 }

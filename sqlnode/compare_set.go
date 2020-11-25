@@ -10,7 +10,8 @@ import (
 )
 
 type sqlTaskCompareSet struct {
-	cmd *cmdCompareSet
+	sqlTaskBase
+	//cmd *cmdCompareSet
 }
 
 func (t *sqlTaskCompareSet) canCombine() bool {
@@ -23,9 +24,10 @@ func (t *sqlTaskCompareSet) combine(cmd) bool {
 
 func (t *sqlTaskCompareSet) do(db *sqlx.DB) {
 	var (
-		table      = t.cmd.table
-		key        = t.cmd.key
-		tableMeta  = getDBMeta().getTableMeta(t.cmd.table)
+		cmd        = t.commands[0].(*cmdCompareSet)
+		oldValue   = cmd.old
+		newValue   = cmd.new
+		tableMeta  = getDBMeta().getTableMeta(t.table)
 		errCode    int32
 		version    int64
 		valueField *proto.Field
@@ -34,23 +36,23 @@ func (t *sqlTaskCompareSet) do(db *sqlx.DB) {
 	)
 
 	if tx, err = db.Beginx(); err != nil {
-		getLogger().Errorf("task-compare-set: table(%s) key(%s): begin-transaction: %s.", table, key, err)
+		getLogger().Errorf("task-compare-set: table(%s) key(%s): begin-transaction: %s.", t.table, t.key, err)
 		errCode = errcode.ERR_SQLERROR
 	} else {
 		var (
-			valueName = t.cmd.old.GetName()
+			valueName = oldValue.GetName()
 			sqlStr    = getStr()
 			s         string
 			result    sql.Result
 			n         int64
 		)
 
-		appendSingleUpdateSqlStr(sqlStr, table, key, t.cmd.version, nil, []*proto.Field{t.cmd.new}, sqlCond{sqlCondEqual, t.cmd.old})
+		appendSingleUpdateSqlStr(sqlStr, t.table, t.key, cmd.version, nil, []*proto.Field{newValue}, sqlCond{sqlCondEqual, oldValue})
 
 		s = sqlStr.ToString()
 		start := time.Now()
 		result, err = tx.Exec(s)
-		getLogger().Debugf("task-compare-set: table(%s) key(%s): update query:\"%s\" cost:%.3fs.", table, key, s, time.Now().Sub(start).Seconds())
+		getLogger().Debugf("task-compare-set: table(%s) key(%s): update query:\"%s\" cost:%.3fs.", t.table, t.key, s, time.Now().Sub(start).Seconds())
 
 		success := false
 
@@ -59,41 +61,43 @@ func (t *sqlTaskCompareSet) do(db *sqlx.DB) {
 		}
 
 		if err != nil {
-			getLogger().Errorf("task-compare-set: table(%s) key(%s): update: %s.", table, key, err)
+			getLogger().Errorf("task-compare-set: table(%s) key(%s): update: %s.", t.table, t.key, err)
 			errCode = errcode.ERR_SQLERROR
 		} else if n > 0 {
 			// 更新成功
 
-			if t.cmd.version != nil {
+			if cmd.version != nil {
 				// 直接计算出新的 version
 
 				errCode = errcode.ERR_OK
-				version = *t.cmd.version + 1
-				valueField = t.cmd.new
+				version = *cmd.version + 1
+				valueField = cmd.new
 				success = true
 			} else {
 				// 查询 version
 
 				sqlStr.Reset()
-				appendSingleSelectFieldsSqlStr(sqlStr, table, key, nil, []string{versionFieldName})
+				appendSingleSelectFieldsSqlStr(sqlStr, t.table, t.key, nil, []string{versionFieldName})
 
 				s = sqlStr.ToString()
 				start := time.Now()
 				row := tx.QueryRowx(s)
-				getLogger().Debugf("task-compare-set: table(%s) key(%s): select version query:\"%s\" cost:%.3fs.", table, key, s, time.Now().Sub(start).Seconds())
+				getLogger().Debugf("task-compare-set: table(%s) key(%s): select version query:\"%s\" cost:%.3fs.", t.table, t.key, s, time.Now().Sub(start).Seconds())
 
-				if err = row.Scan(&version); err != nil {
-					if err == sql.ErrNoRows {
-						errCode = errcode.ERR_RECORD_NOTEXIST
-					} else {
-						getLogger().Errorf("task-compare-set: table(%s) key(%s): select version: %s.", table, key, err)
-						errCode = errcode.ERR_SQLERROR
-					}
+				err = row.Scan(&version)
+
+				if err == sql.ErrNoRows {
+					getLogger().Errorf("task-compare-set: table(%s) key(%s): update successfully but record not exist.", t.table, t.key)
+					errCode = errcode.ERR_RECORD_NOTEXIST
+				} else if err != nil {
+					getLogger().Errorf("task-compare-set: table(%s) key(%s): select version: %s.", t.table, t.key, err)
+					errCode = errcode.ERR_SQLERROR
 				} else {
 					errCode = errcode.ERR_OK
-					valueField = t.cmd.new
+					valueField = newValue
 					success = true
 				}
+
 			}
 
 		} else {
@@ -103,38 +107,39 @@ func (t *sqlTaskCompareSet) do(db *sqlx.DB) {
 			)
 
 			sqlStr.Reset()
-			appendSingleSelectFieldsSqlStr(sqlStr, table, key, nil, []string{versionFieldName, valueName})
+			appendSingleSelectFieldsSqlStr(sqlStr, t.table, t.key, nil, []string{versionFieldName, valueName})
 
 			s = sqlStr.ToString()
 			start := time.Now()
 			row := db.QueryRowx(s)
-			getLogger().Debugf("task-compare-set: table(%s) key(%s): select query:\"%s\" cost:%.3fs.", table, key, s, time.Now().Sub(start).Seconds())
+			getLogger().Debugf("task-compare-set: table(%s) key(%s): select query:\"%s\" cost:%.3fs.", t.table, t.key, s, time.Now().Sub(start).Seconds())
 
-			if err = row.Scan(&version, valueReceiver); err != nil {
-				if err == sql.ErrNoRows {
-					errCode = errcode.ERR_RECORD_NOTEXIST
-				} else {
-					getLogger().Errorf("task-compare-set: table(%s) key(%s): select: %s.", table, key, err)
-					errCode = errcode.ERR_SQLERROR
-				}
+			err = row.Scan(&version, valueReceiver)
+
+			if err == sql.ErrNoRows {
+				errCode = errcode.ERR_RECORD_NOTEXIST
+			} else if err != nil {
+				getLogger().Errorf("task-compare-set: table(%s) key(%s): select: %s.", t.table, t.key, err)
+				errCode = errcode.ERR_SQLERROR
 			} else {
-				valueField = proto.PackField(t.cmd.new.GetName(), fieldMeta.getConverter()(valueReceiver))
+				valueField = proto.PackField(cmd.new.GetName(), fieldMeta.getConverter()(valueReceiver))
 
-				if t.cmd.version != nil && version != *t.cmd.version {
+				if cmd.version != nil && version != *cmd.version {
 					errCode = errcode.ERR_VERSION_MISMATCH
 				} else {
 					errCode = errcode.ERR_CAS_NOT_EQUAL
 				}
 			}
+
 		}
 
 		if success {
 			if err = tx.Commit(); err != nil {
-				getLogger().Errorf("task-compare-set: table(%s) key(%s): transaction-commit: %s.", table, key, err)
+				getLogger().Errorf("task-compare-set: table(%s) key(%s): transaction-commit: %s.", t.table, t.key, err)
 			}
 		} else {
 			if err = tx.Rollback(); err != nil {
-				getLogger().Errorf("task-compare-set: table(%s) key(%s): transaction-rollback: %s.", table, key, err)
+				getLogger().Errorf("task-compare-set: table(%s) key(%s): transaction-rollback: %s.", t.table, t.key, err)
 			}
 		}
 
@@ -147,7 +152,7 @@ func (t *sqlTaskCompareSet) do(db *sqlx.DB) {
 		putStr(sqlStr)
 	}
 
-	t.cmd.reply(errCode, version, valueField)
+	cmd.reply(errCode, version, valueField)
 }
 
 type cmdCompareSet struct {
@@ -162,7 +167,11 @@ func (c *cmdCompareSet) canCombine() bool {
 }
 
 func (c *cmdCompareSet) makeSqlTask() sqlTask {
-	return &sqlTaskCompareSet{cmd: c}
+	return &sqlTaskCompareSet{sqlTaskBase: newSqlTaskBase(c.table, c.key, []cmd{c})}
+}
+
+func (c *cmdCompareSet) replyError(errCode int32) {
+	c.reply(errCode, 0, nil)
 }
 
 func (c *cmdCompareSet) reply(errCode int32, version int64, value *proto.Field) {
@@ -224,5 +233,5 @@ func onCompareSet(conn *cliConn, msg *net.Message) {
 		new:     req.New,
 	}
 
-	pushCmd(cmd)
+	processCmd(cmd)
 }

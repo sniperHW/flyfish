@@ -11,6 +11,8 @@ type cmd interface {
 	canCombine() bool
 	isProcessTimeout() bool
 	makeSqlTask() sqlTask
+	//reply(int32, int64, map[string]*proto.Field)
+	replyError(int32)
 }
 
 type cmdBase struct {

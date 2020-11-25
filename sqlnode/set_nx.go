@@ -10,7 +10,8 @@ import (
 )
 
 type sqlTaskSetNx struct {
-	cmd *cmdSetNx
+	sqlTaskBase
+	//cmd *cmdSetNx
 }
 
 func (t *sqlTaskSetNx) canCombine() bool {
@@ -23,9 +24,8 @@ func (t *sqlTaskSetNx) combine(cmd) bool {
 
 func (t *sqlTaskSetNx) do(db *sqlx.DB) {
 	var (
-		table     = t.cmd.table
-		key       = t.cmd.key
-		tableMeta = getDBMeta().getTableMeta(table)
+		cmd       = t.commands[0].(*cmdSetNx)
+		tableMeta = getDBMeta().getTableMeta(t.table)
 		errCode   int32
 		version   int64
 		fields    []*proto.Field
@@ -52,7 +52,7 @@ func (t *sqlTaskSetNx) do(db *sqlx.DB) {
 			success              bool
 		)
 
-		getFieldCount = len(t.cmd.fields)
+		getFieldCount = len(cmd.fields)
 		queryFieldCount = getFieldCount + 1
 		queryFields = make([]string, queryFieldCount)
 		queryFieldReceivers = make([]interface{}, queryFieldCount)
@@ -61,7 +61,7 @@ func (t *sqlTaskSetNx) do(db *sqlx.DB) {
 		queryFieldReceivers[0] = versionFieldMeta.getReceiver()
 		queryFieldConverters[0] = versionFieldMeta.getConverter()
 		i = 1
-		for k, _ := range t.cmd.fields {
+		for k, _ := range cmd.fields {
 			fm := tableMeta.getFieldMeta(k)
 			queryFields[i] = k
 			queryFieldReceivers[i] = fm.getReceiver()
@@ -69,12 +69,12 @@ func (t *sqlTaskSetNx) do(db *sqlx.DB) {
 			i++
 		}
 
-		appendSingleSelectFieldsSqlStr(sqlStr, table, key, nil, queryFields)
+		appendSingleSelectFieldsSqlStr(sqlStr, t.table, t.key, nil, queryFields)
 
 		s = sqlStr.ToString()
 		start = time.Now()
 		row = tx.QueryRowx(s)
-		getLogger().Debugf("task-set-nx: table(%s) key(%s): select query:\"%s\" cost:%.3fs.", table, key, s, time.Now().Sub(start).Seconds())
+		getLogger().Debugf("task-set-nx: table(%s) key(%s): select query:\"%s\" cost:%.3fs.", t.table, t.key, s, time.Now().Sub(start).Seconds())
 
 		err = row.Scan(queryFieldReceivers...)
 
@@ -101,43 +101,43 @@ func (t *sqlTaskSetNx) do(db *sqlx.DB) {
 			)
 
 			sqlStr.Reset()
-			appendInsertSqlStr(sqlStr, tableMeta, key, 1, t.cmd.fields)
+			appendInsertSqlStr(sqlStr, tableMeta, t.key, 1, cmd.fields)
 			s = sqlStr.ToString()
 			start = time.Now()
 			result, err = tx.Exec(s)
-			getLogger().Debugf("task-set-nx: table(%s) key(%s): insert query:\"%s\" cost:%.3fs.", table, key, s, time.Now().Sub(start).Seconds())
+			getLogger().Debugf("task-set-nx: table(%s) key(%s): insert query:\"%s\" cost:%.3fs.", t.table, t.key, s, time.Now().Sub(start).Seconds())
 
 			if err == nil {
 				n, err = result.RowsAffected()
 			}
 
 			if err != nil {
-				getLogger().Errorf("task-set-nx: table(%s) key(%s): insert: %s.", table, key, err)
+				getLogger().Errorf("task-set-nx: table(%s) key(%s): insert: %s.", t.table, t.key, err)
 				errCode = errcode.ERR_SQLERROR
 			} else if n > 0 {
 				errCode = errcode.ERR_OK
 				version = 1
 				success = true
 			} else {
-				getLogger().Errorf("task-set-nx: table(%s) key(%s): record exist - impossible.", table, key)
+				getLogger().Errorf("task-set-nx: table(%s) key(%s): record exist - impossible.", t.table, t.key)
 				errCode = errcode.ERR_RECORD_EXIST
 			}
 
 		} else {
-			getLogger().Errorf("task-set-nx: table(%s) key(%s): select: %s.", table, key, err)
+			getLogger().Errorf("task-set-nx: table(%s) key(%s): select: %s.", t.table, t.key, err)
 			errCode = errcode.ERR_SQLERROR
 		}
 
 		if success {
 			if err = tx.Commit(); err != nil {
-				getLogger().Errorf("task-set-nx: table(%s) key(%s): transaction-commit: %s.", table, key, err)
+				getLogger().Errorf("task-set-nx: table(%s) key(%s): transaction-commit: %s.", t.table, t.key, err)
 				errCode = errcode.ERR_SQLERROR
 				version = 0
 				fields = nil
 			}
 		} else {
 			if err = tx.Rollback(); err != nil {
-				getLogger().Errorf("task-set-nx: table(%s) key(%s): transaction-rollback: %s.", table, key, err)
+				getLogger().Errorf("task-set-nx: table(%s) key(%s): transaction-rollback: %s.", t.table, t.key, err)
 				errCode = errcode.ERR_SQLERROR
 			}
 		}
@@ -145,7 +145,7 @@ func (t *sqlTaskSetNx) do(db *sqlx.DB) {
 		putStr(sqlStr)
 	}
 
-	t.cmd.reply(errCode, version, fields)
+	cmd.reply(errCode, version, fields)
 }
 
 type cmdSetNx struct {
@@ -159,7 +159,15 @@ func (c *cmdSetNx) canCombine() bool {
 }
 
 func (c *cmdSetNx) makeSqlTask() sqlTask {
-	return &sqlTaskSetNx{cmd: c}
+	return &sqlTaskSetNx{sqlTaskBase{
+		table:    c.table,
+		key:      c.key,
+		commands: []cmd{c},
+	}}
+}
+
+func (c *cmdSetNx) replyError(errCode int32) {
+	c.reply(errCode, 0, nil)
 }
 
 func (c *cmdSetNx) reply(errCode int32, version int64, fields []*proto.Field) {
@@ -243,5 +251,5 @@ func onSetNx(conn *cliConn, msg *net.Message) {
 		cmd.fields[v.GetName()] = v
 	}
 
-	pushCmd(cmd)
+	processCmd(cmd)
 }

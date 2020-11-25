@@ -10,21 +10,11 @@ import (
 import "github.com/sniperHW/flyfish/proto"
 
 type sqlTaskGet struct {
+	sqlTaskBase
 	uniKey    string
-	table     string
-	key       string
-	commands  []*cmdGet
 	getAll    bool
 	getFields []string
 	fields    map[string]*proto.Field
-}
-
-func (t *sqlTaskGet) addCmd(cmd *cmdGet) {
-	if cmd == nil {
-		panic("cmd is nil")
-	}
-
-	t.commands = append(t.commands, cmd)
 }
 
 func (t *sqlTaskGet) canCombine() bool {
@@ -60,7 +50,7 @@ func (t *sqlTaskGet) combine(c cmd) bool {
 		}
 	}
 
-	t.addCmd(cmd)
+	t.commands = append(t.commands, c)
 
 	return true
 }
@@ -134,7 +124,7 @@ func (t *sqlTaskGet) do(db *sqlx.DB) {
 
 func (t *sqlTaskGet) reply(errCode int32, version int64, fields map[string]*proto.Field) {
 	for _, cmd := range t.commands {
-		cmd.reply(errCode, version, fields)
+		cmd.(*cmdGet).reply(errCode, version, fields)
 	}
 }
 
@@ -145,23 +135,21 @@ type cmdGet struct {
 	version *int64
 }
 
-//func (c *cmdGet) getReq() *proto.GetReq {
-//	return c.msg.GetData().(*proto.GetReq)
-//}
-
 func (c *cmdGet) canCombine() bool {
 	return true
 }
+
+//func (c *cmdGet) getReq() *proto.GetReq {
+//	return c.msg.GetData().(*proto.GetReq)
+//}
 
 func (c *cmdGet) makeSqlTask() sqlTask {
 	tableFieldCount := getDBMeta().getTableMeta(c.table).getFieldCount()
 
 	task := &sqlTaskGet{
-		uniKey:   c.uKey,
-		table:    c.table,
-		key:      c.key,
-		commands: make([]*cmdGet, 0, 1),
-		fields:   make(map[string]*proto.Field, tableFieldCount),
+		sqlTaskBase: newSqlTaskBase(c.table, c.key, []cmd{c}),
+		uniKey:      c.uKey,
+		fields:      make(map[string]*proto.Field, tableFieldCount),
 	}
 
 	if c.getAll {
@@ -184,9 +172,11 @@ func (c *cmdGet) makeSqlTask() sqlTask {
 	//	task.getWithVersion = false
 	//}
 
-	task.addCmd(c)
-
 	return task
+}
+
+func (c *cmdGet) replyError(errCode int32) {
+	c.reply(errCode, 0, nil)
 }
 
 func (c *cmdGet) reply(errCode int32, version int64, fields map[string]*proto.Field) {
@@ -199,7 +189,7 @@ func (c *cmdGet) reply(errCode int32, version int64, fields map[string]*proto.Fi
 		if errCode == errcode.ERR_OK {
 			if c.version != nil && version == *c.version {
 				errCode = errcode.ERR_RECORD_UNCHANGE
-			} else {
+			} else if len(fields) > 0 {
 				if c.getAll {
 					resp.Fields = make([]*proto.Field, len(fields))
 					i := 0
@@ -268,5 +258,5 @@ func onGet(conn *cliConn, msg *net.Message) {
 		version: req.Version,
 	}
 
-	pushCmd(cmd)
+	processCmd(cmd)
 }
