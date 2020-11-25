@@ -185,10 +185,7 @@ func processCmd(c cmd) {
 }
 
 func completeCmd(c cmd) {
-	n := atomic.AddInt32(&commandCount, -1)
-	if n == 0 {
-		getLogger().Infof("command count 0")
-	}
+	atomic.AddInt32(&commandCount, -1)
 }
 
 func doTask(t sqlTask, db *sqlx.DB) {
