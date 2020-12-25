@@ -134,7 +134,7 @@ func (this *reqProcessor) onReq(seqno int64, session kendynet.StreamSession, req
 				session:   session,
 				processor: this,
 			}
-			pReq.deadlineTimer = this.timerMgr.Once(time.Duration(timeout)*time.Millisecond, nil, pReq.onTimeout, nil)
+			pReq.deadlineTimer = this.timerMgr.Once(time.Duration(timeout)*time.Millisecond, pReq.onTimeout, nil)
 			this.pendingReqs[seqno] = pReq
 		}
 		return err

@@ -540,7 +540,7 @@ func (rc *raftNode) startRaft() {
 		}
 	}
 
-	rc.readIndexTimer = timer.Repeat(time.Second, nil, rc.processTimeoutReadReq, nil)
+	rc.readIndexTimer = timer.Repeat(time.Second, rc.processTimeoutReadReq, nil)
 
 	go rc.serveChannels()
 }
