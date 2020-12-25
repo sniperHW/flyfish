@@ -19,9 +19,7 @@ func MGet(callbackQueue *event.EventQueue, cmds ...*SliceCmd) *MGetCmd {
 
 func (this *MGetCmd) doCallBack(sync bool, cb func([]*SliceResult), rets []*SliceResult) {
 	if !sync && nil != this.callbackQueue {
-		this.callbackQueue.Post(func() {
-			cb(rets)
-		})
+		this.callbackQueue.Post(cb, rets)
 	} else {
 		defer util.Recover(logger)
 		cb(rets)

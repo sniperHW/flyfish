@@ -16,8 +16,7 @@ type Client struct {
 	compress      bool
 }
 
-func (this *Client) pcall(unikey string, cb callback, a interface{}) {
-	defer util.Recover(logger)
+func (this *Client) callcb(unikey string, cb callback, a interface{}) {
 	switch a.(type) {
 	case int32:
 		cb.onError(unikey, a.(int32))
@@ -28,16 +27,10 @@ func (this *Client) pcall(unikey string, cb callback, a interface{}) {
 
 func (this *Client) doCallBack(unikey string, cb callback, a interface{}) {
 	if nil != this.callbackQueue && cb.sync == false {
-		this.callbackQueue.Post(func() {
-			switch a.(type) {
-			case int32:
-				cb.onError(unikey, a.(int32))
-			default:
-				cb.onResult(unikey, a)
-			}
-		})
+		this.callbackQueue.Post(this.callcb, unikey, cb, a)
 	} else {
-		this.pcall(unikey, cb, a)
+		defer util.Recover(logger)
+		this.callcb(unikey, cb, a)
 	}
 }
 
