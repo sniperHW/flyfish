@@ -133,13 +133,17 @@ func (this *Conn) exec(c *cmdContext) {
 
 		if this.dialing {
 			if len(this.pendingSend) < maxPendingSize {
-				this.timerMgr.OnceWithIndex(time.Duration(ClientTimeout)*time.Millisecond, this.eventQueue, this.onTimeout, c, uint64(c.req.GetHead().Seqno))
+				this.timerMgr.OnceWithIndex(time.Duration(ClientTimeout)*time.Millisecond, func(t *timer.Timer, ctx interface{}) {
+					this.eventQueue.PostNoWait(this.onTimeout, t, ctx)
+				}, c, uint64(c.req.GetHead().Seqno))
 				this.pendingSend = append(this.pendingSend, c)
 			} else {
 				this.c.doCallBack(c.unikey, c.cb, errcode.ERR_BUSY)
 			}
 		} else {
-			this.timerMgr.OnceWithIndex(time.Duration(ClientTimeout)*time.Millisecond, this.eventQueue, this.onTimeout, c, uint64(c.req.GetHead().Seqno))
+			this.timerMgr.OnceWithIndex(time.Duration(ClientTimeout)*time.Millisecond, func(t *timer.Timer, ctx interface{}) {
+				this.eventQueue.PostNoWait(this.onTimeout, t, ctx)
+			}, c, uint64(c.req.GetHead().Seqno))
 			this.sendReq(c)
 		}
 	})

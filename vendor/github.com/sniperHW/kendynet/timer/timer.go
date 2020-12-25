@@ -3,7 +3,7 @@ package timer
 import (
 	"fmt"
 	"github.com/sniperHW/kendynet"
-	"github.com/sniperHW/kendynet/event"
+	//"github.com/sniperHW/kendynet/event"
 	"github.com/sniperHW/kendynet/util"
 	"runtime"
 	"sync"
@@ -22,7 +22,7 @@ const (
 )
 
 type Timer struct {
-	eventQue *event.EventQueue
+	//eventQue *event.EventQueue
 	duration time.Duration
 	repeat   bool //是否重复定时器
 	status   int32
@@ -42,7 +42,7 @@ func (this *Timer) GetCTX() interface{} {
 	return this.ctx
 }
 
-func (this *Timer) call_() {
+func (this *Timer) call() {
 	if atomic.CompareAndSwapInt32(&this.status, waitting, firing) {
 		if _, err := util.ProtectCall(this.callback, this, this.ctx); nil != err {
 			logger := kendynet.GetLogger()
@@ -66,16 +66,6 @@ func (this *Timer) call_() {
 	}
 }
 
-func (this *Timer) call() {
-	if nil == this.eventQue {
-		this.call_()
-	} else {
-		this.eventQue.PostNoWait(func() {
-			this.call_()
-		})
-	}
-}
-
 func newp() *p {
 	mgr := &p{
 		index2Timer: map[uint64]*Timer{},
@@ -89,13 +79,12 @@ func newp() *p {
  *  eventQue:   如果非nil,callback会被投递到eventQue，否则在定时器主循环中执行
  */
 
-func (this *p) newTimer(timeout time.Duration, repeat bool, eventQue *event.EventQueue, fn func(*Timer, interface{}), ctx interface{}, index uint64) *Timer {
+func (this *p) newTimer(timeout time.Duration, repeat bool, fn func(*Timer, interface{}), ctx interface{}, index uint64) *Timer {
 	if nil != fn {
 		t := &Timer{
 			duration: timeout,
 			repeat:   repeat,
 			callback: fn,
-			eventQue: eventQue,
 			p:        this,
 			ctx:      ctx,
 			index:    index,
@@ -211,21 +200,21 @@ func (this *p) removeByIndex(index uint64) (bool, interface{}) {
 }
 
 //一次性定时器
-func (this *p) Once(timeout time.Duration, eventQue *event.EventQueue, callback func(*Timer, interface{}), ctx interface{}) *Timer {
-	return this.newTimer(timeout, false, eventQue, callback, ctx, 0)
+func (this *p) Once(timeout time.Duration, callback func(*Timer, interface{}), ctx interface{}) *Timer {
+	return this.newTimer(timeout, false, callback, ctx, 0)
 }
 
-func (this *p) OnceWithIndex(timeout time.Duration, eventQue *event.EventQueue, callback func(*Timer, interface{}), ctx interface{}, index uint64) *Timer {
+func (this *p) OnceWithIndex(timeout time.Duration, callback func(*Timer, interface{}), ctx interface{}, index uint64) *Timer {
 	if index > 0 {
-		return this.newTimer(timeout, false, eventQue, callback, ctx, index)
+		return this.newTimer(timeout, false, callback, ctx, index)
 	} else {
 		return nil
 	}
 }
 
 //重复定时器
-func (this *p) Repeat(duration time.Duration, eventQue *event.EventQueue, callback func(*Timer, interface{}), ctx interface{}) *Timer {
-	return this.newTimer(duration, true, eventQue, callback, ctx, 0)
+func (this *p) Repeat(duration time.Duration, callback func(*Timer, interface{}), ctx interface{}) *Timer {
+	return this.newTimer(duration, true, callback, ctx, 0)
 }
 
 type TimerMgr struct {
@@ -246,22 +235,22 @@ func NewTimerMgr(num int) *TimerMgr {
 }
 
 //一次性定时器
-func (this *TimerMgr) Once(timeout time.Duration, eventQue *event.EventQueue, callback func(*Timer, interface{}), ctx interface{}) *Timer {
-	return this.slots[0].newTimer(timeout, false, eventQue, callback, ctx, 0)
+func (this *TimerMgr) Once(timeout time.Duration, callback func(*Timer, interface{}), ctx interface{}) *Timer {
+	return this.slots[0].newTimer(timeout, false, callback, ctx, 0)
 }
 
-func (this *TimerMgr) OnceWithIndex(timeout time.Duration, eventQue *event.EventQueue, callback func(*Timer, interface{}), ctx interface{}, index uint64) *Timer {
+func (this *TimerMgr) OnceWithIndex(timeout time.Duration, callback func(*Timer, interface{}), ctx interface{}, index uint64) *Timer {
 	if index > 0 {
 		slot := int(index) % len(this.slots)
-		return this.slots[slot].newTimer(timeout, false, eventQue, callback, ctx, index)
+		return this.slots[slot].newTimer(timeout, false, callback, ctx, index)
 	} else {
 		return nil
 	}
 }
 
 //重复定时器
-func (this *TimerMgr) Repeat(duration time.Duration, eventQue *event.EventQueue, callback func(*Timer, interface{}), ctx interface{}) *Timer {
-	return this.slots[0].newTimer(duration, true, eventQue, callback, ctx, 0)
+func (this *TimerMgr) Repeat(duration time.Duration, callback func(*Timer, interface{}), ctx interface{}) *Timer {
+	return this.slots[0].newTimer(duration, true, callback, ctx, 0)
 }
 
 func (this *TimerMgr) GetTimerByIndex(index uint64) *Timer {
@@ -294,17 +283,17 @@ func (this *Timer) ResetDuration(duration time.Duration) bool {
 }
 
 //一次性定时器
-func Once(timeout time.Duration, eventQue *event.EventQueue, callback func(*Timer, interface{}), ctx interface{}) *Timer {
-	return globalMgr.Once(timeout, eventQue, callback, ctx)
+func Once(timeout time.Duration, callback func(*Timer, interface{}), ctx interface{}) *Timer {
+	return globalMgr.Once(timeout, callback, ctx)
 }
 
 //重复定时器
-func Repeat(duration time.Duration, eventQue *event.EventQueue, callback func(*Timer, interface{}), ctx interface{}) *Timer {
-	return globalMgr.Repeat(duration, eventQue, callback, ctx)
+func Repeat(duration time.Duration, callback func(*Timer, interface{}), ctx interface{}) *Timer {
+	return globalMgr.Repeat(duration, callback, ctx)
 }
 
-func OnceWithIndex(timeout time.Duration, eventQue *event.EventQueue, callback func(*Timer, interface{}), ctx interface{}, index uint64) *Timer {
-	return globalMgr.OnceWithIndex(timeout, eventQue, callback, ctx, index)
+func OnceWithIndex(timeout time.Duration, callback func(*Timer, interface{}), ctx interface{}, index uint64) *Timer {
+	return globalMgr.OnceWithIndex(timeout, callback, ctx, index)
 }
 
 func GetTimerByIndex(index uint64) *Timer {

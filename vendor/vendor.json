@@ -218,10 +218,10 @@
 			"revisionTime": "2020-10-30T06:48:30Z"
 		},
 		{
-			"checksumSHA1": "qxyZVV8Yl4Mu4NQbPxO86NPQEK8=",
+			"checksumSHA1": "XIUXozv4vyZkNIFn3P3WGDziCUY=",
 			"path": "github.com/sniperHW/kendynet/asyn",
-			"revision": "c4497f4124f2b67b074db0c61251b2864186d6d0",
-			"revisionTime": "2020-10-30T06:48:30Z"
+			"revision": "cb58aa903a6297cef1bc9ab7aa8d38568c5971e9",
+			"revisionTime": "2020-12-24T12:47:18Z"
 		},
 		{
 			"checksumSHA1": "Jo99p/leW8Z9hMLv0KH7lfwNS0Y=",
@@ -242,10 +242,10 @@
 			"revisionTime": "2020-10-30T06:48:30Z"
 		},
 		{
-			"checksumSHA1": "MByz1QAjEEWw0tuJIf9in5eEnuM=",
+			"checksumSHA1": "cXSSpV01ui8C6JEqpRdfsT2z0L8=",
 			"path": "github.com/sniperHW/kendynet/rpc",
-			"revision": "c4497f4124f2b67b074db0c61251b2864186d6d0",
-			"revisionTime": "2020-10-30T06:48:30Z"
+			"revision": "cb58aa903a6297cef1bc9ab7aa8d38568c5971e9",
+			"revisionTime": "2020-12-24T12:47:18Z"
 		},
 		{
 			"checksumSHA1": "NykbUWe5TiKEQXruoH1puaD2Wxw=",
@@ -278,16 +278,16 @@
 			"revisionTime": "2020-03-25T08:48:01Z"
 		},
 		{
-			"checksumSHA1": "fGniK7Nv7jnQKWjaETjLIRXsvcQ=",
+			"checksumSHA1": "ilJ6RMrcRjxy1apRrN8dPWZd9Qg=",
 			"path": "github.com/sniperHW/kendynet/timer",
-			"revision": "c4497f4124f2b67b074db0c61251b2864186d6d0",
-			"revisionTime": "2020-10-30T06:48:30Z"
+			"revision": "cb58aa903a6297cef1bc9ab7aa8d38568c5971e9",
+			"revisionTime": "2020-12-24T12:47:18Z"
 		},
 		{
-			"checksumSHA1": "ri0RtQ4DXK5nJVWeJGErnD1SOPE=",
+			"checksumSHA1": "e0Nrc1rY41KTJGoNtSH3sYt4xHU=",
 			"path": "github.com/sniperHW/kendynet/util",
-			"revision": "c4497f4124f2b67b074db0c61251b2864186d6d0",
-			"revisionTime": "2020-10-30T06:48:30Z"
+			"revision": "cb58aa903a6297cef1bc9ab7aa8d38568c5971e9",
+			"revisionTime": "2020-12-24T12:47:18Z"
 		},
 		{
 			"checksumSHA1": "uqTJVsJ/tb7FA5JpHtwlAF0ELCk=",

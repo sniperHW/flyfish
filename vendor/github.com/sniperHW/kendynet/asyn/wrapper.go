@@ -11,7 +11,7 @@ import (
 
 var routinePool_ *routinePool
 
-type wrapFunc func(callback func([]interface{}), args ...interface{})
+type wrapFunc func(callback interface{}, args ...interface{})
 
 func AsynWrap(queue *event.EventQueue, fn interface{}) wrapFunc {
 
@@ -27,22 +27,26 @@ func AsynWrap(queue *event.EventQueue, fn interface{}) wrapFunc {
 
 	fnType := reflect.TypeOf(fn)
 
-	return func(callback func([]interface{}), args ...interface{}) {
+	return func(callback interface{}, args ...interface{}) {
 		f := func() {
-			var in []reflect.Value
+			in := []reflect.Value{}
+			var out []reflect.Value
 			numIn := fnType.NumIn()
 			if numIn > 0 {
-				in = make([]reflect.Value, numIn)
 				for i := 0; i < numIn; i++ {
 					if i >= len(args) || args[i] == nil {
-						in[i] = reflect.Zero(fnType.In(i))
+						in = append(in, reflect.Zero(fnType.In(i)))
 					} else {
-						in[i] = reflect.ValueOf(args[i])
+						in = append(in, reflect.ValueOf(args[i]))
 					}
 				}
 			}
 
-			out := oriF.Call(in)
+			if fnType.IsVariadic() {
+				out = oriF.CallSlice(in)
+			} else {
+				out = oriF.Call(in)
+			}
 
 			if len(out) > 0 {
 				ret := make([]interface{}, len(out))
