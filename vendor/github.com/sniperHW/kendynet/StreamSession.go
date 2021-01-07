@@ -81,11 +81,6 @@ type StreamSession interface {
 	IsClosed() bool
 
 	/*
-		关闭读
-	*/
-	ShutdownRead()
-
-	/*
 		设置关闭回调，当session被关闭时回调
 		其中reason参数表明关闭原因由Close函数传入
 		需要注意，回调可能在接收或发送goroutine中调用，如回调函数涉及数据竞争，需要自己加锁保护

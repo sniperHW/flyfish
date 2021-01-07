@@ -176,6 +176,20 @@ func (self *BlockQueue) Clear() {
 	self.fullCond.Broadcast()
 }
 
+func (self *BlockQueue) CloseAndClear() {
+	self.listGuard.Lock()
+
+	if self.closed {
+		self.listGuard.Unlock()
+		return
+	}
+	self.list = self.list[0:0]
+	self.closed = true
+	self.listGuard.Unlock()
+	self.emptyCond.Broadcast()
+	self.fullCond.Broadcast()
+}
+
 func (self *BlockQueue) SetFullSize(newSize int) {
 	if newSize > 0 {
 		needSignal := false

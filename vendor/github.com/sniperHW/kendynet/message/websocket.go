@@ -61,6 +61,12 @@ func (this *WSMessage) Type() int {
 }
 
 func NewWSMessage(messageType int, optional ...interface{}) *WSMessage {
+	switch messageType {
+	case WSTextMessage, WSBinaryMessage, WSCloseMessage, WSPingMessage, WSPongMessage:
+	default:
+		return nil
+	}
+
 	buff := kendynet.NewByteBuffer(optional...)
 	if nil == buff {
 		fmt.Printf("nil == buff\n")

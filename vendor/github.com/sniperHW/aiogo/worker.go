@@ -1,7 +1,6 @@
 package aiogo
 
 import (
-	//"fmt"
 	"sync"
 	"time"
 )
@@ -70,7 +69,6 @@ func (self *worker) run(waitgroup *sync.WaitGroup) {
 	timer := newTimer(self, func(op *op) {
 		op.remove()
 		if nil != op.done {
-
 			var err error
 			if op.tt == Read {
 				err = ErrRecvTimeout
@@ -122,15 +120,41 @@ func (self *worker) run(waitgroup *sync.WaitGroup) {
 					if e.timer != nil {
 						e.timer.Remove(e)
 					}
+
+					if nil != e.done {
+						e.done.Post(&CompleteEvent{
+							Conn: e.c,
+							Type: e.tt,
+							buff: e.buff,
+							Size: 0,
+							Ud:   e.ud,
+							Err:  ErrConnClosed,
+						})
+					}
+
 					e.remove()
 					gOpPool.put(e)
 				}
+
 				for e := c.pendingWrite.front(); nil != e; e = c.pendingWrite.front() {
 					if e.timer != nil {
 						e.timer.Remove(e)
 					}
+
+					if nil != e.done {
+						e.done.Post(&CompleteEvent{
+							Conn: e.c,
+							Type: e.tt,
+							buff: e.buff,
+							Size: 0,
+							Ud:   e.ud,
+							Err:  ErrConnClosed,
+						})
+					}
+
 					e.remove()
 					gOpPool.put(e)
+
 				}
 				gOpPool.put(op)
 			case Read:
