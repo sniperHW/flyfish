@@ -69,6 +69,8 @@ func (this *RPCServer) PendingCount() int32 {
 }
 
 func (this *RPCServer) SetOnMissingMethod(onMissingMethod func(string, *RPCReplyer)) {
+	defer this.Unlock()
+	this.Lock()
 	this.onMissingMethod = onMissingMethod
 }
 
@@ -92,22 +94,20 @@ func (this *RPCServer) DirectReplyError(channel RPCChannel, req *RPCRequest, err
 
 func (this *RPCServer) RegisterMethod(name string, method RPCMethodHandler) error {
 	if name == "" {
-		panic("name == ''")
+		return fmt.Errorf("nams is nil")
+	} else if nil == method {
+		return fmt.Errorf("method == nil")
+	} else {
+		defer this.Unlock()
+		this.Lock()
+		_, ok := this.methods[name]
+		if ok {
+			return fmt.Errorf("duplicate method:%s", name)
+		} else {
+			this.methods[name] = method
+			return nil
+		}
 	}
-
-	if nil == method {
-		panic("method == nil")
-	}
-
-	defer this.Unlock()
-	this.Lock()
-
-	_, ok := this.methods[name]
-	if ok {
-		return fmt.Errorf("duplicate method:%s", name)
-	}
-	this.methods[name] = method
-	return nil
 }
 
 func (this *RPCServer) UnRegisterMethod(name string) {
@@ -119,7 +119,7 @@ func (this *RPCServer) UnRegisterMethod(name string) {
 func (this *RPCServer) callMethod(method RPCMethodHandler, replyer *RPCReplyer, arg interface{}) {
 	if _, err := util.ProtectCall(method, replyer, arg); nil != err {
 		kendynet.GetLogger().Errorln(err.Error())
-		replyer.reply(&RPCResponse{Seq: replyer.req.Seq, Err: err})
+		replyer.Reply(nil, err)
 	}
 }
 
@@ -139,7 +139,9 @@ func (this *RPCServer) OnRPCMessage(channel RPCChannel, message interface{}) {
 			req := msg.(*RPCRequest)
 			this.RLock()
 			method, ok := this.methods[req.Method]
+			onMissingMethod := this.onMissingMethod
 			this.RUnlock()
+
 			if !ok {
 				err = fmt.Errorf("invaild method:%s", req.Method)
 				kendynet.GetLogger().Errorf(util.FormatFileLine("rpc request from(%s) invaild method %s\n", channel.Name(), req.Method))
@@ -148,10 +150,10 @@ func (this *RPCServer) OnRPCMessage(channel RPCChannel, message interface{}) {
 			replyer := &RPCReplyer{encoder: this.encoder, channel: channel, req: req, s: this}
 			atomic.AddInt32(&this.pendingCount, 1)
 			if nil != err {
-				if nil != this.onMissingMethod {
-					this.onMissingMethod(req.Method, replyer)
+				if nil != onMissingMethod {
+					onMissingMethod(req.Method, replyer)
 				} else {
-					replyer.reply(&RPCResponse{Seq: req.Seq, Err: err})
+					replyer.Reply(nil, err)
 				}
 			} else {
 				this.callMethod(method, replyer, req.Arg)
@@ -159,25 +161,20 @@ func (this *RPCServer) OnRPCMessage(channel RPCChannel, message interface{}) {
 		}
 		break
 	default:
-		panic("RPCServer.OnRPCMessage() invaild msg type")
+		kendynet.GetLogger().Errorln("RPCServer.OnRPCMessage() invaild msg type")
 		break
 	}
 
 }
 
 func NewRPCServer(decoder RPCMessageDecoder, encoder RPCMessageEncoder) *RPCServer {
-	if nil == decoder {
-		panic("decoder == nil")
+	if nil == decoder || nil == encoder {
+		return nil
+	} else {
+		return &RPCServer{
+			decoder: decoder,
+			encoder: encoder,
+			methods: map[string]RPCMethodHandler{},
+		}
 	}
-
-	if nil == encoder {
-		panic("encoder == nil")
-	}
-
-	return &RPCServer{
-		decoder: decoder,
-		encoder: encoder,
-		methods: map[string]RPCMethodHandler{},
-	}
-
 }

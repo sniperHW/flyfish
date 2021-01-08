@@ -27,22 +27,21 @@ type reqContext struct {
 
 func (this *reqContext) callResponseCB(ret interface{}, err error) {
 	if this.cbEventQueue != nil {
-		this.cbEventQueue.PostNoWait(func() {
-			this.callResponseCB_(ret, err)
-		})
+		this.cbEventQueue.PostNoWait(this.callResponseCB_, ret, err)
+
 	} else {
+		defer util.Recover(kendynet.GetLogger())
 		this.callResponseCB_(ret, err)
 	}
 }
 
 func (this *reqContext) callResponseCB_(ret interface{}, err error) {
-	defer util.Recover(kendynet.GetLogger())
 	this.onResponse(ret, err)
 	atomic.AddInt32(&this.c.pendingCount, -1)
 }
 
 func (this *reqContext) onTimeout(_ *timer.Timer, _ interface{}) {
-	kendynet.GetLogger().Infoln("req timeout", this.seq)
+	kendynet.GetLogger().Infoln("req timeout", this.seq, time.Now())
 	this.callResponseCB(nil, ErrCallTimeout)
 }
 
@@ -148,32 +147,28 @@ func (this *RPCClient) PendingCount() int32 {
 }
 
 func NewClient(decoder RPCMessageDecoder, encoder RPCMessageEncoder, cbEventQueue ...*event.EventQueue) *RPCClient {
-	if nil == decoder {
-		panic("decoder == nil")
-	}
+	if nil == decoder || nil == encoder {
+		return nil
+	} else {
 
-	if nil == encoder {
-		panic("encoder == nil")
-	}
+		client_once.Do(func() {
+			timerMgrs = make([]*timer.TimerMgr, 61)
+			for i, _ := range timerMgrs {
+				timerMgrs[i] = timer.NewTimerMgr(1)
+			}
+		})
 
-	client_once.Do(func() {
-		timerMgrs = make([]*timer.TimerMgr, 61)
-		for i, _ := range timerMgrs {
-			timerMgrs[i] = timer.NewTimerMgr(1)
+		var q *event.EventQueue
+
+		if len(cbEventQueue) > 0 {
+			q = cbEventQueue[0]
 		}
-	})
 
-	var q *event.EventQueue
-
-	if len(cbEventQueue) > 0 {
-		q = cbEventQueue[0]
+		c := &RPCClient{
+			encoder:      encoder,
+			decoder:      decoder,
+			cbEventQueue: q,
+		}
+		return c
 	}
-
-	c := &RPCClient{
-		encoder:      encoder,
-		decoder:      decoder,
-		cbEventQueue: q,
-	}
-
-	return c
 }
