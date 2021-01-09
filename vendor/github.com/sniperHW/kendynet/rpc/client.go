@@ -3,7 +3,6 @@ package rpc
 import (
 	"fmt"
 	"github.com/sniperHW/kendynet"
-	"github.com/sniperHW/kendynet/event"
 	"github.com/sniperHW/kendynet/timer"
 	"github.com/sniperHW/kendynet/util"
 	"sync"
@@ -19,37 +18,19 @@ var timerMgrs []*timer.TimerMgr
 type RPCResponseHandler func(interface{}, error)
 
 type reqContext struct {
-	seq          uint64
-	onResponse   RPCResponseHandler
-	cbEventQueue *event.EventQueue
-	c            *RPCClient
-}
-
-func (this *reqContext) callResponseCB(ret interface{}, err error) {
-	if this.cbEventQueue != nil {
-		this.cbEventQueue.PostNoWait(this.callResponseCB_, ret, err)
-
-	} else {
-		defer util.Recover(kendynet.GetLogger())
-		this.callResponseCB_(ret, err)
-	}
-}
-
-func (this *reqContext) callResponseCB_(ret interface{}, err error) {
-	this.onResponse(ret, err)
-	atomic.AddInt32(&this.c.pendingCount, -1)
+	seq        uint64
+	onResponse RPCResponseHandler
+	c          *RPCClient
 }
 
 func (this *reqContext) onTimeout(_ *timer.Timer, _ interface{}) {
 	kendynet.GetLogger().Infoln("req timeout", this.seq, time.Now())
-	this.callResponseCB(nil, ErrCallTimeout)
+	this.onResponse(nil, ErrCallTimeout)
 }
 
 type RPCClient struct {
-	encoder      RPCMessageEncoder
-	decoder      RPCMessageDecoder
-	cbEventQueue *event.EventQueue
-	pendingCount int32
+	encoder RPCMessageEncoder
+	decoder RPCMessageDecoder
 }
 
 //收到RPC消息后调用
@@ -60,7 +41,7 @@ func (this *RPCClient) OnRPCMessage(message interface{}) {
 		if resp, ok := msg.(*RPCResponse); ok {
 			mgr := timerMgrs[msg.GetSeq()%uint64(len(timerMgrs))]
 			if ok, ctx := mgr.CancelByIndex(resp.GetSeq()); ok {
-				ctx.(*reqContext).callResponseCB(resp.Ret, resp.Err)
+				ctx.(*reqContext).onResponse(resp.Ret, resp.Err)
 			} else if nil == ctx {
 				kendynet.GetLogger().Infoln("onResponse with no reqContext", resp.GetSeq())
 			}
@@ -105,10 +86,9 @@ func (this *RPCClient) AsynCall(channel RPCChannel, method string, arg interface
 	}
 
 	context := &reqContext{
-		onResponse:   cb,
-		seq:          req.Seq,
-		cbEventQueue: this.cbEventQueue,
-		c:            this,
+		onResponse: cb,
+		seq:        req.Seq,
+		c:          this,
 	}
 
 	if request, err := this.encoder.Encode(req); err != nil {
@@ -117,7 +97,6 @@ func (this *RPCClient) AsynCall(channel RPCChannel, method string, arg interface
 		mgr := timerMgrs[req.Seq%uint64(len(timerMgrs))]
 		mgr.OnceWithIndex(timeout, context.onTimeout, context, context.seq)
 		if err = channel.SendRequest(request); err == nil {
-			atomic.AddInt32(&this.pendingCount, 1)
 			return nil
 		} else {
 			mgr.CancelByIndex(context.seq)
@@ -142,11 +121,7 @@ func (this *RPCClient) Call(channel RPCChannel, method string, arg interface{}, 
 	return
 }
 
-func (this *RPCClient) PendingCount() int32 {
-	return atomic.LoadInt32(&this.pendingCount)
-}
-
-func NewClient(decoder RPCMessageDecoder, encoder RPCMessageEncoder, cbEventQueue ...*event.EventQueue) *RPCClient {
+func NewClient(decoder RPCMessageDecoder, encoder RPCMessageEncoder) *RPCClient {
 	if nil == decoder || nil == encoder {
 		return nil
 	} else {
@@ -158,16 +133,9 @@ func NewClient(decoder RPCMessageDecoder, encoder RPCMessageEncoder, cbEventQueu
 			}
 		})
 
-		var q *event.EventQueue
-
-		if len(cbEventQueue) > 0 {
-			q = cbEventQueue[0]
-		}
-
 		c := &RPCClient{
-			encoder:      encoder,
-			decoder:      decoder,
-			cbEventQueue: q,
+			encoder: encoder,
+			decoder: decoder,
 		}
 		return c
 	}

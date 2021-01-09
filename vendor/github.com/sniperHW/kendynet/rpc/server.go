@@ -75,20 +75,35 @@ func (this *RPCServer) SetOnMissingMethod(onMissingMethod func(string, *RPCReply
 }
 
 /*
- *  在服务停止无需调用OnRPCMessage的情况下使用DirectReplyError直接向对端返回错误响应
+ *  在服务停止的情况下直接向对端返回错误响应
  */
-func (this *RPCServer) DirectReplyError(channel RPCChannel, req *RPCRequest, err error) {
-	response := &RPCResponse{Seq: req.Seq, Err: err}
+func (this *RPCServer) OnServiceStop(channel RPCChannel, message interface{}, err error) {
 
-	msg, err := this.encoder.Encode(response)
+	msg, err := this.decoder.Decode(message)
 	if nil != err {
-		kendynet.GetLogger().Errorf(util.FormatFileLine("Encode rpc response error:%s\n", err.Error()))
+		kendynet.GetLogger().Errorln(util.FormatFileLine("RPCServer rpc message from(%s) decode err:%s\n", channel.Name(), err.Error()))
 		return
 	}
 
-	err = channel.SendResponse(msg)
-	if nil != err {
-		kendynet.GetLogger().Errorf(util.FormatFileLine("send rpc response to (%s) error:%s\n", channel.Name(), err.Error()))
+	switch msg.(type) {
+	case *RPCRequest:
+		req := msg.(*RPCRequest)
+
+		response := &RPCResponse{Seq: req.Seq, Err: err}
+
+		msg, err := this.encoder.Encode(response)
+		if nil != err {
+			kendynet.GetLogger().Errorf(util.FormatFileLine("Encode rpc response error:%s\n", err.Error()))
+		}
+
+		err = channel.SendResponse(msg)
+
+		if nil != err {
+			kendynet.GetLogger().Errorf(util.FormatFileLine("send rpc response to (%s) error:%s\n", channel.Name(), err.Error()))
+		}
+
+	default:
+		kendynet.GetLogger().Errorln("RPCServer.OnRPCMessage() invaild msg type")
 	}
 }
 
@@ -159,10 +174,8 @@ func (this *RPCServer) OnRPCMessage(channel RPCChannel, message interface{}) {
 				this.callMethod(method, replyer, req.Arg)
 			}
 		}
-		break
 	default:
 		kendynet.GetLogger().Errorln("RPCServer.OnRPCMessage() invaild msg type")
-		break
 	}
 
 }
