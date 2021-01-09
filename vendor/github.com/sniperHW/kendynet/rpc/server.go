@@ -22,12 +22,11 @@ func (this *RPCReplyer) Reply(ret interface{}, err error) {
 			response := &RPCResponse{Seq: this.req.Seq, Ret: ret, Err: err}
 			this.reply(response)
 		}
-		if nil != this.s {
-			atomic.AddInt32(&this.s.pendingCount, -1)
-		}
+		atomic.AddInt32(&this.s.pendingCount, -1)
 	}
 }
 
+/*
 func (this *RPCReplyer) DropResponse() {
 	if atomic.CompareAndSwapInt32(&this.fired, 0, 1) {
 		if nil != this.s {
@@ -35,6 +34,7 @@ func (this *RPCReplyer) DropResponse() {
 		}
 	}
 }
+*/
 
 func (this *RPCReplyer) reply(response RPCMessage) {
 	msg, err := this.encoder.Encode(response)
@@ -56,28 +56,28 @@ type RPCMethodHandler func(*RPCReplyer, interface{})
 
 type RPCServer struct {
 	sync.RWMutex
-	encoder         RPCMessageEncoder
-	decoder         RPCMessageDecoder
-	methods         map[string]RPCMethodHandler
-	lastSeq         uint64
-	onMissingMethod func(string, *RPCReplyer)
-	pendingCount    int32
+	encoder            RPCMessageEncoder
+	decoder            RPCMessageDecoder
+	methods            map[string]RPCMethodHandler
+	lastSeq            uint64
+	pendingCount       int32
+	errOnMissingMethod atomic.Value
 }
 
 func (this *RPCServer) PendingCount() int32 {
 	return atomic.LoadInt32(&this.pendingCount)
 }
 
-func (this *RPCServer) SetOnMissingMethod(onMissingMethod func(string, *RPCReplyer)) {
-	defer this.Unlock()
-	this.Lock()
-	this.onMissingMethod = onMissingMethod
+func (this *RPCServer) SetErrorCodeOnMissingMethod(errOnMissingMethod error) {
+	if nil != errOnMissingMethod {
+		this.errOnMissingMethod.Store(errOnMissingMethod)
+	}
 }
 
 /*
  *  在服务停止的情况下直接向对端返回错误响应
  */
-func (this *RPCServer) OnServiceStop(channel RPCChannel, message interface{}, err error) {
+func (this *RPCServer) OnServiceStop(channel RPCChannel, message interface{}, errorCode error) {
 
 	msg, err := this.decoder.Decode(message)
 	if nil != err {
@@ -89,7 +89,7 @@ func (this *RPCServer) OnServiceStop(channel RPCChannel, message interface{}, er
 	case *RPCRequest:
 		req := msg.(*RPCRequest)
 
-		response := &RPCResponse{Seq: req.Seq, Err: err}
+		response := &RPCResponse{Seq: req.Seq, Err: errorCode}
 
 		msg, err := this.encoder.Encode(response)
 		if nil != err {
@@ -154,21 +154,18 @@ func (this *RPCServer) OnRPCMessage(channel RPCChannel, message interface{}) {
 			req := msg.(*RPCRequest)
 			this.RLock()
 			method, ok := this.methods[req.Method]
-			onMissingMethod := this.onMissingMethod
 			this.RUnlock()
-
-			if !ok {
-				err = fmt.Errorf("invaild method:%s", req.Method)
-				kendynet.GetLogger().Errorf(util.FormatFileLine("rpc request from(%s) invaild method %s\n", channel.Name(), req.Method))
-			}
 
 			replyer := &RPCReplyer{encoder: this.encoder, channel: channel, req: req, s: this}
 			atomic.AddInt32(&this.pendingCount, 1)
-			if nil != err {
-				if nil != onMissingMethod {
-					onMissingMethod(req.Method, replyer)
+
+			if !ok {
+				kendynet.GetLogger().Errorf(util.FormatFileLine("rpc request from(%s) invaild method %s\n", channel.Name(), req.Method))
+				errOnMissingMethod := this.errOnMissingMethod.Load()
+				if nil != errOnMissingMethod {
+					replyer.Reply(nil, errOnMissingMethod.(error))
 				} else {
-					replyer.Reply(nil, err)
+					replyer.Reply(nil, fmt.Errorf("invaild method:%s", req.Method))
 				}
 			} else {
 				this.callMethod(method, replyer, req.Arg)
