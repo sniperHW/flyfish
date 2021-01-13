@@ -26,6 +26,7 @@ func (this *RPCReplyer) Reply(ret interface{}, err error) {
 	}
 }
 
+/*
 func (this *RPCReplyer) DropResponse() {
 	if atomic.CompareAndSwapInt32(&this.fired, 0, 1) {
 		if nil != this.s {
@@ -33,6 +34,7 @@ func (this *RPCReplyer) DropResponse() {
 		}
 	}
 }
+*/
 
 func (this *RPCReplyer) reply(response RPCMessage) {
 	msg, err := this.encoder.Encode(response)
