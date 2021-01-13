@@ -237,7 +237,6 @@ func (this *AioSocket) emitSendRequest() {
 	}
 	atomic.AddInt32(&this.sendCount, 1)
 	this.aioConn.SendBuffers(this.sendBuffs[:c], this, this.wcompleteQueue)
-	return
 }
 
 func (this *AioSocket) onSendComplete(r *aiogo.CompleteEvent) {
@@ -257,20 +256,8 @@ func (this *AioSocket) onSendComplete(r *aiogo.CompleteEvent) {
 				onClearSendQueue.(func())()
 			}
 		} else {
-			c := 0
-			totalSize := 0
-			for v := this.pendingSend.Front(); v != nil; v = this.pendingSend.Front() {
-				this.pendingSend.Remove(v)
-				this.sendBuffs[c] = v.Value.(kendynet.Message).Bytes()
-				totalSize += len(this.sendBuffs[c])
-				c++
-				if c >= len(this.sendBuffs) || totalSize >= this.maxPostSendSize {
-					break
-				}
-			}
+			this.emitSendRequest()
 			this.muW.Unlock()
-			atomic.AddInt32(&this.sendCount, 1)
-			this.aioConn.SendBuffers(this.sendBuffs[:c], this, this.wcompleteQueue)
 		}
 	} else {
 

@@ -43,14 +43,11 @@ func NewRoutinePool(max int) *routinePool {
 }
 
 func pcall(t *task) {
-	defer util.Recover(kendynet.GetLogger())
-	switch t.fn.(type) {
-	case func():
-		t.fn.(func())()
-		break
-	case func([]interface{}):
-		t.fn.(func([]interface{}))(t.args)
-		break
+	if _, err := util.ProtectCall(t.fn, t.args); err != nil {
+		logger := kendynet.GetLogger()
+		if logger != nil {
+			logger.Errorln(err)
+		}
 	}
 }
 
@@ -84,19 +81,7 @@ func (this *routinePool) newRoutine() {
 }
 
 func (this *routinePool) AddTask(fn interface{}, args ...interface{}) {
-	t := &task{}
-	switch fn.(type) {
-	case func():
-		t.fn = fn
-		break
-	case func([]interface{}):
-		t.fn = fn
-		t.args = args
-		break
-	default:
-		panic("invaild fn type")
-	}
-
+	t := &task{fn: fn, args: args}
 	this.mtx.Lock()
 	this.taskCount++
 	if this.freeCount < this.taskCount && this.count < this.max {

@@ -6,12 +6,14 @@ import (
 	"github.com/sniperHW/aiogo"
 	"math/rand"
 	"runtime"
+	"sync"
 )
 
 type AioService struct {
 	watchers            []*aiogo.Watcher
 	readCompleteQueues  []*aiogo.CompleteQueue
 	writeCompleteQueues []*aiogo.CompleteQueue
+	closeOnce           sync.Once
 }
 
 func completeRoutine(completeQueue *aiogo.CompleteQueue) {
@@ -77,4 +79,21 @@ func NewAioService(watcherCount int, completeQueueCount int, workerCount int, bu
 func (this *AioService) getWatcherAndCompleteQueue() (*aiogo.Watcher, *aiogo.CompleteQueue, *aiogo.CompleteQueue) {
 	r := rand.Int()
 	return this.watchers[r%len(this.watchers)], this.readCompleteQueues[r%len(this.readCompleteQueues)], this.writeCompleteQueues[r%len(this.writeCompleteQueues)]
+}
+
+func (this *AioService) Close() {
+	this.closeOnce.Do(func() {
+		for _, v := range this.watchers {
+			v.Close()
+		}
+
+		for _, v := range this.readCompleteQueues {
+			v.Close()
+		}
+
+		for _, v := range this.writeCompleteQueues {
+			v.Close()
+		}
+
+	})
 }

@@ -1,8 +1,10 @@
 package event
 
 import (
+	//"fmt"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/util"
+	"reflect"
 	"sync"
 	"sync/atomic"
 )
@@ -57,10 +59,9 @@ func (this *EventHandler) register(event interface{}, once bool, fn interface{})
 		panic("event == nil")
 	}
 
-	switch fn.(type) {
-	case func(), func(...interface{}), func(Handle), func(Handle, ...interface{}):
-	default:
-		panic("invaild fn type")
+	if reflect.TypeOf(fn).Kind() != reflect.Func {
+		panic("fn should be func type")
+
 	}
 
 	h := &handle{
@@ -116,6 +117,9 @@ func (this *EventHandler) Emit(event interface{}, args ...interface{}) {
 	this.RUnlock()
 	if ok {
 		if this.processQueue != nil {
+			//this.processQueue.PostNoWait(func() {
+			//	slot.emit(args...)
+			//})
 			this.processQueue.PostNoWait(slot.emit, args...)
 		} else {
 			slot.emit(args...)
@@ -161,16 +165,24 @@ func (this *handlerSlot) remove(h *handle) {
 }
 
 func pcall2(h *handle, args []interface{}) {
-	defer util.Recover(kendynet.GetLogger())
-	switch h.fn.(type) {
-	case func():
-		h.fn.(func())()
-	case func(Handle):
-		h.fn.(func(Handle))((Handle)(h))
-	case func(...interface{}):
-		h.fn.(func(...interface{}))(args...)
-	case func(Handle, ...interface{}):
-		h.fn.(func(Handle, ...interface{}))((Handle)(h), args...)
+
+	var arguments []interface{}
+
+	fnType := reflect.TypeOf(h.fn)
+
+	if fnType.NumIn() > 0 && fnType.In(0) == reflect.TypeOf((Handle)(h)) {
+		arguments = make([]interface{}, len(args)+1, len(args)+1)
+		arguments[0] = h
+		copy(arguments[1:], args)
+	} else {
+		arguments = args
+	}
+
+	if _, err := util.ProtectCall(h.fn, arguments...); err != nil {
+		logger := kendynet.GetLogger()
+		if logger != nil {
+			logger.Errorln(err)
+		}
 	}
 }
 

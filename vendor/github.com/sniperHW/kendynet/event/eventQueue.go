@@ -29,15 +29,10 @@ func NewEventQueue(fullSize ...int) *EventQueue {
 }
 
 func (this *EventQueue) preparePost(fn interface{}, args ...interface{}) *element {
-	e := &element{fn: fn}
-	switch fn.(type) {
-	case func():
-	case func([]interface{}), func(...interface{}):
-		e.args = args
-	default:
-		panic("invaild callback type")
+	return &element{
+		fn:   fn,
+		args: args,
 	}
-	return e
 }
 
 func (this *EventQueue) PostFullReturn(fn interface{}, args ...interface{}) error {
@@ -56,25 +51,18 @@ func (this *EventQueue) Close() {
 	this.eventQueue.Close()
 }
 
-func pcall1(fn interface{}, args []interface{}) {
-	defer util.Recover(kendynet.GetLogger())
-	switch fn.(type) {
-	case func():
-		fn.(func())()
-	case func([]interface{}):
-		fn.(func([]interface{}))(args)
-	case func(...interface{}):
-		fn.(func(...interface{}))(args...)
-	}
-}
-
 func (this *EventQueue) Run() {
 	if atomic.CompareAndSwapInt32(&this.started, 0, 1) {
 		for {
 			closed, localList := this.eventQueue.Get()
 			for _, v := range localList {
 				e := v.(*element)
-				pcall1(e.fn, e.args)
+				if _, err := util.ProtectCall(e.fn, e.args...); err != nil {
+					logger := kendynet.GetLogger()
+					if logger != nil {
+						logger.Errorln(err)
+					}
+				}
 			}
 			if closed {
 				return

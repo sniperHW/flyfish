@@ -5,7 +5,9 @@ package asyn
  */
 
 import (
+	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/event"
+	"github.com/sniperHW/kendynet/util"
 	"reflect"
 )
 
@@ -25,36 +27,20 @@ func AsynWrap(queue *event.EventQueue, fn interface{}) wrapFunc {
 		return nil
 	}
 
-	fnType := reflect.TypeOf(fn)
-
 	return func(callback interface{}, args ...interface{}) {
 		f := func() {
-			in := []reflect.Value{}
-			var out []reflect.Value
-			numIn := fnType.NumIn()
-			if numIn > 0 {
-				for i := 0; i < numIn; i++ {
-					if i >= len(args) || args[i] == nil {
-						in = append(in, reflect.Zero(fnType.In(i)))
-					} else {
-						in = append(in, reflect.ValueOf(args[i]))
-					}
+			out, err := util.ProtectCall(fn, args...)
+			if err != nil {
+				logger := kendynet.GetLogger()
+				if logger != nil {
+					logger.Errorln(err)
 				}
-			}
-
-			if fnType.IsVariadic() {
-				out = oriF.CallSlice(in)
-			} else {
-				out = oriF.Call(in)
+				return
 			}
 
 			if len(out) > 0 {
-				ret := make([]interface{}, len(out))
-				for i, v := range out {
-					ret[i] = v.Interface()
-				}
 				if nil != callback {
-					queue.PostNoWait(callback, ret...)
+					queue.PostNoWait(callback, out...)
 				}
 			} else {
 				if nil != callback {
