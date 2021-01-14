@@ -5,6 +5,7 @@ import (
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/proto"
+	"time"
 )
 
 type asynCmdTaskIncrDecr struct {
@@ -22,6 +23,7 @@ func (this *asynCmdTaskIncrDecr) onSqlResp(errno int32) {
 			this.fields = map[string]*proto.Field{}
 			fillDefaultValue(cmd.getKV().meta, &this.fields)
 			this.sqlFlag = sql_insert_update
+			this.version = time.Now().UnixNano()
 		} else {
 			this.sqlFlag = sql_update
 		}
@@ -37,7 +39,7 @@ func (this *asynCmdTaskIncrDecr) onSqlResp(errno int32) {
 		}
 
 		this.fields[oldV.GetName()] = newV
-		this.version++
+		this.version = increaseVersion(this.version)
 	}
 
 	if this.errno != errcode.ERR_OK {
@@ -161,7 +163,11 @@ func (this *cmdIncrDecr) prepare(t asynCmdTaskI) (asynCmdTaskI, bool) {
 		task.fields[oldV.GetName()] = newV
 
 		if nil == t {
-			task.version = kv.version + 1
+			if status == cache_missing {
+				task.version = time.Now().UnixNano()
+			} else {
+				task.version = increaseVersion(kv.version)
+			}
 		}
 	}
 

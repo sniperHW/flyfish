@@ -26,7 +26,7 @@ func (this *asynCmdTaskCompareAndSet) onSqlResp(errno int32) {
 			this.errno = errcode.ERR_CAS_NOT_EQUAL
 		} else {
 			this.fields[cmd.oldV.GetName()] = cmd.newV
-			this.version++
+			this.version = increaseVersion(this.version)
 		}
 		if this.errno != errcode.ERR_OK {
 			this.reply()
@@ -113,7 +113,7 @@ func (this *cmdCompareAndSet) prepare(t asynCmdTaskI) (asynCmdTaskI, bool) {
 			task.sqlFlag = sql_update
 			task.fields = map[string]*proto.Field{}
 			task.fields[this.newV.GetName()] = this.newV
-			task.version = kv.version + 1
+			task.version = increaseVersion(kv.version)
 		} else {
 			task = newAsynCmdTaskCompareAndSet(this)
 		}

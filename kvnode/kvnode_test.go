@@ -81,6 +81,31 @@ EnableLogStdout = true
 `
 
 func test(t *testing.T, c *client.Client) {
+
+	{
+
+		c.Del("users1", "sniperHW").Exec()
+
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		fields["name"] = "sniperHW"
+
+		r1 := c.Set("users1", "sniperHW", fields).Exec()
+		assert.Equal(t, errcode.ERR_OK, r1.ErrCode)
+		fmt.Println("version-----------", r1.Version)
+
+		c.Del("users1", "sniperHW").Exec()
+
+		r2 := c.Set("users1", "sniperHW", fields).Exec()
+		assert.Equal(t, errcode.ERR_OK, r2.ErrCode)
+		fmt.Println(r1.Version, r2.Version)
+
+		r3 := c.Set("users1", "sniperHW", fields, r1.Version).Exec()
+		assert.Equal(t, errcode.ERR_VERSION_MISMATCH, r3.ErrCode)
+		fmt.Println(r1.Version, r3.Version)
+
+	}
+
 	{
 		//del
 		//set

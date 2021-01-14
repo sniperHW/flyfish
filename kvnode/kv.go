@@ -111,6 +111,15 @@ type kv struct {
 var maxPendingCmdCount int64 = int64(200000) //整个物理节点待处理的命令上限
 var maxPendingCmdCountPerKv int = 1000       //单个kv待处理命令上限
 
+func increaseVersion(version int64) int64 {
+	version += 1
+	if 0 == version {
+		return 1
+	} else {
+		return version
+	}
+}
+
 func (this *kv) resetStatus() {
 	this.modifyFields = map[string]*proto.Field{}
 	this.fields = nil

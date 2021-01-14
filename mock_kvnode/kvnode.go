@@ -10,6 +10,7 @@ import (
 	protocol "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/event"
+	"time"
 )
 
 type handler func(kendynet.StreamSession, *net.Message)
@@ -230,7 +231,7 @@ func (this *Node) set(session kendynet.StreamSession, msg *net.Message) {
 					uniKey:  head.UniKey,
 					key:     key,
 					table:   table,
-					version: 0,
+					version: time.Now().UnixNano(),
 					meta:    m,
 					fields:  map[string]*proto.Field{},
 				}
@@ -319,7 +320,7 @@ func (this *Node) setNx(session kendynet.StreamSession, msg *net.Message) {
 					uniKey:  head.UniKey,
 					key:     key,
 					table:   table,
-					version: 0,
+					version: time.Now().UnixNano(),
 					meta:    m,
 					fields:  map[string]*proto.Field{},
 				}
@@ -466,7 +467,7 @@ func (this *Node) compareAndSetNx(session kendynet.StreamSession, msg *net.Messa
 			uniKey:  head.UniKey,
 			key:     key,
 			table:   table,
-			version: 0,
+			version: time.Now().UnixNano(),
 			meta:    m,
 			fields:  map[string]*proto.Field{},
 		}
@@ -564,7 +565,7 @@ func (this *Node) incrBy(session kendynet.StreamSession, msg *net.Message) {
 			uniKey:  head.UniKey,
 			key:     key,
 			table:   table,
-			version: 0,
+			version: time.Now().UnixNano(),
 			meta:    m,
 			fields:  map[string]*proto.Field{},
 		}
@@ -660,7 +661,7 @@ func (this *Node) decrBy(session kendynet.StreamSession, msg *net.Message) {
 			uniKey:  head.UniKey,
 			key:     key,
 			table:   table,
-			version: 0,
+			version: time.Now().UnixNano(),
 			meta:    m,
 			fields:  map[string]*proto.Field{},
 		}

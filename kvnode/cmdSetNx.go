@@ -4,6 +4,7 @@ import (
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/proto"
+	"time"
 )
 
 type asynCmdTaskSetNx struct {
@@ -22,7 +23,7 @@ func (this *asynCmdTaskSetNx) onSqlResp(errno int32) {
 		}
 		this.errno = errcode.ERR_OK
 		this.sqlFlag = sql_insert_update
-		this.version = 1
+		this.version = time.Now().UnixNano()
 		this.getKV().store.issueUpdate(this)
 	} else {
 		this.errno = errcode.ERR_RECORD_EXIST
@@ -101,7 +102,7 @@ func (this *cmdSetNx) prepare(t asynCmdTaskI) (asynCmdTaskI, bool) {
 		for k, v := range this.fields {
 			task.fields[k] = v
 		}
-		task.version = 1
+		task.version = time.Now().UnixNano()
 	}
 
 	return task, true

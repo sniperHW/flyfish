@@ -4,6 +4,7 @@ package mock_kvnode
 //go tool cover -html=coverage.out
 
 import (
+	"fmt"
 	"github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/stretchr/testify/assert"
@@ -12,6 +13,31 @@ import (
 )
 
 func test(t *testing.T, c *client.Client) {
+
+	{
+
+		c.Del("users1", "sniperHW").Exec()
+
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		fields["name"] = "sniperHW"
+
+		r1 := c.Set("users1", "sniperHW", fields).Exec()
+		assert.Equal(t, errcode.ERR_OK, r1.ErrCode)
+		fmt.Println("version-----------", r1.Version)
+
+		c.Del("users1", "sniperHW").Exec()
+
+		r2 := c.Set("users1", "sniperHW", fields).Exec()
+		assert.Equal(t, errcode.ERR_OK, r2.ErrCode)
+		fmt.Println(r1.Version, r2.Version)
+
+		r3 := c.Set("users1", "sniperHW", fields, r1.Version).Exec()
+		assert.Equal(t, errcode.ERR_VERSION_MISMATCH, r3.ErrCode)
+		fmt.Println(r1.Version, r3.Version)
+
+	}
+
 	{
 		fields := map[string]interface{}{}
 		fields["age"] = 12
@@ -21,7 +47,6 @@ func test(t *testing.T, c *client.Client) {
 		{
 			r := c.Set("users1", "sniperHW", fields).Exec()
 			assert.Equal(t, errcode.ERR_OK, r.ErrCode)
-			assert.Equal(t, int64(1), r.Version)
 		}
 
 		{
@@ -64,13 +89,16 @@ func test(t *testing.T, c *client.Client) {
 		{
 			r := c.Set("users1", "sniperHW", fields).Exec()
 			assert.Equal(t, errcode.ERR_OK, r.ErrCode)
-			assert.Equal(t, int64(1), r.Version)
 		}
 
 		{
+
+			r0 := c.GetAll("users1", "sniperHW").Exec()
+			assert.Equal(t, errcode.ERR_OK, r0.ErrCode)
+
 			r := c.Set("users1", "sniperHW", fields).Exec()
 			assert.Equal(t, errcode.ERR_OK, r.ErrCode)
-			assert.Equal(t, int64(2), r.Version)
+			assert.Equal(t, r0.Version+1, r.Version)
 		}
 
 		{
@@ -79,7 +107,11 @@ func test(t *testing.T, c *client.Client) {
 		}
 
 		{
-			r := c.GetAllWithVersion("users1", "sniperHW", int64(2)).Exec()
+
+			r0 := c.GetAll("users1", "sniperHW").Exec()
+			assert.Equal(t, errcode.ERR_OK, r0.ErrCode)
+
+			r := c.GetAllWithVersion("users1", "sniperHW", r0.Version).Exec()
 			assert.Equal(t, errcode.ERR_RECORD_UNCHANGE, r.ErrCode)
 		}
 
@@ -89,9 +121,12 @@ func test(t *testing.T, c *client.Client) {
 		}
 
 		{
-			r := c.Set("users1", "sniperHW", fields, int64(2)).Exec()
+			r0 := c.GetAll("users1", "sniperHW").Exec()
+			assert.Equal(t, errcode.ERR_OK, r0.ErrCode)
+
+			r := c.Set("users1", "sniperHW", fields, r0.Version).Exec()
 			assert.Equal(t, errcode.ERR_OK, r.ErrCode)
-			assert.Equal(t, int64(3), r.Version)
+			assert.Equal(t, r0.Version+1, r.Version)
 		}
 
 		{
@@ -121,7 +156,10 @@ func test(t *testing.T, c *client.Client) {
 		}
 
 		{
-			r := c.Del("users1", "sniperHW", int64(3)).Exec()
+			r0 := c.GetAll("users1", "sniperHW").Exec()
+			assert.Equal(t, errcode.ERR_OK, r0.ErrCode)
+
+			r := c.Del("users1", "sniperHW", r0.Version).Exec()
 			assert.Equal(t, errcode.ERR_OK, r.ErrCode)
 		}
 

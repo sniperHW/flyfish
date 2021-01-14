@@ -4,6 +4,7 @@ import (
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/proto"
+	"time"
 )
 
 type asynCmdTaskCompareAndSetNx struct {
@@ -18,7 +19,7 @@ func (this *asynCmdTaskCompareAndSetNx) onSqlResp(errno int32) {
 		fillDefaultValue(cmd.getKV().meta, &this.fields)
 		this.sqlFlag = sql_insert_update
 		this.errno = errcode.ERR_OK
-		this.version = 1
+		this.version = time.Now().UnixNano()
 		this.fields[cmd.newV.GetName()] = cmd.newV
 		this.getKV().store.issueUpdate(this)
 	} else if errno == errcode.ERR_OK {
@@ -31,7 +32,7 @@ func (this *asynCmdTaskCompareAndSetNx) onSqlResp(errno int32) {
 			this.errno = errcode.ERR_CAS_NOT_EQUAL
 		} else {
 			this.fields[cmd.oldV.GetName()] = cmd.newV
-			this.version++
+			this.version = increaseVersion(this.version)
 		}
 
 		if this.errno != errcode.ERR_OK {
@@ -115,9 +116,9 @@ func (this *cmdCompareAndSetNx) prepare(t asynCmdTaskI) (asynCmdTaskI, bool) {
 		task.sqlFlag = sql_update
 		task.fields = map[string]*proto.Field{}
 		task.fields[this.newV.GetName()] = this.newV
-		task.version = kv.version + 1
+		task.version = increaseVersion(kv.version)
 	} else if status == cache_missing {
-		task.version = 1
+		task.version = time.Now().UnixNano()
 		task.sqlFlag = sql_insert_update
 		task.fields = map[string]*proto.Field{}
 		fillDefaultValue(this.getKV().meta, &task.fields)
