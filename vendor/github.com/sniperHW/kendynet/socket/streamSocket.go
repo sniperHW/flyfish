@@ -113,7 +113,7 @@ func (this *StreamSocket) sendThreadFunc() {
 							this.sendQue.CloseAndClear()
 						}
 
-						if this.callEventCB(&kendynet.Event{Session: this, EventType: kendynet.EventTypeError, Data: err}) || breakLoop {
+						if this.callEventCB(&kendynet.Event{Session: this, EventType: kendynet.EventTypeError, Data: err}, fclosed) || breakLoop {
 							return
 						}
 					}

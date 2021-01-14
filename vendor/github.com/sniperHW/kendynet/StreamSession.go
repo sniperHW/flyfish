@@ -78,6 +78,8 @@ type StreamSession interface {
 	*/
 	Close(reason string, timeout time.Duration)
 
+	ShutdownRead()
+
 	IsClosed() bool
 
 	/*

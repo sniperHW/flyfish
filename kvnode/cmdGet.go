@@ -136,14 +136,15 @@ func get(n *KVNode, cli *cliConn, msg *net.Message) {
 				}
 			}
 		} else {
+
+			if !kv.meta.CheckGet(req.GetFields()) {
+				op.reply(errcode.ERR_INVAILD_FIELD, nil, 0)
+				return
+			}
+
 			for _, name := range req.GetFields() {
 				op.fields[name] = proto.PackField(name, nil)
 			}
-		}
-
-		if !kv.meta.CheckGet(op.fields) {
-			op.reply(errcode.ERR_INVAILD_FIELD, nil, 0)
-			return
 		}
 
 		kv.processCmd(op)

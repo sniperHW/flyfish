@@ -13,6 +13,7 @@ import (
 const (
 	fstarted    = int32(1 << 0) //是否已经Start
 	fclosed     = int32(1 << 1) //是否已经调用Close
+	frclosed    = int32(1 << 2) //调用来了shutdownRead
 	frecvStoped = int32(1 << 4) //recvThread已经结束
 	fsendStoped = int32(1 << 5) //sendThread已经结束
 )
@@ -86,8 +87,8 @@ func (this *SocketBase) GetUserData() interface{} {
 }
 
 //保证onEvent在读写线程中按序执行
-func (this *SocketBase) callEventCB(event *kendynet.Event) bool {
-	if this.testFlag(fclosed) {
+func (this *SocketBase) callEventCB(event *kendynet.Event, flag int32) bool {
+	if this.testFlag(flag) {
 		return true
 	} else {
 		/*
@@ -96,7 +97,7 @@ func (this *SocketBase) callEventCB(event *kendynet.Event) bool {
 		this.CBLock.Lock()
 		this.onEvent(event)
 		this.CBLock.Unlock()
-		return this.testFlag(fclosed)
+		return this.testFlag(flag)
 	}
 }
 
@@ -164,7 +165,7 @@ func (this *SocketBase) recvThreadFunc() {
 
 	receiver := this.receiver.Load().(kendynet.Receiver)
 
-	breakLoop := this.testFlag(fclosed)
+	breakLoop := this.testFlag(fclosed | frclosed)
 
 	for !breakLoop {
 
@@ -192,21 +193,25 @@ func (this *SocketBase) recvThreadFunc() {
 				if kendynet.IsNetTimeout(err) {
 					event.Data = kendynet.ErrRecvTimeout
 				} else {
-					this.shutdownRead()
 					breakLoop = true
 				}
 			} else {
 				event.EventType = kendynet.EventTypeMessage
 				event.Data = p
 			}
-			breakLoop = this.callEventCB(&event) || breakLoop
+			breakLoop = this.callEventCB(&event, fclosed|frclosed) || breakLoop
 		} else {
-			breakLoop = this.testFlag(fclosed)
+			breakLoop = this.testFlag(fclosed | frclosed)
 		}
 	}
 }
 
+func (this *SocketBase) ShutdownRead() {
+	this.shutdownRead()
+}
+
 func (this *SocketBase) shutdownRead() {
+	this.setFlag(frclosed)
 	this.imp.getNetConn().(interface{ CloseRead() error }).CloseRead()
 }
 

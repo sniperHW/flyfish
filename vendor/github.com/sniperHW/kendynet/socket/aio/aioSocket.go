@@ -130,12 +130,12 @@ func (this *AioSocket) clearup() {
 }
 
 //保证onEvent在读写线程中按序执行
-func (this *AioSocket) callEventCB(event *kendynet.Event, oflag int32) {
+func (this *AioSocket) callEventCB(event *kendynet.Event, checkFlag int32, setflag int32) {
 	for {
 		flag := atomic.LoadInt32(&this.flag)
-		if flag&(fclosed|fwclosed) > 0 {
+		if flag&(checkFlag) > 0 {
 			return
-		} else if atomic.CompareAndSwapInt32(&this.flag, flag, flag|oflag) {
+		} else if atomic.CompareAndSwapInt32(&this.flag, flag, flag|setflag) {
 			break
 		}
 	}
@@ -159,46 +159,44 @@ func (this *AioSocket) testFlag(flag int32) bool {
 func (this *AioSocket) onRecvComplete(r *aiogo.CompleteEvent) {
 
 	defer func() {
-		if atomic.AddInt32(&this.recvCount, -1) == 0 && this.testFlag(fclosed|frclosed) && atomic.LoadInt32(&this.sendCount) == 0 {
+		if atomic.AddInt32(&this.recvCount, -1) == 0 && this.testFlag(fclosed) && atomic.LoadInt32(&this.sendCount) == 0 {
 			this.clearup()
 		}
 	}()
 
+	checkflag := fclosed | frclosed
+
 	if nil != r.Err {
-		flag := int32(0)
 		if r.Err == aiogo.ErrRecvTimeout {
 			r.Err = kendynet.ErrRecvTimeout
 		} else {
 			if r.Err == aiogo.ErrEof {
 				r.Err = io.EOF
 			}
-			this.shutdownRead()
-			flag = frclosed
 		}
 
 		this.callEventCB(&kendynet.Event{
 			Session:   this,
 			EventType: kendynet.EventTypeError,
 			Data:      r.Err,
-		}, flag)
+		}, checkflag, frclosed)
 
 	} else {
 		this.receiver.OnRecvOk(this, r.GetBuff())
-		for !this.testFlag(fclosed | frclosed) {
+		for !this.testFlag(checkflag) {
 			msg, err := this.receiver.ReceiveAndUnpack(this)
 			if nil != err {
-				this.shutdownRead()
 				this.callEventCB(&kendynet.Event{
 					Session:   this,
 					EventType: kendynet.EventTypeError,
 					Data:      err,
-				}, frclosed)
+				}, checkflag, int32(0))
 			} else if msg != nil {
 				this.callEventCB(&kendynet.Event{
 					Session:   this,
 					EventType: kendynet.EventTypeMessage,
 					Data:      msg,
-				}, int32(0))
+				}, checkflag, int32(0))
 			} else {
 				break
 			}
@@ -242,7 +240,7 @@ func (this *AioSocket) emitSendRequest() {
 func (this *AioSocket) onSendComplete(r *aiogo.CompleteEvent) {
 
 	defer func() {
-		if 0 == atomic.AddInt32(&this.sendCount, -1) && this.testFlag(fclosed|fwclosed) && atomic.LoadInt32(&this.recvCount) == 0 {
+		if 0 == atomic.AddInt32(&this.sendCount, -1) && this.testFlag(fclosed) && atomic.LoadInt32(&this.recvCount) == 0 {
 			this.clearup()
 		}
 	}()
@@ -261,7 +259,8 @@ func (this *AioSocket) onSendComplete(r *aiogo.CompleteEvent) {
 		}
 	} else {
 
-		flag := int32(0)
+		checkflag := fclosed | fwclosed
+		setflag := int32(0)
 
 		if r.Err == aiogo.ErrSendTimeout {
 			r.Err = kendynet.ErrSendTimeout
@@ -269,14 +268,14 @@ func (this *AioSocket) onSendComplete(r *aiogo.CompleteEvent) {
 			if r.Err == aiogo.ErrEof {
 				r.Err = io.EOF
 			}
-			flag = fwclosed
+			setflag |= fwclosed
 		}
 
 		this.callEventCB(&kendynet.Event{
 			Session:   this,
 			EventType: kendynet.EventTypeError,
 			Data:      r.Err,
-		}, flag)
+		}, checkflag, setflag)
 	}
 }
 
@@ -331,7 +330,12 @@ func (this *AioSocket) SendMessage(msg kendynet.Message) error {
 	return this.sendMessage(msg)
 }
 
+func (this *AioSocket) ShutdownRead() {
+	this.shutdownRead()
+}
+
 func (this *AioSocket) shutdownRead() {
+	this.setFlag(frclosed)
 	this.aioConn.GetRowConn().(interface{ CloseRead() error }).CloseRead()
 }
 

@@ -153,15 +153,15 @@ func set(n *KVNode, cli *cliConn, msg *net.Message) {
 		return
 	} else {
 
+		if !kv.meta.CheckSet(req.GetFields()) {
+			op.reply(errcode.ERR_INVAILD_FIELD, nil, 0)
+			return
+		}
+
 		op.kv = kv
 
 		for _, v := range req.GetFields() {
 			op.fields[v.GetName()] = v
-		}
-
-		if !kv.meta.CheckSet(op.fields) {
-			op.reply(errcode.ERR_INVAILD_FIELD, nil, 0)
-			return
 		}
 
 		kv.processCmd(op)

@@ -148,9 +148,9 @@ func (this *TableMeta) GetDefaultV(name string) interface{} {
 }
 
 //检查要获取的字段是否符合表配置
-func (this *TableMeta) CheckGet(fields map[string]*proto.Field) bool {
+func (this *TableMeta) CheckGet(fields /*map[string]*/ []string) bool {
 	for _, v := range fields {
-		_, ok := this.fieldMetas[v.GetName()]
+		_, ok := this.fieldMetas[v]
 		if !ok {
 			return false
 		}
@@ -187,7 +187,7 @@ func (this *TableMeta) CheckField(field *proto.Field) bool {
 }
 
 //检查要设置的字段是否符合表配置
-func (this *TableMeta) CheckSet(fields map[string]*proto.Field) bool {
+func (this *TableMeta) CheckSet(fields /*map[string]*/ []*proto.Field) bool {
 	for _, v := range fields {
 		m, ok := this.fieldMetas[v.GetName()]
 		if !ok {
