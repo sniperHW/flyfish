@@ -157,7 +157,7 @@ message decr_by_resp {
 
 /*
 *  如果记录存在且old.name的值与old.value相等，将其设定为new.value
-*  只要记录存在，无论替换是否成功都将返回old.name的当前值。     
+*  如果错误码为ERR_CAS_NOT_EQUAL，返回old.name的当前值。     
 */
 message compare_and_set_req {
   optional int64  version = 1[(gogoproto.nullable) = true];
@@ -172,7 +172,7 @@ message compare_and_set_resp {
 
 /*
 *  如果记录不存在，或old.name的值与old.value相等，将其设定为new.value
-*  无论替换是否成功都将返回old.name的当前值。(注意:如果记录不存在，old.name以外的字段将被设置为初始值)
+*  如果错误码为ERR_CAS_NOT_EQUAL，返回old.name的当前值。(注意:如果记录不存在，old.name以外的字段将被设置为初始值)
 */ 
 message compare_and_set_nx_req {
   optional int64  version = 1[(gogoproto.nullable) = true];
