@@ -111,8 +111,8 @@ type raftNode struct {
 	readIndex int64
 	lease     *lease
 
-	term    uint64
-	kvstore *kvstore
+	term  uint64
+	store *kvstore
 
 	proposalCompressor net.CompressorI
 	snapshotCompressor net.CompressorI
@@ -127,7 +127,7 @@ var snapshotCatchUpEntriesN uint64 = 3000
 // commit channel, followed by a nil message (to indicate the channel is
 // current), then new log entries. To shutdown, close proposeC and read errorC.
 func newRaftNode(mutilRaft *mutilRaft, id int, peers map[int]string, join bool, proposeC *util.BlockQueue,
-	confChangeC <-chan *asynTaskConfChange, readC *util.BlockQueue, getSnapshot func() [][]*kvsnap) (*raftNode, <-chan interface{}, <-chan error, <-chan *snap.Snapshotter) {
+	confChangeC <-chan *asynTaskConfChange, readC *util.BlockQueue, getSnapshot func() [][]*kvsnap, store *kvstore) (*raftNode, <-chan interface{}, <-chan error, <-chan *snap.Snapshotter) {
 
 	/*
 	 *  如果commitC设置成无缓冲，则raftNode会等待上层提取commitedEntry之后才继续后续处理。
@@ -169,6 +169,7 @@ func newRaftNode(mutilRaft *mutilRaft, id int, peers map[int]string, join bool, 
 
 		proposalCompressor: &net.ZipCompressor{},
 		snapshotCompressor: &net.ZipCompressor{},
+		store:              store,
 
 		// rest of structure populated after WAL replay
 	}
@@ -1073,6 +1074,11 @@ func (rc *raftNode) serveChannels() {
 					loseLeadership = true
 				}
 				if rc.leader == rc.id {
+
+					if dbMetaStr, err := loadMetaString(); nil != err {
+						rc.store.storeMgr.dbmeta.Reload(dbMetaStr)
+					}
+
 					rc.lease.startLeaseRoutine(rc)
 					logger.Infoln("becomeLeader id:", rd.SoftState.Lead>>16)
 				}

@@ -591,7 +591,7 @@ func newStoreMgr(kvnode *KVNode, mutilRaft *mutilRaft, dbmeta *dbmeta.DBMeta, id
 
 		store := newKVStore(mgr, kvnode, proposeC, readC, confChangeC)
 
-		rn, commitC, errorC, snapshotterReady := newRaftNode(mutilRaft, (*id<<16)+i, peers, false, proposeC, confChangeC, readC, store.getSnapshot)
+		rn, commitC, errorC, snapshotterReady := newRaftNode(mutilRaft, (*id<<16)+i, peers, false, proposeC, confChangeC, readC, store.getSnapshot, store)
 
 		store.rn = rn
 

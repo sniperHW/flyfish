@@ -2,6 +2,7 @@ package kvnode
 
 import (
 	"container/list"
+	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/dbmeta"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/proto"
@@ -107,9 +108,6 @@ type kv struct {
 	nnext        *kv
 	pprev        *kv
 }
-
-var maxPendingCmdCount int64 = int64(200000) //整个物理节点待处理的命令上限
-var maxPendingCmdCountPerKv int = 1000       //单个kv待处理命令上限
 
 func increaseVersion(version int64) int64 {
 	version += 1
@@ -249,6 +247,9 @@ func newkv(store *kvstore, tableMeta *dbmeta.TableMeta, key string, uniKey strin
 	return k
 }
 
+var maxPendingCmdCount int = 300000   //整个物理节点待处理的命令上限
+var maxPendingCmdCountPerKv int = 100 //单个kv待处理命令上限
+
 func (this *kv) processCmd(op commandI) {
 
 	var asynTask asynCmdTaskI
@@ -257,6 +258,15 @@ func (this *kv) processCmd(op commandI) {
 	removeKv := false
 	issueUpdate := false
 	issueReadReq := false
+
+	config := conf.GetConfig()
+	if config.MaxPendingCmdCount > 0 {
+		maxPendingCmdCount = config.MaxPendingCmdCount
+	}
+
+	if config.MaxPendingCmdCountPerKv > 0 {
+		maxPendingCmdCountPerKv = config.MaxPendingCmdCountPerKv
+	}
 
 	this.Lock()
 
@@ -280,7 +290,7 @@ func (this *kv) processCmd(op commandI) {
 	if nil != op {
 
 		if this.getStatus() == cache_remove ||
-			atomic.LoadInt64(&this.store.kvNode.wait4ReplyCount) > 500000 ||
+			atomic.LoadInt64(&this.store.kvNode.wait4ReplyCount) > int64(maxPendingCmdCount) ||
 			this.cmdQueue.queue.Len() > maxPendingCmdCountPerKv {
 			op.reply(errcode.ERR_RETRY, nil, 0)
 			return

@@ -21,6 +21,9 @@ Compress                = false                #是否开启通信压缩
 ProposalFlushInterval   = 100
 ReadFlushInterval       = 10
 
+MaxPendingCmdCount       = 300000              #整个物理节点待处理的命令上限
+MaxPendingCmdCountPerKv  = 100        		   #单个kv待处理命令上限
+
 
 [DBConfig]
 SqlType         = "pgsql"

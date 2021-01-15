@@ -60,6 +60,9 @@ type Config struct {
 	ProposalFlushInterval int
 	ReadFlushInterval     int
 
+	MaxPendingCmdCount      int // = int64(300000) //整个物理节点待处理的命令上限
+	MaxPendingCmdCountPerKv int // = 100        //单个kv待处理命令上限
+
 	DBConfig struct {
 		SqlType string
 

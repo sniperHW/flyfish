@@ -135,7 +135,7 @@ func (this *Node) del(session kendynet.StreamSession, msg *net.Message) {
 	if !ok {
 		session.Send(net.NewMessage(net.CommonHead{
 			Seqno:   head.Seqno,
-			ErrCode: errcode.ERR_RECORD_EXIST,
+			ErrCode: errcode.ERR_RECORD_NOTEXIST,
 		}, &proto.DelResp{Version: req.GetVersion()}))
 	} else {
 		if !checkVersion(req.Version, v.version) {

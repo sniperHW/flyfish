@@ -63,7 +63,8 @@ func test(t *testing.T, c *client.Client) {
 
 		{
 			r := c.Del("users1", "sniperHW").Exec()
-			assert.Equal(t, errcode.ERR_RECORD_EXIST, r.ErrCode)
+			fmt.Println(r.ErrCode)
+			assert.Equal(t, errcode.ERR_RECORD_NOTEXIST, r.ErrCode)
 		}
 
 		{
