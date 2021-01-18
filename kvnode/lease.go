@@ -19,11 +19,9 @@ import (
  */
 
 const (
-	leaseTimeout        = 20 * time.Second //租约时效20秒
-	leaseOwnerTimeout   = 10 * time.Second //当前获得租约的leader的组约时效
-	renewTime           = 2 * time.Second  //续约间隔
-	break_lease_routine = 1
-	wait_timeout        = 2
+	leaseTimeout      = 20 * time.Second //租约时效20秒
+	leaseOwnerTimeout = 10 * time.Second //当前获得租约的leader的组约时效
+	renewTime         = 2 * time.Second  //续约间隔
 )
 
 type asynTaskLease struct {
@@ -82,13 +80,14 @@ func (l *lease) update(rn *raftNode, id int, term uint64) bool {
 	return rn.id == id && oldTerm != term
 }
 
-func (l *lease) wait(stopc chan struct{}, second time.Duration) int {
+func (l *lease) wait(stopc chan struct{}, second time.Duration) (break_lease_routine bool) {
+	break_lease_routine = false
 	select {
 	case <-time.After(second):
-		return wait_timeout
 	case <-stopc:
-		return break_lease_routine
+		break_lease_routine = true
 	}
+	return
 }
 
 func (l *lease) stop() {
@@ -106,17 +105,20 @@ func (l *lease) startLeaseRoutine(rn *raftNode) {
 			l.Lock()
 			waitLeaseTimeout := l.owner != 0 && l.owner != rn.id && !(time.Now().Sub(l.startTime) > leaseTimeout)
 			l.Unlock()
+
+			var waitTime time.Duration
+
 			if waitLeaseTimeout {
 				//owner非自己，等待owner的lease过期
-				if l.wait(stopc, time.Second) == break_lease_routine {
-					return
-				}
+				waitTime = time.Second
 			} else {
 				//续租
 				rn.renew()
-				if l.wait(stopc, renewTime) == break_lease_routine {
-					return
-				}
+				waitTime = renewTime
+			}
+
+			if break_lease_routine := l.wait(stopc, waitTime); break_lease_routine {
+				break
 			}
 		}
 	}()
