@@ -151,7 +151,7 @@ func (this *WebSocket) GetUnderConn() interface{} {
 	return this.conn
 }
 
-func (this *WebSocket) getNetConn() net.Conn {
+func (this *WebSocket) GetNetConn() net.Conn {
 	return this.conn.UnderlyingConn()
 }
 

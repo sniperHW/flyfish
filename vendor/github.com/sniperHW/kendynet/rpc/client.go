@@ -20,11 +20,11 @@ var timerMgrs []*timer.TimerMgr
 type RPCResponseHandler func(interface{}, error)
 
 type reqContext struct {
-	seq         uint64
-	onResponse  RPCResponseHandler
-	listEle     *list.Element
-	channelName string
-	c           *RPCClient
+	seq        uint64
+	onResponse RPCResponseHandler
+	listEle    *list.Element
+	channelUID uint64
+	c          *RPCClient
 }
 
 type channelReqContexts struct {
@@ -67,7 +67,7 @@ func (this *reqContext) onTimeout(_ *timer.Timer, _ interface{}) {
 
 type channelReqMap struct {
 	sync.Mutex
-	m map[string]*channelReqContexts
+	m map[uint64]*channelReqContexts
 }
 
 type RPCClient struct {
@@ -77,34 +77,33 @@ type RPCClient struct {
 }
 
 func (this *RPCClient) addChannelReq(channel RPCChannel, req *reqContext) {
-	name := channel.Name()
-	m := this.channelReqMaps[util.StringHash(name)%len(this.channelReqMaps)]
+	uid := channel.UID()
+	m := this.channelReqMaps[int(uid)%len(this.channelReqMaps)]
 
 	m.Lock()
 	defer m.Unlock()
-	c, ok := m.m[channel.Name()]
+	c, ok := m.m[uid]
 	if !ok {
 		c = &channelReqContexts{
 			reqs: list.New(),
 		}
-		m.m[channel.Name()] = c
+		m.m[uid] = c
 	}
 	c.add(req)
 }
 
 func (this *RPCClient) removeChannelReq(req *reqContext) bool {
-
-	name := req.channelName
-	m := this.channelReqMaps[util.StringHash(name)%len(this.channelReqMaps)]
+	uid := req.channelUID
+	m := this.channelReqMaps[int(uid)%len(this.channelReqMaps)]
 
 	m.Lock()
 	defer m.Unlock()
 
-	c, ok := m.m[name]
+	c, ok := m.m[uid]
 	if ok {
 		ret := c.remove(req)
 		if c.reqs.Len() == 0 {
-			delete(m.m, name)
+			delete(m.m, uid)
 		}
 		return ret
 	} else {
@@ -113,13 +112,12 @@ func (this *RPCClient) removeChannelReq(req *reqContext) bool {
 }
 
 func (this *RPCClient) OnChannelDisconnect(channel RPCChannel) {
-
-	name := channel.Name()
-	m := this.channelReqMaps[util.StringHash(name)%len(this.channelReqMaps)]
+	uid := channel.UID()
+	m := this.channelReqMaps[int(uid)%len(this.channelReqMaps)]
 
 	m.Lock()
 	defer m.Unlock()
-	c, ok := m.m[name]
+	c, ok := m.m[uid]
 	if ok {
 		c.onChannelDisconnect()
 	}
@@ -180,10 +178,10 @@ func (this *RPCClient) AsynCall(channel RPCChannel, method string, arg interface
 	}
 
 	context := &reqContext{
-		onResponse:  cb,
-		seq:         req.Seq,
-		c:           this,
-		channelName: channel.Name(),
+		onResponse: cb,
+		seq:        req.Seq,
+		c:          this,
+		channelUID: channel.UID(),
 	}
 
 	if request, err := this.encoder.Encode(req); err != nil {
@@ -238,7 +236,7 @@ func NewClient(decoder RPCMessageDecoder, encoder RPCMessageEncoder) *RPCClient 
 
 		for k, _ := range c.channelReqMaps {
 			c.channelReqMaps[k] = channelReqMap{
-				m: map[string]*channelReqContexts{},
+				m: map[uint64]*channelReqContexts{},
 			}
 		}
 

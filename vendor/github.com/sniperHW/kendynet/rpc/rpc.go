@@ -61,4 +61,5 @@ type RPCChannel interface {
 	SendRequest(interface{}) error  //发送RPC请求
 	SendResponse(interface{}) error //发送RPC回应
 	Name() string
+	UID() uint64
 }

@@ -22,7 +22,6 @@ type SocketImpl interface {
 	kendynet.StreamSession
 	recvThreadFunc()
 	sendThreadFunc()
-	getNetConn() net.Conn
 	sendMessage(kendynet.Message) error
 	defaultReceiver() kendynet.Receiver
 }
@@ -71,11 +70,11 @@ func (this *SocketBase) IsClosed() bool {
 }
 
 func (this *SocketBase) LocalAddr() net.Addr {
-	return this.imp.getNetConn().LocalAddr()
+	return this.imp.GetNetConn().LocalAddr()
 }
 
 func (this *SocketBase) RemoteAddr() net.Addr {
-	return this.imp.getNetConn().RemoteAddr()
+	return this.imp.GetNetConn().RemoteAddr()
 }
 
 func (this *SocketBase) SetUserData(ud interface{}) {
@@ -161,7 +160,7 @@ func (this *SocketBase) recvThreadFunc() {
 		}
 	}()
 
-	conn := this.imp.getNetConn()
+	conn := this.imp.GetNetConn()
 
 	receiver := this.receiver.Load().(kendynet.Receiver)
 
@@ -212,7 +211,7 @@ func (this *SocketBase) ShutdownRead() {
 
 func (this *SocketBase) shutdownRead() {
 	this.setFlag(frclosed)
-	this.imp.getNetConn().(interface{ CloseRead() error }).CloseRead()
+	this.imp.GetNetConn().(interface{ CloseRead() error }).CloseRead()
 }
 
 func (this *SocketBase) Close(reason string, delay time.Duration) {
@@ -253,13 +252,13 @@ func (this *SocketBase) Close(reason string, delay time.Duration) {
 				case <-ticker.C:
 				}
 				ticker.Stop()
-				this.imp.getNetConn().Close()
+				this.imp.GetNetConn().Close()
 			}()
 
 		} else {
 
 			this.sendQue.Clear()
-			this.imp.getNetConn().Close()
+			this.imp.GetNetConn().Close()
 
 			if !this.testFlag(fstarted) {
 				this.clearup()

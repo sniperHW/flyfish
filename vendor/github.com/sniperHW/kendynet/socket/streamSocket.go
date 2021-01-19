@@ -154,12 +154,12 @@ func (this *StreamSocket) Read(b []byte) (int, error) {
 	return this.conn.Read(b)
 }
 
-func (this *StreamSocket) getNetConn() net.Conn {
+func (this *StreamSocket) GetNetConn() net.Conn {
 	return this.conn
 }
 
 func (this *StreamSocket) GetUnderConn() interface{} {
-	return this.getNetConn()
+	return this.GetNetConn()
 }
 
 func (this *StreamSocket) defaultReceiver() kendynet.Receiver {

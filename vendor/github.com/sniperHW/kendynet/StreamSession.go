@@ -127,6 +127,8 @@ type StreamSession interface {
 
 	GetUnderConn() interface{}
 
+	GetNetConn() net.Conn
+
 	SetRecvTimeout(time.Duration)
 
 	SetSendTimeout(time.Duration)

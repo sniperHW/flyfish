@@ -452,11 +452,11 @@ func (this *AioSocket) Start(eventCB func(*kendynet.Event)) error {
 }
 
 func (this *AioSocket) LocalAddr() net.Addr {
-	return this.aioConn.GetRowConn().LocalAddr()
+	return this.GetNetConn().LocalAddr()
 }
 
 func (this *AioSocket) RemoteAddr() net.Addr {
-	return this.aioConn.GetRowConn().RemoteAddr()
+	return this.GetNetConn().RemoteAddr()
 }
 
 func (this *AioSocket) SetUserData(ud interface{}) {
@@ -468,6 +468,10 @@ func (this *AioSocket) GetUserData() interface{} {
 }
 
 func (this *AioSocket) GetUnderConn() interface{} {
+	return this.aioConn
+}
+
+func (this *AioSocket) GetNetConn() net.Conn {
 	return this.aioConn.GetRowConn()
 }
 
