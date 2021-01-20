@@ -218,12 +218,6 @@
 			"revisionTime": "2021-01-19T08:48:12Z"
 		},
 		{
-			"checksumSHA1": "Uf4l+vvoc3TBgjCblvFuJN+txyY=",
-			"path": "github.com/sniperHW/kendynet/asyn",
-			"revision": "cd72e73f87df77c9e42d2647db2a8c887733ddcc",
-			"revisionTime": "2021-01-12T02:34:20Z"
-		},
-		{
 			"checksumSHA1": "85qXIPLGakzRaxy7EeHMrbGFxwQ=",
 			"path": "github.com/sniperHW/kendynet/event",
 			"revision": "cd72e73f87df77c9e42d2647db2a8c887733ddcc",
@@ -242,12 +236,6 @@
 			"revisionTime": "2021-01-12T02:34:20Z"
 		},
 		{
-			"checksumSHA1": "GPOFjj1WI30YwmY+pALhrMlr7bE=",
-			"path": "github.com/sniperHW/kendynet/rpc",
-			"revision": "0f5c6a93bc02906e31ad90f70224397107b465d1",
-			"revisionTime": "2021-01-19T08:48:12Z"
-		},
-		{
 			"checksumSHA1": "9IW4frvZH3eWurwVnRDwLjN0xY4=",
 			"path": "github.com/sniperHW/kendynet/socket",
 			"revision": "0f5c6a93bc02906e31ad90f70224397107b465d1",
@@ -258,30 +246,6 @@
 			"path": "github.com/sniperHW/kendynet/socket/aio",
 			"revision": "0f5c6a93bc02906e31ad90f70224397107b465d1",
 			"revisionTime": "2021-01-19T08:48:12Z"
-		},
-		{
-			"checksumSHA1": "gcobTHLuH7mtHNTkynUBSOBzbRM=",
-			"path": "github.com/sniperHW/kendynet/socket/connector/aio",
-			"revision": "4c74556ef700e0462d92fd280d56cc5849078227",
-			"revisionTime": "2020-04-16T01:54:14Z"
-		},
-		{
-			"checksumSHA1": "1Ki2d2XkGJtfPpigDs7mv8Sl/nA=",
-			"path": "github.com/sniperHW/kendynet/socket/connector/tcp",
-			"revision": "0cd8ab5535d67c6c209c161e8dc6a9c4620ce48d",
-			"revisionTime": "2019-07-24T10:31:35Z"
-		},
-		{
-			"checksumSHA1": "qQ6YJEyf1GCrnIEHMNQjKS92720=",
-			"path": "github.com/sniperHW/kendynet/socket/listener/aio",
-			"revision": "4c74556ef700e0462d92fd280d56cc5849078227",
-			"revisionTime": "2020-04-16T01:54:14Z"
-		},
-		{
-			"checksumSHA1": "7ZvMikiIlLJ0YEt+GzTd0ezIhDo=",
-			"path": "github.com/sniperHW/kendynet/socket/listener/tcp",
-			"revision": "eaf87079daf69fa16a5517f6d65b61a115c12329",
-			"revisionTime": "2020-03-25T08:48:01Z"
 		},
 		{
 			"checksumSHA1": "ilJ6RMrcRjxy1apRrN8dPWZd9Qg=",
@@ -377,12 +341,6 @@
 			"checksumSHA1": "gMbe/Kh0udVDg6r2cDUvtlT1n9U=",
 			"origin": "go.etcd.io/etcd/vendor/github.com/xiang90/probing",
 			"path": "github.com/xiang90/probing",
-			"revision": "6f0ae78b399ff5e365c3646e92121e18d5d1a01e",
-			"revisionTime": "2019-08-24T19:27:53Z"
-		},
-		{
-			"checksumSHA1": "Q4jOwMK2ZN67LyaTbxhu/Cu8xgI=",
-			"path": "go.etcd.io/etcd/etcdserver/api/rafthttp",
 			"revision": "6f0ae78b399ff5e365c3646e92121e18d5d1a01e",
 			"revisionTime": "2019-08-24T19:27:53Z"
 		},
