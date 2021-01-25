@@ -117,10 +117,20 @@ func (this *EventHandler) Emit(event interface{}, args ...interface{}) {
 	this.RUnlock()
 	if ok {
 		if this.processQueue != nil {
-			//this.processQueue.PostNoWait(func() {
-			//	slot.emit(args...)
-			//})
-			this.processQueue.PostNoWait(slot.emit, args...)
+			this.processQueue.PostNoWait(0, slot.emit, args...)
+		} else {
+			slot.emit(args...)
+		}
+	}
+}
+
+func (this *EventHandler) EmitWithPriority(priority int, event interface{}, args ...interface{}) {
+	this.RLock()
+	slot, ok := this.slots[event]
+	this.RUnlock()
+	if ok {
+		if this.processQueue != nil {
+			this.processQueue.PostNoWait(priority, slot.emit, args...)
 		} else {
 			slot.emit(args...)
 		}

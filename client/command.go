@@ -486,7 +486,7 @@ func (this *Conn) onReloadTableConfResp(c *cmdContext, errCode int32, resp *prot
 }
 
 func (this *Conn) onMessage(msg *net.Message) {
-	this.eventQueue.Post(func() {
+	this.eventQueue.Post(this.c.priority, func() {
 		head := msg.GetHead()
 		cmd := protocol.CmdType(msg.GetCmd())
 		if cmd != protocol.CmdType_Ping {

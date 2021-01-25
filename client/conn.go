@@ -53,7 +53,7 @@ func (this *Conn) ping(now *time.Time) {
 }
 
 func (this *Conn) onConnected(session kendynet.StreamSession, compress bool) {
-	this.eventQueue.Post(func() {
+	this.eventQueue.Post(this.c.priority, func() {
 		this.dialing = false
 		this.session = session
 		this.session.SetSendQueueSize(maxPendingSize)
@@ -87,7 +87,7 @@ func (this *Conn) onConnected(session kendynet.StreamSession, compress bool) {
 }
 
 func (this *Conn) onDisconnected() {
-	this.eventQueue.Post(func() {
+	this.eventQueue.Post(this.c.priority, func() {
 		this.session = nil
 	})
 }
@@ -125,7 +125,7 @@ func (this *Conn) onTimeout(_ *timer.Timer, ctx interface{}) {
 }
 
 func (this *Conn) exec(c *cmdContext) {
-	this.eventQueue.Post(func() {
+	this.eventQueue.Post(this.c.priority, func() {
 		c.deadline = time.Now().Add(time.Duration(ClientTimeout) * time.Millisecond)
 		if nil == this.session && !this.dialing {
 			this.dial()
@@ -134,7 +134,7 @@ func (this *Conn) exec(c *cmdContext) {
 		if this.dialing {
 			if len(this.pendingSend) < maxPendingSize {
 				this.timerMgr.OnceWithIndex(time.Duration(ClientTimeout)*time.Millisecond, func(t *timer.Timer, ctx interface{}) {
-					this.eventQueue.PostNoWait(this.onTimeout, t, ctx)
+					this.eventQueue.PostNoWait(this.c.priority, this.onTimeout, t, ctx)
 				}, c, uint64(c.req.GetHead().Seqno))
 				this.pendingSend = append(this.pendingSend, c)
 			} else {
@@ -142,7 +142,7 @@ func (this *Conn) exec(c *cmdContext) {
 			}
 		} else {
 			this.timerMgr.OnceWithIndex(time.Duration(ClientTimeout)*time.Millisecond, func(t *timer.Timer, ctx interface{}) {
-				this.eventQueue.PostNoWait(this.onTimeout, t, ctx)
+				this.eventQueue.PostNoWait(this.c.priority, this.onTimeout, t, ctx)
 			}, c, uint64(c.req.GetHead().Seqno))
 			this.sendReq(c)
 		}

@@ -14,6 +14,7 @@ type Client struct {
 	closed        int32
 	callbackQueue *event.EventQueue //响应回调的事件队列
 	compress      bool
+	priority      int
 }
 
 func (this *Client) callcb(unikey string, cb callback, a interface{}) {
@@ -27,7 +28,7 @@ func (this *Client) callcb(unikey string, cb callback, a interface{}) {
 
 func (this *Client) doCallBack(unikey string, cb callback, a interface{}) {
 	if nil != this.callbackQueue && cb.sync == false {
-		this.callbackQueue.Post(this.callcb, unikey, cb, a)
+		this.callbackQueue.Post(this.priority, this.callcb, unikey, cb, a)
 	} else {
 		defer util.Recover(logger)
 		this.callcb(unikey, cb, a)
@@ -47,6 +48,10 @@ func OpenClient(service string, compress bool, callbackQueue ...*event.EventQueu
 	c.conn = openConn(c, service)
 
 	return c
+}
+
+func (this *Client) SetPriority(priority int) {
+	this.priority = priority
 }
 
 func (this *Client) Get(table, key string, fields ...string) *SliceCmd {

@@ -47,7 +47,7 @@ func (this *Node) Dispatch(session kendynet.StreamSession, cmd uint16, msg *net.
 		switch cmd {
 		default:
 			if handler, ok := this.handlers[cmd]; ok {
-				this.queue.PostNoWait(handler, session, msg)
+				this.queue.PostNoWait(0, handler, session, msg)
 			}
 		}
 	}

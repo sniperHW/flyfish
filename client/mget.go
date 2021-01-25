@@ -6,20 +6,22 @@ import (
 )
 
 type MGetCmd struct {
+	priority      int
 	callbackQueue *event.EventQueue
 	cmds          []*SliceCmd
 }
 
-func MGet(callbackQueue *event.EventQueue, cmds ...*SliceCmd) *MGetCmd {
+func MGet(priority int, callbackQueue *event.EventQueue, cmds ...*SliceCmd) *MGetCmd {
 	return &MGetCmd{
 		callbackQueue: callbackQueue,
 		cmds:          cmds,
+		priority:      priority,
 	}
 }
 
 func (this *MGetCmd) doCallBack(sync bool, cb func([]*SliceResult), rets []*SliceResult) {
 	if !sync && nil != this.callbackQueue {
-		this.callbackQueue.Post(cb, rets)
+		this.callbackQueue.Post(this.priority, cb, rets)
 	} else {
 		defer util.Recover(logger)
 		cb(rets)
