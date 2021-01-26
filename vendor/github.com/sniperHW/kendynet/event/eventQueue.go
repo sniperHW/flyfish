@@ -16,15 +16,15 @@ type EventQueue struct {
 	started    int32
 }
 
-func NewEventQueueWithName(name string, fullSize ...int) *EventQueue {
+func NewEventQueueWithPriority(priority int, fullSize ...int) *EventQueue {
 	r := &EventQueue{}
-	r.eventQueue = NewPriorityQueueWithName(name, fullSize...)
+	r.eventQueue = NewPriorityQueue(priority, fullSize...)
 	return r
 }
 
 func NewEventQueue(fullSize ...int) *EventQueue {
 	r := &EventQueue{}
-	r.eventQueue = NewPriorityQueue(fullSize...)
+	r.eventQueue = NewPriorityQueue(1, fullSize...)
 	return r
 }
 

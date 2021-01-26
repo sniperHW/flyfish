@@ -1,7 +1,7 @@
 package event
 
 import (
-	"container/heap"
+	"container/list"
 	"errors"
 	"sync"
 )
@@ -12,48 +12,72 @@ var (
 )
 
 const (
-	initCap         = 64
 	defaultFullSize = 10000
 )
 
-type Item struct {
-	Value    interface{}
-	priority int
-	seq      int
+type pq struct {
+	priorityQueue []*list.List
+	count         int
+	high          int //最高优先级的非空队列
 }
 
-type pq []Item
+/*
+ *  创建一个优先级从0-priorityCount-1共priorityCount个优先级
+ */
+func newpq(priorityCount int) *pq {
+	if priorityCount <= 0 {
+		priorityCount = 1
+	}
 
-func (this pq) Len() int { return len(this) }
+	q := &pq{
+		priorityQueue: make([]*list.List, priorityCount),
+	}
 
-func (this pq) Less(i, j int) bool {
-	if this[i].priority == this[j].priority {
-		return this[i].seq < this[j].seq
-	} else {
-		return this[i].priority > this[j].priority
+	for i, _ := range q.priorityQueue {
+		q.priorityQueue[i] = list.New()
+	}
+
+	return q
+}
+
+func (this *pq) push(priority int, v interface{}) {
+	if priority < 0 {
+		priority = 0
+	} else if priority >= len(this.priorityQueue) {
+		priority = len(this.priorityQueue) - 1
+	}
+
+	this.priorityQueue[priority].PushBack(v)
+	this.count++
+	if priority > this.high {
+		this.high = priority
 	}
 }
 
-func (this pq) Swap(i, j int) {
-	this[i], this[j] = this[j], this[i]
-}
+func (this *pq) pop() (bool, interface{}) {
+	if this.count == 0 {
+		return false, nil
+	} else {
+		q := this.priorityQueue[this.high]
+		e := q.Front()
+		q.Remove(e)
+		this.count--
 
-func (this *pq) Push(x interface{}) {
-	item := x.(Item)
-	*this = append(*this, item)
-}
+		if q.Len() == 0 {
+			for this.high > 0 {
+				this.high--
+				if this.priorityQueue[this.high].Len() > 0 {
+					break
+				}
+			}
+		}
 
-func (this *pq) Pop() interface{} {
-	old := *this
-	n := len(old)
-	item := old[n-1]
-	old[n-1].Value = nil
-	*this = old[0 : n-1]
-	return item
+		return true, e.Value
+	}
 }
 
 type PriorityQueue struct {
-	list        pq
+	q           *pq
 	listGuard   sync.Mutex
 	emptyCond   *sync.Cond
 	fullCond    *sync.Cond
@@ -61,7 +85,7 @@ type PriorityQueue struct {
 	closed      bool
 	emptyWaited int
 	fullWaited  int
-	name        string
+	closeOnce   sync.Once
 }
 
 func (self *PriorityQueue) AddNoWait(priority int, item interface{}, fullReturn ...bool) error {
@@ -71,20 +95,14 @@ func (self *PriorityQueue) AddNoWait(priority int, item interface{}, fullReturn 
 		return ErrQueueClosed
 	}
 
-	n := self.list.Len()
+	n := self.q.count
 
 	if len(fullReturn) > 0 && fullReturn[0] && n >= self.fullSize {
 		self.listGuard.Unlock()
 		return ErrQueueFull
 	}
 
-	i := Item{
-		priority: priority,
-		Value:    item,
-		seq:      self.list.Len(),
-	}
-
-	heap.Push(&self.list, i)
+	self.q.push(priority, item)
 
 	needSignal := self.emptyWaited > 0
 	self.listGuard.Unlock()
@@ -102,7 +120,7 @@ func (self *PriorityQueue) Add(priority int, item interface{}) error {
 		return ErrQueueClosed
 	}
 
-	for self.list.Len() >= self.fullSize {
+	for self.q.count >= self.fullSize {
 		self.fullWaited++
 		self.fullCond.Wait()
 		self.fullWaited--
@@ -112,13 +130,7 @@ func (self *PriorityQueue) Add(priority int, item interface{}) error {
 		}
 	}
 
-	i := Item{
-		priority: priority,
-		Value:    item,
-		seq:      self.list.Len(),
-	}
-
-	heap.Push(&self.list, i)
+	self.q.push(priority, item)
 
 	needSignal := self.emptyWaited > 0
 	self.listGuard.Unlock()
@@ -130,15 +142,15 @@ func (self *PriorityQueue) Add(priority int, item interface{}) error {
 
 func (self *PriorityQueue) Get() (closed bool, v interface{}) {
 	self.listGuard.Lock()
-	for !self.closed && self.list.Len() == 0 {
+	for !self.closed && self.q.count == 0 {
 		//Cond.Wait不能设置超时，蛋疼
 		self.emptyWaited++
 		self.emptyCond.Wait()
 		self.emptyWaited--
 	}
 
-	if self.list.Len() > 0 {
-		v = heap.Pop(&self.list).(Item).Value
+	if self.q.count > 0 {
+		_, v = self.q.pop()
 	}
 
 	needSignal := self.fullWaited > 0
@@ -152,17 +164,13 @@ func (self *PriorityQueue) Get() (closed bool, v interface{}) {
 }
 
 func (self *PriorityQueue) Close() {
-	self.listGuard.Lock()
-
-	if self.closed {
+	self.closeOnce.Do(func() {
+		self.listGuard.Lock()
+		self.closed = true
 		self.listGuard.Unlock()
-		return
-	}
-
-	self.closed = true
-	self.listGuard.Unlock()
-	self.emptyCond.Broadcast()
-	self.fullCond.Broadcast()
+		self.emptyCond.Broadcast()
+		self.fullCond.Broadcast()
+	})
 }
 
 func (self *PriorityQueue) SetFullSize(newSize int) {
@@ -181,30 +189,18 @@ func (self *PriorityQueue) SetFullSize(newSize int) {
 	}
 }
 
-func newPriorityQueue(name string, fullSize ...int) *PriorityQueue {
+func NewPriorityQueue(priorityCount int, fullSize ...int) *PriorityQueue {
 	self := &PriorityQueue{}
-	self.name = name
 	self.closed = false
 	self.emptyCond = sync.NewCond(&self.listGuard)
 	self.fullCond = sync.NewCond(&self.listGuard)
-	self.list = make(pq, 0, initCap)
+	self.q = newpq(priorityCount)
 
-	if len(fullSize) > 0 {
-		if fullSize[0] <= 0 {
-			return nil
-		}
+	if len(fullSize) > 0 && fullSize[0] > 0 {
 		self.fullSize = fullSize[0]
 	} else {
 		self.fullSize = defaultFullSize
 	}
 
 	return self
-}
-
-func NewPriorityQueueWithName(name string, fullSize ...int) *PriorityQueue {
-	return newPriorityQueue(name, fullSize...)
-}
-
-func NewPriorityQueue(fullSize ...int) *PriorityQueue {
-	return newPriorityQueue("", fullSize...)
 }
