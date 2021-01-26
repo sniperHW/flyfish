@@ -2,7 +2,8 @@ package net
 
 import (
 	//"fmt"
-	"github.com/golang/protobuf/proto"
+	//"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/net/pb"
 	_ "github.com/sniperHW/flyfish/proto"

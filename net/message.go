@@ -1,7 +1,8 @@
 package net
 
 import (
-	"github.com/golang/protobuf/proto"
+	//"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/net/pb"
 	protocol "github.com/sniperHW/flyfish/proto"
 )
