@@ -1,7 +1,6 @@
 package event
 
 import (
-	"container/list"
 	"errors"
 	"sync"
 )
@@ -15,8 +14,52 @@ const (
 	defaultFullSize = 10000
 )
 
+type listItem struct {
+	ppnext   *listItem
+	v        interface{}
+	poolItem bool
+}
+
+type list struct {
+	tail *listItem
+}
+
+func (this *list) push(item *listItem) {
+	var head *listItem
+	if this.tail == nil {
+		head = item
+	} else {
+		head = this.tail.ppnext
+		this.tail.ppnext = item
+	}
+	item.ppnext = head
+	this.tail = item
+}
+
+func (this *list) pop() *listItem {
+	if this.tail == nil {
+		return nil
+	} else {
+		item := this.tail.ppnext
+		if item == this.tail {
+			this.tail = nil
+		} else {
+			this.tail.ppnext = item.ppnext
+		}
+
+		item.ppnext = nil
+		return item
+	}
+}
+
+func (this *list) empty() bool {
+	return this.tail == nil
+}
+
 type pq struct {
-	priorityQueue []*list.List
+	priorityQueue []list
+	itemPool      []listItem
+	freelist      list
 	count         int
 	high          int //最高优先级的非空队列
 }
@@ -30,14 +73,32 @@ func newpq(priorityCount int) *pq {
 	}
 
 	q := &pq{
-		priorityQueue: make([]*list.List, priorityCount),
+		priorityQueue: make([]list, priorityCount),
+		itemPool:      make([]listItem, defaultFullSize, defaultFullSize),
 	}
 
-	for i, _ := range q.priorityQueue {
-		q.priorityQueue[i] = list.New()
+	for i, _ := range q.itemPool {
+		item := &q.itemPool[i]
+		item.poolItem = true
+		q.freelist.push(item)
 	}
 
 	return q
+}
+
+func (this *pq) getItem(v interface{}) *listItem {
+	item := this.freelist.pop()
+	if nil == item {
+		item = &listItem{}
+	}
+	item.v = v
+	return item
+}
+
+func (this *pq) releaseItem(item *listItem) {
+	if item.poolItem {
+		this.freelist.push(item)
+	}
 }
 
 func (this *pq) push(priority int, v interface{}) {
@@ -47,7 +108,7 @@ func (this *pq) push(priority int, v interface{}) {
 		priority = len(this.priorityQueue) - 1
 	}
 
-	this.priorityQueue[priority].PushBack(v)
+	this.priorityQueue[priority].push(this.getItem(v))
 	this.count++
 	if priority > this.high {
 		this.high = priority
@@ -58,21 +119,19 @@ func (this *pq) pop() (bool, interface{}) {
 	if this.count == 0 {
 		return false, nil
 	} else {
-		q := this.priorityQueue[this.high]
-		e := q.Front()
-		q.Remove(e)
+		q := &this.priorityQueue[this.high]
+
+		item := q.pop()
+		v := item.v
+		this.releaseItem(item)
+
 		this.count--
 
-		if q.Len() == 0 {
-			for this.high > 0 {
-				this.high--
-				if this.priorityQueue[this.high].Len() > 0 {
-					break
-				}
-			}
+		for this.priorityQueue[this.high].empty() && this.high > 0 {
+			this.high--
 		}
 
-		return true, e.Value
+		return true, v
 	}
 }
 
