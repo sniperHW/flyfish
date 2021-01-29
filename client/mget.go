@@ -11,7 +11,13 @@ type MGetCmd struct {
 	cmds          []*SliceCmd
 }
 
-func MGet(priority int, callbackQueue *event.EventQueue, cmds ...*SliceCmd) *MGetCmd {
+func MGet(cmds ...*SliceCmd) *MGetCmd {
+	return &MGetCmd{
+		cmds: cmds,
+	}
+}
+
+func MGetWithEventQueue(priority int, callbackQueue *event.EventQueue, cmds ...*SliceCmd) *MGetCmd {
 	return &MGetCmd{
 		callbackQueue: callbackQueue,
 		cmds:          cmds,

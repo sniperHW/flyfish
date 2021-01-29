@@ -4,7 +4,7 @@ import (
 	//"github.com/sniperHW/flyfish/codec"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/net/pb"
-	protocol "github.com/sniperHW/flyfish/proto"
+	//protocol "github.com/sniperHW/flyfish/proto"
 	//"github.com/sniperHW/flyfish/proto/login"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/event"
@@ -23,8 +23,8 @@ type Conn struct {
 	eventQueue  *event.EventQueue //此客户端的主处理队列
 	dialing     bool
 	c           *Client
-	nextPing    time.Time
-	timerMgr    *timer.TimerMgr
+	//nextPing    time.Time
+	timerMgr *timer.TimerMgr
 }
 
 func openConn(cli *Client, addr string) *Conn {
@@ -33,13 +33,14 @@ func openConn(cli *Client, addr string) *Conn {
 		eventQueue:  event.NewEventQueue(),
 		pendingSend: []*cmdContext{},
 		c:           cli,
-		nextPing:    time.Now().Add(protocol.PingTime),
-		timerMgr:    timer.NewTimerMgr(1),
+		//nextPing:    time.Now().Add(protocol.PingTime),
+		timerMgr: timer.NewTimerMgr(1),
 	}
 	go c.eventQueue.Run()
 	return c
 }
 
+/*
 func (this *Conn) ping(now *time.Time) {
 	if nil != this.session && now.After(this.nextPing) {
 		this.nextPing = now.Add(protocol.PingTime)
@@ -50,7 +51,7 @@ func (this *Conn) ping(now *time.Time) {
 
 		this.session.Send(req)
 	}
-}
+}*/
 
 func (this *Conn) onConnected(session kendynet.StreamSession, compress bool) {
 	this.eventQueue.Post(this.c.priority, func() {
