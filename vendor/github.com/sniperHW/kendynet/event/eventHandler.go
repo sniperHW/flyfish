@@ -1,7 +1,6 @@
 package event
 
 import (
-	//"fmt"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/util"
 	"reflect"
@@ -22,35 +21,40 @@ type handle struct {
 	fn      interface{}
 	once    bool
 	event   interface{}
-	slot    *handlerSlot
-	removed int32
 	version int64
+}
+
+const (
+	opEmit     = 1
+	opDelete   = 2
+	opRegister = 3
+)
+
+type op struct {
+	ppnext *op
+	opType int
+	args   []interface{}
+	h      *handle
 }
 
 type handlerSlot struct {
 	sync.Mutex
-	l       []handList
-	emiting bool
-	removed int32
-	current int
-	version int64
+	l         handList
+	emiting   bool
+	current   int
+	version   int64
+	pendingOP *op
 }
 
 type EventHandler struct {
 	sync.RWMutex
-	slots        map[interface{}]*handlerSlot
-	processQueue *EventQueue
-	version      int64
+	slots   map[interface{}]*handlerSlot
+	version int64
 }
 
-func NewEventHandler(processQueue ...*EventQueue) *EventHandler {
-	var q *EventQueue
-	if len(processQueue) > 0 {
-		q = processQueue[0]
-	}
+func NewEventHandler() *EventHandler {
 	return &EventHandler{
-		slots:        map[interface{}]*handlerSlot{},
-		processQueue: q,
+		slots: map[interface{}]*handlerSlot{},
 	}
 }
 
@@ -75,15 +79,11 @@ func (this *EventHandler) register(event interface{}, once bool, fn interface{})
 	slot, ok := this.slots[event]
 	if !ok {
 		slot = &handlerSlot{
-			l:       make([]handList, 2),
 			version: atomic.AddInt64(&this.version, 1),
 		}
 
-		slot.l[0].head.nnext = &slot.l[0].tail
-		slot.l[0].tail.pprev = &slot.l[0].head
-
-		slot.l[1].head.nnext = &slot.l[1].tail
-		slot.l[1].tail.pprev = &slot.l[1].head
+		slot.l.head.nnext = &slot.l.tail
+		slot.l.tail.pprev = &slot.l.head
 
 		this.slots[h.event] = slot
 	}
@@ -105,7 +105,7 @@ func (this *EventHandler) Remove(h Handle) {
 	this.RLock()
 	slot, ok := this.slots[hh.event]
 	this.RUnlock()
-	if ok {
+	if ok && hh.version == slot.version {
 		slot.remove(h)
 	}
 }
@@ -116,61 +116,109 @@ func (this *EventHandler) Emit(event interface{}, args ...interface{}) {
 	slot, ok := this.slots[event]
 	this.RUnlock()
 	if ok {
-		if this.processQueue != nil {
-			this.processQueue.PostNoWait(0, slot.emit, args...)
-		} else {
-			slot.emit(args...)
-		}
+		slot.emit(args...)
 	}
 }
 
-func (this *EventHandler) EmitWithPriority(priority int, event interface{}, args ...interface{}) {
-	this.RLock()
-	slot, ok := this.slots[event]
-	this.RUnlock()
-	if ok {
-		if this.processQueue != nil {
-			this.processQueue.PostNoWait(priority, slot.emit, args...)
-		} else {
-			slot.emit(args...)
-		}
+/*
+ * 通过事件队列来执行emit
+ */
+
+type EventQueueParam struct {
+	Priority   int
+	Q          *EventQueue
+	BlockMode  bool //阻塞模式，如果Q满阻塞调用方
+	FullReturn bool //BlockMode==false时,如果FullReturn==true,则当Q满时返回ErrQueueFull,否则不管Q是否满都将emit投递过去
+}
+
+func (this *EventHandler) EmitToEventQueue(param EventQueueParam, event interface{}, args ...interface{}) error {
+	a := make([]interface{}, 0, len(args)+1)
+	a = append(a, event)
+	a = append(a, args...)
+	if param.BlockMode {
+		return param.Q.Post(param.Priority, this.Emit, a...)
+	} else if param.FullReturn {
+		return param.Q.PostFullReturn(param.Priority, this.Emit, a...)
+	} else {
+		return param.Q.PostNoWait(param.Priority, this.Emit, a...)
 	}
 }
 
 func (this *EventHandler) Clear(event interface{}) {
 	this.Lock()
 	defer this.Unlock()
-	slot, ok := this.slots[event]
-	if ok {
-		atomic.StoreInt32(&slot.removed, 1)
-		delete(this.slots, event)
+	delete(this.slots, event)
+}
+
+func (this *handlerSlot) push(item *op) {
+	var head *op
+	if this.pendingOP == nil {
+		head = item
+	} else {
+		head = this.pendingOP.ppnext
+		this.pendingOP.ppnext = item
 	}
+	item.ppnext = head
+	this.pendingOP = item
+}
+
+func (this *handlerSlot) pop() *op {
+	if this.pendingOP == nil {
+		return nil
+	} else {
+		item := this.pendingOP.ppnext
+		if item == this.pendingOP {
+			this.pendingOP = nil
+		} else {
+			this.pendingOP.ppnext = item.ppnext
+		}
+
+		item.ppnext = nil
+		return item
+	}
+}
+
+func (this *handlerSlot) doRegister(h *handle) {
+	h.version = this.version
+	this.l.tail.pprev.nnext = h
+	h.nnext = &this.l.tail
+	h.pprev = this.l.tail.pprev
+	this.l.tail.pprev = h
 }
 
 func (this *handlerSlot) register(h *handle) {
 	this.Lock()
 	defer this.Unlock()
-	l := &this.l[this.current]
-	h.slot = this
-	h.version = this.version
+	if this.emiting {
+		this.push(&op{
+			opType: opRegister,
+			h:      h,
+		})
+	} else {
+		this.doRegister(h)
+	}
+}
 
-	(*l).tail.pprev.nnext = h
-	h.nnext = &(*l).tail
-	h.pprev = (*l).tail.pprev
-	(*l).tail.pprev = h
+func (this *handlerSlot) doRemove(h *handle) {
+	if h.version == this.version {
+		h.pprev.nnext = h.nnext
+		h.nnext.pprev = h.pprev
+		h.nnext = nil
+		h.pprev = nil
+		h.version = 0
+	}
 }
 
 func (this *handlerSlot) remove(h *handle) {
-	if h.slot == this && h.version == this.version {
-		atomic.StoreInt32(&h.removed, 1)
-		this.Lock()
-		if !this.emiting {
-			h.pprev.nnext = h.nnext
-			h.nnext.pprev = h.pprev
-			h.slot = nil
-			h.version = 0
-		}
-		this.Unlock()
+	this.Lock()
+	defer this.Unlock()
+	if this.emiting {
+		this.push(&op{
+			opType: opDelete,
+			h:      h,
+		})
+	} else {
+		this.doRemove(h)
 	}
 }
 
@@ -198,49 +246,44 @@ func pcall2(h *handle, args []interface{}) {
 
 func (this *handlerSlot) emit(args ...interface{}) {
 	this.Lock()
-	this.emiting = true
-	l := &this.l[this.current]
-	this.current = (this.current + 1) % 2
-	this.Unlock()
+	this.push(&op{
+		opType: opEmit,
+		args:   args,
+	})
 
-	cur := (*l).head.nnext
-	for cur != &(*l).tail {
-		if atomic.LoadInt32(&this.removed) == 1 {
-			//当前slot已经被清除
-			return
+	if this.emiting {
+		this.Unlock()
+	} else {
+		this.emiting = true
+		/*
+		 *  在执行doEmit的时候，其它go程或事件处理器可能会往pendingOP中添加请求
+		 *  因此当前的执行者必须把这些pendingOP全部执行完毕。
+		 */
+		for {
+			if o := this.pop(); nil == o {
+				break
+			} else {
+				switch o.opType {
+				case opDelete:
+					this.doRemove(o.h)
+				case opRegister:
+					this.doRegister(o.h)
+				case opEmit:
+					cur := this.l.head.nnext
+					for cur != &this.l.tail {
+						this.Unlock()
+						pcall2(cur, o.args)
+						this.Lock()
+						next := cur.nnext
+						if cur.once {
+							this.doRemove(cur)
+						}
+						cur = next
+					}
+				}
+			}
 		}
-		next := cur.nnext
-		if atomic.LoadInt32(&cur.removed) == 0 {
-			pcall2(cur, args)
-		}
-		cur = next
+		this.emiting = false
+		this.Unlock()
 	}
-
-	this.Lock()
-
-	ll := &this.l[this.current]
-
-	cur = (*l).tail.pprev
-
-	for cur != &(*l).head {
-		pprev := cur.pprev
-		if atomic.LoadInt32(&cur.removed) == 0 && !cur.once {
-			cur.nnext = nil
-			cur.pprev = nil
-			(*ll).head.nnext.pprev = cur
-			cur.nnext = (*ll).head.nnext
-			cur.pprev = &(*ll).head
-			(*ll).head.nnext = cur
-		} else {
-			cur.slot = nil
-			cur.version = 0
-		}
-		cur = pprev
-	}
-
-	(*l).head.nnext = &(*l).tail
-	(*l).tail.pprev = &(*l).head
-
-	this.emiting = false
-	this.Unlock()
 }

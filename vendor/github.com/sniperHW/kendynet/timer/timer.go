@@ -1,9 +1,7 @@
 package timer
 
 import (
-	"fmt"
 	"github.com/sniperHW/kendynet"
-	//"github.com/sniperHW/kendynet/event"
 	"github.com/sniperHW/kendynet/util"
 	"runtime"
 	"sync"
@@ -22,14 +20,13 @@ const (
 )
 
 type Timer struct {
-	//eventQue *event.EventQueue
 	duration time.Duration
 	repeat   bool //是否重复定时器
 	status   int32
 	callback func(*Timer, interface{})
 	p        *p
 	ctx      interface{}
-	index    uint64
+	index    *uint64
 	t        atomic.Value
 }
 
@@ -45,11 +42,8 @@ func (this *Timer) GetCTX() interface{} {
 func (this *Timer) call() {
 	if atomic.CompareAndSwapInt32(&this.status, waitting, firing) {
 		if _, err := util.ProtectCall(this.callback, this, this.ctx); nil != err {
-			logger := kendynet.GetLogger()
-			if nil != logger {
+			if logger := kendynet.GetLogger(); nil != logger {
 				logger.Errorln("error on timer:", err.Error())
-			} else {
-				fmt.Println("error on timer:", err.Error())
 			}
 		}
 
@@ -57,9 +51,9 @@ func (this *Timer) call() {
 			this.p.resetTicker(this)
 		} else {
 			atomic.StoreInt32(&this.status, removed)
-			if this.index != 0 {
+			if this.index != nil {
 				this.p.Lock()
-				delete(this.p.index2Timer, this.index)
+				delete(this.p.index2Timer, *this.index)
 				this.p.Unlock()
 			}
 		}
@@ -79,7 +73,7 @@ func newp() *p {
  *  eventQue:   如果非nil,callback会被投递到eventQue，否则在定时器主循环中执行
  */
 
-func (this *p) newTimer(timeout time.Duration, repeat bool, fn func(*Timer, interface{}), ctx interface{}, index uint64) *Timer {
+func (this *p) newTimer(timeout time.Duration, repeat bool, fn func(*Timer, interface{}), ctx interface{}, index *uint64) *Timer {
 	if nil != fn {
 		t := &Timer{
 			duration: timeout,
@@ -89,7 +83,7 @@ func (this *p) newTimer(timeout time.Duration, repeat bool, fn func(*Timer, inte
 			ctx:      ctx,
 			index:    index,
 		}
-		if this.addTimer(t, index) {
+		if this.addTimer(t) {
 			return t
 		} else {
 			return nil
@@ -99,14 +93,14 @@ func (this *p) newTimer(timeout time.Duration, repeat bool, fn func(*Timer, inte
 	}
 }
 
-func (this *p) addTimer(t *Timer, index uint64) bool {
-	if index > 0 {
+func (this *p) addTimer(t *Timer) bool {
+	if t.index != nil {
 		this.Lock()
 		defer this.Unlock()
-		if _, ok := this.index2Timer[index]; ok {
+		if _, ok := this.index2Timer[*t.index]; ok {
 			return false
 		} else {
-			this.index2Timer[index] = t
+			this.index2Timer[*t.index] = t
 			t.t.Store(time.AfterFunc(t.duration, func() {
 				t.call()
 			}))
@@ -131,10 +125,14 @@ func (this *p) GetTimerByIndex(index uint64) *Timer {
 
 func (this *p) resetTicker(t *Timer) {
 	if atomic.CompareAndSwapInt32(&t.status, firing, waitting) {
-		duration := time.Duration(atomic.LoadInt64((*int64)(&t.duration)))
-		t.t.Store(time.AfterFunc(duration, func() {
+		//1
+		t.t.Store(time.AfterFunc(t.duration, func() {
 			t.call()
 		}))
+		/*
+		 * 执行到1的时候,其它线程可能会调用remove,新的定时器还没被设置，因此在remove中Stop的是旧的定时器
+		 * 因此这里需要再次判断是否执行了removed,如果是则将前面设置的定时器Stop
+		 */
 		if atomic.LoadInt32(&t.status) == removed {
 			t.t.Load().(*time.Timer).Stop()
 		}
@@ -148,30 +146,12 @@ func (this *p) resetFireTime(t *Timer, timeout time.Duration) bool {
 	return t.t.Load().(*time.Timer).Reset(timeout)
 }
 
-func (this *p) resetDuration(t *Timer, duration time.Duration) bool {
-	if !t.repeat {
-		return false
-	} else {
-		atomic.StoreInt64((*int64)(&t.duration), int64(duration))
-		for {
-			if atomic.LoadInt32(&t.status) == removed {
-				return false
-			} else {
-				if t.t.Load().(*time.Timer).Reset(duration) {
-					break
-				}
-			}
-		}
-		return true
-	}
-}
-
 func (this *p) remove(t *Timer) bool {
 	if atomic.CompareAndSwapInt32(&t.status, waitting, removed) {
 		t.t.Load().(*time.Timer).Stop()
-		if t.index > 0 {
+		if nil != t.index {
 			this.Lock()
-			delete(this.index2Timer, t.index)
+			delete(this.index2Timer, *t.index)
 			this.Unlock()
 		}
 		return true
@@ -188,7 +168,7 @@ func (this *p) removeByIndex(index uint64) (bool, interface{}) {
 	if ok {
 		if atomic.CompareAndSwapInt32(&t.status, waitting, removed) {
 			t.t.Load().(*time.Timer).Stop()
-			delete(this.index2Timer, t.index)
+			delete(this.index2Timer, *t.index)
 			return true, t.ctx
 		} else {
 			atomic.StoreInt32(&t.status, removed)
@@ -197,24 +177,6 @@ func (this *p) removeByIndex(index uint64) (bool, interface{}) {
 	} else {
 		return false, nil
 	}
-}
-
-//一次性定时器
-func (this *p) Once(timeout time.Duration, callback func(*Timer, interface{}), ctx interface{}) *Timer {
-	return this.newTimer(timeout, false, callback, ctx, 0)
-}
-
-func (this *p) OnceWithIndex(timeout time.Duration, callback func(*Timer, interface{}), ctx interface{}, index uint64) *Timer {
-	if index > 0 {
-		return this.newTimer(timeout, false, callback, ctx, index)
-	} else {
-		return nil
-	}
-}
-
-//重复定时器
-func (this *p) Repeat(duration time.Duration, callback func(*Timer, interface{}), ctx interface{}) *Timer {
-	return this.newTimer(duration, true, callback, ctx, 0)
 }
 
 type TimerMgr struct {
@@ -236,21 +198,17 @@ func NewTimerMgr(num int) *TimerMgr {
 
 //一次性定时器
 func (this *TimerMgr) Once(timeout time.Duration, callback func(*Timer, interface{}), ctx interface{}) *Timer {
-	return this.slots[0].newTimer(timeout, false, callback, ctx, 0)
+	return this.slots[0].newTimer(timeout, false, callback, ctx, nil)
 }
 
 func (this *TimerMgr) OnceWithIndex(timeout time.Duration, callback func(*Timer, interface{}), ctx interface{}, index uint64) *Timer {
-	if index > 0 {
-		slot := int(index) % len(this.slots)
-		return this.slots[slot].newTimer(timeout, false, callback, ctx, index)
-	} else {
-		return nil
-	}
+	slot := int(index) % len(this.slots)
+	return this.slots[slot].newTimer(timeout, false, callback, ctx, &index)
 }
 
 //重复定时器
 func (this *TimerMgr) Repeat(duration time.Duration, callback func(*Timer, interface{}), ctx interface{}) *Timer {
-	return this.slots[0].newTimer(duration, true, callback, ctx, 0)
+	return this.slots[0].newTimer(duration, true, callback, ctx, nil)
 }
 
 func (this *TimerMgr) GetTimerByIndex(index uint64) *Timer {
@@ -275,11 +233,6 @@ func (this *Timer) Cancel() bool {
 //只对一次性定时器有效
 func (this *Timer) ResetFireTime(timeout time.Duration) bool {
 	return this.p.resetFireTime(this, timeout)
-}
-
-//只对重复定时器有效
-func (this *Timer) ResetDuration(duration time.Duration) bool {
-	return this.p.resetDuration(this, duration)
 }
 
 //一次性定时器

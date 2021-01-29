@@ -10,8 +10,9 @@ var (
 	ErrQueueFull   = errors.New("queue full")
 )
 
-const (
+var (
 	defaultFullSize = 10000
+	poolSize        = 10000
 )
 
 type listItem struct {
@@ -74,7 +75,7 @@ func newpq(priorityCount int) *pq {
 
 	q := &pq{
 		priorityQueue: make([]list, priorityCount),
-		itemPool:      make([]listItem, defaultFullSize, defaultFullSize),
+		itemPool:      make([]listItem, poolSize, poolSize),
 	}
 
 	for i, _ := range q.itemPool {
@@ -115,14 +116,13 @@ func (this *pq) push(priority int, v interface{}) {
 	}
 }
 
-func (this *pq) pop() (bool, interface{}) {
-	if this.count == 0 {
-		return false, nil
-	} else {
+func (this *pq) pop() (ok bool, v interface{}) {
+	if this.count > 0 {
 		q := &this.priorityQueue[this.high]
 
 		item := q.pop()
-		v := item.v
+		v = item.v
+		ok = true
 		this.releaseItem(item)
 
 		this.count--
@@ -130,9 +130,8 @@ func (this *pq) pop() (bool, interface{}) {
 		for this.priorityQueue[this.high].empty() && this.high > 0 {
 			this.high--
 		}
-
-		return true, v
 	}
+	return
 }
 
 type PriorityQueue struct {
