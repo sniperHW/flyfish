@@ -417,8 +417,11 @@ func testConnDisconnect(t *testing.T) {
 	c := OpenClient("localhost:8110", false, q)
 	c.SetPriority(1)
 
+	ClientTimeout = 5000
+	mock_kvnode.SetProcessDelay(2 * time.Second)
+
 	c.GetWithVersion("users1", "sniperHW", 1, "age").AsyncExec(func(r *SliceResult) {
-		fmt.Println(r)
+		assert.Equal(t, r.ErrCode, errcode.ERR_CONNECTION)
 		q.Close()
 	})
 
@@ -429,6 +432,8 @@ func testConnDisconnect(t *testing.T) {
 	c.conn.session.Close("test", 0)
 
 	q.Run()
+
+	mock_kvnode.SetProcessDelay(0)
 
 }
 
@@ -446,4 +451,7 @@ func TestClient(t *testing.T) {
 	testMGetWithQueue(t, c)
 	testConnDisconnect(t)
 	time.Sleep(time.Second)
+
+	assert.Equal(t, 0, len(c.conn.waitResp))
+
 }

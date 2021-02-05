@@ -486,37 +486,38 @@ func (this *Conn) onReloadTableConfResp(c *cmdContext, errCode int32, resp *prot
 }
 
 func (this *Conn) onMessage(msg *net.Message) {
-	this.eventQueue.Post(this.c.priority, func() {
-		head := msg.GetHead()
-		cmd := protocol.CmdType(msg.GetCmd())
-		if cmd != protocol.CmdType_Ping {
-			ok, ctx := this.timerMgr.CancelByIndex(uint64(head.Seqno))
-			if ok {
-				c := ctx.(*cmdContext)
-				switch cmd {
-				case protocol.CmdType_Get:
-					this.onGetResp(c, head.ErrCode, msg.GetData().(*protocol.GetResp))
-				case protocol.CmdType_Set:
-					this.onSetResp(c, head.ErrCode, msg.GetData().(*protocol.SetResp))
-				case protocol.CmdType_SetNx:
-					this.onSetNxResp(c, head.ErrCode, msg.GetData().(*protocol.SetNxResp))
-				case protocol.CmdType_CompareAndSet:
-					this.onCompareAndSetResp(c, head.ErrCode, msg.GetData().(*protocol.CompareAndSetResp))
-				case protocol.CmdType_CompareAndSetNx:
-					this.onCompareAndSetNxResp(c, head.ErrCode, msg.GetData().(*protocol.CompareAndSetNxResp))
-				case protocol.CmdType_Del:
-					this.onDelResp(c, head.ErrCode, msg.GetData().(*protocol.DelResp))
-				case protocol.CmdType_IncrBy:
-					this.onIncrByResp(c, head.ErrCode, msg.GetData().(*protocol.IncrByResp))
-				case protocol.CmdType_DecrBy:
-					this.onDecrByResp(c, head.ErrCode, msg.GetData().(*protocol.DecrByResp))
-				case protocol.CmdType_Kick:
-					this.onKickResp(c, head.ErrCode, msg.GetData().(*protocol.KickResp))
-				case protocol.CmdType_ReloadTableConf:
-					this.onReloadTableConfResp(c, head.ErrCode, msg.GetData().(*protocol.ReloadTableConfResp))
-				default:
-				}
+	head := msg.GetHead()
+	cmd := protocol.CmdType(msg.GetCmd())
+	if cmd != protocol.CmdType_Ping {
+		this.Lock()
+		delete(this.waitResp, uint64(head.Seqno))
+		ok, ctx := this.timerMgr.CancelByIndex(uint64(head.Seqno))
+		this.Unlock()
+		if ok {
+			c := ctx.(*cmdContext)
+			switch cmd {
+			case protocol.CmdType_Get:
+				this.onGetResp(c, head.ErrCode, msg.GetData().(*protocol.GetResp))
+			case protocol.CmdType_Set:
+				this.onSetResp(c, head.ErrCode, msg.GetData().(*protocol.SetResp))
+			case protocol.CmdType_SetNx:
+				this.onSetNxResp(c, head.ErrCode, msg.GetData().(*protocol.SetNxResp))
+			case protocol.CmdType_CompareAndSet:
+				this.onCompareAndSetResp(c, head.ErrCode, msg.GetData().(*protocol.CompareAndSetResp))
+			case protocol.CmdType_CompareAndSetNx:
+				this.onCompareAndSetNxResp(c, head.ErrCode, msg.GetData().(*protocol.CompareAndSetNxResp))
+			case protocol.CmdType_Del:
+				this.onDelResp(c, head.ErrCode, msg.GetData().(*protocol.DelResp))
+			case protocol.CmdType_IncrBy:
+				this.onIncrByResp(c, head.ErrCode, msg.GetData().(*protocol.IncrByResp))
+			case protocol.CmdType_DecrBy:
+				this.onDecrByResp(c, head.ErrCode, msg.GetData().(*protocol.DecrByResp))
+			case protocol.CmdType_Kick:
+				this.onKickResp(c, head.ErrCode, msg.GetData().(*protocol.KickResp))
+			case protocol.CmdType_ReloadTableConf:
+				this.onReloadTableConfResp(c, head.ErrCode, msg.GetData().(*protocol.ReloadTableConfResp))
+			default:
 			}
 		}
-	})
+	}
 }
