@@ -1,30 +1,28 @@
 package client
 
 import (
-	//"github.com/sniperHW/flyfish/codec"
 	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/net/pb"
-	//protocol "github.com/sniperHW/flyfish/proto"
-	//"github.com/sniperHW/flyfish/proto/login"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/event"
-	//connector "github.com/sniperHW/kendynet/socket/connector/tcp"
-	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/kendynet/timer"
+	//"sync"
 	"time"
 )
 
 const maxPendingSize int = 10000
 
 type Conn struct {
+	//sync.Mutex
 	session     kendynet.StreamSession
 	addr        string
-	pendingSend []*cmdContext     //等待发送的消息
-	eventQueue  *event.EventQueue //此客户端的主处理队列
-	dialing     bool
-	c           *Client
-	//nextPing    time.Time
-	timerMgr *timer.TimerMgr
+	pendingSend []*cmdContext //等待发送的消息
+	//waitResp    map[uint64]*cmdContext
+	eventQueue *event.EventQueue //此客户端的主处理队列
+	dialing    bool
+	c          *Client
+	timerMgr   *timer.TimerMgr
 }
 
 func openConn(cli *Client, addr string) *Conn {
@@ -33,8 +31,7 @@ func openConn(cli *Client, addr string) *Conn {
 		eventQueue:  event.NewEventQueue(),
 		pendingSend: []*cmdContext{},
 		c:           cli,
-		//nextPing:    time.Now().Add(protocol.PingTime),
-		timerMgr: timer.NewTimerMgr(1),
+		timerMgr:    timer.NewTimerMgr(1),
 	}
 	go c.eventQueue.Run()
 	return c

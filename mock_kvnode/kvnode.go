@@ -10,8 +10,24 @@ import (
 	protocol "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/event"
+	"sync/atomic"
 	"time"
 )
+
+var processDelay atomic.Value
+
+func SetProcessDelay(delay time.Duration) {
+	processDelay.Store(delay)
+}
+
+func getProcessDelay() time.Duration {
+	v := processDelay.Load()
+	if nil == v {
+		return 0
+	} else {
+		return v.(time.Duration)
+	}
+}
 
 type handler func(kendynet.StreamSession, *net.Message)
 
@@ -47,6 +63,10 @@ func (this *Node) Dispatch(session kendynet.StreamSession, cmd uint16, msg *net.
 		switch cmd {
 		default:
 			if handler, ok := this.handlers[cmd]; ok {
+				delay := getProcessDelay()
+				if delay > 0 {
+					time.Sleep(delay)
+				}
 				this.queue.PostNoWait(0, handler, session, msg)
 			}
 		}

@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/mock_kvnode"
+	"github.com/sniperHW/kendynet"
+	"github.com/sniperHW/kendynet/event"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
@@ -374,10 +376,74 @@ func test(t *testing.T, c *Client) {
 	}
 }
 
+func testTimeout(t *testing.T, c *Client) {
+	{
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		fields["name"] = "sniperHW"
+
+		r1 := c.Set("users1", "sniperHW", fields).Exec()
+		assert.Equal(t, errcode.ERR_TIMEOUT, r1.ErrCode)
+
+		r0 := c.GetAll("users1", "sniperHW").Exec()
+		assert.Equal(t, errcode.ERR_TIMEOUT, r0.ErrCode)
+	}
+}
+
+func testWithQueue(t *testing.T) {
+	q := event.NewEventQueueWithPriority(2, 100)
+	c := OpenClient("localhost:8110", false, q)
+	c.SetPriority(1)
+
+	c.GetWithVersion("users1", "sniperHW", 1, "age").AsyncExec(func(r *SliceResult) {
+		q.Close()
+	})
+
+	q.Run()
+
+}
+
+func testMGetWithQueue(t *testing.T, c *Client) {
+	q := event.NewEventQueueWithPriority(2, 100)
+	MGetWithEventQueue(1, q, c.GetAll("users1", "sniperHW1"), c.GetAll("users1", "sniperHW2"), c.GetAll("users1", "sniperHW3")).AsyncExec(func(ret []*SliceResult) {
+		q.Close()
+	})
+
+	q.Run()
+}
+
+func testConnDisconnect(t *testing.T) {
+	q := event.NewEventQueueWithPriority(2, 100)
+	c := OpenClient("localhost:8110", false, q)
+	c.SetPriority(1)
+
+	c.GetWithVersion("users1", "sniperHW", 1, "age").AsyncExec(func(r *SliceResult) {
+		fmt.Println(r)
+		q.Close()
+	})
+
+	for c.conn.session == nil {
+		time.Sleep(time.Second)
+	}
+
+	c.conn.session.Close("test", 0)
+
+	q.Run()
+
+}
+
 func TestClient(t *testing.T) {
+	InitLogger(&kendynet.EmptyLogger{})
 	n := mock_kvnode.New()
 	assert.Nil(t, n.Start("localhost:8110", []string{"users1@name:string:,age:int:,phone:string:"}))
 	c := OpenClient("localhost:8110", false)
 	test(t, c)
+	ClientTimeout = 1000
+	mock_kvnode.SetProcessDelay(2 * time.Second)
+	testTimeout(t, c)
+	mock_kvnode.SetProcessDelay(0)
+	testWithQueue(t)
+	testMGetWithQueue(t, c)
+	testConnDisconnect(t)
 	time.Sleep(time.Second)
 }

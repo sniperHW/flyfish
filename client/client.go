@@ -11,7 +11,6 @@ var seqno int64
 
 type Client struct {
 	conn          *Conn
-	closed        int32
 	callbackQueue *event.EventQueue //响应回调的事件队列
 	compress      bool
 	priority      int
