@@ -15,6 +15,24 @@ import (
 )
 
 var processDelay atomic.Value
+var disconnectOnRecvMsg atomic.Value
+
+func SetDisconnectOnRecvMsg() {
+	disconnectOnRecvMsg.Store(true)
+}
+
+func ClearDisconnectOnRecvMsg() {
+	disconnectOnRecvMsg.Store(false)
+}
+
+func GetDisconnectOnRecvMsg() bool {
+	v := disconnectOnRecvMsg.Load()
+	if nil == v {
+		return false
+	} else {
+		return v.(bool)
+	}
+}
 
 func SetProcessDelay(delay time.Duration) {
 	processDelay.Store(delay)
@@ -59,15 +77,19 @@ func (this *Node) Register(cmd uint16, h handler) {
 }
 
 func (this *Node) Dispatch(session kendynet.StreamSession, cmd uint16, msg *net.Message) {
-	if nil != msg {
-		switch cmd {
-		default:
-			if handler, ok := this.handlers[cmd]; ok {
-				delay := getProcessDelay()
-				if delay > 0 {
-					time.Sleep(delay)
+	if GetDisconnectOnRecvMsg() {
+		session.Close("none", 0)
+	} else {
+		if nil != msg {
+			switch cmd {
+			default:
+				if handler, ok := this.handlers[cmd]; ok {
+					delay := getProcessDelay()
+					if delay > 0 {
+						time.Sleep(delay)
+					}
+					this.queue.PostNoWait(0, handler, session, msg)
 				}
-				this.queue.PostNoWait(0, handler, session, msg)
 			}
 		}
 	}

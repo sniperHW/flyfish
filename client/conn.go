@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const maxPendingSize int = 10000
+var maxPendingSize int = 10000
 
 type Conn struct {
 	sync.Mutex

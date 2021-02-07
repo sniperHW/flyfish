@@ -43,14 +43,6 @@ type cmdContext struct {
 	req         *net.Message
 }
 
-func (this *cmdContext) onError(errCode int32) {
-	this.cb.onError(this.unikey, errCode)
-}
-
-func (this *cmdContext) onResult(r interface{}) {
-	this.cb.onResult(this.unikey, r)
-}
-
 type StatusCmd struct {
 	conn *Conn
 	req  *net.Message

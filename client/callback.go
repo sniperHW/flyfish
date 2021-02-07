@@ -63,8 +63,6 @@ func (this *callback) onError(unikey string, errCode int32) {
 			unikey:  unikey,
 			ErrCode: errCode,
 		})
-	} else {
-		panic("invaild cb_type")
 	}
 }
 
@@ -83,7 +81,5 @@ func (this *callback) onResult(unikey string, r interface{}) {
 		ret.Table = table
 		ret.unikey = unikey
 		this.cb.(func(*SliceResult))(ret)
-	} else {
-		panic("invaild cb_type")
 	}
 }

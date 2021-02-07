@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/mock_kvnode"
+	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/event"
 	"github.com/stretchr/testify/assert"
@@ -434,11 +435,81 @@ func testConnDisconnect(t *testing.T) {
 	q.Run()
 
 	mock_kvnode.SetProcessDelay(0)
+}
+
+func testMaxPendingSize(t *testing.T) {
+	q := event.NewEventQueueWithPriority(2, 100)
+	c := OpenClient("localhost:8110", false, q)
+	c.SetPriority(1)
+
+	backmaxPendingSize := maxPendingSize
+
+	maxPendingSize = 1
+
+	c.GetWithVersion("users1", "sniperHW", 1, "age").AsyncExec(func(r *SliceResult) {
+		assert.Equal(t, r.ErrCode, errcode.ERR_OK)
+		q.Close()
+	})
+
+	c.GetWithVersion("users1", "sniperHW", 1, "age").AsyncExec(func(r *SliceResult) {
+		assert.Equal(t, r.ErrCode, errcode.ERR_BUSY)
+		//q.Close()
+	})
+
+	maxPendingSize = backmaxPendingSize
+
+	q.Run()
+
+}
+
+func testPassiveDisconnected(t *testing.T) {
+	q := event.NewEventQueueWithPriority(2, 100)
+	c := OpenClient("localhost:8110", false, q)
+	c.SetPriority(1)
+
+	ClientTimeout = 5000
+	mock_kvnode.SetDisconnectOnRecvMsg()
+
+	c.GetWithVersion("users1", "sniperHW", 1, "age").AsyncExec(func(r *SliceResult) {
+		assert.Equal(t, r.ErrCode, errcode.ERR_CONNECTION)
+		q.Close()
+	})
+
+	q.Run()
+
+	mock_kvnode.ClearDisconnectOnRecvMsg()
+
+}
+
+func testDialFailed(t *testing.T) {
+	q := event.NewEventQueueWithPriority(2, 100)
+	c := OpenClient("localhost:8119", false, q)
+	c.SetPriority(1)
+
+	ClientTimeout = 3000
+
+	c.GetWithVersion("users1", "sniperHW", 1, "age").AsyncExec(func(r *SliceResult) {
+		assert.Equal(t, r.ErrCode, errcode.ERR_TIMEOUT)
+		q.Close()
+	})
+
+	q.Run()
 
 }
 
 func TestClient(t *testing.T) {
 	InitLogger(&kendynet.EmptyLogger{})
+
+	{
+		f1 := (*Field)(proto.PackField("float", 1.2))
+		assert.Equal(t, false, f1.IsNil())
+		assert.Equal(t, f1.GetFloat(), 1.2)
+
+		f2 := (*Field)(proto.PackField("blob", []byte("blob")))
+		assert.Equal(t, []byte("blob"), f2.GetBlob())
+		assert.Equal(t, []byte("blob"), f2.GetValue().([]byte))
+	}
+
 	n := mock_kvnode.New()
 	assert.Nil(t, n.Start("localhost:8110", []string{"users1@name:string:,age:int:,phone:string:"}))
 	c := OpenClient("localhost:8110", false)
@@ -450,6 +521,9 @@ func TestClient(t *testing.T) {
 	testWithQueue(t)
 	testMGetWithQueue(t, c)
 	testConnDisconnect(t)
+	testMaxPendingSize(t)
+	testPassiveDisconnected(t)
+	testDialFailed(t)
 	time.Sleep(time.Second)
 
 	assert.Equal(t, 0, len(c.conn.waitResp))
