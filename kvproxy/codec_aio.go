@@ -16,7 +16,7 @@ type Receiver struct {
 func NewReceiver() *Receiver {
 	receiver := &Receiver{}
 	receiver.AioReceiverBase = &net.AioReceiverBase{
-		Unpack: receiver.unpack,
+		BaseUnpack: receiver.unpack,
 	}
 	return receiver
 }

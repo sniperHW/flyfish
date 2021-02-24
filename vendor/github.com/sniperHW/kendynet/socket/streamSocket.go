@@ -7,6 +7,7 @@ package socket
 import (
 	"bufio"
 	//"fmt"
+	"errors"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/util"
 	"net"
@@ -14,11 +15,11 @@ import (
 	"time"
 )
 
-type defaultSSReceiver struct {
+type defaultSSInBoundProcessor struct {
 	buffer []byte
 }
 
-func (this *defaultSSReceiver) ReceiveAndUnpack(sess kendynet.StreamSession) (interface{}, error) {
+func (this *defaultSSInBoundProcessor) ReceiveAndUnpack(sess kendynet.StreamSession) (interface{}, error) {
 	n, err := sess.(*StreamSocket).Read(this.buffer[:])
 	if err != nil {
 		return nil, err
@@ -26,6 +27,22 @@ func (this *defaultSSReceiver) ReceiveAndUnpack(sess kendynet.StreamSession) (in
 	msg := kendynet.NewByteBuffer(n)
 	msg.AppendBytes(this.buffer[:n])
 	return msg, err
+}
+
+func (this *defaultSSInBoundProcessor) GetRecvBuff() []byte {
+	return nil
+}
+
+func (this *defaultSSInBoundProcessor) OnData([]byte) {
+
+}
+
+func (this *defaultSSInBoundProcessor) Unpack() (interface{}, error) {
+	return nil, nil
+}
+
+func (this *defaultSSInBoundProcessor) OnSocketClose() {
+
 }
 
 type StreamSocket struct {
@@ -48,25 +65,23 @@ func (this *StreamSocket) sendMessage(msg kendynet.Message) error {
 			return err
 		}
 	}
+	this.sendOnce.Do(func() {
+		this.ioWait.Add(1)
+		go this.sendThreadFunc()
+	})
 	return nil
 }
 
 func (this *StreamSocket) sendThreadFunc() {
-	defer func() {
-		close(this.sendCloseChan)
-		this.setFlag(fsendStoped)
-		if this.testFlag(frecvStoped) {
-			this.clearup()
-		}
-	}()
+	defer this.ioWait.Done()
 
 	var err error
 
 	writer := bufio.NewWriterSize(this.conn, kendynet.SendBufferSize)
 
-	timeout := this.getSendTimeout()
-
 	for {
+
+		timeout := this.getSendTimeout()
 
 		closed, localList := this.sendQue.Get()
 		size := len(localList)
@@ -103,17 +118,22 @@ func (this *StreamSocket) sendThreadFunc() {
 					} else {
 						err = writer.Flush()
 					}
-					if err != nil {
 
-						breakLoop := false
+					if err != nil && !this.testFlag(fclosed) {
 						if kendynet.IsNetTimeout(err) {
 							err = kendynet.ErrSendTimeout
-						} else {
-							breakLoop = true
-							this.sendQue.CloseAndClear()
 						}
 
-						if this.callEventCB(&kendynet.Event{Session: this, EventType: kendynet.EventTypeError, Data: err}, fclosed) || breakLoop {
+						if nil != this.errorCallback {
+							if err != kendynet.ErrSendTimeout {
+								this.Close(err, 0)
+							}
+							this.errorCallback(this, err)
+						} else {
+							this.Close(err, 0)
+						}
+
+						if this.testFlag(fclosed) {
 							return
 						}
 					}
@@ -140,11 +160,9 @@ func NewStreamSocket(conn net.Conn) kendynet.StreamSession {
 		imp:           s,
 	}
 
-	//fmt.Println("new")
-
 	runtime.SetFinalizer(s, func(s *StreamSocket) {
 		//fmt.Println("gc")
-		s.Close("gc", 0)
+		s.Close(errors.New("gc"), 0)
 	})
 
 	return s
@@ -162,172 +180,6 @@ func (this *StreamSocket) GetUnderConn() interface{} {
 	return this.GetNetConn()
 }
 
-func (this *StreamSocket) defaultReceiver() kendynet.Receiver {
-	return &defaultSSReceiver{buffer: make([]byte, 4096)}
+func (this *StreamSocket) defaultInBoundProcessor() kendynet.InBoundProcessor {
+	return &defaultSSInBoundProcessor{buffer: make([]byte, 4096)}
 }
-
-/*
-func (this *StreamSocket) sendThreadFunc() {
-
-	defer func() {
-		close(this.sendCloseChan)
-	}()
-
-	var err error
-
-	var sendBuff bytes.Buffer
-
-	cap := 1024 * 1024
-
-	timeout := this.sendTimeout
-
-	for {
-
-		closed, localList := this.sendQue.Get()
-		size := len(localList)
-		if closed && size == 0 {
-			break
-		}
-
-		if sendBuff.Cap() > cap {
-			sendBuff = bytes.Buffer{}
-		} else {
-			sendBuff.Reset()
-		}
-
-		for i := 0; i < size; i++ {
-			msg := localList[i].(kendynet.Message)
-			data := msg.Bytes()
-			sendBuff.Write(data)
-		}
-
-		n := 0
-		b := sendBuff.Bytes()
-
-		for {
-
-			if timeout > 0 {
-				this.conn.SetWriteDeadline(time.Now().Add(timeout))
-				n, err = this.conn.Write(b)
-				this.conn.SetWriteDeadline(time.Time{})
-			} else {
-				n, err = this.conn.Write(b)
-			}
-
-			if nil != err {
-				if this.sendQue.Closed() {
-					return
-				}
-				if kendynet.IsNetTimeout(err) {
-					err = kendynet.ErrSendTimeout
-				} else {
-					kendynet.Errorf("writer.Flush error:%s\n", err.Error())
-					this.mutex.Lock()
-					this.flag |= wclosed
-					this.mutex.Unlock()
-				}
-				event := &kendynet.Event{Session: this, EventType: kendynet.EventTypeError, Data: err}
-				this.onEvent(event)
-				if this.sendQue.Closed() {
-					return
-				}
-			} else {
-				if n == len(b) {
-					break
-				} else {
-					b = b[n:]
-				}
-			}
-		}
-	}
-}
-*/
-
-/*
-func (this *StreamSocket) sendThreadFunc() {
-
-	defer func() {
-		close(this.sendCloseChan)
-	}()
-
-	var err error
-
-	var closed bool
-
-	var localList []interface{}
-
-	var writeBuffers net.Buffers
-
-	timeout := this.sendTimeout
-
-	totalBytes := int64(0)
-
-	for {
-		if len(writeBuffers) > 0 {
-			closed, localList = this.sendQue.GetNoWait()
-		} else {
-			closed, localList = this.sendQue.Get()
-		}
-		size := len(localList)
-		if closed && size == 0 {
-			break
-		}
-
-		n := int64(0)
-
-		for i := 0; i < size; i++ {
-			msg := localList[i].(kendynet.Message)
-			data := msg.Bytes()
-			totalBytes += int64(len(data))
-			writeBuffers = append(writeBuffers, data)
-		}
-
-		if timeout > 0 {
-			this.conn.SetWriteDeadline(time.Now().Add(timeout))
-			n, err = writeBuffers.WriteTo(this.conn)
-			this.conn.SetWriteDeadline(time.Time{})
-		} else {
-			n, err = writeBuffers.WriteTo(this.conn)
-		}
-
-		if nil != err {
-			if this.sendQue.Closed() {
-				return
-			}
-			if kendynet.IsNetTimeout(err) {
-				err = kendynet.ErrSendTimeout
-			} else {
-				kendynet.Errorf("writer.Flush error:%s\n", err.Error())
-				this.mutex.Lock()
-				this.flag |= wclosed
-				this.mutex.Unlock()
-			}
-			event := &kendynet.Event{Session: this, EventType: kendynet.EventTypeError, Data: err}
-			this.onEvent(event)
-			if this.sendQue.Closed() {
-				return
-			}
-		} else {
-			if n >= totalBytes {
-				writeBuffers = writeBuffers[:0]
-				totalBytes = 0
-			} else {
-				oldBuffers := writeBuffers
-				writeBuffers = net.Buffers{}
-				totalBytes = 0
-				for _, v := range oldBuffers {
-					if n >= int64(len(v)) {
-						n -= int64(len(v))
-					} else {
-						if n > 0 {
-							v = v[n:]
-							n = 0
-						}
-						writeBuffers = append(writeBuffers, v)
-						totalBytes += int64(len(v))
-					}
-				}
-			}
-		}
-	}
-}*/

@@ -41,7 +41,7 @@ func (this *dispatcher) Dispatch(session kendynet.StreamSession, cmd uint16, msg
 	}
 }
 
-func (this *dispatcher) OnClose(session kendynet.StreamSession, reason string) {
+func (this *dispatcher) OnClose(session kendynet.StreamSession) {
 	if u := session.GetUserData(); nil != u {
 		switch u.(type) {
 		case *cliConn:

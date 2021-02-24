@@ -217,16 +217,12 @@ func (this *kvproxy) Start() error {
 		go func() {
 			session.SetRecvTimeout(protocol.PingTime * 2)
 			session.SetUserData(compress)
-			session.SetReceiver(NewReceiver())
+			session.SetInBoundProcessor(NewReceiver())
 			session.SetEncoder(net.NewEncoder(pb.GetNamespace("response"), compress))
-			session.Start(func(event *kendynet.Event) {
-				if event.EventType == kendynet.EventTypeError {
-					event.Session.Close(event.Data.(error).Error(), 0)
-				} else {
-					seqno := atomic.AddInt64(&this.seqno, 1)
-					processor := this.processors[seqno%int64(len(this.processors))]
-					processor.onReq(seqno, session, event.Data.(*kendynet.ByteBuffer))
-				}
+			session.BeginRecv(func(s kendynet.StreamSession, msg interface{}) {
+				seqno := atomic.AddInt64(&this.seqno, 1)
+				processor := this.processors[seqno%int64(len(this.processors))]
+				processor.onReq(seqno, s, msg.(*kendynet.ByteBuffer))
 			})
 		}()
 	})

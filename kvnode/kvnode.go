@@ -57,6 +57,16 @@ func (this *KVNode) isStoped() bool {
 	return atomic.LoadInt32(&this.stoped) == 1
 }
 
+/*
+	session.SetInBoundProcessor(NewReceiver())
+	session.SetEncoder(net.NewEncoder(pb.GetNamespace("response"), compress))
+	session.BeginRecv(func(s kendynet.StreamSession, msg interface{}) {
+		seqno := atomic.AddInt64(&this.seqno, 1)
+		processor := this.processors[seqno%int64(len(this.processors))]
+		processor.onReq(seqno, s, msg.(*kendynet.ByteBuffer))
+	})
+*/
+
 func (this *KVNode) startListener() error {
 	if nil == this.listener {
 		return fmt.Errorf("invaild listener")
@@ -68,20 +78,17 @@ func (this *KVNode) startListener() error {
 			session.SetSendQueueSize(10000)
 
 			//只有配置了压缩开启同时客户端支持压缩才开启通信压缩
-			session.SetReceiver(net.NewReceiver(pb.GetNamespace("request"), compress))
+			session.SetInBoundProcessor(net.NewReceiver(pb.GetNamespace("request"), compress))
 			session.SetEncoder(net.NewEncoder(pb.GetNamespace("response"), compress))
 
-			session.SetCloseCallBack(func(sess kendynet.StreamSession, reason string) {
-				this.dispatcher.OnClose(sess, reason)
+			session.SetCloseCallBack(func(sess kendynet.StreamSession, reason error) {
+				this.dispatcher.OnClose(sess)
 			})
 			this.dispatcher.OnNewClient(session)
-			session.Start(func(event *kendynet.Event) {
-				if event.EventType == kendynet.EventTypeError {
-					event.Session.Close(event.Data.(error).Error(), 0)
-				} else {
-					msg := event.Data.(*net.Message)
-					this.dispatcher.Dispatch(session, msg.GetCmd(), msg)
-				}
+
+			session.BeginRecv(func(s kendynet.StreamSession, m interface{}) {
+				msg := m.(*net.Message)
+				this.dispatcher.Dispatch(session, msg.GetCmd(), msg)
 			})
 		}()
 	})
@@ -220,7 +227,7 @@ func (this *KVNode) Stop() {
 		//关闭所有客户连接
 
 		this.sessions.Range(func(key, value interface{}) bool {
-			value.(kendynet.StreamSession).Close("", 1)
+			value.(kendynet.StreamSession).Close(nil, 1)
 			return true
 		})
 

@@ -31,30 +31,25 @@ const (
 	SendBufferSize = 65535 //64k
 )
 
-/*
-type eventWaiter struct {
-	waiter chan struct{}
+type Message interface {
+	Bytes() []byte
 }
 
-func (this *eventWaiter) Wait() {
-	<-this.waiter
+type InBoundProcessor interface {
+	//供aio socket使用
+	GetRecvBuff() []byte
+	OnData([]byte)
+	Unpack() (interface{}, error)
+	OnSocketClose()
+	//供阻塞式socket使用
+	ReceiveAndUnpack(StreamSession) (interface{}, error)
 }
 
-func (this *eventWaiter) Notify() {
-	close(this.waiter)
-}
-
-func NewEventWaiter() *eventWaiter {
-	return &eventWaiter{
-		waiter: make(chan struct{}),
-	}
-}*/
-
-type Event struct {
-	EventType int16
-	Session   StreamSession
-	Data      interface{}
-	//EventWaiter *eventWaiter
+type EnCoder interface {
+	/*
+	 *  输入一个对象，输出可供session发送的Message对象
+	 */
+	EnCode(o interface{}) (Message, error)
 }
 
 type StreamSession interface {
@@ -76,7 +71,7 @@ type StreamSession interface {
 
 		无论何种情况，调用Close之后SendXXX操作都将返回错误
 	*/
-	Close(reason string, timeout time.Duration)
+	Close(reason error, timeout time.Duration)
 
 	ShutdownRead()
 
@@ -87,24 +82,19 @@ type StreamSession interface {
 		其中reason参数表明关闭原因由Close函数传入
 		需要注意，回调可能在接收或发送goroutine中调用，如回调函数涉及数据竞争，需要自己加锁保护
 	*/
-	SetCloseCallBack(cb func(StreamSession, string))
+	SetCloseCallBack(cb func(StreamSession, error)) StreamSession
 
-	/*
-	 *   设置接收解包器,必须在调用Start前设置，Start成功之后的调用将没有任何效果
-	 */
-	SetReceiver(r Receiver)
+	SetErrorCallBack(cb func(StreamSession, error)) StreamSession
+
+	SetInBoundProcessor(InBoundProcessor) StreamSession
 
 	/*
 	 *  设置消息序列化器，用于将一个对象序列化成Message对象，
 	 *  如果没有设置Send和PostSend将返回错误(只能调用SendMessage,PostSendMessage发送Message)
 	 */
-	SetEncoder(encoder EnCoder)
+	SetEncoder(encoder EnCoder) StreamSession
 
-	/*
-	 *   启动会话处理
-	 */
-	Start(eventCB func(*Event)) error
-
+	BeginRecv(func(StreamSession, interface{})) error
 	/*
 	 *   获取会话的本端地址
 	 */
@@ -118,7 +108,7 @@ type StreamSession interface {
 	/*
 	 *   设置用户数据
 	 */
-	SetUserData(ud interface{})
+	SetUserData(ud interface{}) StreamSession
 
 	/*
 	 *   获取用户数据
@@ -129,12 +119,12 @@ type StreamSession interface {
 
 	GetNetConn() net.Conn
 
-	SetRecvTimeout(time.Duration)
+	SetRecvTimeout(time.Duration) StreamSession
 
-	SetSendTimeout(time.Duration)
+	SetSendTimeout(time.Duration) StreamSession
 
 	/*
 	 *   设置异步发送队列大小,必须在调用Start前设置
 	 */
-	SetSendQueueSize(int)
+	SetSendQueueSize(int) StreamSession
 }

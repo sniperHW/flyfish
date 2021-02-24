@@ -78,7 +78,7 @@ func (this *Node) Register(cmd uint16, h handler) {
 
 func (this *Node) Dispatch(session kendynet.StreamSession, cmd uint16, msg *net.Message) {
 	if GetDisconnectOnRecvMsg() {
-		session.Close("none", 0)
+		session.Close(nil, 0)
 	} else {
 		if nil != msg {
 			switch cmd {
@@ -106,16 +106,12 @@ func (this *Node) startListener() error {
 			session.SetSendQueueSize(10000)
 
 			//只有配置了压缩开启同时客户端支持压缩才开启通信压缩
-			session.SetReceiver(net.NewReceiver(pb.GetNamespace("request"), compress))
+			session.SetInBoundProcessor(net.NewReceiver(pb.GetNamespace("request"), compress))
 			session.SetEncoder(net.NewEncoder(pb.GetNamespace("response"), compress))
 
-			session.Start(func(event *kendynet.Event) {
-				if event.EventType == kendynet.EventTypeError {
-					event.Session.Close(event.Data.(error).Error(), 0)
-				} else {
-					msg := event.Data.(*net.Message)
-					this.Dispatch(session, msg.GetCmd(), msg)
-				}
+			session.BeginRecv(func(s kendynet.StreamSession, m interface{}) {
+				msg := m.(*net.Message)
+				this.Dispatch(session, msg.GetCmd(), msg)
 			})
 		}()
 	})

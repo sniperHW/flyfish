@@ -1,6 +1,6 @@
 // +build linux
 
-package aiogo
+package goaio
 
 import (
 	"sync"
@@ -9,11 +9,8 @@ import (
 )
 
 type epoll struct {
-	fd        int
-	wfd       int // wake fd
-	fd2Conn   fd2Conn
-	ver       int64
-	closeOnce sync.Once
+	poller_base
+	wfd int // wake fd
 }
 
 func openPoller() (*epoll, error) {
@@ -24,6 +21,7 @@ func openPoller() (*epoll, error) {
 	poller := new(epoll)
 	poller.fd = epollFD
 	poller.fd2Conn = fd2Conn(make([]sync.Map, hashSize))
+	poller.die = make(chan struct{})
 
 	r0, _, e0 := syscall.Syscall(syscall.SYS_EVENTFD2, 0, 0, 0)
 	if e0 != 0 {
@@ -52,6 +50,11 @@ func openPoller() (*epoll, error) {
 	return poller, nil
 }
 
+func (p *epoll) close() {
+	p.trigger()
+	<-p.die
+}
+
 func (p *epoll) trigger() error {
 	_, err := syscall.Write(p.wfd, []byte{0, 0, 0, 0, 0, 0, 0, 1})
 	return err
@@ -59,38 +62,27 @@ func (p *epoll) trigger() error {
 
 const EPOLLET uint32 = 0x80000000
 
-func (p *epoll) enableWrite(c *Conn) bool {
+func (p *epoll) enableWrite(c *AIOConn) bool {
 	err := syscall.EpollCtl(p.fd, syscall.EPOLL_CTL_MOD, c.fd, &syscall.EpollEvent{Fd: int32(c.fd), Events: syscall.EPOLLRDHUP | syscall.EPOLLIN | syscall.EPOLLOUT | EPOLLET})
 	return nil == err
 }
 
-func (p *epoll) disableWrite(c *Conn) bool {
+func (p *epoll) disableWrite(c *AIOConn) bool {
 	err := syscall.EpollCtl(p.fd, syscall.EPOLL_CTL_MOD, c.fd, &syscall.EpollEvent{Fd: int32(c.fd), Events: syscall.EPOLLRDHUP | syscall.EPOLLIN | EPOLLET})
 	return nil == err
 }
 
-func (p *epoll) watch(conn *Conn) bool {
+func (p *epoll) watch(conn *AIOConn) bool {
 
 	if _, ok := p.fd2Conn.get(conn.fd); ok {
 		return false
 	}
 
-	var pollerVersion int32
+	conn.pollerVersion = p.updatePollerVersionOnWatch()
 
-	for {
-		ver := atomic.LoadInt64(&p.ver)
-		addVer := int32(ver>>32) + 1
-		pollerVersion = int32(ver & 0x00000000FFFFFFFF)
-		nextVer := int64(addVer<<32) | int64(pollerVersion)
-		if atomic.CompareAndSwapInt64(&p.ver, ver, nextVer) {
-			break
-		}
-	}
-
-	conn.pollerVersion = pollerVersion
 	p.fd2Conn.add(conn)
 
-	err := syscall.EpollCtl(p.fd, syscall.EPOLL_CTL_ADD, int(conn.fd), &syscall.EpollEvent{Fd: int32(conn.fd), Events: syscall.EPOLLRDHUP | syscall.EPOLLIN | /*syscall.EPOLLOUT |*/ EPOLLET})
+	err := syscall.EpollCtl(p.fd, syscall.EPOLL_CTL_ADD, int(conn.fd), &syscall.EpollEvent{Fd: int32(conn.fd), Events: syscall.EPOLLRDHUP | syscall.EPOLLIN | syscall.EPOLLOUT | EPOLLET})
 	if nil != err {
 		p.fd2Conn.remove(conn)
 		return false
@@ -100,7 +92,7 @@ func (p *epoll) watch(conn *Conn) bool {
 
 }
 
-func (p *epoll) unwatch(conn *Conn) bool {
+func (p *epoll) unwatch(conn *AIOConn) bool {
 
 	if _, ok := p.fd2Conn.get(conn.fd); !ok {
 		return false
@@ -126,6 +118,7 @@ func (p *epoll) wait(stoped *int32) {
 	defer func() {
 		syscall.Close(p.fd)
 		syscall.Close(p.wfd)
+		close(p.die)
 	}()
 
 	eventlist := make([]syscall.EpollEvent, 64)
@@ -142,17 +135,7 @@ func (p *epoll) wait(stoped *int32) {
 			return
 		}
 
-		var pollerVersion int32
-
-		for {
-			ver := atomic.LoadInt64(&p.ver)
-			addVer := int32(ver >> 32)
-			pollerVersion = int32(ver&0x00000000FFFFFFFF) + 1
-			nextVer := int64(addVer<<32) | int64(pollerVersion)
-			if atomic.CompareAndSwapInt64(&p.ver, ver, nextVer) {
-				break
-			}
-		}
+		pollerVersion := p.updatePollerVersionOnWait()
 
 		for i := 0; i < n; i++ {
 
@@ -178,14 +161,7 @@ func (p *epoll) wait(stoped *int32) {
 						event |= EV_WRITE
 					}
 
-					op := gOpPool.get()
-					op.tt = pollEvent
-					op.c = conn
-					op.ud = event
-
-					if nil != conn.worker.push(op) {
-						return
-					}
+					conn.onActive(event)
 				}
 
 			} else {
@@ -201,6 +177,5 @@ func (p *epoll) wait(stoped *int32) {
 		if n == len(eventlist) {
 			eventlist = make([]syscall.EpollEvent, n<<1)
 		}
-
 	}
 }

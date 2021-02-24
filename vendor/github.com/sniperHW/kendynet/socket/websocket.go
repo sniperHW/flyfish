@@ -12,6 +12,7 @@ import (
 	"github.com/sniperHW/kendynet/util"
 	"net"
 	//"sync/atomic"
+	"errors"
 	"runtime"
 	"time"
 )
@@ -22,16 +23,32 @@ var ErrInvaildWSMessage = fmt.Errorf("invaild websocket message")
 *   无封包结构，直接将收到的所有数据返回
  */
 
-type defaultWSReceiver struct {
+type defaultWSInBoundProcessor struct {
 }
 
-func (this *defaultWSReceiver) ReceiveAndUnpack(sess kendynet.StreamSession) (interface{}, error) {
+func (this *defaultWSInBoundProcessor) ReceiveAndUnpack(sess kendynet.StreamSession) (interface{}, error) {
 	mt, msg, err := sess.(*WebSocket).Read()
 	if err != nil {
 		return nil, err
 	} else {
 		return message.NewWSMessage(mt, msg), nil
 	}
+}
+
+func (this *defaultWSInBoundProcessor) GetRecvBuff() []byte {
+	return nil
+}
+
+func (this *defaultWSInBoundProcessor) OnData([]byte) {
+
+}
+
+func (this *defaultWSInBoundProcessor) Unpack() (interface{}, error) {
+	return nil, nil
+}
+
+func (this *defaultWSInBoundProcessor) OnSocketClose() {
+
 }
 
 type WebSocket struct {
@@ -60,23 +77,20 @@ func (this *WebSocket) sendMessage(msg kendynet.Message) error {
 			return ErrInvaildWSMessage
 		}
 	}
+	this.sendOnce.Do(func() {
+		this.ioWait.Add(1)
+		go this.sendThreadFunc()
+	})
 	return nil
 }
 
 func (this *WebSocket) sendThreadFunc() {
+	defer this.ioWait.Done()
 
-	defer func() {
-		close(this.sendCloseChan)
-		this.setFlag(fsendStoped)
-		if this.testFlag(frecvStoped) {
-			if onClose := this.onClose.Load(); nil != onClose {
-				onClose.(func(kendynet.StreamSession, string))(this.imp.(kendynet.StreamSession), this.closeReason)
-			}
-		}
-	}()
-
-	timeout := this.getSendTimeout()
 	for {
+
+		timeout := this.getSendTimeout()
+
 		closed, localList := this.sendQue.Get()
 		size := len(localList)
 		if closed && size == 0 {
@@ -95,16 +109,22 @@ func (this *WebSocket) sendThreadFunc() {
 				err = this.conn.WriteMessage(msg.Type(), msg.Bytes())
 			}
 
-			if err != nil && msg.Type() != message.WSCloseMessage {
-				breakLoop := false
+			if err != nil && !this.testFlag(fclosed) {
+
 				if kendynet.IsNetTimeout(err) {
 					err = kendynet.ErrSendTimeout
-				} else {
-					breakLoop = true
-					this.sendQue.CloseAndClear()
 				}
 
-				if this.callEventCB(&kendynet.Event{Session: this, EventType: kendynet.EventTypeError, Data: err}, fclosed) || breakLoop {
+				if nil != this.errorCallback {
+					if err != kendynet.ErrSendTimeout {
+						this.Close(err, 0)
+					}
+					this.errorCallback(this, err)
+				} else {
+					this.Close(err, 0)
+				}
+
+				if this.testFlag(fclosed) {
 					return
 				}
 			}
@@ -132,7 +152,7 @@ func NewWSSocket(conn *gorilla.Conn) kendynet.StreamSession {
 		}
 
 		runtime.SetFinalizer(s, func(s *WebSocket) {
-			s.Close("gc", 0)
+			s.Close(errors.New("gc"), 0)
 		})
 
 		return s
@@ -159,8 +179,8 @@ func (this *WebSocket) Read() (messageType int, p []byte, err error) {
 	return this.conn.ReadMessage()
 }
 
-func (this *WebSocket) defaultReceiver() kendynet.Receiver {
-	return &defaultWSReceiver{}
+func (this *WebSocket) defaultInBoundProcessor() kendynet.InBoundProcessor {
+	return &defaultWSInBoundProcessor{}
 }
 
 func (this *WebSocket) SendWSClose(reason string) error {

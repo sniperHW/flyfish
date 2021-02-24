@@ -47,7 +47,7 @@ func (this *Conn) Close() {
 	this.pendingSend = []*pendingMsg{}
 	if nil != this.session {
 		this.Unlock()
-		this.session.Close("", 0)
+		this.session.Close(nil, 0)
 	} else {
 		this.Unlock()
 	}
@@ -59,9 +59,9 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 	this.session = session
 	session.SetRecvTimeout(protocol.PingTime * 2)
 	this.session.SetSendQueueSize(maxSendQueueSize)
-	this.session.SetReceiver(NewReceiver())
+	this.session.SetInBoundProcessor(NewReceiver())
 
-	this.session.SetCloseCallBack(func(sess kendynet.StreamSession, reason string) {
+	this.session.SetCloseCallBack(func(sess kendynet.StreamSession, reason error) {
 		this.Lock()
 		defer this.Unlock()
 		this.session = nil
@@ -71,12 +71,8 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 		}
 	})
 
-	this.session.Start(func(event *kendynet.Event) {
-		if event.EventType == kendynet.EventTypeError {
-			event.Session.Close(event.Data.(error).Error(), 0)
-		} else {
-			this.proxy.respChan <- event.Data.(*kendynet.ByteBuffer)
-		}
+	this.session.BeginRecv(func(s kendynet.StreamSession, msg interface{}) {
+		this.proxy.respChan <- msg.(*kendynet.ByteBuffer)
 	})
 
 	now := time.Now()

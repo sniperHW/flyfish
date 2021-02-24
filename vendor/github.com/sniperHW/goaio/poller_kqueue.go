@@ -1,6 +1,6 @@
 // +build darwin netbsd freebsd openbsd dragonfly
 
-package aiogo
+package goaio
 
 import (
 	"sync"
@@ -9,10 +9,7 @@ import (
 )
 
 type kqueue struct {
-	fd        int
-	fd2Conn   fd2Conn
-	ver       int64
-	closeOnce sync.Once
+	poller_base
 }
 
 func openPoller() (*kqueue, error) {
@@ -23,6 +20,7 @@ func openPoller() (*kqueue, error) {
 	poller := new(kqueue)
 	poller.fd = kfd
 	poller.fd2Conn = fd2Conn(make([]sync.Map, hashSize))
+	poller.die = make(chan struct{})
 
 	_, err = syscall.Kevent(poller.fd, []syscall.Kevent_t{{
 		Ident:  0,
@@ -38,6 +36,11 @@ func openPoller() (*kqueue, error) {
 	return poller, nil
 }
 
+func (p *kqueue) close() {
+	p.trigger()
+	<-p.die
+}
+
 func (p *kqueue) trigger() error {
 	_, err := syscall.Kevent(p.fd, []syscall.Kevent_t{{
 		Ident:  0,
@@ -47,35 +50,24 @@ func (p *kqueue) trigger() error {
 	return err
 }
 
-func (p *kqueue) enableWrite(c *Conn) bool {
+func (p *kqueue) enableWrite(c *AIOConn) bool {
 	_, err := syscall.Kevent(p.fd, []syscall.Kevent_t{{Ident: uint64(c.fd), Flags: syscall.EV_ENABLE, Filter: syscall.EVFILT_WRITE}}, nil, nil)
 	return nil == err
 }
 
-func (p *kqueue) disableWrite(c *Conn) bool {
+func (p *kqueue) disableWrite(c *AIOConn) bool {
 	_, err := syscall.Kevent(p.fd, []syscall.Kevent_t{{Ident: uint64(c.fd), Flags: syscall.EV_DISABLE, Filter: syscall.EVFILT_WRITE}}, nil, nil)
 	return nil == err
 }
 
-func (p *kqueue) watch(conn *Conn) bool {
+func (p *kqueue) watch(conn *AIOConn) bool {
 
 	if _, ok := p.fd2Conn.get(conn.fd); ok {
 		return false
 	}
 
-	var pollerVersion int32
+	conn.pollerVersion = p.updatePollerVersionOnWatch()
 
-	for {
-		ver := atomic.LoadInt64(&p.ver)
-		addVer := int32(ver>>32) + 1
-		pollerVersion = int32(ver & 0x00000000FFFFFFFF)
-		nextVer := int64(addVer<<32) | int64(pollerVersion)
-		if atomic.CompareAndSwapInt64(&p.ver, ver, nextVer) {
-			break
-		}
-	}
-
-	conn.pollerVersion = pollerVersion
 	p.fd2Conn.add(conn)
 
 	events := []syscall.Kevent_t{
@@ -91,7 +83,7 @@ func (p *kqueue) watch(conn *Conn) bool {
 	}
 }
 
-func (p *kqueue) unwatch(conn *Conn) bool {
+func (p *kqueue) unwatch(conn *AIOConn) bool {
 
 	if _, ok := p.fd2Conn.get(conn.fd); !ok {
 		return false
@@ -112,7 +104,10 @@ func (p *kqueue) unwatch(conn *Conn) bool {
 
 func (p *kqueue) wait(stoped *int32) {
 
-	defer syscall.Close(p.fd)
+	defer func() {
+		syscall.Close(p.fd)
+		close(p.die)
+	}()
 
 	eventlist := make([]syscall.Kevent_t, 64)
 
@@ -129,17 +124,7 @@ func (p *kqueue) wait(stoped *int32) {
 			return
 		}
 
-		var pollerVersion int32
-
-		for {
-			ver := atomic.LoadInt64(&p.ver)
-			addVer := int32(ver >> 32)
-			pollerVersion = int32(ver&0x00000000FFFFFFFF) + 1
-			nextVer := int64(addVer<<32) | int64(pollerVersion)
-			if atomic.CompareAndSwapInt64(&p.ver, ver, nextVer) {
-				break
-			}
-		}
+		pollerVersion := p.updatePollerVersionOnWait()
 
 		if n > 0 {
 			for i := 0; i < n; i++ {
@@ -160,14 +145,7 @@ func (p *kqueue) wait(stoped *int32) {
 							event |= EV_WRITE
 						}
 
-						op := gOpPool.get()
-						op.tt = pollEvent
-						op.c = conn
-						op.ud = event
-
-						if nil != conn.worker.push(op) {
-							return
-						}
+						conn.onActive(event)
 					}
 				}
 			}

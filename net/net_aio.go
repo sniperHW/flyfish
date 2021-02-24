@@ -4,14 +4,12 @@ package net
 
 import (
 	"fmt"
-	//"github.com/golang/protobuf/proto"
 	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/net/pb"
 	"github.com/sniperHW/kendynet"
 	"github.com/sniperHW/kendynet/socket/aio"
 	"net"
-	"runtime"
 	"sync"
 )
 
@@ -31,37 +29,26 @@ func NewBufferPool() *BufferPool {
 	}
 }
 
-func (p *BufferPool) Get() []byte {
+func (p *BufferPool) Acquire() []byte {
 	return p.pool.Get().([]byte)
 }
 
-func (p *BufferPool) Put(buff []byte) {
+func (p *BufferPool) Release(buff []byte) {
 	if uint64(cap(buff)) == PoolBuffSize {
 		p.pool.Put(buff[:cap(buff)])
 	}
 }
 
-var aioService *aio.AioService
+var aioService *aio.SocketService
 var buffPool *BufferPool
 
 func init() {
 	buffPool = NewBufferPool()
-	workerCount := 0
-	completeQueueCount := 0
-	cpuNum := runtime.NumCPU()
-	if cpuNum <= 4 {
-		workerCount = 16
-		completeQueueCount = 32
-	} else {
-		workerCount = cpuNum * 4
-		completeQueueCount = cpuNum * 8
-	}
-
-	aioService = aio.NewAioService(1, workerCount, completeQueueCount, buffPool)
+	aioService = aio.NewSocketService(buffPool)
 }
 
 func createSession(conn net.Conn) kendynet.StreamSession {
-	return aio.NewAioSocket(aioService, conn)
+	return aio.NewSocket(aioService, conn)
 }
 
 type AioReceiverBase struct {
@@ -69,7 +56,7 @@ type AioReceiverBase struct {
 	w              uint64
 	r              uint64
 	nextPacketSize uint64
-	Unpack         func(buffer []byte, w uint64, r uint64) (ret interface{}, packetSize uint64, nextPacketSize uint64, err error)
+	BaseUnpack     func(buffer []byte, w uint64, r uint64) (ret interface{}, packetSize uint64, nextPacketSize uint64, err error)
 }
 
 type Receiver struct {
@@ -78,7 +65,31 @@ type Receiver struct {
 	pbSpace      *pb.Namespace
 }
 
-func (this *AioReceiverBase) OnRecvOk(s kendynet.StreamSession, buff []byte) {
+func (this *AioReceiverBase) GetRecvBuff() []byte {
+	//由aio socket通过buffPool获取recv buff
+	return nil
+}
+
+func (this *AioReceiverBase) Unpack() (interface{}, error) {
+	var msg interface{}
+	var err error
+	var packetSize uint64
+	msg, packetSize, this.nextPacketSize, err = this.BaseUnpack(this.buffer, this.r, this.w)
+	this.r += packetSize
+
+	if this.r == this.w && cap(this.buffer) != 0 {
+		buffPool.Release(this.buffer)
+		this.buffer = nil
+	} else if nil == msg && this.r != this.w {
+		copy(this.buffer, this.buffer[this.r:this.w])
+		this.w = this.w - this.r
+		this.r = 0
+	}
+
+	return msg, err
+}
+
+func (this *AioReceiverBase) OnData(buff []byte) {
 	if cap(this.buffer) == 0 {
 		this.buffer = buff[:cap(buff)]
 		this.r = 0
@@ -91,6 +102,7 @@ func (this *AioReceiverBase) OnRecvOk(s kendynet.StreamSession, buff []byte) {
 			this.w += l
 		} else {
 			sizeWant := l + this.w
+			fmt.Println(sizeWant, this.nextPacketSize)
 			if sizeWant < this.nextPacketSize {
 				//下一个包是大包，需要准备足够的空间
 				sizeWant = this.nextPacketSize + PoolBuffSize
@@ -99,45 +111,22 @@ func (this *AioReceiverBase) OnRecvOk(s kendynet.StreamSession, buff []byte) {
 			copy(b, this.buffer[:this.w])
 			copy(b[this.w:], buff[:l])
 			this.w += l
-			buffPool.Put(this.buffer)
+			buffPool.Release(this.buffer)
 			this.buffer = b
 		}
-		buffPool.Put(buff)
+		buffPool.Release(buff)
 	}
 }
 
-func (this *AioReceiverBase) StartReceive(s kendynet.StreamSession) {
-	s.(*aio.AioSocket).Recv(nil)
-}
-
-func (this *AioReceiverBase) OnClose() {
+func (this *AioReceiverBase) OnSocketClose() {
 	if cap(this.buffer) != 0 {
-		buffPool.Put(this.buffer)
+		buffPool.Release(this.buffer)
 		this.buffer = nil
 	}
 }
 
 func (this *AioReceiverBase) ReceiveAndUnpack(s kendynet.StreamSession) (interface{}, error) {
-	var msg interface{}
-	var err error
-	var packetSize uint64
-	msg, packetSize, this.nextPacketSize, err = this.Unpack(this.buffer, this.r, this.w)
-	this.r += packetSize
-
-	if this.r == this.w && cap(this.buffer) != 0 {
-		buffPool.Put(this.buffer)
-		this.buffer = nil
-	} else if nil == msg && this.r != this.w {
-		copy(this.buffer, this.buffer[this.r:this.w])
-		this.w = this.w - this.r
-		this.r = 0
-	}
-
-	if nil == msg && nil == err {
-		return nil, s.(*aio.AioSocket).Recv(nil)
-	} else {
-		return msg, err
-	}
+	return nil, nil
 }
 
 func NewReceiver(pbSpace *pb.Namespace, compress bool) *Receiver {
@@ -146,7 +135,7 @@ func NewReceiver(pbSpace *pb.Namespace, compress bool) *Receiver {
 	}
 
 	receiver.AioReceiverBase = &AioReceiverBase{
-		Unpack: receiver.unpack,
+		BaseUnpack: receiver.unpack,
 	}
 
 	if compress {

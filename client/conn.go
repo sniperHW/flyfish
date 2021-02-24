@@ -55,17 +55,12 @@ func (this *Conn) onConnected(session kendynet.StreamSession, compress bool) {
 	this.dialing = false
 	this.session = session
 	this.session.SetSendQueueSize(maxPendingSize)
-	this.session.SetReceiver(net.NewReceiver(pb.GetNamespace("response"), compress))
+	this.session.SetInBoundProcessor(net.NewReceiver(pb.GetNamespace("response"), compress))
 	this.session.SetEncoder(net.NewEncoder(pb.GetNamespace("request"), compress))
-	this.session.SetCloseCallBack(func(sess kendynet.StreamSession, reason string) {
+	this.session.SetCloseCallBack(func(sess kendynet.StreamSession, reason error) {
 		this.onDisconnected()
-	})
-	this.session.Start(func(event *kendynet.Event) {
-		if event.EventType == kendynet.EventTypeError {
-			event.Session.Close(event.Data.(error).Error(), 0)
-		} else {
-			this.onMessage(event.Data.(*net.Message))
-		}
+	}).BeginRecv(func(s kendynet.StreamSession, msg interface{}) {
+		this.onMessage(msg.(*net.Message))
 	})
 
 	pendingSend := this.pendingSend
