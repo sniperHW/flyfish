@@ -5,11 +5,9 @@
 package net
 
 import (
-	"fmt"
 	"github.com/sniperHW/flyfish/net/pb"
 	protocol "github.com/sniperHW/flyfish/proto"
 	"github.com/stretchr/testify/assert"
-	"strings"
 	"testing"
 )
 
@@ -68,48 +66,11 @@ func TestAio(t *testing.T) {
 	assert.Equal(t, uint64(0), r.r)
 	assert.Equal(t, uint64(half), r.w)
 
-	r.OnData(bytes[half:])
-	msg, err = r.Unpack()
-	assert.Nil(t, err)
-	assert.Equal(t, int64(1), msg.(*Message).head.Seqno)
-	assert.Equal(t, "test:test", msg.(*Message).head.UniKey)
-	assert.Equal(t, r.w, r.r)
+	buff = r.GetRecvBuff()
 
-	fields["name"] = strings.Repeat("a", 1024)
-	m, err = e.EnCode(MakeSetRequest("test", "test", fields))
-	bytes = m.Bytes()
+	copy(buff, bytes[half:])
 
-	fmt.Println(len(bytes))
-
-	half = len(bytes) / 2
-	copy(buff, bytes[:half])
-
-	r.OnData(buff[:half])
-	msg, err = r.Unpack()
-	assert.Nil(t, err)
-	assert.Nil(t, msg)
-	assert.Equal(t, uint64(0), r.r)
-	assert.Equal(t, uint64(half), r.w)
-
-	r.OnData(bytes[half:])
-	msg, err = r.Unpack()
-	assert.Nil(t, err)
-	assert.Equal(t, int64(1), msg.(*Message).head.Seqno)
-	assert.Equal(t, "test:test", msg.(*Message).head.UniKey)
-	assert.Equal(t, r.w, r.r)
-
-	//三次解出包
-
-	half = len(bytes) / 2
-	copy(buff, bytes[:half])
-
-	r.OnData(buff[:half])
-	r.Unpack()
-
-	r.OnData(bytes[half : len(bytes)-1])
-	r.Unpack()
-
-	r.OnData(bytes[len(bytes)-1:])
+	r.OnData(buff)
 	msg, err = r.Unpack()
 	assert.Nil(t, err)
 	assert.Equal(t, int64(1), msg.(*Message).head.Seqno)
