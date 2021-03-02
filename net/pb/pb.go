@@ -20,7 +20,7 @@ type Namespace struct {
 
 func (this *Namespace) newMessage(id uint32) (msg proto.Message, err error) {
 	if mt, ok := this.idToMeta[id]; ok {
-		msg = reflect.New(mt.tt.Elem()).Interface().(proto.Message)
+		msg = reflect.New(mt.tt).Interface().(proto.Message)
 	} else {
 		err = fmt.Errorf("invaild id:%d", id)
 	}
@@ -51,7 +51,7 @@ func (this *Namespace) Register(msg proto.Message, id uint32) error {
 	}
 
 	this.nameToID[name] = id
-	this.idToMeta[id] = reflectInfo{tt: tt, name: name}
+	this.idToMeta[id] = reflectInfo{tt: tt.Elem(), name: name}
 	return nil
 }
 
