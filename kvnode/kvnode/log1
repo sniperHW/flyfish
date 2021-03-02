@@ -1,0 +1,476 @@
+2021-03-02T16:10:49.702+0800	[34mINFO[0m	kvnode/raft.go:444	replaying WAL of member 65537
+2021-03-02T16:11:05.138+0800	[34mINFO[0m	kvnode/raft.go:433	loading WAL at term 0 and index 0
+2021-03-02T16:11:05.621+0800	[34mINFO[0m	kvnode/raft.go:451	ents:0
+2021-03-02T16:11:05.621+0800	[34mINFO[0m	kvnode/kvstore.go:349	reply ok,keycount 0
+
+2021-03-02T16:11:05.621+0800	[34mINFO[0m	kvnode/mutilRaft.go:75	addTransport 65537
+
+2021-03-02T16:11:05.621+0800	[34mINFO[0m	kvnode/kvnode.go:180	flyfish start:127.0.0.1:10012
+
+2021-03-02T16:11:05.622+0800	[34mINFO[0m	kvnode/mutilRaft.go:123	serve:http://127.0.0.1:12376
+
+2021-03-02T16:11:30.975+0800	[34mINFO[0m	kvnode/raft.go:360	raftpb.EntryConfChange 0 {0 65537 [] 0 []}
+
+2021-03-02T16:11:32.536+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 1 0 0
+
+2021-03-02T16:11:32.556+0800	[34mINFO[0m	kvnode/raft.go:1083	becomeLeader id:1
+
+2021-03-02T16:11:32.825+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:32.826+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672692594718000 0
+
+2021-03-02T16:11:33.187+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:33.290+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:33.290+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set name='sniperHW',age=12,__version__=1614672693072926001 where __key__ = 'sniperHW';
+2021-03-02T16:11:33.312+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672693072926001 0
+
+2021-03-02T16:11:33.400+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 3 0 0
+
+2021-03-02T16:11:33.501+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:33.602+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:33.602+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set name='sniperHW',age=12,__version__=1614672693409453001 where __key__ = 'sniperHW';
+2021-03-02T16:11:33.703+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:33.703+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set name='sniperHW',age=12,__version__=1614672693409453002 where __key__ = 'sniperHW';
+2021-03-02T16:11:33.704+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672693409453002 824634927608
+
+2021-03-02T16:11:33.706+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672693409453002 824636409208
+
+2021-03-02T16:11:33.906+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:34.006+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:13,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:34.007+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=13,__version__=1614672693805579001 where __key__ = 'sniperHW';
+2021-03-02T16:11:34.109+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:34.109+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=12,__version__=1614672693805579002 where __key__ = 'sniperHW';
+2021-03-02T16:11:34.109+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672693805579002 0
+
+2021-03-02T16:11:34.310+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:1,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:34.312+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672694210381000 0
+
+2021-03-02T16:11:34.511+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:-1,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:34.568+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:100,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:34.568+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=100,__version__=1614672694411438001 where __key__ = 'sniperHW';
+2021-03-02T16:11:34.569+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672694411438001 0
+
+2021-03-02T16:11:34.712+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:100,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:34.812+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:1,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:34.813+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=1,__version__=1614672694612673001 where __key__ = 'sniperHW';
+2021-03-02T16:11:34.914+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:34.914+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=12,name='sniperHW',__version__=1614672694612673002 where __key__ = 'sniperHW';
+2021-03-02T16:11:34.914+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672694612673002 0
+
+2021-03-02T16:11:35.217+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:11:35.217+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 1 0 0
+
+2021-03-02T16:11:35.418+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:35.618+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:11:35.618+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 1 0 0
+
+2021-03-02T16:11:35.718+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 3 0 0
+
+2021-03-02T16:11:35.820+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:35.920+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:11:36.022+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:36.124+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:11:36.226+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:36.226+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=12,name='sniperHW',phone='',__version__=1614672695719262001 where __key__ = 'sniperHW';
+2021-03-02T16:11:36.426+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:11:36.527+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:36.570+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:10,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:36.570+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=10,__version__=1614672695719262002 where __key__ = 'sniperHW';
+2021-03-02T16:11:36.581+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672695719262002 0
+
+2021-03-02T16:11:36.727+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:100,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:36.736+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672696627804000 0
+
+2021-03-02T16:11:37.039+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:11:37.131+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:100,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:37.340+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:11:37.341+0800	[35mDEBUG[0m	kvnode/cmdCompareAndSetNx.go:27	asynCmdTaskCompareAndSetNx onSqlResp %d
+1614672697040387000
+2021-03-02T16:11:37.433+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:100,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:37.534+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:37.535+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set name='sniperHW',age=12,__version__=1614672697040387001 where __key__ = 'sniperHW';
+2021-03-02T16:11:37.734+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:11:37.735+0800	[35mDEBUG[0m	kvnode/cmdCompareAndSetNx.go:27	asynCmdTaskCompareAndSetNx onSqlResp %d
+1614672697040387001
+2021-03-02T16:11:37.836+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:37.936+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:11:37.937+0800	[35mDEBUG[0m	kvnode/cmdCompareAndSetNx.go:27	asynCmdTaskCompareAndSetNx onSqlResp %d
+1614672697040387001
+2021-03-02T16:11:38.036+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:10,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:38.036+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=10,phone='',name='sniperHW',__version__=1614672697040387002 where __key__ = 'sniperHW';
+2021-03-02T16:11:38.237+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:11:38.339+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:10,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:38.340+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672697040387002 824636412088
+
+2021-03-02T16:11:38.340+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672697040387002 0
+
+2021-03-02T16:11:38.542+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:38.542+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672698440548000 0
+
+2021-03-02T16:11:38.743+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:11:38.843+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:39.044+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:11:39.145+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:39.246+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:13,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:39.246+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=13,__version__=1614672698744388001 where __key__ = 'sniperHW';
+2021-03-02T16:11:39.348+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:39.348+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=12,__version__=1614672698744388002 where __key__ = 'sniperHW';
+2021-03-02T16:11:39.348+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672698744388002 0
+
+2021-03-02T16:11:39.651+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:11:39.751+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:1,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:39.751+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672699652164001 0
+
+2021-03-02T16:11:40.057+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:11:40.157+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:-1,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:40.358+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:11:40.460+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:-1,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:40.563+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:11:40.571+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:-2,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:40.571+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set name='',age=-2,phone='',__version__=1614672700057838002 where __key__ = 'sniperHW';
+2021-03-02T16:11:40.572+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672700057838002 0
+
+2021-03-02T16:11:40.765+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:-1,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:40.765+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672700664993000 0
+
+2021-03-02T16:11:40.965+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:1,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:41.165+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:11:41.266+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:2,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:41.266+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set name='',age=2,phone='',__version__=1614672700867007001 where __key__ = 'sniperHW';
+2021-03-02T16:11:41.368+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:5,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:41.368+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=5,__version__=1614672700867007002 where __key__ = 'sniperHW';
+2021-03-02T16:11:41.469+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:41.469+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set name='sniperHW',age=12,__version__=1614672700867007003 where __key__ = 'sniperHW';
+2021-03-02T16:11:41.571+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:11:41.671+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:41.672+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set name='sniperHW',age=12,phone='',__version__=1614672700867007004 where __key__ = 'sniperHW';
+2021-03-02T16:11:41.773+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:41.773+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set name='sniperHW',age=12,__version__=1614672700867007005 where __key__ = 'sniperHW';
+2021-03-02T16:11:41.874+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:41.874+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=12,name='sniperHW',__version__=1614672700867007006 where __key__ = 'sniperHW';
+2021-03-02T16:11:41.974+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:41.974+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=12,name='sniperHW',__version__=1614672700867007007 where __key__ = 'sniperHW';
+2021-03-02T16:11:42.076+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:14,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:42.077+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=14,__version__=1614672700867007008 where __key__ = 'sniperHW';
+2021-03-02T16:11:42.176+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:15,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:42.176+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=15,__version__=1614672700867007009 where __key__ = 'sniperHW';
+2021-03-02T16:11:42.281+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:16,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:42.281+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=16,__version__=1614672700867007010 where __key__ = 'sniperHW';
+2021-03-02T16:11:42.381+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:42.381+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=12,name='sniperHW',__version__=1614672700867007011 where __key__ = 'sniperHW';
+2021-03-02T16:11:42.481+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:10,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:42.482+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=10,__version__=1614672700867007012 where __key__ = 'sniperHW';
+2021-03-02T16:11:42.542+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672700867007012 0
+
+2021-03-02T16:11:42.582+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:42.684+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:10,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:42.684+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=10,__version__=1614672702575770001 where __key__ = 'sniperHW';
+2021-03-02T16:11:42.886+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:11:42.986+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:20,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:42.986+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set name='sniperHW',age=20,phone='',__version__=1614672702575770002 where __key__ = 'sniperHW';
+2021-03-02T16:11:43.188+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:11:43.290+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:20,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:43.392+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:11:43.494+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:20,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:43.494+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672702575770002 0
+
+2021-03-02T16:11:43.797+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:11:43.807+0800	[34mINFO[0m	kvnode/kvnode.go:203	StopServer
+
+2021-03-02T16:11:43.808+0800	[34mINFO[0m	kvnode/kvnode.go:177	flyfish listener stop
+
+2021-03-02T16:11:43.808+0800	[34mINFO[0m	kvnode/kvnode.go:213	ShutdownRead ok, wait4ReplyCount:0
+
+2021-03-02T16:11:43.899+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW2 map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW2,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:11:43.910+0800	[34mINFO[0m	kvnode/sqlUpdater.go:107	sqlUpdater:4 stoped
+
+2021-03-02T16:11:43.910+0800	[34mINFO[0m	kvnode/sqlUpdater.go:107	sqlUpdater:2 stoped
+
+2021-03-02T16:11:43.910+0800	[34mINFO[0m	kvnode/sqlUpdater.go:107	sqlUpdater:1 stoped
+
+2021-03-02T16:11:43.910+0800	[34mINFO[0m	kvnode/sqlUpdater.go:107	sqlUpdater:0 stoped
+
+2021-03-02T16:11:43.910+0800	[34mINFO[0m	kvnode/sqlUpdater.go:107	sqlUpdater:3 stoped
+
+2021-03-02T16:11:43.910+0800	[34mINFO[0m	kvnode/kvnode.go:225	sql stop ok%!(EXTRA string=totalUpdateSqlCount:%d
+, int64=65)
+2021-03-02T16:11:44.011+0800	[34mINFO[0m	kvnode/kvnode.go:249	flyfish stop ok
+2021-03-02T16:11:45.123+0800	[34mINFO[0m	kvnode/raft.go:444	replaying WAL of member 65537
+2021-03-02T16:11:45.338+0800	[34mINFO[0m	kvnode/raft.go:433	loading WAL at term 0 and index 0
+2021-03-02T16:11:45.343+0800	[34mINFO[0m	kvnode/raft.go:451	ents:0
+2021-03-02T16:11:45.343+0800	[34mINFO[0m	kvnode/mutilRaft.go:75	addTransport 65537
+
+2021-03-02T16:11:45.344+0800	[34mINFO[0m	kvnode/kvstore.go:349	reply ok,keycount 0
+
+2021-03-02T16:11:45.344+0800	[34mINFO[0m	kvnode/kvnode.go:180	flyfish start:127.0.0.1:10018
+
+2021-03-02T16:11:45.344+0800	[34mINFO[0m	kvnode/mutilRaft.go:123	serve:http://127.0.0.1:12377
+
+2021-03-02T16:11:45.551+0800	[34mINFO[0m	kvnode/raft.go:360	raftpb.EntryConfChange 0 {0 65537 [] 0 []}
+
+2021-03-02T16:13:24.438+0800	[34mINFO[0m	kvnode/raft.go:444	replaying WAL of member 65537
+2021-03-02T16:13:24.636+0800	[34mINFO[0m	kvnode/raft.go:433	loading WAL at term 0 and index 0
+2021-03-02T16:13:24.639+0800	[34mINFO[0m	kvnode/raft.go:451	ents:0
+2021-03-02T16:13:24.641+0800	[34mINFO[0m	kvnode/mutilRaft.go:75	addTransport 65537
+
+2021-03-02T16:13:24.641+0800	[34mINFO[0m	kvnode/kvstore.go:349	reply ok,keycount 0
+
+2021-03-02T16:13:24.642+0800	[34mINFO[0m	kvnode/kvnode.go:180	flyfish start:127.0.0.1:10012
+
+2021-03-02T16:13:24.644+0800	[34mINFO[0m	kvnode/mutilRaft.go:123	serve:http://127.0.0.1:12376
+
+2021-03-02T16:13:24.841+0800	[34mINFO[0m	kvnode/raft.go:360	raftpb.EntryConfChange 0 {0 65537 [] 0 []}
+
+2021-03-02T16:13:26.346+0800	[34mINFO[0m	kvnode/raft.go:1083	becomeLeader id:1
+
+2021-03-02T16:13:26.357+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 1 0 0
+
+2021-03-02T16:13:26.550+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:26.551+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672806448876000 0
+
+2021-03-02T16:13:26.751+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:26.851+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:26.851+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=12,name='sniperHW',__version__=1614672806650418001 where __key__ = 'sniperHW';
+2021-03-02T16:13:26.869+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672806650418001 0
+
+2021-03-02T16:13:26.952+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 3 0 0
+
+2021-03-02T16:13:27.053+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:27.154+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:27.154+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=12,name='sniperHW',__version__=1614672806966349001 where __key__ = 'sniperHW';
+2021-03-02T16:13:27.255+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:27.255+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=12,name='sniperHW',__version__=1614672806966349002 where __key__ = 'sniperHW';
+2021-03-02T16:13:27.256+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672806966349002 824636458560
+
+2021-03-02T16:13:27.260+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672806966349002 824636458736
+
+2021-03-02T16:13:27.457+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:27.557+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:13,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:27.557+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=13,__version__=1614672807356156001 where __key__ = 'sniperHW';
+2021-03-02T16:13:27.657+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:27.657+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=12,__version__=1614672807356156002 where __key__ = 'sniperHW';
+2021-03-02T16:13:27.658+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672807356156002 0
+
+2021-03-02T16:13:27.859+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:1,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:27.860+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672807759569000 0
+
+2021-03-02T16:13:28.062+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:-1,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:28.162+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:100,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:28.162+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=100,__version__=1614672807961840001 where __key__ = 'sniperHW';
+2021-03-02T16:13:28.163+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672807961840001 0
+
+2021-03-02T16:13:28.349+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:100,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:28.363+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:1,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:28.364+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=1,__version__=1614672808263637001 where __key__ = 'sniperHW';
+2021-03-02T16:13:28.463+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:28.463+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=12,name='sniperHW',__version__=1614672808263637002 where __key__ = 'sniperHW';
+2021-03-02T16:13:28.464+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672808263637002 0
+
+2021-03-02T16:13:28.768+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:13:28.768+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 1 0 0
+
+2021-03-02T16:13:28.968+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:29.170+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:13:29.170+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 1 0 0
+
+2021-03-02T16:13:29.270+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 3 0 0
+
+2021-03-02T16:13:29.371+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:29.473+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:13:29.575+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:29.677+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:13:29.778+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:29.778+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set phone='',age=12,name='sniperHW',__version__=1614672809270922001 where __key__ = 'sniperHW';
+2021-03-02T16:13:29.979+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:13:30.079+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:30.179+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:10,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:30.179+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=10,__version__=1614672809270922002 where __key__ = 'sniperHW';
+2021-03-02T16:13:30.189+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672809270922002 0
+
+2021-03-02T16:13:30.350+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:100,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:30.359+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672810281835000 0
+
+2021-03-02T16:13:30.584+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:13:30.684+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:100,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:30.885+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:13:30.886+0800	[35mDEBUG[0m	kvnode/cmdCompareAndSetNx.go:27	asynCmdTaskCompareAndSetNx onSqlResp %d
+1614672810588049000
+2021-03-02T16:13:30.985+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:100,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:31.086+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:31.086+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set name='sniperHW',age=12,__version__=1614672810588049001 where __key__ = 'sniperHW';
+2021-03-02T16:13:31.289+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:13:31.289+0800	[35mDEBUG[0m	kvnode/cmdCompareAndSetNx.go:27	asynCmdTaskCompareAndSetNx onSqlResp %d
+1614672810588049001
+2021-03-02T16:13:31.389+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:31.489+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:13:31.490+0800	[35mDEBUG[0m	kvnode/cmdCompareAndSetNx.go:27	asynCmdTaskCompareAndSetNx onSqlResp %d
+1614672810588049001
+2021-03-02T16:13:31.589+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:10,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:31.590+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set name='sniperHW',age=10,phone='',__version__=1614672810588049002 where __key__ = 'sniperHW';
+2021-03-02T16:13:31.793+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:13:31.894+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:10,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:31.894+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672810588049002 824634481680
+
+2021-03-02T16:13:31.894+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672810588049002 0
+
+2021-03-02T16:13:32.097+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:32.099+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672811996915000 0
+
+2021-03-02T16:13:32.353+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:13:32.397+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:32.599+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:13:32.699+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:32.802+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:13,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:32.802+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=13,__version__=1614672812355429001 where __key__ = 'sniperHW';
+2021-03-02T16:13:32.904+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:12,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:sniperHW,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:32.904+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set age=12,__version__=1614672812355429002 where __key__ = 'sniperHW';
+2021-03-02T16:13:32.904+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672812355429002 0
+
+2021-03-02T16:13:33.205+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:13:33.306+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:1,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:33.307+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672813206577001 0
+
+2021-03-02T16:13:33.607+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:13:33.708+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:-1,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:33.910+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:13:34.010+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:-1,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:34.110+0800	[35mDEBUG[0m	kvnode/cmdKick.go:25	asynCmdTaskKick.done() users1:sniperHW
+
+2021-03-02T16:13:34.211+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:-2,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:34.211+0800	[35mDEBUG[0m	kvnode/sqlString.go:670	update users1 set name='',age=-2,phone='',__version__=1614672813608541002 where __key__ = 'sniperHW';
+2021-03-02T16:13:34.212+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672813608541002 0
+
+2021-03-02T16:13:34.351+0800	[35mDEBUG[0m	kvnode/kv.go:227	set ok users1:sniperHW map[age:&Field{Name:age,V:&Value{Type:int,I:-1,F:0,S:,B:[],},} name:&Field{Name:name,V:&Value{Type:string,I:0,F:0,S:,B:[],},} phone:&Field{Name:phone,V:&Value{Type:string,I:0,F:0,S:,B:[],},}]
+
+2021-03-02T16:13:34.352+0800	[35mDEBUG[0m	kvnode/cmdDel.go:60	cmdDel users1:sniperHW 2 1614672814313223000 0
+

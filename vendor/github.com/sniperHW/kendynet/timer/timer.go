@@ -43,7 +43,7 @@ func (this *Timer) call() {
 	if atomic.CompareAndSwapInt32(&this.status, waitting, firing) {
 		if _, err := util.ProtectCall(this.callback, this, this.ctx); nil != err {
 			if logger := kendynet.GetLogger(); nil != logger {
-				logger.Errorln("error on timer:", err.Error())
+				logger.Error("error on timer:", err.Error())
 			}
 		}
 

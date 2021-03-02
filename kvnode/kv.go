@@ -224,7 +224,7 @@ func (this *kv) setOK(version int64, fields map[string]*proto.Field) {
 		}
 	}
 
-	logger.Debugln("set ok", this.uniKey, this.fields)
+	logger.Debugf("set ok %s %v\n", this.uniKey, this.fields)
 
 }
 

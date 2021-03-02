@@ -104,7 +104,7 @@ func (this *sqlUpdater) run() {
 		}
 
 		if closed {
-			logger.Infoln(this.name, "stoped")
+			logger.Infof("%s stoped\n", this.name)
 			this.sqlMgr.sqlUpdateWg.Done()
 			return
 		}
@@ -118,7 +118,7 @@ func (this *sqlUpdater) append(v interface{}) {
 			//空闲超过5分钟发送ping
 			err := this.db.Ping()
 			if nil != err {
-				logger.Errorln("ping error", err)
+				logger.Errorf("ping error %v\n", err)
 			}
 			this.lastTime = time.Now()
 		}
@@ -212,9 +212,9 @@ func (this *sqlUpdater) exec() {
 		if nil == err {
 			break
 		} else {
-			logger.Errorln(str, err)
+			logger.Errorf("%s %v\n", str, err)
 			if isRetryError(err) {
-				logger.Errorln("sqlUpdater exec error:", err)
+				logger.Errorf("sqlUpdater exec error:%v\n", err)
 				if this.sqlMgr.isStoped() {
 					err = errServerStop
 					break
@@ -229,7 +229,7 @@ func (this *sqlUpdater) exec() {
 				//休眠一秒重试
 				time.Sleep(time.Second)
 			} else {
-				logger.Errorln("sqlUpdater exec error:", err)
+				logger.Errorf("sqlUpdater exec error:%v\n", err)
 				break
 			}
 		}

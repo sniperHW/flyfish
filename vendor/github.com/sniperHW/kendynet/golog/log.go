@@ -34,20 +34,6 @@ const (
 
 )
 
-type LoggerI interface {
-	Debugf(format string, v ...interface{})
-	Debugln(v ...interface{})
-	Infof(format string, v ...interface{})
-	Infoln(v ...interface{})
-	Warnf(format string, v ...interface{})
-	Warnln(v ...interface{})
-	Errorf(format string, v ...interface{})
-	Errorln(v ...interface{})
-	Fatalf(format string, v ...interface{})
-	Fatalln(v ...interface{})
-	SetLevelByString(level string)
-}
-
 var enableStdOut bool = true
 
 func str2loglevel(level string) Level {
@@ -272,7 +258,7 @@ func (self *Logger) Debugf(format string, v ...interface{}) {
 	self.Log(ColorFromLevel(Level_Debug), Level_Debug, format, v...)
 }
 
-func (self *Logger) Debugln(v ...interface{}) {
+func (self *Logger) Debug(v ...interface{}) {
 	self.Log(ColorFromLevel(Level_Debug), Level_Debug, "", v...)
 }
 
@@ -281,7 +267,7 @@ func (self *Logger) Infof(format string, v ...interface{}) {
 	self.Log(ColorFromLevel(Level_Info), Level_Info, format, v...)
 }
 
-func (self *Logger) Infoln(v ...interface{}) {
+func (self *Logger) Info(v ...interface{}) {
 	self.Log(ColorFromLevel(Level_Info), Level_Info, "", v...)
 }
 
@@ -290,7 +276,7 @@ func (self *Logger) Warnf(format string, v ...interface{}) {
 	self.Log(ColorFromLevel(Level_Warn), Level_Warn, format, v...)
 }
 
-func (self *Logger) Warnln(v ...interface{}) {
+func (self *Logger) Warn(v ...interface{}) {
 	self.Log(ColorFromLevel(Level_Warn), Level_Warn, "", v...)
 }
 
@@ -299,7 +285,7 @@ func (self *Logger) Errorf(format string, v ...interface{}) {
 	self.Log(ColorFromLevel(Level_Error), Level_Error, format, v...)
 }
 
-func (self *Logger) Errorln(v ...interface{}) {
+func (self *Logger) Error(v ...interface{}) {
 	self.Log(ColorFromLevel(Level_Error), Level_Error, "", v...)
 }
 
@@ -308,7 +294,7 @@ func (self *Logger) Fatalf(format string, v ...interface{}) {
 	self.Log(ColorFromLevel(Level_Fatal), Level_Fatal, format, v...)
 }
 
-func (self *Logger) Fatalln(v ...interface{}) {
+func (self *Logger) Fatal(v ...interface{}) {
 	self.Log(ColorFromLevel(Level_Fatal), Level_Fatal, "", v...)
 }
 

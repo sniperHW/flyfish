@@ -70,7 +70,7 @@ func (this *outMessage) Bytes() []byte {
 	var totalLen int
 	var flag byte
 	if pbbytes, cmd, err = this.pbSpace.Marshal(this.msg); err != nil {
-		kendynet.GetLogger().Errorln("outMessage encode err:", err, this.pbSpace.Name())
+		kendynet.GetLogger().Errorf("outMessage encode err:%s %s", err.Error(), this.pbSpace.Name())
 		return nil
 	}
 
@@ -86,7 +86,7 @@ func (this *outMessage) Bytes() []byte {
 	payloadLen = SizeFlag + SizeCmd + len(pbbytes) + sizeOfHead
 	totalLen = SizeLen + payloadLen
 	if uint64(totalLen) > conf.MaxPacketSize {
-		kendynet.GetLogger().Errorln("packet too large totalLen", totalLen)
+		kendynet.GetLogger().Errorf("packet too large totalLen:%d", totalLen)
 		return nil
 	}
 	//len + flag + cmd + pbbytes

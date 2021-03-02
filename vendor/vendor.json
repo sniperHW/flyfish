@@ -212,22 +212,22 @@
 			"revisionTime": "2021-02-23T09:48:36Z"
 		},
 		{
-			"checksumSHA1": "0nVmrl9XYTlTI8NdLNFDgArrad4=",
+			"checksumSHA1": "gU9Ne54IA21TUxSMsApsLbr/b00=",
 			"path": "github.com/sniperHW/kendynet",
-			"revision": "a50cb8dcd0015f60ea0488d15e5602faab785933",
-			"revisionTime": "2021-02-23T09:36:48Z"
+			"revision": "f44fb1d5210b423413227192cbc81827425752d3",
+			"revisionTime": "2021-03-02T06:43:40Z"
 		},
 		{
-			"checksumSHA1": "UmDPLeqQVxlX5lxiAEoFjaLhQgo=",
+			"checksumSHA1": "TEyKcIz/miyVDvhXdq8KwvUJsRE=",
 			"path": "github.com/sniperHW/kendynet/event",
-			"revision": "28340a5aa733c91946752ab4bb1594e2ae96abd7",
-			"revisionTime": "2021-01-29T08:13:28Z"
+			"revision": "f44fb1d5210b423413227192cbc81827425752d3",
+			"revisionTime": "2021-03-02T06:43:40Z"
 		},
 		{
-			"checksumSHA1": "o+LCpe9TKbK+QZXpJFsrIcoBqrc=",
+			"checksumSHA1": "oQNYrES0b6/fRuKy0DCh0l2S8AA=",
 			"path": "github.com/sniperHW/kendynet/golog",
-			"revision": "c4497f4124f2b67b074db0c61251b2864186d6d0",
-			"revisionTime": "2020-10-30T06:48:30Z"
+			"revision": "f44fb1d5210b423413227192cbc81827425752d3",
+			"revisionTime": "2021-03-02T06:43:40Z"
 		},
 		{
 			"checksumSHA1": "iEa8RYzu0AIqLDWGITjdLkBXNng=",
@@ -248,16 +248,16 @@
 			"revisionTime": "2021-02-23T09:36:48Z"
 		},
 		{
-			"checksumSHA1": "3xdvSpjZWvNZO4UpudruxyhEId8=",
+			"checksumSHA1": "Zg2f2hBP1KfvPf9gthFYBuXDlSM=",
 			"path": "github.com/sniperHW/kendynet/timer",
-			"revision": "28340a5aa733c91946752ab4bb1594e2ae96abd7",
-			"revisionTime": "2021-01-29T08:13:28Z"
+			"revision": "f44fb1d5210b423413227192cbc81827425752d3",
+			"revisionTime": "2021-03-02T06:43:40Z"
 		},
 		{
-			"checksumSHA1": "+3N4sSmVHkuK5SwsL7FmSjoefh8=",
+			"checksumSHA1": "MOhMUWnmxeoSzLV5pqpWNIgwV+M=",
 			"path": "github.com/sniperHW/kendynet/util",
-			"revision": "cd72e73f87df77c9e42d2647db2a8c887733ddcc",
-			"revisionTime": "2021-01-12T02:34:20Z"
+			"revision": "f44fb1d5210b423413227192cbc81827425752d3",
+			"revisionTime": "2021-03-02T06:43:40Z"
 		},
 		{
 			"checksumSHA1": "uqTJVsJ/tb7FA5JpHtwlAF0ELCk=",

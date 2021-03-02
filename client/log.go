@@ -2,13 +2,12 @@ package client
 
 import (
 	"github.com/sniperHW/kendynet"
-	"github.com/sniperHW/kendynet/golog"
 	//"sync"
 )
 
-var logger golog.LoggerI
+var logger kendynet.LoggerI
 
-func InitLogger(l golog.LoggerI) {
+func InitLogger(l kendynet.LoggerI) {
 	logger = l
 	kendynet.InitLogger(l)
 }

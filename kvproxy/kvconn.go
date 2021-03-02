@@ -81,7 +81,7 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 		if !now.After(v.sendDeadline) {
 			this.session.SendMessage(v.msg)
 		} else {
-			logger.Infoln("sendDeadline")
+			logger.Info("sendDeadline")
 		}
 	}
 
@@ -116,7 +116,7 @@ func (this *Conn) dial() {
 				this.onConnected(session)
 				return
 			} else {
-				logger.Errorln("dial error", this.addr, err)
+				logger.Errorf("dial error %s %v\n", this.addr, err)
 				time.Sleep(1 * time.Second)
 			}
 		}

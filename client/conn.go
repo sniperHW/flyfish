@@ -118,7 +118,7 @@ func (this *Conn) dial() {
 				this.onConnected(session, compress)
 				return
 			} else {
-				logger.Errorln("dial error", this.addr, err)
+				logger.Errorf("dial %s error:%s", this.addr, err.Error())
 				time.Sleep(1 * time.Second)
 			}
 		}

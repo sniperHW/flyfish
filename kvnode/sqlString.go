@@ -578,7 +578,7 @@ func (this *sqlMgr) buildInsertUpdateStringPgSql(s *str.Str, kv *kv) {
 	}
 	s.AppendString("__version__=").AppendFieldStr(version, this.binaryToSqlStr)
 	s.AppendString(" where ").AppendString(kv.table).AppendString(".__key__ = '").AppendString(kv.key).AppendString("';")
-	logger.Debugln(s.ToString())
+	logger.Debug(s.ToString())
 }
 
 /*
@@ -667,7 +667,7 @@ func (this *sqlMgr) buildUpdateString(s *str.Str, kv *kv) {
 	s.AppendString("__version__=").AppendFieldStr(version, this.binaryToSqlStr)
 	s.AppendString(" where __key__ = '").AppendString(kv.key).AppendString("';")
 
-	logger.Debugln(s.ToString())
+	logger.Debug(s.ToString())
 }
 
 func (this *sqlMgr) buildDeleteString(s *str.Str, ckey *kv) {

@@ -57,7 +57,7 @@ func (this *cmdDel) prepare(t asynCmdTaskI) (asynCmdTaskI, bool) {
 
 	status := this.kv.getStatus()
 
-	logger.Debugln("cmdDel", this.kv.uniKey, status, this.kv.version, this.version)
+	logger.Debugf("cmdDel %s %d %d %d\n", this.kv.uniKey, status, this.kv.version, this.version)
 
 	if status == cache_missing {
 		this.reply(errcode.ERR_RECORD_NOTEXIST, nil, 0)

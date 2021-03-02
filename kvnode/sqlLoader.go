@@ -53,7 +53,7 @@ func (this *sqlLoader) append(v interface{}) {
 			//空闲超过5分钟发送ping
 			err := this.db.Ping()
 			if nil != err {
-				logger.Errorln("ping error", err)
+				logger.Errorf("ping error %v\n", err)
 			}
 			this.lastTime = time.Now()
 		}
@@ -121,11 +121,11 @@ func (this *sqlLoader) exec() {
 		elapse := time.Now().Sub(beg)
 
 		if elapse/time.Millisecond > 500 {
-			logger.Infoln("sqlQueryer long exec", elapse, this.count)
+			logger.Infof("sqlQueryer long exec %v %d\n", elapse, this.count)
 		}
 
 		if nil != err {
-			logger.Errorln("sqlQueryer exec error:", err, reflect.TypeOf(err).String())
+			logger.Errorf("sqlQueryer exec error:%v %s\n", err, reflect.TypeOf(err).String())
 			this.onSqlError()
 		} else {
 
@@ -140,7 +140,7 @@ func (this *sqlLoader) exec() {
 			for rows.Next() {
 				err := rows.Scan(filed_receiver...)
 				if err != nil {
-					logger.Errorln("rows.Scan err", err)
+					logger.Errorf("rows.Scan err:%v\n", err)
 					queryMeta.PutReceivers(filed_receiver)
 					this.onSqlError()
 					return

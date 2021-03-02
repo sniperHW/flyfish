@@ -1,38 +1,20 @@
 package kvnode
 
 import (
-	"fmt"
 	"github.com/sniperHW/flyfish/conf"
+	flyfish_logger "github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/kendynet"
-	"github.com/sniperHW/kendynet/golog"
 )
 
 var (
-	logger *golog.Logger
+	logger kendynet.LoggerI
 )
 
 func InitLogger() {
 	logConfig := conf.GetConfig().Log
-	if !logConfig.EnableLogStdout {
-		golog.DisableStdOut()
-	}
-	fullname := "kvserver"
-
-	fmt.Println(logConfig.LogDir, logConfig.LogPrefix)
-
-	logger = golog.New(fullname, golog.NewOutputLogger(logConfig.LogDir, logConfig.LogPrefix, logConfig.MaxLogfileSize))
-	logger.SetLevelByString(logConfig.LogLevel)
-	kendynet.InitLogger(logger)
-	logger.Infof("%s logger init", fullname)
-
+	logger = flyfish_logger.NewZapLogger("kvnode.log", logConfig.LogDir, logConfig.LogLevel, logConfig.MaxLogfileSize, 14, logConfig.EnableLogStdout)
 }
 
 func UpdateLogConfig() {
-	logConfig := conf.GetConfig().Log
-	if logConfig.EnableLogStdout {
-		golog.EnableStdOut()
-	} else {
-		golog.DisableStdOut()
-	}
-	logger.SetLevelByString(logConfig.LogLevel)
+
 }

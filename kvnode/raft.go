@@ -248,7 +248,7 @@ func (rc *raftNode) removeOldWal(index uint64) {
 	if ok {
 		for _, v := range names[:nameIndex] {
 			os.Remove(rc.waldir + "/" + v)
-			logger.Infoln("remove old wal", v)
+			logger.Infof("remove old wal %v\n", v)
 		}
 	}
 }
@@ -270,7 +270,7 @@ func (rc *raftNode) removeOldSnapAndWal(term uint64, index uint64) {
 					if nil == err && n == 2 {
 						if _term <= term && _index < index {
 							os.Remove(path)
-							logger.Infoln("remove old snap", path)
+							logger.Infof("remove old snap %s\n", path)
 							rc.removeOldWal(_index)
 						}
 					}
@@ -357,7 +357,7 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 			cc.Unmarshal(ents[i].Data)
 			rc.confState = *rc.node.ApplyConfChange(cc)
 
-			logger.Infoln("raftpb.EntryConfChange", cc.Type, cc)
+			logger.Infof("raftpb.EntryConfChange %d %d\n", cc.Type, cc)
 			var url string
 			if len(cc.Context) > 0 {
 				url = string(cc.Context[4:])
@@ -373,15 +373,15 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 			switch cc.Type {
 			case raftpb.ConfChangeAddNode:
 				if url != "" {
-					logger.Infoln("ConfChangeAddNode", types.ID(cc.NodeID).String(), url)
+					logger.Infof("ConfChangeAddNode %s %s\n", types.ID(cc.NodeID).String(), url)
 					rc.transport.AddPeer(types.ID(cc.NodeID), []string{url})
 				}
 			case raftpb.ConfChangeRemoveNode:
 				if cc.NodeID == uint64(rc.id) {
-					logger.Infoln("I've been removed from the cluster! Shutting down.")
+					logger.Info("I've been removed from the cluster! Shutting down.")
 					return false
 				}
-				logger.Infoln("ConfChangeRemoveNode", types.ID(cc.NodeID).String())
+				logger.Infof("ConfChangeRemoveNode %s\n", types.ID(cc.NodeID).String())
 				rc.transport.RemovePeer(types.ID(cc.NodeID))
 			}
 
@@ -394,7 +394,7 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 		if ents[i].Index == rc.lastIndex {
 			select {
 			case rc.commitC <- replayOK:
-				logger.Infoln("send replayOK")
+				logger.Info("send replayOK")
 			case <-rc.stopc:
 				return false
 			}
@@ -457,7 +457,7 @@ func (rc *raftNode) replayWAL() *wal.WAL {
 	rc.raftStorage.SetHardState(st)
 
 	if snapshot != nil {
-		logger.Infoln("send replaySnapshot")
+		logger.Info("send replaySnapshot")
 		rc.commitC <- replaySnapshot
 	}
 
@@ -536,7 +536,7 @@ func (rc *raftNode) startRaft() {
 	for k, v := range rc.peers {
 		id := k<<16 + rc.region
 		if id != rc.id {
-			logger.Infoln("AddPeer", types.ID(id).String())
+			logger.Infof("AddPeer %s\n", types.ID(id).String())
 			rc.transport.AddPeer(types.ID(id), []string{v})
 		}
 	}
@@ -650,7 +650,7 @@ func (rc *raftNode) triggerSnapshot() {
 			panic(err)
 		}
 
-		logger.Infoln("save snapshot time", time.Now().Sub(beg))
+		logger.Infof("save snapshot time %v\n", time.Now().Sub(beg))
 
 		rc.snapshottingOK <- struct{}{}
 
@@ -1044,7 +1044,7 @@ func (rc *raftNode) serveChannels() {
 				if !ok {
 					rc.confChangeC = nil
 				} else {
-					logger.Infoln("proposeConfChange")
+					logger.Info("proposeConfChange")
 					confChangeCount++
 					rc.proposeConfChange(confChangeCount, cc)
 				}
@@ -1080,7 +1080,7 @@ func (rc *raftNode) serveChannels() {
 					}
 
 					rc.lease.startLeaseRoutine(rc)
-					logger.Infoln("becomeLeader id:", rd.SoftState.Lead>>16)
+					logger.Infof("becomeLeader id:%d\n", rd.SoftState.Lead>>16)
 				}
 
 			}

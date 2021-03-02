@@ -87,7 +87,7 @@ func (this *EventQueue) Run() {
 				if _, err := util.ProtectCall(e.fn, e.args...); err != nil {
 					logger := kendynet.GetLogger()
 					if logger != nil {
-						logger.Errorln(err)
+						logger.Error(err)
 					}
 				}
 			} else if closed {

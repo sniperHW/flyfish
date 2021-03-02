@@ -72,7 +72,7 @@ func (this *mutilRaft) addTransport(id types.ID, t *rafthttp.Transport) {
 	this.Lock()
 	defer this.Unlock()
 
-	logger.Infoln("addTransport", id)
+	logger.Infof("addTransport %d\n", id)
 
 	handler := &raftHandler{
 		pipelineHandler: rafthttp.NewPipelineHandler(t, t.Raft, t.ClusterID),
@@ -105,7 +105,7 @@ func (this *mutilRaft) Handler() http.Handler {
 func (this *mutilRaft) serveMutilRaft(urlStr string) {
 	url, err := url.Parse(urlStr)
 	if err != nil {
-		logger.Fatalln("raftexample: Failed parsing URL", err)
+		logger.Fatalf("raftexample: Failed parsing URL %v\n", err)
 	}
 
 	var ln *stoppableListener
@@ -113,21 +113,21 @@ func (this *mutilRaft) serveMutilRaft(urlStr string) {
 	for {
 		ln, err = newStoppableListener(url.Host, this.httpstopc)
 		if err != nil {
-			logger.Infoln("raftexample: Failed to listen rafthttp", err)
+			logger.Infof("raftexample: Failed to listen rafthttp %v\n", err)
 			time.Sleep(time.Second)
 		} else {
 			break
 		}
 	}
 
-	logger.Infoln("serve", urlStr)
+	logger.Infof("serve:%s\n", urlStr)
 
 	err = (&http.Server{Handler: this.Handler()}).Serve(ln)
 
 	select {
 	case <-this.httpstopc:
 	default:
-		logger.Fatalln("raftexample: Failed to serve rafthttp", err)
+		logger.Fatalf("raftexample: Failed to serve rafthttp %v\n", err)
 	}
 
 	close(this.httpdonec)

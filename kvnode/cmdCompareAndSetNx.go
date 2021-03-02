@@ -24,7 +24,7 @@ func (this *asynCmdTaskCompareAndSetNx) onSqlResp(errno int32) {
 		this.getKV().store.issueUpdate(this)
 	} else if errno == errcode.ERR_OK {
 
-		logger.Debugln("asynCmdTaskCompareAndSetNx onSqlResp", this.version)
+		logger.Debug("asynCmdTaskCompareAndSetNx onSqlResp %d\n", this.version)
 
 		if !cmd.checkVersion(this.version) {
 			this.errno = errcode.ERR_VERSION_MISMATCH
@@ -60,7 +60,6 @@ type cmdCompareAndSetNx struct {
 }
 
 func (this *cmdCompareAndSetNx) reply(errCode int32, fields map[string]*proto.Field, version int64) {
-	logger.Debugln("cmdCompareAndSetNx reply", fields)
 	this.replyer.reply(this, errCode, fields, version)
 }
 

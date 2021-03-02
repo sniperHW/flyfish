@@ -174,10 +174,10 @@ func (this *KVNode) Start(id *int, cluster *string) error {
 		if nil != err {
 			logger.Errorf("server.Start() error:%s\n", err.Error())
 		}
-		logger.Infoln("flyfish listener stop")
+		logger.Infof("flyfish listener stop\n")
 	}()
 
-	logger.Infoln("flyfish start:", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort))
+	logger.Infof("flyfish start:%s:%d\n", config.ServiceHost, config.ServicePort)
 
 	return nil
 }
@@ -200,7 +200,7 @@ func waitCondition(fn func() bool) {
 func (this *KVNode) Stop() {
 
 	if atomic.CompareAndSwapInt32(&this.stoped, 0, 1) {
-		logger.Infoln("StopServer")
+		logger.Infof("StopServer\n")
 		//关闭监听
 		this.listener.Close()
 
@@ -210,7 +210,7 @@ func (this *KVNode) Stop() {
 			return true
 		})
 
-		logger.Infoln("ShutdownRead ok", "wait4ReplyCount:", this.wait4ReplyCount)
+		logger.Infof("ShutdownRead ok, wait4ReplyCount:%d\n", this.wait4ReplyCount)
 
 		waitCondition(func() bool {
 			if atomic.LoadInt64(&this.wait4ReplyCount) == 0 {
@@ -222,7 +222,7 @@ func (this *KVNode) Stop() {
 
 		this.sqlMgr.stop()
 
-		logger.Infoln("sql stop ok", "totalUpdateSqlCount:", this.sqlMgr.totalUpdateSqlCount)
+		logger.Infof("sql stop ok", "totalUpdateSqlCount:%d\n", this.sqlMgr.totalUpdateSqlCount)
 
 		//关闭所有客户连接
 
@@ -246,7 +246,7 @@ func (this *KVNode) Stop() {
 		this.storeMgr.stop()
 		this.mutilRaft.stop()
 
-		logger.Infoln("flyfish stop ok")
+		logger.Info("flyfish stop ok")
 
 	}
 }

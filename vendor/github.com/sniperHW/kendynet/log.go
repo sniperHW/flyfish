@@ -2,16 +2,28 @@ package kendynet
 
 import (
 	"fmt"
-	"github.com/sniperHW/kendynet/golog"
 )
 
-var logger golog.LoggerI
+var logger LoggerI
 
-func InitLogger(l golog.LoggerI) {
+type LoggerI interface {
+	Debugf(format string, v ...interface{})
+	Debug(v ...interface{})
+	Infof(format string, v ...interface{})
+	Info(v ...interface{})
+	Warnf(format string, v ...interface{})
+	Warn(v ...interface{})
+	Errorf(format string, v ...interface{})
+	Error(v ...interface{})
+	Fatalf(format string, v ...interface{})
+	Fatal(v ...interface{})
+}
+
+func InitLogger(l LoggerI) {
 	logger = l
 }
 
-func GetLogger() golog.LoggerI {
+func GetLogger() LoggerI {
 	if nil == logger {
 		return &EmptyLogger{}
 	}
@@ -25,93 +37,30 @@ func (this *EmptyLogger) Debugf(format string, v ...interface{}) {
 	fmt.Printf(format, v...)
 }
 
-func (this *EmptyLogger) Debugln(v ...interface{}) {
+func (this *EmptyLogger) Debug(v ...interface{}) {
 	fmt.Println(v...)
 }
 func (this *EmptyLogger) Infof(format string, v ...interface{}) {
 	fmt.Printf(format, v...)
 }
-func (this *EmptyLogger) Infoln(v ...interface{}) {
+func (this *EmptyLogger) Info(v ...interface{}) {
 	fmt.Println(v...)
 }
 func (this *EmptyLogger) Warnf(format string, v ...interface{}) {
 	fmt.Printf(format, v...)
 }
-func (this *EmptyLogger) Warnln(v ...interface{}) {
+func (this *EmptyLogger) Warn(v ...interface{}) {
 	fmt.Println(v...)
 }
 func (this *EmptyLogger) Errorf(format string, v ...interface{}) {
 	fmt.Printf(format, v...)
 }
-func (this *EmptyLogger) Errorln(v ...interface{}) {
+func (this *EmptyLogger) Error(v ...interface{}) {
 	fmt.Println(v...)
 }
 func (this *EmptyLogger) Fatalf(format string, v ...interface{}) {
 	fmt.Printf(format, v...)
 }
-func (this *EmptyLogger) Fatalln(v ...interface{}) {
+func (this *EmptyLogger) Fatal(v ...interface{}) {
 	fmt.Println(v...)
 }
-func (this *EmptyLogger) SetLevelByString(level string) {}
-
-/*
-func Debugf(format string, v ...interface{}) {
-	if nil != logger {
-		logger.Debugf(format, v...)
-	}
-}
-
-func Debugln(v ...interface{}) {
-	if nil != logger {
-		logger.Debugln(v...)
-	}
-}
-
-func Infof(format string, v ...interface{}) {
-	if nil != logger {
-		logger.Infof(format, v...)
-	}
-}
-
-func Infoln(v ...interface{}) {
-	if nil != logger {
-		logger.Infoln(v...)
-	}
-}
-
-func Warnf(format string, v ...interface{}) {
-	if nil != logger {
-		logger.Warnf(format, v...)
-	}
-}
-
-func Warnln(v ...interface{}) {
-	if nil != logger {
-		logger.Warnln(v...)
-	}
-}
-
-func Errorf(format string, v ...interface{}) {
-	if nil != logger {
-		logger.Errorf(format, v...)
-	}
-}
-
-func Errorln(v ...interface{}) {
-	if nil != logger {
-		logger.Errorln(v...)
-	}
-}
-
-func Fatalf(format string, v ...interface{}) {
-	if nil != logger {
-		logger.Fatalf(format, v...)
-	}
-}
-
-func Fatalln(v ...interface{}) {
-	if nil != logger {
-		logger.Fatalln(v...)
-	}
-}
-*/

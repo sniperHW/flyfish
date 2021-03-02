@@ -98,6 +98,7 @@ func (this *pq) getItem(v interface{}) *listItem {
 
 func (this *pq) releaseItem(item *listItem) {
 	if item.poolItem {
+		item.v = nil
 		this.freelist.push(item)
 	}
 }

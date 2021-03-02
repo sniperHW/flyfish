@@ -1,27 +1,15 @@
 package kvproxy
 
 import (
-	"fmt"
+	flyfish_logger "github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/kendynet"
-	"github.com/sniperHW/kendynet/golog"
 )
 
 var (
-	logger *golog.Logger
+	logger kendynet.LoggerI
 )
 
 func InitLogger() {
 	logConfig := GetConfig().Log
-	if !logConfig.EnableLogStdout {
-		golog.DisableStdOut()
-	}
-	fullname := "kvproxy"
-
-	fmt.Println(logConfig.LogDir, logConfig.LogPrefix)
-
-	logger = golog.New(fullname, golog.NewOutputLogger(logConfig.LogDir, logConfig.LogPrefix, logConfig.MaxLogfileSize))
-	logger.SetLevelByString(logConfig.LogLevel)
-	kendynet.InitLogger(logger)
-	logger.Infof("%s logger init", fullname)
-
+	logger = flyfish_logger.NewZapLogger("kvproxy.log", logConfig.LogDir, logConfig.LogLevel, logConfig.MaxLogfileSize, 14, logConfig.EnableLogStdout)
 }

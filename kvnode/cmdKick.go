@@ -22,7 +22,7 @@ func (this *asynCmdTaskKick) onSqlResp(errno int32) {
 
 func (this *asynCmdTaskKick) done() {
 	kv := this.getKV()
-	logger.Debugln("asynCmdTaskKick.done()", kv.uniKey)
+	logger.Debugf("asynCmdTaskKick.done() %s\n", kv.uniKey)
 	kv.store.removeKv(kv)
 }
 

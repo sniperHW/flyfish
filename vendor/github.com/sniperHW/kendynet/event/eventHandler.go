@@ -239,7 +239,7 @@ func pcall2(h *handle, args []interface{}) {
 	if _, err := util.ProtectCall(h.fn, arguments...); err != nil {
 		logger := kendynet.GetLogger()
 		if logger != nil {
-			logger.Errorln(err)
+			logger.Error(err)
 		}
 	}
 }

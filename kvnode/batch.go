@@ -72,7 +72,7 @@ func (this *commitedBatchProposal) apply(store *kvstore) {
 		})
 	} else {
 		if !store.apply(this.data, false) {
-			logger.Fatalln("apply commitedBatchProposal failed")
+			logger.Fatal("apply commitedBatchProposal failed")
 		}
 	}
 }
