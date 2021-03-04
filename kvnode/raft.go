@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/errcode"
+	flyfish_logger "github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/rafthttp"
 	"github.com/sniperHW/flyfish/util/fixedarray"
@@ -36,7 +37,7 @@ import (
 	"go.etcd.io/etcd/raft/raftpb"
 	"go.etcd.io/etcd/wal"
 	"go.etcd.io/etcd/wal/walpb"
-	"go.uber.org/zap"
+	//"go.uber.org/zap"
 	"math"
 	"os"
 	"path/filepath"
@@ -248,7 +249,7 @@ func (rc *raftNode) removeOldWal(index uint64) {
 	if ok {
 		for _, v := range names[:nameIndex] {
 			os.Remove(rc.waldir + "/" + v)
-			logger.Infof("remove old wal %v\n", v)
+			flyfish_logger.GetSugar().Infof("remove old wal %v", v)
 		}
 	}
 }
@@ -270,7 +271,7 @@ func (rc *raftNode) removeOldSnapAndWal(term uint64, index uint64) {
 					if nil == err && n == 2 {
 						if _term <= term && _index < index {
 							os.Remove(path)
-							logger.Infof("remove old snap %s\n", path)
+							flyfish_logger.GetSugar().Infof("remove old snap %s", path)
 							rc.removeOldWal(_index)
 						}
 					}
@@ -311,7 +312,7 @@ func (rc *raftNode) entriesToApply(ents []raftpb.Entry) (nents []raftpb.Entry) {
 	}
 	firstIdx := ents[0].Index
 	if firstIdx > rc.appliedIndex+1 {
-		logger.Fatalf("first index of committed entry[%d] should <= progress.appliedIndex[%d]+1", firstIdx, rc.appliedIndex)
+		flyfish_logger.GetSugar().Fatalf("first index of committed entry[%d] should <= progress.appliedIndex[%d]+1", firstIdx, rc.appliedIndex)
 	}
 	if rc.appliedIndex-firstIdx+1 < uint64(len(ents)) {
 		nents = ents[rc.appliedIndex-firstIdx+1:]
@@ -357,7 +358,7 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 			cc.Unmarshal(ents[i].Data)
 			rc.confState = *rc.node.ApplyConfChange(cc)
 
-			logger.Infof("raftpb.EntryConfChange %d %d\n", cc.Type, cc)
+			flyfish_logger.GetSugar().Infof("raftpb.EntryConfChange %d %d", cc.Type, cc)
 			var url string
 			if len(cc.Context) > 0 {
 				url = string(cc.Context[4:])
@@ -373,15 +374,15 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 			switch cc.Type {
 			case raftpb.ConfChangeAddNode:
 				if url != "" {
-					logger.Infof("ConfChangeAddNode %s %s\n", types.ID(cc.NodeID).String(), url)
+					flyfish_logger.GetSugar().Infof("ConfChangeAddNode %s %s", types.ID(cc.NodeID).String(), url)
 					rc.transport.AddPeer(types.ID(cc.NodeID), []string{url})
 				}
 			case raftpb.ConfChangeRemoveNode:
 				if cc.NodeID == uint64(rc.id) {
-					logger.Info("I've been removed from the cluster! Shutting down.")
+					flyfish_logger.GetSugar().Info("I've been removed from the cluster! Shutting down.")
 					return false
 				}
-				logger.Infof("ConfChangeRemoveNode %s\n", types.ID(cc.NodeID).String())
+				flyfish_logger.GetSugar().Infof("ConfChangeRemoveNode %s", types.ID(cc.NodeID).String())
 				rc.transport.RemovePeer(types.ID(cc.NodeID))
 			}
 
@@ -394,7 +395,7 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 		if ents[i].Index == rc.lastIndex {
 			select {
 			case rc.commitC <- replayOK:
-				logger.Info("send replayOK")
+				flyfish_logger.GetSugar().Info("send replayOK")
 			case <-rc.stopc:
 				return false
 			}
@@ -406,7 +407,7 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 func (rc *raftNode) loadSnapshot() *raftpb.Snapshot {
 	snapshot, err := rc.snapshotter.Load()
 	if err != nil && err != snap.ErrNoSnapshot {
-		logger.Fatalf("raftexample: error loading snapshot (%v)", err)
+		flyfish_logger.GetSugar().Fatalf("raftexample: error loading snapshot (%v)", err)
 	}
 	return snapshot
 }
@@ -415,12 +416,12 @@ func (rc *raftNode) loadSnapshot() *raftpb.Snapshot {
 func (rc *raftNode) openWAL(snapshot *raftpb.Snapshot) *wal.WAL {
 	if !wal.Exist(rc.waldir) {
 		if err := os.Mkdir(rc.waldir, 0750); err != nil {
-			logger.Fatalf("raftexample: cannot create dir for wal (%v)", err)
+			flyfish_logger.GetSugar().Fatalf("raftexample: cannot create dir for wal (%v)", err)
 		}
 
-		w, err := wal.Create(zap.NewExample(), rc.waldir, nil)
+		w, err := wal.Create(flyfish_logger.GetLogger() /*zap.NewExample()*/, rc.waldir, nil)
 		if err != nil {
-			logger.Fatalf("raftexample: create wal error (%v)", err)
+			flyfish_logger.GetSugar().Fatalf("raftexample: create wal error (%v)", err)
 		}
 		w.Close()
 	}
@@ -430,10 +431,10 @@ func (rc *raftNode) openWAL(snapshot *raftpb.Snapshot) *wal.WAL {
 		walsnap.Index, walsnap.Term = snapshot.Metadata.Index, snapshot.Metadata.Term
 	}
 
-	logger.Infof("loading WAL at term %d and index %d", walsnap.Term, walsnap.Index)
-	w, err := wal.Open(zap.NewExample(), rc.waldir, walsnap)
+	flyfish_logger.GetSugar().Infof("loading WAL at term %d and index %d", walsnap.Term, walsnap.Index)
+	w, err := wal.Open(flyfish_logger.GetLogger() /*zap.NewExample()*/, rc.waldir, walsnap)
 	if err != nil {
-		logger.Fatalf("raftexample: error loading wal (%v)", err)
+		flyfish_logger.GetSugar().Fatalf("raftexample: error loading wal (%v)", err)
 	}
 
 	return w
@@ -441,14 +442,14 @@ func (rc *raftNode) openWAL(snapshot *raftpb.Snapshot) *wal.WAL {
 
 // replayWAL replays WAL entries into the raft instance.
 func (rc *raftNode) replayWAL() *wal.WAL {
-	logger.Infof("replaying WAL of member %d", rc.id)
+	flyfish_logger.GetSugar().Infof("replaying WAL of member %d", rc.id)
 	snapshot := rc.loadSnapshot()
 	w := rc.openWAL(snapshot)
 	_, st, ents, err := w.ReadAll()
 	if err != nil {
-		logger.Fatalf("raftexample: failed to read WAL (%v)", err)
+		flyfish_logger.GetSugar().Fatalf("raftexample: failed to read WAL (%v)", err)
 	} else {
-		logger.Infof("ents:%d", len(ents))
+		flyfish_logger.GetSugar().Infof("ents:%d", len(ents))
 	}
 	rc.raftStorage = raft.NewMemoryStorage()
 	if snapshot != nil {
@@ -457,7 +458,7 @@ func (rc *raftNode) replayWAL() *wal.WAL {
 	rc.raftStorage.SetHardState(st)
 
 	if snapshot != nil {
-		logger.Info("send replaySnapshot")
+		flyfish_logger.GetSugar().Info("send replaySnapshot")
 		rc.commitC <- replaySnapshot
 	}
 
@@ -484,10 +485,10 @@ func (rc *raftNode) writeError(err error) {
 func (rc *raftNode) startRaft() {
 	if !fileutil.Exist(rc.snapdir) {
 		if err := os.Mkdir(rc.snapdir, 0750); err != nil {
-			logger.Fatalf("raftexample: cannot create dir for snapshot (%v)", err)
+			flyfish_logger.GetSugar().Fatalf("raftexample: cannot create dir for snapshot (%v)", err)
 		}
 	}
-	rc.snapshotter = snap.New(zap.NewExample(), rc.snapdir)
+	rc.snapshotter = snap.New(flyfish_logger.GetLogger() /*zap.NewExample()*/, rc.snapdir)
 	rc.snapshotterReady <- rc.snapshotter
 
 	oldwal := wal.Exist(rc.waldir)
@@ -521,7 +522,7 @@ func (rc *raftNode) startRaft() {
 	}
 
 	rc.transport = &rafthttp.Transport{
-		Logger:      zap.NewExample(),
+		Logger:      flyfish_logger.GetLogger(), //zap.NewExample(),
 		ID:          types.ID(rc.id),
 		ClusterID:   0x10000,
 		Raft:        rc,
@@ -536,7 +537,7 @@ func (rc *raftNode) startRaft() {
 	for k, v := range rc.peers {
 		id := k<<16 + rc.region
 		if id != rc.id {
-			logger.Infof("AddPeer %s\n", types.ID(id).String())
+			flyfish_logger.GetSugar().Infof("AddPeer %s", types.ID(id).String())
 			rc.transport.AddPeer(types.ID(id), []string{v})
 		}
 	}
@@ -567,11 +568,11 @@ func (rc *raftNode) publishSnapshot(snapshotToSave raftpb.Snapshot) {
 		return
 	}
 
-	logger.Infof("publishing snapshot at index %d", rc.snapshotIndex)
-	defer logger.Infof("finished publishing snapshot at index %d", rc.snapshotIndex)
+	flyfish_logger.GetSugar().Infof("publishing snapshot at index %d", rc.snapshotIndex)
+	defer flyfish_logger.GetSugar().Infof("finished publishing snapshot at index %d", rc.snapshotIndex)
 
 	if snapshotToSave.Metadata.Index <= rc.appliedIndex {
-		logger.Fatalf("snapshot index [%d] should > progress.appliedIndex [%d]", snapshotToSave.Metadata.Index, rc.appliedIndex)
+		flyfish_logger.GetSugar().Fatalf("snapshot index [%d] should > progress.appliedIndex [%d]", snapshotToSave.Metadata.Index, rc.appliedIndex)
 	}
 	rc.commitC <- replaySnapshot // trigger kvstore to load snapshot
 
@@ -604,7 +605,7 @@ func (rc *raftNode) triggerSnapshot() {
 
 	atomic.StoreInt32(&rc.snapshotting, 1)
 
-	logger.Infof("start snapshot [applied index: %d | last snapshot index: %d]", rc.appliedIndex, rc.snapshotIndex)
+	flyfish_logger.GetSugar().Infof("start snapshot [applied index: %d | last snapshot index: %d]", rc.appliedIndex, rc.snapshotIndex)
 
 	appliedIndex := rc.appliedIndex
 	confState := rc.confState
@@ -650,7 +651,7 @@ func (rc *raftNode) triggerSnapshot() {
 			panic(err)
 		}
 
-		logger.Infof("save snapshot time %v\n", time.Now().Sub(beg))
+		flyfish_logger.GetSugar().Infof("save snapshot time %v", time.Now().Sub(beg))
 
 		rc.snapshottingOK <- struct{}{}
 
@@ -1044,7 +1045,7 @@ func (rc *raftNode) serveChannels() {
 				if !ok {
 					rc.confChangeC = nil
 				} else {
-					logger.Info("proposeConfChange")
+					flyfish_logger.GetSugar().Info("proposeConfChange")
 					confChangeCount++
 					rc.proposeConfChange(confChangeCount, cc)
 				}
@@ -1080,7 +1081,7 @@ func (rc *raftNode) serveChannels() {
 					}
 
 					rc.lease.startLeaseRoutine(rc)
-					logger.Infof("becomeLeader id:%d\n", rd.SoftState.Lead>>16)
+					flyfish_logger.GetSugar().Infof("becomeLeader id:%d", rd.SoftState.Lead>>16)
 				}
 
 			}

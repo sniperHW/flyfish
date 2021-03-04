@@ -1,6 +1,7 @@
 package kvproxy
 
 import (
+	flyfish_logger "github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/net"
 	protocol "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/kendynet"
@@ -81,7 +82,7 @@ func (this *Conn) onConnected(session kendynet.StreamSession) {
 		if !now.After(v.sendDeadline) {
 			this.session.SendMessage(v.msg)
 		} else {
-			logger.Info("sendDeadline")
+			flyfish_logger.GetSugar().Info("sendDeadline")
 		}
 	}
 
@@ -116,7 +117,7 @@ func (this *Conn) dial() {
 				this.onConnected(session)
 				return
 			} else {
-				logger.Errorf("dial error %s %v\n", this.addr, err)
+				flyfish_logger.GetSugar().Errorf("dial error %s %v", this.addr, err)
 				time.Sleep(1 * time.Second)
 			}
 		}

@@ -77,7 +77,7 @@ MaxLogfileSize  = 104857600 # 100mb
 LogDir          = "log1"
 LogPrefix       = "flyfish"
 LogLevel        = "debug"
-EnableLogStdout = true	
+EnableLogStdout = false	
 `
 
 func test1(t *testing.T, c *client.Client) {

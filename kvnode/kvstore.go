@@ -6,6 +6,7 @@ import (
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/dbmeta"
 	"github.com/sniperHW/flyfish/errcode"
+	flyfish_logger "github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/proto"
 	futil "github.com/sniperHW/flyfish/util"
@@ -13,7 +14,6 @@ import (
 	"github.com/sniperHW/kendynet/timer"
 	"github.com/sniperHW/kendynet/util"
 	"go.etcd.io/etcd/etcdserver/api/snap"
-	//"go.etcd.io/etcd/raft/raftpb"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -25,7 +25,7 @@ type asynTaskKick struct {
 }
 
 func (this *asynTaskKick) done() {
-	logger.Debugf("kick done set cache_remove %s\n", this.kv.uniKey)
+	flyfish_logger.GetSugar().Debugf("kick done set cache_remove unikey:%s", this.kv.uniKey)
 	this.kv.store.removeKv(this.kv)
 }
 
@@ -230,7 +230,7 @@ func (this *kvstore) apply(data []byte, snapshot bool) bool {
 		var err error
 		data, err = this.unCompressor.UnCompress(data[2:])
 		if nil != err {
-			logger.Error("uncompress error")
+			flyfish_logger.GetSugar().Error("uncompress error")
 			return false
 		}
 	} else {
@@ -265,7 +265,7 @@ func (this *kvstore) apply(data []byte, snapshot bool) bool {
 			unikey := p.values[0].(string)
 
 			if p.tt == proposal_kick {
-				logger.Debugf("cache_kick %s\n", unikey)
+				flyfish_logger.GetSugar().Debugf("cache_kick unikey:%s", unikey)
 				kv, ok := this.elements[unikey]
 				if !ok {
 					return false
@@ -310,7 +310,7 @@ func (this *kvstore) apply(data []byte, snapshot bool) bool {
 					for _, v := range fields {
 						//不一致表示数据库字段类型发生变更，老数据直接丢弃
 						if !kv.meta.CheckFieldMeta(v) {
-							logger.Debugf("drop field %s\n", v.GetName())
+							flyfish_logger.GetSugar().Debugf("table:%s drop field name:%s\n", kv.table, v.GetName())
 						} else {
 							kv.fields[v.GetName()] = v
 						}
@@ -338,15 +338,15 @@ func (this *kvstore) readCommits(snapshotter *snap.Snapshotter, commitC <-chan i
 				// OR signaled to load snapshot
 				snapshot, err := snapshotter.Load()
 				if err != nil {
-					logger.Fatal(err)
+					flyfish_logger.GetSugar().Fatal(err)
 				} else {
-					logger.Infof("loading snapshot at term %d and index %d", snapshot.Metadata.Term, snapshot.Metadata.Index)
+					flyfish_logger.GetSugar().Infof("loading snapshot at term %d and index %d", snapshot.Metadata.Term, snapshot.Metadata.Index)
 					if !this.apply(snapshot.Data[8:], true) {
-						logger.Fatal("recoverFromSnapshot failed")
+						flyfish_logger.GetSugar().Fatal("recoverFromSnapshot failed")
 					}
 				}
 			} else if data == replayOK {
-				logger.Infof("reply ok,keycount %d\n", len(this.elements))
+				flyfish_logger.GetSugar().Infof("reply ok,keycount %d", len(this.elements))
 				return
 			} else {
 				data.apply(this)
@@ -360,7 +360,7 @@ func (this *kvstore) readCommits(snapshotter *snap.Snapshotter, commitC <-chan i
 	}
 
 	if err, ok := <-errorC; ok {
-		logger.Fatal(err)
+		flyfish_logger.GetSugar().Fatal(err)
 	}
 }
 
@@ -434,7 +434,7 @@ func (this *kvstore) getSnapshot() [][]*kvsnap {
 		ret = append(ret, v)
 	}
 
-	logger.Infof("clone time %v\n", time.Now().Sub(beg))
+	flyfish_logger.GetSugar().Infof("clone time %v", time.Now().Sub(beg))
 
 	return ret
 
@@ -455,7 +455,7 @@ func (this *kvstore) gotLease() {
 				} else if status == cache_missing {
 					vv.setSqlFlag(sql_delete)
 				}
-				logger.Debugf("pushUpdateReq %s %d %v\n", vv.uniKey, status, vv.fields)
+				flyfish_logger.GetSugar().Debugf("pushUpdateReq unikey:%s status:%d fields:%v", vv.uniKey, status, vv.fields)
 				this.kvNode.sqlMgr.pushUpdateReq(vv)
 			}
 		}
@@ -536,7 +536,7 @@ func (this *storeMgr) getStore(uniKey string) *kvstore {
 
 func (this *storeMgr) addStore(index int, store *kvstore) bool {
 	if 0 == index || nil == store {
-		logger.Fatal("0 == index || nil == store")
+		flyfish_logger.GetSugar().Fatal("0 == index || nil == store")
 	}
 	this.Lock()
 	defer this.Unlock()

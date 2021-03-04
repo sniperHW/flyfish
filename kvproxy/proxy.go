@@ -2,6 +2,7 @@ package kvproxy
 
 import (
 	"fmt"
+	flyfish_logger "github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/net/pb"
 	protocol "github.com/sniperHW/flyfish/proto"
@@ -55,7 +56,7 @@ type kvproxy struct {
 func (this *pendingReq) onTimeout(_ *timer.Timer, _ interface{}) {
 	this.processor.Lock()
 	defer this.processor.Unlock()
-	logger.Infof("remove timeout req %d\n", this.seqno)
+	flyfish_logger.GetSugar().Debugf("remove timeout req %d", this.seqno)
 	delete(this.processor.pendingReqs, this.seqno)
 }
 
@@ -142,7 +143,7 @@ func (this *reqProcessor) onReq(seqno int64, session kendynet.StreamSession, req
 
 	if nil != err {
 		//返回错误响应
-		logger.Infof("send to kvnode error %v\n", err.Error())
+		flyfish_logger.GetSugar().Infof("send to kvnode error %v", err.Error())
 	}
 }
 
@@ -157,13 +158,13 @@ func (this *reqProcessor) onResp(seqno int64, resp *kendynet.ByteBuffer) {
 			//用oriSeqno替换seqno
 			resp.PutInt64(5, req.oriSeqno)
 			if err := req.session.SendMessage(resp); nil != err {
-				logger.Info("send resp to client error %v\n", err.Error())
+				flyfish_logger.GetSugar().Debugf("send resp to client error %v", err.Error())
 			}
 		} else {
-			logger.Info("cancel timer failed")
+			flyfish_logger.GetSugar().Debug("cancel timer failed")
 		}
 	} else {
-		logger.Infof("on kvnode response but req timeout %d\n", seqno)
+		flyfish_logger.GetSugar().Debugf("on kvnode response but req timeout %d", seqno)
 	}
 }
 
@@ -207,7 +208,7 @@ func (this *kvproxy) Start() error {
 					processor := this.processors[seqno%int64(len(this.processors))]
 					processor.onResp(seqno, v)
 				} else {
-					logger.Info("onResp but get seqno failed")
+					flyfish_logger.GetSugar().Info("onResp but get seqno failed")
 				}
 			}
 		}()

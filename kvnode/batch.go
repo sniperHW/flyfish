@@ -1,6 +1,7 @@
 package kvnode
 
 import (
+	flyfish_logger "github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/util/fixedarray"
 	"github.com/sniperHW/flyfish/util/str"
 	"time"
@@ -72,7 +73,7 @@ func (this *commitedBatchProposal) apply(store *kvstore) {
 		})
 	} else {
 		if !store.apply(this.data, false) {
-			logger.Fatal("apply commitedBatchProposal failed")
+			flyfish_logger.GetSugar().Fatal("apply commitedBatchProposal failed")
 		}
 	}
 }

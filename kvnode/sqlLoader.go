@@ -5,6 +5,7 @@ import (
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/dbmeta"
 	"github.com/sniperHW/flyfish/errcode"
+	flyfish_logger "github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/util/str"
 	"github.com/sniperHW/kendynet/util"
@@ -53,7 +54,7 @@ func (this *sqlLoader) append(v interface{}) {
 			//空闲超过5分钟发送ping
 			err := this.db.Ping()
 			if nil != err {
-				logger.Errorf("ping error %v\n", err)
+				flyfish_logger.GetSugar().Errorf("ping error %v\n", err)
 			}
 			this.lastTime = time.Now()
 		}
@@ -121,11 +122,11 @@ func (this *sqlLoader) exec() {
 		elapse := time.Now().Sub(beg)
 
 		if elapse/time.Millisecond > 500 {
-			logger.Infof("sqlQueryer long exec %v %d\n", elapse, this.count)
+			flyfish_logger.GetSugar().Infof("sqlQueryer long exec elapse:%v count:%d", elapse, this.count)
 		}
 
 		if nil != err {
-			logger.Errorf("sqlQueryer exec error:%v %s\n", err, reflect.TypeOf(err).String())
+			flyfish_logger.GetSugar().Errorf("sqlQueryer exec error:%v %s", err, reflect.TypeOf(err).String())
 			this.onSqlError()
 		} else {
 
@@ -140,7 +141,7 @@ func (this *sqlLoader) exec() {
 			for rows.Next() {
 				err := rows.Scan(filed_receiver...)
 				if err != nil {
-					logger.Errorf("rows.Scan err:%v\n", err)
+					flyfish_logger.GetSugar().Errorf("rows.Scan err:%v", err)
 					queryMeta.PutReceivers(filed_receiver)
 					this.onSqlError()
 					return

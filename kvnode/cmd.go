@@ -1,8 +1,7 @@
 package kvnode
 
 import (
-	//"fmt"
-	//"bytes"
+	flyfish_logger "github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/proto"
 	"sync/atomic"
@@ -103,7 +102,7 @@ func (this *replyer) reply(cmd commandI, errCode int32, fields map[string]*proto
 		if this.peer.removeReplyer(this) && !time.Now().After(this.respDeadline) {
 			err := this.peer.send(cmd.makeResponse(errCode, fields, version))
 			if nil != err {
-				logger.Errorf("send resp error:%s\n", err.Error())
+				flyfish_logger.GetSugar().Errorf("send resp error:%s", err.Error())
 			}
 		}
 	}

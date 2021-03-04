@@ -1,6 +1,7 @@
 package kvnode
 
 import (
+	flyfish_logger "github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/rafthttp"
 	"github.com/xiang90/probing"
 	"go.etcd.io/etcd/pkg/types"
@@ -72,7 +73,7 @@ func (this *mutilRaft) addTransport(id types.ID, t *rafthttp.Transport) {
 	this.Lock()
 	defer this.Unlock()
 
-	logger.Infof("addTransport %d\n", id)
+	flyfish_logger.GetSugar().Infof("addTransport %d", id)
 
 	handler := &raftHandler{
 		pipelineHandler: rafthttp.NewPipelineHandler(t, t.Raft, t.ClusterID),
@@ -105,7 +106,7 @@ func (this *mutilRaft) Handler() http.Handler {
 func (this *mutilRaft) serveMutilRaft(urlStr string) {
 	url, err := url.Parse(urlStr)
 	if err != nil {
-		logger.Fatalf("raftexample: Failed parsing URL %v\n", err)
+		flyfish_logger.GetSugar().Fatalf("raftexample: Failed parsing URL %v", err)
 	}
 
 	var ln *stoppableListener
@@ -113,21 +114,21 @@ func (this *mutilRaft) serveMutilRaft(urlStr string) {
 	for {
 		ln, err = newStoppableListener(url.Host, this.httpstopc)
 		if err != nil {
-			logger.Infof("raftexample: Failed to listen rafthttp %v\n", err)
+			flyfish_logger.GetSugar().Infof("raftexample: Failed to listen rafthttp %v", err)
 			time.Sleep(time.Second)
 		} else {
 			break
 		}
 	}
 
-	logger.Infof("serve:%s\n", urlStr)
+	flyfish_logger.GetSugar().Infof("serve:%s", urlStr)
 
 	err = (&http.Server{Handler: this.Handler()}).Serve(ln)
 
 	select {
 	case <-this.httpstopc:
 	default:
-		logger.Fatalf("raftexample: Failed to serve rafthttp %v\n", err)
+		flyfish_logger.GetSugar().Fatalf("raftexample: Failed to serve rafthttp %v", err)
 	}
 
 	close(this.httpdonec)

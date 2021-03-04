@@ -2,6 +2,7 @@ package kvnode
 
 import (
 	"github.com/sniperHW/flyfish/errcode"
+	flyfish_logger "github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/proto"
 	"time"
@@ -24,7 +25,7 @@ func (this *asynCmdTaskCompareAndSetNx) onSqlResp(errno int32) {
 		this.getKV().store.issueUpdate(this)
 	} else if errno == errcode.ERR_OK {
 
-		logger.Debug("asynCmdTaskCompareAndSetNx onSqlResp %d\n", this.version)
+		flyfish_logger.GetSugar().Debugf("asynCmdTaskCompareAndSetNx onSqlResp version:%d", this.version)
 
 		if !cmd.checkVersion(this.version) {
 			this.errno = errcode.ERR_VERSION_MISMATCH

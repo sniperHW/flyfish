@@ -3,6 +3,7 @@ package kvnode
 import (
 	"fmt"
 	"github.com/sniperHW/flyfish/errcode"
+	flyfish_logger "github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/util/str"
@@ -22,7 +23,7 @@ func (this *asynCmdTaskKick) onSqlResp(errno int32) {
 
 func (this *asynCmdTaskKick) done() {
 	kv := this.getKV()
-	logger.Debugf("asynCmdTaskKick.done() %s\n", kv.uniKey)
+	flyfish_logger.GetSugar().Debugf("asynCmdTaskKick.done() unikey:%s", kv.uniKey)
 	kv.store.removeKv(kv)
 }
 

@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"github.com/jmoiron/sqlx"
+	flyfish_logger "github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/util/fixedarray"
 	"github.com/sniperHW/flyfish/util/str"
@@ -104,7 +105,7 @@ func (this *sqlUpdater) run() {
 		}
 
 		if closed {
-			logger.Infof("%s stoped\n", this.name)
+			flyfish_logger.GetSugar().Infof("%s stoped", this.name)
 			this.sqlMgr.sqlUpdateWg.Done()
 			return
 		}
@@ -118,7 +119,7 @@ func (this *sqlUpdater) append(v interface{}) {
 			//空闲超过5分钟发送ping
 			err := this.db.Ping()
 			if nil != err {
-				logger.Errorf("ping error %v\n", err)
+				flyfish_logger.GetSugar().Errorf("ping error %v", err)
 			}
 			this.lastTime = time.Now()
 		}
@@ -212,9 +213,9 @@ func (this *sqlUpdater) exec() {
 		if nil == err {
 			break
 		} else {
-			logger.Errorf("%s %v\n", str, err)
+			flyfish_logger.GetSugar().Errorf("%s %v", str, err)
 			if isRetryError(err) {
-				logger.Errorf("sqlUpdater exec error:%v\n", err)
+				flyfish_logger.GetSugar().Errorf("sqlUpdater exec error:%v", err)
 				if this.sqlMgr.isStoped() {
 					err = errServerStop
 					break
@@ -229,7 +230,7 @@ func (this *sqlUpdater) exec() {
 				//休眠一秒重试
 				time.Sleep(time.Second)
 			} else {
-				logger.Errorf("sqlUpdater exec error:%v\n", err)
+				flyfish_logger.GetSugar().Errorf("sqlUpdater exec error:%v", err)
 				break
 			}
 		}

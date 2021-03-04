@@ -2,6 +2,7 @@ package kvnode
 
 import (
 	"github.com/sniperHW/flyfish/errcode"
+	flyfish_logger "github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/proto"
 )
@@ -57,7 +58,7 @@ func (this *cmdDel) prepare(t asynCmdTaskI) (asynCmdTaskI, bool) {
 
 	status := this.kv.getStatus()
 
-	logger.Debugf("cmdDel %s %d %d %d\n", this.kv.uniKey, status, this.kv.version, this.version)
+	flyfish_logger.GetSugar().Debugf("cmdDel unikey:%s status:%d kv version:%d req version:%d", this.kv.uniKey, status, this.kv.version, this.version)
 
 	if status == cache_missing {
 		this.reply(errcode.ERR_RECORD_NOTEXIST, nil, 0)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/dbmeta"
+	flyfish_logger "github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/net"
 	"github.com/sniperHW/flyfish/net/pb"
 	protocol "github.com/sniperHW/flyfish/proto"
@@ -172,12 +173,12 @@ func (this *KVNode) Start(id *int, cluster *string) error {
 	go func() {
 		err := this.startListener()
 		if nil != err {
-			logger.Errorf("server.Start() error:%s\n", err.Error())
+			flyfish_logger.GetSugar().Errorf("server.Start() error:%s", err.Error())
 		}
-		logger.Infof("flyfish listener stop\n")
+		flyfish_logger.GetSugar().Infof("flyfish listener stop")
 	}()
 
-	logger.Infof("flyfish start:%s:%d\n", config.ServiceHost, config.ServicePort)
+	flyfish_logger.GetSugar().Infof("flyfish start:%s:%d", config.ServiceHost, config.ServicePort)
 
 	return nil
 }
@@ -200,7 +201,7 @@ func waitCondition(fn func() bool) {
 func (this *KVNode) Stop() {
 
 	if atomic.CompareAndSwapInt32(&this.stoped, 0, 1) {
-		logger.Infof("StopServer\n")
+		flyfish_logger.GetSugar().Infof("StopServer")
 		//关闭监听
 		this.listener.Close()
 
@@ -210,7 +211,7 @@ func (this *KVNode) Stop() {
 			return true
 		})
 
-		logger.Infof("ShutdownRead ok, wait4ReplyCount:%d\n", this.wait4ReplyCount)
+		flyfish_logger.GetSugar().Infof("ShutdownRead ok, wait4ReplyCount:%d", this.wait4ReplyCount)
 
 		waitCondition(func() bool {
 			if atomic.LoadInt64(&this.wait4ReplyCount) == 0 {
@@ -222,7 +223,7 @@ func (this *KVNode) Stop() {
 
 		this.sqlMgr.stop()
 
-		logger.Infof("sql stop ok", "totalUpdateSqlCount:%d\n", this.sqlMgr.totalUpdateSqlCount)
+		flyfish_logger.GetSugar().Infof("sql stop ok totalUpdateSqlCount:%d", this.sqlMgr.totalUpdateSqlCount)
 
 		//关闭所有客户连接
 
@@ -246,7 +247,7 @@ func (this *KVNode) Stop() {
 		this.storeMgr.stop()
 		this.mutilRaft.stop()
 
-		logger.Info("flyfish stop ok")
+		flyfish_logger.GetSugar().Info("flyfish stop ok")
 
 	}
 }

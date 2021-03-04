@@ -5,6 +5,7 @@ import (
 	"github.com/sniperHW/flyfish/conf"
 	"github.com/sniperHW/flyfish/dbmeta"
 	"github.com/sniperHW/flyfish/errcode"
+	flyfish_logger "github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/util/bitfield"
 	"sync"
@@ -224,7 +225,7 @@ func (this *kv) setOK(version int64, fields map[string]*proto.Field) {
 		}
 	}
 
-	logger.Debugf("set ok %s %v\n", this.uniKey, this.fields)
+	flyfish_logger.GetSugar().Debugf("set ok unikey:%s fileds:%v", this.uniKey, this.fields)
 
 }
 

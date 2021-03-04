@@ -5,6 +5,7 @@ import (
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"os"
+	"sync"
 )
 
 type stdoutWriteSyncer struct {
@@ -44,13 +45,13 @@ func getLoggerLevel(lvl string) zapcore.Level {
 	return zapcore.InfoLevel
 }
 
-func NewZapLogger(name string, path string, level string, maxLogfileSize int, maxAge int, enableLogStdout bool) *zap.SugaredLogger {
+func NewZapLogger(name string, path string, level string, maxLogfileSize int, maxAge int, enableLogStdout bool) *zap.Logger {
 
 	syncWriter := zapcore.AddSync(&lumberjack.Logger{
-		Filename: path + "/" + name,
-		MaxSize:  maxLogfileSize,
-		MaxAge:   maxAge,
-		//LocalTime: true,
+		Filename:  path + "/" + name,
+		MaxSize:   maxLogfileSize,
+		MaxAge:    maxAge,
+		LocalTime: true,
 		//Compress: true,
 	})
 
@@ -71,5 +72,24 @@ func NewZapLogger(name string, path string, level string, maxLogfileSize int, ma
 
 	core := zapcore.NewCore(zapcore.NewConsoleEncoder(encoder), w, zap.NewAtomicLevelAt(getLoggerLevel(level)))
 
-	return zap.New(core, zap.AddCaller()).Sugar()
+	return zap.New(core, zap.AddCaller())
+}
+
+var initOnce sync.Once
+var zapLogger *zap.Logger
+var sugaredLogger *zap.SugaredLogger
+
+func InitLogger(logger *zap.Logger) {
+	initOnce.Do(func() {
+		zapLogger = logger
+		sugaredLogger = zapLogger.Sugar()
+	})
+}
+
+func GetLogger() *zap.Logger {
+	return zapLogger
+}
+
+func GetSugar() *zap.SugaredLogger {
+	return sugaredLogger
 }
