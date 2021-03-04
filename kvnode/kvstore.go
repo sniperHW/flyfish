@@ -355,6 +355,8 @@ func (this *kvstore) readCommits(snapshotter *snap.Snapshotter, commitC <-chan i
 			e.(*readBatchSt).reply()
 		case leaseNotify:
 			this.gotLease()
+		case chan struct{}:
+			close(e.(chan struct{}))
 		}
 
 	}

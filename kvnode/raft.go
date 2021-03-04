@@ -322,7 +322,10 @@ func (rc *raftNode) entriesToApply(ents []raftpb.Entry) (nents []raftpb.Entry) {
 
 // publishEntries writes committed log entries to commit channel and returns
 // whether all entries could be published.
-func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
+func (rc *raftNode) publishEntries(ents []raftpb.Entry) (<-chan struct{}, bool) {
+
+	var applyDoneC chan struct{}
+
 	for i := range ents {
 		switch ents[i].Type {
 		case raftpb.EntryNormal:
@@ -349,7 +352,11 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 			select {
 			case rc.commitC <- committedEntry:
 			case <-rc.stopc:
-				return false
+				return nil, false
+			}
+
+			if nil == applyDoneC {
+				applyDoneC = make(chan struct{})
 			}
 
 		case raftpb.EntryConfChange:
@@ -362,11 +369,13 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 			var url string
 			if len(cc.Context) > 0 {
 				url = string(cc.Context[4:])
-				if rc.isLeader() {
-					rc.muPendingConfChange.Lock()
-					e := rc.pendingConfChange.Front()
+				rc.muPendingConfChange.Lock()
+				e := rc.pendingConfChange.Front()
+				if nil != e {
 					rc.pendingConfChange.Remove(e)
-					rc.muPendingConfChange.Unlock()
+				}
+				rc.muPendingConfChange.Unlock()
+				if nil != e {
 					e.Value.(*asynTaskConfChange).done()
 				}
 			}
@@ -380,7 +389,7 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 			case raftpb.ConfChangeRemoveNode:
 				if cc.NodeID == uint64(rc.id) {
 					flyfish_logger.GetSugar().Info("I've been removed from the cluster! Shutting down.")
-					return false
+					return nil, false
 				}
 				flyfish_logger.GetSugar().Infof("ConfChangeRemoveNode %s", types.ID(cc.NodeID).String())
 				rc.transport.RemovePeer(types.ID(cc.NodeID))
@@ -397,11 +406,20 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 			case rc.commitC <- replayOK:
 				flyfish_logger.GetSugar().Info("send replayOK")
 			case <-rc.stopc:
-				return false
+				return nil, false
 			}
 		}
 	}
-	return true
+
+	if nil != applyDoneC {
+		select {
+		case rc.commitC <- applyDoneC:
+		case <-rc.stopc:
+			return nil, false
+		}
+	}
+
+	return applyDoneC, true
 }
 
 func (rc *raftNode) loadSnapshot() *raftpb.Snapshot {
@@ -658,7 +676,7 @@ func (rc *raftNode) triggerSnapshot() {
 	}()
 }
 
-func (rc *raftNode) maybeTriggerSnapshot() {
+func (rc *raftNode) maybeTriggerSnapshot(applyDoneC <-chan struct{}) {
 
 	if atomic.LoadInt32(&rc.snapshotting) == 1 {
 		return
@@ -666,6 +684,14 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 
 	if rc.appliedIndex-rc.snapshotIndex <= rc.snapCount {
 		return
+	}
+
+	if applyDoneC != nil {
+		select {
+		case <-applyDoneC:
+		case <-rc.stopc:
+			return
+		}
 	}
 
 	rc.triggerSnapshot()
@@ -1098,7 +1124,9 @@ func (rc *raftNode) serveChannels() {
 
 			rc.transport.Send(rd.Messages)
 
-			if ok := rc.publishEntries(rc.entriesToApply(rd.CommittedEntries)); !ok {
+			applyDoneC, ok := rc.publishEntries(rc.entriesToApply(rd.CommittedEntries))
+
+			if !ok {
 				rc.stop()
 				return
 			}
@@ -1107,7 +1135,7 @@ func (rc *raftNode) serveChannels() {
 				rc.processReadStates(rd.ReadStates)
 			}
 
-			rc.maybeTriggerSnapshot()
+			rc.maybeTriggerSnapshot(applyDoneC)
 
 			if loseLeadership {
 				rc.onLoseLeadership()
