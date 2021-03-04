@@ -1,4 +1,4 @@
-package mock_kvnode
+package kvnode
 
 import (
 	"fmt"
