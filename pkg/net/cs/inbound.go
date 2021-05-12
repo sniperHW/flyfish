@@ -3,10 +3,10 @@ package cs
 import (
 	"fmt"
 	"github.com/gogo/protobuf/proto"
-	"github.com/sniperHW/flyfish/core/buffer"
 	"github.com/sniperHW/flyfish/errcode"
-	flynet "github.com/sniperHW/flyfish/net"
-	"github.com/sniperHW/flyfish/net/pb"
+	"github.com/sniperHW/flyfish/pkg/buffer"
+	flynet "github.com/sniperHW/flyfish/pkg/net"
+	"github.com/sniperHW/flyfish/pkg/net/pb"
 	flyproto "github.com/sniperHW/flyfish/proto"
 )
 

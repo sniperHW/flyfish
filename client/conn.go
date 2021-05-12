@@ -2,8 +2,8 @@ package client
 
 import (
 	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/net"
-	"github.com/sniperHW/flyfish/net/cs"
+	"github.com/sniperHW/flyfish/pkg/net"
+	"github.com/sniperHW/flyfish/pkg/net/cs"
 	"sync"
 	"time"
 )

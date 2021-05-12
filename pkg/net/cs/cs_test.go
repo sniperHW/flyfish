@@ -5,9 +5,9 @@ package cs
 import (
 	//"errors"
 	"fmt"
-	//"github.com/sniperHW/flyfish/core/buffer"
-	flynet "github.com/sniperHW/flyfish/net"
-	//"github.com/sniperHW/flyfish/net/pb"
+	//"github.com/sniperHW/flyfish/pkg/buffer"
+	flynet "github.com/sniperHW/flyfish/pkg/net"
+	//"github.com/sniperHW/flyfish/pkg/net/pb"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	//"github.com/stretchr/testify/assert"
 	//"net"

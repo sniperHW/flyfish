@@ -2,8 +2,8 @@ package kvnode
 
 import (
 	"github.com/sniperHW/flyfish/backend/db"
-	"github.com/sniperHW/flyfish/core/buffer"
 	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/pkg/buffer"
 	flyproto "github.com/sniperHW/flyfish/proto"
 )
 

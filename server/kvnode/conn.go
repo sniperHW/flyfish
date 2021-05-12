@@ -1,8 +1,8 @@
 package kvnode
 
 import (
-	"github.com/sniperHW/flyfish/net"
-	"github.com/sniperHW/flyfish/net/cs"
+	"github.com/sniperHW/flyfish/pkg/net"
+	"github.com/sniperHW/flyfish/pkg/net/cs"
 	"sync"
 )
 

@@ -3,7 +3,7 @@ package cs
 import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/net/pb"
+	"github.com/sniperHW/flyfish/pkg/net/pb"
 	protocol "github.com/sniperHW/flyfish/proto"
 )
 

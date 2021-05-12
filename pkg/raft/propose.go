@@ -2,7 +2,7 @@ package raft
 
 import (
 	"context"
-	"github.com/sniperHW/flyfish/core/buffer"
+	"github.com/sniperHW/flyfish/pkg/buffer"
 	"go.etcd.io/etcd/raft/raftpb"
 	"time"
 )

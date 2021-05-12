@@ -2,7 +2,7 @@ package pd
 
 import (
 	"github.com/gogo/protobuf/proto"
-	"github.com/sniperHW/flyfish/core/timer"
+	"github.com/sniperHW/flyfish/pkg/timer"
 	pdproto "github.com/sniperHW/flyfish/server/pd/proto"
 	"time"
 )

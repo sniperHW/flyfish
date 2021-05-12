@@ -6,8 +6,8 @@ package net
 import (
 	"errors"
 	"fmt"
-	"github.com/sniperHW/flyfish/core/buffer"
 	"github.com/sniperHW/flyfish/logger"
+	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/stretchr/testify/assert"
 	"io"
 	"net"

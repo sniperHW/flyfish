@@ -3,8 +3,8 @@ package cs
 import (
 	"errors"
 	"fmt"
-	"github.com/sniperHW/flyfish/core/buffer"
-	"github.com/sniperHW/flyfish/net/pb"
+	"github.com/sniperHW/flyfish/pkg/buffer"
+	"github.com/sniperHW/flyfish/pkg/net/pb"
 	_ "github.com/sniperHW/flyfish/proto"
 	"reflect"
 )

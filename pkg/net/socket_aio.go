@@ -4,8 +4,8 @@ package net
 
 import (
 	"errors"
-	"github.com/sniperHW/flyfish/core/buffer"
-	"github.com/sniperHW/flyfish/core/gopool"
+	"github.com/sniperHW/flyfish/pkg/buffer"
+	"github.com/sniperHW/flyfish/pkg/gopool"
 	"github.com/sniperHW/goaio"
 	"math/rand"
 	"net"

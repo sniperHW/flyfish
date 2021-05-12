@@ -1,7 +1,7 @@
 package raft
 
 import (
-	//"github.com/sniperHW/flyfish/core/buffer"
+	//"github.com/sniperHW/flyfish/pkg/buffer"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"

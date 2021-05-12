@@ -2,7 +2,7 @@ package net
 
 import (
 	"errors"
-	"github.com/sniperHW/flyfish/core/buffer"
+	"github.com/sniperHW/flyfish/pkg/buffer"
 )
 
 var (

@@ -3,7 +3,7 @@ package login
 import (
 	"encoding/binary"
 	"github.com/gogo/protobuf/proto"
-	"github.com/sniperHW/flyfish/core/buffer"
+	"github.com/sniperHW/flyfish/pkg/buffer"
 	protocol "github.com/sniperHW/flyfish/proto"
 	"net"
 	"time"

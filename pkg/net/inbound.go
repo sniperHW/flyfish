@@ -1,7 +1,7 @@
 package net
 
 import (
-	"github.com/sniperHW/flyfish/net/pb"
+	"github.com/sniperHW/flyfish/pkg/net/pb"
 )
 
 func isPow2(size int) bool {

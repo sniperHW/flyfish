@@ -2,8 +2,8 @@ package net
 
 import (
 	"github.com/gogo/protobuf/proto"
-	"github.com/sniperHW/flyfish/core/buffer"
-	"github.com/sniperHW/flyfish/net/pb"
+	"github.com/sniperHW/flyfish/pkg/buffer"
+	"github.com/sniperHW/flyfish/pkg/net/pb"
 	pdproto "github.com/sniperHW/flyfish/server/pd/proto"
 	"net"
 )

@@ -3,7 +3,7 @@ package sql
 import (
 	"fmt"
 	"github.com/sniperHW/flyfish/backend/db"
-	"github.com/sniperHW/flyfish/core/buffer"
+	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/proto"
 	"strconv"
 )

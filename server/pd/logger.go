@@ -1,8 +1,8 @@
 package pd
 
 import (
-	"github.com/sniperHW/flyfish/core/raft"
-	"github.com/sniperHW/flyfish/net"
+	"github.com/sniperHW/flyfish/pkg/net"
+	"github.com/sniperHW/flyfish/pkg/raft"
 	"go.uber.org/zap"
 	"sync"
 )

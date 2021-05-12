@@ -2,7 +2,7 @@ package cs
 
 import (
 	"fmt"
-	flynet "github.com/sniperHW/flyfish/net"
+	flynet "github.com/sniperHW/flyfish/pkg/net"
 	protocol "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/login"
 	"net"

@@ -1,7 +1,7 @@
 package client
 
 import (
-	"github.com/sniperHW/flyfish/net"
+	"github.com/sniperHW/flyfish/pkg/net"
 	"go.uber.org/zap"
 	"sync"
 )

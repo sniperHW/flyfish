@@ -2,7 +2,7 @@ package db
 
 import (
 	"github.com/sniperHW/flyfish/backend/db"
-	"github.com/sniperHW/flyfish/core/queue"
+	"github.com/sniperHW/flyfish/pkg/queue"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"sync"
 )

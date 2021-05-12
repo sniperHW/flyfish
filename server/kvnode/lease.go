@@ -2,7 +2,7 @@ package kvnode
 
 import (
 	"encoding/binary"
-	"github.com/sniperHW/flyfish/core/buffer"
+	"github.com/sniperHW/flyfish/pkg/buffer"
 	"sync"
 	"sync/atomic"
 	"time"

@@ -4,8 +4,8 @@ package net
 
 import (
 	"errors"
-	"github.com/sniperHW/flyfish/core/buffer"
-	"github.com/sniperHW/flyfish/core/queue"
+	"github.com/sniperHW/flyfish/pkg/buffer"
+	"github.com/sniperHW/flyfish/pkg/queue"
 	"net"
 	"runtime"
 	"sync/atomic"
