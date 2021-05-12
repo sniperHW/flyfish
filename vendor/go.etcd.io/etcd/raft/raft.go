@@ -477,8 +477,8 @@ func (r *raft) maybeSendAppend(to uint64, sendIfEmpty bool) bool {
 		}
 		m.Snapshot = snapshot
 		sindex, sterm := snapshot.Metadata.Index, snapshot.Metadata.Term
-		r.logger.Debugf("%x [firstindex: %d, commit: %d] sent snapshot[index: %d, term: %d] to %x [%s]",
-			r.id, r.raftLog.firstIndex(), r.raftLog.committed, sindex, sterm, to, pr)
+		r.logger.Debugf("%x [firstindex: %d, commit: %d] sent snapshot[index: %d, term: %d] to %x [%s] conf %v",
+			r.id, r.raftLog.firstIndex(), r.raftLog.committed, sindex, sterm, to, pr, snapshot.Metadata.ConfState)
 		pr.BecomeSnapshot(sindex)
 		r.logger.Debugf("%x paused sending replication messages to %x [%s]", r.id, to, pr)
 	} else {
@@ -1349,11 +1349,9 @@ func stepFollower(r *raft, m pb.Message) error {
 			r.logger.Infof("%x not forwarding to leader %x at term %d; dropping proposal", r.id, r.lead, r.Term)
 			return ErrProposalDropped
 		}
-		r.logger.Infof("stepFollower case pb.MsgProp")
 		m.To = r.lead
 		r.send(m)
 	case pb.MsgApp:
-		//fmt.Println("recv pb.MsgApp", m.From, m.Index, len(m.Entries))
 		r.electionElapsed = 0
 		r.lead = m.From
 		r.handleAppendEntries(m)
@@ -1461,6 +1459,7 @@ func (r *raft) restore(s pb.Snapshot) bool {
 	for _, set := range [][]uint64{
 		cs.Voters,
 		cs.Learners,
+		cs.VotersOutgoing,
 	} {
 		for _, id := range set {
 			if id == r.id {

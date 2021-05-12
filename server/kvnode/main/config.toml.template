@@ -1,0 +1,49 @@
+Shard = [1,2,3,4,5]
+
+SnapshotCurrentCount = 0
+
+MainQueueMaxSize        = 10000
+
+LruCheckInterval        = 100              #每隔100ms执行一次lru剔除操作
+
+CacheGroupSize          = 1                  #cache分组数量，每一个cache组单独管理，以降低处理冲突
+
+MaxCachePerStoreSize    = 500000               #每组最大key数量，超过数量将会触发key剔除
+
+SqlLoadPipeLineSize     = 200                  #sql加载管道线大小
+
+SqlLoadQueueSize        = 10000                #sql加载请求队列大小，此队列每CacheGroup一个
+
+SqlLoaderCount          = 5
+SqlUpdaterCount         = 5
+
+
+ServiceHost             = "127.0.0.1"
+
+ServicePort             = 8110
+
+ProposalFlushInterval   = 100
+ReadFlushInterval       = 10                   	 
+
+
+[DBConfig]
+SqlType         = "pgsql"
+
+
+DbHost          = "localhost"
+DbPort          = 5432
+DbUser			= "sniper"
+DbPassword      = "123456"
+DbDataBase      = "test"
+
+ConfDbHost      = "localhost"
+ConfDbPort      = 5432
+ConfDbUser      = "sniper"
+ConfDbPassword  = "123456"
+ConfDataBase    = "test"
+
+
+[Log]
+MaxLogfileSize  = 104857600 # 100mb
+LogDir          = "log"
+LogLevel        = "info"	

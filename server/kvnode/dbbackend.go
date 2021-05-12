@@ -1,0 +1,114 @@
+package kvnode
+
+import (
+	"fmt"
+	_ "github.com/go-sql-driver/mysql"
+	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
+	"github.com/sniperHW/flyfish/backend/db"
+	"github.com/sniperHW/flyfish/backend/db/sql"
+	sslot "github.com/sniperHW/flyfish/server/slot"
+	"sync"
+)
+
+type sqlMetaMgr map[string]*sql.TableMeta
+
+type dbbackendI interface {
+	getTableMeta(table string) db.TableMeta
+	issueLoad(l db.DBLoadTask) bool
+	issueUpdate(u db.DBUpdateTask) bool
+	stop()
+	start() error
+}
+
+type sqlDbBackend struct {
+	metaMgr  db.MetaMgr
+	loaders  []db.DBLoader
+	updaters []db.DBUpdater
+	wait     sync.WaitGroup
+}
+
+func pgsqlOpen(host string, port int, dbname string, user string, password string) (*sqlx.DB, error) {
+	connStr := fmt.Sprintf("host=%s port=%d dbname=%s user=%s password=%s sslmode=disable", host, port, dbname, user, password)
+	return sqlx.Open("postgres", connStr)
+}
+
+func mysqlOpen(host string, port int, dbname string, user string, password string) (*sqlx.DB, error) {
+	connStr := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", user, password, host, port, dbname)
+	return sqlx.Open("mysql", connStr)
+}
+
+func sqlOpen(sqlType string, host string, port int, dbname string, user string, password string) (*sqlx.DB, error) {
+	if sqlType == "mysql" {
+		return mysqlOpen(host, port, dbname, user, password)
+	} else {
+		return pgsqlOpen(host, port, dbname, user, password)
+	}
+}
+
+func (this sqlMetaMgr) GetTableMeta(table string) db.TableMeta {
+	v, ok := this[table]
+	if ok {
+		return v
+	} else {
+		return nil
+	}
+}
+
+func NewSqlDbBackend(def *db.DbDef) (*sqlDbBackend, error) {
+	m, err := sql.CreateDbMeta(def)
+	if nil != err {
+		return nil, err
+	}
+
+	d := &sqlDbBackend{
+		metaMgr: sqlMetaMgr(m),
+	}
+
+	return d, nil
+}
+
+func (d *sqlDbBackend) start() error {
+	dbConfig := GetConfig().DBConfig
+
+	for i := 0; i < 5; i++ {
+		dbl, err := sqlOpen(dbConfig.SqlType, dbConfig.ConfDbHost, dbConfig.ConfDbPort, dbConfig.ConfDataBase, dbConfig.ConfDbUser, dbConfig.ConfDbPassword)
+		if nil != err {
+			return err
+		}
+		d.loaders = append(d.loaders, sql.NewLoader(dbl, 200, 5000))
+
+		dbw, err := sqlOpen(dbConfig.SqlType, dbConfig.ConfDbHost, dbConfig.ConfDbPort, dbConfig.ConfDataBase, dbConfig.ConfDbUser, dbConfig.ConfDbPassword)
+		if nil != err {
+			return err
+		}
+
+		d.updaters = append(d.updaters, sql.NewUpdater(dbw, dbConfig.SqlType, d.wait))
+	}
+
+	for i := 0; i < 5; i++ {
+		d.loaders[i].Start()
+		d.updaters[i].Start()
+	}
+
+	return nil
+}
+
+func (d *sqlDbBackend) getTableMeta(table string) db.TableMeta {
+	return d.metaMgr.GetTableMeta(table)
+}
+
+func (d *sqlDbBackend) issueLoad(l db.DBLoadTask) bool {
+	idx := sslot.StringHash(l.GetUniKey())
+	return d.loaders[idx%len(d.loaders)].IssueLoadTask(l) == nil
+}
+
+func (d *sqlDbBackend) issueUpdate(u db.DBUpdateTask) bool {
+	idx := sslot.StringHash(u.GetUniKey())
+	return d.updaters[idx%len(d.updaters)].IssueUpdateTask(u) == nil
+}
+
+func (d *sqlDbBackend) stop() {
+	//等待所有updater结束
+	d.wait.Wait()
+}

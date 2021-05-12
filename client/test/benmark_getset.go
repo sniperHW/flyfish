@@ -4,7 +4,7 @@ import (
 	"fmt"
 	kclient "github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/kendynet/golog"
+	"github.com/sniperHW/flyfish/logger"
 	"math/rand"
 	"os"
 	"strconv"
@@ -44,9 +44,8 @@ func Set(c *kclient.Client) {
 			setAvaDelay = (time.Now().Sub(beg) + setAvaDelay) / 2
 		}
 
-		if ret.ErrCode != errcode.ERR_OK {
-			fmt.Println("set err:", ret.ErrCode, key)
-			kclient.Debugln("set err:", ret.ErrCode, key)
+		if ret.ErrCode != nil {
+			fmt.Println("set err:", errcode.GetErrorDesc(ret.ErrCode), key)
 		}
 		atomic.AddInt32(&setCount, 1)
 		Set(c)
@@ -70,11 +69,11 @@ func Get(c *kclient.Client) {
 			getAvaDelay = (time.Now().Sub(beg) + getAvaDelay) / 2
 		}
 
-		if ret.ErrCode != errcode.ERR_OK && ret.ErrCode != errcode.ERR_RECORD_NOTEXIST {
+		if ret.ErrCode != nil && ret.ErrCode.Code != errcode.Errcode_record_notexist {
 			fmt.Println("get err:", ret.ErrCode)
 		}
 
-		if ret.ErrCode == errcode.ERR_RECORD_NOTEXIST {
+		if ret.ErrCode.Code == errcode.Errcode_record_notexist {
 			fmt.Println("notfound", key)
 		}
 
@@ -92,8 +91,7 @@ func main() {
 
 	keyrange, _ = strconv.ParseInt(os.Args[1], 10, 32)
 
-	//golog.DisableStdOut()
-	kclient.InitLogger(golog.New("flyfish client", golog.NewOutputLogger("log", "flyfish client", 1024*1024*50)))
+	kclient.InitLogger(logger.NewZapLogger("client.log", "./log", "debug", 100, 14, true))
 
 	id = 0
 
@@ -105,7 +103,7 @@ func main() {
 	}
 
 	for j := 0; j < 50; j++ {
-		c := kclient.OpenClient(services) //eventQueue)
+		c := kclient.OpenClient(os.Args[2], false) //eventQueue)
 		for i := 0; i < 20; i++ {
 			Get(c)
 		}

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	kclient "github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/kendynet/golog"
+	"github.com/sniperHW/flyfish/logger"
 	"os"
 	"strconv"
 	"strings"
@@ -42,13 +42,13 @@ func Set(c *kclient.Client) {
 			setAvaDelay = (time.Now().Sub(beg) + setAvaDelay) / 2
 		}
 
-		if ret.ErrCode != errcode.ERR_OK {
-			if ret.ErrCode == errcode.ERR_TIMEOUT {
+		if ret.ErrCode != nil {
+			if ret.ErrCode.Code == errcode.Errcode_timeout {
 				atomic.AddInt32(&timeoutCount, 1)
-			} else if ret.ErrCode == errcode.ERR_BUSY {
+			} else if ret.ErrCode.Code == errcode.Errcode_retry {
 				atomic.AddInt32(&busyCount, 1)
 			} else {
-				fmt.Println("set err:", ret.ErrCode, key)
+				fmt.Println("set err:", errcode.GetErrorDesc(ret.ErrCode), key)
 			}
 
 			//fmt.Println("set err:", ret.ErrCode, key)
@@ -66,8 +66,7 @@ func main() {
 		return
 	}
 
-	//golog.DisableStdOut()
-	kclient.InitLogger(golog.New("flyfish client", golog.NewOutputLogger("log", "flyfish client", 1024*1024*50)))
+	kclient.InitLogger(logger.NewZapLogger("client.log", "./log", "debug", 100, 14, true))
 
 	keyrange, _ = strconv.ParseInt(os.Args[1], 10, 32)
 

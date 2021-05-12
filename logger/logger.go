@@ -6,6 +6,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 	"os"
 	"sync"
+	"time"
 )
 
 type stdoutWriteSyncer struct {
@@ -45,6 +46,10 @@ func getLoggerLevel(lvl string) zapcore.Level {
 	return zapcore.InfoLevel
 }
 
+func TimeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
+	enc.AppendString(t.Format("2006-01-02 15:04:05.000"))
+}
+
 func NewZapLogger(name string, path string, level string, maxLogfileSize int, maxAge int, enableLogStdout bool) *zap.Logger {
 
 	syncWriter := zapcore.AddSync(&lumberjack.Logger{
@@ -59,7 +64,7 @@ func NewZapLogger(name string, path string, level string, maxLogfileSize int, ma
 
 	encoder := zap.NewProductionEncoderConfig()
 
-	encoder.EncodeTime = zapcore.ISO8601TimeEncoder
+	encoder.EncodeTime = TimeEncoder
 
 	if enableLogStdout {
 		//encoder.EncodeLevel = zapcore.CapitalColorLevelEncoder

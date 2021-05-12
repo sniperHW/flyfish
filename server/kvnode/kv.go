@@ -1,0 +1,292 @@
+package kvnode
+
+import (
+	"github.com/sniperHW/flyfish/backend/db"
+	"github.com/sniperHW/flyfish/errcode"
+	flyproto "github.com/sniperHW/flyfish/proto"
+	"sync"
+	"time"
+)
+
+type kvState byte
+type proposalType uint8
+
+const (
+	kv_invaild   = kvState(0)
+	kv_new       = kvState(1)
+	kv_loading   = kvState(2)
+	kv_ok        = kvState(3)
+	kv_no_record = kvState(4)
+)
+
+const (
+	proposal_none     = proposalType(0)
+	proposal_snapshot = proposalType(1) //全量数据kv快照,
+	proposal_update   = proposalType(2) //fields变更
+	proposal_kick     = proposalType(3) //从缓存移除kv
+	proposal_lease    = proposalType(4) //数据库update权租约
+)
+
+type dbUpdateTask struct {
+	sync.Mutex
+	doing        bool
+	updateFields map[string]*flyproto.Field
+	version      int64
+	dbstate      db.DBState
+	keyValue     *kv
+}
+
+type dbLoadTask struct {
+	keyValue *kv
+	cmd      cmdI
+}
+
+type kvProposal struct {
+	dbstate  db.DBState
+	ptype    proposalType
+	fields   map[string]*flyproto.Field
+	version  int64
+	cmds     []cmdI
+	keyValue *kv
+}
+
+type kvLinearizableRead struct {
+	keyValue *kv
+	cmds     []cmdI
+}
+
+type cmdQueue struct {
+	head  int
+	tail  int
+	queue []cmdI
+}
+
+type kv struct {
+	lru           lruElement
+	uniKey        string //"table:key"组成的唯一全局唯一键
+	key           string
+	version       int64
+	state         kvState
+	kicking       bool
+	fields        map[string]*flyproto.Field //字段
+	tbmeta        db.TableMeta
+	updateTask    dbUpdateTask
+	loadTask      dbLoadTask
+	pendingCmd    *cmdQueue
+	store         *kvstore
+	asynTaskCount int
+}
+
+/*
+ * 0表示key不存在，因此inc时要越过0
+ */
+func incVersion(version int64) int64 {
+	version += 1
+	if 0 == version {
+		return 1
+	} else {
+		return version
+	}
+}
+
+func genVersion() int64 {
+	return time.Now().UnixNano()
+}
+
+func newCmdQueue(max int) *cmdQueue {
+	if max <= 0 {
+		max = 32
+	}
+	return &cmdQueue{
+		queue: make([]cmdI, max+1, max+1),
+	}
+}
+
+func (this *cmdQueue) empty() bool {
+	return this.head == this.tail
+}
+
+func (this *cmdQueue) add(c cmdI) bool {
+	if (this.tail+1)%len(this.queue) == this.head {
+		return false
+	} else {
+		this.queue[this.tail] = c
+		this.tail = (this.tail + 1) % len(this.queue)
+		return true
+	}
+}
+
+func (this *cmdQueue) front() cmdI {
+	if this.empty() {
+		return nil
+	} else {
+		return this.queue[this.head]
+	}
+}
+
+func (this *cmdQueue) popFront() {
+	if this.head != this.tail {
+		this.queue[this.head] = nil
+		this.head = (this.head + 1) % len(this.queue)
+	}
+}
+
+func mergeAbleCmd(cmdType flyproto.CmdType) bool {
+	switch cmdType {
+	case flyproto.CmdType_Get, flyproto.CmdType_Set, flyproto.CmdType_IncrBy, flyproto.CmdType_DecrBy:
+		return true
+	default:
+	}
+	return false
+}
+
+func (this *kv) kickable() bool {
+	if this.store.needWriteBackAll {
+		return false
+	}
+
+	if this.kicking {
+		return false
+	}
+
+	if !(this.state == kv_ok || this.state == kv_no_record) {
+		return false
+	}
+
+	if this.asynTaskCount > 0 || !this.pendingCmd.empty() {
+		return false
+	}
+
+	if this.updateTask.isDoing() {
+		return false
+	}
+
+	return true
+}
+
+func (this *kv) process(cmd cmdI) {
+	if nil != cmd {
+		if this.state == kv_new {
+			//request load kv from database
+			this.loadTask.cmd = cmd
+			if !this.store.db.issueLoad(&this.loadTask) {
+				GetSugar().Infof("reply retry")
+				cmd.reply(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"), nil, 0)
+				delete(this.store.keyvals, this.uniKey)
+			} else {
+				this.asynTaskCount++
+				this.state = kv_loading
+				GetSugar().Debugf("load--------------- %s", this.uniKey)
+
+			}
+			return
+		} else if !this.pendingCmd.add(cmd) {
+			GetSugar().Infof("reply retry")
+			cmd.reply(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"), nil, 0)
+			return
+		} else if !this.kicking && (this.state == kv_ok || this.state == kv_no_record) {
+			this.store.lru.updateLRU(&this.lru)
+		}
+	} else {
+		this.asynTaskCount--
+	}
+
+	if this.pendingCmd.empty() || this.asynTaskCount != 0 {
+		return
+	} else {
+		for {
+			cmds := []cmdI{}
+			for {
+				c := this.pendingCmd.front()
+				if nil == c {
+					break
+				}
+
+				if c.isTimeout() || c.isCancel() {
+					this.pendingCmd.popFront()
+					c.dontReply()
+				} else if !c.check(this) {
+					this.pendingCmd.popFront()
+				} else {
+					if 0 == len(cmds) {
+						cmds = append(cmds, c)
+						this.pendingCmd.popFront()
+					} else {
+						f := cmds[0]
+						if mergeAbleCmd(f.cmdType()) {
+							if f.cmdType() != c.cmdType() {
+								//不同类命令，不能合并
+								break
+							} else if f.cmdType() != flyproto.CmdType_Get && c.checkVersion() {
+								//命令要检查版本号，不能跟之前的命令合并
+								break
+							} else {
+								cmds = append(cmds, c)
+								this.pendingCmd.popFront()
+							}
+						} else {
+							break
+						}
+					}
+				}
+			}
+
+			if len(cmds) == 0 {
+				return
+			}
+
+			var linearizableRead *kvLinearizableRead
+			var proposal *kvProposal
+
+			switch cmds[0].cmdType() {
+			case flyproto.CmdType_Get:
+				linearizableRead = &kvLinearizableRead{
+					keyValue: this,
+					cmds:     cmds,
+				}
+			default:
+				proposal = &kvProposal{
+					ptype:    proposal_snapshot,
+					keyValue: this,
+					cmds:     cmds,
+					version:  this.version,
+					fields:   map[string]*flyproto.Field{},
+				}
+
+				for _, v := range cmds {
+					v.(interface {
+						do(*kv, *kvProposal)
+					}).do(this, proposal)
+				}
+
+				if proposal.ptype == proposal_none {
+					proposal = nil
+				}
+
+				//GetSugar().Infof("proposal type %v", proposal.ptype)
+
+			}
+
+			if linearizableRead != nil || proposal != nil {
+
+				var err error
+
+				if nil != linearizableRead {
+					err = this.store.rn.IssueLinearizableRead(linearizableRead)
+				} else {
+					err = this.store.rn.IssueProposal(proposal)
+				}
+
+				if nil != err {
+					for _, v := range cmds {
+						GetSugar().Infof("reply retry")
+						v.reply(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"), nil, 0)
+					}
+				} else {
+					this.asynTaskCount++
+					return
+				}
+			}
+		}
+	}
+}

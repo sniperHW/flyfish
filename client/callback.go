@@ -1,7 +1,11 @@
 package client
 
+import (
+	"github.com/sniperHW/flyfish/errcode"
+)
+
 type StatusResult struct {
-	ErrCode int32
+	ErrCode errcode.Error
 	Table   string
 	Key     string
 	Version int64
@@ -10,7 +14,7 @@ type StatusResult struct {
 }
 
 type SliceResult struct {
-	ErrCode int32
+	ErrCode errcode.Error
 	Table   string
 	Key     string
 	Version int64
@@ -46,7 +50,7 @@ func splitUniKey(unikey string) (table string, key string) {
 	return
 }
 
-func (this *callback) onError(unikey string, errCode int32) {
+func (this *callback) onError(unikey string, errCode errcode.Error) {
 	if this.tt == cb_status {
 		table, key := splitUniKey(unikey)
 		this.cb.(func(*StatusResult))(&StatusResult{

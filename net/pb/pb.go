@@ -92,31 +92,17 @@ func (this *Namespace) Unmarshal(id uint32, buff []byte) (proto.Message, error) 
 	return msg, nil
 }
 
-var requestSpace *Namespace
-var responseSpace *Namespace
+var namespaces map[string]*Namespace = map[string]*Namespace{}
 
 func GetNamespace(space string) *Namespace {
-	if space == "request" {
-		return requestSpace
-	} else if space == "response" {
-		return responseSpace
-	} else {
-		return nil
+	namespace, ok := namespaces[space]
+	if !ok {
+		namespace = &Namespace{
+			name:     space,
+			idToMeta: map[uint32]reflectInfo{},
+			nameToID: map[string]uint32{},
+		}
+		namespaces[space] = namespace
 	}
-}
-
-func init() {
-
-	requestSpace = &Namespace{
-		name:     "request",
-		idToMeta: map[uint32]reflectInfo{},
-		nameToID: map[string]uint32{},
-	}
-
-	responseSpace = &Namespace{
-		name:     "response",
-		idToMeta: map[uint32]reflectInfo{},
-		nameToID: map[string]uint32{},
-	}
-
+	return namespace
 }

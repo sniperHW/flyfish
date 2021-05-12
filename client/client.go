@@ -1,25 +1,53 @@
 package client
 
 import (
-	"github.com/sniperHW/kendynet/event"
-	"github.com/sniperHW/kendynet/util"
+	"fmt"
+	"github.com/sniperHW/flyfish/errcode"
+	"runtime"
+	"strings"
 )
 
 var ClientTimeout uint32 = 6000 //6sec
 
 var seqno int64
 
+type EventQueueI interface {
+	Post(priority int, fn interface{}, args ...interface{}) error
+}
+
+func formatFileLine(format string, v ...interface{}) string {
+	_, file, line, ok := runtime.Caller(1)
+	if ok {
+		s := fmt.Sprintf("[%s:%d]", file, line)
+		return strings.Join([]string{s, fmt.Sprintf(format, v...)}, "")
+	} else {
+		return fmt.Sprintf(format, v...)
+	}
+}
+
+func Recover() {
+	if r := recover(); r != nil {
+		buf := make([]byte, 65535)
+		l := runtime.Stack(buf, false)
+		GetSugar().Errorf(formatFileLine("%s\n", fmt.Sprintf("%v: %s", r, buf[:l])))
+	}
+}
+
 type Client struct {
 	conn          *Conn
-	callbackQueue *event.EventQueue //响应回调的事件队列
-	compress      bool
+	callbackQueue EventQueueI //响应回调的事件队列
 	priority      int
+	/*
+	 *  返回unikey所在的store
+	 *  对于连接proxy的方式无需提供,store字段由proxy填写
+	 */
+	unikeyPlacement func(string) int
 }
 
 func (this *Client) callcb(unikey string, cb callback, a interface{}) {
 	switch a.(type) {
-	case int32:
-		cb.onError(unikey, a.(int32))
+	case errcode.Error:
+		cb.onError(unikey, a.(errcode.Error))
 	default:
 		cb.onResult(unikey, a)
 	}
@@ -29,16 +57,14 @@ func (this *Client) doCallBack(unikey string, cb callback, a interface{}) {
 	if nil != this.callbackQueue && cb.sync == false {
 		this.callbackQueue.Post(this.priority, this.callcb, unikey, cb, a)
 	} else {
-		defer util.Recover(logger)
+		defer Recover()
 		this.callcb(unikey, cb, a)
 	}
 }
 
-func OpenClient(service string, compress bool, callbackQueue ...*event.EventQueue) *Client {
+func OpenClient(service string, callbackQueue ...EventQueueI) *Client {
 
-	c := &Client{
-		compress: compress,
-	}
+	c := &Client{}
 
 	if len(callbackQueue) > 0 {
 		c.callbackQueue = callbackQueue[0]
@@ -47,6 +73,10 @@ func OpenClient(service string, compress bool, callbackQueue ...*event.EventQueu
 	c.conn = openConn(c, service)
 
 	return c
+}
+
+func (this *Client) SetUnikeyPlacement(u func(string) int) {
+	this.unikeyPlacement = u
 }
 
 func (this *Client) SetPriority(priority int) {

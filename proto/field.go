@@ -1,11 +1,5 @@
 package proto
 
-import (
-	"fmt"
-	"reflect"
-	//"github.com/golang/protobuf/proto"
-)
-
 func (m *Field) GetType() ValueType {
 	if m.V == nil {
 		return ValueType_nil
@@ -75,21 +69,21 @@ func (m *Field) SetInt(v int64) {
 	if !m.IsInt() {
 		panic("v is not int")
 	}
-	m.V.I = v //proto.Int64(v)
+	m.V.I = v
 }
 
 func (m *Field) SetString(v string) {
 	if !m.IsString() {
 		panic("v is not string")
 	}
-	m.V.S = v //proto.String(v)
+	m.V.S = v
 }
 
 func (m *Field) SetFloat(v float64) {
 	if !m.IsFloat() {
 		panic("v is not float")
 	}
-	m.V.F = v //proto.Float64(v)
+	m.V.F = v
 }
 
 func (m *Field) SetBlob(v []byte) {
@@ -155,11 +149,11 @@ func PackField(name string, v interface{}) *Field {
 
 	field := &Field{
 		V:    &Value{},
-		Name: name, //proto.String(name),
+		Name: name,
 	}
 
 	if nil == v {
-		field.V.Type = ValueType_nil //ValueType(ValueType_nil).Enum()
+		field.V.Type = ValueType_nil
 		return field
 	}
 
@@ -169,51 +163,48 @@ func PackField(name string, v interface{}) *Field {
 	switch v.(type) {
 	case []byte:
 		field.V.B = v.([]byte)
-		field.V.Type = ValueType_blob //ValueType(ValueType_blob).Enum()
+		field.V.Type = ValueType_blob
 		return field
 	case string:
-		field.V.S = v.(string)          //proto.String(v.(string))
-		field.V.Type = ValueType_string //ValueType(ValueType_string).Enum()
+		field.V.S = v.(string)
+		field.V.Type = ValueType_string
 		return field
 	case int:
-		field.V.Type = ValueType_int //ValueType(ValueType_int).Enum()
+		field.V.Type = ValueType_int
 		vvI = int64(v.(int))
 		break
 	case int8:
-		field.V.Type = ValueType_int //ValueType(ValueType_int).Enum()
+		field.V.Type = ValueType_int
 		vvI = int64(v.(int8))
 		break
 	case int16:
-		field.V.Type = ValueType_int //ValueType(ValueType_int).Enum()
+		field.V.Type = ValueType_int
 		vvI = int64(v.(int16))
 		break
 	case int32:
-		field.V.Type = ValueType_int //ValueType(ValueType_int).Enum()
+		field.V.Type = ValueType_int
 		vvI = int64(v.(int32))
 		break
 	case int64:
-		field.V.Type = ValueType_int //ValueType(ValueType_int).Enum()
+		field.V.Type = ValueType_int
 		vvI = int64(v.(int64))
 		break
 	case float32:
-		field.V.Type = ValueType_float //ValueType(ValueType_float).Enum()
+		field.V.Type = ValueType_float
 		vvF = float64(v.(float32))
 		break
 	case float64:
-		field.V.Type = ValueType_float //ValueType(ValueType_float).Enum()
+		field.V.Type = ValueType_float
 		vvF = float64(v.(float64))
 		break
 	default:
-		tt := reflect.TypeOf(v)
-		name := tt.String()
-		fmt.Println("return nil2", name)
 		return nil
 	}
 
 	if field.GetType() == ValueType_float {
-		field.V.F = vvF //proto.Float64(vvF)
+		field.V.F = vvF
 	} else {
-		field.V.I = vvI //proto.Int64(vvI)
+		field.V.I = vvI
 	}
 	return field
 }

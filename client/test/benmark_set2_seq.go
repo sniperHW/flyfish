@@ -5,7 +5,7 @@ import (
 	"github.com/schollz/progressbar"
 	kclient "github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/kendynet/golog"
+	"github.com/sniperHW/flyfish/logger"
 	"os"
 	"sort"
 	"strconv"
@@ -17,7 +17,7 @@ import (
 
 type result struct {
 	latency time.Duration
-	err     int32
+	err     errcode.Error
 }
 
 type ByTime []result
@@ -83,7 +83,7 @@ func main() {
 	keyrange, _ = strconv.ParseInt(os.Args[1], 10, 32)
 	total, _ = strconv.ParseInt(os.Args[2], 10, 32)
 
-	kclient.InitLogger(golog.New("flyfish client", golog.NewOutputLogger("log", "flyfish client", 1024*1024*50)))
+	kclient.InitLogger(logger.NewZapLogger("client.log", "./log", "debug", 100, 14, true))
 
 	id = 0
 
@@ -117,11 +117,11 @@ func main() {
 	avagelatency := time.Duration(0)
 
 	for _, v := range results {
-		if v.err == errcode.ERR_OK {
+		if v.err == nil {
 			success++
-		} else if v.err == errcode.ERR_BUSY {
+		} else if v.err.Code == errcode.Errcode_retry {
 			busy++
-		} else if v.err == errcode.ERR_TIMEOUT {
+		} else if v.err.Code == errcode.Errcode_timeout {
 			timeout++
 		} else {
 			otherErr++

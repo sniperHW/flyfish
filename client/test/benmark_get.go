@@ -4,7 +4,7 @@ import (
 	"fmt"
 	kclient "github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/kendynet/golog"
+	"github.com/sniperHW/flyfish/logger"
 	"os"
 	"strconv"
 	"strings"
@@ -31,19 +31,17 @@ func Get(c *kclient.Client) {
 
 	get.AsyncExec(func(ret *kclient.SliceResult) {
 
-		//fmt.Println(ret.Fields["age"].GetInt())
-
 		if getAvaDelay == time.Duration(0) {
 			getAvaDelay = time.Now().Sub(beg)
 		} else {
 			getAvaDelay = (time.Now().Sub(beg) + getAvaDelay) / 2
 		}
 
-		if ret.ErrCode != errcode.ERR_OK && ret.ErrCode != errcode.ERR_RECORD_NOTEXIST {
+		if ret.ErrCode != nil && ret.ErrCode.Code != errcode.Errcode_record_notexist {
 			fmt.Println("get err:", ret.ErrCode)
 		}
 
-		if ret.ErrCode == errcode.ERR_RECORD_NOTEXIST {
+		if ret.ErrCode.Code == errcode.Errcode_record_notexist {
 			fmt.Println("notfound", key)
 		}
 
@@ -59,7 +57,7 @@ func main() {
 		return
 	}
 
-	kclient.InitLogger(golog.New("flyfish client", golog.NewOutputLogger("log", "flyfish client", 1024*1024*50)))
+	kclient.InitLogger(logger.NewZapLogger("client.log", "./log", "debug", 100, 14, true))
 
 	id = 0
 

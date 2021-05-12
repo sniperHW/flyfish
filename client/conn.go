@@ -3,10 +3,7 @@ package client
 import (
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/net"
-	"github.com/sniperHW/flyfish/net/pb"
-	"github.com/sniperHW/kendynet"
-	//"github.com/sniperHW/kendynet/event"
-	"github.com/sniperHW/kendynet/timer"
+	"github.com/sniperHW/flyfish/net/cs"
 	"sync"
 	"time"
 )
@@ -15,22 +12,20 @@ var maxPendingSize int = 10000
 
 type Conn struct {
 	sync.Mutex
-	session     kendynet.StreamSession
+	session     *net.Socket
 	addr        string
 	pendingSend []*cmdContext //等待发送的消息
-	waitResp    map[uint64]*cmdContext
+	waitResp    map[int64]*cmdContext
 	dialing     bool
 	c           *Client
-	timerMgr    *timer.TimerMgr
 }
 
 func openConn(cli *Client, addr string) *Conn {
 	c := &Conn{
 		addr:        addr,
 		pendingSend: []*cmdContext{},
-		waitResp:    map[uint64]*cmdContext{},
+		waitResp:    map[int64]*cmdContext{},
 		c:           cli,
-		timerMgr:    timer.NewTimerMgr(1),
 	}
 	return c
 }
@@ -48,49 +43,34 @@ func (this *Conn) ping(now *time.Time) {
 	}
 }*/
 
-func (this *Conn) onConnected(session kendynet.StreamSession, compress bool) {
+func (this *Conn) onConnected(session *net.Socket) {
 
 	this.Lock()
+	defer this.Unlock()
 
 	this.dialing = false
 	this.session = session
 	this.session.SetSendQueueSize(maxPendingSize)
-	this.session.SetInBoundProcessor(net.NewReceiver(pb.GetNamespace("response"), compress))
-	this.session.SetEncoder(net.NewEncoder(pb.GetNamespace("request"), compress))
-	this.session.SetCloseCallBack(func(sess kendynet.StreamSession, reason error) {
+	this.session.SetInBoundProcessor(cs.NewRespInboundProcessor())
+	this.session.SetEncoder(&cs.ReqEncoder{})
+	this.session.SetCloseCallBack(func(sess *net.Socket, reason error) {
+		GetSugar().Infof("socket close %v", reason)
 		this.onDisconnected()
-	}).BeginRecv(func(s kendynet.StreamSession, msg interface{}) {
-		this.onMessage(msg.(*net.Message))
+	}).BeginRecv(func(s *net.Socket, msg interface{}) {
+		this.onMessage(msg.(*cs.RespMessage))
 	})
 
 	pendingSend := this.pendingSend
 	this.pendingSend = []*cmdContext{}
-
-	this.Unlock()
 
 	now := time.Now()
 
 	//发送被排队的请求
 	for _, v := range pendingSend {
 		//已经超时或马上就要超时的请求不发送
-		if !v.isTimeouted && v.deadline.Sub(now) > 10*time.Millisecond {
+		if v.deadline.Sub(now) > 10*time.Millisecond && nil != this.waitResp[v.req.Seqno] {
 			this.sendReq(v)
 		}
-	}
-}
-
-func (this *Conn) onTimeout(_ *timer.Timer, ctx interface{}) {
-	this.Lock()
-	c := ctx.(*cmdContext)
-	_, ok := this.waitResp[uint64(c.req.GetHead().Seqno)]
-	if ok {
-		delete(this.waitResp, uint64(c.req.GetHead().Seqno))
-	}
-	this.Unlock()
-
-	if ok {
-		c.isTimeouted = true
-		this.c.doCallBack(c.unikey, c.cb, errcode.ERR_TIMEOUT)
 	}
 }
 
@@ -98,12 +78,14 @@ func (this *Conn) onDisconnected() {
 	this.Lock()
 	this.session = nil
 	waitResp := this.waitResp
-	this.waitResp = map[uint64]*cmdContext{}
+	this.waitResp = map[int64]*cmdContext{}
 	this.Unlock()
 
-	for k, v := range waitResp {
-		this.timerMgr.CancelByIndex(k)
-		this.c.doCallBack(v.unikey, v.cb, errcode.ERR_CONNECTION)
+	for _, v := range waitResp {
+		if v.deadlineTimer.Stop() {
+			this.c.doCallBack(v.unikey, v.cb, errcode.New(errcode.Errcode_error, "lose connection"))
+			releaseCmdContext(v)
+		}
 	}
 }
 
@@ -111,14 +93,14 @@ func (this *Conn) dial() {
 	this.dialing = true
 
 	go func() {
-		c := net.NewConnector("tcp", this.addr, this.c.compress)
+		c := cs.NewConnector("tcp", this.addr)
 		for {
-			session, compress, err := c.Dial(time.Second * 5)
+			session, err := c.Dial(time.Second * 5)
 			if nil == err {
-				this.onConnected(session, compress)
+				this.onConnected(session)
 				return
 			} else {
-				logger.Errorf("dial %s error:%s", this.addr, err.Error())
+				GetSugar().Errorf("dial %s error:%s", this.addr, err.Error())
 				time.Sleep(1 * time.Second)
 			}
 		}
@@ -126,16 +108,21 @@ func (this *Conn) dial() {
 }
 
 func (this *Conn) sendReq(c *cmdContext) {
+	if nil != this.c.unikeyPlacement {
+		//如果提供了定位器，使用定位器直接计算出Store
+		c.req.Store = this.c.unikeyPlacement(c.req.UniKey)
+	}
 	this.session.Send(c.req)
 }
 
 func (this *Conn) exec(c *cmdContext) {
-	errCode := errcode.ERR_OK
+	var errCode errcode.Error
 	this.Lock()
 	defer func() {
 		this.Unlock()
-		if errCode != errcode.ERR_OK {
+		if errCode != nil {
 			this.c.doCallBack(c.unikey, c.cb, errCode)
+			releaseCmdContext(c)
 		}
 	}()
 	c.deadline = time.Now().Add(time.Duration(ClientTimeout) * time.Millisecond)
@@ -145,19 +132,15 @@ func (this *Conn) exec(c *cmdContext) {
 
 	if this.dialing {
 		if len(this.pendingSend) < maxPendingSize {
-			this.waitResp[uint64(c.req.GetHead().Seqno)] = c
-			this.timerMgr.OnceWithIndex(time.Duration(ClientTimeout)*time.Millisecond, func(t *timer.Timer, ctx interface{}) {
-				this.onTimeout(t, ctx)
-			}, c, uint64(c.req.GetHead().Seqno))
+			this.waitResp[c.req.Seqno] = c
+			c.deadlineTimer = time.AfterFunc(time.Duration(ClientTimeout)*time.Millisecond, c.onTimeout)
 			this.pendingSend = append(this.pendingSend, c)
 		} else {
-			errCode = errcode.ERR_BUSY
+			errCode = errcode.New(errcode.Errcode_retry, "busy please retry later")
 		}
 	} else {
-		this.waitResp[uint64(c.req.GetHead().Seqno)] = c
-		this.timerMgr.OnceWithIndex(time.Duration(ClientTimeout)*time.Millisecond, func(t *timer.Timer, ctx interface{}) {
-			this.onTimeout(t, ctx)
-		}, c, uint64(c.req.GetHead().Seqno))
+		this.waitResp[c.req.Seqno] = c
+		c.deadlineTimer = time.AfterFunc(time.Duration(ClientTimeout)*time.Millisecond, c.onTimeout)
 		this.sendReq(c)
 	}
 }

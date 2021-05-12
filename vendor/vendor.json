@@ -83,18 +83,6 @@
 			"revisionTime": "2019-01-09T07:22:47Z"
 		},
 		{
-			"checksumSHA1": "h1d2lPZf6j2dW/mIqVnd1RdykDo=",
-			"path": "github.com/golang/snappy",
-			"revision": "2e65f85255dbc3072edf28d6b5b8efc472979f5a",
-			"revisionTime": "2018-05-18T05:39:59Z"
-		},
-		{
-			"checksumSHA1": "EFilcRi6b0Bf3nckKo3UbeqoW50=",
-			"path": "github.com/gorilla/websocket",
-			"revision": "95ba29eb981bbb27d92e1f70bf8a1949452d926b",
-			"revisionTime": "2018-12-06T07:02:39Z"
-		},
-		{
 			"checksumSHA1": "vFb/tA6zAeUX1rCRmp3a1BNCmXU=",
 			"path": "github.com/jmoiron/sqlx",
 			"revision": "38398a30ed8516ffda617a04c822de09df8a3ec5",
@@ -206,136 +194,16 @@
 			"revisionTime": "2019-06-04T15:29:10Z"
 		},
 		{
-			"checksumSHA1": "rqif4+dkcTwQfuuJI5/bH3b9mzY=",
+			"checksumSHA1": "VPIm+txaL5WWKnPOcvqhSYRqPec=",
 			"path": "github.com/sniperHW/goaio",
-			"revision": "f3db0a5810f21a604950e0e981988a2492092966",
-			"revisionTime": "2021-02-23T09:48:36Z"
-		},
-		{
-			"checksumSHA1": "gU9Ne54IA21TUxSMsApsLbr/b00=",
-			"path": "github.com/sniperHW/kendynet",
-			"revision": "f44fb1d5210b423413227192cbc81827425752d3",
-			"revisionTime": "2021-03-02T06:43:40Z"
-		},
-		{
-			"checksumSHA1": "TEyKcIz/miyVDvhXdq8KwvUJsRE=",
-			"path": "github.com/sniperHW/kendynet/event",
-			"revision": "f44fb1d5210b423413227192cbc81827425752d3",
-			"revisionTime": "2021-03-02T06:43:40Z"
-		},
-		{
-			"checksumSHA1": "oQNYrES0b6/fRuKy0DCh0l2S8AA=",
-			"path": "github.com/sniperHW/kendynet/golog",
-			"revision": "f44fb1d5210b423413227192cbc81827425752d3",
-			"revisionTime": "2021-03-02T06:43:40Z"
-		},
-		{
-			"checksumSHA1": "iEa8RYzu0AIqLDWGITjdLkBXNng=",
-			"path": "github.com/sniperHW/kendynet/message",
-			"revision": "cd72e73f87df77c9e42d2647db2a8c887733ddcc",
-			"revisionTime": "2021-01-12T02:34:20Z"
-		},
-		{
-			"checksumSHA1": "leT5UPFd4gqLLaXW3o4g9pBM/bE=",
-			"path": "github.com/sniperHW/kendynet/socket",
-			"revision": "a50cb8dcd0015f60ea0488d15e5602faab785933",
-			"revisionTime": "2021-02-23T09:36:48Z"
-		},
-		{
-			"checksumSHA1": "Q4nYrHzs0yKz5Osb9NHKtj38e3c=",
-			"path": "github.com/sniperHW/kendynet/socket/aio",
-			"revision": "a50cb8dcd0015f60ea0488d15e5602faab785933",
-			"revisionTime": "2021-02-23T09:36:48Z"
-		},
-		{
-			"checksumSHA1": "Zg2f2hBP1KfvPf9gthFYBuXDlSM=",
-			"path": "github.com/sniperHW/kendynet/timer",
-			"revision": "f44fb1d5210b423413227192cbc81827425752d3",
-			"revisionTime": "2021-03-02T06:43:40Z"
-		},
-		{
-			"checksumSHA1": "MOhMUWnmxeoSzLV5pqpWNIgwV+M=",
-			"path": "github.com/sniperHW/kendynet/util",
-			"revision": "f44fb1d5210b423413227192cbc81827425752d3",
-			"revisionTime": "2021-03-02T06:43:40Z"
+			"revision": "07ec9a2332a8fd1de93f38f4c9577216019c3a01",
+			"revisionTime": "2021-05-11T07:23:32Z"
 		},
 		{
 			"checksumSHA1": "uqTJVsJ/tb7FA5JpHtwlAF0ELCk=",
 			"path": "github.com/stretchr/testify/assert",
 			"revision": "b7d60e3a8c98f214225821e939174e8cf76d51ef",
 			"revisionTime": "2020-02-05T20:43:46Z"
-		},
-		{
-			"checksumSHA1": "FavASzhzj5uawgAyMG+00Vcx0po=",
-			"path": "github.com/syndtr/goleveldb/leveldb",
-			"revision": "02440ea7a28525b3079783ad9c27083994a42366",
-			"revisionTime": "2019-06-25T01:02:20Z"
-		},
-		{
-			"checksumSHA1": "mPNraL2edpk/2FYq26rSXfMHbJg=",
-			"path": "github.com/syndtr/goleveldb/leveldb/cache",
-			"revision": "02440ea7a28525b3079783ad9c27083994a42366",
-			"revisionTime": "2019-06-25T01:02:20Z"
-		},
-		{
-			"checksumSHA1": "UA+PKDKWlDnE2OZblh23W6wZwbY=",
-			"path": "github.com/syndtr/goleveldb/leveldb/comparer",
-			"revision": "02440ea7a28525b3079783ad9c27083994a42366",
-			"revisionTime": "2019-06-25T01:02:20Z"
-		},
-		{
-			"checksumSHA1": "1DRAxdlWzS4U0xKN/yQ/fdNN7f0=",
-			"path": "github.com/syndtr/goleveldb/leveldb/errors",
-			"revision": "02440ea7a28525b3079783ad9c27083994a42366",
-			"revisionTime": "2019-06-25T01:02:20Z"
-		},
-		{
-			"checksumSHA1": "iBorxU3FBbau81WSyVa8KwcutzA=",
-			"path": "github.com/syndtr/goleveldb/leveldb/filter",
-			"revision": "02440ea7a28525b3079783ad9c27083994a42366",
-			"revisionTime": "2019-06-25T01:02:20Z"
-		},
-		{
-			"checksumSHA1": "hPyFsMiqZ1OB7MX+6wIAA6nsdtc=",
-			"path": "github.com/syndtr/goleveldb/leveldb/iterator",
-			"revision": "02440ea7a28525b3079783ad9c27083994a42366",
-			"revisionTime": "2019-06-25T01:02:20Z"
-		},
-		{
-			"checksumSHA1": "gJY7bRpELtO0PJpZXgPQ2BYFJ88=",
-			"path": "github.com/syndtr/goleveldb/leveldb/journal",
-			"revision": "02440ea7a28525b3079783ad9c27083994a42366",
-			"revisionTime": "2019-06-25T01:02:20Z"
-		},
-		{
-			"checksumSHA1": "2ncG38FDk2thSlrHd7JFmiuvnxA=",
-			"path": "github.com/syndtr/goleveldb/leveldb/memdb",
-			"revision": "02440ea7a28525b3079783ad9c27083994a42366",
-			"revisionTime": "2019-06-25T01:02:20Z"
-		},
-		{
-			"checksumSHA1": "o2TorI3z+vc+EBMJ8XeFoUmXBtU=",
-			"path": "github.com/syndtr/goleveldb/leveldb/opt",
-			"revision": "02440ea7a28525b3079783ad9c27083994a42366",
-			"revisionTime": "2019-06-25T01:02:20Z"
-		},
-		{
-			"checksumSHA1": "ZnyuciM+R19NG8L5YS3TIJdo1e8=",
-			"path": "github.com/syndtr/goleveldb/leveldb/storage",
-			"revision": "02440ea7a28525b3079783ad9c27083994a42366",
-			"revisionTime": "2019-06-25T01:02:20Z"
-		},
-		{
-			"checksumSHA1": "DS0i9KReIeZn3T1Bpu31xPMtzio=",
-			"path": "github.com/syndtr/goleveldb/leveldb/table",
-			"revision": "02440ea7a28525b3079783ad9c27083994a42366",
-			"revisionTime": "2019-06-25T01:02:20Z"
-		},
-		{
-			"checksumSHA1": "V/Dh7NV0/fy/5jX1KaAjmGcNbzI=",
-			"path": "github.com/syndtr/goleveldb/leveldb/util",
-			"revision": "02440ea7a28525b3079783ad9c27083994a42366",
-			"revisionTime": "2019-06-25T01:02:20Z"
 		},
 		{
 			"checksumSHA1": "gMbe/Kh0udVDg6r2cDUvtlT1n9U=",
@@ -539,11 +407,17 @@
 			"revisionTime": "2019-08-24T19:27:53Z"
 		},
 		{
+			"checksumSHA1": "TM3Neoy1xRAKyZYMGzKc41sDFW4=",
+			"path": "gopkg.in/natefinch/lumberjack.v2",
+			"revision": "a96e63847dc3c67d17befa69c303767e2f84e54f",
+			"revisionTime": "2017-05-31T16:03:50Z"
+		},
+		{
 			"checksumSHA1": "mspriBK28mrdRiQNHoThnYEFaeQ=",
 			"path": "gopkg.in/yaml.v2",
 			"revision": "1f64d6156d11335c3f22d9330b0ad14fc1e789ce",
 			"revisionTime": "2019-11-19T21:27:36Z"
 		}
 	],
-	"rootPath": "github.com/sniperHW/flyfish"
+	"rootPath": "github.com/sniperHW/fly"
 }

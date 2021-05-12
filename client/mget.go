@@ -1,13 +1,8 @@
 package client
 
-import (
-	"github.com/sniperHW/kendynet/event"
-	"github.com/sniperHW/kendynet/util"
-)
-
 type MGetCmd struct {
 	priority      int
-	callbackQueue *event.EventQueue
+	callbackQueue EventQueueI
 	cmds          []*SliceCmd
 }
 
@@ -17,7 +12,7 @@ func MGet(cmds ...*SliceCmd) *MGetCmd {
 	}
 }
 
-func MGetWithEventQueue(priority int, callbackQueue *event.EventQueue, cmds ...*SliceCmd) *MGetCmd {
+func MGetWithEventQueue(priority int, callbackQueue EventQueueI, cmds ...*SliceCmd) *MGetCmd {
 	return &MGetCmd{
 		callbackQueue: callbackQueue,
 		cmds:          cmds,
@@ -29,7 +24,7 @@ func (this *MGetCmd) doCallBack(sync bool, cb func([]*SliceResult), rets []*Slic
 	if !sync && nil != this.callbackQueue {
 		this.callbackQueue.Post(this.priority, cb, rets)
 	} else {
-		defer util.Recover(logger)
+		defer Recover()
 		cb(rets)
 	}
 }
@@ -59,7 +54,7 @@ func (this *MGetCmd) asyncExec(sync bool, cb func([]*SliceResult)) {
 			case <-die:
 			case retChan <- func() bool {
 				for k, v := range this.cmds {
-					if v.req.GetHead().UniKey == ret.unikey {
+					if v.req.UniKey == ret.unikey {
 						results[k] = ret
 						respCount++
 					}

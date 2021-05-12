@@ -1,61 +1,53 @@
 package errcode
 
 const (
-	ERR_OK = int32(iota)
-	ERR_RETRY
-	ERR_BUSY
-	ERR_VERSION_MISMATCH
-	ERR_RECORD_EXIST //key已经存在
-	ERR_TIMEOUT
-	ERR_SERVER_STOPED
-	ERR_SQLERROR
-	ERR_NOT_LEADER
-	ERR_RAFT
-	ERR_SEND_FAILED
-	ERR_RECORD_NOTEXIST
-	ERR_MISSING_FIELDS //缺少字段
-	ERR_MISSING_TABLE  //没有指定表
-	ERR_MISSING_KEY    //没有指定key
-	ERR_INVAILD_TABLE  //非法表
-	ERR_INVAILD_FIELD  //非法字段
-	ERR_CAS_NOT_EQUAL
-	ERR_PROPOSAL_DROPPED
-	ERR_CONNECTION
-	ERR_OTHER
-	ERR_RECORD_UNCHANGE
-	ERR_END
+	Errcode_version_mismatch = int16(iota + 1)
+	Errcode_record_exist
+	Errcode_record_notexist
+	Errcode_record_unchange
+	Errcode_cas_not_equal
+	Errcode_timeout
+	Errcode_retry
+	Errcode_error
 )
 
-var err_str []string = []string{
-	"OK",
-	"RETRY",
-	"BUSY",
-	"VERSION_MISMATCH",
-	"RECORD_EXIST",
-	"TIMEOUT",
-	"SERVER_STOPED",
-	"SQLERROR",
-	"NOT_LEADER",
-	"RAFT",
-	"SEND_FAILED",
-	"RECORD_NOTEXIST",
-	"MISSING_FIELDS",
-	"MISSING_TABLE",
-	"MISSING_KEY",
-	"INVAILD_TABLE",
-	"INVAILD_FIELD",
-	"CAS_NOT_EQUAL",
-	"PROPOSAL_DROPPED",
-	"CONNECTION",
-	"OTHER",
-	"RECORD_UNCHANGE",
+type Error *error
+
+type error struct {
+	Code int16
+	Desc string
 }
 
-func GetErrorStr(code int32) string {
-
-	if code >= 0 && code < ERR_END {
-		return err_str[code]
+func GetErrorDesc(e Error) string {
+	if nil == e {
+		return "no error"
 	} else {
-		return "invaild errcode"
+		switch e.Code {
+		case Errcode_version_mismatch:
+			return "version mismatch"
+		case Errcode_record_exist:
+			return "record is exist already"
+		case Errcode_record_notexist:
+			return "record is not exist"
+		case Errcode_record_unchange:
+			return "record is unchange"
+		case Errcode_cas_not_equal:
+			return "cas old value is not equal"
+		case Errcode_retry:
+			if "" == e.Desc {
+				return "please retry later"
+			} else {
+				return e.Desc
+			}
+		default:
+			return e.Desc
+		}
+	}
+}
+
+func New(code int16, desc string) Error {
+	return &error{
+		Code: code,
+		Desc: desc,
 	}
 }

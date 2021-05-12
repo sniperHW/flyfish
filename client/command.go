@@ -3,8 +3,9 @@ package client
 import (
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/net"
+	"github.com/sniperHW/flyfish/net/cs"
 	protocol "github.com/sniperHW/flyfish/proto"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -35,29 +36,58 @@ func (this *Field) GetValue() interface{} {
 	return (*protocol.Field)(this).GetValue()
 }
 
+var cmdContextPool = sync.Pool{
+	New: func() interface{} {
+		return &cmdContext{}
+	},
+}
+
+func getCmdContext() *cmdContext {
+	return cmdContextPool.Get().(*cmdContext)
+}
+
+func releaseCmdContext(c *cmdContext) {
+	cmdContextPool.Put(c)
+}
+
 type cmdContext struct {
-	unikey      string
-	deadline    time.Time
-	isTimeouted bool
-	cb          callback
-	req         *net.Message
+	unikey        string
+	deadline      time.Time
+	deadlineTimer *time.Timer
+	cb            callback
+	req           *cs.ReqMessage
+	conn          *Conn
+}
+
+func (this *cmdContext) onTimeout() {
+	this.conn.Lock()
+	_, ok := this.conn.waitResp[this.req.Seqno]
+	if ok {
+		delete(this.conn.waitResp, this.req.Seqno)
+	}
+	this.conn.Unlock()
+
+	if ok {
+		this.conn.c.doCallBack(this.unikey, this.cb, errcode.New(errcode.Errcode_timeout, "timeout"))
+		releaseCmdContext(this)
+	}
 }
 
 type StatusCmd struct {
 	conn *Conn
-	req  *net.Message
+	req  *cs.ReqMessage
 }
 
 func (this *StatusCmd) asyncExec(syncFlag bool, cb func(*StatusResult)) {
-	context := &cmdContext{
-		cb: callback{
-			tt:   cb_status,
-			cb:   cb,
-			sync: syncFlag,
-		},
-		unikey: this.req.GetHead().UniKey,
-		req:    this.req,
+	context := getCmdContext()
+	context.cb = callback{
+		tt:   cb_status,
+		cb:   cb,
+		sync: syncFlag,
 	}
+	context.unikey = this.req.UniKey
+	context.req = this.req
+	context.conn = this.conn
 	this.conn.exec(context)
 }
 
@@ -75,19 +105,19 @@ func (this *StatusCmd) Exec() *StatusResult {
 
 type SliceCmd struct {
 	conn *Conn
-	req  *net.Message
+	req  *cs.ReqMessage
 }
 
 func (this *SliceCmd) asyncExec(syncFlag bool, cb func(*SliceResult)) {
-	context := &cmdContext{
-		cb: callback{
-			tt:   cb_slice,
-			cb:   cb,
-			sync: syncFlag,
-		},
-		unikey: this.req.GetHead().UniKey,
-		req:    this.req,
+	context := getCmdContext()
+	context.cb = callback{
+		tt:   cb_slice,
+		cb:   cb,
+		sync: syncFlag,
 	}
+	context.unikey = this.req.UniKey
+	context.req = this.req
+	context.conn = this.conn
 	this.conn.exec(context)
 }
 
@@ -109,15 +139,16 @@ func (this *Conn) Get(table, key string, version *int64, fields ...string) *Slic
 		return nil
 	}
 
-	req := net.NewMessage(net.CommonHead{
+	req := &cs.ReqMessage{
 		Seqno:   atomic.AddInt64(&seqno, 1),
 		UniKey:  table + ":" + key,
 		Timeout: ClientTimeout,
-	}, &protocol.GetReq{
-		Version: version,
-		Fields:  fields,
-		All:     false,
-	})
+		Data: &protocol.GetReq{
+			Version: version,
+			Fields:  fields,
+			All:     false,
+		},
+	}
 
 	return &SliceCmd{
 		conn: this,
@@ -127,14 +158,15 @@ func (this *Conn) Get(table, key string, version *int64, fields ...string) *Slic
 
 func (this *Conn) GetAll(table, key string, version *int64) *SliceCmd {
 
-	req := net.NewMessage(net.CommonHead{
+	req := &cs.ReqMessage{
 		Seqno:   atomic.AddInt64(&seqno, 1),
 		UniKey:  table + ":" + key,
 		Timeout: ClientTimeout,
-	}, &protocol.GetReq{
-		Version: version,
-		All:     true,
-	})
+		Data: &protocol.GetReq{
+			Version: version,
+			All:     true,
+		},
+	}
 
 	return &SliceCmd{
 		conn: this,
@@ -159,11 +191,11 @@ func (this *Conn) Set(table, key string, fields map[string]interface{}, version 
 		pbdata.Fields = append(pbdata.Fields, protocol.PackField(k, v))
 	}
 
-	req := net.NewMessage(net.CommonHead{
+	req := &cs.ReqMessage{
 		Seqno:   atomic.AddInt64(&seqno, 1),
 		UniKey:  table + ":" + key,
 		Timeout: ClientTimeout,
-	}, pbdata)
+		Data:    pbdata}
 
 	return &StatusCmd{
 		conn: this,
@@ -183,11 +215,11 @@ func (this *Conn) SetNx(table, key string, fields map[string]interface{}) *Slice
 		pbdata.Fields = append(pbdata.Fields, protocol.PackField(k, v))
 	}
 
-	req := net.NewMessage(net.CommonHead{
+	req := &cs.ReqMessage{
 		Seqno:   atomic.AddInt64(&seqno, 1),
 		UniKey:  table + ":" + key,
 		Timeout: ClientTimeout,
-	}, pbdata)
+		Data:    pbdata}
 
 	return &SliceCmd{
 		conn: this,
@@ -211,11 +243,11 @@ func (this *Conn) CompareAndSet(table, key, field string, oldV, newV interface{}
 		pbdata.Version = proto.Int64(version[0])
 	}
 
-	req := net.NewMessage(net.CommonHead{
+	req := &cs.ReqMessage{
 		Seqno:   atomic.AddInt64(&seqno, 1),
 		UniKey:  table + ":" + key,
 		Timeout: ClientTimeout,
-	}, pbdata)
+		Data:    pbdata}
 
 	return &SliceCmd{
 		conn: this,
@@ -238,11 +270,11 @@ func (this *Conn) CompareAndSetNx(table, key, field string, oldV, newV interface
 		pbdata.Version = proto.Int64(version[0])
 	}
 
-	req := net.NewMessage(net.CommonHead{
+	req := &cs.ReqMessage{
 		Seqno:   atomic.AddInt64(&seqno, 1),
 		UniKey:  table + ":" + key,
 		Timeout: ClientTimeout,
-	}, pbdata)
+		Data:    pbdata}
 
 	return &SliceCmd{
 		conn: this,
@@ -258,11 +290,11 @@ func (this *Conn) Del(table, key string, version ...int64) *StatusCmd {
 		pbdata.Version = proto.Int64(version[0])
 	}
 
-	req := net.NewMessage(net.CommonHead{
+	req := &cs.ReqMessage{
 		Seqno:   atomic.AddInt64(&seqno, 1),
 		UniKey:  table + ":" + key,
 		Timeout: ClientTimeout,
-	}, pbdata)
+		Data:    pbdata}
 
 	return &StatusCmd{
 		conn: this,
@@ -280,11 +312,11 @@ func (this *Conn) IncrBy(table, key, field string, value int64, version ...int64
 		pbdata.Version = proto.Int64(version[0])
 	}
 
-	req := net.NewMessage(net.CommonHead{
+	req := &cs.ReqMessage{
 		Seqno:   atomic.AddInt64(&seqno, 1),
 		UniKey:  table + ":" + key,
 		Timeout: ClientTimeout,
-	}, pbdata)
+		Data:    pbdata}
 
 	return &SliceCmd{
 		conn: this,
@@ -301,11 +333,11 @@ func (this *Conn) DecrBy(table, key, field string, value int64, version ...int64
 		pbdata.Version = proto.Int64(version[0])
 	}
 
-	req := net.NewMessage(net.CommonHead{
+	req := &cs.ReqMessage{
 		Seqno:   atomic.AddInt64(&seqno, 1),
 		UniKey:  table + ":" + key,
 		Timeout: ClientTimeout,
-	}, pbdata)
+		Data:    pbdata}
 
 	return &SliceCmd{
 		conn: this,
@@ -316,11 +348,11 @@ func (this *Conn) DecrBy(table, key, field string, value int64, version ...int64
 func (this *Conn) Kick(table, key string) *StatusCmd {
 	pbdata := &protocol.KickReq{}
 
-	req := net.NewMessage(net.CommonHead{
+	req := &cs.ReqMessage{
 		Seqno:   atomic.AddInt64(&seqno, 1),
 		UniKey:  table + ":" + key,
 		Timeout: ClientTimeout,
-	}, pbdata)
+		Data:    pbdata}
 
 	return &StatusCmd{
 		conn: this,
@@ -331,9 +363,9 @@ func (this *Conn) Kick(table, key string) *StatusCmd {
 func (this *Conn) ReloadTableConf() *StatusCmd {
 	pbdata := &protocol.ReloadTableConfReq{}
 
-	req := net.NewMessage(net.CommonHead{
+	req := &cs.ReqMessage{
 		Seqno: atomic.AddInt64(&seqno, 1),
-	}, pbdata)
+		Data:  pbdata}
 
 	return &StatusCmd{
 		conn: this,
@@ -341,14 +373,14 @@ func (this *Conn) ReloadTableConf() *StatusCmd {
 	}
 }
 
-func (this *Conn) onGetResp(c *cmdContext, errCode int32, resp *protocol.GetResp) {
+func (this *Conn) onGetResp(c *cmdContext, errCode errcode.Error, resp *protocol.GetResp) {
 
 	ret := SliceResult{
 		ErrCode: errCode,
 		Version: resp.GetVersion(),
 	}
 
-	if ret.ErrCode == errcode.ERR_OK {
+	if ret.ErrCode == nil {
 		ret.Fields = map[string]*Field{}
 		for _, v := range resp.Fields {
 			ret.Fields[v.GetName()] = (*Field)(v)
@@ -359,7 +391,7 @@ func (this *Conn) onGetResp(c *cmdContext, errCode int32, resp *protocol.GetResp
 
 }
 
-func (this *Conn) onSetResp(c *cmdContext, errCode int32, resp *protocol.SetResp) {
+func (this *Conn) onSetResp(c *cmdContext, errCode errcode.Error, resp *protocol.SetResp) {
 	ret := StatusResult{
 		ErrCode: errCode,
 		Version: resp.GetVersion(),
@@ -367,14 +399,14 @@ func (this *Conn) onSetResp(c *cmdContext, errCode int32, resp *protocol.SetResp
 	this.c.doCallBack(c.unikey, c.cb, &ret)
 }
 
-func (this *Conn) onSetNxResp(c *cmdContext, errCode int32, resp *protocol.SetNxResp) {
+func (this *Conn) onSetNxResp(c *cmdContext, errCode errcode.Error, resp *protocol.SetNxResp) {
 
 	ret := SliceResult{
 		ErrCode: errCode,
 		Version: resp.GetVersion(),
 	}
 
-	if ret.ErrCode == errcode.ERR_RECORD_EXIST {
+	if nil != ret.ErrCode && ret.ErrCode.Code == errcode.Errcode_record_exist {
 		ret.Fields = map[string]*Field{}
 		for _, v := range resp.Fields {
 			ret.Fields[v.GetName()] = (*Field)(v)
@@ -385,14 +417,14 @@ func (this *Conn) onSetNxResp(c *cmdContext, errCode int32, resp *protocol.SetNx
 
 }
 
-func (this *Conn) onCompareAndSetResp(c *cmdContext, errCode int32, resp *protocol.CompareAndSetResp) {
+func (this *Conn) onCompareAndSetResp(c *cmdContext, errCode errcode.Error, resp *protocol.CompareAndSetResp) {
 
 	ret := SliceResult{
 		ErrCode: errCode,
 		Version: resp.GetVersion(),
 	}
 
-	if ret.ErrCode == errcode.ERR_OK || ret.ErrCode == errcode.ERR_CAS_NOT_EQUAL {
+	if ret.ErrCode == nil || ret.ErrCode.Code == errcode.Errcode_cas_not_equal {
 		ret.Fields = map[string]*Field{}
 		ret.Fields[resp.GetValue().GetName()] = (*Field)(resp.GetValue())
 	}
@@ -401,14 +433,14 @@ func (this *Conn) onCompareAndSetResp(c *cmdContext, errCode int32, resp *protoc
 
 }
 
-func (this *Conn) onCompareAndSetNxResp(c *cmdContext, errCode int32, resp *protocol.CompareAndSetNxResp) {
+func (this *Conn) onCompareAndSetNxResp(c *cmdContext, errCode errcode.Error, resp *protocol.CompareAndSetNxResp) {
 
 	ret := SliceResult{
 		ErrCode: errCode,
 		Version: resp.GetVersion(),
 	}
 
-	if ret.ErrCode == errcode.ERR_OK || ret.ErrCode == errcode.ERR_CAS_NOT_EQUAL {
+	if ret.ErrCode == nil || ret.ErrCode.Code == errcode.Errcode_cas_not_equal {
 		ret.Fields = map[string]*Field{}
 		ret.Fields[resp.GetValue().GetName()] = (*Field)(resp.GetValue())
 	}
@@ -417,7 +449,7 @@ func (this *Conn) onCompareAndSetNxResp(c *cmdContext, errCode int32, resp *prot
 
 }
 
-func (this *Conn) onDelResp(c *cmdContext, errCode int32, resp *protocol.DelResp) {
+func (this *Conn) onDelResp(c *cmdContext, errCode errcode.Error, resp *protocol.DelResp) {
 
 	ret := StatusResult{
 		ErrCode: errCode,
@@ -428,14 +460,14 @@ func (this *Conn) onDelResp(c *cmdContext, errCode int32, resp *protocol.DelResp
 
 }
 
-func (this *Conn) onIncrByResp(c *cmdContext, errCode int32, resp *protocol.IncrByResp) {
+func (this *Conn) onIncrByResp(c *cmdContext, errCode errcode.Error, resp *protocol.IncrByResp) {
 
 	ret := SliceResult{
 		ErrCode: errCode,
 		Version: resp.GetVersion(),
 	}
 
-	if ret.ErrCode == errcode.ERR_OK {
+	if ret.ErrCode == nil {
 		ret.Fields = map[string]*Field{}
 		ret.Fields[resp.GetField().GetName()] = (*Field)(resp.GetField())
 	}
@@ -443,14 +475,14 @@ func (this *Conn) onIncrByResp(c *cmdContext, errCode int32, resp *protocol.Incr
 	this.c.doCallBack(c.unikey, c.cb, &ret)
 }
 
-func (this *Conn) onDecrByResp(c *cmdContext, errCode int32, resp *protocol.DecrByResp) {
+func (this *Conn) onDecrByResp(c *cmdContext, errCode errcode.Error, resp *protocol.DecrByResp) {
 
 	ret := SliceResult{
 		ErrCode: errCode,
 		Version: resp.GetVersion(),
 	}
 
-	if ret.ErrCode == errcode.ERR_OK {
+	if ret.ErrCode == nil {
 		ret.Fields = map[string]*Field{}
 		ret.Fields[resp.GetField().GetName()] = (*Field)(resp.GetField())
 	}
@@ -459,7 +491,7 @@ func (this *Conn) onDecrByResp(c *cmdContext, errCode int32, resp *protocol.Decr
 
 }
 
-func (this *Conn) onKickResp(c *cmdContext, errCode int32, resp *protocol.KickResp) {
+func (this *Conn) onKickResp(c *cmdContext, errCode errcode.Error, resp *protocol.KickResp) {
 
 	ret := StatusResult{
 		ErrCode: errCode,
@@ -469,7 +501,7 @@ func (this *Conn) onKickResp(c *cmdContext, errCode int32, resp *protocol.KickRe
 
 }
 
-func (this *Conn) onReloadTableConfResp(c *cmdContext, errCode int32, resp *protocol.ReloadTableConfResp) {
+func (this *Conn) onReloadTableConfResp(c *cmdContext, errCode errcode.Error, resp *protocol.ReloadTableConfResp) {
 	ret := StatusResult{
 		ErrCode: errCode,
 		ErrStr:  resp.Err,
@@ -477,39 +509,42 @@ func (this *Conn) onReloadTableConfResp(c *cmdContext, errCode int32, resp *prot
 	this.c.doCallBack(c.unikey, c.cb, &ret)
 }
 
-func (this *Conn) onMessage(msg *net.Message) {
-	head := msg.GetHead()
-	cmd := protocol.CmdType(msg.GetCmd())
+func (this *Conn) onMessage(msg *cs.RespMessage) {
+	cmd := protocol.CmdType(msg.Cmd)
 	if cmd != protocol.CmdType_Ping {
 		this.Lock()
-		delete(this.waitResp, uint64(head.Seqno))
-		ok, ctx := this.timerMgr.CancelByIndex(uint64(head.Seqno))
+		ctx, ok := this.waitResp[msg.Seqno]
+		if ok {
+			if ok = ctx.deadlineTimer.Stop(); ok {
+				delete(this.waitResp, msg.Seqno)
+			}
+		}
 		this.Unlock()
 		if ok {
-			c := ctx.(*cmdContext)
 			switch cmd {
 			case protocol.CmdType_Get:
-				this.onGetResp(c, head.ErrCode, msg.GetData().(*protocol.GetResp))
+				this.onGetResp(ctx, msg.Err, msg.Data.(*protocol.GetResp))
 			case protocol.CmdType_Set:
-				this.onSetResp(c, head.ErrCode, msg.GetData().(*protocol.SetResp))
+				this.onSetResp(ctx, msg.Err, msg.Data.(*protocol.SetResp))
 			case protocol.CmdType_SetNx:
-				this.onSetNxResp(c, head.ErrCode, msg.GetData().(*protocol.SetNxResp))
+				this.onSetNxResp(ctx, msg.Err, msg.Data.(*protocol.SetNxResp))
 			case protocol.CmdType_CompareAndSet:
-				this.onCompareAndSetResp(c, head.ErrCode, msg.GetData().(*protocol.CompareAndSetResp))
+				this.onCompareAndSetResp(ctx, msg.Err, msg.Data.(*protocol.CompareAndSetResp))
 			case protocol.CmdType_CompareAndSetNx:
-				this.onCompareAndSetNxResp(c, head.ErrCode, msg.GetData().(*protocol.CompareAndSetNxResp))
+				this.onCompareAndSetNxResp(ctx, msg.Err, msg.Data.(*protocol.CompareAndSetNxResp))
 			case protocol.CmdType_Del:
-				this.onDelResp(c, head.ErrCode, msg.GetData().(*protocol.DelResp))
+				this.onDelResp(ctx, msg.Err, msg.Data.(*protocol.DelResp))
 			case protocol.CmdType_IncrBy:
-				this.onIncrByResp(c, head.ErrCode, msg.GetData().(*protocol.IncrByResp))
+				this.onIncrByResp(ctx, msg.Err, msg.Data.(*protocol.IncrByResp))
 			case protocol.CmdType_DecrBy:
-				this.onDecrByResp(c, head.ErrCode, msg.GetData().(*protocol.DecrByResp))
+				this.onDecrByResp(ctx, msg.Err, msg.Data.(*protocol.DecrByResp))
 			case protocol.CmdType_Kick:
-				this.onKickResp(c, head.ErrCode, msg.GetData().(*protocol.KickResp))
+				this.onKickResp(ctx, msg.Err, msg.Data.(*protocol.KickResp))
 			case protocol.CmdType_ReloadTableConf:
-				this.onReloadTableConfResp(c, head.ErrCode, msg.GetData().(*protocol.ReloadTableConfResp))
+				this.onReloadTableConfResp(ctx, msg.Err, msg.Data.(*protocol.ReloadTableConfResp))
 			default:
 			}
+			releaseCmdContext(ctx)
 		}
 	}
 }

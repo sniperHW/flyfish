@@ -1,0 +1,176 @@
+syntax = "proto2";
+package proto;
+
+import "gogoproto/gogo.proto";
+
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+option (gogoproto.unmarshaler_all) = true;
+option (gogoproto.goproto_getters_all) = true;
+option (gogoproto.goproto_enum_prefix_all) = true;
+
+enum KvnodeStoreTransType {
+	TransAddStore = 1;
+	TransRemStore = 2;
+}
+
+enum CmdType {
+  
+  //kvnode <-> pd 消息
+
+  KvnodeBoot                    = 10;                   //kvnode冷启登录  
+  KvnodeBootResp                = 11;
+
+  NotifyKvnodeStoreTrans        = 12;
+  NotifyKvnodeStoreTransResp    = 13;
+
+  SlotTransferPrepare           = 14;
+  SlotTransferPrepareAck        = 15;
+  SlotTransferCancel            = 16;
+  SlotTransferCommit            = 17;
+  
+  //控制消息
+  AddKvnode                     = 20;                   //添加kvnode
+  AddKvnodeResp                 = 21;
+  RemKvnode                     = 22;                   //移除kvnode
+  RemKvnodeResp                 = 23; 
+  AddStore                      = 24;                   //添加store
+  AddStoreResp                  = 25;
+  RemStore                      = 26;                   //移除store
+  RemStoreResp                  = 27;
+  KvnodeAddStore                = 28;                   //向kvnode添加一个store
+  KvnodeAddStoreResp            = 29;
+  KvnodeRemStore                = 30;                   //从kvnode中移除store
+  KvnodeRemStoreResp            = 31;               
+           
+}
+
+message kvnodeBoot {
+	optional int32  nodeID   = 1;
+}
+
+message storeInfo {
+	optional int32  id          = 1;
+	optional string raftCluster = 2;
+	optional bytes  slots       = 3;
+}
+
+message kvnodeBootResp {
+	optional bool   ok          = 1;
+	optional string reason      = 2;
+	optional string service     = 3;   //kvnode服务地址
+	optional string udpService  = 4;   //与pd通信的udp地址
+	optional string raftService = 5;
+	repeated storeInfo stores   = 6;
+}
+
+message notifyKvnodeStoreTrans {
+	optional int64 transID                  = 1;
+	optional KvnodeStoreTransType transType = 2;
+	optional int32 nodeId                   = 3;
+	optional int32 storeId                  = 4;
+}
+
+message notifyKvnodeStoreTransResp {
+	optional int64 transID                  = 1;
+	optional int32 nodeId                   = 2;
+	optional int32 isLeader                 = 3;
+}
+
+
+message addKvnode {
+	optional int64  seqno       = 1;
+	optional int32  nodeId      = 2;
+	optional string service     = 3;       //kvnode服务地址
+	optional string udpService  = 4;       //与pd通信的udp地址
+	optional string raftService = 5;
+}
+
+message addKvnodeResp {
+	optional int64  seqno       = 1;
+	optional bool   ok          = 2;
+	optional string reason      = 3;	
+}
+
+message remKvnode {
+	optional int64  seqno       = 1;
+	optional int32  nodeId      = 2;
+}
+
+message remKvnodeResp {
+	optional int64  seqno       = 1;
+	optional bool   ok          = 2;
+	optional string reason      = 3;
+}
+
+message addStore {
+	optional int64  seqno       = 1;
+	optional int32  id          = 2;
+}
+
+message addStoreResp {
+	optional int64  seqno       = 1;
+	optional bool   ok          = 2;
+	optional string reason      = 3;	
+}
+
+message remStore {
+	optional int64  seqno       = 1;
+	optional int32  id          = 2;
+}
+
+message remStoreResp {
+	optional int64  seqno       = 1;
+	optional bool   ok          = 2;
+	optional string reason      = 3;		
+}
+
+
+message kvnodeAddStore {
+	optional int64  seqno       = 1;
+	optional int32  nodeId      = 2;
+	optional int32  storeId     = 3;
+}
+
+message kvnodeAddStoreResp {
+	optional int64  seqno       = 1;
+	optional bool   ok          = 2;
+	optional string reason      = 3;	
+}
+
+message  kvnodeRemStore {
+	optional int64  seqno       = 1;
+	optional int32  nodeId      = 2;
+	optional int32  storeId     = 3;
+}
+
+message kvnodeRemStoreResp {
+	optional int64  seqno       = 1;
+	optional bool   ok          = 2;
+	optional string reason      = 3;	
+} 
+
+
+message slotTransferPrepare {
+ 	optional int64 transID      = 1;
+ 	optional int32 slot         = 2;
+  	optional int32 storeIn      = 3;
+  	optional int32 storeOut     = 4;
+}
+
+message slotTransferPrepareAck {
+  	optional int64 transID  = 1;
+  	optional int32 storeID  = 2;
+  	optional bool  ok       = 3;  
+}
+
+
+message slotTransferCancel {
+	optional int64 transID  = 1;
+  	optional int32 storeID  = 2;	
+}
+
+message slotTransferCommit {
+	optional int64 transID  = 1;
+  	optional int32 storeID  = 2;	
+}

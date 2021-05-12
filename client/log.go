@@ -1,73 +1,27 @@
 package client
 
 import (
-	"github.com/sniperHW/kendynet"
-	//"sync"
+	"github.com/sniperHW/flyfish/net"
+	"go.uber.org/zap"
+	"sync"
 )
 
-var logger kendynet.LoggerI
+var initOnce sync.Once
+var zapLogger *zap.Logger
+var sugaredLogger *zap.SugaredLogger
 
-func InitLogger(l kendynet.LoggerI) {
-	logger = l
-	kendynet.InitLogger(l)
+func InitLogger(logger *zap.Logger) {
+	initOnce.Do(func() {
+		zapLogger = logger
+		sugaredLogger = zapLogger.Sugar()
+		net.InitLogger(logger)
+	})
 }
 
-/*func Debugf(format string, v ...interface{}) {
-	if nil != logger {
-		logger.Debugf(format, v...)
-	}
+func GetLogger() *zap.Logger {
+	return zapLogger
 }
 
-func Debugln(v ...interface{}) {
-	if nil != logger {
-		logger.Debugln(v...)
-	}
+func GetSugar() *zap.SugaredLogger {
+	return sugaredLogger
 }
-
-func Infof(format string, v ...interface{}) {
-	if nil != logger {
-		logger.Infof(format, v...)
-	}
-}
-
-func Infoln(v ...interface{}) {
-	if nil != logger {
-		logger.Infoln(v...)
-	}
-}
-
-func Warnf(format string, v ...interface{}) {
-	if nil != logger {
-		logger.Warnf(format, v...)
-	}
-}
-
-func Warnln(v ...interface{}) {
-	if nil != logger {
-		logger.Warnln(v...)
-	}
-}
-
-func Errorf(format string, v ...interface{}) {
-	if nil != logger {
-		logger.Errorf(format, v...)
-	}
-}
-
-func Errorln(v ...interface{}) {
-	if nil != logger {
-		logger.Errorln(v...)
-	}
-}
-
-func Fatalf(format string, v ...interface{}) {
-	if nil != logger {
-		logger.Fatalf(format, v...)
-	}
-}
-
-func Fatalln(v ...interface{}) {
-	if nil != logger {
-		logger.Fatalln(v...)
-	}
-}*/

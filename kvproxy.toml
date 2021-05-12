@@ -1,9 +1,0 @@
-Host            = "localhost:8110"
-KVNodes 		= "1:localhost:10012"
-                	
-[Log]
-MaxLogfileSize  = 104857600 # 100mb
-LogDir          = "log1"
-LogPrefix       = "kvproxy"
-LogLevel        = "info"
-EnableLogStdout = true

@@ -3,9 +3,17 @@
 package goaio
 
 import (
-	"sync"
-	"sync/atomic"
+	"container/list"
+	//"sync"
 	"syscall"
+	"unsafe"
+)
+
+const (
+	readEvents         = int(syscall.EPOLLIN)
+	writeEvents        = int(syscall.EPOLLOUT)
+	errorEvents        = int(syscall.EPOLLERR | syscall.EPOLLHUP | syscall.EPOLLRDHUP)
+	EPOLLET     uint32 = 0x80000000
 )
 
 type epoll struct {
@@ -20,8 +28,8 @@ func openPoller() (*epoll, error) {
 	}
 	poller := new(epoll)
 	poller.fd = epollFD
-	poller.fd2Conn = fd2Conn(make([]sync.Map, hashSize))
-	poller.die = make(chan struct{})
+	//poller.fd2Conn = fd2Conn(make([]sync.Map, hashSize))
+	poller.pending = list.New()
 
 	r0, _, e0 := syscall.Syscall(syscall.SYS_EVENTFD2, 0, 0, 0)
 	if e0 != 0 {
@@ -52,7 +60,6 @@ func openPoller() (*epoll, error) {
 
 func (p *epoll) close() {
 	p.trigger()
-	<-p.die
 }
 
 func (p *epoll) trigger() error {
@@ -60,25 +67,11 @@ func (p *epoll) trigger() error {
 	return err
 }
 
-const EPOLLET uint32 = 0x80000000
-
-func (p *epoll) enableWrite(c *AIOConn) bool {
-	err := syscall.EpollCtl(p.fd, syscall.EPOLL_CTL_MOD, c.fd, &syscall.EpollEvent{Fd: int32(c.fd), Events: syscall.EPOLLRDHUP | syscall.EPOLLIN | syscall.EPOLLOUT | EPOLLET})
-	return nil == err
-}
-
-func (p *epoll) disableWrite(c *AIOConn) bool {
-	err := syscall.EpollCtl(p.fd, syscall.EPOLL_CTL_MOD, c.fd, &syscall.EpollEvent{Fd: int32(c.fd), Events: syscall.EPOLLRDHUP | syscall.EPOLLIN | EPOLLET})
-	return nil == err
-}
-
-func (p *epoll) watch(conn *AIOConn) bool {
+func (p *epoll) _watch(conn *AIOConn) bool {
 
 	if _, ok := p.fd2Conn.get(conn.fd); ok {
 		return false
 	}
-
-	conn.pollerVersion = p.updatePollerVersionOnWatch()
 
 	p.fd2Conn.add(conn)
 
@@ -89,7 +82,18 @@ func (p *epoll) watch(conn *AIOConn) bool {
 	} else {
 		return true
 	}
+}
 
+func (p *epoll) watch(conn *AIOConn) <-chan bool {
+	p.muPending.Lock()
+	ch := make(chan bool)
+	p.pending.PushBack(pendingWatch{
+		conn: conn,
+		resp: ch,
+	})
+	p.muPending.Unlock()
+	p.trigger()
+	return ch
 }
 
 func (p *epoll) unwatch(conn *AIOConn) bool {
@@ -107,75 +111,99 @@ func (p *epoll) unwatch(conn *AIOConn) bool {
 	}
 }
 
-const (
-	readEvents  = int(syscall.EPOLLIN)
-	writeEvents = int(syscall.EPOLLOUT)
-	errorEvents = int(syscall.EPOLLERR | syscall.EPOLLHUP | syscall.EPOLLRDHUP)
-)
-
-func (p *epoll) wait(stoped *int32) {
+func (p *epoll) wait(die <-chan struct{}) {
 
 	defer func() {
 		syscall.Close(p.fd)
 		syscall.Close(p.wfd)
-		close(p.die)
 	}()
 
 	eventlist := make([]syscall.EpollEvent, 64)
 
-	for atomic.LoadInt32(stoped) == 0 {
-		n, err0 := syscall.EpollWait(p.fd, eventlist, -1)
-
-		if err0 == syscall.EINTR {
-			continue
-		}
-
-		if err0 != nil && err0 != syscall.EINTR {
-			panic(err0)
+	for {
+		select {
+		case <-die:
 			return
-		}
+		default:
 
-		pollerVersion := p.updatePollerVersionOnWait()
+			p.muPending.Lock()
+			for e := p.pending.Front(); nil != e; e = p.pending.Front() {
+				v := p.pending.Remove(e).(pendingWatch)
+				v.resp <- p._watch(v.conn)
+			}
+			p.muPending.Unlock()
 
-		for i := 0; i < n; i++ {
+			n, err0 := syscall.EpollWait(p.fd, eventlist, -1)
 
-			e := &eventlist[i]
+			if err0 == syscall.EINTR {
+				continue
+			}
 
-			fd := int(e.Fd)
+			if err0 != nil && err0 != syscall.EINTR {
+				panic(err0)
+				return
+			}
 
-			if fd != p.wfd {
+			for i := 0; i < n; i++ {
 
-				if conn, ok := p.fd2Conn.get(fd); ok && conn.pollerVersion != pollerVersion {
+				e := &eventlist[i]
 
-					event := int(0)
+				fd := int(e.Fd)
 
-					if e.Events&uint32(errorEvents) != 0 {
-						event |= EV_ERROR
+				if fd != p.wfd {
+
+					if conn, ok := p.fd2Conn.get(fd); ok {
+
+						event := int(0)
+
+						if e.Events&uint32(errorEvents) != 0 {
+							event |= EV_ERROR
+						}
+
+						if e.Events&uint32(readEvents) != 0 {
+							event |= EV_READ
+						}
+
+						if e.Events&uint32(writeEvents) != 0 {
+							event |= EV_WRITE
+						}
+
+						conn.onActive(event)
 					}
 
-					if e.Events&uint32(readEvents) != 0 {
-						event |= EV_READ
-					}
-
-					if e.Events&uint32(writeEvents) != 0 {
-						event |= EV_WRITE
-					}
-
-					conn.onActive(event)
-				}
-
-			} else {
-				buff := make([]byte, 8)
-				for {
-					if _, err := syscall.Read(p.wfd, buff); err == syscall.EAGAIN {
-						break
+				} else {
+					buff := make([]byte, 8)
+					for {
+						if _, err := syscall.Read(p.wfd, buff); err == syscall.EAGAIN {
+							break
+						}
 					}
 				}
 			}
-		}
 
-		if n == len(eventlist) {
-			eventlist = make([]syscall.EpollEvent, n<<1)
+			if n == len(eventlist) {
+				eventlist = make([]syscall.EpollEvent, n<<1)
+			}
 		}
 	}
+}
+
+// raw read for nonblocking op to avert context switch
+func rawRead(fd int, p []byte) (n int, err error) {
+	r0, _, e1 := syscall.RawSyscall(syscall.SYS_READ, uintptr(fd), uintptr(unsafe.Pointer(&p[0])), uintptr(len(p)))
+	n = int(r0)
+	if e1 != 0 {
+		err = e1
+	}
+	return
+}
+
+// raw write for nonblocking op to avert context switch
+func rawWrite(fd int, p []byte) (n int, err error) {
+	r0, _, e1 := syscall.RawSyscall(syscall.SYS_WRITE, uintptr(fd), uintptr(unsafe.Pointer(&p[0])), uintptr(len(p)))
+	n = int(r0)
+	if e1 != 0 {
+		err = e1
+	}
+	return
 }

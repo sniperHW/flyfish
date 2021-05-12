@@ -1,0 +1,197 @@
+pd维护了一个slot视图
+
+视图中的内容包括kvnode,store,以及slot
+
+store包含1-N个slot,kvnode包含1-N个store，其中的store有leader也有follower。
+
+proxy转发用户请求时，首先根据unikey的hash值计算出unikey归属的slot。
+
+接着查询slot在哪个store上，然后查询store leader在哪个kvnode上。之后将请求转发到对应的kvnode处理。
+
+
+proxy获取slot在哪个kvnode的方式。
+
+1：由pd负责告之
+
+proxy连接上pd之后请求获得网络地图，地图上明确标识store leader所在。当leader发生切换,当kvnode返回非leader错误码时
+proxy向pd再次查询。
+
+2：proxy自己向kvnode查询
+
+网络地图不包含store leader所在，只包含store关联的kvnode。当proxy不知道leader在哪的时候，向关联的kvnode发出leader查询请求。每当接收到非leader错误码时再次
+向关联的kvnode发出leader查询请求。
+
+
+kvnode配置需要添加到pd中，kvnode启动时从pd索取，如果id未找到则kvnode不能成功启动。
+
+store如何与kvnode关联
+
+kvnode运行的store配置存储在pd中,kvnode启动后向pd拉取。
+
+如果中途kvnode需要添加新的store,通过与pd交换信息以获取。
+
+store信息包括slots以及raft cluster信息，raft cluster信息包括了所有运行这个store的kvnode raft 地址。
+
+这些kvnode一起构成了store的raft group。
+
+------------------------------------------------------------------------------------------------------------------------------
+
+向store s中添加kvnode x。
+
+1）
+
+如果此时s为空,则直接添加，并通知x加载s。
+
+否则 生成添加事务并持久化（写入到pd的raft日志）
+
+持久化完成后正式开始执行事务。
+
+pd请求s的leader执行配置变更，变更完成后向pd反馈。
+
+pd接收到反馈后将事务标记为完成状态并持久化。持久化完成通知x加载store s。
+
+为了避免因为节点或网络故障导致事务无法完成的情况。pd leader(如果发生leader切换，由新的leader继续执行)定期向s的leader重发配置变更请求直到事务完结。
+
+
+可能出现的服务不可用情况
+
+考虑store s最初只有一个节点y的情况
+
+当y完成向s添加x的配置变更后与pd失联。此时raft group中只剩下一个节点，store s处于不可用状态。
+
+
+2）
+
+对于向kvnode x添加store s的情况。
+
+pd首先向store s写入新加入的kvnode x,然后将添加信息通告给新的kvnode x以及 store s leader y。
+
+y接收到之后执行配置变更，将y加入到raft group s的配置中。而x则不断尝试加入raft group s。
+
+当配置变更被commited,x将成功加入 raft group s。
+
+
+存在的问题，如果pd与store s的leader暂时失联，则配置变更无法执行，而kvnode x将反复加入raft group s失败。
+
+
+在此，倾向于避免服务不可用状态。由此得到3
+
+3）
+
+如果此时s为空,则直接添加，并通知x加载s。
+
+否则 生成添加事务并持久化（写入到pd的raft日志）
+
+持久化完成后直接向store s添加kvnode x。
+
+通告store s leader变更配置，通告x加载s。
+
+当接收到store s leader的反馈后标记事务完成。
+
+对于未完成的事务，定期向store s leader重发配置变更请求。
+
+--------------------------------------------------------------------------------------------
+
+从store s删除kvnode x
+
+生成删除事务并持久化（写入到pd的raft日志）
+
+通告store s leader执行配置变更。
+
+接收到store s leader的反馈后从store s删除kvnode x。
+
+对于未完成的事务，定期向store s leader重发配置变更请求。
+
+
+对于x上报心跳，发现缺少s的情况。
+
+查询s是否存在一个删除x的尚未完成的事务。如果是无需通告x加载s.
+
+
+--------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
