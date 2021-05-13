@@ -167,7 +167,7 @@ func (b *Buffer) DropFirstNBytes(n int) *Buffer {
 
 func (b *Buffer) Free() {
 	if nil != b.pool {
-		b.pool.put(b)
+		b.pool.Put(b)
 	}
 }
 

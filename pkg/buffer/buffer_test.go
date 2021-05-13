@@ -56,12 +56,4 @@ func TestBuffer(t *testing.T) {
 	assert.Equal(t, b.Len(), 8)
 	b.DropFirstNBytes(8)
 	assert.Equal(t, b.Len(), 0)
-
-	b.AppendString("hello")
-	b.ResetLen(6)
-	assert.Equal(t, b.Len(), 5)
-	b.ResetLen(5)
-	assert.Equal(t, b.Len(), 5)
-	b.ResetLen(4)
-	assert.Equal(t, b.Len(), 4)
 }
