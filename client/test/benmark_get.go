@@ -37,12 +37,15 @@ func Get(c *kclient.Client) {
 			getAvaDelay = (time.Now().Sub(beg) + getAvaDelay) / 2
 		}
 
-		if ret.ErrCode != nil && ret.ErrCode.Code != errcode.Errcode_record_notexist {
-			fmt.Println("get err:", ret.ErrCode)
-		}
+		if ret.ErrCode != nil {
 
-		if ret.ErrCode.Code == errcode.Errcode_record_notexist {
-			fmt.Println("notfound", key)
+			if ret.ErrCode.Code != errcode.Errcode_record_notexist {
+				fmt.Println("get err:", ret.ErrCode)
+			}
+
+			if ret.ErrCode.Code == errcode.Errcode_record_notexist {
+				fmt.Println("notfound", key)
+			}
 		}
 
 		atomic.AddInt32(&getCount, 1)
