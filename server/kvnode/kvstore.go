@@ -221,7 +221,7 @@ func (s *kvstore) checkLru(ch chan struct{}) {
 
 	if s.lru.head.nnext != &s.lru.tail {
 		cur := s.lru.tail.pprev
-		for cur != &s.lru.head && len(s.keyvals) > GetConfig().MaxCachePerStoreSize {
+		for cur != &s.lru.head && len(s.keyvals) > GetConfig().MaxCachePerStore {
 			if !s.tryKick(cur.keyvalue) {
 				return
 			}
@@ -306,13 +306,13 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 				})
 				return
 			} else {
-				if len(s.keyvals) > (GetConfig().MaxCachePerStoreSize*3)/2 {
+				if len(s.keyvals) > (GetConfig().MaxCachePerStore*3)/2 {
 					req.from.send(&cs.RespMessage{
 						Cmd:   req.msg.Cmd,
 						Seqno: req.msg.Seqno,
-						Err:   errcode.New(errcode.Errcode_retry, "kvstore not start ok,please retry later"),
+						Err:   errcode.New(errcode.Errcode_retry, "kvstore busy,please retry later"),
 					})
-					GetSugar().Infof("reply retry")
+					GetSugar().Infof("reply retry %d %d", len(s.keyvals), GetConfig().MaxCachePerStore)
 					return
 				} else {
 					table, key := splitUniKey(req.msg.UniKey)

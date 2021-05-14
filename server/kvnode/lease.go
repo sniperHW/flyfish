@@ -16,7 +16,7 @@ const (
 
 type leaseProposal struct {
 	beginTime time.Time
-	notifyCh  chan interface{}
+	notifyCh  chan error
 	store     *kvstore
 }
 
@@ -67,7 +67,7 @@ func (this *leaseProposal) apply() {
 	}
 
 	select {
-	case this.notifyCh <- "ok":
+	case this.notifyCh <- nil:
 	default:
 	}
 }
@@ -109,7 +109,7 @@ func newLease(store *kvstore) *lease {
 				for 0 == atomic.LoadInt32(&l.stoped) && l.store.isLeader() {
 					proposal := &leaseProposal{
 						store:     l.store,
-						notifyCh:  make(chan interface{}, 1),
+						notifyCh:  make(chan error, 1),
 						beginTime: time.Now(),
 					}
 
@@ -117,16 +117,13 @@ func newLease(store *kvstore) *lease {
 						return
 					}
 
-					r := <-proposal.notifyCh
-
-					switch r.(type) {
-					case error:
-						GetSugar().Errorf("lease error:%v", r.(error))
-					case time.Time:
+					if r := <-proposal.notifyCh; nil == r {
 						elapse := time.Now().Sub(l.beginTime)
 						if elapse < renewTime {
 							time.Sleep(renewTime - elapse)
 						}
+					} else {
+						GetSugar().Errorf("lease error:%v", r)
 					}
 				}
 			}

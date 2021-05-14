@@ -56,7 +56,7 @@ func CreateDbDefFromCsv(s []string) (*DbDef, error) {
 	for _, l := range s {
 		t1 := strings.Split(l, "@")
 		if len(t1) != 2 {
-			return nil, fmt.Errorf("invaild table format(表名@字段1:类型:默认值,字段2:类型:默认值,...) %s", l)
+			return nil, fmt.Errorf("1 invaild table format(表名@字段1:类型:默认值,字段2:类型:默认值,...) %s", l)
 		}
 
 		tdef := TableDef{
@@ -66,25 +66,23 @@ func CreateDbDefFromCsv(s []string) (*DbDef, error) {
 		fields := strings.Split(t1[1], ",")
 
 		if len(fields) == 0 {
-			return nil, fmt.Errorf("invaild table format(表名@字段1:类型:默认值,字段2:类型:默认值,...) %s", l)
+			return nil, fmt.Errorf("2 invaild table format(表名@字段1:类型:默认值,字段2:类型:默认值,...) %s", l)
 		}
 
 		//处理其它字段
 		for _, v := range fields {
-			if v == "" {
-				return nil, fmt.Errorf("invaild table format(表名@字段1:类型:默认值,字段2:类型:默认值,...) %s", l)
-			}
+			if v != "" {
+				field := strings.Split(v, ":")
+				if len(field) != 3 {
+					return nil, fmt.Errorf("3 invaild table format(表名@字段1:类型:默认值,字段2:类型:默认值,...) %s", l)
+				}
 
-			field := strings.Split(v, ":")
-			if len(field) != 3 {
-				return nil, fmt.Errorf("invaild table format(表名@字段1:类型:默认值,字段2:类型:默认值,...) %s", l)
+				tdef.Fields = append(tdef.Fields, FieldDef{
+					Name:        field[0],
+					Type:        field[1],
+					DefautValue: field[2],
+				})
 			}
-
-			tdef.Fields = append(tdef.Fields, FieldDef{
-				Name:        field[0],
-				Type:        field[1],
-				DefautValue: field[2],
-			})
 		}
 
 		dbDef.TableDefs = append(dbDef.TableDefs, tdef)

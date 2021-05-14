@@ -2,6 +2,7 @@ package kvnode
 
 import (
 	//"errors"
+	"errors"
 	"fmt"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
@@ -10,9 +11,8 @@ import (
 	"github.com/sniperHW/flyfish/pkg/net/cs"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
-	//"github.com/sniperHW/flyfish/pkg/net/pb"
-	"errors"
 	flyproto "github.com/sniperHW/flyfish/proto"
+	"github.com/sniperHW/flyfish/server/slot"
 	"os"
 	"strconv"
 	"strings"
@@ -34,6 +34,8 @@ var (
 )
 
 type kvnode struct {
+	mu sync.Mutex
+
 	muC     sync.Mutex
 	clients map[*net.Socket]*net.Socket
 
@@ -256,6 +258,9 @@ func (this *kvnode) addStore(storeID int, cluster string, slots *bitmap.Bitmap) 
 
 func (this *kvnode) Stop() {
 	this.stopOnce.Do(func() {
+		this.mu.Lock()
+		defer this.mu.Unlock()
+
 		atomic.StoreInt32(&this.running, 0)
 		//首先关闭监听,不在接受新到达的连接
 		this.listener.Close()
@@ -309,9 +314,11 @@ func (this *kvnode) Stop() {
 	})
 }
 
-func (this *kvnode) Start(selfUrl string) error {
+func (this *kvnode) Start() error {
 	var err error
 	this.startOnce.Do(func() {
+		this.mu.Lock()
+		defer this.mu.Unlock()
 
 		config := GetConfig()
 
@@ -319,27 +326,56 @@ func (this *kvnode) Start(selfUrl string) error {
 			return
 		}
 
-		err = this.db.start()
+		if config.Mode == "solo" {
+			this.selfUrl = config.RaftUrl
 
-		if nil != err {
-			return
+			err = this.db.start()
+
+			if nil != err {
+				return
+			}
+
+			this.listener, err = cs.NewListener("tcp", fmt.Sprintf("%s:%d", config.SoloConfig.ServiceHost, config.SoloConfig.ServicePort), verifyLogin)
+
+			if nil != err {
+				return
+			}
+
+			go this.mutilRaft.Serve(this.selfUrl)
+
+			this.startListener()
+
+			atomic.StoreInt32(&this.running, 1)
+
+			//添加store
+			if len(config.SoloConfig.Stores) > 0 {
+				slotPerStore := slot.SlotCount / len(config.SoloConfig.Stores)
+				for i, v := range config.SoloConfig.Stores {
+					storeBitmap := bitmap.New(slot.SlotCount)
+					j := i * slotPerStore
+					for ; j < (i+1)*slotPerStore; j++ {
+						storeBitmap.Set(j)
+					}
+
+					//不能正好平分，剩余的slot全部交给最后一个store
+					if i == len(config.SoloConfig.Stores) && j < slot.SlotCount {
+						for ; j < slot.SlotCount; j++ {
+							storeBitmap.Set(j)
+						}
+					}
+
+					if err = this.addStore(v, config.SoloConfig.RaftCluster, storeBitmap); nil != err {
+						return
+					}
+				}
+			}
+
+			GetSugar().Infof("flyfish start:%s:%d", config.SoloConfig.ServiceHost, config.SoloConfig.ServicePort)
+
+		} else {
+
 		}
 
-		this.listener, err = cs.NewListener("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort), verifyLogin)
-
-		if nil != err {
-			return
-		}
-
-		this.selfUrl = selfUrl
-
-		go this.mutilRaft.Serve(this.selfUrl)
-
-		this.startListener()
-
-		atomic.StoreInt32(&this.running, 1)
-
-		GetSugar().Infof("flyfish start:%s:%d", config.ServiceHost, config.ServicePort)
 	})
 	return err
 }

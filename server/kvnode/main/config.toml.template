@@ -1,14 +1,14 @@
-Shard = [1,2,3,4,5]
+RaftUrl = "http://127.0.0.1:12377"
+
+Mode = "solo"
 
 SnapshotCurrentCount = 0
 
 MainQueueMaxSize        = 10000
 
-LruCheckInterval        = 100              #每隔100ms执行一次lru剔除操作
+LruCheckInterval        = 100                  #每隔100ms执行一次lru剔除操作
 
-CacheGroupSize          = 1                  #cache分组数量，每一个cache组单独管理，以降低处理冲突
-
-MaxCachePerStoreSize    = 500000               #每组最大key数量，超过数量将会触发key剔除
+MaxCachePerStore        = 500000               #每组最大key数量，超过数量将会触发key剔除
 
 SqlLoadPipeLineSize     = 200                  #sql加载管道线大小
 
@@ -24,6 +24,13 @@ ServicePort             = 8110
 
 ProposalFlushInterval   = 100
 ReadFlushInterval       = 10                   	 
+
+[SoloConfig]
+
+ServiceHost             = "127.0.0.1"
+ServicePort             = 8110
+RaftCluster             = "1@http://127.0.0.1:12377"
+Stores                  = [1]
 
 
 [DBConfig]

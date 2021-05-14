@@ -15,7 +15,6 @@ import (
 
 func main() {
 
-	cluster := flag.String("cluster", "1@http://127.0.0.1:12379", "comma separated cluster peers")
 	id := flag.Int("id", 1, "node ID")
 	pprof := flag.String("pprof", "localhost:8899", "pprof")
 	config := flag.String("config", "config.toml", "config")
@@ -36,7 +35,7 @@ func main() {
 
 	dbConfig := conf.DBConfig
 
-	meta, err := metaLoader.LoadDBMetaFromSqlOld(dbConfig.SqlType, dbConfig.ConfDbHost, dbConfig.ConfDbPort, dbConfig.ConfDataBase, dbConfig.ConfDbUser, dbConfig.ConfDbPassword)
+	meta, err := metaLoader.LoadDBMetaFromSqlCsv(dbConfig.SqlType, dbConfig.ConfDbHost, dbConfig.ConfDbPort, dbConfig.ConfDataBase, dbConfig.ConfDbUser, dbConfig.ConfDbPassword)
 
 	if nil != err {
 		kvnode.GetSugar().Error(err)
@@ -52,7 +51,7 @@ func main() {
 
 	node := kvnode.NewKvNode(*id, backend)
 
-	err = node.Start(cluster, conf.Shard)
+	err = node.Start()
 	if nil == err {
 		c := make(chan os.Signal)
 		signal.Notify(c, syscall.SIGINT) //监听指定信号

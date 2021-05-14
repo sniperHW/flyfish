@@ -66,7 +66,7 @@ func main() {
 	services := strings.Split(os.Args[2], ",")
 
 	for j := 0; j < 50; j++ {
-		c := kclient.OpenClient(services[j%len(services)], false)
+		c := kclient.OpenClient(services[j%len(services)]).SetUnikeyPlacement(func(_ string) int { return 1 })
 		for i := 0; i < 50; i++ {
 			Get(c)
 		}

@@ -37,23 +37,32 @@ func GetConfig() *Config {
 }
 
 type Config struct {
-	Shard []int
+	RaftUrl string
+
+	Mode string //"cluster"集群模式,"solo"独立模式
+
+	SoloConfig struct {
+		ServiceHost string
+		ServicePort int
+		RaftCluster string
+		Stores      []int
+	}
+
+	ClusterConfig struct {
+		Pd []string //pd服务的地址
+	}
 
 	SnapshotCurrentCount int //并行执行快照序列化数量，如果设置为0则取cpu数量
 
 	LruCheckInterval int //ms
 
-	CacheGroupSize       int
-	MaxCachePerStoreSize int
+	MaxCachePerStore int
 
 	SqlLoadPipeLineSize int
 	SqlLoadQueueSize    int
 
 	SqlLoaderCount  int
 	SqlUpdaterCount int
-
-	ServiceHost string
-	ServicePort int
 
 	ProposalFlushInterval int
 	ReadFlushInterval     int

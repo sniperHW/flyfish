@@ -75,8 +75,9 @@ func OpenClient(service string, callbackQueue ...EventQueueI) *Client {
 	return c
 }
 
-func (this *Client) SetUnikeyPlacement(u func(string) int) {
+func (this *Client) SetUnikeyPlacement(u func(string) int) *Client {
 	this.unikeyPlacement = u
+	return this
 }
 
 func (this *Client) SetPriority(priority int) {

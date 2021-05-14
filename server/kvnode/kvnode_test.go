@@ -10,11 +10,9 @@ import (
 	"github.com/sniperHW/flyfish/backend/db/sql"
 	"github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/logger"
-	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	"github.com/sniperHW/flyfish/server/kvnode/metaLoader"
 	mockDB "github.com/sniperHW/flyfish/server/mock/db"
-	sslot "github.com/sniperHW/flyfish/server/slot"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"sync"
@@ -33,15 +31,15 @@ type dbconf struct {
 
 var configStr string = `
 
-Shard = [1]
+RaftUrl = "http://127.0.0.1:12377"
+
+Mode = "solo"
 
 SnapshotCurrentCount = 2
 
 LruCheckInterval        = 100              #每隔100ms执行一次lru剔除操作
 
-CacheGroupSize          = 1                  #cache分组数量，每一个cache组单独管理，以降低处理冲突
-
-MaxCachePerStoreSize    = 100               #每组最大key数量，超过数量将会触发key剔除
+MaxCachePerStore        = 100               #每组最大key数量，超过数量将会触发key剔除
 
 SqlLoadPipeLineSize     = 200                  #sql加载管道线大小
 
@@ -50,15 +48,18 @@ SqlLoadQueueSize        = 10000                #sql加载请求队列大小，�
 SqlLoaderCount          = 5
 SqlUpdaterCount         = 5
 
+ProposalFlushInterval   = 100
+ReadFlushInterval       = 10 
+
+
+[SoloConfig]
 
 ServiceHost             = "127.0.0.1"
-
 ServicePort             = %d
+RaftCluster             = "1@http://127.0.0.1:12377"
+Stores                  = [1]
 
-ProposalFlushInterval   = 100
-ReadFlushInterval       = 10                   	 
-
-
+                  	
 [DBConfig]
 SqlType         = "%s"
 
@@ -126,8 +127,6 @@ func (d *mockBackEnd) stop() {
 
 var dbMeta *db.DbDef
 
-var storeBitmap *bitmap.Bitmap
-
 func init() {
 	dbConf := &dbconf{}
 	if _, err := toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
@@ -140,11 +139,6 @@ func init() {
 
 	dbMeta, _ = metaLoader.LoadDBMetaFromSqlJson(dbConfig.SqlType, dbConfig.ConfDbHost, dbConfig.ConfDbPort, dbConfig.ConfDataBase, dbConfig.ConfDbUser, dbConfig.ConfDbPassword)
 
-	storeBitmap = bitmap.New(sslot.SlotCount)
-
-	for i := 0; i < sslot.SlotCount; i++ {
-		storeBitmap.Set(i)
-	}
 }
 
 func GetStore(unikey string) int {
@@ -163,16 +157,9 @@ func newMockDBBackEnd() dbbackendI {
 
 func start1Node(b dbbackendI) *kvnode {
 
-	cluster := "1@http://127.0.0.1:12377"
-	id := 1
+	node := NewKvNode(1, b)
 
-	node := NewKvNode(id, b)
-
-	if err := node.Start("http://127.0.0.1:12377"); nil != err {
-		panic(err)
-	}
-
-	if err := node.addStore(1, cluster, storeBitmap); nil != err {
+	if err := node.Start(); nil != err {
 		panic(err)
 	}
 
