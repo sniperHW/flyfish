@@ -19,6 +19,14 @@ type error struct {
 	Desc string
 }
 
+func GetCode(e Error) int16 {
+	if nil == e {
+		return Errcode_ok
+	} else {
+		return e.Code
+	}
+}
+
 func GetErrorDesc(e Error) string {
 	if nil == e {
 		return "no error"
