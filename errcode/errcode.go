@@ -1,7 +1,7 @@
 package errcode
 
 const (
-	Errcode_ok = int16(0)
+	Errcode_ok = int16(iota)
 	Errcode_version_mismatch
 	Errcode_record_exist
 	Errcode_record_notexist
