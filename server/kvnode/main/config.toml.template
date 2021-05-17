@@ -20,7 +20,11 @@ ServicePort             = 8110
 
 ProposalFlushInterval   = 100                    
 
-ReadFlushInterval       = 10                   	 
+ReadFlushInterval       = 10
+
+ProposalBatchCount      = 200
+
+ReadBatchCount          = 100             	 
 
 [SoloConfig]
 

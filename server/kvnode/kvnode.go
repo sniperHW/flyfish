@@ -381,6 +381,25 @@ func (this *kvnode) Start() error {
 }
 
 func NewKvNode(id int, db dbbackendI) *kvnode {
+
+	config := GetConfig()
+
+	if config.ProposalFlushInterval > 0 {
+		raft.ProposalFlushInterval = config.ProposalFlushInterval
+	}
+
+	if config.ReadFlushInterval > 0 {
+		raft.ReadFlushInterval = config.ReadFlushInterval
+	}
+
+	if config.ProposalBatchCount > 0 {
+		raft.ProposalBatchCount = config.ProposalBatchCount
+	}
+
+	if config.ReadBatchCount > 0 {
+		raft.ReadBatchCount = config.ReadBatchCount
+	}
+
 	return &kvnode{
 		id:        id,
 		mutilRaft: raft.NewMutilRaft(),

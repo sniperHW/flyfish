@@ -66,6 +66,10 @@ type Config struct {
 
 	ReadFlushInterval int
 
+	ProposalBatchCount int
+
+	ReadBatchCount int
+
 	MainQueueMaxSize int //store主处理队列容量上限,超过上限客户端的命令无法入列将返回retry
 
 	DBConfig struct {
