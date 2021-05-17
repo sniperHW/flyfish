@@ -165,6 +165,8 @@ func (s *kvstore) addCliMessage(msg clientRequest) error {
 	return s.mainQueue.append(msg)
 }
 
+const kvCmdQueueSize = 32
+
 func (s *kvstore) newkv(unikey string, key string, table string) (*kv, errcode.Error) {
 	tbmeta := s.db.getTableMeta(table)
 
@@ -177,7 +179,7 @@ func (s *kvstore) newkv(unikey string, key string, table string) (*kv, errcode.E
 		key:        key,
 		state:      kv_new,
 		tbmeta:     tbmeta,
-		pendingCmd: newCmdQueue(64),
+		pendingCmd: newCmdQueue(kvCmdQueueSize),
 		store:      s,
 	}
 	kv.lru.keyvalue = kv

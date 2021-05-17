@@ -1,28 +1,25 @@
 RaftUrl = "http://127.0.0.1:12377"
 
-Mode = "solo"
+Mode = "solo"                                  #solo单机模式,cluster集群模式
 
-SnapshotCurrentCount = 0
+SnapshotCurrentCount = 0                       #并行执行快照序列化数量，如果设置为0则取cpu数量
 
-MainQueueMaxSize        = 10000
+MainQueueMaxSize        = 10000                #store消息队列大小
 
 LruCheckInterval        = 100                  #每隔100ms执行一次lru剔除操作
 
 MaxCachePerStore        = 500000               #每组最大key数量，超过数量将会触发key剔除
 
-SqlLoadPipeLineSize     = 200                  #sql加载管道线大小
-
-SqlLoadQueueSize        = 10000                #sql加载请求队列大小，此队列每CacheGroup一个
-
-SqlLoaderCount          = 5
-SqlUpdaterCount         = 5
-
+SqlLoaderCount          = 5                    #加载go程的数量
+    
+SqlUpdaterCount         = 5                    #更新go程的数量
 
 ServiceHost             = "127.0.0.1"
 
 ServicePort             = 8110
 
-ProposalFlushInterval   = 100
+ProposalFlushInterval   = 100                    
+
 ReadFlushInterval       = 10                   	 
 
 [SoloConfig]
