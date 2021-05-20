@@ -118,7 +118,12 @@ func (this *updater) exec(v interface{}) {
 				this.toSqlStr.deleteStatement(b, &s)
 			default:
 				GetSugar().Errorf("invaild dbstate %s %d", task.GetUniKey(), s.State)
-				task.ReleaseLock()
+				if task.Dirty() {
+					//再次发生变更,插入队列继续执行
+					this.que.ForceAppend(task)
+				} else {
+					task.ReleaseLock()
+				}
 				return
 			}
 
@@ -140,20 +145,17 @@ func (this *updater) exec(v interface{}) {
 							time.Sleep(time.Second)
 						} else {
 							GetSugar().Errorf("sqlUpdater exec error:%v", err)
-							task.ReleaseLock()
-							return
+							break
 						}
 					}
 				}
 			}
 
-			if nil == err {
-				if task.Dirty() {
-					//再次发生变更,插入队列继续执行
-					this.que.ForceAppend(task)
-				} else {
-					task.ReleaseLock()
-				}
+			if task.Dirty() {
+				//再次发生变更,插入队列继续执行
+				this.que.ForceAppend(task)
+			} else {
+				task.ReleaseLock()
 			}
 		}
 	}

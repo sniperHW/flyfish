@@ -4,6 +4,7 @@ import (
 	//"errors"
 	"encoding/binary"
 	"fmt"
+	"github.com/sniperHW/flyfish/backend/db"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/buffer"
@@ -134,6 +135,7 @@ type kvstore struct {
 	needWriteBackAll   bool
 	shard              int
 	slots              *bitmap.Bitmap
+	meta               db.DBMeta
 }
 
 func (s *kvstore) hasLease() bool {
@@ -168,7 +170,7 @@ func (s *kvstore) addCliMessage(msg clientRequest) error {
 const kvCmdQueueSize = 32
 
 func (s *kvstore) newkv(unikey string, key string, table string) (*kv, errcode.Error) {
-	tbmeta := s.db.getTableMeta(table)
+	tbmeta := s.meta.GetTableMeta(table)
 
 	if nil == tbmeta {
 		return nil, errcode.New(errcode.Errcode_error, fmt.Sprintf("table:%s no define", table))
@@ -184,7 +186,8 @@ func (s *kvstore) newkv(unikey string, key string, table string) (*kv, errcode.E
 	}
 	kv.lru.keyvalue = kv
 	kv.updateTask = dbUpdateTask{
-		keyValue: kv,
+		keyValue:     kv,
+		updateFields: map[string]*flyproto.Field{},
 	}
 	kv.loadTask = dbLoadTask{
 		keyValue: kv,
@@ -282,7 +285,7 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 		return
 	}
 
-	if !s.ready {
+	if !s.ready || s.meta == nil {
 		req.from.send(&cs.RespMessage{
 			Cmd:   req.msg.Cmd,
 			Seqno: req.msg.Seqno,
@@ -405,7 +408,23 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 			return nil
 		}
 
-		if ptype == proposal_lease {
+		if ptype == proposal_tbmeta {
+			def, err := db.CreateDbDefFromJsonString(data.([]byte))
+			if nil != err {
+				return err
+			}
+
+			meta, err := s.kvnode.metaCreator(def)
+
+			if nil != err {
+				return err
+			}
+
+			if meta.GetVersion() > s.meta.GetVersion() {
+				s.meta = meta
+			}
+
+		} else if ptype == proposal_lease {
 			p := data.(pplease)
 			s.lease.update(p.nodeid, p.begtime)
 		} else {
@@ -527,6 +546,9 @@ func (s *kvstore) gotLease() {
 		GetSugar().Info("WriteBackAll")
 		s.needWriteBackAll = false
 		for _, v := range s.keyvals {
+			if v.tbmeta.GetVersion() != s.meta.GetVersion() {
+				v.tbmeta = s.meta.GetTableMeta(v.tbmeta.TableName())
+			}
 			err := v.updateTask.issueFullDbWriteBack()
 			if nil != err {
 				break

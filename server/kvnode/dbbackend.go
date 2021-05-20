@@ -11,10 +11,7 @@ import (
 	"sync"
 )
 
-type sqlMetaMgr map[string]*sql.TableMeta
-
 type dbbackendI interface {
-	getTableMeta(table string) db.TableMeta
 	issueLoad(l db.DBLoadTask) bool
 	issueUpdate(u db.DBUpdateTask) bool
 	stop()
@@ -22,7 +19,6 @@ type dbbackendI interface {
 }
 
 type sqlDbBackend struct {
-	metaMgr  db.MetaMgr
 	loaders  []db.DBLoader
 	updaters []db.DBUpdater
 	wait     sync.WaitGroup
@@ -46,26 +42,8 @@ func sqlOpen(sqlType string, host string, port int, dbname string, user string, 
 	}
 }
 
-func (this sqlMetaMgr) GetTableMeta(table string) db.TableMeta {
-	v, ok := this[table]
-	if ok {
-		return v
-	} else {
-		return nil
-	}
-}
-
-func NewSqlDbBackend(def *db.DbDef) (*sqlDbBackend, error) {
-	m, err := sql.CreateDbMeta(def)
-	if nil != err {
-		return nil, err
-	}
-
-	d := &sqlDbBackend{
-		metaMgr: sqlMetaMgr(m),
-	}
-
-	return d, nil
+func NewSqlDbBackend() *sqlDbBackend {
+	return &sqlDbBackend{}
 }
 
 func (d *sqlDbBackend) start() error {
@@ -92,10 +70,6 @@ func (d *sqlDbBackend) start() error {
 	}
 
 	return nil
-}
-
-func (d *sqlDbBackend) getTableMeta(table string) db.TableMeta {
-	return d.metaMgr.GetTableMeta(table)
 }
 
 func (d *sqlDbBackend) issueLoad(l db.DBLoadTask) bool {

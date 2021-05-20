@@ -48,6 +48,23 @@ func (this *FieldMeta) GetDefaultValue() interface{} {
 	return this.defaultValue
 }
 
+type DBMeta struct {
+	tables  map[string]*TableMeta
+	version int64
+}
+
+func (this *DBMeta) GetTableMeta(tab string) db.TableMeta {
+	if v, ok := this.tables[tab]; ok {
+		return v
+	} else {
+		return nil
+	}
+}
+
+func (this *DBMeta) GetVersion() int64 {
+	return this.version
+}
+
 //表格的元信息
 type TableMeta struct {
 	table            string                //表名
@@ -56,6 +73,11 @@ type TableMeta struct {
 	insertPrefix     string
 	selectPrefix     string
 	insertFieldOrder []string
+	version          int64
+}
+
+func (this *TableMeta) GetVersion() int64 {
+	return this.version
 }
 
 func (this *TableMeta) TableName() string {
@@ -217,7 +239,7 @@ func getDefaultValue(tt proto.ValueType, v string) interface{} {
 	}
 }
 
-func CreateDbMeta(def *db.DbDef) (map[string]*TableMeta, error) {
+func CreateDbMeta(def *db.DbDef) (db.DBMeta, error) {
 
 	table_metas := map[string]*TableMeta{}
 	for _, v := range def.TableDefs {
@@ -230,6 +252,7 @@ func CreateDbMeta(def *db.DbDef) (map[string]*TableMeta, error) {
 				field_receiver: []interface{}{},
 				field_convter:  []func(interface{}) interface{}{},
 			},
+			version: def.Version,
 		}
 
 		//插入两个默认字段
@@ -281,6 +304,10 @@ func CreateDbMeta(def *db.DbDef) (map[string]*TableMeta, error) {
 		t_meta.insertPrefix = fmt.Sprintf("INSERT INTO %s(__key__,__version__,%s) VALUES (", t_meta.table, strings.Join(t_meta.insertFieldOrder, ","))
 
 	}
-	return table_metas, nil
+
+	return &DBMeta{
+		version: def.Version,
+		tables:  table_metas,
+	}, nil
 
 }

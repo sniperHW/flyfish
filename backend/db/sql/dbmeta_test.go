@@ -103,7 +103,11 @@ func TestDbmeta1(t *testing.T) {
 }
 
 func TestDbmeta2(t *testing.T) {
-	dbdef, _ := db.CreateDbDefFromCsv([]string{"Table1@field1:int:1,field2:float:1.2,field3:string:hello,field4:string:,field5:blob:"})
+	dbdef, err := db.CreateDbDefFromCsv([]string{"meta_version@10", "Table1@field1:int:1,field2:float:1.2,field3:string:hello,field4:string:,field5:blob:"})
+
+	assert.Nil(t, err)
+
+	assert.Equal(t, dbdef.Version, int64(10))
 
 	mt, err := CreateDbMeta(dbdef)
 	assert.Nil(t, err)
@@ -113,6 +117,8 @@ func TestDbmeta2(t *testing.T) {
 	fmt.Println(string(defStr))
 
 	td := mt["Table1"]
+
+	assert.Equal(t, td.version, int64(10))
 
 	fmt.Println(td.GetQueryMeta().GetFieldNames())
 

@@ -86,31 +86,21 @@ EnableLogStdout = false
 `
 
 type mockBackEnd struct {
-	d       *mockDB.DB
-	metaMgr db.MetaMgr
+	d *mockDB.DB
 }
 
-func newMockDB(def *db.DbDef) (*mockBackEnd, error) {
-	m, err := sql.CreateDbMeta(def)
-	if nil != err {
-		return nil, err
-	}
+func newMockDB() *mockBackEnd {
 
 	d := &mockBackEnd{
-		metaMgr: sqlMetaMgr(m),
-		d:       mockDB.New(),
+		d: mockDB.New(),
 	}
 
-	return d, nil
+	return d
 }
 
 func (d *mockBackEnd) start() error {
 	d.d.Start()
 	return nil
-}
-
-func (d *mockBackEnd) getTableMeta(table string) db.TableMeta {
-	return d.metaMgr.GetTableMeta(table)
 }
 
 func (d *mockBackEnd) issueLoad(l db.DBLoadTask) bool {
@@ -146,18 +136,16 @@ func GetStore(unikey string) int {
 }
 
 func newSqlDBBackEnd() dbbackendI {
-	backend, _ := NewSqlDbBackend(dbMeta)
-	return backend
+	return NewSqlDbBackend()
 }
 
 func newMockDBBackEnd() dbbackendI {
-	backend, _ := newMockDB(dbMeta)
-	return backend
+	return newMockDB()
 }
 
 func start1Node(b dbbackendI) *kvnode {
 
-	node := NewKvNode(1, b)
+	node := NewKvNode(1, dbMeta, sql.CreateDbMeta, b)
 
 	if err := node.Start(); nil != err {
 		panic(err)

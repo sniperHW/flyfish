@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/sniperHW/flyfish/proto"
+	"strconv"
 	"strings"
 )
 
@@ -34,6 +35,7 @@ type TableDef struct {
 }
 
 type DbDef struct {
+	Version   int64 `json:"Version,omitempty"`
 	TableDefs []TableDef
 }
 
@@ -59,33 +61,44 @@ func CreateDbDefFromCsv(s []string) (*DbDef, error) {
 			return nil, fmt.Errorf("1 invaild table format(表名@字段1:类型:默认值,字段2:类型:默认值,...) %s", l)
 		}
 
-		tdef := TableDef{
-			Name: t1[0],
-		}
-
-		fields := strings.Split(t1[1], ",")
-
-		if len(fields) == 0 {
-			return nil, fmt.Errorf("2 invaild table format(表名@字段1:类型:默认值,字段2:类型:默认值,...) %s", l)
-		}
-
-		//处理其它字段
-		for _, v := range fields {
-			if v != "" {
-				field := strings.Split(v, ":")
-				if len(field) != 3 {
-					return nil, fmt.Errorf("3 invaild table format(表名@字段1:类型:默认值,字段2:类型:默认值,...) %s", l)
-				}
-
-				tdef.Fields = append(tdef.Fields, FieldDef{
-					Name:        field[0],
-					Type:        field[1],
-					DefautValue: field[2],
-				})
+		if t1[0] == "meta_version" {
+			v, err := strconv.ParseInt(t1[1], 10, 64)
+			if nil != err {
+				return nil, err
+			} else {
+				dbDef.Version = v
 			}
-		}
 
-		dbDef.TableDefs = append(dbDef.TableDefs, tdef)
+		} else {
+
+			tdef := TableDef{
+				Name: t1[0],
+			}
+
+			fields := strings.Split(t1[1], ",")
+
+			if len(fields) == 0 {
+				return nil, fmt.Errorf("2 invaild table format(表名@字段1:类型:默认值,字段2:类型:默认值,...) %s", l)
+			}
+
+			//处理其它字段
+			for _, v := range fields {
+				if v != "" {
+					field := strings.Split(v, ":")
+					if len(field) != 3 {
+						return nil, fmt.Errorf("3 invaild table format(表名@字段1:类型:默认值,字段2:类型:默认值,...) %s", l)
+					}
+
+					tdef.Fields = append(tdef.Fields, FieldDef{
+						Name:        field[0],
+						Type:        field[1],
+						DefautValue: field[2],
+					})
+				}
+			}
+
+			dbDef.TableDefs = append(dbDef.TableDefs, tdef)
+		}
 	}
 
 	return dbDef, nil
@@ -114,6 +127,11 @@ func GetTypeByStr(s string) proto.ValueType {
 	}
 }
 
+type DBMeta interface {
+	GetTableMeta(tab string) TableMeta
+	GetVersion() int64
+}
+
 type TableMeta interface {
 	GetDefaultValue(name string) interface{}
 	CheckFields(fields ...*proto.Field) error
@@ -121,6 +139,7 @@ type TableMeta interface {
 	GetAllFieldsName() []string
 	TableName() string
 	FillDefaultValues(fields map[string]*proto.Field)
+	GetVersion() int64
 }
 
 type DBLoadTask interface {
@@ -137,10 +156,6 @@ type UpdateState struct {
 	Fields  map[string]*proto.Field
 	Meta    TableMeta
 	State   DBState
-}
-
-type MetaMgr interface {
-	GetTableMeta(string) TableMeta
 }
 
 type DBLoader interface {

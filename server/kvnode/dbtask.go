@@ -26,7 +26,7 @@ func (this *dbUpdateTask) ReleaseLock() {
 func (this *dbUpdateTask) Dirty() bool {
 	this.Lock()
 	defer this.Unlock()
-	return len(this.updateFields) != 0
+	return this.dbstate != db.DBState_none
 }
 
 func (this *dbUpdateTask) ClearUpdateStateAndReleaseLock() {
@@ -72,6 +72,7 @@ func (this *dbUpdateTask) issueFullDbWriteBack() error {
 		this.dbstate = db.DBState_insert
 	case kv_no_record:
 		this.dbstate = db.DBState_delete
+		this.updateFields = map[string]*flyproto.Field{}
 	case kv_new, kv_loading:
 		return nil
 	case kv_invaild:
@@ -79,10 +80,6 @@ func (this *dbUpdateTask) issueFullDbWriteBack() error {
 	}
 
 	this.version = this.keyValue.version
-
-	if this.updateFields == nil {
-		this.updateFields = map[string]*flyproto.Field{}
-	}
 
 	if this.dbstate == db.DBState_insert {
 		for k, v := range this.keyValue.fields {
@@ -122,6 +119,7 @@ func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields 
 			this.dbstate = db.DBState_insert
 		} else if dbstate == db.DBState_delete {
 			this.dbstate = db.DBState_delete
+			this.updateFields = map[string]*flyproto.Field{}
 		} else {
 			return errors.New("updateState error 2")
 		}
@@ -134,6 +132,9 @@ func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields 
 	case db.DBState_update:
 		if dbstate == db.DBState_update || dbstate == db.DBState_delete {
 			this.dbstate = dbstate
+			if dbstate == db.DBState_delete {
+				this.updateFields = map[string]*flyproto.Field{}
+			}
 		} else {
 			return errors.New("updateState error 4")
 		}
@@ -142,10 +143,6 @@ func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields 
 	}
 
 	this.version = version
-
-	if this.updateFields == nil {
-		this.updateFields = map[string]*flyproto.Field{}
-	}
 
 	for k, v := range fields {
 		this.updateFields[k] = v

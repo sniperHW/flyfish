@@ -4,6 +4,7 @@ import (
 	//"errors"
 	"errors"
 	"fmt"
+	"github.com/sniperHW/flyfish/backend/db"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/compress"
@@ -44,12 +45,14 @@ type kvnode struct {
 	running    int32
 	remCounter int32
 
-	db        dbbackendI
-	listener  *cs.Listener
-	id        int
-	mutilRaft *raft.MutilRaft
-	stopOnce  sync.Once
-	startOnce sync.Once
+	db          dbbackendI
+	meta        db.DBMeta
+	listener    *cs.Listener
+	id          int
+	mutilRaft   *raft.MutilRaft
+	stopOnce    sync.Once
+	startOnce   sync.Once
+	metaCreator func(*db.DbDef) (db.DBMeta, error)
 
 	selfUrl string
 }
@@ -114,6 +117,19 @@ func (this *kvnode) startListener() {
 						c.(*conn).removePendingCmdBySeqno(v)
 					}
 				case flyproto.CmdType_ReloadTableConf:
+					/*err := this.updateTbMeta()
+					if nil == err {
+						session.Send(&cs.RespMessage{
+							Seqno: msg.Seqno,
+							Cmd:   msg.Cmd,
+						})
+					} else {
+						session.Send(&cs.RespMessage{
+							Seqno: msg.Seqno,
+							Cmd:   msg.Cmd,
+							Err:   errcode.New(errcode.Errcode_error, err.Error()),
+						})
+					}*/
 				default:
 
 					this.muS.RLock()
@@ -190,7 +206,7 @@ func (this *kvnode) remStore(storeID int) error {
 	return nil
 }
 
-func (this *kvnode) addStore(storeID int, cluster string, slots *bitmap.Bitmap) error {
+func (this *kvnode) addStore(meta db.DBMeta, storeID int, cluster string, slots *bitmap.Bitmap) error {
 	if atomic.LoadInt32(&this.running) == 0 {
 		return errors.New("kvnode is not running")
 	}
@@ -246,6 +262,7 @@ func (this *kvnode) addStore(storeID int, cluster string, slots *bitmap.Bitmap) 
 		kvnode:             this,
 		shard:              storeID,
 		slots:              slots,
+		meta:               meta,
 	}
 
 	store.lru.init()
@@ -364,7 +381,7 @@ func (this *kvnode) Start() error {
 						}
 					}
 
-					if err = this.addStore(v, config.SoloConfig.RaftCluster, storeBitmap); nil != err {
+					if err = this.addStore(this.meta, v, config.SoloConfig.RaftCluster, storeBitmap); nil != err {
 						return
 					}
 				}
@@ -380,7 +397,13 @@ func (this *kvnode) Start() error {
 	return err
 }
 
-func NewKvNode(id int, db dbbackendI) *kvnode {
+func NewKvNode(id int, metaDef *db.DbDef, metaCreator func(*db.DbDef) (db.DBMeta, error), db dbbackendI) *kvnode {
+
+	meta, err := metaCreator(metaDef)
+
+	if nil != err {
+		return nil
+	}
 
 	config := GetConfig()
 
@@ -401,10 +424,12 @@ func NewKvNode(id int, db dbbackendI) *kvnode {
 	}
 
 	return &kvnode{
-		id:        id,
-		mutilRaft: raft.NewMutilRaft(),
-		clients:   map[*net.Socket]*net.Socket{},
-		stores:    map[int]*kvstore{},
-		db:        db,
+		id:          id,
+		mutilRaft:   raft.NewMutilRaft(),
+		clients:     map[*net.Socket]*net.Socket{},
+		stores:      map[int]*kvstore{},
+		db:          db,
+		meta:        meta,
+		metaCreator: metaCreator,
 	}
 }

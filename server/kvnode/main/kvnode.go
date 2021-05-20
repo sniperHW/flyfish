@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/sniperHW/flyfish/backend/db/sql"
 	"github.com/sniperHW/flyfish/logger"
 	kvnode "github.com/sniperHW/flyfish/server/kvnode"
 	"github.com/sniperHW/flyfish/server/kvnode/metaLoader"
@@ -42,14 +43,7 @@ func main() {
 		return
 	}
 
-	backend, err := kvnode.NewSqlDbBackend(meta)
-
-	if nil != err {
-		kvnode.GetSugar().Error(err)
-		return
-	}
-
-	node := kvnode.NewKvNode(*id, backend)
+	node := kvnode.NewKvNode(*id, meta, sql.CreateDbMeta, kvnode.NewSqlDbBackend())
 
 	err = node.Start()
 	if nil == err {
