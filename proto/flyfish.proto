@@ -22,8 +22,7 @@ enum CmdType {
   CompareAndSet = 8;
   CompareAndSetNx = 9;
   Kick = 10;
-  ReloadTableConf = 11;
-  Cancel = 12; 
+  Cancel = 11; 
 }
 
 message loginReq {
@@ -34,25 +33,6 @@ message loginResp {
   optional bool ok = 1;
   optional bool compress = 2;
 }
-
-message reloadTableConfReq {
-  required int64  seqno   = 1;  
-}
-
-message reloadTableConfResp {
-  required int64  seqno   = 1;
-  required int32  errCode = 2;
-  optional string err     = 3;   
-}
-
-message reloadConfigReq {
-  optional string path = 1;
-}
-
-message reloadConfigResp {
-  optional string err = 1;  
-}
-
 
 enum ValueType {
   invaild  = 0;
@@ -202,26 +182,6 @@ message kick_req {
 message kick_resp {
   
 }
-
-/*
-message row {
-  required string key = 1;
-  required int64 version = 2;
-  repeated field fields = 3;
-}
-
-
-message scan_req {
-  required req_common head = 1;  
-  repeated string fields  = 3;
-  optional bool  all = 4;  //获取所有字段
-  optional int32 count = 5;  
-}
-
-message scan_resp {
-  required resp_common head = 1;  
-  repeated row    rows     = 3;
-}*/
 
 message cancel {
   repeated int64 seqs = 1;//所有需要取消的seqno 

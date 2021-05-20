@@ -116,20 +116,6 @@ func (this *kvnode) startListener() {
 					for _, v := range req.GetSeqs() {
 						c.(*conn).removePendingCmdBySeqno(v)
 					}
-				case flyproto.CmdType_ReloadTableConf:
-					/*err := this.updateTbMeta()
-					if nil == err {
-						session.Send(&cs.RespMessage{
-							Seqno: msg.Seqno,
-							Cmd:   msg.Cmd,
-						})
-					} else {
-						session.Send(&cs.RespMessage{
-							Seqno: msg.Seqno,
-							Cmd:   msg.Cmd,
-							Err:   errcode.New(errcode.Errcode_error, err.Error()),
-						})
-					}*/
 				default:
 
 					this.muS.RLock()

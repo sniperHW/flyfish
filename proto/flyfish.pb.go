@@ -42,8 +42,7 @@ const (
 	CmdType_CompareAndSet   CmdType = 8
 	CmdType_CompareAndSetNx CmdType = 9
 	CmdType_Kick            CmdType = 10
-	CmdType_ReloadTableConf CmdType = 11
-	CmdType_Cancel          CmdType = 12
+	CmdType_Cancel          CmdType = 11
 )
 
 var CmdType_name = map[int32]string{
@@ -57,8 +56,7 @@ var CmdType_name = map[int32]string{
 	8:  "CompareAndSet",
 	9:  "CompareAndSetNx",
 	10: "Kick",
-	11: "ReloadTableConf",
-	12: "Cancel",
+	11: "Cancel",
 }
 
 var CmdType_value = map[string]int32{
@@ -72,8 +70,7 @@ var CmdType_value = map[string]int32{
 	"CompareAndSet":   8,
 	"CompareAndSetNx": 9,
 	"Kick":            10,
-	"ReloadTableConf": 11,
-	"Cancel":          12,
+	"Cancel":          11,
 }
 
 func (x CmdType) Enum() *CmdType {
@@ -245,194 +242,6 @@ func (m *LoginResp) GetCompress() bool {
 	return false
 }
 
-type ReloadTableConfReq struct {
-	Seqno int64 `protobuf:"varint,1,req,name=seqno" json:"seqno"`
-}
-
-func (m *ReloadTableConfReq) Reset()      { *m = ReloadTableConfReq{} }
-func (*ReloadTableConfReq) ProtoMessage() {}
-func (*ReloadTableConfReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{2}
-}
-func (m *ReloadTableConfReq) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *ReloadTableConfReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_ReloadTableConfReq.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (m *ReloadTableConfReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ReloadTableConfReq.Merge(m, src)
-}
-func (m *ReloadTableConfReq) XXX_Size() int {
-	return m.Size()
-}
-func (m *ReloadTableConfReq) XXX_DiscardUnknown() {
-	xxx_messageInfo_ReloadTableConfReq.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_ReloadTableConfReq proto.InternalMessageInfo
-
-func (m *ReloadTableConfReq) GetSeqno() int64 {
-	if m != nil {
-		return m.Seqno
-	}
-	return 0
-}
-
-type ReloadTableConfResp struct {
-	Seqno   int64  `protobuf:"varint,1,req,name=seqno" json:"seqno"`
-	ErrCode int32  `protobuf:"varint,2,req,name=errCode" json:"errCode"`
-	Err     string `protobuf:"bytes,3,opt,name=err" json:"err"`
-}
-
-func (m *ReloadTableConfResp) Reset()      { *m = ReloadTableConfResp{} }
-func (*ReloadTableConfResp) ProtoMessage() {}
-func (*ReloadTableConfResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{3}
-}
-func (m *ReloadTableConfResp) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *ReloadTableConfResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_ReloadTableConfResp.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (m *ReloadTableConfResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ReloadTableConfResp.Merge(m, src)
-}
-func (m *ReloadTableConfResp) XXX_Size() int {
-	return m.Size()
-}
-func (m *ReloadTableConfResp) XXX_DiscardUnknown() {
-	xxx_messageInfo_ReloadTableConfResp.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_ReloadTableConfResp proto.InternalMessageInfo
-
-func (m *ReloadTableConfResp) GetSeqno() int64 {
-	if m != nil {
-		return m.Seqno
-	}
-	return 0
-}
-
-func (m *ReloadTableConfResp) GetErrCode() int32 {
-	if m != nil {
-		return m.ErrCode
-	}
-	return 0
-}
-
-func (m *ReloadTableConfResp) GetErr() string {
-	if m != nil {
-		return m.Err
-	}
-	return ""
-}
-
-type ReloadConfigReq struct {
-	Path string `protobuf:"bytes,1,opt,name=path" json:"path"`
-}
-
-func (m *ReloadConfigReq) Reset()      { *m = ReloadConfigReq{} }
-func (*ReloadConfigReq) ProtoMessage() {}
-func (*ReloadConfigReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{4}
-}
-func (m *ReloadConfigReq) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *ReloadConfigReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_ReloadConfigReq.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (m *ReloadConfigReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ReloadConfigReq.Merge(m, src)
-}
-func (m *ReloadConfigReq) XXX_Size() int {
-	return m.Size()
-}
-func (m *ReloadConfigReq) XXX_DiscardUnknown() {
-	xxx_messageInfo_ReloadConfigReq.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_ReloadConfigReq proto.InternalMessageInfo
-
-func (m *ReloadConfigReq) GetPath() string {
-	if m != nil {
-		return m.Path
-	}
-	return ""
-}
-
-type ReloadConfigResp struct {
-	Err string `protobuf:"bytes,1,opt,name=err" json:"err"`
-}
-
-func (m *ReloadConfigResp) Reset()      { *m = ReloadConfigResp{} }
-func (*ReloadConfigResp) ProtoMessage() {}
-func (*ReloadConfigResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{5}
-}
-func (m *ReloadConfigResp) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *ReloadConfigResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_ReloadConfigResp.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (m *ReloadConfigResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ReloadConfigResp.Merge(m, src)
-}
-func (m *ReloadConfigResp) XXX_Size() int {
-	return m.Size()
-}
-func (m *ReloadConfigResp) XXX_DiscardUnknown() {
-	xxx_messageInfo_ReloadConfigResp.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_ReloadConfigResp proto.InternalMessageInfo
-
-func (m *ReloadConfigResp) GetErr() string {
-	if m != nil {
-		return m.Err
-	}
-	return ""
-}
-
 type Value struct {
 	Type ValueType `protobuf:"varint,1,req,name=type,enum=proto.ValueType" json:"type"`
 	I    int64     `protobuf:"varint,2,opt,name=i" json:"i"`
@@ -444,7 +253,7 @@ type Value struct {
 func (m *Value) Reset()      { *m = Value{} }
 func (*Value) ProtoMessage() {}
 func (*Value) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{6}
+	return fileDescriptor_178c4910b45e4c52, []int{2}
 }
 func (m *Value) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -516,7 +325,7 @@ type Field struct {
 func (m *Field) Reset()      { *m = Field{} }
 func (*Field) ProtoMessage() {}
 func (*Field) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{7}
+	return fileDescriptor_178c4910b45e4c52, []int{3}
 }
 func (m *Field) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -566,7 +375,7 @@ type PingReq struct {
 func (m *PingReq) Reset()      { *m = PingReq{} }
 func (*PingReq) ProtoMessage() {}
 func (*PingReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{8}
+	return fileDescriptor_178c4910b45e4c52, []int{4}
 }
 func (m *PingReq) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -609,7 +418,7 @@ type PingResp struct {
 func (m *PingResp) Reset()      { *m = PingResp{} }
 func (*PingResp) ProtoMessage() {}
 func (*PingResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{9}
+	return fileDescriptor_178c4910b45e4c52, []int{5}
 }
 func (m *PingResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -655,7 +464,7 @@ type GetReq struct {
 func (m *GetReq) Reset()      { *m = GetReq{} }
 func (*GetReq) ProtoMessage() {}
 func (*GetReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{10}
+	return fileDescriptor_178c4910b45e4c52, []int{6}
 }
 func (m *GetReq) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -713,7 +522,7 @@ type GetResp struct {
 func (m *GetResp) Reset()      { *m = GetResp{} }
 func (*GetResp) ProtoMessage() {}
 func (*GetResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{11}
+	return fileDescriptor_178c4910b45e4c52, []int{7}
 }
 func (m *GetResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -767,7 +576,7 @@ type SetReq struct {
 func (m *SetReq) Reset()      { *m = SetReq{} }
 func (*SetReq) ProtoMessage() {}
 func (*SetReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{12}
+	return fileDescriptor_178c4910b45e4c52, []int{8}
 }
 func (m *SetReq) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -817,7 +626,7 @@ type SetResp struct {
 func (m *SetResp) Reset()      { *m = SetResp{} }
 func (*SetResp) ProtoMessage() {}
 func (*SetResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{13}
+	return fileDescriptor_178c4910b45e4c52, []int{9}
 }
 func (m *SetResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -863,7 +672,7 @@ type SetNxReq struct {
 func (m *SetNxReq) Reset()      { *m = SetNxReq{} }
 func (*SetNxReq) ProtoMessage() {}
 func (*SetNxReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{14}
+	return fileDescriptor_178c4910b45e4c52, []int{10}
 }
 func (m *SetNxReq) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -914,7 +723,7 @@ type SetNxResp struct {
 func (m *SetNxResp) Reset()      { *m = SetNxResp{} }
 func (*SetNxResp) ProtoMessage() {}
 func (*SetNxResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{15}
+	return fileDescriptor_178c4910b45e4c52, []int{11}
 }
 func (m *SetNxResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -968,7 +777,7 @@ type IncrByReq struct {
 func (m *IncrByReq) Reset()      { *m = IncrByReq{} }
 func (*IncrByReq) ProtoMessage() {}
 func (*IncrByReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{16}
+	return fileDescriptor_178c4910b45e4c52, []int{12}
 }
 func (m *IncrByReq) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1019,7 +828,7 @@ type IncrByResp struct {
 func (m *IncrByResp) Reset()      { *m = IncrByResp{} }
 func (*IncrByResp) ProtoMessage() {}
 func (*IncrByResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{17}
+	return fileDescriptor_178c4910b45e4c52, []int{13}
 }
 func (m *IncrByResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1073,7 +882,7 @@ type DecrByReq struct {
 func (m *DecrByReq) Reset()      { *m = DecrByReq{} }
 func (*DecrByReq) ProtoMessage() {}
 func (*DecrByReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{18}
+	return fileDescriptor_178c4910b45e4c52, []int{14}
 }
 func (m *DecrByReq) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1124,7 +933,7 @@ type DecrByResp struct {
 func (m *DecrByResp) Reset()      { *m = DecrByResp{} }
 func (*DecrByResp) ProtoMessage() {}
 func (*DecrByResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{19}
+	return fileDescriptor_178c4910b45e4c52, []int{15}
 }
 func (m *DecrByResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1179,7 +988,7 @@ type CompareAndSetReq struct {
 func (m *CompareAndSetReq) Reset()      { *m = CompareAndSetReq{} }
 func (*CompareAndSetReq) ProtoMessage() {}
 func (*CompareAndSetReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{20}
+	return fileDescriptor_178c4910b45e4c52, []int{16}
 }
 func (m *CompareAndSetReq) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1237,7 +1046,7 @@ type CompareAndSetResp struct {
 func (m *CompareAndSetResp) Reset()      { *m = CompareAndSetResp{} }
 func (*CompareAndSetResp) ProtoMessage() {}
 func (*CompareAndSetResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{21}
+	return fileDescriptor_178c4910b45e4c52, []int{17}
 }
 func (m *CompareAndSetResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1292,7 +1101,7 @@ type CompareAndSetNxReq struct {
 func (m *CompareAndSetNxReq) Reset()      { *m = CompareAndSetNxReq{} }
 func (*CompareAndSetNxReq) ProtoMessage() {}
 func (*CompareAndSetNxReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{22}
+	return fileDescriptor_178c4910b45e4c52, []int{18}
 }
 func (m *CompareAndSetNxReq) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1350,7 +1159,7 @@ type CompareAndSetNxResp struct {
 func (m *CompareAndSetNxResp) Reset()      { *m = CompareAndSetNxResp{} }
 func (*CompareAndSetNxResp) ProtoMessage() {}
 func (*CompareAndSetNxResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{23}
+	return fileDescriptor_178c4910b45e4c52, []int{19}
 }
 func (m *CompareAndSetNxResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1401,7 +1210,7 @@ type DelReq struct {
 func (m *DelReq) Reset()      { *m = DelReq{} }
 func (*DelReq) ProtoMessage() {}
 func (*DelReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{24}
+	return fileDescriptor_178c4910b45e4c52, []int{20}
 }
 func (m *DelReq) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1444,7 +1253,7 @@ type DelResp struct {
 func (m *DelResp) Reset()      { *m = DelResp{} }
 func (*DelResp) ProtoMessage() {}
 func (*DelResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{25}
+	return fileDescriptor_178c4910b45e4c52, []int{21}
 }
 func (m *DelResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1486,7 +1295,7 @@ type KickReq struct {
 func (m *KickReq) Reset()      { *m = KickReq{} }
 func (*KickReq) ProtoMessage() {}
 func (*KickReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{26}
+	return fileDescriptor_178c4910b45e4c52, []int{22}
 }
 func (m *KickReq) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1521,7 +1330,7 @@ type KickResp struct {
 func (m *KickResp) Reset()      { *m = KickResp{} }
 func (*KickResp) ProtoMessage() {}
 func (*KickResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{27}
+	return fileDescriptor_178c4910b45e4c52, []int{23}
 }
 func (m *KickResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1557,7 +1366,7 @@ type Cancel struct {
 func (m *Cancel) Reset()      { *m = Cancel{} }
 func (*Cancel) ProtoMessage() {}
 func (*Cancel) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{28}
+	return fileDescriptor_178c4910b45e4c52, []int{24}
 }
 func (m *Cancel) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1598,10 +1407,6 @@ func init() {
 	proto.RegisterEnum("proto.ValueType", ValueType_name, ValueType_value)
 	proto.RegisterType((*LoginReq)(nil), "proto.loginReq")
 	proto.RegisterType((*LoginResp)(nil), "proto.loginResp")
-	proto.RegisterType((*ReloadTableConfReq)(nil), "proto.reloadTableConfReq")
-	proto.RegisterType((*ReloadTableConfResp)(nil), "proto.reloadTableConfResp")
-	proto.RegisterType((*ReloadConfigReq)(nil), "proto.reloadConfigReq")
-	proto.RegisterType((*ReloadConfigResp)(nil), "proto.reloadConfigResp")
 	proto.RegisterType((*Value)(nil), "proto.value")
 	proto.RegisterType((*Field)(nil), "proto.field")
 	proto.RegisterType((*PingReq)(nil), "proto.ping_req")
@@ -1630,60 +1435,54 @@ func init() {
 func init() { proto.RegisterFile("flyfish.proto", fileDescriptor_178c4910b45e4c52) }
 
 var fileDescriptor_178c4910b45e4c52 = []byte{
-	// 844 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0x95, 0x41, 0x6f, 0xe3, 0x44,
-	0x14, 0xc7, 0x33, 0x71, 0x5c, 0xdb, 0x2f, 0x5d, 0xd6, 0x4c, 0xab, 0x12, 0x55, 0xc8, 0x44, 0x23,
-	0x0e, 0xa1, 0xa0, 0x2e, 0xda, 0x13, 0x17, 0x0e, 0x34, 0x2b, 0x21, 0xb4, 0xd2, 0xb2, 0xeb, 0xae,
-	0x90, 0x40, 0x42, 0x95, 0x13, 0x4f, 0xb2, 0xa3, 0x4c, 0x66, 0x5c, 0x8f, 0x37, 0x34, 0x37, 0x24,
-	0xbe, 0x00, 0x1f, 0x82, 0x03, 0x1f, 0xa5, 0xc7, 0x1e, 0xf7, 0x84, 0x68, 0x7a, 0xe1, 0xb8, 0x1f,
-	0x01, 0xbd, 0x89, 0xdd, 0x34, 0xdd, 0x80, 0x2c, 0x6d, 0x4e, 0x79, 0xf9, 0xbf, 0x37, 0xbf, 0xf7,
-	0x7f, 0xe3, 0xb1, 0x07, 0x1e, 0x8c, 0xe4, 0x7c, 0x24, 0xcc, 0xab, 0xe3, 0x2c, 0xd7, 0x85, 0xa6,
-	0xae, 0xfd, 0x39, 0xdc, 0x1f, 0xeb, 0xb1, 0xb6, 0xe1, 0x23, 0x8c, 0x96, 0x49, 0xf6, 0x05, 0xf8,
-	0x52, 0x8f, 0x85, 0x8a, 0xf9, 0x39, 0xed, 0x82, 0x3f, 0xd4, 0xd3, 0x2c, 0xe7, 0xc6, 0x74, 0x48,
-	0x97, 0xf4, 0xfc, 0x93, 0xd6, 0xe5, 0x5f, 0x9f, 0x34, 0xe2, 0x5b, 0x95, 0xf5, 0x21, 0x28, 0xab,
-	0x4d, 0x46, 0xf7, 0xa1, 0xa9, 0x27, 0x6b, 0x85, 0x4d, 0x3d, 0x59, 0x83, 0x34, 0x37, 0x42, 0xbe,
-	0x04, 0x9a, 0x73, 0xa9, 0x93, 0xf4, 0x65, 0x32, 0x90, 0xbc, 0xaf, 0xd5, 0x08, 0x9b, 0x1f, 0x82,
-	0x6b, 0xf8, 0xb9, 0xd2, 0x1d, 0xd2, 0x6d, 0xf6, 0x9c, 0x72, 0xd1, 0x52, 0x62, 0x02, 0xf6, 0xde,
-	0x59, 0x61, 0xb2, 0xff, 0x5b, 0x42, 0x23, 0xf0, 0x78, 0x9e, 0xf7, 0x75, 0xca, 0x3b, 0xcd, 0x6e,
-	0xb3, 0xe7, 0x96, 0xd9, 0x4a, 0xa4, 0x07, 0xe0, 0xf0, 0x3c, 0xef, 0x38, 0x5d, 0xd2, 0x0b, 0xca,
-	0x1c, 0x0a, 0xec, 0x73, 0x78, 0xb8, 0x6c, 0x85, 0x5d, 0xc4, 0x18, 0x9d, 0x75, 0xa0, 0x95, 0x25,
-	0xc5, 0x2b, 0x3b, 0x69, 0x55, 0x6b, 0x15, 0x76, 0x04, 0xe1, 0x7a, 0xb1, 0xc9, 0x2a, 0x30, 0xb9,
-	0x0f, 0xfe, 0x8d, 0x80, 0x3b, 0x4b, 0xe4, 0x6b, 0x4e, 0x8f, 0xa0, 0x55, 0xcc, 0x33, 0x6e, 0x5d,
-	0x7f, 0xf0, 0x38, 0x5c, 0x3e, 0x88, 0xe3, 0x1f, 0x30, 0xf7, 0x72, 0x9e, 0xf1, 0xaa, 0x03, 0xd6,
-	0x50, 0x0a, 0x44, 0xd8, 0x6d, 0xac, 0xc6, 0x23, 0x02, 0xb5, 0x91, 0x35, 0x4e, 0x2a, 0x6d, 0x84,
-	0x9a, 0xe9, 0xb4, 0xee, 0xf4, 0x24, 0x06, 0xb5, 0x41, 0xc7, 0xed, 0x92, 0xde, 0x6e, 0xa5, 0x0d,
-	0xd8, 0xd7, 0xe0, 0x8e, 0x04, 0x97, 0x29, 0x0e, 0xa5, 0x92, 0x29, 0x5f, 0x1f, 0x0a, 0x15, 0x7a,
-	0x08, 0x64, 0x66, 0x5b, 0xb6, 0x1f, 0xef, 0x96, 0xde, 0xac, 0xef, 0x98, 0xcc, 0xd8, 0x31, 0xf8,
-	0x99, 0x50, 0xe3, 0xb3, 0x9c, 0x9f, 0x53, 0x06, 0x41, 0x21, 0xa6, 0xdc, 0x14, 0xc9, 0x34, 0xb3,
-	0x98, 0xca, 0xe2, 0x4a, 0x66, 0x8f, 0x20, 0x28, 0xeb, 0x4d, 0xb6, 0xbe, 0xa0, 0xb9, 0x79, 0xc1,
-	0x8f, 0xe0, 0x8d, 0x79, 0x61, 0xf9, 0x11, 0x78, 0x33, 0x9e, 0x1b, 0xa1, 0xd5, 0x1d, 0x3a, 0x89,
-	0x2b, 0x91, 0x1e, 0xc0, 0x8e, 0x1d, 0x05, 0x8f, 0x99, 0xd3, 0x0b, 0xe2, 0xf2, 0x1f, 0x3e, 0x80,
-	0x44, 0x4a, 0xbb, 0x41, 0xd5, 0xd9, 0x43, 0x81, 0x3d, 0x07, 0x7f, 0x89, 0x36, 0xd9, 0x66, 0x76,
-	0x63, 0xc5, 0xfe, 0x74, 0x8d, 0xbd, 0xda, 0x08, 0x2b, 0x56, 0x9d, 0xd8, 0xf7, 0xe0, 0x99, 0x9a,
-	0x66, 0xeb, 0x01, 0x8f, 0xc0, 0x37, 0x35, 0x2d, 0xb2, 0x18, 0x00, 0x6b, 0xd5, 0xc5, 0x16, 0xfb,
-	0x9f, 0x42, 0xfb, 0x96, 0xb9, 0xb5, 0x5d, 0x7a, 0x01, 0x6d, 0xa1, 0x86, 0xf9, 0xd9, 0x60, 0x5e,
-	0xcb, 0x29, 0x2b, 0x4f, 0xa8, 0x7d, 0x6d, 0xef, 0x33, 0x97, 0x29, 0x16, 0xc3, 0xee, 0x0a, 0x59,
-	0xc3, 0xe8, 0x1d, 0x26, 0xf9, 0x2f, 0xe6, 0x0b, 0x68, 0xa7, 0x7c, 0xeb, 0x36, 0x57, 0xc8, 0x2d,
-	0xd9, 0x7c, 0x0d, 0x7b, 0xf8, 0x21, 0x4d, 0x72, 0x7e, 0x96, 0xa8, 0xf4, 0xac, 0xee, 0xf9, 0x8b,
-	0xc0, 0x51, 0xfc, 0x97, 0x8d, 0x66, 0x31, 0x81, 0x79, 0x2d, 0xd3, 0x8e, 0xb3, 0x29, 0xaf, 0x65,
-	0xca, 0x7e, 0x82, 0xfd, 0x77, 0xdb, 0xd6, 0x1b, 0xc9, 0x7e, 0x3c, 0x36, 0x8f, 0x64, 0x53, 0xec,
-	0x02, 0x0e, 0xee, 0xb3, 0x6b, 0x9e, 0xea, 0xf7, 0x9d, 0xea, 0x67, 0xf8, 0x68, 0x63, 0xe7, 0x2d,
-	0x0d, 0xf6, 0x19, 0x78, 0x29, 0x97, 0x75, 0x26, 0xc1, 0x37, 0x7f, 0x59, 0x5a, 0xe3, 0xcd, 0x07,
-	0xf0, 0x27, 0x62, 0x38, 0x41, 0x2e, 0x6b, 0x43, 0x50, 0xc6, 0x26, 0x63, 0x1f, 0xc3, 0xce, 0x30,
-	0x51, 0x43, 0x2e, 0x29, 0x85, 0x96, 0xe1, 0xe7, 0x78, 0x8b, 0x3b, 0x3d, 0x27, 0xb6, 0xf1, 0xd1,
-	0x1f, 0x04, 0xbc, 0xfe, 0x34, 0xc5, 0x2b, 0x86, 0xfa, 0xd0, 0x7a, 0x2e, 0xd4, 0x38, 0x24, 0xd4,
-	0x03, 0xe7, 0x94, 0x17, 0x61, 0x13, 0x83, 0x6f, 0x79, 0x11, 0x3a, 0x18, 0x3c, 0xe1, 0x32, 0x6c,
-	0x51, 0x80, 0x9d, 0xef, 0xd4, 0x30, 0x3f, 0x99, 0x87, 0x2e, 0xc6, 0x4f, 0xb8, 0x8d, 0x77, 0x68,
-	0x00, 0xee, 0x29, 0x2f, 0x9e, 0x5d, 0x84, 0x1e, 0xfd, 0x10, 0x1e, 0xf4, 0x97, 0x1b, 0xf8, 0x8d,
-	0x4a, 0x91, 0xe3, 0xd3, 0x3d, 0x78, 0xb8, 0x26, 0x3d, 0xbb, 0x08, 0x03, 0xec, 0xf7, 0x54, 0x0c,
-	0x27, 0x21, 0x60, 0x3a, 0x5e, 0xbf, 0xca, 0xc3, 0x36, 0xd2, 0xfb, 0xd6, 0x78, 0xb8, 0x7b, 0xf4,
-	0x14, 0x82, 0xdb, 0xab, 0x90, 0xb6, 0xc1, 0x13, 0x6a, 0x96, 0x08, 0x99, 0x86, 0x0d, 0x34, 0xa6,
-	0x84, 0x0c, 0x09, 0x96, 0x9b, 0x22, 0x47, 0xff, 0xd6, 0xb6, 0x50, 0x68, 0x3b, 0x00, 0x77, 0x24,
-	0x75, 0x52, 0x84, 0x2d, 0xec, 0x36, 0x90, 0x7a, 0x10, 0xba, 0x27, 0x5f, 0x5d, 0x5e, 0x47, 0xe4,
-	0xea, 0x3a, 0x22, 0x6f, 0xae, 0xa3, 0xc6, 0xdb, 0xeb, 0x88, 0xfc, 0xba, 0x88, 0xc8, 0x9f, 0x8b,
-	0x88, 0x5c, 0x2e, 0x22, 0x72, 0xb5, 0x88, 0xc8, 0xdf, 0x8b, 0x88, 0xfc, 0xb3, 0x88, 0x1a, 0x6f,
-	0x17, 0x11, 0xf9, 0xfd, 0x26, 0x6a, 0x5c, 0xdd, 0x44, 0x8d, 0x37, 0x37, 0x51, 0xe3, 0xdf, 0x00,
-	0x00, 0x00, 0xff, 0xff, 0xa3, 0x51, 0x87, 0x53, 0x44, 0x09, 0x00, 0x00,
+	// 743 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0x95, 0xcf, 0x6a, 0xdb, 0x4a,
+	0x14, 0xc6, 0x35, 0xfa, 0x63, 0x49, 0xc7, 0xc9, 0xbd, 0xba, 0x93, 0x90, 0x2b, 0x42, 0x99, 0x1a,
+	0xd1, 0x85, 0x6b, 0x4a, 0x02, 0x59, 0x75, 0xd3, 0x45, 0xe3, 0x40, 0x29, 0x81, 0x34, 0x51, 0x4a,
+	0xa1, 0x85, 0x62, 0x64, 0x6b, 0xec, 0x0e, 0x96, 0x25, 0x45, 0x52, 0x5c, 0x7b, 0x57, 0xe8, 0x03,
+	0xb4, 0x8f, 0xd1, 0x47, 0xc9, 0x32, 0xcb, 0xac, 0x4a, 0xed, 0x6c, 0xba, 0xcc, 0x23, 0x94, 0x19,
+	0x4b, 0x71, 0xdc, 0xb8, 0x20, 0xa8, 0x57, 0x3e, 0xfe, 0xce, 0x99, 0xdf, 0xf9, 0xce, 0x68, 0xa4,
+	0x81, 0xf5, 0x6e, 0x30, 0xee, 0xb2, 0xf4, 0xc3, 0x4e, 0x9c, 0x44, 0x59, 0x84, 0x35, 0xf1, 0xb3,
+	0xbd, 0xd9, 0x8b, 0x7a, 0x91, 0x08, 0x77, 0x79, 0x34, 0x4b, 0x3a, 0x4f, 0xc0, 0x08, 0xa2, 0x1e,
+	0x0b, 0x5d, 0x7a, 0x86, 0x6b, 0x60, 0x74, 0xa2, 0x41, 0x9c, 0xd0, 0x34, 0xb5, 0x51, 0x0d, 0xd5,
+	0x8d, 0x7d, 0xf5, 0xe2, 0xfb, 0x43, 0xc9, 0xbd, 0x55, 0x9d, 0x26, 0x98, 0x79, 0x75, 0x1a, 0xe3,
+	0x4d, 0x90, 0xa3, 0xfe, 0x42, 0xa1, 0x1c, 0xf5, 0x17, 0x20, 0xf2, 0x52, 0xc8, 0x67, 0x04, 0xda,
+	0xd0, 0x0b, 0xce, 0x29, 0x6e, 0x80, 0x9a, 0x8d, 0x63, 0x6a, 0xa3, 0x9a, 0x5c, 0xff, 0x67, 0xcf,
+	0x9a, 0x59, 0xda, 0x79, 0xc3, 0x73, 0xaf, 0xc7, 0x31, 0xcd, 0x57, 0x8a, 0x1a, 0x8c, 0x01, 0x31,
+	0x01, 0x54, 0x72, 0x19, 0x31, 0xae, 0x75, 0x6d, 0xa5, 0x86, 0xea, 0xa8, 0xd0, 0xba, 0x5c, 0x4b,
+	0x6d, 0xb5, 0x86, 0xea, 0x66, 0xa1, 0xa5, 0x5c, 0x6b, 0xdb, 0x5a, 0x0d, 0xd5, 0xd7, 0x0a, 0xad,
+	0xed, 0x3c, 0x03, 0xad, 0xcb, 0x68, 0xe0, 0x63, 0x1b, 0xd4, 0xd0, 0x1b, 0x50, 0x31, 0x48, 0xb1,
+	0x46, 0x28, 0x78, 0x1b, 0xd0, 0x50, 0xb4, 0xac, 0xee, 0xad, 0xe5, 0xde, 0x84, 0x6f, 0x17, 0x0d,
+	0x9d, 0x1d, 0x30, 0x62, 0x16, 0xf6, 0x5a, 0x09, 0x3d, 0xc3, 0x0e, 0x98, 0x19, 0x1b, 0xd0, 0x34,
+	0xf3, 0x06, 0xb1, 0xc0, 0x14, 0x16, 0xe7, 0xb2, 0xb3, 0x0b, 0x66, 0x5e, 0x9f, 0xc6, 0x8b, 0x0b,
+	0xe4, 0xe5, 0x0b, 0xde, 0x82, 0xde, 0xa3, 0x99, 0xe0, 0x13, 0xd0, 0x87, 0x34, 0x49, 0x59, 0x14,
+	0xde, 0xa1, 0x23, 0xb7, 0x10, 0xf1, 0x16, 0x54, 0xc4, 0x28, 0x7c, 0xc3, 0x95, 0xba, 0xe9, 0xe6,
+	0xff, 0xf0, 0x16, 0x28, 0x5e, 0x10, 0x88, 0x0d, 0x2a, 0x9e, 0x02, 0x17, 0x9c, 0x63, 0x30, 0x66,
+	0xe8, 0x34, 0x5e, 0xce, 0x96, 0xe6, 0xec, 0x47, 0x0b, 0xec, 0xf9, 0x46, 0x08, 0xb1, 0xe8, 0xe4,
+	0xbc, 0x02, 0x3d, 0x2d, 0x69, 0xb6, 0x1c, 0xb0, 0x01, 0x46, 0x5a, 0xd2, 0xa2, 0xe3, 0x02, 0xf0,
+	0xda, 0x70, 0xb4, 0xc2, 0xfe, 0xa7, 0x50, 0xbd, 0x65, 0xae, 0x6c, 0x97, 0x4e, 0xa0, 0xca, 0xc2,
+	0x4e, 0xd2, 0x6a, 0x8f, 0x4b, 0x39, 0x75, 0xf2, 0x13, 0x6a, 0xcb, 0x35, 0xf9, 0x1e, 0x73, 0x96,
+	0x72, 0x5c, 0x58, 0x9b, 0x23, 0x4b, 0x18, 0xbd, 0xc3, 0x44, 0x7f, 0x62, 0x9e, 0x40, 0xd5, 0xa7,
+	0x2b, 0xb7, 0x39, 0x47, 0xae, 0xc8, 0xe6, 0x39, 0x6c, 0xf0, 0x4f, 0x8a, 0x97, 0xd0, 0x96, 0x17,
+	0xfa, 0xad, 0xb2, 0xe7, 0x8f, 0x80, 0x12, 0xd2, 0x8f, 0x4b, 0xcd, 0xf2, 0x04, 0xcf, 0x47, 0x81,
+	0x6f, 0x2b, 0xcb, 0xf2, 0x51, 0xe0, 0x3b, 0xef, 0x60, 0xf3, 0x7e, 0xdb, 0x72, 0x23, 0x89, 0x8f,
+	0xc7, 0xf2, 0x91, 0x44, 0xca, 0x19, 0xc1, 0xd6, 0xef, 0xec, 0x92, 0xa7, 0xfa, 0x6f, 0xa7, 0x7a,
+	0x0f, 0xff, 0x2f, 0xed, 0xbc, 0xa2, 0xc1, 0x1e, 0x83, 0xee, 0xd3, 0xa0, 0xcc, 0x24, 0xfc, 0xcd,
+	0x9f, 0x95, 0x96, 0x78, 0xf3, 0x01, 0x8c, 0x3e, 0xeb, 0xf4, 0x39, 0xd7, 0xa9, 0x82, 0x99, 0xc7,
+	0x69, 0xec, 0x3c, 0x80, 0x4a, 0xc7, 0x0b, 0x3b, 0x34, 0xc0, 0x18, 0xd4, 0x94, 0x9e, 0xf1, 0xfb,
+	0x4c, 0xa9, 0x2b, 0xae, 0x88, 0x1b, 0x5f, 0x10, 0xe8, 0xcd, 0x81, 0xcf, 0xaf, 0x18, 0x6c, 0x80,
+	0x7a, 0xcc, 0xc2, 0x9e, 0x85, 0xb0, 0x0e, 0xca, 0x29, 0xcd, 0x2c, 0x99, 0x07, 0x2f, 0x68, 0x66,
+	0x29, 0x3c, 0x38, 0xa0, 0x81, 0xa5, 0x62, 0x80, 0xca, 0xcb, 0xb0, 0x93, 0xec, 0x8f, 0x2d, 0x8d,
+	0xc7, 0x07, 0x54, 0xc4, 0x15, 0x6c, 0x82, 0x76, 0x4a, 0xb3, 0xa3, 0x91, 0xa5, 0xe3, 0xff, 0x60,
+	0xbd, 0x39, 0xdb, 0xc0, 0xe7, 0xa1, 0xcf, 0x39, 0x06, 0xde, 0x80, 0x7f, 0x17, 0xa4, 0xa3, 0x91,
+	0x65, 0xf2, 0x7e, 0x87, 0xac, 0xd3, 0xb7, 0x80, 0x83, 0x9a, 0xc2, 0xa3, 0x55, 0x6d, 0x1c, 0x82,
+	0x79, 0x7b, 0xeb, 0xe1, 0x2a, 0xe8, 0x2c, 0x1c, 0x7a, 0x2c, 0xf0, 0x2d, 0x89, 0x7b, 0x08, 0x59,
+	0x60, 0x21, 0x5e, 0x9e, 0x66, 0x09, 0xb7, 0x2a, 0x1c, 0xb2, 0x90, 0x3b, 0x34, 0x41, 0xeb, 0x06,
+	0x91, 0x97, 0x59, 0x2a, 0x07, 0xb7, 0x83, 0xa8, 0x6d, 0x69, 0xfb, 0x4f, 0x2f, 0x26, 0x04, 0x5d,
+	0x4e, 0x08, 0xba, 0x9a, 0x10, 0xe9, 0x66, 0x42, 0xd0, 0xa7, 0x29, 0x41, 0xdf, 0xa6, 0x04, 0x5d,
+	0x4c, 0x09, 0xba, 0x9c, 0x12, 0xf4, 0x63, 0x4a, 0xd0, 0xcf, 0x29, 0x91, 0x6e, 0xa6, 0x04, 0x7d,
+	0xbd, 0x26, 0xd2, 0xe5, 0x35, 0x91, 0xae, 0xae, 0x89, 0xf4, 0x2b, 0x00, 0x00, 0xff, 0xff, 0xa4,
+	0x4f, 0xd9, 0x55, 0x39, 0x08, 0x00, 0x00,
 }
 
 func (x CmdType) String() string {
@@ -1747,108 +1546,6 @@ func (this *LoginResp) Equal(that interface{}) bool {
 		return false
 	}
 	if this.Compress != that1.Compress {
-		return false
-	}
-	return true
-}
-func (this *ReloadTableConfReq) Equal(that interface{}) bool {
-	if that == nil {
-		return this == nil
-	}
-
-	that1, ok := that.(*ReloadTableConfReq)
-	if !ok {
-		that2, ok := that.(ReloadTableConfReq)
-		if ok {
-			that1 = &that2
-		} else {
-			return false
-		}
-	}
-	if that1 == nil {
-		return this == nil
-	} else if this == nil {
-		return false
-	}
-	if this.Seqno != that1.Seqno {
-		return false
-	}
-	return true
-}
-func (this *ReloadTableConfResp) Equal(that interface{}) bool {
-	if that == nil {
-		return this == nil
-	}
-
-	that1, ok := that.(*ReloadTableConfResp)
-	if !ok {
-		that2, ok := that.(ReloadTableConfResp)
-		if ok {
-			that1 = &that2
-		} else {
-			return false
-		}
-	}
-	if that1 == nil {
-		return this == nil
-	} else if this == nil {
-		return false
-	}
-	if this.Seqno != that1.Seqno {
-		return false
-	}
-	if this.ErrCode != that1.ErrCode {
-		return false
-	}
-	if this.Err != that1.Err {
-		return false
-	}
-	return true
-}
-func (this *ReloadConfigReq) Equal(that interface{}) bool {
-	if that == nil {
-		return this == nil
-	}
-
-	that1, ok := that.(*ReloadConfigReq)
-	if !ok {
-		that2, ok := that.(ReloadConfigReq)
-		if ok {
-			that1 = &that2
-		} else {
-			return false
-		}
-	}
-	if that1 == nil {
-		return this == nil
-	} else if this == nil {
-		return false
-	}
-	if this.Path != that1.Path {
-		return false
-	}
-	return true
-}
-func (this *ReloadConfigResp) Equal(that interface{}) bool {
-	if that == nil {
-		return this == nil
-	}
-
-	that1, ok := that.(*ReloadConfigResp)
-	if !ok {
-		that2, ok := that.(ReloadConfigResp)
-		if ok {
-			that1 = &that2
-		} else {
-			return false
-		}
-	}
-	if that1 == nil {
-		return this == nil
-	} else if this == nil {
-		return false
-	}
-	if this.Err != that1.Err {
 		return false
 	}
 	return true
@@ -2561,48 +2258,6 @@ func (this *LoginResp) GoString() string {
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
-func (this *ReloadTableConfReq) GoString() string {
-	if this == nil {
-		return "nil"
-	}
-	s := make([]string, 0, 5)
-	s = append(s, "&proto.ReloadTableConfReq{")
-	s = append(s, "Seqno: "+fmt.Sprintf("%#v", this.Seqno)+",\n")
-	s = append(s, "}")
-	return strings.Join(s, "")
-}
-func (this *ReloadTableConfResp) GoString() string {
-	if this == nil {
-		return "nil"
-	}
-	s := make([]string, 0, 7)
-	s = append(s, "&proto.ReloadTableConfResp{")
-	s = append(s, "Seqno: "+fmt.Sprintf("%#v", this.Seqno)+",\n")
-	s = append(s, "ErrCode: "+fmt.Sprintf("%#v", this.ErrCode)+",\n")
-	s = append(s, "Err: "+fmt.Sprintf("%#v", this.Err)+",\n")
-	s = append(s, "}")
-	return strings.Join(s, "")
-}
-func (this *ReloadConfigReq) GoString() string {
-	if this == nil {
-		return "nil"
-	}
-	s := make([]string, 0, 5)
-	s = append(s, "&proto.ReloadConfigReq{")
-	s = append(s, "Path: "+fmt.Sprintf("%#v", this.Path)+",\n")
-	s = append(s, "}")
-	return strings.Join(s, "")
-}
-func (this *ReloadConfigResp) GoString() string {
-	if this == nil {
-		return "nil"
-	}
-	s := make([]string, 0, 5)
-	s = append(s, "&proto.ReloadConfigResp{")
-	s = append(s, "Err: "+fmt.Sprintf("%#v", this.Err)+",\n")
-	s = append(s, "}")
-	return strings.Join(s, "")
-}
 func (this *Value) GoString() string {
 	if this == nil {
 		return "nil"
@@ -2977,122 +2632,6 @@ func (m *LoginResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	}
 	i--
 	dAtA[i] = 0x8
-	return len(dAtA) - i, nil
-}
-
-func (m *ReloadTableConfReq) Marshal() (dAtA []byte, err error) {
-	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
-	if err != nil {
-		return nil, err
-	}
-	return dAtA[:n], nil
-}
-
-func (m *ReloadTableConfReq) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *ReloadTableConfReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
-	_ = i
-	var l int
-	_ = l
-	i = encodeVarintFlyfish(dAtA, i, uint64(m.Seqno))
-	i--
-	dAtA[i] = 0x8
-	return len(dAtA) - i, nil
-}
-
-func (m *ReloadTableConfResp) Marshal() (dAtA []byte, err error) {
-	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
-	if err != nil {
-		return nil, err
-	}
-	return dAtA[:n], nil
-}
-
-func (m *ReloadTableConfResp) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *ReloadTableConfResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
-	_ = i
-	var l int
-	_ = l
-	i -= len(m.Err)
-	copy(dAtA[i:], m.Err)
-	i = encodeVarintFlyfish(dAtA, i, uint64(len(m.Err)))
-	i--
-	dAtA[i] = 0x1a
-	i = encodeVarintFlyfish(dAtA, i, uint64(m.ErrCode))
-	i--
-	dAtA[i] = 0x10
-	i = encodeVarintFlyfish(dAtA, i, uint64(m.Seqno))
-	i--
-	dAtA[i] = 0x8
-	return len(dAtA) - i, nil
-}
-
-func (m *ReloadConfigReq) Marshal() (dAtA []byte, err error) {
-	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
-	if err != nil {
-		return nil, err
-	}
-	return dAtA[:n], nil
-}
-
-func (m *ReloadConfigReq) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *ReloadConfigReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
-	_ = i
-	var l int
-	_ = l
-	i -= len(m.Path)
-	copy(dAtA[i:], m.Path)
-	i = encodeVarintFlyfish(dAtA, i, uint64(len(m.Path)))
-	i--
-	dAtA[i] = 0xa
-	return len(dAtA) - i, nil
-}
-
-func (m *ReloadConfigResp) Marshal() (dAtA []byte, err error) {
-	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
-	if err != nil {
-		return nil, err
-	}
-	return dAtA[:n], nil
-}
-
-func (m *ReloadConfigResp) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *ReloadConfigResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
-	_ = i
-	var l int
-	_ = l
-	i -= len(m.Err)
-	copy(dAtA[i:], m.Err)
-	i = encodeVarintFlyfish(dAtA, i, uint64(len(m.Err)))
-	i--
-	dAtA[i] = 0xa
 	return len(dAtA) - i, nil
 }
 
@@ -3978,51 +3517,6 @@ func (m *LoginResp) Size() (n int) {
 	return n
 }
 
-func (m *ReloadTableConfReq) Size() (n int) {
-	if m == nil {
-		return 0
-	}
-	var l int
-	_ = l
-	n += 1 + sovFlyfish(uint64(m.Seqno))
-	return n
-}
-
-func (m *ReloadTableConfResp) Size() (n int) {
-	if m == nil {
-		return 0
-	}
-	var l int
-	_ = l
-	n += 1 + sovFlyfish(uint64(m.Seqno))
-	n += 1 + sovFlyfish(uint64(m.ErrCode))
-	l = len(m.Err)
-	n += 1 + l + sovFlyfish(uint64(l))
-	return n
-}
-
-func (m *ReloadConfigReq) Size() (n int) {
-	if m == nil {
-		return 0
-	}
-	var l int
-	_ = l
-	l = len(m.Path)
-	n += 1 + l + sovFlyfish(uint64(l))
-	return n
-}
-
-func (m *ReloadConfigResp) Size() (n int) {
-	if m == nil {
-		return 0
-	}
-	var l int
-	_ = l
-	l = len(m.Err)
-	n += 1 + l + sovFlyfish(uint64(l))
-	return n
-}
-
 func (m *Value) Size() (n int) {
 	if m == nil {
 		return 0
@@ -4378,48 +3872,6 @@ func (this *LoginResp) String() string {
 	s := strings.Join([]string{`&LoginResp{`,
 		`Ok:` + fmt.Sprintf("%v", this.Ok) + `,`,
 		`Compress:` + fmt.Sprintf("%v", this.Compress) + `,`,
-		`}`,
-	}, "")
-	return s
-}
-func (this *ReloadTableConfReq) String() string {
-	if this == nil {
-		return "nil"
-	}
-	s := strings.Join([]string{`&ReloadTableConfReq{`,
-		`Seqno:` + fmt.Sprintf("%v", this.Seqno) + `,`,
-		`}`,
-	}, "")
-	return s
-}
-func (this *ReloadTableConfResp) String() string {
-	if this == nil {
-		return "nil"
-	}
-	s := strings.Join([]string{`&ReloadTableConfResp{`,
-		`Seqno:` + fmt.Sprintf("%v", this.Seqno) + `,`,
-		`ErrCode:` + fmt.Sprintf("%v", this.ErrCode) + `,`,
-		`Err:` + fmt.Sprintf("%v", this.Err) + `,`,
-		`}`,
-	}, "")
-	return s
-}
-func (this *ReloadConfigReq) String() string {
-	if this == nil {
-		return "nil"
-	}
-	s := strings.Join([]string{`&ReloadConfigReq{`,
-		`Path:` + fmt.Sprintf("%v", this.Path) + `,`,
-		`}`,
-	}, "")
-	return s
-}
-func (this *ReloadConfigResp) String() string {
-	if this == nil {
-		return "nil"
-	}
-	s := strings.Join([]string{`&ReloadConfigResp{`,
-		`Err:` + fmt.Sprintf("%v", this.Err) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -4843,385 +4295,6 @@ func (m *LoginResp) Unmarshal(dAtA []byte) error {
 				}
 			}
 			m.Compress = bool(v != 0)
-		default:
-			iNdEx = preIndex
-			skippy, err := skipFlyfish(dAtA[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if skippy < 0 {
-				return ErrInvalidLengthFlyfish
-			}
-			if (iNdEx + skippy) < 0 {
-				return ErrInvalidLengthFlyfish
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			iNdEx += skippy
-		}
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
-func (m *ReloadTableConfReq) Unmarshal(dAtA []byte) error {
-	var hasFields [1]uint64
-	l := len(dAtA)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowFlyfish
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := dAtA[iNdEx]
-			iNdEx++
-			wire |= uint64(b&0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: reloadTableConfReq: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: reloadTableConfReq: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		case 1:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Seqno", wireType)
-			}
-			m.Seqno = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowFlyfish
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.Seqno |= int64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			hasFields[0] |= uint64(0x00000001)
-		default:
-			iNdEx = preIndex
-			skippy, err := skipFlyfish(dAtA[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if skippy < 0 {
-				return ErrInvalidLengthFlyfish
-			}
-			if (iNdEx + skippy) < 0 {
-				return ErrInvalidLengthFlyfish
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			iNdEx += skippy
-		}
-	}
-	if hasFields[0]&uint64(0x00000001) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("seqno")
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
-func (m *ReloadTableConfResp) Unmarshal(dAtA []byte) error {
-	var hasFields [1]uint64
-	l := len(dAtA)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowFlyfish
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := dAtA[iNdEx]
-			iNdEx++
-			wire |= uint64(b&0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: reloadTableConfResp: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: reloadTableConfResp: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		case 1:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Seqno", wireType)
-			}
-			m.Seqno = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowFlyfish
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.Seqno |= int64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			hasFields[0] |= uint64(0x00000001)
-		case 2:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ErrCode", wireType)
-			}
-			m.ErrCode = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowFlyfish
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.ErrCode |= int32(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			hasFields[0] |= uint64(0x00000002)
-		case 3:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Err", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowFlyfish
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLengthFlyfish
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthFlyfish
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.Err = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
-		default:
-			iNdEx = preIndex
-			skippy, err := skipFlyfish(dAtA[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if skippy < 0 {
-				return ErrInvalidLengthFlyfish
-			}
-			if (iNdEx + skippy) < 0 {
-				return ErrInvalidLengthFlyfish
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			iNdEx += skippy
-		}
-	}
-	if hasFields[0]&uint64(0x00000001) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("seqno")
-	}
-	if hasFields[0]&uint64(0x00000002) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("errCode")
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
-func (m *ReloadConfigReq) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowFlyfish
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := dAtA[iNdEx]
-			iNdEx++
-			wire |= uint64(b&0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: reloadConfigReq: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: reloadConfigReq: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		case 1:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Path", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowFlyfish
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLengthFlyfish
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthFlyfish
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.Path = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
-		default:
-			iNdEx = preIndex
-			skippy, err := skipFlyfish(dAtA[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if skippy < 0 {
-				return ErrInvalidLengthFlyfish
-			}
-			if (iNdEx + skippy) < 0 {
-				return ErrInvalidLengthFlyfish
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			iNdEx += skippy
-		}
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
-func (m *ReloadConfigResp) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowFlyfish
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := dAtA[iNdEx]
-			iNdEx++
-			wire |= uint64(b&0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: reloadConfigResp: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: reloadConfigResp: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		case 1:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Err", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowFlyfish
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLengthFlyfish
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthFlyfish
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.Err = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipFlyfish(dAtA[iNdEx:])
