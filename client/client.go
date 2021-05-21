@@ -131,7 +131,3 @@ func (this *Client) DecrBy(table, key, field string, value int64, version ...int
 func (this *Client) Kick(table, key string) *StatusCmd {
 	return this.conn.Kick(table, key)
 }
-
-func (this *Client) ReloadTableConf() *StatusCmd {
-	return this.conn.ReloadTableConf()
-}

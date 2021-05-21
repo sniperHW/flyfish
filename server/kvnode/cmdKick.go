@@ -34,7 +34,7 @@ func (this *cmdKick) do(keyvalue *kv, proposal *kvProposal) {
 }
 
 func (s *kvstore) makeKick(keyvalue *kv, processDeadline time.Time, respDeadline time.Time, c *conn, seqno int64, req *flyproto.KickReq) (cmdI, errcode.Error) {
-	GetSugar().Infof("make kick")
+
 	kick := &cmdKick{}
 
 	initCmdBase(&kick.cmdBase, flyproto.CmdType_Kick, c, seqno, nil, processDeadline, respDeadline, &s.wait4ReplyCount, kick.makeResponse)

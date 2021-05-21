@@ -136,6 +136,8 @@ type kvstore struct {
 	shard              int
 	slots              *bitmap.Bitmap
 	meta               db.DBMeta
+	removeonce         sync.Once
+	removing           bool
 }
 
 func (s *kvstore) hasLease() bool {
@@ -285,13 +287,19 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 		return
 	}
 
-	if !s.ready || s.meta == nil {
+	if s.removing {
+		//store正被移除
+		req.from.send(&cs.RespMessage{
+			Cmd:   req.msg.Cmd,
+			Seqno: req.msg.Seqno,
+			Err:   errcode.New(errcode.Errcode_error, fmt.Sprintf("%s current store is removing", req.msg.UniKey)),
+		})
+	} else if !s.ready || s.meta == nil {
 		req.from.send(&cs.RespMessage{
 			Cmd:   req.msg.Cmd,
 			Seqno: req.msg.Seqno,
 			Err:   errcode.New(errcode.Errcode_retry, "kvstore not start ok,please retry later"),
 		})
-		GetSugar().Infof("reply retry")
 	} else {
 
 		var (

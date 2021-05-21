@@ -40,10 +40,10 @@ type kvnode struct {
 	muC     sync.Mutex
 	clients map[*net.Socket]*net.Socket
 
-	muS        sync.RWMutex
-	stores     map[int]*kvstore
-	running    int32
-	remCounter int32
+	muS     sync.RWMutex
+	stores  map[int]*kvstore
+	running int32
+	//remCounter int32
 
 	db          dbbackendI
 	meta        db.DBMeta
@@ -167,27 +167,34 @@ func (this *kvnode) remStore(storeID int) error {
 	}
 
 	this.muS.Lock()
-	defer this.muS.Unlock()
 
 	s, ok := this.stores[storeID]
-	if ok {
+	if !ok {
 		return nil
 	}
 
-	delete(this.stores, storeID)
+	this.muS.Unlock()
 
-	atomic.AddInt32(&this.remCounter, 1)
+	s.removeonce.Do(func() {
 
-	go func() {
-		waitCondition(func() bool {
-			if atomic.LoadInt32(&s.wait4ReplyCount) != 0 {
-				return false
-			}
-			return true
+		s.mainQueue.AppendHighestPriotiryItem(func() {
+			s.removing = true
 		})
-		s.stop()
-		atomic.AddInt32(&this.remCounter, -1)
-	}()
+
+		go func() {
+			waitCondition(func() bool {
+				if atomic.LoadInt32(&s.wait4ReplyCount) != 0 {
+					return false
+				}
+				return true
+			})
+			s.stop()
+			this.muS.Lock()
+			delete(this.stores, storeID)
+			this.muS.Unlock()
+
+		}()
+	})
 
 	return nil
 }
@@ -309,7 +316,7 @@ func (this *kvnode) Stop() {
 		waitCondition(func() bool {
 			this.muS.RLock()
 			defer this.muS.RUnlock()
-			return len(this.stores) == 0 && atomic.LoadInt32(&this.remCounter) == 0
+			return len(this.stores) == 0
 		})
 
 		this.mutilRaft.Stop()

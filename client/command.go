@@ -360,19 +360,6 @@ func (this *Conn) Kick(table, key string) *StatusCmd {
 	}
 }
 
-func (this *Conn) ReloadTableConf() *StatusCmd {
-	pbdata := &protocol.ReloadTableConfReq{}
-
-	req := &cs.ReqMessage{
-		Seqno: atomic.AddInt64(&seqno, 1),
-		Data:  pbdata}
-
-	return &StatusCmd{
-		conn: this,
-		req:  req,
-	}
-}
-
 func (this *Conn) onGetResp(c *cmdContext, errCode errcode.Error, resp *protocol.GetResp) {
 
 	ret := SliceResult{
@@ -501,14 +488,6 @@ func (this *Conn) onKickResp(c *cmdContext, errCode errcode.Error, resp *protoco
 
 }
 
-func (this *Conn) onReloadTableConfResp(c *cmdContext, errCode errcode.Error, resp *protocol.ReloadTableConfResp) {
-	ret := StatusResult{
-		ErrCode: errCode,
-		ErrStr:  resp.Err,
-	}
-	this.c.doCallBack(c.unikey, c.cb, &ret)
-}
-
 func (this *Conn) onMessage(msg *cs.RespMessage) {
 	cmd := protocol.CmdType(msg.Cmd)
 	if cmd != protocol.CmdType_Ping {
@@ -540,8 +519,6 @@ func (this *Conn) onMessage(msg *cs.RespMessage) {
 				this.onDecrByResp(ctx, msg.Err, msg.Data.(*protocol.DecrByResp))
 			case protocol.CmdType_Kick:
 				this.onKickResp(ctx, msg.Err, msg.Data.(*protocol.KickResp))
-			case protocol.CmdType_ReloadTableConf:
-				this.onReloadTableConfResp(ctx, msg.Err, msg.Data.(*protocol.ReloadTableConfResp))
 			default:
 			}
 			releaseCmdContext(ctx)
