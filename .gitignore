@@ -32,3 +32,4 @@ kvserver
 log1/
 coverage.out
 test_dbconf.toml
+flyfish.code-workspace

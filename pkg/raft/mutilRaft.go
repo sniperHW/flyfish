@@ -2,15 +2,16 @@ package raft
 
 import (
 	"errors"
-	"github.com/sniperHW/flyfish/pkg/raft/rafthttp"
-	"github.com/xiang90/probing"
-	"go.etcd.io/etcd/pkg/types"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/sniperHW/flyfish/pkg/raft/rafthttp"
+	"github.com/xiang90/probing"
+	"go.etcd.io/etcd/pkg/types"
 )
 
 type raftHandler struct {
@@ -152,6 +153,12 @@ func (this *MutilRaft) Serve(urlStr string) {
 		ln, err = newStoppableListener(url.Host, this.httpstopc)
 		if err != nil {
 			GetSugar().Infof("raftexample: Failed to listen rafthttp %v", err)
+			select {
+			case <-this.httpstopc:
+				close(this.httpdonec)
+				return
+			default:
+			}
 			time.Sleep(time.Second)
 		} else {
 			break
