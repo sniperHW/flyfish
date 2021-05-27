@@ -1,11 +1,12 @@
 package kvnode
 
 import (
+	"sync"
+	"time"
+
 	"github.com/sniperHW/flyfish/backend/db"
 	"github.com/sniperHW/flyfish/errcode"
 	flyproto "github.com/sniperHW/flyfish/proto"
-	"sync"
-	"time"
 )
 
 type kvState byte
@@ -72,7 +73,6 @@ type kv struct {
 	fields        map[string]*flyproto.Field //字段
 	tbmeta        db.TableMeta
 	updateTask    dbUpdateTask
-	loadTask      dbLoadTask
 	pendingCmd    *cmdQueue
 	store         *kvstore
 	asynTaskCount int
@@ -169,8 +169,11 @@ func (this *kv) process(cmd cmdI) {
 	if nil != cmd {
 		if this.state == kv_new {
 			//request load kv from database
-			this.loadTask.cmd = cmd
-			if !this.store.db.issueLoad(&this.loadTask) {
+			l := &dbLoadTask{
+				cmd:      cmd,
+				keyValue: this,
+			}
+			if !this.store.db.issueLoad(l) {
 				GetSugar().Infof("reply retry")
 				cmd.reply(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"), nil, 0)
 				delete(this.store.keyvals, this.uniKey)

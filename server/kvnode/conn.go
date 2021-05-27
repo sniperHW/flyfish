@@ -1,9 +1,10 @@
 package kvnode
 
 import (
+	"sync"
+
 	"github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/net/cs"
-	"sync"
 )
 
 type conn struct {

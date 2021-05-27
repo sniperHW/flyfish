@@ -6,13 +6,28 @@ import (
 
 var (
 	defaultFullSize = 10000
-	poolSize        = 10000
 )
 
 type listItem struct {
-	ppnext   *listItem
-	v        interface{}
-	poolItem bool
+	ppnext *listItem
+	v      interface{}
+}
+
+var listItemPool = sync.Pool{
+	New: func() interface{} {
+		return &listItem{}
+	},
+}
+
+func getListItem(v interface{}) *listItem {
+	l := listItemPool.Get().(*listItem)
+	l.v = v
+	return l
+}
+
+func releaseListItem(i *listItem) {
+	i.v = nil
+	listItemPool.Put(i)
 }
 
 type list struct {
@@ -53,8 +68,6 @@ func (this *list) empty() bool {
 
 type pq struct {
 	priorityQueue []list
-	itemPool      []listItem
-	freelist      list
 	count         int
 	high          int //最高优先级的非空队列
 }
@@ -67,33 +80,8 @@ func newpq(priorityCount int) *pq {
 		priorityCount = 1
 	}
 
-	q := &pq{
+	return &pq{
 		priorityQueue: make([]list, priorityCount),
-		itemPool:      make([]listItem, poolSize, poolSize),
-	}
-
-	for i, _ := range q.itemPool {
-		item := &q.itemPool[i]
-		item.poolItem = true
-		q.freelist.push(item)
-	}
-
-	return q
-}
-
-func (this *pq) getItem(v interface{}) *listItem {
-	item := this.freelist.pop()
-	if nil == item {
-		item = &listItem{}
-	}
-	item.v = v
-	return item
-}
-
-func (this *pq) releaseItem(item *listItem) {
-	if item.poolItem {
-		item.v = nil
-		this.freelist.push(item)
 	}
 }
 
@@ -104,7 +92,7 @@ func (this *pq) push(priority int, v interface{}) {
 		priority = len(this.priorityQueue) - 1
 	}
 
-	this.priorityQueue[priority].push(this.getItem(v))
+	this.priorityQueue[priority].push(getListItem(v))
 	this.count++
 	if priority > this.high {
 		this.high = priority
@@ -118,7 +106,7 @@ func (this *pq) pop() (ok bool, v interface{}) {
 		item := q.pop()
 		v = item.v
 		ok = true
-		this.releaseItem(item)
+		releaseListItem(item)
 
 		this.count--
 

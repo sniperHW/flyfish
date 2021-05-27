@@ -2,9 +2,10 @@ package raft
 
 import (
 	"context"
+	"time"
+
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	"go.etcd.io/etcd/raft/raftpb"
-	"time"
 )
 
 type Proposal interface {
@@ -98,8 +99,9 @@ func (rc *RaftNode) runConfChange() {
 				break
 			}
 
-			for _, vv := range localList {
+			for k, vv := range localList {
 				rc.proposeConfChange(vv.(ProposalConfChange))
+				localList[k] = nil
 			}
 		}
 	}()
@@ -171,7 +173,7 @@ func (rc *RaftNode) runProposePipeline() {
 				break
 			}
 
-			for _, vv := range localList {
+			for k, vv := range localList {
 				issuePropose := false
 				if nil == vv {
 					//触发时间到达
@@ -189,6 +191,7 @@ func (rc *RaftNode) runProposePipeline() {
 					rc.propose(batch)
 					batch = make([]Proposal, 0, ProposalBatchCount)
 				}
+				localList[k] = nil
 			}
 
 		}

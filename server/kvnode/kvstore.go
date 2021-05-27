@@ -4,6 +4,11 @@ import (
 	//"errors"
 	"encoding/binary"
 	"fmt"
+	"reflect"
+	"runtime"
+	"sync"
+	"time"
+
 	"github.com/sniperHW/flyfish/backend/db"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
@@ -16,10 +21,6 @@ import (
 	sslot "github.com/sniperHW/flyfish/server/slot"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	"go.etcd.io/etcd/raft/raftpb"
-	"reflect"
-	"runtime"
-	"sync"
-	"time"
 )
 
 type applyable interface {
@@ -191,10 +192,6 @@ func (s *kvstore) newkv(unikey string, key string, table string) (*kv, errcode.E
 		keyValue:     kv,
 		updateFields: map[string]*flyproto.Field{},
 	}
-	kv.loadTask = dbLoadTask{
-		keyValue: kv,
-	}
-
 	return kv, nil
 }
 
@@ -545,6 +542,7 @@ func (s *kvstore) getSnapshot() ([]byte, error) {
 
 func (s *kvstore) stop() {
 	s.stoponce.Do(func() {
+		s.lease.stop()
 		s.rn.Stop()
 	})
 }

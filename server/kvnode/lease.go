@@ -2,10 +2,11 @@ package kvnode
 
 import (
 	"encoding/binary"
-	"github.com/sniperHW/flyfish/pkg/buffer"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/sniperHW/flyfish/pkg/buffer"
 )
 
 const (
@@ -173,4 +174,8 @@ func (l *lease) snapshot(b []byte) []byte {
 	binary.BigEndian.PutUint32(b[ll:ll+4], uint32(len(b)-ll-4))
 
 	return b
+}
+
+func (l *lease) stop() {
+	atomic.StoreInt32(&l.stoped, 1)
 }
