@@ -2,10 +2,10 @@ package kvnode
 
 import (
 	//"errors"
+
 	"encoding/binary"
 	"fmt"
 	"reflect"
-	"runtime"
 	"sync"
 	"time"
 
@@ -122,7 +122,7 @@ type kvstore struct {
 	snapshotter        *snap.Snapshotter
 	rn                 *raft.RaftNode
 	mainQueue          applicationQueue
-	keyvals            map[string]*kv
+	keyvals            []map[string]*kv
 	db                 dbbackendI
 	lru                lruList
 	wait4ReplyCount    int32
@@ -172,7 +172,7 @@ func (s *kvstore) addCliMessage(msg clientRequest) error {
 
 const kvCmdQueueSize = 32
 
-func (s *kvstore) newkv(unikey string, key string, table string) (*kv, errcode.Error) {
+func (s *kvstore) newkv(groupID int, unikey string, key string, table string) (*kv, errcode.Error) {
 	tbmeta := s.meta.GetTableMeta(table)
 
 	if nil == tbmeta {
@@ -186,6 +186,7 @@ func (s *kvstore) newkv(unikey string, key string, table string) (*kv, errcode.E
 		tbmeta:     tbmeta,
 		pendingCmd: newCmdQueue(kvCmdQueueSize),
 		store:      s,
+		groupID:    groupID,
 	}
 	kv.lru.keyvalue = kv
 	kv.updateTask = dbUpdateTask{
@@ -306,7 +307,9 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 			ok       bool
 		)
 
-		keyvalue, ok = s.keyvals[req.msg.UniKey]
+		groupID := sslot.StringHash(req.msg.UniKey) % len(s.keyvals)
+
+		keyvalue, ok = s.keyvals[groupID][req.msg.UniKey]
 
 		if !ok {
 			if req.msg.Cmd == flyproto.CmdType_Kick { //kv不在缓存中,kick操作直接返回ok
@@ -326,7 +329,7 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 					return
 				} else {
 					table, key := splitUniKey(req.msg.UniKey)
-					keyvalue, err = s.newkv(req.msg.UniKey, key, table)
+					keyvalue, err = s.newkv(groupID, req.msg.UniKey, key, table)
 					if nil != err {
 						req.from.send(&cs.RespMessage{
 							Cmd:   req.msg.Cmd,
@@ -335,7 +338,7 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 						})
 						return
 					} else {
-						s.keyvals[req.msg.UniKey] = keyvalue
+						s.keyvals[keyvalue.groupID][req.msg.UniKey] = keyvalue
 					}
 				}
 			}
@@ -434,7 +437,8 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 			s.lease.update(p.nodeid, p.begtime)
 		} else {
 			p := data.(ppkv)
-			keyvalue, ok := s.keyvals[p.unikey]
+			groupID := sslot.StringHash(p.unikey) % len(s.keyvals)
+			keyvalue, ok := s.keyvals[groupID][p.unikey]
 			GetSugar().Debugf("%s %d %d", p.unikey, ptype, p.version)
 			if !ok {
 				if ptype == proposal_kick || ptype == proposal_update {
@@ -442,17 +446,17 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 				} else {
 					var e errcode.Error
 					table, key := splitUniKey(p.unikey)
-					keyvalue, e = s.newkv(p.unikey, key, table)
+					keyvalue, e = s.newkv(groupID, p.unikey, key, table)
 					if nil != e {
 						return fmt.Errorf("bad data,%s is no table define", p.unikey)
 					}
-					s.keyvals[p.unikey] = keyvalue
+					s.keyvals[groupID][p.unikey] = keyvalue
 				}
 			}
 
 			switch ptype {
 			case proposal_kick:
-				delete(s.keyvals, p.unikey)
+				delete(s.keyvals[groupID], p.unikey)
 			case proposal_update:
 				keyvalue.version = p.version
 				for k, v := range p.fields {
@@ -470,43 +474,27 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 			GetSugar().Debugf("%s ok", p.unikey)
 		}
 	}
-
-	return nil
 }
 
 func (s *kvstore) getSnapshot() ([]byte, error) {
 
-	var groupSize int = GetConfig().SnapshotCurrentCount
-
-	if 0 == groupSize {
-		groupSize = runtime.NumCPU()
-	}
-
 	beg := time.Now()
 
-	kvGroup := make([][]*kv, groupSize, groupSize)
-	i := 0
-
-	for _, v := range s.keyvals {
-		if v.state == kv_ok || v.state == kv_no_record {
-			kvGroup[i] = append(kvGroup[i], v)
-			i = (i + 1) % len(kvGroup)
-		}
-	}
-
 	var waitGroup sync.WaitGroup
-	waitGroup.Add(groupSize)
+	waitGroup.Add(len(s.keyvals))
 
 	buff := make([]byte, 0, 1024*64)
 	var mtx sync.Mutex
 
 	//多线程序列化和压缩
-	for i, _ := range kvGroup {
-		go func(i int) {
+	for _, v := range s.keyvals {
+		go func(m map[string]*kv) {
 			b := make([]byte, 0, 1024*64)
 			b = buffer.AppendInt32(b, 0) //占位符
-			for _, v := range kvGroup[i] {
-				b = serilizeKv(b, proposal_snapshot, v.uniKey, v.version, v.fields)
+			for _, v := range m {
+				if v.state == kv_ok || v.state == kv_no_record {
+					b = serilizeKv(b, proposal_snapshot, v.uniKey, v.version, v.fields)
+				}
 			}
 
 			compressor := s.snapCompressor.Clone()
@@ -528,7 +516,7 @@ func (s *kvstore) getSnapshot() ([]byte, error) {
 			mtx.Unlock()
 
 			waitGroup.Done()
-		}(i)
+		}(v)
 	}
 
 	waitGroup.Wait()
@@ -552,12 +540,14 @@ func (s *kvstore) gotLease() {
 		GetSugar().Info("WriteBackAll")
 		s.needWriteBackAll = false
 		for _, v := range s.keyvals {
-			if v.tbmeta.GetVersion() != s.meta.GetVersion() {
-				v.tbmeta = s.meta.GetTableMeta(v.tbmeta.TableName())
-			}
-			err := v.updateTask.issueFullDbWriteBack()
-			if nil != err {
-				break
+			for _, vv := range v {
+				if vv.tbmeta.GetVersion() != s.meta.GetVersion() {
+					vv.tbmeta = s.meta.GetTableMeta(vv.tbmeta.TableName())
+				}
+				err := vv.updateTask.issueFullDbWriteBack()
+				if nil != err {
+					break
+				}
 			}
 		}
 	}

@@ -4,6 +4,14 @@ import (
 	//"errors"
 	"errors"
 	"fmt"
+	"os"
+	"runtime"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/sniperHW/flyfish/backend/db"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
@@ -14,12 +22,6 @@ import (
 	"github.com/sniperHW/flyfish/pkg/raft"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/server/slot"
-	"os"
-	"strconv"
-	"strings"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 /*
@@ -241,13 +243,19 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, cluster string, slots 
 		q: queue.NewPriorityQueue(2, GetConfig().MainQueueMaxSize),
 	}
 
+	var groupSize int = GetConfig().SnapshotCurrentCount
+
+	if 0 == groupSize {
+		groupSize = runtime.NumCPU()
+	}
+
 	rn, snapshotterReady := raft.NewRaftNode(this.mutilRaft, mainQueue, (this.id<<16)+storeID, peers, false, GetConfig().Log.LogDir, "kvnode")
 	store := &kvstore{
 		rn:                 rn,
 		db:                 this.db,
 		mainQueue:          mainQueue,
 		raftID:             rn.ID(),
-		keyvals:            map[string]*kv{},
+		keyvals:            make([]map[string]*kv, groupSize),
 		proposalCompressor: &compress.ZipCompressor{},
 		snapCompressor:     &compress.ZipCompressor{},
 		unCompressor:       &compress.ZipUnCompressor{},
@@ -256,6 +264,10 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, cluster string, slots 
 		shard:              storeID,
 		slots:              slots,
 		meta:               meta,
+	}
+
+	for i := 0; i < len(store.keyvals); i++ {
+		store.keyvals[i] = map[string]*kv{}
 	}
 
 	store.lru.init()

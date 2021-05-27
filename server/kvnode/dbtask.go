@@ -2,6 +2,7 @@ package kvnode
 
 import (
 	"errors"
+
 	"github.com/sniperHW/flyfish/backend/db"
 	"github.com/sniperHW/flyfish/errcode"
 	flyproto "github.com/sniperHW/flyfish/proto"
@@ -183,7 +184,7 @@ func (this *dbLoadTask) onResultError(err errcode.Error) {
 			f.reply(err, nil, 0)
 			this.keyValue.pendingCmd.popFront()
 		}
-		delete(this.keyValue.store.keyvals, this.keyValue.uniKey)
+		delete(this.keyValue.store.keyvals[this.keyValue.groupID], this.keyValue.uniKey)
 	})
 }
 

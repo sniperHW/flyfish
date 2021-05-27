@@ -6,7 +6,6 @@ package kvnode
 import (
 	"fmt"
 	"os"
-	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -83,7 +82,7 @@ ConfDataBase    = "%s"
 MaxLogfileSize  = 104857600 # 100mb
 LogDir          = "log"
 LogPrefix       = "flyfish"
-LogLevel        = "debug"
+LogLevel        = "info"
 EnableLogStdout = false	
 `
 
@@ -615,18 +614,7 @@ func TestUseMockDB(t *testing.T) {
 	c := client.OpenClient("localhost:10018")
 	c.SetUnikeyPlacement(GetStore)
 
-	fields := map[string]interface{}{}
-	fields["age"] = 12
-	fields["name"] = "sniperHW"
-
-	c.Set("users1", "sniperHW", fields).Exec()
-
-	for i := 0; i < 5; i++ {
-		runtime.GC()
-		time.Sleep(time.Second)
-	}
-
-	//test(t, c)
+	test(t, c)
 
 	node.Stop()
 
