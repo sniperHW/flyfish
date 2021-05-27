@@ -5,6 +5,12 @@ package kvnode
 
 import (
 	"fmt"
+	"os"
+	"runtime"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/BurntSushi/toml"
 	"github.com/sniperHW/flyfish/backend/db"
 	"github.com/sniperHW/flyfish/backend/db/sql"
@@ -14,10 +20,6 @@ import (
 	"github.com/sniperHW/flyfish/server/kvnode/metaLoader"
 	mockDB "github.com/sniperHW/flyfish/server/mock/db"
 	"github.com/stretchr/testify/assert"
-	"os"
-	"sync"
-	"testing"
-	"time"
 )
 
 type dbconf struct {
@@ -81,7 +83,7 @@ ConfDataBase    = "%s"
 MaxLogfileSize  = 104857600 # 100mb
 LogDir          = "log"
 LogPrefix       = "flyfish"
-LogLevel        = "info"
+LogLevel        = "debug"
 EnableLogStdout = false	
 `
 
@@ -490,8 +492,8 @@ func Test1Node1Store1(t *testing.T) {
 	InitLogger(logger.NewZapLogger("testRaft.log", "./log", GetConfig().Log.LogLevel, 100, 14, true))
 
 	//先删除所有kv文件
-	os.RemoveAll("./log/kv-1-1")
-	os.RemoveAll("./log/kv-1-1-snap")
+	os.RemoveAll("./log/kvnode-1-1")
+	os.RemoveAll("./log/kvnode-1-1-snap")
 
 	client.InitLogger(GetLogger())
 
@@ -535,8 +537,8 @@ func Test1Node1Store2(t *testing.T) {
 	InitLogger(logger.NewZapLogger("testRaft.log", "./log", GetConfig().Log.LogLevel, 100, 14, true))
 
 	//先删除所有kv文件
-	os.RemoveAll("./log/kv-1-1")
-	os.RemoveAll("./log/kv-1-1-snap")
+	os.RemoveAll("./log/kvnode-1-1")
+	os.RemoveAll("./log/kvnode-1-1-snap")
 
 	client.InitLogger(GetLogger())
 
@@ -563,8 +565,8 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 	InitLogger(logger.NewZapLogger("testRaft.log", "./log", GetConfig().Log.LogLevel, 100, 14, true))
 
 	//先删除所有kv文件
-	os.RemoveAll("./log/kv-1-1")
-	os.RemoveAll("./log/kv-1-1-snap")
+	os.RemoveAll("./log/kvnode-1-1")
+	os.RemoveAll("./log/kvnode-1-1-snap")
 
 	client.InitLogger(GetLogger())
 
@@ -603,8 +605,8 @@ func TestUseMockDB(t *testing.T) {
 	InitLogger(logger.NewZapLogger("testRaft.log", "./log", GetConfig().Log.LogLevel, 100, 14, true))
 
 	//先删除所有kv文件
-	os.RemoveAll("./log/kv-1-1")
-	os.RemoveAll("./log/kv-1-1-snap")
+	os.RemoveAll("./log/kvnode-1-1")
+	os.RemoveAll("./log/kvnode-1-1-snap")
 
 	client.InitLogger(GetLogger())
 
@@ -613,7 +615,18 @@ func TestUseMockDB(t *testing.T) {
 	c := client.OpenClient("localhost:10018")
 	c.SetUnikeyPlacement(GetStore)
 
-	test(t, c)
+	fields := map[string]interface{}{}
+	fields["age"] = 12
+	fields["name"] = "sniperHW"
+
+	c.Set("users1", "sniperHW", fields).Exec()
+
+	for i := 0; i < 5; i++ {
+		runtime.GC()
+		time.Sleep(time.Second)
+	}
+
+	//test(t, c)
 
 	node.Stop()
 

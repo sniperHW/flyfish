@@ -5,6 +5,15 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"math"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft/rafthttp"
 	"go.etcd.io/etcd/etcdserver/api/snap"
@@ -16,14 +25,6 @@ import (
 	"go.etcd.io/etcd/wal"
 	"go.etcd.io/etcd/wal/walpb"
 	"go.uber.org/zap"
-	"math"
-	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 //应用程序队列必须Append必须是非阻塞的，最好支持优先级
@@ -80,6 +81,7 @@ func (this *raftTaskMgr) getAndRemoveByID(id uint64) *raftTask {
 	if ok {
 		GetSugar().Debugf("raftTaskMgr getAndRemoveByID %d", t.id)
 		this.l.Remove(t.lelement)
+		delete(this.dict, t.id)
 		return t
 	} else {
 		return nil
