@@ -2,10 +2,11 @@ package kvnode
 
 import (
 	"errors"
-	"github.com/sniperHW/flyfish/pkg/buffer"
-	flyproto "github.com/sniperHW/flyfish/proto"
 	"math"
 	"time"
+
+	"github.com/sniperHW/flyfish/pkg/buffer"
+	flyproto "github.com/sniperHW/flyfish/proto"
 )
 
 type proposalReader struct {
@@ -101,7 +102,6 @@ func (this *proposalReader) readField() (*flyproto.Field, error) {
 	}
 	switch flyproto.ValueType(tt) {
 	case flyproto.ValueType_int, flyproto.ValueType_float:
-		//GetSugar().Infof("readField %s number", name)
 		var i int64
 		i, err = this.reader.CheckGetInt64()
 		if nil != err {
@@ -118,14 +118,13 @@ func (this *proposalReader) readField() (*flyproto.Field, error) {
 		if nil != err {
 			return nil, err
 		}
-		b, err = this.reader.CheckGetBytes(int(l))
+		b, err = this.reader.CopyBytes(int(l))
 		if nil != err {
 			return nil, err
 		}
 		if flyproto.ValueType(tt) == flyproto.ValueType_blob {
 			return flyproto.PackField(name, b), nil
 		} else {
-			//GetSugar().Infof("readField %s string %s", name, string(b))
 			return flyproto.PackField(name, string(b)), nil
 		}
 	default:
@@ -154,7 +153,7 @@ func (this *proposalReader) read() (isOver bool, ptype proposalType, data interf
 				}
 
 				var bb []byte
-				bb, err = this.reader.CheckGetBytes(int(l))
+				bb, err = this.reader.CopyBytes(int(l))
 				if nil != err {
 					return
 				}
@@ -213,8 +212,6 @@ func (this *proposalReader) read() (isOver bool, ptype proposalType, data interf
 					if nil != err {
 						return
 					}
-
-					//GetSugar().Infof("fieldSize:%d", fieldSize)
 
 					var fields map[string]*flyproto.Field
 
