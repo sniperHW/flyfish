@@ -507,10 +507,10 @@ func (s *kvstore) getSnapshot() ([]byte, error) {
 				b = append(b, byte(0))
 				binary.BigEndian.PutUint32(b[:4], uint32(len(b)-4))
 			} else {
-				b = make([]byte, 0, len(cb)+4+1)
-				b = buffer.AppendInt32(b, int32(len(cb)+1))
+				b = b[4:]
 				b = append(b, cb...)
 				b = append(b, byte(1))
+				binary.BigEndian.PutUint32(b[:4], uint32(len(cb)+1))
 			}
 
 			mtx.Lock()
