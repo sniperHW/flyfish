@@ -396,7 +396,7 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 	compress := b[len(b)-1]
 	b = b[:len(b)-1]
 	if compress == byte(1) {
-		b, err = s.unCompressor.UnCompress(b)
+		b, err = s.unCompressor.Clone().UnCompress(b)
 		if nil != err {
 			GetSugar().Errorf("UnCompress error %v", err)
 			return err
