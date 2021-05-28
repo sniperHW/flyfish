@@ -476,9 +476,23 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 	}
 }
 
-func (s *kvstore) getSnapshot() ([]byte, error) {
+const buffsize = 1024 * 64 * 1024
 
-	const buffsize = 1024 * 64 * 1024
+var snapshotBufferPool = sync.Pool{
+	New: func() interface{} {
+		return make([]byte, 0, buffsize)
+	},
+}
+
+func getSnapshotBuffer() []byte {
+	return snapshotBufferPool.Get().([]byte)
+}
+
+func releaseSnapshotBuffer(b []byte) {
+	snapshotBufferPool.Put(b[:0])
+}
+
+func (s *kvstore) getSnapshot() ([]byte, error) {
 
 	beg := time.Now()
 
@@ -491,7 +505,7 @@ func (s *kvstore) getSnapshot() ([]byte, error) {
 	//多线程序列化和压缩
 	for _, v := range s.keyvals {
 		go func(m map[string]*kv) {
-			b := make([]byte, 0, buffsize)
+			b := getSnapshotBuffer()     //make([]byte, 0, buffsize)
 			b = buffer.AppendInt32(b, 0) //占位符
 			for _, v := range m {
 				if v.state == kv_ok || v.state == kv_no_record {
@@ -516,6 +530,8 @@ func (s *kvstore) getSnapshot() ([]byte, error) {
 			mtx.Lock()
 			buff = append(buff, b...)
 			mtx.Unlock()
+
+			releaseSnapshotBuffer(b)
 
 			waitGroup.Done()
 		}(v)
