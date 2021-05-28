@@ -42,20 +42,24 @@ func (rc *RaftNode) maybeTriggerSnapshot(index uint64) bool {
 	return true
 }
 
-func (rc *RaftNode) onTriggerSnapshotOK(index uint64) {
+func (rc *RaftNode) onTriggerSnapshotOK(snap raftpb.Snapshot) {
 
 	GetSugar().Infof("onTriggerSnapshotOK")
 
 	compactIndex := uint64(1)
-	if index > SnapshotCatchUpEntriesN {
-		compactIndex = index - SnapshotCatchUpEntriesN
+	if snap.Metadata.Index > SnapshotCatchUpEntriesN {
+		compactIndex = snap.Metadata.Index - SnapshotCatchUpEntriesN
 	}
+
+	rc.snapshotIndex = snap.Metadata.Index
+
+	rc.snapshotting = false
+
 	if err := rc.raftStorage.Compact(compactIndex); err != nil {
 		panic(err)
 	}
-	rc.snapshotIndex = index
 
-	rc.snapshotting = false
+	go rc.removeOldSnapAndWal(snap.Metadata.Term, compactIndex)
 
 }
 
@@ -77,7 +81,7 @@ func (rc *RaftNode) triggerSnapshot(st snapshotNotifyst) {
 			panic(err)
 		}
 
-		rc.snapshotCh <- st.applyIdx
+		rc.snapshotCh <- snap
 
 	}()
 }
@@ -96,13 +100,8 @@ func (rc *RaftNode) saveSnap(snap raftpb.Snapshot) error {
 	if err := rc.snapshotter.SaveSnap(snap); err != nil {
 		return err
 	}
-	err := rc.wal.ReleaseLockTo(snap.Metadata.Index)
 
-	if nil == err {
-		rc.removeOldSnapAndWal(snap.Metadata.Term, snap.Metadata.Index)
-	}
-
-	return err
+	return rc.wal.ReleaseLockTo(snap.Metadata.Index)
 }
 
 func (rc *RaftNode) loadSnapshot() *raftpb.Snapshot {

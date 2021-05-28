@@ -162,6 +162,8 @@ type RaftNode struct {
 	raftStorage *raft.MemoryStorage
 	wal         *wal.WAL
 
+	msgSnapC chan raftpb.Message
+
 	snapshotter      *snap.Snapshotter
 	snapshotterReady chan *snap.Snapshotter // signals when snapshotter is ready
 	snapshotCh       chan interface{}
@@ -451,6 +453,34 @@ func (rc *RaftNode) publishEntries(ents []raftpb.Entry) {
 	}
 }
 
+func (r *RaftNode) processMessages(ms []raftpb.Message) []raftpb.Message {
+	sentAppResp := false
+	for i := len(ms) - 1; i >= 0; i-- {
+		if ms[i].Type == raftpb.MsgAppResp {
+			if sentAppResp {
+				ms[i].To = 0
+			} else {
+				sentAppResp = true
+			}
+		}
+
+		if ms[i].Type == raftpb.MsgSnap {
+			// There are two separate data store: the store for v2, and the KV for v3.
+			// The msgSnap only contains the most recent snapshot of store without KV.
+			// So we need to redirect the msgSnap to etcd server main loop for merging in the
+			// current store snapshot and KV snapshot.
+			select {
+			case r.msgSnapC <- ms[i]:
+			default:
+				// drop msgSnap if the inflight chan if full.
+			}
+			ms[i].To = 0
+		}
+
+	}
+	return ms
+}
+
 func (rc *RaftNode) serveChannels() {
 	snap, err := rc.raftStorage.Snapshot()
 	if err != nil {
@@ -566,8 +596,8 @@ func (rc *RaftNode) serveChannels() {
 			switch c.(type) {
 			case snapshotNotifyst:
 				rc.triggerSnapshot(c.(snapshotNotifyst))
-			case uint64:
-				rc.onTriggerSnapshotOK(c.(uint64))
+			case raftpb.Snapshot:
+				rc.onTriggerSnapshotOK(c.(raftpb.Snapshot))
 			}
 		}
 	}
