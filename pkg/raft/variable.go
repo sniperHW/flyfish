@@ -5,13 +5,15 @@ import (
 )
 
 var (
-	ProposalFlushInterval          = 100
-	ProposalBatchCount             = 200
-	ReadFlushInterval              = 50
-	ReadBatchCount                 = 100
-	ReadTimeout                    = time.Second * 5
-	DefaultSnapshotCount    uint64 = 3000
-	SnapshotCatchUpEntriesN uint64 = 3000
+	ProposalFlushInterval            = 100
+	ProposalBatchCount               = 200
+	ReadFlushInterval                = 50
+	ReadBatchCount                   = 100
+	ReadTimeout                      = time.Second * 5
+	DefaultSnapshotCount      uint64 = 10000
+	SnapshotCatchUpEntriesN   uint64 = 1000
+	MaxInFlightMsgSnap        int64  = 16
+	ReleaseDelayAfterSnapshot        = 30 * time.Second
 )
 
 type RemoveFromCluster struct{}

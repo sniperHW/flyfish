@@ -136,10 +136,11 @@ func (this *raftTaskMgr) onLeaderDemote() {
 }
 
 type RaftNode struct {
-	confChangeC     *queue.ArrayQueue
-	proposePipeline *queue.ArrayQueue
-	readPipeline    *queue.ArrayQueue
-	commitC         ApplicationQueue
+	inflightSnapshots int64
+	confChangeC       *queue.ArrayQueue
+	proposePipeline   *queue.ArrayQueue
+	readPipeline      *queue.ArrayQueue
+	commitC           ApplicationQueue
 
 	waitStop sync.WaitGroup
 
@@ -162,7 +163,7 @@ type RaftNode struct {
 	raftStorage *raft.MemoryStorage
 	wal         *wal.WAL
 
-	msgSnapC chan raftpb.Message
+	//msgSnapC chan raftpb.Message
 
 	snapshotter      *snap.Snapshotter
 	snapshotterReady chan *snap.Snapshotter // signals when snapshotter is ready
@@ -172,6 +173,7 @@ type RaftNode struct {
 	snapCount uint64
 	transport *rafthttp.Transport
 	stopc     chan struct{} // signals proposal channel closed
+	stopping  chan struct{}
 
 	proposalMgr         raftTaskMgr
 	confChangeMgr       raftTaskMgr
@@ -453,7 +455,7 @@ func (rc *RaftNode) publishEntries(ents []raftpb.Entry) {
 	}
 }
 
-func (r *RaftNode) processMessages(ms []raftpb.Message) []raftpb.Message {
+func (rc *RaftNode) processMessages(ms []raftpb.Message) []raftpb.Message {
 	sentAppResp := false
 	for i := len(ms) - 1; i >= 0; i-- {
 		if ms[i].Type == raftpb.MsgAppResp {
@@ -465,18 +467,16 @@ func (r *RaftNode) processMessages(ms []raftpb.Message) []raftpb.Message {
 		}
 
 		if ms[i].Type == raftpb.MsgSnap {
-			// There are two separate data store: the store for v2, and the KV for v3.
-			// The msgSnap only contains the most recent snapshot of store without KV.
-			// So we need to redirect the msgSnap to etcd server main loop for merging in the
-			// current store snapshot and KV snapshot.
-			select {
-			case r.msgSnapC <- ms[i]:
-			default:
+			if atomic.AddInt64(&rc.inflightSnapshots, 1) > MaxInFlightMsgSnap {
 				// drop msgSnap if the inflight chan if full.
+				atomic.AddInt64(&rc.inflightSnapshots, -1)
+			} else {
+				//use sendsnap to send the snapshot
+				ms[i].Snapshot.Metadata.ConfState = rc.confState
+				go rc.sendSnapshot(ms[i])
 			}
 			ms[i].To = 0
 		}
-
 	}
 	return ms
 }
@@ -557,19 +557,7 @@ func (rc *RaftNode) serveChannels() {
 
 			rc.raftStorage.Append(rd.Entries)
 
-			/*
-			 * 如果快照之后加入一个空节点，此时需要向空节点发送快照
-			 * 但是之前的快照中ConfState不包含新节点，因此新节点会拒绝接受快照
-			 * 这里使用最新的ConfState替换之前快照的ConfState
-			 * etcd在这个地方也是有特殊处理,参看：EtcdServer.createMergedSnapshotMessage
-			 */
-			for i, v := range rd.Messages {
-				if v.Type == raftpb.MsgSnap {
-					rd.Messages[i].Snapshot.Metadata.ConfState = rc.confState
-				}
-			}
-
-			rc.transport.Send(rd.Messages)
+			rc.transport.Send(rc.processMessages(rd.Messages))
 
 			rc.publishEntries(rc.entriesToApply(rd.CommittedEntries))
 
@@ -606,6 +594,7 @@ func (rc *RaftNode) serveChannels() {
 func (rc *RaftNode) Stop() {
 	rc.stoponce.Do(func() {
 		GetSugar().Infof("RaftNode.Stop()")
+		close(rc.stopping)
 		rc.confChangeC.Close()
 		rc.proposePipeline.Close()
 		rc.readPipeline.Close()
@@ -665,6 +654,7 @@ func (rc *RaftNode) startRaft() {
 		ServerStats: stats.NewServerStats("", ""),
 		LeaderStats: stats.NewLeaderStats(strconv.Itoa(rc.id)),
 		ErrorC:      make(chan error),
+		Snapshotter: rc.snapshotter,
 	}
 
 	rc.mutilRaft.addTransport(types.ID(rc.id), rc.transport)
@@ -724,6 +714,7 @@ func NewRaftNode(mutilRaft *MutilRaft, commitC ApplicationQueue, id int, peers m
 		snapdir:          fmt.Sprintf("%s/%s-%d-%d-snap", logPath, raftLogPrefix, nodeID, region),
 		snapCount:        DefaultSnapshotCount,
 		stopc:            make(chan struct{}),
+		stopping:         make(chan struct{}),
 		snapshotCh:       make(chan interface{}, 1),
 		snapshotterReady: make(chan *snap.Snapshotter, 1),
 		proposalMgr: raftTaskMgr{
