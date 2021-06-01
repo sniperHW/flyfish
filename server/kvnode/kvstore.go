@@ -115,6 +115,12 @@ func (this *lruList) removeLRU(e *lruElement) {
 	e.pprev = nil
 }
 
+type kvmgr struct {
+	kv     map[string]*kv
+	modify map[string]*kv
+	kicks  map[string]bool
+}
+
 type kvstore struct {
 	raftMtx            sync.Mutex
 	raftID             int
@@ -122,7 +128,7 @@ type kvstore struct {
 	snapshotter        *snap.Snapshotter
 	rn                 *raft.RaftNode
 	mainQueue          applicationQueue
-	keyvals            []map[string]*kv
+	keyvals            []kvmgr
 	db                 dbbackendI
 	lru                lruList
 	wait4ReplyCount    int32
@@ -309,7 +315,7 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 
 		groupID := sslot.StringHash(req.msg.UniKey) % len(s.keyvals)
 
-		keyvalue, ok = s.keyvals[groupID][req.msg.UniKey]
+		keyvalue, ok = s.keyvals[groupID].kv[req.msg.UniKey]
 
 		if !ok {
 			if req.msg.Cmd == flyproto.CmdType_Kick { //kv不在缓存中,kick操作直接返回ok
@@ -338,7 +344,7 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 						})
 						return
 					} else {
-						s.keyvals[keyvalue.groupID][req.msg.UniKey] = keyvalue
+						s.keyvals[keyvalue.groupID].kv[req.msg.UniKey] = keyvalue
 					}
 				}
 			}
@@ -387,11 +393,192 @@ func (s *kvstore) processConfChange(p raft.ProposalConfChange) {
 
 }
 
+const buffsize = 1024 * 64 * 1024
+
+var snapshotBufferPool = sync.Pool{
+	New: func() interface{} {
+		return make([]byte, 0, buffsize)
+	},
+}
+
+func getSnapshotBuffer() []byte {
+	return snapshotBufferPool.Get().([]byte)
+}
+
+func releaseSnapshotBuffer(b []byte) {
+	snapshotBufferPool.Put(b[:0])
+}
+
+func (s *kvstore) snapMerge(snaps ...[]byte) ([]byte, error) {
+
+	store := make([]map[string]*kv, len(s.keyvals))
+
+	for i := 0; i < len(store); i++ {
+		store[i] = map[string]*kv{}
+	}
+
+	var lease pplease
+	//var tbmeta []byte
+
+	snapBytes := [][]byte{}
+
+	for _, b := range snaps {
+
+		r := newSnapshotReader(b)
+		var data []byte
+		var isOver bool
+		var err error
+		for {
+			isOver, data, err = r.read()
+			if isOver {
+				break
+			} else if nil != err {
+				return nil, err
+			} else {
+				snapBytes = append(snapBytes, data)
+			}
+		}
+	}
+
+	for _, b := range snapBytes {
+		var err error
+
+		compress := b[len(b)-1]
+		b = b[:len(b)-1]
+		if compress == byte(1) {
+			b, err = s.unCompressor.Clone().UnCompress(b)
+			if nil != err {
+				GetSugar().Errorf("UnCompress error %v", err)
+				return nil, err
+			}
+		}
+
+		r := newProposalReader(b)
+
+		var ptype proposalType
+		var data interface{}
+		var isOver bool
+		for {
+			isOver, ptype, data, err = r.read()
+			if nil != err {
+				return nil, err
+			} else if isOver {
+				break
+			}
+
+			if ptype == proposal_tbmeta {
+				//tbmeta = data.([]byte)
+			} else if ptype == proposal_lease {
+				lease = data.(pplease)
+			} else {
+				p := data.(ppkv)
+				groupID := sslot.StringHash(p.unikey) % len(store)
+				keyvalue, ok := store[groupID][p.unikey]
+
+				if !ok {
+					if ptype == proposal_kick || ptype == proposal_update {
+						return nil, fmt.Errorf("bad data,%s with a bad proposal_type:%d", p.unikey, ptype)
+					} else {
+						keyvalue = &kv{
+							uniKey:  p.unikey,
+							groupID: groupID,
+						}
+						store[groupID][p.unikey] = keyvalue
+					}
+				}
+
+				switch ptype {
+				case proposal_kick:
+					delete(store[keyvalue.groupID], p.unikey)
+				case proposal_update:
+					keyvalue.version = p.version
+					for k, v := range p.fields {
+						keyvalue.fields[k] = v
+					}
+
+				case proposal_snapshot:
+					keyvalue.version = p.version
+					keyvalue.fields = p.fields
+					if keyvalue.version != 0 {
+						keyvalue.state = kv_ok
+					} else {
+						keyvalue.state = kv_no_record
+					}
+				}
+			}
+		}
+	}
+
+	beg := time.Now()
+
+	var waitGroup sync.WaitGroup
+	waitGroup.Add(len(store))
+
+	buff := make([]byte, 0, buffsize)
+	var mtx sync.Mutex
+
+	kvcount := 0
+
+	for _, v := range store {
+		kvcount += len(v)
+	}
+
+	//多线程序列化和压缩
+	for i, v := range store {
+		go func(id int, m map[string]*kv) {
+			b := getSnapshotBuffer()
+			b = buffer.AppendInt32(b, 0) //占位符
+
+			for _, vv := range m {
+				b = serilizeKv(b, proposal_snapshot, vv.uniKey, vv.version, vv.fields)
+			}
+
+			compressor := s.snapCompressor.Clone()
+
+			cb, err := compressor.Compress(b[4:])
+			if nil != err {
+				GetSugar().Errorf("snapshot compress error:%v", err)
+				b = append(b, byte(0))
+				binary.BigEndian.PutUint32(b[:4], uint32(len(b)-4))
+			} else {
+				b = b[:4]
+				b = append(b, cb...)
+				b = append(b, byte(1))
+				binary.BigEndian.PutUint32(b[:4], uint32(len(cb)+1))
+			}
+
+			mtx.Lock()
+			buff = append(buff, b...)
+			mtx.Unlock()
+
+			releaseSnapshotBuffer(b)
+
+			waitGroup.Done()
+
+		}(i, v)
+	}
+
+	waitGroup.Wait()
+
+	ll := len(buff)
+	buff = buffer.AppendInt32(buff, 0) //占位符
+	buff = buffer.AppendByte(buff, byte(proposal_lease))
+	buff = buffer.AppendInt32(buff, int32(lease.nodeid))
+	bb, _ := lease.begtime.MarshalBinary()
+	buff = buffer.AppendInt32(buff, int32(len(bb)))
+	buff = buffer.AppendBytes(buff, bb)
+	buff = append(buff, byte(0)) //写入无压缩标记
+
+	binary.BigEndian.PutUint32(buff[ll:ll+4], uint32(len(buff)-ll-4))
+
+	GetSugar().Infof("snapMerge: %v,snapshot len:%d", time.Now().Sub(beg), len(buff))
+
+	return buff, nil
+}
+
 func (s *kvstore) replayFromBytes(b []byte) error {
 
 	var err error
-
-	GetSugar().Debugf("replayFromBytes len:%d", len(b))
 
 	compress := b[len(b)-1]
 	b = b[:len(b)-1]
@@ -438,7 +625,7 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 		} else {
 			p := data.(ppkv)
 			groupID := sslot.StringHash(p.unikey) % len(s.keyvals)
-			keyvalue, ok := s.keyvals[groupID][p.unikey]
+			keyvalue, ok := s.keyvals[groupID].kv[p.unikey]
 			GetSugar().Debugf("%s %d %d", p.unikey, ptype, p.version)
 			if !ok {
 				if ptype == proposal_kick || ptype == proposal_update {
@@ -450,18 +637,24 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 					if nil != e {
 						return fmt.Errorf("bad data,%s is no table define", p.unikey)
 					}
-					s.keyvals[groupID][p.unikey] = keyvalue
+					s.keyvals[groupID].kv[p.unikey] = keyvalue
 				}
 			}
 
 			switch ptype {
 			case proposal_kick:
-				delete(s.keyvals[groupID], p.unikey)
+				delete(s.keyvals[groupID].kv, p.unikey)
+				delete(s.keyvals[groupID].modify, p.unikey)
+				s.keyvals[groupID].kicks[p.unikey] = true
 			case proposal_update:
 				keyvalue.version = p.version
 				for k, v := range p.fields {
 					keyvalue.fields[k] = v
 				}
+
+				delete(s.keyvals[groupID].kicks, p.unikey)
+				s.keyvals[groupID].modify[p.unikey] = keyvalue
+
 			case proposal_snapshot:
 				keyvalue.version = p.version
 				keyvalue.fields = p.fields
@@ -470,26 +663,13 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 				} else {
 					keyvalue.state = kv_no_record
 				}
+
+				delete(s.keyvals[groupID].kicks, p.unikey)
+				s.keyvals[groupID].modify[p.unikey] = keyvalue
 			}
 			GetSugar().Debugf("%s ok", p.unikey)
 		}
 	}
-}
-
-const buffsize = 1024 * 64 * 1024
-
-var snapshotBufferPool = sync.Pool{
-	New: func() interface{} {
-		return make([]byte, 0, buffsize)
-	},
-}
-
-func getSnapshotBuffer() []byte {
-	return snapshotBufferPool.Get().([]byte)
-}
-
-func releaseSnapshotBuffer(b []byte) {
-	snapshotBufferPool.Put(b[:0])
 }
 
 func (s *kvstore) getSnapshot() ([]byte, error) {
@@ -503,15 +683,21 @@ func (s *kvstore) getSnapshot() ([]byte, error) {
 	var mtx sync.Mutex
 
 	//多线程序列化和压缩
-	for _, v := range s.keyvals {
-		go func(m map[string]*kv) {
+	for i, _ := range s.keyvals {
+		go func(m *kvmgr) {
 			b := getSnapshotBuffer()     //make([]byte, 0, buffsize)
 			b = buffer.AppendInt32(b, 0) //占位符
-			for _, v := range m {
-				if v.state == kv_ok || v.state == kv_no_record {
-					b = serilizeKv(b, proposal_snapshot, v.uniKey, v.version, v.fields)
-				}
+
+			for _, v := range m.modify {
+				b = serilizeKv(b, proposal_snapshot, v.uniKey, v.version, v.fields)
 			}
+
+			for k, _ := range m.kicks {
+				b = serilizeKv(b, proposal_kick, k, 0, nil)
+			}
+
+			m.modify = map[string]*kv{}
+			m.kicks = map[string]bool{}
 
 			compressor := s.snapCompressor.Clone()
 
@@ -534,7 +720,8 @@ func (s *kvstore) getSnapshot() ([]byte, error) {
 			releaseSnapshotBuffer(b)
 
 			waitGroup.Done()
-		}(v)
+
+		}(&s.keyvals[i])
 	}
 
 	waitGroup.Wait()
@@ -558,7 +745,7 @@ func (s *kvstore) gotLease() {
 		GetSugar().Info("WriteBackAll")
 		s.needWriteBackAll = false
 		for _, v := range s.keyvals {
-			for _, vv := range v {
+			for _, vv := range v.kv {
 				if vv.tbmeta.GetVersion() != s.meta.GetVersion() {
 					vv.tbmeta = s.meta.GetTableMeta(vv.tbmeta.TableName())
 				}
@@ -657,26 +844,27 @@ func (s *kvstore) serve() {
 				case raft.RaftStopOK:
 					GetSugar().Info("RaftStopOK")
 					return
-				case raft.ReplaySnapshot:
-					snapshot, err := s.loadSnapshot()
-					if err != nil {
-						GetSugar().Panic(err)
-					}
-					if snapshot != nil {
-						GetSugar().Infof("%x loading snapshot at term %d and index %d", s.rn.ID(), snapshot.Metadata.Term, snapshot.Metadata.Index)
-						r := newSnapshotReader(snapshot.Data)
-						var data []byte
-						var isOver bool
-						var err error
-						for {
-							isOver, data, err = r.read()
-							if isOver {
-								break
-							} else if nil != err {
+				case raftpb.Snapshot:
+					snapshot := v.(raftpb.Snapshot)
+
+					GetSugar().Infof("%x loading snapshot at term %d and index %d", s.rn.ID(), snapshot.Metadata.Term, snapshot.Metadata.Index)
+					r := newSnapshotReader(snapshot.Data)
+					var data []byte
+					var isOver bool
+					var err error
+					for {
+						isOver, data, err = r.read()
+						if isOver {
+							break
+						} else if nil != err {
+							GetSugar().Panic(err)
+						} else {
+							if err = s.replayFromBytes(data); err != nil {
 								GetSugar().Panic(err)
 							} else {
-								if err = s.replayFromBytes(data); err != nil {
-									GetSugar().Panic(err)
+								for i, _ := range s.keyvals {
+									s.keyvals[i].modify = map[string]*kv{}
+									s.keyvals[i].kicks = map[string]bool{}
 								}
 							}
 						}

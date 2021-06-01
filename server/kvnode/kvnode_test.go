@@ -574,7 +574,7 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 	c := client.OpenClient("localhost:10018")
 	c.SetUnikeyPlacement(GetStore)
 
-	for i := 0; i < 150; i++ {
+	for i := 0; i < 500; i++ {
 		fields := map[string]interface{}{}
 		fields["age"] = 12
 		name := fmt.Sprintf("sniperHW:%d", i)

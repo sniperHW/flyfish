@@ -2,11 +2,19 @@ package raft
 
 import (
 	//"github.com/sniperHW/flyfish/pkg/buffer"
+
+	"fmt"
 	"io"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"time"
 
+	"sort"
+
 	"github.com/dustin/go-humanize"
+	"github.com/sniperHW/flyfish/pkg/buffer"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	"go.etcd.io/etcd/pkg/types"
 	"go.etcd.io/etcd/raft"
@@ -75,7 +83,12 @@ func (rc *RaftNode) onTriggerSnapshotOK(snap raftpb.Snapshot) {
 		panic(err)
 	}
 
-	go rc.removeOldSnapAndWal(snap.Metadata.Term, compactIndex)
+	go func() {
+		if err := rc.mergeSnapshot(); nil != err {
+			GetSugar().Errorf("mergeSnapshot error:%v", err)
+		}
+
+	}()
 
 }
 
@@ -121,10 +134,16 @@ func (rc *RaftNode) saveSnap(snap raftpb.Snapshot) error {
 }
 
 func (rc *RaftNode) loadSnapshot() *raftpb.Snapshot {
+
+	if err := rc.mergeSnapshot(); nil != err {
+		GetSugar().Fatalf("raftexample: error merge snapshot (%v)", err)
+	}
+
 	snapshot, err := rc.snapshotter.Load()
 	if err != nil && err != snap.ErrNoSnapshot {
 		GetSugar().Fatalf("raftexample: error loading snapshot (%v)", err)
 	}
+
 	return snapshot
 }
 
@@ -141,7 +160,7 @@ func (rc *RaftNode) publishSnapshot(snapshotToSave raftpb.Snapshot) {
 	}
 
 	// trigger kvstore to load snapshot
-	rc.commitC.AppendHighestPriotiryItem(ReplaySnapshot{})
+	rc.commitC.AppendHighestPriotiryItem(snapshotToSave)
 
 	rc.confState = snapshotToSave.Metadata.ConfState
 	rc.snapshotIndex = snapshotToSave.Metadata.Index
@@ -176,13 +195,59 @@ func newSnapshotReaderCloser(data []byte) io.ReadCloser {
 
 func (rc *RaftNode) sendSnapshot(m raftpb.Message) {
 
-	data := m.Snapshot.Data
+	snaps := []string{}
+
+	filepath.Walk(rc.snapdir,
+		func(path string, f os.FileInfo, err error) error {
+
+			if f == nil {
+				return err
+			}
+
+			if !f.IsDir() && strings.HasSuffix(path, ".snap") {
+				filename := strings.TrimLeft(path, rc.snapdir+"/")
+				snaps = append(snaps, filename)
+				return nil
+			}
+
+			return nil
+		})
+
+	//对snap文件按文件名排序
+
+	sort.Slice(snaps, func(i, j int) bool { return snaps[i] < snaps[j] })
+
+	b := buffer.New()
+
+	for _, v := range snaps {
+
+		var _term uint64
+		var _index uint64
+
+		n, err := fmt.Sscanf(v, "%016x-%016x.snap", &_term, &_index)
+
+		if n != 2 || nil != err {
+			continue
+		}
+
+		if _term == m.Snapshot.Metadata.Term && _index == m.Snapshot.Metadata.Index {
+			break
+		}
+
+		if s, err := snap.Read(GetLogger(), rc.snapdir+"/"+v); nil != err {
+			GetSugar().Fatalf("read snap %s error:%v", v, err)
+		} else {
+			b.AppendBytes(s.Data)
+		}
+	}
+
+	b.AppendBytes(m.Snapshot.Data)
 
 	m.Snapshot.Data = nil
 
-	pr := newSnapshotReaderCloser(data)
+	pr := newSnapshotReaderCloser(b.Bytes())
 
-	snapMsg := *snap.NewMessage(m, pr, int64(len(data)))
+	snapMsg := *snap.NewMessage(m, pr, int64(b.Len()))
 
 	now := time.Now()
 	rc.transport.SendSnapshot(snapMsg)
@@ -217,5 +282,68 @@ func (rc *RaftNode) sendSnapshot(m raftpb.Message) {
 			return
 		}
 	}()
+}
 
+func (rc *RaftNode) mergeSnapshot() error {
+
+	//正在传送snapshot,暂停压缩
+
+	if !atomic.CompareAndSwapInt64(&rc.snapshotMerging, 0, 1) {
+		return nil
+	}
+
+	defer atomic.StoreInt64(&rc.snapshotMerging, 0)
+
+	snaps := []string{}
+
+	filepath.Walk(rc.snapdir,
+		func(path string, f os.FileInfo, err error) error {
+
+			if f == nil {
+				return err
+			}
+
+			if !f.IsDir() && strings.HasSuffix(path, ".snap") {
+				filename := strings.TrimLeft(path, rc.snapdir+"/")
+				snaps = append(snaps, filename)
+				return nil
+			}
+
+			return nil
+		})
+
+	//对snap文件按文件名排序
+
+	sort.Slice(snaps, func(i, j int) bool { return snaps[i] < snaps[j] })
+
+	snapshots := []*raftpb.Snapshot{}
+	datas := [][]byte{}
+
+	for _, v := range snaps {
+		if s, err := snap.Read(GetLogger(), rc.snapdir+"/"+v); nil != err {
+			return err
+		} else {
+			snapshots = append(snapshots, s)
+			datas = append(datas, s.Data)
+		}
+	}
+
+	if len(snapshots) <= 1 {
+		return nil
+	}
+
+	mergeSnap := raftpb.Snapshot{
+		Metadata: snapshots[len(snapshots)-1].Metadata,
+	}
+
+	if mergeData, err := rc.snapMerge(datas...); nil != err {
+		return err
+	} else {
+		mergeSnap.Data = mergeData
+		err = rc.snapshotter.SaveSnap(mergeSnap)
+		if nil == err {
+			rc.removeOldSnapAndWal(mergeSnap.Metadata.Term, mergeSnap.Metadata.Index-SnapshotCatchUpEntriesN)
+		}
+		return err
+	}
 }

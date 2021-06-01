@@ -16,7 +16,7 @@ type Buffer struct {
 func New(o ...[]byte) *Buffer {
 	if len(o) > 0 {
 		return &Buffer{
-			bs: o[0],
+			bs: o[0][:0],
 		}
 	} else {
 		return &Buffer{}

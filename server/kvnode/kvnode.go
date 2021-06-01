@@ -78,7 +78,7 @@ func (this *kvnode) startListener() {
 			this.clients[session] = session
 			this.muC.Unlock()
 
-			session.SetRecvTimeout(flyproto.PingTime * 2)
+			session.SetRecvTimeout(flyproto.PingTime * 10)
 			session.SetSendQueueSize(10000)
 
 			//只有配置了压缩开启同时客户端支持压缩才开启通信压缩
@@ -249,25 +249,28 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, cluster string, slots 
 		groupSize = runtime.NumCPU()
 	}
 
-	rn, snapshotterReady := raft.NewRaftNode(this.mutilRaft, mainQueue, (this.id<<16)+storeID, peers, false, GetConfig().Log.LogDir, "kvnode")
 	store := &kvstore{
-		rn:                 rn,
 		db:                 this.db,
 		mainQueue:          mainQueue,
-		raftID:             rn.ID(),
-		keyvals:            make([]map[string]*kv, groupSize),
+		keyvals:            make([]kvmgr, groupSize),
 		proposalCompressor: &compress.ZipCompressor{},
 		snapCompressor:     &compress.ZipCompressor{},
 		unCompressor:       &compress.ZipUnCompressor{},
-		snapshotter:        <-snapshotterReady,
 		kvnode:             this,
 		shard:              storeID,
 		slots:              slots,
 		meta:               meta,
 	}
 
+	rn := raft.NewRaftNode(store.snapMerge, this.mutilRaft, mainQueue, (this.id<<16)+storeID, peers, false, GetConfig().Log.LogDir, "kvnode")
+
+	store.rn = rn
+	store.raftID = rn.ID()
+
 	for i := 0; i < len(store.keyvals); i++ {
-		store.keyvals[i] = map[string]*kv{}
+		store.keyvals[i].kv = map[string]*kv{}
+		store.keyvals[i].modify = map[string]*kv{}
+		store.keyvals[i].kicks = map[string]bool{}
 	}
 
 	store.lru.init()
