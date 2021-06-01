@@ -23,13 +23,17 @@ type snapshotNotifyst struct {
 type SnapshotNotify struct {
 	notify snapshotNotifyst
 	ch     chan interface{}
+	rc     *RaftNode
 }
 
 func (this *SnapshotNotify) Notify(snapshot []byte) {
 	GetSugar().Infof("snapshot notify")
 	this.notify.snapshot = snapshot
-	this.ch <- this.notify
-	GetSugar().Infof("snapshot notify ok")
+	select {
+	case this.ch <- this.notify:
+		GetSugar().Infof("snapshot notify ok")
+	case <-this.rc.stopc:
+	}
 }
 
 func (rc *RaftNode) maybeTriggerSnapshot(index uint64) bool {
@@ -97,7 +101,10 @@ func (rc *RaftNode) triggerSnapshot(st snapshotNotifyst) {
 			panic(err)
 		}
 
-		rc.snapshotCh <- snap
+		select {
+		case rc.snapshotCh <- snap:
+		case <-rc.stopc:
+		}
 
 	}()
 }

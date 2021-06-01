@@ -351,11 +351,6 @@ func (rc *RaftNode) replayWAL() *wal.WAL {
 	return w
 }
 
-//func (rc *RaftNode) writeError(err error) {
-//rc.node.Stop()
-//	rc.commitC.AppendHighestPriotiryItem(err)
-//}
-
 func (rc *RaftNode) entriesToApply(ents []raftpb.Entry) (nents []raftpb.Entry) {
 	if len(ents) == 0 {
 		return ents
@@ -440,6 +435,7 @@ func (rc *RaftNode) publishEntries(ents []raftpb.Entry) {
 						applyIdx: ents[i].Index,
 					},
 					ch: rc.snapshotCh,
+					rc: rc,
 				}
 			}
 			rc.commitC.AppendHighestPriotiryItem(*committed)
