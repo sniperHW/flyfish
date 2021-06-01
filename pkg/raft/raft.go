@@ -470,13 +470,15 @@ func (rc *RaftNode) processMessages(ms []raftpb.Message) []raftpb.Message {
 		}
 
 		if ms[i].Type == raftpb.MsgSnap {
-			if atomic.AddInt64(&rc.inflightSnapshots, 1) > MaxInFlightMsgSnap {
-				// drop msgSnap if the inflight chan if full.
-				atomic.AddInt64(&rc.inflightSnapshots, -1)
-			} else {
-				//use sendsnap to send the snapshot
-				ms[i].Snapshot.Metadata.ConfState = rc.confState
-				go rc.sendSnapshot(ms[i])
+			if atomic.LoadInt64(&rc.snapshotMerging) == 0 {
+				if atomic.AddInt64(&rc.inflightSnapshots, 1) > MaxInFlightMsgSnap {
+					// drop msgSnap if the inflight chan if full.
+					atomic.AddInt64(&rc.inflightSnapshots, -1)
+				} else {
+					//use sendsnap to send the snapshot
+					ms[i].Snapshot.Metadata.ConfState = rc.confState
+					go rc.sendSnapshot(ms[i])
+				}
 			}
 			ms[i].To = 0
 		}

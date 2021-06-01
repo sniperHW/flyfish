@@ -83,11 +83,15 @@ func (rc *RaftNode) onTriggerSnapshotOK(snap raftpb.Snapshot) {
 		panic(err)
 	}
 
+	if !atomic.CompareAndSwapInt64(&rc.snapshotMerging, 0, 1) {
+		return
+	}
+
 	go func() {
 		if err := rc.mergeSnapshot(); nil != err {
 			GetSugar().Errorf("mergeSnapshot error:%v", err)
 		}
-
+		atomic.StoreInt64(&rc.snapshotMerging, 0)
 	}()
 
 }
@@ -285,14 +289,6 @@ func (rc *RaftNode) sendSnapshot(m raftpb.Message) {
 }
 
 func (rc *RaftNode) mergeSnapshot() error {
-
-	//正在传送snapshot,暂停压缩
-
-	if !atomic.CompareAndSwapInt64(&rc.snapshotMerging, 0, 1) {
-		return nil
-	}
-
-	defer atomic.StoreInt64(&rc.snapshotMerging, 0)
 
 	snaps := []string{}
 
