@@ -234,18 +234,12 @@ func (rc *RaftNode) sendSnapshot(m raftpb.Message) {
 			continue
 		}
 
-		if _term == m.Snapshot.Metadata.Term && _index == m.Snapshot.Metadata.Index {
-			break
-		}
-
 		if s, err := snap.Read(GetLogger(), rc.snapdir+"/"+v); nil != err {
 			GetSugar().Fatalf("read snap %s error:%v", v, err)
 		} else {
 			b.AppendBytes(s.Data)
 		}
 	}
-
-	b.AppendBytes(m.Snapshot.Data)
 
 	m.Snapshot.Data = nil
 

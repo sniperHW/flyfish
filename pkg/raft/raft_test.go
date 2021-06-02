@@ -356,7 +356,7 @@ func (s *kvstore) serve() {
 }
 
 func init() {
-	InitLogger(logger.NewZapLogger("testRaft.log", "./log", "info", 100, 14, true))
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", "debug", 100, 14, true))
 }
 
 type kvnode struct {

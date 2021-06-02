@@ -639,6 +639,7 @@ func (rc *RaftNode) startRaft() {
 		MaxInflightMsgs:           256,
 		MaxUncommittedEntriesSize: 1 << 30,
 		Logger:                    rloger,
+		DisableProposalForwarding: true, //禁止非leader转发proposal
 	}
 
 	if oldwal {

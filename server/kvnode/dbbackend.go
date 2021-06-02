@@ -2,20 +2,21 @@ package kvnode
 
 import (
 	"fmt"
+	"sync"
+
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/sniperHW/flyfish/backend/db"
 	"github.com/sniperHW/flyfish/backend/db/sql"
 	sslot "github.com/sniperHW/flyfish/server/slot"
-	"sync"
 )
 
 type dbbackendI interface {
 	issueLoad(l db.DBLoadTask) bool
 	issueUpdate(u db.DBUpdateTask) bool
 	stop()
-	start() error
+	start(config *Config) error
 }
 
 type sqlDbBackend struct {
@@ -46,8 +47,8 @@ func NewSqlDbBackend() *sqlDbBackend {
 	return &sqlDbBackend{}
 }
 
-func (d *sqlDbBackend) start() error {
-	dbConfig := GetConfig().DBConfig
+func (d *sqlDbBackend) start(config *Config) error {
+	dbConfig := config.DBConfig
 
 	for i := 0; i < 5; i++ {
 		dbl, err := sqlOpen(dbConfig.SqlType, dbConfig.ConfDbHost, dbConfig.ConfDbPort, dbConfig.ConfDataBase, dbConfig.ConfDbUser, dbConfig.ConfDbPassword)

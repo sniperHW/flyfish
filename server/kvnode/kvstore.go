@@ -229,7 +229,7 @@ func (s *kvstore) checkLru(ch chan struct{}) {
 
 	if s.lru.head.nnext != &s.lru.tail {
 		cur := s.lru.tail.pprev
-		for cur != &s.lru.head && len(s.keyvals) > GetConfig().MaxCachePerStore {
+		for cur != &s.lru.head && len(s.keyvals) > s.kvnode.config.MaxCachePerStore {
 			if !s.tryKick(cur.keyvalue) {
 				return
 			}
@@ -295,6 +295,12 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 			Seqno: req.msg.Seqno,
 			Err:   errcode.New(errcode.Errcode_error, fmt.Sprintf("%s current store is removing", req.msg.UniKey)),
 		})
+	} else if s.leader != s.raftID {
+		req.from.send(&cs.RespMessage{
+			Cmd:   req.msg.Cmd,
+			Seqno: req.msg.Seqno,
+			Err:   errcode.New(errcode.Errcode_retry, "kvstore is not leader"),
+		})
 	} else if !s.ready || s.meta == nil {
 		req.from.send(&cs.RespMessage{
 			Cmd:   req.msg.Cmd,
@@ -322,13 +328,13 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 				})
 				return
 			} else {
-				if len(s.keyvals) > (GetConfig().MaxCachePerStore*3)/2 {
+				if len(s.keyvals) > (s.kvnode.config.MaxCachePerStore*3)/2 {
 					req.from.send(&cs.RespMessage{
 						Cmd:   req.msg.Cmd,
 						Seqno: req.msg.Seqno,
 						Err:   errcode.New(errcode.Errcode_retry, "kvstore busy,please retry later"),
 					})
-					GetSugar().Infof("reply retry %d %d", len(s.keyvals), GetConfig().MaxCachePerStore)
+					GetSugar().Infof("reply retry %d %d", len(s.keyvals), s.kvnode.config.MaxCachePerStore)
 					return
 				} else {
 					table, key := splitUniKey(req.msg.UniKey)
@@ -415,11 +421,44 @@ func (s *kvstore) gotLease() {
 	}
 }
 
+type TestConfChange struct {
+	raft.ProposalConfChangeBase
+	ch chan error
+}
+
+func (this TestConfChange) GetType() raftpb.ConfChangeType {
+	return this.ConfChangeType
+}
+
+func (this TestConfChange) GetUrl() string {
+	return this.Url
+}
+
+func (this TestConfChange) GetNodeID() uint64 {
+	return this.NodeID
+}
+
+func (this TestConfChange) OnError(err error) {
+
+}
+
+func (s *kvstore) addNode(id uint64, url string) {
+	o := TestConfChange{
+		ProposalConfChangeBase: raft.ProposalConfChangeBase{
+			ConfChangeType: raftpb.ConfChangeAddNode,
+			Url:            url,
+			NodeID:         id,
+		},
+	}
+
+	s.rn.IssueConfChange(o)
+}
+
 func (s *kvstore) serve() {
 
 	go func() {
 		ch := make(chan struct{}, 1)
-		interval := time.Duration(GetConfig().LruCheckInterval)
+		interval := time.Duration(s.kvnode.config.LruCheckInterval)
 		if 0 == interval {
 			interval = 1000
 		}

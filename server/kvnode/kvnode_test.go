@@ -5,6 +5,8 @@ package kvnode
 
 import (
 	"fmt"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"sync"
 	"testing"
@@ -99,7 +101,7 @@ func newMockDB() *mockBackEnd {
 	return d
 }
 
-func (d *mockBackEnd) start() error {
+func (d *mockBackEnd) start(config *Config) error {
 	d.d.Start()
 	return nil
 }
@@ -118,15 +120,22 @@ func (d *mockBackEnd) stop() {
 
 var dbMeta *db.DbDef
 
+var config *Config
+
 func init() {
+
+	go func() {
+		http.ListenAndServe("localhost:6060", nil)
+	}()
+
 	dbConf := &dbconf{}
 	if _, err := toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
 		panic(err)
 	}
 
-	LoadConfigStr(fmt.Sprintf(configStr, 10018, "pgsql", "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB))
+	config, _ = LoadConfigStr(fmt.Sprintf(configStr, 10018, "pgsql", "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB))
 
-	dbConfig := GetConfig().DBConfig
+	dbConfig := config.DBConfig
 
 	dbMeta, _ = metaLoader.LoadDBMetaFromSqlJson(dbConfig.SqlType, dbConfig.ConfDbHost, dbConfig.ConfDbPort, dbConfig.ConfDataBase, dbConfig.ConfDbUser, dbConfig.ConfDbPassword)
 
@@ -146,7 +155,7 @@ func newMockDBBackEnd() dbbackendI {
 
 func start1Node(b dbbackendI) *kvnode {
 
-	node := NewKvNode(1, dbMeta, sql.CreateDbMeta, b)
+	node := NewKvNode(1, config, dbMeta, sql.CreateDbMeta, b)
 
 	if err := node.Start(); nil != err {
 		panic(err)
@@ -488,7 +497,7 @@ func test(t *testing.T, c *client.Client) {
 
 func Test1Node1Store1(t *testing.T) {
 
-	InitLogger(logger.NewZapLogger("testRaft.log", "./log", GetConfig().Log.LogLevel, 100, 14, true))
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, 100, 14, true))
 
 	//先删除所有kv文件
 	os.RemoveAll("./log/kvnode-1-1")
@@ -533,7 +542,7 @@ func Test1Node1Store1(t *testing.T) {
 
 func Test1Node1Store2(t *testing.T) {
 
-	InitLogger(logger.NewZapLogger("testRaft.log", "./log", GetConfig().Log.LogLevel, 100, 14, true))
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, 100, 14, true))
 
 	//先删除所有kv文件
 	os.RemoveAll("./log/kvnode-1-1")
@@ -561,7 +570,7 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 	raft.DefaultSnapshotCount = 100
 	raft.SnapshotCatchUpEntriesN = 100
 
-	InitLogger(logger.NewZapLogger("testRaft.log", "./log", GetConfig().Log.LogLevel, 100, 14, true))
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, 100, 14, true))
 
 	//先删除所有kv文件
 	os.RemoveAll("./log/kvnode-1-1")
@@ -642,7 +651,7 @@ func Test1Node1StoreSnapshot2(t *testing.T) {
 	raft.DefaultSnapshotCount = 100
 	raft.SnapshotCatchUpEntriesN = 100
 
-	InitLogger(logger.NewZapLogger("testRaft.log", "./log", GetConfig().Log.LogLevel, 100, 14, true))
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, 100, 14, true))
 
 	//先删除所有kv文件
 	os.RemoveAll("./log/kvnode-1-1")
@@ -695,7 +704,7 @@ func Test1Node1StoreSnapshot2(t *testing.T) {
 }
 
 func TestUseMockDB(t *testing.T) {
-	InitLogger(logger.NewZapLogger("testRaft.log", "./log", GetConfig().Log.LogLevel, 100, 14, true))
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, 100, 14, true))
 
 	//先删除所有kv文件
 	os.RemoveAll("./log/kvnode-1-1")
