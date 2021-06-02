@@ -25,7 +25,7 @@ func (this *kvProposal) OnError(err error) {
 				f.reply(errcode.New(errcode.Errcode_error, err.Error()), nil, 0)
 				this.keyValue.pendingCmd.popFront()
 			}
-			delete(this.keyValue.store.keyvals[this.keyValue.groupID], this.keyValue.uniKey)
+			delete(this.keyValue.store.keyvals[this.keyValue.groupID].kv, this.keyValue.uniKey)
 		} else {
 			this.keyValue.process(nil)
 		}
@@ -64,7 +64,10 @@ func (this *kvProposal) apply() {
 			this.keyValue.pendingCmd.popFront()
 		}
 
-		delete(this.keyValue.store.keyvals[this.keyValue.groupID], this.keyValue.uniKey)
+		delete(this.keyValue.store.keyvals[this.keyValue.groupID].kv, this.keyValue.uniKey)
+
+		this.keyValue.store.keyvals[this.keyValue.groupID].kicks[this.keyValue.uniKey] = true
+
 		//从LRU删除
 		this.keyValue.store.lru.removeLRU(&this.keyValue.lru)
 
@@ -103,9 +106,12 @@ func (this *kvProposal) apply() {
 
 		if oldState == kv_loading {
 			this.keyValue.store.lru.updateLRU(&this.keyValue.lru)
+			delete(this.keyValue.store.keyvals[this.keyValue.groupID].kicks, this.keyValue.uniKey)
 		}
 
+		this.keyValue.snapshot = true
 		this.keyValue.process(nil)
+
 	}
 }
 
@@ -129,5 +135,6 @@ func (this *kvLinearizableRead) ok() {
 	for _, v := range this.cmds {
 		v.reply(nil, this.keyValue.fields, this.keyValue.version)
 	}
+
 	this.keyValue.process(nil)
 }

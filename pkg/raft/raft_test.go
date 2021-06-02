@@ -7,12 +7,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/sniperHW/flyfish/logger"
-	"github.com/sniperHW/flyfish/pkg/buffer"
-	"github.com/sniperHW/flyfish/pkg/queue"
-	"github.com/stretchr/testify/assert"
-	"go.etcd.io/etcd/etcdserver/api/snap"
-	"go.etcd.io/etcd/raft/raftpb"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -23,6 +17,12 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/sniperHW/flyfish/logger"
+	"github.com/sniperHW/flyfish/pkg/buffer"
+	"github.com/sniperHW/flyfish/pkg/queue"
+	"github.com/stretchr/testify/assert"
+	"go.etcd.io/etcd/raft/raftpb"
 )
 
 func init() {
@@ -119,15 +119,14 @@ func (this TestConfChange) OnError(err error) {
 }
 
 type kvstore struct {
-	mu            sync.RWMutex
-	mainQueue     applicationQueue
-	kvStore       map[string]string // current committed key-value pairs
-	snapshotter   *snap.Snapshotter
-	rn            *RaftNode
-	becomeLeader  func()
-	startOK       func()
-	onApplySnapOK func()
-	raftStopCh    chan struct{}
+	mu           sync.RWMutex
+	mainQueue    applicationQueue
+	kvStore      map[string]string // current committed key-value pairs
+	rn           *RaftNode
+	becomeLeader func()
+	startOK      func()
+	//onApplySnapOK func()
+	raftStopCh chan struct{}
 }
 
 type kv struct {
@@ -135,26 +134,12 @@ type kv struct {
 	Val string
 }
 
-func newKVStore(mainQueue applicationQueue, snapshotter *snap.Snapshotter, rn *RaftNode) *kvstore {
+func newKVStore(mainQueue applicationQueue, rn *RaftNode) *kvstore {
 	s := &kvstore{
-		mainQueue:   mainQueue,
-		kvStore:     make(map[string]string),
-		snapshotter: snapshotter,
-		rn:          rn,
-		raftStopCh:  make(chan struct{}),
-	}
-
-	snapshot, err := s.loadSnapshot()
-
-	if err != nil {
-		log.Panic(err)
-	}
-
-	if snapshot != nil {
-		GetSugar().Infof("%x loading snapshot at term %d and index %d", rn.id, snapshot.Metadata.Term, snapshot.Metadata.Index)
-		if err := s.recoverFromSnapshot(snapshot.Data); err != nil {
-			log.Panic(err)
-		}
+		mainQueue:  mainQueue,
+		kvStore:    make(map[string]string),
+		rn:         rn,
+		raftStopCh: make(chan struct{}),
 	}
 
 	go s.serve()
@@ -230,25 +215,33 @@ func (s *kvstore) RemoveNode(id uint64) error {
 func (s *kvstore) getSnapshot() ([]byte, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return json.Marshal(s.kvStore)
-}
-
-func (s *kvstore) loadSnapshot() (*raftpb.Snapshot, error) {
-	snapshot, err := s.snapshotter.Load()
-	if err == snap.ErrNoSnapshot {
-		return nil, nil
-	}
-	if err != nil {
+	bb, err := json.Marshal(s.kvStore)
+	if nil != err {
 		return nil, err
+	} else {
+		b := buffer.New()
+		b.AppendUint32(uint32(len(bb)))
+		b.AppendBytes(bb)
+		return b.Bytes(), nil
 	}
-	return snapshot, nil
 }
 
 func (s *kvstore) recoverFromSnapshot(snapshot []byte) error {
-	var store map[string]string
-	if err := json.Unmarshal(snapshot, &store); err != nil {
-		return err
+	store := map[string]string{}
+	r := buffer.NewReader(snapshot)
+	for !r.IsOver() {
+		l := r.GetUint32()
+		b := r.GetBytes(int(l))
+		var s map[string]string
+		if err := json.Unmarshal(b, &s); err != nil {
+			return err
+		}
+
+		for k, vv := range s {
+			store[k] = vv
+		}
 	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.kvStore = store
@@ -305,8 +298,7 @@ func (s *kvstore) processCommited(commited *Committed) {
 	//raft请求snapshot,建立snapshot并返回
 	snapshotNotify := commited.GetSnapshotNotify()
 	if nil != snapshotNotify {
-		//fmt.Println("need snapshot")
-		bytes, _ := json.Marshal(s.kvStore)
+		bytes, _ := s.getSnapshot()
 		snapshotNotify.Notify(bytes)
 	}
 }
@@ -341,19 +333,11 @@ func (s *kvstore) serve() {
 				if nil != s.startOK {
 					s.startOK()
 				}
-			case ReplaySnapshot:
-				snapshot, err := s.loadSnapshot()
-				if err != nil {
+			case raftpb.Snapshot:
+				snapshot := v.(raftpb.Snapshot)
+				GetSugar().Infof("%x loading snapshot at term %d and index %d", s.rn.id, snapshot.Metadata.Term, snapshot.Metadata.Index)
+				if err := s.recoverFromSnapshot(snapshot.Data); err != nil {
 					log.Panic(err)
-				}
-				if snapshot != nil {
-					GetSugar().Infof("%x loading snapshot at term %d and index %d", s.rn.id, snapshot.Metadata.Term, snapshot.Metadata.Index)
-					if err := s.recoverFromSnapshot(snapshot.Data); err != nil {
-						log.Panic(err)
-					}
-					if nil != s.onApplySnapOK {
-						s.onApplySnapOK()
-					}
 				}
 			case LeaderChange:
 				if v.(LeaderChange).Leader == s.rn.ID() {
@@ -372,13 +356,36 @@ func (s *kvstore) serve() {
 }
 
 func init() {
-	InitLogger(logger.NewZapLogger("testRaft.log", "./log", "info", 100, 14, true))
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", "debug", 100, 14, true))
 }
 
 type kvnode struct {
 	mutilRaft *MutilRaft
 	rn        *RaftNode
 	store     *kvstore
+}
+
+func snapMerge(snaps ...[]byte) ([]byte, error) {
+	store := map[string]string{}
+	for _, v := range snaps {
+		var s map[string]string
+		if err := json.Unmarshal(v[4:], &s); err != nil {
+			return nil, err
+		}
+
+		for k, vv := range s {
+			store[k] = vv
+		}
+	}
+
+	if b, err := json.Marshal(store); nil != err {
+		return nil, err
+	} else {
+		bb := buffer.New(make([]byte, 4+len(b)))
+		bb.AppendUint32(uint32(len(b)))
+		bb.AppendBytes(b)
+		return bb.Bytes(), nil
+	}
 }
 
 func newKvNode(id int, cluster string) *kvnode {
@@ -410,11 +417,9 @@ func newKvNode(id int, cluster string) *kvnode {
 
 	mutilRaft := NewMutilRaft()
 
-	rn, snapshotterReady := NewRaftNode(mutilRaft, mainQueue, (id<<16)+1, peers, false, "log", "kv")
+	rn := NewRaftNode(snapMerge, mutilRaft, mainQueue, (id<<16)+1, peers, false, "log", "kv")
 
-	snapshotter := <-snapshotterReady
-
-	store := newKVStore(mainQueue, snapshotter, rn)
+	store := newKVStore(mainQueue, rn)
 
 	go mutilRaft.Serve(selfUrl)
 
@@ -432,7 +437,6 @@ func (this *kvnode) stop() {
 	this.store.mainQueue.Close()
 	this.mutilRaft.Stop()
 }
-
 func TestSingleNode(t *testing.T) {
 
 	//先删除所有kv文件
@@ -471,7 +475,7 @@ func TestSingleNode(t *testing.T) {
 		assert.Equal(t, "ok", node.store.kvStore["sniperHW"])
 
 		for i := 0; i < 500; i++ {
-			node.store.Set("sniperHW", "ok")
+			node.store.Set(fmt.Sprintf("sniperHW:%d", i), fmt.Sprintf("sniperHW:%d", i))
 		}
 
 		node.store.Set("sniperHW", "sniperHW")
@@ -570,7 +574,7 @@ func TestCluster(t *testing.T) {
 	leader := getLeader()
 
 	for i := 0; i < 500; i++ {
-		leader.store.Set("sniperHW", "ok")
+		leader.store.Set(fmt.Sprintf("sniperHW:%d", i), fmt.Sprintf("sniperHW:%d", i))
 	}
 
 	leader.store.Set("sniperHW", "sniperHW")
@@ -590,7 +594,7 @@ func TestCluster(t *testing.T) {
 
 	startOkCh4 := make(chan struct{}, 1)
 
-	node4.store.onApplySnapOK = func() {
+	node4.store.startOK = func() {
 		select {
 		case startOkCh4 <- struct{}{}:
 		default:

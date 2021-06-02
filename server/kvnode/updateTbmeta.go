@@ -45,7 +45,7 @@ func (this *tbMetaProposal) OnMergeFinish(b []byte) (ret []byte) {
 func (this *tbMetaProposal) apply() {
 	this.store.meta = this.meta
 	for _, v := range this.store.keyvals {
-		for _, vv := range v {
+		for _, vv := range v.kv {
 			vv.tbmeta = this.store.meta.GetTableMeta(vv.tbmeta.TableName())
 		}
 	}

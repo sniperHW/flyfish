@@ -2,14 +2,15 @@ package sql
 
 import (
 	"database/sql/driver"
-	"github.com/jmoiron/sqlx"
-	"github.com/sniperHW/flyfish/backend/db"
-	"github.com/sniperHW/flyfish/pkg/buffer"
-	"github.com/sniperHW/flyfish/pkg/queue"
 	"net"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/jmoiron/sqlx"
+	"github.com/sniperHW/flyfish/backend/db"
+	"github.com/sniperHW/flyfish/pkg/buffer"
+	"github.com/sniperHW/flyfish/pkg/queue"
 )
 
 func isRetryError(err error) bool {

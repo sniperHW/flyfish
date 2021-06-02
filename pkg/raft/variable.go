@@ -18,7 +18,6 @@ var (
 
 type RemoveFromCluster struct{}
 type ReplayOK struct{}
-type ReplaySnapshot struct{}
 type RaftStopOK struct{}
 type LeaderChange struct {
 	Leader int

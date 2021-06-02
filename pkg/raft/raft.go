@@ -136,6 +136,7 @@ func (this *raftTaskMgr) onLeaderDemote() {
 }
 
 type RaftNode struct {
+	snapshotMerging   int64
 	inflightSnapshots int64
 	confChangeC       *queue.ArrayQueue
 	proposePipeline   *queue.ArrayQueue
@@ -165,10 +166,10 @@ type RaftNode struct {
 
 	//msgSnapC chan raftpb.Message
 
-	snapshotter      *snap.Snapshotter
-	snapshotterReady chan *snap.Snapshotter // signals when snapshotter is ready
-	snapshotCh       chan interface{}
-	snapshotting     bool //当前是否正在做快照
+	snapshotter *snap.Snapshotter
+	//snapshotterReady chan *snap.Snapshotter // signals when snapshotter is ready
+	snapshotCh   chan interface{}
+	snapshotting bool //当前是否正在做快照
 
 	snapCount uint64
 	transport *rafthttp.Transport
@@ -185,6 +186,8 @@ type RaftNode struct {
 	leader    int
 	idcounter int32
 	stoponce  sync.Once
+
+	snapMerge func(...[]byte) ([]byte, error)
 }
 
 func readWALNames(dirpath string) []string {
@@ -336,7 +339,7 @@ func (rc *RaftNode) replayWAL() *wal.WAL {
 
 	if snapshot != nil {
 		GetSugar().Info("send replaySnapshot")
-		rc.commitC.AppendHighestPriotiryItem(ReplaySnapshot{})
+		rc.commitC.AppendHighestPriotiryItem(*snapshot)
 	}
 
 	// append to storage so raft starts at the right place in log
@@ -463,13 +466,15 @@ func (rc *RaftNode) processMessages(ms []raftpb.Message) []raftpb.Message {
 		}
 
 		if ms[i].Type == raftpb.MsgSnap {
-			if atomic.AddInt64(&rc.inflightSnapshots, 1) > MaxInFlightMsgSnap {
-				// drop msgSnap if the inflight chan if full.
-				atomic.AddInt64(&rc.inflightSnapshots, -1)
-			} else {
-				//use sendsnap to send the snapshot
-				ms[i].Snapshot.Metadata.ConfState = rc.confState
-				go rc.sendSnapshot(ms[i])
+			if atomic.LoadInt64(&rc.snapshotMerging) == 0 {
+				if atomic.AddInt64(&rc.inflightSnapshots, 1) > MaxInFlightMsgSnap {
+					// drop msgSnap if the inflight chan if full.
+					atomic.AddInt64(&rc.inflightSnapshots, -1)
+				} else {
+					//use sendsnap to send the snapshot
+					ms[i].Snapshot.Metadata.ConfState = rc.confState
+					go rc.sendSnapshot(ms[i])
+				}
 			}
 			ms[i].To = 0
 		}
@@ -604,7 +609,7 @@ func (rc *RaftNode) startRaft() {
 		}
 	}
 	rc.snapshotter = snap.New(GetLogger(), rc.snapdir)
-	rc.snapshotterReady <- rc.snapshotter
+	//rc.snapshotterReady <- rc.snapshotter
 
 	oldwal := wal.Exist(rc.waldir)
 	rc.wal = rc.replayWAL()
@@ -630,6 +635,7 @@ func (rc *RaftNode) startRaft() {
 		MaxInflightMsgs:           256,
 		MaxUncommittedEntriesSize: 1 << 30,
 		Logger:                    rloger,
+		DisableProposalForwarding: true, //禁止非leader转发proposal
 	}
 
 	if oldwal {
@@ -696,23 +702,22 @@ func (rc *RaftNode) IssueConfChange(p ProposalConfChange) error {
 	return rc.confChangeC.ForceAppend(p)
 }
 
-func NewRaftNode(mutilRaft *MutilRaft, commitC ApplicationQueue, id int, peers map[int]string, join bool, logPath string, raftLogPrefix string) (*RaftNode, <-chan *snap.Snapshotter) {
+func NewRaftNode(snapMerge func(...[]byte) ([]byte, error), mutilRaft *MutilRaft, commitC ApplicationQueue, id int, peers map[int]string, join bool, logPath string, raftLogPrefix string) *RaftNode {
 
 	nodeID := id >> 16
 	region := id & 0xFFFF
 
 	rc := &RaftNode{
-		commitC:          commitC,
-		id:               id,
-		peers:            peers,
-		join:             join,
-		waldir:           fmt.Sprintf("%s/%s-%d-%d", logPath, raftLogPrefix, nodeID, region),
-		snapdir:          fmt.Sprintf("%s/%s-%d-%d-snap", logPath, raftLogPrefix, nodeID, region),
-		snapCount:        DefaultSnapshotCount,
-		stopc:            make(chan struct{}),
-		stopping:         make(chan struct{}),
-		snapshotCh:       make(chan interface{}, 1),
-		snapshotterReady: make(chan *snap.Snapshotter, 1),
+		commitC:    commitC,
+		id:         id,
+		peers:      peers,
+		join:       join,
+		waldir:     fmt.Sprintf("%s/%s-%d-%d", logPath, raftLogPrefix, nodeID, region),
+		snapdir:    fmt.Sprintf("%s/%s-%d-%d-snap", logPath, raftLogPrefix, nodeID, region),
+		snapCount:  DefaultSnapshotCount,
+		stopc:      make(chan struct{}),
+		stopping:   make(chan struct{}),
+		snapshotCh: make(chan interface{}, 1),
 		proposalMgr: raftTaskMgr{
 			l:    list.New(),
 			dict: map[uint64]*raftTask{},
@@ -731,8 +736,9 @@ func NewRaftNode(mutilRaft *MutilRaft, commitC ApplicationQueue, id int, peers m
 		confChangeC:     queue.NewArrayQueue(),
 		proposePipeline: queue.NewArrayQueue(10000),
 		readPipeline:    queue.NewArrayQueue(10000),
+		snapMerge:       snapMerge,
 	}
 
 	go rc.startRaft()
-	return rc, rc.snapshotterReady
+	return rc //, rc.snapshotterReady
 }

@@ -3,7 +3,6 @@ package kvnode
 import (
 	//"errors"
 
-	"encoding/binary"
 	"fmt"
 	"reflect"
 	"sync"
@@ -12,7 +11,6 @@ import (
 	"github.com/sniperHW/flyfish/backend/db"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
-	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/pkg/compress"
 	"github.com/sniperHW/flyfish/pkg/net/cs"
 	"github.com/sniperHW/flyfish/pkg/queue"
@@ -115,6 +113,11 @@ func (this *lruList) removeLRU(e *lruElement) {
 	e.pprev = nil
 }
 
+type kvmgr struct {
+	kv    map[string]*kv
+	kicks map[string]bool
+}
+
 type kvstore struct {
 	raftMtx            sync.Mutex
 	raftID             int
@@ -122,7 +125,7 @@ type kvstore struct {
 	snapshotter        *snap.Snapshotter
 	rn                 *raft.RaftNode
 	mainQueue          applicationQueue
-	keyvals            []map[string]*kv
+	keyvals            []kvmgr
 	db                 dbbackendI
 	lru                lruList
 	wait4ReplyCount    int32
@@ -226,7 +229,7 @@ func (s *kvstore) checkLru(ch chan struct{}) {
 
 	if s.lru.head.nnext != &s.lru.tail {
 		cur := s.lru.tail.pprev
-		for cur != &s.lru.head && len(s.keyvals) > GetConfig().MaxCachePerStore {
+		for cur != &s.lru.head && len(s.keyvals) > s.kvnode.config.MaxCachePerStore {
 			if !s.tryKick(cur.keyvalue) {
 				return
 			}
@@ -292,6 +295,12 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 			Seqno: req.msg.Seqno,
 			Err:   errcode.New(errcode.Errcode_error, fmt.Sprintf("%s current store is removing", req.msg.UniKey)),
 		})
+	} else if s.leader != s.raftID {
+		req.from.send(&cs.RespMessage{
+			Cmd:   req.msg.Cmd,
+			Seqno: req.msg.Seqno,
+			Err:   errcode.New(errcode.Errcode_retry, "kvstore is not leader"),
+		})
 	} else if !s.ready || s.meta == nil {
 		req.from.send(&cs.RespMessage{
 			Cmd:   req.msg.Cmd,
@@ -309,7 +318,7 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 
 		groupID := sslot.StringHash(req.msg.UniKey) % len(s.keyvals)
 
-		keyvalue, ok = s.keyvals[groupID][req.msg.UniKey]
+		keyvalue, ok = s.keyvals[groupID].kv[req.msg.UniKey]
 
 		if !ok {
 			if req.msg.Cmd == flyproto.CmdType_Kick { //kv不在缓存中,kick操作直接返回ok
@@ -319,13 +328,13 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 				})
 				return
 			} else {
-				if len(s.keyvals) > (GetConfig().MaxCachePerStore*3)/2 {
+				if len(s.keyvals) > (s.kvnode.config.MaxCachePerStore*3)/2 {
 					req.from.send(&cs.RespMessage{
 						Cmd:   req.msg.Cmd,
 						Seqno: req.msg.Seqno,
 						Err:   errcode.New(errcode.Errcode_retry, "kvstore busy,please retry later"),
 					})
-					GetSugar().Infof("reply retry %d %d", len(s.keyvals), GetConfig().MaxCachePerStore)
+					GetSugar().Infof("reply retry %d %d", len(s.keyvals), s.kvnode.config.MaxCachePerStore)
 					return
 				} else {
 					table, key := splitUniKey(req.msg.UniKey)
@@ -338,7 +347,7 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 						})
 						return
 					} else {
-						s.keyvals[keyvalue.groupID][req.msg.UniKey] = keyvalue
+						s.keyvals[keyvalue.groupID].kv[req.msg.UniKey] = keyvalue
 					}
 				}
 			}
@@ -363,7 +372,7 @@ func (s *kvstore) processCommited(commited *raft.Committed) {
 			v.(applyable).apply()
 		}
 	} else {
-		err := s.replayFromBytes(commited.Data)
+		err := s.replayFromBytes(false, commited.Data)
 		if nil != err {
 			GetSugar().Panic(err)
 		}
@@ -387,165 +396,6 @@ func (s *kvstore) processConfChange(p raft.ProposalConfChange) {
 
 }
 
-func (s *kvstore) replayFromBytes(b []byte) error {
-
-	var err error
-
-	GetSugar().Debugf("replayFromBytes len:%d", len(b))
-
-	compress := b[len(b)-1]
-	b = b[:len(b)-1]
-	if compress == byte(1) {
-		b, err = s.unCompressor.Clone().UnCompress(b)
-		if nil != err {
-			GetSugar().Errorf("UnCompress error %v", err)
-			return err
-		}
-	}
-
-	r := newProposalReader(b)
-
-	var ptype proposalType
-	var data interface{}
-	var isOver bool
-	for {
-		isOver, ptype, data, err = r.read()
-		if nil != err {
-			return err
-		} else if isOver {
-			return nil
-		}
-
-		if ptype == proposal_tbmeta {
-			def, err := db.CreateDbDefFromJsonString(data.([]byte))
-			if nil != err {
-				return err
-			}
-
-			meta, err := s.kvnode.metaCreator(def)
-
-			if nil != err {
-				return err
-			}
-
-			if meta.GetVersion() > s.meta.GetVersion() {
-				s.meta = meta
-			}
-
-		} else if ptype == proposal_lease {
-			p := data.(pplease)
-			s.lease.update(p.nodeid, p.begtime)
-		} else {
-			p := data.(ppkv)
-			groupID := sslot.StringHash(p.unikey) % len(s.keyvals)
-			keyvalue, ok := s.keyvals[groupID][p.unikey]
-			GetSugar().Debugf("%s %d %d", p.unikey, ptype, p.version)
-			if !ok {
-				if ptype == proposal_kick || ptype == proposal_update {
-					return fmt.Errorf("bad data,%s with a bad proposal_type:%d", p.unikey, ptype)
-				} else {
-					var e errcode.Error
-					table, key := splitUniKey(p.unikey)
-					keyvalue, e = s.newkv(groupID, p.unikey, key, table)
-					if nil != e {
-						return fmt.Errorf("bad data,%s is no table define", p.unikey)
-					}
-					s.keyvals[groupID][p.unikey] = keyvalue
-				}
-			}
-
-			switch ptype {
-			case proposal_kick:
-				delete(s.keyvals[groupID], p.unikey)
-			case proposal_update:
-				keyvalue.version = p.version
-				for k, v := range p.fields {
-					keyvalue.fields[k] = v
-				}
-			case proposal_snapshot:
-				keyvalue.version = p.version
-				keyvalue.fields = p.fields
-				if keyvalue.version != 0 {
-					keyvalue.state = kv_ok
-				} else {
-					keyvalue.state = kv_no_record
-				}
-			}
-			GetSugar().Debugf("%s ok", p.unikey)
-		}
-	}
-}
-
-const buffsize = 1024 * 64 * 1024
-
-var snapshotBufferPool = sync.Pool{
-	New: func() interface{} {
-		return make([]byte, 0, buffsize)
-	},
-}
-
-func getSnapshotBuffer() []byte {
-	return snapshotBufferPool.Get().([]byte)
-}
-
-func releaseSnapshotBuffer(b []byte) {
-	snapshotBufferPool.Put(b[:0])
-}
-
-func (s *kvstore) getSnapshot() ([]byte, error) {
-
-	beg := time.Now()
-
-	var waitGroup sync.WaitGroup
-	waitGroup.Add(len(s.keyvals))
-
-	buff := make([]byte, 0, buffsize)
-	var mtx sync.Mutex
-
-	//多线程序列化和压缩
-	for _, v := range s.keyvals {
-		go func(m map[string]*kv) {
-			b := getSnapshotBuffer()     //make([]byte, 0, buffsize)
-			b = buffer.AppendInt32(b, 0) //占位符
-			for _, v := range m {
-				if v.state == kv_ok || v.state == kv_no_record {
-					b = serilizeKv(b, proposal_snapshot, v.uniKey, v.version, v.fields)
-				}
-			}
-
-			compressor := s.snapCompressor.Clone()
-
-			cb, err := compressor.Compress(b[4:])
-			if nil != err {
-				GetSugar().Errorf("snapshot compress error:%v", err)
-				b = append(b, byte(0))
-				binary.BigEndian.PutUint32(b[:4], uint32(len(b)-4))
-			} else {
-				b = b[:4]
-				b = append(b, cb...)
-				b = append(b, byte(1))
-				binary.BigEndian.PutUint32(b[:4], uint32(len(cb)+1))
-			}
-
-			mtx.Lock()
-			buff = append(buff, b...)
-			mtx.Unlock()
-
-			releaseSnapshotBuffer(b)
-
-			waitGroup.Done()
-		}(v)
-	}
-
-	waitGroup.Wait()
-
-	buff = s.lease.snapshot(buff)
-
-	GetSugar().Infof("getSnapshot: %v,snapshot len:%d", time.Now().Sub(beg), len(buff))
-
-	return buff, nil
-}
-
 func (s *kvstore) stop() {
 	s.stoponce.Do(func() {
 		s.lease.stop()
@@ -558,7 +408,7 @@ func (s *kvstore) gotLease() {
 		GetSugar().Info("WriteBackAll")
 		s.needWriteBackAll = false
 		for _, v := range s.keyvals {
-			for _, vv := range v {
+			for _, vv := range v.kv {
 				if vv.tbmeta.GetVersion() != s.meta.GetVersion() {
 					vv.tbmeta = s.meta.GetTableMeta(vv.tbmeta.TableName())
 				}
@@ -571,39 +421,44 @@ func (s *kvstore) gotLease() {
 	}
 }
 
-type snapshotReader struct {
-	reader buffer.BufferReader
+type TestConfChange struct {
+	raft.ProposalConfChangeBase
+	ch chan error
 }
 
-func newSnapshotReader(b []byte) *snapshotReader {
-	return &snapshotReader{
-		reader: buffer.NewReader(b),
-	}
+func (this TestConfChange) GetType() raftpb.ConfChangeType {
+	return this.ConfChangeType
 }
 
-func (this *snapshotReader) read() (isOver bool, data []byte, err error) {
-	if this.reader.IsOver() {
-		isOver = true
-		return
-	} else {
-		var l int32
-		l, err = this.reader.CheckGetInt32()
-		if nil != err {
-			return
-		}
-		data, err = this.reader.CheckGetBytes(int(l))
-		if nil != err {
-			return
-		}
-		return
+func (this TestConfChange) GetUrl() string {
+	return this.Url
+}
+
+func (this TestConfChange) GetNodeID() uint64 {
+	return this.NodeID
+}
+
+func (this TestConfChange) OnError(err error) {
+
+}
+
+func (s *kvstore) addNode(id uint64, url string) {
+	o := TestConfChange{
+		ProposalConfChangeBase: raft.ProposalConfChangeBase{
+			ConfChangeType: raftpb.ConfChangeAddNode,
+			Url:            url,
+			NodeID:         id,
+		},
 	}
+
+	s.rn.IssueConfChange(o)
 }
 
 func (s *kvstore) serve() {
 
 	go func() {
 		ch := make(chan struct{}, 1)
-		interval := time.Duration(GetConfig().LruCheckInterval)
+		interval := time.Duration(s.kvnode.config.LruCheckInterval)
 		if 0 == interval {
 			interval = 1000
 		}
@@ -657,27 +512,23 @@ func (s *kvstore) serve() {
 				case raft.RaftStopOK:
 					GetSugar().Info("RaftStopOK")
 					return
-				case raft.ReplaySnapshot:
-					snapshot, err := s.loadSnapshot()
-					if err != nil {
-						GetSugar().Panic(err)
-					}
-					if snapshot != nil {
-						GetSugar().Infof("%x loading snapshot at term %d and index %d", s.rn.ID(), snapshot.Metadata.Term, snapshot.Metadata.Index)
-						r := newSnapshotReader(snapshot.Data)
-						var data []byte
-						var isOver bool
-						var err error
-						for {
-							isOver, data, err = r.read()
-							if isOver {
-								break
-							} else if nil != err {
+				case raftpb.Snapshot:
+					snapshot := v.(raftpb.Snapshot)
+
+					GetSugar().Infof("%x loading snapshot at term %d and index %d", s.rn.ID(), snapshot.Metadata.Term, snapshot.Metadata.Index)
+					r := newSnapshotReader(snapshot.Data)
+					var data []byte
+					var isOver bool
+					var err error
+					for {
+						isOver, data, err = r.read()
+						if isOver {
+							break
+						} else if nil != err {
+							GetSugar().Panic(err)
+						} else {
+							if err = s.replayFromBytes(true, data); err != nil {
 								GetSugar().Panic(err)
-							} else {
-								if err = s.replayFromBytes(data); err != nil {
-									GetSugar().Panic(err)
-								}
 							}
 						}
 					}

@@ -77,6 +77,7 @@ type kv struct {
 	store         *kvstore
 	asynTaskCount int
 	groupID       int
+	snapshot      bool //是否需要快照
 }
 
 /*
@@ -177,7 +178,7 @@ func (this *kv) process(cmd cmdI) {
 			if !this.store.db.issueLoad(l) {
 				GetSugar().Infof("reply retry")
 				cmd.reply(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"), nil, 0)
-				delete(this.store.keyvals[this.groupID], this.uniKey)
+				delete(this.store.keyvals[this.groupID].kv, this.uniKey)
 			} else {
 				this.asynTaskCount++
 				this.state = kv_loading

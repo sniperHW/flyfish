@@ -132,6 +132,7 @@ func (rc *RaftNode) propose(batchProposal []Proposal) {
 
 	rc.proposalMgr.insert(t)
 	if err := rc.node.Propose(context.TODO(), b); nil != err {
+		GetSugar().Errorf("proposalError %v", err)
 		rc.proposalMgr.remove(t)
 		for _, v := range batchProposal {
 			v.OnError(err)

@@ -45,7 +45,7 @@ type kvnode struct {
 	muS     sync.RWMutex
 	stores  map[int]*kvstore
 	running int32
-	//remCounter int32
+	config  *Config
 
 	db          dbbackendI
 	meta        db.DBMeta
@@ -78,7 +78,7 @@ func (this *kvnode) startListener() {
 			this.clients[session] = session
 			this.muC.Unlock()
 
-			session.SetRecvTimeout(flyproto.PingTime * 2)
+			session.SetRecvTimeout(flyproto.PingTime * 10)
 			session.SetSendQueueSize(10000)
 
 			//只有配置了压缩开启同时客户端支持压缩才开启通信压缩
@@ -240,34 +240,36 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, cluster string, slots 
 	}
 
 	mainQueue := applicationQueue{
-		q: queue.NewPriorityQueue(2, GetConfig().MainQueueMaxSize),
+		q: queue.NewPriorityQueue(2, this.config.MainQueueMaxSize),
 	}
 
-	var groupSize int = GetConfig().SnapshotCurrentCount
+	var groupSize int = this.config.SnapshotCurrentCount
 
 	if 0 == groupSize {
 		groupSize = runtime.NumCPU()
 	}
 
-	rn, snapshotterReady := raft.NewRaftNode(this.mutilRaft, mainQueue, (this.id<<16)+storeID, peers, false, GetConfig().Log.LogDir, "kvnode")
 	store := &kvstore{
-		rn:                 rn,
 		db:                 this.db,
 		mainQueue:          mainQueue,
-		raftID:             rn.ID(),
-		keyvals:            make([]map[string]*kv, groupSize),
+		keyvals:            make([]kvmgr, groupSize),
 		proposalCompressor: &compress.ZipCompressor{},
 		snapCompressor:     &compress.ZipCompressor{},
 		unCompressor:       &compress.ZipUnCompressor{},
-		snapshotter:        <-snapshotterReady,
 		kvnode:             this,
 		shard:              storeID,
 		slots:              slots,
 		meta:               meta,
 	}
 
+	rn := raft.NewRaftNode(store.snapMerge, this.mutilRaft, mainQueue, (this.id<<16)+storeID, peers, false, this.config.Log.LogDir, "kvnode")
+
+	store.rn = rn
+	store.raftID = rn.ID()
+
 	for i := 0; i < len(store.keyvals); i++ {
-		store.keyvals[i] = map[string]*kv{}
+		store.keyvals[i].kv = map[string]*kv{}
+		store.keyvals[i].kicks = map[string]bool{}
 	}
 
 	store.lru.init()
@@ -342,7 +344,7 @@ func (this *kvnode) Start() error {
 		this.mu.Lock()
 		defer this.mu.Unlock()
 
-		config := GetConfig()
+		config := this.config
 
 		if err = os.MkdirAll(config.Log.LogDir, os.ModePerm); nil != err {
 			return
@@ -351,7 +353,7 @@ func (this *kvnode) Start() error {
 		if config.Mode == "solo" {
 			this.selfUrl = config.RaftUrl
 
-			err = this.db.start()
+			err = this.db.start(config)
 
 			if nil != err {
 				return
@@ -402,15 +404,13 @@ func (this *kvnode) Start() error {
 	return err
 }
 
-func NewKvNode(id int, metaDef *db.DbDef, metaCreator func(*db.DbDef) (db.DBMeta, error), db dbbackendI) *kvnode {
+func NewKvNode(id int, config *Config, metaDef *db.DbDef, metaCreator func(*db.DbDef) (db.DBMeta, error), db dbbackendI) *kvnode {
 
 	meta, err := metaCreator(metaDef)
 
 	if nil != err {
 		return nil
 	}
-
-	config := GetConfig()
 
 	if config.ProposalFlushInterval > 0 {
 		raft.ProposalFlushInterval = config.ProposalFlushInterval
@@ -436,5 +436,6 @@ func NewKvNode(id int, metaDef *db.DbDef, metaCreator func(*db.DbDef) (db.DBMeta
 		db:          db,
 		meta:        meta,
 		metaCreator: metaCreator,
+		config:      config,
 	}
 }
