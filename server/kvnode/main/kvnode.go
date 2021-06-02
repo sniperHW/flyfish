@@ -3,15 +3,16 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/sniperHW/flyfish/backend/db/sql"
-	"github.com/sniperHW/flyfish/logger"
-	kvnode "github.com/sniperHW/flyfish/server/kvnode"
-	"github.com/sniperHW/flyfish/server/kvnode/metaLoader"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/sniperHW/flyfish/backend/db/sql"
+	"github.com/sniperHW/flyfish/logger"
+	kvnode "github.com/sniperHW/flyfish/server/kvnode"
+	"github.com/sniperHW/flyfish/server/kvnode/metaLoader"
 )
 
 func main() {
@@ -26,9 +27,12 @@ func main() {
 
 	flag.Parse()
 
-	kvnode.LoadConfig(*config)
+	conf, err := kvnode.LoadConfig(*config)
 
-	conf := kvnode.GetConfig()
+	if nil != err {
+		kvnode.GetSugar().Error(err)
+		return
+	}
 
 	logname := fmt.Sprintf("kvnode:%d.log", *id)
 
@@ -43,7 +47,7 @@ func main() {
 		return
 	}
 
-	node := kvnode.NewKvNode(*id, meta, sql.CreateDbMeta, kvnode.NewSqlDbBackend())
+	node := kvnode.NewKvNode(*id, conf, meta, sql.CreateDbMeta, kvnode.NewSqlDbBackend())
 
 	err = node.Start()
 	if nil == err {
