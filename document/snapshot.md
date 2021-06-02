@@ -1,4 +1,4 @@
-在基于内存的cache中，全量数据快照并不合理。
+## 在基于内存的cache中，全量数据快照并不合理
 
 flyfish是这样一个系统，它cache持久数据源中的热数据，当cache的数据量达到上限时，要加载新的数据必须将别的数据从内存中剔除，
 留出空间供新数据使用。
@@ -36,6 +36,51 @@ raft snapshot中的内存快照作为初始点。
 S0与S1的并集。
 
 随着快照数量的增加，需要将S0,S1.....Sn做一次合并，压缩快照。
+
+## 实现
+
+### snapshot
+
+每个kv设置一个snapshot标记
+
+kvmgr设置一个kicks字典
+
+每当一个kv被替换，将key加入kicks中。
+
+当kv被成功加载或变更设置其snapshot标记。
+
+执行snapshot的时候将标记为snapshot的kv先写入snapshot，之后将kicks中的key写入snapshot。
+
+完成后清空kicks，清除kv的snapshot标记。
+
+### snapshot merge
+
+加载所有的snapshot，根据term,index按升序排序。
+
+构造一个空的kvstore。
+
+按序执行snapshot文件中的指令。
+
+指令执行完毕后将恢复出一个kvstore。
+
+保存这个kvstore，用最后一个snapshot文件的term和index产生一个snapshot文件。这个文件将会覆盖最近的一个snapshot文件。
+
+清除其它snapshot文件。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -66,7 +66,6 @@ func (this *kvProposal) apply() {
 
 		delete(this.keyValue.store.keyvals[this.keyValue.groupID].kv, this.keyValue.uniKey)
 
-		delete(this.keyValue.store.keyvals[this.keyValue.groupID].modify, this.keyValue.uniKey)
 		this.keyValue.store.keyvals[this.keyValue.groupID].kicks[this.keyValue.uniKey] = true
 
 		//从LRU删除
@@ -107,12 +106,12 @@ func (this *kvProposal) apply() {
 
 		if oldState == kv_loading {
 			this.keyValue.store.lru.updateLRU(&this.keyValue.lru)
+			delete(this.keyValue.store.keyvals[this.keyValue.groupID].kicks, this.keyValue.uniKey)
 		}
 
-		delete(this.keyValue.store.keyvals[this.keyValue.groupID].kicks, this.keyValue.uniKey)
-		this.keyValue.store.keyvals[this.keyValue.groupID].modify[this.keyValue.uniKey] = this.keyValue
-
+		this.keyValue.snapshot = true
 		this.keyValue.process(nil)
+
 	}
 }
 

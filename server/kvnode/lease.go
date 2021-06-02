@@ -34,12 +34,7 @@ func (this *leaseProposal) OnError(err error) {
 
 func (this *leaseProposal) Serilize(b []byte) []byte {
 	this.beginTime = time.Now()
-	b = buffer.AppendByte(b, byte(proposal_lease))
-	b = buffer.AppendInt32(b, int32(this.store.raftID))
-	bb, _ := this.beginTime.MarshalBinary()
-	b = buffer.AppendInt32(b, int32(len(bb)))
-	b = buffer.AppendBytes(b, bb)
-	return b
+	return serilizeLease(b, this.store.raftID, this.beginTime)
 }
 
 func (this *leaseProposal) OnMergeFinish(b []byte) (ret []byte) {
@@ -164,15 +159,9 @@ func (l *lease) snapshot(b []byte) []byte {
 	defer l.Unlock()
 	ll := len(b)
 	b = buffer.AppendInt32(b, 0) //占位符
-	b = buffer.AppendByte(b, byte(proposal_lease))
-	b = buffer.AppendInt32(b, int32(l.owner))
-	bb, _ := l.beginTime.MarshalBinary()
-	b = buffer.AppendInt32(b, int32(len(bb)))
-	b = buffer.AppendBytes(b, bb)
+	b = serilizeLease(b, l.owner, l.beginTime)
 	b = append(b, byte(0)) //写入无压缩标记
-
 	binary.BigEndian.PutUint32(b[ll:ll+4], uint32(len(b)-ll-4))
-
 	return b
 }
 

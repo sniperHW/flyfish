@@ -52,6 +52,14 @@ func appendField(b []byte, field *flyproto.Field) []byte {
 	return b
 }
 
+func serilizeLease(b []byte, nodeid int, begtime time.Time) []byte {
+	b = buffer.AppendByte(b, byte(proposal_lease))
+	b = buffer.AppendInt32(b, int32(nodeid))
+	bb, _ := begtime.MarshalBinary()
+	b = buffer.AppendInt32(b, int32(len(bb)))
+	return buffer.AppendBytes(b, bb)
+}
+
 func serilizeKv(b []byte, ptype proposalType, unikey string, version int64, fields map[string]*flyproto.Field) []byte {
 	//先写入类型
 	b = buffer.AppendByte(b, byte(ptype))

@@ -1,9 +1,10 @@
 package kvnode
 
 import (
-	"github.com/BurntSushi/toml"
 	"sync/atomic"
 	"unsafe"
+
+	"github.com/BurntSushi/toml"
 )
 
 var (

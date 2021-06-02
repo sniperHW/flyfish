@@ -77,6 +77,7 @@ type kv struct {
 	store         *kvstore
 	asynTaskCount int
 	groupID       int
+	snapshot      bool //是否需要快照
 }
 
 /*

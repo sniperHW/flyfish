@@ -36,7 +36,7 @@ RaftUrl = "http://127.0.0.1:12377"
 
 Mode = "solo"
 
-SnapshotCurrentCount = 2
+SnapshotCurrentCount    = 1
 
 LruCheckInterval        = 100              #每隔100ms执行一次lru剔除操作
 
@@ -569,12 +569,106 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 
 	client.InitLogger(GetLogger())
 
-	node := start1Node(newSqlDBBackEnd())
+	node := start1Node(newMockDBBackEnd())
 
 	c := client.OpenClient("localhost:10018")
 	c.SetUnikeyPlacement(GetStore)
 
-	for i := 0; i < 500; i++ {
+	for i := 0; i < 100; i++ {
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		name := fmt.Sprintf("sniperHW:%d", i)
+		fields["name"] = name
+		fields["phone"] = "123456789123456789123456789"
+
+		r := c.Set("users1", name, fields).Exec()
+		assert.Nil(t, r.ErrCode)
+	}
+	time.Sleep(time.Second * 1)
+	assert.Nil(t, c.Kick("users1", "sniperHW:99").Exec().ErrCode)
+
+	for i := 100; i < 200; i++ {
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		name := fmt.Sprintf("sniperHW:%d", i)
+		fields["name"] = name
+		fields["phone"] = "123456789123456789123456789"
+
+		r := c.Set("users1", name, fields).Exec()
+		assert.Nil(t, r.ErrCode)
+	}
+
+	//重新加载
+	c.GetAll("users1", "sniperHW:99").Exec()
+	time.Sleep(time.Second * 1)
+	assert.Nil(t, c.Kick("users1", "sniperHW:199").Exec().ErrCode)
+
+	for i := 200; i < 300; i++ {
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		name := fmt.Sprintf("sniperHW:%d", i)
+		fields["name"] = name
+		fields["phone"] = "123456789123456789123456789"
+
+		r := c.Set("users1", name, fields).Exec()
+		assert.Nil(t, r.ErrCode)
+	}
+
+	time.Sleep(time.Second * 2)
+
+	node.Stop()
+
+	node = start1Node(newSqlDBBackEnd())
+
+	time.Sleep(time.Second * 2)
+
+	assert.Equal(t, 299, len(node.stores[1].keyvals[0].kv))
+
+	assert.Nil(t, node.stores[1].keyvals[0].kv["users1:sniperHW:199"])
+
+	assert.NotNil(t, node.stores[1].keyvals[0].kv["users1:sniperHW:99"])
+
+	node.Stop()
+
+	raft.DefaultSnapshotCount = DefaultSnapshotCount
+	raft.SnapshotCatchUpEntriesN = SnapshotCatchUpEntriesN
+
+}
+
+func Test1Node1StoreSnapshot2(t *testing.T) {
+	DefaultSnapshotCount := raft.DefaultSnapshotCount
+	SnapshotCatchUpEntriesN := raft.SnapshotCatchUpEntriesN
+
+	raft.DefaultSnapshotCount = 100
+	raft.SnapshotCatchUpEntriesN = 100
+
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", GetConfig().Log.LogLevel, 100, 14, true))
+
+	//先删除所有kv文件
+	os.RemoveAll("./log/kvnode-1-1")
+	os.RemoveAll("./log/kvnode-1-1-snap")
+
+	client.InitLogger(GetLogger())
+
+	node := start1Node(newMockDBBackEnd())
+
+	c := client.OpenClient("localhost:10018")
+	c.SetUnikeyPlacement(GetStore)
+
+	for i := 0; i < 50; i++ {
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		name := fmt.Sprintf("sniperHW:%d", i)
+		fields["name"] = name
+		fields["phone"] = "123456789123456789123456789"
+
+		r := c.Set("users1", name, fields).Exec()
+		assert.Nil(t, r.ErrCode)
+	}
+	time.Sleep(time.Second * 1)
+	assert.Nil(t, c.Kick("users1", "sniperHW:49").Exec().ErrCode)
+
+	for i := 50; i < 100; i++ {
 		fields := map[string]interface{}{}
 		fields["age"] = 12
 		name := fmt.Sprintf("sniperHW:%d", i)

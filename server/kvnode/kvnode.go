@@ -269,7 +269,6 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, cluster string, slots 
 
 	for i := 0; i < len(store.keyvals); i++ {
 		store.keyvals[i].kv = map[string]*kv{}
-		store.keyvals[i].modify = map[string]*kv{}
 		store.keyvals[i].kicks = map[string]bool{}
 	}
 
