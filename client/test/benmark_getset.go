@@ -75,10 +75,6 @@ func Get(c *kclient.Client) {
 			fmt.Println("get err:", ret.ErrCode)
 		}
 
-		if ret.ErrCode.Code == errcode.Errcode_record_notexist {
-			fmt.Println("notfound", key)
-		}
-
 		atomic.AddInt32(&getCount, 1)
 		Get(c)
 	})
