@@ -160,14 +160,10 @@ type RaftNode struct {
 	appliedIndex  uint64
 
 	// raft backing for the commit/error channel
-	node        raft.Node
-	raftStorage *raft.MemoryStorage
-	wal         *wal.WAL
-
-	//msgSnapC chan raftpb.Message
-
-	snapshotter *snap.Snapshotter
-	//snapshotterReady chan *snap.Snapshotter // signals when snapshotter is ready
+	node         raft.Node
+	raftStorage  *raft.MemoryStorage
+	wal          *wal.WAL
+	snapshotter  *snap.Snapshotter
 	snapshotCh   chan interface{}
 	snapshotting bool //当前是否正在做快照
 
@@ -609,8 +605,6 @@ func (rc *RaftNode) startRaft() {
 		}
 	}
 	rc.snapshotter = snap.New(GetLogger(), rc.snapdir)
-	//rc.snapshotterReady <- rc.snapshotter
-
 	oldwal := wal.Exist(rc.waldir)
 	rc.wal = rc.replayWAL()
 
@@ -636,6 +630,8 @@ func (rc *RaftNode) startRaft() {
 		MaxUncommittedEntriesSize: 1 << 30,
 		Logger:                    rloger,
 		DisableProposalForwarding: true, //禁止非leader转发proposal
+		CheckQuorum:               true,
+		PreVote:                   true,
 	}
 
 	if oldwal {
@@ -740,5 +736,5 @@ func NewRaftNode(snapMerge func(...[]byte) ([]byte, error), mutilRaft *MutilRaft
 	}
 
 	go rc.startRaft()
-	return rc //, rc.snapshotterReady
+	return rc
 }

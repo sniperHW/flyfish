@@ -3,8 +3,9 @@ package raft
 import (
 	"context"
 	"encoding/binary"
-	"go.etcd.io/etcd/raft"
 	"time"
+
+	"go.etcd.io/etcd/raft"
 )
 
 //一致性读请求
@@ -107,7 +108,7 @@ func (rc *RaftNode) runReadPipeline() {
 
 		defer rc.waitStop.Done()
 
-		localList := make([]interface{}, 0, 200)
+		localList := []interface{}{}
 		closed := false
 		batch := make([]LinearizableRead, 0, ReadBatchCount)
 

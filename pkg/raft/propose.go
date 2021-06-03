@@ -88,7 +88,7 @@ func (rc *RaftNode) proposeConfChange(proposal ProposalConfChange) {
 func (rc *RaftNode) runConfChange() {
 	go func() {
 		defer rc.waitStop.Done()
-		localList := make([]interface{}, 0, 10)
+		localList := []interface{}{}
 		closed := false
 		for {
 
@@ -161,7 +161,7 @@ func (rc *RaftNode) runProposePipeline() {
 
 		defer rc.waitStop.Done()
 
-		localList := make([]interface{}, 0, 200)
+		localList := []interface{}{}
 		closed := false
 		batch := make([]Proposal, 0, ProposalBatchCount)
 
