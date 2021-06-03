@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math"
 	"time"
+	"unsafe"
 
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	flyproto "github.com/sniperHW/flyfish/proto"
@@ -133,7 +134,7 @@ func (this *proposalReader) readField() (*flyproto.Field, error) {
 		if flyproto.ValueType(tt) == flyproto.ValueType_blob {
 			return flyproto.PackField(name, b), nil
 		} else {
-			return flyproto.PackField(name, string(b)), nil
+			return flyproto.PackField(name, *(*string)(unsafe.Pointer(&b))), nil
 		}
 	default:
 	}

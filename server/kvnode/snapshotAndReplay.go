@@ -9,6 +9,7 @@ import (
 	"github.com/sniperHW/flyfish/backend/db"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/buffer"
+	"github.com/sniperHW/flyfish/pkg/compress"
 	sslot "github.com/sniperHW/flyfish/server/slot"
 )
 
@@ -87,13 +88,17 @@ func (s *kvstore) snapMerge(snaps ...[]byte) ([]byte, error) {
 		}
 	}
 
+	u := getUnCompressor()
+
+	defer releaseUnCompressor(u)
+
 	for _, b := range snapBytes {
 		var err error
 
-		compress := b[len(b)-1]
+		bb := b[len(b)-1]
 		b = b[:len(b)-1]
-		if compress == byte(1) {
-			b, err = s.unCompressor.Clone().UnCompress(b)
+		if bb == byte(1) {
+			b, err = u.UnCompress(b)
 			if nil != err {
 				GetSugar().Errorf("UnCompress error %v", err)
 				return nil, err
@@ -182,9 +187,9 @@ func (s *kvstore) snapMerge(snaps ...[]byte) ([]byte, error) {
 				b = serilizeKv(b, proposal_snapshot, vv.uniKey, vv.version, vv.fields)
 			}
 
-			compressor := s.snapCompressor.Clone()
+			c := getCompressor()
 
-			cb, err := compressor.Compress(b[4:])
+			cb, err := c.Compress(b[4:])
 			if nil != err {
 				GetSugar().Errorf("snapshot compress error:%v", err)
 				b = append(b, byte(0))
@@ -195,6 +200,8 @@ func (s *kvstore) snapMerge(snaps ...[]byte) ([]byte, error) {
 				b = append(b, byte(1))
 				binary.BigEndian.PutUint32(b[:4], uint32(len(cb)+1))
 			}
+
+			releaseCompressor(c)
 
 			mtx.Lock()
 			buff = append(buff, b...)
@@ -224,10 +231,20 @@ func (s *kvstore) replayFromBytes(callByReplaySnapshot bool, b []byte) error {
 
 	var err error
 
-	compress := b[len(b)-1]
+	bb := b[len(b)-1]
 	b = b[:len(b)-1]
-	if compress == byte(1) {
-		b, err = s.unCompressor.Clone().UnCompress(b)
+
+	var u compress.UnCompressorI
+
+	defer func() {
+		if nil != u {
+			releaseUnCompressor(u)
+		}
+	}()
+
+	if bb == byte(1) {
+		u = getUnCompressor()
+		b, err = u.UnCompress(b)
 		if nil != err {
 			GetSugar().Errorf("UnCompress error %v", err)
 			return err
@@ -383,9 +400,9 @@ func (s *kvstore) getSnapshot() ([]byte, error) {
 
 			m.kicks = map[string]bool{}
 
-			compressor := s.snapCompressor.Clone()
+			c := getCompressor()
 
-			cb, err := compressor.Compress(b[4:])
+			cb, err := c.Compress(b[4:])
 			if nil != err {
 				GetSugar().Errorf("snapshot compress error:%v", err)
 				b = append(b, byte(0))
@@ -396,6 +413,7 @@ func (s *kvstore) getSnapshot() ([]byte, error) {
 				b = append(b, byte(1))
 				binary.BigEndian.PutUint32(b[:4], uint32(len(cb)+1))
 			}
+			releaseCompressor(c)
 
 			mtx.Lock()
 			buff = append(buff, b...)

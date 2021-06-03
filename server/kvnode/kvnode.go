@@ -15,7 +15,6 @@ import (
 	"github.com/sniperHW/flyfish/backend/db"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
-	"github.com/sniperHW/flyfish/pkg/compress"
 	"github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/net/cs"
 	"github.com/sniperHW/flyfish/pkg/queue"
@@ -250,16 +249,16 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, cluster string, slots 
 	}
 
 	store := &kvstore{
-		db:                 this.db,
-		mainQueue:          mainQueue,
-		keyvals:            make([]kvmgr, groupSize),
-		proposalCompressor: &compress.ZipCompressor{},
-		snapCompressor:     &compress.ZipCompressor{},
-		unCompressor:       &compress.ZipUnCompressor{},
-		kvnode:             this,
-		shard:              storeID,
-		slots:              slots,
-		meta:               meta,
+		db:        this.db,
+		mainQueue: mainQueue,
+		keyvals:   make([]kvmgr, groupSize),
+		//proposalCompressor: &compress.ZipCompressor{},
+		//snapCompressor:     &compress.ZipCompressor{},
+		//unCompressor:       &compress.ZipUnCompressor{},
+		kvnode: this,
+		shard:  storeID,
+		slots:  slots,
+		meta:   meta,
 	}
 
 	rn := raft.NewRaftNode(store.snapMerge, this.mutilRaft, mainQueue, (this.id<<16)+storeID, peers, false, this.config.Log.LogDir, "kvnode")

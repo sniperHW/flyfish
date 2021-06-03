@@ -39,7 +39,8 @@ func (this *leaseProposal) Serilize(b []byte) []byte {
 
 func (this *leaseProposal) OnMergeFinish(b []byte) (ret []byte) {
 	if len(b) >= 1024 {
-		cb, err := this.store.proposalCompressor.Compress(b)
+		c := getCompressor()
+		cb, err := c.Compress(b)
 		if nil != err {
 			ret = buffer.AppendByte(b, byte(0))
 		} else {
@@ -47,6 +48,7 @@ func (this *leaseProposal) OnMergeFinish(b []byte) (ret []byte) {
 			b = buffer.AppendBytes(b, cb)
 			ret = buffer.AppendByte(b, byte(1))
 		}
+		releaseCompressor(c)
 	} else {
 		ret = buffer.AppendByte(b, byte(0))
 	}

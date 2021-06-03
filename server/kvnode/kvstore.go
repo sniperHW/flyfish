@@ -118,30 +118,58 @@ type kvmgr struct {
 	kicks map[string]bool
 }
 
+var compressorPool sync.Pool = sync.Pool{
+	New: func() interface{} {
+		return &compress.ZipCompressor{}
+	},
+}
+
+func getCompressor() compress.CompressorI {
+	return compressorPool.Get().(compress.CompressorI)
+}
+
+func releaseCompressor(c compress.CompressorI) {
+	compressorPool.Put(c)
+}
+
+var uncompressorPool sync.Pool = sync.Pool{
+	New: func() interface{} {
+		return &compress.ZipUnCompressor{}
+	},
+}
+
+func getUnCompressor() compress.UnCompressorI {
+	return uncompressorPool.Get().(compress.UnCompressorI)
+}
+
+func releaseUnCompressor(c compress.UnCompressorI) {
+	uncompressorPool.Put(c)
+}
+
 type kvstore struct {
-	raftMtx            sync.Mutex
-	raftID             int
-	leader             int
-	snapshotter        *snap.Snapshotter
-	rn                 *raft.RaftNode
-	mainQueue          applicationQueue
-	keyvals            []kvmgr
-	db                 dbbackendI
-	lru                lruList
-	wait4ReplyCount    int32
-	proposalCompressor compress.CompressorI
-	snapCompressor     compress.CompressorI
-	unCompressor       compress.UnCompressorI
-	lease              *lease
-	stoponce           sync.Once
-	ready              bool
-	kvnode             *kvnode
-	needWriteBackAll   bool
-	shard              int
-	slots              *bitmap.Bitmap
-	meta               db.DBMeta
-	removeonce         sync.Once
-	removing           bool
+	raftMtx         sync.Mutex
+	raftID          int
+	leader          int
+	snapshotter     *snap.Snapshotter
+	rn              *raft.RaftNode
+	mainQueue       applicationQueue
+	keyvals         []kvmgr
+	db              dbbackendI
+	lru             lruList
+	wait4ReplyCount int32
+	//proposalCompressor compress.CompressorI
+	//snapCompressor     compress.CompressorI
+	//unCompressor       compress.UnCompressorI
+	lease            *lease
+	stoponce         sync.Once
+	ready            bool
+	kvnode           *kvnode
+	needWriteBackAll bool
+	shard            int
+	slots            *bitmap.Bitmap
+	meta             db.DBMeta
+	removeonce       sync.Once
+	removing         bool
 }
 
 func (s *kvstore) hasLease() bool {
