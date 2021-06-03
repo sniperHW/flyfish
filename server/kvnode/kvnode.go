@@ -349,7 +349,7 @@ func makeStoreBitmap(stores []int) (b []*bitmap.Bitmap) {
 			}
 
 			//不能正好平分，剩余的slot全部交给最后一个store
-			if i == len(stores) && j < slot.SlotCount {
+			if i == len(stores)-1 && j < slot.SlotCount {
 				for ; j < slot.SlotCount; j++ {
 					storeBitmap.Set(j)
 				}
@@ -371,12 +371,13 @@ func MakeUnikeyPlacement(stores []int) (fn func(string) int) {
 			}
 
 			//不能正好平分，剩余的slot全部交给最后一个store
-			if i == len(stores) && j < slot.SlotCount {
+			if i == len(stores)-1 && j < slot.SlotCount {
 				for ; j < slot.SlotCount; j++ {
 					slot2Store[j] = v
 				}
 			}
 		}
+
 		fn = func(unikey string) int {
 			return slot2Store[slot.Unikey2Slot(unikey)]
 		}

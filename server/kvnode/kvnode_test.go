@@ -20,6 +20,7 @@ import (
 	"github.com/sniperHW/flyfish/pkg/raft"
 	"github.com/sniperHW/flyfish/server/kvnode/metaLoader"
 	mockDB "github.com/sniperHW/flyfish/server/mock/db"
+	"github.com/sniperHW/flyfish/server/slot"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -722,4 +723,11 @@ func TestUseMockDB(t *testing.T) {
 	node.Stop()
 
 	fmt.Println("stop ok")
+}
+
+func TestMakeUnikeyPlacement(t *testing.T) {
+	fn := MakeUnikeyPlacement([]int{1, 2, 3, 4, 5})
+
+	fmt.Println(fn("users1:huangwei:247100"), slot.Unikey2Slot("users1:huangwei:247100"))
+
 }
