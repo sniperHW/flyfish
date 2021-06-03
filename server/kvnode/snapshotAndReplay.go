@@ -40,7 +40,7 @@ func (this *snapshotReader) read() (isOver bool, data []byte, err error) {
 	}
 }
 
-const buffsize = 1024 * 64 * 1024
+const buffsize = 1024 * 4 * 1024
 
 var snapshotBufferPool = sync.Pool{
 	New: func() interface{} {
