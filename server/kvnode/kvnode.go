@@ -338,6 +338,52 @@ func (this *kvnode) Stop() {
 	})
 }
 
+func makeStoreBitmap(stores []int) (b []*bitmap.Bitmap) {
+	if len(stores) > 0 {
+		slotPerStore := slot.SlotCount / len(stores)
+		for i, _ := range stores {
+			storeBitmap := bitmap.New(slot.SlotCount)
+			j := i * slotPerStore
+			for ; j < (i+1)*slotPerStore; j++ {
+				storeBitmap.Set(j)
+			}
+
+			//不能正好平分，剩余的slot全部交给最后一个store
+			if i == len(stores) && j < slot.SlotCount {
+				for ; j < slot.SlotCount; j++ {
+					storeBitmap.Set(j)
+				}
+			}
+			b = append(b, storeBitmap)
+		}
+	}
+	return
+}
+
+func MakeUnikeyPlacement(stores []int) (fn func(string) int) {
+	if len(stores) > 0 {
+		slot2Store := map[int]int{}
+		slotPerStore := slot.SlotCount / len(stores)
+		for i, v := range stores {
+			j := i * slotPerStore
+			for ; j < (i+1)*slotPerStore; j++ {
+				slot2Store[j] = v
+			}
+
+			//不能正好平分，剩余的slot全部交给最后一个store
+			if i == len(stores) && j < slot.SlotCount {
+				for ; j < slot.SlotCount; j++ {
+					slot2Store[j] = v
+				}
+			}
+		}
+		fn = func(unikey string) int {
+			return slot2Store[slot.Unikey2Slot(unikey)]
+		}
+	}
+	return
+}
+
 func (this *kvnode) Start() error {
 	var err error
 	this.startOnce.Do(func() {
@@ -373,22 +419,9 @@ func (this *kvnode) Start() error {
 
 			//添加store
 			if len(config.SoloConfig.Stores) > 0 {
-				slotPerStore := slot.SlotCount / len(config.SoloConfig.Stores)
+				storeBitmaps := makeStoreBitmap(config.SoloConfig.Stores)
 				for i, v := range config.SoloConfig.Stores {
-					storeBitmap := bitmap.New(slot.SlotCount)
-					j := i * slotPerStore
-					for ; j < (i+1)*slotPerStore; j++ {
-						storeBitmap.Set(j)
-					}
-
-					//不能正好平分，剩余的slot全部交给最后一个store
-					if i == len(config.SoloConfig.Stores) && j < slot.SlotCount {
-						for ; j < slot.SlotCount; j++ {
-							storeBitmap.Set(j)
-						}
-					}
-
-					if err = this.addStore(this.meta, v, config.SoloConfig.RaftCluster, storeBitmap); nil != err {
+					if err = this.addStore(this.meta, v, config.SoloConfig.RaftCluster, storeBitmaps[i]); nil != err {
 						return
 					}
 				}
