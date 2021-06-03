@@ -2,15 +2,17 @@ package main
 
 import (
 	"fmt"
-	kclient "github.com/sniperHW/flyfish/client"
-	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/logger"
 	"math/rand"
 	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	kclient "github.com/sniperHW/flyfish/client"
+	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/logger"
+	"github.com/sniperHW/flyfish/server/kvnode"
 )
 
 var getCount int32
@@ -96,14 +98,14 @@ func main() {
 	id = 0
 
 	for j := 0; j < 100; j++ {
-		c := kclient.OpenClient(os.Args[2]).SetUnikeyPlacement(func(_ string) int { return 1 }) //eventQueue)
+		c := kclient.OpenClient(os.Args[2]).SetUnikeyPlacement(kvnode.MakeUnikeyPlacement([]int{1, 2, 3, 4, 5})) //eventQueue)
 		for i := 0; i < 10; i++ {
 			Set(c)
 		}
 	}
 
 	for j := 0; j < 50; j++ {
-		c := kclient.OpenClient(os.Args[2]).SetUnikeyPlacement(func(_ string) int { return 1 }) //eventQueue)
+		c := kclient.OpenClient(os.Args[2]).SetUnikeyPlacement(kvnode.MakeUnikeyPlacement([]int{1, 2, 3, 4, 5})) //eventQueue)
 		for i := 0; i < 20; i++ {
 			Get(c)
 		}

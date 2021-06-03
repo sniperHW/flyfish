@@ -2,10 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/schollz/progressbar"
-	kclient "github.com/sniperHW/flyfish/client"
-	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/logger"
 	"os"
 	"sort"
 	"strconv"
@@ -13,6 +9,12 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/schollz/progressbar"
+	kclient "github.com/sniperHW/flyfish/client"
+	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/logger"
+	"github.com/sniperHW/flyfish/server/kvnode"
 )
 
 type result struct {
@@ -92,7 +94,7 @@ func main() {
 	bar = progressbar.New(int(total))
 
 	for j := 0; j < 100; j++ {
-		c := kclient.OpenClient(services[j%len(services)]).SetUnikeyPlacement(func(_ string) int { return 1 })
+		c := kclient.OpenClient(services[j%len(services)]).SetUnikeyPlacement(kvnode.MakeUnikeyPlacement([]int{1, 2, 3, 4, 5}))
 		go func() {
 			for {
 				for i := 0; i < 50; i++ {

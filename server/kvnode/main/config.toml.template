@@ -31,7 +31,7 @@ ReadBatchCount          = 100
 ServiceHost             = "127.0.0.1"
 ServicePort             = 8110
 RaftCluster             = "1@http://127.0.0.1:12377"
-Stores                  = [1]
+Stores                  = [1,2,3,4,5]
 
 
 [DBConfig]

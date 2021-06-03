@@ -2,15 +2,17 @@ package main
 
 import (
 	"fmt"
-	kclient "github.com/sniperHW/flyfish/client"
-	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/logger"
 	"math/rand"
 	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	kclient "github.com/sniperHW/flyfish/client"
+	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/logger"
+	"github.com/sniperHW/flyfish/server/kvnode"
 )
 
 var (
@@ -70,7 +72,7 @@ func main() {
 	keyrange, _ = strconv.ParseInt(os.Args[1], 10, 32)
 
 	for j := 0; j < 50; j++ {
-		c := kclient.OpenClient(os.Args[2]).SetUnikeyPlacement(func(_ string) int { return 1 })
+		c := kclient.OpenClient(os.Args[2]).SetUnikeyPlacement(kvnode.MakeUnikeyPlacement([]int{1, 2, 3, 4, 5}))
 		for i := 0; i < 50; i++ {
 			Set(c)
 		}

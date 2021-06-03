@@ -2,14 +2,16 @@ package main
 
 import (
 	"fmt"
-	kclient "github.com/sniperHW/flyfish/client"
-	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/logger"
 	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
+
+	kclient "github.com/sniperHW/flyfish/client"
+	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/logger"
+	"github.com/sniperHW/flyfish/server/kvnode"
 )
 
 var (
@@ -73,7 +75,7 @@ func main() {
 	services := strings.Split(os.Args[2], ",")
 
 	for j := 0; j < 100; j++ {
-		c := kclient.OpenClient(services[j%len(services)]).SetUnikeyPlacement(func(_ string) int { return 1 })
+		c := kclient.OpenClient(services[j%len(services)]).SetUnikeyPlacement(kvnode.MakeUnikeyPlacement([]int{1, 2, 3, 4, 5}))
 		for i := 0; i < 50; i++ {
 			Set(c)
 		}
