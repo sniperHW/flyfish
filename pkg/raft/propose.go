@@ -2,6 +2,7 @@ package raft
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/sniperHW/flyfish/pkg/buffer"
@@ -107,6 +108,20 @@ func (rc *RaftNode) runConfChange() {
 	}()
 }
 
+var proposeBuffPool sync.Pool = sync.Pool{
+	New: func() interface{} {
+		return make([]byte, 0, 1024*1024)
+	},
+}
+
+func getProposeBuff() []byte {
+	return proposeBuffPool.Get().([]byte)
+}
+
+func releaseProposeBuff(b []byte) {
+	proposeBuffPool.Put(b[:0])
+}
+
 func (rc *RaftNode) propose(batchProposal []Proposal) {
 	t := &raftTask{
 		id:    rc.genNextIndex(),
@@ -118,7 +133,7 @@ func (rc *RaftNode) propose(batchProposal []Proposal) {
 		},
 	}
 
-	buff := make([]byte, 0, 4096)
+	buff := getProposeBuff() //make([]byte, 0, 4096)
 
 	for _, v := range batchProposal {
 		buff = v.Serilize(buff)
@@ -129,6 +144,8 @@ func (rc *RaftNode) propose(batchProposal []Proposal) {
 	b := make([]byte, 0, len(buff)+8)
 	b = buffer.AppendUint64(b, t.id)
 	b = buffer.AppendBytes(b, buff)
+
+	releaseProposeBuff(buff)
 
 	rc.proposalMgr.insert(t)
 	if err := rc.node.Propose(context.TODO(), b); nil != err {
