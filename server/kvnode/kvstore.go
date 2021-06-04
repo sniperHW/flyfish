@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sniperHW/flyfish/backend/db"
@@ -52,8 +53,8 @@ func (q applicationQueue) AppendHighestPriotiryItem(m interface{}) {
 	}
 }
 
-func (q applicationQueue) append(m interface{}) error {
-	return q.q.Append(0, m)
+func (q applicationQueue) append(m interface{}) {
+	q.q.ForceAppend(0, m)
 }
 
 func (q applicationQueue) pop() (closed bool, v interface{}) {
@@ -147,19 +148,16 @@ func releaseUnCompressor(c compress.UnCompressorI) {
 }
 
 type kvstore struct {
-	raftMtx         sync.Mutex
-	raftID          int
-	leader          int
-	snapshotter     *snap.Snapshotter
-	rn              *raft.RaftNode
-	mainQueue       applicationQueue
-	keyvals         []kvmgr
-	db              dbbackendI
-	lru             lruList
-	wait4ReplyCount int32
-	//proposalCompressor compress.CompressorI
-	//snapCompressor     compress.CompressorI
-	//unCompressor       compress.UnCompressorI
+	raftMtx          sync.Mutex
+	raftID           int
+	leader           int
+	snapshotter      *snap.Snapshotter
+	rn               *raft.RaftNode
+	mainQueue        applicationQueue
+	keyvals          []kvmgr
+	db               dbbackendI
+	lru              lruList
+	wait4ReplyCount  int32
 	lease            *lease
 	stoponce         sync.Once
 	ready            bool
@@ -197,8 +195,8 @@ func (s *kvstore) loadSnapshot() (*raftpb.Snapshot, error) {
 	return snapshot, nil
 }
 
-func (s *kvstore) addCliMessage(msg clientRequest) error {
-	return s.mainQueue.append(msg)
+func (s *kvstore) addCliMessage(msg clientRequest) {
+	s.mainQueue.append(msg)
 }
 
 const kvCmdQueueSize = 32
@@ -211,13 +209,12 @@ func (s *kvstore) newkv(groupID int, unikey string, key string, table string) (*
 	}
 
 	kv := &kv{
-		uniKey:     unikey,
-		key:        key,
-		state:      kv_new,
-		tbmeta:     tbmeta,
-		pendingCmd: newCmdQueue(kvCmdQueueSize),
-		store:      s,
-		groupID:    groupID,
+		uniKey:  unikey,
+		key:     key,
+		state:   kv_new,
+		tbmeta:  tbmeta,
+		store:   s,
+		groupID: groupID,
 	}
 	kv.lru.keyvalue = kv
 	kv.updateTask = dbUpdateTask{
@@ -303,6 +300,15 @@ func (s *kvstore) makeCmd(keyvalue *kv, req clientRequest) (cmdI, errcode.Error)
 }
 
 func (s *kvstore) processClientMessage(req clientRequest) {
+
+	if atomic.LoadInt32(&s.wait4ReplyCount) >= int32(s.kvnode.config.MainQueueMaxSize) {
+		req.from.send(&cs.RespMessage{
+			Cmd:   req.msg.Cmd,
+			Seqno: req.msg.Seqno,
+			Err:   errcode.New(errcode.Errcode_retry, "kvstore busy,please retry later"),
+		})
+		return
+	}
 
 	slot := sslot.Unikey2Slot(req.msg.UniKey)
 

@@ -129,17 +129,10 @@ func (this *kvnode) startListener() {
 							Err:   errcode.New(errcode.Errcode_error, fmt.Sprintf("%s not in current server", msg.UniKey)),
 						})
 					} else {
-						if nil != store.addCliMessage(clientRequest{
+						store.addCliMessage(clientRequest{
 							from: c.(*conn),
 							msg:  msg,
-						}) {
-							session.Send(&cs.RespMessage{
-								Seqno: msg.Seqno,
-								Cmd:   msg.Cmd,
-								Err:   errcode.New(errcode.Errcode_retry, "server is busy, please try again!"),
-							})
-							GetSugar().Infof("reply retry")
-						}
+						})
 					}
 				}
 			})
@@ -239,7 +232,7 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, cluster string, slots 
 	}
 
 	mainQueue := applicationQueue{
-		q: queue.NewPriorityQueue(2, this.config.MainQueueMaxSize),
+		q: queue.NewPriorityQueue(2),
 	}
 
 	var groupSize int = this.config.SnapshotCurrentCount
@@ -252,13 +245,10 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, cluster string, slots 
 		db:        this.db,
 		mainQueue: mainQueue,
 		keyvals:   make([]kvmgr, groupSize),
-		//proposalCompressor: &compress.ZipCompressor{},
-		//snapCompressor:     &compress.ZipCompressor{},
-		//unCompressor:       &compress.ZipUnCompressor{},
-		kvnode: this,
-		shard:  storeID,
-		slots:  slots,
-		meta:   meta,
+		kvnode:    this,
+		shard:     storeID,
+		slots:     slots,
+		meta:      meta,
 	}
 
 	rn := raft.NewRaftNode(store.snapMerge, this.mutilRaft, mainQueue, (this.id<<16)+storeID, peers, false, this.config.Log.LogDir, "kvnode")

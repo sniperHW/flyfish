@@ -58,9 +58,8 @@ type kvLinearizableRead struct {
 }
 
 type cmdQueue struct {
-	head  int
-	tail  int
-	queue []cmdI
+	head cmdI
+	tail cmdI
 }
 
 type kv struct {
@@ -73,7 +72,7 @@ type kv struct {
 	fields        map[string]*flyproto.Field //字段
 	tbmeta        db.TableMeta
 	updateTask    dbUpdateTask
-	pendingCmd    *cmdQueue
+	pendingCmd    cmdQueue
 	store         *kvstore
 	asynTaskCount int
 	groupID       int
@@ -96,41 +95,32 @@ func genVersion() int64 {
 	return time.Now().UnixNano()
 }
 
-func newCmdQueue(max int) *cmdQueue {
-	if max <= 0 {
-		max = 32
-	}
-	return &cmdQueue{
-		queue: make([]cmdI, max+1, max+1),
-	}
-}
-
 func (this *cmdQueue) empty() bool {
-	return this.head == this.tail
+	return this.head == nil
 }
 
-func (this *cmdQueue) add(c cmdI) bool {
-	if (this.tail+1)%len(this.queue) == this.head {
-		return false
+func (this *cmdQueue) add(c cmdI) {
+	if nil == this.tail {
+		this.head = c
 	} else {
-		this.queue[this.tail] = c
-		this.tail = (this.tail + 1) % len(this.queue)
-		return true
+		this.tail.setNext(c)
 	}
+	this.tail = c
+	c.setNext(nil)
 }
 
 func (this *cmdQueue) front() cmdI {
-	if this.empty() {
-		return nil
-	} else {
-		return this.queue[this.head]
-	}
+	return this.head
 }
 
 func (this *cmdQueue) popFront() {
-	if this.head != this.tail {
-		this.queue[this.head] = nil
-		this.head = (this.head + 1) % len(this.queue)
+	if !this.empty() {
+		f := this.head
+		this.head = f.getNext()
+		if this.head == nil {
+			this.tail = nil
+		}
+		f.setNext(nil)
 	}
 }
 
@@ -186,12 +176,11 @@ func (this *kv) process(cmd cmdI) {
 
 			}
 			return
-		} else if !this.pendingCmd.add(cmd) {
-			GetSugar().Infof("reply retry")
-			cmd.reply(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"), nil, 0)
-			return
-		} else if !this.kicking && (this.state == kv_ok || this.state == kv_no_record) {
-			this.store.lru.updateLRU(&this.lru)
+		} else {
+			this.pendingCmd.add(cmd)
+			if !this.kicking && (this.state == kv_ok || this.state == kv_no_record) {
+				this.store.lru.updateLRU(&this.lru)
+			}
 		}
 	} else {
 		this.asynTaskCount--

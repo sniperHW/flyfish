@@ -1,12 +1,13 @@
 package kvnode
 
 import (
-	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/pkg/net/cs"
-	flyproto "github.com/sniperHW/flyfish/proto"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/pkg/net/cs"
+	flyproto "github.com/sniperHW/flyfish/proto"
 )
 
 type replyAble interface {
@@ -23,6 +24,8 @@ type cmdI interface {
 	onLoadResult(err error, proposal *kvProposal) //当err==nil或err==ERR_RecordNotExist才会调用
 	checkVersion() bool
 	check(keyvalue *kv) bool
+	getNext() cmdI
+	setNext(cmdI)
 }
 
 type MakeResponse func(errcode.Error, map[string]*flyproto.Field, int64) *cs.RespMessage
@@ -37,6 +40,7 @@ type cmdBase struct {
 	replyOnce       sync.Once
 	wait4ReplyCount *int32
 	fnMakeResponse  MakeResponse
+	ppnext          cmdI
 }
 
 func initCmdBase(base *cmdBase, cmd flyproto.CmdType, peer *conn, seqno int64, version *int64, processDeadline time.Time, respDeadline time.Time, wait4ReplyCount *int32, makeResponse MakeResponse) {
@@ -50,6 +54,14 @@ func initCmdBase(base *cmdBase, cmd flyproto.CmdType, peer *conn, seqno int64, v
 	base.wait4ReplyCount = wait4ReplyCount
 	base.fnMakeResponse = makeResponse
 	peer.addPendingCmd(base)
+}
+
+func (this *cmdBase) getNext() cmdI {
+	return this.ppnext
+}
+
+func (this *cmdBase) setNext(n cmdI) {
+	this.ppnext = n
 }
 
 func (this *cmdBase) checkVersion() bool {

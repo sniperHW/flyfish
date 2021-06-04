@@ -41,6 +41,8 @@ Mode = "solo"
 
 SnapshotCurrentCount    = 1
 
+MainQueueMaxSize        = 10000
+
 LruCheckInterval        = 100              #每隔100ms执行一次lru剔除操作
 
 MaxCachePerStore        = 100               #每组最大key数量，超过数量将会触发key剔除

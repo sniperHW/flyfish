@@ -27,6 +27,8 @@ func TestMutilNode(t *testing.T) {
 	SnapshotCurrentCount    = 1
 	
 	LruCheckInterval        = 100              #每隔100ms执行一次lru剔除操作
+
+	MainQueueMaxSize        = 10000
 	
 	MaxCachePerStore        = 100               #每组最大key数量，超过数量将会触发key剔除
 	
@@ -227,6 +229,8 @@ func TestMutilNode(t *testing.T) {
 	Mode = "solo"
 	
 	SnapshotCurrentCount    = 1
+
+	MainQueueMaxSize        = 10000
 	
 	LruCheckInterval        = 100              #每隔100ms执行一次lru剔除操作
 	
