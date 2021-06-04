@@ -41,21 +41,7 @@ func (this *snapshotReader) read() (isOver bool, data []byte, err error) {
 	}
 }
 
-const buffsize = 1024 * 4 * 1024
-
-var snapshotBufferPool = sync.Pool{
-	New: func() interface{} {
-		return make([]byte, 0, buffsize)
-	},
-}
-
-func getSnapshotBuffer() []byte {
-	return snapshotBufferPool.Get().([]byte)
-}
-
-func releaseSnapshotBuffer(b []byte) {
-	snapshotBufferPool.Put(b[:0])
-}
+const buffsize = 1024 * 16 * 1024
 
 func (s *kvstore) snapMerge(snaps ...[]byte) ([]byte, error) {
 
@@ -180,7 +166,7 @@ func (s *kvstore) snapMerge(snaps ...[]byte) ([]byte, error) {
 	//多线程序列化和压缩
 	for i, v := range store {
 		go func(id int, m map[string]*kv) {
-			b := getSnapshotBuffer()
+			b := make([]byte, 0, buffsize)
 			b = buffer.AppendInt32(b, 0) //占位符
 
 			for _, vv := range m {
@@ -206,8 +192,6 @@ func (s *kvstore) snapMerge(snaps ...[]byte) ([]byte, error) {
 			mtx.Lock()
 			buff = append(buff, b...)
 			mtx.Unlock()
-
-			releaseSnapshotBuffer(b)
 
 			waitGroup.Done()
 
@@ -368,7 +352,7 @@ func (s *kvstore) getSnapshot() ([]byte, error) {
 	//多线程序列化和压缩
 	for i, _ := range s.keyvals {
 		go func(m *kvmgr) {
-			b := getSnapshotBuffer()
+			b := make([]byte, 0, buffsize)
 			b = buffer.AppendInt32(b, 0) //占位符
 
 			/*
@@ -418,8 +402,6 @@ func (s *kvstore) getSnapshot() ([]byte, error) {
 			mtx.Lock()
 			buff = append(buff, b...)
 			mtx.Unlock()
-
-			releaseSnapshotBuffer(b)
 
 			waitGroup.Done()
 
