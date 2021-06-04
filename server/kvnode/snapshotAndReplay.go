@@ -309,9 +309,15 @@ func (s *kvstore) replayFromBytes(callByReplaySnapshot bool, b []byte) error {
 			switch ptype {
 			case proposal_kick:
 				delete(s.keyvals[groupID].kv, p.unikey)
+
 				if !callByReplaySnapshot {
 					s.keyvals[groupID].kicks[p.unikey] = true
 				}
+
+				if nil != keyvalue {
+					s.lru.removeLRU(&keyvalue.lru)
+				}
+
 			case proposal_update:
 				keyvalue.version = p.version
 				for k, v := range p.fields {
@@ -320,6 +326,9 @@ func (s *kvstore) replayFromBytes(callByReplaySnapshot bool, b []byte) error {
 				if !callByReplaySnapshot {
 					keyvalue.snapshot = true
 				}
+
+				s.lru.updateLRU(&keyvalue.lru)
+
 			case proposal_snapshot:
 				keyvalue.version = p.version
 				keyvalue.fields = p.fields
@@ -333,6 +342,8 @@ func (s *kvstore) replayFromBytes(callByReplaySnapshot bool, b []byte) error {
 					delete(s.keyvals[groupID].kicks, p.unikey)
 					keyvalue.snapshot = true
 				}
+
+				s.lru.updateLRU(&keyvalue.lru)
 			}
 			GetSugar().Debugf("%s ok", p.unikey)
 		}
