@@ -35,8 +35,17 @@ func (this *ZipCompressor) Compress(in []byte) ([]byte, error) {
 		this.zipWriter.Reset(&this.zipBuff)
 	}
 
-	this.zipWriter.Write(in)
-	this.zipWriter.Flush()
+	var err error
+
+	_, err = this.zipWriter.Write(in)
+	if nil != err {
+		return nil, err
+	}
+
+	err = this.zipWriter.Flush()
+	if nil != err {
+		return nil, err
+	}
 
 	out := this.zipBuff.Bytes()
 
@@ -44,7 +53,8 @@ func (this *ZipCompressor) Compress(in []byte) ([]byte, error) {
 }
 
 type ZipUnCompressor struct {
-	zipBuff bytes.Buffer
+	zipBuff   bytes.Buffer
+	zipReader io.ReadCloser
 }
 
 func (this *ZipUnCompressor) Clone() UnCompressorI {
@@ -52,15 +62,27 @@ func (this *ZipUnCompressor) Clone() UnCompressorI {
 }
 
 func (this *ZipUnCompressor) UnCompress(in []byte) ([]byte, error) {
+
+	var err error
+
 	this.zipBuff.Reset()
-	this.zipBuff.Write(in)
-	r, err := zlib.NewReader(&this.zipBuff)
-	if err != nil {
+
+	_, err = this.zipBuff.Write(in)
+	if nil != err {
 		return nil, err
 	}
 
-	out, err := ioutil.ReadAll(r)
-	r.Close()
+	if nil == this.zipReader {
+		this.zipReader, err = zlib.NewReader(&this.zipBuff)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		this.zipReader.(zlib.Resetter).Reset(&this.zipBuff, nil)
+	}
+
+	out, err := ioutil.ReadAll(this.zipReader)
+	this.zipReader.Close()
 	if err != nil {
 		if err != io.ErrUnexpectedEOF && err != io.EOF {
 			return nil, err
@@ -87,8 +109,19 @@ func (this *GZipCompressor) Compress(in []byte) ([]byte, error) {
 		this.zipWriter.Reset(&this.zipBuff)
 	}
 
-	this.zipWriter.Write(in)
-	this.zipWriter.Flush()
+	var err error
+
+	_, err = this.zipWriter.Write(in)
+
+	if nil != err {
+		return nil, err
+	}
+
+	err = this.zipWriter.Flush()
+
+	if nil != err {
+		return nil, err
+	}
 
 	out := this.zipBuff.Bytes()
 
@@ -105,24 +138,6 @@ func (this *GZipUnCompressor) Clone() UnCompressorI {
 }
 
 func (this *GZipUnCompressor) UnCompress(in []byte) ([]byte, error) {
-
-	/*var err error
-	var out []byte
-
-	r, err := gzip.NewReader(bytes.NewReader(in))
-	if nil != err {
-		return nil, err
-	}
-
-	out, err = ioutil.ReadAll(r)
-	r.Close()
-	if err != nil {
-		if err != io.ErrUnexpectedEOF && err != io.EOF {
-			return nil, err
-		}
-	}
-
-	return out, nil*/
 
 	this.zipBuff.Reset()
 	_, err := this.zipBuff.Write(in)

@@ -45,6 +45,16 @@ func TestCompress(t *testing.T) {
 			t.Fatal(unzipOut)
 		}
 
+		unzipOut, err = zipUnCompressor.UnCompress(zipOut)
+
+		if nil != err {
+			t.Fatal(err)
+		}
+
+		if string(unzipOut) != s {
+			t.Fatal(unzipOut)
+		}
+
 	}()
 
 	func() {
