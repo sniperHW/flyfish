@@ -292,7 +292,6 @@ func (s *Socket) onRecvComplete(r *goaio.AIOResult) {
 }
 
 func (s *Socket) prepareSendBuff() {
-	const maxsendsize = 65535
 
 	//只有之前请求的buff全部发送完毕才填充新的buff
 	if nil == s.b {
@@ -306,8 +305,6 @@ func (s *Socket) prepareSendBuff() {
 			s.b.SetLen(l)
 			GetSugar().Errorf("encode error:%v", err)
 
-		} else if s.b.Len() >= maxsendsize {
-			break
 		}
 	}
 }

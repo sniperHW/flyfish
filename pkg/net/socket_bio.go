@@ -149,8 +149,6 @@ func (this *Socket) sendThreadFunc() {
 
 	closed := false
 
-	const maxsendsize = 65535
-
 	var n int
 
 	oldTimeout := this.getSendTimeout()
@@ -177,15 +175,13 @@ func (this *Socket) sendThreadFunc() {
 						//EnCode错误，这个包已经写入到b中的内容需要直接丢弃
 						b.SetLen(l)
 						GetSugar().Errorf("encode error:%v", err)
-					} else if b.Len() >= maxsendsize {
-						break
 					}
 				}
+			}
 
-				if b.Len() == 0 {
-					b.Free()
-					break
-				}
+			if b.Len() == 0 {
+				b.Free()
+				break
 			}
 
 			oldTimeout = timeout
