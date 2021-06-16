@@ -216,14 +216,12 @@ func (s *Socket) ShutdownWrite() {
 		return
 	} else {
 		s.setFlag(fwclosed)
-		if s.sendQueue.empty() {
+		if s.sendQueue.empty() && !s.sendLock {
 			s.conn.(interface{ CloseWrite() error }).CloseWrite()
-		} else {
-			if !s.sendLock {
-				s.addIO()
-				s.sendLock = true
-				sendRoutinePool.GoTask(s)
-			}
+		} else if !s.sendLock {
+			s.addIO()
+			s.sendLock = true
+			sendRoutinePool.GoTask(s)
 		}
 	}
 }
@@ -340,6 +338,10 @@ func (s *Socket) onSendComplete(r *goaio.AIOResult) {
 			s.b.Free()
 			s.b = nil
 			s.sendLock = false
+			if s.testFlag(fwclosed) {
+				s.conn.(interface{ CloseWrite() error }).CloseWrite()
+				close(s.sendCloseChan)
+			}
 			s.muW.Unlock()
 		} else {
 			s.b.Reset()
@@ -347,7 +349,6 @@ func (s *Socket) onSendComplete(r *goaio.AIOResult) {
 			s.sendLock = true
 			s.muW.Unlock()
 			sendRoutinePool.GoTask(s)
-			return
 		}
 	} else if !s.testFlag(fclosed) {
 		if r.Err == goaio.ErrSendTimeout {
@@ -356,31 +357,28 @@ func (s *Socket) onSendComplete(r *goaio.AIOResult) {
 
 		if nil != s.errorCallback {
 			if r.Err != ErrSendTimeout {
+				s.errorCallback(s, r.Err)
+				close(s.sendCloseChan)
 				s.Close(r.Err, 0)
+			} else {
+				s.errorCallback(s, r.Err)
+				if !s.testFlag(fclosed) {
+					s.muW.Lock()
+					//超时可能会发送部分数据
+					s.b.DropFirstNBytes(r.Bytestransfer)
+					s.addIO()
+					s.sendLock = true
+					s.muW.Unlock()
+					sendRoutinePool.GoTask(s)
+				} else {
+					close(s.sendCloseChan)
+					s.Close(r.Err, 0)
+				}
 			}
-
-			s.errorCallback(s, r.Err)
-
-			//发送超时，但用户没有关闭socket,需要将尚未发送完成的buff再次请求发送
-			if r.Err == ErrSendTimeout && !s.testFlag(fclosed) {
-				s.muW.Lock()
-				//超时可能会发送部分数据
-				s.b.DropFirstNBytes(r.Bytestransfer)
-				s.addIO()
-				s.sendLock = true
-				s.muW.Unlock()
-				sendRoutinePool.GoTask(s)
-				return
-			}
-
 		} else {
+			close(s.sendCloseChan)
 			s.Close(r.Err, 0)
 		}
-	}
-
-	if s.testFlag(fclosed | fwclosed) {
-		s.conn.(interface{ CloseWrite() error }).CloseWrite()
-		close(s.sendCloseChan)
 	}
 }
 
