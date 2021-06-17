@@ -86,9 +86,7 @@ func (this *SocketService) completeRoutine(s *goaio.AIOService) {
 func (this *SocketService) createAIOConn(conn net.Conn) (*goaio.AIOConn, error) {
 	idx := rand.Int() % len(this.services)
 	c, err := this.services[idx].CreateAIOConn(conn, goaio.AIOConnOption{
-		SendqueSize: 1,
-		RecvqueSize: 1,
-		ShareBuff:   GetBuffPool(),
+		ShareBuff: GetBuffPool(),
 	})
 	return c, err
 }
@@ -218,10 +216,7 @@ func (s *Socket) ShutdownWrite() {
 		s.setFlag(fwclosed)
 		if s.sendQueue.empty() && !s.sendLock {
 			s.conn.(interface{ CloseWrite() error }).CloseWrite()
-		} else if !s.sendLock {
-			s.addIO()
-			s.sendLock = true
-			sendRoutinePool.GoTask(s)
+			close(s.sendCloseChan)
 		}
 	}
 }
@@ -230,16 +225,6 @@ func (s *Socket) SetSendQueueSize(size int) *Socket {
 	s.muW.Lock()
 	defer s.muW.Unlock()
 	s.sendQueue.setCap(size)
-	return s
-}
-
-func (s *Socket) SetRecvTimeout(timeout time.Duration) *Socket {
-	s.aioConn.SetRecvTimeout(timeout)
-	return s
-}
-
-func (s *Socket) SetSendTimeout(timeout time.Duration) *Socket {
-	s.aioConn.SetSendTimeout(timeout)
 	return s
 }
 
@@ -283,7 +268,7 @@ func (s *Socket) onRecvComplete(r *goaio.AIOResult) {
 			}
 		}
 
-		if !recvAgain || s.testFlag(fclosed|frclosed) || nil != s.aioConn.Recv(&s.recvContext, s.inboundProcessor.GetRecvBuff()) {
+		if !recvAgain || s.testFlag(fclosed|frclosed) || nil != s.aioConn.Recv(&s.recvContext, s.inboundProcessor.GetRecvBuff(), s.getRecvTimeout()) {
 			s.ioDone()
 		}
 	}
@@ -323,7 +308,7 @@ func (s *Socket) doSend() {
 
 	if s.b.Len() == 0 {
 		s.onSendComplete(&goaio.AIOResult{})
-	} else if nil != s.aioConn.Send(&s.sendContext, s.b.Bytes()) {
+	} else if nil != s.aioConn.Send(&s.sendContext, s.b.Bytes(), s.getSendTimeout()) {
 		s.onSendComplete(&goaio.AIOResult{Err: ErrSocketClose})
 	}
 
@@ -372,7 +357,6 @@ func (s *Socket) onSendComplete(r *goaio.AIOResult) {
 					sendRoutinePool.GoTask(s)
 				} else {
 					close(s.sendCloseChan)
-					s.Close(r.Err, 0)
 				}
 			}
 		} else {
@@ -433,7 +417,7 @@ func (s *Socket) BeginRecv(cb func(*Socket, interface{})) (err error) {
 		} else {
 			//发起第一个recv
 			s.inboundCallBack = cb
-			if err = s.aioConn.Recv(&s.recvContext, s.inboundProcessor.GetRecvBuff()); nil != err {
+			if err = s.aioConn.Recv(&s.recvContext, s.inboundProcessor.GetRecvBuff(), s.getRecvTimeout()); nil != err {
 				s.ioDone()
 			}
 		}
@@ -464,11 +448,6 @@ func (s *Socket) Close(reason error, delay time.Duration) {
 		s.setFlag(fclosed)
 
 		if !s.testFlag(fwclosed) && delay > 0 {
-			if !s.sendLock {
-				s.addIO()
-				s.sendLock = true
-				sendRoutinePool.GoTask(s)
-			}
 			s.muW.Unlock()
 			s.ShutdownRead()
 			ticker := time.NewTicker(delay)

@@ -4,6 +4,7 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 const (
@@ -28,6 +29,8 @@ type socketBase struct {
 	inboundCallBack  func(*Socket, interface{})
 	ioCount          int32
 	closeReason      error
+	sendTimeout      int64
+	recvTimeout      int64
 }
 
 func (s *Socket) setFlag(flag int32) {
@@ -95,4 +98,22 @@ func (s *Socket) ShutdownRead() {
 
 func (s *Socket) addIO() {
 	atomic.AddInt32(&s.ioCount, 1)
+}
+
+func (this *Socket) SetRecvTimeout(timeout time.Duration) *Socket {
+	atomic.StoreInt64(&this.recvTimeout, int64(timeout))
+	return this
+}
+
+func (this *Socket) SetSendTimeout(timeout time.Duration) *Socket {
+	atomic.StoreInt64(&this.sendTimeout, int64(timeout))
+	return this
+}
+
+func (this *Socket) getRecvTimeout() time.Duration {
+	return time.Duration(atomic.LoadInt64(&this.recvTimeout))
+}
+
+func (this *Socket) getSendTimeout() time.Duration {
+	return time.Duration(atomic.LoadInt64(&this.sendTimeout))
 }

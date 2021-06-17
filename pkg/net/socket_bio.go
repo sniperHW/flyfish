@@ -25,9 +25,7 @@ func isNetTimeout(err error) bool {
 
 type Socket struct {
 	socketBase
-	sendQue     *queue.ArrayQueue
-	sendTimeout int64
-	recvTimeout int64
+	sendQue *queue.ArrayQueue
 }
 
 func (this *Socket) ShutdownWrite() {
@@ -39,27 +37,9 @@ func (this *Socket) ShutdownWrite() {
 	}
 }
 
-func (this *Socket) SetRecvTimeout(timeout time.Duration) *Socket {
-	atomic.StoreInt64(&this.recvTimeout, int64(timeout))
-	return this
-}
-
-func (this *Socket) SetSendTimeout(timeout time.Duration) *Socket {
-	atomic.StoreInt64(&this.sendTimeout, int64(timeout))
-	return this
-}
-
 func (this *Socket) SetSendQueueSize(size int) *Socket {
 	this.sendQue.SetCap(size)
 	return this
-}
-
-func (this *Socket) getRecvTimeout() time.Duration {
-	return time.Duration(atomic.LoadInt64(&this.recvTimeout))
-}
-
-func (this *Socket) getSendTimeout() time.Duration {
-	return time.Duration(atomic.LoadInt64(&this.sendTimeout))
 }
 
 func (this *Socket) recvThreadFunc() {
