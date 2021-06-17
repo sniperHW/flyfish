@@ -22,6 +22,7 @@ type socketBase struct {
 	closeOnce        sync.Once
 	beginOnce        sync.Once
 	sendOnce         sync.Once
+	doCloseOnce      sync.Once
 	encoder          Encoder
 	inboundProcessor InBoundProcessor
 	errorCallback    func(*Socket, error)

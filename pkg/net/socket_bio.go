@@ -251,9 +251,11 @@ func (this *Socket) Send(o interface{}) (err error) {
 
 func (this *Socket) ioDone() {
 	if 0 == atomic.AddInt32(&this.ioCount, -1) && this.testFlag(fdoclose) {
-		if nil != this.closeCallBack {
-			this.closeCallBack(this, this.closeReason)
-		}
+		this.doCloseOnce.Do(func() {
+			if nil != this.closeCallBack {
+				this.closeCallBack(this, this.closeReason)
+			}
+		})
 	}
 }
 
@@ -269,12 +271,6 @@ func (this *Socket) Close(reason error, delay time.Duration) {
 		this.sendQue.Close()
 
 		if !wclosed && delay > 0 {
-			func() {
-				this.sendOnce.Do(func() {
-					this.addIO()
-					go this.sendThreadFunc()
-				})
-			}()
 			ticker := time.NewTicker(delay)
 			go func() {
 				/*
@@ -297,9 +293,11 @@ func (this *Socket) Close(reason error, delay time.Duration) {
 		this.setFlag(fdoclose)
 
 		if atomic.LoadInt32(&this.ioCount) == 0 {
-			if nil != this.closeCallBack {
-				this.closeCallBack(this, reason)
-			}
+			this.doCloseOnce.Do(func() {
+				if nil != this.closeCallBack {
+					this.closeCallBack(this, reason)
+				}
+			})
 		}
 
 	})

@@ -208,12 +208,12 @@ type Socket struct {
 }
 
 func (s *Socket) ShutdownWrite() {
-	s.muW.Lock()
-	defer s.muW.Unlock()
 	if s.testFlag(fclosed | fwclosed) {
 		return
 	} else {
 		s.setFlag(fwclosed)
+		s.muW.Lock()
+		defer s.muW.Unlock()
 		if s.sendQueue.empty() && !s.sendLock {
 			s.conn.(interface{ CloseWrite() error }).CloseWrite()
 			close(s.sendCloseChan)
@@ -314,14 +314,20 @@ func (s *Socket) doSend() {
 
 }
 
+func (s *Socket) releaseb() {
+	if nil != s.b {
+		s.b.Free()
+		s.b = nil
+	}
+}
+
 func (s *Socket) onSendComplete(r *goaio.AIOResult) {
 	defer s.ioDone()
 	if nil == r.Err {
 		s.muW.Lock()
 		//发送完成释放发送buff
 		if s.sendQueue.empty() {
-			s.b.Free()
-			s.b = nil
+			s.releaseb()
 			s.sendLock = false
 			if s.testFlag(fwclosed) {
 				s.conn.(interface{ CloseWrite() error }).CloseWrite()
@@ -329,10 +335,9 @@ func (s *Socket) onSendComplete(r *goaio.AIOResult) {
 			}
 			s.muW.Unlock()
 		} else {
+			s.muW.Unlock()
 			s.b.Reset()
 			s.addIO()
-			s.sendLock = true
-			s.muW.Unlock()
 			sendRoutinePool.GoTask(s)
 		}
 	} else if !s.testFlag(fclosed) {
@@ -342,27 +347,29 @@ func (s *Socket) onSendComplete(r *goaio.AIOResult) {
 
 		if nil != s.errorCallback {
 			if r.Err != ErrSendTimeout {
-				s.errorCallback(s, r.Err)
 				close(s.sendCloseChan)
 				s.Close(r.Err, 0)
+				s.errorCallback(s, r.Err)
+				s.releaseb()
 			} else {
 				s.errorCallback(s, r.Err)
 				if !s.testFlag(fclosed) {
-					s.muW.Lock()
 					//超时可能会发送部分数据
 					s.b.DropFirstNBytes(r.Bytestransfer)
 					s.addIO()
-					s.sendLock = true
-					s.muW.Unlock()
 					sendRoutinePool.GoTask(s)
 				} else {
 					close(s.sendCloseChan)
+					s.releaseb()
 				}
 			}
 		} else {
 			close(s.sendCloseChan)
 			s.Close(r.Err, 0)
+			s.releaseb()
 		}
+	} else {
+		s.releaseb()
 	}
 }
 
@@ -372,13 +379,12 @@ func (s *Socket) Send(o interface{}) error {
 	} else if nil == o {
 		return errors.New("o is nil")
 	} else {
-		s.muW.Lock()
 
-		if s.flag&(fclosed|fwclosed) > 0 {
-			s.muW.Unlock()
+		if s.testFlag(fclosed|fwclosed) > 0 {
 			return ErrSocketClose
 		}
 
+		s.muW.Lock()
 		if !s.sendQueue.push(o) {
 			s.muW.Unlock()
 			return ErrSendQueFull
@@ -427,28 +433,23 @@ func (s *Socket) BeginRecv(cb func(*Socket, interface{})) (err error) {
 
 func (s *Socket) ioDone() {
 	if 0 == atomic.AddInt32(&s.ioCount, -1) && s.testFlag(fdoclose) {
-		if nil != s.b {
-			s.b.Free()
-		}
-		if nil != s.inboundProcessor {
-			s.inboundProcessor.OnSocketClose()
-		}
-		if nil != s.closeCallBack {
-			s.closeCallBack(s, s.closeReason)
-		}
+		s.doCloseOnce.Do(func() {
+			if nil != s.inboundProcessor {
+				s.inboundProcessor.OnSocketClose()
+			}
+			if nil != s.closeCallBack {
+				s.closeCallBack(s, s.closeReason)
+			}
+		})
 	}
 }
 
 func (s *Socket) Close(reason error, delay time.Duration) {
 	s.closeOnce.Do(func() {
 		runtime.SetFinalizer(s, nil)
-
-		s.muW.Lock()
-
 		s.setFlag(fclosed)
 
 		if !s.testFlag(fwclosed) && delay > 0 {
-			s.muW.Unlock()
 			s.ShutdownRead()
 			ticker := time.NewTicker(delay)
 			go func() {
@@ -461,7 +462,6 @@ func (s *Socket) Close(reason error, delay time.Duration) {
 				s.aioConn.Close(nil)
 			}()
 		} else {
-			s.muW.Unlock()
 			s.aioConn.Close(nil)
 		}
 
@@ -469,15 +469,14 @@ func (s *Socket) Close(reason error, delay time.Duration) {
 		s.closeReason = reason
 
 		if 0 == atomic.LoadInt32(&s.ioCount) {
-			if nil != s.b {
-				s.b.Free()
-			}
-			if nil != s.inboundProcessor {
-				s.inboundProcessor.OnSocketClose()
-			}
-			if nil != s.closeCallBack {
-				s.closeCallBack(s, s.closeReason)
-			}
+			s.doCloseOnce.Do(func() {
+				if nil != s.inboundProcessor {
+					s.inboundProcessor.OnSocketClose()
+				}
+				if nil != s.closeCallBack {
+					s.closeCallBack(s, s.closeReason)
+				}
+			})
 		}
 	})
 }
