@@ -32,6 +32,7 @@ type socketBase struct {
 	closeReason      error
 	sendTimeout      int64
 	recvTimeout      int64
+	sendQueue        *SendQueue
 }
 
 func (s *Socket) setFlag(flag int32) {
@@ -101,20 +102,25 @@ func (s *Socket) addIO() {
 	atomic.AddInt32(&s.ioCount, 1)
 }
 
-func (this *Socket) SetRecvTimeout(timeout time.Duration) *Socket {
-	atomic.StoreInt64(&this.recvTimeout, int64(timeout))
-	return this
+func (s *Socket) SetSendQueueSize(size int) *Socket {
+	s.sendQueue.SetFullSize(size)
+	return s
 }
 
-func (this *Socket) SetSendTimeout(timeout time.Duration) *Socket {
-	atomic.StoreInt64(&this.sendTimeout, int64(timeout))
-	return this
+func (s *Socket) SetRecvTimeout(timeout time.Duration) *Socket {
+	atomic.StoreInt64(&s.recvTimeout, int64(timeout))
+	return s
 }
 
-func (this *Socket) getRecvTimeout() time.Duration {
-	return time.Duration(atomic.LoadInt64(&this.recvTimeout))
+func (s *Socket) SetSendTimeout(timeout time.Duration) *Socket {
+	atomic.StoreInt64(&s.sendTimeout, int64(timeout))
+	return s
 }
 
-func (this *Socket) getSendTimeout() time.Duration {
-	return time.Duration(atomic.LoadInt64(&this.sendTimeout))
+func (s *Socket) getRecvTimeout() time.Duration {
+	return time.Duration(atomic.LoadInt64(&s.recvTimeout))
+}
+
+func (s *Socket) getSendTimeout() time.Duration {
+	return time.Duration(atomic.LoadInt64(&s.sendTimeout))
 }

@@ -28,8 +28,8 @@ func (r *routine) run(p *Pool) {
 }
 
 var defaultPool *Pool = New(Option{
-	MaxRoutineCount: 1000,
-	Mode:            QueueMode,
+	MaxRoutineCount: 1024,
+	Mode:            GoMode,
 })
 
 type Mode int
@@ -59,7 +59,7 @@ func newring(max int) ring {
 
 	var l int
 	if max == 0 {
-		l = 100 + 1
+		l = 1024 + 1
 	} else {
 		l = max + 1
 	}

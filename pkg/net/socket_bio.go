@@ -5,7 +5,6 @@ package net
 import (
 	"errors"
 	"github.com/sniperHW/flyfish/pkg/buffer"
-	"github.com/sniperHW/flyfish/pkg/queue"
 	"net"
 	"runtime"
 	"sync/atomic"
@@ -25,21 +24,13 @@ func isNetTimeout(err error) bool {
 
 type Socket struct {
 	socketBase
-	sendQue *queue.ArrayQueue
 }
 
 func (this *Socket) ShutdownWrite() {
-	if this.sendQue.Close() {
-		this.sendOnce.Do(func() {
-			this.addIO()
-			go this.sendThreadFunc()
-		})
+	closeOK, remain := this.sendQueue.Close()
+	if closeOK && remain == 0 {
+		this.conn.(interface{ CloseWrite() error }).CloseWrite()
 	}
-}
-
-func (this *Socket) SetSendQueueSize(size int) *Socket {
-	this.sendQue.SetCap(size)
-	return this
 }
 
 func (this *Socket) recvThreadFunc() {
@@ -120,8 +111,10 @@ func (this *Socket) recvThreadFunc() {
 }
 
 func (this *Socket) sendThreadFunc() {
-	defer this.ioDone()
-	defer close(this.sendCloseChan)
+	defer func() {
+		close(this.sendCloseChan)
+		this.ioDone()
+	}()
 
 	var err error
 
@@ -136,7 +129,7 @@ func (this *Socket) sendThreadFunc() {
 
 	for {
 
-		localList, closed = this.sendQue.Pop(localList)
+		closed, localList = this.sendQueue.Get(localList)
 		size := len(localList)
 		if closed && size == 0 {
 			this.conn.(interface{ CloseWrite() error }).CloseWrite()
@@ -235,10 +228,10 @@ func (this *Socket) Send(o interface{}) (err error) {
 	if nil == o {
 		return errors.New("o == nil")
 	}
-	err = this.sendQue.Append(o)
-	if err == queue.ErrQueueClosed {
+	err = this.sendQueue.Add(o)
+	if err == ErrQueueClosed {
 		err = ErrSocketClose
-	} else if err == queue.ErrQueueFull {
+	} else if err == ErrQueueFull {
 		err = ErrSendQueFull
 	} else {
 		this.sendOnce.Do(func() {
@@ -266,11 +259,9 @@ func (this *Socket) Close(reason error, delay time.Duration) {
 
 		this.setFlag(fclosed)
 
-		wclosed := this.sendQue.Closed()
+		_, remain := this.sendQueue.Close()
 
-		this.sendQue.Close()
-
-		if !wclosed && delay > 0 {
+		if remain > 0 && delay > 0 {
 			ticker := time.NewTicker(delay)
 			go func() {
 				/*
@@ -317,8 +308,8 @@ func NewSocket(conn net.Conn) *Socket {
 		socketBase: socketBase{
 			conn:          conn,
 			sendCloseChan: make(chan struct{}),
+			sendQueue:     NewSendQueue(256),
 		},
-		sendQue: queue.NewArrayQueue(128),
 	}
 
 	runtime.SetFinalizer(s, func(s *Socket) {

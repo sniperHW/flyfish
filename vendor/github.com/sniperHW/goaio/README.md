@@ -20,8 +20,6 @@ func NewAIOService(worker int) *AIOService
 
 ```go
 type AIOConnOption struct {
-	SendqueSize int
-	RecvqueSize int
 	ShareBuff   ShareBuffer
 	UserData    interface{}
 }
@@ -38,18 +36,18 @@ func (this *AIOService) GetCompleteStatus() (AIOResult, error)
 获取操作结果。需要注意的是，如果使用多个`goroutine`调用`AIOService.GetCompleteStatus`，对于一个连接，如果同时投递了多个io操作请求，则操作结果可能会以任意顺序被多个`goroutine`获取到。如果操作结果的顺序是重要的，要么避免同时投递多个io请求，要么只使用一个`goroutine`获取操作结果。
 
 ```go
-func (this *AIOConn) Recv(context interface{}, buff []byte) error
+func (this *AIOConn) Recv(context interface{}, buff []byte,timeout time.Duration) error
 ```
 
-投递读请求。如果没有提供`buff`,且没有提供`ShareBuff`，当连接可读时将使用`make`创建一个`buff`来接收数据。数据的接收使用readv接口，因此，会一次性将多个buff提供给readv。
+投递读请求。如果没有提供`buff`,且没有提供`ShareBuff`，当连接可读时将使用`make`创建一个`buff`来接收数据。如果要设置超时,timeout>0
 
 ```go
-func (this *AIOConn) Send(context interface{}, buff []byte) error
+func (this *AIOConn) Send(context interface{}, buff []byte,timeout time.Duration) error
 ```
 
-投递写请求。数据的接收使用writev接口，因此，会一次性将多个buff提供给writev。只有当操作提供的所有buff都发送完毕，整个操作才算完成。
+投递写请求。只有当操作提供的所有buff都发送完毕，整个操作才算完成。
 
-对于设置了发送超时的情况，返回的结果包含超时错误以及成功发送的字节数，使用者可以根据情况重发剩余部分。
+对于设置了发送超时的情况，返回的结果包含超时错误以及成功发送的字节数，使用者可以根据情况重发剩余部分。如果要设置超时,timeout>0
 
 ### 关于GatherIO
 
@@ -92,9 +90,9 @@ func main() {
 				fmt.Println("go error", res.Err)
 				res.Conn.Close(res.Err)
 			} else if res.Context.(rune) == 'r' {
-				res.Conn.Send('w', res.Buff[:res.Bytestransfer])
+				res.Conn.Send('w', res.Buff[:res.Bytestransfer],-1)
 			} else {
-				res.Conn.Recv('r', res.Buff[:cap(res.Buff)])
+				res.Conn.Recv('r', res.Buff[:cap(res.Buff)],time.Second * 5)
 			}
 		}
 	}()
@@ -112,9 +110,7 @@ func main() {
 
 		c, _ := goaio.Bind(conn, goaio.AIOConnOption{})
 
-		c.SetRecvTimeout(time.Second * 5)
-
-		c.Recv('r', make([]byte, 1024*4))
+		c.Recv('r', make([]byte, 1024*4),time.Second * 5)
 
 	}
 

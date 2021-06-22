@@ -53,9 +53,9 @@ func GetBuffPool() *bufferPool {
 	return buffPool
 }
 
-var sendRoutinePool *gopool.Pool = gopool.New(gopool.Option{
-	MaxRoutineCount: 1024,
-	Mode:            gopool.QueueMode,
+var routinePool *gopool.Pool = gopool.New(gopool.Option{
+	MaxRoutineCount: 4096,
+	Mode:            gopool.GoMode,
 })
 
 type SocketService struct {
@@ -63,8 +63,8 @@ type SocketService struct {
 }
 
 type ioContext struct {
-	s *Socket
-	t rune
+	b  *buffer.Buffer
+	cb func(*goaio.AIOResult, *buffer.Buffer)
 }
 
 func (this *SocketService) completeRoutine(s *goaio.AIOService) {
@@ -73,12 +73,10 @@ func (this *SocketService) completeRoutine(s *goaio.AIOService) {
 		if !ok {
 			break
 		} else {
-			context := res.Context.(*ioContext)
-			if context.t == 'r' {
-				context.s.onRecvComplete(&res)
-			} else {
-				context.s.onSendComplete(&res)
-			}
+			c := res.Context.(*ioContext)
+			routinePool.Go(func() {
+				c.cb(&res, c.b)
+			})
 		}
 	}
 }
@@ -129,106 +127,23 @@ func NewSocketService(o ServiceOption) *SocketService {
 	return s
 }
 
-var itemPool *sync.Pool = &sync.Pool{
-	New: func() interface{} {
-		return &item{}
-	},
-}
-
-type item struct {
-	nnext *item
-	v     interface{}
-}
-
-type sendqueue struct {
-	head *item
-	tail *item
-	cap  int
-	len  int
-}
-
-func newSendQueue(cap int) sendqueue {
-	return sendqueue{
-		cap: cap,
-	}
-}
-
-func (r *sendqueue) empty() bool {
-	return r.len == 0
-}
-
-func (r *sendqueue) setCap(cap int) {
-	r.cap = cap
-}
-
-func (r *sendqueue) pop() interface{} {
-	if r.len == 0 {
-		return nil
-	} else {
-		f := r.head
-		v := f.v
-		r.head = f.nnext
-		if r.head == nil {
-			r.tail = nil
-		}
-		f.nnext = nil
-		f.v = nil
-		itemPool.Put(f)
-		r.len--
-		return v
-	}
-}
-
-func (r *sendqueue) push(v interface{}) bool {
-	if r.len == r.cap {
-		return false
-	} else {
-		it := itemPool.Get().(*item)
-		it.v = v
-		if nil == r.tail {
-			r.head = it
-		} else {
-			r.tail.nnext = it
-		}
-		r.tail = it
-		r.len++
-		return true
-	}
-}
-
 type Socket struct {
 	socketBase
-	muW         sync.Mutex
-	sendQueue   sendqueue
 	aioConn     *goaio.AIOConn
-	sendLock    bool
+	sendLock    int32
 	sendContext ioContext
 	recvContext ioContext
-	b           *buffer.Buffer
+	swaped      []interface{}
 }
 
 func (s *Socket) ShutdownWrite() {
-	if s.testFlag(fclosed | fwclosed) {
-		return
-	} else {
-		s.setFlag(fwclosed)
-		s.muW.Lock()
-		defer s.muW.Unlock()
-		if s.sendQueue.empty() && !s.sendLock {
-			s.conn.(interface{ CloseWrite() error }).CloseWrite()
-			close(s.sendCloseChan)
-		}
+	closeOK, remain := s.sendQueue.Close()
+	if closeOK && remain == 0 && atomic.LoadInt32(&s.sendLock) == 0 {
+		s.conn.(interface{ CloseWrite() error }).CloseWrite()
 	}
 }
 
-func (s *Socket) SetSendQueueSize(size int) *Socket {
-	s.muW.Lock()
-	defer s.muW.Unlock()
-	s.sendQueue.setCap(size)
-	return s
-}
-
-func (s *Socket) onRecvComplete(r *goaio.AIOResult) {
+func (s *Socket) onRecvComplete(r *goaio.AIOResult, _ *buffer.Buffer) {
 	if s.testFlag(fclosed | frclosed) {
 		s.ioDone()
 	} else {
@@ -274,103 +189,36 @@ func (s *Socket) onRecvComplete(r *goaio.AIOResult) {
 	}
 }
 
-func (s *Socket) prepareSendBuff() {
+func (s *Socket) Do() {
+	s.doSend(nil)
+}
 
-	//只有之前请求的buff全部发送完毕才填充新的buff
-	if nil == s.b {
-		s.b = buffer.Get()
+func (s *Socket) doSend(b *buffer.Buffer) {
+
+	if nil == b {
+		b = buffer.Get()
+		s.sendContext.b = b
 	}
 
-	for v := s.sendQueue.pop(); nil != v; v = s.sendQueue.pop() {
-		l := s.b.Len()
-		if err := s.encoder.EnCode(v, s.b); nil != err {
+	_, s.swaped = s.sendQueue.Get(s.swaped)
+
+	for i := 0; i < len(s.swaped); i++ {
+		l := b.Len()
+		if err := s.encoder.EnCode(s.swaped[i], b); nil != err {
 			//EnCode错误，这个包已经写入到b中的内容需要直接丢弃
-			s.b.SetLen(l)
+			b.SetLen(l)
 			GetSugar().Errorf("encode error:%v", err)
 
 		}
-	}
-}
-
-/*
- *  实现gopool.Task接口,避免无谓的闭包创建
- */
-
-func (s *Socket) Do() {
-	s.doSend()
-}
-
-func (s *Socket) doSend() {
-
-	s.muW.Lock()
-	s.prepareSendBuff()
-	s.muW.Unlock()
-
-	if s.b.Len() == 0 {
-		s.onSendComplete(&goaio.AIOResult{})
-	} else if nil != s.aioConn.Send(&s.sendContext, s.b.Bytes(), s.getSendTimeout()) {
-		s.onSendComplete(&goaio.AIOResult{Err: ErrSocketClose})
+		s.swaped[i] = nil
 	}
 
-}
-
-func (s *Socket) releaseb() {
-	if nil != s.b {
-		s.b.Free()
-		s.b = nil
+	if b.Len() == 0 {
+		s.onSendComplete(&goaio.AIOResult{}, b)
+	} else if nil != s.aioConn.Send(&s.sendContext, b.Bytes(), s.getSendTimeout()) {
+		s.onSendComplete(&goaio.AIOResult{Err: ErrSocketClose}, b)
 	}
-}
 
-func (s *Socket) onSendComplete(r *goaio.AIOResult) {
-	defer s.ioDone()
-	if nil == r.Err {
-		s.muW.Lock()
-		//发送完成释放发送buff
-		if s.sendQueue.empty() {
-			s.releaseb()
-			s.sendLock = false
-			if s.testFlag(fwclosed) {
-				s.conn.(interface{ CloseWrite() error }).CloseWrite()
-				close(s.sendCloseChan)
-			}
-			s.muW.Unlock()
-		} else {
-			s.muW.Unlock()
-			s.b.Reset()
-			s.addIO()
-			sendRoutinePool.GoTask(s)
-		}
-	} else if !s.testFlag(fclosed) {
-		if r.Err == goaio.ErrSendTimeout {
-			r.Err = ErrSendTimeout
-		}
-
-		if nil != s.errorCallback {
-			if r.Err != ErrSendTimeout {
-				close(s.sendCloseChan)
-				s.Close(r.Err, 0)
-				s.errorCallback(s, r.Err)
-				s.releaseb()
-			} else {
-				s.errorCallback(s, r.Err)
-				if !s.testFlag(fclosed) {
-					//超时可能会发送部分数据
-					s.b.DropFirstNBytes(r.Bytestransfer)
-					s.addIO()
-					sendRoutinePool.GoTask(s)
-				} else {
-					close(s.sendCloseChan)
-					s.releaseb()
-				}
-			}
-		} else {
-			close(s.sendCloseChan)
-			s.Close(r.Err, 0)
-			s.releaseb()
-		}
-	} else {
-		s.releaseb()
-	}
 }
 
 func (s *Socket) Send(o interface{}) error {
@@ -380,23 +228,20 @@ func (s *Socket) Send(o interface{}) error {
 		return errors.New("o is nil")
 	} else {
 
-		if s.testFlag(fclosed|fwclosed) > 0 {
-			return ErrSocketClose
+		if err := s.sendQueue.Add(o); nil != err {
+			if err == ErrQueueClosed {
+				err = ErrSocketClose
+			} else if err == ErrQueueFull {
+				err = ErrSendQueFull
+			}
+			return err
 		}
 
-		s.muW.Lock()
-		if !s.sendQueue.push(o) {
-			s.muW.Unlock()
-			return ErrSendQueFull
-		}
-
-		if !s.sendLock {
+		//send:2
+		if atomic.CompareAndSwapInt32(&s.sendLock, 0, 1) {
+			//send:3
 			s.addIO()
-			s.sendLock = true
-			s.muW.Unlock()
-			sendRoutinePool.GoTask(s)
-		} else {
-			s.muW.Unlock()
+			routinePool.GoTask(s)
 		}
 
 		return nil
@@ -404,25 +249,92 @@ func (s *Socket) Send(o interface{}) error {
 
 }
 
+func (s *Socket) onSendComplete(r *goaio.AIOResult, b *buffer.Buffer) {
+	if nil == r.Err {
+		if s.sendQueue.Empty() {
+			//onSendComplete:1
+			atomic.StoreInt32(&s.sendLock, 0)
+			//onSendComplete:2
+			if !s.sendQueue.Empty() && atomic.CompareAndSwapInt32(&s.sendLock, 0, 1) {
+				/*
+				 * 如果a routine执行到onSendComplete:1处暂停
+				 * 此时b routine执行到send:2
+				 *
+				 * 现在有两种情况
+				 *
+				 * 情况1
+				 * b routine先执行完后面的代码，此时sendLock==1,因此 b不会执行send:3里面的代码
+				 * a 恢复执行，发现!s.sendQueue.Empty() && atomic.CompareAndSwapInt32(&s.sendLock, 0, 1) == true
+				 * 由a继续触发sendRoutinePool.GoTask(s)
+				 *
+				 * 情况2
+				 *
+				 * a routine执行到onSendComplete:2暂停
+				 * b routine继续执行，此时sendLock==0，b执行send:3里面的代码
+				 * a 恢复执行，发现!s.sendQueue.Empty()但是,atomic.CompareAndSwapInt32(&s.sendLock, 0, 1)失败,执行onSendComplete:3
+				 *
+				 */
+				b.Reset()
+				s.doSend(b)
+				return
+			} else {
+				//onSendComplete:3
+				if s.sendQueue.Closed() {
+					s.conn.(interface{ CloseWrite() error }).CloseWrite()
+					close(s.sendCloseChan)
+				}
+			}
+		} else {
+			b.Reset()
+			s.doSend(b)
+			return
+		}
+	} else if !s.testFlag(fclosed) {
+
+		if r.Err == goaio.ErrSendTimeout {
+			r.Err = ErrSendTimeout
+		}
+
+		if nil != s.errorCallback {
+			if r.Err != ErrSendTimeout {
+				close(s.sendCloseChan)
+				s.Close(r.Err, 0)
+				s.errorCallback(s, r.Err)
+			} else {
+				s.errorCallback(s, r.Err)
+				//如果是发送超时且用户没有关闭socket,再次请求发送
+				if !s.testFlag(fclosed) {
+					//超时可能会发送部分数据
+					b.DropFirstNBytes(r.Bytestransfer)
+					s.doSend(b)
+					return
+				} else {
+					close(s.sendCloseChan)
+				}
+			}
+		} else {
+			close(s.sendCloseChan)
+			s.Close(r.Err, 0)
+		}
+	}
+
+	b.Free()
+
+	s.ioDone()
+}
+
 func (s *Socket) BeginRecv(cb func(*Socket, interface{})) (err error) {
 	s.beginOnce.Do(func() {
 		if nil == cb {
 			err = errors.New("BeginRecv cb is nil")
-			return
-		}
-
-		if nil == s.inboundProcessor {
+		} else if nil == s.inboundProcessor {
 			err = errors.New("inboundProcessor is nil")
-			return
-		}
-
-		s.addIO()
-		if s.testFlag(fclosed | frclosed) {
-			s.ioDone()
+		} else if s.testFlag(fclosed | frclosed) {
 			err = ErrSocketClose
 		} else {
 			//发起第一个recv
 			s.inboundCallBack = cb
+			s.addIO()
 			if err = s.aioConn.Recv(&s.recvContext, s.inboundProcessor.GetRecvBuff(), s.getRecvTimeout()); nil != err {
 				s.ioDone()
 			}
@@ -448,8 +360,8 @@ func (s *Socket) Close(reason error, delay time.Duration) {
 	s.closeOnce.Do(func() {
 		runtime.SetFinalizer(s, nil)
 		s.setFlag(fclosed)
-
-		if !s.testFlag(fwclosed) && delay > 0 {
+		_, remain := s.sendQueue.Close()
+		if remain > 0 && delay > 0 {
 			s.ShutdownRead()
 			ticker := time.NewTicker(delay)
 			go func() {
@@ -465,8 +377,8 @@ func (s *Socket) Close(reason error, delay time.Duration) {
 			s.aioConn.Close(nil)
 		}
 
-		s.setFlag(fdoclose)
 		s.closeReason = reason
+		s.setFlag(fdoclose)
 
 		if 0 == atomic.LoadInt32(&s.ioCount) {
 			s.doCloseOnce.Do(func() {
@@ -493,6 +405,7 @@ func NewSocket(service *SocketService, conn net.Conn) *Socket {
 		socketBase: socketBase{
 			conn:          conn,
 			sendCloseChan: make(chan struct{}),
+			sendQueue:     NewSendQueue(256),
 		},
 	}
 
@@ -502,9 +415,10 @@ func NewSocket(service *SocketService, conn net.Conn) *Socket {
 	}
 
 	s.aioConn = c
-	s.sendQueue = newSendQueue(256)
-	s.sendContext = ioContext{s: s, t: 's'}
-	s.recvContext = ioContext{s: s, t: 'r'}
+
+	s.sendContext.cb = s.onSendComplete
+
+	s.recvContext.cb = s.onRecvComplete
 
 	runtime.SetFinalizer(s, func(s *Socket) {
 		s.Close(errors.New("gc"), 0)
