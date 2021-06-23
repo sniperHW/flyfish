@@ -24,9 +24,8 @@ const PoolBuffSize uint64 = 1024 * 1024 * 2
 var buffPool *bufferPool = newBufferPool()
 
 var aioService *SocketService = NewSocketService(ServiceOption{
-	PollerCount:              1,
-	WorkerPerPoller:          runtime.NumCPU(),
-	CompleteRoutinePerPoller: 4,
+	PollerCount:     1,
+	WorkerPerPoller: runtime.NumCPU(),
 })
 
 func newBufferPool() *bufferPool {
@@ -96,9 +95,8 @@ func (this *SocketService) Close() {
 }
 
 type ServiceOption struct {
-	PollerCount              int
-	WorkerPerPoller          int
-	CompleteRoutinePerPoller int
+	PollerCount     int
+	WorkerPerPoller int
 }
 
 func NewSocketService(o ServiceOption) *SocketService {
@@ -112,16 +110,10 @@ func NewSocketService(o ServiceOption) *SocketService {
 		o.WorkerPerPoller = 1
 	}
 
-	if o.CompleteRoutinePerPoller == 0 {
-		o.CompleteRoutinePerPoller = 1
-	}
-
 	for i := 0; i < o.PollerCount; i++ {
 		se := goaio.NewAIOService(o.WorkerPerPoller)
 		s.services = append(s.services, se)
-		for j := 0; j < o.CompleteRoutinePerPoller; j++ {
-			go s.completeRoutine(se)
-		}
+		go s.completeRoutine(se)
 	}
 
 	return s
@@ -183,7 +175,7 @@ func (s *Socket) onRecvComplete(r *goaio.AIOResult, _ *buffer.Buffer) {
 			}
 		}
 
-		if !recvAgain || s.testFlag(fclosed|frclosed) || nil != s.aioConn.Recv(&s.recvContext, s.inboundProcessor.GetRecvBuff(), s.getRecvTimeout()) {
+		if !recvAgain || s.testFlag(fclosed|frclosed) || nil != s.aioConn.Recv1(&s.recvContext, s.inboundProcessor.GetRecvBuff(), s.getRecvTimeout()) {
 			s.ioDone()
 		}
 	}
@@ -215,7 +207,7 @@ func (s *Socket) doSend(b *buffer.Buffer) {
 
 	if b.Len() == 0 {
 		s.onSendComplete(&goaio.AIOResult{}, b)
-	} else if nil != s.aioConn.Send(&s.sendContext, b.Bytes(), s.getSendTimeout()) {
+	} else if nil != s.aioConn.Send1(&s.sendContext, b.Bytes(), s.getSendTimeout()) {
 		s.onSendComplete(&goaio.AIOResult{Err: ErrSocketClose}, b)
 	}
 

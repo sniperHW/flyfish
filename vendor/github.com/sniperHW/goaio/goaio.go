@@ -212,8 +212,8 @@ func (this *AIOConn) send(context interface{}, buff []byte, timeout time.Duratio
 	}
 
 	if this.writeable && !this.doingW {
+		this.doingW = true
 		if dosend {
-			this.doingW = true
 			this.muW.Unlock()
 			this.doWrite()
 		} else {
@@ -268,11 +268,11 @@ func (this *AIOConn) recv(context interface{}, readfull bool, buff []byte, timeo
 	}
 
 	if this.readable && !this.doingR {
-		if doread && len(buff) == 0 && nil != this.sharebuff {
+		this.doingR = true
+		if !doread || (len(buff) == 0 && nil != this.sharebuff) {
 			/*
 			 *  使用sharebuff,doRead会调用sharebuff.Acquire，sharebuff.Acquire有可能会阻塞，所以不能直接调用
 			 */
-			this.doingR = true
 			if !this.service.deliverTask(&task{conn: this, tt: int64(EV_READ)}) {
 				removeContext(c)
 				this.muR.Unlock()
@@ -282,7 +282,6 @@ func (this *AIOConn) recv(context interface{}, readfull bool, buff []byte, timeo
 				this.muR.Unlock()
 			}
 		} else {
-			this.doingR = true
 			this.muR.Unlock()
 			this.doRead()
 		}
@@ -294,37 +293,36 @@ func (this *AIOConn) recv(context interface{}, readfull bool, buff []byte, timeo
 	return nil
 }
 
-/*
- * 带Asyn前缀与不带前缀的区别
- *
- * 带Asyn前缀:将请求添加进队列，请求在单独的工作线程中执行
- * 不带Asyn前缀: 将请求添加进队列，如果io可以执行且当前io任务没有在执行,立即在当前goroutine执行io任务。
- * 注意：对于使用了sharebuff的recv不管带不带Asyn前缀，io都在单独的工作线程中执行。
- *
- */
-
 func (this *AIOConn) Send(context interface{}, buff []byte, timeout time.Duration) error {
-	return this.send(context, buff, timeout, true)
-}
-
-func (this *AIOConn) AsynSend(context interface{}, buff []byte, timeout time.Duration) error {
 	return this.send(context, buff, timeout, false)
 }
 
 func (this *AIOConn) Recv(context interface{}, buff []byte, timeout time.Duration) error {
-	return this.recv(context, false, buff, timeout, true)
-}
-
-func (this *AIOConn) AsynRecv(context interface{}, buff []byte, timeout time.Duration) error {
 	return this.recv(context, false, buff, timeout, false)
 }
 
 func (this *AIOConn) RecvFull(context interface{}, buff []byte, timeout time.Duration) error {
-	return this.recv(context, true, buff, timeout, true)
+	return this.recv(context, true, buff, timeout, false)
 }
 
-func (this *AIOConn) AsynRecvFull(context interface{}, buff []byte, timeout time.Duration) error {
-	return this.recv(context, true, buff, timeout, false)
+/*
+ * 以下3个接口在可能的情况下会立即在本地执行io任务
+ *
+ * 禁止在completeRoutine中使用以下3个接口。因为接口可能触发向completeQueue投递的操作。
+ * 如果此时completeQueue满将导致死锁（当前线程阻塞在postCompleteStatus上,因此无法调用GetCompleteStatus去解除阻塞）。
+ *
+ */
+
+func (this *AIOConn) Send1(context interface{}, buff []byte, timeout time.Duration) error {
+	return this.send(context, buff, timeout, true)
+}
+
+func (this *AIOConn) Recv1(context interface{}, buff []byte, timeout time.Duration) error {
+	return this.recv(context, false, buff, timeout, true)
+}
+
+func (this *AIOConn) RecvFull1(context interface{}, buff []byte, timeout time.Duration) error {
+	return this.recv(context, true, buff, timeout, true)
 }
 
 func (this *AIOConn) doRead() {
