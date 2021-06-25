@@ -338,6 +338,8 @@ func (s *Socket) BeginRecv(cb func(*Socket, interface{})) (err error) {
 func (s *Socket) ioDone() {
 	if 0 == atomic.AddInt32(&s.ioCount, -1) && s.testFlag(fdoclose) {
 		s.doCloseOnce.Do(func() {
+			s.aioConn.Close(nil)
+
 			if nil != s.inboundProcessor {
 				s.inboundProcessor.OnSocketClose()
 			}
@@ -352,9 +354,9 @@ func (s *Socket) Close(reason error, delay time.Duration) {
 	s.closeOnce.Do(func() {
 		runtime.SetFinalizer(s, nil)
 		s.setFlag(fclosed)
+		s.ShutdownRead()
 		_, remain := s.sendQueue.Close()
 		if remain > 0 && delay > 0 {
-			s.ShutdownRead()
 			ticker := time.NewTicker(delay)
 			go func() {
 				select {
@@ -363,10 +365,10 @@ func (s *Socket) Close(reason error, delay time.Duration) {
 				}
 
 				ticker.Stop()
-				s.aioConn.Close(nil)
+				s.conn.(interface{ CloseWrite() error }).CloseWrite()
 			}()
 		} else {
-			s.aioConn.Close(nil)
+			s.conn.(interface{ CloseWrite() error }).CloseWrite()
 		}
 
 		s.closeReason = reason
@@ -374,6 +376,8 @@ func (s *Socket) Close(reason error, delay time.Duration) {
 
 		if 0 == atomic.LoadInt32(&s.ioCount) {
 			s.doCloseOnce.Do(func() {
+				s.aioConn.Close(nil)
+
 				if nil != s.inboundProcessor {
 					s.inboundProcessor.OnSocketClose()
 				}

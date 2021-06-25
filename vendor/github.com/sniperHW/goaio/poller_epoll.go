@@ -3,8 +3,6 @@
 package goaio
 
 import (
-	"container/list"
-	//"sync"
 	"syscall"
 	"unsafe"
 )
@@ -28,8 +26,6 @@ func openPoller() (*epoll, error) {
 	}
 	poller := new(epoll)
 	poller.fd = epollFD
-	//poller.fd2Conn = fd2Conn(make([]sync.Map, hashSize))
-	poller.pending = list.New()
 
 	r0, _, e0 := syscall.Syscall(syscall.SYS_EVENTFD2, 0, 0, 0)
 	if e0 != 0 {
@@ -85,13 +81,7 @@ func (p *epoll) _watch(conn *AIOConn) bool {
 }
 
 func (p *epoll) watch(conn *AIOConn) <-chan bool {
-	p.muPending.Lock()
-	ch := make(chan bool)
-	p.pending.PushBack(pendingWatch{
-		conn: conn,
-		resp: ch,
-	})
-	p.muPending.Unlock()
+	ch := watch(&p.poller_base, conn)
 	p.trigger()
 	return ch
 }
@@ -126,12 +116,7 @@ func (p *epoll) wait(die <-chan struct{}) {
 			return
 		default:
 
-			p.muPending.Lock()
-			for e := p.pending.Front(); nil != e; e = p.pending.Front() {
-				v := p.pending.Remove(e).(pendingWatch)
-				v.resp <- p._watch(v.conn)
-			}
-			p.muPending.Unlock()
+			doWatch(&p.poller_base, p._watch)
 
 			n, err0 := syscall.EpollWait(p.fd, eventlist, -1)
 

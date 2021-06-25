@@ -1,7 +1,6 @@
 package goaio
 
 import (
-	"container/list"
 	"reflect"
 	"sync"
 	"unsafe"
@@ -39,7 +38,27 @@ type poller_base struct {
 	fd2Conn   fd2Conn
 	ver       int64
 	muPending sync.Mutex
-	pending   *list.List
+	pending   linkList
+}
+
+func watch(p *poller_base, conn *AIOConn) <-chan bool {
+	p.muPending.Lock()
+	ch := make(chan bool)
+	p.pending.push(pendingWatch{
+		conn: conn,
+		resp: ch,
+	})
+	p.muPending.Unlock()
+	return ch
+}
+
+func doWatch(p *poller_base, f func(*AIOConn) bool) {
+	p.muPending.Lock()
+	for e := p.pending.pop(); nil != e; e = p.pending.pop() {
+		v := e.(pendingWatch)
+		v.resp <- f(v.conn)
+	}
+	p.muPending.Unlock()
 }
 
 type pollerI interface {
