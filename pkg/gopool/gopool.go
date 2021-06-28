@@ -10,27 +10,26 @@ type Task interface {
 }
 
 type routine struct {
-	taskCh chan interface{}
+	nnext  *routine
+	taskCh chan func()
 }
 
 func (r *routine) run(p *Pool) {
+	var ok bool
 	for task := range r.taskCh {
-		switch task.(type) {
-		case func():
-			task.(func())()
-		case Task:
-			task.(Task).Do()
-		default:
-			panic("invaild element")
+		task()
+		for {
+			ok, task = p.putRoutine(r)
+			if !ok {
+				return
+			} else if nil != task {
+				task()
+			} else {
+				break
+			}
 		}
-		p.free(r)
 	}
 }
-
-var defaultPool *Pool = New(Option{
-	MaxRoutineCount: 1024,
-	Mode:            GoMode,
-})
 
 type Mode int
 
@@ -45,72 +44,108 @@ type Option struct {
 	Mode            Mode
 }
 
-type ring struct {
-	head int
-	tail int
-	data []interface{}
-	max  int
+const maxCacheItemCount = 4096
+
+var gItemPool *sync.Pool = &sync.Pool{
+	New: func() interface{} {
+		return &listItem{}
+	},
 }
 
-func newring(max int) ring {
-	r := ring{
-		max: max,
-	}
+type listItem struct {
+	nnext *listItem
+	v     func()
+}
 
-	var l int
-	if max == 0 {
-		l = 1024 + 1
+type linkList struct {
+	tail      *listItem
+	count     int
+	freeItems *listItem
+	freeCount int
+}
+
+func (this *linkList) pushItem(l **listItem, item *listItem) {
+	var head *listItem
+	if *l == nil {
+		head = item
 	} else {
-		l = max + 1
+		head = (*l).nnext
+		(*l).nnext = item
 	}
-
-	r.data = make([]interface{}, l, l)
-
-	return r
+	item.nnext = head
+	*l = item
 }
 
-func (r *ring) grow() {
-	data := make([]interface{}, len(r.data)*2-1, len(r.data)*2-1)
-	i := 0
-	for v := r.pop(); nil != v; v = r.pop() {
-		data[i] = v
-		i++
-	}
-	r.data = data
-	r.head = 0
-	r.tail = i
-}
-
-func (r *ring) pop() interface{} {
-	if r.head != r.tail {
-		head := r.data[r.head]
-		r.data[r.head] = nil
-		r.head = (r.head + 1) % len(r.data)
-		return head
-	} else {
+func (this *linkList) popItem(l **listItem) *listItem {
+	if *l == nil {
 		return nil
+	} else {
+		item := (*l).nnext
+		if item == (*l) {
+			(*l) = nil
+		} else {
+			(*l).nnext = item.nnext
+		}
+
+		item.nnext = nil
+		return item
 	}
 }
 
-func (r *ring) push(v interface{}) bool {
-	if (r.tail+1)%len(r.data) != r.head {
-		r.data[r.tail] = v
-		r.tail = (r.tail + 1) % len(r.data)
-		return true
-	} else if r.max == 0 {
-		r.grow()
-		return r.push(v)
+func (this *linkList) getPoolItem(v func()) *listItem {
+	/*
+	 * 本地的cache中获取listItem,如果没有才去sync.Pool取
+	 */
+	item := this.popItem(&this.freeItems)
+	if nil == item {
+		item = gItemPool.Get().(*listItem)
 	} else {
-		return false
+		this.freeCount--
+	}
+	item.v = v
+	return item
+}
+
+func (this *linkList) putPoolItem(item *listItem) {
+	item.v = nil
+	if this.freeCount < maxCacheItemCount {
+		//如果尚未超过本地cache限制，将listItem放回本地cache供下次使用
+		this.freeCount++
+		this.pushItem(&this.freeItems, item)
+	} else {
+		gItemPool.Put(item)
 	}
 }
+
+func (this *linkList) push(v func()) {
+	this.pushItem(&this.tail, this.getPoolItem(v))
+	this.count++
+}
+
+func (this *linkList) pop() func() {
+	item := this.popItem(&this.tail)
+	if nil == item {
+		return nil
+	} else {
+		this.count--
+		v := item.v
+		this.putPoolItem(item)
+		return v
+	}
+}
+
+var defaultPool *Pool = New(Option{
+	MaxRoutineCount: 1024,
+	Mode:            GoMode,
+})
 
 type Pool struct {
 	sync.Mutex
-	frees ring
-	queue ring
-	count int
-	o     Option
+	die          bool
+	routineCount int
+	o            Option
+	freeRoutines *routine
+	taskQueue    linkList
 }
 
 func New(o Option) *Pool {
@@ -121,90 +156,101 @@ func New(o Option) *Pool {
 	}
 
 	if o.MaxRoutineCount == 0 {
-		o.MaxRoutineCount = 100
+		o.MaxRoutineCount = 8
 	}
 
-	p := &Pool{
-		o:     o,
-		frees: newring(o.MaxRoutineCount),
+	return &Pool{
+		o: o,
 	}
-
-	if o.Mode == QueueMode {
-		p.queue = newring(o.MaxQueueSize)
-	}
-
-	return p
 }
 
-func (p *Pool) free(r *routine) {
+func (p *Pool) putRoutine(r *routine) (bool, func()) {
 	p.Lock()
-	defer p.Unlock()
-	switch p.o.Mode {
-	case QueueMode:
-		f := p.queue.pop()
-		if nil != f {
-			r.taskCh <- f //f.(func())
-			return
+	if p.die {
+		p.Unlock()
+		return false, nil
+	} else {
+		v := p.taskQueue.pop()
+		if nil != v {
+			p.Unlock()
+			return true, v
+		} else {
+			var head *routine
+			if p.freeRoutines == nil {
+				head = r
+			} else {
+				head = p.freeRoutines.nnext
+				p.freeRoutines.nnext = r
+			}
+			r.nnext = head
+			p.freeRoutines = r
+
+			p.Unlock()
 		}
+		return true, nil
 	}
-	p.frees.push(r)
 }
 
-func (p *Pool) popFree() *routine {
-	if r := p.frees.pop(); nil != r {
-		return r.(*routine)
-	} else {
+func (p *Pool) getRoutine() *routine {
+	if p.freeRoutines == nil {
 		return nil
+	} else {
+		r := p.freeRoutines.nnext
+		if r == p.freeRoutines {
+			p.freeRoutines = nil
+		} else {
+			p.freeRoutines.nnext = r.nnext
+		}
+
+		r.nnext = nil
+		return r
 	}
 }
 
-func (p *Pool) gogo(f interface{}) error {
+func (p *Pool) Go(task func()) (err error) {
 	p.Lock()
-	defer p.Unlock()
-	r := p.popFree()
-	if nil != r {
-		r.taskCh <- f
+	if p.die {
+		p.Unlock()
+		err = errors.New("closed")
+	} else if r := p.getRoutine(); nil != r {
+		p.Unlock()
+		r.taskCh <- task
 	} else {
-		if p.count == p.o.MaxRoutineCount {
+		if p.routineCount == p.o.MaxRoutineCount {
 			switch p.o.Mode {
 			case GoMode:
-				switch f.(type) {
-				case func():
-					go f.(func())()
-				case Task:
-					go f.(Task).Do()
-				default:
-					return errors.New("invaild arg")
-				}
+				p.Unlock()
+				go task()
 			case QueueMode:
-				if !p.queue.push(f) {
-					return errors.New("exceed MaxQueueSize")
+				if p.o.MaxQueueSize > 0 && p.taskQueue.count >= p.o.MaxQueueSize {
+					err = errors.New("exceed MaxQueueSize")
+				} else {
+					p.taskQueue.push(task)
 				}
+				p.Unlock()
 			}
 		} else {
-			p.count++
-			r = &routine{
-				taskCh: make(chan interface{}, 1),
-			}
-			r.taskCh <- f
+			p.routineCount++
+			r := &routine{taskCh: make(chan func())}
+			p.Unlock()
 			go r.run(p)
+			r.taskCh <- task
 		}
 	}
-	return nil
+	return
 }
 
-func (p *Pool) Go(f func()) error {
-	return p.gogo(f)
-}
-
-func (p *Pool) GoTask(t Task) error {
-	return p.gogo(t)
+func (p *Pool) Close() {
+	p.Lock()
+	defer p.Unlock()
+	if !p.die {
+		p.die = true
+	}
+	for r := p.getRoutine(); nil != r; r = p.getRoutine() {
+		close(r.taskCh)
+	}
 }
 
 func Go(f func()) error {
 	return defaultPool.Go(f)
-}
-
-func GoTask(t Task) error {
-	return defaultPool.GoTask(t)
 }

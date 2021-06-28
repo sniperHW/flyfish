@@ -4,7 +4,7 @@ package gopool
 //go test -v -run=^$ -bench Benchmark -count 10
 //go tool cover -html=coverage.out
 import (
-	//"fmt"
+	"fmt"
 	//"github.com/stretchr/testify/assert"
 	"sync"
 	"testing"
@@ -20,6 +20,8 @@ func TestGo(t *testing.T) {
 
 		var wait sync.WaitGroup
 
+		fmt.Println("1")
+
 		wait.Add(20)
 
 		for i := 0; i < 20; i++ {
@@ -30,6 +32,8 @@ func TestGo(t *testing.T) {
 		}
 
 		wait.Wait()
+
+		fmt.Println("3")
 
 		wait.Add(20)
 
@@ -52,6 +56,10 @@ func TestGo(t *testing.T) {
 		}
 
 		wait.Wait()
+
+		fmt.Println(pool.routineCount)
+
+		pool.Close()
 
 	}
 
@@ -77,14 +85,21 @@ func TestGo(t *testing.T) {
 }
 
 func BenchmarkGoroutine(b *testing.B) {
+	pool := New(Option{
+		MaxRoutineCount: 1024,
+		Mode:            QueueMode,
+	})
+
 	var wait sync.WaitGroup
 	for i := 0; i < b.N; i++ {
 		wait.Add(1)
-		Go(func() {
+		pool.Go(func() {
 			wait.Done()
 		})
 	}
 	wait.Wait()
+
+	pool.Close()
 }
 
 func BenchmarkRoutine(b *testing.B) {

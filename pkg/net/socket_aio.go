@@ -126,6 +126,7 @@ type Socket struct {
 	sendContext ioContext
 	recvContext ioContext
 	swaped      []interface{}
+	task        func()
 }
 
 func (s *Socket) ShutdownWrite() {
@@ -181,10 +182,6 @@ func (s *Socket) onRecvComplete(r *goaio.AIOResult, _ *buffer.Buffer) {
 	}
 }
 
-func (s *Socket) Do() {
-	s.doSend(nil)
-}
-
 func (s *Socket) doSend(b *buffer.Buffer) {
 
 	if nil == b {
@@ -233,7 +230,7 @@ func (s *Socket) Send(o interface{}) error {
 		if atomic.CompareAndSwapInt32(&s.sendLock, 0, 1) {
 			//send:3
 			s.addIO()
-			routinePool.GoTask(s)
+			routinePool.Go(s.task)
 		}
 
 		return nil
@@ -415,6 +412,10 @@ func NewSocket(service *SocketService, conn net.Conn) *Socket {
 	s.sendContext.cb = s.onSendComplete
 
 	s.recvContext.cb = s.onRecvComplete
+
+	s.task = func() {
+		s.doSend(nil)
+	}
 
 	runtime.SetFinalizer(s, func(s *Socket) {
 		s.Close(errors.New("gc"), 0)
