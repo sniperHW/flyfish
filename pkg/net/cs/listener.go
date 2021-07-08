@@ -5,13 +5,13 @@ import (
 	protocol "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/login"
 	"net"
-	"sync"
+	"sync/atomic"
 )
 
 type Listener struct {
 	l           *net.TCPListener
-	startOnce   sync.Once
-	closeOnce   sync.Once
+	startOnce   int32
+	closeOnce   int32
 	verifyLogin func(*protocol.LoginReq) bool
 }
 
@@ -29,16 +29,15 @@ func NewListener(nettype, service string, verifyLogin func(*protocol.LoginReq) b
 }
 
 func (this *Listener) Close() {
-	this.closeOnce.Do(func() {
+	if atomic.CompareAndSwapInt32(&this.closeOnce, 0, 1) {
 		if nil != this.l {
 			this.l.Close()
 		}
-	})
+	}
 }
 
 func (this *Listener) Serve(onNewClient func(*flynet.Socket)) {
-
-	this.startOnce.Do(func() {
+	if atomic.CompareAndSwapInt32(&this.startOnce, 0, 1) {
 		go func() {
 			for {
 				conn, err := this.l.Accept()
@@ -76,5 +75,5 @@ func (this *Listener) Serve(onNewClient func(*flynet.Socket)) {
 				}
 			}
 		}()
-	})
+	}
 }

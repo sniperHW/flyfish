@@ -1,7 +1,6 @@
 package kvnode
 
 import (
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -37,7 +36,7 @@ type cmdBase struct {
 	peer            *conn
 	processDeadline time.Time
 	respDeadline    time.Time
-	replyOnce       sync.Once
+	replyOnce       int32
 	wait4ReplyCount *int32
 	fnMakeResponse  MakeResponse
 	ppnext          cmdI
@@ -93,7 +92,7 @@ func (this *cmdBase) isTimeout() bool {
 }
 
 func (this *cmdBase) reply(err errcode.Error, fields map[string]*flyproto.Field, version int64) {
-	this.replyOnce.Do(func() {
+	if atomic.CompareAndSwapInt32(&this.replyOnce, 0, 1) {
 		atomic.AddInt32(this.wait4ReplyCount, -1)
 		if this.peer.removePendingCmd(this) && !time.Now().After(this.respDeadline) {
 			resp := this.fnMakeResponse(err, fields, version)
@@ -102,14 +101,14 @@ func (this *cmdBase) reply(err errcode.Error, fields map[string]*flyproto.Field,
 				GetSugar().Errorf("send resp error:%v", e)
 			}
 		}
-	})
+	}
 }
 
 func (this *cmdBase) dontReply() {
-	this.replyOnce.Do(func() {
+	if atomic.CompareAndSwapInt32(&this.replyOnce, 0, 1) {
 		atomic.AddInt32(this.wait4ReplyCount, -1)
 		this.peer.removePendingCmd(this)
-	})
+	}
 }
 
 func (this *cmdBase) check(keyvalue *kv) bool {

@@ -7,7 +7,7 @@ import (
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/proto"
 	"reflect"
-	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 )
@@ -41,7 +41,7 @@ type loader struct {
 	dbc        *sqlx.DB
 	lastTime   time.Time
 	que        *queue.ArrayQueue
-	stoponce   sync.Once
+	stoponce   int32
 }
 
 func (this *loader) IssueLoadTask(t db.DBLoadTask) error {
@@ -49,9 +49,9 @@ func (this *loader) IssueLoadTask(t db.DBLoadTask) error {
 }
 
 func (this *loader) Stop() {
-	this.stoponce.Do(func() {
+	if atomic.CompareAndSwapInt32(&this.stoponce, 0, 1) {
 		this.que.Close()
-	})
+	}
 }
 
 func (this *loader) Start() {

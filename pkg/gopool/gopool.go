@@ -5,10 +5,6 @@ import (
 	"sync"
 )
 
-type Task interface {
-	Do()
-}
-
 type routine struct {
 	nnext  *routine
 	taskCh chan func()
@@ -245,9 +241,9 @@ func (p *Pool) Close() {
 	defer p.Unlock()
 	if !p.die {
 		p.die = true
-	}
-	for r := p.getRoutine(); nil != r; r = p.getRoutine() {
-		close(r.taskCh)
+		for r := p.getRoutine(); nil != r; r = p.getRoutine() {
+			close(r.taskCh)
+		}
 	}
 }
 

@@ -159,14 +159,14 @@ type kvstore struct {
 	lru              lruList
 	wait4ReplyCount  int32
 	lease            *lease
-	stoponce         sync.Once
+	stoponce         int32
 	ready            bool
 	kvnode           *kvnode
 	needWriteBackAll bool
 	shard            int
 	slots            *bitmap.Bitmap
 	meta             db.DBMeta
-	removeonce       sync.Once
+	removeonce       int32
 	removing         bool
 }
 
@@ -431,10 +431,10 @@ func (s *kvstore) processConfChange(p raft.ProposalConfChange) {
 }
 
 func (s *kvstore) stop() {
-	s.stoponce.Do(func() {
+	if atomic.CompareAndSwapInt32(&s.stoponce, 0, 1) {
 		s.lease.stop()
 		s.rn.Stop()
-	})
+	}
 }
 
 func (s *kvstore) gotLease() {

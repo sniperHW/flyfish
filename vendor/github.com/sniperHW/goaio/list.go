@@ -4,86 +4,85 @@ import (
 	"sync"
 )
 
-type listItem struct {
-	nnext *listItem
-	v     interface{}
-}
+const maxPoolItemCount = 4096
 
-var itemPool *sync.Pool = &sync.Pool{
+var gItemPool *sync.Pool = &sync.Pool{
 	New: func() interface{} {
 		return &listItem{}
 	},
 }
 
-func getItem(v interface{}) (i *listItem) {
-	i = itemPool.Get().(*listItem)
-	i.v = v
-	return i
-}
-
-func putItem(i *listItem) {
-	i.v = nil
-	itemPool.Put(i)
+type listItem struct {
+	nnext *listItem
+	v     interface{}
 }
 
 type linkList struct {
-	tail *listItem
+	tail      *listItem
+	itemPool  *listItem
+	poolCount int
 }
 
-/*
-func (l *linkList) push(v interface{}) {
-	n := getItem(v)
-	if l.head == nil {
-		l.head = n
-	} else {
-		l.tail.nnext = n
-	}
-	l.tail = n
-}
-
-func (l *linkList) pop() interface{} {
-	if l.head == nil {
-		return nil
-	} else {
-		first := l.head
-		l.head = first.nnext
-		if l.head == nil {
-			l.tail = nil
-		}
-		v := first.v
-		putItem(first)
-		return v
-	}
-}
-*/
-
-func (this *linkList) push(v interface{}) {
-	item := getItem(v)
+func (this *linkList) pushItem(l **listItem, item *listItem) {
 	var head *listItem
-	if this.tail == nil {
+	if *l == nil {
 		head = item
 	} else {
-		head = this.tail.nnext
-		this.tail.nnext = item
+		head = (*l).nnext
+		(*l).nnext = item
 	}
 	item.nnext = head
-	this.tail = item
+	*l = item
 }
 
-func (this *linkList) pop() interface{} {
-	if this.tail == nil {
+func (this *linkList) popItem(l **listItem) *listItem {
+	if *l == nil {
 		return nil
 	} else {
-		item := this.tail.nnext
-		if item == this.tail {
-			this.tail = nil
+		item := (*l).nnext
+		if item == (*l) {
+			(*l) = nil
 		} else {
-			this.tail.nnext = item.nnext
+			(*l).nnext = item.nnext
 		}
 
 		item.nnext = nil
+		return item
+	}
+}
+
+func (this *linkList) getPoolItem(v interface{}) *listItem {
+	item := this.popItem(&this.itemPool)
+	if nil == item {
+		item = gItemPool.Get().(*listItem)
+	} else {
+		this.poolCount--
+	}
+	item.v = v
+	return item
+}
+
+func (this *linkList) putPoolItem(item *listItem) {
+	item.v = nil
+	if this.poolCount < maxPoolItemCount {
+		this.poolCount++
+		this.pushItem(&this.itemPool, item)
+	} else {
+		gItemPool.Put(item)
+	}
+}
+
+func (this *linkList) push(v interface{}) {
+	this.pushItem(&this.tail, this.getPoolItem(v))
+}
+
+func (this *linkList) pop() interface{} {
+	item := this.popItem(&this.tail)
+	if nil == item {
+		return nil
+	} else {
 		v := item.v
-		putItem(item)
+		this.putPoolItem(item)
 		return v
 	}
 }

@@ -201,7 +201,7 @@ func (this *Socket) sendThreadFunc() {
 
 func (this *Socket) BeginRecv(cb func(*Socket, interface{})) (err error) {
 
-	this.beginOnce.Do(func() {
+	if atomic.CompareAndSwapInt32(&this.beginOnce, 0, 1) {
 		if nil == cb {
 			err = errors.New("BeginRecv cb is nil")
 			return
@@ -219,7 +219,7 @@ func (this *Socket) BeginRecv(cb func(*Socket, interface{})) (err error) {
 			this.addIO()
 			go this.recvThreadFunc()
 		}
-	})
+	}
 
 	return
 }
@@ -234,27 +234,27 @@ func (this *Socket) Send(o interface{}) (err error) {
 	} else if err == ErrQueueFull {
 		err = ErrSendQueFull
 	} else {
-		this.sendOnce.Do(func() {
+		if atomic.CompareAndSwapInt32(&this.sendOnce, 0, 1) {
 			this.addIO()
 			go this.sendThreadFunc()
-		})
+		}
 	}
 	return
 }
 
 func (this *Socket) ioDone() {
 	if 0 == atomic.AddInt32(&this.ioCount, -1) && this.testFlag(fdoclose) {
-		this.doCloseOnce.Do(func() {
+		if atomic.CompareAndSwapInt32(&this.doCloseOnce, 0, 1) {
 			if nil != this.closeCallBack {
 				this.closeCallBack(this, this.closeReason)
 			}
-		})
+		}
 	}
 }
 
 func (this *Socket) Close(reason error, delay time.Duration) {
 
-	this.closeOnce.Do(func() {
+	if atomic.CompareAndSwapInt32(&this.closeOnce, 0, 1) {
 		runtime.SetFinalizer(this, nil)
 
 		this.setFlag(fclosed)
@@ -284,14 +284,14 @@ func (this *Socket) Close(reason error, delay time.Duration) {
 		this.setFlag(fdoclose)
 
 		if atomic.LoadInt32(&this.ioCount) == 0 {
-			this.doCloseOnce.Do(func() {
+			if atomic.CompareAndSwapInt32(&this.doCloseOnce, 0, 1) {
 				if nil != this.closeCallBack {
 					this.closeCallBack(this, reason)
 				}
-			})
+			}
 		}
 
-	})
+	}
 
 }
 

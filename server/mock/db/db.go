@@ -5,6 +5,7 @@ import (
 	"github.com/sniperHW/flyfish/pkg/queue"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"sync"
+	"sync/atomic"
 )
 
 type kv struct {
@@ -16,8 +17,8 @@ type kv struct {
 type DB struct {
 	store     map[string]*kv
 	que       *queue.ArrayQueue
-	stoponce  sync.Once
-	startonce sync.Once
+	stoponce  int32
+	startonce int32
 }
 
 func (d *DB) do(v interface{}) {
@@ -87,13 +88,13 @@ func (d *DB) do(v interface{}) {
 }
 
 func (d *DB) Stop() {
-	d.stoponce.Do(func() {
+	if atomic.CompareAndSwapInt32(&d.stoponce, 0, 1) {
 		d.que.Close()
-	})
+	}
 }
 
 func (d *DB) Start() {
-	d.startonce.Do(func() {
+	if atomic.CompareAndSwapInt32(&d.startonce, 0, 1) {
 		go func() {
 			localList := make([]interface{}, 0, 200)
 			closed := false
@@ -111,7 +112,7 @@ func (d *DB) Start() {
 				}
 			}
 		}()
-	})
+	}
 }
 
 func (d *DB) IssueTask(t interface{}) error {

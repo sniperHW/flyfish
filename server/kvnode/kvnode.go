@@ -51,8 +51,8 @@ type kvnode struct {
 	listener    *cs.Listener
 	id          int
 	mutilRaft   *raft.MutilRaft
-	stopOnce    sync.Once
-	startOnce   sync.Once
+	stopOnce    int32
+	startOnce   int32
 	metaCreator func(*db.DbDef) (db.DBMeta, error)
 
 	selfUrl string
@@ -169,7 +169,7 @@ func (this *kvnode) remStore(storeID int) error {
 
 	this.muS.Unlock()
 
-	s.removeonce.Do(func() {
+	if atomic.CompareAndSwapInt32(&s.removeonce, 0, 1) {
 
 		s.mainQueue.AppendHighestPriotiryItem(func() {
 			s.removing = true
@@ -188,7 +188,7 @@ func (this *kvnode) remStore(storeID int) error {
 			this.muS.Unlock()
 
 		}()
-	})
+	}
 
 	return nil
 }
@@ -270,7 +270,7 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, cluster string, slots 
 }
 
 func (this *kvnode) Stop() {
-	this.stopOnce.Do(func() {
+	if atomic.CompareAndSwapInt32(&this.stopOnce, 0, 1) {
 		this.mu.Lock()
 		defer this.mu.Unlock()
 
@@ -324,7 +324,7 @@ func (this *kvnode) Stop() {
 
 		this.mutilRaft.Stop()
 
-	})
+	}
 }
 
 func makeStoreBitmap(stores []int) (b []*bitmap.Bitmap) {
@@ -376,14 +376,14 @@ func MakeUnikeyPlacement(stores []int) (fn func(string) int) {
 
 func (this *kvnode) Start() error {
 	var err error
-	this.startOnce.Do(func() {
+	if atomic.CompareAndSwapInt32(&this.startOnce, 0, 1) {
 		this.mu.Lock()
 		defer this.mu.Unlock()
 
 		config := this.config
 
 		if err = os.MkdirAll(config.Log.LogDir, os.ModePerm); nil != err {
-			return
+			return err
 		}
 
 		if config.Mode == "solo" {
@@ -392,13 +392,13 @@ func (this *kvnode) Start() error {
 			err = this.db.start(config)
 
 			if nil != err {
-				return
+				return err
 			}
 
 			this.listener, err = cs.NewListener("tcp", fmt.Sprintf("%s:%d", config.SoloConfig.ServiceHost, config.SoloConfig.ServicePort), verifyLogin)
 
 			if nil != err {
-				return
+				return err
 			}
 
 			go this.mutilRaft.Serve(this.selfUrl)
@@ -412,7 +412,7 @@ func (this *kvnode) Start() error {
 				storeBitmaps := makeStoreBitmap(config.SoloConfig.Stores)
 				for i, v := range config.SoloConfig.Stores {
 					if err = this.addStore(this.meta, v, config.SoloConfig.RaftCluster, storeBitmaps[i]); nil != err {
-						return
+						return err
 					}
 				}
 			}
@@ -423,7 +423,7 @@ func (this *kvnode) Start() error {
 
 		}
 
-	})
+	}
 	return err
 }
 

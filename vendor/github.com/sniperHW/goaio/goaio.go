@@ -99,7 +99,7 @@ type AIOConn struct {
 	dowTimer       *time.Timer
 	service        *AIOService
 	closed         int32
-	closeOnce      sync.Once
+	closeOnce      int32
 	sendTimeout    time.Duration
 	recvTimeout    time.Duration
 	reason         error
@@ -453,24 +453,22 @@ func (this *AIOConn) doWrite() {
 
 func (this *AIOService) postCompleteStatus(c *AIOConn, buff []byte, bytestransfer int, err error, context interface{}) {
 	c.connMgr.subIO(c)
-	select {
-	case <-this.die:
-		return
-	default:
-		if atomic.LoadInt32(&c.closed) == 0 {
-			this.completeQueue <- AIOResult{
-				Conn:          c,
-				Context:       context,
-				Err:           err,
-				Buff:          buff,
-				Bytestransfer: bytestransfer,
-			}
+	if atomic.LoadInt32(&c.closed) == 0 {
+		select {
+		case <-this.die:
+		case this.completeQueue <- AIOResult{
+			Conn:          c,
+			Context:       context,
+			Err:           err,
+			Buff:          buff,
+			Bytestransfer: bytestransfer,
+		}:
 		}
 	}
 }
 
 func (this *AIOConn) Close(reason error) {
-	this.closeOnce.Do(func() {
+	if atomic.CompareAndSwapInt32(&this.closeOnce, 0, 1) {
 		runtime.SetFinalizer(this, nil)
 
 		if nil == reason {
@@ -508,7 +506,7 @@ func (this *AIOConn) Close(reason error) {
 
 		this.rawconn.Close()
 
-	})
+	}
 }
 
 func (this *AIOConn) processReadTimeout() {

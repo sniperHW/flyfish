@@ -5,6 +5,7 @@ import (
 )
 
 type routine struct {
+	nnext  *routine
 	taskCh chan func()
 }
 
@@ -30,7 +31,7 @@ type taskPool struct {
 	die             bool
 	routineCount    int
 	maxRoutineCount int
-	freeRoutines    linkList
+	freeRoutines    *routine
 	taskQueue       linkList
 }
 
@@ -54,7 +55,16 @@ func (p *taskPool) putRoutine(r *routine) (bool, func()) {
 			p.Unlock()
 			return true, v.(func())
 		} else {
-			p.freeRoutines.push(r)
+			var head *routine
+			if p.freeRoutines == nil {
+				head = r
+			} else {
+				head = p.freeRoutines.nnext
+				p.freeRoutines.nnext = r
+			}
+			r.nnext = head
+			p.freeRoutines = r
+
 			p.Unlock()
 		}
 		return true, nil
@@ -62,10 +72,18 @@ func (p *taskPool) putRoutine(r *routine) (bool, func()) {
 }
 
 func (p *taskPool) getRoutine() *routine {
-	if f := p.freeRoutines.pop(); nil != f {
-		return f.(*routine)
-	} else {
+	if p.freeRoutines == nil {
 		return nil
+	} else {
+		r := p.freeRoutines.nnext
+		if r == p.freeRoutines {
+			p.freeRoutines = nil
+		} else {
+			p.freeRoutines.nnext = r.nnext
+		}
+
+		r.nnext = nil
+		return r
 	}
 }
 
@@ -97,8 +115,8 @@ func (p *taskPool) close() {
 	defer p.Unlock()
 	if !p.die {
 		p.die = true
-	}
-	for v := p.freeRoutines.pop(); nil != v; v = p.freeRoutines.pop() {
-		close(v.(*routine).taskCh)
+		for r := p.getRoutine(); nil != r; r = p.getRoutine() {
+			close(r.taskCh)
+		}
 	}
 }

@@ -2,6 +2,7 @@ package queue
 
 import (
 	"sync"
+	"sync/atomic"
 )
 
 var (
@@ -126,7 +127,7 @@ type PriorityQueue struct {
 	closed      bool
 	emptyWaited int
 	fullWaited  int
-	closeOnce   sync.Once
+	closeOnce   int32
 }
 
 //如果队列满返回ErrQueueFull
@@ -190,12 +191,12 @@ func (self *PriorityQueue) Pop() (closed bool, v interface{}) {
 }
 
 func (self *PriorityQueue) Close() {
-	self.closeOnce.Do(func() {
+	if atomic.CompareAndSwapInt32(&self.closeOnce, 0, 1) {
 		self.listGuard.Lock()
 		self.closed = true
 		self.listGuard.Unlock()
 		self.emptyCond.Broadcast()
-	})
+	}
 }
 
 func (self *PriorityQueue) Len() int {

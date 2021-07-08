@@ -366,6 +366,9 @@ type kvnode struct {
 }
 
 func snapMerge(snaps ...[]byte) ([]byte, error) {
+
+	//kvstore每次都是全量快照，实际这里并不需要合并，直返返回snaps最后一个元素即可
+
 	store := map[string]string{}
 	for _, v := range snaps {
 		var s map[string]string

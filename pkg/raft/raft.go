@@ -181,7 +181,7 @@ type RaftNode struct {
 	mutilRaft *MutilRaft
 	leader    int
 	idcounter int32
-	stoponce  sync.Once
+	stoponce  int32
 
 	snapMerge func(...[]byte) ([]byte, error)
 }
@@ -589,13 +589,13 @@ func (rc *RaftNode) serveChannels() {
 }
 
 func (rc *RaftNode) Stop() {
-	rc.stoponce.Do(func() {
+	if atomic.CompareAndSwapInt32(&rc.stoponce, 0, 1) {
 		GetSugar().Infof("RaftNode.Stop()")
 		close(rc.stopping)
 		rc.confChangeC.Close()
 		rc.proposePipeline.Close()
 		rc.readPipeline.Close()
-	})
+	}
 }
 
 func (rc *RaftNode) startRaft() {

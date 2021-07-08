@@ -3,6 +3,7 @@
 package goaio
 
 import (
+	"fmt"
 	"syscall"
 )
 
@@ -114,7 +115,7 @@ func (p *kqueue) wait(die <-chan struct{}) {
 			}
 
 			if err0 != nil && err0 != syscall.EINTR {
-				panic(err0)
+				panic(fmt.Errorf("syscall.Kevent error:%v", err0))
 				return
 			}
 

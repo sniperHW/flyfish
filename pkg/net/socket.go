@@ -2,7 +2,6 @@ package net
 
 import (
 	"net"
-	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -19,10 +18,10 @@ type socketBase struct {
 	flag             int32
 	ud               atomic.Value
 	sendCloseChan    chan struct{}
-	closeOnce        sync.Once
-	beginOnce        sync.Once
-	sendOnce         sync.Once
-	doCloseOnce      sync.Once
+	closeOnce        int32
+	beginOnce        int32
+	sendOnce         int32
+	doCloseOnce      int32
 	encoder          Encoder
 	inboundProcessor InBoundProcessor
 	errorCallback    func(*Socket, error)

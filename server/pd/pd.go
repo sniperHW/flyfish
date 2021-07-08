@@ -13,7 +13,7 @@ import (
 	pdnet "github.com/sniperHW/flyfish/server/pd/net"
 	pdproto "github.com/sniperHW/flyfish/server/pd/proto"
 	"github.com/sniperHW/flyfish/server/slot"
-	"go.etcd.io/etcd/etcdserver/api/snap"
+	//"go.etcd.io/etcd/etcdserver/api/snap"
 	"go.etcd.io/etcd/raft/raftpb"
 	"math/rand"
 	"net"
@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -69,16 +70,15 @@ type applicationQueue struct {
 }
 
 type pd struct {
-	raftID      int
-	leader      int
-	snapshotter *snap.Snapshotter
-	rn          *raft.RaftNode
-	mutilRaft   *raft.MutilRaft
-	mainque     applicationQueue
-	udp         *pdnet.Udp
-	stores      map[int]*store
-	kvnodes     map[int]*kvnode
-	slot2store  map[int]*store
+	raftID     int
+	leader     int
+	rn         *raft.RaftNode
+	mutilRaft  *raft.MutilRaft
+	mainque    applicationQueue
+	udp        *pdnet.Udp
+	stores     map[int]*store
+	kvnodes    map[int]*kvnode
+	slot2store map[int]*store
 
 	msgHandler map[reflect.Type]func(*net.UDPAddr, proto.Message)
 
@@ -89,8 +89,8 @@ type pd struct {
 	tmpTransNodeStore map[int64]*nodeStoreTransaction
 	transferingSlot   map[int]bool //正在迁移中的slot
 
-	stoponce  sync.Once
-	startonce sync.Once
+	stoponce  int32
+	startonce int32
 	wait      sync.WaitGroup
 	ready     bool
 }
@@ -127,13 +127,12 @@ func NewPd(udpService string, id int, cluster string) (*pd, error) {
 
 	mutilRaft := raft.NewMutilRaft()
 
-	rn, snapshotterReady := raft.NewRaftNode(mutilRaft, mainQueue, (id<<16)+1, peers, false, GetConfig().Log.LogDir, "pd")
+	rn := raft.NewRaftNode(snapMerge, mutilRaft, mainQueue, (id<<16)+1, peers, false, GetConfig().Log.LogDir, "pd")
 
 	p := &pd{
 		rn:                rn,
 		mainque:           mainQueue,
 		raftID:            rn.ID(),
-		snapshotter:       <-snapshotterReady,
 		mutilRaft:         mutilRaft,
 		stores:            map[int]*store{},
 		kvnodes:           map[int]*kvnode{},
@@ -377,24 +376,13 @@ func (p *pd) onBecomeLeader() {
 }
 
 func (p *pd) Stop() {
-	p.stoponce.Do(func() {
+	if atomic.CompareAndSwapInt32(&p.stoponce, 0, 1) {
 		GetSugar().Info("Stop")
 		p.udp.Close()
 		p.rn.Stop()
 		p.mutilRaft.Stop()
 		p.wait.Wait()
-	})
-}
-
-func (p *pd) loadSnapshot() (*raftpb.Snapshot, error) {
-	snapshot, err := p.snapshotter.Load()
-	if err == snap.ErrNoSnapshot {
-		return nil, nil
 	}
-	if err != nil {
-		return nil, err
-	}
-	return snapshot, nil
 }
 
 func (p *pd) processCommited(commited raft.Committed) {
@@ -418,6 +406,11 @@ func (p *pd) processCommited(commited raft.Committed) {
 		}
 		snapshotNotify.Notify(snapshot)
 	}
+}
+
+func snapMerge(snaps ...[]byte) ([]byte, error) {
+	//pd每次都是全量快照，无需合并，返回最后一个即可
+	return snaps[len(snaps)-1], nil
 }
 
 func (p *pd) serve() {
@@ -446,8 +439,8 @@ func (p *pd) serve() {
 			case raft.RaftStopOK:
 				GetSugar().Info("RaftStopOK")
 				return
-			case raft.ReplaySnapshot:
-				snapshot, err := p.loadSnapshot()
+			case raftpb.Snapshot:
+				/*snapshot, err := p.loadSnapshot()
 				if err != nil {
 					GetSugar().Panic(err)
 				}
@@ -456,7 +449,7 @@ func (p *pd) serve() {
 					if err := p.recoverFromSnapshot(snapshot.Data); nil != err {
 						GetSugar().Panic(err)
 					}
-				}
+				}*/
 			case raft.LeaderChange:
 				oldLeader := p.leader
 				p.leader = v.(raft.LeaderChange).Leader

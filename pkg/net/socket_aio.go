@@ -313,7 +313,8 @@ func (s *Socket) onSendComplete(r *goaio.AIOResult, b *buffer.Buffer) {
 }
 
 func (s *Socket) BeginRecv(cb func(*Socket, interface{})) (err error) {
-	s.beginOnce.Do(func() {
+	//s.beginOnce.Do(func() {
+	if atomic.CompareAndSwapInt32(&s.beginOnce, 0, 1) {
 		if nil == cb {
 			err = errors.New("BeginRecv cb is nil")
 		} else if nil == s.inboundProcessor {
@@ -328,13 +329,13 @@ func (s *Socket) BeginRecv(cb func(*Socket, interface{})) (err error) {
 				s.ioDone()
 			}
 		}
-	})
+	}
 	return
 }
 
 func (s *Socket) ioDone() {
 	if 0 == atomic.AddInt32(&s.ioCount, -1) && s.testFlag(fdoclose) {
-		s.doCloseOnce.Do(func() {
+		if atomic.CompareAndSwapInt32(&s.doCloseOnce, 0, 1) {
 			s.aioConn.Close(nil)
 
 			if nil != s.inboundProcessor {
@@ -343,12 +344,12 @@ func (s *Socket) ioDone() {
 			if nil != s.closeCallBack {
 				s.closeCallBack(s, s.closeReason)
 			}
-		})
+		}
 	}
 }
 
 func (s *Socket) Close(reason error, delay time.Duration) {
-	s.closeOnce.Do(func() {
+	if atomic.CompareAndSwapInt32(&s.closeOnce, 0, 1) {
 		runtime.SetFinalizer(s, nil)
 		s.setFlag(fclosed)
 		s.ShutdownRead()
@@ -372,7 +373,7 @@ func (s *Socket) Close(reason error, delay time.Duration) {
 		s.setFlag(fdoclose)
 
 		if 0 == atomic.LoadInt32(&s.ioCount) {
-			s.doCloseOnce.Do(func() {
+			if atomic.CompareAndSwapInt32(&s.doCloseOnce, 0, 1) {
 				s.aioConn.Close(nil)
 
 				if nil != s.inboundProcessor {
@@ -381,9 +382,9 @@ func (s *Socket) Close(reason error, delay time.Duration) {
 				if nil != s.closeCallBack {
 					s.closeCallBack(s, s.closeReason)
 				}
-			})
+			}
 		}
-	})
+	}
 }
 
 func NewSocket(service *SocketService, conn net.Conn) *Socket {

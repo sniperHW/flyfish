@@ -3,6 +3,7 @@
 package goaio
 
 import (
+	"fmt"
 	"syscall"
 	"unsafe"
 )
@@ -125,7 +126,7 @@ func (p *epoll) wait(die <-chan struct{}) {
 			}
 
 			if err0 != nil && err0 != syscall.EINTR {
-				panic(err0)
+				panic(fmt.Errorf("syscall.EpollWait error:%v", err0))
 				return
 			}
 

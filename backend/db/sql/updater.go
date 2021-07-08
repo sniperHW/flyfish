@@ -35,7 +35,6 @@ type updater struct {
 	que       *queue.ArrayQueue
 	waitGroup sync.WaitGroup
 	stoped    int32
-	stoponce  sync.Once
 	toSqlStr  sqlstring
 }
 
@@ -48,10 +47,9 @@ func (this *updater) isStoped() bool {
 }
 
 func (this *updater) Stop() {
-	this.stoponce.Do(func() {
+	if atomic.CompareAndSwapInt32(&this.stoped, 0, 1) {
 		this.que.Close()
-		atomic.StoreInt32(&this.stoped, 1)
-	})
+	}
 }
 
 func (this *updater) Start() {
