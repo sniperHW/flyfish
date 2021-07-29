@@ -300,10 +300,13 @@ func (this *kvnode) Stop() {
 
 		//关闭现有连接
 		this.muC.Lock()
-		for _, v := range this.clients {
+		clients := this.clients
+		this.muC.Unlock()
+
+		for _, v := range clients {
 			v.Close(nil, time.Second*5)
 		}
-		this.muC.Unlock()
+
 		waitCondition(func() bool {
 			this.muC.Lock()
 			defer this.muC.Unlock()

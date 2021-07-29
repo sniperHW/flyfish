@@ -354,7 +354,7 @@ func (this *BufferReader) CheckGetBytes(size int) ([]byte, error) {
 }
 
 func (this *BufferReader) CopyBytes(size int) ([]byte, error) {
-	if b, err := this.CheckGetBytes(size); nil != err {
+	if b, err := this.CheckGetBytes(size); nil == err {
 		out := make([]byte, len(b))
 		copy(out, b)
 		return out, nil
