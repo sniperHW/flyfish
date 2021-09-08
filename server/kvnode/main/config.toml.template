@@ -14,10 +14,6 @@ SqlLoaderCount          = 5                    #加载go程的数量
     
 SqlUpdaterCount         = 5                    #更新go程的数量
 
-ServiceHost             = "127.0.0.1"
-
-ServicePort             = 8110
-
 ProposalFlushInterval   = 100                    
 
 ReadFlushInterval       = 10

@@ -36,5 +36,5 @@ func (this *Connector) Dial(timeout time.Duration) (*flynet.Socket, error) {
 		return nil, fmt.Errorf("login failed")
 	}
 
-	return flynet.CreateSocket(conn), nil
+	return flynet.NewSocket(conn), nil
 }

@@ -70,7 +70,7 @@ func (this *Listener) Serve(onNewClient func(*flynet.Socket)) {
 							return
 						}
 
-						onNewClient(flynet.CreateSocket(conn))
+						onNewClient(flynet.NewSocket(conn))
 					}()
 				}
 			}

@@ -1,7 +1,6 @@
 package net
 
-//go test -tags=aio -covermode=count -v -coverprofile=coverage.out -run=.
-//go test -tags=bio -covermode=count -v -coverprofile=coverage.out -run=.
+//go test -covermode=count -v -coverprofile=coverage.out -run=.
 //go tool cover -html=coverage.out
 import (
 	"errors"
@@ -88,7 +87,7 @@ func TestSendTimeout(t *testing.T) {
 					return
 				} else {
 					conn.(*net.TCPConn).SetReadBuffer(0)
-					holdSession = CreateSocket(conn)
+					holdSession = NewSocket(conn)
 					//不启动接收
 				}
 			}
@@ -97,7 +96,7 @@ func TestSendTimeout(t *testing.T) {
 		dialer := &net.Dialer{}
 		conn, _ := dialer.Dial("tcp", "localhost:8110")
 		conn.(*net.TCPConn).SetWriteBuffer(0)
-		session := CreateSocket(conn)
+		session := NewSocket(conn)
 
 		die := make(chan struct{})
 
@@ -161,7 +160,7 @@ func TestSocket(t *testing.T) {
 				if err != nil {
 					return
 				} else {
-					session := CreateSocket(conn)
+					session := NewSocket(conn)
 					session.GetNetConn()
 					session.SetEncoder(&encoder{})
 					session.SetRecvTimeout(time.Second * 1).SetSendTimeout(time.Second * 1)
@@ -185,7 +184,7 @@ func TestSocket(t *testing.T) {
 		fmt.Println("00")
 		dialer := &net.Dialer{}
 		conn, _ := dialer.Dial("tcp", "localhost:8110")
-		session := CreateSocket(conn)
+		session := NewSocket(conn)
 
 		respChan := make(chan interface{})
 
@@ -230,7 +229,7 @@ func TestSocket(t *testing.T) {
 				if err != nil {
 					return
 				} else {
-					CreateSocket(conn).SetEncoder(&encoder{}).
+					NewSocket(conn).SetEncoder(&encoder{}).
 						SetRecvTimeout(time.Second * 1).
 						SetInBoundProcessor(&TestInboundProcessor{buffer: make([]byte, 1024)}).
 						BeginRecv(func(s *Socket, msg interface{}) {
@@ -244,7 +243,7 @@ func TestSocket(t *testing.T) {
 		{
 			dialer := &net.Dialer{}
 			conn, _ := dialer.Dial("tcp", "localhost:8110")
-			session := CreateSocket(conn)
+			session := NewSocket(conn)
 
 			respChan := make(chan interface{})
 
@@ -266,7 +265,7 @@ func TestSocket(t *testing.T) {
 		{
 			dialer := &net.Dialer{}
 			conn, _ := dialer.Dial("tcp", "localhost:8110")
-			session := CreateSocket(conn)
+			session := NewSocket(conn)
 
 			session.SetEncoder(&encoder{})
 
@@ -288,7 +287,7 @@ func TestSocket(t *testing.T) {
 		{
 			dialer := &net.Dialer{}
 			conn, _ := dialer.Dial("tcp", "localhost:8110")
-			session := CreateSocket(conn)
+			session := NewSocket(conn)
 			session.SetCloseCallBack(func(sess *Socket, reason error) {
 				fmt.Println("reason", reason)
 			})
@@ -306,7 +305,7 @@ func TestSocket(t *testing.T) {
 		{
 			dialer := &net.Dialer{}
 			conn, _ := dialer.Dial("tcp", "localhost:8110")
-			session := CreateSocket(conn)
+			session := NewSocket(conn)
 
 			die := make(chan struct{})
 
@@ -343,7 +342,7 @@ func TestSocket(t *testing.T) {
 				if err != nil {
 					return
 				} else {
-					CreateSocket(conn).SetInBoundProcessor(&TestInboundProcessor{buffer: make([]byte, 1024)}).BeginRecv(func(s *Socket, msg interface{}) {
+					NewSocket(conn).SetInBoundProcessor(&TestInboundProcessor{buffer: make([]byte, 1024)}).BeginRecv(func(s *Socket, msg interface{}) {
 						close(die)
 					})
 				}
@@ -352,7 +351,7 @@ func TestSocket(t *testing.T) {
 
 		dialer := &net.Dialer{}
 		conn, _ := dialer.Dial("tcp", "localhost:8110")
-		session := CreateSocket(conn)
+		session := NewSocket(conn)
 
 		session.SetEncoder(&encoder{})
 
@@ -380,7 +379,7 @@ func TestSocket(t *testing.T) {
 				if err != nil {
 					return
 				} else {
-					session := CreateSocket(conn)
+					session := NewSocket(conn)
 					session.SetRecvTimeout(time.Second * 1)
 					session.SetSendTimeout(time.Second * 1)
 					session.SetCloseCallBack(func(sess *Socket, reason error) {
@@ -396,7 +395,7 @@ func TestSocket(t *testing.T) {
 
 		dialer := &net.Dialer{}
 		conn, _ := dialer.Dial("tcp", "localhost:8110")
-		session := CreateSocket(conn)
+		session := NewSocket(conn)
 		session.SetInBoundProcessor(&TestInboundProcessor{buffer: make([]byte, 1024)})
 		session.SetEncoder(&encoder{}).SetCloseCallBack(func(sess *Socket, reason error) {
 			close(clientdie)
@@ -437,7 +436,7 @@ func TestShutDownRead(t *testing.T) {
 			if err != nil {
 				return
 			} else {
-				CreateSocket(conn).SetCloseCallBack(func(sess *Socket, reason error) {
+				NewSocket(conn).SetCloseCallBack(func(sess *Socket, reason error) {
 					fmt.Println("server close")
 				}).SetInBoundProcessor(&TestInboundProcessor{buffer: make([]byte, 1024)}).BeginRecv(func(s *Socket, msg interface{}) {
 				})
@@ -447,7 +446,7 @@ func TestShutDownRead(t *testing.T) {
 
 	dialer := &net.Dialer{}
 	conn, _ := dialer.Dial("tcp", "localhost:8110")
-	session := CreateSocket(conn)
+	session := NewSocket(conn)
 
 	die := make(chan struct{})
 
@@ -486,7 +485,7 @@ func TestShutDownWrite(t *testing.T) {
 			if err != nil {
 				return
 			} else {
-				s := CreateSocket(conn).SetCloseCallBack(func(sess *Socket, reason error) {
+				s := NewSocket(conn).SetCloseCallBack(func(sess *Socket, reason error) {
 					fmt.Println("server close")
 				}).SetErrorCallBack(func(sess *Socket, reason error) {
 					if reason == io.EOF {
@@ -508,7 +507,7 @@ func TestShutDownWrite(t *testing.T) {
 	{
 		dialer := &net.Dialer{}
 		conn, _ := dialer.Dial("tcp", "localhost:8110")
-		session := CreateSocket(conn).SetInBoundProcessor(&TestInboundProcessor{buffer: make([]byte, 1024)})
+		session := NewSocket(conn).SetInBoundProcessor(&TestInboundProcessor{buffer: make([]byte, 1024)})
 
 		die := make(chan struct{})
 
@@ -529,7 +528,7 @@ func TestShutDownWrite(t *testing.T) {
 	{
 		dialer := &net.Dialer{}
 		conn, _ := dialer.Dial("tcp", "localhost:8110")
-		session := CreateSocket(conn).SetInBoundProcessor(&TestInboundProcessor{buffer: make([]byte, 1024)})
+		session := NewSocket(conn).SetInBoundProcessor(&TestInboundProcessor{buffer: make([]byte, 1024)})
 
 		die := make(chan struct{})
 

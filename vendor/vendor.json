@@ -194,12 +194,6 @@
 			"revisionTime": "2019-06-04T15:29:10Z"
 		},
 		{
-			"checksumSHA1": "NPqsBE4y5/7DBOAaoQ8hsfDS/Xo=",
-			"path": "github.com/sniperHW/goaio",
-			"revision": "ce603c593e6b4fda03508c05423b70b86d5ed324",
-			"revisionTime": "2021-07-08T06:22:57Z"
-		},
-		{
 			"checksumSHA1": "uqTJVsJ/tb7FA5JpHtwlAF0ELCk=",
 			"path": "github.com/stretchr/testify/assert",
 			"revision": "b7d60e3a8c98f214225821e939174e8cf76d51ef",
