@@ -36,19 +36,19 @@ func AppendBytes(bs []byte, bytes []byte) []byte {
 }
 
 func AppendUint16(bs []byte, u16 uint16) []byte {
-	bu := make([]byte, 2)
+	bu := []byte{0, 0}
 	binary.BigEndian.PutUint16(bu, u16)
 	return AppendBytes(bs, bu)
 }
 
 func AppendUint32(bs []byte, u32 uint32) []byte {
-	bu := make([]byte, 4)
+	bu := []byte{0, 0, 0, 0}
 	binary.BigEndian.PutUint32(bu, u32)
 	return AppendBytes(bs, bu)
 }
 
 func AppendUint64(bs []byte, u64 uint64) []byte {
-	bu := make([]byte, 8)
+	bu := []byte{0, 0, 0, 0, 0, 0, 0, 0}
 	binary.BigEndian.PutUint64(bu, u64)
 	return AppendBytes(bs, bu)
 }

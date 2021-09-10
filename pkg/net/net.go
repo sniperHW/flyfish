@@ -37,5 +37,4 @@ type InBoundProcessor interface {
 	GetRecvBuff() []byte
 	OnData([]byte)
 	Unpack() (interface{}, error)
-	OnSocketClose()
 }

@@ -12,7 +12,7 @@ import (
 
 func reqUnpack(pbSpace *pb.Namespace, b []byte, r int, w int) (ret interface{}, packetSize int, err error) {
 	unpackSize := w - r
-	if unpackSize > minSize {
+	if unpackSize >= minSize {
 		var msg proto.Message
 
 		reader := buffer.NewReader(b[r : r+unpackSize])
@@ -55,7 +55,7 @@ func reqUnpack(pbSpace *pb.Namespace, b []byte, r int, w int) (ret interface{}, 
 
 func respUnpack(pbSpace *pb.Namespace, b []byte, r int, w int) (ret interface{}, packetSize int, err error) {
 	unpackSize := w - r
-	if unpackSize > minSize {
+	if unpackSize >= minSize {
 		var msg proto.Message
 
 		reader := buffer.NewReader(b[r : r+unpackSize])
