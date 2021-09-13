@@ -1,5 +1,3 @@
-RaftUrl = "http://127.0.0.1:12377"
-
 Mode = "solo"                                  #solo单机模式,cluster集群模式
 
 SnapshotCurrentCount = 0                       #并行执行快照序列化数量，如果设置为0则取cpu数量
@@ -23,7 +21,7 @@ ProposalBatchCount      = 200
 ReadBatchCount          = 100             	 
 
 [SoloConfig]
-
+RaftUrl                 = "http://127.0.0.1:12377"
 ServiceHost             = "127.0.0.1"
 ServicePort             = 8110
 RaftCluster             = "1@http://127.0.0.1:12377"

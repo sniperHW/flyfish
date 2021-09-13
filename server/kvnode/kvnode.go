@@ -390,7 +390,7 @@ func (this *kvnode) Start() error {
 		}
 
 		if config.Mode == "solo" {
-			this.selfUrl = config.RaftUrl
+			this.selfUrl = config.SoloConfig.RaftUrl
 
 			err = this.db.start(config)
 

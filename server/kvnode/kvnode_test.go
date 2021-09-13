@@ -35,8 +35,6 @@ type dbconf struct {
 
 var configStr string = `
 
-RaftUrl = "http://127.0.0.1:12377"
-
 Mode = "solo"
 
 SnapshotCurrentCount    = 1
@@ -60,6 +58,7 @@ ReadFlushInterval       = 10
 
 [SoloConfig]
 
+RaftUrl                 = "http://127.0.0.1:12377"
 ServiceHost             = "127.0.0.1"
 ServicePort             = %d
 RaftCluster             = "1@http://127.0.0.1:12377"

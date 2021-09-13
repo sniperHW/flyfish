@@ -25,13 +25,12 @@ func LoadConfig(path string) (*Config, error) {
 }
 
 type Config struct {
-	RaftUrl string
-
 	Mode string //"cluster"集群模式,"solo"独立模式
 
 	SoloConfig struct {
 		ServiceHost string
 		ServicePort int
+		RaftUrl     string
 		RaftCluster string
 		Stores      []int
 	}
