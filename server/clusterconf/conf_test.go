@@ -85,8 +85,8 @@ func Test1(t *testing.T) {
 	assert.Nil(t, err)
 	fmt.Println(string(b))
 
-	conf, err := makeKvConfig(&confJson)
-	assert.Nil(t, err)
+	//conf, err := makeKvConfig(&confJson)
+	//assert.Nil(t, err)
 
 	fmt.Println("---------------------------------------------")
 

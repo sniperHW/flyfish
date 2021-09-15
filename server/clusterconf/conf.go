@@ -62,6 +62,7 @@ func UnmarshalConfig(b []byte) (*KvConfigJson, error) {
 	}
 }
 
+/*
 type RouteInfo struct {
 	Store int
 	Nodes []int
@@ -92,7 +93,7 @@ func MakeRoute(j *KvConfigJson) map[int]*RouteInfo {
 	}
 
 	return route
-}
+}*/
 
 func makeKvConfig(j *KvConfigJson) (*KvConfig, error) {
 	storeCount := len(j.Shard) * StorePerNode

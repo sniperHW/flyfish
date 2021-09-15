@@ -10,6 +10,7 @@ const (
 	Errcode_timeout
 	Errcode_retry
 	Errcode_error
+	Errcode_not_leader
 )
 
 type Error *error
@@ -42,6 +43,8 @@ func GetErrorDesc(e Error) string {
 			return "record is unchange"
 		case Errcode_cas_not_equal:
 			return "cas old value is not equal"
+		case Errcode_not_leader:
+			return "not leader"
 		case Errcode_retry:
 			if "" == e.Desc {
 				return "please retry later"

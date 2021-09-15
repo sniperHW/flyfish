@@ -333,7 +333,7 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 		req.from.send(&cs.RespMessage{
 			Cmd:   req.msg.Cmd,
 			Seqno: req.msg.Seqno,
-			Err:   errcode.New(errcode.Errcode_retry, "kvstore is not leader"),
+			Err:   errcode.New(errcode.Errcode_not_leader, ""),
 		})
 	} else if !s.ready || s.meta == nil {
 		req.from.send(&cs.RespMessage{
