@@ -19,7 +19,7 @@ const (
 	SizeTimeout    = 4
 	SizeErrDescLen = 2
 	SizeUniKeyLen  = 2
-	minSize        = SizeLen
+	MinSize        = SizeLen
 	MaxPacketSize  = 8 * 1024 * 1024
 )
 

@@ -28,6 +28,16 @@ RaftCluster             = "1@http://127.0.0.1:12377"
 Stores                  = [1,2,3,4,5]
 
 
+[ClusterConfig]
+ClusterID               = 1
+DbHost                  = "localhost"
+DbPort                  = 5432
+DbUser			        = "sniper"
+DbPassword              = "123456"
+DbDataBase              = "test"
+	
+
+
 [DBConfig]
 SqlType         = "pgsql"
 

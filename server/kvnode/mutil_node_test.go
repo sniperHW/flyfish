@@ -19,8 +19,6 @@ import (
 
 func TestMutilNode(t *testing.T) {
 	var configStr1 string = `
-
-	RaftUrl =  "%s"
 	
 	Mode = "solo"
 	
@@ -44,7 +42,7 @@ func TestMutilNode(t *testing.T) {
 	
 	
 	[SoloConfig]
-	
+	RaftUrl 				=  "%s"	
 	ServiceHost             = "127.0.0.1"
 	ServicePort             = %d
 	RaftCluster             = "1@http://127.0.0.1:12377,2@http://127.0.0.1:12378,3@http://127.0.0.1:12379"
@@ -223,8 +221,6 @@ func TestMutilNode(t *testing.T) {
 	time.Sleep(time.Second * 2)
 
 	var configStr2 string = `
-
-	RaftUrl =  "%s"
 	
 	Mode = "solo"
 	
@@ -248,7 +244,7 @@ func TestMutilNode(t *testing.T) {
 	
 	
 	[SoloConfig]
-	
+	RaftUrl                 =  "%s"	
 	ServiceHost             = "127.0.0.1"
 	ServicePort             = %d
 	RaftCluster             = "1@http://127.0.0.1:12377,2@http://127.0.0.1:12378,3@http://127.0.0.1:12379,4@http://127.0.0.1:22381"

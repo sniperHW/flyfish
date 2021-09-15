@@ -36,7 +36,13 @@ type Config struct {
 	}
 
 	ClusterConfig struct {
-		Pd []string //pd服务的地址
+		ClusterID  int
+		SqlType    string
+		DbHost     string
+		DbPort     int
+		DbUser     string
+		DbPassword string
+		DbDataBase string
 	}
 
 	SnapshotCurrentCount int //并行执行快照序列化数量，如果设置为0则取cpu数量

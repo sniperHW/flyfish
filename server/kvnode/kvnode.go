@@ -1,17 +1,8 @@
 package kvnode
 
 import (
-	//"errors"
 	"errors"
 	"fmt"
-	"os"
-	"runtime"
-	"strconv"
-	"strings"
-	"sync"
-	"sync/atomic"
-	"time"
-
 	"github.com/sniperHW/flyfish/backend/db"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
@@ -20,7 +11,15 @@ import (
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	flyproto "github.com/sniperHW/flyfish/proto"
+	"github.com/sniperHW/flyfish/server/clusterconf"
 	"github.com/sniperHW/flyfish/server/slot"
+	"os"
+	"runtime"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
 )
 
 /*
@@ -54,6 +53,8 @@ type kvnode struct {
 	stopOnce    int32
 	startOnce   int32
 	metaCreator func(*db.DbDef) (db.DBMeta, error)
+
+	consoleConn *net.Udp
 
 	selfUrl string
 }
@@ -327,6 +328,10 @@ func (this *kvnode) Stop() {
 
 		this.mutilRaft.Stop()
 
+		if nil != this.consoleConn {
+			this.consoleConn.Close()
+		}
+
 	}
 }
 
@@ -377,6 +382,12 @@ func MakeUnikeyPlacement(stores []int) (fn func(string) int) {
 	return
 }
 
+type storeConf struct {
+	id          int
+	raftCluster string
+	slots       *bitmap.Bitmap
+}
+
 func (this *kvnode) Start() error {
 	var err error
 	if atomic.CompareAndSwapInt32(&this.startOnce, 0, 1) {
@@ -423,6 +434,95 @@ func (this *kvnode) Start() error {
 			GetSugar().Infof("flyfish start:%s:%d", config.SoloConfig.ServiceHost, config.SoloConfig.ServicePort)
 
 		} else {
+
+			//从DB获取配置
+			clusterConf := config.ClusterConfig
+			kvconf, err := clusterconf.LoadConfigFromDB(clusterConf.ClusterID, clusterConf.SqlType, clusterConf.DbHost, clusterConf.DbPort, clusterConf.DbDataBase, clusterConf.DbUser, clusterConf.DbPassword)
+			if nil != err {
+				return err
+			}
+
+			var sn *clusterconf.Node
+			var shard int
+
+			for k, v := range kvconf.Shard {
+				for _, vv := range v {
+					if vv.ID == this.id {
+						sn = vv
+						shard = k
+						break
+					}
+				}
+				if nil != sn {
+					break
+				}
+			}
+
+			if nil == sn {
+				return fmt.Errorf("%d not in clusterconf", this.id)
+			}
+
+			makeStoreConf := func() []storeConf {
+				sc := []storeConf{}
+				for _, v := range sn.Stores {
+					s := storeConf{
+						id:    v.Id,
+						slots: v.Slots,
+					}
+
+					for k, vv := range kvconf.Shard[shard] {
+						if k > 0 {
+							s.raftCluster += ","
+						}
+
+						s.raftCluster += fmt.Sprintf("%d@http://%s:%d", vv.ID, vv.HostIP, vv.RaftPort)
+
+					}
+
+					sc = append(sc, s)
+
+				}
+				return sc
+			}
+
+			sc := makeStoreConf()
+
+			this.selfUrl = fmt.Sprintf("http://%s:%d", sn.HostIP, sn.RaftPort)
+
+			err = this.initConsole(fmt.Sprintf("http://%s:%d", sn.HostIP, sn.ConsolePort))
+
+			if nil != err {
+				return err
+			}
+
+			err = this.db.start(config)
+
+			if nil != err {
+				return err
+			}
+
+			this.listener, err = cs.NewListener("tcp", fmt.Sprintf("%s:%d", sn.HostIP, sn.ServicePort), verifyLogin)
+
+			if nil != err {
+				return err
+			}
+
+			go this.mutilRaft.Serve(this.selfUrl)
+
+			this.startListener()
+
+			atomic.StoreInt32(&this.running, 1)
+
+			//添加store
+			if len(sc) > 0 {
+				for _, v := range sc {
+					if err = this.addStore(this.meta, v.id, v.raftCluster, v.slots); nil != err {
+						return err
+					}
+				}
+			}
+
+			GetSugar().Infof("flyfish start:%s:%d", sn.HostIP, sn.ServicePort)
 
 		}
 

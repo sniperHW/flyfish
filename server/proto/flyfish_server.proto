@@ -1,0 +1,26 @@
+syntax = "proto2";
+package proto;
+
+
+import "gogoproto/gogo.proto";
+
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+option (gogoproto.unmarshaler_all) = true;
+option (gogoproto.goproto_getters_all) = true;
+option (gogoproto.goproto_enum_prefix_all) = true;
+
+
+enum CmdType {
+  QueryLeader = 1;
+  QueryLeaderResp = 2;
+}
+
+//查询是否store的leader,如果是返回yes=true
+message query_leader {
+  optional int32 store = 1;
+}
+
+message query_leader_resp {
+  optional bool yes = 1;
+}

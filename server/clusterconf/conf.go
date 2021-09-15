@@ -1,4 +1,4 @@
-package kvnodeconf
+package clusterconf
 
 import (
 	"encoding/json"
@@ -10,7 +10,7 @@ import (
 	"github.com/sniperHW/flyfish/server/slot"
 )
 
-const StorePerNode int = 5 //每节点store数量
+var StorePerNode int = 5 //每节点store数量
 
 type store struct {
 	Id    int
@@ -60,6 +60,38 @@ func UnmarshalConfig(b []byte) (*KvConfigJson, error) {
 	} else {
 		return &conf, nil
 	}
+}
+
+type RouteInfo struct {
+	Store int
+	Nodes []int
+}
+
+func MakeRoute(j *KvConfigJson) map[int]*RouteInfo {
+	route := map[int]*RouteInfo{}
+	storeCount := len(j.Shard) * StorePerNode
+	var stores []RouteInfo
+	for i := 0; i < storeCount; i++ {
+		stores = append(stores, RouteInfo{
+			Store: i + 1,
+		})
+	}
+
+	for k, v := range j.Shard {
+		for _, vv := range v.Nodes {
+			for i := 0; i < StorePerNode; i++ {
+				stores[k*StorePerNode+i].Nodes = append(stores[k*StorePerNode+i].Nodes, vv)
+			}
+		}
+	}
+
+	jj := 0
+	for i := 0; i < slot.SlotCount; i++ {
+		jj = (jj + 1) % storeCount
+		route[i] = &stores[jj]
+	}
+
+	return route
 }
 
 func makeKvConfig(j *KvConfigJson) (*KvConfig, error) {
@@ -120,7 +152,7 @@ func sqlOpen(sqlType string, host string, port int, dbname string, user string, 
 	}
 }
 
-func LoadConfigFromDB(sqlType string, host string, port int, dbname string, user string, password string) (*KvConfig, error) {
+func LoadConfigFromDB(clusterID int, sqlType string, host string, port int, dbname string, user string, password string) (*KvConfig, error) {
 	var db *sqlx.DB
 	var err error
 
@@ -130,7 +162,7 @@ func LoadConfigFromDB(sqlType string, host string, port int, dbname string, user
 		return nil, err
 	} else {
 
-		rows, err := db.Query("select conf from kvconf where id = 1")
+		rows, err := db.Query(fmt.Sprintf("select conf from kvconf where id = %d", clusterID))
 
 		if nil != err {
 			return nil, err
@@ -162,17 +194,17 @@ func LoadConfigFromDB(sqlType string, host string, port int, dbname string, user
 	}
 }
 
-func makeStoreMysql(b []byte) string {
+func makeStoreMysql(clusterID int, b []byte) string {
 	c := string(b)
-	return fmt.Sprintf("INSERT INTO kvconf(id,conf) VALUES (1,'%s') on duplicate key update conf='%s' where id = 1", c, c)
+	return fmt.Sprintf("INSERT INTO kvconf(id,conf) VALUES (1,'%s') on duplicate key update conf='%s' where id = %d", c, c, clusterID)
 }
 
-func makeStorePgsql(b []byte) string {
+func makeStorePgsql(clusterID int, b []byte) string {
 	c := string(b)
-	return fmt.Sprintf("INSERT INTO kvconf(id,conf) VALUES (1,'%s') ON conflict(id)  DO UPDATE SET conf='%s' where kvconf.id = 1", c, c)
+	return fmt.Sprintf("INSERT INTO kvconf(id,conf) VALUES (1,'%s') ON conflict(id)  DO UPDATE SET conf='%s' where kvconf.id = %d", c, c, clusterID)
 }
 
-func LoadConfigJsonFromDB(sqlType string, host string, port int, dbname string, user string, password string) (*KvConfigJson, error) {
+func LoadConfigJsonFromDB(clusterID int, sqlType string, host string, port int, dbname string, user string, password string) (*KvConfigJson, error) {
 	var db *sqlx.DB
 	var err error
 
@@ -182,7 +214,7 @@ func LoadConfigJsonFromDB(sqlType string, host string, port int, dbname string, 
 		return nil, err
 	} else {
 
-		rows, err := db.Query("select conf from kvconf where id = 1")
+		rows, err := db.Query(fmt.Sprintf("select conf from kvconf where id = %d", clusterID))
 
 		if nil != err {
 			return nil, err
@@ -208,7 +240,7 @@ func LoadConfigJsonFromDB(sqlType string, host string, port int, dbname string, 
 	}
 }
 
-func StoreConfigJsonToDB(sqlType string, host string, port int, dbname string, user string, password string, conf *KvConfigJson) error {
+func StoreConfigJsonToDB(clusterID int, sqlType string, host string, port int, dbname string, user string, password string, conf *KvConfigJson) error {
 	b, err := MarshalConfig(conf)
 	if nil != err {
 		return err
@@ -222,9 +254,9 @@ func StoreConfigJsonToDB(sqlType string, host string, port int, dbname string, u
 
 	var sqlStr string
 	if sqlType == "mysql" {
-		sqlStr = makeStoreMysql(b)
+		sqlStr = makeStoreMysql(clusterID, b)
 	} else {
-		sqlStr = makeStorePgsql(b)
+		sqlStr = makeStorePgsql(clusterID, b)
 	}
 
 	_, err = db.Exec(sqlStr)
