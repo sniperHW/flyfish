@@ -11,6 +11,7 @@ const (
 	Errcode_retry
 	Errcode_error
 	Errcode_not_leader
+	Errcode_gate_busy
 )
 
 type Error *error
@@ -45,6 +46,8 @@ func GetErrorDesc(e Error) string {
 			return "cas old value is not equal"
 		case Errcode_not_leader:
 			return "not leader"
+		case Errcode_gate_busy:
+			return "gate busy"
 		case Errcode_retry:
 			if "" == e.Desc {
 				return "please retry later"

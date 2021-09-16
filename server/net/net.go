@@ -30,7 +30,7 @@ func Pack(msg proto.Message) ([]byte, error) {
 func init() {
 	namespace := pb.GetNamespace("sproto")
 
-	namespace.Register(&sproto.QueryLeader{}, uint32(sproto.CmdType_QueryLeader))
-	namespace.Register(&sproto.QueryLeaderResp{}, uint32(sproto.CmdType_QueryLeaderResp))
+	namespace.Register(&sproto.QueryLeader{}, uint32(sproto.ServerCmdType_QueryLeader))
+	namespace.Register(&sproto.QueryLeaderResp{}, uint32(sproto.ServerCmdType_QueryLeaderResp))
 
 }

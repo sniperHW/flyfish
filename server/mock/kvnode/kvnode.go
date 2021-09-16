@@ -5,11 +5,13 @@ import (
 	"github.com/sniperHW/flyfish/backend/db"
 	"github.com/sniperHW/flyfish/backend/db/sql"
 	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/pkg/net"
+	fnet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/net/cs"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/proto"
 	flyproto "github.com/sniperHW/flyfish/proto"
+	snet "github.com/sniperHW/flyfish/server/net"
+	sproto "github.com/sniperHW/flyfish/server/proto"
 	"sync/atomic"
 	"time"
 )
@@ -76,7 +78,7 @@ func getProcessDelay() time.Duration {
 	}
 }
 
-type handler func(*net.Socket, *cs.ReqMessage)
+type handler func(*fnet.Socket, *cs.ReqMessage)
 
 type kv struct {
 	uniKey  string
@@ -87,22 +89,11 @@ type kv struct {
 	fields  map[string]*proto.Field //字段
 }
 
-type sqlMetaMgr map[string]*sql.TableMeta
-
-func (this sqlMetaMgr) GetTableMeta(table string) db.TableMeta {
-	v, ok := this[table]
-	if ok {
-		return v
-	} else {
-		return nil
-	}
-}
-
 type Node struct {
 	listener *cs.Listener
 	handlers map[flyproto.CmdType]handler
 	queue    *queue.PriorityQueue
-	metaMgr  db.MetaMgr
+	metaMgr  db.DBMeta
 	store    map[string]*kv
 }
 
@@ -116,11 +107,14 @@ func (this *Node) Register(cmd flyproto.CmdType, h handler) {
 	}
 }
 
-func (this *Node) Dispatch(session *net.Socket, cmd flyproto.CmdType, msg *cs.ReqMessage) {
+func (this *Node) Dispatch(session *fnet.Socket, cmd flyproto.CmdType, msg *cs.ReqMessage) {
 	if GetDisconnectOnRecvMsg() {
 		session.Close(nil, 0)
 	} else {
 		if nil != msg {
+
+			fmt.Println("got req", cmd)
+
 			switch cmd {
 			default:
 				if handler, ok := this.handlers[cmd]; ok {
@@ -142,7 +136,7 @@ func (this *Node) startListener() error {
 		return fmt.Errorf("invaild listener")
 	}
 
-	this.listener.Serve(func(session *net.Socket) {
+	this.listener.Serve(func(session *fnet.Socket) {
 		go func() {
 			session.SetRecvTimeout(flyproto.PingTime * 2)
 			session.SetSendQueueSize(10000)
@@ -150,7 +144,7 @@ func (this *Node) startListener() error {
 			session.SetInBoundProcessor(cs.NewReqInboundProcessor())
 			session.SetEncoder(&cs.RespEncoder{})
 
-			session.BeginRecv(func(s *net.Socket, m interface{}) {
+			session.BeginRecv(func(s *fnet.Socket, m interface{}) {
 				msg := m.(*cs.ReqMessage)
 				this.Dispatch(session, msg.Cmd, msg)
 			})
@@ -160,14 +154,14 @@ func (this *Node) startListener() error {
 	return nil
 }
 
-func (this *Node) Start(service string, def *db.DbDef) error {
+func (this *Node) Start(leader bool, service string, console string, def *db.DbDef) error {
 
 	m, err := sql.CreateDbMeta(def)
 	if nil != err {
 		return err
 	}
 
-	this.metaMgr = sqlMetaMgr(m)
+	this.metaMgr = m
 
 	if this.listener, err = cs.NewListener("tcp", service, verifyLogin); nil != err {
 		return err
@@ -195,6 +189,27 @@ func (this *Node) Start(service string, def *db.DbDef) error {
 		}
 	}()
 
+	consoleConn, err := fnet.NewUdp(console, snet.Pack, snet.Unpack)
+	if nil != err {
+		return err
+	}
+
+	go func() {
+		recvbuff := make([]byte, 64*1024)
+		for {
+			from, msg, err := consoleConn.ReadFrom(recvbuff)
+			if nil != err {
+				return
+			} else {
+				switch msg.(type) {
+				case *sproto.QueryLeader:
+					consoleConn.SendTo(from, &sproto.QueryLeaderResp{Yes: leader})
+				}
+			}
+		}
+
+	}()
+
 	return nil
 }
 
@@ -210,7 +225,7 @@ func checkVersion(v1 *int64, v2 int64) bool {
 	}
 }
 
-func (this *Node) del(session *net.Socket, msg *cs.ReqMessage) {
+func (this *Node) del(session *fnet.Socket, msg *cs.ReqMessage) {
 
 	req := msg.Data.(*flyproto.DelReq)
 
@@ -239,7 +254,7 @@ func (this *Node) del(session *net.Socket, msg *cs.ReqMessage) {
 	}
 }
 
-func (this *Node) get(session *net.Socket, msg *cs.ReqMessage) {
+func (this *Node) get(session *fnet.Socket, msg *cs.ReqMessage) {
 	req := msg.Data.(*flyproto.GetReq)
 
 	table, _ := splitUniKey(msg.UniKey)
@@ -281,7 +296,7 @@ func (this *Node) get(session *net.Socket, msg *cs.ReqMessage) {
 	}
 }
 
-func (this *Node) set(session *net.Socket, msg *cs.ReqMessage) {
+func (this *Node) set(session *fnet.Socket, msg *cs.ReqMessage) {
 	req := msg.Data.(*flyproto.SetReq)
 	if len(req.GetFields()) == 0 {
 		session.Send(&cs.RespMessage{
@@ -346,7 +361,7 @@ func (this *Node) set(session *net.Socket, msg *cs.ReqMessage) {
 	}
 }
 
-func (this *Node) setNx(session *net.Socket, msg *cs.ReqMessage) {
+func (this *Node) setNx(session *fnet.Socket, msg *cs.ReqMessage) {
 	req := msg.Data.(*flyproto.SetNxReq)
 
 	if len(req.GetFields()) == 0 {
@@ -423,7 +438,7 @@ func (this *Node) setNx(session *net.Socket, msg *cs.ReqMessage) {
 	}
 }
 
-func (this *Node) compareAndSet(session *net.Socket, msg *cs.ReqMessage) {
+func (this *Node) compareAndSet(session *fnet.Socket, msg *cs.ReqMessage) {
 
 	req := msg.Data.(*flyproto.CompareAndSetReq)
 
@@ -490,7 +505,7 @@ func (this *Node) compareAndSet(session *net.Socket, msg *cs.ReqMessage) {
 	}
 }
 
-func (this *Node) compareAndSetNx(session *net.Socket, msg *cs.ReqMessage) {
+func (this *Node) compareAndSetNx(session *fnet.Socket, msg *cs.ReqMessage) {
 
 	req := msg.Data.(*flyproto.CompareAndSetNxReq)
 
@@ -578,7 +593,7 @@ func (this *Node) compareAndSetNx(session *net.Socket, msg *cs.ReqMessage) {
 	}
 }
 
-func (this *Node) incrBy(session *net.Socket, msg *cs.ReqMessage) {
+func (this *Node) incrBy(session *fnet.Socket, msg *cs.ReqMessage) {
 
 	req := msg.Data.(*flyproto.IncrByReq)
 
@@ -666,7 +681,7 @@ func (this *Node) incrBy(session *net.Socket, msg *cs.ReqMessage) {
 	}
 }
 
-func (this *Node) decrBy(session *net.Socket, msg *cs.ReqMessage) {
+func (this *Node) decrBy(session *fnet.Socket, msg *cs.ReqMessage) {
 	req := msg.Data.(*flyproto.DecrByReq)
 
 	f := req.GetField()
@@ -753,7 +768,7 @@ func (this *Node) decrBy(session *net.Socket, msg *cs.ReqMessage) {
 	}
 }
 
-func (this *Node) kick(session *net.Socket, msg *cs.ReqMessage) {
+func (this *Node) kick(session *fnet.Socket, msg *cs.ReqMessage) {
 	session.Send(&cs.RespMessage{
 		Seqno: msg.Seqno,
 		Data:  &flyproto.KickResp{},

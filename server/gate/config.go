@@ -39,6 +39,9 @@ type Config struct {
 		DbDataBase string
 	}
 
+	MaxNodePendingMsg  int
+	MaxStorePendingMsg int
+
 	Log struct {
 		MaxLogfileSize  int
 		LogDir          string

@@ -2,128 +2,33 @@ package gate
 
 import (
 	"container/list"
-	"encoding/binary"
+	"errors"
 	"fmt"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/net/cs"
-	"github.com/sniperHW/flyfish/pkg/net/pb"
+	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/server/clusterconf"
 	"github.com/sniperHW/flyfish/server/slot"
 	"net"
 	"os"
-	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 )
 
-type node struct {
-	sync.Mutex
-	seqCounter   int64
-	id           int
-	dialing      bool
-	service      string
-	consoleAddr  *net.UDPAddr
-	session      *flynet.Socket
-	waittingSend *list.List //dailing时暂存请求
-	pendingReq   map[int64]*relayMsg
+type encoder struct {
 }
 
-func (n *node) sendRelayReq(req *relayMsg) {
-	req.nodeSeqno = atomic.AddInt64(&n.seqCounter, 1)
-	//改写seqno
-	binary.BigEndian.PutUint64(req.bytes[4:], uint64(req.nodeSeqno))
-	//填充storeID
-	binary.BigEndian.PutUint32(req.bytes[4+8:], uint32(req.store.id))
-
-	n.Lock()
-	if nil != n.session {
-		if nil == n.session.Send(req.bytes) {
-			n.pendingReq[req.nodeSeqno] = req
-			req.deadlineTimer = time.AfterFunc(req.timeout, req.onTimeout)
-		} else {
-			n.Unlock()
-			replyCliError(req.cli, req.seqno, req.cmd, errcode.New(errcode.Errcode_retry, ""))
-			return
-		}
-	} else {
-		n.waittingSend.PushBack(req)
-		if !n.dialing {
-			n.dial()
-		}
+func (this *encoder) EnCode(o interface{}, buff *buffer.Buffer) error {
+	b, ok := o.([]byte)
+	if !ok {
+		return errors.New("invaild o")
 	}
-	n.Unlock()
-}
 
-func (n *node) dial() {
-	n.dialing = true
-	go func() {
-		c := cs.NewConnector("tcp", n.service)
-		session, err := c.Dial(time.Second * 5)
-		n.Lock()
-		n.dialing = false
-		n.session = session
-		if nil == err {
-			//session.SetInBoundProcessor(cs.NewRespInboundProcessor())
-			session.SetCloseCallBack(func(sess *flynet.Socket, reason error) {
-				n.Lock()
-				n.session = nil
-				pendingReq := n.pendingReq
-				n.Unlock()
-				for _, v := range pendingReq {
-					if v.deadlineTimer.Stop() {
-						replyCliError(v.cli, v.seqno, v.cmd, errcode.New(errcode.Errcode_error, "lose connection"))
-					}
-				}
-			}).BeginRecv(func(s *flynet.Socket, msg interface{}) {
-				n.onNodeResp(msg.([]byte))
-			})
+	buff.AppendBytes(b)
 
-			for v := n.waittingSend.Front(); nil != v; v = n.waittingSend.Front() {
-				req := n.waittingSend.Remove(v).(*relayMsg)
-				if nil == session.Send(req.bytes) {
-					n.pendingReq[req.nodeSeqno] = req
-					req.deadlineTimer = time.AfterFunc(req.timeout, req.onTimeout)
-				} else {
-					replyCliError(req.cli, req.seqno, req.cmd, errcode.New(errcode.Errcode_retry, ""))
-				}
-			}
-			n.Unlock()
-		} else {
-			waittingSend := n.waittingSend
-			n.waittingSend = list.New()
-			n.Unlock()
-			for v := waittingSend.Front(); nil != v; v = waittingSend.Front() {
-				req := waittingSend.Remove(v).(*relayMsg)
-				replyCliError(req.cli, req.seqno, req.cmd, errcode.New(errcode.Errcode_retry, ""))
-			}
-		}
-	}()
-}
-
-func (n *node) onNodeResp(b []byte) {
-	seqno := int64(binary.BigEndian.Uint64(b[cs.SizeLen:]))
-	errCode := int16(binary.BigEndian.Uint16(b[cs.SizeLen+8+2:]))
-	n.Lock()
-	req, ok := n.pendingReq[seqno]
-	if ok {
-		delete(n.pendingReq, seqno)
-		n.Unlock()
-		if errCode == errcode.Errcode_not_leader {
-			req.store.onLoseLeader(req.version)
-		}
-
-		if req.deadlineTimer.Stop() {
-			//恢复客户端的seqno
-			binary.BigEndian.PutUint64(b[4:], uint64(req.seqno))
-			req.cli.Send(b)
-		}
-
-	} else {
-		n.Unlock()
-	}
+	return nil
 }
 
 type relayMsg struct {
@@ -184,75 +89,9 @@ func replyCliError(cli *flynet.Socket, seqno int64, cmd uint16, err errcode.Erro
 		}
 	}
 
+	b = buffer.AppendInt32(b, 0)
+
 	cli.Send(b)
-}
-
-func clientReqUnpack(pbSpace *pb.Namespace, b []byte, r int, w int) (ret interface{}, packetSize int, err error) {
-	unpackSize := w - r
-	if unpackSize >= cs.MinSize {
-		payload := int(binary.BigEndian.Uint32(b[r:]))
-
-		if payload == 0 {
-			err = fmt.Errorf("zero payload")
-			return
-		}
-
-		if payload+cs.SizeLen > cs.MaxPacketSize {
-			err = fmt.Errorf("large packet %d", payload+cs.SizeLen)
-			return
-		}
-
-		totalSize := payload + cs.SizeLen
-
-		packetSize = totalSize
-
-		if totalSize <= unpackSize {
-			rr := r + cs.SizeLen
-			var m relayMsg
-			m.bytes = b[r : r+totalSize]
-			m.seqno = int64(binary.BigEndian.Uint64(b[rr:]))
-			rr += (8 + 4)
-			m.cmd = binary.BigEndian.Uint16(b[rr:])
-			rr += 2
-			uniKeyLen := int(binary.BigEndian.Uint16(b[rr:]))
-			rr += 2
-			if uniKeyLen > 0 {
-				if uniKeyLen > payload-(rr-r) {
-					err = fmt.Errorf("invaild uniKeyLen")
-					return
-				}
-				bb := b[rr : rr+uniKeyLen]
-				uniKey := *(*string)(unsafe.Pointer(&bb))
-				m.slot = slot.Unikey2Slot(uniKey)
-				rr += uniKeyLen
-			}
-			m.timeout = time.Duration(binary.BigEndian.Uint32(b[rr:]))
-			ret = &m
-		}
-	}
-	return
-}
-
-type store struct {
-	sync.Mutex
-	id             int
-	queryingLeader bool
-	version        int64
-	leader         *node
-	nodes          []*node
-	waittingSend   *list.List //查询leader时的暂存队列
-}
-
-func (s *store) onCliMsg(cli *flynet.Socket, msg *relayMsg) {
-
-}
-
-func (s *store) onLoseLeader(version int64) {
-	s.Lock()
-	if s.version == version && nil != s.leader {
-		s.leader = nil
-	}
-	s.Unlock()
 }
 
 type gate struct {
@@ -262,15 +101,45 @@ type gate struct {
 	slotToStore map[int]*store
 	nodes       map[int]*node
 	stores      []*store
+	listener    *cs.Listener
 }
 
-func (g *gate) onCliMsg(cli *flynet.Socket, msg *relayMsg) {
-	s, ok := g.slotToStore[msg.slot]
-	if !ok {
-		replyCliError(cli, msg.seqno, msg.cmd, errcode.New(errcode.Errcode_error, "can't find store"))
-	} else {
-		s.onCliMsg(cli, msg)
+func NewGate(config *Config) *gate {
+	return &gate{
+		config:      config,
+		slotToStore: map[int]*store{},
+		nodes:       map[int]*node{},
 	}
+}
+
+func (g *gate) startListener() {
+	g.listener.Serve(func(session *flynet.Socket) {
+		go func() {
+			session.SetEncoder(&encoder{})
+			session.SetSendQueueSize(256)
+			session.SetInBoundProcessor(NewCliReqInboundProcessor())
+
+			//session.SetCloseCallBack(func(session *net.Socket, reason error) {
+			//})
+
+			session.BeginRecv(func(session *flynet.Socket, v interface{}) {
+				msg := v.(*relayMsg)
+				s, ok := g.slotToStore[msg.slot]
+				if !ok {
+					replyCliError(session, msg.seqno, msg.cmd, errcode.New(errcode.Errcode_error, "can't find store"))
+				} else {
+					msg.store = s
+					msg.cli = session
+					s.onCliMsg(session, msg)
+				}
+
+			})
+		}()
+	})
+}
+
+func verifyLogin(loginReq *flyproto.LoginReq) bool {
+	return true
 }
 
 func (g *gate) Start() error {
@@ -278,6 +147,12 @@ func (g *gate) Start() error {
 	if atomic.CompareAndSwapInt32(&g.startOnce, 0, 1) {
 		config := g.config
 		if err = os.MkdirAll(config.Log.LogDir, os.ModePerm); nil != err {
+			return err
+		}
+
+		g.listener, err = cs.NewListener("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort), verifyLogin)
+
+		if nil != err {
 			return err
 		}
 
@@ -290,8 +165,11 @@ func (g *gate) Start() error {
 
 		for _, v := range kvconf.NodeInfo {
 			n := &node{
-				id:      v.ID,
-				service: fmt.Sprintf("%s:%d", v.HostIP, v.ServicePort),
+				id:           v.ID,
+				service:      fmt.Sprintf("%s:%d", v.HostIP, v.ServicePort),
+				gate:         g,
+				waittingSend: list.New(),
+				pendingReq:   map[int64]*relayMsg{},
 			}
 
 			if udpAddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.HostIP, v.ConsolePort)); nil != err {
@@ -308,7 +186,9 @@ func (g *gate) Start() error {
 
 		for i := 0; i < storeCount; i++ {
 			g.stores = append(g.stores, &store{
-				id: i + 1,
+				id:           i + 1,
+				gate:         g,
+				waittingSend: list.New(),
 			})
 		}
 
@@ -320,12 +200,21 @@ func (g *gate) Start() error {
 			}
 		}
 
+		/*for _, v := range g.stores {
+			fmt.Println("store", v.id)
+			for _, vv := range v.nodes {
+				fmt.Println(vv.id, vv.service)
+			}
+		}*/
+
 		jj := 0
 
 		for i := 0; i < slot.SlotCount; i++ {
 			jj = (jj + 1) % storeCount
 			g.slotToStore[i] = g.stores[jj]
 		}
+
+		g.startListener()
 
 	}
 

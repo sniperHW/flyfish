@@ -1,4 +1,4 @@
-package kvnode
+package gate
 
 //go test -covermode=count -v -coverprofile=coverage.out -run=.
 //go tool cover -html=coverage.out
@@ -8,10 +8,50 @@ import (
 	"github.com/sniperHW/flyfish/backend/db"
 	"github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/logger"
+	"github.com/sniperHW/flyfish/server/mock/kvnode"
 	"github.com/stretchr/testify/assert"
 	"testing"
-	"time"
+	//"time"
 )
+
+var (
+	Err_version_mismatch errcode.Error = errcode.New(errcode.Errcode_version_mismatch, "")
+	Err_record_exist     errcode.Error = errcode.New(errcode.Errcode_record_exist, "")
+	Err_record_notexist  errcode.Error = errcode.New(errcode.Errcode_record_notexist, "")
+	Err_record_unchange  errcode.Error = errcode.New(errcode.Errcode_record_unchange, "")
+	Err_cas_not_equal    errcode.Error = errcode.New(errcode.Errcode_cas_not_equal, "")
+	Err_timeout          errcode.Error = errcode.New(errcode.Errcode_timeout, "")
+)
+
+var metaStr string = `
+{"TableDefs":[{"Name":"users1","Fields":[{"Name":"name","Type":"string"},{"Name":"age","Type":"int","DefautValue":"0"},{"Name":"phone","Type":"string"}]}]}
+`
+
+var configStr string = `
+	ServiceHost = "localhost"
+	ServicePort = 8110
+	ConsolePort = 8110
+
+	MaxNodePendingMsg  = 4096
+	MaxStorePendingMsg = 1024
+
+	[ClusterConfig]
+		ClusterID               = 1
+		DbHost                  = "localhost"
+		DbPort                  = 5432
+		DbUser			        = "sniper"
+		DbPassword              = "123456"
+		DbDataBase              = "test"
+
+	[Log]
+		MaxLogfileSize  = 104857600 # 100mb
+		LogDir          = "log"
+		LogPrefix       = "gate"
+		LogLevel        = "info"
+		EnableLogStdout = false		
+
+`
 
 func test(t *testing.T, c *client.Client) {
 
@@ -309,15 +349,31 @@ func test(t *testing.T, c *client.Client) {
 	}
 }
 
-var metaStr string = `
-{"TableDefs":[{"Name":"users1","Fields":[{"Name":"name","Type":"string"},{"Name":"age","Type":"int","DefautValue":"0"},{"Name":"phone","Type":"string"}]}]}
-`
-
-func TestMockKvNode(t *testing.T) {
-	n := New()
+func Test1(t *testing.T) {
 	def, _ := db.CreateDbDefFromJsonString([]byte(metaStr))
-	assert.Nil(t, n.Start(false, "localhost:8110", "localhost:8110", def))
+	n1 := kvnode.New()
+	n2 := kvnode.New()
+	n3 := kvnode.New()
+
+	assert.Nil(t, n1.Start(true, "localhost:8021", "localhost:8031", def))
+	assert.Nil(t, n2.Start(false, "localhost:8022", "localhost:8032", def))
+	assert.Nil(t, n3.Start(false, "localhost:8023", "localhost:8033", def))
+
+	config, err := LoadConfigStr(configStr)
+
+	assert.Nil(t, err)
+
+	l := logger.NewZapLogger("testGate.log", "./log", config.Log.LogLevel, 100, 14, true)
+
+	InitLogger(l)
+
+	client.InitLogger(l)
+
+	g := NewGate(config)
+
+	assert.Nil(t, g.Start())
+
 	c := client.OpenClient("localhost:8110")
 	test(t, c)
-	time.Sleep(time.Second)
+
 }

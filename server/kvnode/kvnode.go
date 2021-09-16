@@ -78,8 +78,8 @@ func (this *kvnode) startListener() {
 			this.clients[session] = session
 			this.muC.Unlock()
 
-			session.SetRecvTimeout(flyproto.PingTime * 10)
-			session.SetSendQueueSize(10000)
+			//session.SetRecvTimeout(flyproto.PingTime * 10)
+			//session.SetSendQueueSize()
 
 			//只有配置了压缩开启同时客户端支持压缩才开启通信压缩
 			session.SetInBoundProcessor(cs.NewReqInboundProcessor())
