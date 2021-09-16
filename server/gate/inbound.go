@@ -39,6 +39,8 @@ func clientReqUnpack(pbSpace *pb.Namespace, b []byte, r int, w int) (ret interfa
 			rr += (8 + 4)
 			m.cmd = binary.BigEndian.Uint16(b[rr:])
 			rr += 2
+			m.deadline = time.Now().Add(time.Duration(binary.BigEndian.Uint32(b[rr:])) * time.Millisecond)
+			rr += 4
 			uniKeyLen := int(binary.BigEndian.Uint16(b[rr:]))
 			rr += 2
 			if uniKeyLen > 0 {
@@ -49,9 +51,7 @@ func clientReqUnpack(pbSpace *pb.Namespace, b []byte, r int, w int) (ret interfa
 				bb := b[rr : rr+uniKeyLen]
 				uniKey := *(*string)(unsafe.Pointer(&bb))
 				m.slot = slot.Unikey2Slot(uniKey)
-				rr += uniKeyLen
 			}
-			m.timeout = time.Duration(binary.BigEndian.Uint32(b[rr:]))
 			ret = &m
 		}
 	}

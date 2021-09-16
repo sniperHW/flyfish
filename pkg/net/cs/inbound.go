@@ -37,9 +37,9 @@ func reqUnpack(pbSpace *pb.Namespace, b []byte, r int, w int) (ret interface{}, 
 			m.Seqno = reader.GetInt64()
 			m.Store = int(reader.GetUint32())
 			m.Cmd = flyproto.CmdType(reader.GetUint16())
+			m.Timeout = reader.GetUint32()
 			sizeOfUniKey := int(reader.GetUint16())
 			m.UniKey = reader.GetString(sizeOfUniKey)
-			m.Timeout = reader.GetUint32()
 			pbsize := int(reader.GetInt32())
 			buff := reader.GetBytes(pbsize)
 			if msg, err = pbSpace.Unmarshal(uint32(m.Cmd), buff); err != nil {

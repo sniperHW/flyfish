@@ -26,43 +26,51 @@ type node struct {
 }
 
 func (n *node) sendRelayReq(req *relayMsg) {
-	req.node = n
-	req.nodeSeqno = atomic.AddInt64(&n.seqCounter, 1)
-	//改写seqno
-	binary.BigEndian.PutUint64(req.bytes[4:], uint64(req.nodeSeqno))
-	//填充storeID
-	binary.BigEndian.PutUint32(req.bytes[4+8:], uint32(req.store.id))
+	now := time.Now()
+	if req.deadline.After(now) {
+		req.node = n
+		req.nodeSeqno = atomic.AddInt64(&n.seqCounter, 1)
+		//改写seqno
+		binary.BigEndian.PutUint64(req.bytes[4:], uint64(req.nodeSeqno))
+		//填充storeID
+		binary.BigEndian.PutUint32(req.bytes[4+8:], uint32(req.store.id))
 
-	n.Lock()
-	if nil != n.session {
-		if len(n.pendingReq) >= n.gate.config.MaxNodePendingMsg {
-			n.Unlock()
-			replyCliError(req.cli, req.seqno, req.cmd, errcode.New(errcode.Errcode_gate_busy, ""))
-			return
-		} else {
-			if nil == n.session.Send(req.bytes) {
-				req.bytes = nil
-				n.pendingReq[req.nodeSeqno] = req
-				req.deadlineTimer = time.AfterFunc(req.timeout*time.Millisecond, req.onTimeout)
-			} else {
+		n.Lock()
+		if nil != n.session {
+			if len(n.pendingReq) >= n.gate.config.MaxNodePendingMsg {
 				n.Unlock()
-				replyCliError(req.cli, req.seqno, req.cmd, errcode.New(errcode.Errcode_retry, ""))
+				replyCliError(req.cli, req.seqno, req.cmd, errcode.New(errcode.Errcode_gate_busy, ""))
 				return
+			} else {
+				GetSugar().Infof("send req to kvnode:%d store:%d seqno:%d nodeSeqno:%d", n.id, req.store.id, req.seqno, req.nodeSeqno)
+				timeout := req.deadline.Sub(now)
+				if timeout > time.Millisecond {
+					binary.BigEndian.PutUint32(req.bytes[18:], uint32(timeout/time.Millisecond))
+					if nil == n.session.Send(req.bytes) {
+						req.bytes = nil
+						n.pendingReq[req.nodeSeqno] = req
+						req.deadlineTimer = time.AfterFunc(timeout, req.onTimeout)
+					} else {
+						n.Unlock()
+						replyCliError(req.cli, req.seqno, req.cmd, errcode.New(errcode.Errcode_retry, ""))
+						return
+					}
+				}
 			}
-		}
-	} else {
-		if n.waittingSend.Len() >= n.gate.config.MaxNodePendingMsg {
-			n.Unlock()
-			replyCliError(req.cli, req.seqno, req.cmd, errcode.New(errcode.Errcode_gate_busy, ""))
-			return
 		} else {
-			n.waittingSend.PushBack(req)
-			if !n.dialing {
-				n.dial()
+			if n.waittingSend.Len() >= n.gate.config.MaxNodePendingMsg {
+				n.Unlock()
+				replyCliError(req.cli, req.seqno, req.cmd, errcode.New(errcode.Errcode_gate_busy, ""))
+				return
+			} else {
+				n.waittingSend.PushBack(req)
+				if !n.dialing {
+					n.dial()
+				}
 			}
 		}
+		n.Unlock()
 	}
-	n.Unlock()
 }
 
 func (n *node) dial() {
@@ -87,19 +95,22 @@ func (n *node) dial() {
 					}
 				}
 			}).BeginRecv(func(s *flynet.Socket, msg interface{}) {
-				GetSugar().Infof("got kvnode resp")
 				n.onNodeResp(msg.([]byte))
 			})
 
 			for v := n.waittingSend.Front(); nil != v; v = n.waittingSend.Front() {
 				req := n.waittingSend.Remove(v).(*relayMsg)
-				if nil == session.Send(req.bytes) {
-					GetSugar().Infof("send req to kvnode:%d nodeSeqno:%d,timeout:%d", n.id, req.nodeSeqno, req.timeout)
-					req.bytes = nil
-					n.pendingReq[req.nodeSeqno] = req
-					req.deadlineTimer = time.AfterFunc(req.timeout*time.Millisecond, req.onTimeout)
-				} else {
-					replyCliError(req.cli, req.seqno, req.cmd, errcode.New(errcode.Errcode_retry, ""))
+				timeout := req.deadline.Sub(time.Now())
+				if timeout > time.Millisecond {
+					GetSugar().Infof("send req to kvnode:%d store:%d seqno:%d nodeSeqno:%d", n.id, req.store.id, req.seqno, req.nodeSeqno)
+					binary.BigEndian.PutUint32(req.bytes[18:], uint32(timeout/time.Millisecond))
+					if nil == session.Send(req.bytes) {
+						req.bytes = nil
+						n.pendingReq[req.nodeSeqno] = req
+						req.deadlineTimer = time.AfterFunc(timeout, req.onTimeout)
+					} else {
+						replyCliError(req.cli, req.seqno, req.cmd, errcode.New(errcode.Errcode_retry, ""))
+					}
 				}
 			}
 			n.Unlock()
@@ -118,25 +129,20 @@ func (n *node) dial() {
 func (n *node) onNodeResp(b []byte) {
 	seqno := int64(binary.BigEndian.Uint64(b[cs.SizeLen:]))
 	errCode := int16(binary.BigEndian.Uint16(b[cs.SizeLen+8+2:]))
-
-	GetSugar().Infof("onNodeResp seqno:%d,errCode:%d", seqno, errCode)
-
 	n.Lock()
 	req, ok := n.pendingReq[seqno]
 	if ok {
-
-		GetSugar().Infof("onNodeResp got req ctx")
-
 		delete(n.pendingReq, seqno)
 		n.Unlock()
-		if errCode == errcode.Errcode_not_leader {
-			req.store.onLoseLeader(req.version)
-		}
-
 		if req.deadlineTimer.Stop() {
-			//恢复客户端的seqno
-			binary.BigEndian.PutUint64(b[4:], uint64(req.seqno))
-			req.cli.Send(b)
+			if errCode == errcode.Errcode_not_leader {
+				replyCliError(req.cli, req.seqno, req.cmd, errcode.New(errcode.Errcode_retry, ""))
+				req.store.onLoseLeader(req.version)
+			} else {
+				//恢复客户端的seqno
+				binary.BigEndian.PutUint64(b[4:], uint64(req.seqno))
+				req.cli.Send(b)
+			}
 		}
 	} else {
 		n.Unlock()

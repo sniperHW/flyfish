@@ -24,7 +24,6 @@ type store struct {
 }
 
 func (s *store) onCliMsg(cli *flynet.Socket, msg *relayMsg) {
-	GetSugar().Infof("got msg cmd:%d,seq:%d", msg.cmd, msg.seqno)
 	var leader *node
 	s.Lock()
 	if nil == s.leader {

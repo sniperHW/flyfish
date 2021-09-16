@@ -74,11 +74,11 @@ func (this *ReqEncoder) EnCode(o interface{}, buff *buffer.Buffer) error {
 	buff.AppendUint32(uint32(m.Store))
 	//cmd
 	buff.AppendUint16(uint16(cmd))
+	//timeout
+	buff.AppendUint32(m.Timeout)
 	//unikey
 	buff.AppendInt16(int16(sizeOfUniKey))
 	buff.AppendString(m.UniKey)
-	//timeout
-	buff.AppendUint32(m.Timeout)
 	//pb
 	buff.AppendInt32(int32(len(pbbytes)))
 	buff.AppendBytes(pbbytes)

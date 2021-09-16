@@ -112,9 +112,6 @@ func (this *Node) Dispatch(session *fnet.Socket, cmd flyproto.CmdType, msg *cs.R
 		session.Close(nil, 0)
 	} else {
 		if nil != msg {
-
-			fmt.Println("got req", cmd)
-
 			switch cmd {
 			default:
 				if handler, ok := this.handlers[cmd]; ok {

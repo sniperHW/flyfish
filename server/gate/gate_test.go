@@ -376,4 +376,10 @@ func Test1(t *testing.T) {
 	c := client.OpenClient("localhost:8110")
 	test(t, c)
 
+	g.config.MaxNodePendingMsg = 0
+
+	r := c.Del("users1", "sniperHW").Exec()
+
+	assert.Equal(t, errcode.Errcode_gate_busy, errcode.GetCode(r.ErrCode))
+
 }

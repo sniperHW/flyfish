@@ -37,7 +37,7 @@ type relayMsg struct {
 	slot          int
 	seqno         int64
 	cmd           uint16
-	timeout       time.Duration
+	deadline      time.Time
 	bytes         []byte
 	deadlineTimer *time.Timer
 	store         *store
@@ -199,13 +199,6 @@ func (g *gate) Start() error {
 				}
 			}
 		}
-
-		/*for _, v := range g.stores {
-			fmt.Println("store", v.id)
-			for _, vv := range v.nodes {
-				fmt.Println(vv.id, vv.service)
-			}
-		}*/
 
 		jj := 0
 
