@@ -31,6 +31,7 @@ type dir struct {
 func NewDir(config *Config) *dir {
 	return &dir{
 		config: config,
+		gates:  map[string]*gate{},
 	}
 }
 

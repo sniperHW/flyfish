@@ -10,9 +10,11 @@ import (
 	"github.com/sniperHW/flyfish/pkg/net/cs"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/server/clusterconf"
+	sproto "github.com/sniperHW/flyfish/server/proto"
 	"github.com/sniperHW/flyfish/server/slot"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -119,10 +121,9 @@ func replyCliError(cli *flynet.Socket, seqno int64, cmd uint16, err errcode.Erro
 }
 
 type gate struct {
-	config    *Config
-	stopOnce  int32
-	startOnce int32
-	//muRW          sync.RWMutex
+	config        *Config
+	stopOnce      int32
+	startOnce     int32
 	slotToStore   map[int]*store
 	nodes         map[int]*node
 	stores        []*store
@@ -131,8 +132,10 @@ type gate struct {
 	muC           sync.Mutex
 	clients       map[*flynet.Socket]*flynet.Socket
 	consoleConn   *flynet.Udp
+	muConf        sync.Mutex
 	kvconf        *clusterconf.KvConfigJson
 	kvconfVersion int
+	die           chan struct{}
 }
 
 func NewGate(config *Config) *gate {
@@ -141,6 +144,7 @@ func NewGate(config *Config) *gate {
 		slotToStore: map[int]*store{},
 		nodes:       map[int]*node{},
 		clients:     map[*flynet.Socket]*flynet.Socket{},
+		die:         make(chan struct{}),
 	}
 }
 
@@ -256,6 +260,43 @@ func (g *gate) Start() error {
 
 		g.startListener()
 
+		dirs := strings.Split(g.config.DirService, ";")
+
+		if len(dirs) > 0 {
+			go func() {
+				for {
+					g.muConf.Lock()
+					kvconfVersion := g.kvconfVersion
+					g.muConf.Unlock()
+					for _, v := range dirs {
+						if addr, err := net.ResolveUDPAddr("udp", v); nil == err {
+							g.consoleConn.SendTo(addr, &sproto.GateReport{
+								Service:     fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort),
+								Console:     fmt.Sprintf("%s:%d", g.config.ServiceHost, g.config.ConsolePort),
+								ConfVersion: int32(kvconfVersion),
+							})
+						}
+					}
+
+					ticker := time.NewTicker((sproto.PingTime - 1) * time.Second)
+					select {
+					case <-g.die:
+						ticker.Stop()
+						//服务关闭，通知所有dir立即从gatelist中移除本服务
+						for _, v := range dirs {
+							if addr, err := net.ResolveUDPAddr("udp", v); nil == err {
+								g.consoleConn.SendTo(addr, &sproto.RemoveGate{
+									Service: fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort),
+								})
+							}
+						}
+						return
+					case <-ticker.C:
+					}
+					ticker.Stop()
+				}
+			}()
+		}
 	}
 
 	return nil
@@ -278,6 +319,7 @@ func waitCondition(fn func() bool) {
 
 func (g *gate) Stop() {
 	if atomic.CompareAndSwapInt32(&g.stopOnce, 0, 1) {
+		close(g.die)
 
 		//首先关闭监听,不在接受新到达的连接
 		g.listener.Close()

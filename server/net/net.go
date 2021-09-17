@@ -37,4 +37,5 @@ func init() {
 	namespace.Register(&sproto.QueryGateList{}, uint32(sproto.ServerCmdType_QueryGateList))
 	namespace.Register(&sproto.GateList{}, uint32(sproto.ServerCmdType_GateList))
 	namespace.Register(&sproto.NotifyReloadKvconf{}, uint32(sproto.ServerCmdType_NotiReloadKvConf))
+	namespace.Register(&sproto.RemoveGate{}, uint32(sproto.ServerCmdType_RemoveGate))
 }
