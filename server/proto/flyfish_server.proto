@@ -12,8 +12,12 @@ option (gogoproto.goproto_enum_prefix_all) = true;
 
 
 enum ServerCmdType {
-  QueryLeader = 1;
+  QueryLeader     = 1;
   QueryLeaderResp = 2;
+  GateReport      = 3;
+  QueryGateList   = 4;
+  GateList        = 5;
+  NotiReloadKvConf    = 6;
 }
 
 //查询是否store的leader,如果是返回yes=true
@@ -23,4 +27,23 @@ message query_leader {
 
 message query_leader_resp {
   optional bool yes = 1;
+}
+
+
+message gate_report {
+  optional string service      = 1;
+  optional string console      = 2;
+  optional int32  conf_version = 3;
+}
+
+message query_gate_list {
+  
+}
+
+message gate_list {
+  repeated string list  = 1;
+}
+
+message notify_reload_kvconf {
+  
 }

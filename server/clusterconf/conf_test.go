@@ -73,20 +73,12 @@ func Test1(t *testing.T) {
 		Nodes: []int{4, 5, 6},
 	})
 
-	r := MakeRoute(&confJson)
-
-	jj := 0
-	for i := 0; i < sslot.SlotCount; i++ {
-		jj = (jj + 1) % 10
-		assert.Equal(t, jj+1, r[i].Store)
-	}
-
 	b, err := MarshalConfig(&confJson)
 	assert.Nil(t, err)
 	fmt.Println(string(b))
 
-	//conf, err := makeKvConfig(&confJson)
-	//assert.Nil(t, err)
+	conf, err := makeKvConfig(&confJson)
+	assert.Nil(t, err)
 
 	fmt.Println("---------------------------------------------")
 
@@ -201,11 +193,16 @@ func Test2(t *testing.T) {
 		Nodes: []int{4, 5, 6},
 	})
 
-	err := StoreConfigJsonToDB(1, "pgsql", "localhost", 5432, "test", "sniper", "123456", &confJson)
+	_, version, _ := LoadConfigJsonFromDB(1, "pgsql", "localhost", 5432, "test", "sniper", "123456")
+
+	oldVersion := version
+	newVersion := version + 1
+
+	err := StoreConfigJsonToDB(1, oldVersion, newVersion, "pgsql", "localhost", 5432, "test", "sniper", "123456", &confJson)
 
 	fmt.Println(err)
 
-	c, err := LoadConfigJsonFromDB(1, "pgsql", "localhost", 5432, "test", "sniper", "123456")
+	c, version, err := LoadConfigJsonFromDB(1, "pgsql", "localhost", 5432, "test", "sniper", "123456")
 
 	assert.Equal(t, c.Shard[0].Nodes[0], 1)
 	assert.Equal(t, c.Shard[0].Nodes[1], 2)
@@ -216,5 +213,7 @@ func Test2(t *testing.T) {
 	assert.Equal(t, c.Shard[1].Nodes[2], 6)
 
 	assert.Equal(t, c.NodeInfo[5].ID, 6)
+
+	fmt.Println(version)
 
 }

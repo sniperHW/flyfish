@@ -1,4 +1,4 @@
-package gate
+package dir
 
 import (
 	"github.com/BurntSushi/toml"
@@ -25,10 +25,8 @@ func LoadConfig(path string) (*Config, error) {
 }
 
 type Config struct {
-	ServiceHost string
-	ServicePort int
+	Host        string
 	ConsolePort int
-	DirService  string //dir服务以；分割
 
 	ClusterConfig struct {
 		ClusterID  int
@@ -39,10 +37,6 @@ type Config struct {
 		DbPassword string
 		DbDataBase string
 	}
-
-	MaxNodePendingMsg  int //单个node  dial期间pending消息数量限制/已经发往kvnode等待应答的消息数量
-	MaxStorePendingMsg int //单个store 缺失leader期间pending消息数量限制
-	MaxPendingMsg      int //整个gate pending消息数量限制
 
 	Log struct {
 		MaxLogfileSize  int

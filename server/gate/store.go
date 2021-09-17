@@ -24,25 +24,29 @@ type store struct {
 }
 
 func (s *store) onCliMsg(cli *flynet.Socket, msg *relayMsg) {
-	var leader *node
-	s.Lock()
-	if nil == s.leader {
-		if s.waittingSend.Len() >= s.gate.config.MaxStorePendingMsg {
-			s.Unlock()
-			replyCliError(msg.cli, msg.seqno, msg.cmd, errcode.New(errcode.Errcode_gate_busy, ""))
+	if atomic.AddInt64(&s.gate.pendingMsg, 1) > int64(s.gate.config.MaxPendingMsg) {
+		msg.replyErr(errcode.New(errcode.Errcode_gate_busy, ""))
+	} else {
+		var leader *node
+		s.Lock()
+		if nil == s.leader {
+			if s.waittingSend.Len() >= s.gate.config.MaxStorePendingMsg {
+				s.Unlock()
+				msg.replyErr(errcode.New(errcode.Errcode_gate_busy, ""))
+			} else {
+				s.waittingSend.PushBack(msg)
+				s.queryLeader()
+				s.Unlock()
+			}
 		} else {
-			s.waittingSend.PushBack(msg)
-			s.queryLeader()
+			msg.version = atomic.LoadInt64(&s.version)
+			leader = s.leader
 			s.Unlock()
 		}
-	} else {
-		msg.version = atomic.LoadInt64(&s.version)
-		leader = s.leader
-		s.Unlock()
-	}
 
-	if nil != leader {
-		leader.sendRelayReq(msg)
+		if nil != leader {
+			leader.sendRelayReq(msg)
+		}
 	}
 }
 
@@ -117,7 +121,7 @@ func (s *store) queryLeader() {
 			if nil == n {
 				for v := waittingSend.Front(); nil != v; v = waittingSend.Front() {
 					req := waittingSend.Remove(v).(*relayMsg)
-					replyCliError(req.cli, req.seqno, req.cmd, errcode.New(errcode.Errcode_retry, ""))
+					req.replyErr(errcode.New(errcode.Errcode_retry, ""))
 				}
 			} else {
 				for v := waittingSend.Front(); nil != v; v = waittingSend.Front() {

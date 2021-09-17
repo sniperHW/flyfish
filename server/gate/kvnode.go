@@ -39,7 +39,7 @@ func (n *node) sendRelayReq(req *relayMsg) {
 		if nil != n.session {
 			if len(n.pendingReq) >= n.gate.config.MaxNodePendingMsg {
 				n.Unlock()
-				replyCliError(req.cli, req.seqno, req.cmd, errcode.New(errcode.Errcode_gate_busy, ""))
+				req.replyErr(errcode.New(errcode.Errcode_gate_busy, ""))
 				return
 			} else {
 				GetSugar().Infof("send req to kvnode:%d store:%d seqno:%d nodeSeqno:%d", n.id, req.store.id, req.seqno, req.nodeSeqno)
@@ -52,15 +52,17 @@ func (n *node) sendRelayReq(req *relayMsg) {
 						req.deadlineTimer = time.AfterFunc(timeout, req.onTimeout)
 					} else {
 						n.Unlock()
-						replyCliError(req.cli, req.seqno, req.cmd, errcode.New(errcode.Errcode_retry, ""))
+						req.replyErr(errcode.New(errcode.Errcode_retry, ""))
 						return
 					}
+				} else {
+					req.dropReply()
 				}
 			}
 		} else {
 			if n.waittingSend.Len() >= n.gate.config.MaxNodePendingMsg {
 				n.Unlock()
-				replyCliError(req.cli, req.seqno, req.cmd, errcode.New(errcode.Errcode_gate_busy, ""))
+				req.replyErr(errcode.New(errcode.Errcode_gate_busy, ""))
 				return
 			} else {
 				n.waittingSend.PushBack(req)
@@ -70,6 +72,8 @@ func (n *node) sendRelayReq(req *relayMsg) {
 			}
 		}
 		n.Unlock()
+	} else {
+		req.dropReply()
 	}
 }
 
@@ -91,7 +95,7 @@ func (n *node) dial() {
 				n.Unlock()
 				for _, v := range pendingReq {
 					if v.deadlineTimer.Stop() {
-						replyCliError(v.cli, v.seqno, v.cmd, errcode.New(errcode.Errcode_retry, ""))
+						v.dropReply()
 					}
 				}
 			}).BeginRecv(func(s *flynet.Socket, msg interface{}) {
@@ -109,8 +113,10 @@ func (n *node) dial() {
 						n.pendingReq[req.nodeSeqno] = req
 						req.deadlineTimer = time.AfterFunc(timeout, req.onTimeout)
 					} else {
-						replyCliError(req.cli, req.seqno, req.cmd, errcode.New(errcode.Errcode_retry, ""))
+						req.replyErr(errcode.New(errcode.Errcode_retry, ""))
 					}
+				} else {
+					req.dropReply()
 				}
 			}
 			n.Unlock()
@@ -120,7 +126,7 @@ func (n *node) dial() {
 			n.Unlock()
 			for v := waittingSend.Front(); nil != v; v = waittingSend.Front() {
 				req := waittingSend.Remove(v).(*relayMsg)
-				replyCliError(req.cli, req.seqno, req.cmd, errcode.New(errcode.Errcode_retry, ""))
+				req.replyErr(errcode.New(errcode.Errcode_retry, ""))
 			}
 		}
 	}()
@@ -136,12 +142,12 @@ func (n *node) onNodeResp(b []byte) {
 		n.Unlock()
 		if req.deadlineTimer.Stop() {
 			if errCode == errcode.Errcode_not_leader {
-				replyCliError(req.cli, req.seqno, req.cmd, errcode.New(errcode.Errcode_retry, ""))
+				req.replyErr(errcode.New(errcode.Errcode_retry, ""))
 				req.store.onLoseLeader(req.version)
 			} else {
 				//恢复客户端的seqno
 				binary.BigEndian.PutUint64(b[4:], uint64(req.seqno))
-				req.cli.Send(b)
+				req.reply(b)
 			}
 		}
 	} else {

@@ -90,11 +90,12 @@ type kv struct {
 }
 
 type Node struct {
-	listener *cs.Listener
-	handlers map[flyproto.CmdType]handler
-	queue    *queue.PriorityQueue
-	metaMgr  db.DBMeta
-	store    map[string]*kv
+	listener    *cs.Listener
+	handlers    map[flyproto.CmdType]handler
+	queue       *queue.PriorityQueue
+	metaMgr     db.DBMeta
+	store       map[string]*kv
+	consoleConn *fnet.Udp
 }
 
 func verifyLogin(loginReq *flyproto.LoginReq) bool {
@@ -151,6 +152,11 @@ func (this *Node) startListener() error {
 	return nil
 }
 
+func (this *Node) Stop() {
+	this.listener.Close()
+	this.consoleConn.Close()
+}
+
 func (this *Node) Start(leader bool, service string, console string, def *db.DbDef) error {
 
 	m, err := sql.CreateDbMeta(def)
@@ -186,7 +192,7 @@ func (this *Node) Start(leader bool, service string, console string, def *db.DbD
 		}
 	}()
 
-	consoleConn, err := fnet.NewUdp(console, snet.Pack, snet.Unpack)
+	this.consoleConn, err = fnet.NewUdp(console, snet.Pack, snet.Unpack)
 	if nil != err {
 		return err
 	}
@@ -194,13 +200,13 @@ func (this *Node) Start(leader bool, service string, console string, def *db.DbD
 	go func() {
 		recvbuff := make([]byte, 64*1024)
 		for {
-			from, msg, err := consoleConn.ReadFrom(recvbuff)
+			from, msg, err := this.consoleConn.ReadFrom(recvbuff)
 			if nil != err {
 				return
 			} else {
 				switch msg.(type) {
 				case *sproto.QueryLeader:
-					consoleConn.SendTo(from, &sproto.QueryLeaderResp{Yes: leader})
+					this.consoleConn.SendTo(from, &sproto.QueryLeaderResp{Yes: leader})
 				}
 			}
 		}

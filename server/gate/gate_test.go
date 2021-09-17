@@ -35,6 +35,7 @@ var configStr string = `
 
 	MaxNodePendingMsg  = 4096
 	MaxStorePendingMsg = 1024
+	MaxPendingMsg = 10000
 
 	[ClusterConfig]
 		ClusterID               = 1
@@ -381,5 +382,10 @@ func Test1(t *testing.T) {
 	r := c.Del("users1", "sniperHW").Exec()
 
 	assert.Equal(t, errcode.Errcode_gate_busy, errcode.GetCode(r.ErrCode))
+
+	g.Stop()
+	n1.Stop()
+	n2.Stop()
+	n3.Stop()
 
 }

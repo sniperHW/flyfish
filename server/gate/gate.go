@@ -13,6 +13,7 @@ import (
 	"github.com/sniperHW/flyfish/server/slot"
 	"net"
 	"os"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -42,13 +43,36 @@ type relayMsg struct {
 	deadlineTimer *time.Timer
 	store         *store
 	node          *node
+	gate          *gate
 	cli           *flynet.Socket
+	replyed       int32
 }
 
 func (r *relayMsg) onTimeout() {
 	r.node.Lock()
 	delete(r.node.pendingReq, r.nodeSeqno)
 	r.node.Unlock()
+	r.dropReply()
+}
+
+func (r *relayMsg) reply(b []byte) {
+	if atomic.CompareAndSwapInt32(&r.replyed, 0, 1) {
+		atomic.AddInt64(&r.gate.pendingMsg, -1)
+		r.cli.Send(b)
+	}
+}
+
+func (r *relayMsg) replyErr(err errcode.Error) {
+	if atomic.CompareAndSwapInt32(&r.replyed, 0, 1) {
+		atomic.AddInt64(&r.gate.pendingMsg, -1)
+		replyCliError(r.cli, r.seqno, r.cmd, err)
+	}
+}
+
+func (r *relayMsg) dropReply() {
+	if atomic.CompareAndSwapInt32(&r.replyed, 0, 1) {
+		atomic.AddInt64(&r.gate.pendingMsg, -1)
+	}
 }
 
 func replyCliError(cli *flynet.Socket, seqno int64, cmd uint16, err errcode.Error) {
@@ -95,13 +119,20 @@ func replyCliError(cli *flynet.Socket, seqno int64, cmd uint16, err errcode.Erro
 }
 
 type gate struct {
-	config      *Config
-	stopOnce    int32
-	startOnce   int32
-	slotToStore map[int]*store
-	nodes       map[int]*node
-	stores      []*store
-	listener    *cs.Listener
+	config    *Config
+	stopOnce  int32
+	startOnce int32
+	//muRW          sync.RWMutex
+	slotToStore   map[int]*store
+	nodes         map[int]*node
+	stores        []*store
+	listener      *cs.Listener
+	pendingMsg    int64
+	muC           sync.Mutex
+	clients       map[*flynet.Socket]*flynet.Socket
+	consoleConn   *flynet.Udp
+	kvconf        *clusterconf.KvConfigJson
+	kvconfVersion int
 }
 
 func NewGate(config *Config) *gate {
@@ -109,27 +140,39 @@ func NewGate(config *Config) *gate {
 		config:      config,
 		slotToStore: map[int]*store{},
 		nodes:       map[int]*node{},
+		clients:     map[*flynet.Socket]*flynet.Socket{},
 	}
 }
 
 func (g *gate) startListener() {
 	g.listener.Serve(func(session *flynet.Socket) {
 		go func() {
+
+			g.muC.Lock()
+			g.clients[session] = session
+			g.muC.Unlock()
+
 			session.SetEncoder(&encoder{})
 			session.SetSendQueueSize(256)
 			session.SetInBoundProcessor(NewCliReqInboundProcessor())
 
-			//session.SetCloseCallBack(func(session *net.Socket, reason error) {
-			//})
+			session.SetCloseCallBack(func(session *flynet.Socket, reason error) {
+				g.muC.Lock()
+				delete(g.clients, session)
+				g.muC.Unlock()
+			})
 
 			session.BeginRecv(func(session *flynet.Socket, v interface{}) {
 				msg := v.(*relayMsg)
+				//g.muRW.RLock()
 				s, ok := g.slotToStore[msg.slot]
+				//g.muRW.RUnlock()
 				if !ok {
 					replyCliError(session, msg.seqno, msg.cmd, errcode.New(errcode.Errcode_error, "can't find store"))
 				} else {
 					msg.store = s
 					msg.cli = session
+					msg.gate = g
 					s.onCliMsg(session, msg)
 				}
 
@@ -158,12 +201,12 @@ func (g *gate) Start() error {
 
 		//从DB获取配置
 		clusterConf := config.ClusterConfig
-		kvconf, err := clusterconf.LoadConfigJsonFromDB(clusterConf.ClusterID, clusterConf.SqlType, clusterConf.DbHost, clusterConf.DbPort, clusterConf.DbDataBase, clusterConf.DbUser, clusterConf.DbPassword)
+		g.kvconf, g.kvconfVersion, err = clusterconf.LoadConfigJsonFromDB(clusterConf.ClusterID, clusterConf.SqlType, clusterConf.DbHost, clusterConf.DbPort, clusterConf.DbDataBase, clusterConf.DbUser, clusterConf.DbPassword)
 		if nil != err {
 			return err
 		}
 
-		for _, v := range kvconf.NodeInfo {
+		for _, v := range g.kvconf.NodeInfo {
 			n := &node{
 				id:           v.ID,
 				service:      fmt.Sprintf("%s:%d", v.HostIP, v.ServicePort),
@@ -182,7 +225,7 @@ func (g *gate) Start() error {
 
 		}
 
-		storeCount := len(kvconf.Shard) * clusterconf.StorePerNode
+		storeCount := len(g.kvconf.Shard) * clusterconf.StorePerNode
 
 		for i := 0; i < storeCount; i++ {
 			g.stores = append(g.stores, &store{
@@ -192,7 +235,7 @@ func (g *gate) Start() error {
 			})
 		}
 
-		for k, v := range kvconf.Shard {
+		for k, v := range g.kvconf.Shard {
 			for _, vv := range v.Nodes {
 				for i := 0; i < clusterconf.StorePerNode; i++ {
 					g.stores[k*clusterconf.StorePerNode+i].nodes = append(g.stores[k*clusterconf.StorePerNode+i].nodes, g.nodes[vv])
@@ -207,9 +250,65 @@ func (g *gate) Start() error {
 			g.slotToStore[i] = g.stores[jj]
 		}
 
+		if err = g.initConsole(fmt.Sprintf("%s:%d", g.config.ServiceHost, g.config.ConsolePort)); nil != err {
+			return err
+		}
+
 		g.startListener()
 
 	}
 
 	return nil
+}
+
+func waitCondition(fn func() bool) {
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		for {
+			time.Sleep(time.Millisecond * 100)
+			if fn() {
+				wg.Done()
+				break
+			}
+		}
+	}()
+	wg.Wait()
+}
+
+func (g *gate) Stop() {
+	if atomic.CompareAndSwapInt32(&g.stopOnce, 0, 1) {
+
+		//首先关闭监听,不在接受新到达的连接
+		g.listener.Close()
+		//关闭现有连接的读端，不会再接收新的req
+		g.muC.Lock()
+		for _, v := range g.clients {
+			v.ShutdownRead()
+		}
+		g.muC.Unlock()
+
+		//等待所有消息处理完
+		waitCondition(func() bool {
+			return atomic.LoadInt64(&g.pendingMsg) == 0
+		})
+
+		//关闭现有连接
+		g.muC.Lock()
+		clients := g.clients
+		g.muC.Unlock()
+
+		for _, v := range clients {
+			v.Close(nil, time.Second*5)
+		}
+
+		waitCondition(func() bool {
+			g.muC.Lock()
+			defer g.muC.Unlock()
+			return len(g.clients) == 0
+		})
+
+		g.consoleConn.Close()
+
+	}
 }

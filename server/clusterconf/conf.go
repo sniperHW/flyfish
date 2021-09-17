@@ -195,53 +195,54 @@ func LoadConfigFromDB(clusterID int, sqlType string, host string, port int, dbna
 	}
 }
 
-func makeStoreMysql(clusterID int, b []byte) string {
+func makeStoreMysql(clusterID int, oldVersion int, newVersion int, b []byte) string {
 	c := string(b)
-	return fmt.Sprintf("INSERT INTO kvconf(id,conf) VALUES (1,'%s') on duplicate key update conf='%s' where id = %d", c, c, clusterID)
+	return fmt.Sprintf("INSERT INTO kvconf(id,conf,version) VALUES (%d,'%s',%d) on duplicate key update conf='%s' , version=%d where id = %d and version=%d", clusterID, c, newVersion, c, clusterID, newVersion, oldVersion)
 }
 
-func makeStorePgsql(clusterID int, b []byte) string {
+func makeStorePgsql(clusterID int, oldVersion int, newVersion int, b []byte) string {
 	c := string(b)
-	return fmt.Sprintf("INSERT INTO kvconf(id,conf) VALUES (1,'%s') ON conflict(id)  DO UPDATE SET conf='%s' where kvconf.id = %d", c, c, clusterID)
+	return fmt.Sprintf("INSERT INTO kvconf(id,conf,version) VALUES (%d,'%s',%d) ON conflict(id)  DO UPDATE SET conf='%s' , version=%d where kvconf.id = %d and kvconf.version=%d", clusterID, c, newVersion, c, newVersion, clusterID, oldVersion)
 }
 
-func LoadConfigJsonFromDB(clusterID int, sqlType string, host string, port int, dbname string, user string, password string) (*KvConfigJson, error) {
+func LoadConfigJsonFromDB(clusterID int, sqlType string, host string, port int, dbname string, user string, password string) (*KvConfigJson, int, error) {
 	var db *sqlx.DB
 	var err error
 
 	db, err = sqlOpen(sqlType, host, port, dbname, user, password)
 
 	if nil != err {
-		return nil, err
+		return nil, 0, err
 	} else {
 
-		rows, err := db.Query(fmt.Sprintf("select conf from kvconf where id = %d", clusterID))
+		rows, err := db.Query(fmt.Sprintf("select conf,version from kvconf where id = %d", clusterID))
 
 		if nil != err {
-			return nil, err
+			return nil, 0, err
 		}
 		defer rows.Close()
 
 		var str string
+		var version int
 
 		if rows.Next() {
-			err := rows.Scan(&str)
+			err := rows.Scan(&str, &version)
 			if nil != err {
-				return nil, err
+				return nil, 0, err
 			}
 		}
 
 		var confJson *KvConfigJson
 		confJson, err = UnmarshalConfig([]byte(str))
 		if nil != err {
-			return nil, err
+			return nil, version, err
 		} else {
-			return confJson, nil
+			return confJson, version, nil
 		}
 	}
 }
 
-func StoreConfigJsonToDB(clusterID int, sqlType string, host string, port int, dbname string, user string, password string, conf *KvConfigJson) error {
+func StoreConfigJsonToDB(clusterID int, oldVersion int, newVersion int, sqlType string, host string, port int, dbname string, user string, password string, conf *KvConfigJson) error {
 	b, err := MarshalConfig(conf)
 	if nil != err {
 		return err
@@ -255,9 +256,9 @@ func StoreConfigJsonToDB(clusterID int, sqlType string, host string, port int, d
 
 	var sqlStr string
 	if sqlType == "mysql" {
-		sqlStr = makeStoreMysql(clusterID, b)
+		sqlStr = makeStoreMysql(clusterID, oldVersion, newVersion, b)
 	} else {
-		sqlStr = makeStorePgsql(clusterID, b)
+		sqlStr = makeStorePgsql(clusterID, oldVersion, newVersion, b)
 	}
 
 	_, err = db.Exec(sqlStr)

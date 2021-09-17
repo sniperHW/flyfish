@@ -29,18 +29,30 @@ const _ = proto.GoGoProtoPackageIsVersion2 // please upgrade the proto package
 type ServerCmdType int32
 
 const (
-	ServerCmdType_QueryLeader     ServerCmdType = 1
-	ServerCmdType_QueryLeaderResp ServerCmdType = 2
+	ServerCmdType_QueryLeader      ServerCmdType = 1
+	ServerCmdType_QueryLeaderResp  ServerCmdType = 2
+	ServerCmdType_GateReport       ServerCmdType = 3
+	ServerCmdType_QueryGateList    ServerCmdType = 4
+	ServerCmdType_GateList         ServerCmdType = 5
+	ServerCmdType_NotiReloadKvConf ServerCmdType = 6
 )
 
 var ServerCmdType_name = map[int32]string{
 	1: "QueryLeader",
 	2: "QueryLeaderResp",
+	3: "GateReport",
+	4: "QueryGateList",
+	5: "GateList",
+	6: "NotiReloadKvConf",
 }
 
 var ServerCmdType_value = map[string]int32{
-	"QueryLeader":     1,
-	"QueryLeaderResp": 2,
+	"QueryLeader":      1,
+	"QueryLeaderResp":  2,
+	"GateReport":       3,
+	"QueryGateList":    4,
+	"GateList":         5,
+	"NotiReloadKvConf": 6,
 }
 
 func (x ServerCmdType) Enum() *ServerCmdType {
@@ -153,31 +165,216 @@ func (m *QueryLeaderResp) GetYes() bool {
 	return false
 }
 
+type GateReport struct {
+	Service     string `protobuf:"bytes,1,opt,name=service" json:"service"`
+	Console     string `protobuf:"bytes,2,opt,name=console" json:"console"`
+	ConfVersion int32  `protobuf:"varint,3,opt,name=conf_version,json=confVersion" json:"conf_version"`
+}
+
+func (m *GateReport) Reset()      { *m = GateReport{} }
+func (*GateReport) ProtoMessage() {}
+func (*GateReport) Descriptor() ([]byte, []int) {
+	return fileDescriptor_03085fc3fc38bb42, []int{2}
+}
+func (m *GateReport) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GateReport) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GateReport.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *GateReport) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GateReport.Merge(m, src)
+}
+func (m *GateReport) XXX_Size() int {
+	return m.Size()
+}
+func (m *GateReport) XXX_DiscardUnknown() {
+	xxx_messageInfo_GateReport.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GateReport proto.InternalMessageInfo
+
+func (m *GateReport) GetService() string {
+	if m != nil {
+		return m.Service
+	}
+	return ""
+}
+
+func (m *GateReport) GetConsole() string {
+	if m != nil {
+		return m.Console
+	}
+	return ""
+}
+
+func (m *GateReport) GetConfVersion() int32 {
+	if m != nil {
+		return m.ConfVersion
+	}
+	return 0
+}
+
+type QueryGateList struct {
+}
+
+func (m *QueryGateList) Reset()      { *m = QueryGateList{} }
+func (*QueryGateList) ProtoMessage() {}
+func (*QueryGateList) Descriptor() ([]byte, []int) {
+	return fileDescriptor_03085fc3fc38bb42, []int{3}
+}
+func (m *QueryGateList) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *QueryGateList) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_QueryGateList.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *QueryGateList) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryGateList.Merge(m, src)
+}
+func (m *QueryGateList) XXX_Size() int {
+	return m.Size()
+}
+func (m *QueryGateList) XXX_DiscardUnknown() {
+	xxx_messageInfo_QueryGateList.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_QueryGateList proto.InternalMessageInfo
+
+type GateList struct {
+	List []string `protobuf:"bytes,1,rep,name=list" json:"list,omitempty"`
+}
+
+func (m *GateList) Reset()      { *m = GateList{} }
+func (*GateList) ProtoMessage() {}
+func (*GateList) Descriptor() ([]byte, []int) {
+	return fileDescriptor_03085fc3fc38bb42, []int{4}
+}
+func (m *GateList) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GateList) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GateList.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *GateList) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GateList.Merge(m, src)
+}
+func (m *GateList) XXX_Size() int {
+	return m.Size()
+}
+func (m *GateList) XXX_DiscardUnknown() {
+	xxx_messageInfo_GateList.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GateList proto.InternalMessageInfo
+
+func (m *GateList) GetList() []string {
+	if m != nil {
+		return m.List
+	}
+	return nil
+}
+
+type NotifyReloadKvconf struct {
+}
+
+func (m *NotifyReloadKvconf) Reset()      { *m = NotifyReloadKvconf{} }
+func (*NotifyReloadKvconf) ProtoMessage() {}
+func (*NotifyReloadKvconf) Descriptor() ([]byte, []int) {
+	return fileDescriptor_03085fc3fc38bb42, []int{5}
+}
+func (m *NotifyReloadKvconf) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *NotifyReloadKvconf) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_NotifyReloadKvconf.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *NotifyReloadKvconf) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_NotifyReloadKvconf.Merge(m, src)
+}
+func (m *NotifyReloadKvconf) XXX_Size() int {
+	return m.Size()
+}
+func (m *NotifyReloadKvconf) XXX_DiscardUnknown() {
+	xxx_messageInfo_NotifyReloadKvconf.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_NotifyReloadKvconf proto.InternalMessageInfo
+
 func init() {
 	proto.RegisterEnum("proto.ServerCmdType", ServerCmdType_name, ServerCmdType_value)
 	proto.RegisterType((*QueryLeader)(nil), "proto.query_leader")
 	proto.RegisterType((*QueryLeaderResp)(nil), "proto.query_leader_resp")
+	proto.RegisterType((*GateReport)(nil), "proto.gate_report")
+	proto.RegisterType((*QueryGateList)(nil), "proto.query_gate_list")
+	proto.RegisterType((*GateList)(nil), "proto.gate_list")
+	proto.RegisterType((*NotifyReloadKvconf)(nil), "proto.notify_reload_kvconf")
 }
 
 func init() { proto.RegisterFile("flyfish_server.proto", fileDescriptor_03085fc3fc38bb42) }
 
 var fileDescriptor_03085fc3fc38bb42 = []byte{
-	// 227 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x12, 0x49, 0xcb, 0xa9, 0x4c,
-	0xcb, 0x2c, 0xce, 0x88, 0x2f, 0x4e, 0x2d, 0x2a, 0x4b, 0x2d, 0xd2, 0x2b, 0x28, 0xca, 0x2f, 0xc9,
-	0x17, 0x62, 0x05, 0x53, 0x52, 0x22, 0xe9, 0xf9, 0xe9, 0xf9, 0x60, 0xa6, 0x3e, 0x88, 0x05, 0x91,
-	0x54, 0xd2, 0xe2, 0xe2, 0x29, 0x2c, 0x4d, 0x2d, 0xaa, 0x8c, 0xcf, 0x49, 0x4d, 0x4c, 0x49, 0x2d,
-	0x12, 0x92, 0xe2, 0x62, 0x2d, 0x2e, 0xc9, 0x2f, 0x4a, 0x95, 0x60, 0x54, 0x60, 0xd4, 0x60, 0x75,
-	0x62, 0x39, 0x71, 0x4f, 0x9e, 0x21, 0x08, 0x22, 0xa4, 0xa4, 0xcd, 0x25, 0x88, 0xac, 0x36, 0xbe,
-	0x28, 0xb5, 0xb8, 0x40, 0x48, 0x8c, 0x8b, 0xb9, 0x32, 0xb5, 0x18, 0xac, 0x9c, 0x03, 0xaa, 0x1c,
-	0x24, 0xa0, 0x65, 0xca, 0xc5, 0x1b, 0x0c, 0x76, 0x85, 0x73, 0x6e, 0x4a, 0x48, 0x65, 0x41, 0xaa,
-	0x10, 0x3f, 0x17, 0x77, 0x20, 0x48, 0xb7, 0x0f, 0x58, 0xb3, 0x00, 0xa3, 0x90, 0x30, 0x17, 0x3f,
-	0x92, 0x40, 0x50, 0x6a, 0x71, 0x81, 0x00, 0x93, 0x93, 0xc5, 0x89, 0x87, 0x72, 0x8c, 0x17, 0x1e,
-	0xca, 0x31, 0xde, 0x78, 0x28, 0xc7, 0xf0, 0xe1, 0xa1, 0x1c, 0x63, 0xc3, 0x23, 0x39, 0xc6, 0x15,
-	0x8f, 0xe4, 0x18, 0x4f, 0x3c, 0x92, 0x63, 0xbc, 0xf0, 0x48, 0x8e, 0xf1, 0xc1, 0x23, 0x39, 0xc6,
-	0x17, 0x8f, 0xe4, 0x18, 0x3e, 0x3c, 0x92, 0x63, 0x9c, 0xf0, 0x58, 0x8e, 0xe1, 0xc2, 0x63, 0x39,
-	0x86, 0x1b, 0x8f, 0xe5, 0x18, 0x00, 0x01, 0x00, 0x00, 0xff, 0xff, 0x1f, 0x48, 0x3e, 0x7d, 0xfd,
-	0x00, 0x00, 0x00,
+	// 383 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x4c, 0x90, 0xc1, 0xce, 0xd2, 0x40,
+	0x10, 0xc7, 0xbb, 0x5f, 0xa9, 0x7e, 0x0c, 0x7c, 0x52, 0xd6, 0x86, 0x34, 0x1c, 0x16, 0xd2, 0x8b,
+	0x04, 0x13, 0xbd, 0x7a, 0x86, 0x83, 0x07, 0x89, 0x89, 0xd5, 0x78, 0x6d, 0x1a, 0x98, 0x62, 0x63,
+	0xed, 0xd6, 0xdd, 0xb5, 0x49, 0x13, 0x0f, 0x3e, 0x82, 0x8f, 0xe1, 0xa3, 0x70, 0xe4, 0xc8, 0xc9,
+	0xd8, 0x72, 0xf1, 0xc8, 0x23, 0x98, 0xdd, 0x22, 0xe9, 0x69, 0x67, 0x7e, 0xff, 0x7f, 0x66, 0xfe,
+	0x3b, 0xe0, 0x25, 0x59, 0x95, 0xa4, 0xf2, 0x53, 0x24, 0x51, 0x94, 0x28, 0x5e, 0x14, 0x82, 0x2b,
+	0x4e, 0x1d, 0xf3, 0x4c, 0xbd, 0x3d, 0xdf, 0x73, 0x53, 0xbe, 0xd4, 0x55, 0x2b, 0x06, 0x4b, 0x18,
+	0x7e, 0xfd, 0x86, 0xa2, 0x8a, 0x32, 0x8c, 0x77, 0x28, 0xe8, 0x14, 0x1c, 0xa9, 0xb8, 0x40, 0x9f,
+	0xcc, 0xc9, 0xc2, 0x59, 0xf5, 0x0e, 0xbf, 0x67, 0x56, 0xd8, 0xa2, 0xe0, 0x39, 0x8c, 0xbb, 0xde,
+	0x48, 0xa0, 0x2c, 0xe8, 0x04, 0xec, 0x0a, 0xa5, 0xb1, 0xdf, 0x5f, 0xed, 0x1a, 0x04, 0x25, 0x0c,
+	0xf6, 0xb1, 0xc2, 0x48, 0x60, 0xc1, 0x85, 0xa2, 0x0c, 0x1e, 0xeb, 0x50, 0xe9, 0xb6, 0x9d, 0xdc,
+	0xbf, 0x5a, 0xff, 0x43, 0xad, 0x6f, 0x79, 0x2e, 0x79, 0x86, 0xfe, 0x5d, 0x57, 0xbf, 0x42, 0xfa,
+	0x0c, 0x86, 0x5b, 0x9e, 0x27, 0x51, 0x89, 0x42, 0xa6, 0x3c, 0xf7, 0xed, 0x4e, 0xbc, 0x81, 0x56,
+	0x3e, 0xb6, 0x42, 0x30, 0x86, 0x51, 0x1b, 0xd2, 0x6c, 0xcf, 0x52, 0xa9, 0x82, 0x19, 0xf4, 0x6f,
+	0x0d, 0xa5, 0xd0, 0xd3, 0xaf, 0x4f, 0xe6, 0xf6, 0xa2, 0x1f, 0x9a, 0x3a, 0x98, 0x80, 0x97, 0x73,
+	0x95, 0x26, 0x55, 0x24, 0x30, 0xe3, 0xf1, 0x2e, 0xfa, 0x5c, 0xea, 0x91, 0xcb, 0xef, 0xf0, 0xf0,
+	0xde, 0x5c, 0x72, 0xfd, 0x65, 0xf7, 0xa1, 0x2a, 0x90, 0x8e, 0x60, 0xf0, 0x4e, 0x0f, 0xdf, 0x98,
+	0x03, 0xb8, 0x84, 0x3e, 0x85, 0x51, 0x07, 0x84, 0x28, 0x0b, 0xf7, 0x8e, 0x3e, 0x01, 0x78, 0x1d,
+	0x2b, 0x0c, 0xcd, 0xcf, 0x5d, 0x9b, 0x8e, 0xe1, 0xc1, 0x98, 0x34, 0xdc, 0xa4, 0x52, 0xb9, 0x3d,
+	0x3a, 0x84, 0xfb, 0x5b, 0xe7, 0x50, 0x0f, 0xdc, 0xb7, 0x5c, 0xa5, 0xa1, 0x59, 0xfe, 0xa6, 0x5c,
+	0xf3, 0x3c, 0x71, 0x1f, 0xad, 0x5e, 0x1d, 0x6a, 0x46, 0x8e, 0x35, 0x23, 0xa7, 0x9a, 0x59, 0x97,
+	0x9a, 0x91, 0x1f, 0x0d, 0x23, 0xbf, 0x1a, 0x46, 0x0e, 0x0d, 0x23, 0xc7, 0x86, 0x91, 0x3f, 0x0d,
+	0x23, 0x7f, 0x1b, 0x66, 0x5d, 0x1a, 0x46, 0x7e, 0x9e, 0x99, 0x75, 0x3c, 0x33, 0xeb, 0x74, 0x66,
+	0xd6, 0xbf, 0x00, 0x00, 0x00, 0xff, 0xff, 0x39, 0x42, 0x7c, 0xd2, 0x08, 0x02, 0x00, 0x00,
 }
 
 func (x ServerCmdType) String() string {
@@ -235,6 +432,107 @@ func (this *QueryLeaderResp) Equal(that interface{}) bool {
 	}
 	return true
 }
+func (this *GateReport) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*GateReport)
+	if !ok {
+		that2, ok := that.(GateReport)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Service != that1.Service {
+		return false
+	}
+	if this.Console != that1.Console {
+		return false
+	}
+	if this.ConfVersion != that1.ConfVersion {
+		return false
+	}
+	return true
+}
+func (this *QueryGateList) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*QueryGateList)
+	if !ok {
+		that2, ok := that.(QueryGateList)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *GateList) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*GateList)
+	if !ok {
+		that2, ok := that.(GateList)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.List) != len(that1.List) {
+		return false
+	}
+	for i := range this.List {
+		if this.List[i] != that1.List[i] {
+			return false
+		}
+	}
+	return true
+}
+func (this *NotifyReloadKvconf) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*NotifyReloadKvconf)
+	if !ok {
+		that2, ok := that.(NotifyReloadKvconf)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
 func (this *QueryLeader) GoString() string {
 	if this == nil {
 		return "nil"
@@ -252,6 +550,48 @@ func (this *QueryLeaderResp) GoString() string {
 	s := make([]string, 0, 5)
 	s = append(s, "&proto.QueryLeaderResp{")
 	s = append(s, "Yes: "+fmt.Sprintf("%#v", this.Yes)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *GateReport) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&proto.GateReport{")
+	s = append(s, "Service: "+fmt.Sprintf("%#v", this.Service)+",\n")
+	s = append(s, "Console: "+fmt.Sprintf("%#v", this.Console)+",\n")
+	s = append(s, "ConfVersion: "+fmt.Sprintf("%#v", this.ConfVersion)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *QueryGateList) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&proto.QueryGateList{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *GateList) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&proto.GateList{")
+	if this.List != nil {
+		s = append(s, "List: "+fmt.Sprintf("%#v", this.List)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *NotifyReloadKvconf) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&proto.NotifyReloadKvconf{")
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
@@ -320,6 +660,120 @@ func (m *QueryLeaderResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
+func (m *GateReport) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GateReport) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GateReport) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(m.ConfVersion))
+	i--
+	dAtA[i] = 0x18
+	i -= len(m.Console)
+	copy(dAtA[i:], m.Console)
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(len(m.Console)))
+	i--
+	dAtA[i] = 0x12
+	i -= len(m.Service)
+	copy(dAtA[i:], m.Service)
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(len(m.Service)))
+	i--
+	dAtA[i] = 0xa
+	return len(dAtA) - i, nil
+}
+
+func (m *QueryGateList) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *QueryGateList) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryGateList) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	return len(dAtA) - i, nil
+}
+
+func (m *GateList) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GateList) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GateList) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.List) > 0 {
+		for iNdEx := len(m.List) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.List[iNdEx])
+			copy(dAtA[i:], m.List[iNdEx])
+			i = encodeVarintFlyfishServer(dAtA, i, uint64(len(m.List[iNdEx])))
+			i--
+			dAtA[i] = 0xa
+		}
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *NotifyReloadKvconf) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *NotifyReloadKvconf) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *NotifyReloadKvconf) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	return len(dAtA) - i, nil
+}
+
 func encodeVarintFlyfishServer(dAtA []byte, offset int, v uint64) int {
 	offset -= sovFlyfishServer(v)
 	base := offset
@@ -351,6 +805,53 @@ func (m *QueryLeaderResp) Size() (n int) {
 	return n
 }
 
+func (m *GateReport) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Service)
+	n += 1 + l + sovFlyfishServer(uint64(l))
+	l = len(m.Console)
+	n += 1 + l + sovFlyfishServer(uint64(l))
+	n += 1 + sovFlyfishServer(uint64(m.ConfVersion))
+	return n
+}
+
+func (m *QueryGateList) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	return n
+}
+
+func (m *GateList) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.List) > 0 {
+		for _, s := range m.List {
+			l = len(s)
+			n += 1 + l + sovFlyfishServer(uint64(l))
+		}
+	}
+	return n
+}
+
+func (m *NotifyReloadKvconf) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	return n
+}
+
 func sovFlyfishServer(x uint64) (n int) {
 	return (math_bits.Len64(x|1) + 6) / 7
 }
@@ -373,6 +874,46 @@ func (this *QueryLeaderResp) String() string {
 	}
 	s := strings.Join([]string{`&QueryLeaderResp{`,
 		`Yes:` + fmt.Sprintf("%v", this.Yes) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *GateReport) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&GateReport{`,
+		`Service:` + fmt.Sprintf("%v", this.Service) + `,`,
+		`Console:` + fmt.Sprintf("%v", this.Console) + `,`,
+		`ConfVersion:` + fmt.Sprintf("%v", this.ConfVersion) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *QueryGateList) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&QueryGateList{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *GateList) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&GateList{`,
+		`List:` + fmt.Sprintf("%v", this.List) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *NotifyReloadKvconf) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&NotifyReloadKvconf{`,
 		`}`,
 	}, "")
 	return s
@@ -506,6 +1047,333 @@ func (m *QueryLeaderResp) Unmarshal(dAtA []byte) error {
 				}
 			}
 			m.Yes = bool(v != 0)
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GateReport) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFlyfishServer
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: gate_report: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: gate_report: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Service", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Service = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Console", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Console = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ConfVersion", wireType)
+			}
+			m.ConfVersion = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ConfVersion |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *QueryGateList) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFlyfishServer
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: query_gate_list: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: query_gate_list: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GateList) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFlyfishServer
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: gate_list: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: gate_list: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field List", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.List = append(m.List, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *NotifyReloadKvconf) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFlyfishServer
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: notify_reload_kvconf: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: notify_reload_kvconf: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
 		default:
 			iNdEx = preIndex
 			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
