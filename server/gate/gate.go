@@ -229,6 +229,10 @@ func (g *gate) Start() error {
 
 		}
 
+		if len(g.kvconf.Shard) == 0 {
+			return errors.New("shard == 0")
+		}
+
 		storeCount := len(g.kvconf.Shard) * clusterconf.StorePerNode
 
 		for i := 0; i < storeCount; i++ {

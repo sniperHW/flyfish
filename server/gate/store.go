@@ -63,7 +63,7 @@ func (s *store) queryLeader() {
 		return
 	} else {
 
-		GetSugar().Infof("queryLeader")
+		//GetSugar().Infof("queryLeader")
 
 		s.queryingLeader = true
 		version := atomic.AddInt64(&s.version, 1)
@@ -71,11 +71,13 @@ func (s *store) queryLeader() {
 			okCh := make(chan *node)
 			uu := make([]*flynet.Udp, len(s.nodes))
 			for k, v := range s.nodes {
-				go func(n *node) {
-					u, err := flynet.NewUdp(fmt.Sprintf("%s:0", s.gate.config.ServiceHost), snet.Pack, snet.Unpack)
+				go func(i int, n *node) {
+					u, err := flynet.NewUdp(fmt.Sprintf(":0"), snet.Pack, snet.Unpack)
 					if nil == err {
 						u.SendTo(n.consoleAddr, &sproto.QueryLeader{Store: int32(s.id)})
-						uu[k] = u
+						//GetSugar().Infof("queryLeader to %v", n.consoleAddr)
+
+						uu[i] = u
 						recvbuff := make([]byte, 256)
 						_, r, err := u.ReadFrom(recvbuff)
 						if nil == err {
@@ -86,7 +88,7 @@ func (s *store) queryLeader() {
 					} else {
 						GetSugar().Infof("%v", err)
 					}
-				}(v)
+				}(k, v)
 			}
 
 			ticker := time.NewTicker(3 * time.Second)

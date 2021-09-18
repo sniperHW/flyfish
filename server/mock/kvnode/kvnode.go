@@ -204,8 +204,10 @@ func (this *Node) Start(leader bool, service string, console string, def *db.DbD
 			if nil != err {
 				return
 			} else {
+				fmt.Println(msg)
 				switch msg.(type) {
 				case *sproto.QueryLeader:
+					fmt.Println(service, leader)
 					this.consoleConn.SendTo(from, &sproto.QueryLeaderResp{Yes: leader})
 				}
 			}

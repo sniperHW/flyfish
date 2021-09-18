@@ -30,19 +30,6 @@ func openConn(cli *Client, addr string) *Conn {
 	return c
 }
 
-/*
-func (this *Conn) ping(now *time.Time) {
-	if nil != this.session && now.After(this.nextPing) {
-		this.nextPing = now.Add(protocol.PingTime)
-
-		req := net.NewMessage(net.CommonHead{}, &protocol.PingReq{
-			Timestamp: now.UnixNano(),
-		})
-
-		this.session.Send(req)
-	}
-}*/
-
 func (this *Conn) onConnected(session *net.Socket) {
 
 	this.Lock()
