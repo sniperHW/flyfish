@@ -1,6 +1,7 @@
 package client2
 
 import (
+	"container/list"
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/net/cs"
@@ -57,6 +58,8 @@ type cmdContext struct {
 	cb            callback
 	req           *cs.ReqMessage
 	client        *Client
+	listElement   *list.Element
+	l             *list.List
 }
 
 func (this *cmdContext) onTimeout() {
@@ -65,6 +68,11 @@ func (this *cmdContext) onTimeout() {
 	if ok {
 		delete(this.client.waitResp, this.req.Seqno)
 	}
+
+	if this.l == this.client.pendingSend {
+		this.l.Remove(this.listElement)
+	}
+
 	this.client.Unlock()
 
 	if ok {
@@ -140,9 +148,8 @@ func (this *Client) get(table, key string, version *int64, fields ...string) *Sl
 	}
 
 	req := &cs.ReqMessage{
-		Seqno:   atomic.AddInt64(&seqno, 1),
-		UniKey:  table + ":" + key,
-		Timeout: ClientTimeout,
+		Seqno:  atomic.AddInt64(&seqno, 1),
+		UniKey: table + ":" + key,
 		Data: &protocol.GetReq{
 			Version: version,
 			Fields:  fields,
@@ -159,9 +166,8 @@ func (this *Client) get(table, key string, version *int64, fields ...string) *Sl
 func (this *Client) getAll(table, key string, version *int64) *SliceCmd {
 
 	req := &cs.ReqMessage{
-		Seqno:   atomic.AddInt64(&seqno, 1),
-		UniKey:  table + ":" + key,
-		Timeout: ClientTimeout,
+		Seqno:  atomic.AddInt64(&seqno, 1),
+		UniKey: table + ":" + key,
 		Data: &protocol.GetReq{
 			Version: version,
 			All:     true,
@@ -208,10 +214,9 @@ func (this *Client) Set(table, key string, fields map[string]interface{}, versio
 	}
 
 	req := &cs.ReqMessage{
-		Seqno:   atomic.AddInt64(&seqno, 1),
-		UniKey:  table + ":" + key,
-		Timeout: ClientTimeout,
-		Data:    pbdata}
+		Seqno:  atomic.AddInt64(&seqno, 1),
+		UniKey: table + ":" + key,
+		Data:   pbdata}
 
 	return &StatusCmd{
 		client: this,
@@ -232,10 +237,9 @@ func (this *Client) SetNx(table, key string, fields map[string]interface{}) *Sli
 	}
 
 	req := &cs.ReqMessage{
-		Seqno:   atomic.AddInt64(&seqno, 1),
-		UniKey:  table + ":" + key,
-		Timeout: ClientTimeout,
-		Data:    pbdata}
+		Seqno:  atomic.AddInt64(&seqno, 1),
+		UniKey: table + ":" + key,
+		Data:   pbdata}
 
 	return &SliceCmd{
 		client: this,
@@ -260,10 +264,9 @@ func (this *Client) CompareAndSet(table, key, field string, oldV, newV interface
 	}
 
 	req := &cs.ReqMessage{
-		Seqno:   atomic.AddInt64(&seqno, 1),
-		UniKey:  table + ":" + key,
-		Timeout: ClientTimeout,
-		Data:    pbdata}
+		Seqno:  atomic.AddInt64(&seqno, 1),
+		UniKey: table + ":" + key,
+		Data:   pbdata}
 
 	return &SliceCmd{
 		client: this,
@@ -287,10 +290,9 @@ func (this *Client) CompareAndSetNx(table, key, field string, oldV, newV interfa
 	}
 
 	req := &cs.ReqMessage{
-		Seqno:   atomic.AddInt64(&seqno, 1),
-		UniKey:  table + ":" + key,
-		Timeout: ClientTimeout,
-		Data:    pbdata}
+		Seqno:  atomic.AddInt64(&seqno, 1),
+		UniKey: table + ":" + key,
+		Data:   pbdata}
 
 	return &SliceCmd{
 		client: this,
@@ -307,10 +309,9 @@ func (this *Client) Del(table, key string, version ...int64) *StatusCmd {
 	}
 
 	req := &cs.ReqMessage{
-		Seqno:   atomic.AddInt64(&seqno, 1),
-		UniKey:  table + ":" + key,
-		Timeout: ClientTimeout,
-		Data:    pbdata}
+		Seqno:  atomic.AddInt64(&seqno, 1),
+		UniKey: table + ":" + key,
+		Data:   pbdata}
 
 	return &StatusCmd{
 		client: this,
@@ -329,10 +330,9 @@ func (this *Client) IncrBy(table, key, field string, value int64, version ...int
 	}
 
 	req := &cs.ReqMessage{
-		Seqno:   atomic.AddInt64(&seqno, 1),
-		UniKey:  table + ":" + key,
-		Timeout: ClientTimeout,
-		Data:    pbdata}
+		Seqno:  atomic.AddInt64(&seqno, 1),
+		UniKey: table + ":" + key,
+		Data:   pbdata}
 
 	return &SliceCmd{
 		client: this,
@@ -350,10 +350,9 @@ func (this *Client) DecrBy(table, key, field string, value int64, version ...int
 	}
 
 	req := &cs.ReqMessage{
-		Seqno:   atomic.AddInt64(&seqno, 1),
-		UniKey:  table + ":" + key,
-		Timeout: ClientTimeout,
-		Data:    pbdata}
+		Seqno:  atomic.AddInt64(&seqno, 1),
+		UniKey: table + ":" + key,
+		Data:   pbdata}
 
 	return &SliceCmd{
 		client: this,
@@ -365,10 +364,9 @@ func (this *Client) Kick(table, key string) *StatusCmd {
 	pbdata := &protocol.KickReq{}
 
 	req := &cs.ReqMessage{
-		Seqno:   atomic.AddInt64(&seqno, 1),
-		UniKey:  table + ":" + key,
-		Timeout: ClientTimeout,
-		Data:    pbdata}
+		Seqno:  atomic.AddInt64(&seqno, 1),
+		UniKey: table + ":" + key,
+		Data:   pbdata}
 
 	return &StatusCmd{
 		client: this,

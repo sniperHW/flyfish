@@ -1,6 +1,7 @@
 package client2
 
 import (
+	"container/list"
 	"errors"
 	"fmt"
 	"github.com/sniperHW/flyfish/errcode"
@@ -57,11 +58,11 @@ type ClientConf struct {
 type Client struct {
 	sync.Mutex
 	conf        ClientConf
-	soloMode    bool
 	index       int
 	session     *flynet.Socket
-	pendingSend []*cmdContext //等待发送的消息
+	pendingSend *list.List //等待发送的消息
 	waitResp    map[int64]*cmdContext
+	connecting  bool
 	closed      int32
 }
 
@@ -138,7 +139,6 @@ func (this *Client) onDisconnected() {
 	this.session = nil
 	waitResp := this.waitResp
 	this.waitResp = map[int64]*cmdContext{}
-	closed := atomic.LoadInt32(&this.closed)
 	this.Unlock()
 
 	for _, v := range waitResp {
@@ -147,50 +147,6 @@ func (this *Client) onDisconnected() {
 			releaseCmdContext(v)
 		}
 	}
-
-	if closed == 1 {
-		return
-	}
-
-	if this.soloMode {
-		go func() {
-			for {
-				session, err := cs.NewConnector("tcp", this.conf.SoloService).Dial(time.Second * 5)
-				if nil == err {
-					this.onConnected(session)
-					return
-				}
-
-				if atomic.LoadInt32(&this.closed) == 1 {
-					return
-				} else {
-					time.Sleep(time.Second)
-				}
-			}
-		}()
-	} else {
-		go func() {
-			for {
-				gates, err := queryGates(this.conf.Dir)
-				if nil != err && len(gates) > 0 {
-					for i := 0; i < len(gates); i++ {
-						session, err := cs.NewConnector("tcp", gates[this.index]).Dial(time.Second * 5)
-						if nil == err {
-							this.onConnected(session)
-							return
-						} else {
-							this.index = (this.index + 1) % len(gates)
-						}
-					}
-				}
-				if atomic.LoadInt32(&this.closed) == 1 {
-					return
-				} else {
-					time.Sleep(time.Second)
-				}
-			}
-		}()
-	}
 }
 
 func (this *Client) onConnected(session *flynet.Socket) {
@@ -198,8 +154,7 @@ func (this *Client) onConnected(session *flynet.Socket) {
 	this.Lock()
 	defer this.Unlock()
 
-	//todo:启动ping定时器
-
+	this.connecting = false
 	this.session = session
 	this.session.SetSendQueueSize(maxPendingSize)
 	this.session.SetInBoundProcessor(cs.NewRespInboundProcessor())
@@ -212,16 +167,84 @@ func (this *Client) onConnected(session *flynet.Socket) {
 	})
 
 	pendingSend := this.pendingSend
-	this.pendingSend = []*cmdContext{}
+	this.pendingSend = list.New()
 
 	now := time.Now()
-
 	//发送被排队的请求
-	for _, v := range pendingSend {
-		//已经超时或马上就要超时的请求不发送
-		if v.deadline.Sub(now) > 10*time.Millisecond && nil != this.waitResp[v.req.Seqno] {
-			this.sendReq(v)
+	for v := pendingSend.Front(); v != nil; v = pendingSend.Front() {
+		e := pendingSend.Remove(v).(*cmdContext)
+		if remain := e.deadline.Sub(now) / time.Millisecond; remain > 0 {
+			e.req.Timeout = uint32(remain)
+			this.sendReq(e)
 		}
+	}
+}
+
+func (this *Client) connectCluster() bool {
+	gates, err := queryGates(this.conf.Dir)
+
+	if nil != err {
+		return false
+	}
+
+	if len(gates) == 0 {
+		return false
+	}
+
+	GetSugar().Infof("got gates%v", gates)
+
+	this.index = rand.Int() % len(gates)
+
+	for i := 0; i < len(gates); i++ {
+		session, err := cs.NewConnector("tcp", gates[this.index]).Dial(time.Second * 5)
+		if nil == err {
+			this.onConnected(session)
+			return true
+		} else {
+			this.index = (this.index + 1) % len(gates)
+		}
+	}
+
+	return false
+}
+
+func (this *Client) connectSolo() bool {
+	session, err := cs.NewConnector("tcp", this.conf.SoloService).Dial(time.Second * 5)
+	if nil != err {
+		return false
+	} else {
+		this.onConnected(session)
+		return true
+	}
+}
+
+func (this *Client) connect() {
+	if !this.connecting {
+		this.connecting = true
+		go func() {
+			ok := false
+			for {
+				if this.conf.SoloService == "" {
+					ok = this.connectCluster()
+				} else {
+					ok = this.connectSolo()
+				}
+
+				if ok {
+					return
+				} else {
+					time.Sleep(100 * time.Millisecond)
+					this.Lock()
+					if atomic.LoadInt32(&this.closed) == 1 || this.pendingSend.Len() == 0 {
+						this.connecting = false
+						this.Unlock()
+						return
+					} else {
+						this.Unlock()
+					}
+				}
+			}
+		}()
 	}
 }
 
@@ -250,13 +273,16 @@ func (this *Client) exec(c *cmdContext) {
 		c.deadline = time.Now().Add(time.Duration(ClientTimeout) * time.Millisecond)
 		if nil != this.session {
 			this.waitResp[c.req.Seqno] = c
+			c.req.Timeout = ClientTimeout
 			c.deadlineTimer = time.AfterFunc(time.Duration(ClientTimeout)*time.Millisecond, c.onTimeout)
 			this.sendReq(c)
 		} else {
-			if len(this.pendingSend) < maxPendingSize {
+			this.connect()
+			if this.pendingSend.Len() < maxPendingSize {
 				this.waitResp[c.req.Seqno] = c
 				c.deadlineTimer = time.AfterFunc(time.Duration(ClientTimeout)*time.Millisecond, c.onTimeout)
-				this.pendingSend = append(this.pendingSend, c)
+				c.listElement = this.pendingSend.PushBack(c)
+				c.l = this.pendingSend
 			} else {
 				errCode = errcode.New(errcode.Errcode_retry, "busy please retry later")
 			}
@@ -265,61 +291,26 @@ func (this *Client) exec(c *cmdContext) {
 }
 
 func (this *Client) Close() {
-	this.Lock()
-	defer this.Unlock()
 	if atomic.CompareAndSwapInt32(&this.closed, 0, 1) {
-
+		this.Lock()
+		session := this.session
+		this.Unlock()
+		if nil != session {
+			session.Close(nil, 0)
+		}
 	}
 }
 
 func OpenClient(conf ClientConf) (*Client, error) {
 	c := &Client{
 		conf:        conf,
-		pendingSend: []*cmdContext{},
+		pendingSend: list.New(),
 		waitResp:    map[int64]*cmdContext{},
 	}
 
-	if "" == conf.SoloService {
-		if len(conf.Dir) == 0 {
-			return nil, errors.New("cluster mode,but dir empty")
-		}
-		gates, err := queryGates(conf.Dir)
-
-		if nil != err {
-			return nil, err
-		}
-
-		if len(gates) == 0 {
-			return nil, errors.New("no available gate")
-		}
-
-		GetSugar().Infof("got gates%v", gates)
-
-		c.index = rand.Int() % len(gates)
-
-		for i := 0; i < len(gates); i++ {
-			session, err := cs.NewConnector("tcp", gates[c.index]).Dial(time.Second * 5)
-			if nil == err {
-				c.onConnected(session)
-				break
-			} else {
-				c.index = (c.index + 1) % len(gates)
-			}
-		}
-
-		if nil == c.session {
-			return nil, errors.New("no available gate")
-		}
-
+	if "" == conf.SoloService && len(conf.Dir) == 0 {
+		return nil, errors.New("cluster mode,but dir empty")
 	} else {
-		c.soloMode = true
-		session, err := cs.NewConnector("tcp", c.conf.SoloService).Dial(time.Second * 5)
-		if nil != err {
-			return nil, err
-		} else {
-			c.onConnected(session)
-		}
+		return c, nil
 	}
-
-	return c, nil
 }
