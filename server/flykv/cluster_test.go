@@ -23,6 +23,8 @@ func TestCluster1(t *testing.T) {
 
 		Mode = "cluster"
 
+		DBType         = "pgsql"
+
 		SnapshotCurrentCount    = 1
 
 		LruCheckInterval        = 100              #每隔100ms执行一次lru剔除操作
@@ -44,28 +46,21 @@ func TestCluster1(t *testing.T) {
 
 		[ClusterConfig]
 		ClusterID               = 1
-		DbHost                  = "localhost"
-		DbPort                  = 5432
-		DbUser			        = "sniper"
-		DbPassword              = "123456"
-		DbDataBase              = "test"
+		DBHost                  = "localhost"
+		DBPort                  = 5432
+		DBUser			        = "sniper"
+		DBPassword              = "123456"
+		ConfDB                  = "test"
 
 
 		[DBConfig]
-		SqlType         = "%s"
 
-
-		DbHost          = "%s"
-		DbPort          = %d
-		DbUser			= "%s"
-		DbPassword      = "%s"
-		DbDataBase      = "%s"
-
-		ConfDbHost      = "%s"
-		ConfDbPort      = %d
-		ConfDbUser      = "%s"
-		ConfDbPassword  = "%s"
-		ConfDataBase    = "%s"
+		Host            = "%s"
+		Port            = %d
+		User		    = "%s"
+		Password        = "%s"
+		DataDB          = "%s"
+		ConfDBB         = "%s"
 
 
 		[Log]
@@ -133,9 +128,7 @@ func TestCluster1(t *testing.T) {
 		panic(err)
 	}
 
-	conf1, _ := LoadConfigStr(fmt.Sprintf(configStr1, "pgsql", "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB))
-	conf2, _ := LoadConfigStr(fmt.Sprintf(configStr1, "pgsql", "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB))
-	conf3, _ := LoadConfigStr(fmt.Sprintf(configStr1, "pgsql", "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB))
+	conf1, _ := LoadConfigStr(fmt.Sprintf(configStr1, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB, dbConf.PgDB))
 
 	client.InitLogger(GetLogger())
 
@@ -145,13 +138,13 @@ func TestCluster1(t *testing.T) {
 		panic(err)
 	}
 
-	node2 := NewKvNode(2, conf2, dbMeta, sql.CreateDbMeta, newMockDBBackEnd())
+	node2 := NewKvNode(2, conf1, dbMeta, sql.CreateDbMeta, newMockDBBackEnd())
 
 	if err := node2.Start(); nil != err {
 		panic(err)
 	}
 
-	node3 := NewKvNode(3, conf3, dbMeta, sql.CreateDbMeta, newMockDBBackEnd())
+	node3 := NewKvNode(3, conf1, dbMeta, sql.CreateDbMeta, newMockDBBackEnd())
 
 	if err := node3.Start(); nil != err {
 		panic(err)

@@ -40,11 +40,12 @@ var configStr string = `
 
 	[ClusterConfig]
 		ClusterID               = 1
-		DbHost                  = "localhost"
-		DbPort                  = 5432
-		DbUser			        = "sniper"
-		DbPassword              = "123456"
-		DbDataBase              = "test"
+		DBType                  = "pgsql"
+		DBHost                  = "localhost"
+		DBPort                  = 5432
+		DBUser			        = "sniper"
+		DBPassword              = "123456"
+		ConfDB                  = "test"
 
 	[Log]
 		MaxLogfileSize  = 104857600 # 100mb

@@ -40,7 +40,7 @@ func main() {
 
 	dbConfig := conf.DBConfig
 
-	meta, err := metaLoader.LoadDBMetaFromSqlCsv(dbConfig.SqlType, dbConfig.ConfDbHost, dbConfig.ConfDbPort, dbConfig.ConfDataBase, dbConfig.ConfDbUser, dbConfig.ConfDbPassword)
+	meta, err := metaLoader.LoadDBMetaFromSqlCsv(conf.DBType, dbConfig.Host, dbConfig.Port, dbConfig.MetaDB, dbConfig.User, dbConfig.Password)
 
 	if nil != err {
 		flykv.GetSugar().Error(err)

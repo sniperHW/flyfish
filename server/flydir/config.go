@@ -30,12 +30,12 @@ type Config struct {
 
 	ClusterConfig struct {
 		ClusterID  int
-		SqlType    string
-		DbHost     string
-		DbPort     int
-		DbUser     string
-		DbPassword string
-		DbDataBase string
+		DBType     string
+		DBHost     string
+		DBPort     int
+		DBUser     string
+		DBPassword string
+		ConfDB     string
 	}
 
 	Log struct {

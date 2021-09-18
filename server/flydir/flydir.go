@@ -45,7 +45,7 @@ func (d *dir) Start() error {
 
 		//从DB获取配置版本号
 		clusterConf := config.ClusterConfig
-		_, d.kvconfVersion, err = clusterconf.LoadConfigJsonFromDB(clusterConf.ClusterID, clusterConf.SqlType, clusterConf.DbHost, clusterConf.DbPort, clusterConf.DbDataBase, clusterConf.DbUser, clusterConf.DbPassword)
+		_, d.kvconfVersion, err = clusterconf.LoadConfigJsonFromDB(clusterConf.ClusterID, clusterConf.DBType, clusterConf.DBHost, clusterConf.DBPort, clusterConf.ConfDB, clusterConf.DBUser, clusterConf.DBPassword)
 		if nil != err {
 			return err
 		}

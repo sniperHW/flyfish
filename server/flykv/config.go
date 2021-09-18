@@ -27,6 +27,8 @@ func LoadConfig(path string) (*Config, error) {
 type Config struct {
 	Mode string //"cluster"集群模式,"solo"独立模式
 
+	DBType string
+
 	SoloConfig struct {
 		ServiceHost string
 		ServicePort int
@@ -37,12 +39,11 @@ type Config struct {
 
 	ClusterConfig struct {
 		ClusterID  int
-		SqlType    string
-		DbHost     string
-		DbPort     int
-		DbUser     string
-		DbPassword string
-		DbDataBase string
+		DBHost     string
+		DBPort     int
+		DBUser     string
+		DBPassword string
+		ConfDB     string
 	}
 
 	SnapshotCurrentCount int //并行执行快照序列化数量，如果设置为0则取cpu数量
@@ -66,19 +67,12 @@ type Config struct {
 	MainQueueMaxSize int //store主处理队列容量上限,超过上限客户端的命令无法入列将返回retry
 
 	DBConfig struct {
-		SqlType string
-
-		DbHost     string
-		DbPort     int
-		DbUser     string
-		DbPassword string
-		DbDataBase string
-
-		ConfDbHost     string
-		ConfDbPort     int
-		ConfDbUser     string
-		ConfDbPassword string
-		ConfDataBase   string
+		Host     string
+		Port     int
+		User     string
+		Password string
+		DataDB   string
+		MetaDB   string
 	}
 
 	Log struct {

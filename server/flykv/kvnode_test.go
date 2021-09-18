@@ -37,6 +37,8 @@ var configStr string = `
 
 Mode = "solo"
 
+DBType                  = "pgsql"
+
 SnapshotCurrentCount    = 1
 
 MainQueueMaxSize        = 10000
@@ -66,20 +68,13 @@ Stores                  = [1]
 
                   	
 [DBConfig]
-SqlType         = "%s"
 
-
-DbHost          = "%s"
-DbPort          = %d
-DbUser			= "%s"
-DbPassword      = "%s"
-DbDataBase      = "%s"
-
-ConfDbHost      = "%s"
-ConfDbPort      = %d
-ConfDbUser      = "%s"
-ConfDbPassword  = "%s"
-ConfDataBase    = "%s"
+Host          = "%s"
+Port          = %d
+User	      = "%s"
+Password      = "%s"
+DataDB        = "%s"
+ConfDB        = "%s"
 
 
 [Log]
@@ -135,11 +130,11 @@ func init() {
 		panic(err)
 	}
 
-	config, _ = LoadConfigStr(fmt.Sprintf(configStr, 10018, "pgsql", "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB))
+	config, _ = LoadConfigStr(fmt.Sprintf(configStr, 10018, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB, dbConf.PgDB))
 
 	dbConfig := config.DBConfig
 
-	dbMeta, _ = metaLoader.LoadDBMetaFromSqlJson(dbConfig.SqlType, dbConfig.ConfDbHost, dbConfig.ConfDbPort, dbConfig.ConfDataBase, dbConfig.ConfDbUser, dbConfig.ConfDbPassword)
+	dbMeta, _ = metaLoader.LoadDBMetaFromSqlJson(config.DBType, dbConfig.Host, dbConfig.Port, dbConfig.ConfDB, dbConfig.User, dbConfig.Password)
 
 }
 

@@ -1,4 +1,4 @@
-package dir
+package flydir
 
 import (
 	"github.com/gogo/protobuf/proto"
@@ -20,7 +20,7 @@ func (d *dir) onGateReport(from *net.UDPAddr, m *sproto.GateReport) {
 			config := d.config
 			for {
 				clusterConf := config.ClusterConfig
-				_, version, err = clusterconf.LoadConfigJsonFromDB(clusterConf.ClusterID, clusterConf.SqlType, clusterConf.DbHost, clusterConf.DbPort, clusterConf.DbDataBase, clusterConf.DbUser, clusterConf.DbPassword)
+				_, version, err = clusterconf.LoadConfigJsonFromDB(clusterConf.ClusterID, clusterConf.DBType, clusterConf.DBHost, clusterConf.DBPort, clusterConf.ConfDB, clusterConf.DBUser, clusterConf.DBPassword)
 				if nil == err {
 					break
 				}

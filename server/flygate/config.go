@@ -32,12 +32,12 @@ type Config struct {
 
 	ClusterConfig struct {
 		ClusterID  int
-		SqlType    string
-		DbHost     string
-		DbPort     int
-		DbUser     string
-		DbPassword string
-		DbDataBase string
+		DBType     string
+		DBHost     string
+		DBPort     int
+		DBUser     string
+		DBPassword string
+		ConfDB     string
 	}
 
 	MaxNodePendingMsg  int //单个node  dial期间pending消息数量限制/已经发往kvnode等待应答的消息数量

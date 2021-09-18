@@ -21,6 +21,8 @@ func TestMutilNode(t *testing.T) {
 	var configStr1 string = `
 	
 	Mode = "solo"
+
+	DBType = "pgsql"
 	
 	SnapshotCurrentCount    = 1
 	
@@ -50,20 +52,15 @@ func TestMutilNode(t *testing.T) {
 	
 						  
 	[DBConfig]
-	SqlType         = "%s"
+
 	
 	
 	DbHost          = "%s"
 	DbPort          = %d
 	DbUser			= "%s"
 	DbPassword      = "%s"
-	DbDataBase      = "%s"
-	
-	ConfDbHost      = "%s"
-	ConfDbPort      = %d
-	ConfDbUser      = "%s"
-	ConfDbPassword  = "%s"
-	ConfDataBase    = "%s"
+	DataDB          = "%s"
+	ConfDB          = "%s"
 	
 	
 	[Log]
@@ -97,9 +94,9 @@ func TestMutilNode(t *testing.T) {
 		panic(err)
 	}
 
-	conf1, _ := LoadConfigStr(fmt.Sprintf(configStr1, "http://127.0.0.1:12377", 10018, "pgsql", "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB))
-	conf2, _ := LoadConfigStr(fmt.Sprintf(configStr1, "http://127.0.0.1:12378", 10017, "pgsql", "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB))
-	conf3, _ := LoadConfigStr(fmt.Sprintf(configStr1, "http://127.0.0.1:12379", 10016, "pgsql", "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB))
+	conf1, _ := LoadConfigStr(fmt.Sprintf(configStr1, "http://127.0.0.1:12377", 10018, "localhost", 5432, dbConf.PgDB, dbConf.PgDB))
+	conf2, _ := LoadConfigStr(fmt.Sprintf(configStr1, "http://127.0.0.1:12378", 10017, "localhost", 5432, dbConf.PgDB, dbConf.PgDB))
+	conf3, _ := LoadConfigStr(fmt.Sprintf(configStr1, "http://127.0.0.1:12379", 10016, "localhost", 5432, dbConf.PgDB, dbConf.PgDB))
 
 	client.InitLogger(GetLogger())
 
@@ -223,6 +220,8 @@ func TestMutilNode(t *testing.T) {
 	var configStr2 string = `
 	
 	Mode = "solo"
+
+	DBType = "pgsql"
 	
 	SnapshotCurrentCount    = 1
 
@@ -252,20 +251,15 @@ func TestMutilNode(t *testing.T) {
 	
 						  
 	[DBConfig]
-	SqlType         = "%s"
+
 	
 	
-	DbHost          = "%s"
-	DbPort          = %d
-	DbUser			= "%s"
-	DbPassword      = "%s"
-	DbDataBase      = "%s"
-	
-	ConfDbHost      = "%s"
-	ConfDbPort      = %d
-	ConfDbUser      = "%s"
-	ConfDbPassword  = "%s"
-	ConfDataBase    = "%s"
+	Host          = "%s"
+	Port          = %d
+	User		  = "%s"
+	Password      = "%s"
+	DataDB        = "%s"
+	ConfDB        = "%s"
 	
 	
 	[Log]
@@ -276,7 +270,7 @@ func TestMutilNode(t *testing.T) {
 	EnableLogStdout = false	
 	`
 
-	conf4, _ := LoadConfigStr(fmt.Sprintf(configStr2, "http://127.0.0.1:22381", 10019, "pgsql", "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB))
+	conf4, _ := LoadConfigStr(fmt.Sprintf(configStr2, "http://127.0.0.1:22381", 10019, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB, dbConf.PgDB))
 
 	node4 := NewKvNode(4, conf4, dbMeta, sql.CreateDbMeta, newMockDBBackEnd())
 

@@ -437,7 +437,7 @@ func (this *kvnode) Start() error {
 
 			//从DB获取配置
 			clusterConf := config.ClusterConfig
-			kvconf, err := clusterconf.LoadConfigFromDB(clusterConf.ClusterID, clusterConf.SqlType, clusterConf.DbHost, clusterConf.DbPort, clusterConf.DbDataBase, clusterConf.DbUser, clusterConf.DbPassword)
+			kvconf, err := clusterconf.LoadConfigFromDB(clusterConf.ClusterID, config.DBType, clusterConf.DBHost, clusterConf.DBPort, clusterConf.ConfDB, clusterConf.DBUser, clusterConf.DBPassword)
 			if nil != err {
 				return err
 			}
