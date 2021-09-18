@@ -1,13 +1,24 @@
-package client
+package client2
 
 import (
+	"errors"
 	"fmt"
 	"github.com/sniperHW/flyfish/errcode"
+	flynet "github.com/sniperHW/flyfish/pkg/net"
+	"github.com/sniperHW/flyfish/pkg/net/cs"
+	snet "github.com/sniperHW/flyfish/server/net"
+	sproto "github.com/sniperHW/flyfish/server/proto"
+	"math/rand"
+	"net"
 	"runtime"
 	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
 )
 
 var ClientTimeout uint32 = 6000 //6sec
+var maxPendingSize int = 10000
 
 var seqno int64
 
@@ -33,15 +44,25 @@ func Recover() {
 	}
 }
 
+type ClientConf struct {
+	CallbackQueue   EventQueueI //响应回调的事件队列
+	CBEventPriority int         //回调事件优先级
+	//cluster模式
+	Dir []string //dir服务地址
+	//solo模式
+	UnikeyPlacement func(string) int //返回unikey所在的store,对于连接proxy的方式无需提供,store字段由proxy填写
+	SoloService     string
+}
+
 type Client struct {
-	conn          *Conn
-	callbackQueue EventQueueI //响应回调的事件队列
-	priority      int
-	/*
-	 *  返回unikey所在的store
-	 *  对于连接proxy的方式无需提供,store字段由proxy填写
-	 */
-	unikeyPlacement func(string) int
+	sync.Mutex
+	conf        ClientConf
+	soloMode    bool
+	index       int
+	session     *flynet.Socket
+	pendingSend []*cmdContext //等待发送的消息
+	waitResp    map[int64]*cmdContext
+	closed      int32
 }
 
 func (this *Client) callcb(unikey string, cb callback, a interface{}) {
@@ -54,80 +75,251 @@ func (this *Client) callcb(unikey string, cb callback, a interface{}) {
 }
 
 func (this *Client) doCallBack(unikey string, cb callback, a interface{}) {
-	if nil != this.callbackQueue && cb.sync == false {
-		this.callbackQueue.Post(this.priority, this.callcb, unikey, cb, a)
+	cbqueue := this.conf.CallbackQueue
+	priority := this.conf.CBEventPriority
+
+	if nil != cbqueue && cb.sync == false {
+		cbqueue.Post(priority, this.callcb, unikey, cb, a)
 	} else {
 		defer Recover()
 		this.callcb(unikey, cb, a)
 	}
 }
 
-func OpenClient(service string, callbackQueue ...EventQueueI) *Client {
-
-	c := &Client{}
-
-	if len(callbackQueue) > 0 {
-		c.callbackQueue = callbackQueue[0]
+func queryGates(dir []string) (gates []string, err error) {
+	okCh := make(chan []string)
+	uu := make([]*flynet.Udp, len(dir))
+	for k, v := range dir {
+		go func(i int, s string) {
+			u, err := flynet.NewUdp(fmt.Sprintf(":0"), snet.Pack, snet.Unpack)
+			if nil == err {
+				addr, err := net.ResolveUDPAddr("udp", s)
+				if nil == err {
+					u.SendTo(addr, &sproto.QueryGateList{})
+					uu[i] = u
+					recvbuff := make([]byte, 4096)
+					_, r, err := u.ReadFrom(recvbuff)
+					if nil == err {
+						if resp, ok := r.(*sproto.GateList); ok {
+							okCh <- resp.List
+						}
+					}
+				} else {
+					GetSugar().Infof("%v", err)
+				}
+			} else {
+				GetSugar().Infof("%v", err)
+			}
+		}(k, v)
 	}
 
-	c.conn = openConn(c, service)
+	ticker := time.NewTicker(1 * time.Second)
 
-	return c
+	select {
+	case v := <-okCh:
+		gates = v
+	case <-ticker.C:
+		err = errors.New("timeout")
+
+	}
+	ticker.Stop()
+
+	for _, v := range uu {
+		if nil != v {
+			v.Close()
+		}
+	}
+
+	return
 }
 
-func (this *Client) SetUnikeyPlacement(u func(string) int) *Client {
-	this.unikeyPlacement = u
-	return this
+func (this *Client) onDisconnected() {
+	this.Lock()
+	this.session = nil
+	waitResp := this.waitResp
+	this.waitResp = map[int64]*cmdContext{}
+	closed := atomic.LoadInt32(&this.closed)
+	this.Unlock()
+
+	for _, v := range waitResp {
+		if v.deadlineTimer.Stop() {
+			this.doCallBack(v.unikey, v.cb, errcode.New(errcode.Errcode_error, "lose connection"))
+			releaseCmdContext(v)
+		}
+	}
+
+	if closed == 1 {
+		return
+	}
+
+	if this.soloMode {
+		go func() {
+			for {
+				session, err := cs.NewConnector("tcp", this.conf.SoloService).Dial(time.Second * 5)
+				if nil == err {
+					this.onConnected(session)
+					return
+				}
+
+				if atomic.LoadInt32(&this.closed) == 1 {
+					return
+				} else {
+					time.Sleep(time.Second)
+				}
+			}
+		}()
+	} else {
+		go func() {
+			for {
+				gates, err := queryGates(this.conf.Dir)
+				if nil != err && len(gates) > 0 {
+					for i := 0; i < len(gates); i++ {
+						session, err := cs.NewConnector("tcp", gates[this.index]).Dial(time.Second * 5)
+						if nil == err {
+							this.onConnected(session)
+							return
+						} else {
+							this.index = (this.index + 1) % len(gates)
+						}
+					}
+				}
+				if atomic.LoadInt32(&this.closed) == 1 {
+					return
+				} else {
+					time.Sleep(time.Second)
+				}
+			}
+		}()
+	}
 }
 
-func (this *Client) SetPriority(priority int) {
-	this.priority = priority
+func (this *Client) onConnected(session *flynet.Socket) {
+
+	this.Lock()
+	defer this.Unlock()
+
+	//todo:启动ping定时器
+
+	this.session = session
+	this.session.SetSendQueueSize(maxPendingSize)
+	this.session.SetInBoundProcessor(cs.NewRespInboundProcessor())
+	this.session.SetEncoder(&cs.ReqEncoder{})
+	this.session.SetCloseCallBack(func(sess *flynet.Socket, reason error) {
+		GetSugar().Infof("socket close %v", reason)
+		this.onDisconnected()
+	}).BeginRecv(func(s *flynet.Socket, msg interface{}) {
+		this.onMessage(msg.(*cs.RespMessage))
+	})
+
+	pendingSend := this.pendingSend
+	this.pendingSend = []*cmdContext{}
+
+	now := time.Now()
+
+	//发送被排队的请求
+	for _, v := range pendingSend {
+		//已经超时或马上就要超时的请求不发送
+		if v.deadline.Sub(now) > 10*time.Millisecond && nil != this.waitResp[v.req.Seqno] {
+			this.sendReq(v)
+		}
+	}
 }
 
-func (this *Client) Get(table, key string, fields ...string) *SliceCmd {
-	return this.conn.Get(table, key, nil, fields...)
+func (this *Client) sendReq(c *cmdContext) {
+	if nil != this.conf.UnikeyPlacement {
+		//如果提供了定位器，使用定位器直接计算出Store
+		c.req.Store = this.conf.UnikeyPlacement(c.req.UniKey)
+	}
+	this.session.Send(c.req)
 }
 
-func (this *Client) GetAll(table, key string) *SliceCmd {
-	return this.conn.GetAll(table, key, nil)
+func (this *Client) exec(c *cmdContext) {
+	var errCode errcode.Error
+	this.Lock()
+	defer func() {
+		this.Unlock()
+		if errCode != nil {
+			this.doCallBack(c.unikey, c.cb, errCode)
+			releaseCmdContext(c)
+		}
+	}()
+
+	if atomic.LoadInt32(&this.closed) == 1 {
+		errCode = errcode.New(errcode.Errcode_error, "client closed")
+	} else {
+		c.deadline = time.Now().Add(time.Duration(ClientTimeout) * time.Millisecond)
+		if nil != this.session {
+			this.waitResp[c.req.Seqno] = c
+			c.deadlineTimer = time.AfterFunc(time.Duration(ClientTimeout)*time.Millisecond, c.onTimeout)
+			this.sendReq(c)
+		} else {
+			if len(this.pendingSend) < maxPendingSize {
+				this.waitResp[c.req.Seqno] = c
+				c.deadlineTimer = time.AfterFunc(time.Duration(ClientTimeout)*time.Millisecond, c.onTimeout)
+				this.pendingSend = append(this.pendingSend, c)
+			} else {
+				errCode = errcode.New(errcode.Errcode_retry, "busy please retry later")
+			}
+		}
+	}
 }
 
-func (this *Client) GetWithVersion(table, key string, version int64, fields ...string) *SliceCmd {
-	return this.conn.Get(table, key, &version, fields...)
+func (this *Client) Close() {
+	this.Lock()
+	defer this.Unlock()
+	if atomic.CompareAndSwapInt32(&this.closed, 0, 1) {
+
+	}
 }
 
-func (this *Client) GetAllWithVersion(table, key string, version int64) *SliceCmd {
-	return this.conn.GetAll(table, key, &version)
-}
+func OpenClient(conf ClientConf) (*Client, error) {
+	c := &Client{
+		conf:        conf,
+		pendingSend: []*cmdContext{},
+		waitResp:    map[int64]*cmdContext{},
+	}
 
-func (this *Client) Set(table, key string, fields map[string]interface{}, version ...int64) *StatusCmd {
-	return this.conn.Set(table, key, fields, version...)
-}
+	if "" == conf.SoloService {
+		if len(conf.Dir) == 0 {
+			return nil, errors.New("cluster mode,but dir empty")
+		}
+		gates, err := queryGates(conf.Dir)
 
-func (this *Client) SetNx(table, key string, fields map[string]interface{}) *SliceCmd {
-	return this.conn.SetNx(table, key, fields)
-}
+		if nil != err {
+			return nil, err
+		}
 
-func (this *Client) CompareAndSet(table, key, field string, oldV, newV interface{}, version ...int64) *SliceCmd {
-	return this.conn.CompareAndSet(table, key, field, oldV, newV, version...)
-}
+		if len(gates) == 0 {
+			return nil, errors.New("no available gate")
+		}
 
-func (this *Client) CompareAndSetNx(table, key, field string, oldV, newV interface{}, version ...int64) *SliceCmd {
-	return this.conn.CompareAndSetNx(table, key, field, oldV, newV, version...)
-}
+		GetSugar().Infof("got gates%v", gates)
 
-func (this *Client) Del(table, key string, version ...int64) *StatusCmd {
-	return this.conn.Del(table, key, version...)
-}
+		c.index = rand.Int() % len(gates)
 
-func (this *Client) IncrBy(table, key, field string, value int64, version ...int64) *SliceCmd {
-	return this.conn.IncrBy(table, key, field, value, version...)
-}
+		for i := 0; i < len(gates); i++ {
+			session, err := cs.NewConnector("tcp", gates[c.index]).Dial(time.Second * 5)
+			if nil == err {
+				c.onConnected(session)
+				break
+			} else {
+				c.index = (c.index + 1) % len(gates)
+			}
+		}
 
-func (this *Client) DecrBy(table, key, field string, value int64, version ...int64) *SliceCmd {
-	return this.conn.DecrBy(table, key, field, value, version...)
-}
+		if nil == c.session {
+			return nil, errors.New("no available gate")
+		}
 
-func (this *Client) Kick(table, key string) *StatusCmd {
-	return this.conn.Kick(table, key)
+	} else {
+		c.soloMode = true
+		session, err := cs.NewConnector("tcp", c.conf.SoloService).Dial(time.Second * 5)
+		if nil != err {
+			return nil, err
+		} else {
+			c.onConnected(session)
+		}
+	}
+
+	return c, nil
 }

@@ -1,4 +1,4 @@
-package client
+package client2
 
 //go test -covermode=count -v -coverprofile=coverage.out -run=.
 //go tool cover -html=coverage.out
@@ -8,8 +8,12 @@ import (
 	"github.com/sniperHW/flyfish/backend/db"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/logger"
-	"github.com/sniperHW/flyfish/proto"
+	//"github.com/sniperHW/flyfish/proto"
+	"github.com/sniperHW/flyfish/server/clusterconf"
+	Dir "github.com/sniperHW/flyfish/server/dir"
+	Gate "github.com/sniperHW/flyfish/server/gate"
 	"github.com/sniperHW/flyfish/server/mock/kvnode"
+	sslot "github.com/sniperHW/flyfish/server/slot"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
@@ -25,7 +29,10 @@ var (
 )
 
 func init() {
-	InitLogger(logger.NewZapLogger("client.log", "./log", "debug", 100, 14, true))
+	l := logger.NewZapLogger("testClient.log", "./log", "debug", 100, 14, true)
+	InitLogger(l)
+	Gate.InitLogger(l)
+	Dir.InitLogger(l)
 }
 
 func test(t *testing.T, c *Client) {
@@ -404,7 +411,164 @@ func testTimeout(t *testing.T, c *Client) {
 	}
 }
 
-func testConnDisconnect(t *testing.T) {
+var metaStr string = `
+{"TableDefs":[{"Name":"users1","Fields":[{"Name":"name","Type":"string"},{"Name":"age","Type":"int","DefautValue":"0"},{"Name":"phone","Type":"string"}]}]}
+`
+
+func TestSolo(t *testing.T) {
+	def, _ := db.CreateDbDefFromJsonString([]byte(metaStr))
+	n1 := kvnode.New()
+	assert.Nil(t, n1.Start(true, "localhost:8021", "localhost:8031", def))
+
+	c, err := OpenClient(ClientConf{
+		SoloService: "localhost:8021",
+	})
+
+	assert.Nil(t, err)
+
+	test(t, c)
+
+	c.Close()
+
+	n1.Stop()
+}
+
+var gateConfigStr string = `
+	ServiceHost = "localhost"
+	ServicePort = 8110
+	ConsolePort = 8110
+	DirService  = "localhost:8113"
+
+	MaxNodePendingMsg  = 4096
+	MaxStorePendingMsg = 1024
+	MaxPendingMsg = 10000
+
+	[ClusterConfig]
+		ClusterID               = 1
+		DbHost                  = "localhost"
+		DbPort                  = 5432
+		DbUser			        = "sniper"
+		DbPassword              = "123456"
+		DbDataBase              = "test"
+
+	[Log]
+		MaxLogfileSize  = 104857600 # 100mb
+		LogDir          = "log"
+		LogPrefix       = "gate"
+		LogLevel        = "info"
+		EnableLogStdout = false		
+
+`
+
+var configDirStr string = `
+	Host = "localhost"
+	ConsolePort = 8113
+
+	[ClusterConfig]
+		ClusterID               = 1
+		DbHost                  = "localhost"
+		DbPort                  = 5432
+		DbUser			        = "sniper"
+		DbPassword              = "123456"
+		DbDataBase              = "test"
+
+	[Log]
+		MaxLogfileSize  = 104857600 # 100mb
+		LogDir          = "log"
+		LogPrefix       = "gate"
+		LogLevel        = "info"
+		EnableLogStdout = false		
+
+`
+
+func TestCluster(t *testing.T) {
+
+	sslot.SlotCount = 128
+
+	confJson := clusterconf.KvConfigJson{}
+
+	confJson.NodeInfo = append(confJson.NodeInfo, clusterconf.Node{
+		ID:          1,
+		HostIP:      "localhost",
+		RaftPort:    8011,
+		ServicePort: 8021,
+		ConsolePort: 8031,
+	})
+
+	confJson.NodeInfo = append(confJson.NodeInfo, clusterconf.Node{
+		ID:          2,
+		HostIP:      "localhost",
+		RaftPort:    8012,
+		ServicePort: 8022,
+		ConsolePort: 8032,
+	})
+
+	confJson.NodeInfo = append(confJson.NodeInfo, clusterconf.Node{
+		ID:          3,
+		HostIP:      "localhost",
+		RaftPort:    8013,
+		ServicePort: 8023,
+		ConsolePort: 8033,
+	})
+
+	confJson.Shard = append(confJson.Shard, clusterconf.RaftGroupJson{
+		Nodes: []int{1, 2, 3},
+	})
+
+	_, version, _ := clusterconf.LoadConfigJsonFromDB(1, "pgsql", "localhost", 5432, "test", "sniper", "123456")
+
+	oldVersion := version
+	newVersion := version + 1
+
+	err := clusterconf.StoreConfigJsonToDB(1, oldVersion, newVersion, "pgsql", "localhost", 5432, "test", "sniper", "123456", &confJson)
+
+	assert.Nil(t, err)
+
+	def, _ := db.CreateDbDefFromJsonString([]byte(metaStr))
+	n1 := kvnode.New()
+	n2 := kvnode.New()
+	n3 := kvnode.New()
+
+	assert.Nil(t, n1.Start(true, "localhost:8021", "localhost:8031", def))
+	assert.Nil(t, n2.Start(false, "localhost:8022", "localhost:8032", def))
+	assert.Nil(t, n3.Start(false, "localhost:8023", "localhost:8033", def))
+
+	configDir, err := Dir.LoadConfigStr(configDirStr)
+	assert.Nil(t, err)
+
+	dir := Dir.NewDir(configDir)
+
+	assert.Nil(t, dir.Start())
+
+	gateConfig, err := Gate.LoadConfigStr(gateConfigStr)
+
+	assert.Nil(t, err)
+
+	g := Gate.NewGate(gateConfig)
+
+	assert.Nil(t, g.Start())
+
+	time.Sleep(time.Second)
+
+	c, err := OpenClient(ClientConf{
+		Dir: []string{"localhost:8113"},
+	})
+
+	assert.Nil(t, err)
+
+	test(t, c)
+
+	c.Close()
+
+	g.Stop()
+	dir.Stop()
+
+	n1.Stop()
+	n2.Stop()
+	n3.Stop()
+}
+
+/*func testConnDisconnect(t *testing.T) {
 	c := OpenClient("localhost:8110")
 
 	ClientTimeout = 5000
@@ -518,4 +682,4 @@ func TestClient(t *testing.T) {
 
 	assert.Equal(t, 0, len(c.conn.waitResp))
 
-}
+}*/

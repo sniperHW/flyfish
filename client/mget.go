@@ -1,4 +1,4 @@
-package client
+package client2
 
 type MGetCmd struct {
 	priority      int
