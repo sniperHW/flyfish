@@ -23,41 +23,6 @@ type nodeStoreTransaction struct {
 	timer *timer.Timer
 }
 
-//slot迁移事务
-type slotTransferState int
-
-const (
-	slotTransferPrepare = slotTransferState(0)
-	slotTransferCommit  = slotTransferState(1)
-	slotTransferCancel  = slotTransferState(2)
-)
-
-type slotTransferTransaction struct {
-	TransID    int64
-	State      slotTransferState
-	Slot       int //slot will be transfer
-	OutStoreID int
-	InStoreID  int
-
-	tmpState slotTransferState
-	inAgree  bool
-	outAgree bool
-	timer    *timer.Timer
-	pd       *pd
-}
-
-func (t *slotTransferTransaction) isPrepare() bool {
-	return t.State == slotTransferPrepare && t.tmpState == slotTransferPrepare
-}
-
-func (t *slotTransferTransaction) isCancel() bool {
-	return t.State == slotTransferCancel || t.tmpState == slotTransferCancel
-}
-
-func (t *slotTransferTransaction) isCommit() bool {
-	return t.State == slotTransferCommit
-}
-
 func (t *nodeStoreTransaction) Notify() {
 	msg := &sproto.NotifyKvnodeStoreTrans{
 		TransID:   t.TransID,
@@ -79,6 +44,41 @@ func (t *nodeStoreTransaction) Notify() {
 
 func (t *nodeStoreTransaction) onTimeout(_ *timer.Timer, _ interface{}) {
 	t.Notify()
+}
+
+//slot迁移事务
+type slotTransferState int
+
+const (
+	slotTransferPrepare = slotTransferState(0)
+	slotTransferCommit  = slotTransferState(1)
+	slotTransferCancel  = slotTransferState(2)
+)
+
+type slotTransferTransaction struct {
+	TransID    int64
+	State      slotTransferState
+	Slots      []int32 //slots will be transfer
+	OutStoreID int
+	InStoreID  int
+
+	tmpState slotTransferState
+	inAgree  bool
+	outAgree bool
+	timer    *timer.Timer
+	pd       *pd
+}
+
+func (t *slotTransferTransaction) isPrepare() bool {
+	return t.State == slotTransferPrepare && t.tmpState == slotTransferPrepare
+}
+
+func (t *slotTransferTransaction) isCancel() bool {
+	return t.State == slotTransferCancel || t.tmpState == slotTransferCancel
+}
+
+func (t *slotTransferTransaction) isCommit() bool {
+	return t.State == slotTransferCommit
 }
 
 func (trans *slotTransferTransaction) notifyCancel() {

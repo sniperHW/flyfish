@@ -3,6 +3,7 @@ package flypd
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/pkg/timer"
@@ -84,7 +85,7 @@ func (p *initPdProposal) apply() {
 
 		slots := s.slots.GetOpenBits()
 		for _, vv := range slots {
-			p.pd.slot2store[vv] = s
+			p.pd.slot2store[int32(vv)] = s
 		}
 
 		p.pd.stores[s.id] = s
@@ -278,6 +279,11 @@ func (p *kvnodeStoreTransRespProposal) apply() {
 	}
 
 	if p.trans.GotLeaderResp && p.trans.GotOtherResp {
+		fmt.Println(p.trans.TransID)
+		if nil == p.trans.timer {
+			panic("here")
+		}
+
 		p.trans.timer.Cancel()
 		p.trans.timer = nil
 		//事务结束
@@ -295,7 +301,9 @@ type slotTransferPrepareProposal struct {
 
 func (p *slotTransferPrepareProposal) OnError(error error) {
 	p.pd.mainque.AppendHighestPriotiryItem(func() {
-		delete(p.pd.transferingSlot, p.trans.Slot)
+		for _, v := range p.trans.Slots {
+			delete(p.pd.transferingSlot, v)
+		}
 	})
 }
 
@@ -315,7 +323,7 @@ func (p *slotTransferPrepareProposal) apply() {
 
 	prepare := &sproto.SlotTransferPrepare{
 		TransID:  p.trans.TransID,
-		Slot:     int32(p.trans.Slot),
+		Slot:     p.trans.Slots,
 		StoreIn:  int32(p.trans.InStoreID),
 		StoreOut: int32(p.trans.OutStoreID),
 	}
@@ -359,7 +367,9 @@ func (p *slotTransferCancelProposal) OnMergeFinish(b []byte) []byte {
 
 func (p *slotTransferCancelProposal) apply() {
 	p.trans.State = slotTransferCancel
-	delete(p.pd.transferingSlot, p.trans.Slot)
+	for _, v := range p.trans.Slots {
+		delete(p.pd.transferingSlot, v)
+	}
 	p.trans.notifyCancel()
 }
 
@@ -384,11 +394,12 @@ func (p *slotTransferCommitProposal) Serilize(b []byte) []byte {
 }
 
 func (p *slotTransferCommitProposal) apply() {
-	delete(p.pd.transferingSlot, p.trans.Slot)
 	p.trans.State = slotTransferCommit
-	p.pd.stores[p.trans.InStoreID].slots.Set(p.trans.Slot)
-	p.pd.stores[p.trans.OutStoreID].slots.Clear(p.trans.Slot)
-
+	for _, v := range p.trans.Slots {
+		delete(p.pd.transferingSlot, v)
+		p.pd.stores[p.trans.InStoreID].slots.Set(int(v))
+		p.pd.stores[p.trans.OutStoreID].slots.Clear(int(v))
+	}
 	p.trans.notifyCommit()
 }
 
@@ -414,7 +425,7 @@ func (p *pd) replayInitPd(reader *buffer.BufferReader) error {
 
 		slots := s.slots.GetOpenBits()
 		for _, vv := range slots {
-			p.slot2store[vv] = s
+			p.slot2store[int32(vv)] = s
 		}
 
 		p.stores[s.id] = s

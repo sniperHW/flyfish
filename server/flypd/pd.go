@@ -79,7 +79,7 @@ type pd struct {
 	udp        *flynet.Udp
 	stores     map[int]*store
 	kvnodes    map[int]*kvnode
-	slot2store map[int]*store
+	slot2store map[int32]*store
 
 	msgHandler map[reflect.Type]func(*net.UDPAddr, proto.Message)
 
@@ -88,7 +88,7 @@ type pd struct {
 	transSlotTransfer map[int64]*slotTransferTransaction
 
 	tmpTransNodeStore map[int64]*nodeStoreTransaction
-	transferingSlot   map[int]bool //正在迁移中的slot
+	transferingSlot   map[int32]bool //正在迁移中的slot
 
 	stoponce  int32
 	startonce int32
@@ -137,11 +137,11 @@ func NewPd(udpService string, id int, cluster string) (*pd, error) {
 		mutilRaft:         mutilRaft,
 		stores:            map[int]*store{},
 		kvnodes:           map[int]*kvnode{},
-		slot2store:        map[int]*store{},
+		slot2store:        map[int32]*store{},
 		msgHandler:        map[reflect.Type]func(*net.UDPAddr, proto.Message){},
 		transNodeStore:    map[int64]*nodeStoreTransaction{},
 		transSlotTransfer: map[int64]*slotTransferTransaction{},
-		transferingSlot:   map[int]bool{},
+		transferingSlot:   map[int32]bool{},
 		tmpTransNodeStore: map[int64]*nodeStoreTransaction{},
 	}
 
@@ -327,7 +327,7 @@ func (p *pd) initPd() {
 
 func (p *pd) onBecomeLeader() {
 
-	p.transferingSlot = map[int]bool{}
+	p.transferingSlot = map[int32]bool{}
 
 	p.tmpTransNodeStore = map[int64]*nodeStoreTransaction{}
 
@@ -339,12 +339,15 @@ func (p *pd) onBecomeLeader() {
 
 		if v.State == slotTransferPrepare {
 
-			p.transferingSlot[v.Slot] = true
+			//p.transferingSlot[v.Slot] = true
+			for _, vv := range v.Slots {
+				p.transferingSlot[vv] = true
+			}
 
 			//重发prepare
 			prepare := &sproto.SlotTransferPrepare{
 				TransID:  v.TransID,
-				Slot:     int32(v.Slot),
+				Slot:     v.Slots,
 				StoreIn:  int32(v.InStoreID),
 				StoreOut: int32(v.OutStoreID),
 			}
@@ -485,22 +488,26 @@ func (p *pd) serve() {
 
 }
 
-func (p *pd) beginSlotTransfer(slot int, storeIn *store, storeOut *store) error {
-	if p.transferingSlot[slot] {
-		return errors.New("slot is transfering")
-	}
+func (p *pd) beginSlotTransfer(slot []int32, storeIn *store, storeOut *store) error {
 
-	if !storeOut.slots.Test(slot) {
-		return errors.New("slot is not found in storeOut")
-	}
+	for _, v := range slot {
 
-	if storeIn.slots.Test(slot) {
-		return errors.New("slot is already in storeIn")
+		if p.transferingSlot[v] {
+			return fmt.Errorf("slot:%d is transfering", v)
+		}
+
+		if !storeOut.slots.Test(int(v)) {
+			return fmt.Errorf("slot:%d is not found in storeOut:%d", v, storeOut.id)
+		}
+
+		if storeIn.slots.Test(int(v)) {
+			return fmt.Errorf("slot:%d is already in storeIn:%d", v, storeIn.id)
+		}
 	}
 
 	trans := &slotTransferTransaction{
 		TransID:    p.nextTransID,
-		Slot:       slot,
+		Slots:      slot,
 		OutStoreID: storeOut.id,
 		InStoreID:  storeIn.id,
 		pd:         p,
@@ -517,7 +524,9 @@ func (p *pd) beginSlotTransfer(slot int, storeIn *store, storeOut *store) error 
 		})
 
 	if nil == err {
-		p.transferingSlot[slot] = true
+		for _, v := range slot {
+			p.transferingSlot[v] = true
+		}
 	}
 
 	return err
@@ -600,7 +609,7 @@ func (p *pd) recoverFromSnapshot(b []byte) error {
 
 	p.stores = map[int]*store{}
 
-	p.slot2store = map[int]*store{}
+	p.slot2store = map[int32]*store{}
 
 	for _, v := range snap.Stores {
 		s := &store{
@@ -616,7 +625,7 @@ func (p *pd) recoverFromSnapshot(b []byte) error {
 
 		slots := s.slots.GetOpenBits()
 		for _, vv := range slots {
-			p.slot2store[vv] = s
+			p.slot2store[int32(vv)] = s
 		}
 		p.stores[s.id] = s
 	}

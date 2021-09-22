@@ -22,8 +22,6 @@ enum ServerCmdType {
 
 
   //kvnode <-> pd 消息
-
-
   KvnodeBoot                    = 110;                   //kvnode冷启登录  
   KvnodeBootResp                = 111;
 
@@ -199,24 +197,24 @@ message kvnodeRemStoreResp {
 
 message slotTransferPrepare {
   optional int64 transID      = 1;
-  optional int32 slot         = 2;
-    optional int32 storeIn      = 3;
-    optional int32 storeOut     = 4;
+  repeated int32 slot         = 2;
+  optional int32 storeIn      = 3;
+  optional int32 storeOut     = 4;
 }
 
 message slotTransferPrepareAck {
-    optional int64 transID  = 1;
-    optional int32 storeID  = 2;
-    optional bool  ok       = 3;  
+  optional int64 transID  = 1;
+  optional int32 storeID  = 2;
+  optional bool  ok       = 3;  
 }
 
 
 message slotTransferCancel {
   optional int64 transID  = 1;
-    optional int32 storeID  = 2;  
+  optional int32 storeID  = 2;  
 }
 
 message slotTransferCommit {
   optional int64 transID  = 1;
-    optional int32 storeID  = 2;  
+  optional int32 storeID  = 2;  
 }
