@@ -1,14 +1,12 @@
-package pd
+package flypd
 
 import (
 	"encoding/json"
 	"errors"
-	//"fmt"
-	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/pkg/timer"
-	pdproto "github.com/sniperHW/flyfish/server/pd/proto"
+	sproto "github.com/sniperHW/flyfish/server/proto"
 	"github.com/sniperHW/flyfish/server/slot"
 	"net"
 	"time"
@@ -315,11 +313,11 @@ func (p *slotTransferPrepareProposal) Serilize(b []byte) []byte {
 func (p *slotTransferPrepareProposal) apply() {
 	p.pd.transSlotTransfer[p.trans.TransID] = p.trans
 
-	prepare := &pdproto.SlotTransferPrepare{
-		TransID:  proto.Int64(p.trans.TransID),
-		Slot:     proto.Int32(int32(p.trans.Slot)),
-		StoreIn:  proto.Int32(int32(p.trans.InStoreID)),
-		StoreOut: proto.Int32(int32(p.trans.OutStoreID)),
+	prepare := &sproto.SlotTransferPrepare{
+		TransID:  p.trans.TransID,
+		Slot:     int32(p.trans.Slot),
+		StoreIn:  int32(p.trans.InStoreID),
+		StoreOut: int32(p.trans.OutStoreID),
 	}
 
 	for _, v := range p.pd.stores[p.trans.InStoreID].kvnodes {

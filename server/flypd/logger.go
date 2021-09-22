@@ -1,4 +1,4 @@
-package pd
+package flypd
 
 import (
 	"github.com/sniperHW/flyfish/pkg/net"

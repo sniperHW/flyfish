@@ -1,9 +1,8 @@
-package pd
+package flypd
 
 import (
-	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/pkg/timer"
-	pdproto "github.com/sniperHW/flyfish/server/pd/proto"
+	sproto "github.com/sniperHW/flyfish/server/proto"
 	"time"
 )
 
@@ -14,7 +13,7 @@ func makeTransactionNodeStoreID(storeID int, nodeID int) int64 {
 //kvnode增/删store的事务
 type nodeStoreTransaction struct {
 	TransID       int64
-	Type          pdproto.KvnodeStoreTransType
+	Type          sproto.KvnodeStoreTransType
 	NodeId        int
 	StoreId       int
 	GotLeaderResp bool
@@ -60,18 +59,18 @@ func (t *slotTransferTransaction) isCommit() bool {
 }
 
 func (t *nodeStoreTransaction) Notify() {
-	msg := &pdproto.NotifyKvnodeStoreTrans{
-		TransID:   proto.Int64(t.TransID),
-		TransType: pdproto.KvnodeStoreTransType.Enum(t.Type),
-		NodeId:    proto.Int32(int32(t.NodeId)),
-		StoreId:   proto.Int32(int32(t.StoreId)),
+	msg := &sproto.NotifyKvnodeStoreTrans{
+		TransID:   t.TransID,
+		TransType: t.Type,
+		NodeId:    int32(t.NodeId),
+		StoreId:   int32(t.StoreId),
 	}
 
 	for _, v := range t.pd.stores[t.StoreId].kvnodes {
 		t.pd.udp.SendTo(v.udpAddr, msg)
 	}
 
-	if t.Type == pdproto.KvnodeStoreTransType_TransAddStore {
+	if t.Type == sproto.KvnodeStoreTransType_TransAddStore {
 		t.pd.udp.SendTo(t.pd.kvnodes[t.NodeId].udpAddr, msg)
 	}
 
@@ -83,18 +82,18 @@ func (t *nodeStoreTransaction) onTimeout(_ *timer.Timer, _ interface{}) {
 }
 
 func (trans *slotTransferTransaction) notifyCancel() {
-	toIn := &pdproto.SlotTransferCancel{
-		TransID: proto.Int64(trans.TransID),
-		StoreID: proto.Int32(int32(trans.InStoreID)),
+	toIn := &sproto.SlotTransferCancel{
+		TransID: trans.TransID,
+		StoreID: int32(trans.InStoreID),
 	}
 
 	for _, v := range trans.pd.stores[trans.InStoreID].kvnodes {
 		trans.pd.udp.SendTo(v.udpAddr, toIn)
 	}
 
-	toOut := &pdproto.SlotTransferCancel{
-		TransID: proto.Int64(trans.TransID),
-		StoreID: proto.Int32(int32(trans.OutStoreID)),
+	toOut := &sproto.SlotTransferCancel{
+		TransID: trans.TransID,
+		StoreID: int32(trans.OutStoreID),
 	}
 
 	for _, v := range trans.pd.stores[trans.OutStoreID].kvnodes {
@@ -103,18 +102,18 @@ func (trans *slotTransferTransaction) notifyCancel() {
 }
 
 func (trans *slotTransferTransaction) notifyCommit() {
-	toIn := &pdproto.SlotTransferCommit{
-		TransID: proto.Int64(trans.TransID),
-		StoreID: proto.Int32(int32(trans.InStoreID)),
+	toIn := &sproto.SlotTransferCommit{
+		TransID: trans.TransID,
+		StoreID: int32(trans.InStoreID),
 	}
 
 	for _, v := range trans.pd.stores[trans.InStoreID].kvnodes {
 		trans.pd.udp.SendTo(v.udpAddr, toIn)
 	}
 
-	toOut := &pdproto.SlotTransferCommit{
-		TransID: proto.Int64(trans.TransID),
-		StoreID: proto.Int32(int32(trans.OutStoreID)),
+	toOut := &sproto.SlotTransferCommit{
+		TransID: trans.TransID,
+		StoreID: int32(trans.OutStoreID),
 	}
 
 	for _, v := range trans.pd.stores[trans.OutStoreID].kvnodes {

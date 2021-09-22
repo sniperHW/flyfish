@@ -1,4 +1,4 @@
-package pd
+package flypd
 
 import (
 	"encoding/json"
@@ -7,11 +7,12 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/compress"
+	flynet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	"github.com/sniperHW/flyfish/pkg/timer"
-	pdnet "github.com/sniperHW/flyfish/server/pd/net"
-	pdproto "github.com/sniperHW/flyfish/server/pd/proto"
+	snet "github.com/sniperHW/flyfish/server/net"
+	sproto "github.com/sniperHW/flyfish/server/proto"
 	"github.com/sniperHW/flyfish/server/slot"
 	//"go.etcd.io/etcd/etcdserver/api/snap"
 	"go.etcd.io/etcd/raft/raftpb"
@@ -75,7 +76,7 @@ type pd struct {
 	rn         *raft.RaftNode
 	mutilRaft  *raft.MutilRaft
 	mainque    applicationQueue
-	udp        *pdnet.Udp
+	udp        *flynet.Udp
 	stores     map[int]*store
 	kvnodes    map[int]*kvnode
 	slot2store map[int]*store
@@ -200,7 +201,7 @@ func (p *pd) issueProposal(proposal raft.Proposal) error {
 }
 
 func (p *pd) startUdpService(udpService string) error {
-	udp, err := pdnet.NewUdp(udpService)
+	udp, err := flynet.NewUdp(udpService, snet.Pack, snet.Unpack)
 	if nil != err {
 		return err
 	}
@@ -341,11 +342,11 @@ func (p *pd) onBecomeLeader() {
 			p.transferingSlot[v.Slot] = true
 
 			//重发prepare
-			prepare := &pdproto.SlotTransferPrepare{
-				TransID:  proto.Int64(v.TransID),
-				Slot:     proto.Int32(int32(v.Slot)),
-				StoreIn:  proto.Int32(int32(v.InStoreID)),
-				StoreOut: proto.Int32(int32(v.OutStoreID)),
+			prepare := &sproto.SlotTransferPrepare{
+				TransID:  v.TransID,
+				Slot:     int32(v.Slot),
+				StoreIn:  int32(v.InStoreID),
+				StoreOut: int32(v.OutStoreID),
 			}
 
 			for _, v := range p.stores[v.InStoreID].kvnodes {
