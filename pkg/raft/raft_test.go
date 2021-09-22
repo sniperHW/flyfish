@@ -199,6 +199,21 @@ func (s *kvstore) AddNode(id uint64, url string) error {
 	return <-o.ch
 }
 
+func (s *kvstore) AddLearner(id uint64, url string) error {
+	o := TestConfChange{
+		ProposalConfChangeBase: ProposalConfChangeBase{
+			ConfChangeType: raftpb.ConfChangeAddLearnerNode,
+			Url:            url,
+			NodeID:         id,
+		},
+		ch: make(chan error, 1),
+	}
+
+	s.rn.IssueConfChange(o)
+
+	return <-o.ch
+}
+
 func (s *kvstore) RemoveNode(id uint64) error {
 	o := TestConfChange{
 		ProposalConfChangeBase: ProposalConfChangeBase{
@@ -327,8 +342,8 @@ func (s *kvstore) serve() {
 				s.processLinearizableRead(v.([]LinearizableRead))
 			case ProposalConfChange:
 				s.processConfChange(v.(ProposalConfChange))
-
-			case RemoveFromCluster:
+			case ConfChange:
+				GetSugar().Infof("-----------------ConfChange %v %d---------------------", v.(ConfChange).CCType, v.(ConfChange).NodeID)
 			case ReplayOK:
 				if nil != s.startOK {
 					s.startOK()
@@ -356,7 +371,7 @@ func (s *kvstore) serve() {
 }
 
 func init() {
-	InitLogger(logger.NewZapLogger("testRaft.log", "./log", "debug", 100, 14, true))
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", "info", 100, 14, true))
 }
 
 type kvnode struct {
@@ -699,5 +714,69 @@ func TestProposeTimeout(t *testing.T) {
 	}
 
 	time.Sleep(time.Second * 5)
+
+}
+
+func TestAddNode(t *testing.T) {
+	//先删除所有kv文件
+	os.RemoveAll("./log/kv-1-1")
+	os.RemoveAll("./log/kv-1-1-snap")
+	os.RemoveAll("./log/kv-2-1")
+	os.RemoveAll("./log/kv-2-1-snap")
+	os.RemoveAll("./log/kv-3-1")
+	os.RemoveAll("./log/kv-3-1-snap")
+	os.RemoveAll("./log/kv-4-1")
+	os.RemoveAll("./log/kv-4-1-snap")
+
+	ProposalFlushInterval = 10
+	ProposalBatchCount = 1
+	ReadFlushInterval = 10
+	ReadBatchCount = 1
+	DefaultSnapshotCount = 100
+	SnapshotCatchUpEntriesN = 100
+
+	cluster := "1@http://127.0.0.1:22378"
+
+	node1 := newKvNode(1, cluster)
+
+	becomeLeaderCh1 := make(chan *kvnode, 1)
+
+	node1.store.becomeLeader = func() {
+		becomeLeaderCh1 <- node1
+	}
+
+	getLeader := func() *kvnode {
+		select {
+		case n := <-becomeLeaderCh1:
+			return n
+		}
+	}
+
+	leader := getLeader()
+
+	newNodeID := uint64((4 << 16) + 1)
+	err := leader.store.AddLearner(newNodeID, "http://127.0.0.1:22381")
+	assert.Nil(t, err)
+
+	//加入新节点
+	cluster = "1@http://127.0.0.1:22378,4@http://127.0.0.1:22381"
+
+	node4 := newKvNode(4, cluster)
+
+	startOkCh4 := make(chan struct{}, 1)
+
+	node4.store.startOK = func() {
+		select {
+		case startOkCh4 <- struct{}{}:
+		default:
+		}
+	}
+
+	<-startOkCh4
+
+	time.Sleep(time.Second * 5)
+
+	node1.stop()
+	node4.stop()
 
 }

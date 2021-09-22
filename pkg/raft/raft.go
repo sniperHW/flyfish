@@ -344,7 +344,7 @@ func (rc *RaftNode) replayWAL() *wal.WAL {
 	if len(ents) > 0 {
 		rc.lastIndex = ents[len(ents)-1].Index
 	} else {
-		GetSugar().Info("ReplayOK")
+		GetSugar().Info("ReplayOK 2")
 		rc.commitC.AppendHighestPriotiryItem(ReplayOK{})
 	}
 	return w
@@ -402,7 +402,7 @@ func (rc *RaftNode) publishEntries(ents []raftpb.Entry) {
 			GetSugar().Infof("%x raftpb.EntryConfChange %d %d %v", rc.id, cc.Type, cc, rc.confState)
 
 			switch cc.Type {
-			case raftpb.ConfChangeAddNode:
+			case raftpb.ConfChangeAddNode, raftpb.ConfChangeAddLearnerNode:
 				if len(cc.Context) > 0 {
 					url := string(cc.Context[8:])
 					GetSugar().Infof("ConfChangeAddNode %s %s", types.ID(cc.NodeID).String(), url)
@@ -411,10 +411,6 @@ func (rc *RaftNode) publishEntries(ents []raftpb.Entry) {
 			case raftpb.ConfChangeRemoveNode:
 				GetSugar().Infof("ConfChangeRemoveNode %s", types.ID(cc.NodeID).String())
 				rc.transport.RemovePeer(types.ID(cc.NodeID))
-				if cc.NodeID == uint64(rc.id) {
-					GetSugar().Info("I've been removed from the cluster! Shutting down.")
-					rc.commitC.AppendHighestPriotiryItem(RemoveFromCluster{})
-				}
 			}
 
 			if len(cc.Context) > 0 {
@@ -425,6 +421,12 @@ func (rc *RaftNode) publishEntries(ents []raftpb.Entry) {
 					}
 				}
 			}
+
+			rc.commitC.AppendHighestPriotiryItem(ConfChange{
+				CCType: cc.Type,
+				NodeID: int(cc.NodeID >> 16),
+			})
+
 		}
 
 		if committed != nil {
@@ -445,6 +447,7 @@ func (rc *RaftNode) publishEntries(ents []raftpb.Entry) {
 
 		// special nil commit to signal replay has finished
 		if ents[i].Index == rc.lastIndex {
+			GetSugar().Infof("ReplayOK 1")
 			rc.commitC.AppendHighestPriotiryItem(ReplayOK{})
 		}
 	}
