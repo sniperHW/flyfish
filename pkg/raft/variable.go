@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"go.etcd.io/etcd/raft/raftpb"
 	"time"
 )
 
@@ -16,9 +17,15 @@ var (
 	ReleaseDelayAfterSnapshot        = 30 * time.Second
 )
 
-type RemoveFromCluster struct{}
+type ConfChange struct {
+	CCType raftpb.ConfChangeType
+	NodeID int
+}
+
 type ReplayOK struct{}
+
 type RaftStopOK struct{}
+
 type LeaderChange struct {
 	Leader int
 }

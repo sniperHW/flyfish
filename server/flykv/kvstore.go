@@ -538,8 +538,11 @@ func (s *kvstore) serve() {
 					s.processLinearizableRead(v.([]raft.LinearizableRead))
 				case raft.ProposalConfChange:
 					s.processConfChange(v.(raft.ProposalConfChange))
-				case raft.RemoveFromCluster:
-					GetSugar().Info("RemoveFromCluster")
+				case raft.ConfChange:
+					c := v.(raft.ConfChange)
+					if c.CCType == raftpb.ConfChangeRemoveNode && c.NodeID == s.kvnode.id {
+						GetSugar().Info("RemoveFromCluster")
+					}
 					return
 				case raft.ReplayOK:
 					s.ready = true
