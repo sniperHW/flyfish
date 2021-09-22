@@ -74,7 +74,7 @@ Port          = %d
 User	      = "%s"
 Password      = "%s"
 DataDB        = "%s"
-ConfDB        = "%s"
+MetaDB        = "%s"
 
 
 [Log]
@@ -134,7 +134,7 @@ func init() {
 
 	dbConfig := config.DBConfig
 
-	dbMeta, _ = metaLoader.LoadDBMetaFromSqlJson(config.DBType, dbConfig.Host, dbConfig.Port, dbConfig.ConfDB, dbConfig.User, dbConfig.Password)
+	dbMeta, _ = metaLoader.LoadDBMetaFromSqlCsv(config.DBType, dbConfig.Host, dbConfig.Port, dbConfig.MetaDB, dbConfig.User, dbConfig.Password)
 
 }
 
@@ -504,8 +504,7 @@ func Test1Node1Store1(t *testing.T) {
 
 	node := start1Node(newSqlDBBackEnd())
 
-	c := client.OpenClient("localhost:10018")
-	c.SetUnikeyPlacement(GetStore)
+	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
 
 	c.Del("users1", "sniperHW", 1).Exec()
 
@@ -549,8 +548,7 @@ func Test1Node1Store2(t *testing.T) {
 
 	node := start1Node(newSqlDBBackEnd())
 
-	c := client.OpenClient("localhost:10018")
-	c.SetUnikeyPlacement(GetStore)
+	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
 
 	test(t, c)
 
@@ -577,8 +575,7 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 
 	node := start1Node(newMockDBBackEnd())
 
-	c := client.OpenClient("localhost:10018")
-	c.SetUnikeyPlacement(GetStore)
+	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
 
 	for i := 0; i < 100; i++ {
 		fields := map[string]interface{}{}
@@ -658,8 +655,7 @@ func Test1Node1StoreSnapshot2(t *testing.T) {
 
 	node := start1Node(newMockDBBackEnd())
 
-	c := client.OpenClient("localhost:10018")
-	c.SetUnikeyPlacement(GetStore)
+	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
 
 	for i := 0; i < 50; i++ {
 		fields := map[string]interface{}{}
@@ -711,8 +707,7 @@ func TestUseMockDB(t *testing.T) {
 
 	node := start1Node(newMockDBBackEnd())
 
-	c := client.OpenClient("localhost:10018")
-	c.SetUnikeyPlacement(GetStore)
+	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
 
 	test(t, c)
 

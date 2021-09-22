@@ -489,7 +489,7 @@ func (this *kvnode) Start() error {
 
 			this.selfUrl = fmt.Sprintf("http://%s:%d", sn.HostIP, sn.RaftPort)
 
-			err = this.initConsole(fmt.Sprintf("http://%s:%d", sn.HostIP, sn.ConsolePort))
+			err = this.initConsole(fmt.Sprintf("%s:%d", sn.HostIP, sn.ConsolePort))
 
 			if nil != err {
 				return err

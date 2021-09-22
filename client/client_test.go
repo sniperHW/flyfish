@@ -1,4 +1,4 @@
-package client2
+package client
 
 //go test -covermode=count -v -coverprofile=coverage.out -run=.
 //go tool cover -html=coverage.out

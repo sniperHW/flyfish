@@ -60,7 +60,7 @@ func TestCluster1(t *testing.T) {
 		User		    = "%s"
 		Password        = "%s"
 		DataDB          = "%s"
-		ConfDBB         = "%s"
+		MetaDB          = "%s"
 
 
 		[Log]
@@ -111,7 +111,12 @@ func TestCluster1(t *testing.T) {
 		Nodes: []int{1, 2, 3},
 	})
 
-	clusterconf.StoreConfigJsonToDB(1, "pgsql", "localhost", 5432, "test", "sniper", "123456", &confJson)
+	_, version, _ := clusterconf.LoadConfigJsonFromDB(1, "pgsql", "localhost", 5432, "test", "sniper", "123456")
+
+	oldVersion := version
+	newVersion := version + 1
+
+	clusterconf.StoreConfigJsonToDB(1, oldVersion, newVersion, "pgsql", "localhost", 5432, "test", "sniper", "123456", &confJson)
 
 	InitLogger(logger.NewZapLogger("testRaft.log", "./log", "info", 100, 14, true))
 

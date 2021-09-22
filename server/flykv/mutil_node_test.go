@@ -5,16 +5,15 @@ package flykv
 
 import (
 	"fmt"
-	"os"
-	"testing"
-	"time"
-
 	"github.com/BurntSushi/toml"
 	"github.com/sniperHW/flyfish/backend/db/sql"
 	"github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	"github.com/stretchr/testify/assert"
+	"os"
+	"testing"
+	"time"
 )
 
 func TestMutilNode(t *testing.T) {
@@ -172,8 +171,7 @@ func TestMutilNode(t *testing.T) {
 
 	<-ok
 
-	c := client.OpenClient(fmt.Sprintf("localhost:%d", leader.config.SoloConfig.ServicePort))
-	c.SetUnikeyPlacement(GetStore)
+	c, _ := client.OpenClient(client.ClientConf{SoloService: fmt.Sprintf("localhost:%d", leader.config.SoloConfig.ServicePort), UnikeyPlacement: GetStore})
 
 	for i := 0; i < 100; i++ {
 		fields := map[string]interface{}{}

@@ -418,7 +418,8 @@ func Test1(t *testing.T) {
 
 	assert.Nil(t, g.Start())
 
-	c := client.OpenClient("localhost:8110")
+	c, _ := client.OpenClient(client.ClientConf{
+		SoloService: "localhost:8110"})
 	test(t, c)
 
 	g.config.MaxNodePendingMsg = 0

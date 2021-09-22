@@ -1,4 +1,4 @@
-package client2
+package client
 
 import (
 	"github.com/sniperHW/flyfish/errcode"
