@@ -219,7 +219,7 @@ func (g *gate) Start() error {
 				pendingReq:   map[int64]*relayMsg{},
 			}
 
-			if udpAddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.HostIP, v.ConsolePort)); nil != err {
+			if udpAddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.HostIP, v.InterPort)); nil != err {
 				return err
 			} else {
 				n.consoleAddr = udpAddr

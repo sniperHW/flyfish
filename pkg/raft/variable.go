@@ -18,8 +18,9 @@ var (
 )
 
 type ConfChange struct {
-	CCType raftpb.ConfChangeType
-	NodeID int
+	CCType  raftpb.ConfChangeType
+	NodeID  int
+	RaftUrl string
 }
 
 type ReplayOK struct{}

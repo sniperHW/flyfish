@@ -401,12 +401,14 @@ func (rc *RaftNode) publishEntries(ents []raftpb.Entry) {
 
 			GetSugar().Infof("%x raftpb.EntryConfChange %d %d %v", rc.id, cc.Type, cc, rc.confState)
 
+			var raftUrl string
+
 			switch cc.Type {
 			case raftpb.ConfChangeAddNode, raftpb.ConfChangeAddLearnerNode:
 				if len(cc.Context) > 0 {
-					url := string(cc.Context[8:])
-					GetSugar().Infof("ConfChangeAddNode %s %s", types.ID(cc.NodeID).String(), url)
-					rc.transport.AddPeer(types.ID(cc.NodeID), []string{url})
+					raftUrl = string(cc.Context[8:])
+					GetSugar().Infof("ConfChangeAddNode %s %s", types.ID(cc.NodeID).String(), raftUrl)
+					rc.transport.AddPeer(types.ID(cc.NodeID), []string{raftUrl})
 				}
 			case raftpb.ConfChangeRemoveNode:
 				GetSugar().Infof("ConfChangeRemoveNode %s", types.ID(cc.NodeID).String())
@@ -423,8 +425,9 @@ func (rc *RaftNode) publishEntries(ents []raftpb.Entry) {
 			}
 
 			rc.commitC.AppendHighestPriotiryItem(ConfChange{
-				CCType: cc.Type,
-				NodeID: int(cc.NodeID >> 16),
+				CCType:  cc.Type,
+				NodeID:  int(cc.NodeID >> 16),
+				RaftUrl: raftUrl,
 			})
 
 		}

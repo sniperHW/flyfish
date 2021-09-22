@@ -20,9 +20,8 @@ type store struct {
 type Node struct {
 	ID          int
 	HostIP      string
-	RaftPort    int //raft端口
+	InterPort   int //内部服务之间端口
 	ServicePort int //对外服务端口
-	ConsolePort int //控制端口
 	Stores      []store
 }
 

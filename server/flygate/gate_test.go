@@ -361,25 +361,22 @@ func Test1(t *testing.T) {
 	confJson.NodeInfo = append(confJson.NodeInfo, clusterconf.Node{
 		ID:          1,
 		HostIP:      "localhost",
-		RaftPort:    8011,
+		InterPort:   8011,
 		ServicePort: 8021,
-		ConsolePort: 8031,
 	})
 
 	confJson.NodeInfo = append(confJson.NodeInfo, clusterconf.Node{
 		ID:          2,
 		HostIP:      "localhost",
-		RaftPort:    8012,
+		InterPort:   8012,
 		ServicePort: 8022,
-		ConsolePort: 8032,
 	})
 
 	confJson.NodeInfo = append(confJson.NodeInfo, clusterconf.Node{
 		ID:          3,
 		HostIP:      "localhost",
-		RaftPort:    8013,
+		InterPort:   8013,
 		ServicePort: 8023,
-		ConsolePort: 8033,
 	})
 
 	confJson.Shard = append(confJson.Shard, clusterconf.RaftGroupJson{

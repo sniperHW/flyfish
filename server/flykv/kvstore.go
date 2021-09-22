@@ -166,8 +166,8 @@ type kvstore struct {
 	shard            int
 	slots            *bitmap.Bitmap
 	meta             db.DBMeta
-	removeonce       int32
-	removing         bool
+	//removeonce       int32
+	//removing         bool
 }
 
 func (s *kvstore) hasLease() bool {
@@ -322,14 +322,7 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 		return
 	}
 
-	if s.removing {
-		//store正被移除
-		req.from.send(&cs.RespMessage{
-			Cmd:   req.msg.Cmd,
-			Seqno: req.msg.Seqno,
-			Err:   errcode.New(errcode.Errcode_error, fmt.Sprintf("%s current store is removing", req.msg.UniKey)),
-		})
-	} else if s.leader != s.raftID {
+	if s.leader != s.raftID {
 		req.from.send(&cs.RespMessage{
 			Cmd:   req.msg.Cmd,
 			Seqno: req.msg.Seqno,
@@ -542,8 +535,8 @@ func (s *kvstore) serve() {
 					c := v.(raft.ConfChange)
 					if c.CCType == raftpb.ConfChangeRemoveNode && c.NodeID == s.kvnode.id {
 						GetSugar().Info("RemoveFromCluster")
+						return
 					}
-					return
 				case raft.ReplayOK:
 					s.ready = true
 				case raft.RaftStopOK:

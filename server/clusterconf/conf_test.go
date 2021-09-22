@@ -18,25 +18,22 @@ func Test1(t *testing.T) {
 	confJson.NodeInfo = append(confJson.NodeInfo, Node{
 		ID:          1,
 		HostIP:      "10.127.0.1",
-		RaftPort:    11,
+		InterPort:   11,
 		ServicePort: 21,
-		ConsolePort: 31,
 	})
 
 	confJson.NodeInfo = append(confJson.NodeInfo, Node{
 		ID:          2,
 		HostIP:      "10.127.0.2",
-		RaftPort:    12,
+		InterPort:   12,
 		ServicePort: 22,
-		ConsolePort: 32,
 	})
 
 	confJson.NodeInfo = append(confJson.NodeInfo, Node{
 		ID:          3,
 		HostIP:      "10.127.0.3",
-		RaftPort:    13,
+		InterPort:   13,
 		ServicePort: 23,
-		ConsolePort: 33,
 	})
 
 	/////
@@ -44,25 +41,22 @@ func Test1(t *testing.T) {
 	confJson.NodeInfo = append(confJson.NodeInfo, Node{
 		ID:          4,
 		HostIP:      "10.127.0.4",
-		RaftPort:    14,
+		InterPort:   14,
 		ServicePort: 24,
-		ConsolePort: 34,
 	})
 
 	confJson.NodeInfo = append(confJson.NodeInfo, Node{
 		ID:          5,
 		HostIP:      "10.127.0.5",
-		RaftPort:    15,
+		InterPort:   15,
 		ServicePort: 25,
-		ConsolePort: 35,
 	})
 
 	confJson.NodeInfo = append(confJson.NodeInfo, Node{
 		ID:          6,
 		HostIP:      "10.127.0.6",
-		RaftPort:    16,
+		InterPort:   16,
 		ServicePort: 26,
-		ConsolePort: 36,
 	})
 
 	confJson.Shard = append(confJson.Shard, RaftGroupJson{
@@ -138,25 +132,22 @@ func Test2(t *testing.T) {
 	confJson.NodeInfo = append(confJson.NodeInfo, Node{
 		ID:          1,
 		HostIP:      "10.127.0.1",
-		RaftPort:    11,
+		InterPort:   11,
 		ServicePort: 21,
-		ConsolePort: 31,
 	})
 
 	confJson.NodeInfo = append(confJson.NodeInfo, Node{
 		ID:          2,
 		HostIP:      "10.127.0.2",
-		RaftPort:    12,
+		InterPort:   12,
 		ServicePort: 22,
-		ConsolePort: 32,
 	})
 
 	confJson.NodeInfo = append(confJson.NodeInfo, Node{
 		ID:          3,
 		HostIP:      "10.127.0.3",
-		RaftPort:    13,
+		InterPort:   13,
 		ServicePort: 23,
-		ConsolePort: 33,
 	})
 
 	/////
@@ -164,25 +155,22 @@ func Test2(t *testing.T) {
 	confJson.NodeInfo = append(confJson.NodeInfo, Node{
 		ID:          4,
 		HostIP:      "10.127.0.4",
-		RaftPort:    14,
+		InterPort:   14,
 		ServicePort: 24,
-		ConsolePort: 34,
 	})
 
 	confJson.NodeInfo = append(confJson.NodeInfo, Node{
 		ID:          5,
 		HostIP:      "10.127.0.5",
-		RaftPort:    15,
+		InterPort:   15,
 		ServicePort: 25,
-		ConsolePort: 35,
 	})
 
 	confJson.NodeInfo = append(confJson.NodeInfo, Node{
 		ID:          6,
 		HostIP:      "10.127.0.6",
-		RaftPort:    16,
+		InterPort:   16,
 		ServicePort: 26,
-		ConsolePort: 36,
 	})
 
 	confJson.Shard = append(confJson.Shard, RaftGroupJson{

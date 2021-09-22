@@ -156,44 +156,6 @@ func waitCondition(fn func() bool) {
 	wg.Wait()
 }
 
-func (this *kvnode) remStore(storeID int) error {
-	if atomic.LoadInt32(&this.running) == 0 {
-		return errors.New("kvnode is not running")
-	}
-
-	this.muS.Lock()
-
-	s, ok := this.stores[storeID]
-	if !ok {
-		return nil
-	}
-
-	this.muS.Unlock()
-
-	if atomic.CompareAndSwapInt32(&s.removeonce, 0, 1) {
-
-		s.mainQueue.AppendHighestPriotiryItem(func() {
-			s.removing = true
-		})
-
-		go func() {
-			waitCondition(func() bool {
-				if atomic.LoadInt32(&s.wait4ReplyCount) != 0 {
-					return false
-				}
-				return true
-			})
-			s.stop()
-			this.muS.Lock()
-			delete(this.stores, storeID)
-			this.muS.Unlock()
-
-		}()
-	}
-
-	return nil
-}
-
 func (this *kvnode) addStore(meta db.DBMeta, storeID int, cluster string, slots *bitmap.Bitmap) error {
 	if atomic.LoadInt32(&this.running) == 0 {
 		return errors.New("kvnode is not running")
@@ -475,7 +437,7 @@ func (this *kvnode) Start() error {
 							s.raftCluster += ","
 						}
 
-						s.raftCluster += fmt.Sprintf("%d@http://%s:%d", vv.ID, vv.HostIP, vv.RaftPort)
+						s.raftCluster += fmt.Sprintf("%d@http://%s:%d", vv.ID, vv.HostIP, vv.InterPort)
 
 					}
 
@@ -487,9 +449,9 @@ func (this *kvnode) Start() error {
 
 			sc := makeStoreConf()
 
-			this.selfUrl = fmt.Sprintf("http://%s:%d", sn.HostIP, sn.RaftPort)
+			this.selfUrl = fmt.Sprintf("http://%s:%d", sn.HostIP, sn.InterPort)
 
-			err = this.initConsole(fmt.Sprintf("%s:%d", sn.HostIP, sn.ConsolePort))
+			err = this.initConsole(fmt.Sprintf("%s:%d", sn.HostIP, sn.InterPort))
 
 			if nil != err {
 				return err
