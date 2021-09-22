@@ -11,12 +11,92 @@ import (
 	"github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	"github.com/sniperHW/flyfish/server/clusterconf"
+	"github.com/sniperHW/flyfish/server/flydir"
+	"github.com/sniperHW/flyfish/server/flygate"
 	sslot "github.com/sniperHW/flyfish/server/slot"
-	//"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
-	//"time"
+	"time"
 )
+
+var configGate1Str string = `
+	ServiceHost = "localhost"
+	ServicePort = 8110
+	ConsolePort = 8110
+	DirService  = "localhost:8113"
+
+	MaxNodePendingMsg  = 4096
+	MaxStorePendingMsg = 1024
+	MaxPendingMsg = 10000
+
+	[ClusterConfig]
+		ClusterID               = 1
+		DBType                  = "pgsql"
+		DBHost                  = "localhost"
+		DBPort                  = 5432
+		DBUser			        = "sniper"
+		DBPassword              = "123456"
+		ConfDB                  = "test"
+
+	[Log]
+		MaxLogfileSize  = 104857600 # 100mb
+		LogDir          = "log"
+		LogPrefix       = "gate"
+		LogLevel        = "info"
+		EnableLogStdout = false		
+
+`
+
+var configGate2Str string = `
+	ServiceHost = "localhost"
+	ServicePort = 8111
+	ConsolePort = 8111
+	DirService  = "localhost:8113"
+
+	MaxNodePendingMsg  = 4096
+	MaxStorePendingMsg = 1024
+	MaxPendingMsg = 10000
+
+	[ClusterConfig]
+		ClusterID               = 1
+		DBType                  = "pgsql"
+		DBHost                  = "localhost"
+		DBPort                  = 5432
+		DBUser			        = "sniper"
+		DBPassword              = "123456"
+		ConfDB                  = "test"
+
+	[Log]
+		MaxLogfileSize  = 104857600 # 100mb
+		LogDir          = "log"
+		LogPrefix       = "gate"
+		LogLevel        = "info"
+		EnableLogStdout = false		
+
+`
+
+var configDirStr string = `
+	Host = "localhost"
+	ConsolePort = 8113
+
+	[ClusterConfig]
+		ClusterID               = 1
+		DBType                  = "pgsql"
+		DBHost                  = "localhost"
+		DBPort                  = 5432
+		DBUser			        = "sniper"
+		DBPassword              = "123456"
+		ConfDB                  = "test"
+
+	[Log]
+		MaxLogfileSize  = 104857600 # 100mb
+		LogDir          = "log"
+		LogPrefix       = "gate"
+		LogLevel        = "info"
+		EnableLogStdout = false		
+
+`
 
 func TestCluster1(t *testing.T) {
 	var configStr1 string = `
@@ -118,7 +198,34 @@ func TestCluster1(t *testing.T) {
 
 	clusterconf.StoreConfigJsonToDB(1, oldVersion, newVersion, "pgsql", "localhost", 5432, "test", "sniper", "123456", &confJson)
 
-	InitLogger(logger.NewZapLogger("testRaft.log", "./log", "info", 100, 14, true))
+	configDir, err := flydir.LoadConfigStr(configDirStr)
+	assert.Nil(t, err)
+
+	l := logger.NewZapLogger("test_flykv.log", "./log", "info", 100, 14, true)
+	flygate.InitLogger(l)
+	flydir.InitLogger(l)
+	InitLogger(l)
+
+	dir := flydir.NewDir(configDir)
+
+	err = dir.Start()
+
+	assert.Nil(t, err)
+
+	configGate1, err := flygate.LoadConfigStr(configGate1Str)
+	assert.Nil(t, err)
+
+	configGate2, err := flygate.LoadConfigStr(configGate2Str)
+	assert.Nil(t, err)
+
+	gate1 := flygate.NewGate(configGate1)
+	gate2 := flygate.NewGate(configGate2)
+
+	err = gate1.Start()
+	assert.Nil(t, err)
+
+	err = gate2.Start()
+	assert.Nil(t, err)
 
 	//先删除所有kv文件
 	os.RemoveAll("./log/kvnode-1-1")
@@ -155,8 +262,13 @@ func TestCluster1(t *testing.T) {
 		panic(err)
 	}
 
-	//等待有一个节点成为leader
-	//var leader *kvnode
+	client.InitLogger(l)
+
+	c, _ := client.OpenClient(client.ClientConf{Dir: []string{"localhost:8113"}})
+
+	time.Sleep(time.Second)
+
+	//等待leader确立
 	ok := make(chan struct{})
 
 	go func() {
@@ -168,7 +280,6 @@ func TestCluster1(t *testing.T) {
 			}
 
 			if node1.stores[1].isLeader() {
-				//leader = node1
 				close(ok)
 				return
 			}
@@ -184,7 +295,6 @@ func TestCluster1(t *testing.T) {
 			}
 
 			if node2.stores[1].isLeader() {
-				//leader = node2
 				close(ok)
 				return
 			}
@@ -200,7 +310,6 @@ func TestCluster1(t *testing.T) {
 			}
 
 			if node3.stores[1].isLeader() {
-				//leader = node3
 				close(ok)
 				return
 			}
@@ -208,6 +317,8 @@ func TestCluster1(t *testing.T) {
 	}()
 
 	<-ok
+
+	test(t, c)
 
 	node1.Stop()
 	fmt.Println("stop1")
