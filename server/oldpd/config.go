@@ -36,9 +36,26 @@ func GetConfig() *Config {
 	return (*Config)(atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&defConfig))))
 }
 
+type node struct {
+	Id          int
+	Service     string //对外服务地址端口
+	RaftService string //raft服务地址
+	UdpService  string
+	Stores      []int
+}
+
+type kvnodes struct {
+	Node []node
+}
+
 type Config struct {
 	MainQueueMaxSize int //主处理队列容量上限,超过上限客户端的命令无法入列
-	Log              struct {
+
+	Stores []int
+
+	Kvnodes kvnodes
+
+	Log struct {
 		MaxLogfileSize  int
 		LogDir          string
 		LogPrefix       string
