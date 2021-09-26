@@ -179,7 +179,9 @@ type RaftNode struct {
 	term uint64
 
 	mutilRaft *MutilRaft
-	leader    int
+
+	softState raft.SoftState
+
 	idcounter int32
 	stoponce  int32
 
@@ -236,7 +238,7 @@ func (rc *RaftNode) ID() int {
 }
 
 func (rc *RaftNode) isLeader() bool {
-	return rc.leader == rc.id
+	return rc.softState.RaftState == raft.StateLeader
 }
 
 func (rc *RaftNode) genNextIndex() uint64 {
@@ -526,22 +528,23 @@ func (rc *RaftNode) serveChannels() {
 		// store raft entries to wal, then publish over commit channel
 		case rd := <-rc.node.Ready():
 			if rd.SoftState != nil {
-
-				oldLeader := rc.leader
-				rc.leader = int(rd.SoftState.Lead)
 				rc.term = rd.HardState.Term
-
-				if rc.leader != rc.id && oldLeader == rc.id {
-					rc.proposalMgr.onLeaderDemote()
-					rc.confChangeMgr.onLeaderDemote()
-					rc.linearizableReadMgr.onLeaderDemote()
-				}
-
-				if oldLeader != rc.leader {
-					if rc.leader == rc.id {
+				if !(rc.softState.Lead == rd.SoftState.Lead && rc.softState.RaftState == rd.SoftState.RaftState) {
+					oldSoftState := rc.softState
+					rc.softState = *rd.SoftState
+					if oldSoftState.RaftState == raft.StateLeader {
+						if rc.softState.RaftState != raft.StateLeader {
+							rc.proposalMgr.onLeaderDemote()
+							rc.confChangeMgr.onLeaderDemote()
+							rc.linearizableReadMgr.onLeaderDemote()
+						}
+					} else if rc.softState.RaftState == raft.StateLeader {
 						GetSugar().Infof("becomeLeader id:%x", rc.id)
 					}
-					rc.commitC.AppendHighestPriotiryItem(LeaderChange{Leader: rc.leader})
+
+					if oldSoftState.Lead != rc.softState.Lead {
+						rc.commitC.AppendHighestPriotiryItem(LeaderChange{Leader: int(rc.softState.Lead)})
+					}
 				}
 			}
 

@@ -144,10 +144,17 @@ func (p *pd) replayNotifySlotTransInResp(reader *buffer.BufferReader) error {
 }
 
 func (p *pd) beginSlotTransfer(slot int, setOut int, storeOut int, setIn int, storeIn int) error {
-	return nil
-	/*trans := &TransSlotTransfer{
-		Slot:             slot,
-		StoreTransferOut: storeOut,
-		StoreTransferIn:  storeIn,
-	}*/
+	return p.issueProposal(&ProposalBeginSlotTransfer{
+		trans: &TransSlotTransfer{
+			Slot:             slot,
+			SetOut:           setOut,
+			StoreTransferOut: storeOut,
+			SetIn:            setIn,
+			StoreTransferIn:  storeIn,
+			pd:               p,
+		},
+		proposalBase: &proposalBase{
+			pd: p,
+		},
+	})
 }

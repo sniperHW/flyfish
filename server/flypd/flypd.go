@@ -1,23 +1,16 @@
 package flypd
 
 import (
-	//"encoding/json"
+	"encoding/json"
 	"errors"
-	//"fmt"
 	"github.com/gogo/protobuf/proto"
-	//"github.com/sniperHW/flyfish/pkg/bitmap"
-	//"github.com/sniperHW/flyfish/pkg/compress"
+	"github.com/sniperHW/flyfish/pkg/buffer"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
-	//"github.com/sniperHW/flyfish/pkg/timer"
 	snet "github.com/sniperHW/flyfish/server/net"
-	//sproto "github.com/sniperHW/flyfish/server/proto"
-	//"github.com/sniperHW/flyfish/server/slot"
 	"go.etcd.io/etcd/raft/raftpb"
-	//"math/rand"
 	"net"
-	//"net/url"
 	"reflect"
 	"strconv"
 	"strings"
@@ -184,6 +177,23 @@ func (p *pd) startUdpService(udpService string) error {
 
 func (p *pd) onBecomeLeader() {
 
+	for _, v := range p.addingNode {
+		p.sendNotifyAddNode(v)
+		v.timer = time.AfterFunc(time.Second*3, func() {
+			p.mainque.AppendHighestPriotiryItem(v)
+		})
+	}
+
+	for _, v := range p.removingNode {
+		p.sendNotifyRemNode(v)
+		v.timer = time.AfterFunc(time.Second*3, func() {
+			p.mainque.AppendHighestPriotiryItem(v)
+		})
+	}
+
+	for _, v := range p.slotTransfer {
+		v.notify()
+	}
 }
 
 func (p *pd) onLeaderDemote() {
@@ -304,7 +314,7 @@ func (p *pd) serve() {
 					p.onBecomeLeader()
 				}
 
-				if oldLeader == p.raftID && p.leader != p.raftID {
+				if oldLeader == p.raftID && !p.isLeader() {
 					p.onLeaderDemote()
 				}
 
@@ -331,9 +341,108 @@ func (p *pd) serve() {
 }
 
 func (p *pd) getSnapshot() ([]byte, error) {
-	return nil, nil
+
+	jsonDeployment, err := p.deployment.toJson()
+	if nil != err {
+		return nil, err
+	}
+
+	var addingNode []*AddingNode
+	for _, v := range p.addingNode {
+		addingNode = append(addingNode, v)
+	}
+
+	jsonAddingNode, err := json.Marshal(&addingNode)
+
+	if nil != err {
+		return nil, err
+	}
+
+	var removingNode []*RemovingNode
+	for _, v := range p.removingNode {
+		removingNode = append(removingNode, v)
+	}
+
+	jsonRemovingNode, err := json.Marshal(&removingNode)
+
+	if nil != err {
+		return nil, err
+	}
+
+	var slotTransfer []*TransSlotTransfer
+	for _, v := range p.slotTransfer {
+		slotTransfer = append(slotTransfer, v)
+	}
+
+	jsonSlotTransfer, err := json.Marshal(&slotTransfer)
+
+	if nil != err {
+		return nil, err
+	}
+
+	b := make([]byte, 0, 4*4+len(jsonDeployment)+len(jsonAddingNode)+len(jsonRemovingNode)+len(jsonSlotTransfer))
+
+	b = buffer.AppendInt32(b, int32(len(jsonDeployment)))
+	b = buffer.AppendBytes(b, jsonDeployment)
+
+	b = buffer.AppendInt32(b, int32(len(jsonAddingNode)))
+	b = buffer.AppendBytes(b, jsonAddingNode)
+
+	b = buffer.AppendInt32(b, int32(len(jsonRemovingNode)))
+	b = buffer.AppendBytes(b, jsonRemovingNode)
+
+	b = buffer.AppendInt32(b, int32(len(jsonSlotTransfer)))
+	b = buffer.AppendBytes(b, jsonSlotTransfer)
+
+	return b, nil
 }
 
 func (p *pd) recoverFromSnapshot(b []byte) error {
+	reader := buffer.NewReader(b)
+	l1 := reader.GetInt32()
+
+	var d deployment
+	err := d.loadFromJson(reader.GetBytes(int(l1)))
+
+	if nil != err {
+		return err
+	}
+
+	l2 := reader.GetInt32()
+	var addingNode []*AddingNode
+
+	err = json.Unmarshal(reader.GetBytes(int(l2)), &addingNode)
+	if nil != err {
+		return err
+	}
+
+	for _, v := range addingNode {
+		p.addingNode[int(v.NodeID)] = v
+	}
+
+	l3 := reader.GetInt32()
+	var removingNode []*RemovingNode
+
+	err = json.Unmarshal(reader.GetBytes(int(l3)), &removingNode)
+	if nil != err {
+		return err
+	}
+
+	for _, v := range removingNode {
+		p.removingNode[int(v.NodeID)] = v
+	}
+
+	l4 := reader.GetInt32()
+	var slotTransfer []*TransSlotTransfer
+
+	err = json.Unmarshal(reader.GetBytes(int(l4)), &slotTransfer)
+	if nil != err {
+		return err
+	}
+
+	for _, v := range slotTransfer {
+		p.slotTransfer[int(v.Slot)] = v
+	}
+
 	return nil
 }
