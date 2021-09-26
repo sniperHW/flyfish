@@ -240,6 +240,7 @@ func (p *ProposalInstallDeployment) Serilize(b []byte) []byte {
 
 func (p *ProposalInstallDeployment) apply() {
 	p.pd.deployment = p.d
+	p.reply()
 }
 
 func (p *pd) replayInstallDeployment(reader *buffer.BufferReader) error {

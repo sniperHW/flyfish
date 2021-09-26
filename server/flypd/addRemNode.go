@@ -48,6 +48,10 @@ func (p *ProposalAddNode) apply() {
 			p.pd.mainque.AppendHighestPriotiryItem(an)
 		})
 	}
+
+	if nil != p.reply {
+		p.reply()
+	}
 }
 
 func (p *pd) replayAddNode(reader *buffer.BufferReader) error {
@@ -162,6 +166,10 @@ func (p *ProposalRemNode) apply() {
 		rn.timer = time.AfterFunc(time.Second*3, func() {
 			p.pd.mainque.AppendHighestPriotiryItem(rn)
 		})
+	}
+
+	if nil != p.reply {
+		p.reply()
 	}
 }
 

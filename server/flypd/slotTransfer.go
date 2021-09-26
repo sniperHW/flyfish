@@ -65,6 +65,10 @@ func (p *ProposalBeginSlotTransfer) apply() {
 		p.pd.slotTransfer[p.trans.Slot] = p.trans
 		p.trans.notify()
 	}
+
+	if nil != p.reply {
+		p.reply()
+	}
 }
 
 func (p *pd) replayBeginSlotTransfer(reader *buffer.BufferReader) error {

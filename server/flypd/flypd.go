@@ -56,7 +56,7 @@ type pd struct {
 	ready        bool
 }
 
-func NewPd(udpService string, id int, cluster string) (*pd, error) {
+func NewPd(config *Config, udpService string, id int, cluster string) (*pd, error) {
 	clusterArray := strings.Split(cluster, ",")
 
 	peers := map[int]string{}
@@ -83,12 +83,12 @@ func NewPd(udpService string, id int, cluster string) (*pd, error) {
 	}
 
 	mainQueue := applicationQueue{
-		q: queue.NewPriorityQueue(2, GetConfig().MainQueueMaxSize),
+		q: queue.NewPriorityQueue(2, config.MainQueueMaxSize),
 	}
 
 	mutilRaft := raft.NewMutilRaft()
 
-	rn := raft.NewRaftNode(snapMerge, mutilRaft, mainQueue, (id<<16)+1, peers, false, GetConfig().Log.LogDir, "pd")
+	rn := raft.NewRaftNode(snapMerge, mutilRaft, mainQueue, (id<<16)+1, peers, false, config.Log.LogDir, "pd")
 
 	p := &pd{
 		id:           id,

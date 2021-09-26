@@ -49,4 +49,10 @@ func init() {
 	namespace.Register(&sproto.RemNode{}, uint32(sproto.ServerCmdType_RemNode))
 	namespace.Register(&sproto.RemNodeResp{}, uint32(sproto.ServerCmdType_RemNodeResp))
 
+	namespace.Register(&sproto.NotifySlotTransOut{}, uint32(sproto.ServerCmdType_NotifySlotTransOut))
+	namespace.Register(&sproto.NotifySlotTransOutResp{}, uint32(sproto.ServerCmdType_NotifySlotTransOutResp))
+
+	namespace.Register(&sproto.NotifySlotTransIn{}, uint32(sproto.ServerCmdType_NotifySlotTransIn))
+	namespace.Register(&sproto.NotifySlotTransInResp{}, uint32(sproto.ServerCmdType_NotifySlotTransInResp))
+
 }

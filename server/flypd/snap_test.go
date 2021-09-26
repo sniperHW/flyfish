@@ -6,20 +6,21 @@ package flypd
 import (
 	"fmt"
 	//"github.com/sniperHW/flyfish/logger"
-	//flynet "github.com/sniperHW/flyfish/pkg/net"
-	//snet "github.com/sniperHW/flyfish/server/net"
-	//sproto "github.com/sniperHW/flyfish/server/proto"
+	fnet "github.com/sniperHW/flyfish/pkg/net"
+	snet "github.com/sniperHW/flyfish/server/net"
+	sproto "github.com/sniperHW/flyfish/server/proto"
 	//sslot "github.com/sniperHW/flyfish/server/slot"
 	"github.com/stretchr/testify/assert"
-	//"net"
-	//"os"
+	"net"
+	"os"
 	//"sync"
+	"github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"testing"
-	//"time"
+	"time"
 )
 
-func TestSnaoShot(t *testing.T) {
+func TestSnapShot(t *testing.T) {
 
 	d := &deployment{
 		sets: map[int]*set{},
@@ -149,5 +150,89 @@ func TestSnaoShot(t *testing.T) {
 	assert.Equal(t, 3, p2.removingNode[3].NodeID)
 
 	assert.Equal(t, 2, p2.slotTransfer[2].Slot)
+
+}
+
+func TestInstallDeployment(t *testing.T) {
+
+	os.RemoveAll("./log/pd-1-1")
+	os.RemoveAll("./log/pd-1-1-snap")
+
+	var configStr string = `
+
+	MainQueueMaxSize = 1000
+
+	[Log]
+		MaxLogfileSize  = 104857600 # 100mb
+		LogDir          = "log"
+		LogPrefix       = "gate"
+		LogLevel        = "info"
+		EnableLogStdout = false		
+
+`
+
+	l := logger.NewZapLogger("testPd.log", "./log", "Debug", 100, 14, true)
+	InitLogger(l)
+
+	conf, _ := LoadConfigStr(configStr)
+
+	p, err := NewPd(conf, "localhost:8110", 1, "1@http:\\localhost:8110")
+
+	for {
+		if p.isLeader() && p.ready {
+			break
+		} else {
+			time.Sleep(time.Second)
+		}
+	}
+
+	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
+	assert.Nil(t, err)
+
+	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
+
+	KvNodePerSet = 3
+
+	install := &sproto.InstallDeployment{}
+	set1 := &sproto.DeploymentSet{SetID: 1}
+	set1.Nodes = append(set1.Nodes, &sproto.DeploymentKvnode{
+		NodeID:      1,
+		Host:        "192.168.0.1",
+		ServicePort: 8110,
+		InterPort:   8111,
+	})
+	install.Sets = append(install.Sets, set1)
+
+	conn.SendTo(addr, install)
+	recvbuff := make([]byte, 256)
+	_, r, err := conn.ReadFrom(recvbuff)
+
+	assert.Equal(t, r.(*sproto.InstallDeploymentResp).Ok, false)
+
+	assert.Equal(t, r.(*sproto.InstallDeploymentResp).Reason, "node count of set should be 3")
+
+	KvNodePerSet = 1
+
+	conn.SendTo(addr, install)
+
+	_, r, err = conn.ReadFrom(recvbuff)
+
+	assert.Equal(t, r.(*sproto.InstallDeploymentResp).Ok, true)
+
+	/*set1.Nodes = append(set1.Nodes, &sproto.DeploymentKvnode{
+		NodeID:      1,
+		Host:        "192.168.0.1",
+		ServicePort: 8110,
+		InterPort:   8111,
+	})
+
+	set1.Nodes = append(set1.Nodes, &sproto.DeploymentKvnode{
+		NodeID:      1,
+		Host:        "192.168.0.1",
+		ServicePort: 8110,
+		InterPort:   8111,
+	})*/
+
+	p.Stop()
 
 }
