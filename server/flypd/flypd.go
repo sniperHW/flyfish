@@ -99,6 +99,7 @@ func NewPd(udpService string, id int, cluster string) (*pd, error) {
 		msgHandler:   map[reflect.Type]func(*net.UDPAddr, proto.Message){},
 		addingNode:   map[int]*AddingNode{},
 		removingNode: map[int]*RemovingNode{},
+		slotTransfer: map[int]*TransSlotTransfer{},
 	}
 
 	p.initMsgHandler()
@@ -403,6 +404,7 @@ func (p *pd) recoverFromSnapshot(b []byte) error {
 
 	var d deployment
 	err := d.loadFromJson(reader.GetBytes(int(l1)))
+	p.deployment = &d
 
 	if nil != err {
 		return err
@@ -441,6 +443,7 @@ func (p *pd) recoverFromSnapshot(b []byte) error {
 	}
 
 	for _, v := range slotTransfer {
+		v.pd = p
 		p.slotTransfer[int(v.Slot)] = v
 	}
 
