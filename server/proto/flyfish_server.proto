@@ -20,8 +20,25 @@ enum ServerCmdType {
   NotiReloadKvConf              = 6;
   RemoveGate                    = 7;
 
+  //console <-> pd
+  InstallDeployment             = 101;
+  InstallDeploymentResp         = 102;
+  AddNode                       = 103;
+  AddNodeResp                   = 104;
+  RemNode                       = 105;
+  RemNodeResp                   = 106;
 
-
+  //kvnode <-> pd
+  KvnodeBoot                    = 210;                   //kvnode冷启登录  
+  KvnodeBootResp                = 211;
+  NotifyAddNode                 = 212;
+  NotifyAddNodeResp             = 213;
+  NotifyRemNode                 = 214;
+  NotifyRemNodeResp             = 215;
+  NotifySlotTransOut            = 216;
+  NotifySlotTransOutResp        = 217;
+  NotifySlotTransIn             = 218;
+  NotifySlotTransInResp         = 219;    
 }
 
 //查询是否store的leader,如果是返回yes=true
@@ -56,5 +73,113 @@ message remove_gate {
   optional string service      = 1;
 }
 
+message deploymentKvnode  {
+  optional int32  nodeID      = 1;
+  optional string host        = 2;
+  optional int32  servicePort = 3;
+  optional int32  interPort   = 4; 
+}
+
+message deploymentSet  {
+  optional int32  setID           = 1;
+  repeated deploymentKvnode nodes = 2;
+}
+
+
+message installDeployment  {
+  repeated deploymentSet sets     = 1;
+}
+
+message installDeploymentResp  {
+  optional bool ok            = 1;
+  optional string reason      = 2;
+}
+
+message addNode {
+  optional int32  setID       = 1;
+  optional int32  nodeID      = 2;
+  optional string host        = 3;
+  optional int32  servicePort = 4;
+  optional int32  interPort   = 5;      
+}
+
+
+message addNodeResp  {
+  optional bool ok            = 1;
+  optional string reason      = 2;
+}
+
+message remNode {
+  optional int32  setID       = 1;
+  optional int32  nodeID      = 2;     
+}
+
+
+message remNodeResp  {
+  optional bool ok            = 1;
+  optional string reason      = 2;
+}
+
+
+message kvnodeBoot {
+  optional int32  nodeID      = 1;
+  optional string host        = 2;
+}
+
+message storeInfo {
+  optional int32  id          = 1;
+  optional string raftCluster = 2;
+  optional bytes  slots       = 3;
+}
+
+message kvnodeBootResp {
+  optional bool   ok           = 1;
+  optional string reason       = 2;
+  optional string serviceProt  = 3;
+  optional string interPort    = 4;   
+  repeated storeInfo stores    = 5;
+}
+
+message notifyAddNode {
+  optional int32  nodeID      = 1;
+  optional string host        = 2;
+  optional int32  interPort   = 3;
+  repeated int32  stores      = 4; 
+}
+
+message notifyAddNodeResp {
+  optional int32  nodeID      = 1;
+  optional int32  store       = 2;
+}
+
+
+message notifyRemNode {
+  optional int32  nodeID      = 1;
+  repeated int32  stores      = 2; 
+}
+
+message notifyRemNodeResp {
+  optional int32  nodeID      = 1;
+  optional int32  store       = 2;
+}
+
+
+message notifySlotTransOut {
+  optional int32  slot        = 1;  
+  optional int32  store       = 2;  
+}
+  
+message notifySlotTransOutResp {
+  optional int32  slot        = 1; 
+}  
+
+message  notifySlotTransIn {
+  optional int32  slot        = 1;  
+  optional int32  store       = 2; 
+}
+
+message notifySlotTransInResp {
+  optional int32  slot        = 1; 
+}  
 
 

@@ -1,0 +1,3 @@
+kvstore slots需要保存到快照中
+
+处理slot迁移消息

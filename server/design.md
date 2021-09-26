@@ -28,6 +28,24 @@ kvnode启动后使用id以及hostIP向flypd查询store信息。加载由flypd返
 
 因为我们已经以set为单位，一个store的副本发生故障，其实跟它在同一个set的store副本都发生故障。因此我们可以直接向set添加新的kvnode以及移除故障kvnode。
 
+##### 添加kvnode
+
+向pd发出请求，pd检查上传的set是否正确，nodeid以及地址是否否重复。
+
+检查通过后持久化添加请求。并生成一个pendingAdd结构。然后向set中所有节点发出添加请求。因为每个节点上有相同的store。
+
+节点接到请求后，向每个store所在raft group发起添加成员请求，只有是leader的store才执行请求。当请求apply之后向pd发回响应。
+
+只有当所有store都发回添加响应，添加事务才算完成。此时可以将新的kvnode加入set的配置中。
+
+kvnode被加入配置之后新的kvnode就可以启动。
+
+
+
+##### 移除kvnode
+
+与添加类似，生成一个pendingRem结构，向set中节点发出remkvnode请求，接收到所有store的响应后再将kvnode从配置移除。
+
 
 
 #### 添加新的store，并为其关联kvnode
@@ -87,6 +105,36 @@ kvnode启动后使用id以及hostIP向flypd查询store信息。加载由flypd返
 向flypd请求移除set 3。flypd将把store(10,11,12,13,14)标记为待移除。然后执行流程开始把store(10,11,12,13,14)上面的slot迁移出去。
 
 当所有slot迁移完成，store(10,11,12,13,14)将不再负责任何得slot。此时，将set 3从配置中移除。可以将set 3上的机器关闭。
+
+
+
+## slot迁移
+
+当新的set加入集群后，pd需要把现有set中的slot迁移到新加入的set中。pd首先根据当前set的数量，计算每个set的平均slot数量。
+
+把高于平均数量的set中的slot迁移到低于平均数量的set中。
+
+slot在迁移过程中将无法服务，为了避免大量slot同时进入无法服务的状态，应该挨个slot迁移。这样带来的副作用是整个平衡过程需要一定时间。
+
+### 迁移事务
+
+pd创建一个迁移事务(slot,storeTransOut,transOutOk,storeTransIn)，持久化，向storeTransOut leader发出迁出通告。
+
+storeTransOut leader接收到通告后，将slot关联的kv踢出缓存。当所有kv都被踢出之后，向pd返回响应。pd标记transOutOk=true,
+
+迁出部分完成。然后向storeTransIn leader发出slot迁入通告，storeTransIn leader响应，事务结束，pd将迁移事务删除。
+
+
+
+
+
+
+
+
+
+
+
+### 
 
 
 

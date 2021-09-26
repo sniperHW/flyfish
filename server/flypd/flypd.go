@@ -23,27 +23,44 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	//"time"
+	"time"
 )
 
 type applicationQueue struct {
 	q *queue.PriorityQueue
 }
 
+type AddingNode struct {
+	KvNodeJson
+	SetID    int
+	OkStores []int
+	timer    *time.Timer
+}
+
+type RemovingNode struct {
+	NodeID   int
+	SetID    int
+	OkStores []int
+	timer    *time.Timer
+}
+
 type pd struct {
-	id         int
-	raftID     int
-	leader     int
-	rn         *raft.RaftNode
-	mutilRaft  *raft.MutilRaft
-	mainque    applicationQueue
-	udp        *flynet.Udp
-	depolyment deployment
-	msgHandler map[reflect.Type]func(*net.UDPAddr, proto.Message)
-	stoponce   int32
-	startonce  int32
-	wait       sync.WaitGroup
-	ready      bool
+	id           int
+	raftID       int
+	leader       int
+	rn           *raft.RaftNode
+	mutilRaft    *raft.MutilRaft
+	mainque      applicationQueue
+	udp          *flynet.Udp
+	deployment   *deployment
+	addingNode   map[int]*AddingNode
+	removingNode map[int]*RemovingNode
+	slotTransfer map[int]*TransSlotTransfer
+	msgHandler   map[reflect.Type]func(*net.UDPAddr, proto.Message)
+	stoponce     int32
+	startonce    int32
+	wait         sync.WaitGroup
+	ready        bool
 }
 
 func NewPd(udpService string, id int, cluster string) (*pd, error) {
@@ -81,12 +98,14 @@ func NewPd(udpService string, id int, cluster string) (*pd, error) {
 	rn := raft.NewRaftNode(snapMerge, mutilRaft, mainQueue, (id<<16)+1, peers, false, GetConfig().Log.LogDir, "pd")
 
 	p := &pd{
-		id:         id,
-		rn:         rn,
-		mainque:    mainQueue,
-		raftID:     rn.ID(),
-		mutilRaft:  mutilRaft,
-		msgHandler: map[reflect.Type]func(*net.UDPAddr, proto.Message){},
+		id:           id,
+		rn:           rn,
+		mainque:      mainQueue,
+		raftID:       rn.ID(),
+		mutilRaft:    mutilRaft,
+		msgHandler:   map[reflect.Type]func(*net.UDPAddr, proto.Message){},
+		addingNode:   map[int]*AddingNode{},
+		removingNode: map[int]*RemovingNode{},
 	}
 
 	p.initMsgHandler()
@@ -167,6 +186,23 @@ func (p *pd) onBecomeLeader() {
 
 }
 
+func (p *pd) onLeaderDemote() {
+	for _, v := range p.addingNode {
+		v.timer.Stop()
+		v.timer = nil
+	}
+
+	for _, v := range p.removingNode {
+		v.timer.Stop()
+		v.timer = nil
+	}
+
+	for _, v := range p.slotTransfer {
+		v.timer.Stop()
+		v.timer = nil
+	}
+}
+
 func (p *pd) Stop() {
 	if atomic.CompareAndSwapInt32(&p.stoponce, 0, 1) {
 		GetSugar().Info("Stop")
@@ -205,10 +241,33 @@ func snapMerge(snaps ...[]byte) ([]byte, error) {
 	return snaps[len(snaps)-1], nil
 }
 
+func (p *pd) onAddNodeTimeout(an *AddingNode) {
+	ann := p.addingNode[an.NodeID]
+	if ann == an {
+		p.sendNotifyAddNode(an)
+		an.timer = time.AfterFunc(time.Second*3, func() {
+			p.mainque.AppendHighestPriotiryItem(an)
+		})
+	}
+}
+
+func (p *pd) onRemNodeTimeout(rn *RemovingNode) {
+	rnn := p.removingNode[rn.NodeID]
+	if rnn == rn {
+		p.sendNotifyRemNode(rn)
+		rn.timer = time.AfterFunc(time.Second*3, func() {
+			p.mainque.AppendHighestPriotiryItem(rn)
+		})
+	}
+}
+
 func (p *pd) serve() {
 
 	go func() {
-		defer p.wait.Done()
+		defer func() {
+			p.wait.Done()
+			p.mainque.close()
+		}()
 		for {
 			_, v := p.mainque.pop()
 			switch v.(type) {
@@ -246,9 +305,23 @@ func (p *pd) serve() {
 				}
 
 				if oldLeader == p.raftID && p.leader != p.raftID {
-
+					p.onLeaderDemote()
 				}
 
+			case *AddingNode:
+				if p.isLeader() {
+					p.onAddNodeTimeout(v.(*AddingNode))
+				}
+			case *RemovingNode:
+				if p.isLeader() {
+					p.onRemNodeTimeout(v.(*RemovingNode))
+				}
+			case *TransSlotTransfer:
+				if p.isLeader() {
+					if _, ok := p.slotTransfer[v.(*TransSlotTransfer).Slot]; ok {
+						v.(*TransSlotTransfer).notify()
+					}
+				}
 			default:
 				GetSugar().Infof("here %v %s", v, reflect.TypeOf(v).String())
 			}

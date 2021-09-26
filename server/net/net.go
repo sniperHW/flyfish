@@ -39,34 +39,14 @@ func init() {
 	namespace.Register(&sproto.NotifyReloadKvconf{}, uint32(sproto.ServerCmdType_NotiReloadKvConf))
 	namespace.Register(&sproto.RemoveGate{}, uint32(sproto.ServerCmdType_RemoveGate))
 
-	namespace.Register(&sproto.KvnodeBoot{}, uint32(sproto.ServerCmdType_KvnodeBoot))
-	namespace.Register(&sproto.KvnodeBootResp{}, uint32(sproto.ServerCmdType_KvnodeBootResp))
+	//console <-> pd
+	namespace.Register(&sproto.InstallDeployment{}, uint32(sproto.ServerCmdType_InstallDeployment))
+	namespace.Register(&sproto.InstallDeploymentResp{}, uint32(sproto.ServerCmdType_InstallDeploymentResp))
 
-	namespace.Register(&sproto.AddKvnode{}, uint32(sproto.ServerCmdType_AddKvnode))
-	namespace.Register(&sproto.AddKvnodeResp{}, uint32(sproto.ServerCmdType_AddKvnodeResp))
+	namespace.Register(&sproto.AddNode{}, uint32(sproto.ServerCmdType_AddNode))
+	namespace.Register(&sproto.AddNodeResp{}, uint32(sproto.ServerCmdType_AddNodeResp))
 
-	namespace.Register(&sproto.RemKvnode{}, uint32(sproto.ServerCmdType_RemKvnode))
-	namespace.Register(&sproto.RemKvnodeResp{}, uint32(sproto.ServerCmdType_RemKvnodeResp))
-
-	namespace.Register(&sproto.AddStore{}, uint32(sproto.ServerCmdType_AddStore))
-	namespace.Register(&sproto.AddStoreResp{}, uint32(sproto.ServerCmdType_AddStoreResp))
-
-	namespace.Register(&sproto.RemStore{}, uint32(sproto.ServerCmdType_RemStore))
-	namespace.Register(&sproto.RemStoreResp{}, uint32(sproto.ServerCmdType_RemStoreResp))
-
-	namespace.Register(&sproto.KvnodeAddStore{}, uint32(sproto.ServerCmdType_KvnodeAddStore))
-	namespace.Register(&sproto.KvnodeAddStoreResp{}, uint32(sproto.ServerCmdType_KvnodeAddStoreResp))
-
-	namespace.Register(&sproto.KvnodeRemStore{}, uint32(sproto.ServerCmdType_KvnodeRemStore))
-	namespace.Register(&sproto.KvnodeRemStoreResp{}, uint32(sproto.ServerCmdType_KvnodeRemStoreResp))
-
-	namespace.Register(&sproto.NotifyKvnodeStoreTrans{}, uint32(sproto.ServerCmdType_NotifyKvnodeStoreTrans))
-	namespace.Register(&sproto.NotifyKvnodeStoreTransResp{}, uint32(sproto.ServerCmdType_NotifyKvnodeStoreTransResp))
-
-	namespace.Register(&sproto.SlotTransferPrepare{}, uint32(sproto.ServerCmdType_SlotTransferPrepare))
-	namespace.Register(&sproto.SlotTransferPrepareAck{}, uint32(sproto.ServerCmdType_SlotTransferPrepareAck))
-
-	namespace.Register(&sproto.SlotTransferCancel{}, uint32(sproto.ServerCmdType_SlotTransferCancel))
-	namespace.Register(&sproto.SlotTransferCommit{}, uint32(sproto.ServerCmdType_SlotTransferCommit))
+	namespace.Register(&sproto.RemNode{}, uint32(sproto.ServerCmdType_RemNode))
+	namespace.Register(&sproto.RemNodeResp{}, uint32(sproto.ServerCmdType_RemNodeResp))
 
 }

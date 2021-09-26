@@ -777,6 +777,31 @@ func TestAddNode(t *testing.T) {
 	time.Sleep(time.Second * 5)
 
 	node1.stop()
+
+	node1 = newKvNode(1, "1@http://127.0.0.1:22378")
+
+	becomeLeaderCh1 = make(chan *kvnode, 1)
+	becomeLeaderCh4 := make(chan *kvnode, 1)
+
+	node1.store.becomeLeader = func() {
+		becomeLeaderCh1 <- node1
+	}
+
+	node4.store.becomeLeader = func() {
+		becomeLeaderCh4 <- node4
+	}
+
+	getLeader = func() *kvnode {
+		select {
+		case n := <-becomeLeaderCh1:
+			return n
+		case n := <-becomeLeaderCh4:
+			return n
+		}
+	}
+
+	leader = getLeader()
+
 	node4.stop()
 
 }

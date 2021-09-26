@@ -1,9 +1,13 @@
 package flypd
 
 import (
-	//"github.com/sniperHW/flyfish/server/slot"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
+	"github.com/sniperHW/flyfish/pkg/buffer"
+	sproto "github.com/sniperHW/flyfish/server/proto"
+	"github.com/sniperHW/flyfish/server/slot"
 )
 
 var StorePerSet int = 5  //每个set含有多少个store
@@ -88,6 +92,8 @@ func (d deployment) toJson() ([]byte, error) {
 }
 
 func (d *deployment) loadFromJson(jsonBytes []byte) error {
+	d.sets = map[int]*set{}
+
 	var deploymentJson DeploymentJson
 	var err error
 	if err = json.Unmarshal(jsonBytes, &deploymentJson); err != nil {
@@ -124,8 +130,123 @@ func (d *deployment) loadFromJson(jsonBytes []byte) error {
 			}
 			s.stores[vv.StoreID] = st
 		}
+
+		d.sets[v.SetID] = s
 	}
 
 	return nil
 
+}
+
+func (d *deployment) loadFromPB(sets []*sproto.DeploymentSet) error {
+	d.sets = map[int]*set{}
+
+	nodes := map[int32]bool{}
+	services := map[string]bool{}
+	inters := map[string]bool{}
+
+	if len(sets) == 0 {
+		return errors.New("empty sets")
+	}
+
+	storeCount := len(sets) * StorePerSet
+	var storeBitmaps []*bitmap.Bitmap
+
+	for i := 0; i < storeCount; i++ {
+		storeBitmaps = append(storeBitmaps, bitmap.New(slot.SlotCount))
+	}
+
+	jj := 0
+	for i := 0; i < slot.SlotCount; i++ {
+		storeBitmaps[jj].Set(i)
+		jj = (jj + 1) % storeCount
+	}
+
+	for i, v := range sets {
+		if _, ok := d.sets[int(v.SetID)]; ok {
+			return fmt.Errorf("duplicate set:%d", v.SetID)
+		}
+
+		if len(v.Nodes) != KvNodePerSet {
+			return fmt.Errorf("node count of set should be %d", KvNodePerSet)
+		}
+
+		s := &set{
+			id:     int(v.SetID),
+			nodes:  map[int]*kvnode{},
+			stores: map[int]*store{},
+		}
+
+		for _, vv := range v.Nodes {
+			if _, ok := nodes[vv.NodeID]; ok {
+				return fmt.Errorf("duplicate node:%d", vv.NodeID)
+			}
+
+			service := fmt.Sprintf("%s:%d", vv.Host, vv.ServicePort)
+
+			if _, ok := services[service]; ok {
+				return fmt.Errorf("duplicate service:%s", service)
+			}
+
+			inter := fmt.Sprintf("%s:%d", vv.Host, vv.InterPort)
+
+			if _, ok := inters[inter]; ok {
+				return fmt.Errorf("duplicate inter:%s", inter)
+			}
+
+			nodes[vv.NodeID] = true
+			services[service] = true
+			inters[inter] = true
+
+			n := &kvnode{
+				id:          int(vv.NodeID),
+				host:        vv.Host,
+				servicePort: int(vv.ServicePort),
+				interPort:   int(vv.InterPort),
+				set:         s,
+			}
+			s.nodes[int(vv.NodeID)] = n
+		}
+
+		for j := 0; j < StorePerSet; j++ {
+			st := &store{
+				id:    i + j + 1,
+				slots: storeBitmaps[i+j],
+				set:   s,
+			}
+
+			s.stores[st.id] = st
+		}
+
+		d.sets[int(v.SetID)] = s
+	}
+
+	return nil
+}
+
+type ProposalInstallDeployment struct {
+	*proposalBase
+	d *deployment
+}
+
+func (p *ProposalInstallDeployment) Serilize(b []byte) []byte {
+	b = buffer.AppendByte(b, byte(proposalInstallDeployment))
+	bb, err := p.d.toJson()
+	if nil != err {
+		panic(err)
+	}
+	return buffer.AppendBytes(b, bb)
+}
+
+func (p *ProposalInstallDeployment) apply() {
+	p.pd.deployment = p.d
+}
+
+func (p *pd) replayInstallDeployment(reader *buffer.BufferReader) error {
+	d := &deployment{}
+	if err := d.loadFromJson(reader.GetAll()); nil != err {
+		return err
+	}
+	p.deployment = d
+	return nil
 }
