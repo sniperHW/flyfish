@@ -27,6 +27,11 @@ enum ServerCmdType {
   AddNodeResp                   = 104;
   RemNode                       = 105;
   RemNodeResp                   = 106;
+  AddSet                        = 107;
+  AddSetResp                    = 108;
+  RemSet                        = 109;
+  RemSetResp                    = 110;
+
 
   //kvnode <-> pd
   KvnodeBoot                    = 210;                   //kvnode冷启登录  
@@ -182,4 +187,23 @@ message notifySlotTransInResp {
   optional int32  slot        = 1; 
 }  
 
+
+message addSet {
+  optional deploymentSet set   = 1;
+}
+
+message   addSetResp {
+  optional bool   ok           = 1;
+  optional string reason       = 2;
+}
+
+
+message remSet {
+  optional int32 setID         = 1;
+}
+
+message   remSetResp {
+  optional bool   ok           = 1;
+  optional string reason       = 2;
+}
 

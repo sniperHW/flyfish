@@ -43,11 +43,23 @@ func init() {
 	namespace.Register(&sproto.InstallDeployment{}, uint32(sproto.ServerCmdType_InstallDeployment))
 	namespace.Register(&sproto.InstallDeploymentResp{}, uint32(sproto.ServerCmdType_InstallDeploymentResp))
 
+	namespace.Register(&sproto.AddSet{}, uint32(sproto.ServerCmdType_AddSet))
+	namespace.Register(&sproto.AddSetResp{}, uint32(sproto.ServerCmdType_AddSetResp))
+
+	namespace.Register(&sproto.RemSet{}, uint32(sproto.ServerCmdType_RemSet))
+	namespace.Register(&sproto.RemSetResp{}, uint32(sproto.ServerCmdType_RemSetResp))
+
 	namespace.Register(&sproto.AddNode{}, uint32(sproto.ServerCmdType_AddNode))
 	namespace.Register(&sproto.AddNodeResp{}, uint32(sproto.ServerCmdType_AddNodeResp))
 
+	namespace.Register(&sproto.NotifyAddNode{}, uint32(sproto.ServerCmdType_NotifyAddNode))
+	namespace.Register(&sproto.NotifyAddNodeResp{}, uint32(sproto.ServerCmdType_NotifyAddNodeResp))
+
 	namespace.Register(&sproto.RemNode{}, uint32(sproto.ServerCmdType_RemNode))
 	namespace.Register(&sproto.RemNodeResp{}, uint32(sproto.ServerCmdType_RemNodeResp))
+
+	namespace.Register(&sproto.NotifyRemNode{}, uint32(sproto.ServerCmdType_NotifyRemNode))
+	namespace.Register(&sproto.NotifyRemNodeResp{}, uint32(sproto.ServerCmdType_NotifyRemNodeResp))
 
 	namespace.Register(&sproto.NotifySlotTransOut{}, uint32(sproto.ServerCmdType_NotifySlotTransOut))
 	namespace.Register(&sproto.NotifySlotTransOutResp{}, uint32(sproto.ServerCmdType_NotifySlotTransOutResp))

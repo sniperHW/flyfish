@@ -161,7 +161,7 @@ func (p *pd) startUdpService(udpService string) error {
 				GetSugar().Errorf("read err:%v", err)
 				return
 			} else {
-				GetSugar().Infof("got msg")
+				//GetSugar().Infof("got msg")
 				p.mainque.append(func() {
 					if p.isLeader() && p.ready {
 						p.onMsg(from, msg)

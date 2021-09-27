@@ -8,6 +8,7 @@ import (
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"github.com/sniperHW/flyfish/server/slot"
+	"sort"
 )
 
 var StorePerSet int = 5  //每个set含有多少个store
@@ -249,5 +250,121 @@ func (p *pd) replayInstallDeployment(reader *buffer.BufferReader) error {
 		return err
 	}
 	p.deployment = d
+	return nil
+}
+
+type ProposalAddSet struct {
+	*proposalBase
+	msg *sproto.AddSet
+}
+
+func (p *ProposalAddSet) Serilize(b []byte) []byte {
+	b = buffer.AppendByte(b, byte(proposalAddSet))
+	bb, err := json.Marshal(p.msg)
+	if nil != err {
+		panic(err)
+	}
+	return buffer.AppendBytes(b, bb)
+}
+
+func (p *ProposalAddSet) doApply() {
+
+	s := &set{
+		id:     int(p.msg.Set.SetID),
+		nodes:  map[int]*kvnode{},
+		stores: map[int]*store{},
+	}
+
+	for _, v := range p.msg.Set.Nodes {
+		s.nodes[int(v.NodeID)] = &kvnode{
+			id:          int(v.NodeID),
+			host:        v.Host,
+			servicePort: int(v.ServicePort),
+			interPort:   int(v.InterPort),
+			set:         s,
+		}
+	}
+
+	var stores []int
+
+	for _, v := range p.pd.deployment.sets {
+		for _, vv := range v.stores {
+			stores = append(stores, vv.id)
+		}
+	}
+
+	sort.Slice(stores, func(i, j int) bool {
+		return stores[i] < stores[j]
+	})
+
+	var i int
+	for i := 0; i < len(stores)-1; i++ {
+		if stores[i]+1 != stores[i+1] {
+			break
+		}
+	}
+
+	var beg int
+	if stores[i]+1 != stores[i+1] {
+		beg = stores[i] + 1
+		if beg+StorePerSet >= stores[i+1] {
+			panic("error here")
+		}
+	} else {
+		beg = stores[i+1] + 1
+	}
+
+	for i := 0; i < StorePerSet; i++ {
+		st := &store{
+			id:    beg + i,
+			slots: bitmap.New(slot.SlotCount),
+			set:   s,
+		}
+		s.stores[st.id] = st
+	}
+
+	p.pd.deployment.sets[s.id] = s
+
+}
+
+func (p *ProposalAddSet) apply() {
+	p.doApply()
+	p.reply()
+}
+
+func (p *pd) replayAddSet(reader *buffer.BufferReader) error {
+	var msg sproto.AddSet
+	if err := json.Unmarshal(reader.GetAll(), &msg); nil != err {
+		return err
+	}
+
+	pr := &ProposalAddSet{
+		proposalBase: &proposalBase{
+			pd: p,
+		},
+		msg: &msg,
+	}
+	pr.doApply()
+	return nil
+}
+
+type ProposalRemSet struct {
+	*proposalBase
+	setID int
+}
+
+func (p *ProposalRemSet) Serilize(b []byte) []byte {
+	b = buffer.AppendByte(b, byte(proposalRemSet))
+	return buffer.AppendInt32(b, int32(p.setID))
+}
+
+func (p *ProposalRemSet) apply() {
+	delete(p.pd.deployment.sets, p.setID)
+	p.reply()
+}
+
+func (p *pd) replayRemSet(reader *buffer.BufferReader) error {
+	setID := int(reader.GetInt32())
+	delete(p.deployment.sets, setID)
 	return nil
 }

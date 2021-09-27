@@ -22,6 +22,8 @@ const (
 	proposalBeginSlotTransfer      = 6
 	proposalNotifySlotTransOutResp = 7
 	proposalNotifySlotTransInResp  = 8
+	proposalAddSet                 = 9
+	proposalRemSet                 = 10
 )
 
 type proposalBase struct {

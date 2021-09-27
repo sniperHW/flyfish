@@ -86,18 +86,22 @@ func (p *ProposalNotifyAddNodeResp) Serilize(b []byte) []byte {
 
 func (p *ProposalNotifyAddNodeResp) apply() {
 	an, ok := p.pd.addingNode[int(p.msg.NodeID)]
-	if ok {
-		var i int
 
+	if ok {
+
+		find := false
 		for i := 0; i < len(an.OkStores); i++ {
 			if an.OkStores[i] == int(p.msg.Store) {
+				find = true
 				break
 			}
 		}
 
-		if i == len(an.OkStores) {
+		if !find {
 			an.OkStores = append(an.OkStores, int(p.msg.Store))
 		}
+
+		//GetSugar().Infof("ProposalNotifyAddNodeResp apply %d %d", an.OkStores, StorePerSet)
 
 		if len(an.OkStores) == StorePerSet {
 			if nil != an.timer {
@@ -206,15 +210,15 @@ func (p *ProposalNotifyRemNodeResp) Serilize(b []byte) []byte {
 func (p *ProposalNotifyRemNodeResp) apply() {
 	rn, ok := p.pd.removingNode[int(p.msg.NodeID)]
 	if ok {
-		var i int
-
+		find := false
 		for i := 0; i < len(rn.OkStores); i++ {
 			if rn.OkStores[i] == int(p.msg.Store) {
+				find = true
 				break
 			}
 		}
 
-		if i == len(rn.OkStores) {
+		if !find {
 			rn.OkStores = append(rn.OkStores, int(p.msg.Store))
 		}
 
@@ -250,51 +254,59 @@ func (p *pd) replayNotifyRemNodeResp(reader *buffer.BufferReader) error {
 }
 
 func (p *pd) sendNotifyRemNode(rn *RemovingNode) {
-	s := p.deployment.sets[rn.SetID]
-	notify := &sproto.NotifyRemNode{
-		NodeID: int32(rn.NodeID),
-	}
+	if len(rn.OkStores) < StorePerSet {
+		s := p.deployment.sets[rn.SetID]
+		notify := &sproto.NotifyRemNode{
+			NodeID: int32(rn.NodeID),
+		}
 
-	for _, v := range s.stores {
-		var i int
-		for i = 0; i < len(rn.OkStores); i++ {
-			if rn.OkStores[i] == v.id {
-				break
+		for _, v := range s.stores {
+			find := false
+			for i := 0; i < len(rn.OkStores); i++ {
+				if rn.OkStores[i] == v.id {
+					find = true
+					break
+				}
+			}
+
+			if !find {
+				notify.Stores = append(notify.Stores, int32(v.id))
 			}
 		}
-		if i == len(rn.OkStores) {
-			notify.Stores = append(notify.Stores, int32(v.id))
-		}
-	}
 
-	for _, v := range s.nodes {
-		addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.host, v.interPort))
-		p.udp.SendTo(addr, notify)
+		for _, v := range s.nodes {
+			addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.host, v.interPort))
+			p.udp.SendTo(addr, notify)
+		}
 	}
 }
 
 func (p *pd) sendNotifyAddNode(an *AddingNode) {
-	s := p.deployment.sets[an.SetID]
-	notify := &sproto.NotifyAddNode{
-		NodeID:    int32(an.NodeID),
-		Host:      an.Host,
-		InterPort: int32(an.InterPort),
-	}
+	if len(an.OkStores) < StorePerSet {
+		s := p.deployment.sets[an.SetID]
+		notify := &sproto.NotifyAddNode{
+			NodeID:    int32(an.NodeID),
+			Host:      an.Host,
+			InterPort: int32(an.InterPort),
+		}
 
-	for _, v := range s.stores {
-		var i int
-		for i = 0; i < len(an.OkStores); i++ {
-			if an.OkStores[i] == v.id {
-				break
+		for _, v := range s.stores {
+			find := false
+			for i := 0; i < len(an.OkStores); i++ {
+				if an.OkStores[i] == v.id {
+					find = true
+					break
+				}
+			}
+			if !find {
+				notify.Stores = append(notify.Stores, int32(v.id))
 			}
 		}
-		if i == len(an.OkStores) {
-			notify.Stores = append(notify.Stores, int32(v.id))
-		}
-	}
 
-	for _, v := range s.nodes {
-		addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.host, v.interPort))
-		p.udp.SendTo(addr, notify)
+		for _, v := range s.nodes {
+			addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.host, v.interPort))
+			GetSugar().Infof("send notify add node to %s:%d", v.host, v.interPort)
+			p.udp.SendTo(addr, notify)
+		}
 	}
 }

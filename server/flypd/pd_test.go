@@ -6,19 +6,34 @@ package flypd
 import (
 	"fmt"
 	//"github.com/sniperHW/flyfish/logger"
+	"github.com/sniperHW/flyfish/logger"
+	"github.com/sniperHW/flyfish/pkg/bitmap"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
-	//sslot "github.com/sniperHW/flyfish/server/slot"
+	sslot "github.com/sniperHW/flyfish/server/slot"
 	"github.com/stretchr/testify/assert"
 	"net"
 	"os"
-	//"sync"
-	"github.com/sniperHW/flyfish/logger"
-	"github.com/sniperHW/flyfish/pkg/bitmap"
+	"sync"
 	"testing"
 	"time"
 )
+
+func waitCondition(fn func() bool) {
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		for {
+			time.Sleep(time.Millisecond * 100)
+			if fn() {
+				wg.Done()
+				break
+			}
+		}
+	}()
+	wg.Wait()
+}
 
 func TestSnapShot(t *testing.T) {
 
@@ -153,7 +168,9 @@ func TestSnapShot(t *testing.T) {
 
 }
 
-func TestInstallDeployment(t *testing.T) {
+func TestPd(t *testing.T) {
+
+	sslot.SlotCount = 128
 
 	os.RemoveAll("./log/pd-1-1")
 	os.RemoveAll("./log/pd-1-1-snap")
@@ -165,7 +182,7 @@ func TestInstallDeployment(t *testing.T) {
 	[Log]
 		MaxLogfileSize  = 104857600 # 100mb
 		LogDir          = "log"
-		LogPrefix       = "gate"
+		LogPrefix       = "pd"
 		LogLevel        = "info"
 		EnableLogStdout = false		
 
@@ -176,7 +193,7 @@ func TestInstallDeployment(t *testing.T) {
 
 	conf, _ := LoadConfigStr(configStr)
 
-	p, err := NewPd(conf, "localhost:8110", 1, "1@http:\\localhost:8110")
+	p, _ := NewPd(conf, "localhost:8110", 1, "1@http://localhost:8110")
 
 	for {
 		if p.isLeader() && p.ready {
@@ -185,6 +202,15 @@ func TestInstallDeployment(t *testing.T) {
 			time.Sleep(time.Second)
 		}
 	}
+
+	testInstallDeployment(t, p)
+
+	testAddRemNode(t, p)
+
+	p.Stop()
+}
+
+func testInstallDeployment(t *testing.T, p *pd) {
 
 	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
 	assert.Nil(t, err)
@@ -197,9 +223,9 @@ func TestInstallDeployment(t *testing.T) {
 	set1 := &sproto.DeploymentSet{SetID: 1}
 	set1.Nodes = append(set1.Nodes, &sproto.DeploymentKvnode{
 		NodeID:      1,
-		Host:        "192.168.0.1",
-		ServicePort: 8110,
-		InterPort:   8111,
+		Host:        "localhost",
+		ServicePort: 9110,
+		InterPort:   9111,
 	})
 	install.Sets = append(install.Sets, set1)
 
@@ -219,20 +245,112 @@ func TestInstallDeployment(t *testing.T) {
 
 	assert.Equal(t, r.(*sproto.InstallDeploymentResp).Ok, true)
 
-	/*set1.Nodes = append(set1.Nodes, &sproto.DeploymentKvnode{
-		NodeID:      1,
-		Host:        "192.168.0.1",
-		ServicePort: 8110,
-		InterPort:   8111,
+	conn.Close()
+
+}
+
+type testKvnode struct {
+	udp    *fnet.Udp
+	nodeId int
+}
+
+func (n *testKvnode) run() {
+	recvbuff := make([]byte, 64*1024)
+	for {
+		from, msg, err := n.udp.ReadFrom(recvbuff)
+		if nil != err {
+			return
+		} else {
+			fmt.Println(msg)
+			switch msg.(type) {
+			case *sproto.NotifyAddNode:
+				fmt.Println("on NotifyAddNode")
+				notify := msg.(*sproto.NotifyAddNode)
+				for _, v := range notify.Stores {
+					n.udp.SendTo(from, &sproto.NotifyAddNodeResp{
+						NodeID: notify.NodeID,
+						Store:  v,
+					})
+				}
+			case *sproto.NotifyRemNode:
+				fmt.Println("on NotifyRemNode")
+				notify := msg.(*sproto.NotifyRemNode)
+				for _, v := range notify.Stores {
+					n.udp.SendTo(from, &sproto.NotifyRemNodeResp{
+						NodeID: notify.NodeID,
+						Store:  v,
+					})
+				}
+			}
+
+		}
+	}
+}
+
+func (n *testKvnode) stop() {
+	n.udp.Close()
+}
+
+func testAddRemNode(t *testing.T, p *pd) {
+
+	node1 := &testKvnode{
+		nodeId: 1,
+	}
+
+	node1.udp, _ = fnet.NewUdp("localhost:9111", snet.Pack, snet.Unpack)
+
+	go node1.run()
+
+	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
+	assert.Nil(t, err)
+
+	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
+
+	conn.SendTo(addr, &sproto.AddNode{
+		SetID:       1,
+		NodeID:      2,
+		Host:        "localhost",
+		ServicePort: 9120,
+		InterPort:   9121,
 	})
 
-	set1.Nodes = append(set1.Nodes, &sproto.DeploymentKvnode{
-		NodeID:      1,
-		Host:        "192.168.0.1",
-		ServicePort: 8110,
-		InterPort:   8111,
-	})*/
+	recvbuff := make([]byte, 256)
 
-	p.Stop()
+	_, r, err := conn.ReadFrom(recvbuff)
+
+	assert.Equal(t, true, r.(*sproto.AddNodeResp).Ok)
+
+	waitCondition(func() bool {
+		if len(p.deployment.sets[1].nodes) == 2 {
+			return true
+		} else {
+			return false
+		}
+	})
+
+	conn.SendTo(addr, &sproto.RemNode{
+		SetID:  1,
+		NodeID: 2,
+	})
+
+	_, r, err = conn.ReadFrom(recvbuff)
+
+	assert.Equal(t, true, r.(*sproto.RemNodeResp).Ok)
+
+	waitCondition(func() bool {
+		if len(p.deployment.sets[1].nodes) == 1 {
+			return true
+		} else {
+			return false
+		}
+	})
+
+	conn.Close()
+
+	node1.stop()
+
+}
+
+func testAddSet(t *testing.T, p *pd) {
 
 }
