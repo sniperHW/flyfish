@@ -129,7 +129,7 @@ func (p *ProposalNotifySlotTransInResp) Serilize(b []byte) []byte {
 func (p *ProposalNotifySlotTransInResp) apply() {
 	if t, ok := p.pd.slotTransfer[p.slot]; ok {
 		delete(p.pd.slotTransfer, p.slot)
-		st := p.pd.deployment.sets[t.SetOut].stores[t.StoreTransferOut]
+		st := p.pd.deployment.sets[t.SetIn].stores[t.StoreTransferIn]
 		st.slots.Set(int(t.Slot))
 		if nil != t.timer {
 			t.timer.Stop()

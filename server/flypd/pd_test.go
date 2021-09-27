@@ -207,7 +207,24 @@ func TestPd(t *testing.T) {
 
 	testAddRemNode(t, p)
 
+	testAddRemSet(t, p)
+
+	testSlotTransfer(t, p)
+
 	p.Stop()
+
+	p, _ = NewPd(conf, "localhost:8110", 1, "1@http://localhost:8110")
+
+	for {
+		if p.isLeader() && p.ready {
+			break
+		} else {
+			time.Sleep(time.Second)
+		}
+	}
+
+	p.Stop()
+
 }
 
 func testInstallDeployment(t *testing.T, p *pd) {
@@ -281,8 +298,17 @@ func (n *testKvnode) run() {
 						Store:  v,
 					})
 				}
+			case *sproto.NotifySlotTransIn:
+				notify := msg.(*sproto.NotifySlotTransIn)
+				n.udp.SendTo(from, &sproto.NotifySlotTransInResp{
+					Slot: notify.Slot,
+				})
+			case *sproto.NotifySlotTransOut:
+				notify := msg.(*sproto.NotifySlotTransOut)
+				n.udp.SendTo(from, &sproto.NotifySlotTransOutResp{
+					Slot: notify.Slot,
+				})
 			}
-
 		}
 	}
 }
@@ -351,6 +377,142 @@ func testAddRemNode(t *testing.T, p *pd) {
 
 }
 
-func testAddSet(t *testing.T, p *pd) {
+func testAddRemSet(t *testing.T, p *pd) {
+
+	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
+	assert.Nil(t, err)
+
+	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
+
+	conn.SendTo(addr, &sproto.AddSet{
+		&sproto.DeploymentSet{
+			SetID: 2,
+			Nodes: []*sproto.DeploymentKvnode{
+				&sproto.DeploymentKvnode{
+					NodeID:      3,
+					Host:        "localhost",
+					ServicePort: 8311,
+					InterPort:   8321,
+				},
+			},
+		},
+	})
+
+	recvbuff := make([]byte, 256)
+
+	_, r, err := conn.ReadFrom(recvbuff)
+
+	assert.Equal(t, true, r.(*sproto.AddSetResp).Ok)
+
+	waitCondition(func() bool {
+		if len(p.deployment.sets) == 2 {
+			return true
+		} else {
+			return false
+		}
+	})
+
+	assert.Equal(t, 3, int(p.deployment.sets[2].nodes[3].id))
+
+	conn.SendTo(addr, &sproto.RemSet{
+		SetID: 2,
+	})
+
+	_, r, err = conn.ReadFrom(recvbuff)
+
+	assert.Equal(t, true, r.(*sproto.RemSetResp).Ok)
+
+	waitCondition(func() bool {
+		if len(p.deployment.sets) == 1 {
+			return true
+		} else {
+			return false
+		}
+	})
+
+}
+
+func testSlotTransfer(t *testing.T, p *pd) {
+
+	//先添加一个set
+
+	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
+	assert.Nil(t, err)
+
+	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
+
+	conn.SendTo(addr, &sproto.AddSet{
+		&sproto.DeploymentSet{
+			SetID: 2,
+			Nodes: []*sproto.DeploymentKvnode{
+				&sproto.DeploymentKvnode{
+					NodeID:      2,
+					Host:        "localhost",
+					ServicePort: 9210,
+					InterPort:   9211,
+				},
+			},
+		},
+	})
+
+	recvbuff := make([]byte, 256)
+
+	_, r, err := conn.ReadFrom(recvbuff)
+
+	assert.Equal(t, true, r.(*sproto.AddSetResp).Ok)
+
+	waitCondition(func() bool {
+		if len(p.deployment.sets) == 2 {
+			return true
+		} else {
+			return false
+		}
+	})
+
+	//启动两个节点
+	node1 := &testKvnode{
+		nodeId: 1,
+	}
+
+	node1.udp, _ = fnet.NewUdp("localhost:9111", snet.Pack, snet.Unpack)
+
+	go node1.run()
+
+	node2 := &testKvnode{
+		nodeId: 2,
+	}
+
+	node2.udp, _ = fnet.NewUdp("localhost:9211", snet.Pack, snet.Unpack)
+
+	go node2.run()
+
+	set1 := p.deployment.sets[1]
+
+	set2 := p.deployment.sets[2]
+
+	store1 := set1.stores[1]
+	store6 := set2.stores[6]
+
+	assert.NotNil(t, store1)
+
+	assert.NotNil(t, store6)
+
+	slotTransfer := store1.slots.GetOpenBits()[0]
+
+	p.beginSlotTransfer(slotTransfer, 1, 1, 2, 6)
+
+	waitCondition(func() bool {
+		if len(store6.slots.GetOpenBits()) == 1 {
+			return true
+		} else {
+			return false
+		}
+	})
+
+	assert.Equal(t, false, store1.slots.Test(slotTransfer))
+	assert.Equal(t, true, store6.slots.Test(slotTransfer))
+
+	node1.stop()
+	node2.stop()
 
 }

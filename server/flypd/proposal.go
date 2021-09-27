@@ -73,6 +73,10 @@ func (p *pd) replayProposal(proposal []byte) error {
 		return p.replayNotifySlotTransOutResp(&reader)
 	case proposalNotifySlotTransInResp:
 		return p.replayNotifySlotTransInResp(&reader)
+	case proposalAddSet:
+		return p.replayAddSet(&reader)
+	case proposalRemSet:
+		return p.replayRemSet(&reader)
 	default:
 		return errors.New("invaild proposal type")
 	}
