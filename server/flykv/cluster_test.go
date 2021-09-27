@@ -2,7 +2,7 @@ package flykv
 
 //go test -covermode=count -v -coverprofile=coverage.out -run=.
 //go tool cover -html=coverage.out
-
+/*
 import (
 	"fmt"
 	"github.com/BurntSushi/toml"
@@ -44,7 +44,7 @@ var configGate1Str string = `
 		LogDir          = "log"
 		LogPrefix       = "gate"
 		LogLevel        = "info"
-		EnableLogStdout = false		
+		EnableLogStdout = false
 
 `
 
@@ -72,7 +72,7 @@ var configGate2Str string = `
 		LogDir          = "log"
 		LogPrefix       = "gate"
 		LogLevel        = "info"
-		EnableLogStdout = false		
+		EnableLogStdout = false
 
 `
 
@@ -94,7 +94,7 @@ var configDirStr string = `
 		LogDir          = "log"
 		LogPrefix       = "gate"
 		LogLevel        = "info"
-		EnableLogStdout = false		
+		EnableLogStdout = false
 
 `
 
@@ -329,4 +329,4 @@ func TestCluster1(t *testing.T) {
 
 	raft.DefaultSnapshotCount = DefaultSnapshotCount
 	raft.SnapshotCatchUpEntriesN = SnapshotCatchUpEntriesN
-}
+}*/

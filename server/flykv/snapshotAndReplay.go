@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/sniperHW/flyfish/backend/db"
 	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/pkg/compress"
 	sslot "github.com/sniperHW/flyfish/server/slot"
@@ -51,7 +52,8 @@ func (s *kvstore) snapMerge(snaps ...[]byte) ([]byte, error) {
 	}
 
 	var lease pplease
-	//var tbmeta []byte
+
+	var slots *bitmap.Bitmap
 
 	snapBytes := [][]byte{}
 
@@ -107,6 +109,8 @@ func (s *kvstore) snapMerge(snaps ...[]byte) ([]byte, error) {
 				//tbmeta = data.([]byte)
 			} else if ptype == proposal_lease {
 				lease = data.(pplease)
+			} else if ptype == proposal_slots {
+				slots = data.(*bitmap.Bitmap)
 			} else {
 				p := data.(ppkv)
 				groupID := sslot.StringHash(p.unikey) % len(store)
@@ -154,6 +158,10 @@ func (s *kvstore) snapMerge(snaps ...[]byte) ([]byte, error) {
 	waitGroup.Add(len(store))
 
 	buff := make([]byte, 0, buffsize)
+
+	//先写入slot
+	buff = serilizeSlots(slots, buff)
+
 	var mtx sync.Mutex
 
 	kvcount := 0
@@ -266,6 +274,8 @@ func (s *kvstore) replayFromBytes(callByReplaySnapshot bool, b []byte) error {
 		} else if ptype == proposal_lease {
 			p := data.(pplease)
 			s.lease.update(p.nodeid, p.begtime)
+		} else if ptype == proposal_slots {
+			s.slots = data.(*bitmap.Bitmap)
 		} else {
 			p := data.(ppkv)
 			groupID := sslot.StringHash(p.unikey) % len(s.keyvals)
@@ -357,6 +367,10 @@ func (s *kvstore) getSnapshot() ([]byte, error) {
 	waitGroup.Add(len(s.keyvals))
 
 	buff := make([]byte, 0, buffsize)
+
+	//写入slots
+	buff = serilizeSlots(s.slots, buff)
+
 	var mtx sync.Mutex
 
 	//多线程序列化和压缩

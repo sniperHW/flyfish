@@ -1,13 +1,14 @@
 package flykv
 
 import (
+	"encoding/binary"
 	"errors"
+	"github.com/sniperHW/flyfish/pkg/bitmap"
+	"github.com/sniperHW/flyfish/pkg/buffer"
+	flyproto "github.com/sniperHW/flyfish/proto"
 	"math"
 	"time"
 	"unsafe"
-
-	"github.com/sniperHW/flyfish/pkg/buffer"
-	flyproto "github.com/sniperHW/flyfish/proto"
 )
 
 type proposalReader struct {
@@ -59,6 +60,18 @@ func serilizeLease(b []byte, nodeid int, begtime time.Time) []byte {
 	bb, _ := begtime.MarshalBinary()
 	b = buffer.AppendInt32(b, int32(len(bb)))
 	return buffer.AppendBytes(b, bb)
+}
+
+func serilizeSlots(slots *bitmap.Bitmap, b []byte) []byte {
+	ll := len(b)
+	b = buffer.AppendInt32(b, 0) //占位符
+	slotB := slots.ToJson()
+	b = buffer.AppendByte(b, byte(proposal_slots))
+	b = buffer.AppendInt32(b, int32(len(slotB)))
+	b = buffer.AppendBytes(b, slotB)
+	b = append(b, byte(0)) //写入无压缩标记
+	binary.BigEndian.PutUint32(b[ll:ll+4], uint32(len(b)-ll-4))
+	return b
 }
 
 func serilizeKv(b []byte, ptype proposalType, unikey string, version int64, fields map[string]*flyproto.Field) []byte {
@@ -151,6 +164,22 @@ func (this *proposalReader) read() (isOver bool, ptype proposalType, data interf
 		if nil == err {
 			ptype = proposalType(b)
 			switch ptype {
+			case proposal_slots:
+				var l int32
+				l, err = this.reader.CheckGetInt32()
+				if nil != err {
+					GetSugar().Errorf("here1")
+					return
+				}
+				var bb []byte
+				bb, err = this.reader.CopyBytes(int(l))
+				if nil != err {
+					GetSugar().Errorf("here2:%d", l)
+					return
+				}
+				var slots *bitmap.Bitmap
+				slots, err = bitmap.CreateFromJson(bb)
+				data = slots
 			case proposal_none:
 				err = errors.New("bad data 2")
 			case proposal_tbmeta:
