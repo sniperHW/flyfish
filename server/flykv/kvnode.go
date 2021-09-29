@@ -205,13 +205,14 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, cluster string, slots 
 	}
 
 	store := &kvstore{
-		db:        this.db,
-		mainQueue: mainQueue,
-		keyvals:   make([]kvmgr, groupSize),
-		kvnode:    this,
-		shard:     storeID,
-		slots:     slots,
-		meta:      meta,
+		db:         this.db,
+		mainQueue:  mainQueue,
+		keyvals:    make([]kvmgr, groupSize),
+		kvnode:     this,
+		shard:      storeID,
+		slots:      slots,
+		meta:       meta,
+		memberShip: map[int]bool{},
 	}
 
 	rn := raft.NewRaftNode(store.snapMerge, this.mutilRaft, mainQueue, (this.id<<16)+storeID, peers, false, this.config.Log.LogDir, "kvnode")
@@ -226,6 +227,7 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, cluster string, slots 
 
 	store.lru.init()
 	store.lease = newLease(store)
+	store.memberShip[this.id] = true
 	this.stores[storeID] = store
 	store.serve()
 

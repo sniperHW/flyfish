@@ -2,13 +2,8 @@ package flykv
 
 import (
 	//"errors"
-
 	"fmt"
-	"reflect"
-	"sync"
-	"sync/atomic"
-	"time"
-
+	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/backend/db"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
@@ -17,9 +12,15 @@ import (
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	flyproto "github.com/sniperHW/flyfish/proto"
+	sproto "github.com/sniperHW/flyfish/server/proto"
 	sslot "github.com/sniperHW/flyfish/server/slot"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	"go.etcd.io/etcd/raft/raftpb"
+	"net"
+	"reflect"
+	"sync"
+	"sync/atomic"
+	"time"
 )
 
 type applyable interface {
@@ -166,8 +167,7 @@ type kvstore struct {
 	shard            int
 	slots            *bitmap.Bitmap
 	meta             db.DBMeta
-	//removeonce       int32
-	//removing         bool
+	memberShip       map[int]bool
 }
 
 func (s *kvstore) hasLease() bool {
@@ -420,7 +420,7 @@ func (s *kvstore) processLinearizableRead(r []raft.LinearizableRead) {
 }
 
 func (s *kvstore) processConfChange(p raft.ProposalConfChange) {
-
+	p.(*ProposalConfChange).reply()
 }
 
 func (s *kvstore) stop() {
@@ -446,39 +446,6 @@ func (s *kvstore) gotLease() {
 			}
 		}
 	}
-}
-
-type TestConfChange struct {
-	raft.ProposalConfChangeBase
-	ch chan error
-}
-
-func (this TestConfChange) GetType() raftpb.ConfChangeType {
-	return this.ConfChangeType
-}
-
-func (this TestConfChange) GetUrl() string {
-	return this.Url
-}
-
-func (this TestConfChange) GetNodeID() uint64 {
-	return this.NodeID
-}
-
-func (this TestConfChange) OnError(err error) {
-
-}
-
-func (s *kvstore) addNode(id uint64, url string) {
-	o := TestConfChange{
-		ProposalConfChangeBase: raft.ProposalConfChangeBase{
-			ConfChangeType: raftpb.ConfChangeAddNode,
-			Url:            url,
-			NodeID:         id,
-		},
-	}
-
-	s.rn.IssueConfChange(o)
 }
 
 func (s *kvstore) serve() {
@@ -517,6 +484,8 @@ func (s *kvstore) serve() {
 				return
 			} else {
 				switch v.(type) {
+				case *consoleMsg:
+					s.onConsoleMsg(v.(*consoleMsg).from, v.(*consoleMsg).m)
 				case error:
 					GetSugar().Errorf("error for raft:%v", v.(error))
 					return
@@ -533,9 +502,14 @@ func (s *kvstore) serve() {
 					s.processConfChange(v.(raft.ProposalConfChange))
 				case raft.ConfChange:
 					c := v.(raft.ConfChange)
-					if c.CCType == raftpb.ConfChangeRemoveNode && c.NodeID == s.kvnode.id {
-						GetSugar().Info("RemoveFromCluster")
-						return
+					if c.CCType == raftpb.ConfChangeRemoveNode {
+						delete(s.memberShip, c.NodeID)
+						if c.NodeID == s.kvnode.id {
+							GetSugar().Info("RemoveFromCluster")
+							return
+						}
+					} else if c.CCType == raftpb.ConfChangeAddNode {
+						s.memberShip[c.NodeID] = true
 					}
 				case raft.ReplayOK:
 					s.ready = true
@@ -580,4 +554,85 @@ func (s *kvstore) serve() {
 			}
 		}
 	}()
+}
+
+type ProposalConfChange struct {
+	raft.ProposalConfChangeBase
+	reply func()
+}
+
+func (this *ProposalConfChange) GetType() raftpb.ConfChangeType {
+	return this.ConfChangeType
+}
+
+func (this *ProposalConfChange) GetUrl() string {
+	return this.Url
+}
+
+func (this *ProposalConfChange) GetNodeID() uint64 {
+	return this.NodeID
+}
+
+func (this *ProposalConfChange) OnError(err error) {
+
+}
+
+func (s *kvstore) onNotifyAddNode(from *net.UDPAddr, msg *sproto.NotifyAddNode) {
+	if s.leader == s.raftID {
+		if s.memberShip[int(msg.NodeID)] {
+			s.kvnode.consoleConn.SendTo(from, &sproto.NotifyAddNodeResp{
+				NodeID: msg.NodeID,
+				Store:  int32(s.shard),
+			})
+		} else {
+			//发起proposal
+			s.rn.IssueConfChange(&ProposalConfChange{
+				ProposalConfChangeBase: raft.ProposalConfChangeBase{
+					ConfChangeType: raftpb.ConfChangeAddNode,
+					Url:            fmt.Sprintf("http://%s:%d", msg.Host, msg.InterPort),
+					NodeID:         uint64((int(msg.NodeID) << 16) + s.shard),
+				},
+				reply: func() {
+					s.kvnode.consoleConn.SendTo(from, &sproto.NotifyAddNodeResp{
+						NodeID: msg.NodeID,
+						Store:  int32(s.shard),
+					})
+				},
+			})
+		}
+	}
+}
+
+func (s *kvstore) onNotifyRemNode(from *net.UDPAddr, msg *sproto.NotifyRemNode) {
+	if s.leader == s.raftID {
+		if !s.memberShip[int(msg.NodeID)] {
+			s.kvnode.consoleConn.SendTo(from, &sproto.NotifyRemNodeResp{
+				NodeID: int32(int(msg.NodeID)),
+				Store:  int32(s.shard),
+			})
+		} else {
+			//发起proposal
+			s.rn.IssueConfChange(&ProposalConfChange{
+				ProposalConfChangeBase: raft.ProposalConfChangeBase{
+					ConfChangeType: raftpb.ConfChangeRemoveNode,
+					NodeID:         uint64((int(msg.NodeID) << 16) + s.shard),
+				},
+				reply: func() {
+					s.kvnode.consoleConn.SendTo(from, &sproto.NotifyRemNodeResp{
+						NodeID: msg.NodeID,
+						Store:  int32(s.shard),
+					})
+				},
+			})
+		}
+	}
+}
+
+func (s *kvstore) onConsoleMsg(from *net.UDPAddr, m proto.Message) {
+	switch m.(type) {
+	case *sproto.NotifyAddNode:
+		s.onNotifyAddNode(from, m.(*sproto.NotifyAddNode))
+	case *sproto.NotifyRemNode:
+		s.onNotifyRemNode(from, m.(*sproto.NotifyRemNode))
+	}
 }
