@@ -27,10 +27,11 @@ func LoadConfig(path string) (*Config, error) {
 type Config struct {
 	Mode string //"cluster"集群模式,"solo"独立模式
 
+	ServiceHost string
+
 	DBType string
 
 	SoloConfig struct {
-		ServiceHost string
 		ServicePort int
 		RaftUrl     string
 		RaftCluster string
@@ -38,12 +39,7 @@ type Config struct {
 	}
 
 	ClusterConfig struct {
-		ClusterID  int
-		DBHost     string
-		DBPort     int
-		DBUser     string
-		DBPassword string
-		ConfDB     string
+		PD string //pd服务地址用;分隔
 	}
 
 	SnapshotCurrentCount int //并行执行快照序列化数量，如果设置为0则取cpu数量
@@ -71,8 +67,7 @@ type Config struct {
 		Port     int
 		User     string
 		Password string
-		DataDB   string
-		MetaDB   string
+		DB       string
 	}
 
 	Log struct {

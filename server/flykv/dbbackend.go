@@ -51,13 +51,13 @@ func (d *sqlDbBackend) start(config *Config) error {
 	dbConfig := config.DBConfig
 
 	for i := 0; i < 5; i++ {
-		dbl, err := sqlOpen(config.DBType, dbConfig.Host, dbConfig.Port, dbConfig.DataDB, dbConfig.User, dbConfig.Password)
+		dbl, err := sqlOpen(config.DBType, dbConfig.Host, dbConfig.Port, dbConfig.DB, dbConfig.User, dbConfig.Password)
 		if nil != err {
 			return err
 		}
 		d.loaders = append(d.loaders, sql.NewLoader(dbl, 200, 5000))
 
-		dbw, err := sqlOpen(config.DBType, dbConfig.Host, dbConfig.Port, dbConfig.DataDB, dbConfig.User, dbConfig.Password)
+		dbw, err := sqlOpen(config.DBType, dbConfig.Host, dbConfig.Port, dbConfig.DB, dbConfig.User, dbConfig.Password)
 		if nil != err {
 			return err
 		}

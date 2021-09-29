@@ -6,13 +6,15 @@ import (
 	"github.com/sniperHW/flyfish/backend/db"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
-	"github.com/sniperHW/flyfish/pkg/net"
+	fnet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/net/cs"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	flyproto "github.com/sniperHW/flyfish/proto"
-	"github.com/sniperHW/flyfish/server/clusterconf"
+	snet "github.com/sniperHW/flyfish/server/net"
+	sproto "github.com/sniperHW/flyfish/server/proto"
 	"github.com/sniperHW/flyfish/server/slot"
+	"net"
 	"os"
 	"runtime"
 	"strconv"
@@ -38,7 +40,7 @@ type kvnode struct {
 	mu sync.Mutex
 
 	muC     sync.Mutex
-	clients map[*net.Socket]*net.Socket
+	clients map[*fnet.Socket]*fnet.Socket
 
 	muS     sync.RWMutex
 	stores  map[int]*kvstore
@@ -54,7 +56,7 @@ type kvnode struct {
 	startOnce   int32
 	metaCreator func(*db.DbDef) (db.DBMeta, error)
 
-	consoleConn *net.Udp
+	consoleConn *fnet.Udp
 
 	selfUrl string
 }
@@ -64,7 +66,7 @@ func verifyLogin(loginReq *flyproto.LoginReq) bool {
 }
 
 func (this *kvnode) startListener() {
-	this.listener.Serve(func(session *net.Socket) {
+	this.listener.Serve(func(session *fnet.Socket) {
 		go func() {
 
 			session.SetUserData(
@@ -84,7 +86,7 @@ func (this *kvnode) startListener() {
 			//只有配置了压缩开启同时客户端支持压缩才开启通信压缩
 			session.SetInBoundProcessor(cs.NewReqInboundProcessor())
 			session.SetEncoder(&cs.RespEncoder{})
-			session.SetCloseCallBack(func(session *net.Socket, reason error) {
+			session.SetCloseCallBack(func(session *fnet.Socket, reason error) {
 				if u := session.GetUserData(); nil != u {
 					switch u.(type) {
 					case *conn:
@@ -96,7 +98,7 @@ func (this *kvnode) startListener() {
 				this.muC.Unlock()
 			})
 
-			session.BeginRecv(func(session *net.Socket, v interface{}) {
+			session.BeginRecv(func(session *fnet.Socket, v interface{}) {
 				c := session.GetUserData()
 				if nil == c {
 					return
@@ -353,6 +355,53 @@ type storeConf struct {
 	slots       *bitmap.Bitmap
 }
 
+func (this *kvnode) getKvnodeBootInfo(serviceHost string, pd []*net.UDPAddr) *sproto.KvnodeBootResp {
+	var resp *sproto.KvnodeBootResp
+
+	for {
+		respCh := make(chan *sproto.KvnodeBootResp)
+		uu := make([]*fnet.Udp, len(pd))
+		for k, v := range pd {
+			u, err := fnet.NewUdp(fmt.Sprintf(":0"), snet.Pack, snet.Unpack)
+			if nil == err {
+				uu[k] = u
+				go func(u *fnet.Udp, pdAddr *net.UDPAddr) {
+					u.SendTo(pdAddr, &sproto.KvnodeBoot{NodeID: int32(this.id), Host: serviceHost})
+					recvbuff := make([]byte, 65535)
+					_, r, err := u.ReadFrom(recvbuff)
+					if nil == err {
+						respCh <- r.(*sproto.KvnodeBootResp)
+					}
+				}(u, v)
+			}
+		}
+
+		ticker := time.NewTicker(3 * time.Second)
+
+		select {
+
+		case v := <-respCh:
+			resp = v
+		case <-ticker.C:
+
+		}
+
+		ticker.Stop()
+
+		for _, v := range uu {
+			if nil != v {
+				v.Close()
+			}
+		}
+
+		if nil != resp {
+			break
+		}
+	}
+
+	return resp
+}
+
 func (this *kvnode) Start() error {
 	var err error
 	if atomic.CompareAndSwapInt32(&this.startOnce, 0, 1) {
@@ -374,7 +423,7 @@ func (this *kvnode) Start() error {
 				return err
 			}
 
-			this.listener, err = cs.NewListener("tcp", fmt.Sprintf("%s:%d", config.SoloConfig.ServiceHost, config.SoloConfig.ServicePort), verifyLogin)
+			this.listener, err = cs.NewListener("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, config.SoloConfig.ServicePort), verifyLogin)
 
 			if nil != err {
 				return err
@@ -396,65 +445,32 @@ func (this *kvnode) Start() error {
 				}
 			}
 
-			GetSugar().Infof("flyfish start:%s:%d", config.SoloConfig.ServiceHost, config.SoloConfig.ServicePort)
+			GetSugar().Infof("flyfish start:%s:%d", config.ServiceHost, config.SoloConfig.ServicePort)
 
 		} else {
 
-			//从DB获取配置
-			clusterConf := config.ClusterConfig
-			kvconf, err := clusterconf.LoadConfigFromDB(clusterConf.ClusterID, config.DBType, clusterConf.DBHost, clusterConf.DBPort, clusterConf.ConfDB, clusterConf.DBUser, clusterConf.DBPassword)
-			if nil != err {
-				return err
-			}
+			pd := strings.Split(config.ClusterConfig.PD, ";")
 
-			var sn *clusterconf.Node
-			var shard int
+			var pdAddr []*net.UDPAddr
 
-			for k, v := range kvconf.Shard {
-				for _, vv := range v {
-					if vv.ID == this.id {
-						sn = vv
-						shard = k
-						break
-					}
-				}
-				if nil != sn {
-					break
+			for _, v := range pd {
+				addr, err := net.ResolveUDPAddr("udp", v)
+				if nil != err {
+					return err
+				} else {
+					pdAddr = append(pdAddr, addr)
 				}
 			}
 
-			if nil == sn {
-				return fmt.Errorf("%d not in clusterconf", this.id)
+			resp := this.getKvnodeBootInfo(config.ServiceHost, pdAddr)
+
+			if !resp.Ok {
+				return errors.New(resp.Reason)
 			}
 
-			makeStoreConf := func() []storeConf {
-				sc := []storeConf{}
-				for _, v := range sn.Stores {
-					s := storeConf{
-						id:    v.Id,
-						slots: v.Slots,
-					}
+			this.selfUrl = fmt.Sprintf("http://%s:%d", config.ServiceHost, resp.InterPort)
 
-					for k, vv := range kvconf.Shard[shard] {
-						if k > 0 {
-							s.raftCluster += ","
-						}
-
-						s.raftCluster += fmt.Sprintf("%d@http://%s:%d", vv.ID, vv.HostIP, vv.InterPort)
-
-					}
-
-					sc = append(sc, s)
-
-				}
-				return sc
-			}
-
-			sc := makeStoreConf()
-
-			this.selfUrl = fmt.Sprintf("http://%s:%d", sn.HostIP, sn.InterPort)
-
-			err = this.initConsole(fmt.Sprintf("%s:%d", sn.HostIP, sn.InterPort))
+			err = this.initConsole(fmt.Sprintf("%s:%d", config.ServiceHost, resp.InterPort))
 
 			if nil != err {
 				return err
@@ -466,7 +482,7 @@ func (this *kvnode) Start() error {
 				return err
 			}
 
-			this.listener, err = cs.NewListener("tcp", fmt.Sprintf("%s:%d", sn.HostIP, sn.ServicePort), verifyLogin)
+			this.listener, err = cs.NewListener("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, resp.ServicePort), verifyLogin)
 
 			if nil != err {
 				return err
@@ -478,17 +494,19 @@ func (this *kvnode) Start() error {
 
 			atomic.StoreInt32(&this.running, 1)
 
-			//添加store
-			if len(sc) > 0 {
-				for _, v := range sc {
-					if err = this.addStore(this.meta, v.id, v.raftCluster, v.slots); nil != err {
-						return err
-					}
+			for _, v := range resp.Stores {
+				slots, err := bitmap.CreateFromJson(v.Slots)
+
+				if nil != err {
+					return err
+				}
+
+				if err = this.addStore(this.meta, int(v.Id), v.RaftCluster, slots); nil != err {
+					return err
 				}
 			}
 
-			GetSugar().Infof("flyfish start:%s:%d", sn.HostIP, sn.ServicePort)
-
+			GetSugar().Infof("flyfish start:%s:%d", config.ServiceHost, resp.ServicePort)
 		}
 
 	}
@@ -522,7 +540,7 @@ func NewKvNode(id int, config *Config, metaDef *db.DbDef, metaCreator func(*db.D
 	return &kvnode{
 		id:          id,
 		mutilRaft:   raft.NewMutilRaft(),
-		clients:     map[*net.Socket]*net.Socket{},
+		clients:     map[*fnet.Socket]*fnet.Socket{},
 		stores:      map[int]*kvstore{},
 		db:          db,
 		meta:        meta,

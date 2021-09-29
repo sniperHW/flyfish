@@ -140,7 +140,7 @@ message storeInfo {
 message kvnodeBootResp {
   optional bool   ok           = 1;
   optional string reason       = 2;
-  optional string serviceProt  = 3;
+  optional string servicePort  = 3;
   optional string interPort    = 4;   
   repeated storeInfo stores    = 5;
 }
