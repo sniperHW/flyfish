@@ -1,4 +1,4 @@
-package db
+package mock
 
 import (
 	"github.com/sniperHW/flyfish/backend/db"
@@ -7,14 +7,14 @@ import (
 	"sync/atomic"
 )
 
-type kv struct {
+type dbkv struct {
 	uniKey  string
 	version int64
 	fields  map[string]*flyproto.Field //字段
 }
 
 type DB struct {
-	store     map[string]*kv
+	store     map[string]*dbkv
 	que       *queue.ArrayQueue
 	stoponce  int32
 	startonce int32
@@ -47,7 +47,7 @@ func (d *DB) do(v interface{}) {
 						k.fields[n] = vv
 					}
 				} else {
-					k := &kv{
+					k := &dbkv{
 						uniKey:  t.GetUniKey(),
 						version: s.Version,
 						fields:  map[string]*flyproto.Field{},
@@ -118,9 +118,9 @@ func (d *DB) IssueTask(t interface{}) error {
 	return d.que.Append(t)
 }
 
-func New() *DB {
+func NewDB() *DB {
 	return &DB{
-		store: map[string]*kv{},
+		store: map[string]*dbkv{},
 		que:   queue.NewArrayQueue(1000),
 	}
 }

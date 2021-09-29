@@ -182,23 +182,6 @@ func (this *proposalReader) read() (isOver bool, ptype proposalType, data interf
 				data = slots
 			case proposal_none:
 				err = errors.New("bad data 2")
-			case proposal_tbmeta:
-
-				var l int32
-				l, err = this.reader.CheckGetInt32()
-				if nil != err {
-					return
-				}
-
-				var bb []byte
-				bb, err = this.reader.CopyBytes(int(l))
-				if nil != err {
-					return
-				}
-
-				data = bb
-				return
-
 			case proposal_lease:
 				var id int32
 				id, err = this.reader.CheckGetInt32()

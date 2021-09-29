@@ -26,8 +26,7 @@ const (
 	proposal_update   = proposalType(2) //fields变更
 	proposal_kick     = proposalType(3) //从缓存移除kv
 	proposal_lease    = proposalType(4) //数据库update权租约
-	proposal_tbmeta   = proposalType(5) //表格元信息
-	proposal_slots    = proposalType(6)
+	proposal_slots    = proposalType(5)
 )
 
 type dbUpdateTask struct {

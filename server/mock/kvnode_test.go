@@ -1,4 +1,4 @@
-package kvnode
+package mock
 
 //go test -covermode=count -v -coverprofile=coverage.out -run=.
 //go tool cover -html=coverage.out
@@ -314,10 +314,10 @@ var metaStr string = `
 `
 
 func TestMockKvNode(t *testing.T) {
-	n := New()
+	n := NewKvNode()
 	def, _ := db.CreateDbDefFromJsonString([]byte(metaStr))
 	assert.Nil(t, n.Start(false, "localhost:8110", "localhost:8110", def))
-	c := client.OpenClient("localhost:8110")
+	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:8110"})
 	test(t, c)
 	time.Sleep(time.Second)
 }

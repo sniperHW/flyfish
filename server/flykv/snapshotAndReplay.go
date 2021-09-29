@@ -3,7 +3,6 @@ package flykv
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/sniperHW/flyfish/backend/db"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/buffer"
@@ -105,9 +104,7 @@ func (s *kvstore) snapMerge(snaps ...[]byte) ([]byte, error) {
 				break
 			}
 
-			if ptype == proposal_tbmeta {
-				//tbmeta = data.([]byte)
-			} else if ptype == proposal_lease {
+			if ptype == proposal_lease {
 				lease = data.(pplease)
 			} else if ptype == proposal_slots {
 				slots = data.(*bitmap.Bitmap)
@@ -255,23 +252,7 @@ func (s *kvstore) replayFromBytes(callByReplaySnapshot bool, b []byte) error {
 			return nil
 		}
 
-		if ptype == proposal_tbmeta {
-			def, err := db.CreateDbDefFromJsonString(data.([]byte))
-			if nil != err {
-				return err
-			}
-
-			meta, err := s.kvnode.metaCreator(def)
-
-			if nil != err {
-				return err
-			}
-
-			if meta.GetVersion() > s.meta.GetVersion() {
-				s.meta = meta
-			}
-
-		} else if ptype == proposal_lease {
+		if ptype == proposal_lease {
 			p := data.(pplease)
 			s.lease.update(p.nodeid, p.begtime)
 		} else if ptype == proposal_slots {

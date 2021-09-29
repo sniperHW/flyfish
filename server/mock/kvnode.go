@@ -1,4 +1,4 @@
-package kvnode
+package mock
 
 import (
 	"fmt"
@@ -798,7 +798,7 @@ func (this *Node) initHandler() *Node {
 
 }
 
-func New() *Node {
+func NewKvNode() *Node {
 	n := &Node{store: map[string]*kv{}}
 	return n.initHandler()
 }
