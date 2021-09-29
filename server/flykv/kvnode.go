@@ -213,6 +213,7 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, cluster string, slots 
 		slots:      slots,
 		meta:       meta,
 		memberShip: map[int]bool{},
+		slotsKvMap: map[int]map[string]*kv{},
 	}
 
 	rn := raft.NewRaftNode(store.snapMerge, this.mutilRaft, mainQueue, (this.id<<16)+storeID, peers, false, this.config.Log.LogDir, "kvnode")

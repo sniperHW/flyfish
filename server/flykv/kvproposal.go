@@ -39,7 +39,7 @@ func (this *kvProposal) OnError(err error) {
 				f.reply(errcode.New(errcode.Errcode_error, err.Error()), nil, 0)
 				this.keyValue.pendingCmd.popFront()
 			}
-			delete(this.keyValue.store.keyvals[this.keyValue.groupID].kv, this.keyValue.uniKey)
+			this.keyValue.store.deleteKv(this.keyValue, false)
 		} else {
 			this.keyValue.process(nil)
 		}
@@ -80,12 +80,7 @@ func (this *kvProposal) apply() {
 			this.keyValue.pendingCmd.popFront()
 		}
 
-		delete(this.keyValue.store.keyvals[this.keyValue.groupID].kv, this.keyValue.uniKey)
-
-		this.keyValue.store.keyvals[this.keyValue.groupID].kicks[this.keyValue.uniKey] = true
-
-		//从LRU删除
-		this.keyValue.store.lru.removeLRU(&this.keyValue.lru)
+		this.keyValue.store.deleteKv(this.keyValue, true)
 
 	} else {
 

@@ -184,7 +184,7 @@ func (this *dbLoadTask) onResultError(err errcode.Error) {
 			f.reply(err, nil, 0)
 			this.keyValue.pendingCmd.popFront()
 		}
-		delete(this.keyValue.store.keyvals[this.keyValue.groupID].kv, this.keyValue.uniKey)
+		this.keyValue.store.deleteKv(this.keyValue, false)
 	})
 }
 

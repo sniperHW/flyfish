@@ -109,10 +109,12 @@ func (this *lruList) updateLRU(e *lruElement) {
 }
 
 func (this *lruList) removeLRU(e *lruElement) {
-	e.pprev.nnext = e.nnext
-	e.nnext.pprev = e.pprev
-	e.nnext = nil
-	e.pprev = nil
+	if e.nnext != nil && e.pprev != nil {
+		e.pprev.nnext = e.nnext
+		e.nnext.pprev = e.pprev
+		e.nnext = nil
+		e.pprev = nil
+	}
 }
 
 type kvmgr struct {
@@ -156,6 +158,7 @@ type kvstore struct {
 	rn               *raft.RaftNode
 	mainQueue        applicationQueue
 	keyvals          []kvmgr
+	slotsKvMap       map[int]map[string]*kv
 	db               dbbackendI
 	lru              lruList
 	wait4ReplyCount  int32
@@ -168,6 +171,7 @@ type kvstore struct {
 	slots            *bitmap.Bitmap
 	meta             db.DBMeta
 	memberShip       map[int]bool
+	slotsTransferOut map[int]*SlotTransferProposal //正在迁出的slot
 }
 
 func (s *kvstore) hasLease() bool {
@@ -201,7 +205,19 @@ func (s *kvstore) addCliMessage(msg clientRequest) {
 
 const kvCmdQueueSize = 32
 
-func (s *kvstore) newkv(groupID int, unikey string, key string, table string) (*kv, errcode.Error) {
+func (s *kvstore) deleteKv(k *kv, kick bool) {
+	delete(s.keyvals[k.groupID].kv, k.uniKey)
+	sl := s.slotsKvMap[k.slot]
+	if nil != sl {
+		delete(sl, k.uniKey)
+	}
+	s.lru.removeLRU(&k.lru)
+	if kick {
+		s.keyvals[k.groupID].kicks[k.uniKey] = true
+	}
+}
+
+func (s *kvstore) newkv(slot int, groupID int, unikey string, key string, table string) (*kv, errcode.Error) {
 	tbmeta := s.meta.GetTableMeta(table)
 
 	if nil == tbmeta {
@@ -215,6 +231,7 @@ func (s *kvstore) newkv(groupID int, unikey string, key string, table string) (*
 		tbmeta:  tbmeta,
 		store:   s,
 		groupID: groupID,
+		slot:    slot,
 	}
 	kv.lru.keyvalue = kv
 	kv.updateTask = dbUpdateTask{
@@ -245,20 +262,21 @@ func (this *kvstore) tryKick(kv *kv) bool {
 }
 
 func (s *kvstore) checkLru(ch chan struct{}) {
-	defer func() {
-		select {
-		case ch <- struct{}{}:
-		default:
-		}
-	}()
-
-	if s.lru.head.nnext != &s.lru.tail {
-		cur := s.lru.tail.pprev
-		for cur != &s.lru.head && len(s.keyvals) > s.kvnode.config.MaxCachePerStore {
-			if !s.tryKick(cur.keyvalue) {
-				return
+	if s.ready && s.leader == s.raftID {
+		defer func() {
+			select {
+			case ch <- struct{}{}:
+			default:
 			}
-			cur = cur.pprev
+		}()
+		if s.lru.head.nnext != &s.lru.tail {
+			cur := s.lru.tail.pprev
+			for cur != &s.lru.head && len(s.keyvals) > s.kvnode.config.MaxCachePerStore {
+				if !s.tryKick(cur.keyvalue) {
+					return
+				}
+				cur = cur.pprev
+			}
 		}
 	}
 }
@@ -322,6 +340,16 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 		return
 	}
 
+	if s.slotsTransferOut[slot] != nil {
+		//正在迁出
+		req.from.send(&cs.RespMessage{
+			Cmd:   req.msg.Cmd,
+			Seqno: req.msg.Seqno,
+			Err:   errcode.New(errcode.Errcode_slot_transfering, ""),
+		})
+		return
+	}
+
 	if s.leader != s.raftID {
 		req.from.send(&cs.RespMessage{
 			Cmd:   req.msg.Cmd,
@@ -365,7 +393,7 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 					return
 				} else {
 					table, key := splitUniKey(req.msg.UniKey)
-					keyvalue, err = s.newkv(groupID, req.msg.UniKey, key, table)
+					keyvalue, err = s.newkv(slot, groupID, req.msg.UniKey, key, table)
 					if nil != err {
 						req.from.send(&cs.RespMessage{
 							Cmd:   req.msg.Cmd,
@@ -375,6 +403,14 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 						return
 					} else {
 						s.keyvals[keyvalue.groupID].kv[req.msg.UniKey] = keyvalue
+						sl := s.slotsKvMap[slot]
+						if nil != sl {
+							sl[req.msg.UniKey] = keyvalue
+						} else {
+							sl = map[string]*kv{}
+							sl[req.msg.UniKey] = keyvalue
+							s.slotsKvMap[slot] = sl
+						}
 					}
 				}
 			}
@@ -548,6 +584,8 @@ func (s *kvstore) serve() {
 						s.needWriteBackAll = true
 						s.lease.becomeLeader()
 					}
+				case *SlotTransferProposal:
+					s.processKickSlots(v.(*SlotTransferProposal))
 				default:
 					GetSugar().Infof("here %v %s", v, reflect.TypeOf(v).String())
 				}
@@ -629,6 +667,26 @@ func (s *kvstore) onNotifySlotTransIn(from *net.UDPAddr, msg *sproto.NotifySlotT
 	}
 }
 
+func (s *kvstore) processKickSlots(p *SlotTransferProposal) {
+	kvs := s.slotsKvMap[p.slot]
+	if s.ready && (nil == kvs || 0 == len(kvs)) {
+		delete(s.slotsTransferOut, p.slot)
+		s.slots.Clear(p.slot)
+		if nil != p.reply {
+			p.reply()
+		}
+		return
+	} else if s.leader == s.raftID {
+		for _, v := range kvs {
+			s.tryKick(v)
+		}
+	}
+
+	p.timer = time.AfterFunc(time.Millisecond*100, func() {
+		s.mainQueue.AppendHighestPriotiryItem(p)
+	})
+}
+
 func (s *kvstore) onNotifySlotTransOut(from *net.UDPAddr, msg *sproto.NotifySlotTransOut) {
 	if s.leader == s.raftID {
 		slot := int(msg.Slot)
@@ -637,16 +695,18 @@ func (s *kvstore) onNotifySlotTransOut(from *net.UDPAddr, msg *sproto.NotifySlot
 				Slot: msg.Slot,
 			})
 		} else {
-			s.rn.IssueProposal(&SlotTransferProposal{
-				slot:         slot,
-				transferType: slotTransferOut,
-				store:        s,
-				reply: func() {
-					s.kvnode.consoleConn.SendTo(from, &sproto.NotifySlotTransOutResp{
-						Slot: msg.Slot,
-					})
-				},
-			})
+			if nil == s.slotsTransferOut[slot] {
+				s.rn.IssueProposal(&SlotTransferProposal{
+					slot:         slot,
+					transferType: slotTransferOut,
+					store:        s,
+					reply: func() {
+						s.kvnode.consoleConn.SendTo(from, &sproto.NotifySlotTransOutResp{
+							Slot: msg.Slot,
+						})
+					},
+				})
+			}
 		}
 	}
 }

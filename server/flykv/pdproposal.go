@@ -7,6 +7,7 @@ import (
 	//flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	"go.etcd.io/etcd/raft/raftpb"
+	"time"
 )
 
 type ProposalConfChange struct {
@@ -42,6 +43,7 @@ type SlotTransferProposal struct {
 	transferType slotTransferType
 	store        *kvstore
 	reply        func()
+	timer        *time.Timer
 }
 
 func (this *SlotTransferProposal) Isurgent() bool {
@@ -79,10 +81,11 @@ func (this *SlotTransferProposal) OnMergeFinish(b []byte) (ret []byte) {
 func (this *SlotTransferProposal) apply() {
 	if this.transferType == slotTransferIn {
 		this.store.slots.Set(this.slot)
+		if nil != this.reply {
+			this.reply()
+		}
 	} else if this.transferType == slotTransferOut {
-		this.store.slots.Clear(this.slot)
-	}
-	if nil != this.reply {
-		this.reply()
+		this.store.slotsTransferOut[this.slot] = this
+		this.store.processKickSlots(this)
 	}
 }

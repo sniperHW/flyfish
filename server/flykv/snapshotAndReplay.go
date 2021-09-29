@@ -292,17 +292,34 @@ func (s *kvstore) replayFromBytes(callByReplaySnapshot bool, b []byte) error {
 				} else {
 					var e errcode.Error
 					table, key := splitUniKey(p.unikey)
-					keyvalue, e = s.newkv(groupID, p.unikey, key, table)
+					slot := sslot.Unikey2Slot(p.unikey)
+					keyvalue, e = s.newkv(slot, groupID, p.unikey, key, table)
 					if nil != e {
 						return fmt.Errorf("bad data,%s is no table define", p.unikey)
 					}
 					s.keyvals[groupID].kv[p.unikey] = keyvalue
+
+					sl := s.slotsKvMap[slot]
+					if nil != sl {
+						sl[p.unikey] = keyvalue
+					} else {
+						sl = map[string]*kv{}
+						sl[p.unikey] = keyvalue
+						s.slotsKvMap[slot] = sl
+					}
+
 				}
 			}
 
 			switch ptype {
 			case proposal_kick:
 				delete(s.keyvals[groupID].kv, p.unikey)
+				slot := sslot.Unikey2Slot(p.unikey)
+
+				sl := s.slotsKvMap[slot]
+				if nil != sl {
+					delete(sl, p.unikey)
+				}
 
 				if !callByReplaySnapshot {
 					s.keyvals[groupID].kicks[p.unikey] = true
@@ -338,6 +355,7 @@ func (s *kvstore) replayFromBytes(callByReplaySnapshot bool, b []byte) error {
 				}
 
 				s.lru.updateLRU(&keyvalue.lru)
+
 			}
 			GetSugar().Debugf("%s ok", p.unikey)
 		}

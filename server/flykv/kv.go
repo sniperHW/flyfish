@@ -50,6 +50,7 @@ type cmdQueue struct {
 }
 
 type kv struct {
+	slot          int
 	lru           lruElement
 	uniKey        string //"table:key"组成的唯一全局唯一键
 	key           string
@@ -155,7 +156,7 @@ func (this *kv) process(cmd cmdI) {
 			if !this.store.db.issueLoad(l) {
 				GetSugar().Infof("reply retry")
 				cmd.reply(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"), nil, 0)
-				delete(this.store.keyvals[this.groupID].kv, this.uniKey)
+				this.store.deleteKv(this, false)
 			} else {
 				this.asynTaskCount++
 				this.state = kv_loading
