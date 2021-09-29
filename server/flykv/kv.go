@@ -21,12 +21,13 @@ const (
 )
 
 const (
-	proposal_none     = proposalType(0)
-	proposal_snapshot = proposalType(1) //全量数据kv快照,
-	proposal_update   = proposalType(2) //fields变更
-	proposal_kick     = proposalType(3) //从缓存移除kv
-	proposal_lease    = proposalType(4) //数据库update权租约
-	proposal_slots    = proposalType(5)
+	proposal_none          = proposalType(0)
+	proposal_snapshot      = proposalType(1) //全量数据kv快照,
+	proposal_update        = proposalType(2) //fields变更
+	proposal_kick          = proposalType(3) //从缓存移除kv
+	proposal_lease         = proposalType(4) //数据库update权租约
+	proposal_slots         = proposalType(5)
+	proposal_slot_transfer = proposalType(6)
 )
 
 type dbUpdateTask struct {
@@ -41,20 +42,6 @@ type dbUpdateTask struct {
 type dbLoadTask struct {
 	keyValue *kv
 	cmd      cmdI
-}
-
-type kvProposal struct {
-	dbstate  db.DBState
-	ptype    proposalType
-	fields   map[string]*flyproto.Field
-	version  int64
-	cmds     []cmdI
-	keyValue *kv
-}
-
-type kvLinearizableRead struct {
-	keyValue *kv
-	cmds     []cmdI
 }
 
 type cmdQueue struct {

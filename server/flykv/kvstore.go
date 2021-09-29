@@ -556,27 +556,6 @@ func (s *kvstore) serve() {
 	}()
 }
 
-type ProposalConfChange struct {
-	raft.ProposalConfChangeBase
-	reply func()
-}
-
-func (this *ProposalConfChange) GetType() raftpb.ConfChangeType {
-	return this.ConfChangeType
-}
-
-func (this *ProposalConfChange) GetUrl() string {
-	return this.Url
-}
-
-func (this *ProposalConfChange) GetNodeID() uint64 {
-	return this.NodeID
-}
-
-func (this *ProposalConfChange) OnError(err error) {
-
-}
-
 func (s *kvstore) onNotifyAddNode(from *net.UDPAddr, msg *sproto.NotifyAddNode) {
 	if s.leader == s.raftID {
 		if s.memberShip[int(msg.NodeID)] {
@@ -628,11 +607,59 @@ func (s *kvstore) onNotifyRemNode(from *net.UDPAddr, msg *sproto.NotifyRemNode) 
 	}
 }
 
+func (s *kvstore) onNotifySlotTransIn(from *net.UDPAddr, msg *sproto.NotifySlotTransIn) {
+	if s.leader == s.raftID {
+		slot := int(msg.Slot)
+		if s.slots.Test(slot) {
+			s.kvnode.consoleConn.SendTo(from, &sproto.NotifySlotTransInResp{
+				Slot: msg.Slot,
+			})
+		} else {
+			s.rn.IssueProposal(&SlotTransferProposal{
+				slot:         slot,
+				transferType: slotTransferIn,
+				store:        s,
+				reply: func() {
+					s.kvnode.consoleConn.SendTo(from, &sproto.NotifySlotTransInResp{
+						Slot: msg.Slot,
+					})
+				},
+			})
+		}
+	}
+}
+
+func (s *kvstore) onNotifySlotTransOut(from *net.UDPAddr, msg *sproto.NotifySlotTransOut) {
+	if s.leader == s.raftID {
+		slot := int(msg.Slot)
+		if !s.slots.Test(slot) {
+			s.kvnode.consoleConn.SendTo(from, &sproto.NotifySlotTransOutResp{
+				Slot: msg.Slot,
+			})
+		} else {
+			s.rn.IssueProposal(&SlotTransferProposal{
+				slot:         slot,
+				transferType: slotTransferOut,
+				store:        s,
+				reply: func() {
+					s.kvnode.consoleConn.SendTo(from, &sproto.NotifySlotTransOutResp{
+						Slot: msg.Slot,
+					})
+				},
+			})
+		}
+	}
+}
+
 func (s *kvstore) onConsoleMsg(from *net.UDPAddr, m proto.Message) {
 	switch m.(type) {
 	case *sproto.NotifyAddNode:
 		s.onNotifyAddNode(from, m.(*sproto.NotifyAddNode))
 	case *sproto.NotifyRemNode:
 		s.onNotifyRemNode(from, m.(*sproto.NotifyRemNode))
+	case *sproto.NotifySlotTransIn:
+		s.onNotifySlotTransIn(from, m.(*sproto.NotifySlotTransIn))
+	case *sproto.NotifySlotTransOut:
+		s.onNotifySlotTransOut(from, m.(*sproto.NotifySlotTransOut))
 	}
 }

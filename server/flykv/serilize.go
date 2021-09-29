@@ -168,18 +168,35 @@ func (this *proposalReader) read() (isOver bool, ptype proposalType, data interf
 				var l int32
 				l, err = this.reader.CheckGetInt32()
 				if nil != err {
-					GetSugar().Errorf("here1")
 					return
 				}
 				var bb []byte
 				bb, err = this.reader.CopyBytes(int(l))
 				if nil != err {
-					GetSugar().Errorf("here2:%d", l)
 					return
 				}
 				var slots *bitmap.Bitmap
 				slots, err = bitmap.CreateFromJson(bb)
 				data = slots
+			case proposal_slot_transfer:
+				var tt byte
+				tt, err = this.reader.CheckGetByte()
+				if nil != err {
+					return
+				}
+
+				var slot int32
+				slot, err = this.reader.CheckGetInt32()
+				if nil != err {
+					return
+				}
+
+				data = &SlotTransferProposal{
+					slot:         int(slot),
+					transferType: slotTransferType(tt),
+				}
+				return
+
 			case proposal_none:
 				err = errors.New("bad data 2")
 			case proposal_lease:

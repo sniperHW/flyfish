@@ -255,6 +255,10 @@ func (s *kvstore) replayFromBytes(callByReplaySnapshot bool, b []byte) error {
 		if ptype == proposal_lease {
 			p := data.(pplease)
 			s.lease.update(p.nodeid, p.begtime)
+		} else if ptype == proposal_slot_transfer {
+			p := data.(*SlotTransferProposal)
+			p.store = s
+			p.apply()
 		} else if ptype == proposal_slots {
 			s.slots = data.(*bitmap.Bitmap)
 		} else {

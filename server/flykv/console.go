@@ -43,6 +43,24 @@ func (this *kvnode) processConsoleMsg(from *net.UDPAddr, m proto.Message) {
 			}
 		}
 		this.muS.RUnlock()
+
+	case *sproto.NotifySlotTransIn, *sproto.NotifySlotTransOut:
+		var store int
+		switch m.(type) {
+		case *sproto.NotifySlotTransIn:
+			store = int(m.(*sproto.NotifySlotTransIn).Store)
+		case *sproto.NotifySlotTransOut:
+			store = int(m.(*sproto.NotifySlotTransOut).Store)
+		}
+
+		this.muS.RLock()
+		if s, ok := this.stores[int(store)]; ok {
+			s.mainQueue.AppendHighestPriotiryItem(&consoleMsg{
+				from: from,
+				m:    m,
+			})
+		}
+		this.muS.RUnlock()
 	}
 }
 

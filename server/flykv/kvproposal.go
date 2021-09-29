@@ -7,6 +7,20 @@ import (
 	flyproto "github.com/sniperHW/flyfish/proto"
 )
 
+type kvProposal struct {
+	dbstate  db.DBState
+	ptype    proposalType
+	fields   map[string]*flyproto.Field
+	version  int64
+	cmds     []cmdI
+	keyValue *kv
+}
+
+type kvLinearizableRead struct {
+	keyValue *kv
+	cmds     []cmdI
+}
+
 func (this *kvProposal) Isurgent() bool {
 	return false
 }
