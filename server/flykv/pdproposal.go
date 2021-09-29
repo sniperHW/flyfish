@@ -85,7 +85,15 @@ func (this *SlotTransferProposal) apply() {
 			this.reply()
 		}
 	} else if this.transferType == slotTransferOut {
-		this.store.slotsTransferOut[this.slot] = this
-		this.store.processKickSlots(this)
+		p := this.store.slotsTransferOut[this.slot]
+		if nil == p {
+			this.store.slotsTransferOut[this.slot] = this
+			this.store.processKickSlots(this)
+		} else {
+			//应答最后一个请求
+			if this.reply != nil {
+				p.reply = this.reply
+			}
+		}
 	}
 }
