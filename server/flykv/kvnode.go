@@ -247,19 +247,17 @@ func (this *kvnode) Stop() {
 		}
 		this.muC.Unlock()
 
-		//等待所有store响应处理请求
+		//等待所有store响应处理请求以及回写完毕
 		waitCondition(func() bool {
 			this.muS.RLock()
 			defer this.muS.RUnlock()
 			for _, v := range this.stores {
-				if atomic.LoadInt32(&v.wait4ReplyCount) != 0 {
+				if atomic.LoadInt32(&v.wait4ReplyCount) != 0 || atomic.LoadInt32(&v.dbWriteBackCount) != 0 {
 					return false
 				}
 			}
 			return true
 		})
-
-		this.db.stop()
 
 		//关闭现有连接
 		this.muC.Lock()
@@ -293,6 +291,8 @@ func (this *kvnode) Stop() {
 		if nil != this.consoleConn {
 			this.consoleConn.Close()
 		}
+
+		this.db.stop()
 
 	}
 }

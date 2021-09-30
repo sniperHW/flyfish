@@ -41,10 +41,6 @@ func (this *updater) IssueUpdateTask(t db.DBUpdateTask) error {
 	return this.que.ForceAppend(t)
 }
 
-func (this *updater) isStoped() bool {
-	return atomic.LoadInt32(&this.stoped) == 1
-}
-
 func (this *updater) Stop() {
 	if atomic.CompareAndSwapInt32(&this.stoped, 0, 1) {
 		this.que.Close()
@@ -133,16 +129,15 @@ func (this *updater) exec(v interface{}) {
 				if nil == err {
 					break
 				} else {
-					GetSugar().Errorf("%s %v", str, err)
-					if this.isStoped() || !task.CheckUpdateLease() {
-						task.ReleaseLock()
+					GetSugar().Errorf("sqlUpdater exec %s %v", str, err)
+					if !task.CheckUpdateLease() {
+						task.ClearUpdateStateAndReleaseLock()
 						return
 					} else {
 						if isRetryError(err) {
 							//休眠一秒重试
 							time.Sleep(time.Second)
 						} else {
-							GetSugar().Errorf("sqlUpdater exec error:%v", err)
 							break
 						}
 					}

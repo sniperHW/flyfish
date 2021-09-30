@@ -5,6 +5,7 @@ import (
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
 	flyproto "github.com/sniperHW/flyfish/proto"
+	"sync/atomic"
 )
 
 func (this *dbUpdateTask) isDoing() bool {
@@ -21,6 +22,7 @@ func (this *dbUpdateTask) ReleaseLock() {
 	this.Lock()
 	defer this.Unlock()
 	this.doing = false
+	atomic.AddInt32(&this.keyValue.store.dbWriteBackCount, -1)
 }
 
 func (this *dbUpdateTask) Dirty() bool {
@@ -36,6 +38,7 @@ func (this *dbUpdateTask) ClearUpdateStateAndReleaseLock() {
 	this.updateFields = map[string]*flyproto.Field{}
 	this.doing = false
 	this.dbstate = db.DBState_none
+	atomic.AddInt32(&this.keyValue.store.dbWriteBackCount, -1)
 }
 
 func (this *dbUpdateTask) GetUpdateAndClearUpdateState() (updateState db.UpdateState) {
@@ -88,10 +91,8 @@ func (this *dbUpdateTask) issueFullDbWriteBack() error {
 	}
 
 	this.doing = true
-	if !this.keyValue.store.db.issueUpdate(this) {
-		this.doing = false
-		return errors.New("issueUpdate failed")
-	}
+	atomic.AddInt32(&this.keyValue.store.dbWriteBackCount, 1)
+	this.keyValue.store.db.issueUpdate(this) //这里不会出错，db要到最后才会stop
 
 	return nil
 }
@@ -150,10 +151,8 @@ func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields 
 
 	if !this.doing {
 		this.doing = true
-		if !this.keyValue.store.db.issueUpdate(this) {
-			this.doing = false
-			return errors.New("issueUpdate failed")
-		}
+		atomic.AddInt32(&this.keyValue.store.dbWriteBackCount, 1)
+		this.keyValue.store.db.issueUpdate(this)
 	}
 
 	return nil

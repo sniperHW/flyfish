@@ -163,7 +163,7 @@ type kvstore struct {
 	lru              lruList
 	wait4ReplyCount  int32
 	lease            *lease
-	stoponce         int32
+	stoped           int32
 	ready            bool
 	kvnode           *kvnode
 	needWriteBackAll bool
@@ -172,6 +172,7 @@ type kvstore struct {
 	meta             db.DBMeta
 	memberShip       map[int]bool
 	slotsTransferOut map[int]*SlotTransferProposal //正在迁出的slot
+	dbWriteBackCount int32
 }
 
 func (s *kvstore) hasLease() bool {
@@ -271,7 +272,7 @@ func (this *kvstore) tryKick(kv *kv) bool {
 }
 
 func (s *kvstore) checkLru(ch chan struct{}) {
-	if s.ready && s.leader == s.raftID {
+	if s.ready && s.leader == s.raftID && atomic.LoadInt32(&s.stoped) == 0 {
 		defer func() {
 			select {
 			case ch <- struct{}{}:
@@ -457,7 +458,7 @@ func (s *kvstore) processConfChange(p raft.ProposalConfChange) {
 }
 
 func (s *kvstore) stop() {
-	if atomic.CompareAndSwapInt32(&s.stoponce, 0, 1) {
+	if atomic.CompareAndSwapInt32(&s.stoped, 0, 1) {
 		s.lease.stop()
 		s.rn.Stop()
 	}
@@ -490,102 +491,100 @@ func (s *kvstore) serve() {
 			interval = 1000
 		}
 
-		for {
+		for atomic.LoadInt32(&s.stoped) == 0 {
 			time.Sleep(time.Millisecond * interval)
-			if nil != s.mainQueue.q.Append(0, func() {
+			err := s.mainQueue.q.Append(0, func() {
 				s.checkLru(ch)
-			}) {
+			})
+			if nil == err {
+				<-ch
+			} else if err == queue.ErrQueueClosed {
 				return
 			}
-			<-ch
 		}
 	}()
 
 	go func() {
-
 		defer func() {
 			s.stop()
 			s.kvnode.muS.Lock()
 			delete(s.kvnode.stores, s.shard)
 			s.kvnode.muS.Unlock()
+			s.mainQueue.close()
 		}()
 
 		for {
-			closed, v := s.mainQueue.pop()
-			if closed {
-				GetSugar().Info("mainQueue stop")
-				return
-			} else {
-				switch v.(type) {
-				case *consoleMsg:
-					s.onConsoleMsg(v.(*consoleMsg).from, v.(*consoleMsg).m)
-				case error:
-					GetSugar().Errorf("error for raft:%v", v.(error))
-					return
-				case func():
-					v.(func())()
-				case clientRequest:
-					s.processClientMessage(v.(clientRequest))
-				case raft.Committed:
-					c := v.(raft.Committed)
-					s.processCommited(&c)
-				case []raft.LinearizableRead:
-					s.processLinearizableRead(v.([]raft.LinearizableRead))
-				case raft.ProposalConfChange:
-					s.processConfChange(v.(raft.ProposalConfChange))
-				case raft.ConfChange:
-					c := v.(raft.ConfChange)
-					if c.CCType == raftpb.ConfChangeRemoveNode {
-						delete(s.memberShip, c.NodeID)
-						if c.NodeID == s.kvnode.id {
-							GetSugar().Info("RemoveFromCluster")
-							return
-						}
-					} else if c.CCType == raftpb.ConfChangeAddNode {
-						s.memberShip[c.NodeID] = true
-					}
-				case raft.ReplayOK:
-					s.ready = true
-				case raft.RaftStopOK:
-					GetSugar().Info("RaftStopOK")
-					return
-				case raftpb.Snapshot:
-					snapshot := v.(raftpb.Snapshot)
+			_, v := s.mainQueue.pop()
 
-					GetSugar().Infof("%x loading snapshot at term %d and index %d", s.rn.ID(), snapshot.Metadata.Term, snapshot.Metadata.Index)
-					r := newSnapshotReader(snapshot.Data)
-					var data []byte
-					var isOver bool
-					var err error
-					for {
-						isOver, data, err = r.read()
-						if isOver {
-							break
-						} else if nil != err {
+			switch v.(type) {
+			case *consoleMsg:
+				s.onConsoleMsg(v.(*consoleMsg).from, v.(*consoleMsg).m)
+			case error:
+				GetSugar().Errorf("error for raft:%v", v.(error))
+				return
+			case func():
+				v.(func())()
+			case clientRequest:
+				s.processClientMessage(v.(clientRequest))
+			case raft.Committed:
+				c := v.(raft.Committed)
+				s.processCommited(&c)
+			case []raft.LinearizableRead:
+				s.processLinearizableRead(v.([]raft.LinearizableRead))
+			case raft.ProposalConfChange:
+				s.processConfChange(v.(raft.ProposalConfChange))
+			case raft.ConfChange:
+				c := v.(raft.ConfChange)
+				if c.CCType == raftpb.ConfChangeRemoveNode {
+					delete(s.memberShip, c.NodeID)
+					if c.NodeID == s.kvnode.id {
+						GetSugar().Info("RemoveFromCluster")
+						return
+					}
+				} else if c.CCType == raftpb.ConfChangeAddNode {
+					s.memberShip[c.NodeID] = true
+				}
+			case raft.ReplayOK:
+				s.ready = true
+			case raft.RaftStopOK:
+				GetSugar().Info("RaftStopOK")
+				return
+			case raftpb.Snapshot:
+				snapshot := v.(raftpb.Snapshot)
+
+				GetSugar().Infof("%x loading snapshot at term %d and index %d", s.rn.ID(), snapshot.Metadata.Term, snapshot.Metadata.Index)
+				r := newSnapshotReader(snapshot.Data)
+				var data []byte
+				var isOver bool
+				var err error
+				for {
+					isOver, data, err = r.read()
+					if isOver {
+						break
+					} else if nil != err {
+						GetSugar().Panic(err)
+					} else {
+						if err = s.replayFromBytes(true, data); err != nil {
 							GetSugar().Panic(err)
-						} else {
-							if err = s.replayFromBytes(true, data); err != nil {
-								GetSugar().Panic(err)
-							}
 						}
 					}
-				case raft.LeaderChange:
-					becomeLeader := false
-					s.raftMtx.Lock()
-					s.leader = v.(raft.LeaderChange).Leader
-					if s.leader == s.raftID {
-						becomeLeader = true
-					}
-					s.raftMtx.Unlock()
-					if becomeLeader {
-						s.needWriteBackAll = true
-						s.lease.becomeLeader()
-					}
-				case *SlotTransferProposal:
-					s.processKickSlots(v.(*SlotTransferProposal))
-				default:
-					GetSugar().Infof("here %v %s", v, reflect.TypeOf(v).String())
 				}
+			case raft.LeaderChange:
+				becomeLeader := false
+				s.raftMtx.Lock()
+				s.leader = v.(raft.LeaderChange).Leader
+				if s.leader == s.raftID {
+					becomeLeader = true
+				}
+				s.raftMtx.Unlock()
+				if becomeLeader {
+					s.needWriteBackAll = true
+					s.lease.becomeLeader()
+				}
+			case *SlotTransferProposal:
+				s.processKickSlots(v.(*SlotTransferProposal))
+			default:
+				GetSugar().Infof("here %v %s", v, reflect.TypeOf(v).String())
 			}
 		}
 	}()
@@ -709,14 +708,16 @@ func (s *kvstore) onNotifySlotTransOut(from *net.UDPAddr, msg *sproto.NotifySlot
 }
 
 func (s *kvstore) onConsoleMsg(from *net.UDPAddr, m proto.Message) {
-	switch m.(type) {
-	case *sproto.NotifyAddNode:
-		s.onNotifyAddNode(from, m.(*sproto.NotifyAddNode))
-	case *sproto.NotifyRemNode:
-		s.onNotifyRemNode(from, m.(*sproto.NotifyRemNode))
-	case *sproto.NotifySlotTransIn:
-		s.onNotifySlotTransIn(from, m.(*sproto.NotifySlotTransIn))
-	case *sproto.NotifySlotTransOut:
-		s.onNotifySlotTransOut(from, m.(*sproto.NotifySlotTransOut))
+	if atomic.LoadInt32(&s.stoped) == 0 {
+		switch m.(type) {
+		case *sproto.NotifyAddNode:
+			s.onNotifyAddNode(from, m.(*sproto.NotifyAddNode))
+		case *sproto.NotifyRemNode:
+			s.onNotifyRemNode(from, m.(*sproto.NotifyRemNode))
+		case *sproto.NotifySlotTransIn:
+			s.onNotifySlotTransIn(from, m.(*sproto.NotifySlotTransIn))
+		case *sproto.NotifySlotTransOut:
+			s.onNotifySlotTransOut(from, m.(*sproto.NotifySlotTransOut))
+		}
 	}
 }
