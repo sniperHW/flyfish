@@ -154,7 +154,6 @@ func (this *kv) process(cmd cmdI) {
 				keyValue: this,
 			}
 			if !this.store.db.issueLoad(l) {
-				GetSugar().Infof("reply retry")
 				cmd.reply(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"), nil, 0)
 				this.store.deleteKv(this, false)
 			} else {

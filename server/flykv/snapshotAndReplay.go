@@ -279,7 +279,7 @@ func (s *kvstore) replayFromBytes(callByReplaySnapshot bool, b []byte) error {
 						 *  1不存在snapshot：如果kv不存在kick不会执行，因此不会被写入到log entry。
 						 *
 						 *  2存在snapshot:合并的snapshot表示store的一个内存状态。后面跟随log entry。
-						 * 	加入在合并的snapshot中kv不存在，那么此时kv在内存中必然不存在。那么在后续的log entry就不可能存在
+						 * 	添加一个在合并的snapshot中kv不存在，那么此时kv在内存中必然不存在。那么在后续的log entry就不可能存在
 						 *  一个kick,因为kick不会被执行。除非在kick之前的log entry中存在一个将kv添加到store的entry。
 						 *
 						 *  log entry回放必定在合并snapshot回放之后执行，因此，如果程序没有bug,在执行log entry回放的时候
@@ -297,38 +297,13 @@ func (s *kvstore) replayFromBytes(callByReplaySnapshot bool, b []byte) error {
 					if nil != e {
 						return fmt.Errorf("bad data,%s is no table define", p.unikey)
 					}
-					s.keyvals[groupID].kv[p.unikey] = keyvalue
-
-					sl := s.slotsKvMap[slot]
-					if nil != sl {
-						sl[p.unikey] = keyvalue
-					} else {
-						sl = map[string]*kv{}
-						sl[p.unikey] = keyvalue
-						s.slotsKvMap[slot] = sl
-					}
 
 				}
 			}
 
 			switch ptype {
 			case proposal_kick:
-				delete(s.keyvals[groupID].kv, p.unikey)
-				slot := sslot.Unikey2Slot(p.unikey)
-
-				sl := s.slotsKvMap[slot]
-				if nil != sl {
-					delete(sl, p.unikey)
-				}
-
-				if !callByReplaySnapshot {
-					s.keyvals[groupID].kicks[p.unikey] = true
-				}
-
-				if nil != keyvalue {
-					s.lru.removeLRU(&keyvalue.lru)
-				}
-
+				s.deleteKv(keyvalue, !callByReplaySnapshot)
 			case proposal_update:
 				keyvalue.version = p.version
 				for k, v := range p.fields {
@@ -392,7 +367,7 @@ func (s *kvstore) getSnapshot() ([]byte, error) {
 			 *  那么在后面的snapshot merge中就kv就无法被剔除。
 			 *
 			 *  但是，如果不忽略proposal_kick,在snapshot重放的过程中（replayFromBytes以及snapMerge）就可能
-			 *  出现kick kv但kv实际不存在的情况。
+			 *  出现kick kv但kv实际不存在的情况()。
 			 *
 			 *  为了处理这种情况执行snapMerge以及当replayFromBytes传入callByReplaySnapshot=true时，将直接忽略这种情况。
 			 *

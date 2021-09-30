@@ -119,7 +119,7 @@ func (this *lruList) removeLRU(e *lruElement) {
 
 type kvmgr struct {
 	kv    map[string]*kv
-	kicks map[string]bool
+	kicks map[string]bool //执行snapshot前所有被kick出缓存的unikey,用于打snapshot,执行完snapshot后会被清空，如果unikey重新被加入kv,相应的unikey也需要重kicks中移除。
 }
 
 var compressorPool sync.Pool = sync.Pool{
@@ -207,8 +207,7 @@ const kvCmdQueueSize = 32
 
 func (s *kvstore) deleteKv(k *kv, kick bool) {
 	delete(s.keyvals[k.groupID].kv, k.uniKey)
-	sl := s.slotsKvMap[k.slot]
-	if nil != sl {
+	if sl := s.slotsKvMap[k.slot]; nil != sl {
 		delete(sl, k.uniKey)
 	}
 	s.lru.removeLRU(&k.lru)
@@ -224,7 +223,7 @@ func (s *kvstore) newkv(slot int, groupID int, unikey string, key string, table 
 		return nil, errcode.New(errcode.Errcode_error, fmt.Sprintf("table:%s no define", table))
 	}
 
-	kv := &kv{
+	k := &kv{
 		uniKey:  unikey,
 		key:     key,
 		state:   kv_new,
@@ -233,12 +232,22 @@ func (s *kvstore) newkv(slot int, groupID int, unikey string, key string, table 
 		groupID: groupID,
 		slot:    slot,
 	}
-	kv.lru.keyvalue = kv
-	kv.updateTask = dbUpdateTask{
-		keyValue:     kv,
+	k.lru.keyvalue = k
+	k.updateTask = dbUpdateTask{
+		keyValue:     k,
 		updateFields: map[string]*flyproto.Field{},
 	}
-	return kv, nil
+
+	s.keyvals[groupID].kv[unikey] = k
+
+	if sl := s.slotsKvMap[slot]; nil != sl {
+		sl[unikey] = k
+	} else {
+		sl = map[string]*kv{}
+		sl[unikey] = k
+		s.slotsKvMap[slot] = sl
+	}
+	return k, nil
 }
 
 func (this *kvstore) tryKick(kv *kv) bool {
@@ -393,31 +402,19 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 					return
 				} else {
 					table, key := splitUniKey(req.msg.UniKey)
-					keyvalue, err = s.newkv(slot, groupID, req.msg.UniKey, key, table)
-					if nil != err {
+					if keyvalue, err = s.newkv(slot, groupID, req.msg.UniKey, key, table); nil != err {
 						req.from.send(&cs.RespMessage{
 							Cmd:   req.msg.Cmd,
 							Seqno: req.msg.Seqno,
 							Err:   err,
 						})
 						return
-					} else {
-						s.keyvals[keyvalue.groupID].kv[req.msg.UniKey] = keyvalue
-						sl := s.slotsKvMap[slot]
-						if nil != sl {
-							sl[req.msg.UniKey] = keyvalue
-						} else {
-							sl = map[string]*kv{}
-							sl[req.msg.UniKey] = keyvalue
-							s.slotsKvMap[slot] = sl
-						}
 					}
 				}
 			}
 		}
 
-		cmd, err = s.makeCmd(keyvalue, req)
-		if nil != err {
+		if cmd, err = s.makeCmd(keyvalue, req); nil != err {
 			req.from.send(&cs.RespMessage{
 				Cmd:   req.msg.Cmd,
 				Seqno: req.msg.Seqno,

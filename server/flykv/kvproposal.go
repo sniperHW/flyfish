@@ -75,7 +75,6 @@ func (this *kvProposal) apply() {
 		}
 
 		for f := this.keyValue.pendingCmd.front(); nil != f; f = this.keyValue.pendingCmd.front() {
-			GetSugar().Infof("reply retry")
 			f.reply(errcode.New(errcode.Errcode_retry, "please try again"), nil, 0)
 			this.keyValue.pendingCmd.popFront()
 		}
