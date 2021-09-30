@@ -6,7 +6,7 @@ import (
 	"fmt"
 	//"github.com/sniperHW/flyfish/backend/db/sql"
 	//"github.com/stretchr/testify/assert"
-	"github.com/sniperHW/flyfish/backend/db"
+	"github.com/sniperHW/flyfish/db"
 	"testing"
 )
 

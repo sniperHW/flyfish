@@ -3,7 +3,7 @@ package flykv
 import (
 	"errors"
 	"fmt"
-	"github.com/sniperHW/flyfish/backend/db"
+	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
@@ -37,17 +37,14 @@ var (
 )
 
 type kvnode struct {
-	mu sync.Mutex
-
-	muC     sync.Mutex
-	clients map[*fnet.Socket]*fnet.Socket
-
-	muS     sync.RWMutex
-	stores  map[int]*kvstore
-	running int32
-	config  *Config
-
-	db          dbbackendI
+	mu          sync.Mutex
+	muC         sync.Mutex
+	clients     map[*fnet.Socket]*fnet.Socket
+	muS         sync.RWMutex
+	stores      map[int]*kvstore
+	running     int32
+	config      *Config
+	db          dbI
 	meta        db.DBMeta
 	listener    *cs.Listener
 	id          int
@@ -55,10 +52,8 @@ type kvnode struct {
 	stopOnce    int32
 	startOnce   int32
 	metaCreator func(*db.DbDef) (db.DBMeta, error)
-
 	consoleConn *fnet.Udp
-
-	selfUrl string
+	selfUrl     string
 }
 
 func verifyLogin(loginReq *flyproto.LoginReq) bool {
@@ -513,7 +508,7 @@ func (this *kvnode) Start() error {
 	return err
 }
 
-func NewKvNode(id int, config *Config, metaDef *db.DbDef, metaCreator func(*db.DbDef) (db.DBMeta, error), db dbbackendI) *kvnode {
+func NewKvNode(id int, config *Config, metaDef *db.DbDef, metaCreator func(*db.DbDef) (db.DBMeta, error), db dbI) *kvnode {
 
 	meta, err := metaCreator(metaDef)
 

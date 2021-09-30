@@ -2,7 +2,7 @@ package sql
 
 import (
 	"github.com/jmoiron/sqlx"
-	"github.com/sniperHW/flyfish/backend/db"
+	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/proto"

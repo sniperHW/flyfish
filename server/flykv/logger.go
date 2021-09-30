@@ -1,7 +1,7 @@
 package flykv
 
 import (
-	"github.com/sniperHW/flyfish/backend/db/sql"
+	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	"go.uber.org/zap"

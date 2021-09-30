@@ -3,7 +3,7 @@ package flykv
 import (
 	"time"
 
-	"github.com/sniperHW/flyfish/backend/db"
+	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/net/cs"
 	flyproto "github.com/sniperHW/flyfish/proto"

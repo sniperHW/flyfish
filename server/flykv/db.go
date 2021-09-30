@@ -2,24 +2,23 @@ package flykv
 
 import (
 	"fmt"
-	"sync"
-
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
-	"github.com/sniperHW/flyfish/backend/db"
-	"github.com/sniperHW/flyfish/backend/db/sql"
+	"github.com/sniperHW/flyfish/db"
+	"github.com/sniperHW/flyfish/db/sql"
 	sslot "github.com/sniperHW/flyfish/server/slot"
+	"sync"
 )
 
-type dbbackendI interface {
+type dbI interface {
 	issueLoad(l db.DBLoadTask) bool
 	issueUpdate(u db.DBUpdateTask) bool
 	stop()
 	start(config *Config) error
 }
 
-type sqlDbBackend struct {
+type sqlDB struct {
 	loaders  []db.DBLoader
 	updaters []db.DBUpdater
 	wait     sync.WaitGroup
@@ -43,11 +42,11 @@ func sqlOpen(sqlType string, host string, port int, dbname string, user string, 
 	}
 }
 
-func NewSqlDbBackend() *sqlDbBackend {
-	return &sqlDbBackend{}
+func NewSqlDB() *sqlDB {
+	return &sqlDB{}
 }
 
-func (d *sqlDbBackend) start(config *Config) error {
+func (d *sqlDB) start(config *Config) error {
 	dbConfig := config.DBConfig
 
 	for i := 0; i < 5; i++ {
@@ -73,17 +72,17 @@ func (d *sqlDbBackend) start(config *Config) error {
 	return nil
 }
 
-func (d *sqlDbBackend) issueLoad(l db.DBLoadTask) bool {
+func (d *sqlDB) issueLoad(l db.DBLoadTask) bool {
 	idx := sslot.StringHash(l.GetUniKey())
 	return d.loaders[idx%len(d.loaders)].IssueLoadTask(l) == nil
 }
 
-func (d *sqlDbBackend) issueUpdate(u db.DBUpdateTask) bool {
+func (d *sqlDB) issueUpdate(u db.DBUpdateTask) bool {
 	idx := sslot.StringHash(u.GetUniKey())
 	return d.updaters[idx%len(d.updaters)].IssueUpdateTask(u) == nil
 }
 
-func (d *sqlDbBackend) stop() {
+func (d *sqlDB) stop() {
 	//等待所有updater结束
 	d.wait.Wait()
 }

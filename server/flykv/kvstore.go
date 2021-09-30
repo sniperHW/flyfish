@@ -4,7 +4,7 @@ import (
 	//"errors"
 	"fmt"
 	"github.com/gogo/protobuf/proto"
-	"github.com/sniperHW/flyfish/backend/db"
+	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/compress"
@@ -159,7 +159,7 @@ type kvstore struct {
 	mainQueue        applicationQueue
 	keyvals          []kvmgr
 	slotsKvMap       map[int]map[string]*kv
-	db               dbbackendI
+	db               dbI
 	lru              lruList
 	wait4ReplyCount  int32
 	lease            *lease

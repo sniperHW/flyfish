@@ -1,12 +1,11 @@
 package flykv
 
 import (
-	"sync"
-	"time"
-
-	"github.com/sniperHW/flyfish/backend/db"
+	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
 	flyproto "github.com/sniperHW/flyfish/proto"
+	"sync"
+	"time"
 )
 
 type kvState byte
