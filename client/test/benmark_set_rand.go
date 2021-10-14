@@ -67,7 +67,7 @@ func main() {
 
 	rand.Seed(int64(time.Now().Unix()))
 
-	kclient.InitLogger(logger.NewZapLogger("client.log", "./log", "debug", 100, 14, true))
+	kclient.InitLogger(logger.NewZapLogger("client.log", "./log", "debug", 100, 14, 10, true))
 
 	keyrange, _ = strconv.ParseInt(os.Args[1], 10, 32)
 

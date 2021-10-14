@@ -29,7 +29,7 @@ var (
 )
 
 func init() {
-	l := logger.NewZapLogger("testClient.log", "./log", "debug", 100, 14, true)
+	l := logger.NewZapLogger("testClient.log", "./log", "debug", 100, 14, 10, true)
 	InitLogger(l)
 	Gate.InitLogger(l)
 	Dir.InitLogger(l)

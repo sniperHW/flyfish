@@ -76,7 +76,7 @@ func TestMutilNode(t *testing.T) {
 	raft.DefaultSnapshotCount = 100
 	raft.SnapshotCatchUpEntriesN = 100
 
-	InitLogger(logger.NewZapLogger("testRaft.log", "./log", "info", 100, 14, true))
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", "info", 100, 14, 10, true))
 
 	//先删除所有kv文件
 	os.RemoveAll("./log/kvnode-1-1")

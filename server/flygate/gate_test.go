@@ -405,7 +405,7 @@ func Test1(t *testing.T) {
 
 	assert.Nil(t, err)
 
-	l := logger.NewZapLogger("testGate.log", "./log", config.Log.LogLevel, 100, 14, true)
+	l := logger.NewZapLogger("testGate.log", "./log", config.Log.LogLevel, 100, 14, 10, true)
 
 	InitLogger(l)
 

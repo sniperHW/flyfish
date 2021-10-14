@@ -36,7 +36,7 @@ func main() {
 
 	logname := fmt.Sprintf("flykv:%d.log", *id)
 
-	flykv.InitLogger(logger.NewZapLogger(logname, conf.Log.LogDir, conf.Log.LogLevel, 100, 14, true))
+	flykv.InitLogger(logger.NewZapLogger(logname, conf.Log.LogDir, conf.Log.LogLevel, 100, 14, 20, true))
 
 	dbConfig := conf.DBConfig
 

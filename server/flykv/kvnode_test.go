@@ -494,7 +494,7 @@ func test(t *testing.T, c *client.Client) {
 
 func Test1Node1Store1(t *testing.T) {
 
-	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, 100, 14, true))
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, 100, 14, 10, true))
 
 	//先删除所有kv文件
 	os.RemoveAll("./log/kvnode-1-1")
@@ -538,7 +538,7 @@ func Test1Node1Store1(t *testing.T) {
 
 func Test1Node1Store2(t *testing.T) {
 
-	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, 100, 14, true))
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, 100, 14, 10, true))
 
 	//先删除所有kv文件
 	os.RemoveAll("./log/kvnode-1-1")
@@ -565,7 +565,7 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 	raft.DefaultSnapshotCount = 100
 	raft.SnapshotCatchUpEntriesN = 100
 
-	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, 100, 14, true))
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, 100, 14, 10, true))
 
 	//先删除所有kv文件
 	os.RemoveAll("./log/kvnode-1-1")
@@ -645,7 +645,7 @@ func Test1Node1StoreSnapshot2(t *testing.T) {
 	raft.DefaultSnapshotCount = 100
 	raft.SnapshotCatchUpEntriesN = 100
 
-	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, 100, 14, true))
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, 100, 14, 10, true))
 
 	//先删除所有kv文件
 	os.RemoveAll("./log/kvnode-1-1")
@@ -697,7 +697,7 @@ func Test1Node1StoreSnapshot2(t *testing.T) {
 }
 
 func TestUseMockDB(t *testing.T) {
-	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, 100, 14, true))
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, 100, 14, 10, true))
 
 	//先删除所有kv文件
 	os.RemoveAll("./log/kvnode-1-1")

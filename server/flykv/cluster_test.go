@@ -201,7 +201,7 @@ func TestCluster1(t *testing.T) {
 	configDir, err := flydir.LoadConfigStr(configDirStr)
 	assert.Nil(t, err)
 
-	l := logger.NewZapLogger("test_flykv.log", "./log", "info", 100, 14, true)
+	l := logger.NewZapLogger("test_flykv.log", "./log", "info", 100, 14,10, true)
 	flygate.InitLogger(l)
 	flydir.InitLogger(l)
 	InitLogger(l)

@@ -188,7 +188,7 @@ func TestPd(t *testing.T) {
 
 `
 
-	l := logger.NewZapLogger("testPd.log", "./log", "Debug", 100, 14, true)
+	l := logger.NewZapLogger("testPd.log", "./log", "Debug", 100, 14, 10, true)
 	InitLogger(l)
 
 	conf, _ := LoadConfigStr(configStr)

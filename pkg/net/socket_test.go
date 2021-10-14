@@ -17,7 +17,7 @@ import (
 )
 
 func init() {
-	InitLogger(logger.NewZapLogger("net.log", "./log", "debug", 100, 14, true))
+	InitLogger(logger.NewZapLogger("net.log", "./log", "debug", 100, 14, 10, true))
 }
 
 type encoder struct {
