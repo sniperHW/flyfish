@@ -5,15 +5,6 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"math"
-	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"sync"
-	"sync/atomic"
-	"time"
-
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft/rafthttp"
 	"go.etcd.io/etcd/etcdserver/api/snap"
@@ -25,6 +16,14 @@ import (
 	"go.etcd.io/etcd/wal"
 	"go.etcd.io/etcd/wal/walpb"
 	"go.uber.org/zap"
+	"math"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
 )
 
 //应用程序队列必须Append必须是非阻塞的，最好支持优先级
@@ -262,32 +261,30 @@ func (rc *RaftNode) removeOldWal(index uint64) {
 }
 
 func (rc *RaftNode) removeOldSnapAndWal(term uint64, index uint64) {
-	go func() {
-		filepath.Walk(rc.snapdir,
-			func(path string, f os.FileInfo, err error) error {
-				if f == nil {
-					return err
-				}
+	filepath.Walk(rc.snapdir,
+		func(path string, f os.FileInfo, err error) error {
+			if f == nil {
+				return err
+			}
 
-				if !f.IsDir() && strings.HasSuffix(path, ".snap") {
-					filename := strings.TrimLeft(path, rc.snapdir+"/")
-					var _term uint64
-					var _index uint64
+			if !f.IsDir() && strings.HasSuffix(path, ".snap") {
+				filename := strings.TrimLeft(path, rc.snapdir+"/")
+				var _term uint64
+				var _index uint64
 
-					n, err := fmt.Sscanf(filename, "%016x-%016x.snap", &_term, &_index)
-					if nil == err && n == 2 {
-						if _term <= term && _index < index {
-							os.Remove(path)
-							GetSugar().Infof("remove old snap %s", path)
-							rc.removeOldWal(_index)
-						}
+				n, err := fmt.Sscanf(filename, "%016x-%016x.snap", &_term, &_index)
+				if nil == err && n == 2 {
+					if _term <= term && _index < index {
+						os.Remove(path)
+						GetSugar().Infof("remove old snap %s", path)
+						rc.removeOldWal(_index)
 					}
-					return nil
 				}
-
 				return nil
-			})
-	}()
+			}
+
+			return nil
+		})
 }
 
 // openWAL returns a WAL ready for reading.
@@ -477,7 +474,7 @@ func (rc *RaftNode) processMessages(ms []raftpb.Message) []raftpb.Message {
 				} else {
 					//use sendsnap to send the snapshot
 					ms[i].Snapshot.Metadata.ConfState = rc.confState
-					go rc.sendSnapshot(ms[i])
+					go rc.sendSnapshot(ms[i], rc.getSnapFiles())
 				}
 			}
 			ms[i].To = 0

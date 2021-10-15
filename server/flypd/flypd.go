@@ -88,7 +88,7 @@ func NewPd(config *Config, udpService string, id int, cluster string) (*pd, erro
 
 	mutilRaft := raft.NewMutilRaft()
 
-	rn := raft.NewRaftNode(snapMerge, mutilRaft, mainQueue, (id<<16)+1, peers, false, config.Log.LogDir, "pd")
+	rn := raft.NewRaftNode(nil, mutilRaft, mainQueue, (id<<16)+1, peers, false, config.Log.LogDir, "pd")
 
 	p := &pd{
 		id:           id,
@@ -247,10 +247,10 @@ func (p *pd) processCommited(commited raft.Committed) {
 	}
 }
 
-func snapMerge(snaps ...[]byte) ([]byte, error) {
-	//pd每次都是全量快照，无需合并，返回最后一个即可
-	return snaps[len(snaps)-1], nil
-}
+//func snapMerge(snaps ...[]byte) ([]byte, error) {
+//pd每次都是全量快照，无需合并，返回最后一个即可
+//	return snaps[len(snaps)-1], nil
+//}
 
 func (p *pd) onAddNodeTimeout(an *AddingNode) {
 	ann := p.addingNode[an.NodeID]

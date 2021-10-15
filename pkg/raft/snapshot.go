@@ -4,15 +4,6 @@ import (
 	//"github.com/sniperHW/flyfish/pkg/buffer"
 
 	"fmt"
-	"io"
-	"os"
-	"path/filepath"
-	"strings"
-	"sync/atomic"
-	"time"
-
-	"sort"
-
 	"github.com/dustin/go-humanize"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	"go.etcd.io/etcd/etcdserver/api/snap"
@@ -21,6 +12,13 @@ import (
 	"go.etcd.io/etcd/raft/raftpb"
 	"go.etcd.io/etcd/wal/walpb"
 	"go.uber.org/zap"
+	"io"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"sync/atomic"
+	"time"
 )
 
 type snapshotNotifyst struct {
@@ -66,6 +64,31 @@ func (rc *RaftNode) maybeTriggerSnapshot(index uint64) bool {
 	return true
 }
 
+func (rc *RaftNode) getSnapFiles() []string {
+	snapfiles := []string{}
+
+	filepath.Walk(rc.snapdir,
+		func(path string, f os.FileInfo, err error) error {
+
+			if f == nil {
+				return err
+			}
+
+			if !f.IsDir() && strings.HasSuffix(path, ".snap") {
+				filename := strings.TrimLeft(path, rc.snapdir+"/")
+				snapfiles = append(snapfiles, filename)
+				return nil
+			}
+
+			return nil
+		})
+
+	//对snap文件按文件名排序
+
+	sort.Slice(snapfiles, func(i, j int) bool { return snapfiles[i] < snapfiles[j] })
+	return snapfiles
+}
+
 func (rc *RaftNode) onTriggerSnapshotOK(snap raftpb.Snapshot) {
 
 	GetSugar().Infof("onTriggerSnapshotOK")
@@ -92,17 +115,20 @@ func (rc *RaftNode) onTriggerSnapshotOK(snap raftpb.Snapshot) {
 		panic(err)
 	}
 
-	if !atomic.CompareAndSwapInt64(&rc.snapshotMerging, 0, 1) {
-		return
-	}
-
-	go func() {
-		if err := rc.mergeSnapshot(); nil != err {
-			GetSugar().Errorf("mergeSnapshot error:%v", err)
+	if nil != rc.snapMerge {
+		if !atomic.CompareAndSwapInt64(&rc.snapshotMerging, 0, 1) {
+			return
 		}
-		atomic.StoreInt64(&rc.snapshotMerging, 0)
-	}()
 
+		snapfiles := rc.getSnapFiles()
+
+		go func() {
+			if err := rc.mergeSnapshot(snapfiles); nil != err {
+				GetSugar().Errorf("mergeSnapshot error:%v", err)
+			}
+			atomic.StoreInt64(&rc.snapshotMerging, 0)
+		}()
+	}
 }
 
 func (rc *RaftNode) triggerSnapshot(st snapshotNotifyst) {
@@ -120,6 +146,11 @@ func (rc *RaftNode) triggerSnapshot(st snapshotNotifyst) {
 
 		if err = rc.saveSnap(snap); err != nil {
 			panic(err)
+		}
+
+		if nil == rc.snapMerge {
+			//删除旧快照
+			rc.removeOldSnapAndWal(snap.Metadata.Term, snap.Metadata.Index-SnapshotCatchUpEntriesN)
 		}
 
 		select {
@@ -150,8 +181,10 @@ func (rc *RaftNode) saveSnap(snap raftpb.Snapshot) error {
 
 func (rc *RaftNode) loadSnapshot() *raftpb.Snapshot {
 
-	if err := rc.mergeSnapshot(); nil != err {
-		GetSugar().Fatalf("raftexample: error merge snapshot (%v)", err)
+	if nil != rc.snapMerge {
+		if err := rc.mergeSnapshot(rc.getSnapFiles()); nil != err {
+			GetSugar().Fatalf("raftexample: error merge snapshot (%v)", err)
+		}
 	}
 
 	snapshot, err := rc.snapshotter.Load()
@@ -208,47 +241,43 @@ func newSnapshotReaderCloser(data []byte) io.ReadCloser {
 	return pr
 }
 
-func (rc *RaftNode) sendSnapshot(m raftpb.Message) {
-
-	snaps := []string{}
-
-	filepath.Walk(rc.snapdir,
-		func(path string, f os.FileInfo, err error) error {
-
-			if f == nil {
-				return err
-			}
-
-			if !f.IsDir() && strings.HasSuffix(path, ".snap") {
-				filename := strings.TrimLeft(path, rc.snapdir+"/")
-				snaps = append(snaps, filename)
-				return nil
-			}
-
-			return nil
-		})
-
-	//对snap文件按文件名排序
-
-	sort.Slice(snaps, func(i, j int) bool { return snaps[i] < snaps[j] })
-
+func (rc *RaftNode) sendSnapshot(m raftpb.Message, snapfiles []string) {
 	b := buffer.New()
 
-	for _, v := range snaps {
-
+	if nil == rc.snapMerge {
+		//在不开启快照合并的情况下，每个快照都是全量快照，直接发送最后一个快照即可
+		v := snapfiles[len(snapfiles)-1]
 		var _term uint64
 		var _index uint64
 
 		n, err := fmt.Sscanf(v, "%016x-%016x.snap", &_term, &_index)
 
 		if n != 2 || nil != err {
-			continue
+			panic("invaild snap file")
 		}
 
 		if s, err := snap.Read(GetLogger(), rc.snapdir+"/"+v); nil != err {
 			GetSugar().Fatalf("read snap %s error:%v", v, err)
 		} else {
 			b.AppendBytes(s.Data)
+		}
+	} else {
+		for _, v := range snapfiles {
+
+			var _term uint64
+			var _index uint64
+
+			n, err := fmt.Sscanf(v, "%016x-%016x.snap", &_term, &_index)
+
+			if n != 2 || nil != err {
+				continue
+			}
+
+			if s, err := snap.Read(GetLogger(), rc.snapdir+"/"+v); nil != err {
+				GetSugar().Fatalf("read snap %s error:%v", v, err)
+			} else {
+				b.AppendBytes(s.Data)
+			}
 		}
 	}
 
@@ -293,34 +322,11 @@ func (rc *RaftNode) sendSnapshot(m raftpb.Message) {
 	}()
 }
 
-func (rc *RaftNode) mergeSnapshot() error {
-
-	snaps := []string{}
-
-	filepath.Walk(rc.snapdir,
-		func(path string, f os.FileInfo, err error) error {
-
-			if f == nil {
-				return err
-			}
-
-			if !f.IsDir() && strings.HasSuffix(path, ".snap") {
-				filename := strings.TrimLeft(path, rc.snapdir+"/")
-				snaps = append(snaps, filename)
-				return nil
-			}
-
-			return nil
-		})
-
-	//对snap文件按文件名排序
-
-	sort.Slice(snaps, func(i, j int) bool { return snaps[i] < snaps[j] })
-
+func (rc *RaftNode) mergeSnapshot(snapfiles []string) error {
 	snapshots := []*raftpb.Snapshot{}
 	datas := [][]byte{}
 
-	for _, v := range snaps {
+	for _, v := range snapfiles {
 		if s, err := snap.Read(GetLogger(), rc.snapdir+"/"+v); nil != err {
 			return err
 		} else {

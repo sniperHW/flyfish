@@ -8,6 +8,7 @@ import (
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/pkg/compress"
 	"github.com/sniperHW/flyfish/pkg/raft"
+	flyproto "github.com/sniperHW/flyfish/proto"
 	sslot "github.com/sniperHW/flyfish/server/slot"
 	"sync"
 	"time"
@@ -42,6 +43,25 @@ func (this *snapshotReader) read() (isOver bool, data []byte, err error) {
 }
 
 const buffsize = 1024 * 16 * 1024
+
+const maxBlockSize = 1024 * 1024 * 1
+
+func compressSnap(b []byte) []byte {
+	c := getCompressor()
+	cb, err := c.Compress(b[4:])
+	if nil != err {
+		GetSugar().Errorf("snapshot compress error:%v", err)
+		b = append(b, byte(0))
+		binary.BigEndian.PutUint32(b[:4], uint32(len(b)-4))
+	} else {
+		b = b[:4]
+		b = append(b, cb...)
+		b = append(b, byte(1))
+		binary.BigEndian.PutUint32(b[:4], uint32(len(cb)+1))
+	}
+	releaseCompressor(c)
+	return b
+}
 
 func (s *kvstore) snapMerge(snaps ...[]byte) ([]byte, error) {
 
@@ -140,11 +160,6 @@ func (s *kvstore) snapMerge(snaps ...[]byte) ([]byte, error) {
 				case proposal_snapshot:
 					keyvalue.version = p.version
 					keyvalue.fields = p.fields
-					if keyvalue.version != 0 {
-						keyvalue.state = kv_ok
-					} else {
-						keyvalue.state = kv_no_record
-					}
 				}
 			}
 		}
@@ -169,38 +184,32 @@ func (s *kvstore) snapMerge(snaps ...[]byte) ([]byte, error) {
 	}
 
 	//多线程序列化和压缩
-	for i, v := range store {
-		go func(id int, m map[string]*kv) {
-			b := make([]byte, 0, buffsize)
+	for _, v := range store {
+		go func(m map[string]*kv) {
+			b := make([]byte, 0, maxBlockSize*2)
 			b = buffer.AppendInt32(b, 0) //占位符
-
 			for _, vv := range m {
 				b = serilizeKv(b, proposal_snapshot, vv.uniKey, vv.version, vv.fields)
+				if len(b) >= maxBlockSize {
+					b = compressSnap(b)
+					mtx.Lock()
+					buff = append(buff, b...)
+					mtx.Unlock()
+					b = b[0:0]
+					b = buffer.AppendInt32(b, 0) //占位符
+				}
 			}
 
-			c := getCompressor()
-
-			cb, err := c.Compress(b[4:])
-			if nil != err {
-				GetSugar().Errorf("snapshot compress error:%v", err)
-				b = append(b, byte(0))
-				binary.BigEndian.PutUint32(b[:4], uint32(len(b)-4))
-			} else {
-				b = b[:4]
-				b = append(b, cb...)
-				b = append(b, byte(1))
-				binary.BigEndian.PutUint32(b[:4], uint32(len(cb)+1))
+			if len(b) > 4 {
+				b = compressSnap(b)
+				mtx.Lock()
+				buff = append(buff, b...)
+				mtx.Unlock()
 			}
-
-			releaseCompressor(c)
-
-			mtx.Lock()
-			buff = append(buff, b...)
-			mtx.Unlock()
 
 			waitGroup.Done()
 
-		}(i, v)
+		}(v)
 	}
 
 	waitGroup.Wait()
@@ -343,7 +352,7 @@ func (s *kvstore) makeSnapshot(notifyer *raft.SnapshotNotify) {
 	var waitGroup sync.WaitGroup
 	waitGroup.Add(len(s.keyvals))
 
-	snaps := make([][]byte, len(s.keyvals))
+	snaps := make([][]*kv, len(s.keyvals))
 
 	buff := make([]byte, 0, buffsize)
 
@@ -355,9 +364,6 @@ func (s *kvstore) makeSnapshot(notifyer *raft.SnapshotNotify) {
 	//多线程序列化和压缩
 	for i, _ := range s.keyvals {
 		go func(i int, m *kvmgr) {
-			b := make([]byte, 0, buffsize)
-			b = buffer.AppendInt32(b, 0) //占位符
-
 			/*
 			 *  考虑在执行snapshot之前先变更某个kv,之后将其kick
 			 *  在执行snapshot的时候kv在m.kv中已经被删除，但存在于m.kicks中
@@ -374,20 +380,35 @@ func (s *kvstore) makeSnapshot(notifyer *raft.SnapshotNotify) {
 			 *
 			 */
 
+			var snapkvs []*kv
+
 			for _, v := range m.kv {
 				if v.snapshot {
 					v.snapshot = false
-					b = serilizeKv(b, proposal_snapshot, v.uniKey, v.version, v.fields)
+					skv := &kv{
+						uniKey:  v.uniKey,
+						version: v.version,
+						fields:  map[string]*flyproto.Field{},
+					}
+
+					for kk, vv := range v.fields {
+						skv.fields[kk] = vv
+					}
+
+					snapkvs = append(snapkvs, skv)
 				}
 			}
 
 			for k, _ := range m.kicks {
-				b = serilizeKv(b, proposal_kick, k, 0, nil)
+				snapkvs = append(snapkvs, &kv{
+					uniKey: k,
+					state:  kv_invaild,
+				})
 			}
 
 			m.kicks = map[string]bool{}
 
-			snaps[i] = b
+			snaps[i] = snapkvs
 
 			waitGroup.Done()
 
@@ -402,29 +423,43 @@ func (s *kvstore) makeSnapshot(notifyer *raft.SnapshotNotify) {
 		var mtx sync.Mutex
 		var waitGroup sync.WaitGroup
 		waitGroup.Add(len(snaps))
-		for _, b := range snaps {
-			go func(b []byte) {
-				c := getCompressor()
-				cb, err := c.Compress(b[4:])
-				if nil != err {
-					GetSugar().Errorf("snapshot compress error:%v", err)
-					b = append(b, byte(0))
-					binary.BigEndian.PutUint32(b[:4], uint32(len(b)-4))
-				} else {
-					b = b[:4]
-					b = append(b, cb...)
-					b = append(b, byte(1))
-					binary.BigEndian.PutUint32(b[:4], uint32(len(cb)+1))
+		for _, snapkvs := range snaps {
+			go func(snapkvs []*kv) {
+				b := make([]byte, 0, maxBlockSize*2)
+				b = buffer.AppendInt32(b, 0) //占位符
+
+				/*
+				 *  每当块大小超过maxBlockSize就执行一次压缩
+				 *  避免内存扩张过大
+				 */
+
+				for _, vv := range snapkvs {
+					if vv.state == kv_invaild {
+						b = serilizeKv(b, proposal_kick, vv.uniKey, 0, nil)
+					} else {
+						b = serilizeKv(b, proposal_snapshot, vv.uniKey, vv.version, vv.fields)
+					}
+
+					if len(b) >= maxBlockSize {
+						b = compressSnap(b)
+						mtx.Lock()
+						buff = append(buff, b...)
+						mtx.Unlock()
+						b = b[0:0]
+						b = buffer.AppendInt32(b, 0) //占位符
+					}
 				}
 
-				releaseCompressor(c)
-
-				mtx.Lock()
-				buff = append(buff, b...)
-				mtx.Unlock()
+				if len(b) > 4 {
+					b = compressSnap(b)
+					mtx.Lock()
+					buff = append(buff, b...)
+					mtx.Unlock()
+				}
 
 				waitGroup.Done()
-			}(b)
+
+			}(snapkvs)
 		}
 		waitGroup.Wait()
 
