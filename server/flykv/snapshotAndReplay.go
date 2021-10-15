@@ -7,6 +7,7 @@ import (
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/pkg/compress"
+	"github.com/sniperHW/flyfish/pkg/raft"
 	sslot "github.com/sniperHW/flyfish/server/slot"
 	"sync"
 	"time"
@@ -297,7 +298,6 @@ func (s *kvstore) replayFromBytes(callByReplaySnapshot bool, b []byte) error {
 					if nil != e {
 						return fmt.Errorf("bad data,%s is no table define", p.unikey)
 					}
-
 				}
 			}
 
@@ -337,23 +337,24 @@ func (s *kvstore) replayFromBytes(callByReplaySnapshot bool, b []byte) error {
 	}
 }
 
-func (s *kvstore) getSnapshot() ([]byte, error) {
-
+func (s *kvstore) makeSnapshot(notifyer *raft.SnapshotNotify) {
 	beg := time.Now()
 
 	var waitGroup sync.WaitGroup
 	waitGroup.Add(len(s.keyvals))
+
+	snaps := make([][]byte, len(s.keyvals))
 
 	buff := make([]byte, 0, buffsize)
 
 	//写入slots
 	buff = serilizeSlots(s.slots, buff)
 
-	var mtx sync.Mutex
+	buff = s.lease.snapshot(buff)
 
 	//多线程序列化和压缩
 	for i, _ := range s.keyvals {
-		go func(m *kvmgr) {
+		go func(i int, m *kvmgr) {
 			b := make([]byte, 0, buffsize)
 			b = buffer.AppendInt32(b, 0) //占位符
 
@@ -386,8 +387,20 @@ func (s *kvstore) getSnapshot() ([]byte, error) {
 
 			m.kicks = map[string]bool{}
 
-			c := getCompressor()
+			snaps[i] = b
 
+			waitGroup.Done()
+
+		}(i, &s.keyvals[i])
+	}
+
+	waitGroup.Wait()
+
+	GetSugar().Infof("traval all kv pairs and serilize take: %v", time.Now().Sub(beg))
+
+	go func() {
+		for _, b := range snaps {
+			c := getCompressor()
 			cb, err := c.Compress(b[4:])
 			if nil != err {
 				GetSugar().Errorf("snapshot compress error:%v", err)
@@ -400,21 +413,93 @@ func (s *kvstore) getSnapshot() ([]byte, error) {
 				binary.BigEndian.PutUint32(b[:4], uint32(len(cb)+1))
 			}
 			releaseCompressor(c)
-
-			mtx.Lock()
 			buff = append(buff, b...)
-			mtx.Unlock()
+		}
 
-			waitGroup.Done()
+		GetSugar().Infof("Snapshot len:%s", len(buff))
 
-		}(&s.keyvals[i])
-	}
-
-	waitGroup.Wait()
-
-	buff = s.lease.snapshot(buff)
-
-	GetSugar().Infof("getSnapshot: %v,snapshot len:%d", time.Now().Sub(beg), len(buff))
-
-	return buff, nil
+		notifyer.Notify(buff)
+	}()
 }
+
+// //func (s *kvstore) getSnapshot() ([]byte, error) {
+
+// //	beg := time.Now()
+
+// //	var waitGroup sync.WaitGroup
+// //	waitGroup.Add(len(s.keyvals))
+
+// //	buff := make([]byte, 0, buffsize)
+
+// 	//写入slots
+// //	buff = serilizeSlots(s.slots, buff)
+
+// //	var mtx sync.Mutex
+
+// 	//多线程序列化和压缩
+// //	for i, _ := range s.keyvals {
+// //		go func(m *kvmgr) {
+// //			b := make([]byte, 0, buffsize)
+// //			b = buffer.AppendInt32(b, 0) //占位符
+
+// 			/*
+// 			 *  考虑在执行snapshot之前先变更某个kv,之后将其kick
+// 			 *  在执行snapshot的时候kv在m.kv中已经被删除，但存在于m.kicks中
+// 			 *
+// 			 *  在这种情况下是否可以忽略对kv的proposal_kick写入snapshot?
+// 			 *
+// 			 *  答案是不行，因为可能前一个snapshot中存在这个kv,如果忽略proposal_kick
+// 			 *  那么在后面的snapshot merge中就kv就无法被剔除。
+// 			 *
+// 			 *  但是，如果不忽略proposal_kick,在snapshot重放的过程中（replayFromBytes以及snapMerge）就可能
+// 			 *  出现kick kv但kv实际不存在的情况()。
+// 			 *
+// 			 *  为了处理这种情况执行snapMerge以及当replayFromBytes传入callByReplaySnapshot=true时，将直接忽略这种情况。
+// 			 *
+// 			 */
+
+// //			for _, v := range m.kv {
+// //				if v.snapshot {
+// //					v.snapshot = false
+// //					b = serilizeKv(b, proposal_snapshot, v.uniKey, v.version, v.fields)
+// //				}
+// //			}
+
+// //			for k, _ := range m.kicks {
+// //				b = serilizeKv(b, proposal_kick, k, 0, nil)
+// //			}
+
+// 			m.kicks = map[string]bool{}
+
+// 			c := getCompressor()
+
+// 			cb, err := c.Compress(b[4:])
+// 			if nil != err {
+// 				GetSugar().Errorf("snapshot compress error:%v", err)
+// 				b = append(b, byte(0))
+// 				binary.BigEndian.PutUint32(b[:4], uint32(len(b)-4))
+// 			} else {
+// 				b = b[:4]
+// 				b = append(b, cb...)
+// 				b = append(b, byte(1))
+// 				binary.BigEndian.PutUint32(b[:4], uint32(len(cb)+1))
+// 			}
+// 			releaseCompressor(c)
+
+// 			mtx.Lock()
+// 			buff = append(buff, b...)
+// 			mtx.Unlock()
+
+// 			waitGroup.Done()
+
+// 		}(&s.keyvals[i])
+// 	}
+
+// 	waitGroup.Wait()
+
+// 	buff = s.lease.snapshot(buff)
+
+// 	GetSugar().Infof("getSnapshot: %v,snapshot len:%d", time.Now().Sub(beg), len(buff))
+
+// 	return buff, nil
+// }

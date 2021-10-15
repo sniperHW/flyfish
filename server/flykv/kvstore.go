@@ -442,8 +442,9 @@ func (s *kvstore) processCommited(commited *raft.Committed) {
 	//raft请求snapshot,建立snapshot并返回
 	snapshotNotify := commited.GetSnapshotNotify()
 	if nil != snapshotNotify {
-		snapshot, _ := s.getSnapshot()
-		snapshotNotify.Notify(snapshot)
+		s.makeSnapshot(snapshotNotify)
+		//snapshot, _ := s.getSnapshot()
+		//snapshotNotify.Notify(snapshot)
 	}
 }
 

@@ -101,18 +101,17 @@ func (rc *RaftNode) onTriggerSnapshotOK(snap raftpb.Snapshot) {
 }
 
 func (rc *RaftNode) triggerSnapshot(st snapshotNotifyst) {
+	GetSugar().Infof("triggerSnapshot")
+
+	var err error
+	var snap raftpb.Snapshot
+
+	snap, err = rc.raftStorage.CreateSnapshot(st.applyIdx, &rc.confState, st.snapshot)
+	if err != nil {
+		panic(err)
+	}
 
 	go func() {
-
-		GetSugar().Infof("triggerSnapshot")
-
-		var err error
-		var snap raftpb.Snapshot
-
-		snap, err = rc.raftStorage.CreateSnapshot(st.applyIdx, &rc.confState, st.snapshot)
-		if err != nil {
-			panic(err)
-		}
 
 		if err = rc.saveSnap(snap); err != nil {
 			panic(err)
