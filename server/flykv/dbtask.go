@@ -182,7 +182,7 @@ func (this *dbLoadTask) onResultError(err errcode.Error) {
 			f.reply(err, nil, 0)
 			this.keyValue.pendingCmd.popFront()
 		}
-		this.keyValue.store.deleteKv(this.keyValue, false)
+		this.keyValue.store.deleteKv(this.keyValue /*, false*/)
 	})
 }
 

@@ -118,8 +118,8 @@ func (this *lruList) removeLRU(e *lruElement) {
 }
 
 type kvmgr struct {
-	kv    map[string]*kv
-	kicks map[string]bool //执行snapshot前所有被kick出缓存的unikey,用于打snapshot,执行完snapshot后会被清空，如果unikey重新被加入kv,相应的unikey也需要重kicks中移除。
+	kv map[string]*kv
+	//kicks map[string]bool //执行snapshot前所有被kick出缓存的unikey,用于打snapshot,执行完snapshot后会被清空，如果unikey重新被加入kv,相应的unikey也需要重kicks中移除。
 }
 
 var compressorPool sync.Pool = sync.Pool{
@@ -206,15 +206,15 @@ func (s *kvstore) addCliMessage(msg clientRequest) {
 
 const kvCmdQueueSize = 32
 
-func (s *kvstore) deleteKv(k *kv, kick bool) {
+func (s *kvstore) deleteKv(k *kv /*, kick bool*/) {
 	delete(s.keyvals[k.groupID].kv, k.uniKey)
 	if sl := s.slotsKvMap[k.slot]; nil != sl {
 		delete(sl, k.uniKey)
 	}
 	s.lru.removeLRU(&k.lru)
-	if kick {
-		s.keyvals[k.groupID].kicks[k.uniKey] = true
-	}
+	//if kick {
+	//	s.keyvals[k.groupID].kicks[k.uniKey] = true
+	//}
 }
 
 func (s *kvstore) newkv(slot int, groupID int, unikey string, key string, table string) (*kv, errcode.Error) {
@@ -433,7 +433,7 @@ func (s *kvstore) processCommited(commited *raft.Committed) {
 			v.(applyable).apply()
 		}
 	} else {
-		err := s.replayFromBytes(false, commited.Data)
+		err := s.replayFromBytes( /*false, */ commited.Data)
 		if nil != err {
 			GetSugar().Panic(err)
 		}
@@ -565,7 +565,7 @@ func (s *kvstore) serve() {
 					} else if nil != err {
 						GetSugar().Panic(err)
 					} else {
-						if err = s.replayFromBytes(true, data); err != nil {
+						if err = s.replayFromBytes( /*true,*/ data); err != nil {
 							GetSugar().Panic(err)
 						}
 					}
