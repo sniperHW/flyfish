@@ -399,22 +399,34 @@ func (s *kvstore) makeSnapshot(notifyer *raft.SnapshotNotify) {
 	GetSugar().Infof("traval all kv pairs and serilize take: %v", time.Now().Sub(beg))
 
 	go func() {
+		var mtx sync.Mutex
+		var waitGroup sync.WaitGroup
+		waitGroup.Add(len(snaps))
 		for _, b := range snaps {
-			c := getCompressor()
-			cb, err := c.Compress(b[4:])
-			if nil != err {
-				GetSugar().Errorf("snapshot compress error:%v", err)
-				b = append(b, byte(0))
-				binary.BigEndian.PutUint32(b[:4], uint32(len(b)-4))
-			} else {
-				b = b[:4]
-				b = append(b, cb...)
-				b = append(b, byte(1))
-				binary.BigEndian.PutUint32(b[:4], uint32(len(cb)+1))
-			}
-			releaseCompressor(c)
-			buff = append(buff, b...)
+			go func(b []byte) {
+				c := getCompressor()
+				cb, err := c.Compress(b[4:])
+				if nil != err {
+					GetSugar().Errorf("snapshot compress error:%v", err)
+					b = append(b, byte(0))
+					binary.BigEndian.PutUint32(b[:4], uint32(len(b)-4))
+				} else {
+					b = b[:4]
+					b = append(b, cb...)
+					b = append(b, byte(1))
+					binary.BigEndian.PutUint32(b[:4], uint32(len(cb)+1))
+				}
+
+				releaseCompressor(c)
+
+				mtx.Lock()
+				buff = append(buff, b...)
+				mtx.Unlock()
+
+				waitGroup.Done()
+			}(b)
 		}
+		waitGroup.Wait()
 
 		GetSugar().Infof("Snapshot len:%s", len(buff))
 
