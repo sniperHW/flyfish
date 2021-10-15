@@ -46,6 +46,11 @@ func (this *SnapshotNotify) Notify(snapshot []byte) {
 
 func (rc *RaftNode) maybeTriggerSnapshot(index uint64) bool {
 
+	if atomic.LoadInt64(&rc.snapshotMerging) != 0 {
+		//正在执行日志文件合并，不应该触发产生新的日志文件
+		return false
+	}
+
 	if rc.snapshotting {
 		return false
 	}
