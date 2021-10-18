@@ -83,10 +83,10 @@
 			"revisionTime": "2019-01-09T07:22:47Z"
 		},
 		{
-			"checksumSHA1": "vFb/tA6zAeUX1rCRmp3a1BNCmXU=",
+			"checksumSHA1": "XQkpCtCtcEMXBEQiwjvJZgnIgGc=",
 			"path": "github.com/jmoiron/sqlx",
-			"revision": "38398a30ed8516ffda617a04c822de09df8a3ec5",
-			"revisionTime": "2019-04-26T15:48:59Z"
+			"revision": "a62bc6088664eb854c3d5ebbd08a1ffd59662ef1",
+			"revisionTime": "2021-05-15T17:05:56Z"
 		},
 		{
 			"checksumSHA1": "i2O6Ji8ZL6q+EL+4cu/ftBytqZg=",

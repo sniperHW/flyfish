@@ -54,19 +54,22 @@ func (d *sqlDB) start(config *Config) error {
 		if nil != err {
 			return err
 		}
-		d.loaders = append(d.loaders, sql.NewLoader(dbl, 200, 5000))
+
+		l := sql.NewLoader(dbl, 200, 5000)
+
+		d.loaders = append(d.loaders, l)
 
 		dbw, err := sqlOpen(config.DBType, dbConfig.Host, dbConfig.Port, dbConfig.DB, dbConfig.User, dbConfig.Password)
 		if nil != err {
 			return err
 		}
 
-		d.updaters = append(d.updaters, sql.NewUpdater(dbw, config.DBType, d.wait))
-	}
+		w := sql.NewUpdater(dbw, config.DBType, d.wait)
 
-	for i := 0; i < 1; i++ {
-		d.loaders[i].Start()
-		d.updaters[i].Start()
+		d.updaters = append(d.updaters, w)
+
+		l.Start()
+		w.Start()
 	}
 
 	return nil

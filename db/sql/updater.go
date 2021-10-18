@@ -35,6 +35,7 @@ type updater struct {
 	que       *queue.ArrayQueue
 	waitGroup sync.WaitGroup
 	stoped    int32
+	startOnce sync.Once
 	toSqlStr  sqlstring
 }
 
@@ -49,34 +50,37 @@ func (this *updater) Stop() {
 }
 
 func (this *updater) Start() {
-	this.waitGroup.Add(1)
-	go func() {
-		for {
-			time.Sleep(time.Second * 60)
-			if nil != this.que.ForceAppend(sqlping) {
-				return
-			}
-		}
-	}()
+	this.startOnce.Do(func() {
 
-	go func() {
-		defer this.waitGroup.Done()
-		localList := make([]interface{}, 0, 200)
-		closed := false
-		for {
-
-			localList, closed = this.que.Pop(localList)
-			size := len(localList)
-			if closed && size == 0 {
-				break
+		this.waitGroup.Add(1)
+		go func() {
+			for {
+				time.Sleep(time.Second * 60)
+				if nil != this.que.ForceAppend(sqlping) {
+					return
+				}
 			}
+		}()
 
-			for i, v := range localList {
-				this.exec(v)
-				localList[i] = nil
+		go func() {
+			defer this.waitGroup.Done()
+			localList := make([]interface{}, 0, 200)
+			closed := false
+			for {
+
+				localList, closed = this.que.Pop(localList)
+				size := len(localList)
+				if closed && size == 0 {
+					break
+				}
+
+				for i, v := range localList {
+					this.exec(v)
+					localList[i] = nil
+				}
 			}
-		}
-	}()
+		}()
+	})
 }
 
 func (this *updater) exec(v interface{}) {

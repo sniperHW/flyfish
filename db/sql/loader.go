@@ -7,6 +7,7 @@ import (
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/proto"
 	"reflect"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unsafe"
@@ -34,6 +35,8 @@ func (q *query) onResult(err error, version int64, fields map[string]*proto.Fiel
 	}
 }
 
+var idCounter int32
+
 type loader struct {
 	queryGroup map[string]*query //要获取的结果集
 	count      int
@@ -42,6 +45,8 @@ type loader struct {
 	lastTime   time.Time
 	que        *queue.ArrayQueue
 	stoponce   int32
+	startOnce  sync.Once
+	id         int32
 }
 
 func (this *loader) IssueLoadTask(t db.DBLoadTask) error {
@@ -55,34 +60,37 @@ func (this *loader) Stop() {
 }
 
 func (this *loader) Start() {
-	go func() {
-		for {
-			time.Sleep(time.Second * 60)
-			if nil != this.que.ForceAppend(sqlping) {
-				return
+	this.startOnce.Do(func() {
+
+		go func() {
+			for {
+				time.Sleep(time.Second * 60)
+				if nil != this.que.ForceAppend(sqlping) {
+					return
+				}
 			}
-		}
-	}()
+		}()
 
-	go func() {
-		localList := make([]interface{}, 0, 200)
-		closed := false
-		for {
+		go func() {
+			localList := make([]interface{}, 0, 200)
+			closed := false
+			for {
 
-			localList, closed = this.que.Pop(localList)
-			size := len(localList)
-			if closed && size == 0 {
-				break
+				localList, closed = this.que.Pop(localList)
+				size := len(localList)
+				if closed && size == 0 {
+					break
+				}
+
+				for i, v := range localList {
+					this.append(v)
+					localList[i] = nil
+				}
+
+				this.exec()
 			}
-
-			for i, v := range localList {
-				this.append(v)
-				localList[i] = nil
-			}
-
-			this.exec()
-		}
-	}()
+		}()
+	})
 }
 
 func (this *loader) append(v interface{}) {
@@ -151,7 +159,7 @@ func (this *loader) exec() {
 		rows, err := this.dbc.Query(statement)
 
 		if v.table == "weapon" {
-			GetSugar().Infof("weapon %s", statement)
+			GetSugar().Infof("loader:%d weapon %s", this.id, statement)
 		}
 
 		v.buff.Free()
@@ -196,21 +204,26 @@ func (this *loader) exec() {
 							name := field_names[i]
 							fields[name] = proto.PackField(name, field_convter[i](filed_receiver[i]))
 						}
-						if v.table == "weapon" {
-							GetSugar().Infof("weapon load %s", key)
-						}
+
+						//if v.table == "weapon" {
+						//	GetSugar().Infof("loader:%d weapon load %s loadok", this.id, key)
+						//}
+
 						delete(v.tasks, key)
 						//返回给主循环
 						task.OnResult(nil, version, fields)
 					} else {
-						GetSugar().Infof("weapon load %s failed", key)
-						//panic("here")
+						if v.table == "weapon" {
+							GetSugar().Infof("loader:%d weapon load %s failed", this.id, key)
+						}
 					}
 				}
 			}
 
 			for kk, vv := range v.tasks {
-				delete(v.tasks, kk)
+				if v.table == "weapon" {
+					GetSugar().Infof("loader:%d weapon %s not_exit", this.id, kk)
+				}
 				vv.OnResult(errCode, 0, nil)
 			}
 		}
@@ -223,5 +236,6 @@ func NewLoader(dbc *sqlx.DB, maxbatchSize int, quesize int) *loader {
 		max:        maxbatchSize,
 		que:        queue.NewArrayQueue(quesize),
 		dbc:        dbc,
+		id:         atomic.AddInt32(&idCounter, 1),
 	}
 }
