@@ -115,6 +115,10 @@ func (this *loader) append(v interface{}) {
 			q.buff.AppendString(",'").AppendString(key).AppendString("'")
 		}
 
+		if nil != q.tasks[key] {
+			panic("duplicate load request")
+		}
+
 		q.tasks[key] = task
 		this.count++
 
@@ -145,6 +149,11 @@ func (this *loader) exec() {
 		statement := *(*string)(unsafe.Pointer(&b))
 		beg := time.Now()
 		rows, err := this.dbc.Query(statement)
+
+		if v.table == "weapon" {
+			GetSugar().Infof("weapon %s", statement)
+		}
+
 		v.buff.Free()
 
 		elapse := time.Now().Sub(beg)
@@ -187,14 +196,21 @@ func (this *loader) exec() {
 							name := field_names[i]
 							fields[name] = proto.PackField(name, field_convter[i](filed_receiver[i]))
 						}
+						if v.table == "weapon" {
+							GetSugar().Infof("weapon load %s", key)
+						}
 						delete(v.tasks, key)
 						//返回给主循环
 						task.OnResult(nil, version, fields)
+					} else {
+						GetSugar().Infof("weapon load %s failed", key)
+						//panic("here")
 					}
 				}
 			}
 
-			for _, vv := range v.tasks {
+			for kk, vv := range v.tasks {
+				delete(v.tasks, kk)
 				vv.OnResult(errCode, 0, nil)
 			}
 		}

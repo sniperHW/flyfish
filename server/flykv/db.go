@@ -49,7 +49,7 @@ func NewSqlDB() *sqlDB {
 func (d *sqlDB) start(config *Config) error {
 	dbConfig := config.DBConfig
 
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 1; i++ {
 		dbl, err := sqlOpen(config.DBType, dbConfig.Host, dbConfig.Port, dbConfig.DB, dbConfig.User, dbConfig.Password)
 		if nil != err {
 			return err
@@ -64,7 +64,7 @@ func (d *sqlDB) start(config *Config) error {
 		d.updaters = append(d.updaters, sql.NewUpdater(dbw, config.DBType, d.wait))
 	}
 
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 1; i++ {
 		d.loaders[i].Start()
 		d.updaters[i].Start()
 	}

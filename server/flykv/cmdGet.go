@@ -13,6 +13,7 @@ type cmdGet struct {
 	cmdBase
 	tbmeta db.TableMeta
 	wants  []string
+	uniKey string
 }
 
 func (this *cmdGet) makeResponse(err errcode.Error, fields map[string]*flyproto.Field, version int64) *cs.RespMessage {
@@ -42,6 +43,11 @@ func (this *cmdGet) makeResponse(err errcode.Error, fields map[string]*flyproto.
 				}
 			}
 		} else {
+
+			if this.tbmeta.TableName() == "weapon" {
+				GetSugar().Infof("weapon record_not_exist:%s %d %d", this.uniKey, len(fields), version)
+			}
+
 			err = Err_record_notexist
 		}
 	}
@@ -53,6 +59,12 @@ func (this *cmdGet) makeResponse(err errcode.Error, fields map[string]*flyproto.
 }
 
 func (this *cmdGet) onLoadResult(err error, proposal *kvProposal) {
+	if err == db.ERR_RecordNotExist {
+		if this.tbmeta.TableName() == "weapon" {
+			GetSugar().Infof("weapon 2 record_not_exist:%s", this.uniKey)
+		}
+	}
+
 	return
 }
 
@@ -66,6 +78,7 @@ func (s *kvstore) makeGet(keyvalue *kv, processDeadline time.Time, respDeadline 
 
 	get := &cmdGet{
 		tbmeta: keyvalue.tbmeta,
+		uniKey: keyvalue.uniKey,
 	}
 
 	initCmdBase(&get.cmdBase, flyproto.CmdType_Get, c, seqno, req.Version, processDeadline, respDeadline, &s.wait4ReplyCount, get.makeResponse)
