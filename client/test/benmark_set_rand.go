@@ -12,7 +12,7 @@ import (
 	kclient "github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/logger"
-	"github.com/sniperHW/flyfish/server/kvnode"
+	"github.com/sniperHW/flyfish/server/flykv"
 )
 
 var (
