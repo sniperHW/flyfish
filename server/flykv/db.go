@@ -49,7 +49,7 @@ func NewSqlDB() *sqlDB {
 func (d *sqlDB) start(config *Config) error {
 	dbConfig := config.DBConfig
 
-	for i := 0; i < 1; i++ {
+	for i := 0; i < 5; i++ {
 		dbl, err := sqlOpen(config.DBType, dbConfig.Host, dbConfig.Port, dbConfig.DB, dbConfig.User, dbConfig.Password)
 		if nil != err {
 			return err
@@ -76,7 +76,7 @@ func (d *sqlDB) start(config *Config) error {
 }
 
 func (d *sqlDB) issueLoad(l db.DBLoadTask) bool {
-	idx := sslot.StringHash(l.GetUniKey())
+	idx := sslot.StringHash(l.GetTable())
 	return d.loaders[idx%len(d.loaders)].IssueLoadTask(l) == nil
 }
 

@@ -207,4 +207,5 @@ type DBUpdateTask interface {
 	ClearUpdateStateAndReleaseLock()
 	GetUpdateAndClearUpdateState() UpdateState //获取脏状态同时将其清理
 	GetUniKey() string
+	GetTable() string
 }

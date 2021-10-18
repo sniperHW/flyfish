@@ -8,6 +8,10 @@ import (
 	"sync/atomic"
 )
 
+func (this *dbUpdateTask) GetTable() string {
+	return this.keyValue.tbmeta.TableName()
+}
+
 func (this *dbUpdateTask) isDoing() bool {
 	this.Lock()
 	defer this.Unlock()
