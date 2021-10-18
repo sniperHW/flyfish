@@ -380,32 +380,6 @@ type kvnode struct {
 	store     *kvstore
 }
 
-func snapMerge(snaps ...[]byte) ([]byte, error) {
-
-	//kvstore每次都是全量快照，实际这里并不需要合并，直返返回snaps最后一个元素即可
-
-	store := map[string]string{}
-	for _, v := range snaps {
-		var s map[string]string
-		if err := json.Unmarshal(v[4:], &s); err != nil {
-			return nil, err
-		}
-
-		for k, vv := range s {
-			store[k] = vv
-		}
-	}
-
-	if b, err := json.Marshal(store); nil != err {
-		return nil, err
-	} else {
-		bb := buffer.New(make([]byte, 4+len(b)))
-		bb.AppendUint32(uint32(len(b)))
-		bb.AppendBytes(b)
-		return bb.Bytes(), nil
-	}
-}
-
 func newKvNode(id int, cluster string) *kvnode {
 
 	clusterArray := strings.Split(cluster, ",")
@@ -435,7 +409,7 @@ func newKvNode(id int, cluster string) *kvnode {
 
 	mutilRaft := NewMutilRaft()
 
-	rn := NewRaftNode(snapMerge, mutilRaft, mainQueue, (id<<16)+1, peers, false, "log", "kv")
+	rn := NewRaftNode(mutilRaft, mainQueue, (id<<16)+1, peers, false, "log", "kv")
 
 	store := newKVStore(mainQueue, rn)
 
@@ -623,7 +597,15 @@ func TestCluster(t *testing.T) {
 
 	GetSugar().Info("startOkCh4")
 
-	assert.Equal(t, "sniperHW", node4.store.kvStore["sniperHW"])
+	for {
+		_, ok := node4.store.kvStore["sniperHW"]
+		if ok {
+			assert.Equal(t, "sniperHW", node4.store.kvStore["sniperHW"])
+			break
+		}
+	}
+
+	//assert.Equal(t, "sniperHW", node4.store.kvStore["sniperHW"])
 
 	//test remove node
 	leader.store.RemoveNode(uint64((4 << 16) + 1))

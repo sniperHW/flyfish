@@ -14,7 +14,7 @@ import (
 	kclient "github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/logger"
-	"github.com/sniperHW/flyfish/server/kvnode"
+	"github.com/sniperHW/flyfish/server/flykv"
 )
 
 type result struct {
@@ -89,12 +89,12 @@ func main() {
 
 	id = 0
 
-	services := strings.Split(os.Args[3], ",")
+	service := os.Args[3]
 
 	bar = progressbar.New(int(total))
 
 	for j := 0; j < 100; j++ {
-		c := kclient.OpenClient(services[j%len(services)]).SetUnikeyPlacement(kvnode.MakeUnikeyPlacement([]int{1, 2, 3, 4, 5}))
+		c, _ := kclient.OpenClient(kclient.ClientConf{SoloService: service, UnikeyPlacement: flykv.MakeUnikeyPlacement([]int{1, 2, 3, 4, 5})})
 		go func() {
 			for {
 				for i := 0; i < 50; i++ {

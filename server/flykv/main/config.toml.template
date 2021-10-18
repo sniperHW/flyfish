@@ -1,8 +1,8 @@
 Mode = "solo"                                  #solo单机模式,cluster集群模式
 
-DBType                = "pgsql"
+DBType                  = "pgsql"
 
-SnapshotCurrentCount = 0                       #并行执行快照序列化数量，如果设置为0则取cpu数量
+SnapshotCurrentCount    = 0                       #并行执行快照序列化数量，如果设置为0则取cpu数量
 
 MainQueueMaxSize        = 10000                #store消息队列大小
 
@@ -29,22 +29,13 @@ ServicePort             = 8110
 RaftCluster             = "1@http://127.0.0.1:12377"
 Stores                  = [1,2,3,4,5]
 
-
-[ClusterConfig]
-ClusterID             = 1
-DBHost                = "localhost"
-DBPort                = 5432
-DBUser			      = "sniper"
-DBPassword            = "123456"
-ConfDB                = "test"
 	
 [DBConfig]
 Host                  = "localhost"
 Port                  = 5432
 User		          = "sniper"
 Password              = "123456"
-DataDB                = "test"
-MetaDB                = "test"
+DB                    = "test"
 
 
 [Log]

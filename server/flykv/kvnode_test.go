@@ -5,23 +5,22 @@ package flykv
 
 import (
 	"fmt"
+	"github.com/BurntSushi/toml"
+	"github.com/sniperHW/flyfish/client"
+	"github.com/sniperHW/flyfish/db"
+	"github.com/sniperHW/flyfish/db/sql"
+	"github.com/sniperHW/flyfish/logger"
+	"github.com/sniperHW/flyfish/pkg/raft"
+	"github.com/sniperHW/flyfish/server/flykv/metaLoader"
+	"github.com/sniperHW/flyfish/server/mock"
+	"github.com/sniperHW/flyfish/server/slot"
+	"github.com/stretchr/testify/assert"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/BurntSushi/toml"
-	"github.com/sniperHW/flyfish/backend/db"
-	"github.com/sniperHW/flyfish/backend/db/sql"
-	"github.com/sniperHW/flyfish/client"
-	"github.com/sniperHW/flyfish/logger"
-	"github.com/sniperHW/flyfish/pkg/raft"
-	"github.com/sniperHW/flyfish/server/flykv/metaLoader"
-	mockDB "github.com/sniperHW/flyfish/server/mock/db"
-	"github.com/sniperHW/flyfish/server/slot"
-	"github.com/stretchr/testify/assert"
 )
 
 type dbconf struct {
@@ -73,8 +72,8 @@ Host          = "%s"
 Port          = %d
 User	      = "%s"
 Password      = "%s"
-DataDB        = "%s"
-MetaDB        = "%s"
+DB            = "%s"
+
 
 
 [Log]
@@ -86,13 +85,13 @@ EnableLogStdout = false
 `
 
 type mockBackEnd struct {
-	d *mockDB.DB
+	d *mock.DB
 }
 
 func newMockDB() *mockBackEnd {
 
 	d := &mockBackEnd{
-		d: mockDB.New(),
+		d: mock.NewDB(),
 	}
 
 	return d
@@ -130,11 +129,13 @@ func init() {
 		panic(err)
 	}
 
-	config, _ = LoadConfigStr(fmt.Sprintf(configStr, 10018, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB, dbConf.PgDB))
+	config, _ = LoadConfigStr(fmt.Sprintf(configStr, 10018, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB))
+
+	fmt.Println(config.Mode)
 
 	dbConfig := config.DBConfig
 
-	dbMeta, _ = metaLoader.LoadDBMetaFromSqlCsv(config.DBType, dbConfig.Host, dbConfig.Port, dbConfig.MetaDB, dbConfig.User, dbConfig.Password)
+	dbMeta, _ = metaLoader.LoadDBMetaFromSqlCsv(config.DBType, dbConfig.Host, dbConfig.Port, dbConfig.DB, dbConfig.User, dbConfig.Password)
 
 }
 
@@ -142,15 +143,15 @@ func GetStore(unikey string) int {
 	return 1
 }
 
-func newSqlDBBackEnd() dbbackendI {
-	return NewSqlDbBackend()
+func newSqlDBBackEnd() dbI {
+	return NewSqlDB()
 }
 
-func newMockDBBackEnd() dbbackendI {
+func newMockDBBackEnd() dbI {
 	return newMockDB()
 }
 
-func start1Node(b dbbackendI) *kvnode {
+func start1Node(b dbI) *kvnode {
 
 	node := NewKvNode(1, config, dbMeta, sql.CreateDbMeta, b)
 

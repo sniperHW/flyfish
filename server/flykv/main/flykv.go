@@ -3,16 +3,15 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/sniperHW/flyfish/db/sql"
+	"github.com/sniperHW/flyfish/logger"
+	"github.com/sniperHW/flyfish/server/flykv"
+	"github.com/sniperHW/flyfish/server/flykv/metaLoader"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
-
-	"github.com/sniperHW/flyfish/backend/db/sql"
-	"github.com/sniperHW/flyfish/logger"
-	"github.com/sniperHW/flyfish/server/flykv"
-	"github.com/sniperHW/flyfish/server/flykv/metaLoader"
 )
 
 func main() {
@@ -40,14 +39,14 @@ func main() {
 
 	dbConfig := conf.DBConfig
 
-	meta, err := metaLoader.LoadDBMetaFromSqlCsv(conf.DBType, dbConfig.Host, dbConfig.Port, dbConfig.MetaDB, dbConfig.User, dbConfig.Password)
+	meta, err := metaLoader.LoadDBMetaFromSqlCsv(conf.DBType, dbConfig.Host, dbConfig.Port, dbConfig.DB, dbConfig.User, dbConfig.Password)
 
 	if nil != err {
 		flykv.GetSugar().Error(err)
 		return
 	}
 
-	node := flykv.NewKvNode(*id, conf, meta, sql.CreateDbMeta, flykv.NewSqlDbBackend())
+	node := flykv.NewKvNode(*id, conf, meta, sql.CreateDbMeta, flykv.NewSqlDB())
 
 	err = node.Start()
 	if nil == err {

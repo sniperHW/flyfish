@@ -1,11 +1,7 @@
 package raft
 
 import (
-	//"github.com/sniperHW/flyfish/pkg/buffer"
-
-	"fmt"
 	"github.com/dustin/go-humanize"
-	"github.com/sniperHW/flyfish/pkg/buffer"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	"go.etcd.io/etcd/pkg/types"
 	"go.etcd.io/etcd/raft"
@@ -13,10 +9,6 @@ import (
 	"go.etcd.io/etcd/wal/walpb"
 	"go.uber.org/zap"
 	"io"
-	"os"
-	"path/filepath"
-	"sort"
-	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -43,12 +35,6 @@ func (this *SnapshotNotify) Notify(snapshot []byte) {
 }
 
 func (rc *RaftNode) maybeTriggerSnapshot(index uint64) bool {
-
-	if atomic.LoadInt64(&rc.snapshotMerging) != 0 {
-		//正在执行日志文件合并，不应该触发产生新的日志文件
-		return false
-	}
-
 	if rc.snapshotting {
 		return false
 	}
@@ -62,31 +48,6 @@ func (rc *RaftNode) maybeTriggerSnapshot(index uint64) bool {
 	rc.snapshotting = true
 
 	return true
-}
-
-func (rc *RaftNode) getSnapFiles() []string {
-	snapfiles := []string{}
-
-	filepath.Walk(rc.snapdir,
-		func(path string, f os.FileInfo, err error) error {
-
-			if f == nil {
-				return err
-			}
-
-			if !f.IsDir() && strings.HasSuffix(path, ".snap") {
-				filename := strings.TrimLeft(path, rc.snapdir+"/")
-				snapfiles = append(snapfiles, filename)
-				return nil
-			}
-
-			return nil
-		})
-
-	//对snap文件按文件名排序
-
-	sort.Slice(snapfiles, func(i, j int) bool { return snapfiles[i] < snapfiles[j] })
-	return snapfiles
 }
 
 func (rc *RaftNode) onTriggerSnapshotOK(snap raftpb.Snapshot) {
@@ -115,20 +76,6 @@ func (rc *RaftNode) onTriggerSnapshotOK(snap raftpb.Snapshot) {
 		panic(err)
 	}
 
-	if nil != rc.snapMerge {
-		if !atomic.CompareAndSwapInt64(&rc.snapshotMerging, 0, 1) {
-			return
-		}
-
-		snapfiles := rc.getSnapFiles()
-
-		go func() {
-			if err := rc.mergeSnapshot(snapfiles); nil != err {
-				GetSugar().Errorf("mergeSnapshot error:%v", err)
-			}
-			atomic.StoreInt64(&rc.snapshotMerging, 0)
-		}()
-	}
 }
 
 func (rc *RaftNode) triggerSnapshot(st snapshotNotifyst) {
@@ -148,10 +95,8 @@ func (rc *RaftNode) triggerSnapshot(st snapshotNotifyst) {
 			panic(err)
 		}
 
-		if nil == rc.snapMerge {
-			//删除旧快照
-			rc.removeOldSnapAndWal(snap.Metadata.Term, snap.Metadata.Index-SnapshotCatchUpEntriesN)
-		}
+		//删除旧快照
+		rc.removeOldSnapAndWal(snap.Metadata.Term, snap.Metadata.Index-SnapshotCatchUpEntriesN)
 
 		select {
 		case rc.snapshotCh <- snap:
@@ -180,18 +125,10 @@ func (rc *RaftNode) saveSnap(snap raftpb.Snapshot) error {
 }
 
 func (rc *RaftNode) loadSnapshot() *raftpb.Snapshot {
-
-	if nil != rc.snapMerge {
-		if err := rc.mergeSnapshot(rc.getSnapFiles()); nil != err {
-			GetSugar().Fatalf("raftexample: error merge snapshot (%v)", err)
-		}
-	}
-
 	snapshot, err := rc.snapshotter.Load()
 	if err != nil && err != snap.ErrNoSnapshot {
 		GetSugar().Fatalf("raftexample: error loading snapshot (%v)", err)
 	}
-
 	return snapshot
 }
 
@@ -241,63 +178,27 @@ func newSnapshotReaderCloser(data []byte) io.ReadCloser {
 	return pr
 }
 
-func (rc *RaftNode) sendSnapshot(m raftpb.Message, snapfiles []string) {
-	b := buffer.New()
+func (rc *RaftNode) sendSnapshot(m raftpb.Message) {
+	data := make([]byte, len(m.Snapshot.Data))
 
-	if nil == rc.snapMerge {
-		//在不开启快照合并的情况下，每个快照都是全量快照，直接发送最后一个快照即可
-		v := snapfiles[len(snapfiles)-1]
-		var _term uint64
-		var _index uint64
+	copy(data, m.Snapshot.Data)
 
-		n, err := fmt.Sscanf(v, "%016x-%016x.snap", &_term, &_index)
+	pr := newSnapshotReaderCloser(data) //(b.Bytes())
 
-		if n != 2 || nil != err {
-			panic("invaild snap file")
-		}
-
-		if s, err := snap.Read(GetLogger(), rc.snapdir+"/"+v); nil != err {
-			GetSugar().Fatalf("read snap %s error:%v", v, err)
-		} else {
-			b.AppendBytes(s.Data)
-		}
-	} else {
-		for _, v := range snapfiles {
-
-			var _term uint64
-			var _index uint64
-
-			n, err := fmt.Sscanf(v, "%016x-%016x.snap", &_term, &_index)
-
-			if n != 2 || nil != err {
-				continue
-			}
-
-			if s, err := snap.Read(GetLogger(), rc.snapdir+"/"+v); nil != err {
-				GetSugar().Fatalf("read snap %s error:%v", v, err)
-			} else {
-				b.AppendBytes(s.Data)
-			}
-		}
-	}
-
-	m.Snapshot.Data = nil
-
-	pr := newSnapshotReaderCloser(b.Bytes())
-
-	snapMsg := *snap.NewMessage(m, pr, int64(b.Len()))
-
-	now := time.Now()
-	rc.transport.SendSnapshot(snapMsg)
-
-	fields := []zap.Field{
-		zap.Int("from", rc.ID()),
-		zap.String("to", types.ID(snapMsg.To).String()),
-		zap.Int64("bytes", snapMsg.TotalSize),
-		zap.String("size", humanize.Bytes(uint64(snapMsg.TotalSize))),
-	}
+	snapMsg := *snap.NewMessage(m, pr, int64(len(data))) //int64(b.Len()))
 
 	go func() {
+
+		now := time.Now()
+		rc.transport.SendSnapshot(snapMsg)
+
+		fields := []zap.Field{
+			zap.Int("from", rc.ID()),
+			zap.String("to", types.ID(snapMsg.To).String()),
+			zap.Int64("bytes", snapMsg.TotalSize),
+			zap.String("size", humanize.Bytes(uint64(snapMsg.TotalSize))),
+		}
+
 		select {
 		case ok := <-snapMsg.CloseNotify():
 			// delay releasing inflight snapshot for another 30 seconds to
@@ -313,44 +214,11 @@ func (rc *RaftNode) sendSnapshot(m raftpb.Message, snapfiles []string) {
 
 			atomic.AddInt64(&rc.inflightSnapshots, -1)
 
-			GetLogger().Info("sent merged snapshot", append(fields, zap.Duration("took", time.Since(now)))...)
+			GetLogger().Info("sent snapshot", append(fields, zap.Duration("took", time.Since(now)))...)
 
 		case <-rc.stopping:
 			GetLogger().Warn("canceled sending merged snapshot; server stopping", fields...)
 			return
 		}
 	}()
-}
-
-func (rc *RaftNode) mergeSnapshot(snapfiles []string) error {
-	snapshots := []*raftpb.Snapshot{}
-	datas := [][]byte{}
-
-	for _, v := range snapfiles {
-		if s, err := snap.Read(GetLogger(), rc.snapdir+"/"+v); nil != err {
-			return err
-		} else {
-			snapshots = append(snapshots, s)
-			datas = append(datas, s.Data)
-		}
-	}
-
-	if len(snapshots) <= 1 {
-		return nil
-	}
-
-	mergeSnap := raftpb.Snapshot{
-		Metadata: snapshots[len(snapshots)-1].Metadata,
-	}
-
-	if mergeData, err := rc.snapMerge(datas...); nil != err {
-		return err
-	} else {
-		mergeSnap.Data = mergeData
-		err = rc.snapshotter.SaveSnap(mergeSnap)
-		if nil == err {
-			rc.removeOldSnapAndWal(mergeSnap.Metadata.Term, mergeSnap.Metadata.Index-SnapshotCatchUpEntriesN)
-		}
-		return err
-	}
 }

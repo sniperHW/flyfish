@@ -92,10 +92,12 @@ func main() {
 
 	id = 0
 
+	service := os.Args[3]
+
 	bar = progressbar.New(int(total))
 
 	for j := 0; j < 100; j++ {
-		c := kclient.OpenClient(os.Args[3]).SetUnikeyPlacement(kvnode.MakeUnikeyPlacement([]int{1, 2, 3, 4, 5}))
+		c, _ := kclient.OpenClient(kclient.ClientConf{SoloService: service, UnikeyPlacement: flykv.MakeUnikeyPlacement([]int{1, 2, 3, 4, 5})})
 		go func() {
 			for {
 				for i := 0; i < 50; i++ {

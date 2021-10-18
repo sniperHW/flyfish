@@ -5,7 +5,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
-	backenddb "github.com/sniperHW/flyfish/backend/db"
+	backenddb "github.com/sniperHW/flyfish/db"
 )
 
 func pgsqlOpen(host string, port int, dbname string, user string, password string) (*sqlx.DB, error) {

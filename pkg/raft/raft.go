@@ -135,7 +135,6 @@ func (this *raftTaskMgr) onLeaderDemote() {
 }
 
 type RaftNode struct {
-	snapshotMerging   int64
 	inflightSnapshots int64
 	confChangeC       *queue.ArrayQueue
 	proposePipeline   *queue.ArrayQueue
@@ -183,8 +182,6 @@ type RaftNode struct {
 
 	idcounter int32
 	stoponce  int32
-
-	snapMerge func(...[]byte) ([]byte, error)
 }
 
 func readWALNames(dirpath string) []string {
@@ -467,14 +464,14 @@ func (rc *RaftNode) processMessages(ms []raftpb.Message) []raftpb.Message {
 		}
 
 		if ms[i].Type == raftpb.MsgSnap {
-			if !rc.snapshotting && atomic.LoadInt64(&rc.snapshotMerging) == 0 {
+			if !rc.snapshotting {
 				if atomic.AddInt64(&rc.inflightSnapshots, 1) > MaxInFlightMsgSnap {
 					// drop msgSnap if the inflight chan if full.
 					atomic.AddInt64(&rc.inflightSnapshots, -1)
 				} else {
 					//use sendsnap to send the snapshot
 					ms[i].Snapshot.Metadata.ConfState = rc.confState
-					go rc.sendSnapshot(ms[i], rc.getSnapFiles())
+					rc.sendSnapshot(ms[i])
 				}
 			}
 			ms[i].To = 0
@@ -700,7 +697,7 @@ func (rc *RaftNode) IssueConfChange(p ProposalConfChange) error {
 	return rc.confChangeC.ForceAppend(p)
 }
 
-func NewRaftNode(snapMerge func(...[]byte) ([]byte, error), mutilRaft *MutilRaft, commitC ApplicationQueue, id int, peers map[int]string, join bool, logPath string, raftLogPrefix string) *RaftNode {
+func NewRaftNode(mutilRaft *MutilRaft, commitC ApplicationQueue, id int, peers map[int]string, join bool, logPath string, raftLogPrefix string) *RaftNode {
 
 	nodeID := id >> 16
 	region := id & 0xFFFF
@@ -734,7 +731,6 @@ func NewRaftNode(snapMerge func(...[]byte) ([]byte, error), mutilRaft *MutilRaft
 		confChangeC:     queue.NewArrayQueue(),
 		proposePipeline: queue.NewArrayQueue(10000),
 		readPipeline:    queue.NewArrayQueue(10000),
-		snapMerge:       snapMerge,
 	}
 
 	go rc.startRaft()

@@ -71,8 +71,10 @@ func main() {
 
 	keyrange, _ = strconv.ParseInt(os.Args[1], 10, 32)
 
+	service := os.Args[2]
+
 	for j := 0; j < 50; j++ {
-		c := kclient.OpenClient(os.Args[2]).SetUnikeyPlacement(kvnode.MakeUnikeyPlacement([]int{1, 2, 3, 4, 5}))
+		c, _ := kclient.OpenClient(kclient.ClientConf{SoloService: service, UnikeyPlacement: flykv.MakeUnikeyPlacement([]int{1, 2, 3, 4, 5})})
 		for i := 0; i < 50; i++ {
 			Set(c)
 		}

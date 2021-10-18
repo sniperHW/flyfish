@@ -240,7 +240,7 @@ func (s *kvstore) makeSnapshot(notifyer *raft.SnapshotNotify) {
 		}
 		waitGroup.Wait()
 
-		GetSugar().Infof("Snapshot len:%s", len(buff))
+		GetSugar().Infof("Snapshot len:%d", len(buff))
 
 		notifyer.Notify(buff)
 	}()

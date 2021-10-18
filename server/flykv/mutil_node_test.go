@@ -1,13 +1,14 @@
 package flykv
 
+/*
 //go test -covermode=count -v -coverprofile=coverage.out -run=.
 //go tool cover -html=coverage.out
 
 import (
 	"fmt"
 	"github.com/BurntSushi/toml"
-	"github.com/sniperHW/flyfish/backend/db/sql"
 	"github.com/sniperHW/flyfish/client"
+	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	"github.com/stretchr/testify/assert"
@@ -18,56 +19,56 @@ import (
 
 func TestMutilNode(t *testing.T) {
 	var configStr1 string = `
-	
+
 	Mode = "solo"
 
 	DBType = "pgsql"
-	
+
 	SnapshotCurrentCount    = 1
-	
+
 	LruCheckInterval        = 100              #每隔100ms执行一次lru剔除操作
 
 	MainQueueMaxSize        = 10000
-	
+
 	MaxCachePerStore        = 100               #每组最大key数量，超过数量将会触发key剔除
-	
+
 	SqlLoadPipeLineSize     = 200                  #sql加载管道线大小
-	
+
 	SqlLoadQueueSize        = 10000                #sql加载请求队列大小，此队列每CacheGroup一个
-	
+
 	SqlLoaderCount          = 5
 	SqlUpdaterCount         = 5
-	
+
 	ProposalFlushInterval   = 100
-	ReadFlushInterval       = 10 
-	
-	
+	ReadFlushInterval       = 10
+
+
 	[SoloConfig]
-	RaftUrl 				=  "%s"	
+	RaftUrl 				=  "%s"
 	ServiceHost             = "127.0.0.1"
 	ServicePort             = %d
 	RaftCluster             = "1@http://127.0.0.1:12377,2@http://127.0.0.1:12378,3@http://127.0.0.1:12379"
 	Stores                  = [1]
-	
-						  
+
+
 	[DBConfig]
 
-	
-	
+
+
 	DbHost          = "%s"
 	DbPort          = %d
 	DbUser			= "%s"
 	DbPassword      = "%s"
 	DataDB          = "%s"
 	ConfDB          = "%s"
-	
-	
+
+
 	[Log]
 	MaxLogfileSize  = 104857600 # 100mb
 	LogDir          = "log"
 	LogPrefix       = "flyfish"
 	LogLevel        = "info"
-	EnableLogStdout = false	
+	EnableLogStdout = false
 	`
 
 	DefaultSnapshotCount := raft.DefaultSnapshotCount
@@ -216,56 +217,56 @@ func TestMutilNode(t *testing.T) {
 	time.Sleep(time.Second * 2)
 
 	var configStr2 string = `
-	
+
 	Mode = "solo"
 
 	DBType = "pgsql"
-	
+
 	SnapshotCurrentCount    = 1
 
 	MainQueueMaxSize        = 10000
-	
+
 	LruCheckInterval        = 100              #每隔100ms执行一次lru剔除操作
-	
+
 	MaxCachePerStore        = 100               #每组最大key数量，超过数量将会触发key剔除
-	
+
 	SqlLoadPipeLineSize     = 200                  #sql加载管道线大小
-	
+
 	SqlLoadQueueSize        = 10000                #sql加载请求队列大小，此队列每CacheGroup一个
-	
+
 	SqlLoaderCount          = 5
 	SqlUpdaterCount         = 5
-	
+
 	ProposalFlushInterval   = 100
-	ReadFlushInterval       = 10 
-	
-	
+	ReadFlushInterval       = 10
+
+
 	[SoloConfig]
-	RaftUrl                 =  "%s"	
+	RaftUrl                 =  "%s"
 	ServiceHost             = "127.0.0.1"
 	ServicePort             = %d
 	RaftCluster             = "1@http://127.0.0.1:12377,2@http://127.0.0.1:12378,3@http://127.0.0.1:12379,4@http://127.0.0.1:22381"
 	Stores                  = [1]
-	
-						  
+
+
 	[DBConfig]
 
-	
-	
+
+
 	Host          = "%s"
 	Port          = %d
 	User		  = "%s"
 	Password      = "%s"
 	DataDB        = "%s"
 	ConfDB        = "%s"
-	
-	
+
+
 	[Log]
 	MaxLogfileSize  = 104857600 # 100mb
 	LogDir          = "log"
 	LogPrefix       = "flyfish"
 	LogLevel        = "info"
-	EnableLogStdout = false	
+	EnableLogStdout = false
 	`
 
 	conf4, _ := LoadConfigStr(fmt.Sprintf(configStr2, "http://127.0.0.1:22381", 10019, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB, dbConf.PgDB))
@@ -298,3 +299,4 @@ func TestMutilNode(t *testing.T) {
 	raft.DefaultSnapshotCount = DefaultSnapshotCount
 	raft.SnapshotCatchUpEntriesN = SnapshotCatchUpEntriesN
 }
+*/
