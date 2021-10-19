@@ -308,6 +308,10 @@ func getDeadline(timeout uint32) (time.Time, time.Time) {
 }
 
 func (s *kvstore) makeCmd(keyvalue *kv, req clientRequest) (cmdI, errcode.Error) {
+	if keyvalue.kicking {
+		return nil, errcode.New(errcode.Errcode_retry, "please retry later")
+	}
+
 	cmd := req.msg.Cmd
 	data := req.msg.Data
 	processDeadline, respDeadline := getDeadline(req.msg.Timeout)

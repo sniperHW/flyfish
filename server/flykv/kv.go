@@ -154,17 +154,15 @@ func (this *kv) process(cmd cmdI) {
 			}
 			if !this.store.db.issueLoad(l) {
 				cmd.reply(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"), nil, 0)
-				this.store.deleteKv(this /*, false*/)
+				this.store.deleteKv(this)
 			} else {
 				this.asynTaskCount++
 				this.state = kv_loading
-				GetSugar().Debugf("load--------------- %s", this.uniKey)
-
 			}
 			return
 		} else {
 			this.pendingCmd.add(cmd)
-			if !this.kicking && (this.state == kv_ok || this.state == kv_no_record) {
+			if this.state == kv_ok || this.state == kv_no_record {
 				this.store.lru.updateLRU(&this.lru)
 			}
 		}
@@ -264,6 +262,9 @@ func (this *kv) process(cmd cmdI) {
 						v.reply(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"), nil, 0)
 					}
 				} else {
+					if proposal.ptype == proposal_kick {
+						this.kicking = true
+					}
 					this.asynTaskCount++
 					return
 				}
