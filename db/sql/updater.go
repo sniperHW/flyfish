@@ -7,7 +7,6 @@ import (
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"net"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -33,7 +32,7 @@ type updater struct {
 	lastTime  time.Time
 	count     int
 	que       *queue.ArrayQueue
-	waitGroup sync.WaitGroup
+	waitGroup *sync.WaitGroup
 	stoped    int32
 	startOnce sync.Once
 	toSqlStr  sqlstring
@@ -132,25 +131,6 @@ func (this *updater) exec(v interface{}) {
 				str := b.ToStrUnsafe()
 				_, err = this.dbc.Exec(str)
 				if nil == err {
-					unikey := task.GetUniKey()
-					//if strings.HasPrefix(unikey, "weapon") {
-					//	slice0 := string(s.Fields["slice0"].GetBlob())
-					//	slice1 := string(s.Fields["slice1"].GetBlob())
-					//	slice2 := string(s.Fields["slice2"].GetBlob())
-					//	slice3 := string(s.Fields["slice3"].GetBlob())
-					//	GetSugar().Infof("insert or update weapon:%s, %s, %s, %s, %s", task.GetUniKey(), slice0, slice1, slice2, slice3)
-					//}
-
-					if strings.HasPrefix(unikey, "weapon") {
-						switch s.State {
-						case db.DBState_insert:
-							GetSugar().Infof("exec insert ok :%s", task.GetUniKey())
-						case db.DBState_update:
-							GetSugar().Infof("exec update ok :%s", task.GetUniKey())
-						case db.DBState_delete:
-							GetSugar().Infof("exec delete ok :%s", task.GetUniKey())
-						}
-					}
 					break
 				} else {
 					GetSugar().Errorf("sqlUpdater exec %s %v", str, err)
@@ -178,7 +158,7 @@ func (this *updater) exec(v interface{}) {
 	}
 }
 
-func NewUpdater(dbc *sqlx.DB, sqlType string, waitGroup sync.WaitGroup) *updater {
+func NewUpdater(dbc *sqlx.DB, sqlType string, waitGroup *sync.WaitGroup) *updater {
 	u := &updater{
 		que:       queue.NewArrayQueue(),
 		dbc:       dbc,

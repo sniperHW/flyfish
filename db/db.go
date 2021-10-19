@@ -161,11 +161,13 @@ type UpdateState struct {
 type DBLoader interface {
 	IssueLoadTask(DBLoadTask) error
 	Start()
+	Stop()
 }
 
 type DBUpdater interface {
 	IssueUpdateTask(DBUpdateTask) error
 	Start()
+	Stop()
 }
 
 /*

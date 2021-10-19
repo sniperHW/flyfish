@@ -68,7 +68,7 @@ func (d *sqlDB) start(config *Config) error {
 			return err
 		}
 
-		w := sql.NewUpdater(dbw, config.DBType, d.wait)
+		w := sql.NewUpdater(dbw, config.DBType, &d.wait)
 
 		d.updaters = append(d.updaters, w)
 		w.Start()
@@ -88,6 +88,14 @@ func (d *sqlDB) issueUpdate(u db.DBUpdateTask) bool {
 }
 
 func (d *sqlDB) stop() {
+	for _, v := range d.loaders {
+		v.Stop()
+	}
+
+	for _, v := range d.updaters {
+		v.Stop()
+	}
+
 	//等待所有updater结束
 	d.wait.Wait()
 }
