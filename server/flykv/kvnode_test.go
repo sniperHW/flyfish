@@ -737,12 +737,20 @@ func TestKick(t *testing.T) {
 
 	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
 
-	for i := 0; i < 200; i++ {
-		fields := map[string]interface{}{}
-		fields["age"] = 12
-		fields["name"] = "sniperHW"
-		c.Set("users1", fmt.Sprintf("sniperHW:%d", i), fields).Exec()
+	for j := 0; j < 10; j++ {
+		for i := 0; i < 200; i++ {
+			fields := map[string]interface{}{}
+			fields["age"] = 12
+			fields["name"] = "sniperHW"
+			c.Set("users1", fmt.Sprintf("sniperHW:%d", i), fields).Exec()
+		}
 	}
+
+	node.Stop()
+
+	node = start1Node(newMockDBBackEnd())
+
+	time.Sleep(time.Second * 5)
 
 	node.Stop()
 
