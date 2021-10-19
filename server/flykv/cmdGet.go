@@ -13,7 +13,6 @@ type cmdGet struct {
 	cmdBase
 	tbmeta db.TableMeta
 	wants  []string
-	uniKey string
 }
 
 func (this *cmdGet) makeResponse(err errcode.Error, fields map[string]*flyproto.Field, version int64) *cs.RespMessage {
@@ -26,11 +25,6 @@ func (this *cmdGet) makeResponse(err errcode.Error, fields map[string]*flyproto.
 		if !record_not_exist {
 			if this.version != nil && *this.version == version {
 				err = Err_record_unchange
-
-				if this.tbmeta.TableName() == "weapon" {
-					GetSugar().Infof("weapon record_unchange:%s %d %d", this.uniKey, len(fields), version)
-				}
-
 			} else {
 				for _, name := range this.wants {
 					v := fields[name]
@@ -46,17 +40,8 @@ func (this *cmdGet) makeResponse(err errcode.Error, fields map[string]*flyproto.
 						}
 					}
 				}
-
-				if this.tbmeta.TableName() == "weapon" {
-					GetSugar().Infof("weapon reply ok:%s %d %d %v", this.uniKey, len(pbdata.Fields), version, this.wants)
-				}
 			}
 		} else {
-
-			if this.tbmeta.TableName() == "weapon" {
-				GetSugar().Infof("weapon record_not_exist1:%s %d %d", this.uniKey, len(fields), version)
-			}
-
 			err = Err_record_notexist
 		}
 	}
@@ -68,12 +53,6 @@ func (this *cmdGet) makeResponse(err errcode.Error, fields map[string]*flyproto.
 }
 
 func (this *cmdGet) onLoadResult(err error, proposal *kvProposal) {
-	if err == db.ERR_RecordNotExist {
-		if this.tbmeta.TableName() == "weapon" {
-			GetSugar().Infof("weapon record_not_exist2:%s", this.uniKey)
-		}
-	}
-
 	return
 }
 
@@ -87,7 +66,6 @@ func (s *kvstore) makeGet(keyvalue *kv, processDeadline time.Time, respDeadline 
 
 	get := &cmdGet{
 		tbmeta: keyvalue.tbmeta,
-		uniKey: keyvalue.uniKey,
 	}
 
 	initCmdBase(&get.cmdBase, flyproto.CmdType_Get, c, seqno, req.Version, processDeadline, respDeadline, &s.wait4ReplyCount, get.makeResponse)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/proto"
+	"reflect"
 	"strconv"
 	"strings"
 )
@@ -13,7 +14,7 @@ import (
 type QueryMeta struct {
 	field_names    []string //所有的字段名
 	field_convter  []func(interface{}) interface{}
-	field_receiver []interface{}
+	field_receiver []reflect.Type
 }
 
 func (this *QueryMeta) GetFieldNames() []string {
@@ -34,7 +35,11 @@ func (this *QueryMeta) GetFieldConvter() []func(interface{}) interface{} {
 }
 
 func (this *QueryMeta) GetReceiver() []interface{} {
-	return this.field_receiver
+	receiver := make([]interface{}, len(this.field_receiver))
+	for i, v := range this.field_receiver {
+		receiver[i] = reflect.New(v).Interface()
+	}
+	return receiver
 }
 
 //字段元信息
@@ -162,16 +167,19 @@ func (this *TableMeta) CheckFieldsName(fields []string) error {
 	return nil
 }
 
-func getReceiver(tt proto.ValueType) interface{} {
+func getReceiver(tt proto.ValueType) reflect.Type {
 	if tt == proto.ValueType_int {
-		return new(int64)
+		var v int64
+		return reflect.TypeOf(v)
 	} else if tt == proto.ValueType_float {
-		return new(float64)
+		var v float64
+		return reflect.TypeOf(v)
 	} else if tt == proto.ValueType_string {
-		return new(string)
+		var v string
+		return reflect.TypeOf(v)
 	} else if tt == proto.ValueType_blob {
-		b := []byte{}
-		return &b
+		var v []byte
+		return reflect.TypeOf(v)
 	} else {
 		return nil
 	}
@@ -249,7 +257,7 @@ func CreateDbMeta(def *db.DbDef) (db.DBMeta, error) {
 			insertFieldOrder: []string{},
 			queryMeta: &QueryMeta{
 				field_names:    []string{},
-				field_receiver: []interface{}{},
+				field_receiver: []reflect.Type{},
 				field_convter:  []func(interface{}) interface{}{},
 			},
 			version: def.Version,

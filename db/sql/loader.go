@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"container/list"
 	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/pkg/buffer"
@@ -25,28 +26,26 @@ const sqlping ping = ping(1)
 type query struct {
 	table string
 	meta  *TableMeta
-	tasks map[string]db.DBLoadTask
-	buff  *buffer.Buffer
+	tasks map[string]*list.List
 }
 
 func (q *query) onResult(err error, version int64, fields map[string]*proto.Field) {
 	for _, v := range q.tasks {
-		v.OnResult(err, version, fields)
+		for t := v.Front(); nil != t; t = v.Front() {
+			task := v.Remove(t).(db.DBLoadTask)
+			task.OnResult(err, version, fields)
+		}
 	}
 }
 
-var idCounter int32
-
 type loader struct {
 	queryGroup map[string]*query //要获取的结果集
-	count      int
 	max        int
 	dbc        *sqlx.DB
 	lastTime   time.Time
 	que        *queue.ArrayQueue
 	stoponce   int32
 	startOnce  sync.Once
-	id         int32
 }
 
 func (this *loader) IssueLoadTask(t db.DBLoadTask) error {
@@ -113,24 +112,21 @@ func (this *loader) append(v interface{}) {
 		if !ok {
 			q = &query{
 				table: table,
-				buff:  buffer.Get(),
-				tasks: map[string]db.DBLoadTask{},
+				tasks: map[string]*list.List{},
 				meta:  task.GetTableMeta().(*TableMeta),
 			}
 			this.queryGroup[table] = q
-			q.buff.AppendString(q.meta.GetSelectPrefix()).AppendString("'").AppendString(key).AppendString("'")
-		} else {
-			q.buff.AppendString(",'").AppendString(key).AppendString("'")
 		}
 
-		if nil != q.tasks[key] {
-			panic("duplicate load request")
+		l, ok := q.tasks[key]
+		if !ok {
+			l = list.New()
+			q.tasks[key] = l
 		}
 
-		q.tasks[key] = task
-		this.count++
+		l.PushBack(task)
 
-		if this.count >= this.max {
+		if len(q.tasks) >= this.max {
 			this.exec()
 		}
 	}
@@ -138,12 +134,10 @@ func (this *loader) append(v interface{}) {
 
 func (this *loader) reset() {
 	this.queryGroup = map[string]*query{}
-	this.count = 0
 }
 
 func (this *loader) exec() {
-
-	if this.count == 0 {
+	if len(this.queryGroup) == 0 {
 		return
 	}
 
@@ -152,30 +146,35 @@ func (this *loader) exec() {
 	this.lastTime = time.Now()
 
 	for _, v := range this.queryGroup {
-		v.buff.AppendString(");")
-		b := v.buff.Bytes()
+		buff := buffer.Get()
+		first := true
+		for kk, _ := range v.tasks {
+			if first {
+				first = false
+				buff.AppendString(v.meta.GetSelectPrefix()).AppendString("'").AppendString(kk).AppendString("'")
+			} else {
+				buff.AppendString(",'").AppendString(kk).AppendString("'")
+			}
+		}
+
+		buff.AppendString(");")
+		b := buff.Bytes()
+
 		statement := *(*string)(unsafe.Pointer(&b))
 		beg := time.Now()
 		rows, err := this.dbc.Query(statement)
-
-		if v.table == "weapon" {
-			GetSugar().Infof("loader:%d weapon %s", this.id, statement)
-		}
-
-		v.buff.Free()
+		buff.Free()
 
 		elapse := time.Now().Sub(beg)
 
 		if elapse/time.Millisecond > 500 {
-			GetSugar().Infof("sqlQueryer long exec elapse:%v count:%d", elapse, this.count)
+			GetSugar().Infof("sqlQueryer long exec elapse:%v count:%d", elapse, len(v.tasks))
 		}
 
 		if nil != err {
 			GetSugar().Errorf("sqlQueryer exec error:%v %s", err, reflect.TypeOf(err).String())
 			v.onResult(db.ERR_DbError, 0, nil)
 		} else {
-
-			defer rows.Close()
 
 			queryMeta := v.meta.GetQueryMeta()
 
@@ -194,8 +193,8 @@ func (this *loader) exec() {
 				} else {
 
 					key := field_convter[0](filed_receiver[0]).(string)
-					task := v.tasks[key]
-					if nil != task {
+					tasks, ok := v.tasks[key]
+					if ok {
 						//填充返回值
 						version := field_convter[1](filed_receiver[1]).(int64)
 						fields := map[string]*proto.Field{}
@@ -205,27 +204,19 @@ func (this *loader) exec() {
 							fields[name] = proto.PackField(name, field_convter[i](filed_receiver[i]))
 						}
 
-						//if v.table == "weapon" {
-						//	GetSugar().Infof("loader:%d weapon load %s loadok", this.id, key)
-						//}
-
 						delete(v.tasks, key)
-						//返回给主循环
-						task.OnResult(nil, version, fields)
-					} else {
-						if v.table == "weapon" {
-							GetSugar().Infof("loader:%d weapon load %s failed", this.id, key)
+
+						for t := tasks.Front(); nil != t; t = tasks.Front() {
+							task := tasks.Remove(t).(db.DBLoadTask)
+							task.OnResult(nil, version, fields)
 						}
 					}
 				}
 			}
 
-			for kk, vv := range v.tasks {
-				if v.table == "weapon" {
-					GetSugar().Infof("loader:%d weapon %s not_exit", this.id, kk)
-				}
-				vv.OnResult(errCode, 0, nil)
-			}
+			rows.Close()
+
+			v.onResult(errCode, 0, nil)
 		}
 	}
 }
@@ -236,6 +227,5 @@ func NewLoader(dbc *sqlx.DB, maxbatchSize int, quesize int) *loader {
 		max:        maxbatchSize,
 		que:        queue.NewArrayQueue(quesize),
 		dbc:        dbc,
-		id:         atomic.AddInt32(&idCounter, 1),
 	}
 }
