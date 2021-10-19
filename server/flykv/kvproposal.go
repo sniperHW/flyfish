@@ -79,7 +79,9 @@ func (this *kvProposal) apply() {
 			this.keyValue.pendingCmd.popFront()
 		}
 
-		this.keyValue.store.deleteKv(this.keyValue /*, true*/)
+		this.keyValue.store.deleteKv(this.keyValue)
+
+		//GetSugar().Infof("kick:%s", this.keyValue.uniKey)
 
 	} else {
 
@@ -116,10 +118,8 @@ func (this *kvProposal) apply() {
 
 		if oldState == kv_loading {
 			this.keyValue.store.lru.updateLRU(&this.keyValue.lru)
-			//delete(this.keyValue.store.keyvals[this.keyValue.groupID].kicks, this.keyValue.uniKey)
 		}
 
-		//this.keyValue.snapshot = true
 		this.keyValue.process(nil)
 
 	}

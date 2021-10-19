@@ -42,7 +42,7 @@ SnapshotCurrentCount    = 1
 
 MainQueueMaxSize        = 10000
 
-LruCheckInterval        = 100              #每隔100ms执行一次lru剔除操作
+LruCheckInterval        = 1000              #每隔100ms执行一次lru剔除操作
 
 MaxCachePerStore        = 100               #每组最大key数量，超过数量将会触发key剔除
 
@@ -560,6 +560,11 @@ func Test1Node1Store2(t *testing.T) {
 }
 
 func Test1Node1StoreSnapshot1(t *testing.T) {
+
+	oldV := config.MaxCachePerStore
+
+	config.MaxCachePerStore = 10000
+
 	DefaultSnapshotCount := raft.DefaultSnapshotCount
 	SnapshotCatchUpEntriesN := raft.SnapshotCatchUpEntriesN
 
@@ -637,6 +642,8 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 	raft.DefaultSnapshotCount = DefaultSnapshotCount
 	raft.SnapshotCatchUpEntriesN = SnapshotCatchUpEntriesN
 
+	config.MaxCachePerStore = oldV
+
 }
 
 func Test1Node1StoreSnapshot2(t *testing.T) {
@@ -711,6 +718,31 @@ func TestUseMockDB(t *testing.T) {
 	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
 
 	test(t, c)
+
+	node.Stop()
+
+	fmt.Println("stop ok")
+}
+
+func TestKick(t *testing.T) {
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, 100, 14, 10, true))
+
+	//先删除所有kv文件
+	os.RemoveAll("./log/kvnode-1-1")
+	os.RemoveAll("./log/kvnode-1-1-snap")
+
+	client.InitLogger(GetLogger())
+
+	node := start1Node(newMockDBBackEnd())
+
+	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
+
+	for i := 0; i < 200; i++ {
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		fields["name"] = "sniperHW"
+		c.Set("users1", fmt.Sprintf("sniperHW:%d", i), fields).Exec()
+	}
 
 	node.Stop()
 

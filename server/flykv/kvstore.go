@@ -119,7 +119,6 @@ func (this *lruList) removeLRU(e *lruElement) {
 
 type kvmgr struct {
 	kv map[string]*kv
-	//kicks map[string]bool //执行snapshot前所有被kick出缓存的unikey,用于打snapshot,执行完snapshot后会被清空，如果unikey重新被加入kv,相应的unikey也需要重kicks中移除。
 }
 
 var compressorPool sync.Pool = sync.Pool{
@@ -175,6 +174,14 @@ type kvstore struct {
 	dbWriteBackCount int32
 }
 
+func (s *kvstore) kvcount() int {
+	total := 0
+	for _, v := range s.keyvals {
+		total += len(v.kv)
+	}
+	return total
+}
+
 func (s *kvstore) hasLease() bool {
 	r := s.lease.hasLease()
 	if !r {
@@ -206,15 +213,12 @@ func (s *kvstore) addCliMessage(msg clientRequest) {
 
 const kvCmdQueueSize = 32
 
-func (s *kvstore) deleteKv(k *kv /*, kick bool*/) {
+func (s *kvstore) deleteKv(k *kv) {
 	delete(s.keyvals[k.groupID].kv, k.uniKey)
 	if sl := s.slotsKvMap[k.slot]; nil != sl {
 		delete(sl, k.uniKey)
 	}
 	s.lru.removeLRU(&k.lru)
-	//if kick {
-	//	s.keyvals[k.groupID].kicks[k.uniKey] = true
-	//}
 }
 
 func (s *kvstore) newkv(slot int, groupID int, unikey string, key string, table string) (*kv, errcode.Error) {
@@ -272,18 +276,22 @@ func (this *kvstore) tryKick(kv *kv) bool {
 }
 
 func (s *kvstore) checkLru(ch chan struct{}) {
+	defer func() {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
+	}()
 	if s.ready && s.leader == s.raftID && atomic.LoadInt32(&s.stoped) == 0 {
-		defer func() {
-			select {
-			case ch <- struct{}{}:
-			default:
-			}
-		}()
-		if s.lru.head.nnext != &s.lru.tail {
+		kvcount := s.kvcount()
+		if kvcount > s.kvnode.config.MaxCachePerStore && s.lru.head.nnext != &s.lru.tail {
+			k := 0
 			cur := s.lru.tail.pprev
-			for cur != &s.lru.head && len(s.keyvals) > s.kvnode.config.MaxCachePerStore {
+			for cur != &s.lru.head && kvcount-k > s.kvnode.config.MaxCachePerStore {
 				if !s.tryKick(cur.keyvalue) {
 					return
+				} else {
+					k++
 				}
 				cur = cur.pprev
 			}
@@ -433,7 +441,7 @@ func (s *kvstore) processCommited(commited *raft.Committed) {
 			v.(applyable).apply()
 		}
 	} else {
-		err := s.replayFromBytes( /*false, */ commited.Data)
+		err := s.replayFromBytes(commited.Data)
 		if nil != err {
 			GetSugar().Panic(err)
 		}
@@ -443,8 +451,6 @@ func (s *kvstore) processCommited(commited *raft.Committed) {
 	snapshotNotify := commited.GetSnapshotNotify()
 	if nil != snapshotNotify {
 		s.makeSnapshot(snapshotNotify)
-		//snapshot, _ := s.getSnapshot()
-		//snapshotNotify.Notify(snapshot)
 	}
 }
 
@@ -504,6 +510,20 @@ func (s *kvstore) serve() {
 			}
 		}
 	}()
+
+	/*go func() {
+		for atomic.LoadInt32(&s.stoped) == 0 {
+			time.Sleep(time.Second)
+			err := s.mainQueue.q.Append(0, func() {
+				GetSugar().Infof("store:%d kvcount:%d", s.shard, s.kvcount())
+			})
+
+			if err == queue.ErrQueueClosed {
+				return
+			}
+		}
+
+	}()*/
 
 	go func() {
 		defer func() {
@@ -565,7 +585,7 @@ func (s *kvstore) serve() {
 					} else if nil != err {
 						GetSugar().Panic(err)
 					} else {
-						if err = s.replayFromBytes( /*true,*/ data); err != nil {
+						if err = s.replayFromBytes(data); err != nil {
 							GetSugar().Panic(err)
 						}
 					}
