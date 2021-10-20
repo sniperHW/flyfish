@@ -113,13 +113,6 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 			p := data.(ppkv)
 			groupID := sslot.StringHash(p.unikey) % len(s.keyvals)
 			keyvalue, ok := s.keyvals[groupID].kv[p.unikey]
-
-			//ttable, tkey := splitUniKey(p.unikey)
-
-			//if ttable == "quest" && tkey == "4523157239152854" {
-			//	GetSugar().Infof("%s %d %d", p.unikey, ptype, p.version)
-			//}
-
 			if !ok {
 				if ptype == proposal_kick {
 					return fmt.Errorf("bad data,%s with a bad proposal_type:%d", p.unikey, ptype)
@@ -142,11 +135,6 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 			case proposal_update:
 				keyvalue.version = p.version
 				for k, v := range p.fields {
-					//if ttable == "quest" && tkey == "4523157239152854" {
-					//	if k == "character_g" {
-					//		GetSugar().Infof("%s update character_g:%s", p.unikey, string(v.GetBlob()))
-					//	}
-					//}
 					keyvalue.fields[k] = v
 				}
 
@@ -155,17 +143,6 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 			case proposal_snapshot:
 				keyvalue.version = p.version
 				keyvalue.fields = p.fields
-
-				//if ttable == "quest" && tkey == "4523157239152854" {
-				//
-				//	character_g := keyvalue.fields["character_g"]
-				//	if nil != character_g {
-				//		GetSugar().Infof("%s snapshot character_g:%s", p.unikey, string(character_g.GetBlob()))
-				//	} else {
-				//		GetSugar().Infof("%s snapshot missing character_g", p.unikey)
-				//	}
-				//}
-
 				if keyvalue.version != 0 {
 					keyvalue.state = kv_ok
 				} else {

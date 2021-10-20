@@ -54,6 +54,7 @@ type kvnode struct {
 	metaCreator func(*db.DbDef) (db.DBMeta, error)
 	consoleConn *fnet.Udp
 	selfUrl     string
+	kvcount     int64
 }
 
 func verifyLogin(loginReq *flyproto.LoginReq) bool {

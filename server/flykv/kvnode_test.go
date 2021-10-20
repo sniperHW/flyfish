@@ -738,7 +738,7 @@ func TestKick(t *testing.T) {
 	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
 
 	for j := 0; j < 10; j++ {
-		for i := 0; i < 200; i++ {
+		for i := 0; i < 20; i++ {
 			fields := map[string]interface{}{}
 			fields["age"] = 12
 			fields["name"] = "sniperHW"

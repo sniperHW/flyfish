@@ -116,32 +116,24 @@ func mergeAbleCmd(cmdType flyproto.CmdType) bool {
 	case flyproto.CmdType_Get, flyproto.CmdType_Set, flyproto.CmdType_IncrBy, flyproto.CmdType_DecrBy:
 		return true
 	default:
+		return false
 	}
-	return false
 }
 
 func (this *kv) kickable() bool {
 	if this.store.needWriteBackAll {
 		return false
-	}
-
-	if this.kicking {
+	} else if this.kicking {
 		return false
-	}
-
-	if !(this.state == kv_ok || this.state == kv_no_record) {
+	} else if !(this.state == kv_ok || this.state == kv_no_record) {
 		return false
-	}
-
-	if this.asynTaskCount > 0 || !this.pendingCmd.empty() {
+	} else if this.asynTaskCount > 0 || !this.pendingCmd.empty() {
 		return false
-	}
-
-	if this.updateTask.isDoing() {
+	} else if this.updateTask.isDoing() {
 		return false
+	} else {
+		return true
 	}
-
-	return true
 }
 
 func (this *kv) process(cmd cmdI) {
@@ -172,102 +164,98 @@ func (this *kv) process(cmd cmdI) {
 
 	if this.pendingCmd.empty() || this.asynTaskCount != 0 {
 		return
-	} else {
+	}
+
+	for {
+		cmds := []cmdI{}
 		for {
-			cmds := []cmdI{}
-			for {
-				c := this.pendingCmd.front()
-				if nil == c {
-					break
-				}
+			c := this.pendingCmd.front()
+			if nil == c {
+				break
+			}
 
-				if c.isTimeout() || c.isCancel() {
-					this.pendingCmd.popFront()
-					c.dontReply()
-				} else if !c.check(this) {
+			if c.isTimeout() || c.isCancel() {
+				this.pendingCmd.popFront()
+				c.dontReply()
+			} else if !c.check(this) {
+				this.pendingCmd.popFront()
+			} else {
+				if 0 == len(cmds) {
+					cmds = append(cmds, c)
 					this.pendingCmd.popFront()
 				} else {
-					if 0 == len(cmds) {
-						cmds = append(cmds, c)
-						this.pendingCmd.popFront()
-					} else {
-						f := cmds[0]
-						if mergeAbleCmd(f.cmdType()) {
-							if f.cmdType() != c.cmdType() {
-								//不同类命令，不能合并
-								break
-							} else if f.cmdType() != flyproto.CmdType_Get && c.checkVersion() {
-								//命令要检查版本号，不能跟之前的命令合并
-								break
-							} else {
-								cmds = append(cmds, c)
-								this.pendingCmd.popFront()
-							}
-						} else {
+					f := cmds[0]
+					if mergeAbleCmd(f.cmdType()) {
+						if f.cmdType() != c.cmdType() {
+							//不同类命令，不能合并
 							break
+						} else if f.cmdType() != flyproto.CmdType_Get && c.checkVersion() {
+							//命令要检查版本号，不能跟之前的命令合并
+							break
+						} else {
+							cmds = append(cmds, c)
+							this.pendingCmd.popFront()
 						}
+					} else {
+						break
 					}
 				}
 			}
+		}
 
-			if len(cmds) == 0 {
-				return
+		if len(cmds) == 0 {
+			return
+		}
+
+		var linearizableRead *kvLinearizableRead
+		var proposal *kvProposal
+
+		switch cmds[0].cmdType() {
+		case flyproto.CmdType_Get:
+			linearizableRead = &kvLinearizableRead{
+				keyValue: this,
+				cmds:     cmds,
+			}
+		default:
+			proposal = &kvProposal{
+				ptype:    proposal_snapshot,
+				keyValue: this,
+				cmds:     cmds,
+				version:  this.version,
+				fields:   map[string]*flyproto.Field{},
 			}
 
-			var linearizableRead *kvLinearizableRead
-			var proposal *kvProposal
+			for _, v := range cmds {
+				v.(interface {
+					do(*kv, *kvProposal)
+				}).do(this, proposal)
+			}
 
-			switch cmds[0].cmdType() {
-			case flyproto.CmdType_Get:
-				linearizableRead = &kvLinearizableRead{
-					keyValue: this,
-					cmds:     cmds,
-				}
-			default:
-				proposal = &kvProposal{
-					ptype:    proposal_snapshot,
-					keyValue: this,
-					cmds:     cmds,
-					version:  this.version,
-					fields:   map[string]*flyproto.Field{},
-				}
+			if proposal.ptype == proposal_none {
+				proposal = nil
+			}
+		}
 
+		if linearizableRead != nil || proposal != nil {
+			var err error
+
+			if nil != linearizableRead {
+				err = this.store.rn.IssueLinearizableRead(linearizableRead)
+			} else {
+				proposal.check()
+				err = this.store.rn.IssueProposal(proposal)
+			}
+
+			if nil != err {
 				for _, v := range cmds {
-					v.(interface {
-						do(*kv, *kvProposal)
-					}).do(this, proposal)
+					v.reply(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"), nil, 0)
 				}
-
-				if proposal.ptype == proposal_none {
-					proposal = nil
+			} else {
+				if nil != proposal && proposal.ptype == proposal_kick {
+					this.kicking = true
 				}
-
-				//GetSugar().Infof("proposal type %v", proposal.ptype)
-
-			}
-
-			if linearizableRead != nil || proposal != nil {
-				var err error
-
-				if nil != linearizableRead {
-					err = this.store.rn.IssueLinearizableRead(linearizableRead)
-				} else {
-					proposal.check()
-					err = this.store.rn.IssueProposal(proposal)
-				}
-
-				if nil != err {
-					for _, v := range cmds {
-						GetSugar().Infof("reply retry")
-						v.reply(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"), nil, 0)
-					}
-				} else {
-					if nil != proposal && proposal.ptype == proposal_kick {
-						this.kicking = true
-					}
-					this.asynTaskCount++
-					return
-				}
+				this.asynTaskCount++
+				return
 			}
 		}
 	}

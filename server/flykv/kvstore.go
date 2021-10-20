@@ -157,6 +157,7 @@ type kvstore struct {
 	rn               *raft.RaftNode
 	mainQueue        applicationQueue
 	keyvals          []kvmgr
+	kvcount          int
 	slotsKvMap       map[int]map[string]*kv
 	db               dbI
 	lru              lruList
@@ -172,14 +173,6 @@ type kvstore struct {
 	memberShip       map[int]bool
 	slotsTransferOut map[int]*SlotTransferProposal //正在迁出的slot
 	dbWriteBackCount int32
-}
-
-func (s *kvstore) kvcount() int {
-	total := 0
-	for _, v := range s.keyvals {
-		total += len(v.kv)
-	}
-	return total
 }
 
 func (s *kvstore) hasLease() bool {
@@ -214,6 +207,8 @@ func (s *kvstore) addCliMessage(msg clientRequest) {
 const kvCmdQueueSize = 32
 
 func (s *kvstore) deleteKv(k *kv) {
+	s.kvcount--
+	atomic.AddInt64(&s.kvnode.kvcount, -1)
 	delete(s.keyvals[k.groupID].kv, k.uniKey)
 	if sl := s.slotsKvMap[k.slot]; nil != sl {
 		delete(sl, k.uniKey)
@@ -244,7 +239,8 @@ func (s *kvstore) newkv(slot int, groupID int, unikey string, key string, table 
 	}
 
 	s.keyvals[groupID].kv[unikey] = k
-
+	s.kvcount++
+	atomic.AddInt64(&s.kvnode.kvcount, 1)
 	if sl := s.slotsKvMap[slot]; nil != sl {
 		sl[unikey] = k
 	} else {
@@ -256,21 +252,17 @@ func (s *kvstore) newkv(slot int, groupID int, unikey string, key string, table 
 }
 
 func (this *kvstore) tryKick(kv *kv) bool {
-	if kv.kickable() {
-		kv.kicking = true
-	} else {
+	if !kv.kickable() {
 		return false
 	}
 
-	proposal := &kvProposal{
+	if err := this.rn.IssueProposal(&kvProposal{
 		ptype:    proposal_kick,
 		keyValue: kv,
-	}
-
-	if err := this.rn.IssueProposal(proposal); nil != err {
-		kv.kicking = false
+	}); nil != err {
 		return false
 	} else {
+		kv.kicking = true
 		return true
 	}
 }
@@ -283,11 +275,10 @@ func (s *kvstore) checkLru(ch chan struct{}) {
 		}
 	}()
 	if s.ready && s.leader == s.raftID && atomic.LoadInt32(&s.stoped) == 0 {
-		kvcount := s.kvcount()
-		if kvcount > s.kvnode.config.MaxCachePerStore && s.lru.head.nnext != &s.lru.tail {
+		if s.kvcount > s.kvnode.config.MaxCachePerStore && s.lru.head.nnext != &s.lru.tail {
 			k := 0
 			cur := s.lru.tail.pprev
-			for cur != &s.lru.head && kvcount-k > s.kvnode.config.MaxCachePerStore {
+			for cur != &s.lru.head && s.kvcount-k > s.kvnode.config.MaxCachePerStore {
 				if !s.tryKick(cur.keyvalue) {
 					return
 				} else {
@@ -405,13 +396,12 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 				})
 				return
 			} else {
-				if len(s.keyvals) > (s.kvnode.config.MaxCachePerStore*3)/2 {
+				if s.kvcount > (s.kvnode.config.MaxCachePerStore*3)/2 {
 					req.from.send(&cs.RespMessage{
 						Cmd:   req.msg.Cmd,
 						Seqno: req.msg.Seqno,
 						Err:   errcode.New(errcode.Errcode_retry, "kvstore busy,please retry later"),
 					})
-					GetSugar().Infof("reply retry %d %d", len(s.keyvals), s.kvnode.config.MaxCachePerStore)
 					return
 				} else {
 					table, key := splitUniKey(req.msg.UniKey)

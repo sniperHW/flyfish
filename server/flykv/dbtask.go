@@ -180,13 +180,12 @@ func (this *dbLoadTask) GetTableMeta() db.TableMeta {
 
 func (this *dbLoadTask) onResultError(err errcode.Error) {
 	this.cmd.reply(err, nil, 0)
-
 	this.keyValue.store.mainQueue.AppendHighestPriotiryItem(func() {
+		this.keyValue.store.deleteKv(this.keyValue)
 		for f := this.keyValue.pendingCmd.front(); nil != f; f = this.keyValue.pendingCmd.front() {
 			f.reply(err, nil, 0)
 			this.keyValue.pendingCmd.popFront()
 		}
-		this.keyValue.store.deleteKv(this.keyValue /*, false*/)
 	})
 }
 
@@ -206,13 +205,6 @@ func (this *dbLoadTask) OnResult(err error, version int64, fields map[string]*fl
 			proposal.fields = fields
 			proposal.version = version
 		}
-
-		//if nil == err {
-		//	if len(this.keyValue.tbmeta.GetAllFieldsName()) != len(fields) {
-		//		GetSugar().Errorf("%s %d %d", this.keyValue.uniKey, len(this.keyValue.tbmeta.GetAllFieldsName()), len(fields))
-		//		panic("len(this.keyValue.tbmeta.GetAllFieldsName()) != len(fields)")
-		//	}
-		//}
 
 		this.cmd.onLoadResult(err, proposal)
 
