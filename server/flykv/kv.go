@@ -247,12 +247,12 @@ func (this *kv) process(cmd cmdI) {
 			}
 
 			if linearizableRead != nil || proposal != nil {
-
 				var err error
 
 				if nil != linearizableRead {
 					err = this.store.rn.IssueLinearizableRead(linearizableRead)
 				} else {
+					proposal.check()
 					err = this.store.rn.IssueProposal(proposal)
 				}
 
@@ -262,7 +262,7 @@ func (this *kv) process(cmd cmdI) {
 						v.reply(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"), nil, 0)
 					}
 				} else {
-					if proposal.ptype == proposal_kick {
+					if nil != proposal && proposal.ptype == proposal_kick {
 						this.kicking = true
 					}
 					this.asynTaskCount++

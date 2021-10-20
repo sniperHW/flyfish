@@ -36,7 +36,9 @@ func (this *cmdSet) onLoadResult(err error, proposal *kvProposal) {
 			proposal.dbstate = db.DBState_insert
 		} else {
 			proposal.version = incVersion(proposal.version)
-			proposal.fields = this.fields
+			for k, v := range this.fields {
+				proposal.fields[k] = v
+			}
 			proposal.dbstate = db.DBState_update
 		}
 	}

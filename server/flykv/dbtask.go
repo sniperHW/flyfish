@@ -207,7 +207,16 @@ func (this *dbLoadTask) OnResult(err error, version int64, fields map[string]*fl
 			proposal.version = version
 		}
 
+		//if nil == err {
+		//	if len(this.keyValue.tbmeta.GetAllFieldsName()) != len(fields) {
+		//		GetSugar().Errorf("%s %d %d", this.keyValue.uniKey, len(this.keyValue.tbmeta.GetAllFieldsName()), len(fields))
+		//		panic("len(this.keyValue.tbmeta.GetAllFieldsName()) != len(fields)")
+		//	}
+		//}
+
 		this.cmd.onLoadResult(err, proposal)
+
+		proposal.check()
 
 		if err = this.keyValue.store.rn.IssueProposal(proposal); nil != err {
 			GetSugar().Infof("reply retry")

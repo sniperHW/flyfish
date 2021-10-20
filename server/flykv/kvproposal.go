@@ -46,7 +46,17 @@ func (this *kvProposal) OnError(err error) {
 	})
 }
 
+func (this *kvProposal) check() {
+	/*if this.ptype == proposal_snapshot && this.version != 0 {
+		if len(this.keyValue.tbmeta.GetAllFieldsName()) != len(this.fields) {
+			GetSugar().Errorf("%s %d %d", this.keyValue.uniKey, len(this.keyValue.tbmeta.GetAllFieldsName()), len(this.fields))
+			panic("len(this.keyValue.tbmeta.GetAllFieldsName()) != len(fields)")
+		}
+	}*/
+}
+
 func (this *kvProposal) Serilize(b []byte) []byte {
+	this.check()
 	return serilizeKv(b, this.ptype, this.keyValue.uniKey, this.version, this.fields)
 }
 
