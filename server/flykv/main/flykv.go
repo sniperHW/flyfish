@@ -29,13 +29,13 @@ func main() {
 	conf, err := flykv.LoadConfig(*config)
 
 	if nil != err {
-		flykv.GetSugar().Error(err)
+		fmt.Println(err)
 		return
 	}
 
 	logname := fmt.Sprintf("flykv:%d.log", *id)
 
-	flykv.InitLogger(logger.NewZapLogger(logname, conf.Log.LogDir, conf.Log.LogLevel, 100, 14, 20, true))
+	flykv.InitLogger(logger.NewZapLogger(logname, conf.Log.LogDir, conf.Log.LogLevel, conf.Log.MaxLogfileSize, conf.Log.MaxAge, conf.Log.MaxBackups, conf.Log.EnableStdout))
 
 	dbConfig := conf.DBConfig
 

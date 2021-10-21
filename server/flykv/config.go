@@ -42,6 +42,10 @@ type Config struct {
 		PD string //pd服务地址用;分隔
 	}
 
+	RaftLogDir string //raft日志存放目录
+
+	RaftLogPrefix string
+
 	SnapshotCurrentCount int //并行执行快照序列化数量，如果设置为0则取cpu数量
 
 	LruCheckInterval int //ms
@@ -71,10 +75,12 @@ type Config struct {
 	}
 
 	Log struct {
-		MaxLogfileSize  int
-		LogDir          string
-		LogPrefix       string
-		LogLevel        string
-		EnableLogStdout bool
+		MaxLogfileSize int
+		LogDir         string
+		LogPrefix      string
+		LogLevel       string
+		EnableStdout   bool
+		MaxAge         int
+		MaxBackups     int
 	}
 }

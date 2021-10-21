@@ -20,7 +20,12 @@ ReadFlushInterval       = 10
 
 ProposalBatchCount      = 200
 
-ReadBatchCount          = 100             	 
+ReadBatchCount          = 100
+
+RaftLogDir              = "raftLog"
+
+RaftLogPrefix           = "flykv"
+
 
 [SoloConfig]
 RaftUrl                 = "http://127.0.0.1:12377"
@@ -41,4 +46,8 @@ DB                    = "test"
 [Log]
 MaxLogfileSize  = 104857600 # 100mb
 LogDir          = "log"
-LogLevel        = "info"	
+LogLevel        = "info"
+LogPrefix       = "flykv"
+EnableStdout = false
+MaxAge          = 14   //最大保留14天的日志
+MaxBackups      = 10   //最多保留10个滚动日志	 

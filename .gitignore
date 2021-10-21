@@ -13,14 +13,6 @@ config.toml
 *.dylib
 
 app/webTool/conf/conf.toml
-kv-1-1
-kv-1-1-snap
-kv-2-1
-kv-3-1
-kv-2-1-snap
-kv-3-1-snap
-kv-4-1
-kv-4-1-snap
 cluster1.sh
 cluster2.sh
 cluster3.sh
@@ -28,8 +20,8 @@ config1.toml
 config2.toml
 config3.toml
 etcd_raft.txt
-kvserver
 log1/
 coverage.out
 test_dbconf.toml
 flyfish.code-workspace
+raftLog/

@@ -151,6 +151,7 @@ type RaftNode struct {
 	join      bool   // node is joining an existing cluster
 	waldir    string // path to WAL directory
 	snapdir   string // path to snapshot directory
+	logDir    string
 	lastIndex uint64 // index of log at start
 
 	confState     raftpb.ConfState
@@ -602,6 +603,7 @@ func (rc *RaftNode) Stop() {
 }
 
 func (rc *RaftNode) startRaft() {
+
 	if !fileutil.Exist(rc.snapdir) {
 		if err := os.Mkdir(rc.snapdir, 0750); err != nil {
 			GetSugar().Fatalf("raftexample: cannot create dir for snapshot (%v)", err)
@@ -697,7 +699,7 @@ func (rc *RaftNode) IssueConfChange(p ProposalConfChange) error {
 	return rc.confChangeC.ForceAppend(p)
 }
 
-func NewRaftNode(mutilRaft *MutilRaft, commitC ApplicationQueue, id int, peers map[int]string, join bool, logPath string, raftLogPrefix string) *RaftNode {
+func NewRaftNode(mutilRaft *MutilRaft, commitC ApplicationQueue, id int, peers map[int]string, join bool, logDir string, raftLogPrefix string) *RaftNode {
 
 	nodeID := id >> 16
 	region := id & 0xFFFF
@@ -707,8 +709,9 @@ func NewRaftNode(mutilRaft *MutilRaft, commitC ApplicationQueue, id int, peers m
 		id:         id,
 		peers:      peers,
 		join:       join,
-		waldir:     fmt.Sprintf("%s/%s-%d-%d", logPath, raftLogPrefix, nodeID, region),
-		snapdir:    fmt.Sprintf("%s/%s-%d-%d-snap", logPath, raftLogPrefix, nodeID, region),
+		logDir:     logDir,
+		waldir:     fmt.Sprintf("%s/%s-%d-%d", logDir, raftLogPrefix, nodeID, region),
+		snapdir:    fmt.Sprintf("%s/%s-%d-%d-snap", logDir, raftLogPrefix, nodeID, region),
 		snapCount:  DefaultSnapshotCount,
 		stopc:      make(chan struct{}),
 		stopping:   make(chan struct{}),
@@ -731,6 +734,12 @@ func NewRaftNode(mutilRaft *MutilRaft, commitC ApplicationQueue, id int, peers m
 		confChangeC:     queue.NewArrayQueue(),
 		proposePipeline: queue.NewArrayQueue(10000),
 		readPipeline:    queue.NewArrayQueue(10000),
+	}
+
+	if !fileutil.Exist(rc.logDir) {
+		if err := os.Mkdir(rc.logDir, 0750); err != nil {
+			GetSugar().Fatalf("raftexample: cannot create dir for logDir (%v)", err)
+		}
 	}
 
 	go rc.startRaft()

@@ -56,6 +56,10 @@ SqlUpdaterCount         = 5
 ProposalFlushInterval   = 100
 ReadFlushInterval       = 10 
 
+RaftLogDir              = "testRaftLog"
+
+RaftLogPrefix           = "flykv"
+
 
 [SoloConfig]
 
@@ -79,9 +83,12 @@ DB            = "%s"
 [Log]
 MaxLogfileSize  = 104857600 # 100mb
 LogDir          = "log"
-LogPrefix       = "flyfish"
+LogPrefix       = "flykv"
 LogLevel        = "info"
-EnableLogStdout = false	
+EnableLogStdout = true	
+MaxAge          = 14
+MaxBackups      = 10
+
 `
 
 type mockBackEnd struct {
@@ -124,12 +131,17 @@ func init() {
 		http.ListenAndServe("localhost:6060", nil)
 	}()
 
+	var err error
+
 	dbConf := &dbconf{}
-	if _, err := toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
+	if _, err = toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
 		panic(err)
 	}
 
-	config, _ = LoadConfigStr(fmt.Sprintf(configStr, 10018, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB))
+	config, err = LoadConfigStr(fmt.Sprintf(configStr, 10018, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB))
+	if nil != err {
+		panic(err)
+	}
 
 	fmt.Println(config.Mode)
 
@@ -495,11 +507,10 @@ func test(t *testing.T, c *client.Client) {
 
 func Test1Node1Store1(t *testing.T) {
 
-	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, 100, 14, 10, true))
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
 
 	//先删除所有kv文件
-	os.RemoveAll("./log/kvnode-1-1")
-	os.RemoveAll("./log/kvnode-1-1-snap")
+	os.RemoveAll("./testRaftLog")
 
 	client.InitLogger(GetLogger())
 
@@ -539,11 +550,10 @@ func Test1Node1Store1(t *testing.T) {
 
 func Test1Node1Store2(t *testing.T) {
 
-	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, 100, 14, 10, true))
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
 
 	//先删除所有kv文件
-	os.RemoveAll("./log/kvnode-1-1")
-	os.RemoveAll("./log/kvnode-1-1-snap")
+	os.RemoveAll("./testRaftLog")
 
 	client.InitLogger(GetLogger())
 
@@ -571,11 +581,10 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 	raft.DefaultSnapshotCount = 100
 	raft.SnapshotCatchUpEntriesN = 100
 
-	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, 100, 14, 10, true))
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
 
 	//先删除所有kv文件
-	os.RemoveAll("./log/kvnode-1-1")
-	os.RemoveAll("./log/kvnode-1-1-snap")
+	os.RemoveAll("./testRaftLog")
 
 	client.InitLogger(GetLogger())
 
@@ -653,11 +662,10 @@ func Test1Node1StoreSnapshot2(t *testing.T) {
 	raft.DefaultSnapshotCount = 100
 	raft.SnapshotCatchUpEntriesN = 100
 
-	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, 100, 14, 10, true))
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
 
 	//先删除所有kv文件
-	os.RemoveAll("./log/kvnode-1-1")
-	os.RemoveAll("./log/kvnode-1-1-snap")
+	os.RemoveAll("./testRaftLog")
 
 	client.InitLogger(GetLogger())
 
@@ -705,11 +713,10 @@ func Test1Node1StoreSnapshot2(t *testing.T) {
 }
 
 func TestUseMockDB(t *testing.T) {
-	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, 100, 14, 10, true))
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
 
 	//先删除所有kv文件
-	os.RemoveAll("./log/kvnode-1-1")
-	os.RemoveAll("./log/kvnode-1-1-snap")
+	os.RemoveAll("./testRaftLog")
 
 	client.InitLogger(GetLogger())
 
@@ -725,11 +732,10 @@ func TestUseMockDB(t *testing.T) {
 }
 
 func TestKick(t *testing.T) {
-	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, 100, 14, 10, true))
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
 
 	//先删除所有kv文件
-	os.RemoveAll("./log/kvnode-1-1")
-	os.RemoveAll("./log/kvnode-1-1-snap")
+	os.RemoveAll("./testRaftLog")
 
 	client.InitLogger(GetLogger())
 
