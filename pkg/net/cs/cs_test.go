@@ -3,22 +3,16 @@ package cs
 //go test -tags=bio -covermode=count -v -coverprofile=coverage.out -run=.
 //go tool cover -html=coverage.out
 import (
-	//"errors"
 	"fmt"
-	//"github.com/sniperHW/flyfish/pkg/buffer"
-	flynet "github.com/sniperHW/flyfish/pkg/net"
-	//"github.com/sniperHW/flyfish/pkg/net/pb"
-	flyproto "github.com/sniperHW/flyfish/proto"
-	//"github.com/stretchr/testify/assert"
-	//"net"
-	//"runtime"
 	"github.com/sniperHW/flyfish/errcode"
+	flynet "github.com/sniperHW/flyfish/pkg/net"
+	flyproto "github.com/sniperHW/flyfish/proto"
 	"testing"
 	"time"
 )
 
 func TestEcho(t *testing.T) {
-	l, _ := NewListener("tcp", "127.0.0.1:8010", func(_ *flyproto.LoginReq) bool {
+	l, _ := NewListener("tcp", "127.0.0.1:8010", 65535, func(_ *flyproto.LoginReq) bool {
 		return true
 	})
 
@@ -52,7 +46,7 @@ func TestEcho(t *testing.T) {
 		})
 	})
 
-	c := NewConnector("tcp", "127.0.0.1:8010")
+	c := NewConnector("tcp", "127.0.0.1:8010", 65535)
 	cc, err := c.Dial(time.Second)
 	if nil != err {
 		return

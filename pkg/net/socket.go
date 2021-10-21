@@ -3,8 +3,10 @@ package net
 import (
 	"errors"
 	"github.com/sniperHW/flyfish/pkg/buffer"
+	"github.com/sniperHW/flyfish/pkg/gopool"
 	"net"
 	"runtime"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -27,25 +29,68 @@ const (
 	fdoclose = int32(1 << 4)
 )
 
+var sendProcessPool *gopool.Pool = gopool.New(gopool.Option{
+	MaxRoutineCount: runtime.NumCPU() * 8,
+	Mode:            gopool.QueueMode,
+})
+
+type sendQueue struct {
+	sync.Mutex
+	ch     chan *buffer.Buffer
+	closed bool
+}
+
+func (s *sendQueue) push(b *buffer.Buffer) error {
+	s.Lock()
+	defer s.Unlock()
+	if !s.closed {
+		s.ch <- b
+		return nil
+	} else {
+		return errors.New("send queue closed")
+	}
+}
+
+func (s *sendQueue) pop() (*buffer.Buffer, bool) {
+	b, ok := <-s.ch
+	return b, ok
+}
+
+func (s *sendQueue) close() int {
+	s.Lock()
+	defer s.Unlock()
+	if !s.closed {
+		s.closed = true
+		close(s.ch)
+	}
+	return len(s.ch)
+}
+
 type Socket struct {
-	conn             net.Conn
-	flag             int32
-	ud               atomic.Value
-	sendCloseChan    chan struct{}
-	closeOnce        int32
-	beginOnce        int32
-	sendOnce         int32
-	doCloseOnce      int32
-	encoder          Encoder
-	inboundProcessor InBoundProcessor
-	errorCallback    func(*Socket, error)
-	closeCallBack    func(*Socket, error)
-	inboundCallBack  func(*Socket, interface{})
-	ioCount          int32
-	closeReason      error
-	sendTimeout      int64
-	recvTimeout      int64
-	sendQueue        *SendQueue
+	conn              net.Conn
+	flag              int32
+	ud                atomic.Value
+	sendCloseChan     chan struct{}
+	shutdownWriteOnce int32
+	closeOnce         int32
+	beginOnce         int32
+	sendOnce          int32
+	doCloseOnce       int32
+	encoder           Encoder
+	inboundProcessor  InBoundProcessor
+	errorCallback     func(*Socket, error)
+	closeCallBack     func(*Socket, error)
+	inboundCallBack   func(*Socket, interface{})
+	ioCount           int32
+	closeReason       error
+	sendTimeout       int64
+	recvTimeout       int64
+	muW               sync.Mutex
+	sendCh            *sendQueue
+	b                 *buffer.Buffer
+	sending           bool
+	maxSendBuffSize   int
+	sendReq           int
 }
 
 func (s *Socket) setFlag(flag int32) {
@@ -115,11 +160,6 @@ func (s *Socket) addIO() {
 	atomic.AddInt32(&s.ioCount, 1)
 }
 
-func (s *Socket) SetSendQueueSize(size int) *Socket {
-	s.sendQueue.SetFullSize(size)
-	return s
-}
-
 func (s *Socket) SetRecvTimeout(timeout time.Duration) *Socket {
 	atomic.StoreInt64(&s.recvTimeout, int64(timeout))
 	return s
@@ -139,9 +179,14 @@ func (s *Socket) getSendTimeout() time.Duration {
 }
 
 func (this *Socket) ShutdownWrite() {
-	closeOK, remain := this.sendQueue.Close()
-	if closeOK && remain == 0 {
-		this.conn.(interface{ CloseWrite() error }).CloseWrite()
+	if atomic.CompareAndSwapInt32(&this.closeOnce, 0, 1) {
+		this.muW.Lock()
+		defer this.muW.Unlock()
+		this.setFlag(fwclosed)
+		if this.sendReq == 0 && !this.sending && (nil == this.b || this.b.Len() == 0) {
+			this.sendCh.close()
+			this.conn.(interface{ CloseWrite() error }).CloseWrite()
+		}
 	}
 }
 
@@ -222,53 +267,43 @@ func (this *Socket) recvThreadFunc() {
 	}
 }
 
+func (this *Socket) onSendFinish(size int) {
+	this.muW.Lock()
+	b := this.b
+	if nil != b {
+		this.b = nil
+		this.muW.Unlock()
+		this.sendCh.push(b)
+	} else {
+		this.sending = false
+		if this.testFlag(fwclosed) {
+			this.sendCh.close()
+			this.conn.(interface{ CloseWrite() error }).CloseWrite()
+		}
+		this.muW.Unlock()
+	}
+}
+
 func (this *Socket) sendThreadFunc() {
+
 	defer func() {
 		close(this.sendCloseChan)
 		this.ioDone()
 	}()
 
 	var err error
-
-	localList := make([]interface{}, 0, 32)
-
-	closed := false
-
 	var n int
-
 	oldTimeout := this.getSendTimeout()
 	timeout := oldTimeout
 
 	for {
-
-		closed, localList = this.sendQueue.Get(localList)
-		size := len(localList)
-		if closed && size == 0 {
-			this.conn.(interface{ CloseWrite() error }).CloseWrite()
+		b, ok := this.sendCh.pop()
+		if !ok {
 			break
 		}
 
-		b := buffer.Get()
-		for i := 0; i < size; {
-			if b.Len() == 0 {
-				for i < size {
-					l := b.Len()
-					err = this.encoder.EnCode(localList[i], b)
-					localList[i] = nil
-					i++
-					if nil != err {
-						//EnCode错误，这个包已经写入到b中的内容需要直接丢弃
-						b.SetLen(l)
-						GetSugar().Errorf("encode error:%v", err)
-					}
-				}
-			}
-
-			if b.Len() == 0 {
-				b.Free()
-				break
-			}
-
+		buff := b.Bytes()
+		for {
 			oldTimeout = timeout
 			timeout = this.getSendTimeout()
 
@@ -278,13 +313,17 @@ func (this *Socket) sendThreadFunc() {
 
 			if timeout > 0 {
 				this.conn.SetWriteDeadline(time.Now().Add(timeout))
-				n, err = this.conn.Write(b.Bytes())
+				n, err = this.conn.Write(buff)
 			} else {
-				n, err = this.conn.Write(b.Bytes())
+				n, err = this.conn.Write(buff)
 			}
 
 			if nil == err {
-				b.Reset()
+				//通告发送完毕
+				n := b.Len()
+				b.Free()
+				this.onSendFinish(n)
+				break
 			} else if !this.testFlag(fclosed) {
 				if isNetTimeout(err) {
 					err = ErrSendTimeout
@@ -301,7 +340,7 @@ func (this *Socket) sendThreadFunc() {
 					return
 				} else {
 					//超时可能完成部分发送，将已经发送部分丢弃
-					b.DropFirstNBytes(n)
+					buff = buff[:n]
 				}
 			} else {
 				b.Free()
@@ -336,27 +375,71 @@ func (this *Socket) BeginRecv(cb func(*Socket, interface{})) (err error) {
 	return
 }
 
-func (this *Socket) Send(o interface{}) (err error) {
+func (this *Socket) Send(o interface{}) error {
 	if nil == o {
 		return errors.New("o == nil")
 	}
-	err = this.sendQueue.Add(o)
-	if err == ErrQueueClosed {
-		err = ErrSocketClose
-	} else if err == ErrQueueFull {
-		err = ErrSendQueFull
-	} else {
+
+	if this.testFlag(fclosed | fwclosed) {
+		return ErrSocketClose
+	}
+
+	this.muW.Lock()
+	this.sendReq++
+	this.muW.Unlock()
+
+	sendProcessPool.Go(func() {
+		this.muW.Lock()
+		defer this.muW.Unlock()
+		this.sendReq--
+		if nil == this.b {
+			this.b = buffer.Get()
+		}
+
+		if this.b.Len() > this.maxSendBuffSize {
+			//超过容量大小，丢包
+			return
+		}
+
+		switch o.(type) {
+		case []byte:
+			this.b.AppendBytes(o.([]byte))
+		default:
+			l := this.b.Len()
+			if err := this.encoder.EnCode(o, this.b); nil != err {
+				this.b.SetLen(l)
+			}
+		}
+
+		if this.b.Len() == 0 {
+			return
+		}
+
+		if this.sending {
+			return
+		}
+
+		this.sending = true
+		b := this.b
+		this.b = nil
+		this.sendCh.push(b)
+
 		if atomic.CompareAndSwapInt32(&this.sendOnce, 0, 1) {
 			this.addIO()
 			go this.sendThreadFunc()
 		}
-	}
-	return
+
+	})
+
+	return nil
 }
 
 func (this *Socket) ioDone() {
 	if 0 == atomic.AddInt32(&this.ioCount, -1) && this.testFlag(fdoclose) {
 		if atomic.CompareAndSwapInt32(&this.doCloseOnce, 0, 1) {
+			if nil != this.b {
+				this.b.Free()
+			}
 			if nil != this.closeCallBack {
 				this.closeCallBack(this, this.closeReason)
 			}
@@ -370,26 +453,32 @@ func (this *Socket) Close(reason error, delay time.Duration) {
 		runtime.SetFinalizer(this, nil)
 
 		this.setFlag(fclosed)
-
-		_, remain := this.sendQueue.Close()
-
-		if remain > 0 && delay > 0 {
-			ticker := time.NewTicker(delay)
-			go func() {
-				/*
-				 *	delay > 0,sendThread最多需要经过delay秒之后才会结束，
-				 *	为了避免阻塞调用Close的goroutine,启动一个新的goroutine在chan上等待事件
-				 */
-				select {
-				case <-this.sendCloseChan:
-				case <-ticker.C:
-				}
-				ticker.Stop()
+		if delay > 0 {
+			this.muW.Lock()
+			if this.sendReq > 0 || this.sending || nil != this.b && this.b.Len() > 0 {
+				ticker := time.NewTicker(delay)
+				go func() {
+					/*
+					 *	delay > 0,sendThread最多需要经过delay秒之后才会结束，
+					 *	为了避免阻塞调用Close的goroutine,启动一个新的goroutine在chan上等待事件
+					 */
+					select {
+					case <-this.sendCloseChan:
+					case <-ticker.C:
+					}
+					ticker.Stop()
+					this.conn.Close()
+					this.sendCh.close()
+				}()
+				this.muW.Unlock()
+			} else {
+				this.muW.Unlock()
 				this.conn.Close()
-			}()
-
+				this.sendCh.close()
+			}
 		} else {
 			this.conn.Close()
+			this.sendCh.close()
 		}
 
 		this.closeReason = reason
@@ -397,18 +486,18 @@ func (this *Socket) Close(reason error, delay time.Duration) {
 
 		if atomic.LoadInt32(&this.ioCount) == 0 {
 			if atomic.CompareAndSwapInt32(&this.doCloseOnce, 0, 1) {
+				if nil != this.b {
+					this.b.Free()
+				}
 				if nil != this.closeCallBack {
 					this.closeCallBack(this, reason)
 				}
 			}
 		}
-
 	}
 }
 
-var DefaultSendQueSize int = 256
-
-func NewSocket(conn net.Conn) *Socket {
+func NewSocket(conn net.Conn, maxSendBuffSize int) *Socket {
 
 	switch conn.(type) {
 	case *net.TCPConn, *net.UnixConn:
@@ -418,9 +507,10 @@ func NewSocket(conn net.Conn) *Socket {
 	}
 
 	s := &Socket{
-		conn:          conn,
-		sendCloseChan: make(chan struct{}),
-		sendQueue:     NewSendQueue(DefaultSendQueSize),
+		conn:            conn,
+		sendCloseChan:   make(chan struct{}),
+		sendCh:          &sendQueue{ch: make(chan *buffer.Buffer, 1)},
+		maxSendBuffSize: maxSendBuffSize,
 	}
 
 	runtime.SetFinalizer(s, func(s *Socket) {
