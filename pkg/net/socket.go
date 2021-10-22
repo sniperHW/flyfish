@@ -440,11 +440,11 @@ func (this *Socket) Send(o interface{}) error {
 	sendProcessPool.Go(func() {
 		this.muW.Lock()
 		defer func() {
+			this.sendReq--
 			this.muW.Unlock()
 			this.ioDone()
 		}()
 
-		this.sendReq--
 		if nil == this.b {
 			this.b = buffer.Get()
 			if this.b.Len() != 0 {
