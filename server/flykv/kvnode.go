@@ -77,9 +77,7 @@ func (this *kvnode) startListener() {
 			this.muC.Unlock()
 
 			//session.SetRecvTimeout(flyproto.PingTime * 10)
-
-			session.SetSendQueueSize(1024)
-
+			//session.SetSendQueueSize(1024)
 			//只有配置了压缩开启同时客户端支持压缩才开启通信压缩
 			session.SetInBoundProcessor(cs.NewReqInboundProcessor())
 			session.SetEncoder(&cs.RespEncoder{})
@@ -397,6 +395,12 @@ func (this *kvnode) getKvnodeBootInfo(serviceHost string, pd []*net.UDPAddr) *sp
 	return resp
 }
 
+var outputBufLimit fnet.OutputBufLimit = fnet.OutputBufLimit{
+	OutPutLimitSoft:        cs.MaxPacketSize,
+	OutPutLimitSoftSeconds: 10,
+	OutPutLimitHard:        cs.MaxPacketSize * 10,
+}
+
 func (this *kvnode) Start() error {
 	var err error
 	if atomic.CompareAndSwapInt32(&this.startOnce, 0, 1) {
@@ -418,7 +422,9 @@ func (this *kvnode) Start() error {
 				return err
 			}
 
-			this.listener, err = cs.NewListener("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, config.SoloConfig.ServicePort), verifyLogin)
+			service := fmt.Sprintf("%s:%d", config.ServiceHost, config.SoloConfig.ServicePort)
+
+			this.listener, err = cs.NewListener("tcp", service, outputBufLimit, verifyLogin)
 
 			if nil != err {
 				return err
@@ -477,7 +483,9 @@ func (this *kvnode) Start() error {
 				return err
 			}
 
-			this.listener, err = cs.NewListener("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, resp.ServicePort), verifyLogin)
+			service := fmt.Sprintf("%s:%d", config.ServiceHost, resp.ServicePort)
+
+			this.listener, err = cs.NewListener("tcp", service, outputBufLimit, verifyLogin)
 
 			if nil != err {
 				return err

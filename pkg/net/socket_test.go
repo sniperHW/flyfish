@@ -89,7 +89,7 @@ func TestSendTimeout(t *testing.T) {
 					return
 				} else {
 					conn.(*net.TCPConn).SetReadBuffer(0)
-					holdSession = NewSocket(conn, maxSendBuffSize)
+					holdSession = NewSocket(conn, OutputBufLimit{})
 					//不启动接收
 				}
 			}
@@ -98,7 +98,7 @@ func TestSendTimeout(t *testing.T) {
 		dialer := &net.Dialer{}
 		conn, _ := dialer.Dial("tcp", "localhost:8110")
 		conn.(*net.TCPConn).SetWriteBuffer(0)
-		session := NewSocket(conn, maxSendBuffSize)
+		session := NewSocket(conn, OutputBufLimit{})
 
 		die := make(chan struct{})
 
@@ -159,7 +159,7 @@ func TestSocket(t *testing.T) {
 				if err != nil {
 					return
 				} else {
-					session := NewSocket(conn, maxSendBuffSize)
+					session := NewSocket(conn, OutputBufLimit{})
 					session.GetNetConn()
 					session.SetEncoder(&encoder{})
 					session.SetRecvTimeout(time.Second * 1).SetSendTimeout(time.Second * 1)
@@ -183,7 +183,7 @@ func TestSocket(t *testing.T) {
 		fmt.Println("00")
 		dialer := &net.Dialer{}
 		conn, _ := dialer.Dial("tcp", "localhost:8110")
-		session := NewSocket(conn, maxSendBuffSize)
+		session := NewSocket(conn, OutputBufLimit{})
 
 		respChan := make(chan interface{})
 
@@ -228,7 +228,7 @@ func TestSocket(t *testing.T) {
 				if err != nil {
 					return
 				} else {
-					NewSocket(conn, maxSendBuffSize).SetEncoder(&encoder{}).
+					NewSocket(conn, OutputBufLimit{}).SetEncoder(&encoder{}).
 						SetRecvTimeout(time.Second * 1).
 						SetInBoundProcessor(&TestInboundProcessor{buffer: make([]byte, 1024)}).
 						BeginRecv(func(s *Socket, msg interface{}) {
@@ -242,7 +242,7 @@ func TestSocket(t *testing.T) {
 		{
 			dialer := &net.Dialer{}
 			conn, _ := dialer.Dial("tcp", "localhost:8110")
-			session := NewSocket(conn, maxSendBuffSize)
+			session := NewSocket(conn, OutputBufLimit{})
 
 			respChan := make(chan interface{})
 
@@ -264,7 +264,7 @@ func TestSocket(t *testing.T) {
 		{
 			dialer := &net.Dialer{}
 			conn, _ := dialer.Dial("tcp", "localhost:8110")
-			session := NewSocket(conn, maxSendBuffSize)
+			session := NewSocket(conn, OutputBufLimit{})
 
 			session.SetEncoder(&encoder{})
 
@@ -286,7 +286,7 @@ func TestSocket(t *testing.T) {
 		{
 			dialer := &net.Dialer{}
 			conn, _ := dialer.Dial("tcp", "localhost:8110")
-			session := NewSocket(conn, maxSendBuffSize)
+			session := NewSocket(conn, OutputBufLimit{})
 			session.SetCloseCallBack(func(sess *Socket, reason error) {
 				fmt.Println("reason", reason)
 			})
@@ -304,7 +304,7 @@ func TestSocket(t *testing.T) {
 		{
 			dialer := &net.Dialer{}
 			conn, _ := dialer.Dial("tcp", "localhost:8110")
-			session := NewSocket(conn, maxSendBuffSize)
+			session := NewSocket(conn, OutputBufLimit{})
 
 			die := make(chan struct{})
 
@@ -341,7 +341,7 @@ func TestSocket(t *testing.T) {
 				if err != nil {
 					return
 				} else {
-					NewSocket(conn, maxSendBuffSize).SetInBoundProcessor(&TestInboundProcessor{buffer: make([]byte, 1024)}).BeginRecv(func(s *Socket, msg interface{}) {
+					NewSocket(conn, OutputBufLimit{}).SetInBoundProcessor(&TestInboundProcessor{buffer: make([]byte, 1024)}).BeginRecv(func(s *Socket, msg interface{}) {
 						close(die)
 					})
 				}
@@ -350,7 +350,7 @@ func TestSocket(t *testing.T) {
 
 		dialer := &net.Dialer{}
 		conn, _ := dialer.Dial("tcp", "localhost:8110")
-		session := NewSocket(conn, maxSendBuffSize)
+		session := NewSocket(conn, OutputBufLimit{})
 
 		session.SetEncoder(&encoder{})
 
@@ -378,10 +378,11 @@ func TestSocket(t *testing.T) {
 				if err != nil {
 					return
 				} else {
-					session := NewSocket(conn, maxSendBuffSize)
+					session := NewSocket(conn, OutputBufLimit{})
 					session.SetRecvTimeout(time.Second * 1)
 					session.SetSendTimeout(time.Second * 1)
 					session.SetCloseCallBack(func(sess *Socket, reason error) {
+						fmt.Println("server die")
 						close(serverdie)
 					})
 					session.SetInBoundProcessor(&TestInboundProcessor{buffer: make([]byte, 1024)})
@@ -394,9 +395,10 @@ func TestSocket(t *testing.T) {
 
 		dialer := &net.Dialer{}
 		conn, _ := dialer.Dial("tcp", "localhost:8110")
-		session := NewSocket(conn, maxSendBuffSize)
+		session := NewSocket(conn, OutputBufLimit{})
 		session.SetInBoundProcessor(&TestInboundProcessor{buffer: make([]byte, 1024)})
 		session.SetEncoder(&encoder{}).SetCloseCallBack(func(sess *Socket, reason error) {
+			fmt.Println("client die")
 			close(clientdie)
 		}).BeginRecv(func(s *Socket, msg interface{}) {
 		})
@@ -412,7 +414,7 @@ func TestSocket(t *testing.T) {
 		}()
 
 		go func() {
-			time.Sleep(time.Second * 5)
+			time.Sleep(time.Second * 2)
 			session.Close(nil, time.Second)
 		}()
 
@@ -435,7 +437,7 @@ func TestShutDownRead(t *testing.T) {
 			if err != nil {
 				return
 			} else {
-				NewSocket(conn, maxSendBuffSize).SetCloseCallBack(func(sess *Socket, reason error) {
+				NewSocket(conn, OutputBufLimit{}).SetCloseCallBack(func(sess *Socket, reason error) {
 					fmt.Println("server close")
 				}).SetInBoundProcessor(&TestInboundProcessor{buffer: make([]byte, 1024)}).BeginRecv(func(s *Socket, msg interface{}) {
 				})
@@ -445,7 +447,7 @@ func TestShutDownRead(t *testing.T) {
 
 	dialer := &net.Dialer{}
 	conn, _ := dialer.Dial("tcp", "localhost:8110")
-	session := NewSocket(conn, maxSendBuffSize)
+	session := NewSocket(conn, OutputBufLimit{})
 
 	die := make(chan struct{})
 
@@ -484,8 +486,8 @@ func TestShutDownWrite(t *testing.T) {
 			if err != nil {
 				return
 			} else {
-				s := NewSocket(conn, maxSendBuffSize).SetCloseCallBack(func(sess *Socket, reason error) {
-					fmt.Println("server close")
+				s := NewSocket(conn, OutputBufLimit{}).SetCloseCallBack(func(sess *Socket, reason error) {
+					fmt.Printf("server close %p\n", sess)
 				}).SetErrorCallBack(func(sess *Socket, reason error) {
 					if reason == io.EOF {
 						fmt.Println("send ")
@@ -497,16 +499,18 @@ func TestShutDownWrite(t *testing.T) {
 				s.SetEncoder(&encoder{})
 				s.SetInBoundProcessor(&TestInboundProcessor{buffer: make([]byte, 1024)})
 				s.BeginRecv(func(s *Socket, msg interface{}) {
-					fmt.Println(string(msg.([]byte)))
+					fmt.Println("ondata", string(msg.([]byte)))
 				})
 			}
 		}
 	}()
 
+	fmt.Println("11111111111")
+
 	{
 		dialer := &net.Dialer{}
 		conn, _ := dialer.Dial("tcp", "localhost:8110")
-		session := NewSocket(conn, maxSendBuffSize).SetInBoundProcessor(&TestInboundProcessor{buffer: make([]byte, 1024)})
+		session := NewSocket(conn, OutputBufLimit{}).SetInBoundProcessor(&TestInboundProcessor{buffer: make([]byte, 1024)})
 
 		die := make(chan struct{})
 
@@ -523,11 +527,11 @@ func TestShutDownWrite(t *testing.T) {
 
 		<-die
 	}
-
+	fmt.Println("22222222222222")
 	{
 		dialer := &net.Dialer{}
 		conn, _ := dialer.Dial("tcp", "localhost:8110")
-		session := NewSocket(conn, maxSendBuffSize).SetInBoundProcessor(&TestInboundProcessor{buffer: make([]byte, 1024)})
+		session := NewSocket(conn, OutputBufLimit{}).SetInBoundProcessor(&TestInboundProcessor{buffer: make([]byte, 1024)})
 
 		die := make(chan struct{})
 

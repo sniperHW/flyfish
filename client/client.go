@@ -23,6 +23,12 @@ var maxPendingSize int = 10000
 
 var seqno int64
 
+var outputBufLimit flynet.OutputBufLimit = flynet.OutputBufLimit{
+	OutPutLimitSoft:        cs.MaxPacketSize,
+	OutPutLimitSoftSeconds: 10,
+	OutPutLimitHard:        cs.MaxPacketSize * 10,
+}
+
 type EventQueueI interface {
 	Post(priority int, fn interface{}, args ...interface{}) error
 }
@@ -156,7 +162,7 @@ func (this *Client) onConnected(session *flynet.Socket) {
 
 	this.connecting = false
 	this.session = session
-	this.session.SetSendQueueSize(maxPendingSize)
+	//this.session.SetSendQueueSize(maxPendingSize)
 	this.session.SetInBoundProcessor(cs.NewRespInboundProcessor())
 	this.session.SetEncoder(&cs.ReqEncoder{})
 	this.session.SetCloseCallBack(func(sess *flynet.Socket, reason error) {
@@ -196,7 +202,7 @@ func (this *Client) connectCluster() bool {
 	this.index = rand.Int() % len(gates)
 
 	for i := 0; i < len(gates); i++ {
-		session, err := cs.NewConnector("tcp", gates[this.index]).Dial(time.Second * 5)
+		session, err := cs.NewConnector("tcp", gates[this.index], outputBufLimit).Dial(time.Second * 5)
 		if nil == err {
 			this.onConnected(session)
 			return true
@@ -209,7 +215,7 @@ func (this *Client) connectCluster() bool {
 }
 
 func (this *Client) connectSolo() bool {
-	session, err := cs.NewConnector("tcp", this.conf.SoloService).Dial(time.Second * 5)
+	session, err := cs.NewConnector("tcp", this.conf.SoloService, outputBufLimit).Dial(time.Second * 5)
 	if nil != err {
 		return false
 	} else {

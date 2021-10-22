@@ -10,13 +10,13 @@ import (
 )
 
 type Connector struct {
-	nettype         string
-	addr            string
-	maxSendBuffSize int
+	nettype        string
+	addr           string
+	outputBufLimit flynet.OutputBufLimit
 }
 
-func NewConnector(nettype string, addr string, maxSendBuffSize int) *Connector {
-	return &Connector{nettype: nettype, addr: addr, maxSendBuffSize: maxSendBuffSize}
+func NewConnector(nettype string, addr string, outputBufLimit flynet.OutputBufLimit) *Connector {
+	return &Connector{nettype: nettype, addr: addr, outputBufLimit: outputBufLimit}
 }
 
 func (this *Connector) Dial(timeout time.Duration) (*flynet.Socket, error) {
@@ -37,5 +37,5 @@ func (this *Connector) Dial(timeout time.Duration) (*flynet.Socket, error) {
 		return nil, fmt.Errorf("login failed")
 	}
 
-	return flynet.NewSocket(conn, this.maxSendBuffSize), nil
+	return flynet.NewSocket(conn, this.outputBufLimit), nil
 }

@@ -9,14 +9,14 @@ import (
 )
 
 type Listener struct {
-	l               *net.TCPListener
-	startOnce       int32
-	closeOnce       int32
-	verifyLogin     func(*protocol.LoginReq) bool
-	maxSendBuffSize int
+	l              *net.TCPListener
+	startOnce      int32
+	closeOnce      int32
+	verifyLogin    func(*protocol.LoginReq) bool
+	outputBufLimit flynet.OutputBufLimit
 }
 
-func NewListener(nettype, service string, maxSendBuffSize int, verifyLogin func(*protocol.LoginReq) bool) (*Listener, error) {
+func NewListener(nettype, service string, outputBufLimit flynet.OutputBufLimit, verifyLogin func(*protocol.LoginReq) bool) (*Listener, error) {
 	tcpAddr, err := net.ResolveTCPAddr(nettype, service)
 	if err != nil {
 		return nil, err
@@ -26,7 +26,7 @@ func NewListener(nettype, service string, maxSendBuffSize int, verifyLogin func(
 	if err != nil {
 		return nil, err
 	}
-	return &Listener{l: l, verifyLogin: verifyLogin, maxSendBuffSize: maxSendBuffSize}, nil
+	return &Listener{l: l, verifyLogin: verifyLogin, outputBufLimit: outputBufLimit}, nil
 }
 
 func (this *Listener) Close() {
@@ -71,7 +71,7 @@ func (this *Listener) Serve(onNewClient func(*flynet.Socket)) {
 							return
 						}
 
-						onNewClient(flynet.NewSocket(conn, this.maxSendBuffSize))
+						onNewClient(flynet.NewSocket(conn, this.outputBufLimit))
 					}()
 				}
 			}

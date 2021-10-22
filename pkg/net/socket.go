@@ -26,7 +26,6 @@ const (
 	fclosed  = int32(1 << 1)
 	frclosed = int32(1 << 2)
 	fwclosed = int32(1 << 3)
-	fdoclose = int32(1 << 4)
 )
 
 var sendProcessPool *gopool.Pool = gopool.New(gopool.Option{
@@ -66,31 +65,43 @@ func (s *sendQueue) close() int {
 	return len(s.ch)
 }
 
+type OutputBufLimit struct {
+	OutPutLimitSoft        int
+	OutPutLimitSoftSeconds int
+	OutPutLimitHard        int
+}
+
+var DefaultOutPutLimitSoft int = 128 * 1024      //128k
+var DefaultOutPutLimitSoftSeconds int = 10       //10s
+var DefaultOutPutLimitHard int = 4 * 1024 * 1024 //4M
+
 type Socket struct {
-	conn              net.Conn
-	flag              int32
-	ud                atomic.Value
-	sendCloseChan     chan struct{}
-	shutdownWriteOnce int32
-	closeOnce         int32
-	beginOnce         int32
-	sendOnce          int32
-	doCloseOnce       int32
-	encoder           Encoder
-	inboundProcessor  InBoundProcessor
-	errorCallback     func(*Socket, error)
-	closeCallBack     func(*Socket, error)
-	inboundCallBack   func(*Socket, interface{})
-	ioCount           int32
-	closeReason       error
-	sendTimeout       int64
-	recvTimeout       int64
-	muW               sync.Mutex
-	sendCh            *sendQueue
-	b                 *buffer.Buffer
-	sending           bool
-	maxSendBuffSize   int
-	sendReq           int
+	conn                     net.Conn
+	flag                     int32
+	ud                       atomic.Value
+	sendCloseChan            chan struct{}
+	shutdownWriteOnce        int32
+	closeOnce                int32
+	beginOnce                int32
+	sendOnce                 int32
+	doCloseOnce              int32
+	encoder                  Encoder
+	inboundProcessor         InBoundProcessor
+	errorCallback            func(*Socket, error)
+	closeCallBack            func(*Socket, error)
+	inboundCallBack          func(*Socket, interface{})
+	ioCount                  int32
+	closeReason              error
+	sendTimeout              int64
+	recvTimeout              int64
+	muW                      sync.Mutex
+	sendCh                   *sendQueue
+	b                        *buffer.Buffer
+	sending                  bool
+	sendingSize              int
+	sendReq                  int
+	outputLimit              OutputBufLimit
+	obufSoftLimitReachedTime int64
 }
 
 func (s *Socket) setFlag(flag int32) {
@@ -272,6 +283,7 @@ func (this *Socket) onSendFinish(size int) {
 	b := this.b
 	if nil != b {
 		this.b = nil
+		this.sendingSize = b.Len()
 		this.muW.Unlock()
 		this.sendCh.push(b)
 	} else {
@@ -302,13 +314,21 @@ func (this *Socket) sendThreadFunc() {
 			break
 		}
 
-		buff := b.Bytes()
-		for {
+		var buff []byte
+		bb := b.Bytes()
+		i := 0
+		for i < len(bb) {
 			oldTimeout = timeout
 			timeout = this.getSendTimeout()
 
 			if oldTimeout != timeout && timeout == 0 {
 				this.conn.SetWriteDeadline(time.Time{})
+			}
+
+			if i+65535 > len(bb) {
+				buff = bb[i:]
+			} else {
+				buff = bb[i : i+65535]
 			}
 
 			if timeout > 0 {
@@ -318,35 +338,40 @@ func (this *Socket) sendThreadFunc() {
 				n, err = this.conn.Write(buff)
 			}
 
-			if nil == err {
-				//通告发送完毕
-				n := b.Len()
-				b.Free()
-				this.onSendFinish(n)
-				break
-			} else if !this.testFlag(fclosed) {
-				if isNetTimeout(err) {
-					err = ErrSendTimeout
+			i += n
+
+			this.muW.Lock()
+			this.sendingSize -= n
+			this.muW.Unlock()
+
+			if nil != err {
+				if !this.testFlag(fclosed) {
+					if isNetTimeout(err) {
+						err = ErrSendTimeout
+					} else {
+						this.Close(err, 0)
+					}
+
+					if nil != this.errorCallback {
+						this.errorCallback(this, err)
+					}
+
+					if this.testFlag(fclosed) {
+						b.Free()
+						return
+					}
 				} else {
-					this.Close(err, 0)
-				}
-
-				if nil != this.errorCallback {
-					this.errorCallback(this, err)
-				}
-
-				if this.testFlag(fclosed) {
 					b.Free()
 					return
-				} else {
-					//超时可能完成部分发送，将已经发送部分丢弃
-					buff = buff[:n]
 				}
-			} else {
-				b.Free()
-				return
 			}
 		}
+
+		//通告发送完毕
+		n := b.Len()
+		b.Free()
+		this.onSendFinish(n)
+
 	}
 }
 
@@ -375,6 +400,29 @@ func (this *Socket) BeginRecv(cb func(*Socket, interface{})) (err error) {
 	return
 }
 
+func (this *Socket) checkOutputLimit(size int) bool {
+	if size > this.outputLimit.OutPutLimitHard {
+		return false
+	}
+
+	if size > this.outputLimit.OutPutLimitSoft {
+		nowUnix := time.Now().Unix()
+		if this.obufSoftLimitReachedTime == 0 {
+			this.obufSoftLimitReachedTime = nowUnix
+			return false
+		} else {
+			elapse := nowUnix - this.obufSoftLimitReachedTime
+			if int(elapse) >= this.outputLimit.OutPutLimitSoftSeconds {
+				return true
+			}
+		}
+	} else {
+		this.obufSoftLimitReachedTime = 0
+	}
+
+	return true
+}
+
 func (this *Socket) Send(o interface{}) error {
 	if nil == o {
 		return errors.New("o == nil")
@@ -387,17 +435,27 @@ func (this *Socket) Send(o interface{}) error {
 	this.muW.Lock()
 	this.sendReq++
 	this.muW.Unlock()
+	this.addIO()
 
 	sendProcessPool.Go(func() {
 		this.muW.Lock()
-		defer this.muW.Unlock()
+		defer func() {
+			this.muW.Unlock()
+			this.ioDone()
+		}()
+
 		this.sendReq--
 		if nil == this.b {
 			this.b = buffer.Get()
+			if this.b.Len() != 0 {
+				GetSugar().Infof("len:%d", this.b.Len())
+				panic("error")
+			}
 		}
 
-		if this.b.Len() > this.maxSendBuffSize {
-			//超过容量大小，丢包
+		if !this.checkOutputLimit(this.sendingSize + this.b.Len()) {
+			//超过输出限制，丢包
+			GetSugar().Infof("Drop output msg %d %d %p", this.sendingSize, this.b.Len(), this)
 			return
 		}
 
@@ -407,6 +465,7 @@ func (this *Socket) Send(o interface{}) error {
 		default:
 			l := this.b.Len()
 			if err := this.encoder.EnCode(o, this.b); nil != err {
+				GetSugar().Infof("EnCode error:%v", err)
 				this.b.SetLen(l)
 			}
 		}
@@ -420,11 +479,10 @@ func (this *Socket) Send(o interface{}) error {
 		}
 
 		this.sending = true
+		this.sendingSize = this.b.Len()
 		b := this.b
 		this.b = nil
-		this.sendCh.push(b)
-
-		if atomic.CompareAndSwapInt32(&this.sendOnce, 0, 1) {
+		if nil == this.sendCh.push(b) && atomic.CompareAndSwapInt32(&this.sendOnce, 0, 1) {
 			this.addIO()
 			go this.sendThreadFunc()
 		}
@@ -435,14 +493,13 @@ func (this *Socket) Send(o interface{}) error {
 }
 
 func (this *Socket) ioDone() {
-	if 0 == atomic.AddInt32(&this.ioCount, -1) && this.testFlag(fdoclose) {
-		if atomic.CompareAndSwapInt32(&this.doCloseOnce, 0, 1) {
-			if nil != this.b {
-				this.b.Free()
-			}
-			if nil != this.closeCallBack {
-				this.closeCallBack(this, this.closeReason)
-			}
+	if 0 == atomic.AddInt32(&this.ioCount, -1) && atomic.CompareAndSwapInt32(&this.doCloseOnce, 0, 1) {
+		this.sendCh.close()
+		if nil != this.b {
+			this.b.Free()
+		}
+		if nil != this.closeCallBack {
+			this.closeCallBack(this, this.closeReason)
 		}
 	}
 }
@@ -482,22 +539,19 @@ func (this *Socket) Close(reason error, delay time.Duration) {
 		}
 
 		this.closeReason = reason
-		this.setFlag(fdoclose)
 
-		if atomic.LoadInt32(&this.ioCount) == 0 {
-			if atomic.CompareAndSwapInt32(&this.doCloseOnce, 0, 1) {
-				if nil != this.b {
-					this.b.Free()
-				}
-				if nil != this.closeCallBack {
-					this.closeCallBack(this, reason)
-				}
+		if atomic.LoadInt32(&this.ioCount) == 0 && atomic.CompareAndSwapInt32(&this.doCloseOnce, 0, 1) {
+			if nil != this.b {
+				this.b.Free()
+			}
+			if nil != this.closeCallBack {
+				this.closeCallBack(this, reason)
 			}
 		}
 	}
 }
 
-func NewSocket(conn net.Conn, maxSendBuffSize int) *Socket {
+func NewSocket(conn net.Conn, outputLimit OutputBufLimit) *Socket {
 
 	switch conn.(type) {
 	case *net.TCPConn, *net.UnixConn:
@@ -507,10 +561,22 @@ func NewSocket(conn net.Conn, maxSendBuffSize int) *Socket {
 	}
 
 	s := &Socket{
-		conn:            conn,
-		sendCloseChan:   make(chan struct{}),
-		sendCh:          &sendQueue{ch: make(chan *buffer.Buffer, 1)},
-		maxSendBuffSize: maxSendBuffSize,
+		conn:          conn,
+		sendCloseChan: make(chan struct{}),
+		sendCh:        &sendQueue{ch: make(chan *buffer.Buffer, 1)},
+		outputLimit:   outputLimit,
+	}
+
+	if s.outputLimit.OutPutLimitHard <= 0 {
+		s.outputLimit.OutPutLimitHard = DefaultOutPutLimitHard
+	}
+
+	if s.outputLimit.OutPutLimitSoft <= 0 {
+		s.outputLimit.OutPutLimitSoft = DefaultOutPutLimitSoft
+	}
+
+	if s.outputLimit.OutPutLimitSoftSeconds <= 0 {
+		s.outputLimit.OutPutLimitSoftSeconds = DefaultOutPutLimitSoftSeconds
 	}
 
 	runtime.SetFinalizer(s, func(s *Socket) {
