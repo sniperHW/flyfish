@@ -478,11 +478,14 @@ func (this *Socket) Send(o interface{}) error {
 		this.sendingSize = this.b.Len()
 		b := this.b
 		this.b = nil
-		if nil == this.sendCh.push(b) && atomic.CompareAndSwapInt32(&this.sendOnce, 0, 1) {
-			this.addIO()
-			go this.sendThreadFunc()
+		if nil == this.sendCh.push(b) {
+			if atomic.CompareAndSwapInt32(&this.sendOnce, 0, 1) {
+				this.addIO()
+				go this.sendThreadFunc()
+			}
+		} else {
+			b.Free()
 		}
-
 	})
 
 	return nil
