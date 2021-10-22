@@ -447,10 +447,6 @@ func (this *Socket) Send(o interface{}) error {
 
 		if nil == this.b {
 			this.b = buffer.Get()
-			if this.b.Len() != 0 {
-				GetSugar().Infof("len:%d", this.b.Len())
-				panic("error")
-			}
 		}
 
 		if !this.checkOutputLimit(this.sendingSize + this.b.Len()) {

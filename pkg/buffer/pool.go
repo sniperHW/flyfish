@@ -1,4 +1,4 @@
-/*package buffer
+package buffer
 
 import (
 	"sort"
@@ -149,7 +149,10 @@ func index(n int) int {
 		idx = steps - 1
 	}
 	return idx
-}*/
+}
+
+/*
+
 
 // Copyright (c) 2016 Uber Technologies, Inc.
 //
@@ -174,7 +177,6 @@ func index(n int) int {
 package buffer
 
 import "sync"
-import "fmt"
 
 const _size = 4096
 
@@ -196,18 +198,11 @@ func NewPool() Pool {
 func (p Pool) Get() *Buffer {
 	buf := p.p.Get().(*Buffer)
 	buf.pool = &p
-	if buf.Len() != 0 {
-		fmt.Println(buf.Len())
-		panic("error2")
-	}
 	return buf
 }
 
-func (p Pool) Put(buf *Buffer) {
+func (p Pool) put(buf *Buffer) {
 	buf.Reset()
-	if buf.Len() != 0 {
-		panic("error3")
-	}
 	p.p.Put(buf)
 }
 
@@ -216,3 +211,4 @@ var pool Pool = NewPool()
 func Get() *Buffer {
 	return pool.Get()
 }
+*/
