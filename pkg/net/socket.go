@@ -3,7 +3,7 @@ package net
 import (
 	"errors"
 	"github.com/sniperHW/flyfish/pkg/buffer"
-	"github.com/sniperHW/flyfish/pkg/gopool"
+	"math/rand"
 	"net"
 	"runtime"
 	"sync"
@@ -27,11 +27,6 @@ const (
 	frclosed = int32(1 << 2)
 	fwclosed = int32(1 << 3)
 )
-
-var sendProcessPool *gopool.Pool = gopool.New(gopool.Option{
-	MaxRoutineCount: runtime.NumCPU() * 8,
-	Mode:            gopool.QueueMode,
-})
 
 type sendQueue struct {
 	sync.Mutex
@@ -90,7 +85,6 @@ type Socket struct {
 	errorCallback            func(*Socket, error)
 	closeCallBack            func(*Socket, error)
 	inboundCallBack          func(*Socket, interface{})
-	ioCount                  int32
 	closeReason              error
 	sendTimeout              int64
 	recvTimeout              int64
@@ -98,9 +92,10 @@ type Socket struct {
 	sendCh                   *sendQueue
 	b                        *buffer.Buffer
 	sendingSize              int
-	sendReq                  int
 	outputLimit              OutputBufLimit
 	obufSoftLimitReachedTime int64
+	ioLock                   int64
+	p                        *sendp
 }
 
 func (s *Socket) setFlag(flag int32) {
@@ -166,10 +161,6 @@ func (s *Socket) ShutdownRead() {
 	s.conn.(interface{ CloseRead() error }).CloseRead()
 }
 
-func (s *Socket) addIO() {
-	atomic.AddInt32(&s.ioCount, 1)
-}
-
 func (s *Socket) SetRecvTimeout(timeout time.Duration) *Socket {
 	atomic.StoreInt64(&s.recvTimeout, int64(timeout))
 	return s
@@ -190,18 +181,76 @@ func (s *Socket) getSendTimeout() time.Duration {
 
 func (this *Socket) ShutdownWrite() {
 	if atomic.CompareAndSwapInt32(&this.closeOnce, 0, 1) {
-		this.muW.Lock()
-		defer this.muW.Unlock()
 		this.setFlag(fwclosed)
-		if this.sendReq == 0 && this.sendingSize == 0 && (nil == this.b || this.b.Len() == 0) {
+		if this.wLockCount() == 0 {
 			this.sendCh.close()
 			this.conn.(interface{ CloseWrite() error }).CloseWrite()
 		}
 	}
 }
 
+func (this *Socket) doclose(v int64) {
+	if v == 0 && this.IsClosed() && atomic.CompareAndSwapInt32(&this.doCloseOnce, 0, 1) {
+		this.sendCh.close()
+		if nil != this.b {
+			this.b.Free()
+		}
+		if nil != this.closeCallBack {
+			this.closeCallBack(this, this.closeReason)
+		}
+	}
+}
+
+func (this *Socket) rLock() {
+	for {
+		old := atomic.LoadInt64(&this.ioLock)
+		new := (((old >> 32) + 1) << 32) + (old & 0x00000000FFFFFFFF)
+		if atomic.CompareAndSwapInt64(&this.ioLock, old, new) {
+			break
+		}
+	}
+}
+
+func (this *Socket) rUnlock() {
+	var newV int64
+	for {
+		old := atomic.LoadInt64(&this.ioLock)
+		newV = (((old >> 32) - 1) << 32) + (old & 0x00000000FFFFFFFF)
+		if atomic.CompareAndSwapInt64(&this.ioLock, old, newV) {
+			break
+		}
+	}
+	this.doclose(newV)
+}
+
+func (this *Socket) wLock() {
+	for {
+		old := uint64(atomic.LoadInt64(&this.ioLock))
+		new := ((old & 0x00000000FFFFFFFF) + 1) | (old & 0xFFFFFFFF00000000)
+		if atomic.CompareAndSwapInt64(&this.ioLock, int64(old), int64(new)) {
+			break
+		}
+	}
+}
+
+func (this *Socket) wUnlock() {
+	var newV uint64
+	for {
+		old := uint64(atomic.LoadInt64(&this.ioLock))
+		newV = ((old & 0x00000000FFFFFFFF) - 1) | (old & 0xFFFFFFFF00000000)
+		if atomic.CompareAndSwapInt64(&this.ioLock, int64(old), int64(newV)) {
+			break
+		}
+	}
+	this.doclose(int64(newV))
+}
+
+func (this *Socket) wLockCount() int {
+	return int(atomic.LoadInt64(&this.ioLock) & 0x00000000FFFFFFFF)
+}
+
 func (this *Socket) recvThreadFunc() {
-	defer this.ioDone()
+	defer this.rUnlock()
 
 	oldTimeout := this.getRecvTimeout()
 	timeout := oldTimeout
@@ -286,18 +335,11 @@ func (this *Socket) Send(o interface{}) error {
 		return ErrSocketClose
 	}
 
-	this.muW.Lock()
-	this.sendReq++
-	this.muW.Unlock()
-	this.addIO()
+	this.wLock()
 
-	sendProcessPool.Go(func() {
+	this.p.runTask(func() {
 		this.muW.Lock()
-		defer func() {
-			this.sendReq--
-			this.muW.Unlock()
-			this.ioDone()
-		}()
+		defer this.wUnlock()
 
 		if nil == this.b {
 			this.b = buffer.Get()
@@ -306,6 +348,7 @@ func (this *Socket) Send(o interface{}) error {
 		if !this.checkOutputLimit(this.sendingSize + this.b.Len()) {
 			//超过输出限制，丢包
 			GetSugar().Infof("Drop output msg %d %d %p", this.sendingSize, this.b.Len(), this)
+			this.muW.Unlock()
 			return
 		}
 
@@ -323,23 +366,27 @@ func (this *Socket) Send(o interface{}) error {
 		if this.b.Len() == 0 {
 			this.b.Free()
 			this.b = nil
+			this.muW.Unlock()
 			return
 		}
 
 		if this.sendingSize != 0 {
+			this.muW.Unlock()
 			return
 		}
 
 		this.sendingSize = this.b.Len()
 		b := this.b
 		this.b = nil
+		this.muW.Unlock()
+		this.wLock()
 		if nil == this.sendCh.push(b) {
 			if atomic.CompareAndSwapInt32(&this.sendOnce, 0, 1) {
-				this.addIO()
 				go this.sendThreadFunc()
 			}
 		} else {
 			b.Free()
+			this.wUnlock()
 		}
 	})
 
@@ -347,8 +394,14 @@ func (this *Socket) Send(o interface{}) error {
 }
 
 func (this *Socket) onSendFinish() {
+	wUnlock := true
 	this.muW.Lock()
-	defer this.muW.Unlock()
+	defer func() {
+		this.muW.Unlock()
+		if wUnlock {
+			this.wUnlock()
+		}
+	}()
 	b := this.b
 	if nil == b && this.sendingSize == 0 {
 		if this.testFlag(fwclosed) {
@@ -358,7 +411,9 @@ func (this *Socket) onSendFinish() {
 	} else if nil != b && this.sendingSize == 0 {
 		this.b = nil
 		this.sendingSize = b.Len()
-		this.sendCh.push(b)
+		if nil == this.sendCh.push(b) {
+			wUnlock = false
+		}
 	}
 }
 
@@ -366,10 +421,7 @@ func (this *Socket) sendThreadFunc() {
 
 	const sendSize int = 65535
 
-	defer func() {
-		close(this.sendCloseChan)
-		this.ioDone()
-	}()
+	defer close(this.sendCloseChan)
 
 	var err error
 	var n int
@@ -426,10 +478,12 @@ func (this *Socket) sendThreadFunc() {
 
 					if this.testFlag(fclosed) {
 						b.Free()
+						this.wUnlock()
 						return
 					}
 				} else {
 					b.Free()
+					this.wUnlock()
 					return
 				}
 			}
@@ -459,7 +513,7 @@ func (this *Socket) BeginRecv(cb func(*Socket, interface{})) (err error) {
 			err = ErrSocketClose
 		} else {
 			this.inboundCallBack = cb
-			this.addIO()
+			this.rLock()
 			go this.recvThreadFunc()
 		}
 	}
@@ -490,27 +544,15 @@ func (this *Socket) checkOutputLimit(size int) bool {
 	return true
 }
 
-func (this *Socket) ioDone() {
-	if 0 == atomic.AddInt32(&this.ioCount, -1) && atomic.CompareAndSwapInt32(&this.doCloseOnce, 0, 1) {
-		this.sendCh.close()
-		if nil != this.b {
-			this.b.Free()
-		}
-		if nil != this.closeCallBack {
-			this.closeCallBack(this, this.closeReason)
-		}
-	}
-}
-
 func (this *Socket) Close(reason error, delay time.Duration) {
 
 	if atomic.CompareAndSwapInt32(&this.closeOnce, 0, 1) {
 		runtime.SetFinalizer(this, nil)
-
 		this.setFlag(fclosed)
+		this.closeReason = reason
+
 		if delay > 0 {
-			this.muW.Lock()
-			if this.sendReq > 0 || this.sendingSize > 0 || nil != this.b && this.b.Len() > 0 {
+			if this.wLockCount() > 0 {
 				ticker := time.NewTicker(delay)
 				go func() {
 					/*
@@ -525,27 +567,13 @@ func (this *Socket) Close(reason error, delay time.Duration) {
 					this.conn.Close()
 					this.sendCh.close()
 				}()
-				this.muW.Unlock()
-			} else {
-				this.muW.Unlock()
-				this.conn.Close()
-				this.sendCh.close()
-			}
-		} else {
-			this.conn.Close()
-			this.sendCh.close()
-		}
-
-		this.closeReason = reason
-
-		if atomic.LoadInt32(&this.ioCount) == 0 && atomic.CompareAndSwapInt32(&this.doCloseOnce, 0, 1) {
-			if nil != this.b {
-				this.b.Free()
-			}
-			if nil != this.closeCallBack {
-				this.closeCallBack(this, reason)
+				return
 			}
 		}
+
+		this.conn.Close()
+		this.sendCh.close()
+		this.doclose(atomic.LoadInt64(&this.ioLock))
 	}
 }
 
@@ -563,6 +591,7 @@ func NewSocket(conn net.Conn, outputLimit OutputBufLimit) *Socket {
 		sendCloseChan: make(chan struct{}),
 		sendCh:        &sendQueue{ch: make(chan *buffer.Buffer, 1)},
 		outputLimit:   outputLimit,
+		p:             &gSendP[int(rand.Int31())%len(gSendP)],
 	}
 
 	if s.outputLimit.OutPutLimitHard <= 0 {

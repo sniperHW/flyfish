@@ -117,6 +117,7 @@ func TestSendTimeout(t *testing.T) {
 		session.SetErrorCallBack(func(sess *Socket, err error) {
 			assert.Equal(t, ErrSendTimeout, err)
 			if triger { //第二次触发再close
+				fmt.Println("here")
 				sess.Close(err, 0)
 			} else {
 				triger = true
