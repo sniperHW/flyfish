@@ -98,6 +98,10 @@ type Socket struct {
 	p                        *sendp
 }
 
+func (s *Socket) GetUnderConn() net.Conn {
+	return s.conn
+}
+
 func (s *Socket) setFlag(flag int32) {
 	for {
 		f := atomic.LoadInt32(&s.flag)
