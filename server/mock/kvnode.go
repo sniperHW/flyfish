@@ -137,7 +137,6 @@ func (this *Node) startListener() error {
 	this.listener.Serve(func(session *fnet.Socket) {
 		go func() {
 			session.SetRecvTimeout(flyproto.PingTime * 2)
-			session.SetSendQueueSize(10000)
 
 			session.SetInBoundProcessor(cs.NewReqInboundProcessor())
 			session.SetEncoder(&cs.RespEncoder{})
@@ -166,7 +165,7 @@ func (this *Node) Start(leader bool, service string, console string, def *db.DbD
 
 	this.metaMgr = m
 
-	if this.listener, err = cs.NewListener("tcp", service, verifyLogin); nil != err {
+	if this.listener, err = cs.NewListener("tcp", service, fnet.OutputBufLimit{}, verifyLogin); nil != err {
 		return err
 	}
 

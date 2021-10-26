@@ -85,7 +85,7 @@ MaxLogfileSize  = 104857600 # 100mb
 LogDir          = "log"
 LogPrefix       = "flykv"
 LogLevel        = "info"
-EnableLogStdout = true	
+EnableStdout    = true	
 MaxAge          = 14
 MaxBackups      = 10
 
