@@ -5,8 +5,6 @@ import (
 	"sync"
 )
 
-const maxCacheItemCount = 4096
-
 var gItemPool *sync.Pool = &sync.Pool{
 	New: func() interface{} {
 		return &listItem{}
@@ -21,8 +19,6 @@ type listItem struct {
 type linkList struct {
 	tail        *listItem
 	count       int
-	freeItems   *listItem
-	freeCount   int
 	mu          sync.Mutex
 	cond        *sync.Cond
 	emptyWaited int
@@ -57,28 +53,14 @@ func (this *linkList) popItem(l **listItem) *listItem {
 }
 
 func (this *linkList) getPoolItem(v func()) *listItem {
-	/*
-	 * 本地的cache中获取listItem,如果没有才去sync.Pool取
-	 */
-	item := this.popItem(&this.freeItems)
-	if nil == item {
-		item = gItemPool.Get().(*listItem)
-	} else {
-		this.freeCount--
-	}
+	item := gItemPool.Get().(*listItem)
 	item.v = v
 	return item
 }
 
 func (this *linkList) putPoolItem(item *listItem) {
 	item.v = nil
-	if this.freeCount < maxCacheItemCount {
-		//如果尚未超过本地cache限制，将listItem放回本地cache供下次使用
-		this.freeCount++
-		this.pushItem(&this.freeItems, item)
-	} else {
-		gItemPool.Put(item)
-	}
+	gItemPool.Put(item)
 }
 
 func (this *linkList) push(v func()) {

@@ -204,7 +204,7 @@ func (this *Socket) doclose(v int64) {
 func (this *Socket) rLock() {
 	for {
 		old := atomic.LoadInt64(&this.ioLock)
-		new := (((old >> 32) + 1) << 32) + (old & 0x00000000FFFFFFFF)
+		new := (((old >> 32) + 1) << 32) | (old & 0x00000000FFFFFFFF)
 		if atomic.CompareAndSwapInt64(&this.ioLock, old, new) {
 			break
 		}
@@ -215,7 +215,7 @@ func (this *Socket) rUnlock() {
 	var newV int64
 	for {
 		old := atomic.LoadInt64(&this.ioLock)
-		newV = (((old >> 32) - 1) << 32) + (old & 0x00000000FFFFFFFF)
+		newV = (((old >> 32) - 1) << 32) | (old & 0x00000000FFFFFFFF)
 		if atomic.CompareAndSwapInt64(&this.ioLock, old, newV) {
 			break
 		}
@@ -347,7 +347,7 @@ func (this *Socket) Send(o interface{}) error {
 
 		if !this.checkOutputLimit(this.sendingSize + this.b.Len()) {
 			//超过输出限制，丢包
-			GetSugar().Infof("Drop output msg %d %d %p", this.sendingSize, this.b.Len(), this)
+			//GetSugar().Infof("Drop output msg %d %d %p", this.sendingSize, this.b.Len(), this)
 			this.muW.Unlock()
 			return
 		}

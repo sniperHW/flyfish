@@ -12,7 +12,7 @@ import (
 )
 
 func TestEcho(t *testing.T) {
-	l, _ := NewListener("tcp", "127.0.0.1:8010", 65535, func(_ *flyproto.LoginReq) bool {
+	l, _ := NewListener("tcp", "127.0.0.1:8010", flynet.OutputBufLimit{}, func(_ *flyproto.LoginReq) bool {
 		return true
 	})
 
@@ -46,7 +46,7 @@ func TestEcho(t *testing.T) {
 		})
 	})
 
-	c := NewConnector("tcp", "127.0.0.1:8010", 65535)
+	c := NewConnector("tcp", "127.0.0.1:8010", flynet.OutputBufLimit{})
 	cc, err := c.Dial(time.Second)
 	if nil != err {
 		return
