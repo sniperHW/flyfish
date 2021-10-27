@@ -2,6 +2,7 @@ package client
 
 import (
 	"container/list"
+	"encoding/json"
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/net/cs"
@@ -35,6 +36,18 @@ func (this *Field) GetBlob() []byte {
 
 func (this *Field) GetValue() interface{} {
 	return (*protocol.Field)(this).GetValue()
+}
+
+func UnmarshalJsonField(field *Field, obj interface{}) error {
+	if field == nil {
+		return nil
+	} else if (*protocol.Field)(field).IsBlob() {
+		return json.Unmarshal(field.GetBlob(), obj)
+	} else if (*protocol.Field)(field).IsString() {
+		return json.Unmarshal([]byte(field.GetString()), obj)
+	} else {
+		return nil
+	}
 }
 
 var cmdContextPool = sync.Pool{

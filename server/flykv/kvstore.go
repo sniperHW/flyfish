@@ -54,9 +54,9 @@ func (q applicationQueue) AppendHighestPriotiryItem(m interface{}) {
 	}
 }
 
-func (q applicationQueue) append(m interface{}) {
-	q.q.ForceAppend(0, m)
-}
+//func (q applicationQueue) append(m interface{}) {
+//	q.q.ForceAppend(0, m)
+//}
 
 func (q applicationQueue) pop() (closed bool, v interface{}) {
 	return q.q.Pop()
@@ -150,29 +150,31 @@ func releaseUnCompressor(c compress.UnCompressorI) {
 }
 
 type kvstore struct {
-	raftMtx          sync.Mutex
-	raftID           int
-	leader           int
-	snapshotter      *snap.Snapshotter
-	rn               *raft.RaftNode
-	mainQueue        applicationQueue
-	keyvals          []kvmgr
-	kvcount          int
-	slotsKvMap       map[int]map[string]*kv
-	db               dbI
-	lru              lruList
-	wait4ReplyCount  int32
-	lease            *lease
-	stoped           int32
-	ready            bool
-	kvnode           *kvnode
-	needWriteBackAll bool
-	shard            int
-	slots            *bitmap.Bitmap
-	meta             db.DBMeta
-	memberShip       map[int]bool
-	slotsTransferOut map[int]*SlotTransferProposal //正在迁出的slot
-	dbWriteBackCount int32
+	raftMtx              sync.Mutex
+	raftID               int
+	leader               int
+	snapshotter          *snap.Snapshotter
+	rn                   *raft.RaftNode
+	mainQueue            applicationQueue
+	keyvals              []kvmgr
+	kvcount              int
+	slotsKvMap           map[int]map[string]*kv
+	db                   dbI
+	lru                  lruList
+	wait4ReplyCount      int32
+	lease                *lease
+	stoped               int32
+	ready                bool
+	kvnode               *kvnode
+	needWriteBackAll     bool
+	shard                int
+	slots                *bitmap.Bitmap
+	meta                 db.DBMeta
+	memberShip           map[int]bool
+	slotsTransferOut     map[int]*SlotTransferProposal //正在迁出的slot
+	dbWriteBackCount     int32
+	SoftLimitReachedTime int64
+	unixNow              int64
 }
 
 func (s *kvstore) hasLease() bool {
@@ -200,8 +202,14 @@ func (s *kvstore) loadSnapshot() (*raftpb.Snapshot, error) {
 	return snapshot, nil
 }
 
-func (s *kvstore) addCliMessage(msg clientRequest) {
-	s.mainQueue.append(msg)
+func (s *kvstore) addCliMessage(req clientRequest) {
+	if nil != s.mainQueue.q.Append(0, req) {
+		req.from.send(&cs.RespMessage{
+			Cmd:   req.msg.Cmd,
+			Seqno: req.msg.Seqno,
+			Err:   errcode.New(errcode.Errcode_retry, "kvstore busy,please retry later"),
+		})
+	}
 }
 
 const kvCmdQueueSize = 32
@@ -330,9 +338,35 @@ func (s *kvstore) makeCmd(keyvalue *kv, req clientRequest) (cmdI, errcode.Error)
 	return nil, errcode.New(errcode.Errcode_error, "invaild cmd type")
 }
 
-func (s *kvstore) processClientMessage(req clientRequest) {
+func (s *kvstore) checkReqLimit() bool {
+	c := int(atomic.LoadInt32(&s.wait4ReplyCount))
+	conf := s.kvnode.config.StoreReqLimit
 
-	if atomic.LoadInt32(&s.wait4ReplyCount) >= int32(s.kvnode.config.MainQueueMaxSize) {
+	if c > conf.HardLimit {
+		return false
+	}
+
+	if c > conf.SoftLimit {
+		//nowUnix := s.unixNow
+		nowUnix := time.Now().Unix()
+		if s.SoftLimitReachedTime == 0 {
+			s.SoftLimitReachedTime = nowUnix
+			return false
+		} else {
+			elapse := nowUnix - s.SoftLimitReachedTime
+			if int(elapse) >= conf.SoftLimitSeconds {
+				return true
+			}
+		}
+	} else {
+		s.SoftLimitReachedTime = 0
+	}
+
+	return true
+}
+
+func (s *kvstore) processClientMessage(req clientRequest) {
+	if !s.checkReqLimit() {
 		req.from.send(&cs.RespMessage{
 			Cmd:   req.msg.Cmd,
 			Seqno: req.msg.Seqno,
@@ -494,7 +528,7 @@ func (s *kvstore) serve() {
 
 		for atomic.LoadInt32(&s.stoped) == 0 {
 			time.Sleep(time.Millisecond * interval)
-			err := s.mainQueue.q.Append(0, func() {
+			err := s.mainQueue.q.Append(1, func() {
 				s.checkLru(ch)
 			})
 			if nil == err {
@@ -508,15 +542,15 @@ func (s *kvstore) serve() {
 	/*go func() {
 		for atomic.LoadInt32(&s.stoped) == 0 {
 			time.Sleep(time.Second)
-			err := s.mainQueue.q.Append(0, func() {
-				GetSugar().Infof("store:%d kvcount:%d", s.shard, s.kvcount())
+			err := s.mainQueue.q.ForceAppend(1, func() {
+				s.unixNow = time.Now().Unix()
+				//GetSugar().Infof("store:%d kvcount:%d", s.shard, s.kvcount())
 			})
 
 			if err == queue.ErrQueueClosed {
 				return
 			}
 		}
-
 	}()*/
 
 	go func() {

@@ -123,7 +123,7 @@ type PriorityQueue struct {
 	listGuard   sync.Mutex
 	emptyCond   *sync.Cond
 	fullCond    *sync.Cond
-	fullSize    int
+	fullSize    int //<=0则无限制
 	closed      bool
 	emptyWaited int
 	fullWaited  int
@@ -140,7 +140,7 @@ func (self *PriorityQueue) Append(priority int, item interface{}) error {
 
 	n := self.q.count
 
-	if n >= self.fullSize {
+	if self.fullSize > 0 && n >= self.fullSize {
 		self.listGuard.Unlock()
 		return ErrQueueFull
 	}

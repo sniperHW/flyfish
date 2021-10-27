@@ -26,6 +26,11 @@ RaftLogDir              = "raftLog"
 
 RaftLogPrefix           = "flykv"
 
+[StoreReqLimit]
+SoftLimit               = 50000
+HardLimit               = 100000
+SoftLimitSeconds        = 10
+
 
 [SoloConfig]
 RaftUrl                 = "http://127.0.0.1:12377"

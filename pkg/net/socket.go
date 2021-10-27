@@ -406,16 +406,16 @@ func (this *Socket) onSendFinish() {
 			this.wUnlock()
 		}
 	}()
-	b := this.b
-	if nil == b && this.sendingSize == 0 {
+
+	if nil == this.b && this.sendingSize == 0 {
 		if this.testFlag(fwclosed) {
 			this.sendCh.close()
 			this.conn.(interface{ CloseWrite() error }).CloseWrite()
 		}
-	} else if nil != b && this.sendingSize == 0 {
-		this.b = nil
-		this.sendingSize = b.Len()
-		if nil == this.sendCh.push(b) {
+	} else if nil != this.b && this.sendingSize == 0 {
+		this.sendingSize = this.b.Len()
+		if nil == this.sendCh.push(this.b) {
+			this.b = nil
 			wUnlock = false
 		}
 	}

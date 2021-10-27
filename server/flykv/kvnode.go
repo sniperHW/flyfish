@@ -192,7 +192,7 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, cluster string, slots 
 	}
 
 	mainQueue := applicationQueue{
-		q: queue.NewPriorityQueue(2),
+		q: queue.NewPriorityQueue(2, this.config.MainQueueMaxSize),
 	}
 
 	var groupSize int = this.config.SnapshotCurrentCount
@@ -538,6 +538,18 @@ func NewKvNode(id int, config *Config, metaDef *db.DbDef, metaCreator func(*db.D
 
 	if config.ReadBatchCount > 0 {
 		raft.ReadBatchCount = config.ReadBatchCount
+	}
+
+	if config.StoreReqLimit.SoftLimit <= 0 {
+		config.StoreReqLimit.SoftLimit = 20000
+	}
+
+	if config.StoreReqLimit.HardLimit <= 0 {
+		config.StoreReqLimit.HardLimit = 50000
+	}
+
+	if config.StoreReqLimit.SoftLimitSeconds <= 0 {
+		config.StoreReqLimit.SoftLimitSeconds = 10
 	}
 
 	return &kvnode{

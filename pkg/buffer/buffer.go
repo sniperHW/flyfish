@@ -331,6 +331,15 @@ func (this *BufferReader) CheckGetInt64() (int64, error) {
 	}
 }
 
+func (this *BufferReader) CheckGetInt() (int, error) {
+	u, err := this.CheckGetUint32()
+	if nil != err {
+		return 0, err
+	} else {
+		return int(u), nil
+	}
+}
+
 func (this *BufferReader) GetString(size int) string {
 	return string(this.GetBytes(size))
 }

@@ -8,7 +8,7 @@ type ArrayQueue struct {
 	list        []interface{}
 	mtx         sync.Mutex
 	emptyCond   *sync.Cond
-	fullSize    int
+	fullSize    int //<=0则无限制
 	closed      bool
 	emptyWaited int
 }
@@ -20,7 +20,7 @@ func (self *ArrayQueue) Append(item interface{}) error {
 		return ErrQueueClosed
 	}
 	n := len(self.list)
-	if n > self.fullSize {
+	if self.fullSize > 0 && n >= self.fullSize {
 		self.mtx.Unlock()
 		return ErrQueueFull
 	}
@@ -85,13 +85,13 @@ func (self *ArrayQueue) Close() bool {
 	return true
 }
 
-func (self *ArrayQueue) SetCap(newSize int) {
+/*func (self *ArrayQueue) SetCap(newSize int) {
 	if newSize > 0 {
 		self.mtx.Lock()
 		self.fullSize = newSize
 		self.mtx.Unlock()
 	}
-}
+}*/
 
 func (self *ArrayQueue) Len() int {
 	self.mtx.Lock()

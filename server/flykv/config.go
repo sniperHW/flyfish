@@ -74,6 +74,12 @@ type Config struct {
 		DB       string
 	}
 
+	StoreReqLimit struct {
+		SoftLimit        int
+		HardLimit        int
+		SoftLimitSeconds int
+	}
+
 	Log struct {
 		MaxLogfileSize int
 		LogDir         string
