@@ -351,11 +351,10 @@ func (s *kvstore) checkReqLimit() bool {
 		nowUnix := time.Now().Unix()
 		if s.SoftLimitReachedTime == 0 {
 			s.SoftLimitReachedTime = nowUnix
-			return false
 		} else {
 			elapse := nowUnix - s.SoftLimitReachedTime
 			if int(elapse) >= conf.SoftLimitSeconds {
-				return true
+				return false
 			}
 		}
 	} else {

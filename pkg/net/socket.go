@@ -534,11 +534,10 @@ func (this *Socket) checkOutputLimit(size int) bool {
 		nowUnix := time.Now().Unix()
 		if this.obufSoftLimitReachedTime == 0 {
 			this.obufSoftLimitReachedTime = nowUnix
-			return false
 		} else {
 			elapse := nowUnix - this.obufSoftLimitReachedTime
 			if int(elapse) >= this.outputLimit.OutPutLimitSoftSeconds {
-				return true
+				return false
 			}
 		}
 	} else {
