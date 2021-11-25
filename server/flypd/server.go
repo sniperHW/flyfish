@@ -8,6 +8,7 @@ import (
 	"net"
 	//"net/url"
 	"reflect"
+	"strings"
 )
 
 func (p *pd) registerMsgHandler(msg proto.Message, handler func(*net.UDPAddr, proto.Message)) {
@@ -152,13 +153,13 @@ func (p *pd) onAddSet(from *net.UDPAddr, m proto.Message) {
 	//检查node是否有冲突
 	nodeIDS := map[int]bool{}
 	nodeServices := map[string]bool{}
-	nodeInters := map[string]bool{}
+	nodeRafts := map[string]bool{}
 
 	for _, v := range p.deployment.sets {
 		for _, vv := range v.nodes {
 			nodeIDS[vv.id] = true
 			nodeServices[fmt.Sprintf("%s:%d", vv.host, vv.servicePort)] = true
-			nodeInters[fmt.Sprintf("%s:%d", vv.host, vv.servicePort)] = true
+			nodeRafts[fmt.Sprintf("%s:%d", vv.host, vv.raftPort)] = true
 		}
 	}
 
@@ -179,17 +180,17 @@ func (p *pd) onAddSet(from *net.UDPAddr, m proto.Message) {
 			return
 		}
 
-		if nodeInters[fmt.Sprintf("%s:%d", v.Host, v.InterPort)] {
+		if nodeRafts[fmt.Sprintf("%s:%d", v.Host, v.RaftPort)] {
 			p.udp.SendTo(from, &sproto.AddSetResp{
 				Ok:     false,
-				Reason: fmt.Sprintf("duplicate inter:%s:%d", v.Host, v.InterPort),
+				Reason: fmt.Sprintf("duplicate inter:%s:%d", v.Host, v.RaftPort),
 			})
 			return
 		}
 
 		nodeIDS[int(v.NodeID)] = true
 		nodeServices[fmt.Sprintf("%s:%d", v.Host, v.ServicePort)] = true
-		nodeInters[fmt.Sprintf("%s:%d", v.Host, v.InterPort)] = true
+		nodeRafts[fmt.Sprintf("%s:%d", v.Host, v.RaftPort)] = true
 	}
 
 	err := p.issueProposal(&ProposalAddSet{
@@ -267,7 +268,7 @@ func (p *pd) onAddNode(from *net.UDPAddr, m proto.Message) {
 				return
 			}
 
-			if vv.host == msg.Host && vv.interPort == int(msg.InterPort) {
+			if vv.host == msg.Host && vv.raftPort == int(msg.RaftPort) {
 				p.udp.SendTo(from, &sproto.AddNodeResp{
 					Ok:     false,
 					Reason: "duplicate inter addr",
@@ -456,6 +457,69 @@ func (p *pd) onNotifySlotTransInResp(from *net.UDPAddr, m proto.Message) {
 	}
 }
 
+func (p *pd) onKvnodeBoot(from *net.UDPAddr, m proto.Message) {
+	msg := m.(*sproto.KvnodeBoot)
+	node := p.getNode(msg.NodeID)
+	if nil == node {
+		p.udp.SendTo(from, &sproto.KvnodeBootResp{
+			Ok:     false,
+			Reason: fmt.Sprintf("node:%d not in deployment", msg.NodeID),
+		})
+		return
+	}
+
+	if node.host != msg.Host {
+		p.udp.SendTo(from, &sproto.KvnodeBootResp{
+			Ok:     false,
+			Reason: fmt.Sprintf("node:%d host not match(require:%s)", msg.NodeID, node.host),
+		})
+		return
+	}
+
+	resp := &sproto.KvnodeBootResp{
+		Ok:          true,
+		ServicePort: int32(node.servicePort),
+		RaftPort:    int32(node.raftPort),
+	}
+
+	raftCluster := []string{}
+	for _, v := range node.set.nodes {
+		raftCluster = append(raftCluster, fmt.Sprintf("%d@http://%s:%d", v.id, v.host, v.raftPort))
+	}
+
+	strRaftCluster := strings.Join(raftCluster, ",")
+
+	for _, v := range node.set.stores {
+		s := &sproto.StoreInfo{
+			Id:          int32(v.id),
+			Slots:       v.slots.ToJson(),
+			RaftCluster: strRaftCluster,
+		}
+		resp.Stores = append(resp.Stores, s)
+	}
+
+	p.udp.SendTo(from, resp)
+
+}
+
+func (p *pd) onQueryRouteInfo(from *net.UDPAddr, m proto.Message) {
+	msg := m.(*sproto.QueryRouteInfo)
+	p.flygateMgr.onQueryRouteInfo(msg.Service)
+	if nil != p.deployment {
+		resp := p.deployment.queryRouteInfo(msg)
+		p.udp.SendTo(from, resp)
+	}
+}
+
+func (p *pd) onGetFlyGate(from *net.UDPAddr, m proto.Message) {
+	g := p.flygateMgr.getFlyGate()
+	if nil == g {
+		p.udp.SendTo(from, &sproto.GetFlyGateResp{})
+	} else {
+		p.udp.SendTo(from, &sproto.GetFlyGateResp{GateService: g.service})
+	}
+}
+
 func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.InstallDeployment{}, p.onInstallDeployment)
 	p.registerMsgHandler(&sproto.AddSet{}, p.onAddSet)
@@ -466,4 +530,7 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.NotifyRemNodeResp{}, p.onNotifyRemNodeResp)
 	p.registerMsgHandler(&sproto.NotifySlotTransOutResp{}, p.onNotifySlotTransOutResp)
 	p.registerMsgHandler(&sproto.NotifySlotTransInResp{}, p.onNotifySlotTransInResp)
+	p.registerMsgHandler(&sproto.KvnodeBoot{}, p.onKvnodeBoot)
+	p.registerMsgHandler(&sproto.QueryRouteInfo{}, p.onQueryRouteInfo)
+	p.registerMsgHandler(&sproto.GetFlyGate{}, p.onGetFlyGate)
 }

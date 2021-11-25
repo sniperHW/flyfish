@@ -126,6 +126,13 @@ storeTransOut leader接收到通告后，将slot关联的kv踢出缓存。当所
 
 
 
+## 路由
+
+client连接flygate,将请求发往flygate,flygate根据请求的key计算出slot。根据slot将请求发往正确的kvnode。
+
+### flygate启动
+
+flygate在启动时向flypd获取配置信息并缓存在本地。
 
 
 
@@ -134,7 +141,10 @@ storeTransOut leader接收到通告后，将slot关联的kv踢出缓存。当所
 
 
 
-### 
+
+
+
+
 
 
 

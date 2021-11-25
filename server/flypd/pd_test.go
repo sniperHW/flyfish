@@ -8,6 +8,7 @@ import (
 	//"github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
+	//"github.com/sniperHW/flyfish/pkg/compress"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
@@ -51,7 +52,7 @@ func TestSnapShot(t *testing.T) {
 		id:          1,
 		host:        "192.168.0.1",
 		servicePort: 8110,
-		interPort:   8111,
+		raftPort:    8111,
 		set:         set1,
 	}
 
@@ -59,7 +60,7 @@ func TestSnapShot(t *testing.T) {
 		id:          2,
 		host:        "192.168.0.2",
 		servicePort: 8110,
-		interPort:   8111,
+		raftPort:    8111,
 		set:         set1,
 	}
 
@@ -67,7 +68,7 @@ func TestSnapShot(t *testing.T) {
 		id:          3,
 		host:        "192.168.0.3",
 		servicePort: 8110,
-		interPort:   8111,
+		raftPort:    8111,
 		set:         set1,
 	}
 
@@ -118,7 +119,7 @@ func TestSnapShot(t *testing.T) {
 			NodeID:      11,
 			Host:        "192.168.0.11",
 			ServicePort: 8110,
-			InterPort:   8111,
+			RaftPort:    8111,
 		},
 		SetID: 1,
 	}
@@ -211,6 +212,8 @@ func TestPd(t *testing.T) {
 
 	testSlotTransfer(t, p)
 
+	testFlygate(t, p)
+
 	p.Stop()
 
 	p, _ = NewPd(conf, "localhost:8110", 1, "1@http://localhost:8110")
@@ -224,6 +227,23 @@ func TestPd(t *testing.T) {
 	}
 
 	p.Stop()
+
+}
+
+func testFlygate(t *testing.T, p *pd) {
+	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
+	assert.Nil(t, err)
+	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
+
+	conn.SendTo(addr, &sproto.QueryRouteInfo{Version: 0, Service: "localhost:8119"})
+	_, r, err := conn.ReadFrom(make([]byte, 65535))
+
+	assert.Equal(t, r.(*sproto.QueryRouteInfoResp).Version, p.deployment.version)
+
+	conn.SendTo(addr, &sproto.GetFlyGate{})
+	_, r, err = conn.ReadFrom(make([]byte, 65535))
+
+	assert.Equal(t, r.(*sproto.GetFlyGateResp).GateService, "localhost:8119")
 
 }
 
@@ -242,7 +262,7 @@ func testInstallDeployment(t *testing.T, p *pd) {
 		NodeID:      1,
 		Host:        "localhost",
 		ServicePort: 9110,
-		InterPort:   9111,
+		RaftPort:    9111,
 	})
 	install.Sets = append(install.Sets, set1)
 
@@ -323,7 +343,7 @@ func testAddRemNode(t *testing.T, p *pd) {
 		nodeId: 1,
 	}
 
-	node1.udp, _ = fnet.NewUdp("localhost:9111", snet.Pack, snet.Unpack)
+	node1.udp, _ = fnet.NewUdp("localhost:9110", snet.Pack, snet.Unpack)
 
 	go node1.run()
 
@@ -337,7 +357,7 @@ func testAddRemNode(t *testing.T, p *pd) {
 		NodeID:      2,
 		Host:        "localhost",
 		ServicePort: 9120,
-		InterPort:   9121,
+		RaftPort:    9121,
 	})
 
 	recvbuff := make([]byte, 256)
@@ -392,7 +412,7 @@ func testAddRemSet(t *testing.T, p *pd) {
 					NodeID:      3,
 					Host:        "localhost",
 					ServicePort: 8311,
-					InterPort:   8321,
+					RaftPort:    8321,
 				},
 			},
 		},
@@ -449,7 +469,7 @@ func testSlotTransfer(t *testing.T, p *pd) {
 					NodeID:      2,
 					Host:        "localhost",
 					ServicePort: 9210,
-					InterPort:   9211,
+					RaftPort:    9211,
 				},
 			},
 		},
@@ -474,7 +494,7 @@ func testSlotTransfer(t *testing.T, p *pd) {
 		nodeId: 1,
 	}
 
-	node1.udp, _ = fnet.NewUdp("localhost:9111", snet.Pack, snet.Unpack)
+	node1.udp, _ = fnet.NewUdp("localhost:9110", snet.Pack, snet.Unpack)
 
 	go node1.run()
 
@@ -482,7 +502,7 @@ func testSlotTransfer(t *testing.T, p *pd) {
 		nodeId: 2,
 	}
 
-	node2.udp, _ = fnet.NewUdp("localhost:9211", snet.Pack, snet.Unpack)
+	node2.udp, _ = fnet.NewUdp("localhost:9210", snet.Pack, snet.Unpack)
 
 	go node2.run()
 
@@ -515,4 +535,155 @@ func testSlotTransfer(t *testing.T, p *pd) {
 	node1.stop()
 	node2.stop()
 
+}
+
+func makeInstallDeployment(setCount int) *sproto.InstallDeployment {
+	nodeID := 1
+	servicePort := 1
+	raftPort := setCount*KvNodePerSet + 1
+
+	install := &sproto.InstallDeployment{}
+
+	for i := 0; i < setCount; i++ {
+		set := &sproto.DeploymentSet{SetID: int32(i + 1)}
+		for j := 0; j < KvNodePerSet; j++ {
+			set.Nodes = append(set.Nodes, &sproto.DeploymentKvnode{
+				NodeID:      int32(nodeID),
+				Host:        "localhost",
+				ServicePort: int32(servicePort),
+				RaftPort:    int32(raftPort),
+			})
+			nodeID++
+			servicePort++
+			raftPort++
+		}
+
+		install.Sets = append(install.Sets, set)
+	}
+
+	return install
+}
+
+func TestRouteInfo(t *testing.T) {
+	sslot.SlotCount = 16384
+	KvNodePerSet = 5
+	for i := 1; i <= 100; i++ {
+		install := makeInstallDeployment(i)
+
+		d := &deployment{}
+
+		if err := d.loadFromPB(install.Sets); nil != err {
+			t.Fatal(err)
+		}
+
+		r := d.queryRouteInfo(&sproto.QueryRouteInfo{Version: 0})
+
+		b, err := snet.Pack(r)
+
+		if nil != err {
+			t.Fatal(err)
+		}
+
+		fmt.Println(i, len(b))
+
+		_, err = snet.Unpack(b)
+
+		if nil != err {
+			t.Fatal(err)
+		}
+	}
+
+	{
+		install := makeInstallDeployment(1)
+
+		d := &deployment{}
+
+		if err := d.loadFromPB(install.Sets); nil != err {
+			t.Fatal(err)
+		}
+
+		//增加一个set
+		s := &set{
+			id:     2,
+			nodes:  map[int]*kvnode{},
+			stores: map[int]*store{},
+		}
+
+		s.nodes[100] = &kvnode{
+			id:          100,
+			host:        "localhost",
+			servicePort: 1000,
+			raftPort:    1001,
+			set:         s,
+		}
+
+		s.stores[100] = &store{
+			id:    100,
+			set:   s,
+			slots: bitmap.New(sslot.SlotCount),
+		}
+
+		d.sets[2] = s
+		d.version++
+		s.version = d.version
+
+		r := d.queryRouteInfo(&sproto.QueryRouteInfo{Version: 1})
+
+		assert.Equal(t, 1, len(r.Sets))
+
+		assert.Equal(t, 0, len(r.RemoveSets))
+
+		assert.Equal(t, int32(100), r.Sets[0].Kvnodes[0].NodeID)
+
+	}
+
+	{
+		install := makeInstallDeployment(5)
+
+		d := &deployment{}
+
+		if err := d.loadFromPB(install.Sets); nil != err {
+			t.Fatal(err)
+		}
+
+		//移除两个节点
+		delete(d.sets, 2)
+		delete(d.sets, 4)
+
+		//增加一个set
+		s := &set{
+			id:     6,
+			nodes:  map[int]*kvnode{},
+			stores: map[int]*store{},
+		}
+
+		s.nodes[100] = &kvnode{
+			id:          100,
+			host:        "localhost",
+			servicePort: 1000,
+			raftPort:    1001,
+			set:         s,
+		}
+
+		s.stores[100] = &store{
+			id:    100,
+			set:   s,
+			slots: bitmap.New(sslot.SlotCount),
+		}
+
+		d.sets[6] = s
+		d.version++
+		s.version = d.version
+
+		r := d.queryRouteInfo(&sproto.QueryRouteInfo{Version: 1, Sets: []int32{1, 2, 3, 4, 5}})
+
+		assert.Equal(t, 1, len(r.Sets))
+
+		fmt.Println(r.RemoveSets)
+
+		assert.Equal(t, 2, len(r.RemoveSets))
+
+		assert.Equal(t, int32(100), r.Sets[0].Kvnodes[0].NodeID)
+
+	}
 }

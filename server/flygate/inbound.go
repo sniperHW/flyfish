@@ -35,7 +35,7 @@ func clientReqUnpack(pbSpace *pb.Namespace, b []byte, r int, w int) (ret interfa
 			var m relayMsg
 			m.bytes = make([]byte, totalSize)
 			copy(m.bytes, b[r:r+totalSize])
-			m.seqno = int64(binary.BigEndian.Uint64(b[rr:]))
+			m.oriSeqno = int64(binary.BigEndian.Uint64(b[rr:]))
 			rr += (8 + 4)
 			m.cmd = binary.BigEndian.Uint16(b[rr:])
 			rr += 2

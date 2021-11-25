@@ -5,17 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/net/cs"
+	"github.com/sniperHW/flyfish/pkg/queue"
 	flyproto "github.com/sniperHW/flyfish/proto"
-	"github.com/sniperHW/flyfish/server/clusterconf"
+	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
-	"github.com/sniperHW/flyfish/server/slot"
 	"net"
 	"os"
+	"sort"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -34,159 +35,321 @@ func (this *encoder) EnCode(o interface{}, buff *buffer.Buffer) error {
 	return nil
 }
 
-type relayMsg struct {
-	nodeSeqno     int64
-	version       int64
-	slot          int
-	seqno         int64
-	cmd           uint16
-	deadline      time.Time
-	bytes         []byte
-	deadlineTimer *time.Timer
-	store         *store
-	node          *node
-	gate          *gate
-	cli           *flynet.Socket
-	replyed       int32
+type set struct {
+	setID     int
+	nodes     map[int]*kvnode
+	stores    map[int]*store
+	routeInfo *routeInfo
+	removed   bool
 }
 
-func (r *relayMsg) onTimeout() {
-	r.node.Lock()
-	delete(r.node.pendingReq, r.nodeSeqno)
-	r.node.Unlock()
-	r.dropReply()
+type routeInfo struct {
+	version     int64
+	sets        map[int]*set
+	slotToStore map[int]*store
+	config      *Config
 }
 
-func (r *relayMsg) reply(b []byte) {
-	if atomic.CompareAndSwapInt32(&r.replyed, 0, 1) {
-		atomic.AddInt64(&r.gate.pendingMsg, -1)
-		r.cli.Send(b)
-	}
-}
+func (r *routeInfo) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
+	change := r.version != resp.Version
+	r.version = resp.Version
 
-func (r *relayMsg) replyErr(err errcode.Error) {
-	if atomic.CompareAndSwapInt32(&r.replyed, 0, 1) {
-		atomic.AddInt64(&r.gate.pendingMsg, -1)
-		replyCliError(r.cli, r.seqno, r.cmd, err)
-	}
-}
+	for _, v := range resp.Sets {
+		s, ok := r.sets[int(v.SetID)]
+		if ok {
+			for k, _ := range v.Stores {
+				ss := s.stores[int(v.Stores[k])]
+				ss.slots, _ = bitmap.CreateFromJson(v.Slots[k])
+			}
 
-func (r *relayMsg) dropReply() {
-	if atomic.CompareAndSwapInt32(&r.replyed, 0, 1) {
-		atomic.AddInt64(&r.gate.pendingMsg, -1)
-	}
-}
+			localKvnodes := []int32{}
+			for _, vv := range s.nodes {
+				localKvnodes = append(localKvnodes, int32(vv.id))
+			}
 
-func replyCliError(cli *flynet.Socket, seqno int64, cmd uint16, err errcode.Error) {
+			respKvnodes := [][]int32{}
+			for k, vv := range v.Kvnodes {
+				respKvnodes = append(respKvnodes, []int32{vv.NodeID, int32(k)})
+			}
 
-	var sizeOfErrDesc int
+			sort.Slice(localKvnodes, func(i, j int) bool {
+				return localKvnodes[i] < localKvnodes[j]
+			})
 
-	if nil != err && err.Code != 0 {
-		sizeOfErrDesc = len(err.Desc)
-		if sizeOfErrDesc > 0xFF {
-			//描述超长，直接丢弃
-			sizeOfErrDesc = cs.SizeErrDescLen
+			sort.Slice(respKvnodes, func(i, j int) bool {
+				return respKvnodes[i][0] < respKvnodes[j][0]
+			})
+
+			add := [][]int32{}
+			remove := []int32{}
+
+			i := 0
+			j := 0
+
+			for i < len(respKvnodes) && j < len(localKvnodes) {
+				if respKvnodes[i][0] == localKvnodes[j] {
+					i++
+					j++
+				} else if respKvnodes[i][0] > localKvnodes[j] {
+					remove = append(remove, localKvnodes[j])
+					j++
+				} else {
+					add = append(add, respKvnodes[i])
+					i++
+				}
+			}
+
+			if len(respKvnodes[i:]) > 0 {
+				add = append(add, respKvnodes[i:]...)
+			}
+
+			if len(localKvnodes[j:]) > 0 {
+				remove = append(remove, localKvnodes[j:]...)
+			}
+
+			for _, vv := range add {
+				n := &kvnode{
+					id:           int(vv[0]),
+					service:      fmt.Sprintf("%s:%d", v.Kvnodes[vv[1]].Host, v.Kvnodes[vv[1]].ServicePort),
+					waittingSend: list.New(),
+					pendingReq:   map[int64]*relayMsg{},
+					set:          s,
+					config:       r.config,
+				}
+				n.udpAddr, _ = net.ResolveUDPAddr("udp", n.service)
+				s.nodes[n.id] = n
+			}
+
+			for _, vv := range remove {
+				n := s.nodes[int(vv)]
+				delete(s.nodes, int(vv))
+				n.removed = true
+				if nil != n.session {
+					n.session.Close(nil, 0)
+				}
+			}
+
 		} else {
-			sizeOfErrDesc += cs.SizeErrDescLen
+			s := &set{
+				setID:     int(v.SetID),
+				nodes:     map[int]*kvnode{},
+				stores:    map[int]*store{},
+				routeInfo: r,
+			}
+
+			for _, vv := range v.Kvnodes {
+				n := &kvnode{
+					id:           int(vv.NodeID),
+					service:      fmt.Sprintf("%s:%d", vv.Host, vv.ServicePort),
+					waittingSend: list.New(),
+					pendingReq:   map[int64]*relayMsg{},
+					set:          s,
+					config:       r.config,
+				}
+				n.udpAddr, _ = net.ResolveUDPAddr("udp", n.service)
+				s.nodes[n.id] = n
+			}
+
+			for k, vv := range v.Stores {
+				st := &store{
+					id:           int(vv),
+					waittingSend: list.New(),
+					set:          s,
+					config:       r.config,
+				}
+				st.slots, _ = bitmap.CreateFromJson(v.Slots[k])
+				s.stores[st.id] = st
+			}
+
+			r.sets[s.setID] = s
 		}
 	}
 
-	payloadLen := cs.SizeSeqNo + cs.SizeCmd + cs.SizeErrCode + sizeOfErrDesc + cs.SizePB
-	totalLen := cs.SizeLen + payloadLen
-	if uint64(totalLen) > cs.MaxPacketSize {
-		return
-	}
-
-	b := make([]byte, 0, totalLen)
-
-	//写payload大小
-	b = buffer.AppendUint32(b, uint32(payloadLen))
-	//seqno
-	b = buffer.AppendInt64(b, seqno)
-	//cmd
-	b = buffer.AppendUint16(b, cmd)
-	//err
-	b = buffer.AppendInt16(b, errcode.GetCode(err))
-
-	if sizeOfErrDesc > 0 {
-		b = buffer.AppendUint16(b, uint16(sizeOfErrDesc-cs.SizeErrDescLen))
-		if sizeOfErrDesc > cs.SizeErrDescLen {
-			b = buffer.AppendString(b, err.Desc)
+	for _, v := range resp.RemoveSets {
+		if s, ok := r.sets[int(v)]; ok {
+			s.removed = true
+			delete(r.sets, int(v))
+			for _, vv := range s.nodes {
+				if nil != vv.session {
+					vv.session.Close(nil, 0)
+				}
+			}
 		}
 	}
 
-	b = buffer.AppendInt32(b, 0)
-
-	cli.Send(b)
+	if change {
+		r.slotToStore = map[int]*store{}
+		for _, v := range r.sets {
+			for _, vv := range v.stores {
+				slots := vv.slots.GetOpenBits()
+				for _, vvv := range slots {
+					r.slotToStore[vvv] = vv
+				}
+			}
+		}
+	}
 }
 
 type gate struct {
-	config        *Config
-	stopOnce      int32
-	startOnce     int32
-	slotToStore   map[int]*store
-	nodes         map[int]*node
-	stores        []*store
-	listener      *cs.Listener
-	pendingMsg    int64
-	muC           sync.Mutex
-	clients       map[*flynet.Socket]*flynet.Socket
-	consoleConn   *flynet.Udp
-	muConf        sync.Mutex
-	kvconf        *clusterconf.KvConfigJson
-	kvconfVersion int
-	die           chan struct{}
+	config            *Config
+	stopOnce          int32
+	startOnce         int32
+	listener          *cs.Listener
+	totalPendingMsg   int64
+	clients           map[*flynet.Socket]*flynet.Socket
+	routeInfo         routeInfo
+	queryingRouteInfo bool
+	queryTimer        *time.Timer
+	mainQueue         *queue.PriorityQueue
+	serviceAddr       string
+	seqCounter        int64
 }
 
-func NewGate(config *Config) *gate {
+func (g *gate) queryRouteInfo() *sproto.QueryRouteInfoResp {
+	pdService := strings.Split(g.config.PdService, ";")
+
+	if len(pdService) == 0 {
+		GetSugar().Fatalf("PdService is empty")
+		return nil
+	}
+
+	okCh := make(chan *sproto.QueryRouteInfoResp)
+	uu := make([]*flynet.Udp, len(pdService))
+
+	for k, v := range pdService {
+		go func(i int, remote string) {
+			var localU *flynet.Udp
+			var remoteAddr *net.UDPAddr
+			var err error
+			localU, err = flynet.NewUdp(fmt.Sprintf(":0"), snet.Pack, snet.Unpack)
+			if nil != err {
+				GetSugar().Infof("%v", err)
+				return
+			}
+
+			uu[i] = localU
+			remoteAddr, err = net.ResolveUDPAddr("udp", remote)
+			if nil != err {
+				GetSugar().Infof("%v", err)
+				return
+			}
+
+			req := &sproto.QueryRouteInfo{
+				Service: g.serviceAddr,
+				Version: g.routeInfo.version,
+			}
+
+			for kk, _ := range g.routeInfo.sets {
+				req.Sets = append(req.Sets, int32(kk))
+			}
+
+			localU.SendTo(remoteAddr, req)
+			_, r, err := localU.ReadFrom(make([]byte, 1024*64))
+			if nil == err {
+				if resp, ok := r.(*sproto.QueryRouteInfoResp); ok {
+					select {
+					case okCh <- resp:
+					default:
+					}
+				}
+			}
+		}(k, v)
+	}
+
+	ticker := time.NewTicker(3 * time.Second)
+
+	var resp *sproto.QueryRouteInfoResp
+
+	select {
+
+	case v := <-okCh:
+		resp = v
+	case <-ticker.C:
+	}
+	ticker.Stop()
+
+	for _, v := range uu {
+		if nil != v {
+			v.Close()
+		}
+	}
+
+	return resp
+}
+
+func NewFlyGate(config *Config) *gate {
 	return &gate{
-		config:      config,
-		slotToStore: map[int]*store{},
-		nodes:       map[int]*node{},
-		clients:     map[*flynet.Socket]*flynet.Socket{},
-		die:         make(chan struct{}),
+		config:    config,
+		clients:   map[*flynet.Socket]*flynet.Socket{},
+		mainQueue: queue.NewPriorityQueue(2),
+		routeInfo: routeInfo{
+			config:      config,
+			sets:        map[int]*set{},
+			slotToStore: map[int]*store{},
+		},
 	}
 }
 
 func (g *gate) startListener() {
 	g.listener.Serve(func(session *flynet.Socket) {
-		go func() {
-
-			g.muC.Lock()
+		g.mainQueue.ForceAppend(1, func() {
 			g.clients[session] = session
-			g.muC.Unlock()
-
 			session.SetEncoder(&encoder{})
-			session.SetSendQueueSize(256)
 			session.SetInBoundProcessor(NewCliReqInboundProcessor())
+			session.SetRecvTimeout(flyproto.PingTime * 10)
 
 			session.SetCloseCallBack(func(session *flynet.Socket, reason error) {
-				g.muC.Lock()
-				delete(g.clients, session)
-				g.muC.Unlock()
+				g.mainQueue.ForceAppend(1, func() {
+					delete(g.clients, session)
+				})
 			})
 
 			session.BeginRecv(func(session *flynet.Socket, v interface{}) {
 				msg := v.(*relayMsg)
-				//g.muRW.RLock()
-				s, ok := g.slotToStore[msg.slot]
-				//g.muRW.RUnlock()
-				if !ok {
-					replyCliError(session, msg.seqno, msg.cmd, errcode.New(errcode.Errcode_error, "can't find store"))
-				} else {
-					msg.store = s
-					msg.cli = session
-					msg.gate = g
-					s.onCliMsg(session, msg)
-				}
-
+				msg.cli = session
+				g.mainQueue.ForceAppend(0, msg)
 			})
-		}()
+		})
 	})
 }
 
 func verifyLogin(loginReq *flyproto.LoginReq) bool {
 	return true
+}
+
+func (g *gate) mainLoop() {
+	for {
+		_, v := g.mainQueue.Pop()
+		switch v.(type) {
+		case *relayMsg:
+			msg := v.(*relayMsg)
+			s, ok := g.routeInfo.slotToStore[msg.slot]
+			if !ok {
+				replyCliError(msg.cli, msg.seqno, msg.cmd, errcode.New(errcode.Errcode_error, "can't find store"))
+			} else {
+				g.seqCounter++
+				msg.seqno = g.seqCounter
+				msg.totalPendingMsg = &g.totalPendingMsg
+				msg.store = s
+				s.onCliMsg(msg)
+			}
+		case func():
+			v.(func())()
+		}
+	}
+}
+
+func (g *gate) startQueryTimer(timeout time.Duration) {
+	g.queryTimer = time.AfterFunc(timeout, func() {
+		go func() {
+			if resp := g.queryRouteInfo(); nil != resp {
+				g.routeInfo.onQueryRouteInfoResp(resp)
+				g.startQueryTimer(time.Second)
+			} else {
+				g.startQueryTimer(time.Millisecond * 10)
+			}
+		}()
+	})
 }
 
 func (g *gate) Start() error {
@@ -197,164 +360,79 @@ func (g *gate) Start() error {
 			return err
 		}
 
-		g.listener, err = cs.NewListener("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort), verifyLogin)
+		g.listener, err = cs.NewListener("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort), flynet.OutputBufLimit{
+			OutPutLimitSoft:        1024 * 1024 * 10,
+			OutPutLimitSoftSeconds: 10,
+			OutPutLimitHard:        1024 * 1024 * 50,
+		}, verifyLogin)
 
 		if nil != err {
 			return err
 		}
 
-		//从DB获取配置
-		clusterConf := config.ClusterConfig
-		g.kvconf, g.kvconfVersion, err = clusterconf.LoadConfigJsonFromDB(clusterConf.ClusterID, clusterConf.DBType, clusterConf.DBHost, clusterConf.DBPort, clusterConf.ConfDB, clusterConf.DBUser, clusterConf.DBPassword)
-		if nil != err {
-			return err
-		}
-
-		for _, v := range g.kvconf.NodeInfo {
-			n := &node{
-				id:           v.ID,
-				service:      fmt.Sprintf("%s:%d", v.HostIP, v.ServicePort),
-				gate:         g,
-				waittingSend: list.New(),
-				pendingReq:   map[int64]*relayMsg{},
-			}
-
-			if udpAddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.HostIP, v.InterPort)); nil != err {
-				return err
-			} else {
-				n.consoleAddr = udpAddr
-			}
-
-			g.nodes[v.ID] = n
-
-		}
-
-		if len(g.kvconf.Shard) == 0 {
-			return errors.New("shard == 0")
-		}
-
-		storeCount := len(g.kvconf.Shard) * clusterconf.StorePerNode
-
-		for i := 0; i < storeCount; i++ {
-			g.stores = append(g.stores, &store{
-				id:           i + 1,
-				gate:         g,
-				waittingSend: list.New(),
-			})
-		}
-
-		for k, v := range g.kvconf.Shard {
-			for _, vv := range v.Nodes {
-				for i := 0; i < clusterconf.StorePerNode; i++ {
-					g.stores[k*clusterconf.StorePerNode+i].nodes = append(g.stores[k*clusterconf.StorePerNode+i].nodes, g.nodes[vv])
-				}
+		for {
+			resp := g.queryRouteInfo()
+			if nil != resp {
+				g.routeInfo.onQueryRouteInfoResp(resp)
 			}
 		}
 
-		jj := 0
-
-		for i := 0; i < slot.SlotCount; i++ {
-			jj = (jj + 1) % storeCount
-			g.slotToStore[i] = g.stores[jj]
-		}
-
-		if err = g.initConsole(fmt.Sprintf("%s:%d", g.config.ServiceHost, g.config.ConsolePort)); nil != err {
-			return err
-		}
+		go g.mainLoop()
 
 		g.startListener()
 
-		dirs := strings.Split(g.config.DirService, ";")
-
-		if len(dirs) > 0 {
-			go func() {
-				for {
-					g.muConf.Lock()
-					kvconfVersion := g.kvconfVersion
-					g.muConf.Unlock()
-					for _, v := range dirs {
-						if addr, err := net.ResolveUDPAddr("udp", v); nil == err {
-							g.consoleConn.SendTo(addr, &sproto.GateReport{
-								Service:     fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort),
-								Console:     fmt.Sprintf("%s:%d", g.config.ServiceHost, g.config.ConsolePort),
-								ConfVersion: int32(kvconfVersion),
-							})
-						}
-					}
-
-					ticker := time.NewTicker((sproto.PingTime - 1) * time.Second)
-					select {
-					case <-g.die:
-						ticker.Stop()
-						//服务关闭，通知所有dir立即从gatelist中移除本服务
-						for _, v := range dirs {
-							if addr, err := net.ResolveUDPAddr("udp", v); nil == err {
-								g.consoleConn.SendTo(addr, &sproto.RemoveGate{
-									Service: fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort),
-								})
-							}
-						}
-						return
-					case <-ticker.C:
-					}
-					ticker.Stop()
-				}
-			}()
-		}
+		g.startQueryTimer(time.Second)
 	}
 
 	return nil
 }
 
-func waitCondition(fn func() bool) {
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		for {
-			time.Sleep(time.Millisecond * 100)
-			if fn() {
-				wg.Done()
-				break
+func (g *gate) checkCondition(notiyCh chan struct{}, fn func() bool) {
+	g.mainQueue.ForceAppend(1, func() {
+		if fn() {
+			select {
+			case notiyCh <- struct{}{}:
+			default:
 			}
+		} else {
+			go func() {
+				time.Sleep(time.Millisecond * 100)
+				g.checkCondition(notiyCh, fn)
+			}()
 		}
-	}()
-	wg.Wait()
+	})
+}
+
+func (g *gate) waitCondition(fn func() bool) {
+	waitCh := make(chan struct{})
+	g.checkCondition(waitCh, fn)
+	<-waitCh
 }
 
 func (g *gate) Stop() {
 	if atomic.CompareAndSwapInt32(&g.stopOnce, 0, 1) {
-		close(g.die)
-
 		//首先关闭监听,不在接受新到达的连接
 		g.listener.Close()
 		//关闭现有连接的读端，不会再接收新的req
-		g.muC.Lock()
 		for _, v := range g.clients {
 			v.ShutdownRead()
 		}
-		g.muC.Unlock()
 
 		//等待所有消息处理完
-		waitCondition(func() bool {
-			return atomic.LoadInt64(&g.pendingMsg) == 0
+
+		g.waitCondition(func() bool {
+			return g.totalPendingMsg == 0
 		})
 
-		//关闭现有连接
-		g.muC.Lock()
-		clients := g.clients
-		g.muC.Unlock()
-
-		for _, v := range clients {
+		for _, v := range g.clients {
 			v.Close(nil, time.Second*5)
 		}
 
-		waitCondition(func() bool {
-			g.muC.Lock()
-			defer g.muC.Unlock()
+		g.waitCondition(func() bool {
 			return len(g.clients) == 0
 		})
 
-		g.consoleConn.Close()
+		g.mainQueue.Close()
 
 	}
 }

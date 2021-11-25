@@ -30,13 +30,9 @@ const _ = proto.GoGoProtoPackageIsVersion2 // please upgrade the proto package
 type ServerCmdType int32
 
 const (
-	ServerCmdType_QueryLeader      ServerCmdType = 1
-	ServerCmdType_QueryLeaderResp  ServerCmdType = 2
-	ServerCmdType_GateReport       ServerCmdType = 3
-	ServerCmdType_QueryGateList    ServerCmdType = 4
-	ServerCmdType_GateList         ServerCmdType = 5
-	ServerCmdType_NotiReloadKvConf ServerCmdType = 6
-	ServerCmdType_RemoveGate       ServerCmdType = 7
+	//flygate <-> flykv
+	ServerCmdType_QueryLeader     ServerCmdType = 1
+	ServerCmdType_QueryLeaderResp ServerCmdType = 2
 	//console <-> pd
 	ServerCmdType_InstallDeployment     ServerCmdType = 101
 	ServerCmdType_InstallDeploymentResp ServerCmdType = 102
@@ -59,16 +55,17 @@ const (
 	ServerCmdType_NotifySlotTransOutResp ServerCmdType = 217
 	ServerCmdType_NotifySlotTransIn      ServerCmdType = 218
 	ServerCmdType_NotifySlotTransInResp  ServerCmdType = 219
+	//flygate <-> pd
+	ServerCmdType_QueryRouteInfo     ServerCmdType = 310
+	ServerCmdType_QueryRouteInfoResp ServerCmdType = 311
+	//client <-> pd
+	ServerCmdType_GetFlyGate     ServerCmdType = 410
+	ServerCmdType_GetFlyGateResp ServerCmdType = 411
 )
 
 var ServerCmdType_name = map[int32]string{
 	1:   "QueryLeader",
 	2:   "QueryLeaderResp",
-	3:   "GateReport",
-	4:   "QueryGateList",
-	5:   "GateList",
-	6:   "NotiReloadKvConf",
-	7:   "RemoveGate",
 	101: "InstallDeployment",
 	102: "InstallDeploymentResp",
 	103: "AddNode",
@@ -89,16 +86,15 @@ var ServerCmdType_name = map[int32]string{
 	217: "NotifySlotTransOutResp",
 	218: "NotifySlotTransIn",
 	219: "NotifySlotTransInResp",
+	310: "QueryRouteInfo",
+	311: "QueryRouteInfoResp",
+	410: "GetFlyGate",
+	411: "GetFlyGateResp",
 }
 
 var ServerCmdType_value = map[string]int32{
 	"QueryLeader":            1,
 	"QueryLeaderResp":        2,
-	"GateReport":             3,
-	"QueryGateList":          4,
-	"GateList":               5,
-	"NotiReloadKvConf":       6,
-	"RemoveGate":             7,
 	"InstallDeployment":      101,
 	"InstallDeploymentResp":  102,
 	"AddNode":                103,
@@ -119,6 +115,10 @@ var ServerCmdType_value = map[string]int32{
 	"NotifySlotTransOutResp": 217,
 	"NotifySlotTransIn":      218,
 	"NotifySlotTransInResp":  219,
+	"QueryRouteInfo":         310,
+	"QueryRouteInfoResp":     311,
+	"GetFlyGate":             410,
+	"GetFlyGateResp":         411,
 }
 
 func (x ServerCmdType) Enum() *ServerCmdType {
@@ -144,6 +144,250 @@ func (ServerCmdType) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_03085fc3fc38bb42, []int{0}
 }
 
+type QueryRouteInfo struct {
+	Service string  `protobuf:"bytes,1,opt,name=service" json:"service"`
+	Version int64   `protobuf:"varint,2,opt,name=version" json:"version"`
+	Sets    []int32 `protobuf:"varint,3,rep,name=sets" json:"sets,omitempty"`
+}
+
+func (m *QueryRouteInfo) Reset()      { *m = QueryRouteInfo{} }
+func (*QueryRouteInfo) ProtoMessage() {}
+func (*QueryRouteInfo) Descriptor() ([]byte, []int) {
+	return fileDescriptor_03085fc3fc38bb42, []int{0}
+}
+func (m *QueryRouteInfo) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *QueryRouteInfo) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_QueryRouteInfo.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *QueryRouteInfo) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryRouteInfo.Merge(m, src)
+}
+func (m *QueryRouteInfo) XXX_Size() int {
+	return m.Size()
+}
+func (m *QueryRouteInfo) XXX_DiscardUnknown() {
+	xxx_messageInfo_QueryRouteInfo.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_QueryRouteInfo proto.InternalMessageInfo
+
+func (m *QueryRouteInfo) GetService() string {
+	if m != nil {
+		return m.Service
+	}
+	return ""
+}
+
+func (m *QueryRouteInfo) GetVersion() int64 {
+	if m != nil {
+		return m.Version
+	}
+	return 0
+}
+
+func (m *QueryRouteInfo) GetSets() []int32 {
+	if m != nil {
+		return m.Sets
+	}
+	return nil
+}
+
+type RouteInfoKvNode struct {
+	NodeID      int32  `protobuf:"varint,1,opt,name=nodeID" json:"nodeID"`
+	Host        string `protobuf:"bytes,2,opt,name=host" json:"host"`
+	ServicePort int32  `protobuf:"varint,3,opt,name=servicePort" json:"servicePort"`
+}
+
+func (m *RouteInfoKvNode) Reset()      { *m = RouteInfoKvNode{} }
+func (*RouteInfoKvNode) ProtoMessage() {}
+func (*RouteInfoKvNode) Descriptor() ([]byte, []int) {
+	return fileDescriptor_03085fc3fc38bb42, []int{1}
+}
+func (m *RouteInfoKvNode) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *RouteInfoKvNode) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_RouteInfoKvNode.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *RouteInfoKvNode) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RouteInfoKvNode.Merge(m, src)
+}
+func (m *RouteInfoKvNode) XXX_Size() int {
+	return m.Size()
+}
+func (m *RouteInfoKvNode) XXX_DiscardUnknown() {
+	xxx_messageInfo_RouteInfoKvNode.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_RouteInfoKvNode proto.InternalMessageInfo
+
+func (m *RouteInfoKvNode) GetNodeID() int32 {
+	if m != nil {
+		return m.NodeID
+	}
+	return 0
+}
+
+func (m *RouteInfoKvNode) GetHost() string {
+	if m != nil {
+		return m.Host
+	}
+	return ""
+}
+
+func (m *RouteInfoKvNode) GetServicePort() int32 {
+	if m != nil {
+		return m.ServicePort
+	}
+	return 0
+}
+
+type RouteInfoSet struct {
+	SetID   int32              `protobuf:"varint,1,opt,name=setID" json:"setID"`
+	Stores  []int32            `protobuf:"varint,2,rep,name=stores" json:"stores,omitempty"`
+	Slots   [][]byte           `protobuf:"bytes,3,rep,name=slots" json:"slots,omitempty"`
+	Kvnodes []*RouteInfoKvNode `protobuf:"bytes,4,rep,name=kvnodes" json:"kvnodes,omitempty"`
+}
+
+func (m *RouteInfoSet) Reset()      { *m = RouteInfoSet{} }
+func (*RouteInfoSet) ProtoMessage() {}
+func (*RouteInfoSet) Descriptor() ([]byte, []int) {
+	return fileDescriptor_03085fc3fc38bb42, []int{2}
+}
+func (m *RouteInfoSet) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *RouteInfoSet) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_RouteInfoSet.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *RouteInfoSet) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RouteInfoSet.Merge(m, src)
+}
+func (m *RouteInfoSet) XXX_Size() int {
+	return m.Size()
+}
+func (m *RouteInfoSet) XXX_DiscardUnknown() {
+	xxx_messageInfo_RouteInfoSet.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_RouteInfoSet proto.InternalMessageInfo
+
+func (m *RouteInfoSet) GetSetID() int32 {
+	if m != nil {
+		return m.SetID
+	}
+	return 0
+}
+
+func (m *RouteInfoSet) GetStores() []int32 {
+	if m != nil {
+		return m.Stores
+	}
+	return nil
+}
+
+func (m *RouteInfoSet) GetSlots() [][]byte {
+	if m != nil {
+		return m.Slots
+	}
+	return nil
+}
+
+func (m *RouteInfoSet) GetKvnodes() []*RouteInfoKvNode {
+	if m != nil {
+		return m.Kvnodes
+	}
+	return nil
+}
+
+type QueryRouteInfoResp struct {
+	Sets       []*RouteInfoSet `protobuf:"bytes,1,rep,name=sets" json:"sets,omitempty"`
+	RemoveSets []int32         `protobuf:"varint,2,rep,name=removeSets" json:"removeSets,omitempty"`
+	Version    int64           `protobuf:"varint,3,opt,name=version" json:"version"`
+}
+
+func (m *QueryRouteInfoResp) Reset()      { *m = QueryRouteInfoResp{} }
+func (*QueryRouteInfoResp) ProtoMessage() {}
+func (*QueryRouteInfoResp) Descriptor() ([]byte, []int) {
+	return fileDescriptor_03085fc3fc38bb42, []int{3}
+}
+func (m *QueryRouteInfoResp) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *QueryRouteInfoResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_QueryRouteInfoResp.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *QueryRouteInfoResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryRouteInfoResp.Merge(m, src)
+}
+func (m *QueryRouteInfoResp) XXX_Size() int {
+	return m.Size()
+}
+func (m *QueryRouteInfoResp) XXX_DiscardUnknown() {
+	xxx_messageInfo_QueryRouteInfoResp.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_QueryRouteInfoResp proto.InternalMessageInfo
+
+func (m *QueryRouteInfoResp) GetSets() []*RouteInfoSet {
+	if m != nil {
+		return m.Sets
+	}
+	return nil
+}
+
+func (m *QueryRouteInfoResp) GetRemoveSets() []int32 {
+	if m != nil {
+		return m.RemoveSets
+	}
+	return nil
+}
+
+func (m *QueryRouteInfoResp) GetVersion() int64 {
+	if m != nil {
+		return m.Version
+	}
+	return 0
+}
+
 //查询是否store的leader,如果是返回yes=true
 type QueryLeader struct {
 	Store int32 `protobuf:"varint,1,opt,name=store" json:"store"`
@@ -152,7 +396,7 @@ type QueryLeader struct {
 func (m *QueryLeader) Reset()      { *m = QueryLeader{} }
 func (*QueryLeader) ProtoMessage() {}
 func (*QueryLeader) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{0}
+	return fileDescriptor_03085fc3fc38bb42, []int{4}
 }
 func (m *QueryLeader) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -189,13 +433,13 @@ func (m *QueryLeader) GetStore() int32 {
 }
 
 type QueryLeaderResp struct {
-	Yes bool `protobuf:"varint,1,opt,name=yes" json:"yes"`
+	Leader int32 `protobuf:"varint,1,opt,name=leader" json:"leader"`
 }
 
 func (m *QueryLeaderResp) Reset()      { *m = QueryLeaderResp{} }
 func (*QueryLeaderResp) ProtoMessage() {}
 func (*QueryLeaderResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{1}
+	return fileDescriptor_03085fc3fc38bb42, []int{5}
 }
 func (m *QueryLeaderResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -224,239 +468,24 @@ func (m *QueryLeaderResp) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_QueryLeaderResp proto.InternalMessageInfo
 
-func (m *QueryLeaderResp) GetYes() bool {
+func (m *QueryLeaderResp) GetLeader() int32 {
 	if m != nil {
-		return m.Yes
-	}
-	return false
-}
-
-type GateReport struct {
-	Service     string `protobuf:"bytes,1,opt,name=service" json:"service"`
-	Console     string `protobuf:"bytes,2,opt,name=console" json:"console"`
-	ConfVersion int32  `protobuf:"varint,3,opt,name=conf_version,json=confVersion" json:"conf_version"`
-}
-
-func (m *GateReport) Reset()      { *m = GateReport{} }
-func (*GateReport) ProtoMessage() {}
-func (*GateReport) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{2}
-}
-func (m *GateReport) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *GateReport) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_GateReport.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (m *GateReport) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_GateReport.Merge(m, src)
-}
-func (m *GateReport) XXX_Size() int {
-	return m.Size()
-}
-func (m *GateReport) XXX_DiscardUnknown() {
-	xxx_messageInfo_GateReport.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_GateReport proto.InternalMessageInfo
-
-func (m *GateReport) GetService() string {
-	if m != nil {
-		return m.Service
-	}
-	return ""
-}
-
-func (m *GateReport) GetConsole() string {
-	if m != nil {
-		return m.Console
-	}
-	return ""
-}
-
-func (m *GateReport) GetConfVersion() int32 {
-	if m != nil {
-		return m.ConfVersion
+		return m.Leader
 	}
 	return 0
-}
-
-type QueryGateList struct {
-}
-
-func (m *QueryGateList) Reset()      { *m = QueryGateList{} }
-func (*QueryGateList) ProtoMessage() {}
-func (*QueryGateList) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{3}
-}
-func (m *QueryGateList) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *QueryGateList) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_QueryGateList.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (m *QueryGateList) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_QueryGateList.Merge(m, src)
-}
-func (m *QueryGateList) XXX_Size() int {
-	return m.Size()
-}
-func (m *QueryGateList) XXX_DiscardUnknown() {
-	xxx_messageInfo_QueryGateList.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_QueryGateList proto.InternalMessageInfo
-
-type GateList struct {
-	List []string `protobuf:"bytes,1,rep,name=list" json:"list,omitempty"`
-}
-
-func (m *GateList) Reset()      { *m = GateList{} }
-func (*GateList) ProtoMessage() {}
-func (*GateList) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{4}
-}
-func (m *GateList) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *GateList) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_GateList.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (m *GateList) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_GateList.Merge(m, src)
-}
-func (m *GateList) XXX_Size() int {
-	return m.Size()
-}
-func (m *GateList) XXX_DiscardUnknown() {
-	xxx_messageInfo_GateList.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_GateList proto.InternalMessageInfo
-
-func (m *GateList) GetList() []string {
-	if m != nil {
-		return m.List
-	}
-	return nil
-}
-
-type NotifyReloadKvconf struct {
-}
-
-func (m *NotifyReloadKvconf) Reset()      { *m = NotifyReloadKvconf{} }
-func (*NotifyReloadKvconf) ProtoMessage() {}
-func (*NotifyReloadKvconf) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{5}
-}
-func (m *NotifyReloadKvconf) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *NotifyReloadKvconf) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_NotifyReloadKvconf.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (m *NotifyReloadKvconf) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_NotifyReloadKvconf.Merge(m, src)
-}
-func (m *NotifyReloadKvconf) XXX_Size() int {
-	return m.Size()
-}
-func (m *NotifyReloadKvconf) XXX_DiscardUnknown() {
-	xxx_messageInfo_NotifyReloadKvconf.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_NotifyReloadKvconf proto.InternalMessageInfo
-
-type RemoveGate struct {
-	Service string `protobuf:"bytes,1,opt,name=service" json:"service"`
-}
-
-func (m *RemoveGate) Reset()      { *m = RemoveGate{} }
-func (*RemoveGate) ProtoMessage() {}
-func (*RemoveGate) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{6}
-}
-func (m *RemoveGate) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *RemoveGate) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_RemoveGate.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (m *RemoveGate) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_RemoveGate.Merge(m, src)
-}
-func (m *RemoveGate) XXX_Size() int {
-	return m.Size()
-}
-func (m *RemoveGate) XXX_DiscardUnknown() {
-	xxx_messageInfo_RemoveGate.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_RemoveGate proto.InternalMessageInfo
-
-func (m *RemoveGate) GetService() string {
-	if m != nil {
-		return m.Service
-	}
-	return ""
 }
 
 type DeploymentKvnode struct {
 	NodeID      int32  `protobuf:"varint,1,opt,name=nodeID" json:"nodeID"`
 	Host        string `protobuf:"bytes,2,opt,name=host" json:"host"`
 	ServicePort int32  `protobuf:"varint,3,opt,name=servicePort" json:"servicePort"`
-	InterPort   int32  `protobuf:"varint,4,opt,name=interPort" json:"interPort"`
+	RaftPort    int32  `protobuf:"varint,4,opt,name=raftPort" json:"raftPort"`
 }
 
 func (m *DeploymentKvnode) Reset()      { *m = DeploymentKvnode{} }
 func (*DeploymentKvnode) ProtoMessage() {}
 func (*DeploymentKvnode) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{7}
+	return fileDescriptor_03085fc3fc38bb42, []int{6}
 }
 func (m *DeploymentKvnode) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -506,9 +535,9 @@ func (m *DeploymentKvnode) GetServicePort() int32 {
 	return 0
 }
 
-func (m *DeploymentKvnode) GetInterPort() int32 {
+func (m *DeploymentKvnode) GetRaftPort() int32 {
 	if m != nil {
-		return m.InterPort
+		return m.RaftPort
 	}
 	return 0
 }
@@ -521,7 +550,7 @@ type DeploymentSet struct {
 func (m *DeploymentSet) Reset()      { *m = DeploymentSet{} }
 func (*DeploymentSet) ProtoMessage() {}
 func (*DeploymentSet) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{8}
+	return fileDescriptor_03085fc3fc38bb42, []int{7}
 }
 func (m *DeploymentSet) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -571,7 +600,7 @@ type InstallDeployment struct {
 func (m *InstallDeployment) Reset()      { *m = InstallDeployment{} }
 func (*InstallDeployment) ProtoMessage() {}
 func (*InstallDeployment) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{9}
+	return fileDescriptor_03085fc3fc38bb42, []int{8}
 }
 func (m *InstallDeployment) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -615,7 +644,7 @@ type InstallDeploymentResp struct {
 func (m *InstallDeploymentResp) Reset()      { *m = InstallDeploymentResp{} }
 func (*InstallDeploymentResp) ProtoMessage() {}
 func (*InstallDeploymentResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{10}
+	return fileDescriptor_03085fc3fc38bb42, []int{9}
 }
 func (m *InstallDeploymentResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -663,13 +692,13 @@ type AddNode struct {
 	NodeID      int32  `protobuf:"varint,2,opt,name=nodeID" json:"nodeID"`
 	Host        string `protobuf:"bytes,3,opt,name=host" json:"host"`
 	ServicePort int32  `protobuf:"varint,4,opt,name=servicePort" json:"servicePort"`
-	InterPort   int32  `protobuf:"varint,5,opt,name=interPort" json:"interPort"`
+	RaftPort    int32  `protobuf:"varint,5,opt,name=raftPort" json:"raftPort"`
 }
 
 func (m *AddNode) Reset()      { *m = AddNode{} }
 func (*AddNode) ProtoMessage() {}
 func (*AddNode) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{11}
+	return fileDescriptor_03085fc3fc38bb42, []int{10}
 }
 func (m *AddNode) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -726,9 +755,9 @@ func (m *AddNode) GetServicePort() int32 {
 	return 0
 }
 
-func (m *AddNode) GetInterPort() int32 {
+func (m *AddNode) GetRaftPort() int32 {
 	if m != nil {
-		return m.InterPort
+		return m.RaftPort
 	}
 	return 0
 }
@@ -741,7 +770,7 @@ type AddNodeResp struct {
 func (m *AddNodeResp) Reset()      { *m = AddNodeResp{} }
 func (*AddNodeResp) ProtoMessage() {}
 func (*AddNodeResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{12}
+	return fileDescriptor_03085fc3fc38bb42, []int{11}
 }
 func (m *AddNodeResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -792,7 +821,7 @@ type RemNode struct {
 func (m *RemNode) Reset()      { *m = RemNode{} }
 func (*RemNode) ProtoMessage() {}
 func (*RemNode) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{13}
+	return fileDescriptor_03085fc3fc38bb42, []int{12}
 }
 func (m *RemNode) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -843,7 +872,7 @@ type RemNodeResp struct {
 func (m *RemNodeResp) Reset()      { *m = RemNodeResp{} }
 func (*RemNodeResp) ProtoMessage() {}
 func (*RemNodeResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{14}
+	return fileDescriptor_03085fc3fc38bb42, []int{13}
 }
 func (m *RemNodeResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -894,7 +923,7 @@ type KvnodeBoot struct {
 func (m *KvnodeBoot) Reset()      { *m = KvnodeBoot{} }
 func (*KvnodeBoot) ProtoMessage() {}
 func (*KvnodeBoot) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{15}
+	return fileDescriptor_03085fc3fc38bb42, []int{14}
 }
 func (m *KvnodeBoot) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -946,7 +975,7 @@ type StoreInfo struct {
 func (m *StoreInfo) Reset()      { *m = StoreInfo{} }
 func (*StoreInfo) ProtoMessage() {}
 func (*StoreInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{16}
+	return fileDescriptor_03085fc3fc38bb42, []int{15}
 }
 func (m *StoreInfo) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1000,14 +1029,14 @@ type KvnodeBootResp struct {
 	Ok          bool         `protobuf:"varint,1,opt,name=ok" json:"ok"`
 	Reason      string       `protobuf:"bytes,2,opt,name=reason" json:"reason"`
 	ServicePort int32        `protobuf:"varint,3,opt,name=servicePort" json:"servicePort"`
-	InterPort   int32        `protobuf:"varint,4,opt,name=interPort" json:"interPort"`
+	RaftPort    int32        `protobuf:"varint,4,opt,name=raftPort" json:"raftPort"`
 	Stores      []*StoreInfo `protobuf:"bytes,5,rep,name=stores" json:"stores,omitempty"`
 }
 
 func (m *KvnodeBootResp) Reset()      { *m = KvnodeBootResp{} }
 func (*KvnodeBootResp) ProtoMessage() {}
 func (*KvnodeBootResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{17}
+	return fileDescriptor_03085fc3fc38bb42, []int{16}
 }
 func (m *KvnodeBootResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1057,9 +1086,9 @@ func (m *KvnodeBootResp) GetServicePort() int32 {
 	return 0
 }
 
-func (m *KvnodeBootResp) GetInterPort() int32 {
+func (m *KvnodeBootResp) GetRaftPort() int32 {
 	if m != nil {
-		return m.InterPort
+		return m.RaftPort
 	}
 	return 0
 }
@@ -1072,16 +1101,16 @@ func (m *KvnodeBootResp) GetStores() []*StoreInfo {
 }
 
 type NotifyAddNode struct {
-	NodeID    int32   `protobuf:"varint,1,opt,name=nodeID" json:"nodeID"`
-	Host      string  `protobuf:"bytes,2,opt,name=host" json:"host"`
-	InterPort int32   `protobuf:"varint,3,opt,name=interPort" json:"interPort"`
-	Stores    []int32 `protobuf:"varint,4,rep,name=stores" json:"stores,omitempty"`
+	NodeID   int32   `protobuf:"varint,1,opt,name=nodeID" json:"nodeID"`
+	Host     string  `protobuf:"bytes,2,opt,name=host" json:"host"`
+	RaftPort int32   `protobuf:"varint,3,opt,name=raftPort" json:"raftPort"`
+	Stores   []int32 `protobuf:"varint,4,rep,name=stores" json:"stores,omitempty"`
 }
 
 func (m *NotifyAddNode) Reset()      { *m = NotifyAddNode{} }
 func (*NotifyAddNode) ProtoMessage() {}
 func (*NotifyAddNode) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{18}
+	return fileDescriptor_03085fc3fc38bb42, []int{17}
 }
 func (m *NotifyAddNode) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1124,9 +1153,9 @@ func (m *NotifyAddNode) GetHost() string {
 	return ""
 }
 
-func (m *NotifyAddNode) GetInterPort() int32 {
+func (m *NotifyAddNode) GetRaftPort() int32 {
 	if m != nil {
-		return m.InterPort
+		return m.RaftPort
 	}
 	return 0
 }
@@ -1146,7 +1175,7 @@ type NotifyAddNodeResp struct {
 func (m *NotifyAddNodeResp) Reset()      { *m = NotifyAddNodeResp{} }
 func (*NotifyAddNodeResp) ProtoMessage() {}
 func (*NotifyAddNodeResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{19}
+	return fileDescriptor_03085fc3fc38bb42, []int{18}
 }
 func (m *NotifyAddNodeResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1197,7 +1226,7 @@ type NotifyRemNode struct {
 func (m *NotifyRemNode) Reset()      { *m = NotifyRemNode{} }
 func (*NotifyRemNode) ProtoMessage() {}
 func (*NotifyRemNode) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{20}
+	return fileDescriptor_03085fc3fc38bb42, []int{19}
 }
 func (m *NotifyRemNode) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1248,7 +1277,7 @@ type NotifyRemNodeResp struct {
 func (m *NotifyRemNodeResp) Reset()      { *m = NotifyRemNodeResp{} }
 func (*NotifyRemNodeResp) ProtoMessage() {}
 func (*NotifyRemNodeResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{21}
+	return fileDescriptor_03085fc3fc38bb42, []int{20}
 }
 func (m *NotifyRemNodeResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1299,7 +1328,7 @@ type NotifySlotTransOut struct {
 func (m *NotifySlotTransOut) Reset()      { *m = NotifySlotTransOut{} }
 func (*NotifySlotTransOut) ProtoMessage() {}
 func (*NotifySlotTransOut) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{22}
+	return fileDescriptor_03085fc3fc38bb42, []int{21}
 }
 func (m *NotifySlotTransOut) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1349,7 +1378,7 @@ type NotifySlotTransOutResp struct {
 func (m *NotifySlotTransOutResp) Reset()      { *m = NotifySlotTransOutResp{} }
 func (*NotifySlotTransOutResp) ProtoMessage() {}
 func (*NotifySlotTransOutResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{23}
+	return fileDescriptor_03085fc3fc38bb42, []int{22}
 }
 func (m *NotifySlotTransOutResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1393,7 +1422,7 @@ type NotifySlotTransIn struct {
 func (m *NotifySlotTransIn) Reset()      { *m = NotifySlotTransIn{} }
 func (*NotifySlotTransIn) ProtoMessage() {}
 func (*NotifySlotTransIn) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{24}
+	return fileDescriptor_03085fc3fc38bb42, []int{23}
 }
 func (m *NotifySlotTransIn) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1443,7 +1472,7 @@ type NotifySlotTransInResp struct {
 func (m *NotifySlotTransInResp) Reset()      { *m = NotifySlotTransInResp{} }
 func (*NotifySlotTransInResp) ProtoMessage() {}
 func (*NotifySlotTransInResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{25}
+	return fileDescriptor_03085fc3fc38bb42, []int{24}
 }
 func (m *NotifySlotTransInResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1486,7 +1515,7 @@ type AddSet struct {
 func (m *AddSet) Reset()      { *m = AddSet{} }
 func (*AddSet) ProtoMessage() {}
 func (*AddSet) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{26}
+	return fileDescriptor_03085fc3fc38bb42, []int{25}
 }
 func (m *AddSet) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1530,7 +1559,7 @@ type AddSetResp struct {
 func (m *AddSetResp) Reset()      { *m = AddSetResp{} }
 func (*AddSetResp) ProtoMessage() {}
 func (*AddSetResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{27}
+	return fileDescriptor_03085fc3fc38bb42, []int{26}
 }
 func (m *AddSetResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1580,7 +1609,7 @@ type RemSet struct {
 func (m *RemSet) Reset()      { *m = RemSet{} }
 func (*RemSet) ProtoMessage() {}
 func (*RemSet) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{28}
+	return fileDescriptor_03085fc3fc38bb42, []int{27}
 }
 func (m *RemSet) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1624,7 +1653,7 @@ type RemSetResp struct {
 func (m *RemSetResp) Reset()      { *m = RemSetResp{} }
 func (*RemSetResp) ProtoMessage() {}
 func (*RemSetResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{29}
+	return fileDescriptor_03085fc3fc38bb42, []int{28}
 }
 func (m *RemSetResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1667,15 +1696,92 @@ func (m *RemSetResp) GetReason() string {
 	return ""
 }
 
+type GetFlyGate struct {
+}
+
+func (m *GetFlyGate) Reset()      { *m = GetFlyGate{} }
+func (*GetFlyGate) ProtoMessage() {}
+func (*GetFlyGate) Descriptor() ([]byte, []int) {
+	return fileDescriptor_03085fc3fc38bb42, []int{29}
+}
+func (m *GetFlyGate) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetFlyGate) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetFlyGate.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *GetFlyGate) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetFlyGate.Merge(m, src)
+}
+func (m *GetFlyGate) XXX_Size() int {
+	return m.Size()
+}
+func (m *GetFlyGate) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetFlyGate.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetFlyGate proto.InternalMessageInfo
+
+type GetFlyGateResp struct {
+	GateService string `protobuf:"bytes,1,opt,name=gateService" json:"gateService"`
+}
+
+func (m *GetFlyGateResp) Reset()      { *m = GetFlyGateResp{} }
+func (*GetFlyGateResp) ProtoMessage() {}
+func (*GetFlyGateResp) Descriptor() ([]byte, []int) {
+	return fileDescriptor_03085fc3fc38bb42, []int{30}
+}
+func (m *GetFlyGateResp) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetFlyGateResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetFlyGateResp.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *GetFlyGateResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetFlyGateResp.Merge(m, src)
+}
+func (m *GetFlyGateResp) XXX_Size() int {
+	return m.Size()
+}
+func (m *GetFlyGateResp) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetFlyGateResp.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetFlyGateResp proto.InternalMessageInfo
+
+func (m *GetFlyGateResp) GetGateService() string {
+	if m != nil {
+		return m.GateService
+	}
+	return ""
+}
+
 func init() {
 	proto.RegisterEnum("proto.ServerCmdType", ServerCmdType_name, ServerCmdType_value)
+	proto.RegisterType((*QueryRouteInfo)(nil), "proto.queryRouteInfo")
+	proto.RegisterType((*RouteInfoKvNode)(nil), "proto.routeInfoKvNode")
+	proto.RegisterType((*RouteInfoSet)(nil), "proto.routeInfoSet")
+	proto.RegisterType((*QueryRouteInfoResp)(nil), "proto.queryRouteInfoResp")
 	proto.RegisterType((*QueryLeader)(nil), "proto.query_leader")
 	proto.RegisterType((*QueryLeaderResp)(nil), "proto.query_leader_resp")
-	proto.RegisterType((*GateReport)(nil), "proto.gate_report")
-	proto.RegisterType((*QueryGateList)(nil), "proto.query_gate_list")
-	proto.RegisterType((*GateList)(nil), "proto.gate_list")
-	proto.RegisterType((*NotifyReloadKvconf)(nil), "proto.notify_reload_kvconf")
-	proto.RegisterType((*RemoveGate)(nil), "proto.remove_gate")
 	proto.RegisterType((*DeploymentKvnode)(nil), "proto.deploymentKvnode")
 	proto.RegisterType((*DeploymentSet)(nil), "proto.deploymentSet")
 	proto.RegisterType((*InstallDeployment)(nil), "proto.installDeployment")
@@ -1699,76 +1805,80 @@ func init() {
 	proto.RegisterType((*AddSetResp)(nil), "proto.addSetResp")
 	proto.RegisterType((*RemSet)(nil), "proto.remSet")
 	proto.RegisterType((*RemSetResp)(nil), "proto.remSetResp")
+	proto.RegisterType((*GetFlyGate)(nil), "proto.getFlyGate")
+	proto.RegisterType((*GetFlyGateResp)(nil), "proto.getFlyGateResp")
 }
 
 func init() { proto.RegisterFile("flyfish_server.proto", fileDescriptor_03085fc3fc38bb42) }
 
 var fileDescriptor_03085fc3fc38bb42 = []byte{
-	// 1009 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0x56, 0xcd, 0x6e, 0xeb, 0x44,
-	0x14, 0xce, 0xe4, 0xf7, 0xe6, 0xa4, 0x69, 0x27, 0x43, 0x92, 0x1b, 0x0a, 0xf2, 0xad, 0x2c, 0x74,
-	0x89, 0x2e, 0xba, 0x17, 0xe8, 0x8a, 0x0d, 0x12, 0xfd, 0x41, 0x28, 0xe4, 0x12, 0xc0, 0xbd, 0x62,
-	0xc1, 0x26, 0xb2, 0xea, 0x49, 0x6b, 0xe2, 0x78, 0xc2, 0xcc, 0x34, 0x52, 0x76, 0x48, 0xbc, 0x00,
-	0x2b, 0x16, 0x3c, 0x01, 0xbc, 0x02, 0x4f, 0xd0, 0x65, 0xc5, 0x6f, 0x01, 0x09, 0xd1, 0x74, 0xc3,
-	0xf2, 0x3e, 0x02, 0x9a, 0xb1, 0xe3, 0xd8, 0x4d, 0x9a, 0x22, 0xc3, 0xca, 0xf6, 0x39, 0x9f, 0xbf,
-	0xf9, 0xce, 0x99, 0x73, 0xce, 0x0c, 0xd4, 0x07, 0xde, 0x74, 0xe0, 0x8a, 0xd3, 0xbe, 0xa0, 0x7c,
-	0x42, 0xf9, 0x93, 0x31, 0x67, 0x92, 0x91, 0x82, 0x7e, 0x6c, 0xd7, 0x4f, 0xd8, 0x09, 0xd3, 0xaf,
-	0xaf, 0xab, 0xb7, 0xc0, 0x69, 0x3e, 0x82, 0x8d, 0xcf, 0xcf, 0x28, 0x9f, 0xf6, 0x3d, 0x6a, 0x3b,
-	0x94, 0x93, 0x6d, 0x28, 0x08, 0xc9, 0x38, 0x6d, 0xa1, 0x1d, 0xd4, 0x2e, 0xec, 0xe7, 0xcf, 0xff,
-	0x7c, 0x90, 0xb1, 0x02, 0x93, 0xf9, 0x1a, 0xd4, 0xe2, 0xd8, 0x3e, 0xa7, 0x62, 0x4c, 0x9a, 0x90,
-	0x9b, 0x52, 0xa1, 0xe1, 0xf7, 0x42, 0xb8, 0x32, 0x98, 0x13, 0xa8, 0x9c, 0xd8, 0x92, 0xf6, 0x39,
-	0x1d, 0x33, 0x2e, 0x89, 0x01, 0x25, 0x25, 0xca, 0x3d, 0x0e, 0x98, 0xcb, 0x21, 0x74, 0x6e, 0x54,
-	0xfe, 0x63, 0xe6, 0x0b, 0xe6, 0xd1, 0x56, 0x36, 0xee, 0x0f, 0x8d, 0xe4, 0x55, 0xd8, 0x38, 0x66,
-	0xfe, 0xa0, 0x3f, 0xa1, 0x5c, 0xb8, 0xcc, 0x6f, 0xe5, 0x62, 0xf2, 0x2a, 0xca, 0xf3, 0x49, 0xe0,
-	0x30, 0x6b, 0xb0, 0x15, 0x88, 0xd4, 0xab, 0x7b, 0xae, 0x90, 0xe6, 0x03, 0x28, 0x47, 0x1f, 0x84,
-	0x40, 0x5e, 0x3d, 0x5b, 0x68, 0x27, 0xd7, 0x2e, 0x5b, 0xfa, 0xdd, 0x6c, 0x42, 0xdd, 0x67, 0xd2,
-	0x1d, 0x4c, 0xfb, 0x9c, 0x7a, 0xcc, 0x76, 0xfa, 0xc3, 0x89, 0xa2, 0x34, 0x1f, 0x43, 0x85, 0xd3,
-	0x11, 0x9b, 0x50, 0x4d, 0x76, 0x57, 0x0c, 0xe6, 0xd7, 0x08, 0xb0, 0x43, 0xc7, 0x1e, 0x9b, 0x8e,
-	0xa8, 0x2f, 0xbb, 0x13, 0x9f, 0x39, 0x94, 0xbc, 0x0c, 0x45, 0xf5, 0xec, 0x1c, 0x26, 0x32, 0x1a,
-	0xda, 0x48, 0x0b, 0xf2, 0xa7, 0x4c, 0xc8, 0x44, 0xcc, 0xda, 0x42, 0x1e, 0x42, 0x25, 0xe4, 0xfd,
-	0x88, 0x71, 0x99, 0x8c, 0x37, 0xe6, 0x20, 0x26, 0x94, 0x5d, 0x5f, 0x52, 0xae, 0x51, 0xf9, 0x18,
-	0x6a, 0x61, 0x36, 0x3f, 0x85, 0xea, 0x42, 0xd7, 0x11, 0x95, 0x7a, 0x97, 0xa9, 0xbc, 0xa1, 0x29,
-	0x30, 0x91, 0xc7, 0x50, 0x50, 0xe2, 0x44, 0x2b, 0xbb, 0x93, 0x6b, 0x57, 0x76, 0xef, 0x07, 0x85,
-	0xf2, 0xe4, 0x66, 0x60, 0x56, 0x80, 0x32, 0xdf, 0x86, 0x9a, 0xeb, 0x0b, 0x69, 0x7b, 0xde, 0x61,
-	0x84, 0x20, 0x6d, 0xc8, 0x0b, 0x2a, 0x85, 0x4e, 0x72, 0x65, 0xb7, 0xbe, 0x44, 0x71, 0x44, 0xa5,
-	0xa5, 0x11, 0x66, 0x17, 0x1a, 0x4b, 0xbf, 0x5b, 0xaa, 0xae, 0xea, 0x90, 0x65, 0xc3, 0x44, 0x59,
-	0x65, 0xd9, 0x50, 0x65, 0x93, 0x53, 0x5b, 0x30, 0x3f, 0x91, 0xb1, 0xd0, 0x66, 0x7e, 0x87, 0xa0,
-	0x64, 0x3b, 0x4e, 0x4f, 0xe5, 0x7d, 0x5d, 0x88, 0x8b, 0x3d, 0xc9, 0xae, 0xd9, 0x93, 0xdc, 0x5d,
-	0x7b, 0x92, 0xff, 0x57, 0x7b, 0x52, 0x58, 0xbd, 0x27, 0x7b, 0x50, 0x09, 0xa5, 0xa6, 0x0e, 0xf7,
-	0x00, 0x4a, 0x9c, 0x8e, 0xfe, 0x5b, 0xb4, 0x4a, 0x47, 0x48, 0x92, 0x5a, 0xc7, 0x21, 0xc0, 0x50,
-	0xd7, 0xc4, 0x3e, 0x63, 0x32, 0x6d, 0xc1, 0x9b, 0x14, 0xca, 0x7a, 0xcc, 0x74, 0xfc, 0x01, 0x53,
-	0x32, 0x5c, 0x27, 0x41, 0x90, 0x75, 0x1d, 0x95, 0x7f, 0x6e, 0x0f, 0xe4, 0x81, 0x77, 0x26, 0x24,
-	0xe5, 0x09, 0x8e, 0xb8, 0x43, 0x67, 0xc3, 0x63, 0x52, 0xe8, 0x2d, 0xdc, 0x88, 0xb2, 0xa1, 0x4c,
-	0xe6, 0xf7, 0x08, 0x36, 0x17, 0x6a, 0xd3, 0xc6, 0xfc, 0x7f, 0xb6, 0x27, 0x69, 0x43, 0x51, 0x47,
-	0x2e, 0x5a, 0x05, 0xdd, 0x2f, 0x38, 0xec, 0x97, 0x28, 0x1d, 0x56, 0xe8, 0x37, 0xbf, 0x44, 0x50,
-	0x0d, 0x26, 0xd5, 0x5e, 0x58, 0xe6, 0x69, 0xc7, 0x4b, 0x42, 0x57, 0x6e, 0xb5, 0xae, 0x66, 0xa4,
-	0x2b, 0xbf, 0x93, 0x6b, 0x17, 0x22, 0x15, 0x1f, 0x40, 0x2d, 0x21, 0x42, 0x27, 0x71, 0xbd, 0x90,
-	0xe8, 0x58, 0xc9, 0x2e, 0x1f, 0x2b, 0xef, 0xce, 0x63, 0xb2, 0xc2, 0x62, 0x5e, 0x4f, 0xb5, 0x50,
-	0x95, 0x5d, 0xad, 0xca, 0x8a, 0x95, 0x73, 0x7a, 0x55, 0xef, 0x03, 0x09, 0xe8, 0x8e, 0x3c, 0x26,
-	0x9f, 0x71, 0xdb, 0x17, 0x1f, 0x9e, 0x49, 0x95, 0x50, 0x55, 0x46, 0x09, 0x36, 0x6d, 0x59, 0xcb,
-	0xb5, 0x0b, 0xcd, 0x65, 0x2e, 0xad, 0xef, 0x56, 0x3e, 0xb3, 0x33, 0x0f, 0x27, 0xfa, 0xa7, 0xe3,
-	0xa7, 0x5c, 0xfe, 0x4d, 0x68, 0x2c, 0x51, 0xdd, 0xb1, 0xfa, 0x1b, 0x50, 0xb4, 0x1d, 0x47, 0x1d,
-	0x15, 0x0f, 0x21, 0x27, 0x68, 0x00, 0xb9, 0x6d, 0x92, 0x2b, 0x80, 0xf9, 0x0e, 0x40, 0xf0, 0x47,
-	0xea, 0x31, 0xf2, 0x8a, 0xf2, 0x8e, 0xee, 0x38, 0x9e, 0xd4, 0x3a, 0x01, 0x2a, 0xed, 0x3a, 0x8f,
-	0xbe, 0xc9, 0x43, 0xf5, 0x48, 0x5f, 0x90, 0x0e, 0x46, 0xce, 0xb3, 0xe9, 0x98, 0x92, 0x2d, 0xa8,
-	0x7c, 0xac, 0xee, 0x0c, 0x4f, 0xf5, 0xbd, 0x06, 0x23, 0xf2, 0x02, 0x6c, 0xc5, 0x0c, 0x6a, 0x25,
-	0x9c, 0x25, 0x9b, 0x00, 0xef, 0xd9, 0x92, 0x5a, 0xfa, 0x42, 0x83, 0x73, 0xa4, 0x06, 0x55, 0x0d,
-	0x52, 0xc6, 0xa7, 0xae, 0x90, 0x38, 0x4f, 0x36, 0xe0, 0x5e, 0xf4, 0x55, 0x20, 0x75, 0xc0, 0x3d,
-	0x26, 0x5d, 0x4b, 0xdf, 0x29, 0xba, 0x93, 0x03, 0xe6, 0x0f, 0x70, 0x51, 0xd1, 0x58, 0xfa, 0x52,
-	0xa1, 0x90, 0xb8, 0x44, 0x1a, 0x50, 0xeb, 0xdc, 0x3c, 0x01, 0x31, 0x25, 0x2f, 0x42, 0xa3, 0xb3,
-	0xea, 0x60, 0xc4, 0x03, 0x52, 0x81, 0x52, 0xd8, 0x79, 0xf8, 0x44, 0x69, 0x8f, 0xb5, 0x21, 0x3e,
-	0x55, 0xde, 0xb0, 0x03, 0xb0, 0xab, 0xbc, 0xb1, 0x76, 0xc0, 0x9f, 0x11, 0x80, 0xe2, 0x9e, 0xde,
-	0x26, 0x3c, 0x54, 0x4a, 0xf6, 0xa2, 0x2d, 0xc3, 0x9e, 0xf2, 0x59, 0x3a, 0xb5, 0x78, 0x14, 0xaa,
-	0x9c, 0xfb, 0x7c, 0xb2, 0x05, 0xd0, 0x8d, 0xa6, 0x26, 0xfe, 0x41, 0xa5, 0x68, 0xb3, 0x9b, 0x18,
-	0xa3, 0xf8, 0x47, 0x44, 0x08, 0x54, 0x7b, 0xf1, 0xc9, 0x80, 0x7f, 0x42, 0xa4, 0x09, 0xb5, 0xde,
-	0xcd, 0x69, 0x81, 0x7f, 0x8e, 0x61, 0xe7, 0x6a, 0x7f, 0x89, 0x61, 0xe3, 0xa2, 0x7f, 0x45, 0xe4,
-	0x3e, 0x90, 0xde, 0x52, 0x03, 0xe1, 0x4b, 0x44, 0x5e, 0x82, 0x66, 0x6f, 0x65, 0x67, 0xe1, 0xdf,
-	0x62, 0x6c, 0xb1, 0xba, 0xc7, 0xbf, 0x23, 0xb2, 0x0d, 0x8d, 0xde, 0xaa, 0x7e, 0xc0, 0x7f, 0xa0,
-	0xfd, 0xb7, 0xce, 0xaf, 0x0c, 0x74, 0x71, 0x65, 0xa0, 0xcb, 0x2b, 0x23, 0xf3, 0xfc, 0xca, 0x40,
-	0x5f, 0xcc, 0x0c, 0xf4, 0xed, 0xcc, 0x40, 0xe7, 0x33, 0x03, 0x5d, 0xcc, 0x0c, 0xf4, 0xd7, 0xcc,
-	0x40, 0x7f, 0xcf, 0x8c, 0xcc, 0xf3, 0x99, 0x81, 0xbe, 0xba, 0x36, 0x32, 0x17, 0xd7, 0x46, 0xe6,
-	0xf2, 0xda, 0xc8, 0xfc, 0x13, 0x00, 0x00, 0xff, 0xff, 0xba, 0xdb, 0x3e, 0xe6, 0x7d, 0x0b, 0x00,
-	0x00,
+	// 1055 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x56, 0xcd, 0x6e, 0x23, 0x45,
+	0x10, 0x76, 0xcf, 0xd8, 0xf1, 0x6e, 0xd9, 0x71, 0xda, 0xbd, 0xb6, 0xd7, 0x2c, 0xab, 0xc1, 0x1a,
+	0xa1, 0x60, 0xad, 0xc4, 0xb2, 0xbb, 0xa7, 0xbd, 0x20, 0x91, 0x1f, 0x88, 0x8c, 0xc1, 0x90, 0xf1,
+	0x9e, 0xb8, 0x44, 0x16, 0xd3, 0x76, 0x4c, 0xc6, 0xee, 0xec, 0x4c, 0xc7, 0x92, 0x0f, 0x48, 0x70,
+	0xe5, 0xc4, 0x01, 0x09, 0x09, 0x1e, 0x00, 0x9e, 0x00, 0x78, 0x84, 0x1c, 0x23, 0x7e, 0x03, 0x48,
+	0x88, 0x38, 0x17, 0x8e, 0xfb, 0x08, 0xa8, 0x7b, 0x7a, 0xc6, 0x3d, 0xb6, 0xe3, 0x20, 0x03, 0x27,
+	0x7b, 0xaa, 0xaa, 0xab, 0xbe, 0xfa, 0xea, 0xa7, 0x1b, 0x4a, 0x5d, 0x6f, 0xdc, 0xed, 0x07, 0x87,
+	0x07, 0x01, 0xf5, 0x47, 0xd4, 0xbf, 0x7f, 0xec, 0x33, 0xce, 0x48, 0x46, 0xfe, 0xdc, 0x29, 0xf5,
+	0x58, 0x8f, 0xc9, 0xbf, 0xaf, 0x88, 0x7f, 0xa1, 0xd2, 0x76, 0xa1, 0xf0, 0xf4, 0x84, 0xfa, 0x63,
+	0x87, 0x9d, 0x70, 0xda, 0x18, 0x76, 0x19, 0xb1, 0x20, 0x2b, 0x8e, 0xf7, 0xdf, 0xa7, 0x55, 0x54,
+	0x43, 0xf5, 0x9b, 0xdb, 0xe9, 0xd3, 0x3f, 0x5e, 0x48, 0x39, 0x91, 0x50, 0xe8, 0x47, 0xd4, 0x0f,
+	0xfa, 0x6c, 0x58, 0x35, 0x6a, 0xa8, 0x6e, 0x46, 0x7a, 0x25, 0x24, 0x04, 0xd2, 0x01, 0xe5, 0x41,
+	0xd5, 0xac, 0x99, 0xf5, 0x8c, 0x23, 0xff, 0xdb, 0x4f, 0x61, 0xc3, 0x8f, 0x02, 0x34, 0x47, 0x2d,
+	0xe6, 0x52, 0x72, 0x17, 0xd6, 0x86, 0xcc, 0xa5, 0x8d, 0x5d, 0x19, 0x25, 0xa3, 0xbc, 0x28, 0x19,
+	0xa9, 0x42, 0xfa, 0x90, 0x05, 0x5c, 0x46, 0x88, 0x10, 0x48, 0x09, 0xd9, 0x84, 0x9c, 0x42, 0xf2,
+	0x2e, 0xf3, 0x79, 0xd5, 0xd4, 0x0e, 0xeb, 0x0a, 0xfb, 0x13, 0x04, 0xf9, 0x38, 0x66, 0x9b, 0x72,
+	0x72, 0x07, 0x32, 0x01, 0xe5, 0x33, 0xf1, 0x42, 0x11, 0xa9, 0xc0, 0x5a, 0xc0, 0x99, 0x4f, 0x83,
+	0xaa, 0x21, 0x51, 0xab, 0x2f, 0x52, 0x82, 0x4c, 0xe0, 0x31, 0x95, 0x4c, 0xde, 0x09, 0x3f, 0xc8,
+	0x03, 0xc8, 0x1e, 0x8d, 0x04, 0xd0, 0xa0, 0x9a, 0xae, 0x99, 0xf5, 0xdc, 0xa3, 0x4a, 0x48, 0xe6,
+	0xfd, 0x99, 0x1c, 0x9d, 0xc8, 0xcc, 0xfe, 0x10, 0x48, 0x92, 0x65, 0x87, 0x06, 0xc7, 0xe4, 0x25,
+	0xc5, 0x14, 0x92, 0x4e, 0x6e, 0xcd, 0x3a, 0x69, 0x53, 0x1e, 0xd2, 0x47, 0x2c, 0x00, 0x9f, 0x0e,
+	0xd8, 0x88, 0xb6, 0x85, 0x79, 0x08, 0x51, 0x93, 0xe8, 0x25, 0x31, 0x17, 0x94, 0xc4, 0xbe, 0x07,
+	0x79, 0x19, 0xfe, 0xc0, 0xa3, 0x1d, 0x97, 0xfa, 0x92, 0x0a, 0x91, 0xe0, 0x0c, 0x15, 0x42, 0x64,
+	0x3f, 0x84, 0xa2, 0x6e, 0x7b, 0xe0, 0x0b, 0xa4, 0x77, 0x61, 0x2d, 0xfc, 0x4c, 0x16, 0x2b, 0x94,
+	0xd9, 0x9f, 0x21, 0xc0, 0x2e, 0x3d, 0xf6, 0xd8, 0x78, 0x40, 0x87, 0xbc, 0x29, 0x73, 0xfe, 0xbf,
+	0xeb, 0x4b, 0x6a, 0x70, 0xc3, 0xef, 0x74, 0xb9, 0x34, 0x4a, 0x6b, 0x46, 0xb1, 0xd4, 0x7e, 0x0f,
+	0xd6, 0xa7, 0xa8, 0xae, 0xeb, 0x80, 0x97, 0x21, 0x13, 0x56, 0xd4, 0x90, 0xc5, 0xb8, 0xad, 0x8a,
+	0x31, 0x9b, 0x96, 0x13, 0x5a, 0xd9, 0xaf, 0x42, 0xb1, 0x3f, 0x0c, 0x78, 0xc7, 0xf3, 0x76, 0x63,
+	0x0b, 0x52, 0x4f, 0xd4, 0xb3, 0x34, 0xe7, 0x22, 0x2e, 0xa8, 0xdd, 0x84, 0xf2, 0xdc, 0x71, 0xd9,
+	0x12, 0x25, 0x30, 0xd8, 0x91, 0xc4, 0x77, 0x43, 0xe1, 0x33, 0xd8, 0x91, 0xe0, 0xd2, 0xa7, 0x9d,
+	0x40, 0x4d, 0x5c, 0xc4, 0x97, 0x92, 0xd9, 0x5f, 0x21, 0xc8, 0x76, 0x5c, 0x57, 0x4e, 0xd5, 0xb2,
+	0x14, 0xa7, 0x15, 0x31, 0x96, 0x54, 0xc4, 0xbc, 0xae, 0x22, 0xe9, 0x7f, 0x52, 0x91, 0xcc, 0xc2,
+	0x8a, 0x6c, 0x41, 0x4e, 0x01, 0x5d, 0x39, 0xd9, 0x1d, 0xc8, 0xfa, 0x74, 0xf0, 0xef, 0x72, 0x15,
+	0x38, 0x94, 0x93, 0x95, 0x71, 0xec, 0x02, 0x84, 0xc3, 0xbd, 0xcd, 0x18, 0x5f, 0xb5, 0xd9, 0x6d,
+	0x0a, 0x37, 0xe5, 0xd4, 0xc9, 0xc5, 0x5b, 0x02, 0xa3, 0xef, 0x26, 0x1c, 0x18, 0x7d, 0x57, 0xb0,
+	0x2f, 0xf8, 0xdb, 0xf1, 0x4e, 0x02, 0x4e, 0xfd, 0x84, 0x0f, 0x5d, 0x21, 0xd9, 0x50, 0xab, 0x0a,
+	0xd5, 0xf3, 0x31, 0x1b, 0x42, 0x64, 0x7f, 0x87, 0xa0, 0x30, 0x45, 0xbb, 0x6a, 0xce, 0xff, 0xdd,
+	0x68, 0x92, 0x7a, 0xbc, 0x6f, 0x33, 0x72, 0x56, 0xb0, 0x9a, 0x95, 0x98, 0x8c, 0x68, 0x03, 0xdb,
+	0x1f, 0x23, 0x58, 0x1f, 0x32, 0xde, 0xef, 0x8e, 0xb7, 0x54, 0x8b, 0xaf, 0xba, 0x58, 0x74, 0x54,
+	0xe6, 0x42, 0x54, 0xd3, 0x5b, 0x20, 0xad, 0xdf, 0x02, 0xf6, 0xdb, 0x50, 0x4c, 0x40, 0x70, 0xd4,
+	0x4a, 0x5c, 0x02, 0x23, 0xde, 0xb0, 0xc6, 0xfc, 0x86, 0x7d, 0x3d, 0xca, 0xc8, 0x51, 0x8d, 0xbc,
+	0xdc, 0xd5, 0x15, 0x77, 0xd3, 0x14, 0x95, 0xa3, 0xb5, 0xf2, 0xea, 0xa8, 0xde, 0x04, 0x12, 0xba,
+	0x6b, 0x7b, 0x8c, 0x3f, 0xf1, 0x3b, 0xc3, 0xe0, 0x9d, 0x13, 0x2e, 0xe8, 0x14, 0x2d, 0x94, 0xf0,
+	0x26, 0x25, 0x4b, 0x7d, 0x3d, 0x82, 0xca, 0xbc, 0x2f, 0x89, 0xef, 0x4a, 0x7f, 0x76, 0x23, 0x4a,
+	0x27, 0x3e, 0xd3, 0x18, 0xae, 0x18, 0xfe, 0x21, 0x94, 0xe7, 0x5c, 0x5d, 0x13, 0xfd, 0x01, 0xac,
+	0x75, 0x5c, 0x57, 0x5c, 0x12, 0x9b, 0x60, 0x06, 0x34, 0x34, 0xb9, 0x6a, 0x87, 0x0b, 0x03, 0xfb,
+	0x35, 0x80, 0xf0, 0xc4, 0xca, 0x2b, 0xe4, 0x45, 0xa1, 0x1d, 0x5c, 0x73, 0x31, 0x89, 0x38, 0xa1,
+	0xd5, 0xca, 0x71, 0xf2, 0x00, 0x3d, 0xca, 0xdf, 0xf0, 0xc6, 0x7b, 0x1d, 0x4e, 0xed, 0xc7, 0x50,
+	0x98, 0x7e, 0x49, 0x9f, 0x9b, 0x90, 0xeb, 0x75, 0x38, 0x6d, 0x2f, 0x78, 0xf4, 0xe9, 0x8a, 0x7b,
+	0x9f, 0xa7, 0x61, 0xbd, 0x2d, 0x1f, 0x96, 0x3b, 0x03, 0xf7, 0xc9, 0xf8, 0x98, 0x92, 0x0d, 0xc8,
+	0xed, 0x8b, 0xb7, 0xc2, 0x5b, 0xf2, 0x1d, 0x80, 0x11, 0xb9, 0x05, 0x1b, 0x9a, 0x40, 0x78, 0xc7,
+	0x06, 0x29, 0x43, 0xb1, 0x31, 0x7b, 0xd9, 0x61, 0x4a, 0x9e, 0x83, 0x72, 0x63, 0xd1, 0x1d, 0x88,
+	0xbb, 0x24, 0x07, 0x59, 0x35, 0x6a, 0xb8, 0x27, 0x82, 0x68, 0x73, 0x87, 0x0f, 0x85, 0x56, 0xb5,
+	0x3c, 0xee, 0x0b, 0xad, 0xd6, 0xff, 0xf8, 0x03, 0x02, 0xb0, 0xb6, 0x25, 0xeb, 0x82, 0x8f, 0x48,
+	0x01, 0x60, 0x2b, 0xae, 0x11, 0xf6, 0x84, 0xce, 0x91, 0x5c, 0xe2, 0x81, 0xd0, 0x39, 0x31, 0xaf,
+	0x78, 0x48, 0x36, 0x00, 0x9a, 0xf1, 0x8a, 0xc4, 0xdf, 0x8b, 0x5c, 0x0a, 0xcd, 0xc4, 0xce, 0xc4,
+	0x3f, 0x20, 0x42, 0x60, 0xbd, 0xa5, 0xaf, 0x02, 0xfc, 0x23, 0x22, 0x15, 0x28, 0xb6, 0x66, 0xd7,
+	0x03, 0xfe, 0x49, 0xb3, 0x8d, 0xd0, 0xfe, 0xac, 0xd9, 0xea, 0xa0, 0x7f, 0x41, 0xe4, 0x36, 0x90,
+	0xd6, 0xdc, 0xc4, 0xe0, 0x73, 0x44, 0x9e, 0x87, 0x4a, 0x6b, 0xe1, 0x28, 0xe1, 0x5f, 0x35, 0x6f,
+	0x5a, 0xa3, 0xe3, 0xdf, 0x10, 0xb9, 0x03, 0xe5, 0xd6, 0xa2, 0x01, 0xc0, 0xbf, 0xcb, 0xb4, 0xf6,
+	0x13, 0x4f, 0x51, 0xfc, 0x8d, 0x21, 0xc2, 0xef, 0xcf, 0xbd, 0x4f, 0xf1, 0xb7, 0x86, 0x60, 0x65,
+	0x2f, 0xee, 0x16, 0xfc, 0x85, 0x29, 0x8e, 0xef, 0x25, 0xda, 0x07, 0x7f, 0x69, 0x6e, 0x3f, 0x3e,
+	0xbd, 0xb0, 0xd0, 0xd9, 0x85, 0x85, 0xce, 0x2f, 0xac, 0xd4, 0xb3, 0x0b, 0x0b, 0x7d, 0x34, 0xb1,
+	0xd0, 0xd7, 0x13, 0x0b, 0x9d, 0x4e, 0x2c, 0x74, 0x36, 0xb1, 0xd0, 0x9f, 0x13, 0x0b, 0xfd, 0x35,
+	0xb1, 0x52, 0xcf, 0x26, 0x16, 0xfa, 0xf4, 0xd2, 0x4a, 0x9d, 0x5d, 0x5a, 0xa9, 0xf3, 0x4b, 0x2b,
+	0xf5, 0x77, 0x00, 0x00, 0x00, 0xff, 0xff, 0x11, 0x9a, 0x56, 0x41, 0xb2, 0x0c, 0x00, 0x00,
 }
 
 func (x ServerCmdType) String() string {
@@ -1777,6 +1887,159 @@ func (x ServerCmdType) String() string {
 		return s
 	}
 	return strconv.Itoa(int(x))
+}
+func (this *QueryRouteInfo) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*QueryRouteInfo)
+	if !ok {
+		that2, ok := that.(QueryRouteInfo)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Service != that1.Service {
+		return false
+	}
+	if this.Version != that1.Version {
+		return false
+	}
+	if len(this.Sets) != len(that1.Sets) {
+		return false
+	}
+	for i := range this.Sets {
+		if this.Sets[i] != that1.Sets[i] {
+			return false
+		}
+	}
+	return true
+}
+func (this *RouteInfoKvNode) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*RouteInfoKvNode)
+	if !ok {
+		that2, ok := that.(RouteInfoKvNode)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.NodeID != that1.NodeID {
+		return false
+	}
+	if this.Host != that1.Host {
+		return false
+	}
+	if this.ServicePort != that1.ServicePort {
+		return false
+	}
+	return true
+}
+func (this *RouteInfoSet) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*RouteInfoSet)
+	if !ok {
+		that2, ok := that.(RouteInfoSet)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.SetID != that1.SetID {
+		return false
+	}
+	if len(this.Stores) != len(that1.Stores) {
+		return false
+	}
+	for i := range this.Stores {
+		if this.Stores[i] != that1.Stores[i] {
+			return false
+		}
+	}
+	if len(this.Slots) != len(that1.Slots) {
+		return false
+	}
+	for i := range this.Slots {
+		if !bytes.Equal(this.Slots[i], that1.Slots[i]) {
+			return false
+		}
+	}
+	if len(this.Kvnodes) != len(that1.Kvnodes) {
+		return false
+	}
+	for i := range this.Kvnodes {
+		if !this.Kvnodes[i].Equal(that1.Kvnodes[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *QueryRouteInfoResp) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*QueryRouteInfoResp)
+	if !ok {
+		that2, ok := that.(QueryRouteInfoResp)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Sets) != len(that1.Sets) {
+		return false
+	}
+	for i := range this.Sets {
+		if !this.Sets[i].Equal(that1.Sets[i]) {
+			return false
+		}
+	}
+	if len(this.RemoveSets) != len(that1.RemoveSets) {
+		return false
+	}
+	for i := range this.RemoveSets {
+		if this.RemoveSets[i] != that1.RemoveSets[i] {
+			return false
+		}
+	}
+	if this.Version != that1.Version {
+		return false
+	}
+	return true
 }
 func (this *QueryLeader) Equal(that interface{}) bool {
 	if that == nil {
@@ -1821,132 +2084,7 @@ func (this *QueryLeaderResp) Equal(that interface{}) bool {
 	} else if this == nil {
 		return false
 	}
-	if this.Yes != that1.Yes {
-		return false
-	}
-	return true
-}
-func (this *GateReport) Equal(that interface{}) bool {
-	if that == nil {
-		return this == nil
-	}
-
-	that1, ok := that.(*GateReport)
-	if !ok {
-		that2, ok := that.(GateReport)
-		if ok {
-			that1 = &that2
-		} else {
-			return false
-		}
-	}
-	if that1 == nil {
-		return this == nil
-	} else if this == nil {
-		return false
-	}
-	if this.Service != that1.Service {
-		return false
-	}
-	if this.Console != that1.Console {
-		return false
-	}
-	if this.ConfVersion != that1.ConfVersion {
-		return false
-	}
-	return true
-}
-func (this *QueryGateList) Equal(that interface{}) bool {
-	if that == nil {
-		return this == nil
-	}
-
-	that1, ok := that.(*QueryGateList)
-	if !ok {
-		that2, ok := that.(QueryGateList)
-		if ok {
-			that1 = &that2
-		} else {
-			return false
-		}
-	}
-	if that1 == nil {
-		return this == nil
-	} else if this == nil {
-		return false
-	}
-	return true
-}
-func (this *GateList) Equal(that interface{}) bool {
-	if that == nil {
-		return this == nil
-	}
-
-	that1, ok := that.(*GateList)
-	if !ok {
-		that2, ok := that.(GateList)
-		if ok {
-			that1 = &that2
-		} else {
-			return false
-		}
-	}
-	if that1 == nil {
-		return this == nil
-	} else if this == nil {
-		return false
-	}
-	if len(this.List) != len(that1.List) {
-		return false
-	}
-	for i := range this.List {
-		if this.List[i] != that1.List[i] {
-			return false
-		}
-	}
-	return true
-}
-func (this *NotifyReloadKvconf) Equal(that interface{}) bool {
-	if that == nil {
-		return this == nil
-	}
-
-	that1, ok := that.(*NotifyReloadKvconf)
-	if !ok {
-		that2, ok := that.(NotifyReloadKvconf)
-		if ok {
-			that1 = &that2
-		} else {
-			return false
-		}
-	}
-	if that1 == nil {
-		return this == nil
-	} else if this == nil {
-		return false
-	}
-	return true
-}
-func (this *RemoveGate) Equal(that interface{}) bool {
-	if that == nil {
-		return this == nil
-	}
-
-	that1, ok := that.(*RemoveGate)
-	if !ok {
-		that2, ok := that.(RemoveGate)
-		if ok {
-			that1 = &that2
-		} else {
-			return false
-		}
-	}
-	if that1 == nil {
-		return this == nil
-	} else if this == nil {
-		return false
-	}
-	if this.Service != that1.Service {
+	if this.Leader != that1.Leader {
 		return false
 	}
 	return true
@@ -1979,7 +2117,7 @@ func (this *DeploymentKvnode) Equal(that interface{}) bool {
 	if this.ServicePort != that1.ServicePort {
 		return false
 	}
-	if this.InterPort != that1.InterPort {
+	if this.RaftPort != that1.RaftPort {
 		return false
 	}
 	return true
@@ -2103,7 +2241,7 @@ func (this *AddNode) Equal(that interface{}) bool {
 	if this.ServicePort != that1.ServicePort {
 		return false
 	}
-	if this.InterPort != that1.InterPort {
+	if this.RaftPort != that1.RaftPort {
 		return false
 	}
 	return true
@@ -2274,7 +2412,7 @@ func (this *KvnodeBootResp) Equal(that interface{}) bool {
 	if this.ServicePort != that1.ServicePort {
 		return false
 	}
-	if this.InterPort != that1.InterPort {
+	if this.RaftPort != that1.RaftPort {
 		return false
 	}
 	if len(this.Stores) != len(that1.Stores) {
@@ -2312,7 +2450,7 @@ func (this *NotifyAddNode) Equal(that interface{}) bool {
 	if this.Host != that1.Host {
 		return false
 	}
-	if this.InterPort != that1.InterPort {
+	if this.RaftPort != that1.RaftPort {
 		return false
 	}
 	if len(this.Stores) != len(that1.Stores) {
@@ -2615,6 +2753,112 @@ func (this *RemSetResp) Equal(that interface{}) bool {
 	}
 	return true
 }
+func (this *GetFlyGate) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*GetFlyGate)
+	if !ok {
+		that2, ok := that.(GetFlyGate)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *GetFlyGateResp) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*GetFlyGateResp)
+	if !ok {
+		that2, ok := that.(GetFlyGateResp)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.GateService != that1.GateService {
+		return false
+	}
+	return true
+}
+func (this *QueryRouteInfo) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&proto.QueryRouteInfo{")
+	s = append(s, "Service: "+fmt.Sprintf("%#v", this.Service)+",\n")
+	s = append(s, "Version: "+fmt.Sprintf("%#v", this.Version)+",\n")
+	if this.Sets != nil {
+		s = append(s, "Sets: "+fmt.Sprintf("%#v", this.Sets)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *RouteInfoKvNode) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&proto.RouteInfoKvNode{")
+	s = append(s, "NodeID: "+fmt.Sprintf("%#v", this.NodeID)+",\n")
+	s = append(s, "Host: "+fmt.Sprintf("%#v", this.Host)+",\n")
+	s = append(s, "ServicePort: "+fmt.Sprintf("%#v", this.ServicePort)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *RouteInfoSet) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 8)
+	s = append(s, "&proto.RouteInfoSet{")
+	s = append(s, "SetID: "+fmt.Sprintf("%#v", this.SetID)+",\n")
+	if this.Stores != nil {
+		s = append(s, "Stores: "+fmt.Sprintf("%#v", this.Stores)+",\n")
+	}
+	if this.Slots != nil {
+		s = append(s, "Slots: "+fmt.Sprintf("%#v", this.Slots)+",\n")
+	}
+	if this.Kvnodes != nil {
+		s = append(s, "Kvnodes: "+fmt.Sprintf("%#v", this.Kvnodes)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *QueryRouteInfoResp) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&proto.QueryRouteInfoResp{")
+	if this.Sets != nil {
+		s = append(s, "Sets: "+fmt.Sprintf("%#v", this.Sets)+",\n")
+	}
+	if this.RemoveSets != nil {
+		s = append(s, "RemoveSets: "+fmt.Sprintf("%#v", this.RemoveSets)+",\n")
+	}
+	s = append(s, "Version: "+fmt.Sprintf("%#v", this.Version)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
 func (this *QueryLeader) GoString() string {
 	if this == nil {
 		return "nil"
@@ -2631,59 +2875,7 @@ func (this *QueryLeaderResp) GoString() string {
 	}
 	s := make([]string, 0, 5)
 	s = append(s, "&proto.QueryLeaderResp{")
-	s = append(s, "Yes: "+fmt.Sprintf("%#v", this.Yes)+",\n")
-	s = append(s, "}")
-	return strings.Join(s, "")
-}
-func (this *GateReport) GoString() string {
-	if this == nil {
-		return "nil"
-	}
-	s := make([]string, 0, 7)
-	s = append(s, "&proto.GateReport{")
-	s = append(s, "Service: "+fmt.Sprintf("%#v", this.Service)+",\n")
-	s = append(s, "Console: "+fmt.Sprintf("%#v", this.Console)+",\n")
-	s = append(s, "ConfVersion: "+fmt.Sprintf("%#v", this.ConfVersion)+",\n")
-	s = append(s, "}")
-	return strings.Join(s, "")
-}
-func (this *QueryGateList) GoString() string {
-	if this == nil {
-		return "nil"
-	}
-	s := make([]string, 0, 4)
-	s = append(s, "&proto.QueryGateList{")
-	s = append(s, "}")
-	return strings.Join(s, "")
-}
-func (this *GateList) GoString() string {
-	if this == nil {
-		return "nil"
-	}
-	s := make([]string, 0, 5)
-	s = append(s, "&proto.GateList{")
-	if this.List != nil {
-		s = append(s, "List: "+fmt.Sprintf("%#v", this.List)+",\n")
-	}
-	s = append(s, "}")
-	return strings.Join(s, "")
-}
-func (this *NotifyReloadKvconf) GoString() string {
-	if this == nil {
-		return "nil"
-	}
-	s := make([]string, 0, 4)
-	s = append(s, "&proto.NotifyReloadKvconf{")
-	s = append(s, "}")
-	return strings.Join(s, "")
-}
-func (this *RemoveGate) GoString() string {
-	if this == nil {
-		return "nil"
-	}
-	s := make([]string, 0, 5)
-	s = append(s, "&proto.RemoveGate{")
-	s = append(s, "Service: "+fmt.Sprintf("%#v", this.Service)+",\n")
+	s = append(s, "Leader: "+fmt.Sprintf("%#v", this.Leader)+",\n")
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
@@ -2696,7 +2888,7 @@ func (this *DeploymentKvnode) GoString() string {
 	s = append(s, "NodeID: "+fmt.Sprintf("%#v", this.NodeID)+",\n")
 	s = append(s, "Host: "+fmt.Sprintf("%#v", this.Host)+",\n")
 	s = append(s, "ServicePort: "+fmt.Sprintf("%#v", this.ServicePort)+",\n")
-	s = append(s, "InterPort: "+fmt.Sprintf("%#v", this.InterPort)+",\n")
+	s = append(s, "RaftPort: "+fmt.Sprintf("%#v", this.RaftPort)+",\n")
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
@@ -2746,7 +2938,7 @@ func (this *AddNode) GoString() string {
 	s = append(s, "NodeID: "+fmt.Sprintf("%#v", this.NodeID)+",\n")
 	s = append(s, "Host: "+fmt.Sprintf("%#v", this.Host)+",\n")
 	s = append(s, "ServicePort: "+fmt.Sprintf("%#v", this.ServicePort)+",\n")
-	s = append(s, "InterPort: "+fmt.Sprintf("%#v", this.InterPort)+",\n")
+	s = append(s, "RaftPort: "+fmt.Sprintf("%#v", this.RaftPort)+",\n")
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
@@ -2815,7 +3007,7 @@ func (this *KvnodeBootResp) GoString() string {
 	s = append(s, "Ok: "+fmt.Sprintf("%#v", this.Ok)+",\n")
 	s = append(s, "Reason: "+fmt.Sprintf("%#v", this.Reason)+",\n")
 	s = append(s, "ServicePort: "+fmt.Sprintf("%#v", this.ServicePort)+",\n")
-	s = append(s, "InterPort: "+fmt.Sprintf("%#v", this.InterPort)+",\n")
+	s = append(s, "RaftPort: "+fmt.Sprintf("%#v", this.RaftPort)+",\n")
 	if this.Stores != nil {
 		s = append(s, "Stores: "+fmt.Sprintf("%#v", this.Stores)+",\n")
 	}
@@ -2830,7 +3022,7 @@ func (this *NotifyAddNode) GoString() string {
 	s = append(s, "&proto.NotifyAddNode{")
 	s = append(s, "NodeID: "+fmt.Sprintf("%#v", this.NodeID)+",\n")
 	s = append(s, "Host: "+fmt.Sprintf("%#v", this.Host)+",\n")
-	s = append(s, "InterPort: "+fmt.Sprintf("%#v", this.InterPort)+",\n")
+	s = append(s, "RaftPort: "+fmt.Sprintf("%#v", this.RaftPort)+",\n")
 	if this.Stores != nil {
 		s = append(s, "Stores: "+fmt.Sprintf("%#v", this.Stores)+",\n")
 	}
@@ -2958,6 +3150,25 @@ func (this *RemSetResp) GoString() string {
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
+func (this *GetFlyGate) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&proto.GetFlyGate{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *GetFlyGateResp) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&proto.GetFlyGateResp{")
+	s = append(s, "GateService: "+fmt.Sprintf("%#v", this.GateService)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
 func valueToGoStringFlyfishServer(v interface{}, typ string) string {
 	rv := reflect.ValueOf(v)
 	if rv.IsNil() {
@@ -2966,6 +3177,181 @@ func valueToGoStringFlyfishServer(v interface{}, typ string) string {
 	pv := reflect.Indirect(rv).Interface()
 	return fmt.Sprintf("func(v %v) *%v { return &v } ( %#v )", typ, typ, pv)
 }
+func (m *QueryRouteInfo) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *QueryRouteInfo) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryRouteInfo) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.Sets) > 0 {
+		for iNdEx := len(m.Sets) - 1; iNdEx >= 0; iNdEx-- {
+			i = encodeVarintFlyfishServer(dAtA, i, uint64(m.Sets[iNdEx]))
+			i--
+			dAtA[i] = 0x18
+		}
+	}
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(m.Version))
+	i--
+	dAtA[i] = 0x10
+	i -= len(m.Service)
+	copy(dAtA[i:], m.Service)
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(len(m.Service)))
+	i--
+	dAtA[i] = 0xa
+	return len(dAtA) - i, nil
+}
+
+func (m *RouteInfoKvNode) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *RouteInfoKvNode) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *RouteInfoKvNode) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(m.ServicePort))
+	i--
+	dAtA[i] = 0x18
+	i -= len(m.Host)
+	copy(dAtA[i:], m.Host)
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(len(m.Host)))
+	i--
+	dAtA[i] = 0x12
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(m.NodeID))
+	i--
+	dAtA[i] = 0x8
+	return len(dAtA) - i, nil
+}
+
+func (m *RouteInfoSet) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *RouteInfoSet) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *RouteInfoSet) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.Kvnodes) > 0 {
+		for iNdEx := len(m.Kvnodes) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Kvnodes[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintFlyfishServer(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x22
+		}
+	}
+	if len(m.Slots) > 0 {
+		for iNdEx := len(m.Slots) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Slots[iNdEx])
+			copy(dAtA[i:], m.Slots[iNdEx])
+			i = encodeVarintFlyfishServer(dAtA, i, uint64(len(m.Slots[iNdEx])))
+			i--
+			dAtA[i] = 0x1a
+		}
+	}
+	if len(m.Stores) > 0 {
+		for iNdEx := len(m.Stores) - 1; iNdEx >= 0; iNdEx-- {
+			i = encodeVarintFlyfishServer(dAtA, i, uint64(m.Stores[iNdEx]))
+			i--
+			dAtA[i] = 0x10
+		}
+	}
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(m.SetID))
+	i--
+	dAtA[i] = 0x8
+	return len(dAtA) - i, nil
+}
+
+func (m *QueryRouteInfoResp) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *QueryRouteInfoResp) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryRouteInfoResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(m.Version))
+	i--
+	dAtA[i] = 0x18
+	if len(m.RemoveSets) > 0 {
+		for iNdEx := len(m.RemoveSets) - 1; iNdEx >= 0; iNdEx-- {
+			i = encodeVarintFlyfishServer(dAtA, i, uint64(m.RemoveSets[iNdEx]))
+			i--
+			dAtA[i] = 0x10
+		}
+	}
+	if len(m.Sets) > 0 {
+		for iNdEx := len(m.Sets) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Sets[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintFlyfishServer(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0xa
+		}
+	}
+	return len(dAtA) - i, nil
+}
+
 func (m *QueryLeader) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
@@ -3012,156 +3398,9 @@ func (m *QueryLeaderResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	i--
-	if m.Yes {
-		dAtA[i] = 1
-	} else {
-		dAtA[i] = 0
-	}
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(m.Leader))
 	i--
 	dAtA[i] = 0x8
-	return len(dAtA) - i, nil
-}
-
-func (m *GateReport) Marshal() (dAtA []byte, err error) {
-	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
-	if err != nil {
-		return nil, err
-	}
-	return dAtA[:n], nil
-}
-
-func (m *GateReport) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *GateReport) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
-	_ = i
-	var l int
-	_ = l
-	i = encodeVarintFlyfishServer(dAtA, i, uint64(m.ConfVersion))
-	i--
-	dAtA[i] = 0x18
-	i -= len(m.Console)
-	copy(dAtA[i:], m.Console)
-	i = encodeVarintFlyfishServer(dAtA, i, uint64(len(m.Console)))
-	i--
-	dAtA[i] = 0x12
-	i -= len(m.Service)
-	copy(dAtA[i:], m.Service)
-	i = encodeVarintFlyfishServer(dAtA, i, uint64(len(m.Service)))
-	i--
-	dAtA[i] = 0xa
-	return len(dAtA) - i, nil
-}
-
-func (m *QueryGateList) Marshal() (dAtA []byte, err error) {
-	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
-	if err != nil {
-		return nil, err
-	}
-	return dAtA[:n], nil
-}
-
-func (m *QueryGateList) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *QueryGateList) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
-	_ = i
-	var l int
-	_ = l
-	return len(dAtA) - i, nil
-}
-
-func (m *GateList) Marshal() (dAtA []byte, err error) {
-	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
-	if err != nil {
-		return nil, err
-	}
-	return dAtA[:n], nil
-}
-
-func (m *GateList) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *GateList) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
-	_ = i
-	var l int
-	_ = l
-	if len(m.List) > 0 {
-		for iNdEx := len(m.List) - 1; iNdEx >= 0; iNdEx-- {
-			i -= len(m.List[iNdEx])
-			copy(dAtA[i:], m.List[iNdEx])
-			i = encodeVarintFlyfishServer(dAtA, i, uint64(len(m.List[iNdEx])))
-			i--
-			dAtA[i] = 0xa
-		}
-	}
-	return len(dAtA) - i, nil
-}
-
-func (m *NotifyReloadKvconf) Marshal() (dAtA []byte, err error) {
-	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
-	if err != nil {
-		return nil, err
-	}
-	return dAtA[:n], nil
-}
-
-func (m *NotifyReloadKvconf) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *NotifyReloadKvconf) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
-	_ = i
-	var l int
-	_ = l
-	return len(dAtA) - i, nil
-}
-
-func (m *RemoveGate) Marshal() (dAtA []byte, err error) {
-	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
-	if err != nil {
-		return nil, err
-	}
-	return dAtA[:n], nil
-}
-
-func (m *RemoveGate) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *RemoveGate) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
-	_ = i
-	var l int
-	_ = l
-	i -= len(m.Service)
-	copy(dAtA[i:], m.Service)
-	i = encodeVarintFlyfishServer(dAtA, i, uint64(len(m.Service)))
-	i--
-	dAtA[i] = 0xa
 	return len(dAtA) - i, nil
 }
 
@@ -3185,7 +3424,7 @@ func (m *DeploymentKvnode) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	i = encodeVarintFlyfishServer(dAtA, i, uint64(m.InterPort))
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(m.RaftPort))
 	i--
 	dAtA[i] = 0x20
 	i = encodeVarintFlyfishServer(dAtA, i, uint64(m.ServicePort))
@@ -3335,7 +3574,7 @@ func (m *AddNode) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	i = encodeVarintFlyfishServer(dAtA, i, uint64(m.InterPort))
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(m.RaftPort))
 	i--
 	dAtA[i] = 0x28
 	i = encodeVarintFlyfishServer(dAtA, i, uint64(m.ServicePort))
@@ -3559,7 +3798,7 @@ func (m *KvnodeBootResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 			dAtA[i] = 0x2a
 		}
 	}
-	i = encodeVarintFlyfishServer(dAtA, i, uint64(m.InterPort))
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(m.RaftPort))
 	i--
 	dAtA[i] = 0x20
 	i = encodeVarintFlyfishServer(dAtA, i, uint64(m.ServicePort))
@@ -3608,7 +3847,7 @@ func (m *NotifyAddNode) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 			dAtA[i] = 0x20
 		}
 	}
-	i = encodeVarintFlyfishServer(dAtA, i, uint64(m.InterPort))
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(m.RaftPort))
 	i--
 	dAtA[i] = 0x18
 	i -= len(m.Host)
@@ -3956,6 +4195,57 @@ func (m *RemSetResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
+func (m *GetFlyGate) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetFlyGate) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetFlyGate) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	return len(dAtA) - i, nil
+}
+
+func (m *GetFlyGateResp) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetFlyGateResp) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetFlyGateResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	i -= len(m.GateService)
+	copy(dAtA[i:], m.GateService)
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(len(m.GateService)))
+	i--
+	dAtA[i] = 0xa
+	return len(dAtA) - i, nil
+}
+
 func encodeVarintFlyfishServer(dAtA []byte, offset int, v uint64) int {
 	offset -= sovFlyfishServer(v)
 	base := offset
@@ -3967,6 +4257,84 @@ func encodeVarintFlyfishServer(dAtA []byte, offset int, v uint64) int {
 	dAtA[offset] = uint8(v)
 	return base
 }
+func (m *QueryRouteInfo) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Service)
+	n += 1 + l + sovFlyfishServer(uint64(l))
+	n += 1 + sovFlyfishServer(uint64(m.Version))
+	if len(m.Sets) > 0 {
+		for _, e := range m.Sets {
+			n += 1 + sovFlyfishServer(uint64(e))
+		}
+	}
+	return n
+}
+
+func (m *RouteInfoKvNode) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	n += 1 + sovFlyfishServer(uint64(m.NodeID))
+	l = len(m.Host)
+	n += 1 + l + sovFlyfishServer(uint64(l))
+	n += 1 + sovFlyfishServer(uint64(m.ServicePort))
+	return n
+}
+
+func (m *RouteInfoSet) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	n += 1 + sovFlyfishServer(uint64(m.SetID))
+	if len(m.Stores) > 0 {
+		for _, e := range m.Stores {
+			n += 1 + sovFlyfishServer(uint64(e))
+		}
+	}
+	if len(m.Slots) > 0 {
+		for _, b := range m.Slots {
+			l = len(b)
+			n += 1 + l + sovFlyfishServer(uint64(l))
+		}
+	}
+	if len(m.Kvnodes) > 0 {
+		for _, e := range m.Kvnodes {
+			l = e.Size()
+			n += 1 + l + sovFlyfishServer(uint64(l))
+		}
+	}
+	return n
+}
+
+func (m *QueryRouteInfoResp) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.Sets) > 0 {
+		for _, e := range m.Sets {
+			l = e.Size()
+			n += 1 + l + sovFlyfishServer(uint64(l))
+		}
+	}
+	if len(m.RemoveSets) > 0 {
+		for _, e := range m.RemoveSets {
+			n += 1 + sovFlyfishServer(uint64(e))
+		}
+	}
+	n += 1 + sovFlyfishServer(uint64(m.Version))
+	return n
+}
+
 func (m *QueryLeader) Size() (n int) {
 	if m == nil {
 		return 0
@@ -3983,65 +4351,7 @@ func (m *QueryLeaderResp) Size() (n int) {
 	}
 	var l int
 	_ = l
-	n += 2
-	return n
-}
-
-func (m *GateReport) Size() (n int) {
-	if m == nil {
-		return 0
-	}
-	var l int
-	_ = l
-	l = len(m.Service)
-	n += 1 + l + sovFlyfishServer(uint64(l))
-	l = len(m.Console)
-	n += 1 + l + sovFlyfishServer(uint64(l))
-	n += 1 + sovFlyfishServer(uint64(m.ConfVersion))
-	return n
-}
-
-func (m *QueryGateList) Size() (n int) {
-	if m == nil {
-		return 0
-	}
-	var l int
-	_ = l
-	return n
-}
-
-func (m *GateList) Size() (n int) {
-	if m == nil {
-		return 0
-	}
-	var l int
-	_ = l
-	if len(m.List) > 0 {
-		for _, s := range m.List {
-			l = len(s)
-			n += 1 + l + sovFlyfishServer(uint64(l))
-		}
-	}
-	return n
-}
-
-func (m *NotifyReloadKvconf) Size() (n int) {
-	if m == nil {
-		return 0
-	}
-	var l int
-	_ = l
-	return n
-}
-
-func (m *RemoveGate) Size() (n int) {
-	if m == nil {
-		return 0
-	}
-	var l int
-	_ = l
-	l = len(m.Service)
-	n += 1 + l + sovFlyfishServer(uint64(l))
+	n += 1 + sovFlyfishServer(uint64(m.Leader))
 	return n
 }
 
@@ -4055,7 +4365,7 @@ func (m *DeploymentKvnode) Size() (n int) {
 	l = len(m.Host)
 	n += 1 + l + sovFlyfishServer(uint64(l))
 	n += 1 + sovFlyfishServer(uint64(m.ServicePort))
-	n += 1 + sovFlyfishServer(uint64(m.InterPort))
+	n += 1 + sovFlyfishServer(uint64(m.RaftPort))
 	return n
 }
 
@@ -4113,7 +4423,7 @@ func (m *AddNode) Size() (n int) {
 	l = len(m.Host)
 	n += 1 + l + sovFlyfishServer(uint64(l))
 	n += 1 + sovFlyfishServer(uint64(m.ServicePort))
-	n += 1 + sovFlyfishServer(uint64(m.InterPort))
+	n += 1 + sovFlyfishServer(uint64(m.RaftPort))
 	return n
 }
 
@@ -4190,7 +4500,7 @@ func (m *KvnodeBootResp) Size() (n int) {
 	l = len(m.Reason)
 	n += 1 + l + sovFlyfishServer(uint64(l))
 	n += 1 + sovFlyfishServer(uint64(m.ServicePort))
-	n += 1 + sovFlyfishServer(uint64(m.InterPort))
+	n += 1 + sovFlyfishServer(uint64(m.RaftPort))
 	if len(m.Stores) > 0 {
 		for _, e := range m.Stores {
 			l = e.Size()
@@ -4209,7 +4519,7 @@ func (m *NotifyAddNode) Size() (n int) {
 	n += 1 + sovFlyfishServer(uint64(m.NodeID))
 	l = len(m.Host)
 	n += 1 + l + sovFlyfishServer(uint64(l))
-	n += 1 + sovFlyfishServer(uint64(m.InterPort))
+	n += 1 + sovFlyfishServer(uint64(m.RaftPort))
 	if len(m.Stores) > 0 {
 		for _, e := range m.Stores {
 			n += 1 + sovFlyfishServer(uint64(e))
@@ -4344,11 +4654,90 @@ func (m *RemSetResp) Size() (n int) {
 	return n
 }
 
+func (m *GetFlyGate) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	return n
+}
+
+func (m *GetFlyGateResp) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.GateService)
+	n += 1 + l + sovFlyfishServer(uint64(l))
+	return n
+}
+
 func sovFlyfishServer(x uint64) (n int) {
 	return (math_bits.Len64(x|1) + 6) / 7
 }
 func sozFlyfishServer(x uint64) (n int) {
 	return sovFlyfishServer(uint64((x << 1) ^ uint64((int64(x) >> 63))))
+}
+func (this *QueryRouteInfo) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&QueryRouteInfo{`,
+		`Service:` + fmt.Sprintf("%v", this.Service) + `,`,
+		`Version:` + fmt.Sprintf("%v", this.Version) + `,`,
+		`Sets:` + fmt.Sprintf("%v", this.Sets) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *RouteInfoKvNode) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&RouteInfoKvNode{`,
+		`NodeID:` + fmt.Sprintf("%v", this.NodeID) + `,`,
+		`Host:` + fmt.Sprintf("%v", this.Host) + `,`,
+		`ServicePort:` + fmt.Sprintf("%v", this.ServicePort) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *RouteInfoSet) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForKvnodes := "[]*RouteInfoKvNode{"
+	for _, f := range this.Kvnodes {
+		repeatedStringForKvnodes += strings.Replace(fmt.Sprintf("%v", f), "RouteInfoKvNode", "RouteInfoKvNode", 1) + ","
+	}
+	repeatedStringForKvnodes += "}"
+	s := strings.Join([]string{`&RouteInfoSet{`,
+		`SetID:` + fmt.Sprintf("%v", this.SetID) + `,`,
+		`Stores:` + fmt.Sprintf("%v", this.Stores) + `,`,
+		`Slots:` + fmt.Sprintf("%v", this.Slots) + `,`,
+		`Kvnodes:` + repeatedStringForKvnodes + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *QueryRouteInfoResp) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForSets := "[]*RouteInfoSet{"
+	for _, f := range this.Sets {
+		repeatedStringForSets += strings.Replace(fmt.Sprintf("%v", f), "RouteInfoSet", "RouteInfoSet", 1) + ","
+	}
+	repeatedStringForSets += "}"
+	s := strings.Join([]string{`&QueryRouteInfoResp{`,
+		`Sets:` + repeatedStringForSets + `,`,
+		`RemoveSets:` + fmt.Sprintf("%v", this.RemoveSets) + `,`,
+		`Version:` + fmt.Sprintf("%v", this.Version) + `,`,
+		`}`,
+	}, "")
+	return s
 }
 func (this *QueryLeader) String() string {
 	if this == nil {
@@ -4365,57 +4754,7 @@ func (this *QueryLeaderResp) String() string {
 		return "nil"
 	}
 	s := strings.Join([]string{`&QueryLeaderResp{`,
-		`Yes:` + fmt.Sprintf("%v", this.Yes) + `,`,
-		`}`,
-	}, "")
-	return s
-}
-func (this *GateReport) String() string {
-	if this == nil {
-		return "nil"
-	}
-	s := strings.Join([]string{`&GateReport{`,
-		`Service:` + fmt.Sprintf("%v", this.Service) + `,`,
-		`Console:` + fmt.Sprintf("%v", this.Console) + `,`,
-		`ConfVersion:` + fmt.Sprintf("%v", this.ConfVersion) + `,`,
-		`}`,
-	}, "")
-	return s
-}
-func (this *QueryGateList) String() string {
-	if this == nil {
-		return "nil"
-	}
-	s := strings.Join([]string{`&QueryGateList{`,
-		`}`,
-	}, "")
-	return s
-}
-func (this *GateList) String() string {
-	if this == nil {
-		return "nil"
-	}
-	s := strings.Join([]string{`&GateList{`,
-		`List:` + fmt.Sprintf("%v", this.List) + `,`,
-		`}`,
-	}, "")
-	return s
-}
-func (this *NotifyReloadKvconf) String() string {
-	if this == nil {
-		return "nil"
-	}
-	s := strings.Join([]string{`&NotifyReloadKvconf{`,
-		`}`,
-	}, "")
-	return s
-}
-func (this *RemoveGate) String() string {
-	if this == nil {
-		return "nil"
-	}
-	s := strings.Join([]string{`&RemoveGate{`,
-		`Service:` + fmt.Sprintf("%v", this.Service) + `,`,
+		`Leader:` + fmt.Sprintf("%v", this.Leader) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -4428,7 +4767,7 @@ func (this *DeploymentKvnode) String() string {
 		`NodeID:` + fmt.Sprintf("%v", this.NodeID) + `,`,
 		`Host:` + fmt.Sprintf("%v", this.Host) + `,`,
 		`ServicePort:` + fmt.Sprintf("%v", this.ServicePort) + `,`,
-		`InterPort:` + fmt.Sprintf("%v", this.InterPort) + `,`,
+		`RaftPort:` + fmt.Sprintf("%v", this.RaftPort) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -4484,7 +4823,7 @@ func (this *AddNode) String() string {
 		`NodeID:` + fmt.Sprintf("%v", this.NodeID) + `,`,
 		`Host:` + fmt.Sprintf("%v", this.Host) + `,`,
 		`ServicePort:` + fmt.Sprintf("%v", this.ServicePort) + `,`,
-		`InterPort:` + fmt.Sprintf("%v", this.InterPort) + `,`,
+		`RaftPort:` + fmt.Sprintf("%v", this.RaftPort) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -4558,7 +4897,7 @@ func (this *KvnodeBootResp) String() string {
 		`Ok:` + fmt.Sprintf("%v", this.Ok) + `,`,
 		`Reason:` + fmt.Sprintf("%v", this.Reason) + `,`,
 		`ServicePort:` + fmt.Sprintf("%v", this.ServicePort) + `,`,
-		`InterPort:` + fmt.Sprintf("%v", this.InterPort) + `,`,
+		`RaftPort:` + fmt.Sprintf("%v", this.RaftPort) + `,`,
 		`Stores:` + repeatedStringForStores + `,`,
 		`}`,
 	}, "")
@@ -4571,7 +4910,7 @@ func (this *NotifyAddNode) String() string {
 	s := strings.Join([]string{`&NotifyAddNode{`,
 		`NodeID:` + fmt.Sprintf("%v", this.NodeID) + `,`,
 		`Host:` + fmt.Sprintf("%v", this.Host) + `,`,
-		`InterPort:` + fmt.Sprintf("%v", this.InterPort) + `,`,
+		`RaftPort:` + fmt.Sprintf("%v", this.RaftPort) + `,`,
 		`Stores:` + fmt.Sprintf("%v", this.Stores) + `,`,
 		`}`,
 	}, "")
@@ -4694,6 +5033,25 @@ func (this *RemSetResp) String() string {
 	}, "")
 	return s
 }
+func (this *GetFlyGate) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&GetFlyGate{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *GetFlyGateResp) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&GetFlyGateResp{`,
+		`GateService:` + fmt.Sprintf("%v", this.GateService) + `,`,
+		`}`,
+	}, "")
+	return s
+}
 func valueToStringFlyfishServer(v interface{}) string {
 	rv := reflect.ValueOf(v)
 	if rv.IsNil() {
@@ -4701,6 +5059,705 @@ func valueToStringFlyfishServer(v interface{}) string {
 	}
 	pv := reflect.Indirect(rv).Interface()
 	return fmt.Sprintf("*%v", pv)
+}
+func (m *QueryRouteInfo) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFlyfishServer
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: queryRouteInfo: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: queryRouteInfo: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Service", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Service = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
+			}
+			m.Version = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Version |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType == 0 {
+				var v int32
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowFlyfishServer
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					v |= int32(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				m.Sets = append(m.Sets, v)
+			} else if wireType == 2 {
+				var packedLen int
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowFlyfishServer
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					packedLen |= int(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				if packedLen < 0 {
+					return ErrInvalidLengthFlyfishServer
+				}
+				postIndex := iNdEx + packedLen
+				if postIndex < 0 {
+					return ErrInvalidLengthFlyfishServer
+				}
+				if postIndex > l {
+					return io.ErrUnexpectedEOF
+				}
+				var elementCount int
+				var count int
+				for _, integer := range dAtA[iNdEx:postIndex] {
+					if integer < 128 {
+						count++
+					}
+				}
+				elementCount = count
+				if elementCount != 0 && len(m.Sets) == 0 {
+					m.Sets = make([]int32, 0, elementCount)
+				}
+				for iNdEx < postIndex {
+					var v int32
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowFlyfishServer
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						v |= int32(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					m.Sets = append(m.Sets, v)
+				}
+			} else {
+				return fmt.Errorf("proto: wrong wireType = %d for field Sets", wireType)
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *RouteInfoKvNode) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFlyfishServer
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: routeInfoKvNode: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: routeInfoKvNode: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NodeID", wireType)
+			}
+			m.NodeID = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.NodeID |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Host", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Host = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ServicePort", wireType)
+			}
+			m.ServicePort = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ServicePort |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *RouteInfoSet) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFlyfishServer
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: routeInfoSet: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: routeInfoSet: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SetID", wireType)
+			}
+			m.SetID = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.SetID |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 2:
+			if wireType == 0 {
+				var v int32
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowFlyfishServer
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					v |= int32(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				m.Stores = append(m.Stores, v)
+			} else if wireType == 2 {
+				var packedLen int
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowFlyfishServer
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					packedLen |= int(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				if packedLen < 0 {
+					return ErrInvalidLengthFlyfishServer
+				}
+				postIndex := iNdEx + packedLen
+				if postIndex < 0 {
+					return ErrInvalidLengthFlyfishServer
+				}
+				if postIndex > l {
+					return io.ErrUnexpectedEOF
+				}
+				var elementCount int
+				var count int
+				for _, integer := range dAtA[iNdEx:postIndex] {
+					if integer < 128 {
+						count++
+					}
+				}
+				elementCount = count
+				if elementCount != 0 && len(m.Stores) == 0 {
+					m.Stores = make([]int32, 0, elementCount)
+				}
+				for iNdEx < postIndex {
+					var v int32
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowFlyfishServer
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						v |= int32(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					m.Stores = append(m.Stores, v)
+				}
+			} else {
+				return fmt.Errorf("proto: wrong wireType = %d for field Stores", wireType)
+			}
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Slots", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Slots = append(m.Slots, make([]byte, postIndex-iNdEx))
+			copy(m.Slots[len(m.Slots)-1], dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Kvnodes", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Kvnodes = append(m.Kvnodes, &RouteInfoKvNode{})
+			if err := m.Kvnodes[len(m.Kvnodes)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *QueryRouteInfoResp) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFlyfishServer
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: queryRouteInfoResp: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: queryRouteInfoResp: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Sets", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Sets = append(m.Sets, &RouteInfoSet{})
+			if err := m.Sets[len(m.Sets)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType == 0 {
+				var v int32
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowFlyfishServer
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					v |= int32(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				m.RemoveSets = append(m.RemoveSets, v)
+			} else if wireType == 2 {
+				var packedLen int
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowFlyfishServer
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					packedLen |= int(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				if packedLen < 0 {
+					return ErrInvalidLengthFlyfishServer
+				}
+				postIndex := iNdEx + packedLen
+				if postIndex < 0 {
+					return ErrInvalidLengthFlyfishServer
+				}
+				if postIndex > l {
+					return io.ErrUnexpectedEOF
+				}
+				var elementCount int
+				var count int
+				for _, integer := range dAtA[iNdEx:postIndex] {
+					if integer < 128 {
+						count++
+					}
+				}
+				elementCount = count
+				if elementCount != 0 && len(m.RemoveSets) == 0 {
+					m.RemoveSets = make([]int32, 0, elementCount)
+				}
+				for iNdEx < postIndex {
+					var v int32
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowFlyfishServer
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						v |= int32(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					m.RemoveSets = append(m.RemoveSets, v)
+				}
+			} else {
+				return fmt.Errorf("proto: wrong wireType = %d for field RemoveSets", wireType)
+			}
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
+			}
+			m.Version = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Version |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
 }
 func (m *QueryLeader) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
@@ -4805,9 +5862,9 @@ func (m *QueryLeaderResp) Unmarshal(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Yes", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Leader", wireType)
 			}
-			var v int
+			m.Leader = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowFlyfishServer
@@ -4817,424 +5874,11 @@ func (m *QueryLeaderResp) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= int(b&0x7F) << shift
+				m.Leader |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			m.Yes = bool(v != 0)
-		default:
-			iNdEx = preIndex
-			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if skippy < 0 {
-				return ErrInvalidLengthFlyfishServer
-			}
-			if (iNdEx + skippy) < 0 {
-				return ErrInvalidLengthFlyfishServer
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			iNdEx += skippy
-		}
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
-func (m *GateReport) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowFlyfishServer
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := dAtA[iNdEx]
-			iNdEx++
-			wire |= uint64(b&0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: gate_report: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: gate_report: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		case 1:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Service", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowFlyfishServer
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLengthFlyfishServer
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthFlyfishServer
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.Service = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
-		case 2:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Console", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowFlyfishServer
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLengthFlyfishServer
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthFlyfishServer
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.Console = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
-		case 3:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ConfVersion", wireType)
-			}
-			m.ConfVersion = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowFlyfishServer
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.ConfVersion |= int32(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-		default:
-			iNdEx = preIndex
-			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if skippy < 0 {
-				return ErrInvalidLengthFlyfishServer
-			}
-			if (iNdEx + skippy) < 0 {
-				return ErrInvalidLengthFlyfishServer
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			iNdEx += skippy
-		}
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
-func (m *QueryGateList) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowFlyfishServer
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := dAtA[iNdEx]
-			iNdEx++
-			wire |= uint64(b&0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: query_gate_list: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: query_gate_list: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		default:
-			iNdEx = preIndex
-			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if skippy < 0 {
-				return ErrInvalidLengthFlyfishServer
-			}
-			if (iNdEx + skippy) < 0 {
-				return ErrInvalidLengthFlyfishServer
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			iNdEx += skippy
-		}
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
-func (m *GateList) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowFlyfishServer
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := dAtA[iNdEx]
-			iNdEx++
-			wire |= uint64(b&0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: gate_list: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: gate_list: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		case 1:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field List", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowFlyfishServer
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLengthFlyfishServer
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthFlyfishServer
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.List = append(m.List, string(dAtA[iNdEx:postIndex]))
-			iNdEx = postIndex
-		default:
-			iNdEx = preIndex
-			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if skippy < 0 {
-				return ErrInvalidLengthFlyfishServer
-			}
-			if (iNdEx + skippy) < 0 {
-				return ErrInvalidLengthFlyfishServer
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			iNdEx += skippy
-		}
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
-func (m *NotifyReloadKvconf) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowFlyfishServer
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := dAtA[iNdEx]
-			iNdEx++
-			wire |= uint64(b&0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: notify_reload_kvconf: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: notify_reload_kvconf: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		default:
-			iNdEx = preIndex
-			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if skippy < 0 {
-				return ErrInvalidLengthFlyfishServer
-			}
-			if (iNdEx + skippy) < 0 {
-				return ErrInvalidLengthFlyfishServer
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			iNdEx += skippy
-		}
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
-func (m *RemoveGate) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowFlyfishServer
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := dAtA[iNdEx]
-			iNdEx++
-			wire |= uint64(b&0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: remove_gate: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: remove_gate: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		case 1:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Service", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowFlyfishServer
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLengthFlyfishServer
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthFlyfishServer
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.Service = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
@@ -5360,9 +6004,9 @@ func (m *DeploymentKvnode) Unmarshal(dAtA []byte) error {
 			}
 		case 4:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field InterPort", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field RaftPort", wireType)
 			}
-			m.InterPort = 0
+			m.RaftPort = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowFlyfishServer
@@ -5372,7 +6016,7 @@ func (m *DeploymentKvnode) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.InterPort |= int32(b&0x7F) << shift
+				m.RaftPort |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -5819,9 +6463,9 @@ func (m *AddNode) Unmarshal(dAtA []byte) error {
 			}
 		case 5:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field InterPort", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field RaftPort", wireType)
 			}
-			m.InterPort = 0
+			m.RaftPort = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowFlyfishServer
@@ -5831,7 +6475,7 @@ func (m *AddNode) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.InterPort |= int32(b&0x7F) << shift
+				m.RaftPort |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -6505,9 +7149,9 @@ func (m *KvnodeBootResp) Unmarshal(dAtA []byte) error {
 			}
 		case 4:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field InterPort", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field RaftPort", wireType)
 			}
-			m.InterPort = 0
+			m.RaftPort = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowFlyfishServer
@@ -6517,7 +7161,7 @@ func (m *KvnodeBootResp) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.InterPort |= int32(b&0x7F) << shift
+				m.RaftPort |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -6662,9 +7306,9 @@ func (m *NotifyAddNode) Unmarshal(dAtA []byte) error {
 			iNdEx = postIndex
 		case 3:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field InterPort", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field RaftPort", wireType)
 			}
-			m.InterPort = 0
+			m.RaftPort = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowFlyfishServer
@@ -6674,7 +7318,7 @@ func (m *NotifyAddNode) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.InterPort |= int32(b&0x7F) << shift
+				m.RaftPort |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -7781,6 +8425,144 @@ func (m *RemSetResp) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Reason = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetFlyGate) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFlyfishServer
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: getFlyGate: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: getFlyGate: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetFlyGateResp) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFlyfishServer
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: getFlyGateResp: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: getFlyGateResp: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field GateService", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.GateService = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

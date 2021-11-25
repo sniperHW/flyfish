@@ -52,7 +52,7 @@ type kvnode struct {
 	stopOnce    int32
 	startOnce   int32
 	metaCreator func(*db.DbDef) (db.DBMeta, error)
-	consoleConn *fnet.Udp
+	udpConn     *fnet.Udp
 	selfUrl     string
 	kvcount     int64
 }
@@ -76,8 +76,7 @@ func (this *kvnode) startListener() {
 			this.clients[session] = session
 			this.muC.Unlock()
 
-			//session.SetRecvTimeout(flyproto.PingTime * 10)
-			//session.SetSendQueueSize(1024)
+			session.SetRecvTimeout(flyproto.PingTime * 10)
 			//只有配置了压缩开启同时客户端支持压缩才开启通信压缩
 			session.SetInBoundProcessor(cs.NewReqInboundProcessor())
 			session.SetEncoder(&cs.RespEncoder{})
@@ -286,8 +285,8 @@ func (this *kvnode) Stop() {
 
 		this.mutilRaft.Stop()
 
-		if nil != this.consoleConn {
-			this.consoleConn.Close()
+		if nil != this.udpConn {
+			this.udpConn.Close()
 		}
 
 		this.db.stop()
@@ -340,12 +339,6 @@ func MakeUnikeyPlacement(stores []int) (fn func(string) int) {
 		}
 	}
 	return
-}
-
-type storeConf struct {
-	id          int
-	raftCluster string
-	slots       *bitmap.Bitmap
 }
 
 func (this *kvnode) getKvnodeBootInfo(serviceHost string, pd []*net.UDPAddr) *sproto.KvnodeBootResp {
@@ -469,9 +462,9 @@ func (this *kvnode) Start() error {
 				return errors.New(resp.Reason)
 			}
 
-			this.selfUrl = fmt.Sprintf("http://%s:%d", config.ServiceHost, resp.InterPort)
+			this.selfUrl = fmt.Sprintf("http://%s:%d", config.ServiceHost, resp.RaftPort)
 
-			err = this.initConsole(fmt.Sprintf("%s:%d", config.ServiceHost, resp.InterPort))
+			err = this.initUdp(fmt.Sprintf("%s:%d", config.ServiceHost, resp.ServicePort))
 
 			if nil != err {
 				return err

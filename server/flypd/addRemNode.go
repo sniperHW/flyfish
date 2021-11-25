@@ -34,7 +34,7 @@ func (p *ProposalAddNode) apply() {
 			NodeID:      int(p.msg.NodeID),
 			Host:        p.msg.Host,
 			ServicePort: int(p.msg.ServicePort),
-			InterPort:   int(p.msg.InterPort),
+			RaftPort:    int(p.msg.RaftPort),
 		},
 		SetID: int(p.msg.SetID),
 	}
@@ -119,7 +119,7 @@ func (p *ProposalNotifyAddNodeResp) apply() {
 				id:          int(an.NodeID),
 				host:        an.Host,
 				servicePort: int(an.ServicePort),
-				interPort:   int(an.InterPort),
+				raftPort:    int(an.RaftPort),
 				set:         s,
 			}
 		}
@@ -275,7 +275,7 @@ func (p *pd) sendNotifyRemNode(rn *RemovingNode) {
 		}
 
 		for _, v := range s.nodes {
-			addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.host, v.interPort))
+			addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.host, v.servicePort))
 			p.udp.SendTo(addr, notify)
 		}
 	}
@@ -285,9 +285,9 @@ func (p *pd) sendNotifyAddNode(an *AddingNode) {
 	if len(an.OkStores) < StorePerSet {
 		s := p.deployment.sets[an.SetID]
 		notify := &sproto.NotifyAddNode{
-			NodeID:    int32(an.NodeID),
-			Host:      an.Host,
-			InterPort: int32(an.InterPort),
+			NodeID:   int32(an.NodeID),
+			Host:     an.Host,
+			RaftPort: int32(an.RaftPort),
 		}
 
 		for _, v := range s.stores {
@@ -304,8 +304,8 @@ func (p *pd) sendNotifyAddNode(an *AddingNode) {
 		}
 
 		for _, v := range s.nodes {
-			addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.host, v.interPort))
-			GetSugar().Infof("send notify add node to %s:%d", v.host, v.interPort)
+			addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.host, v.servicePort))
+			GetSugar().Infof("send notify add node to %s:%d", v.host, v.servicePort)
 			p.udp.SendTo(addr, notify)
 		}
 	}

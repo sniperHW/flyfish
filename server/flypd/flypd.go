@@ -37,6 +37,65 @@ type RemovingNode struct {
 	timer    *time.Timer
 }
 
+type flygate struct {
+	service       string
+	deadlineTimer *time.Timer
+}
+
+type flygateMgr struct {
+	flygateMap   map[string]*flygate
+	flygateArray []*flygate
+	next         int
+	mainque      applicationQueue
+}
+
+func (f *flygateMgr) getFlyGate() *flygate {
+	if len(f.flygateArray) == 0 {
+		return nil
+	} else {
+		f.next++
+		return f.flygateArray[f.next%len(f.flygateArray)]
+	}
+}
+
+func (f *flygateMgr) onFlyGateTimeout(gateService string, t *time.Timer) {
+	if v, ok := f.flygateMap[gateService]; ok && v.deadlineTimer == t {
+		delete(f.flygateMap, gateService)
+		for i, vv := range f.flygateArray {
+			if vv == v {
+				f.flygateArray[i], f.flygateArray[len(f.flygateArray)-1] = f.flygateArray[len(f.flygateArray)-1], f.flygateArray[i]
+				f.flygateArray = f.flygateArray[:len(f.flygateArray)-1]
+				break
+			}
+		}
+	}
+}
+
+func (f *flygateMgr) onQueryRouteInfo(gateService string) {
+	var g *flygate
+	var ok bool
+
+	if g, ok = f.flygateMap[gateService]; ok {
+		g.deadlineTimer.Stop()
+	} else {
+		g = &flygate{
+			service: gateService,
+		}
+		f.flygateMap[gateService] = g
+		f.flygateArray = append(f.flygateArray, g)
+	}
+
+	var deadlineTimer *time.Timer
+
+	deadlineTimer = time.AfterFunc(time.Second*10, func() {
+		f.mainque.AppendHighestPriotiryItem(func() {
+			f.onFlyGateTimeout(gateService, deadlineTimer)
+		})
+	})
+
+	g.deadlineTimer = deadlineTimer
+}
+
 type pd struct {
 	id           int
 	raftID       int
@@ -54,6 +113,7 @@ type pd struct {
 	startonce    int32
 	wait         sync.WaitGroup
 	ready        bool
+	flygateMgr   flygateMgr
 }
 
 func NewPd(config *Config, udpService string, id int, cluster string) (*pd, error) {
@@ -88,7 +148,7 @@ func NewPd(config *Config, udpService string, id int, cluster string) (*pd, erro
 
 	mutilRaft := raft.NewMutilRaft()
 
-	rn := raft.NewRaftNode(nil, mutilRaft, mainQueue, (id<<16)+1, peers, false, config.Log.LogDir, "pd")
+	rn := raft.NewRaftNode(mutilRaft, mainQueue, (id<<16)+1, peers, false, config.Log.LogDir, "pd")
 
 	p := &pd{
 		id:           id,
@@ -100,6 +160,10 @@ func NewPd(config *Config, udpService string, id int, cluster string) (*pd, erro
 		addingNode:   map[int]*AddingNode{},
 		removingNode: map[int]*RemovingNode{},
 		slotTransfer: map[int]*TransSlotTransfer{},
+		flygateMgr: flygateMgr{
+			flygateMap: map[string]*flygate{},
+			mainque:    mainQueue,
+		},
 	}
 
 	p.initMsgHandler()
@@ -135,6 +199,15 @@ func (q applicationQueue) pop() (closed bool, v interface{}) {
 
 func (q applicationQueue) close() {
 	q.q.Close()
+}
+
+func (p *pd) getNode(nodeID int32) *kvnode {
+	for _, v := range p.deployment.sets {
+		if n, ok := v.nodes[int(nodeID)]; ok {
+			return n
+		}
+	}
+	return nil
 }
 
 func (p *pd) isLeader() bool {

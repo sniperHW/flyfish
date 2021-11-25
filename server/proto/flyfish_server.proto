@@ -12,13 +12,10 @@ option (gogoproto.goproto_enum_prefix_all) = true;
 
 
 enum ServerCmdType {
+  //flygate <-> flykv
   QueryLeader                   = 1;
   QueryLeaderResp               = 2;
-  GateReport                    = 3;
-  QueryGateList                 = 4;
-  GateList                      = 5;
-  NotiReloadKvConf              = 6;
-  RemoveGate                    = 7;
+
 
   //console <-> pd
   InstallDeployment             = 101;
@@ -44,7 +41,45 @@ enum ServerCmdType {
   NotifySlotTransOutResp        = 217;
   NotifySlotTransIn             = 218;
   NotifySlotTransInResp         = 219;    
+
+
+  //flygate <-> pd
+  QueryRouteInfo                = 310;
+  QueryRouteInfoResp            = 311;
+
+
+  //client <-> pd
+  GetFlyGate                    = 410;
+  GetFlyGateResp                = 411;
 }
+
+
+message queryRouteInfo {
+  optional string service       = 1;
+  optional int64  version       = 2;  
+  repeated int32  sets          = 3;
+}         
+
+
+message routeInfoKvNode {
+  optional int32  nodeID        = 1;
+  optional string host          = 2;
+  optional int32  servicePort   = 3;       
+}
+
+message routeInfoSet {
+  optional int32  setID            = 1;
+  repeated int32  stores           = 2;
+  repeated bytes  slots            = 3;
+  repeated routeInfoKvNode kvnodes = 4;
+}
+
+message queryRouteInfoResp {
+  repeated routeInfoSet sets       = 1;
+  repeated int32  removeSets       = 2;
+  optional int64  version          = 3; 
+}
+
 
 //查询是否store的leader,如果是返回yes=true
 message query_leader {
@@ -52,37 +87,14 @@ message query_leader {
 }
 
 message query_leader_resp {
-  optional bool yes = 1;
-}
-
-
-message gate_report {
-  optional string service      = 1;
-  optional string console      = 2;
-  optional int32  conf_version = 3;
-}
-
-message query_gate_list {
-  
-}
-
-message gate_list {
-  repeated string list  = 1;
-}
-
-message notify_reload_kvconf {
-  
-}
-
-message remove_gate {
-  optional string service      = 1;
+  optional int32 leader = 1;
 }
 
 message deploymentKvnode  {
   optional int32  nodeID      = 1;
   optional string host        = 2;
   optional int32  servicePort = 3;
-  optional int32  interPort   = 4; 
+  optional int32  raftPort   = 4; 
 }
 
 message deploymentSet  {
@@ -105,7 +117,7 @@ message addNode {
   optional int32  nodeID      = 2;
   optional string host        = 3;
   optional int32  servicePort = 4;
-  optional int32  interPort   = 5;      
+  optional int32  raftPort   = 5;      
 }
 
 
@@ -141,14 +153,14 @@ message kvnodeBootResp {
   optional bool   ok           = 1;
   optional string reason       = 2;
   optional int32  servicePort  = 3;
-  optional int32  interPort    = 4;   
+  optional int32  raftPort     = 4;   
   repeated storeInfo stores    = 5;
 }
 
 message notifyAddNode {
   optional int32  nodeID      = 1;
   optional string host        = 2;
-  optional int32  interPort   = 3;
+  optional int32  raftPort    = 3;
   repeated int32  stores      = 4; 
 }
 
@@ -205,5 +217,14 @@ message remSet {
 message   remSetResp {
   optional bool   ok           = 1;
   optional string reason       = 2;
+}
+
+
+message   getFlyGate {
+
+}
+
+message getFlyGateResp {
+  optional string gateService  = 1;
 }
 

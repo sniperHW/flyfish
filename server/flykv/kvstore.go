@@ -187,8 +187,14 @@ func (s *kvstore) hasLease() bool {
 
 func (s *kvstore) isLeader() bool {
 	s.raftMtx.Lock()
-	s.raftMtx.Unlock()
+	defer s.raftMtx.Unlock()
 	return s.leader == s.raftID
+}
+
+func (s *kvstore) getLeaderNodeID() int {
+	s.raftMtx.Lock()
+	defer s.raftMtx.Unlock()
+	return int(s.leader >> 16)
 }
 
 func (s *kvstore) loadSnapshot() (*raftpb.Snapshot, error) {
@@ -565,8 +571,8 @@ func (s *kvstore) serve() {
 			_, v := s.mainQueue.pop()
 
 			switch v.(type) {
-			case *consoleMsg:
-				s.onConsoleMsg(v.(*consoleMsg).from, v.(*consoleMsg).m)
+			case *udpMsg:
+				s.onUdpMsg(v.(*udpMsg).from, v.(*udpMsg).m)
 			case error:
 				GetSugar().Errorf("error for raft:%v", v.(error))
 				return
@@ -641,7 +647,7 @@ func (s *kvstore) serve() {
 func (s *kvstore) onNotifyAddNode(from *net.UDPAddr, msg *sproto.NotifyAddNode) {
 	if s.leader == s.raftID {
 		if s.memberShip[int(msg.NodeID)] {
-			s.kvnode.consoleConn.SendTo(from, &sproto.NotifyAddNodeResp{
+			s.kvnode.udpConn.SendTo(from, &sproto.NotifyAddNodeResp{
 				NodeID: msg.NodeID,
 				Store:  int32(s.shard),
 			})
@@ -650,11 +656,11 @@ func (s *kvstore) onNotifyAddNode(from *net.UDPAddr, msg *sproto.NotifyAddNode) 
 			s.rn.IssueConfChange(&ProposalConfChange{
 				ProposalConfChangeBase: raft.ProposalConfChangeBase{
 					ConfChangeType: raftpb.ConfChangeAddNode,
-					Url:            fmt.Sprintf("http://%s:%d", msg.Host, msg.InterPort),
+					Url:            fmt.Sprintf("http://%s:%d", msg.Host, msg.RaftPort),
 					NodeID:         uint64((int(msg.NodeID) << 16) + s.shard),
 				},
 				reply: func() {
-					s.kvnode.consoleConn.SendTo(from, &sproto.NotifyAddNodeResp{
+					s.kvnode.udpConn.SendTo(from, &sproto.NotifyAddNodeResp{
 						NodeID: msg.NodeID,
 						Store:  int32(s.shard),
 					})
@@ -667,7 +673,7 @@ func (s *kvstore) onNotifyAddNode(from *net.UDPAddr, msg *sproto.NotifyAddNode) 
 func (s *kvstore) onNotifyRemNode(from *net.UDPAddr, msg *sproto.NotifyRemNode) {
 	if s.leader == s.raftID {
 		if !s.memberShip[int(msg.NodeID)] {
-			s.kvnode.consoleConn.SendTo(from, &sproto.NotifyRemNodeResp{
+			s.kvnode.udpConn.SendTo(from, &sproto.NotifyRemNodeResp{
 				NodeID: int32(int(msg.NodeID)),
 				Store:  int32(s.shard),
 			})
@@ -679,7 +685,7 @@ func (s *kvstore) onNotifyRemNode(from *net.UDPAddr, msg *sproto.NotifyRemNode) 
 					NodeID:         uint64((int(msg.NodeID) << 16) + s.shard),
 				},
 				reply: func() {
-					s.kvnode.consoleConn.SendTo(from, &sproto.NotifyRemNodeResp{
+					s.kvnode.udpConn.SendTo(from, &sproto.NotifyRemNodeResp{
 						NodeID: msg.NodeID,
 						Store:  int32(s.shard),
 					})
@@ -693,7 +699,7 @@ func (s *kvstore) onNotifySlotTransIn(from *net.UDPAddr, msg *sproto.NotifySlotT
 	if s.leader == s.raftID {
 		slot := int(msg.Slot)
 		if s.slots.Test(slot) {
-			s.kvnode.consoleConn.SendTo(from, &sproto.NotifySlotTransInResp{
+			s.kvnode.udpConn.SendTo(from, &sproto.NotifySlotTransInResp{
 				Slot: msg.Slot,
 			})
 		} else {
@@ -702,7 +708,7 @@ func (s *kvstore) onNotifySlotTransIn(from *net.UDPAddr, msg *sproto.NotifySlotT
 				transferType: slotTransferIn,
 				store:        s,
 				reply: func() {
-					s.kvnode.consoleConn.SendTo(from, &sproto.NotifySlotTransInResp{
+					s.kvnode.udpConn.SendTo(from, &sproto.NotifySlotTransInResp{
 						Slot: msg.Slot,
 					})
 				},
@@ -735,7 +741,7 @@ func (s *kvstore) onNotifySlotTransOut(from *net.UDPAddr, msg *sproto.NotifySlot
 	if s.leader == s.raftID {
 		slot := int(msg.Slot)
 		if !s.slots.Test(slot) {
-			s.kvnode.consoleConn.SendTo(from, &sproto.NotifySlotTransOutResp{
+			s.kvnode.udpConn.SendTo(from, &sproto.NotifySlotTransOutResp{
 				Slot: msg.Slot,
 			})
 		} else {
@@ -745,7 +751,7 @@ func (s *kvstore) onNotifySlotTransOut(from *net.UDPAddr, msg *sproto.NotifySlot
 					transferType: slotTransferOut,
 					store:        s,
 					reply: func() {
-						s.kvnode.consoleConn.SendTo(from, &sproto.NotifySlotTransOutResp{
+						s.kvnode.udpConn.SendTo(from, &sproto.NotifySlotTransOutResp{
 							Slot: msg.Slot,
 						})
 					},
@@ -755,7 +761,7 @@ func (s *kvstore) onNotifySlotTransOut(from *net.UDPAddr, msg *sproto.NotifySlot
 	}
 }
 
-func (s *kvstore) onConsoleMsg(from *net.UDPAddr, m proto.Message) {
+func (s *kvstore) onUdpMsg(from *net.UDPAddr, m proto.Message) {
 	if atomic.LoadInt32(&s.stoped) == 0 {
 		switch m.(type) {
 		case *sproto.NotifyAddNode:

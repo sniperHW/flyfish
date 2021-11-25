@@ -8,21 +8,21 @@ import (
 	"net"
 )
 
-type consoleMsg struct {
+type udpMsg struct {
 	from *net.UDPAddr
 	m    proto.Message
 }
 
-func (this *kvnode) processConsoleMsg(from *net.UDPAddr, m proto.Message) {
+func (this *kvnode) processUdpMsg(from *net.UDPAddr, m proto.Message) {
 	switch m.(type) {
 	case *sproto.QueryLeader:
 		this.muS.RLock()
 		store, ok := this.stores[int(m.(*sproto.QueryLeader).GetStore())]
 		this.muS.RUnlock()
 		if !ok {
-			this.consoleConn.SendTo(from, &sproto.QueryLeaderResp{Yes: false})
+			this.udpConn.SendTo(from, &sproto.QueryLeaderResp{Leader: int32(store.getLeaderNodeID())})
 		} else {
-			this.consoleConn.SendTo(from, &sproto.QueryLeaderResp{Yes: store.isLeader()})
+			this.udpConn.SendTo(from, &sproto.QueryLeaderResp{Leader: 0})
 		}
 	case *sproto.NotifyAddNode, *sproto.NotifyRemNode:
 		var stores []int32
@@ -36,7 +36,7 @@ func (this *kvnode) processConsoleMsg(from *net.UDPAddr, m proto.Message) {
 		this.muS.RLock()
 		for _, v := range stores {
 			if s, ok := this.stores[int(v)]; ok {
-				s.mainQueue.AppendHighestPriotiryItem(&consoleMsg{
+				s.mainQueue.AppendHighestPriotiryItem(&udpMsg{
 					from: from,
 					m:    m,
 				})
@@ -55,7 +55,7 @@ func (this *kvnode) processConsoleMsg(from *net.UDPAddr, m proto.Message) {
 
 		this.muS.RLock()
 		if s, ok := this.stores[int(store)]; ok {
-			s.mainQueue.AppendHighestPriotiryItem(&consoleMsg{
+			s.mainQueue.AppendHighestPriotiryItem(&udpMsg{
 				from: from,
 				m:    m,
 			})
@@ -64,9 +64,9 @@ func (this *kvnode) processConsoleMsg(from *net.UDPAddr, m proto.Message) {
 	}
 }
 
-func (this *kvnode) initConsole(service string) error {
+func (this *kvnode) initUdp(service string) error {
 	var err error
-	this.consoleConn, err = fnet.NewUdp(service, snet.Pack, snet.Unpack)
+	this.udpConn, err = fnet.NewUdp(service, snet.Pack, snet.Unpack)
 	if nil != err {
 		return err
 	}
@@ -74,12 +74,12 @@ func (this *kvnode) initConsole(service string) error {
 	go func() {
 		recvbuff := make([]byte, 64*1024)
 		for {
-			from, msg, err := this.consoleConn.ReadFrom(recvbuff)
+			from, msg, err := this.udpConn.ReadFrom(recvbuff)
 			if nil != err {
 				GetSugar().Errorf("read err:%v", err)
 				return
 			} else {
-				this.processConsoleMsg(from, msg)
+				this.processUdpMsg(from, msg)
 			}
 		}
 	}()

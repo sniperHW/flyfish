@@ -18,7 +18,7 @@ type KvNodeJson struct {
 	NodeID      int
 	Host        string
 	ServicePort int
-	InterPort   int
+	RaftPort    int
 }
 
 type StoreJson struct {
@@ -27,6 +27,7 @@ type StoreJson struct {
 }
 
 type SetJson struct {
+	Version  int64
 	SetID    int
 	KvNodes  []KvNodeJson
 	Stores   []StoreJson
@@ -34,14 +35,15 @@ type SetJson struct {
 }
 
 type DeploymentJson struct {
-	Sets []SetJson
+	Version int64
+	Sets    []SetJson
 }
 
 type kvnode struct {
 	id          int
 	host        string
 	servicePort int
-	interPort   int
+	raftPort    int
 	set         *set
 }
 
@@ -52,6 +54,7 @@ type store struct {
 }
 
 type set struct {
+	version  int64
 	id       int
 	removing bool
 	nodes    map[int]*kvnode
@@ -59,13 +62,80 @@ type set struct {
 }
 
 type deployment struct {
-	sets map[int]*set
+	version int64
+	sets    map[int]*set
+}
+
+func (d deployment) queryRouteInfo(req *sproto.QueryRouteInfo) *sproto.QueryRouteInfoResp {
+	resp := &sproto.QueryRouteInfoResp{}
+	resp.Version = d.version
+	if req.Version >= d.version {
+		//路由信息没有发生过变更
+	} else {
+		var localSets []int32
+		for _, v := range d.sets {
+			localSets = append(localSets, int32(v.id))
+			if v.version > req.Version {
+				s := &sproto.RouteInfoSet{
+					SetID: int32(v.id),
+				}
+
+				for _, vv := range v.nodes {
+					s.Kvnodes = append(s.Kvnodes, &sproto.RouteInfoKvNode{
+						NodeID:      int32(vv.id),
+						Host:        vv.host,
+						ServicePort: int32(vv.servicePort),
+					})
+				}
+
+				for _, vv := range v.stores {
+					s.Stores = append(s.Stores, int32(vv.id))
+					s.Slots = append(s.Slots, vv.slots.ToJson())
+				}
+				resp.Sets = append(resp.Sets, s)
+			}
+		}
+
+		if len(localSets) > 0 && len(req.Sets) > 0 {
+			sort.Slice(localSets, func(i, j int) bool {
+				return localSets[i] < localSets[j]
+			})
+
+			sort.Slice(req.Sets, func(i, j int) bool {
+				return req.Sets[i] < req.Sets[j]
+			})
+
+			i := 0
+			j := 0
+
+			for i < len(localSets) && j < len(req.Sets) {
+				if localSets[i] == req.Sets[j] {
+					i++
+					j++
+				} else if localSets[i] > req.Sets[j] {
+					resp.RemoveSets = append(resp.RemoveSets, req.Sets[j])
+					j++
+				} else {
+					i++
+				}
+			}
+
+			if len(req.Sets[j:]) > 0 {
+				resp.RemoveSets = append(resp.RemoveSets, req.Sets[j:]...)
+			}
+
+		}
+	}
+
+	return resp
 }
 
 func (d deployment) toJson() ([]byte, error) {
 	var deploymentJson DeploymentJson
+	deploymentJson.Version = d.version
 	for _, v := range d.sets {
 		setJson := SetJson{
+			Version:  v.version,
 			SetID:    v.id,
 			Removing: v.removing,
 		}
@@ -75,7 +145,7 @@ func (d deployment) toJson() ([]byte, error) {
 				NodeID:      vv.id,
 				Host:        vv.host,
 				ServicePort: vv.servicePort,
-				InterPort:   vv.interPort,
+				RaftPort:    vv.raftPort,
 			})
 		}
 
@@ -101,8 +171,10 @@ func (d *deployment) loadFromJson(jsonBytes []byte) error {
 		return err
 	}
 
+	d.version = deploymentJson.Version
 	for _, v := range deploymentJson.Sets {
 		s := &set{
+			version:  v.Version,
 			id:       v.SetID,
 			removing: v.Removing,
 			nodes:    map[int]*kvnode{},
@@ -114,7 +186,7 @@ func (d *deployment) loadFromJson(jsonBytes []byte) error {
 				id:          vv.NodeID,
 				host:        vv.Host,
 				servicePort: vv.ServicePort,
-				interPort:   vv.InterPort,
+				raftPort:    vv.RaftPort,
 				set:         s,
 			}
 			s.nodes[vv.NodeID] = n
@@ -141,10 +213,11 @@ func (d *deployment) loadFromJson(jsonBytes []byte) error {
 
 func (d *deployment) loadFromPB(sets []*sproto.DeploymentSet) error {
 	d.sets = map[int]*set{}
+	d.version = 1
 
 	nodes := map[int32]bool{}
 	services := map[string]bool{}
-	inters := map[string]bool{}
+	rafts := map[string]bool{}
 
 	if len(sets) == 0 {
 		return errors.New("empty sets")
@@ -173,9 +246,10 @@ func (d *deployment) loadFromPB(sets []*sproto.DeploymentSet) error {
 		}
 
 		s := &set{
-			id:     int(v.SetID),
-			nodes:  map[int]*kvnode{},
-			stores: map[int]*store{},
+			version: 1,
+			id:      int(v.SetID),
+			nodes:   map[int]*kvnode{},
+			stores:  map[int]*store{},
 		}
 
 		for _, vv := range v.Nodes {
@@ -189,21 +263,21 @@ func (d *deployment) loadFromPB(sets []*sproto.DeploymentSet) error {
 				return fmt.Errorf("duplicate service:%s", service)
 			}
 
-			inter := fmt.Sprintf("%s:%d", vv.Host, vv.InterPort)
+			raft := fmt.Sprintf("%s:%d", vv.Host, vv.RaftPort)
 
-			if _, ok := inters[inter]; ok {
-				return fmt.Errorf("duplicate inter:%s", inter)
+			if _, ok := rafts[raft]; ok {
+				return fmt.Errorf("duplicate inter:%s", raft)
 			}
 
 			nodes[vv.NodeID] = true
 			services[service] = true
-			inters[inter] = true
+			rafts[raft] = true
 
 			n := &kvnode{
 				id:          int(vv.NodeID),
 				host:        vv.Host,
 				servicePort: int(vv.ServicePort),
-				interPort:   int(vv.InterPort),
+				raftPort:    int(vv.RaftPort),
 				set:         s,
 			}
 			s.nodes[int(vv.NodeID)] = n
@@ -280,7 +354,7 @@ func (p *ProposalAddSet) doApply() {
 			id:          int(v.NodeID),
 			host:        v.Host,
 			servicePort: int(v.ServicePort),
-			interPort:   int(v.InterPort),
+			raftPort:    int(v.RaftPort),
 			set:         s,
 		}
 	}
@@ -323,6 +397,8 @@ func (p *ProposalAddSet) doApply() {
 		s.stores[st.id] = st
 	}
 
+	p.pd.deployment.version++
+	s.version = p.pd.deployment.version
 	p.pd.deployment.sets[s.id] = s
 
 }
@@ -360,11 +436,13 @@ func (p *ProposalRemSet) Serilize(b []byte) []byte {
 
 func (p *ProposalRemSet) apply() {
 	delete(p.pd.deployment.sets, p.setID)
+	p.pd.deployment.version++
 	p.reply()
 }
 
 func (p *pd) replayRemSet(reader *buffer.BufferReader) error {
 	setID := int(reader.GetInt32())
 	delete(p.deployment.sets, setID)
+	p.deployment.version++
 	return nil
 }
