@@ -14,7 +14,7 @@ import (
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"net"
-	"os"
+	//"os"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -48,9 +48,13 @@ type routeInfo struct {
 	sets        map[int]*set
 	slotToStore map[int]*store
 	config      *Config
+	mainQueue   *queue.PriorityQueue
 }
 
 func (r *routeInfo) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
+
+	GetSugar().Infof("onQueryRouteInfoResp %v", resp)
+
 	change := r.version != resp.Version
 	r.version = resp.Version
 
@@ -115,6 +119,7 @@ func (r *routeInfo) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
 					pendingReq:   map[int64]*relayMsg{},
 					set:          s,
 					config:       r.config,
+					mainQueue:    r.mainQueue,
 				}
 				n.udpAddr, _ = net.ResolveUDPAddr("udp", n.service)
 				s.nodes[n.id] = n
@@ -145,6 +150,7 @@ func (r *routeInfo) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
 					pendingReq:   map[int64]*relayMsg{},
 					set:          s,
 					config:       r.config,
+					mainQueue:    r.mainQueue,
 				}
 				n.udpAddr, _ = net.ResolveUDPAddr("udp", n.service)
 				s.nodes[n.id] = n
@@ -156,6 +162,7 @@ func (r *routeInfo) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
 					waittingSend: list.New(),
 					set:          s,
 					config:       r.config,
+					mainQueue:    r.mainQueue,
 				}
 				st.slots, _ = bitmap.CreateFromJson(v.Slots[k])
 				s.stores[st.id] = st
@@ -278,15 +285,18 @@ func (g *gate) queryRouteInfo() *sproto.QueryRouteInfoResp {
 }
 
 func NewFlyGate(config *Config) *gate {
+	mainQueue := queue.NewPriorityQueue(2)
 	return &gate{
 		config:    config,
 		clients:   map[*flynet.Socket]*flynet.Socket{},
-		mainQueue: queue.NewPriorityQueue(2),
+		mainQueue: mainQueue,
 		routeInfo: routeInfo{
 			config:      config,
 			sets:        map[int]*set{},
 			slotToStore: map[int]*store{},
+			mainQueue:   mainQueue,
 		},
+		serviceAddr: fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort),
 	}
 }
 
@@ -344,7 +354,7 @@ func (g *gate) startQueryTimer(timeout time.Duration) {
 		go func() {
 			if resp := g.queryRouteInfo(); nil != resp {
 				g.routeInfo.onQueryRouteInfoResp(resp)
-				g.startQueryTimer(time.Second)
+				g.startQueryTimer(time.Second * 10)
 			} else {
 				g.startQueryTimer(time.Millisecond * 10)
 			}
@@ -356,9 +366,10 @@ func (g *gate) Start() error {
 	var err error
 	if atomic.CompareAndSwapInt32(&g.startOnce, 0, 1) {
 		config := g.config
-		if err = os.MkdirAll(config.Log.LogDir, os.ModePerm); nil != err {
+
+		/*if err = os.MkdirAll(config.Log.LogDir, os.ModePerm); nil != err {
 			return err
-		}
+		}*/
 
 		g.listener, err = cs.NewListener("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort), flynet.OutputBufLimit{
 			OutPutLimitSoft:        1024 * 1024 * 10,
@@ -374,6 +385,7 @@ func (g *gate) Start() error {
 			resp := g.queryRouteInfo()
 			if nil != resp {
 				g.routeInfo.onQueryRouteInfoResp(resp)
+				break
 			}
 		}
 
@@ -381,7 +393,7 @@ func (g *gate) Start() error {
 
 		g.startListener()
 
-		g.startQueryTimer(time.Second)
+		g.startQueryTimer(time.Second * 10)
 	}
 
 	return nil

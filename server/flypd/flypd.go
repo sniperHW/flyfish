@@ -148,7 +148,7 @@ func NewPd(config *Config, udpService string, id int, cluster string) (*pd, erro
 
 	mutilRaft := raft.NewMutilRaft()
 
-	rn := raft.NewRaftNode(mutilRaft, mainQueue, (id<<16)+1, peers, false, config.Log.LogDir, "pd")
+	rn := raft.NewRaftNode(mutilRaft, mainQueue, (id<<16)+1, peers, false, config.RaftLogDir, config.RaftLogPrefix)
 
 	p := &pd{
 		id:           id,

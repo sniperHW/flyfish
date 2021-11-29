@@ -9,7 +9,6 @@ import (
 	"github.com/sniperHW/flyfish/pkg/net/cs"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
-	"math/rand"
 	"net"
 	"runtime"
 	"strings"
@@ -55,7 +54,7 @@ type ClientConf struct {
 	CallbackQueue   EventQueueI //响应回调的事件队列
 	CBEventPriority int         //回调事件优先级
 	//cluster模式
-	Dir []string //dir服务地址
+	PD []string //pd服务地址
 	//solo模式
 	UnikeyPlacement func(string) int //返回unikey所在的store,对于连接proxy的方式无需提供,store字段由proxy填写
 	SoloService     string
@@ -64,7 +63,6 @@ type ClientConf struct {
 type Client struct {
 	sync.Mutex
 	conf        ClientConf
-	index       int
 	session     *flynet.Socket
 	pendingSend *list.List //等待发送的消息
 	waitResp    map[int64]*cmdContext
@@ -93,22 +91,25 @@ func (this *Client) doCallBack(unikey string, cb callback, a interface{}) {
 	}
 }
 
-func queryGates(dir []string) (gates []string, err error) {
-	okCh := make(chan []string)
-	uu := make([]*flynet.Udp, len(dir))
-	for k, v := range dir {
+func QueryGate(pd []string) (gate string, err error) {
+	okCh := make(chan string)
+	uu := make([]*flynet.Udp, len(pd))
+	for k, v := range pd {
 		go func(i int, s string) {
 			u, err := flynet.NewUdp(fmt.Sprintf(":0"), snet.Pack, snet.Unpack)
 			if nil == err {
 				addr, err := net.ResolveUDPAddr("udp", s)
 				if nil == err {
-					u.SendTo(addr, &sproto.QueryGateList{})
+					u.SendTo(addr, &sproto.GetFlyGate{})
 					uu[i] = u
 					recvbuff := make([]byte, 4096)
 					_, r, err := u.ReadFrom(recvbuff)
 					if nil == err {
-						if resp, ok := r.(*sproto.GateList); ok {
-							okCh <- resp.List
+						if resp, ok := r.(*sproto.GetFlyGateResp); ok {
+							select {
+							case okCh <- resp.GateService:
+							default:
+							}
 						}
 					}
 				} else {
@@ -124,7 +125,7 @@ func queryGates(dir []string) (gates []string, err error) {
 
 	select {
 	case v := <-okCh:
-		gates = v
+		gate = v
 	case <-ticker.C:
 		err = errors.New("timeout")
 
@@ -187,28 +188,23 @@ func (this *Client) onConnected(session *flynet.Socket) {
 }
 
 func (this *Client) connectCluster() bool {
-	gates, err := queryGates(this.conf.Dir)
+
+	gate, err := QueryGate(this.conf.PD)
 
 	if nil != err {
 		return false
 	}
 
-	if len(gates) == 0 {
+	if gate == "" {
 		return false
 	}
 
-	GetSugar().Infof("got gates%v", gates)
+	GetSugar().Infof("got gate%v", gate)
 
-	this.index = rand.Int() % len(gates)
-
-	for i := 0; i < len(gates); i++ {
-		session, err := cs.NewConnector("tcp", gates[this.index], outputBufLimit).Dial(time.Second * 5)
-		if nil == err {
-			this.onConnected(session)
-			return true
-		} else {
-			this.index = (this.index + 1) % len(gates)
-		}
+	session, err := cs.NewConnector("tcp", gate, outputBufLimit).Dial(time.Second * 5)
+	if nil == err {
+		this.onConnected(session)
+		return true
 	}
 
 	return false
@@ -314,8 +310,8 @@ func OpenClient(conf ClientConf) (*Client, error) {
 		waitResp:    map[int64]*cmdContext{},
 	}
 
-	if "" == conf.SoloService && len(conf.Dir) == 0 {
-		return nil, errors.New("cluster mode,but dir empty")
+	if "" == conf.SoloService && len(conf.PD) == 0 {
+		return nil, errors.New("cluster mode,but pd empty")
 	} else {
 		return c, nil
 	}

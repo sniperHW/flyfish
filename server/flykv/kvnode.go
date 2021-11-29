@@ -15,7 +15,7 @@ import (
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"github.com/sniperHW/flyfish/server/slot"
 	"net"
-	"os"
+	//"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -341,7 +341,7 @@ func MakeUnikeyPlacement(stores []int) (fn func(string) int) {
 	return
 }
 
-func (this *kvnode) getKvnodeBootInfo(serviceHost string, pd []*net.UDPAddr) *sproto.KvnodeBootResp {
+func (this *kvnode) getKvnodeBootInfo(pd []*net.UDPAddr) *sproto.KvnodeBootResp {
 	var resp *sproto.KvnodeBootResp
 
 	for {
@@ -352,7 +352,7 @@ func (this *kvnode) getKvnodeBootInfo(serviceHost string, pd []*net.UDPAddr) *sp
 			if nil == err {
 				uu[k] = u
 				go func(u *fnet.Udp, pdAddr *net.UDPAddr) {
-					u.SendTo(pdAddr, &sproto.KvnodeBoot{NodeID: int32(this.id), Host: serviceHost})
+					u.SendTo(pdAddr, &sproto.KvnodeBoot{NodeID: int32(this.id)})
 					recvbuff := make([]byte, 65535)
 					_, r, err := u.ReadFrom(recvbuff)
 					if nil == err {
@@ -402,10 +402,6 @@ func (this *kvnode) Start() error {
 
 		config := this.config
 
-		if err = os.MkdirAll(config.Log.LogDir, os.ModePerm); nil != err {
-			return err
-		}
-
 		if config.Mode == "solo" {
 			this.selfUrl = config.SoloConfig.RaftUrl
 
@@ -415,7 +411,7 @@ func (this *kvnode) Start() error {
 				return err
 			}
 
-			service := fmt.Sprintf("%s:%d", config.ServiceHost, config.SoloConfig.ServicePort)
+			service := fmt.Sprintf("%s:%d", config.SoloConfig.ServiceHost, config.SoloConfig.ServicePort)
 
 			this.listener, err = cs.NewListener("tcp", service, outputBufLimit, verifyLogin)
 
@@ -439,7 +435,7 @@ func (this *kvnode) Start() error {
 				}
 			}
 
-			GetSugar().Infof("flyfish start:%s:%d", config.ServiceHost, config.SoloConfig.ServicePort)
+			GetSugar().Infof("flyfish start:%s:%d", config.SoloConfig.ServiceHost, config.SoloConfig.ServicePort)
 
 		} else {
 
@@ -456,15 +452,15 @@ func (this *kvnode) Start() error {
 				}
 			}
 
-			resp := this.getKvnodeBootInfo(config.ServiceHost, pdAddr)
+			resp := this.getKvnodeBootInfo(pdAddr)
 
 			if !resp.Ok {
 				return errors.New(resp.Reason)
 			}
 
-			this.selfUrl = fmt.Sprintf("http://%s:%d", config.ServiceHost, resp.RaftPort)
+			this.selfUrl = fmt.Sprintf("http://%s:%d", resp.ServiceHost, resp.RaftPort)
 
-			err = this.initUdp(fmt.Sprintf("%s:%d", config.ServiceHost, resp.ServicePort))
+			err = this.initUdp(fmt.Sprintf("%s:%d", resp.ServiceHost, resp.ServicePort))
 
 			if nil != err {
 				return err
@@ -476,7 +472,7 @@ func (this *kvnode) Start() error {
 				return err
 			}
 
-			service := fmt.Sprintf("%s:%d", config.ServiceHost, resp.ServicePort)
+			service := fmt.Sprintf("%s:%d", resp.ServiceHost, resp.ServicePort)
 
 			this.listener, err = cs.NewListener("tcp", service, outputBufLimit, verifyLogin)
 
@@ -502,7 +498,7 @@ func (this *kvnode) Start() error {
 				}
 			}
 
-			GetSugar().Infof("flyfish start:%s:%d", config.ServiceHost, resp.ServicePort)
+			GetSugar().Infof("flyfish start:%s:%d", resp.ServiceHost, resp.ServicePort)
 		}
 
 	}

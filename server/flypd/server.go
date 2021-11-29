@@ -468,16 +468,9 @@ func (p *pd) onKvnodeBoot(from *net.UDPAddr, m proto.Message) {
 		return
 	}
 
-	if node.host != msg.Host {
-		p.udp.SendTo(from, &sproto.KvnodeBootResp{
-			Ok:     false,
-			Reason: fmt.Sprintf("node:%d host not match(require:%s)", msg.NodeID, node.host),
-		})
-		return
-	}
-
 	resp := &sproto.KvnodeBootResp{
 		Ok:          true,
+		ServiceHost: node.host,
 		ServicePort: int32(node.servicePort),
 		RaftPort:    int32(node.raftPort),
 	}

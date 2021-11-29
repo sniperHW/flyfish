@@ -90,6 +90,7 @@ func (s *store) queryLeader() {
 						u.SendTo(n.udpAddr, &sproto.QueryLeader{Store: int32(s.id)})
 						uu[i] = u
 						_, r, err := u.ReadFrom(make([]byte, 256))
+						GetSugar().Infof("%v resp %v %v", n.udpAddr, r, err)
 						if nil == err {
 							if resp, ok := r.(*sproto.QueryLeaderResp); ok && 0 != resp.Leader {
 								select {
@@ -124,10 +125,11 @@ func (s *store) queryLeader() {
 			}
 
 			s.mainQueue.ForceAppend(1, func() {
+				s.queryingLeader = false
 				if leaderNode, ok := s.set.nodes[leader]; ok {
-					s.queryingLeader = false
 					s.leaderVersion++
 					s.leader = leaderNode
+					GetSugar().Infof("store:%d got leader%d", s.id, leader)
 					for v := s.waittingSend.Front(); nil != v; v = s.waittingSend.Front() {
 						req := s.waittingSend.Remove(v).(*relayMsg)
 						req.leaderVersion = s.leaderVersion

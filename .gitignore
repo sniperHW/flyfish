@@ -25,3 +25,4 @@ coverage.out
 test_dbconf.toml
 flyfish.code-workspace
 raftLog/
+testRaftLog/

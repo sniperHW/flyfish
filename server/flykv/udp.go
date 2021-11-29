@@ -19,11 +19,18 @@ func (this *kvnode) processUdpMsg(from *net.UDPAddr, m proto.Message) {
 		this.muS.RLock()
 		store, ok := this.stores[int(m.(*sproto.QueryLeader).GetStore())]
 		this.muS.RUnlock()
-		if !ok {
-			this.udpConn.SendTo(from, &sproto.QueryLeaderResp{Leader: int32(store.getLeaderNodeID())})
+
+		var leader int32
+
+		if ok {
+			leader = int32(store.getLeaderNodeID())
 		} else {
-			this.udpConn.SendTo(from, &sproto.QueryLeaderResp{Leader: 0})
+			GetSugar().Infof("store:%d not in %d", m.(*sproto.QueryLeader).GetStore(), this.id)
 		}
+
+		GetSugar().Infof("store:%d on QueryLeader leader:%d", m.(*sproto.QueryLeader).GetStore(), leader)
+
+		this.udpConn.SendTo(from, &sproto.QueryLeaderResp{Leader: leader})
 	case *sproto.NotifyAddNode, *sproto.NotifyRemNode:
 		var stores []int32
 		switch m.(type) {

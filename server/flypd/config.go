@@ -25,7 +25,9 @@ func LoadConfig(path string) (*Config, error) {
 }
 
 type Config struct {
-	MainQueueMaxSize int //主处理队列容量上限,超过上限客户端的命令无法入列
+	MainQueueMaxSize int    //主处理队列容量上限,超过上限客户端的命令无法入列
+	RaftLogDir       string //raft日志存放目录
+	RaftLogPrefix    string
 	Log              struct {
 		MaxLogfileSize  int
 		LogDir          string

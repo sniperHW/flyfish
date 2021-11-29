@@ -140,7 +140,6 @@ message remNodeResp  {
 
 message kvnodeBoot {
   optional int32  nodeID      = 1;
-  optional string host        = 2;
 }
 
 message storeInfo {
@@ -152,9 +151,10 @@ message storeInfo {
 message kvnodeBootResp {
   optional bool   ok           = 1;
   optional string reason       = 2;
-  optional int32  servicePort  = 3;
-  optional int32  raftPort     = 4;   
-  repeated storeInfo stores    = 5;
+  optional string serviceHost  = 3;
+  optional int32  servicePort  = 4;
+  optional int32  raftPort     = 5;   
+  repeated storeInfo stores    = 6;
 }
 
 message notifyAddNode {
