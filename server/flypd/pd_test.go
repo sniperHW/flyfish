@@ -196,6 +196,8 @@ func TestPd(t *testing.T) {
 
 	p, _ := NewPd(conf, "localhost:8110", 1, "1@http://localhost:8110")
 
+	p.Start()
+
 	for {
 		if p.isLeader() && p.ready {
 			break
@@ -217,6 +219,8 @@ func TestPd(t *testing.T) {
 	p.Stop()
 
 	p, _ = NewPd(conf, "localhost:8110", 1, "1@http://localhost:8110")
+
+	p.Start()
 
 	for {
 		if p.isLeader() && p.ready {

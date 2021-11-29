@@ -98,7 +98,6 @@ func (f *flygateMgr) onQueryRouteInfo(gateService string) {
 
 type pd struct {
 	id           int
-	raftID       int
 	leader       int
 	rn           *raft.RaftNode
 	mutilRaft    *raft.MutilRaft
@@ -114,48 +113,20 @@ type pd struct {
 	wait         sync.WaitGroup
 	ready        bool
 	flygateMgr   flygateMgr
+	raftCluster  string
+	config       *Config
+	udpService   string
 }
 
-func NewPd(config *Config, udpService string, id int, cluster string) (*pd, error) {
-	clusterArray := strings.Split(cluster, ",")
-
-	peers := map[int]string{}
-
-	var selfUrl string
-
-	for _, v := range clusterArray {
-		t := strings.Split(v, "@")
-		if len(t) != 2 {
-			panic("invaild peer")
-		}
-		i, err := strconv.Atoi(t[0])
-		if nil != err {
-			panic(err)
-		}
-		peers[i] = t[1]
-		if i == id {
-			selfUrl = t[1]
-		}
-	}
-
-	if selfUrl == "" {
-		return nil, errors.New("cluster not contain self")
-	}
+func NewPd(config *Config, udpService string, id int, cluster string) *pd {
 
 	mainQueue := applicationQueue{
 		q: queue.NewPriorityQueue(2, config.MainQueueMaxSize),
 	}
 
-	mutilRaft := raft.NewMutilRaft()
-
-	rn := raft.NewRaftNode(mutilRaft, mainQueue, (id<<16)+1, peers, false, config.RaftLogDir, config.RaftLogPrefix)
-
 	p := &pd{
 		id:           id,
-		rn:           rn,
 		mainque:      mainQueue,
-		raftID:       rn.ID(),
-		mutilRaft:    mutilRaft,
 		msgHandler:   map[reflect.Type]func(*net.UDPAddr, proto.Message){},
 		addingNode:   map[int]*AddingNode{},
 		removingNode: map[int]*RemovingNode{},
@@ -164,23 +135,14 @@ func NewPd(config *Config, udpService string, id int, cluster string) (*pd, erro
 			flygateMap: map[string]*flygate{},
 			mainque:    mainQueue,
 		},
+		raftCluster: cluster,
+		config:      config,
+		udpService:  udpService,
 	}
 
 	p.initMsgHandler()
 
-	if err := p.startUdpService(udpService); nil != err {
-		rn.Stop()
-		return nil, err
-	}
-
-	GetSugar().Infof("mutilRaft serve on:%s", selfUrl)
-
-	go p.mutilRaft.Serve(selfUrl)
-
-	p.wait.Add(1)
-	go p.serve()
-
-	return p, nil
+	return p
 }
 
 func (q applicationQueue) AppendHighestPriotiryItem(m interface{}) {
@@ -210,16 +172,61 @@ func (p *pd) getNode(nodeID int32) *kvnode {
 	return nil
 }
 
+func (p *pd) Start() error {
+	clusterArray := strings.Split(p.raftCluster, ",")
+
+	peers := map[int]string{}
+
+	var selfUrl string
+
+	for _, v := range clusterArray {
+		t := strings.Split(v, "@")
+		if len(t) != 2 {
+			panic("invaild peer")
+		}
+		i, err := strconv.Atoi(t[0])
+		if nil != err {
+			panic(err)
+		}
+		peers[i] = t[1]
+		if i == p.id {
+			selfUrl = t[1]
+		}
+	}
+
+	if selfUrl == "" {
+		return errors.New("cluster not contain self")
+	}
+
+	p.mutilRaft = raft.NewMutilRaft()
+
+	p.rn = raft.NewRaftNode(p.mutilRaft, p.mainque, (p.id<<16)+1, peers, false, p.config.RaftLogDir, p.config.RaftLogPrefix)
+
+	if err := p.startUdpService(); nil != err {
+		p.rn.Stop()
+		return err
+	}
+
+	GetSugar().Infof("mutilRaft serve on:%s", selfUrl)
+
+	go p.mutilRaft.Serve(selfUrl)
+
+	p.wait.Add(1)
+	go p.serve()
+
+	return nil
+}
+
 func (p *pd) isLeader() bool {
-	return p.leader == p.raftID
+	return p.leader == p.rn.ID()
 }
 
 func (p *pd) issueProposal(proposal raft.Proposal) error {
 	return p.rn.IssueProposal(proposal)
 }
 
-func (p *pd) startUdpService(udpService string) error {
-	udp, err := flynet.NewUdp(udpService, snet.Pack, snet.Unpack)
+func (p *pd) startUdpService() error {
+	udp, err := flynet.NewUdp(p.udpService, snet.Pack, snet.Unpack)
 	if nil != err {
 		return err
 	}
@@ -384,11 +391,11 @@ func (p *pd) serve() {
 			case raft.LeaderChange:
 				oldLeader := p.leader
 				p.leader = v.(raft.LeaderChange).Leader
-				if p.leader == p.raftID {
+				if p.leader == p.rn.ID() {
 					p.onBecomeLeader()
 				}
 
-				if oldLeader == p.raftID && !p.isLeader() {
+				if oldLeader == p.rn.ID() && !p.isLeader() {
 					p.onLeaderDemote()
 				}
 

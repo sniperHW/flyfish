@@ -1,4 +1,4 @@
-//go test -covermode=count -v -coverprofile=coverage.out -run=.
+//go test -coverpkg=github.com/sniperHW/flyfish/server/flygate,github.com/sniperHW/flyfish/server/flypd,github.com/sniperHW/flyfish/server/flykv -covermode=count -v -coverprofile=coverage.out -run=.
 //go tool cover -html=coverage.out
 
 package integrationTest
@@ -163,7 +163,9 @@ func TestFlygate(t *testing.T) {
 
 	conf, _ := flypd.LoadConfigStr(configStr)
 
-	pd, _ := flypd.NewPd(conf, "localhost:8110", 1, "1@http://localhost:8110")
+	pd := flypd.NewPd(conf, "localhost:8110", 1, "1@http://localhost:8110")
+
+	pd.Start()
 
 	for {
 		if !installDeployment(t) {
