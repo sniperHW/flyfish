@@ -114,9 +114,10 @@ func (p *ProposalNotifySlotTransOutResp) apply() {
 			st.slots.Clear(int(t.Slot))
 			p.pd.deployment.version++
 			s.version = p.pd.deployment.version
-			//if t.timer == nil || t.timer.Stop() {
-			//	t.notify()
-			//}
+			//迁出已经完成，通知迁入
+			if t.timer == nil || t.timer.Stop() {
+				t.notify()
+			}
 		}
 	}
 }
