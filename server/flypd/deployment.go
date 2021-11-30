@@ -11,8 +11,9 @@ import (
 	"sort"
 )
 
-var StorePerSet int = 5  //每个set含有多少个store
-var KvNodePerSet int = 1 //每个set含有多少kvnode
+var StorePerSet int = 5          //每个set含有多少个store
+var KvNodePerSet int = 1         //每个set含有多少kvnode
+var CurrentTransferCount int = 5 //最大并发transfer的slot数量
 
 type KvNodeJson struct {
 	NodeID      int
@@ -27,11 +28,11 @@ type StoreJson struct {
 }
 
 type SetJson struct {
-	Version  int64
-	SetID    int
-	KvNodes  []KvNodeJson
-	Stores   []StoreJson
-	Removing bool //set是否处于移除过程中
+	Version   int64
+	SetID     int
+	KvNodes   []KvNodeJson
+	Stores    []StoreJson
+	MarkClear bool //需要将其上slot全部移走
 }
 
 type DeploymentJson struct {
@@ -48,17 +49,29 @@ type kvnode struct {
 }
 
 type store struct {
-	id    int
-	slots *bitmap.Bitmap
-	set   *set
+	id           int
+	slots        *bitmap.Bitmap
+	set          *set
+	SlotOutCount int //待迁出的slot数量
+	SlotInCount  int //待迁入的slot数量
 }
 
 type set struct {
-	version  int64
-	id       int
-	removing bool
-	nodes    map[int]*kvnode
-	stores   map[int]*store
+	version      int64
+	id           int
+	markClear    bool
+	nodes        map[int]*kvnode
+	stores       map[int]*store
+	SlotOutCount int //待迁出的slot数量
+	SlotInCount  int //待迁入的slot数量
+}
+
+func (s *set) getTotalSlotCount() int {
+	totalSlotCount := 0
+	for _, v := range s.stores {
+		totalSlotCount += len(v.slots.GetOpenBits())
+	}
+	return totalSlotCount
 }
 
 type deployment struct {
@@ -135,9 +148,9 @@ func (d deployment) toJson() ([]byte, error) {
 	deploymentJson.Version = d.version
 	for _, v := range d.sets {
 		setJson := SetJson{
-			Version:  v.version,
-			SetID:    v.id,
-			Removing: v.removing,
+			Version:   v.version,
+			SetID:     v.id,
+			MarkClear: v.markClear,
 		}
 
 		for _, vv := range v.nodes {
@@ -174,11 +187,11 @@ func (d *deployment) loadFromJson(jsonBytes []byte) error {
 	d.version = deploymentJson.Version
 	for _, v := range deploymentJson.Sets {
 		s := &set{
-			version:  v.Version,
-			id:       v.SetID,
-			removing: v.Removing,
-			nodes:    map[int]*kvnode{},
-			stores:   map[int]*store{},
+			version:   v.Version,
+			id:        v.SetID,
+			markClear: v.MarkClear,
+			nodes:     map[int]*kvnode{},
+			stores:    map[int]*store{},
 		}
 
 		for _, vv := range v.KvNodes {
@@ -406,6 +419,8 @@ func (p *ProposalAddSet) doApply() {
 func (p *ProposalAddSet) apply() {
 	p.doApply()
 	p.reply()
+	//添加新set的操作通过，开始执行slot平衡
+	p.pd.slotBalance()
 }
 
 func (p *pd) replayAddSet(reader *buffer.BufferReader) error {
@@ -444,5 +459,33 @@ func (p *pd) replayRemSet(reader *buffer.BufferReader) error {
 	setID := int(reader.GetInt32())
 	delete(p.deployment.sets, setID)
 	p.deployment.version++
+	return nil
+}
+
+type ProposalSetMarkClear struct {
+	*proposalBase
+	setID int
+}
+
+func (p *ProposalSetMarkClear) Serilize(b []byte) []byte {
+	b = buffer.AppendByte(b, byte(proposalSetMarkClear))
+	return buffer.AppendInt32(b, int32(p.setID))
+}
+
+func (p *ProposalSetMarkClear) apply() {
+	if set, ok := p.pd.deployment.sets[p.setID]; ok && !set.markClear {
+		set.markClear = true
+		p.pd.markClearSet[p.setID] = set
+		p.pd.slotBalance()
+	}
+	p.reply()
+}
+
+func (p *pd) replaySetMarkClear(reader *buffer.BufferReader) error {
+	setID := int(reader.GetInt32())
+	if set, ok := p.deployment.sets[setID]; ok && !set.markClear {
+		set.markClear = true
+		p.markClearSet[setID] = set
+	}
 	return nil
 }

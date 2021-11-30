@@ -16,6 +16,7 @@ const (
 	proposalNotifySlotTransInResp  = 8
 	proposalAddSet                 = 9
 	proposalRemSet                 = 10
+	proposalSetMarkClear           = 11
 )
 
 type proposalBase struct {
@@ -69,6 +70,8 @@ func (p *pd) replayProposal(proposal []byte) error {
 		return p.replayAddSet(&reader)
 	case proposalRemSet:
 		return p.replayRemSet(&reader)
+	case proposalSetMarkClear:
+		return p.replaySetMarkClear(&reader)
 	default:
 		return errors.New("invaild proposal type")
 	}

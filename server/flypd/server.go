@@ -131,6 +131,60 @@ func (p *pd) onRemSet(from *net.UDPAddr, m proto.Message) {
 
 }
 
+func (p *pd) onSetMarkClear(from *net.UDPAddr, m proto.Message) {
+	msg := m.(*sproto.SetMarkClear)
+	if nil == p.deployment {
+		p.udp.SendTo(from, &sproto.SetMarkClearResp{
+			Ok:     false,
+			Reason: "no deployment",
+		})
+		return
+	}
+
+	s, ok := p.deployment.sets[int(msg.SetID)]
+	if !ok {
+		p.udp.SendTo(from, &sproto.SetMarkClearResp{
+			Ok:     false,
+			Reason: "set not exists",
+		})
+		return
+	}
+
+	if s.markClear {
+		p.udp.SendTo(from, &sproto.SetMarkClearResp{
+			Ok: true,
+		})
+		return
+	}
+
+	err := p.issueProposal(&ProposalSetMarkClear{
+		setID: int(msg.SetID),
+		proposalBase: &proposalBase{
+			pd: p,
+			reply: func(err ...error) {
+				if len(err) == 0 {
+					p.udp.SendTo(from, &sproto.SetMarkClearResp{
+						Ok: true,
+					})
+				} else {
+					p.udp.SendTo(from, &sproto.SetMarkClearResp{
+						Ok:     false,
+						Reason: err[0].Error(),
+					})
+				}
+			},
+		},
+	})
+
+	if nil != err {
+		p.udp.SendTo(from, &sproto.SetMarkClearResp{
+			Ok:     false,
+			Reason: err.Error(),
+		})
+	}
+
+}
+
 func (p *pd) onAddSet(from *net.UDPAddr, m proto.Message) {
 	msg := m.(*sproto.AddSet)
 	if nil == p.deployment {
@@ -517,6 +571,7 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.InstallDeployment{}, p.onInstallDeployment)
 	p.registerMsgHandler(&sproto.AddSet{}, p.onAddSet)
 	p.registerMsgHandler(&sproto.RemSet{}, p.onRemSet)
+	p.registerMsgHandler(&sproto.SetMarkClear{}, p.onSetMarkClear)
 	p.registerMsgHandler(&sproto.AddNode{}, p.onAddNode)
 	p.registerMsgHandler(&sproto.NotifyAddNodeResp{}, p.onNotifyAddNodeResp)
 	p.registerMsgHandler(&sproto.RemNode{}, p.onRemNode)

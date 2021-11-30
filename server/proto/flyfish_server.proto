@@ -28,6 +28,8 @@ enum ServerCmdType {
   AddSetResp                    = 108;
   RemSet                        = 109;
   RemSetResp                    = 110;
+  SetMarkClear                  = 111;
+  SetMarkClearResp              = 112;
 
 
   //kvnode <-> pd
@@ -215,6 +217,16 @@ message remSet {
 }
 
 message   remSetResp {
+  optional bool   ok           = 1;
+  optional string reason       = 2;
+}
+
+
+message  setMarkClear{
+  optional int32 setID         = 1;
+}
+
+message  setMarkClearResp{
   optional bool   ok           = 1;
   optional string reason       = 2;
 }

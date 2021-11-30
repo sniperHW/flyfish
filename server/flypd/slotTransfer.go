@@ -41,7 +41,8 @@ func (tst *TransSlotTransfer) notify() {
 			})
 		}
 	}
-	tst.timer = time.AfterFunc(time.Second*3, func() {
+
+	tst.timer = time.AfterFunc(time.Second, func() {
 		tst.pd.mainque.AppendHighestPriotiryItem(tst)
 	})
 }
@@ -63,6 +64,15 @@ func (p *ProposalBeginSlotTransfer) Serilize(b []byte) []byte {
 func (p *ProposalBeginSlotTransfer) apply() {
 	if _, ok := p.pd.slotTransfer[p.trans.Slot]; !ok {
 		p.pd.slotTransfer[p.trans.Slot] = p.trans
+
+		storeIn := p.pd.deployment.sets[p.trans.SetIn].stores[p.trans.StoreTransferIn]
+		storeIn.SlotInCount++
+		storeIn.set.SlotInCount++
+
+		storeOut := p.pd.deployment.sets[p.trans.SetOut].stores[p.trans.StoreTransferOut]
+		storeOut.SlotOutCount++
+		storeOut.set.SlotOutCount++
+
 		p.trans.notify()
 	}
 
@@ -98,13 +108,15 @@ func (p *ProposalNotifySlotTransOutResp) apply() {
 		if !t.StoreTransferOutOk {
 			t.StoreTransferOutOk = true
 			s := p.pd.deployment.sets[t.SetOut]
+			s.SlotOutCount--
 			st := s.stores[t.StoreTransferOut]
+			st.SlotOutCount--
 			st.slots.Clear(int(t.Slot))
 			p.pd.deployment.version++
 			s.version = p.pd.deployment.version
-			if t.timer == nil || t.timer.Stop() {
-				t.notify()
-			}
+			//if t.timer == nil || t.timer.Stop() {
+			//	t.notify()
+			//}
 		}
 	}
 }
@@ -136,13 +148,16 @@ func (p *ProposalNotifySlotTransInResp) apply() {
 	if t, ok := p.pd.slotTransfer[p.slot]; ok {
 		delete(p.pd.slotTransfer, p.slot)
 		s := p.pd.deployment.sets[t.SetIn]
+		s.SlotInCount--
 		st := s.stores[t.StoreTransferIn]
+		st.SlotInCount--
 		st.slots.Set(int(t.Slot))
 		p.pd.deployment.version++
 		s.version = p.pd.deployment.version
 		if nil != t.timer {
 			t.timer.Stop()
 		}
+		p.pd.slotBalance()
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	snet "github.com/sniperHW/flyfish/server/net"
+	"github.com/sniperHW/flyfish/server/slot"
 	"go.etcd.io/etcd/raft/raftpb"
 	"net"
 	"reflect"
@@ -107,6 +108,7 @@ type pd struct {
 	addingNode   map[int]*AddingNode
 	removingNode map[int]*RemovingNode
 	slotTransfer map[int]*TransSlotTransfer
+	markClearSet map[int]*set
 	msgHandler   map[reflect.Type]func(*net.UDPAddr, proto.Message)
 	stoponce     int32
 	startonce    int32
@@ -131,6 +133,7 @@ func NewPd(config *Config, udpService string, id int, cluster string) *pd {
 		addingNode:   map[int]*AddingNode{},
 		removingNode: map[int]*RemovingNode{},
 		slotTransfer: map[int]*TransSlotTransfer{},
+		markClearSet: map[int]*set{},
 		flygateMgr: flygateMgr{
 			flygateMap: map[string]*flygate{},
 			mainque:    mainQueue,
@@ -170,6 +173,77 @@ func (p *pd) getNode(nodeID int32) *kvnode {
 		}
 	}
 	return nil
+}
+
+func (p *pd) slotBalance() {
+	if len(p.slotTransfer) >= CurrentTransferCount {
+		return
+	}
+
+	var outStore *store
+
+	if len(p.markClearSet) > 0 {
+		for _, v := range p.markClearSet {
+			if v.getTotalSlotCount()-v.SlotOutCount > 0 {
+				for _, vv := range v.stores {
+					if len(vv.slots.GetOpenBits())-vv.SlotOutCount > 0 {
+						outStore = vv
+						break
+					}
+				}
+			}
+			if nil != outStore {
+				break
+			}
+		}
+	}
+
+	setAverageSlotCount := slot.SlotCount / (len(p.deployment.sets) - len(p.markClearSet))
+
+	storeAverageSlotCount := slot.SlotCount / ((len(p.deployment.sets) - len(p.markClearSet)) * StorePerSet)
+
+	if nil == outStore {
+		for _, v := range p.deployment.sets {
+			if !v.markClear && v.getTotalSlotCount()-v.SlotOutCount > setAverageSlotCount+1 {
+				for _, vv := range v.stores {
+					if len(vv.slots.GetOpenBits())-vv.SlotOutCount > storeAverageSlotCount+1 {
+						outStore = vv
+						break
+					}
+				}
+			}
+			if nil != outStore {
+				break
+			}
+		}
+	}
+
+	if nil != outStore {
+		var inStore *store
+		for _, v := range p.deployment.sets {
+			if !v.markClear && v.getTotalSlotCount()-v.SlotInCount < setAverageSlotCount+1 {
+				for _, vv := range v.stores {
+					if len(vv.slots.GetOpenBits())-vv.SlotInCount < storeAverageSlotCount+1 {
+						inStore = vv
+						break
+					}
+				}
+			}
+			if nil != inStore {
+				break
+			}
+		}
+
+		if nil != inStore && nil != outStore {
+			//从outStore选出一个slot
+			for _, v := range outStore.slots.GetOpenBits() {
+				if _, ok := p.slotTransfer[v]; !ok {
+					p.beginSlotTransfer(v, outStore.set.id, outStore.id, inStore.set.id, inStore.id)
+					break
+				}
+			}
+		}
+	}
 }
 
 func (p *pd) Start() error {
@@ -257,6 +331,28 @@ func (p *pd) startUdpService() error {
 }
 
 func (p *pd) onBecomeLeader() {
+	//重置slotBalance相关的临时数据
+	for _, v := range p.deployment.sets {
+		v.SlotOutCount = 0
+		v.SlotInCount = 0
+		for _, vv := range v.stores {
+			vv.SlotOutCount = 0
+			vv.SlotInCount = 0
+			for _, vvv := range vv.slots.GetOpenBits() {
+				if t, ok := p.slotTransfer[vvv]; ok {
+					if vvv == t.StoreTransferIn {
+						vv.SlotInCount++
+						v.SlotInCount++
+					} else if vvv == t.StoreTransferOut {
+						vv.SlotOutCount++
+						v.SlotOutCount++
+					}
+				}
+			}
+		}
+	}
+
+	p.slotBalance()
 
 	for _, v := range p.addingNode {
 		p.sendNotifyAddNode(v)
@@ -326,11 +422,6 @@ func (p *pd) processCommited(commited raft.Committed) {
 		snapshotNotify.Notify(snapshot)
 	}
 }
-
-//func snapMerge(snaps ...[]byte) ([]byte, error) {
-//pd每次都是全量快照，无需合并，返回最后一个即可
-//	return snaps[len(snaps)-1], nil
-//}
 
 func (p *pd) onAddNodeTimeout(an *AddingNode) {
 	ann := p.addingNode[an.NodeID]
