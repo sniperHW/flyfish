@@ -98,26 +98,27 @@ func (f *flygateMgr) onQueryRouteInfo(gateService string) {
 }
 
 type pd struct {
-	id           int
-	leader       int
-	rn           *raft.RaftNode
-	mutilRaft    *raft.MutilRaft
-	mainque      applicationQueue
-	udp          *flynet.Udp
-	deployment   *deployment
-	addingNode   map[int]*AddingNode
-	removingNode map[int]*RemovingNode
-	slotTransfer map[int]*TransSlotTransfer
-	markClearSet map[int]*set
-	msgHandler   map[reflect.Type]func(*net.UDPAddr, proto.Message)
-	stoponce     int32
-	startonce    int32
-	wait         sync.WaitGroup
-	ready        bool
-	flygateMgr   flygateMgr
-	raftCluster  string
-	config       *Config
-	udpService   string
+	id              int
+	leader          int
+	rn              *raft.RaftNode
+	mutilRaft       *raft.MutilRaft
+	mainque         applicationQueue
+	udp             *flynet.Udp
+	deployment      *deployment
+	addingNode      map[int]*AddingNode
+	removingNode    map[int]*RemovingNode
+	slotTransfer    map[int]*TransSlotTransfer
+	markClearSet    map[int]*set
+	msgHandler      map[reflect.Type]func(*net.UDPAddr, proto.Message)
+	stoponce        int32
+	startonce       int32
+	wait            sync.WaitGroup
+	ready           bool
+	flygateMgr      flygateMgr
+	raftCluster     string
+	config          *Config
+	udpService      string
+	onBalanceFinish func()
 }
 
 func NewPd(config *Config, udpService string, id int, cluster string) *pd {
@@ -239,11 +240,16 @@ func (p *pd) slotBalance() {
 			for _, v := range outStore.slots.GetOpenBits() {
 				if _, ok := p.slotTransfer[v]; !ok {
 					p.beginSlotTransfer(v, outStore.set.id, outStore.id, inStore.set.id, inStore.id)
-					break
+					return
 				}
 			}
 		}
 	}
+
+	if len(p.slotTransfer) == 0 && nil != p.onBalanceFinish {
+		p.onBalanceFinish()
+	}
+
 }
 
 func (p *pd) Start() error {
@@ -331,45 +337,49 @@ func (p *pd) startUdpService() error {
 }
 
 func (p *pd) onBecomeLeader() {
-	//重置slotBalance相关的临时数据
-	for _, v := range p.deployment.sets {
-		v.SlotOutCount = 0
-		v.SlotInCount = 0
-		for _, vv := range v.stores {
-			vv.SlotOutCount = 0
-			vv.SlotInCount = 0
-			for _, vvv := range vv.slots.GetOpenBits() {
-				if t, ok := p.slotTransfer[vvv]; ok {
-					if vvv == t.StoreTransferIn {
-						vv.SlotInCount++
-						v.SlotInCount++
-					} else if vvv == t.StoreTransferOut {
-						vv.SlotOutCount++
-						v.SlotOutCount++
+
+	if nil != p.deployment {
+
+		//重置slotBalance相关的临时数据
+		for _, v := range p.deployment.sets {
+			v.SlotOutCount = 0
+			v.SlotInCount = 0
+			for _, vv := range v.stores {
+				vv.SlotOutCount = 0
+				vv.SlotInCount = 0
+				for _, vvv := range vv.slots.GetOpenBits() {
+					if t, ok := p.slotTransfer[vvv]; ok {
+						if vvv == t.StoreTransferIn {
+							vv.SlotInCount++
+							v.SlotInCount++
+						} else if vvv == t.StoreTransferOut {
+							vv.SlotOutCount++
+							v.SlotOutCount++
+						}
 					}
 				}
 			}
 		}
-	}
 
-	p.slotBalance()
+		p.slotBalance()
 
-	for _, v := range p.addingNode {
-		p.sendNotifyAddNode(v)
-		v.timer = time.AfterFunc(time.Second*3, func() {
-			p.mainque.AppendHighestPriotiryItem(v)
-		})
-	}
+		for _, v := range p.addingNode {
+			p.sendNotifyAddNode(v)
+			v.timer = time.AfterFunc(time.Second*3, func() {
+				p.mainque.AppendHighestPriotiryItem(v)
+			})
+		}
 
-	for _, v := range p.removingNode {
-		p.sendNotifyRemNode(v)
-		v.timer = time.AfterFunc(time.Second*3, func() {
-			p.mainque.AppendHighestPriotiryItem(v)
-		})
-	}
+		for _, v := range p.removingNode {
+			p.sendNotifyRemNode(v)
+			v.timer = time.AfterFunc(time.Second*3, func() {
+				p.mainque.AppendHighestPriotiryItem(v)
+			})
+		}
 
-	for _, v := range p.slotTransfer {
-		v.notify()
+		for _, v := range p.slotTransfer {
+			v.notify()
+		}
 	}
 }
 

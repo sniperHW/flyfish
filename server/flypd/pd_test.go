@@ -173,13 +173,14 @@ func TestPd(t *testing.T) {
 
 	sslot.SlotCount = 128
 
-	os.RemoveAll("./log/pd-1-1")
-	os.RemoveAll("./log/pd-1-1-snap")
+	os.RemoveAll("./raftLog")
+	os.RemoveAll("./raftLog")
 
 	var configStr string = `
 
 	MainQueueMaxSize = 1000
-
+	RaftLogDir       = "raftLog"
+	RaftLogPrefix    = "pd"
 	[Log]
 		MaxLogfileSize  = 104857600 # 100mb
 		LogDir          = "log"
@@ -194,7 +195,7 @@ func TestPd(t *testing.T) {
 
 	conf, _ := LoadConfigStr(configStr)
 
-	p, _ := NewPd(conf, "localhost:8110", 1, "1@http://localhost:8110")
+	p := NewPd(conf, "localhost:8110", 1, "1@http://localhost:8110")
 
 	p.Start()
 
@@ -218,7 +219,7 @@ func TestPd(t *testing.T) {
 
 	p.Stop()
 
-	p, _ = NewPd(conf, "localhost:8110", 1, "1@http://localhost:8110")
+	p = NewPd(conf, "localhost:8110", 1, "1@http://localhost:8110")
 
 	p.Start()
 
@@ -458,7 +459,20 @@ func testAddRemSet(t *testing.T, p *pd) {
 
 func testSlotTransfer(t *testing.T, p *pd) {
 
+	fmt.Println("testSlotTransfer")
+
 	//先添加一个set
+
+	ch := make(chan struct{})
+
+	p.onBalanceFinish = func() {
+		for _, v := range p.deployment.sets {
+			for _, vv := range v.stores {
+				fmt.Printf("store:%d slotCount:%d slots%v\n", vv.id, len(vv.slots.GetOpenBits()), vv.slots.GetOpenBits())
+			}
+		}
+		ch <- struct{}{}
+	}
 
 	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
 	assert.Nil(t, err)
@@ -510,31 +524,27 @@ func testSlotTransfer(t *testing.T, p *pd) {
 
 	go node2.run()
 
-	set1 := p.deployment.sets[1]
+	<-ch
 
-	set2 := p.deployment.sets[2]
+	//将set 2 标记clear
+	go func() {
+		conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
+		assert.Nil(t, err)
 
-	store1 := set1.stores[1]
-	store6 := set2.stores[6]
+		addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
 
-	assert.NotNil(t, store1)
+		conn.SendTo(addr, &sproto.SetMarkClear{
+			SetID: 2,
+		})
 
-	assert.NotNil(t, store6)
+		recvbuff := make([]byte, 256)
 
-	slotTransfer := store1.slots.GetOpenBits()[0]
+		_, r, err := conn.ReadFrom(recvbuff)
 
-	p.beginSlotTransfer(slotTransfer, 1, 1, 2, 6)
+		assert.Equal(t, true, r.(*sproto.SetMarkClearResp).Ok)
+	}()
 
-	waitCondition(func() bool {
-		if len(store6.slots.GetOpenBits()) == 1 {
-			return true
-		} else {
-			return false
-		}
-	})
-
-	assert.Equal(t, false, store1.slots.Test(slotTransfer))
-	assert.Equal(t, true, store6.slots.Test(slotTransfer))
+	<-ch
 
 	node1.stop()
 	node2.stop()

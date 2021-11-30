@@ -738,7 +738,7 @@ func NewRaftNode(mutilRaft *MutilRaft, commitC ApplicationQueue, id int, peers m
 
 	if !fileutil.Exist(rc.logDir) {
 		if err := os.Mkdir(rc.logDir, 0750); err != nil {
-			GetSugar().Fatalf("raftexample: cannot create dir for logDir (%v)", err)
+			GetSugar().Fatalf("raftexample: cannot create dir for logDir:%s (%v)", rc.logDir, err)
 		}
 	}
 

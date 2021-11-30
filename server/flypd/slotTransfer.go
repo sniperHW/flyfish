@@ -176,6 +176,9 @@ func (p *pd) replayNotifySlotTransInResp(reader *buffer.BufferReader) error {
 }
 
 func (p *pd) beginSlotTransfer(slot int, setOut int, storeOut int, setIn int, storeIn int) error {
+
+	GetSugar().Infof("beginSlotTransfer slot:%d setOut:%d setIn:%d storeOut:%d storeIn:%d", slot, setOut, setIn, storeOut, storeIn)
+
 	return p.issueProposal(&ProposalBeginSlotTransfer{
 		trans: &TransSlotTransfer{
 			Slot:             slot,
