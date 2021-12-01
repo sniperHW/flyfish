@@ -4,12 +4,12 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
+	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/errcode"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/net/cs"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
-	"net"
 	"runtime"
 	"strings"
 	"sync"
@@ -91,53 +91,18 @@ func (this *Client) doCallBack(unikey string, cb callback, a interface{}) {
 	}
 }
 
-func QueryGate(pd []string) (gate string, err error) {
-	okCh := make(chan string)
-	uu := make([]*flynet.Udp, len(pd))
-	for k, v := range pd {
-		go func(i int, s string) {
-			u, err := flynet.NewUdp(fmt.Sprintf(":0"), snet.Pack, snet.Unpack)
-			if nil == err {
-				addr, err := net.ResolveUDPAddr("udp", s)
-				if nil == err {
-					u.SendTo(addr, &sproto.GetFlyGate{})
-					uu[i] = u
-					recvbuff := make([]byte, 4096)
-					_, r, err := u.ReadFrom(recvbuff)
-					if nil == err {
-						if resp, ok := r.(*sproto.GetFlyGateResp); ok {
-							select {
-							case okCh <- resp.GateService:
-							default:
-							}
-						}
-					}
-				} else {
-					GetSugar().Infof("%v", err)
-				}
-			} else {
-				GetSugar().Infof("%v", err)
+func QueryGate(pd []string) (ret string) {
+	if resp := snet.UdpCall(pd, &sproto.GetFlyGate{}, func(respCh chan interface{}, r proto.Message) {
+		if resp, ok := r.(*sproto.GetFlyGateResp); ok {
+			select {
+			case respCh <- resp.GateService:
+			default:
 			}
-		}(k, v)
-	}
-
-	ticker := time.NewTicker(1 * time.Second)
-
-	select {
-	case v := <-okCh:
-		gate = v
-	case <-ticker.C:
-		err = errors.New("timeout")
-
-	}
-	ticker.Stop()
-
-	for _, v := range uu {
-		if nil != v {
-			v.Close()
 		}
-	}
+	}); nil != resp {
+		ret = resp.(string)
 
+	}
 	return
 }
 
@@ -163,7 +128,6 @@ func (this *Client) onConnected(session *flynet.Socket) {
 
 	this.connecting = false
 	this.session = session
-	//this.session.SetSendQueueSize(maxPendingSize)
 	this.session.SetInBoundProcessor(cs.NewRespInboundProcessor())
 	this.session.SetEncoder(&cs.ReqEncoder{})
 	this.session.SetCloseCallBack(func(sess *flynet.Socket, reason error) {
@@ -189,11 +153,7 @@ func (this *Client) onConnected(session *flynet.Socket) {
 
 func (this *Client) connectCluster() bool {
 
-	gate, err := QueryGate(this.conf.PD)
-
-	if nil != err {
-		return false
-	}
+	gate := QueryGate(this.conf.PD)
 
 	if gate == "" {
 		return false

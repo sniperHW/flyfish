@@ -8,7 +8,6 @@ import (
 	"github.com/sniperHW/flyfish/pkg/net/cs"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	flyproto "github.com/sniperHW/flyfish/proto"
-	"net"
 	"time"
 )
 
@@ -16,7 +15,6 @@ type kvnode struct {
 	id           int
 	dialing      bool
 	service      string
-	udpAddr      *net.UDPAddr
 	session      *flynet.Socket
 	waittingSend *list.List //dailing时暂存请求
 	waitResponse map[int64]*forwordMsg

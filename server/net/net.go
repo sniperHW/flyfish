@@ -5,9 +5,12 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/pkg/compress"
+	flynet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/net/pb"
 	sproto "github.com/sniperHW/flyfish/server/proto"
+	"net"
 	"sync"
+	"time"
 )
 
 var compressPool = &sync.Pool{
@@ -105,6 +108,44 @@ func Pack(msg proto.Message) ([]byte, error) {
 		}
 		return b, nil
 	}
+}
+
+func UdpCall(remotes []string, req proto.Message, onResp func(chan interface{}, proto.Message)) (ret interface{}) {
+	respCh := make(chan interface{})
+	uu := make([]*flynet.Udp, len(remotes))
+	for k, v := range remotes {
+		go func(i int, addr string) {
+			u, err := flynet.NewUdp(fmt.Sprintf(":0"), Pack, Unpack)
+			if nil == err {
+				remoteAddr, err := net.ResolveUDPAddr("udp", addr)
+				if nil != err {
+					return
+				}
+				u.SendTo(remoteAddr, req)
+				uu[i] = u
+				_, r, err := u.ReadFrom(make([]byte, 65535))
+				if nil == err {
+					onResp(respCh, r.(proto.Message))
+				}
+			}
+		}(k, v)
+	}
+
+	ticker := time.NewTicker(3 * time.Second)
+
+	select {
+	case ret = <-respCh:
+	case <-ticker.C:
+	}
+	ticker.Stop()
+
+	for _, v := range uu {
+		if nil != v {
+			v.Close()
+		}
+	}
+
+	return
 }
 
 func init() {

@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/buffer"
@@ -15,7 +16,6 @@ import (
 	flyproto "github.com/sniperHW/flyfish/proto"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
-	"net"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -123,7 +123,6 @@ func (r *routeInfo) onQueryRouteInfoResp(gate *gate, resp *sproto.QueryRouteInfo
 					mainQueue:    r.mainQueue,
 					gate:         gate,
 				}
-				n.udpAddr, _ = net.ResolveUDPAddr("udp", n.service)
 				s.nodes[n.id] = n
 			}
 
@@ -155,7 +154,6 @@ func (r *routeInfo) onQueryRouteInfoResp(gate *gate, resp *sproto.QueryRouteInfo
 					mainQueue:    r.mainQueue,
 					gate:         gate,
 				}
-				n.udpAddr, _ = net.ResolveUDPAddr("udp", n.service)
 				s.nodes[n.id] = n
 			}
 
@@ -258,59 +256,18 @@ func doQueryRouteInfo(pdService []string, req *sproto.QueryRouteInfo) *sproto.Qu
 		return nil
 	}
 
-	okCh := make(chan *sproto.QueryRouteInfoResp)
-	uu := make([]*flynet.Udp, len(pdService))
-
-	for k, v := range pdService {
-		go func(i int, remote string) {
-			var localU *flynet.Udp
-			var remoteAddr *net.UDPAddr
-			var err error
-			localU, err = flynet.NewUdp(fmt.Sprintf(":0"), snet.Pack, snet.Unpack)
-			if nil != err {
-				GetSugar().Infof("%v", err)
-				return
+	if resp := snet.UdpCall(pdService, req, func(respCh chan interface{}, r proto.Message) {
+		if resp, ok := r.(*sproto.QueryRouteInfoResp); ok {
+			select {
+			case respCh <- resp:
+			default:
 			}
-
-			uu[i] = localU
-			remoteAddr, err = net.ResolveUDPAddr("udp", remote)
-			if nil != err {
-				GetSugar().Infof("%v", err)
-				return
-			}
-
-			localU.SendTo(remoteAddr, req)
-			_, r, err := localU.ReadFrom(make([]byte, 1024*64))
-			if nil == err {
-				if resp, ok := r.(*sproto.QueryRouteInfoResp); ok {
-					select {
-					case okCh <- resp:
-					default:
-					}
-				}
-			}
-		}(k, v)
-	}
-
-	ticker := time.NewTicker(3 * time.Second)
-
-	var resp *sproto.QueryRouteInfoResp
-
-	select {
-
-	case v := <-okCh:
-		resp = v
-	case <-ticker.C:
-	}
-	ticker.Stop()
-
-	for _, v := range uu {
-		if nil != v {
-			v.Close()
 		}
+	}); nil != resp {
+		return resp.(*sproto.QueryRouteInfoResp)
+	} else {
+		return nil
 	}
-
-	return resp
 }
 
 func NewFlyGate(config *Config, service string) *gate {

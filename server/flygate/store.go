@@ -2,10 +2,9 @@ package flygate
 
 import (
 	"container/list"
-	"fmt"
+	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
-	flynet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
@@ -73,55 +72,24 @@ func (s *store) queryLeader() {
 		return
 	} else {
 		s.queryingLeader = true
-		nodes := []*kvnode{}
+		nodes := []string{}
 		for _, v := range s.set.nodes {
 			if !v.removed {
-				nodes = append(nodes, v)
+				nodes = append(nodes, v.service)
 			}
 		}
 
 		go func() {
-			okCh := make(chan int)
-			uu := make([]*flynet.Udp, len(s.set.nodes))
-			for k, v := range nodes {
-				go func(i int, n *kvnode) {
-					u, err := flynet.NewUdp(fmt.Sprintf(":0"), snet.Pack, snet.Unpack)
-					if nil == err {
-						u.SendTo(n.udpAddr, &sproto.QueryLeader{Store: int32(s.id)})
-						uu[i] = u
-						_, r, err := u.ReadFrom(make([]byte, 256))
-						GetSugar().Infof("%v resp %v %v", n.udpAddr, r, err)
-						if nil == err {
-							if resp, ok := r.(*sproto.QueryLeaderResp); ok && 0 != resp.Leader {
-								select {
-								case okCh <- int(resp.Leader):
-								default:
-								}
-							}
-						}
-					} else {
-						GetSugar().Infof("%v", err)
-					}
-				}(k, v)
-			}
-
-			ticker := time.NewTicker(3 * time.Second)
-
 			var leader int
-
-			select {
-
-			case v := <-okCh:
-				leader = v
-			case <-ticker.C:
-
-			}
-			ticker.Stop()
-
-			for _, v := range uu {
-				if nil != v {
-					v.Close()
+			if resp := snet.UdpCall(nodes, &sproto.QueryLeader{Store: int32(s.id)}, func(respCh chan interface{}, r proto.Message) {
+				if resp, ok := r.(*sproto.QueryLeaderResp); ok && 0 != resp.Leader {
+					select {
+					case respCh <- int(resp.Leader):
+					default:
+					}
 				}
+			}); nil != resp {
+				leader = resp.(int)
 			}
 
 			s.mainQueue.ForceAppend(1, func() {
@@ -143,6 +111,7 @@ func (s *store) queryLeader() {
 					})
 				}
 			})
+
 		}()
 	}
 }
