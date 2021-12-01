@@ -13,6 +13,7 @@ const (
 	Errcode_not_leader
 	Errcode_gate_busy
 	Errcode_slot_transfering
+	Errcode_route_info_stale
 )
 
 type Error *error
@@ -57,6 +58,8 @@ func GetErrorDesc(e Error) string {
 			}
 		case Errcode_slot_transfering:
 			return "slot transfering"
+		case Errcode_route_info_stale:
+			return "Errcode_route_info_stale"
 		default:
 			return e.Desc
 		}

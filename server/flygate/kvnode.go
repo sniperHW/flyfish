@@ -24,6 +24,7 @@ type kvnode struct {
 	mainQueue    *queue.PriorityQueue
 	config       *Config
 	removed      bool
+	gate         *gate
 }
 
 func (n *kvnode) sendRelayMsg(req *relayMsg) {
@@ -147,14 +148,18 @@ func (n *kvnode) onNodeResp(b []byte) {
 	if ok {
 		delete(n.pendingReq, seqno)
 		req.pendingReq = nil
-		if req.deadlineTimer.Stop() {
-			if errCode == errcode.Errcode_not_leader {
-				req.store.onErrNotLeader(req)
-			} else {
-				//恢复客户端的seqno
-				binary.BigEndian.PutUint64(b[4:], uint64(req.oriSeqno))
-				req.reply(b)
-			}
+		switch errCode {
+		case errcode.Errcode_not_leader:
+			req.store.onErrNotLeader(req)
+		case errcode.Errcode_route_info_stale:
+			n.mainQueue.ForceAppend(1, func() {
+				n.gate.onRouteInfoStale(req)
+			})
+		default:
+			req.deadlineTimer.Stop()
+			//恢复客户端的seqno
+			binary.BigEndian.PutUint64(b[4:], uint64(req.oriSeqno))
+			req.reply(b)
 		}
 	}
 }

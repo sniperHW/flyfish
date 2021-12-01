@@ -383,11 +383,11 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 	slot := sslot.Unikey2Slot(req.msg.UniKey)
 
 	if !s.slots.Test(slot) {
-		//unikey不归当前store管理
+		//unikey不归当前store管理,路由信息已经stale
 		req.from.send(&cs.RespMessage{
 			Cmd:   req.msg.Cmd,
 			Seqno: req.msg.Seqno,
-			Err:   errcode.New(errcode.Errcode_error, fmt.Sprintf("%s not in current server", req.msg.UniKey)),
+			Err:   errcode.New(errcode.Errcode_route_info_stale, ""),
 		})
 		return
 	}

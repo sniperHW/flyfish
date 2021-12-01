@@ -2,6 +2,8 @@ package flygate
 
 import (
 	"container/list"
+	"crypto/md5"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"github.com/sniperHW/flyfish/errcode"
@@ -14,9 +16,6 @@ import (
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"net"
-	//"os"
-	"crypto/md5"
-	"encoding/base64"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -53,7 +52,7 @@ type routeInfo struct {
 	mainQueue   *queue.PriorityQueue
 }
 
-func (r *routeInfo) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
+func (r *routeInfo) onQueryRouteInfoResp(gate *gate, resp *sproto.QueryRouteInfoResp) {
 
 	GetSugar().Infof("onQueryRouteInfoResp %v", resp)
 
@@ -122,6 +121,7 @@ func (r *routeInfo) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
 					set:          s,
 					config:       r.config,
 					mainQueue:    r.mainQueue,
+					gate:         gate,
 				}
 				n.udpAddr, _ = net.ResolveUDPAddr("udp", n.service)
 				s.nodes[n.id] = n
@@ -153,6 +153,7 @@ func (r *routeInfo) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
 					set:          s,
 					config:       r.config,
 					mainQueue:    r.mainQueue,
+					gate:         gate,
 				}
 				n.udpAddr, _ = net.ResolveUDPAddr("udp", n.service)
 				s.nodes[n.id] = n
@@ -207,16 +208,18 @@ type gate struct {
 	totalPendingMsg   int64
 	clients           map[*flynet.Socket]*flynet.Socket
 	routeInfo         routeInfo
-	queryingRouteInfo bool
+	queryingRouteInfo int32
 	queryTimer        *time.Timer
 	mainQueue         *queue.PriorityQueue
 	serviceAddr       string
 	seqCounter        int64
 	pdToken           string
+	waittingSend      *list.List //因为路由信息错误或slot迁移导致尚无法处理的请求
+	pdService         []string
 }
 
-func (g *gate) queryRouteInfo() *sproto.QueryRouteInfoResp {
-	pdService := strings.Split(g.config.PdService, ";")
+func doQueryRouteInfo(pdService []string, req *sproto.QueryRouteInfo) *sproto.QueryRouteInfoResp {
+	//pdService := strings.Split(g.config.PdService, ";")
 
 	if len(pdService) == 0 {
 		GetSugar().Fatalf("PdService is empty")
@@ -242,16 +245,6 @@ func (g *gate) queryRouteInfo() *sproto.QueryRouteInfoResp {
 			if nil != err {
 				GetSugar().Infof("%v", err)
 				return
-			}
-
-			req := &sproto.QueryRouteInfo{
-				Service: g.serviceAddr,
-				Token:   g.pdToken,
-				Version: g.routeInfo.version,
-			}
-
-			for kk, _ := range g.routeInfo.sets {
-				req.Sets = append(req.Sets, int32(kk))
 			}
 
 			localU.SendTo(remoteAddr, req)
@@ -300,7 +293,9 @@ func NewFlyGate(config *Config, service string) *gate {
 			slotToStore: map[int]*store{},
 			mainQueue:   mainQueue,
 		},
-		serviceAddr: service,
+		waittingSend: list.New(),
+		serviceAddr:  service,
+		pdService:    strings.Split(config.PdService, ";"),
 	}
 	tmp := md5.Sum([]byte(g.serviceAddr + "magicNum"))
 	g.pdToken = base64.StdEncoding.EncodeToString(tmp[:])
@@ -357,16 +352,64 @@ func (g *gate) mainLoop() {
 	}
 }
 
+func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
+	g.routeInfo.onQueryRouteInfoResp(g, resp)
+	for v := g.waittingSend.Front(); nil != v; v = g.waittingSend.Front() {
+		req := g.waittingSend.Remove(v).(*relayMsg)
+		req.l = nil
+		req.listElement = nil
+		s, ok := g.routeInfo.slotToStore[req.slot]
+		if !ok {
+			req.deadlineTimer.Stop()
+			replyCliError(req.cli, req.seqno, req.cmd, errcode.New(errcode.Errcode_error, "can't find store"))
+		} else {
+			req.store = s
+			s.onCliMsg(req)
+		}
+	}
+}
+
+func (g *gate) onRouteInfoStale(req *relayMsg) {
+	if !time.Now().After(req.deadline) {
+		req.l = g.waittingSend
+		req.listElement = g.waittingSend.PushBack(req)
+		if g.waittingSend.Len() == 0 && g.queryTimer.Stop() {
+			g.startQueryTimer(time.Nanosecond)
+		}
+	} else {
+		req.dropReply()
+	}
+}
+
+func (g *gate) queryRouteInfo() {
+	req := &sproto.QueryRouteInfo{
+		Service: g.serviceAddr,
+		Token:   g.pdToken,
+		Version: g.routeInfo.version,
+	}
+
+	for kk, _ := range g.routeInfo.sets {
+		req.Sets = append(req.Sets, int32(kk))
+	}
+
+	go func() {
+		resp := doQueryRouteInfo(g.pdService, req)
+		g.mainQueue.ForceAppend(1, func() {
+			nextTimeout := time.Millisecond * 10
+			if nil != resp {
+				g.onQueryRouteInfoResp(resp)
+				if g.waittingSend.Len() == 0 {
+					nextTimeout = time.Second * 10
+				}
+			}
+			g.startQueryTimer(nextTimeout)
+		})
+	}()
+}
+
 func (g *gate) startQueryTimer(timeout time.Duration) {
 	g.queryTimer = time.AfterFunc(timeout, func() {
-		go func() {
-			if resp := g.queryRouteInfo(); nil != resp {
-				g.routeInfo.onQueryRouteInfoResp(resp)
-				g.startQueryTimer(time.Second * 10)
-			} else {
-				g.startQueryTimer(time.Millisecond * 10)
-			}
-		}()
+		g.queryRouteInfo()
 	})
 }
 
@@ -384,9 +427,14 @@ func (g *gate) Start() error {
 		}
 
 		for {
-			resp := g.queryRouteInfo()
+
+			resp := doQueryRouteInfo(g.pdService, &sproto.QueryRouteInfo{
+				Service: g.serviceAddr,
+				Token:   g.pdToken,
+			})
+
 			if nil != resp {
-				g.routeInfo.onQueryRouteInfoResp(resp)
+				g.routeInfo.onQueryRouteInfoResp(g, resp)
 				break
 			}
 		}
