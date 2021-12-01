@@ -1,0 +1,16 @@
+PdService="ip:port;ip:port" #pd服务以；分割
+
+MaxNodePendingMsg = 5000 #单个node  dial期间pending消息数量限制/已经发往kvnode等待应答的消息数量
+
+MaxStorePendingMsg = 5000 #单个store 缺失leader期间pending消息数量限制
+
+MaxPendingMsg=50000 #整个gate pending消息数量限制
+
+[Log]
+MaxLogfileSize  = 104857600 # 100mb
+LogDir          = "log"
+LogLevel        = "info"
+LogPrefix       = "flygate"
+EnableStdout = false
+MaxAge          = 14   //最大保留14天的日志
+MaxBackups      = 10   //最多保留10个滚动日志	 

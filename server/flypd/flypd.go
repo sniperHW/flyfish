@@ -121,10 +121,10 @@ type pd struct {
 	onBalanceFinish func()
 }
 
-func NewPd(config *Config, udpService string, id int, cluster string) *pd {
+func NewPd(id int, config *Config, udpService string, cluster string) *pd {
 
 	mainQueue := applicationQueue{
-		q: queue.NewPriorityQueue(2, config.MainQueueMaxSize),
+		q: queue.NewPriorityQueue(2, 10000),
 	}
 
 	p := &pd{

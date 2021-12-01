@@ -18,7 +18,7 @@ func main() {
 
 	id := flag.Int("id", 1, "node ID")
 	pprof := flag.String("pprof", "localhost:8899", "pprof")
-	config := flag.String("config", "config.toml", "config")
+	config := flag.String("config", "flykv_config.toml", "config")
 
 	go func() {
 		http.ListenAndServe(*pprof, nil)

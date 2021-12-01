@@ -163,7 +163,7 @@ func TestFlygate(t *testing.T) {
 
 	conf, _ := flypd.LoadConfigStr(configStr)
 
-	pd := flypd.NewPd(conf, "localhost:8110", 1, "1@http://localhost:8110")
+	pd := flypd.NewPd(1, conf, "localhost:8110", "1@http://localhost:8110")
 
 	pd.Start()
 
@@ -208,9 +208,7 @@ func TestFlygate(t *testing.T) {
 	}
 
 	//启动flygate
-	var flyGateConfigStr string = `
-	ServiceHost="localhost"
-	ServicePort=10110     
+	var flyGateConfigStr string = `  
 	PdService="localhost:8110"
 	MaxNodePendingMsg=2000
 	MaxStorePendingMsg=2000
@@ -219,7 +217,7 @@ func TestFlygate(t *testing.T) {
 
 	gateConf, _ := flygate.LoadConfigStr(flyGateConfigStr)
 
-	gate1 := flygate.NewFlyGate(gateConf)
+	gate1 := flygate.NewFlyGate(gateConf, "localhost:10110")
 
 	if err = gate1.Start(); nil != err {
 		panic(err)

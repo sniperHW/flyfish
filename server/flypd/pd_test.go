@@ -186,7 +186,9 @@ func TestPd(t *testing.T) {
 		LogDir          = "log"
 		LogPrefix       = "pd"
 		LogLevel        = "info"
-		EnableLogStdout = false		
+		EnableLogStdout = false	
+		MaxAge          = 14
+		MaxBackups      = 10			
 
 `
 
@@ -195,7 +197,7 @@ func TestPd(t *testing.T) {
 
 	conf, _ := LoadConfigStr(configStr)
 
-	p := NewPd(conf, "localhost:8110", 1, "1@http://localhost:8110")
+	p := NewPd(1, conf, "localhost:8110", "1@http://localhost:8110")
 
 	p.Start()
 
@@ -219,7 +221,7 @@ func TestPd(t *testing.T) {
 
 	p.Stop()
 
-	p = NewPd(conf, "localhost:8110", 1, "1@http://localhost:8110")
+	p = NewPd(1, conf, "localhost:8110", "1@http://localhost:8110")
 
 	p.Start()
 

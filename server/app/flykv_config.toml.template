@@ -45,11 +45,11 @@ PD                      = "ip:port;ip:port"
 
 	
 [DBConfig]
-Host                  = "localhost"
-Port                  = 5432
-User		          = "sniper"
-Password              = "123456"
-DB                    = "test"
+Host                    = "localhost"
+Port                    = 5432
+User		            = "sniper"
+Password                = "123456"
+DB                      = "test"
 
 
 [Log]
@@ -57,6 +57,6 @@ MaxLogfileSize  = 104857600 # 100mb
 LogDir          = "log"
 LogLevel        = "info"
 LogPrefix       = "flykv"
-EnableStdout = false
+EnableStdout    = false
 MaxAge          = 14   //最大保留14天的日志
 MaxBackups      = 10   //最多保留10个滚动日志	 

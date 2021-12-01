@@ -7,6 +7,8 @@ import (
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"net"
 	//"net/url"
+	"crypto/md5"
+	"encoding/base64"
 	"reflect"
 	"strings"
 )
@@ -549,9 +551,28 @@ func (p *pd) onKvnodeBoot(from *net.UDPAddr, m proto.Message) {
 
 }
 
+func isValidTcpService(service string, token string) bool {
+	if "" == service {
+		return false
+	}
+
+	if _, err := net.ResolveTCPAddr("tcp", service); nil == err {
+		tmp := md5.Sum([]byte(service + "magicNum"))
+		if token == base64.StdEncoding.EncodeToString(tmp[:]) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (p *pd) onQueryRouteInfo(from *net.UDPAddr, m proto.Message) {
 	msg := m.(*sproto.QueryRouteInfo)
-	p.flygateMgr.onQueryRouteInfo(msg.Service)
+
+	if isValidTcpService(msg.Service, msg.Token) {
+		p.flygateMgr.onQueryRouteInfo(msg.Service)
+	}
+
 	if nil != p.deployment {
 		resp := p.deployment.queryRouteInfo(msg)
 		p.udp.SendTo(from, resp)

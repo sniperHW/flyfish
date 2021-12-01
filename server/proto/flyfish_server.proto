@@ -57,9 +57,10 @@ enum ServerCmdType {
 
 
 message queryRouteInfo {
-  optional string service       = 1;
-  optional int64  version       = 2;  
-  repeated int32  sets          = 3;
+  optional string service       = 1; //flygate需要填
+  optional string token         = 2; //flygate需要填
+  optional int64  version       = 3;  
+  repeated int32  sets          = 4;
 }         
 
 

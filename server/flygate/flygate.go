@@ -15,6 +15,8 @@ import (
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"net"
 	//"os"
+	"crypto/md5"
+	"encoding/base64"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -210,6 +212,7 @@ type gate struct {
 	mainQueue         *queue.PriorityQueue
 	serviceAddr       string
 	seqCounter        int64
+	pdToken           string
 }
 
 func (g *gate) queryRouteInfo() *sproto.QueryRouteInfoResp {
@@ -243,6 +246,7 @@ func (g *gate) queryRouteInfo() *sproto.QueryRouteInfoResp {
 
 			req := &sproto.QueryRouteInfo{
 				Service: g.serviceAddr,
+				Token:   g.pdToken,
 				Version: g.routeInfo.version,
 			}
 
@@ -284,9 +288,9 @@ func (g *gate) queryRouteInfo() *sproto.QueryRouteInfoResp {
 	return resp
 }
 
-func NewFlyGate(config *Config) *gate {
+func NewFlyGate(config *Config, service string) *gate {
 	mainQueue := queue.NewPriorityQueue(2)
-	return &gate{
+	g := &gate{
 		config:    config,
 		clients:   map[*flynet.Socket]*flynet.Socket{},
 		mainQueue: mainQueue,
@@ -296,8 +300,12 @@ func NewFlyGate(config *Config) *gate {
 			slotToStore: map[int]*store{},
 			mainQueue:   mainQueue,
 		},
-		serviceAddr: fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort),
+		serviceAddr: service,
 	}
+	tmp := md5.Sum([]byte(g.serviceAddr + "magicNum"))
+	g.pdToken = base64.StdEncoding.EncodeToString(tmp[:])
+
+	return g
 }
 
 func (g *gate) startListener() {
@@ -365,13 +373,7 @@ func (g *gate) startQueryTimer(timeout time.Duration) {
 func (g *gate) Start() error {
 	var err error
 	if atomic.CompareAndSwapInt32(&g.startOnce, 0, 1) {
-		config := g.config
-
-		/*if err = os.MkdirAll(config.Log.LogDir, os.ModePerm); nil != err {
-			return err
-		}*/
-
-		g.listener, err = cs.NewListener("tcp", fmt.Sprintf("%s:%d", config.ServiceHost, config.ServicePort), flynet.OutputBufLimit{
+		g.listener, err = cs.NewListener("tcp", g.serviceAddr, flynet.OutputBufLimit{
 			OutPutLimitSoft:        1024 * 1024 * 10,
 			OutPutLimitSoftSeconds: 10,
 			OutPutLimitHard:        1024 * 1024 * 50,

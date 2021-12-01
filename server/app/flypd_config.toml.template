@@ -1,0 +1,12 @@
+RaftLogDir = "raftLog"
+
+RaftLogPrefix = "pd"
+
+[Log]
+MaxLogfileSize  = 104857600 # 100mb
+LogDir          = "log"
+LogLevel        = "info"
+LogPrefix       = "flygate"
+EnableStdout = false
+MaxAge          = 14   //最大保留14天的日志
+MaxBackups      = 10   //最多保留10个滚动日志	 
