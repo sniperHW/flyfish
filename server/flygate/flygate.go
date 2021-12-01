@@ -214,13 +214,11 @@ type gate struct {
 	serviceAddr       string
 	seqCounter        int64
 	pdToken           string
-	waittingSend      *list.List //因为路由信息错误或slot迁移导致尚无法处理的请求
+	staleReqList      *list.List //路由信息stale导致错误转发的请求，待路由信息更新后重发
 	pdService         []string
 }
 
 func doQueryRouteInfo(pdService []string, req *sproto.QueryRouteInfo) *sproto.QueryRouteInfoResp {
-	//pdService := strings.Split(g.config.PdService, ";")
-
 	if len(pdService) == 0 {
 		GetSugar().Fatalf("PdService is empty")
 		return nil
@@ -293,7 +291,7 @@ func NewFlyGate(config *Config, service string) *gate {
 			slotToStore: map[int]*store{},
 			mainQueue:   mainQueue,
 		},
-		waittingSend: list.New(),
+		staleReqList: list.New(),
 		serviceAddr:  service,
 		pdService:    strings.Split(config.PdService, ";"),
 	}
@@ -354,8 +352,8 @@ func (g *gate) mainLoop() {
 
 func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
 	g.routeInfo.onQueryRouteInfoResp(g, resp)
-	for v := g.waittingSend.Front(); nil != v; v = g.waittingSend.Front() {
-		req := g.waittingSend.Remove(v).(*relayMsg)
+	for v := g.staleReqList.Front(); nil != v; v = g.staleReqList.Front() {
+		req := g.staleReqList.Remove(v).(*relayMsg)
 		req.l = nil
 		req.listElement = nil
 		s, ok := g.routeInfo.slotToStore[req.slot]
@@ -371,9 +369,9 @@ func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
 
 func (g *gate) onRouteInfoStale(req *relayMsg) {
 	if !time.Now().After(req.deadline) {
-		req.l = g.waittingSend
-		req.listElement = g.waittingSend.PushBack(req)
-		if g.waittingSend.Len() == 0 && g.queryTimer.Stop() {
+		req.l = g.staleReqList
+		req.listElement = g.staleReqList.PushBack(req)
+		if g.staleReqList.Len() == 0 && g.queryTimer.Stop() {
 			g.startQueryTimer(time.Nanosecond)
 		}
 	} else {
@@ -398,7 +396,7 @@ func (g *gate) queryRouteInfo() {
 			nextTimeout := time.Millisecond * 10
 			if nil != resp {
 				g.onQueryRouteInfoResp(resp)
-				if g.waittingSend.Len() == 0 {
+				if g.staleReqList.Len() == 0 {
 					nextTimeout = time.Second * 10
 				}
 			}
