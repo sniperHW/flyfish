@@ -25,7 +25,7 @@ type store struct {
 	mainQueue      *queue.PriorityQueue
 }
 
-func (s *store) onCliMsg(msg *relayMsg) {
+func (s *store) onCliMsg(msg *forwordMsg) {
 	if atomic.AddInt64(msg.totalPendingMsg, 1) > int64(s.config.MaxPendingMsg) {
 		msg.replyErr(errcode.New(errcode.Errcode_gate_busy, ""))
 	} else {
@@ -39,12 +39,12 @@ func (s *store) onCliMsg(msg *relayMsg) {
 			}
 		} else {
 			msg.leaderVersion = s.leaderVersion
-			s.leader.sendRelayMsg(msg)
+			s.leader.sendForwordMsg(msg)
 		}
 	}
 }
 
-func (s *store) onErrNotLeader(msg *relayMsg) {
+func (s *store) onErrNotLeader(msg *forwordMsg) {
 	if s.set.removed {
 		return
 	}
@@ -52,7 +52,7 @@ func (s *store) onErrNotLeader(msg *relayMsg) {
 	if nil != s.leader && s.leaderVersion != msg.leaderVersion {
 		//向新的leader发送
 		msg.leaderVersion = s.leaderVersion
-		s.leader.sendRelayMsg(msg)
+		s.leader.sendForwordMsg(msg)
 	} else if nil != s.leader && s.leaderVersion == msg.leaderVersion {
 		s.leader = nil
 		s.queryLeader()
@@ -131,11 +131,11 @@ func (s *store) queryLeader() {
 					s.leader = leaderNode
 					GetSugar().Infof("store:%d got leader%d", s.id, leader)
 					for v := s.waittingSend.Front(); nil != v; v = s.waittingSend.Front() {
-						req := s.waittingSend.Remove(v).(*relayMsg)
-						req.leaderVersion = s.leaderVersion
-						req.l = nil
-						req.listElement = nil
-						leaderNode.sendRelayMsg(req)
+						msg := s.waittingSend.Remove(v).(*forwordMsg)
+						msg.leaderVersion = s.leaderVersion
+						msg.l = nil
+						msg.listElement = nil
+						leaderNode.sendForwordMsg(msg)
 					}
 				} else {
 					time.AfterFunc(time.Millisecond*100, func() {

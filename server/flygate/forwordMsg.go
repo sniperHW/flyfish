@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-type relayMsg struct {
+type forwordMsg struct {
 	seqno           int64
 	leaderVersion   int64
 	slot            int
@@ -24,14 +24,14 @@ type relayMsg struct {
 	listElement     *list.Element
 	l               *list.List
 	totalPendingMsg *int64
-	pendingReq      *map[int64]*relayMsg
+	waitResponse    *map[int64]*forwordMsg
 	store           *store
 }
 
-func (r *relayMsg) onTimeout() {
-	if nil != r.pendingReq {
-		delete(*r.pendingReq, r.seqno)
-		r.pendingReq = nil
+func (r *forwordMsg) onTimeout() {
+	if nil != r.waitResponse {
+		delete(*r.waitResponse, r.seqno)
+		r.waitResponse = nil
 	}
 
 	if nil != r.l && nil != r.listElement {
@@ -43,21 +43,21 @@ func (r *relayMsg) onTimeout() {
 	r.dropReply()
 }
 
-func (r *relayMsg) reply(b []byte) {
+func (r *forwordMsg) reply(b []byte) {
 	if atomic.CompareAndSwapInt32(&r.replyed, 0, 1) {
 		atomic.AddInt64(r.totalPendingMsg, -1)
 		r.cli.Send(b)
 	}
 }
 
-func (r *relayMsg) replyErr(err errcode.Error) {
+func (r *forwordMsg) replyErr(err errcode.Error) {
 	if atomic.CompareAndSwapInt32(&r.replyed, 0, 1) {
 		atomic.AddInt64(r.totalPendingMsg, -1)
 		replyCliError(r.cli, r.seqno, r.cmd, err)
 	}
 }
 
-func (r *relayMsg) dropReply() {
+func (r *forwordMsg) dropReply() {
 	if atomic.CompareAndSwapInt32(&r.replyed, 0, 1) {
 		atomic.AddInt64(r.totalPendingMsg, -1)
 	}

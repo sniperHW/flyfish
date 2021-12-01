@@ -32,7 +32,7 @@ func clientReqUnpack(pbSpace *pb.Namespace, b []byte, r int, w int) (ret interfa
 
 		if totalSize <= unpackSize {
 			rr := r + cs.SizeLen
-			var m relayMsg
+			var m forwordMsg
 			m.bytes = make([]byte, totalSize)
 			copy(m.bytes, b[r:r+totalSize])
 			m.oriSeqno = int64(binary.BigEndian.Uint64(b[rr:]))
