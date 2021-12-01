@@ -151,9 +151,9 @@ func (n *kvnode) onNodeResp(b []byte) {
 		switch errCode {
 		case errcode.Errcode_not_leader:
 			req.store.onErrNotLeader(req)
-		case errcode.Errcode_route_info_stale:
+		case errcode.Errcode_route_info_stale, errcode.Errcode_slot_transfering:
 			n.mainQueue.ForceAppend(1, func() {
-				n.gate.onRouteInfoStale(req)
+				n.gate.onForwordError(errCode, req)
 			})
 		default:
 			req.deadlineTimer.Stop()
