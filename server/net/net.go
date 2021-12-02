@@ -110,7 +110,7 @@ func Pack(msg proto.Message) ([]byte, error) {
 	}
 }
 
-func UdpCall(remotes []string, req proto.Message, onResp func(chan interface{}, proto.Message)) (ret interface{}) {
+func UdpCall(remotes []string, req proto.Message, timeout time.Duration, onResp func(chan interface{}, proto.Message)) (ret interface{}) {
 	respCh := make(chan interface{})
 	uu := make([]*flynet.Udp, len(remotes))
 	for k, v := range remotes {
@@ -131,7 +131,7 @@ func UdpCall(remotes []string, req proto.Message, onResp func(chan interface{}, 
 		}(k, v)
 	}
 
-	ticker := time.NewTicker(3 * time.Second)
+	ticker := time.NewTicker(timeout)
 
 	select {
 	case ret = <-respCh:

@@ -225,7 +225,7 @@ func TestFlygate(t *testing.T) {
 
 	for {
 		gate := client.QueryGate([]string{"localhost:8110"})
-		if gate != "" {
+		if len(gate) > 0 {
 			break
 		} else {
 			time.Sleep(time.Second)

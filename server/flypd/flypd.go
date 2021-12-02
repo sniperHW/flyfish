@@ -44,31 +44,20 @@ type flygate struct {
 }
 
 type flygateMgr struct {
-	flygateMap   map[string]*flygate
-	flygateArray []*flygate
-	next         int
-	mainque      applicationQueue
+	flygateMap map[string]*flygate
+	mainque    applicationQueue
 }
 
-func (f *flygateMgr) getFlyGate() *flygate {
-	if len(f.flygateArray) == 0 {
-		return nil
-	} else {
-		f.next++
-		return f.flygateArray[f.next%len(f.flygateArray)]
+func (f *flygateMgr) getFlyGate() (ret []string) {
+	for k, _ := range f.flygateMap {
+		ret = append(ret, k)
 	}
+	return
 }
 
 func (f *flygateMgr) onFlyGateTimeout(gateService string, t *time.Timer) {
 	if v, ok := f.flygateMap[gateService]; ok && v.deadlineTimer == t {
 		delete(f.flygateMap, gateService)
-		for i, vv := range f.flygateArray {
-			if vv == v {
-				f.flygateArray[i], f.flygateArray[len(f.flygateArray)-1] = f.flygateArray[len(f.flygateArray)-1], f.flygateArray[i]
-				f.flygateArray = f.flygateArray[:len(f.flygateArray)-1]
-				break
-			}
-		}
 	}
 }
 
@@ -83,7 +72,6 @@ func (f *flygateMgr) onQueryRouteInfo(gateService string) {
 			service: gateService,
 		}
 		f.flygateMap[gateService] = g
-		f.flygateArray = append(f.flygateArray, g)
 	}
 
 	var deadlineTimer *time.Timer

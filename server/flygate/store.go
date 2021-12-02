@@ -81,7 +81,7 @@ func (s *store) queryLeader() {
 
 		go func() {
 			var leader int
-			if resp := snet.UdpCall(nodes, &sproto.QueryLeader{Store: int32(s.id)}, func(respCh chan interface{}, r proto.Message) {
+			if resp := snet.UdpCall(nodes, &sproto.QueryLeader{Store: int32(s.id)}, time.Second, func(respCh chan interface{}, r proto.Message) {
 				if resp, ok := r.(*sproto.QueryLeaderResp); ok && 0 != resp.Leader {
 					select {
 					case respCh <- int(resp.Leader):

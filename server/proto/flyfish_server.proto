@@ -238,6 +238,6 @@ message   getFlyGate {
 }
 
 message getFlyGateResp {
-  optional string gateService  = 1;
+  repeated string gateService  = 1;
 }
 

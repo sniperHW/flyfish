@@ -233,21 +233,20 @@ func (m *routeErrorAndSlotTransferingReqMgr) addSlotTransferingReq(msg *forwordM
 }
 
 type gate struct {
-	config            *Config
-	stopOnce          int32
-	startOnce         int32
-	listener          *cs.Listener
-	totalPendingMsg   int64
-	clients           map[*flynet.Socket]*flynet.Socket
-	routeInfo         routeInfo
-	queryingRouteInfo int32
-	queryTimer        *time.Timer
-	mainQueue         *queue.PriorityQueue
-	serviceAddr       string
-	seqCounter        int64
-	pdToken           string
-	pdService         []string
-	reSendReqMgr      routeErrorAndSlotTransferingReqMgr
+	config          *Config
+	stopOnce        int32
+	startOnce       int32
+	listener        *cs.Listener
+	totalPendingMsg int64
+	clients         map[*flynet.Socket]*flynet.Socket
+	routeInfo       routeInfo
+	queryTimer      *time.Timer
+	mainQueue       *queue.PriorityQueue
+	serviceAddr     string
+	seqCounter      int64
+	pdToken         string
+	pdService       []string
+	reSendReqMgr    routeErrorAndSlotTransferingReqMgr
 }
 
 func doQueryRouteInfo(pdService []string, req *sproto.QueryRouteInfo) *sproto.QueryRouteInfoResp {
@@ -256,7 +255,7 @@ func doQueryRouteInfo(pdService []string, req *sproto.QueryRouteInfo) *sproto.Qu
 		return nil
 	}
 
-	if resp := snet.UdpCall(pdService, req, func(respCh chan interface{}, r proto.Message) {
+	if resp := snet.UdpCall(pdService, req, time.Second, func(respCh chan interface{}, r proto.Message) {
 		if resp, ok := r.(*sproto.QueryRouteInfoResp); ok {
 			select {
 			case respCh <- resp:

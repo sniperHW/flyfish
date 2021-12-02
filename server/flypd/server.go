@@ -580,12 +580,7 @@ func (p *pd) onQueryRouteInfo(from *net.UDPAddr, m proto.Message) {
 }
 
 func (p *pd) onGetFlyGate(from *net.UDPAddr, m proto.Message) {
-	g := p.flygateMgr.getFlyGate()
-	if nil == g {
-		p.udp.SendTo(from, &sproto.GetFlyGateResp{})
-	} else {
-		p.udp.SendTo(from, &sproto.GetFlyGateResp{GateService: g.service})
-	}
+	p.udp.SendTo(from, &sproto.GetFlyGateResp{GateService: p.flygateMgr.getFlyGate()})
 }
 
 func (p *pd) initMsgHandler() {

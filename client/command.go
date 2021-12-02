@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/flyfish/errcode"
+	flynet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/net/cs"
 	protocol "github.com/sniperHW/flyfish/proto"
 	"sync"
@@ -65,39 +66,52 @@ func releaseCmdContext(c *cmdContext) {
 }
 
 type cmdContext struct {
+	mu            *sync.Mutex
 	unikey        string
 	deadline      time.Time
 	deadlineTimer *time.Timer
 	cb            callback
 	req           *cs.ReqMessage
-	client        *Client
+	serverConn    *serverConn
 	listElement   *list.Element
+	l             *list.List
 	waitResp      *map[int64]*cmdContext
 }
 
 func (this *cmdContext) onTimeout() {
+
 	ok := false
 
-	this.client.Lock()
+	var session *flynet.Socket
 
-	if this.waitResp == this.client.waitResp {
-		delete(*this.client.waitResp, this.req.Seqno)
+	this.mu.Lock()
+
+	if this.waitResp == this.serverConn.waitResp {
+		delete(*this.serverConn.waitResp, this.req.Seqno)
 		this.waitResp = nil
 		ok = true
 	}
 
 	if nil != this.listElement {
-		this.client.pendingSend.Remove(this.listElement)
-		this.listElement = nil
+		this.l.Remove(this.listElement)
 		ok = true
 	}
 
-	this.client.Unlock()
+	if this.serverConn.removed && 0 == len(*this.serverConn.waitResp) {
+		session = this.serverConn.session
+	}
+
+	this.mu.Unlock()
+
+	if nil != session {
+		session.Close(nil, 0)
+	}
 
 	if ok {
-		this.client.doCallBack(this.unikey, this.cb, errcode.New(errcode.Errcode_timeout, "timeout"))
+		this.serverConn.doCallBack(this.unikey, this.cb, errcode.New(errcode.Errcode_timeout, "timeout"))
 		releaseCmdContext(this)
 	}
+
 }
 
 type StatusCmd struct {
@@ -114,7 +128,7 @@ func (this *StatusCmd) asyncExec(syncFlag bool, cb func(*StatusResult)) {
 	}
 	context.unikey = this.req.UniKey
 	context.req = this.req
-	context.client = this.client
+	context.mu = &this.client.mu
 	this.client.exec(context)
 }
 
@@ -144,7 +158,7 @@ func (this *SliceCmd) asyncExec(syncFlag bool, cb func(*SliceResult)) {
 	}
 	context.unikey = this.req.UniKey
 	context.req = this.req
-	context.client = this.client
+	context.mu = &this.client.mu
 	this.client.exec(context)
 }
 
@@ -393,7 +407,7 @@ func (this *Client) Kick(table, key string) *StatusCmd {
 	}
 }
 
-func (this *Client) onGetResp(c *cmdContext, errCode errcode.Error, resp *protocol.GetResp) {
+func (this *serverConn) onGetResp(c *cmdContext, errCode errcode.Error, resp *protocol.GetResp) {
 
 	ret := SliceResult{
 		ErrCode: errCode,
@@ -411,7 +425,7 @@ func (this *Client) onGetResp(c *cmdContext, errCode errcode.Error, resp *protoc
 
 }
 
-func (this *Client) onSetResp(c *cmdContext, errCode errcode.Error, resp *protocol.SetResp) {
+func (this *serverConn) onSetResp(c *cmdContext, errCode errcode.Error, resp *protocol.SetResp) {
 	ret := StatusResult{
 		ErrCode: errCode,
 		Version: resp.GetVersion(),
@@ -419,7 +433,7 @@ func (this *Client) onSetResp(c *cmdContext, errCode errcode.Error, resp *protoc
 	this.doCallBack(c.unikey, c.cb, &ret)
 }
 
-func (this *Client) onSetNxResp(c *cmdContext, errCode errcode.Error, resp *protocol.SetNxResp) {
+func (this *serverConn) onSetNxResp(c *cmdContext, errCode errcode.Error, resp *protocol.SetNxResp) {
 
 	ret := SliceResult{
 		ErrCode: errCode,
@@ -437,7 +451,7 @@ func (this *Client) onSetNxResp(c *cmdContext, errCode errcode.Error, resp *prot
 
 }
 
-func (this *Client) onCompareAndSetResp(c *cmdContext, errCode errcode.Error, resp *protocol.CompareAndSetResp) {
+func (this *serverConn) onCompareAndSetResp(c *cmdContext, errCode errcode.Error, resp *protocol.CompareAndSetResp) {
 
 	ret := SliceResult{
 		ErrCode: errCode,
@@ -453,7 +467,7 @@ func (this *Client) onCompareAndSetResp(c *cmdContext, errCode errcode.Error, re
 
 }
 
-func (this *Client) onCompareAndSetNxResp(c *cmdContext, errCode errcode.Error, resp *protocol.CompareAndSetNxResp) {
+func (this *serverConn) onCompareAndSetNxResp(c *cmdContext, errCode errcode.Error, resp *protocol.CompareAndSetNxResp) {
 
 	ret := SliceResult{
 		ErrCode: errCode,
@@ -469,7 +483,7 @@ func (this *Client) onCompareAndSetNxResp(c *cmdContext, errCode errcode.Error, 
 
 }
 
-func (this *Client) onDelResp(c *cmdContext, errCode errcode.Error, resp *protocol.DelResp) {
+func (this *serverConn) onDelResp(c *cmdContext, errCode errcode.Error, resp *protocol.DelResp) {
 
 	ret := StatusResult{
 		ErrCode: errCode,
@@ -480,7 +494,7 @@ func (this *Client) onDelResp(c *cmdContext, errCode errcode.Error, resp *protoc
 
 }
 
-func (this *Client) onIncrByResp(c *cmdContext, errCode errcode.Error, resp *protocol.IncrByResp) {
+func (this *serverConn) onIncrByResp(c *cmdContext, errCode errcode.Error, resp *protocol.IncrByResp) {
 
 	ret := SliceResult{
 		ErrCode: errCode,
@@ -495,7 +509,7 @@ func (this *Client) onIncrByResp(c *cmdContext, errCode errcode.Error, resp *pro
 	this.doCallBack(c.unikey, c.cb, &ret)
 }
 
-func (this *Client) onDecrByResp(c *cmdContext, errCode errcode.Error, resp *protocol.DecrByResp) {
+func (this *serverConn) onDecrByResp(c *cmdContext, errCode errcode.Error, resp *protocol.DecrByResp) {
 
 	ret := SliceResult{
 		ErrCode: errCode,
@@ -511,7 +525,7 @@ func (this *Client) onDecrByResp(c *cmdContext, errCode errcode.Error, resp *pro
 
 }
 
-func (this *Client) onKickResp(c *cmdContext, errCode errcode.Error, resp *protocol.KickResp) {
+func (this *serverConn) onKickResp(c *cmdContext, errCode errcode.Error, resp *protocol.KickResp) {
 
 	ret := StatusResult{
 		ErrCode: errCode,
@@ -521,18 +535,29 @@ func (this *Client) onKickResp(c *cmdContext, errCode errcode.Error, resp *proto
 
 }
 
-func (this *Client) onMessage(msg *cs.RespMessage) {
+func (this *serverConn) onMessage(msg *cs.RespMessage) {
 	cmd := protocol.CmdType(msg.Cmd)
 	if cmd != protocol.CmdType_Ping {
-		this.Lock()
+
+		var session *flynet.Socket
+
+		this.mu.Lock()
 		ctx, ok := (*this.waitResp)[msg.Seqno]
 		if ok {
 			if ok = ctx.deadlineTimer.Stop(); ok {
 				delete(*this.waitResp, msg.Seqno)
 				ctx.waitResp = nil
+				if this.removed && 0 == len(*this.waitResp) {
+					session = this.session
+				}
 			}
 		}
-		this.Unlock()
+		this.mu.Unlock()
+
+		if nil != session {
+			session.Close(nil, 0)
+		}
+
 		if ok {
 			switch cmd {
 			case protocol.CmdType_Get:

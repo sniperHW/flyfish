@@ -10,7 +10,9 @@ import (
 	"github.com/sniperHW/flyfish/pkg/net/cs"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
+	"math/rand"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -60,14 +62,143 @@ type ClientConf struct {
 	SoloService     string
 }
 
+func makeWaitResp() *map[int64]*cmdContext {
+	waitResp := map[int64]*cmdContext{}
+	return &waitResp
+}
+
+type serverConn struct {
+	mu              *sync.Mutex
+	service         string
+	session         *flynet.Socket
+	pendingSend     *list.List             //因为连接尚未建立被排队等待发送的请求
+	waitResp        *map[int64]*cmdContext //已经发送等待对端应答的请求
+	connecting      int32
+	closed          *int32
+	UnikeyPlacement func(string) int
+	doCallBack      func(unikey string, cb callback, a interface{})
+	c               *Client
+	removed         bool
+}
+
+func (this *serverConn) onDisconnected() {
+	this.mu.Lock()
+	this.session = nil
+	waitResp := *this.waitResp
+	this.waitResp = makeWaitResp()
+	this.mu.Unlock()
+
+	for _, v := range waitResp {
+		if v.deadlineTimer.Stop() {
+			this.doCallBack(v.unikey, v.cb, errcode.New(errcode.Errcode_error, "lose connection"))
+			releaseCmdContext(v)
+		}
+	}
+}
+
+func (this *serverConn) onConnected(session *flynet.Socket) {
+
+	this.mu.Lock()
+	defer this.mu.Unlock()
+
+	atomic.StoreInt32(&this.connecting, 0)
+	this.session = session
+	this.session.SetInBoundProcessor(cs.NewRespInboundProcessor())
+	this.session.SetEncoder(&cs.ReqEncoder{})
+	this.session.SetCloseCallBack(func(sess *flynet.Socket, reason error) {
+		GetSugar().Infof("socket close %v", reason)
+		this.onDisconnected()
+	}).BeginRecv(func(s *flynet.Socket, msg interface{}) {
+		this.onMessage(msg.(*cs.RespMessage))
+	})
+
+	now := time.Now()
+	//发送被排队的请求
+	for v := this.pendingSend.Front(); v != nil; v = this.pendingSend.Front() {
+		e := this.pendingSend.Remove(v).(*cmdContext)
+		e.listElement = nil
+		e.l = nil
+		this.sendReq(e, now)
+	}
+}
+
+func (this *serverConn) sendReq(c *cmdContext, now time.Time) {
+	if c.req.Timeout = uint32(c.deadline.Sub(time.Now()) / time.Millisecond); c.req.Timeout > 0 {
+		if nil != this.UnikeyPlacement {
+			//如果提供了定位器，使用定位器直接计算出Store
+			c.req.Store = this.UnikeyPlacement(c.req.UniKey)
+		}
+		(*this.waitResp)[c.req.Seqno] = c
+		c.waitResp = this.waitResp
+		this.session.Send(c.req)
+	}
+}
+
+func (this *serverConn) exec(c *cmdContext) errcode.Error {
+
+	var errCode errcode.Error
+
+	c.serverConn = this
+
+	if nil != this.session {
+		this.sendReq(c, time.Now())
+	} else {
+		this.connect()
+		if this.pendingSend.Len() < maxPendingSize {
+			c.l = this.pendingSend
+			c.listElement = this.pendingSend.PushBack(c)
+		} else {
+			errCode = errcode.New(errcode.Errcode_retry, "busy please retry later")
+		}
+	}
+
+	return errCode
+}
+
+func (this *serverConn) connect() {
+	if atomic.CompareAndSwapInt32(&this.connecting, 0, 1) {
+		go func() {
+			ok := false
+			for {
+				if session, err := cs.NewConnector("tcp", this.service, outputBufLimit).Dial(time.Second * 1); nil == err {
+					this.onConnected(session)
+					ok = true
+				}
+
+				if ok {
+					return
+				} else {
+					/*
+					 * solo模式只有一个地址，只能一直尝试连接
+					 * cluster模式可能有多个地址，如果当前地址连接不上可以尝试换一个地址，如果无法更换再继续尝试连接
+					 */
+					if this.c.conf.SoloService != "" || !this.c.onConnectFailed(this) {
+						time.Sleep(100 * time.Millisecond)
+						this.mu.Lock()
+						if atomic.LoadInt32(this.closed) == 1 || this.pendingSend.Len() == 0 {
+							atomic.StoreInt32(&this.connecting, 0)
+							this.mu.Unlock()
+							return
+						} else {
+							this.mu.Unlock()
+						}
+					} else {
+						atomic.StoreInt32(&this.connecting, 0)
+						return
+					}
+				}
+			}
+		}()
+	}
+}
+
 type Client struct {
-	sync.Mutex
-	conf        ClientConf
-	session     *flynet.Socket
-	pendingSend *list.List             //因为连接尚未建立被排队等待发送的请求
-	waitResp    *map[int64]*cmdContext //已经发送等待对端应答的请求
-	connecting  bool
-	closed      int32
+	mu            sync.Mutex
+	conf          ClientConf
+	closed        int32
+	serverConnMap map[string]*serverConn
+	usedConn      *serverConn
+	pendingSend   *list.List //usedConn==nil时被排队等待发送的请求
 }
 
 func (this *Client) callcb(unikey string, cb callback, a interface{}) {
@@ -91,8 +222,8 @@ func (this *Client) doCallBack(unikey string, cb callback, a interface{}) {
 	}
 }
 
-func QueryGate(pd []string) (ret string) {
-	if resp := snet.UdpCall(pd, &sproto.GetFlyGate{}, func(respCh chan interface{}, r proto.Message) {
+func QueryGate(pd []string) (ret []string) {
+	if resp := snet.UdpCall(pd, &sproto.GetFlyGate{}, time.Second, func(respCh chan interface{}, r proto.Message) {
 		if resp, ok := r.(*sproto.GetFlyGateResp); ok {
 			select {
 			case respCh <- resp.GateService:
@@ -100,150 +231,73 @@ func QueryGate(pd []string) (ret string) {
 			}
 		}
 	}); nil != resp {
-		ret = resp.(string)
-
+		ret = resp.([]string)
 	}
 	return
 }
 
-func (this *Client) onDisconnected() {
-	this.Lock()
-	this.session = nil
-	waitResp := *this.waitResp
-	this.waitResp = new(map[int64]*cmdContext)
-	this.Unlock()
-
-	for _, v := range waitResp {
-		if v.deadlineTimer.Stop() {
-			this.doCallBack(v.unikey, v.cb, errcode.New(errcode.Errcode_error, "lose connection"))
-			releaseCmdContext(v)
-		}
-	}
-}
-
-func (this *Client) onConnected(session *flynet.Socket) {
-
-	this.Lock()
-	defer this.Unlock()
-
-	this.connecting = false
-	this.session = session
-	this.session.SetInBoundProcessor(cs.NewRespInboundProcessor())
-	this.session.SetEncoder(&cs.ReqEncoder{})
-	this.session.SetCloseCallBack(func(sess *flynet.Socket, reason error) {
-		GetSugar().Infof("socket close %v", reason)
-		this.onDisconnected()
-	}).BeginRecv(func(s *flynet.Socket, msg interface{}) {
-		this.onMessage(msg.(*cs.RespMessage))
-	})
-
-	now := time.Now()
-	//发送被排队的请求
-	for v := this.pendingSend.Front(); v != nil; v = this.pendingSend.Front() {
-		e := this.pendingSend.Remove(v).(*cmdContext)
-		e.listElement = nil
-		if remain := e.deadline.Sub(now) / time.Millisecond; remain > 0 {
-			e.req.Timeout = uint32(remain)
-			this.sendReq(e)
-		}
-	}
-}
-
-func (this *Client) connectCluster() bool {
-
-	gate := QueryGate(this.conf.PD)
-
-	if gate == "" {
-		return false
-	}
-
-	GetSugar().Infof("got gate%v", gate)
-
-	session, err := cs.NewConnector("tcp", gate, outputBufLimit).Dial(time.Second * 5)
-	if nil == err {
-		this.onConnected(session)
-		return true
-	}
-
-	return false
-}
-
-func (this *Client) connectSolo() bool {
-	session, err := cs.NewConnector("tcp", this.conf.SoloService, outputBufLimit).Dial(time.Second * 5)
-	if nil != err {
-		return false
+func (this *Client) onConnectFailed(conn *serverConn) bool {
+	this.mu.Lock()
+	defer this.mu.Unlock()
+	var ret bool
+	if this.usedConn != conn {
+		ret = true
+	} else if len(this.serverConnMap) == 1 {
+		ret = false
 	} else {
-		this.onConnected(session)
-		return true
-	}
-}
-
-func (this *Client) connect() {
-	if !this.connecting {
-		this.connecting = true
-		go func() {
-			ok := false
-			for {
-				if this.conf.SoloService == "" {
-					ok = this.connectCluster()
-				} else {
-					ok = this.connectSolo()
-				}
-
-				if ok {
-					return
-				} else {
-					time.Sleep(100 * time.Millisecond)
-					this.Lock()
-					if atomic.LoadInt32(&this.closed) == 1 || this.pendingSend.Len() == 0 {
-						this.connecting = false
-						this.Unlock()
-						return
-					} else {
-						this.Unlock()
-					}
-				}
+		conns := []*serverConn{}
+		for k, v := range this.serverConnMap {
+			if k != conn.service {
+				conns = append(conns, v)
 			}
-		}()
-	}
-}
-
-func (this *Client) sendReq(c *cmdContext) {
-	if nil != this.conf.UnikeyPlacement {
-		//如果提供了定位器，使用定位器直接计算出Store
-		c.req.Store = this.conf.UnikeyPlacement(c.req.UniKey)
+		}
+		this.usedConn = conns[int(rand.Int31())%len(conns)]
 	}
 
-	(*this.waitResp)[c.req.Seqno] = c
-	c.waitResp = this.waitResp
-	this.session.Send(c.req)
+	if ret {
+		for v := conn.pendingSend.Front(); v != nil; v = conn.pendingSend.Front() {
+			e := conn.pendingSend.Remove(v).(*cmdContext)
+			e.listElement = nil
+			e.l = nil
+
+			e.serverConn = this.usedConn
+
+			if nil != this.usedConn.session {
+				this.usedConn.sendReq(e, time.Now())
+			} else {
+				this.usedConn.connect()
+				e.l = this.usedConn.pendingSend
+				e.listElement = this.usedConn.pendingSend.PushBack(e)
+			}
+		}
+	}
+
+	return ret
 }
 
 func (this *Client) exec(c *cmdContext) {
 	var errCode errcode.Error
 
-	this.Lock()
+	this.mu.Lock()
 
 	if atomic.LoadInt32(&this.closed) == 1 {
 		errCode = errcode.New(errcode.Errcode_error, "client closed")
 	} else {
-		c.deadline = time.Now().Add(time.Duration(ClientTimeout) * time.Millisecond)
-		if nil != this.session {
-			c.req.Timeout = ClientTimeout
-			c.deadlineTimer = time.AfterFunc(time.Duration(ClientTimeout)*time.Millisecond, c.onTimeout)
-			this.sendReq(c)
+		if nil == this.usedConn && this.pendingSend.Len() >= maxPendingSize {
+			errCode = errcode.New(errcode.Errcode_retry, "busy please retry later")
 		} else {
-			this.connect()
-			if this.pendingSend.Len() < maxPendingSize {
-				c.deadlineTimer = time.AfterFunc(time.Duration(ClientTimeout)*time.Millisecond, c.onTimeout)
-				c.listElement = this.pendingSend.PushBack(c)
+			c.deadline = time.Now().Add(time.Duration(ClientTimeout) * time.Millisecond)
+			c.deadlineTimer = time.AfterFunc(time.Duration(ClientTimeout)*time.Millisecond, c.onTimeout)
+			if nil != this.usedConn {
+				errCode = this.usedConn.exec(c)
 			} else {
-				errCode = errcode.New(errcode.Errcode_retry, "busy please retry later")
+				c.l = this.pendingSend
+				c.listElement = this.pendingSend.PushBack(c)
 			}
 		}
 	}
 
-	this.Unlock()
+	this.mu.Unlock()
 
 	if errCode != nil {
 		this.doCallBack(c.unikey, c.cb, errCode)
@@ -253,25 +307,195 @@ func (this *Client) exec(c *cmdContext) {
 
 func (this *Client) Close() {
 	if atomic.CompareAndSwapInt32(&this.closed, 0, 1) {
-		this.Lock()
-		session := this.session
-		this.Unlock()
-		if nil != session {
-			session.Close(nil, 0)
+		if "" != this.conf.SoloService {
+			this.mu.Lock()
+			session := this.usedConn.session
+			this.mu.Unlock()
+			if nil != session {
+				session.Close(nil, 0)
+			}
+		} else {
+			this.mu.Lock()
+			this.usedConn = nil
+			serverConnMap := this.serverConnMap
+			this.serverConnMap = map[string]*serverConn{}
+			this.mu.Unlock()
+			for _, v := range serverConnMap {
+				v.session.Close(nil, 0)
+			}
 		}
 	}
 }
 
-func OpenClient(conf ClientConf) (*Client, error) {
-	c := &Client{
-		conf:        conf,
-		pendingSend: list.New(),
-		waitResp:    new(map[int64]*cmdContext),
+func (this *Client) selectServerConn(ignore ...string) *serverConn {
+	var ignoreService string
+	if len(ignore) > 0 {
+		ignoreService = ignore[0]
 	}
 
+	conns := []*serverConn{}
+	for k, v := range this.serverConnMap {
+		if k != ignoreService {
+			conns = append(conns, v)
+		}
+	}
+
+	if len(conns) > 0 {
+		return conns[int(rand.Int31())%len(conns)]
+	} else {
+		return nil
+	}
+}
+
+func (this *Client) onGates(gates []string) {
+	this.mu.Lock()
+	localGates := []string{}
+	for k, _ := range this.serverConnMap {
+		localGates = append(localGates, k)
+	}
+	this.mu.Unlock()
+
+	sort.Slice(localGates, func(i, j int) bool {
+		return localGates[i] < localGates[j]
+	})
+
+	sort.Slice(gates, func(i, j int) bool {
+		return gates[i][0] < gates[j][0]
+	})
+
+	add := []string{}
+	remove := []string{}
+
+	i := 0
+	j := 0
+
+	for i < len(gates) && j < len(localGates) {
+		if gates[i] == localGates[j] {
+			i++
+			j++
+		} else if gates[i] > localGates[j] {
+			remove = append(remove, localGates[j])
+			j++
+		} else {
+			add = append(add, gates[i])
+			i++
+		}
+	}
+
+	if len(gates[i:]) > 0 {
+		add = append(add, gates[i:]...)
+	}
+
+	if len(localGates[j:]) > 0 {
+		remove = append(remove, localGates[j:]...)
+	}
+
+	this.mu.Lock()
+
+	for _, v := range add {
+		conn := &serverConn{
+			mu:          &this.mu,
+			service:     v,
+			pendingSend: list.New(),
+			waitResp:    makeWaitResp(),
+			doCallBack:  this.doCallBack,
+			closed:      &this.closed,
+			c:           this,
+		}
+		this.serverConnMap[v] = conn
+	}
+
+	closeSession := []*flynet.Socket{}
+
+	for _, v := range remove {
+		conn := this.serverConnMap[v]
+
+		delete(this.serverConnMap, v)
+
+		if nil != this.usedConn && v == this.usedConn.service {
+			this.usedConn = nil
+		}
+
+		if len(*conn.waitResp) == 0 {
+			if nil != conn.session {
+				closeSession = append(closeSession, conn.session)
+			}
+		} else {
+			conn.removed = true
+		}
+	}
+
+	if nil == this.usedConn {
+		this.usedConn = this.selectServerConn()
+		now := time.Now()
+		for v := this.pendingSend.Front(); v != nil; v = this.pendingSend.Front() {
+			e := this.pendingSend.Remove(v).(*cmdContext)
+			e.listElement = nil
+			e.l = nil
+
+			if nil != this.usedConn.session {
+				this.usedConn.sendReq(e, now)
+			} else {
+				this.usedConn.connect()
+				e.l = this.usedConn.pendingSend
+				e.listElement = this.usedConn.pendingSend.PushBack(e)
+			}
+		}
+	}
+
+	this.mu.Unlock()
+
+	for _, v := range closeSession {
+		v.Close(nil, 0)
+	}
+}
+
+func (this *Client) queryRouteInfo() {
+	go func() {
+		gates := QueryGate(this.conf.PD)
+
+		if atomic.LoadInt32(&this.closed) == 1 {
+			return
+		}
+
+		timeout := time.Millisecond * 100
+		if len(gates) > 0 {
+			this.onGates(gates)
+			timeout = time.Second * 5
+		}
+
+		time.AfterFunc(timeout, func() {
+			this.queryRouteInfo()
+		})
+	}()
+}
+
+func OpenClient(conf ClientConf) (*Client, error) {
 	if "" == conf.SoloService && len(conf.PD) == 0 {
 		return nil, errors.New("cluster mode,but pd empty")
 	} else {
+
+		c := &Client{
+			conf: conf,
+		}
+
+		if "" != conf.SoloService {
+			c.usedConn = &serverConn{
+				mu:              &c.mu,
+				service:         conf.SoloService,
+				pendingSend:     list.New(),
+				waitResp:        new(map[int64]*cmdContext),
+				UnikeyPlacement: conf.UnikeyPlacement,
+				doCallBack:      c.doCallBack,
+				closed:          &c.closed,
+				c:               c,
+			}
+		} else {
+			c.pendingSend = list.New()
+			c.serverConnMap = map[string]*serverConn{}
+			c.queryRouteInfo()
+		}
+
 		return c, nil
 	}
 }
