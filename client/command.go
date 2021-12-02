@@ -72,18 +72,24 @@ type cmdContext struct {
 	req           *cs.ReqMessage
 	client        *Client
 	listElement   *list.Element
-	l             *list.List
+	waitResp      *map[int64]*cmdContext
 }
 
 func (this *cmdContext) onTimeout() {
+	ok := false
+
 	this.client.Lock()
-	_, ok := this.client.waitResp[this.req.Seqno]
-	if ok {
-		delete(this.client.waitResp, this.req.Seqno)
+
+	if this.waitResp == this.client.waitResp {
+		delete(*this.client.waitResp, this.req.Seqno)
+		this.waitResp = nil
+		ok = true
 	}
 
-	if this.l == this.client.pendingSend {
-		this.l.Remove(this.listElement)
+	if nil != this.listElement {
+		this.client.pendingSend.Remove(this.listElement)
+		this.listElement = nil
+		ok = true
 	}
 
 	this.client.Unlock()
@@ -519,10 +525,11 @@ func (this *Client) onMessage(msg *cs.RespMessage) {
 	cmd := protocol.CmdType(msg.Cmd)
 	if cmd != protocol.CmdType_Ping {
 		this.Lock()
-		ctx, ok := this.waitResp[msg.Seqno]
+		ctx, ok := (*this.waitResp)[msg.Seqno]
 		if ok {
 			if ok = ctx.deadlineTimer.Stop(); ok {
-				delete(this.waitResp, msg.Seqno)
+				delete(*this.waitResp, msg.Seqno)
+				ctx.waitResp = nil
 			}
 		}
 		this.Unlock()

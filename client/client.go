@@ -64,8 +64,8 @@ type Client struct {
 	sync.Mutex
 	conf        ClientConf
 	session     *flynet.Socket
-	pendingSend *list.List //等待发送的消息
-	waitResp    map[int64]*cmdContext
+	pendingSend *list.List             //因为连接尚未建立被排队等待发送的请求
+	waitResp    *map[int64]*cmdContext //已经发送等待对端应答的请求
 	connecting  bool
 	closed      int32
 }
@@ -109,8 +109,8 @@ func QueryGate(pd []string) (ret string) {
 func (this *Client) onDisconnected() {
 	this.Lock()
 	this.session = nil
-	waitResp := this.waitResp
-	this.waitResp = map[int64]*cmdContext{}
+	waitResp := *this.waitResp
+	this.waitResp = new(map[int64]*cmdContext)
 	this.Unlock()
 
 	for _, v := range waitResp {
@@ -137,13 +137,11 @@ func (this *Client) onConnected(session *flynet.Socket) {
 		this.onMessage(msg.(*cs.RespMessage))
 	})
 
-	pendingSend := this.pendingSend
-	this.pendingSend = list.New()
-
 	now := time.Now()
 	//发送被排队的请求
-	for v := pendingSend.Front(); v != nil; v = pendingSend.Front() {
-		e := pendingSend.Remove(v).(*cmdContext)
+	for v := this.pendingSend.Front(); v != nil; v = this.pendingSend.Front() {
+		e := this.pendingSend.Remove(v).(*cmdContext)
+		e.listElement = nil
 		if remain := e.deadline.Sub(now) / time.Millisecond; remain > 0 {
 			e.req.Timeout = uint32(remain)
 			this.sendReq(e)
@@ -215,40 +213,41 @@ func (this *Client) sendReq(c *cmdContext) {
 		//如果提供了定位器，使用定位器直接计算出Store
 		c.req.Store = this.conf.UnikeyPlacement(c.req.UniKey)
 	}
+
+	(*this.waitResp)[c.req.Seqno] = c
+	c.waitResp = this.waitResp
 	this.session.Send(c.req)
 }
 
 func (this *Client) exec(c *cmdContext) {
 	var errCode errcode.Error
+
 	this.Lock()
-	defer func() {
-		this.Unlock()
-		if errCode != nil {
-			this.doCallBack(c.unikey, c.cb, errCode)
-			releaseCmdContext(c)
-		}
-	}()
 
 	if atomic.LoadInt32(&this.closed) == 1 {
 		errCode = errcode.New(errcode.Errcode_error, "client closed")
 	} else {
 		c.deadline = time.Now().Add(time.Duration(ClientTimeout) * time.Millisecond)
 		if nil != this.session {
-			this.waitResp[c.req.Seqno] = c
 			c.req.Timeout = ClientTimeout
 			c.deadlineTimer = time.AfterFunc(time.Duration(ClientTimeout)*time.Millisecond, c.onTimeout)
 			this.sendReq(c)
 		} else {
 			this.connect()
 			if this.pendingSend.Len() < maxPendingSize {
-				this.waitResp[c.req.Seqno] = c
 				c.deadlineTimer = time.AfterFunc(time.Duration(ClientTimeout)*time.Millisecond, c.onTimeout)
 				c.listElement = this.pendingSend.PushBack(c)
-				c.l = this.pendingSend
 			} else {
 				errCode = errcode.New(errcode.Errcode_retry, "busy please retry later")
 			}
 		}
+	}
+
+	this.Unlock()
+
+	if errCode != nil {
+		this.doCallBack(c.unikey, c.cb, errCode)
+		releaseCmdContext(c)
 	}
 }
 
@@ -267,7 +266,7 @@ func OpenClient(conf ClientConf) (*Client, error) {
 	c := &Client{
 		conf:        conf,
 		pendingSend: list.New(),
-		waitResp:    map[int64]*cmdContext{},
+		waitResp:    new(map[int64]*cmdContext),
 	}
 
 	if "" == conf.SoloService && len(conf.PD) == 0 {
