@@ -309,6 +309,10 @@ func (g *gate) startListener() {
 			})
 
 			session.BeginRecv(func(session *flynet.Socket, v interface{}) {
+				if atomic.LoadInt32(&g.stopOnce) == 1 {
+					//服务关闭不再接受新新的请求
+					return
+				}
 				msg := v.(*forwordMsg)
 				msg.cli = session
 				g.mainQueue.ForceAppend(0, msg)
@@ -495,10 +499,6 @@ func (g *gate) Stop() {
 	if atomic.CompareAndSwapInt32(&g.stopOnce, 0, 1) {
 		//首先关闭监听,不在接受新到达的连接
 		g.listener.Close()
-		//关闭现有连接的读端，不会再接收新的req
-		for _, v := range g.clients {
-			v.ShutdownRead()
-		}
 
 		//等待所有消息处理完
 		g.waitCondition(func() bool {

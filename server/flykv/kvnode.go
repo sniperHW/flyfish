@@ -42,7 +42,6 @@ type kvnode struct {
 	clients     map[*fnet.Socket]*fnet.Socket
 	muS         sync.RWMutex
 	stores      map[int]*kvstore
-	running     int32
 	config      *Config
 	db          dbI
 	meta        db.DBMeta
@@ -93,6 +92,11 @@ func (this *kvnode) startListener() {
 			})
 
 			session.BeginRecv(func(session *fnet.Socket, v interface{}) {
+
+				if atomic.LoadInt32(&this.stopOnce) == 1 {
+					return
+				}
+
 				c := session.GetUserData()
 				if nil == c {
 					return
@@ -153,10 +157,6 @@ func waitCondition(fn func() bool) {
 }
 
 func (this *kvnode) addStore(meta db.DBMeta, storeID int, cluster string, slots *bitmap.Bitmap) error {
-	if atomic.LoadInt32(&this.running) == 0 {
-		return errors.New("kvnode is not running")
-	}
-
 	clusterArray := strings.Split(cluster, ",")
 
 	peers := map[int]string{}
@@ -236,15 +236,8 @@ func (this *kvnode) Stop() {
 		this.mu.Lock()
 		defer this.mu.Unlock()
 
-		atomic.StoreInt32(&this.running, 0)
 		//首先关闭监听,不在接受新到达的连接
 		this.listener.Close()
-		//关闭现有连接的读端，不会再接收新的req
-		this.muC.Lock()
-		for _, v := range this.clients {
-			v.ShutdownRead()
-		}
-		this.muC.Unlock()
 
 		//等待所有store响应处理请求以及回写完毕
 		waitCondition(func() bool {
@@ -423,8 +416,6 @@ func (this *kvnode) Start() error {
 
 			this.startListener()
 
-			atomic.StoreInt32(&this.running, 1)
-
 			//添加store
 			if len(config.SoloConfig.Stores) > 0 {
 				storeBitmaps := makeStoreBitmap(config.SoloConfig.Stores)
@@ -483,8 +474,6 @@ func (this *kvnode) Start() error {
 			go this.mutilRaft.Serve(this.selfUrl)
 
 			this.startListener()
-
-			atomic.StoreInt32(&this.running, 1)
 
 			for _, v := range resp.Stores {
 				slots, err := bitmap.CreateFromJson(v.Slots)
