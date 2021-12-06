@@ -11,6 +11,7 @@ import (
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"math/rand"
+	"net"
 	"runtime"
 	"sort"
 	"strings"
@@ -199,6 +200,7 @@ type Client struct {
 	serverConnMap map[string]*serverConn
 	usedConn      *serverConn
 	pendingSend   *list.List //usedConn==nil时被排队等待发送的请求
+	pdAddr        []*net.UDPAddr
 }
 
 func (this *Client) callcb(unikey string, cb callback, a interface{}) {
@@ -222,7 +224,7 @@ func (this *Client) doCallBack(unikey string, cb callback, a interface{}) {
 	}
 }
 
-func QueryGate(pd []string) (ret []string) {
+func QueryGate(pd []*net.UDPAddr) (ret []string) {
 	if resp := snet.UdpCall(pd, &sproto.GetFlyGate{}, time.Second, func(respCh chan interface{}, r proto.Message) {
 		if resp, ok := r.(*sproto.GetFlyGateResp); ok {
 			select {
@@ -452,7 +454,7 @@ func (this *Client) onGates(gates []string) {
 
 func (this *Client) queryRouteInfo() {
 	go func() {
-		gates := QueryGate(this.conf.PD)
+		gates := QueryGate(this.pdAddr)
 
 		if atomic.LoadInt32(&this.closed) == 1 {
 			return
@@ -491,6 +493,16 @@ func OpenClient(conf ClientConf) (*Client, error) {
 				c:               c,
 			}
 		} else {
+			for _, v := range conf.PD {
+				if addr, err := net.ResolveUDPAddr("udp", v); nil == err {
+					c.pdAddr = append(c.pdAddr, addr)
+				}
+			}
+
+			if len(c.pdAddr) == 0 {
+				return nil, errors.New("pd is empty")
+			}
+
 			c.pendingSend = list.New()
 			c.serverConnMap = map[string]*serverConn{}
 			c.queryRouteInfo()

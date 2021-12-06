@@ -1,7 +1,12 @@
 package movingAverage
 
+import (
+	"sync"
+)
+
 //移动平均
 type MovingAverage struct {
+	sync.Mutex
 	head    int
 	window  []int
 	total   int
@@ -16,6 +21,8 @@ func NewMovingAverage(window int) *MovingAverage {
 }
 
 func (ma *MovingAverage) Add(v int) {
+	ma.Lock()
+	defer ma.Unlock()
 	if ma.wc < len(ma.window) {
 		//窗口没有填满
 		ma.window[ma.head] = v
@@ -31,5 +38,7 @@ func (ma *MovingAverage) Add(v int) {
 }
 
 func (ma MovingAverage) GetAverage() int {
+	ma.Lock()
+	defer ma.Unlock()
 	return ma.average
 }

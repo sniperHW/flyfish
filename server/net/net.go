@@ -110,18 +110,30 @@ func Pack(msg proto.Message) ([]byte, error) {
 	}
 }
 
-func UdpCall(remotes []string, req proto.Message, timeout time.Duration, onResp func(chan interface{}, proto.Message)) (ret interface{}) {
+func UdpCall(remotes interface{}, req proto.Message, timeout time.Duration, onResp func(chan interface{}, proto.Message)) (ret interface{}) {
+	var remoteAddrs []*net.UDPAddr
+	switch remotes.(type) {
+	case []string:
+		for _, v := range remotes.([]string) {
+			if addr, err := net.ResolveUDPAddr("udp", v); nil != err {
+				remoteAddrs = append(remoteAddrs, addr)
+			}
+		}
+	case []*net.UDPAddr:
+		remoteAddrs = remotes.([]*net.UDPAddr)
+	}
+
+	if len(remoteAddrs) == 0 {
+		panic("invaild remotes")
+	}
+
 	respCh := make(chan interface{})
-	uu := make([]*flynet.Udp, len(remotes))
-	for k, v := range remotes {
-		go func(i int, addr string) {
+	uu := make([]*flynet.Udp, len(remoteAddrs))
+	for k, v := range remoteAddrs {
+		go func(i int, addr *net.UDPAddr) {
 			u, err := flynet.NewUdp(fmt.Sprintf(":0"), Pack, Unpack)
 			if nil == err {
-				remoteAddr, err := net.ResolveUDPAddr("udp", addr)
-				if nil != err {
-					return
-				}
-				u.SendTo(remoteAddr, req)
+				u.SendTo(v, req)
 				uu[i] = u
 				_, r, err := u.ReadFrom(make([]byte, 65535))
 				if nil == err {
@@ -193,6 +205,7 @@ func init() {
 	//flygate <->pd
 	namespace.Register(&sproto.QueryRouteInfo{}, uint32(sproto.ServerCmdType_QueryRouteInfo))
 	namespace.Register(&sproto.QueryRouteInfoResp{}, uint32(sproto.ServerCmdType_QueryRouteInfoResp))
+	namespace.Register(&sproto.FlyGateHeartBeat{}, uint32(sproto.ServerCmdType_FlyGateHeartBeat))
 
 	//client <->pd
 	namespace.Register(&sproto.GetFlyGate{}, uint32(sproto.ServerCmdType_GetFlyGate))

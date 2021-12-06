@@ -10,12 +10,14 @@ import (
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/buffer"
+	"github.com/sniperHW/flyfish/pkg/movingAverage"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/net/cs"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
+	"net"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -245,17 +247,19 @@ type gate struct {
 	serviceAddr     string
 	seqCounter      int64
 	pdToken         string
-	pdService       []string
+	pdAddr          []*net.UDPAddr
 	reSendReqMgr    routeErrorAndSlotTransferingReqMgr
+	msgPerSecond    *movingAverage.MovingAverage //每秒客户端转发请求量的移动平均值
+	heartBeatUdp    *flynet.Udp
 }
 
-func doQueryRouteInfo(pdService []string, req *sproto.QueryRouteInfo) *sproto.QueryRouteInfoResp {
-	if len(pdService) == 0 {
+func doQueryRouteInfo(pdAddr []*net.UDPAddr, req *sproto.QueryRouteInfo) *sproto.QueryRouteInfoResp {
+	if len(pdAddr) == 0 {
 		GetSugar().Fatalf("PdService is empty")
 		return nil
 	}
 
-	if resp := snet.UdpCall(pdService, req, time.Second, func(respCh chan interface{}, r proto.Message) {
+	if resp := snet.UdpCall(pdAddr, req, time.Second, func(respCh chan interface{}, r proto.Message) {
 		if resp, ok := r.(*sproto.QueryRouteInfoResp); ok {
 			select {
 			case respCh <- resp:
@@ -286,8 +290,17 @@ func NewFlyGate(config *Config, service string) *gate {
 			slotTransferingReq: map[int]*list.List{},
 		},
 		serviceAddr: service,
-		pdService:   strings.Split(config.PdService, ";"),
 	}
+
+	pdService := strings.Split(config.PdService, ";")
+
+	for _, v := range pdService {
+		if addr, err := net.ResolveUDPAddr("udp", v); nil == err {
+			g.pdAddr = append(g.pdAddr, addr)
+		}
+	}
+
+	g.heartBeatUdp, _ = flynet.NewUdp(fmt.Sprintf(":0"), snet.Pack, snet.Unpack)
 	tmp := md5.Sum([]byte(g.serviceAddr + "magicNum"))
 	g.pdToken = base64.StdEncoding.EncodeToString(tmp[:])
 
@@ -330,6 +343,7 @@ func (g *gate) mainLoop() {
 		_, v := g.mainQueue.Pop()
 		switch v.(type) {
 		case *forwordMsg:
+			g.msgPerSecond.Add(1)
 			msg := v.(*forwordMsg)
 			s, ok := g.routeInfo.slotToStore[msg.slot]
 			if !ok {
@@ -407,8 +421,6 @@ func (g *gate) onForwordError(errCode int16, msg *forwordMsg) {
 
 func (g *gate) queryRouteInfo() {
 	req := &sproto.QueryRouteInfo{
-		Service: g.serviceAddr,
-		Token:   g.pdToken,
 		Version: g.routeInfo.version,
 	}
 
@@ -417,7 +429,7 @@ func (g *gate) queryRouteInfo() {
 	}
 
 	go func() {
-		resp := doQueryRouteInfo(g.pdService, req)
+		resp := doQueryRouteInfo(g.pdAddr, req)
 		g.mainQueue.ForceAppend(1, func() {
 			nextTimeout := time.Millisecond * 100
 			if nil != resp {
@@ -438,6 +450,10 @@ func (g *gate) startQueryTimer(timeout time.Duration) {
 }
 
 func (g *gate) Start() error {
+	if len(g.pdAddr) == 0 {
+		return errors.New("pd is empty")
+	}
+
 	var err error
 	if atomic.CompareAndSwapInt32(&g.startOnce, 0, 1) {
 		g.listener, err = cs.NewListener("tcp", g.serviceAddr, flynet.OutputBufLimit{
@@ -452,16 +468,32 @@ func (g *gate) Start() error {
 
 		for {
 
-			resp := doQueryRouteInfo(g.pdService, &sproto.QueryRouteInfo{
-				Service: g.serviceAddr,
-				Token:   g.pdToken,
-			})
+			resp := doQueryRouteInfo(g.pdAddr, &sproto.QueryRouteInfo{})
 
 			if nil != resp {
 				g.routeInfo.onQueryRouteInfoResp(g, resp)
 				break
 			}
 		}
+
+		var heartbeat func()
+		heartbeat = func() {
+			msg := &sproto.FlyGateHeartBeat{
+				GateService:  g.serviceAddr,
+				Token:        g.pdToken,
+				MsgPerSecond: int32(g.msgPerSecond.GetAverage()),
+			}
+
+			for _, v := range g.pdAddr {
+				if nil != g.heartBeatUdp.SendTo(v, msg) {
+					return
+				}
+			}
+
+			time.AfterFunc(time.Second, heartbeat)
+		}
+
+		heartbeat()
 
 		go g.mainLoop()
 
@@ -499,6 +531,8 @@ func (g *gate) Stop() {
 	if atomic.CompareAndSwapInt32(&g.stopOnce, 0, 1) {
 		//首先关闭监听,不在接受新到达的连接
 		g.listener.Close()
+
+		g.heartBeatUdp.Close()
 
 		//等待所有消息处理完
 		g.waitCondition(func() bool {

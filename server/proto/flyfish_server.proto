@@ -48,6 +48,7 @@ enum ServerCmdType {
   //flygate <-> pd
   QueryRouteInfo                = 310;
   QueryRouteInfoResp            = 311;
+  FlyGateHeartBeat              = 312;
 
 
   //client <-> pd
@@ -57,10 +58,8 @@ enum ServerCmdType {
 
 
 message queryRouteInfo {
-  optional string service       = 1; //flygate需要填
-  optional string token         = 2; //flygate需要填
-  optional int64  version       = 3;  
-  repeated int32  sets          = 4;
+  optional int64  version       = 1;  
+  repeated int32  sets          = 2;
 }         
 
 
@@ -240,4 +239,12 @@ message   getFlyGate {
 message getFlyGateResp {
   repeated string gateService  = 1;
 }
+
+message flyGateHeartBeat {
+  optional string gateService  = 1;
+  optional string token        = 2;
+  optional int32  msgPerSecond = 3;
+}
+
+
 

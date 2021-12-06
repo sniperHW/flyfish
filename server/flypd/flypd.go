@@ -1,6 +1,8 @@
 package flypd
 
 import (
+	"crypto/md5"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"github.com/gogo/protobuf/proto"
@@ -40,7 +42,9 @@ type RemovingNode struct {
 
 type flygate struct {
 	service       string
+	msgPerSecond  int
 	deadlineTimer *time.Timer
+	token         string
 }
 
 type flygateMgr struct {
@@ -61,15 +65,48 @@ func (f *flygateMgr) onFlyGateTimeout(gateService string, t *time.Timer) {
 	}
 }
 
-func (f *flygateMgr) onQueryRouteInfo(gateService string) {
+func isValidTcpService(service string, token string) bool {
+	if "" == service {
+		return false
+	}
+
+	if _, err := net.ResolveTCPAddr("tcp", service); nil == err {
+		tmp := md5.Sum([]byte(service + "magicNum"))
+		if token == base64.StdEncoding.EncodeToString(tmp[:]) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (f *flygateMgr) onHeartBeat(gateService string, token string, msgPerSecond int) {
 	var g *flygate
 	var ok bool
 
 	if g, ok = f.flygateMap[gateService]; ok {
+		if g.token != token {
+			return
+		}
 		g.deadlineTimer.Stop()
 	} else {
+
+		if "" == gateService {
+			return
+		}
+
+		if _, err := net.ResolveTCPAddr("tcp", gateService); nil != err {
+			return
+		}
+
+		tmp := md5.Sum([]byte(gateService + "magicNum"))
+		if token != base64.StdEncoding.EncodeToString(tmp[:]) {
+			return
+		}
+
 		g = &flygate{
 			service: gateService,
+			token:   token,
 		}
 		f.flygateMap[gateService] = g
 	}
@@ -83,6 +120,7 @@ func (f *flygateMgr) onQueryRouteInfo(gateService string) {
 	})
 
 	g.deadlineTimer = deadlineTimer
+	g.msgPerSecond = msgPerSecond
 }
 
 type pd struct {

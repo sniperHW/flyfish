@@ -1,14 +1,10 @@
 package flypd
 
 import (
-	//"errors"
 	"fmt"
 	"github.com/gogo/protobuf/proto"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"net"
-	//"net/url"
-	"crypto/md5"
-	"encoding/base64"
 	"reflect"
 	"strings"
 )
@@ -551,28 +547,8 @@ func (p *pd) onKvnodeBoot(from *net.UDPAddr, m proto.Message) {
 
 }
 
-func isValidTcpService(service string, token string) bool {
-	if "" == service {
-		return false
-	}
-
-	if _, err := net.ResolveTCPAddr("tcp", service); nil == err {
-		tmp := md5.Sum([]byte(service + "magicNum"))
-		if token == base64.StdEncoding.EncodeToString(tmp[:]) {
-			return true
-		}
-	}
-
-	return false
-}
-
 func (p *pd) onQueryRouteInfo(from *net.UDPAddr, m proto.Message) {
 	msg := m.(*sproto.QueryRouteInfo)
-
-	if isValidTcpService(msg.Service, msg.Token) {
-		p.flygateMgr.onQueryRouteInfo(msg.Service)
-	}
-
 	if nil != p.deployment {
 		resp := p.deployment.queryRouteInfo(msg)
 		p.udp.SendTo(from, resp)
@@ -581,6 +557,11 @@ func (p *pd) onQueryRouteInfo(from *net.UDPAddr, m proto.Message) {
 
 func (p *pd) onGetFlyGate(from *net.UDPAddr, m proto.Message) {
 	p.udp.SendTo(from, &sproto.GetFlyGateResp{GateService: p.flygateMgr.getFlyGate()})
+}
+
+func (p *pd) onFlyGateHeartBeat(from *net.UDPAddr, m proto.Message) {
+	msg := m.(*sproto.FlyGateHeartBeat)
+	p.flygateMgr.onHeartBeat(msg.GateService, msg.Token, int(msg.MsgPerSecond))
 }
 
 func (p *pd) initMsgHandler() {
@@ -597,4 +578,6 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.KvnodeBoot{}, p.onKvnodeBoot)
 	p.registerMsgHandler(&sproto.QueryRouteInfo{}, p.onQueryRouteInfo)
 	p.registerMsgHandler(&sproto.GetFlyGate{}, p.onGetFlyGate)
+	p.registerMsgHandler(&sproto.FlyGateHeartBeat{}, p.onFlyGateHeartBeat)
+
 }
