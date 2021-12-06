@@ -425,6 +425,9 @@ func test2() {
 }
 
 func main() {
-	//test1()
-	test2()
+	test := test1
+	if len(os.Args) > 1 && "test2" == os.Args[1] {
+		test = test2
+	}
+	test()
 }
