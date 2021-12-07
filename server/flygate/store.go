@@ -79,39 +79,45 @@ func (s *store) queryLeader() {
 			}
 		}
 
-		go func() {
-			var leader int
-			if resp := snet.UdpCall(nodes, &sproto.QueryLeader{Store: int32(s.id)}, time.Second, func(respCh chan interface{}, r proto.Message) {
-				if resp, ok := r.(*sproto.QueryLeaderResp); ok && 0 != resp.Leader {
-					select {
-					case respCh <- int(resp.Leader):
-					default:
+		if len(nodes) > 0 {
+			go func() {
+				var leader int
+				if resp := snet.UdpCall(nodes, &sproto.QueryLeader{Store: int32(s.id)}, time.Second, func(respCh chan interface{}, r proto.Message) {
+					if resp, ok := r.(*sproto.QueryLeaderResp); ok && 0 != resp.Leader {
+						select {
+						case respCh <- int(resp.Leader):
+						default:
+						}
 					}
+				}); nil != resp {
+					leader = resp.(int)
 				}
-			}); nil != resp {
-				leader = resp.(int)
-			}
 
-			s.mainQueue.ForceAppend(1, func() {
-				s.queryingLeader = false
-				if leaderNode, ok := s.set.nodes[leader]; ok {
-					s.leaderVersion++
-					s.leader = leaderNode
-					GetSugar().Infof("store:%d got leader%d", s.id, leader)
-					for v := s.waittingSend.Front(); nil != v; v = s.waittingSend.Front() {
-						msg := s.waittingSend.Remove(v).(*forwordMsg)
-						msg.leaderVersion = s.leaderVersion
-						msg.l = nil
-						msg.listElement = nil
-						leaderNode.sendForwordMsg(msg)
+				s.mainQueue.ForceAppend(1, func() {
+					s.queryingLeader = false
+					if leaderNode, ok := s.set.nodes[leader]; ok {
+						s.leaderVersion++
+						s.leader = leaderNode
+						GetSugar().Infof("store:%d got leader%d", s.id, leader)
+						for v := s.waittingSend.Front(); nil != v; v = s.waittingSend.Front() {
+							msg := s.waittingSend.Remove(v).(*forwordMsg)
+							msg.leaderVersion = s.leaderVersion
+							msg.l = nil
+							msg.listElement = nil
+							leaderNode.sendForwordMsg(msg)
+						}
+					} else {
+						time.AfterFunc(time.Millisecond*100, func() {
+							s.mainQueue.ForceAppend(1, s.queryLeader)
+						})
 					}
-				} else {
-					time.AfterFunc(time.Millisecond*100, func() {
-						s.mainQueue.ForceAppend(1, s.queryLeader)
-					})
-				}
+				})
+
+			}()
+		} else {
+			time.AfterFunc(time.Second, func() {
+				s.mainQueue.ForceAppend(1, s.queryLeader)
 			})
-
-		}()
+		}
 	}
 }

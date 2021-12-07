@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/pkg/movingAverage"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/net/cs"
 	snet "github.com/sniperHW/flyfish/server/net"
@@ -201,6 +202,8 @@ type Client struct {
 	usedConn      *serverConn
 	pendingSend   *list.List //usedConn==nil时被排队等待发送的请求
 	pdAddr        []*net.UDPAddr
+	msgPerSecond  *movingAverage.MovingAverage
+	gates         []*sproto.Flygate
 }
 
 func (this *Client) callcb(unikey string, cb callback, a interface{}) {
@@ -224,16 +227,16 @@ func (this *Client) doCallBack(unikey string, cb callback, a interface{}) {
 	}
 }
 
-func QueryGate(pd []*net.UDPAddr) (ret []string) {
-	if resp := snet.UdpCall(pd, &sproto.GetFlyGate{}, time.Second, func(respCh chan interface{}, r proto.Message) {
-		if resp, ok := r.(*sproto.GetFlyGateResp); ok {
+func QueryGate(pd []*net.UDPAddr) (ret []*sproto.Flygate) {
+	if resp := snet.UdpCall(pd, &sproto.GetFlyGateList{}, time.Second, func(respCh chan interface{}, r proto.Message) {
+		if resp, ok := r.(*sproto.GetFlyGateListResp); ok {
 			select {
-			case respCh <- resp.GateService:
+			case respCh <- resp.List:
 			default:
 			}
 		}
 	}); nil != resp {
-		ret = resp.([]string)
+		ret = resp.([]*sproto.Flygate)
 	}
 	return
 }
@@ -304,6 +307,8 @@ func (this *Client) exec(c *cmdContext) {
 	if errCode != nil {
 		this.doCallBack(c.unikey, c.cb, errCode)
 		releaseCmdContext(c)
+	} else {
+		this.msgPerSecond.Add(1)
 	}
 }
 
@@ -329,27 +334,7 @@ func (this *Client) Close() {
 	}
 }
 
-func (this *Client) selectServerConn(ignore ...string) *serverConn {
-	var ignoreService string
-	if len(ignore) > 0 {
-		ignoreService = ignore[0]
-	}
-
-	conns := []*serverConn{}
-	for k, v := range this.serverConnMap {
-		if k != ignoreService {
-			conns = append(conns, v)
-		}
-	}
-
-	if len(conns) > 0 {
-		return conns[int(rand.Int31())%len(conns)]
-	} else {
-		return nil
-	}
-}
-
-func (this *Client) onGates(gates []string) {
+func (this *Client) onGates(gates []*sproto.Flygate) {
 	this.mu.Lock()
 	localGates := []string{}
 	for k, _ := range this.serverConnMap {
@@ -362,20 +347,20 @@ func (this *Client) onGates(gates []string) {
 	})
 
 	sort.Slice(gates, func(i, j int) bool {
-		return gates[i][0] < gates[j][0]
+		return gates[i].Service < gates[j].Service
 	})
 
-	add := []string{}
+	add := []*sproto.Flygate{}
 	remove := []string{}
 
 	i := 0
 	j := 0
 
 	for i < len(gates) && j < len(localGates) {
-		if gates[i] == localGates[j] {
+		if gates[i].Service == localGates[j] {
 			i++
 			j++
-		} else if gates[i] > localGates[j] {
+		} else if gates[i].Service > localGates[j] {
 			remove = append(remove, localGates[j])
 			j++
 		} else {
@@ -397,14 +382,14 @@ func (this *Client) onGates(gates []string) {
 	for _, v := range add {
 		conn := &serverConn{
 			mu:          &this.mu,
-			service:     v,
+			service:     v.Service,
 			pendingSend: list.New(),
 			waitResp:    makeWaitResp(),
 			doCallBack:  this.doCallBack,
 			closed:      &this.closed,
 			c:           this,
 		}
-		this.serverConnMap[v] = conn
+		this.serverConnMap[v.Service] = conn
 	}
 
 	closeSession := []*flynet.Socket{}
@@ -427,8 +412,10 @@ func (this *Client) onGates(gates []string) {
 		}
 	}
 
+	this.gates = gates
+
 	if nil == this.usedConn {
-		this.usedConn = this.selectServerConn()
+		this.usedConn = this.serverConnMap[gates[int(rand.Int31())%len(gates)].Service]
 		now := time.Now()
 		for v := this.pendingSend.Front(); v != nil; v = this.pendingSend.Front() {
 			e := this.pendingSend.Remove(v).(*cmdContext)
@@ -443,6 +430,8 @@ func (this *Client) onGates(gates []string) {
 				e.listElement = this.usedConn.pendingSend.PushBack(e)
 			}
 		}
+	} else {
+		this.tryGateBalance()
 	}
 
 	this.mu.Unlock()
@@ -450,6 +439,55 @@ func (this *Client) onGates(gates []string) {
 	for _, v := range closeSession {
 		v.Close(nil, 0)
 	}
+}
+
+func (this *Client) changeFlygate(newGate string) {
+	this.mu.Lock()
+	defer this.mu.Unlock()
+	if nil != this.usedConn && this.usedConn.service == newGate {
+		return
+	}
+
+	g := this.serverConnMap[newGate]
+
+	if nil == g {
+		return
+	}
+
+	this.usedConn = g
+}
+
+func (this *Client) tryGateBalance() {
+	var current *sproto.Flygate
+	average := 0
+	for _, v := range this.gates {
+		average += int(v.MsgPerSecond)
+		if v.Service == this.usedConn.service {
+			current = v
+		}
+	}
+	average /= len(this.gates)
+
+	msgSendPerSend := this.msgPerSecond.GetAverage()
+
+	if nil != current && int(current.MsgPerSecond)-msgSendPerSend > average {
+		go func() {
+			req := &sproto.ChangeFlyGate{CurrentGate: current.Service, MsgSendPerSecond: int32(msgSendPerSend)}
+			if resp := snet.UdpCall(this.pdAddr, req, time.Second, func(respCh chan interface{}, r proto.Message) {
+				if resp, ok := r.(*sproto.ChangeFlyGateResp); ok {
+					select {
+					case respCh <- resp:
+					default:
+					}
+				}
+			}); nil != resp {
+				if ret := resp.(*sproto.ChangeFlyGateResp); ret.Ok {
+					this.changeFlygate(ret.Service)
+				}
+			}
+		}()
+	}
+
 }
 
 func (this *Client) queryRouteInfo() {
@@ -478,7 +516,8 @@ func OpenClient(conf ClientConf) (*Client, error) {
 	} else {
 
 		c := &Client{
-			conf: conf,
+			conf:         conf,
+			msgPerSecond: movingAverage.New(5),
 		}
 
 		if "" != conf.SoloService {

@@ -62,8 +62,10 @@ const (
 	ServerCmdType_QueryRouteInfoResp ServerCmdType = 311
 	ServerCmdType_FlyGateHeartBeat   ServerCmdType = 312
 	//client <-> pd
-	ServerCmdType_GetFlyGate     ServerCmdType = 410
-	ServerCmdType_GetFlyGateResp ServerCmdType = 411
+	ServerCmdType_GetFlyGateList     ServerCmdType = 410
+	ServerCmdType_GetFlyGateListResp ServerCmdType = 411
+	ServerCmdType_ChangeFlyGate      ServerCmdType = 412
+	ServerCmdType_ChangeFlyGateResp  ServerCmdType = 413
 )
 
 var ServerCmdType_name = map[int32]string{
@@ -94,8 +96,10 @@ var ServerCmdType_name = map[int32]string{
 	310: "QueryRouteInfo",
 	311: "QueryRouteInfoResp",
 	312: "FlyGateHeartBeat",
-	410: "GetFlyGate",
-	411: "GetFlyGateResp",
+	410: "GetFlyGateList",
+	411: "GetFlyGateListResp",
+	412: "ChangeFlyGate",
+	413: "ChangeFlyGateResp",
 }
 
 var ServerCmdType_value = map[string]int32{
@@ -126,8 +130,10 @@ var ServerCmdType_value = map[string]int32{
 	"QueryRouteInfo":         310,
 	"QueryRouteInfoResp":     311,
 	"FlyGateHeartBeat":       312,
-	"GetFlyGate":             410,
-	"GetFlyGateResp":         411,
+	"GetFlyGateList":         410,
+	"GetFlyGateListResp":     411,
+	"ChangeFlyGate":          412,
+	"ChangeFlyGateResp":      413,
 }
 
 func (x ServerCmdType) Enum() *ServerCmdType {
@@ -1791,20 +1797,22 @@ func (m *SetMarkClearResp) GetReason() string {
 	return ""
 }
 
-type GetFlyGate struct {
+type Flygate struct {
+	Service      string `protobuf:"bytes,1,opt,name=service" json:"service"`
+	MsgPerSecond int32  `protobuf:"varint,2,opt,name=msgPerSecond" json:"msgPerSecond"`
 }
 
-func (m *GetFlyGate) Reset()      { *m = GetFlyGate{} }
-func (*GetFlyGate) ProtoMessage() {}
-func (*GetFlyGate) Descriptor() ([]byte, []int) {
+func (m *Flygate) Reset()      { *m = Flygate{} }
+func (*Flygate) ProtoMessage() {}
+func (*Flygate) Descriptor() ([]byte, []int) {
 	return fileDescriptor_03085fc3fc38bb42, []int{31}
 }
-func (m *GetFlyGate) XXX_Unmarshal(b []byte) error {
+func (m *Flygate) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *GetFlyGate) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *Flygate) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_GetFlyGate.Marshal(b, m, deterministic)
+		return xxx_messageInfo_Flygate.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -1814,33 +1822,46 @@ func (m *GetFlyGate) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return b[:n], nil
 	}
 }
-func (m *GetFlyGate) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_GetFlyGate.Merge(m, src)
+func (m *Flygate) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Flygate.Merge(m, src)
 }
-func (m *GetFlyGate) XXX_Size() int {
+func (m *Flygate) XXX_Size() int {
 	return m.Size()
 }
-func (m *GetFlyGate) XXX_DiscardUnknown() {
-	xxx_messageInfo_GetFlyGate.DiscardUnknown(m)
+func (m *Flygate) XXX_DiscardUnknown() {
+	xxx_messageInfo_Flygate.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_GetFlyGate proto.InternalMessageInfo
+var xxx_messageInfo_Flygate proto.InternalMessageInfo
 
-type GetFlyGateResp struct {
-	GateService []string `protobuf:"bytes,1,rep,name=gateService" json:"gateService,omitempty"`
+func (m *Flygate) GetService() string {
+	if m != nil {
+		return m.Service
+	}
+	return ""
 }
 
-func (m *GetFlyGateResp) Reset()      { *m = GetFlyGateResp{} }
-func (*GetFlyGateResp) ProtoMessage() {}
-func (*GetFlyGateResp) Descriptor() ([]byte, []int) {
+func (m *Flygate) GetMsgPerSecond() int32 {
+	if m != nil {
+		return m.MsgPerSecond
+	}
+	return 0
+}
+
+type GetFlyGateList struct {
+}
+
+func (m *GetFlyGateList) Reset()      { *m = GetFlyGateList{} }
+func (*GetFlyGateList) ProtoMessage() {}
+func (*GetFlyGateList) Descriptor() ([]byte, []int) {
 	return fileDescriptor_03085fc3fc38bb42, []int{32}
 }
-func (m *GetFlyGateResp) XXX_Unmarshal(b []byte) error {
+func (m *GetFlyGateList) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *GetFlyGateResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *GetFlyGateList) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_GetFlyGateResp.Marshal(b, m, deterministic)
+		return xxx_messageInfo_GetFlyGateList.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -1850,21 +1871,57 @@ func (m *GetFlyGateResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, erro
 		return b[:n], nil
 	}
 }
-func (m *GetFlyGateResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_GetFlyGateResp.Merge(m, src)
+func (m *GetFlyGateList) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetFlyGateList.Merge(m, src)
 }
-func (m *GetFlyGateResp) XXX_Size() int {
+func (m *GetFlyGateList) XXX_Size() int {
 	return m.Size()
 }
-func (m *GetFlyGateResp) XXX_DiscardUnknown() {
-	xxx_messageInfo_GetFlyGateResp.DiscardUnknown(m)
+func (m *GetFlyGateList) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetFlyGateList.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_GetFlyGateResp proto.InternalMessageInfo
+var xxx_messageInfo_GetFlyGateList proto.InternalMessageInfo
 
-func (m *GetFlyGateResp) GetGateService() []string {
+type GetFlyGateListResp struct {
+	List []*Flygate `protobuf:"bytes,1,rep,name=list" json:"list,omitempty"`
+}
+
+func (m *GetFlyGateListResp) Reset()      { *m = GetFlyGateListResp{} }
+func (*GetFlyGateListResp) ProtoMessage() {}
+func (*GetFlyGateListResp) Descriptor() ([]byte, []int) {
+	return fileDescriptor_03085fc3fc38bb42, []int{33}
+}
+func (m *GetFlyGateListResp) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetFlyGateListResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetFlyGateListResp.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *GetFlyGateListResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetFlyGateListResp.Merge(m, src)
+}
+func (m *GetFlyGateListResp) XXX_Size() int {
+	return m.Size()
+}
+func (m *GetFlyGateListResp) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetFlyGateListResp.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetFlyGateListResp proto.InternalMessageInfo
+
+func (m *GetFlyGateListResp) GetList() []*Flygate {
 	if m != nil {
-		return m.GateService
+		return m.List
 	}
 	return nil
 }
@@ -1878,7 +1935,7 @@ type FlyGateHeartBeat struct {
 func (m *FlyGateHeartBeat) Reset()      { *m = FlyGateHeartBeat{} }
 func (*FlyGateHeartBeat) ProtoMessage() {}
 func (*FlyGateHeartBeat) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{33}
+	return fileDescriptor_03085fc3fc38bb42, []int{34}
 }
 func (m *FlyGateHeartBeat) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1928,6 +1985,108 @@ func (m *FlyGateHeartBeat) GetMsgPerSecond() int32 {
 	return 0
 }
 
+type ChangeFlyGate struct {
+	CurrentGate      string `protobuf:"bytes,1,opt,name=currentGate" json:"currentGate"`
+	MsgSendPerSecond int32  `protobuf:"varint,2,opt,name=msgSendPerSecond" json:"msgSendPerSecond"`
+}
+
+func (m *ChangeFlyGate) Reset()      { *m = ChangeFlyGate{} }
+func (*ChangeFlyGate) ProtoMessage() {}
+func (*ChangeFlyGate) Descriptor() ([]byte, []int) {
+	return fileDescriptor_03085fc3fc38bb42, []int{35}
+}
+func (m *ChangeFlyGate) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ChangeFlyGate) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ChangeFlyGate.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ChangeFlyGate) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ChangeFlyGate.Merge(m, src)
+}
+func (m *ChangeFlyGate) XXX_Size() int {
+	return m.Size()
+}
+func (m *ChangeFlyGate) XXX_DiscardUnknown() {
+	xxx_messageInfo_ChangeFlyGate.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ChangeFlyGate proto.InternalMessageInfo
+
+func (m *ChangeFlyGate) GetCurrentGate() string {
+	if m != nil {
+		return m.CurrentGate
+	}
+	return ""
+}
+
+func (m *ChangeFlyGate) GetMsgSendPerSecond() int32 {
+	if m != nil {
+		return m.MsgSendPerSecond
+	}
+	return 0
+}
+
+type ChangeFlyGateResp struct {
+	Ok      bool   `protobuf:"varint,1,opt,name=ok" json:"ok"`
+	Service string `protobuf:"bytes,2,opt,name=service" json:"service"`
+}
+
+func (m *ChangeFlyGateResp) Reset()      { *m = ChangeFlyGateResp{} }
+func (*ChangeFlyGateResp) ProtoMessage() {}
+func (*ChangeFlyGateResp) Descriptor() ([]byte, []int) {
+	return fileDescriptor_03085fc3fc38bb42, []int{36}
+}
+func (m *ChangeFlyGateResp) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ChangeFlyGateResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ChangeFlyGateResp.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ChangeFlyGateResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ChangeFlyGateResp.Merge(m, src)
+}
+func (m *ChangeFlyGateResp) XXX_Size() int {
+	return m.Size()
+}
+func (m *ChangeFlyGateResp) XXX_DiscardUnknown() {
+	xxx_messageInfo_ChangeFlyGateResp.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ChangeFlyGateResp proto.InternalMessageInfo
+
+func (m *ChangeFlyGateResp) GetOk() bool {
+	if m != nil {
+		return m.Ok
+	}
+	return false
+}
+
+func (m *ChangeFlyGateResp) GetService() string {
+	if m != nil {
+		return m.Service
+	}
+	return ""
+}
+
 func init() {
 	proto.RegisterEnum("proto.ServerCmdType", ServerCmdType_name, ServerCmdType_value)
 	proto.RegisterType((*QueryRouteInfo)(nil), "proto.queryRouteInfo")
@@ -1961,87 +2120,96 @@ func init() {
 	proto.RegisterType((*RemSetResp)(nil), "proto.remSetResp")
 	proto.RegisterType((*SetMarkClear)(nil), "proto.setMarkClear")
 	proto.RegisterType((*SetMarkClearResp)(nil), "proto.setMarkClearResp")
-	proto.RegisterType((*GetFlyGate)(nil), "proto.getFlyGate")
-	proto.RegisterType((*GetFlyGateResp)(nil), "proto.getFlyGateResp")
+	proto.RegisterType((*Flygate)(nil), "proto.flygate")
+	proto.RegisterType((*GetFlyGateList)(nil), "proto.getFlyGateList")
+	proto.RegisterType((*GetFlyGateListResp)(nil), "proto.getFlyGateListResp")
 	proto.RegisterType((*FlyGateHeartBeat)(nil), "proto.flyGateHeartBeat")
+	proto.RegisterType((*ChangeFlyGate)(nil), "proto.changeFlyGate")
+	proto.RegisterType((*ChangeFlyGateResp)(nil), "proto.changeFlyGateResp")
 }
 
 func init() { proto.RegisterFile("flyfish_server.proto", fileDescriptor_03085fc3fc38bb42) }
 
 var fileDescriptor_03085fc3fc38bb42 = []byte{
-	// 1145 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x56, 0x4f, 0x6f, 0x1b, 0x45,
-	0x14, 0xf7, 0xec, 0xda, 0x4e, 0xfb, 0xec, 0x24, 0x93, 0xa9, 0x93, 0x9a, 0x50, 0x2d, 0xd6, 0x0a,
-	0x15, 0x2b, 0x12, 0xa5, 0xed, 0x89, 0x0b, 0x12, 0xf9, 0x43, 0x52, 0x13, 0x6a, 0x9a, 0x75, 0x4f,
-	0x5c, 0xa2, 0x55, 0x77, 0xec, 0x18, 0xaf, 0x77, 0xd2, 0xd9, 0x49, 0x24, 0x1f, 0x90, 0xca, 0x95,
-	0x13, 0x07, 0x4e, 0xf0, 0x01, 0xe0, 0x13, 0x00, 0x1f, 0x21, 0xc7, 0x88, 0x3f, 0x25, 0x80, 0x84,
-	0x1a, 0xe7, 0xc2, 0xb1, 0x1f, 0x01, 0xcd, 0xec, 0x7a, 0x3d, 0x6b, 0x3b, 0x0e, 0x72, 0xe1, 0x64,
-	0xef, 0x7b, 0x6f, 0xde, 0xfb, 0xbd, 0x3f, 0xf3, 0x7b, 0x03, 0xa5, 0xa6, 0xdf, 0x6b, 0xb6, 0xc3,
-	0x83, 0xfd, 0x90, 0xf2, 0x63, 0xca, 0xef, 0x1c, 0x72, 0x26, 0x18, 0xc9, 0xa9, 0x9f, 0xd5, 0x52,
-	0x8b, 0xb5, 0x98, 0xfa, 0xfb, 0x8e, 0xfc, 0x17, 0x29, 0xed, 0x2d, 0x58, 0x78, 0x7a, 0x44, 0x79,
-	0xcf, 0x61, 0x47, 0x82, 0xd6, 0x82, 0x26, 0x23, 0x16, 0xcc, 0x1d, 0x53, 0x1e, 0xb6, 0x59, 0x50,
-	0x46, 0x15, 0x54, 0x35, 0x37, 0xb2, 0x27, 0x7f, 0xbd, 0x91, 0x71, 0x06, 0x42, 0x42, 0x20, 0x1b,
-	0x52, 0x11, 0x96, 0x8d, 0x8a, 0x59, 0xcd, 0x39, 0xea, 0xbf, 0xfd, 0x14, 0x16, 0xf9, 0xc0, 0xc1,
-	0xee, 0x71, 0x9d, 0x79, 0x94, 0xdc, 0x82, 0x7c, 0xc0, 0x3c, 0x5a, 0xdb, 0x52, 0x5e, 0x72, 0xb1,
-	0x97, 0x58, 0x46, 0xca, 0x90, 0x3d, 0x60, 0xa1, 0x28, 0x1b, 0x15, 0x54, 0xbd, 0x1e, 0xeb, 0x94,
-	0x84, 0xdc, 0x86, 0x82, 0x44, 0xdf, 0x7e, 0x42, 0x1f, 0x31, 0x2e, 0xca, 0xa6, 0x76, 0x58, 0x57,
-	0xd8, 0x5f, 0x20, 0x28, 0x26, 0x31, 0x1b, 0x54, 0x90, 0x55, 0xc8, 0x85, 0x54, 0x8c, 0xc4, 0x8b,
-	0x44, 0x64, 0x05, 0xf2, 0xa1, 0x60, 0x9c, 0x0e, 0x50, 0xc7, 0x5f, 0xa4, 0x04, 0xb9, 0xd0, 0x67,
-	0x22, 0x2c, 0x9b, 0x15, 0xb3, 0x5a, 0x74, 0xa2, 0x0f, 0x72, 0x17, 0xe6, 0x3a, 0xc7, 0x12, 0x68,
-	0x58, 0xce, 0x56, 0xcc, 0x6a, 0xe1, 0xfe, 0x4a, 0x54, 0xac, 0x3b, 0x23, 0x39, 0x3a, 0x03, 0x33,
-	0xfb, 0x33, 0x20, 0xe9, 0x2a, 0x3a, 0x34, 0x3c, 0x24, 0x6f, 0xc5, 0x95, 0x42, 0xca, 0xc9, 0x8d,
-	0x51, 0x27, 0x0d, 0x2a, 0xa2, 0xf2, 0x11, 0x0b, 0x80, 0xd3, 0x2e, 0x3b, 0xa6, 0x8d, 0x61, 0x61,
-	0x35, 0x89, 0xde, 0x12, 0x73, 0x42, 0x4b, 0xec, 0x35, 0x28, 0xaa, 0xf0, 0xfb, 0x3e, 0x75, 0x3d,
-	0xca, 0x55, 0x29, 0x64, 0x82, 0x23, 0xa5, 0x90, 0x22, 0xfb, 0x1e, 0x2c, 0xe9, 0xb6, 0xfb, 0x5c,
-	0x22, 0xbd, 0x05, 0xf9, 0xe8, 0x33, 0xdd, 0xac, 0x48, 0x66, 0x7f, 0x85, 0x00, 0x7b, 0xf4, 0xd0,
-	0x67, 0xbd, 0x2e, 0x0d, 0xc4, 0xae, 0xca, 0xf9, 0xff, 0xee, 0x2f, 0xa9, 0xc0, 0x35, 0xee, 0x36,
-	0x85, 0x32, 0xca, 0x6a, 0x46, 0x89, 0xd4, 0xfe, 0x04, 0xe6, 0x87, 0xa8, 0xae, 0x9a, 0x80, 0xb7,
-	0x21, 0x17, 0x75, 0xd4, 0x50, 0xcd, 0xb8, 0x19, 0x37, 0x63, 0x34, 0x2d, 0x27, 0xb2, 0xb2, 0xdf,
-	0x83, 0xa5, 0x76, 0x10, 0x0a, 0xd7, 0xf7, 0xb7, 0x12, 0x0b, 0x52, 0x4d, 0xf5, 0xb3, 0x34, 0xe6,
-	0x22, 0x69, 0xa8, 0xbd, 0x0b, 0xcb, 0x63, 0xc7, 0xd5, 0x48, 0x94, 0xc0, 0x60, 0x1d, 0x85, 0xef,
-	0x5a, 0x8c, 0xcf, 0x60, 0x1d, 0x59, 0x4b, 0x4e, 0xdd, 0x90, 0x05, 0xa9, 0x7a, 0xc5, 0x32, 0xfb,
-	0x5b, 0x04, 0x73, 0xae, 0xe7, 0xa9, 0x5b, 0x35, 0x2d, 0xc5, 0x61, 0x47, 0x8c, 0x29, 0x1d, 0x31,
-	0xaf, 0xea, 0x48, 0xf6, 0xdf, 0x74, 0x24, 0x37, 0xb1, 0x23, 0xeb, 0x50, 0x88, 0x81, 0xce, 0x9c,
-	0xec, 0x26, 0xcc, 0x71, 0xda, 0x7d, 0xb5, 0x5c, 0x25, 0x8e, 0xd8, 0xc9, 0xcc, 0x38, 0xd6, 0x00,
-	0xa2, 0xcb, 0xbd, 0xc1, 0x98, 0x98, 0x3e, 0xec, 0x36, 0x85, 0xeb, 0xea, 0x6e, 0x29, 0xfa, 0x2c,
-	0x81, 0xd1, 0xf6, 0x52, 0x66, 0x46, 0xdb, 0x93, 0x35, 0x96, 0x55, 0xda, 0xf4, 0x8f, 0x42, 0x41,
-	0x79, 0x2a, 0xa2, 0xae, 0x50, 0x39, 0xc7, 0x84, 0x84, 0xaa, 0xc5, 0x24, 0x67, 0x29, 0xb2, 0x5f,
-	0x20, 0x58, 0x18, 0x62, 0x9a, 0x35, 0x33, 0xad, 0xdd, 0x0f, 0x46, 0xe7, 0x41, 0x57, 0xfc, 0x77,
-	0x63, 0x41, 0xaa, 0x09, 0xfb, 0xe6, 0xd5, 0xcd, 0xc1, 0xf1, 0xcd, 0x49, 0x8a, 0x36, 0xe0, 0x63,
-	0xfb, 0x73, 0x04, 0xf3, 0x01, 0x13, 0xed, 0x66, 0x6f, 0x3d, 0x1e, 0xf8, 0x59, 0x69, 0x46, 0x47,
-	0x65, 0x4e, 0x44, 0x35, 0xdc, 0x09, 0x59, 0x7d, 0x27, 0xd8, 0x0f, 0x61, 0x29, 0x05, 0xc1, 0x89,
-	0x09, 0x72, 0x0a, 0x8c, 0x84, 0x6f, 0x8d, 0x71, 0xbe, 0xfd, 0x60, 0x90, 0x91, 0x13, 0x8f, 0xf5,
-	0x74, 0x57, 0x97, 0x6c, 0xaa, 0x21, 0x2a, 0x47, 0x1b, 0xec, 0xd9, 0x51, 0x7d, 0x08, 0x24, 0x72,
-	0xd7, 0xf0, 0x99, 0x78, 0xcc, 0xdd, 0x20, 0xfc, 0xf8, 0x48, 0xc8, 0x72, 0xca, 0x51, 0x4b, 0x79,
-	0x53, 0x92, 0xa9, 0xbe, 0xee, 0xc3, 0xca, 0xb8, 0x2f, 0x85, 0xef, 0x52, 0x7f, 0x76, 0x6d, 0x90,
-	0x4e, 0x72, 0xa6, 0x16, 0xcc, 0x18, 0xfe, 0x1e, 0x2c, 0x8f, 0xb9, 0xba, 0x22, 0xfa, 0x5d, 0xc8,
-	0xbb, 0x9e, 0x27, 0x57, 0xc6, 0x6d, 0x30, 0x43, 0x1a, 0x99, 0x5c, 0xc6, 0xe8, 0xd2, 0xc0, 0x7e,
-	0x1f, 0x20, 0x3a, 0x31, 0x33, 0xa1, 0xbc, 0x29, 0xb5, 0xdd, 0x2b, 0xd6, 0x94, 0x8c, 0x13, 0x59,
-	0xbd, 0x02, 0x71, 0x15, 0x43, 0x2a, 0x1e, 0xba, 0xbc, 0xb3, 0xe9, 0x53, 0x97, 0x4f, 0x8d, 0xb6,
-	0x0d, 0x58, 0xb7, 0x9d, 0x39, 0x66, 0x11, 0xa0, 0x45, 0xc5, 0xb6, 0xdf, 0xdb, 0x71, 0x85, 0x9c,
-	0x87, 0x85, 0xe1, 0x97, 0xf2, 0x59, 0x81, 0x42, 0xcb, 0x15, 0xb4, 0x11, 0xb1, 0x86, 0xda, 0x9f,
-	0xd7, 0x1d, 0x5d, 0x64, 0x3f, 0x43, 0x80, 0x9b, 0xd1, 0x89, 0x07, 0xd4, 0xe5, 0x62, 0x83, 0xba,
-	0x8a, 0x81, 0xd2, 0xc7, 0x34, 0xa6, 0xd2, 0x14, 0x32, 0x45, 0xc1, 0x3a, 0x34, 0x8d, 0x2d, 0x12,
-	0x91, 0x2a, 0x14, 0xbb, 0x61, 0xeb, 0x11, 0xe5, 0x0d, 0xfa, 0x84, 0x05, 0x5e, 0x8a, 0x0b, 0x52,
-	0x9a, 0xb5, 0xe7, 0x59, 0x98, 0x6f, 0xa8, 0x77, 0xf3, 0x66, 0xd7, 0x7b, 0xdc, 0x3b, 0xa4, 0x64,
-	0x11, 0x0a, 0x7b, 0xf2, 0xa9, 0xf4, 0x91, 0x7a, 0x06, 0x61, 0x44, 0x6e, 0xc0, 0xa2, 0x26, 0x90,
-	0xa9, 0x61, 0x83, 0x2c, 0xc3, 0x52, 0x6d, 0x74, 0xd7, 0x63, 0x4a, 0x5e, 0x83, 0xe5, 0xda, 0xa4,
-	0x27, 0x00, 0x6e, 0x92, 0x02, 0xcc, 0xc5, 0xdc, 0x82, 0x5b, 0x32, 0x88, 0x46, 0x34, 0xf8, 0x40,
-	0x6a, 0xe3, 0x3b, 0x8e, 0xdb, 0x52, 0xab, 0x5d, 0x78, 0xfc, 0x29, 0x01, 0xc8, 0xaf, 0xab, 0x41,
-	0xc4, 0x1d, 0xb2, 0x00, 0xb0, 0x9e, 0x0c, 0x25, 0xf6, 0xa5, 0xce, 0x51, 0xc3, 0x83, 0xbb, 0x52,
-	0xe7, 0x24, 0x83, 0x84, 0x03, 0x82, 0xa1, 0xd8, 0xd0, 0x5a, 0x8d, 0xe5, 0xa2, 0xc2, 0x8d, 0x91,
-	0xe6, 0xe3, 0x43, 0xb2, 0x08, 0xb0, 0x9b, 0xec, 0x18, 0xfc, 0x93, 0xcc, 0x79, 0x61, 0x37, 0xb5,
-	0x74, 0xf0, 0xcf, 0x88, 0x10, 0x98, 0xaf, 0xeb, 0x1c, 0x89, 0x7f, 0x41, 0x64, 0x05, 0x96, 0xea,
-	0xa3, 0xbc, 0x89, 0x7f, 0xd5, 0x6c, 0x07, 0x59, 0x3d, 0xd7, 0x6c, 0xf5, 0xe4, 0x7e, 0x43, 0xe4,
-	0x26, 0x90, 0xfa, 0x18, 0x95, 0xe0, 0x33, 0x44, 0x5e, 0x87, 0x95, 0xfa, 0x44, 0x8e, 0xc1, 0xbf,
-	0x6b, 0xde, 0x34, 0x06, 0xc0, 0x7f, 0x20, 0xb2, 0x0a, 0xcb, 0xf5, 0x49, 0xcc, 0x80, 0xff, 0x54,
-	0x69, 0xed, 0xa5, 0x5e, 0xec, 0xf8, 0x7b, 0x43, 0x86, 0xdf, 0x1b, 0x7b, 0xc6, 0xe3, 0x1f, 0x64,
-	0x8f, 0xf1, 0xf6, 0xc8, 0x74, 0xe2, 0x1f, 0x0d, 0x59, 0xac, 0x9d, 0x64, 0xd2, 0xf1, 0xd7, 0xa6,
-	0xf4, 0xba, 0x93, 0x1a, 0x7d, 0xfc, 0x8d, 0xb9, 0xf1, 0xee, 0xc9, 0xb9, 0x85, 0x4e, 0xcf, 0x2d,
-	0x74, 0x76, 0x6e, 0x65, 0x5e, 0x9e, 0x5b, 0xe8, 0x59, 0xdf, 0x42, 0xdf, 0xf5, 0x2d, 0x74, 0xd2,
-	0xb7, 0xd0, 0x69, 0xdf, 0x42, 0x2f, 0xfa, 0x16, 0xfa, 0xbb, 0x6f, 0x65, 0x5e, 0xf6, 0x2d, 0xf4,
-	0xe5, 0x85, 0x95, 0x39, 0xbd, 0xb0, 0x32, 0x67, 0x17, 0x56, 0xe6, 0x9f, 0x00, 0x00, 0x00, 0xff,
-	0xff, 0xa0, 0x3e, 0xa6, 0x0c, 0xd0, 0x0d, 0x00, 0x00,
+	// 1238 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x57, 0xcd, 0x6f, 0x1b, 0x45,
+	0x14, 0xf7, 0xec, 0xfa, 0xa3, 0x7d, 0x71, 0x9c, 0xc9, 0xd4, 0x49, 0x4d, 0xa8, 0x16, 0x6b, 0x85,
+	0x8a, 0x15, 0x89, 0x92, 0xf6, 0xd4, 0x0b, 0x12, 0x89, 0x43, 0x52, 0x93, 0xd6, 0x34, 0xeb, 0x9e,
+	0xb8, 0x44, 0xab, 0xec, 0xd8, 0x31, 0x5e, 0xef, 0xa4, 0xbb, 0x93, 0x48, 0x3e, 0x20, 0x95, 0x6b,
+	0x4f, 0x1c, 0x38, 0xf1, 0x71, 0x86, 0xbf, 0x00, 0xf8, 0x13, 0x72, 0x8c, 0xf8, 0x0c, 0x20, 0xa1,
+	0xc6, 0xb9, 0x70, 0xec, 0x9f, 0x80, 0x66, 0x76, 0xbd, 0x9e, 0xb5, 0x1d, 0x07, 0xb9, 0x70, 0xb2,
+	0xf7, 0xbd, 0xb7, 0xef, 0xfd, 0xde, 0xd7, 0x6f, 0x66, 0xa1, 0xd8, 0x74, 0x7b, 0xcd, 0x76, 0x70,
+	0xb0, 0x17, 0x50, 0xff, 0x98, 0xfa, 0x77, 0x0e, 0x7d, 0xc6, 0x19, 0xc9, 0xc8, 0x9f, 0x95, 0x62,
+	0x8b, 0xb5, 0x98, 0xfc, 0xfb, 0x8e, 0xf8, 0x17, 0x2a, 0xcd, 0x4d, 0x28, 0x3c, 0x3d, 0xa2, 0x7e,
+	0xcf, 0x62, 0x47, 0x9c, 0xd6, 0xbc, 0x26, 0x23, 0x06, 0xe4, 0x8e, 0xa9, 0x1f, 0xb4, 0x99, 0x57,
+	0x42, 0x65, 0x54, 0xd1, 0x37, 0xd2, 0x27, 0x7f, 0xbd, 0x91, 0xb2, 0x06, 0x42, 0x42, 0x20, 0x1d,
+	0x50, 0x1e, 0x94, 0xb4, 0xb2, 0x5e, 0xc9, 0x58, 0xf2, 0xbf, 0xf9, 0x14, 0x16, 0xfc, 0x81, 0x83,
+	0x9d, 0xe3, 0x3a, 0x73, 0x28, 0xb9, 0x05, 0x59, 0x8f, 0x39, 0xb4, 0xb6, 0x29, 0xbd, 0x64, 0x22,
+	0x2f, 0x91, 0x8c, 0x94, 0x20, 0x7d, 0xc0, 0x02, 0x5e, 0xd2, 0xca, 0xa8, 0x72, 0x3d, 0xd2, 0x49,
+	0x09, 0xb9, 0x0d, 0x73, 0x02, 0x7d, 0x7b, 0x9f, 0x3e, 0x66, 0x3e, 0x2f, 0xe9, 0xca, 0xcb, 0xaa,
+	0xc2, 0x7c, 0x8e, 0x20, 0x1f, 0xc7, 0x6c, 0x50, 0x4e, 0x56, 0x20, 0x13, 0x50, 0x3e, 0x12, 0x2f,
+	0x14, 0x91, 0x65, 0xc8, 0x06, 0x9c, 0xf9, 0x74, 0x80, 0x3a, 0x7a, 0x22, 0x45, 0xc8, 0x04, 0x2e,
+	0xe3, 0x41, 0x49, 0x2f, 0xeb, 0x95, 0xbc, 0x15, 0x3e, 0x90, 0x35, 0xc8, 0x75, 0x8e, 0x05, 0xd0,
+	0xa0, 0x94, 0x2e, 0xeb, 0x95, 0xb9, 0x7b, 0xcb, 0x61, 0xb1, 0xee, 0x8c, 0xe4, 0x68, 0x0d, 0xcc,
+	0xcc, 0x4f, 0x80, 0x24, 0xab, 0x68, 0xd1, 0xe0, 0x90, 0xbc, 0x15, 0x55, 0x0a, 0x49, 0x27, 0x37,
+	0x46, 0x9d, 0x34, 0x28, 0x0f, 0xcb, 0x47, 0x0c, 0x00, 0x9f, 0x76, 0xd9, 0x31, 0x6d, 0x0c, 0x0b,
+	0xab, 0x48, 0xd4, 0x96, 0xe8, 0x13, 0x5a, 0x62, 0xae, 0x42, 0x5e, 0x86, 0xdf, 0x73, 0xa9, 0xed,
+	0x50, 0x5f, 0x96, 0x42, 0x24, 0x38, 0x52, 0x0a, 0x21, 0x32, 0xef, 0xc2, 0xa2, 0x6a, 0xbb, 0xe7,
+	0x0b, 0xa4, 0xb7, 0x20, 0x1b, 0x3e, 0x26, 0x9b, 0x15, 0xca, 0xcc, 0xcf, 0x11, 0x60, 0x87, 0x1e,
+	0xba, 0xac, 0xd7, 0xa5, 0x1e, 0xdf, 0x91, 0x39, 0xff, 0xdf, 0xfd, 0x25, 0x65, 0xb8, 0xe6, 0xdb,
+	0x4d, 0x2e, 0x8d, 0xd2, 0x8a, 0x51, 0x2c, 0x35, 0x3f, 0x82, 0xf9, 0x21, 0xaa, 0xab, 0x26, 0xe0,
+	0x6d, 0xc8, 0x84, 0x1d, 0xd5, 0x64, 0x33, 0x6e, 0x46, 0xcd, 0x18, 0x4d, 0xcb, 0x0a, 0xad, 0xcc,
+	0x77, 0x61, 0xb1, 0xed, 0x05, 0xdc, 0x76, 0xdd, 0xcd, 0xd8, 0x82, 0x54, 0x12, 0xfd, 0x2c, 0x8e,
+	0xb9, 0x88, 0x1b, 0x6a, 0xee, 0xc0, 0xd2, 0xd8, 0xeb, 0x72, 0x24, 0x8a, 0xa0, 0xb1, 0x8e, 0xc4,
+	0x77, 0x2d, 0xc2, 0xa7, 0xb1, 0x8e, 0xa8, 0xa5, 0x4f, 0xed, 0x80, 0x79, 0x89, 0x7a, 0x45, 0x32,
+	0xf3, 0x1b, 0x04, 0x39, 0xdb, 0x71, 0xe4, 0x56, 0x4d, 0x4b, 0x71, 0xd8, 0x11, 0x6d, 0x4a, 0x47,
+	0xf4, 0xab, 0x3a, 0x92, 0xfe, 0x37, 0x1d, 0xc9, 0x4c, 0xec, 0xc8, 0x3a, 0xcc, 0x45, 0x40, 0x67,
+	0x4e, 0xb6, 0x0a, 0x39, 0x9f, 0x76, 0x5f, 0x2d, 0x57, 0x81, 0x23, 0x72, 0x32, 0x33, 0x8e, 0x55,
+	0x80, 0x70, 0xb9, 0x37, 0x18, 0xe3, 0xd3, 0x87, 0xdd, 0xa4, 0x70, 0x5d, 0xee, 0x96, 0xa4, 0xcf,
+	0x22, 0x68, 0x6d, 0x27, 0x61, 0xa6, 0xb5, 0x1d, 0x51, 0x63, 0x51, 0xa5, 0xaa, 0x7b, 0x14, 0x70,
+	0xea, 0x27, 0x22, 0xaa, 0x0a, 0x99, 0x73, 0x44, 0x48, 0xa8, 0x92, 0x8f, 0x73, 0x16, 0x22, 0xf3,
+	0x05, 0x82, 0xc2, 0x10, 0xd3, 0xac, 0x99, 0x29, 0xed, 0x7e, 0x30, 0x3a, 0x0f, 0xaa, 0xe2, 0xbf,
+	0x1b, 0x0b, 0x52, 0x89, 0xd9, 0x37, 0x2b, 0x37, 0x07, 0x47, 0x9b, 0x13, 0x17, 0x6d, 0xc0, 0xc7,
+	0xe6, 0xa7, 0x08, 0xe6, 0x3d, 0xc6, 0xdb, 0xcd, 0xde, 0x7a, 0x34, 0xf0, 0xb3, 0xd2, 0x8c, 0x8a,
+	0x4a, 0x9f, 0x88, 0x6a, 0x78, 0x26, 0xa4, 0xd5, 0x33, 0xc1, 0x7c, 0x04, 0x8b, 0x09, 0x08, 0x56,
+	0x44, 0x90, 0x53, 0x60, 0xc4, 0x7c, 0xab, 0x8d, 0xf3, 0xed, 0xfb, 0x83, 0x8c, 0xac, 0x68, 0xac,
+	0xa7, 0xbb, 0xba, 0xe4, 0xa4, 0x1a, 0xa2, 0xb2, 0x94, 0xc1, 0x9e, 0x1d, 0xd5, 0x07, 0x40, 0x42,
+	0x77, 0x0d, 0x97, 0xf1, 0x27, 0xbe, 0xed, 0x05, 0x1f, 0x1e, 0x71, 0x51, 0x4e, 0x31, 0x6a, 0x09,
+	0x6f, 0x52, 0x32, 0xd5, 0xd7, 0x3d, 0x58, 0x1e, 0xf7, 0x25, 0xf1, 0x5d, 0xea, 0xcf, 0xac, 0x0d,
+	0xd2, 0x89, 0xdf, 0xa9, 0x79, 0x33, 0x86, 0xbf, 0x0b, 0x4b, 0x63, 0xae, 0xae, 0x88, 0xbe, 0x06,
+	0x59, 0xdb, 0x71, 0xc4, 0x91, 0x71, 0x1b, 0xf4, 0x80, 0x86, 0x26, 0x97, 0x31, 0xba, 0x30, 0x30,
+	0xdf, 0x03, 0x08, 0xdf, 0x98, 0x99, 0x50, 0xde, 0x14, 0xda, 0xee, 0x15, 0xc7, 0x94, 0x88, 0x13,
+	0x5a, 0xbd, 0x02, 0x71, 0xe5, 0x03, 0xca, 0x1f, 0xd9, 0x7e, 0xa7, 0xea, 0x52, 0xdb, 0x9f, 0x1a,
+	0x6d, 0x0b, 0xb0, 0x6a, 0x3b, 0x73, 0xcc, 0x06, 0xe4, 0x9a, 0x6e, 0xaf, 0x65, 0x73, 0x2a, 0xae,
+	0x2a, 0x11, 0x39, 0x48, 0x1f, 0x03, 0xcb, 0x81, 0x90, 0x54, 0x20, 0xdf, 0x0d, 0x5a, 0x8f, 0xa9,
+	0xdf, 0xa0, 0xfb, 0xcc, 0x73, 0x12, 0x0d, 0x4d, 0x68, 0x4c, 0x0c, 0x85, 0x16, 0xe5, 0x5b, 0x6e,
+	0x6f, 0xdb, 0xe6, 0xf4, 0x61, 0x3b, 0xe0, 0xe6, 0x7d, 0x20, 0x49, 0x89, 0x04, 0x6c, 0x42, 0xda,
+	0x6d, 0x07, 0x3c, 0x3a, 0x95, 0x0b, 0x51, 0x0f, 0x23, 0x3c, 0x96, 0xd4, 0x99, 0xcf, 0x10, 0xe0,
+	0x66, 0xf8, 0xde, 0x03, 0x6a, 0xfb, 0x7c, 0x83, 0xda, 0x92, 0xe0, 0x84, 0x49, 0x63, 0x02, 0x5c,
+	0x55, 0x21, 0x2a, 0xc8, 0x59, 0x87, 0x26, 0x53, 0x0f, 0x45, 0x63, 0xe9, 0xe8, 0x97, 0xa6, 0xd3,
+	0x86, 0xf9, 0xfd, 0x03, 0xdb, 0x6b, 0xd1, 0x08, 0xbf, 0x08, 0xbf, 0x7f, 0xe4, 0xfb, 0xd4, 0xe3,
+	0xe2, 0x31, 0x19, 0x5e, 0x51, 0x90, 0x35, 0xc0, 0xdd, 0xa0, 0xd5, 0xa0, 0x9e, 0x33, 0xb9, 0x6a,
+	0x63, 0x5a, 0xb1, 0x5c, 0x89, 0x50, 0x53, 0xfa, 0xaa, 0xb4, 0x4b, 0x9b, 0xd0, 0xae, 0xd5, 0xe7,
+	0x19, 0x98, 0x6f, 0xc8, 0x8f, 0x89, 0x6a, 0xd7, 0x79, 0xd2, 0x3b, 0xa4, 0x64, 0x01, 0xe6, 0x76,
+	0xc5, 0xfd, 0xf1, 0xa1, 0xbc, 0x1b, 0x62, 0x44, 0x6e, 0xc0, 0x82, 0x22, 0x10, 0xb1, 0xb0, 0x46,
+	0x96, 0x60, 0xb1, 0x36, 0x7a, 0x01, 0xc2, 0x94, 0xbc, 0x06, 0x4b, 0xb5, 0x49, 0xf7, 0x22, 0xdc,
+	0x24, 0x73, 0x90, 0x8b, 0x08, 0x17, 0xb7, 0x44, 0x10, 0x85, 0x7d, 0xf1, 0x81, 0xd0, 0x46, 0xc4,
+	0x87, 0xdb, 0x42, 0xab, 0xb0, 0x20, 0xfe, 0x98, 0x00, 0x64, 0xd7, 0xe5, 0x76, 0xe2, 0x0e, 0x29,
+	0x00, 0xac, 0xc7, 0x9b, 0x8a, 0x5d, 0xa1, 0xb3, 0xe4, 0x46, 0xe1, 0xae, 0xd0, 0x59, 0xf1, 0x76,
+	0x61, 0x8f, 0x60, 0xc8, 0x37, 0x94, 0xf9, 0xc7, 0xe2, 0xf4, 0xc6, 0x8d, 0x91, 0x8d, 0xc0, 0x87,
+	0x64, 0x01, 0x60, 0x27, 0x3e, 0x78, 0xf1, 0x8f, 0x22, 0xe7, 0xc2, 0x4e, 0xe2, 0x24, 0xc6, 0x3f,
+	0x21, 0x42, 0x60, 0xbe, 0xae, 0x1e, 0x1c, 0xf8, 0x67, 0x44, 0x96, 0x61, 0xb1, 0x3e, 0x7a, 0x98,
+	0xe0, 0x5f, 0x14, 0xdb, 0x41, 0x56, 0xbf, 0x2a, 0xb6, 0x6a, 0x72, 0xbf, 0x21, 0x72, 0x13, 0x48,
+	0x7d, 0x8c, 0x5f, 0xf1, 0x19, 0x22, 0xaf, 0xc3, 0x72, 0x7d, 0x22, 0xf1, 0xe2, 0xdf, 0x15, 0x6f,
+	0x0a, 0x2d, 0xe2, 0x3f, 0x10, 0x59, 0x81, 0xa5, 0xfa, 0x24, 0xba, 0xc4, 0x7f, 0xca, 0xb4, 0x76,
+	0x13, 0x9f, 0x31, 0xf8, 0x3b, 0x4d, 0x84, 0xdf, 0x1d, 0xfb, 0xb6, 0xc1, 0xdf, 0x8b, 0x1e, 0xe3,
+	0xad, 0x91, 0x9d, 0xc2, 0x3f, 0x68, 0xc2, 0xc9, 0x76, 0x62, 0x4b, 0xf1, 0x17, 0xba, 0x70, 0xb2,
+	0x3d, 0xb6, 0xba, 0xf8, 0x4b, 0x5d, 0x14, 0xa2, 0xaa, 0xce, 0x2a, 0xfe, 0x4a, 0x17, 0xd0, 0xab,
+	0xa3, 0xf3, 0x8b, 0xbf, 0xd6, 0x37, 0xee, 0x9f, 0x9c, 0x1b, 0xe8, 0xf4, 0xdc, 0x40, 0x67, 0xe7,
+	0x46, 0xea, 0xe5, 0xb9, 0x81, 0x9e, 0xf5, 0x0d, 0xf4, 0x6d, 0xdf, 0x40, 0x27, 0x7d, 0x03, 0x9d,
+	0xf6, 0x0d, 0xf4, 0xa2, 0x6f, 0xa0, 0xbf, 0xfb, 0x46, 0xea, 0x65, 0xdf, 0x40, 0x9f, 0x5d, 0x18,
+	0xa9, 0xd3, 0x0b, 0x23, 0x75, 0x76, 0x61, 0xa4, 0xfe, 0x09, 0x00, 0x00, 0xff, 0xff, 0xe9, 0x89,
+	0x15, 0x29, 0x19, 0x0f, 0x00, 0x00,
 }
 
 func (x ServerCmdType) String() string {
@@ -2964,14 +3132,41 @@ func (this *SetMarkClearResp) Equal(that interface{}) bool {
 	}
 	return true
 }
-func (this *GetFlyGate) Equal(that interface{}) bool {
+func (this *Flygate) Equal(that interface{}) bool {
 	if that == nil {
 		return this == nil
 	}
 
-	that1, ok := that.(*GetFlyGate)
+	that1, ok := that.(*Flygate)
 	if !ok {
-		that2, ok := that.(GetFlyGate)
+		that2, ok := that.(Flygate)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Service != that1.Service {
+		return false
+	}
+	if this.MsgPerSecond != that1.MsgPerSecond {
+		return false
+	}
+	return true
+}
+func (this *GetFlyGateList) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*GetFlyGateList)
+	if !ok {
+		that2, ok := that.(GetFlyGateList)
 		if ok {
 			that1 = &that2
 		} else {
@@ -2985,14 +3180,14 @@ func (this *GetFlyGate) Equal(that interface{}) bool {
 	}
 	return true
 }
-func (this *GetFlyGateResp) Equal(that interface{}) bool {
+func (this *GetFlyGateListResp) Equal(that interface{}) bool {
 	if that == nil {
 		return this == nil
 	}
 
-	that1, ok := that.(*GetFlyGateResp)
+	that1, ok := that.(*GetFlyGateListResp)
 	if !ok {
-		that2, ok := that.(GetFlyGateResp)
+		that2, ok := that.(GetFlyGateListResp)
 		if ok {
 			that1 = &that2
 		} else {
@@ -3004,11 +3199,11 @@ func (this *GetFlyGateResp) Equal(that interface{}) bool {
 	} else if this == nil {
 		return false
 	}
-	if len(this.GateService) != len(that1.GateService) {
+	if len(this.List) != len(that1.List) {
 		return false
 	}
-	for i := range this.GateService {
-		if this.GateService[i] != that1.GateService[i] {
+	for i := range this.List {
+		if !this.List[i].Equal(that1.List[i]) {
 			return false
 		}
 	}
@@ -3040,6 +3235,60 @@ func (this *FlyGateHeartBeat) Equal(that interface{}) bool {
 		return false
 	}
 	if this.MsgPerSecond != that1.MsgPerSecond {
+		return false
+	}
+	return true
+}
+func (this *ChangeFlyGate) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ChangeFlyGate)
+	if !ok {
+		that2, ok := that.(ChangeFlyGate)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.CurrentGate != that1.CurrentGate {
+		return false
+	}
+	if this.MsgSendPerSecond != that1.MsgSendPerSecond {
+		return false
+	}
+	return true
+}
+func (this *ChangeFlyGateResp) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ChangeFlyGateResp)
+	if !ok {
+		that2, ok := that.(ChangeFlyGateResp)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Ok != that1.Ok {
+		return false
+	}
+	if this.Service != that1.Service {
 		return false
 	}
 	return true
@@ -3416,23 +3665,34 @@ func (this *SetMarkClearResp) GoString() string {
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
-func (this *GetFlyGate) GoString() string {
+func (this *Flygate) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&proto.Flygate{")
+	s = append(s, "Service: "+fmt.Sprintf("%#v", this.Service)+",\n")
+	s = append(s, "MsgPerSecond: "+fmt.Sprintf("%#v", this.MsgPerSecond)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *GetFlyGateList) GoString() string {
 	if this == nil {
 		return "nil"
 	}
 	s := make([]string, 0, 4)
-	s = append(s, "&proto.GetFlyGate{")
+	s = append(s, "&proto.GetFlyGateList{")
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
-func (this *GetFlyGateResp) GoString() string {
+func (this *GetFlyGateListResp) GoString() string {
 	if this == nil {
 		return "nil"
 	}
 	s := make([]string, 0, 5)
-	s = append(s, "&proto.GetFlyGateResp{")
-	if this.GateService != nil {
-		s = append(s, "GateService: "+fmt.Sprintf("%#v", this.GateService)+",\n")
+	s = append(s, "&proto.GetFlyGateListResp{")
+	if this.List != nil {
+		s = append(s, "List: "+fmt.Sprintf("%#v", this.List)+",\n")
 	}
 	s = append(s, "}")
 	return strings.Join(s, "")
@@ -3446,6 +3706,28 @@ func (this *FlyGateHeartBeat) GoString() string {
 	s = append(s, "GateService: "+fmt.Sprintf("%#v", this.GateService)+",\n")
 	s = append(s, "Token: "+fmt.Sprintf("%#v", this.Token)+",\n")
 	s = append(s, "MsgPerSecond: "+fmt.Sprintf("%#v", this.MsgPerSecond)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ChangeFlyGate) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&proto.ChangeFlyGate{")
+	s = append(s, "CurrentGate: "+fmt.Sprintf("%#v", this.CurrentGate)+",\n")
+	s = append(s, "MsgSendPerSecond: "+fmt.Sprintf("%#v", this.MsgSendPerSecond)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ChangeFlyGateResp) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&proto.ChangeFlyGateResp{")
+	s = append(s, "Ok: "+fmt.Sprintf("%#v", this.Ok)+",\n")
+	s = append(s, "Service: "+fmt.Sprintf("%#v", this.Service)+",\n")
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
@@ -4532,7 +4814,7 @@ func (m *SetMarkClearResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *GetFlyGate) Marshal() (dAtA []byte, err error) {
+func (m *Flygate) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -4542,12 +4824,43 @@ func (m *GetFlyGate) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *GetFlyGate) MarshalTo(dAtA []byte) (int, error) {
+func (m *Flygate) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *GetFlyGate) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *Flygate) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(m.MsgPerSecond))
+	i--
+	dAtA[i] = 0x10
+	i -= len(m.Service)
+	copy(dAtA[i:], m.Service)
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(len(m.Service)))
+	i--
+	dAtA[i] = 0xa
+	return len(dAtA) - i, nil
+}
+
+func (m *GetFlyGateList) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetFlyGateList) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetFlyGateList) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
@@ -4555,7 +4868,7 @@ func (m *GetFlyGate) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *GetFlyGateResp) Marshal() (dAtA []byte, err error) {
+func (m *GetFlyGateListResp) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -4565,21 +4878,26 @@ func (m *GetFlyGateResp) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *GetFlyGateResp) MarshalTo(dAtA []byte) (int, error) {
+func (m *GetFlyGateListResp) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *GetFlyGateResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *GetFlyGateListResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.GateService) > 0 {
-		for iNdEx := len(m.GateService) - 1; iNdEx >= 0; iNdEx-- {
-			i -= len(m.GateService[iNdEx])
-			copy(dAtA[i:], m.GateService[iNdEx])
-			i = encodeVarintFlyfishServer(dAtA, i, uint64(len(m.GateService[iNdEx])))
+	if len(m.List) > 0 {
+		for iNdEx := len(m.List) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.List[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintFlyfishServer(dAtA, i, uint64(size))
+			}
 			i--
 			dAtA[i] = 0xa
 		}
@@ -4620,6 +4938,73 @@ func (m *FlyGateHeartBeat) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i = encodeVarintFlyfishServer(dAtA, i, uint64(len(m.GateService)))
 	i--
 	dAtA[i] = 0xa
+	return len(dAtA) - i, nil
+}
+
+func (m *ChangeFlyGate) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ChangeFlyGate) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ChangeFlyGate) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(m.MsgSendPerSecond))
+	i--
+	dAtA[i] = 0x10
+	i -= len(m.CurrentGate)
+	copy(dAtA[i:], m.CurrentGate)
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(len(m.CurrentGate)))
+	i--
+	dAtA[i] = 0xa
+	return len(dAtA) - i, nil
+}
+
+func (m *ChangeFlyGateResp) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ChangeFlyGateResp) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ChangeFlyGateResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	i -= len(m.Service)
+	copy(dAtA[i:], m.Service)
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(len(m.Service)))
+	i--
+	dAtA[i] = 0x12
+	i--
+	if m.Ok {
+		dAtA[i] = 1
+	} else {
+		dAtA[i] = 0
+	}
+	i--
+	dAtA[i] = 0x8
 	return len(dAtA) - i, nil
 }
 
@@ -5051,7 +5436,19 @@ func (m *SetMarkClearResp) Size() (n int) {
 	return n
 }
 
-func (m *GetFlyGate) Size() (n int) {
+func (m *Flygate) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Service)
+	n += 1 + l + sovFlyfishServer(uint64(l))
+	n += 1 + sovFlyfishServer(uint64(m.MsgPerSecond))
+	return n
+}
+
+func (m *GetFlyGateList) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -5060,15 +5457,15 @@ func (m *GetFlyGate) Size() (n int) {
 	return n
 }
 
-func (m *GetFlyGateResp) Size() (n int) {
+func (m *GetFlyGateListResp) Size() (n int) {
 	if m == nil {
 		return 0
 	}
 	var l int
 	_ = l
-	if len(m.GateService) > 0 {
-		for _, s := range m.GateService {
-			l = len(s)
+	if len(m.List) > 0 {
+		for _, e := range m.List {
+			l = e.Size()
 			n += 1 + l + sovFlyfishServer(uint64(l))
 		}
 	}
@@ -5086,6 +5483,30 @@ func (m *FlyGateHeartBeat) Size() (n int) {
 	l = len(m.Token)
 	n += 1 + l + sovFlyfishServer(uint64(l))
 	n += 1 + sovFlyfishServer(uint64(m.MsgPerSecond))
+	return n
+}
+
+func (m *ChangeFlyGate) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.CurrentGate)
+	n += 1 + l + sovFlyfishServer(uint64(l))
+	n += 1 + sovFlyfishServer(uint64(m.MsgSendPerSecond))
+	return n
+}
+
+func (m *ChangeFlyGateResp) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	n += 2
+	l = len(m.Service)
+	n += 1 + l + sovFlyfishServer(uint64(l))
 	return n
 }
 
@@ -5468,21 +5889,37 @@ func (this *SetMarkClearResp) String() string {
 	}, "")
 	return s
 }
-func (this *GetFlyGate) String() string {
+func (this *Flygate) String() string {
 	if this == nil {
 		return "nil"
 	}
-	s := strings.Join([]string{`&GetFlyGate{`,
+	s := strings.Join([]string{`&Flygate{`,
+		`Service:` + fmt.Sprintf("%v", this.Service) + `,`,
+		`MsgPerSecond:` + fmt.Sprintf("%v", this.MsgPerSecond) + `,`,
 		`}`,
 	}, "")
 	return s
 }
-func (this *GetFlyGateResp) String() string {
+func (this *GetFlyGateList) String() string {
 	if this == nil {
 		return "nil"
 	}
-	s := strings.Join([]string{`&GetFlyGateResp{`,
-		`GateService:` + fmt.Sprintf("%v", this.GateService) + `,`,
+	s := strings.Join([]string{`&GetFlyGateList{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *GetFlyGateListResp) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForList := "[]*Flygate{"
+	for _, f := range this.List {
+		repeatedStringForList += strings.Replace(fmt.Sprintf("%v", f), "Flygate", "Flygate", 1) + ","
+	}
+	repeatedStringForList += "}"
+	s := strings.Join([]string{`&GetFlyGateListResp{`,
+		`List:` + repeatedStringForList + `,`,
 		`}`,
 	}, "")
 	return s
@@ -5495,6 +5932,28 @@ func (this *FlyGateHeartBeat) String() string {
 		`GateService:` + fmt.Sprintf("%v", this.GateService) + `,`,
 		`Token:` + fmt.Sprintf("%v", this.Token) + `,`,
 		`MsgPerSecond:` + fmt.Sprintf("%v", this.MsgPerSecond) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ChangeFlyGate) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ChangeFlyGate{`,
+		`CurrentGate:` + fmt.Sprintf("%v", this.CurrentGate) + `,`,
+		`MsgSendPerSecond:` + fmt.Sprintf("%v", this.MsgSendPerSecond) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ChangeFlyGateResp) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ChangeFlyGateResp{`,
+		`Ok:` + fmt.Sprintf("%v", this.Ok) + `,`,
+		`Service:` + fmt.Sprintf("%v", this.Service) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -9042,7 +9501,7 @@ func (m *SetMarkClearResp) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *GetFlyGate) Unmarshal(dAtA []byte) error {
+func (m *Flygate) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -9065,68 +9524,15 @@ func (m *GetFlyGate) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: getFlyGate: wiretype end group for non-group")
+			return fmt.Errorf("proto: flygate: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: getFlyGate: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		default:
-			iNdEx = preIndex
-			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if skippy < 0 {
-				return ErrInvalidLengthFlyfishServer
-			}
-			if (iNdEx + skippy) < 0 {
-				return ErrInvalidLengthFlyfishServer
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			iNdEx += skippy
-		}
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
-func (m *GetFlyGateResp) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowFlyfishServer
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := dAtA[iNdEx]
-			iNdEx++
-			wire |= uint64(b&0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: getFlyGateResp: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: getFlyGateResp: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: flygate: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field GateService", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Service", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -9154,7 +9560,166 @@ func (m *GetFlyGateResp) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.GateService = append(m.GateService, string(dAtA[iNdEx:postIndex]))
+			m.Service = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MsgPerSecond", wireType)
+			}
+			m.MsgPerSecond = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.MsgPerSecond |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetFlyGateList) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFlyfishServer
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: getFlyGateList: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: getFlyGateList: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetFlyGateListResp) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFlyfishServer
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: getFlyGateListResp: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: getFlyGateListResp: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field List", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.List = append(m.List, &Flygate{})
+			if err := m.List[len(m.List)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -9292,6 +9857,215 @@ func (m *FlyGateHeartBeat) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ChangeFlyGate) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFlyfishServer
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: changeFlyGate: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: changeFlyGate: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field CurrentGate", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.CurrentGate = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MsgSendPerSecond", wireType)
+			}
+			m.MsgSendPerSecond = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.MsgSendPerSecond |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ChangeFlyGateResp) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFlyfishServer
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: changeFlyGateResp: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: changeFlyGateResp: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Ok", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Ok = bool(v != 0)
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Service", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Service = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipFlyfishServer(dAtA[iNdEx:])

@@ -224,7 +224,10 @@ func TestFlygate(t *testing.T) {
 	}
 
 	for {
-		gate := client.QueryGate([]string{"localhost:8110"})
+
+		addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
+
+		gate := client.QueryGate([]*net.UDPAddr{addr})
 		if len(gate) > 0 {
 			break
 		} else {

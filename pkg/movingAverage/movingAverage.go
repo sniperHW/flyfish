@@ -14,7 +14,7 @@ type MovingAverage struct {
 	wc      int
 }
 
-func NewMovingAverage(window int) *MovingAverage {
+func New(window int) *MovingAverage {
 	return &MovingAverage{
 		window: make([]int, window),
 	}

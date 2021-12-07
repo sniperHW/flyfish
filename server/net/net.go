@@ -115,7 +115,7 @@ func UdpCall(remotes interface{}, req proto.Message, timeout time.Duration, onRe
 	switch remotes.(type) {
 	case []string:
 		for _, v := range remotes.([]string) {
-			if addr, err := net.ResolveUDPAddr("udp", v); nil != err {
+			if addr, err := net.ResolveUDPAddr("udp", v); nil == err {
 				remoteAddrs = append(remoteAddrs, addr)
 			}
 		}
@@ -208,7 +208,10 @@ func init() {
 	namespace.Register(&sproto.FlyGateHeartBeat{}, uint32(sproto.ServerCmdType_FlyGateHeartBeat))
 
 	//client <->pd
-	namespace.Register(&sproto.GetFlyGate{}, uint32(sproto.ServerCmdType_GetFlyGate))
-	namespace.Register(&sproto.GetFlyGateResp{}, uint32(sproto.ServerCmdType_GetFlyGateResp))
+	namespace.Register(&sproto.GetFlyGateList{}, uint32(sproto.ServerCmdType_GetFlyGateList))
+	namespace.Register(&sproto.GetFlyGateListResp{}, uint32(sproto.ServerCmdType_GetFlyGateListResp))
+
+	namespace.Register(&sproto.ChangeFlyGate{}, uint32(sproto.ServerCmdType_ChangeFlyGate))
+	namespace.Register(&sproto.ChangeFlyGateResp{}, uint32(sproto.ServerCmdType_ChangeFlyGateResp))
 
 }

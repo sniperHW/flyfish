@@ -289,7 +289,8 @@ func NewFlyGate(config *Config, service string) *gate {
 			routeErrorReqList:  list.New(),
 			slotTransferingReq: map[int]*list.List{},
 		},
-		serviceAddr: service,
+		serviceAddr:  service,
+		msgPerSecond: movingAverage.New(5),
 	}
 
 	pdService := strings.Split(config.PdService, ";")
@@ -326,6 +327,7 @@ func (g *gate) startListener() {
 					//服务关闭不再接受新新的请求
 					return
 				}
+				g.msgPerSecond.Add(1)
 				msg := v.(*forwordMsg)
 				msg.cli = session
 				g.mainQueue.ForceAppend(0, msg)
@@ -343,7 +345,6 @@ func (g *gate) mainLoop() {
 		_, v := g.mainQueue.Pop()
 		switch v.(type) {
 		case *forwordMsg:
-			g.msgPerSecond.Add(1)
 			msg := v.(*forwordMsg)
 			s, ok := g.routeInfo.slotToStore[msg.slot]
 			if !ok {
