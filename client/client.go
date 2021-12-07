@@ -525,7 +525,7 @@ func OpenClient(conf ClientConf) (*Client, error) {
 				mu:              &c.mu,
 				service:         conf.SoloService,
 				pendingSend:     list.New(),
-				waitResp:        new(map[int64]*cmdContext),
+				waitResp:        makeWaitResp(),
 				UnikeyPlacement: conf.UnikeyPlacement,
 				doCallBack:      c.doCallBack,
 				closed:          &c.closed,

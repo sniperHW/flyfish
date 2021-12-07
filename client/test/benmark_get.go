@@ -2,16 +2,16 @@ package main
 
 import (
 	"fmt"
+	kclient "github.com/sniperHW/flyfish/client"
+	"github.com/sniperHW/flyfish/client/test/config"
+	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/logger"
+	"github.com/sniperHW/flyfish/server/flykv"
 	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
-
-	kclient "github.com/sniperHW/flyfish/client"
-	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/logger"
-	"github.com/sniperHW/flyfish/server/flykv"
 )
 
 var (
@@ -57,21 +57,32 @@ func Get(c *kclient.Client) {
 
 func main() {
 
-	if len(os.Args) < 3 {
-		fmt.Println("bin keyrange ip:port ")
+	if len(os.Args) < 2 {
+		fmt.Println("bin keyrange")
 		return
+	}
+
+	cfg, err := config.LoadConfig("./config.toml")
+
+	if nil != err {
+		panic(err)
 	}
 
 	kclient.InitLogger(logger.NewZapLogger("client.log", "./log", "debug", 100, 14, 10, true))
 
-	id = 0
+	var clientCfg kclient.ClientConf
+
+	if cfg.Mode == "solo" {
+		clientCfg.SoloService = cfg.Service
+		clientCfg.UnikeyPlacement = flykv.MakeUnikeyPlacement([]int{1, 2, 3, 4, 5})
+	} else {
+		clientCfg.PD = strings.Split(cfg.PD, ";")
+	}
 
 	keyrange, _ = strconv.ParseInt(os.Args[1], 10, 32)
 
-	service := os.Args[2]
-
 	for j := 0; j < 50; j++ {
-		c, _ := kclient.OpenClient(kclient.ClientConf{SoloService: service, UnikeyPlacement: flykv.MakeUnikeyPlacement([]int{1, 2, 3, 4, 5})})
+		c, _ := kclient.OpenClient(clientCfg)
 		for i := 0; i < 50; i++ {
 			Get(c)
 		}

@@ -8,7 +8,6 @@ import (
 	"github.com/sniperHW/flyfish/backend/db"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/logger"
-	//"github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/server/clusterconf"
 	Dir "github.com/sniperHW/flyfish/server/dir"
 	Gate "github.com/sniperHW/flyfish/server/gate"

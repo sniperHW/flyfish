@@ -37,7 +37,7 @@ func (n *kvnode) sendForwordMsg(msg *forwordMsg) {
 			if len(n.waitResponse) >= n.config.MaxNodePendingMsg {
 				msg.replyErr(errcode.New(errcode.Errcode_gate_busy, ""))
 			} else {
-				GetSugar().Infof("send msg to kvnode:%d store:%d seqno:%d nodeSeqno:%d", n.id, msg.store.id, msg.oriSeqno, msg.seqno)
+				GetSugar().Debugf("send msg to kvnode:%d store:%d seqno:%d nodeSeqno:%d", n.id, msg.store.id, msg.oriSeqno, msg.seqno)
 				timeout := msg.deadline.Sub(now)
 				if timeout > time.Millisecond {
 					binary.BigEndian.PutUint32(msg.bytes[18:], uint32(timeout/time.Millisecond))
@@ -111,7 +111,7 @@ func (n *kvnode) dial() {
 					msg.listElement = nil
 					timeout := msg.deadline.Sub(time.Now())
 					if timeout > time.Millisecond {
-						GetSugar().Infof("send msg to kvnode:%d store:%d seqno:%d nodeSeqno:%d", n.id, msg.store.id, msg.oriSeqno, msg.seqno)
+						GetSugar().Debugf("send msg to kvnode:%d store:%d seqno:%d nodeSeqno:%d", n.id, msg.store.id, msg.oriSeqno, msg.seqno)
 						binary.BigEndian.PutUint32(msg.bytes[18:], uint32(timeout/time.Millisecond))
 						if nil == session.Send(msg.bytes) {
 							msg.bytes = nil

@@ -194,9 +194,11 @@ func (q applicationQueue) close() {
 }
 
 func (p *pd) getNode(nodeID int32) *kvnode {
-	for _, v := range p.deployment.sets {
-		if n, ok := v.nodes[int(nodeID)]; ok {
-			return n
+	if nil != p.deployment {
+		for _, v := range p.deployment.sets {
+			if n, ok := v.nodes[int(nodeID)]; ok {
+				return n
+			}
 		}
 	}
 	return nil
@@ -336,6 +338,8 @@ func (p *pd) startUdpService() error {
 	if nil != err {
 		return err
 	}
+
+	GetSugar().Infof("flypd start udp at %s", p.udpService)
 
 	p.udp = udp
 

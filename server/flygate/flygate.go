@@ -56,7 +56,7 @@ type routeInfo struct {
 
 func (r *routeInfo) onQueryRouteInfoResp(gate *gate, resp *sproto.QueryRouteInfoResp) (oldSlotToStore map[int]*store) {
 
-	GetSugar().Infof("onQueryRouteInfoResp %v", resp)
+	//GetSugar().Infof("onQueryRouteInfoResp %v", resp)
 
 	change := r.version != resp.Version
 	r.version = resp.Version
@@ -334,6 +334,7 @@ func (g *gate) startListener() {
 			})
 		})
 	})
+	GetSugar().Infof("flygate start on %s", g.serviceAddr)
 }
 
 func verifyLogin(loginReq *flyproto.LoginReq) bool {

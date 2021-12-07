@@ -10,11 +10,11 @@
 	 -------------------------------------
 	 |                                   |
 	 |	      raft group             |
-	 |                                   |----kvpd 
-	 |  flyfishd(leader) flyfish flyfish |     |        
+	 |                                   |----flypd 
+	 |  flykv(leader) flykv flykv  |     |        
 	 -------------------------------------     |         
 	                 |                         |        
-	              kvproxy-----------------------
+	              flygate-----------------------
 	                 |
 	               client
 
@@ -44,7 +44,7 @@
 
 ## 表格配置
 
-表格元信息存储在table_conf表中，每一行代表一张表格信息，flyfish启动时会从数据库中读取元信息。
+表格元信息存储在table_conf表中，每一行代表一张表格信息，flykv启动时会从数据库中读取元信息。
 
 表格配置规则如下：
 
@@ -146,23 +146,3 @@ __table__    __conf__
 		fmt.Println(r3.Version)
 	
 	}
-
-## 编译
-
-编译aio版本，此版本只能在linux,mac,freebsd下运行
-
-	go build -tags=aio xxx
-
-编译bio版本，此版本可在任何操作系统下运行
-
-	go build xxx
-
-
-
-
-
-
-
-
-
-

@@ -2,6 +2,12 @@ package main
 
 import (
 	"fmt"
+	"github.com/schollz/progressbar"
+	kclient "github.com/sniperHW/flyfish/client"
+	"github.com/sniperHW/flyfish/client/test/config"
+	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/logger"
+	"github.com/sniperHW/flyfish/server/flykv"
 	"os"
 	"sort"
 	"strconv"
@@ -9,12 +15,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/schollz/progressbar"
-	kclient "github.com/sniperHW/flyfish/client"
-	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/logger"
-	"github.com/sniperHW/flyfish/server/flykv"
 )
 
 type result struct {
@@ -77,9 +77,15 @@ func Set(c *kclient.Client) bool {
 
 func main() {
 
-	if len(os.Args) < 3 {
-		fmt.Println("bin keyrange count ip:port")
+	if len(os.Args) < 2 {
+		fmt.Println("bin keyrange count")
 		return
+	}
+
+	cfg, err := config.LoadConfig("./config.toml")
+
+	if nil != err {
+		panic(err)
 	}
 
 	keyrange, _ = strconv.ParseInt(os.Args[1], 10, 32)
@@ -87,14 +93,19 @@ func main() {
 
 	kclient.InitLogger(logger.NewZapLogger("client.log", "./log", "debug", 100, 14, 10, true))
 
-	id = 0
+	var clientCfg kclient.ClientConf
 
-	service := os.Args[3]
+	if cfg.Mode == "solo" {
+		clientCfg.SoloService = cfg.Service
+		clientCfg.UnikeyPlacement = flykv.MakeUnikeyPlacement([]int{1, 2, 3, 4, 5})
+	} else {
+		clientCfg.PD = strings.Split(cfg.PD, ";")
+	}
 
 	bar = progressbar.New(int(total))
 
 	for j := 0; j < 100; j++ {
-		c, _ := kclient.OpenClient(kclient.ClientConf{SoloService: service, UnikeyPlacement: flykv.MakeUnikeyPlacement([]int{1, 2, 3, 4, 5})})
+		c, _ := kclient.OpenClient(clientCfg)
 		go func() {
 			for {
 				for i := 0; i < 50; i++ {

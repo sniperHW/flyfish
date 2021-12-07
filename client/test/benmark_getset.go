@@ -2,26 +2,24 @@ package main
 
 import (
 	"fmt"
+	kclient "github.com/sniperHW/flyfish/client"
+	"github.com/sniperHW/flyfish/client/test/config"
+	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/logger"
+	"github.com/sniperHW/flyfish/server/flykv"
 	"math/rand"
 	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
-
-	kclient "github.com/sniperHW/flyfish/client"
-	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/logger"
-	"github.com/sniperHW/flyfish/server/flykv"
 )
 
 var getCount int32
 var setCount int32
-var delCount int32
 
-var getAvaDelay time.Duration
-var setAvaDelay time.Duration
-var delAvaDelay time.Duration
+var getAverDelay time.Duration
+var setAverDelay time.Duration
 
 var keyrange int64
 
@@ -40,10 +38,10 @@ func Set(c *kclient.Client) {
 
 	set.AsyncExec(func(ret *kclient.StatusResult) {
 
-		if setAvaDelay == time.Duration(0) {
-			setAvaDelay = time.Now().Sub(beg)
+		if setAverDelay == time.Duration(0) {
+			setAverDelay = time.Now().Sub(beg)
 		} else {
-			setAvaDelay = (time.Now().Sub(beg) + setAvaDelay) / 2
+			setAverDelay = (time.Now().Sub(beg) + setAverDelay) / 2
 		}
 
 		if ret.ErrCode != nil {
@@ -65,10 +63,10 @@ func Get(c *kclient.Client) {
 
 	get.AsyncExec(func(ret *kclient.SliceResult) {
 
-		if getAvaDelay == time.Duration(0) {
-			getAvaDelay = time.Now().Sub(beg)
+		if getAverDelay == time.Duration(0) {
+			getAverDelay = time.Now().Sub(beg)
 		} else {
-			getAvaDelay = (time.Now().Sub(beg) + getAvaDelay) / 2
+			getAverDelay = (time.Now().Sub(beg) + getAverDelay) / 2
 		}
 
 		if ret.ErrCode != nil && ret.ErrCode.Code != errcode.Errcode_record_notexist {
@@ -82,28 +80,39 @@ func Get(c *kclient.Client) {
 
 func main() {
 
-	if len(os.Args) < 3 {
-		fmt.Println("bin keyrange ip:port")
+	if len(os.Args) < 2 {
+		fmt.Println("bin keyrange")
 		return
+	}
+
+	cfg, err := config.LoadConfig("./config.toml")
+
+	if nil != err {
+		panic(err)
 	}
 
 	keyrange, _ = strconv.ParseInt(os.Args[1], 10, 32)
 
 	kclient.InitLogger(logger.NewZapLogger("client.log", "./log", "debug", 100, 14, 10, true))
 
-	id = 0
+	var clientCfg kclient.ClientConf
 
-	service := os.Args[2]
+	if cfg.Mode == "solo" {
+		clientCfg.SoloService = cfg.Service
+		clientCfg.UnikeyPlacement = flykv.MakeUnikeyPlacement([]int{1, 2, 3, 4, 5})
+	} else {
+		clientCfg.PD = strings.Split(cfg.PD, ";")
+	}
 
 	for j := 0; j < 100; j++ {
-		c, _ := kclient.OpenClient(kclient.ClientConf{SoloService: service, UnikeyPlacement: flykv.MakeUnikeyPlacement([]int{1, 2, 3, 4, 5})})
+		c, _ := kclient.OpenClient(clientCfg)
 		for i := 0; i < 10; i++ {
 			Set(c)
 		}
 	}
 
 	for j := 0; j < 50; j++ {
-		c, _ := kclient.OpenClient(kclient.ClientConf{SoloService: service, UnikeyPlacement: flykv.MakeUnikeyPlacement([]int{1, 2, 3, 4, 5})})
+		c, _ := kclient.OpenClient(clientCfg)
 		for i := 0; i < 20; i++ {
 			Get(c)
 		}
@@ -114,19 +123,15 @@ func main() {
 			time.Sleep(time.Second)
 			setCount_ := atomic.LoadInt32(&setCount)
 			getCount_ := atomic.LoadInt32(&getCount)
-			delCount_ := atomic.LoadInt32(&delCount)
-			fmt.Printf("s:%d,sava:%d,g:%d,gava:%d,d:%d,dava:%d,total:%d\n",
+			fmt.Printf("set:%d,setAver:%d,get:%d,getAver:%d,total:%d\n",
 				setCount_,
-				setAvaDelay/time.Millisecond,
+				setAverDelay/time.Millisecond,
 				getCount_,
-				getAvaDelay/time.Millisecond,
-				delCount_,
-				delAvaDelay/time.Millisecond,
-				(setCount_ + getCount_ + delCount_))
+				getAverDelay/time.Millisecond,
+				(setCount_ + getCount_))
 
 			atomic.StoreInt32(&setCount, 0)
 			atomic.StoreInt32(&getCount, 0)
-			atomic.StoreInt32(&delCount, 0)
 		}
 	}()
 
