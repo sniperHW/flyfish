@@ -53,6 +53,7 @@ func (this *dbUpdateTask) GetUpdateAndClearUpdateState() (updateState db.UpdateS
 	updateState.State = this.dbstate
 	updateState.Meta = this.keyValue.tbmeta
 	updateState.Key = this.keyValue.key
+	updateState.Slot = this.keyValue.slot
 	this.updateFields = map[string]*flyproto.Field{}
 	this.dbstate = db.DBState_none
 	return

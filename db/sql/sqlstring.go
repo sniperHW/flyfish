@@ -48,10 +48,14 @@ func (this *sqlstring) buildInsert(b *buffer.Buffer, s *db.UpdateState) *proto.F
 	meta := s.Meta.(*TableMeta)
 
 	version := proto.PackField("__version__", s.Version)
+	slot := proto.PackField("__slot__", s.Slot)
 
 	b.AppendString(meta.GetInsertPrefix()).AppendString("'").AppendString(s.Key).AppendString("',")
 
 	this.appendFieldStr(b, version)
+	b.AppendString(",")
+
+	this.appendFieldStr(b, slot)
 	b.AppendString(",")
 
 	fields := meta.GetInsertOrder()

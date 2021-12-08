@@ -153,6 +153,7 @@ type DBLoadTask interface {
 type UpdateState struct {
 	Version int64
 	Key     string
+	Slot    int
 	Fields  map[string]*proto.Field
 	Meta    TableMeta
 	State   DBState

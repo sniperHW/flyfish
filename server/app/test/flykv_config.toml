@@ -1,4 +1,4 @@
-Mode = "cluster"                                  #solo单机模式,cluster集群模式
+Mode = "solo"                                  #solo单机模式,cluster集群模式
 
 DBType                  = "pgsql"
 

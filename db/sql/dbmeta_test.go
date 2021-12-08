@@ -4,7 +4,7 @@ package sql
 //go tool cover -html=coverage.out
 import (
 	"fmt"
-	"github.com/sniperHW/flyfish/backend/db"
+	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/stretchr/testify/assert"
 	"reflect"
@@ -63,7 +63,7 @@ func TestDbmeta1(t *testing.T) {
 	mt, err := CreateDbMeta(&m)
 	assert.Nil(t, err)
 
-	td := mt["Table1"]
+	td := mt.GetTableMeta("Table1").(*TableMeta)
 
 	fmt.Println(td.GetQueryMeta().GetFieldNames())
 
@@ -71,11 +71,11 @@ func TestDbmeta1(t *testing.T) {
 
 	assert.Equal(t, reflect.TypeOf(r[0]).String(), "*string")
 	assert.Equal(t, reflect.TypeOf(r[1]).String(), "*int64")
-	assert.Equal(t, reflect.TypeOf(r[2]).String(), "*int64")
-	assert.Equal(t, reflect.TypeOf(r[3]).String(), "*float64")
-	assert.Equal(t, reflect.TypeOf(r[4]).String(), "*string")
+	assert.Equal(t, reflect.TypeOf(r[3]).String(), "*int64")
+	assert.Equal(t, reflect.TypeOf(r[4]).String(), "*float64")
 	assert.Equal(t, reflect.TypeOf(r[5]).String(), "*string")
-	assert.Equal(t, reflect.TypeOf(r[6]).String(), "*[]uint8")
+	assert.Equal(t, reflect.TypeOf(r[6]).String(), "*string")
+	assert.Equal(t, reflect.TypeOf(r[7]).String(), "*[]uint8")
 
 	assert.Equal(t, td.GetDefaultValue("field1"), int64(1))
 	assert.Equal(t, td.GetDefaultValue("field2"), float64(1.2))
@@ -100,6 +100,9 @@ func TestDbmeta1(t *testing.T) {
 		assert.Equal(t, convert_blob(&b), []byte("string"))
 	}
 
+	fmt.Println(td.GetInsertPrefix())
+	fmt.Println(td.GetSelectPrefix())
+
 }
 
 func TestDbmeta2(t *testing.T) {
@@ -116,7 +119,7 @@ func TestDbmeta2(t *testing.T) {
 	assert.Nil(t, err)
 	fmt.Println(string(defStr))
 
-	td := mt["Table1"]
+	td := mt.GetTableMeta("Table1").(*TableMeta)
 
 	assert.Equal(t, td.version, int64(10))
 
@@ -126,11 +129,11 @@ func TestDbmeta2(t *testing.T) {
 
 	assert.Equal(t, reflect.TypeOf(r[0]).String(), "*string")
 	assert.Equal(t, reflect.TypeOf(r[1]).String(), "*int64")
-	assert.Equal(t, reflect.TypeOf(r[2]).String(), "*int64")
-	assert.Equal(t, reflect.TypeOf(r[3]).String(), "*float64")
-	assert.Equal(t, reflect.TypeOf(r[4]).String(), "*string")
+	assert.Equal(t, reflect.TypeOf(r[3]).String(), "*int64")
+	assert.Equal(t, reflect.TypeOf(r[4]).String(), "*float64")
 	assert.Equal(t, reflect.TypeOf(r[5]).String(), "*string")
-	assert.Equal(t, reflect.TypeOf(r[6]).String(), "*[]uint8")
+	assert.Equal(t, reflect.TypeOf(r[6]).String(), "*string")
+	assert.Equal(t, reflect.TypeOf(r[7]).String(), "*[]uint8")
 
 	assert.Equal(t, td.GetDefaultValue("field1"), int64(1))
 	assert.Equal(t, td.GetDefaultValue("field2"), float64(1.2))

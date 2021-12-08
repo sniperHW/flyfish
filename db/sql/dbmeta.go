@@ -263,12 +263,16 @@ func CreateDbMeta(def *db.DbDef) (db.DBMeta, error) {
 			version: def.Version,
 		}
 
-		//插入两个默认字段
+		//插入三个默认字段
 		t_meta.queryMeta.field_names = append(t_meta.queryMeta.field_names, "__key__")
 		t_meta.queryMeta.field_receiver = append(t_meta.queryMeta.field_receiver, getReceiver(proto.ValueType_string))
 		t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter, getConvetor(proto.ValueType_string))
 
 		t_meta.queryMeta.field_names = append(t_meta.queryMeta.field_names, "__version__")
+		t_meta.queryMeta.field_receiver = append(t_meta.queryMeta.field_receiver, getReceiver(proto.ValueType_int))
+		t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter, getConvetor(proto.ValueType_int))
+
+		t_meta.queryMeta.field_names = append(t_meta.queryMeta.field_names, "__slot__")
 		t_meta.queryMeta.field_receiver = append(t_meta.queryMeta.field_receiver, getReceiver(proto.ValueType_int))
 		t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter, getConvetor(proto.ValueType_int))
 
@@ -309,7 +313,7 @@ func CreateDbMeta(def *db.DbDef) (db.DBMeta, error) {
 		table_metas[v.Name] = t_meta
 
 		t_meta.selectPrefix = fmt.Sprintf("SELECT %s FROM %s where __key__ in(", strings.Join(t_meta.queryMeta.field_names, ","), t_meta.table)
-		t_meta.insertPrefix = fmt.Sprintf("INSERT INTO %s(__key__,__version__,%s) VALUES (", t_meta.table, strings.Join(t_meta.insertFieldOrder, ","))
+		t_meta.insertPrefix = fmt.Sprintf("INSERT INTO %s(__key__,__version__,__slot__,%s) VALUES (", t_meta.table, strings.Join(t_meta.insertFieldOrder, ","))
 
 	}
 
