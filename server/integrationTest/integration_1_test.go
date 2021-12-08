@@ -59,7 +59,7 @@ func installDeployment(t *testing.T) bool {
 	})
 	install.Sets = append(install.Sets, set2)
 
-	conn.SendTo(addr, install)
+	conn.SendTo(addr, snet.MakeMessage(0, install))
 
 	ch := make(chan interface{})
 
@@ -68,7 +68,7 @@ func installDeployment(t *testing.T) bool {
 		_, r, err := conn.ReadFrom(recvbuff)
 		if nil == err {
 			select {
-			case ch <- r:
+			case ch <- r.(*snet.Message).Msg:
 			default:
 			}
 		}

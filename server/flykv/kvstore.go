@@ -1,9 +1,7 @@
 package flykv
 
 import (
-	//"errors"
 	"fmt"
-	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
@@ -12,6 +10,7 @@ import (
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	flyproto "github.com/sniperHW/flyfish/proto"
+	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	sslot "github.com/sniperHW/flyfish/server/slot"
 	"go.etcd.io/etcd/etcdserver/api/snap"
@@ -644,13 +643,14 @@ func (s *kvstore) serve() {
 	}()
 }
 
-func (s *kvstore) onNotifyAddNode(from *net.UDPAddr, msg *sproto.NotifyAddNode) {
+func (s *kvstore) onNotifyAddNode(from *net.UDPAddr, msg *sproto.NotifyAddNode, context int64) {
 	if s.leader == s.raftID {
 		if s.memberShip[int(msg.NodeID)] {
-			s.kvnode.udpConn.SendTo(from, &sproto.NotifyAddNodeResp{
-				NodeID: msg.NodeID,
-				Store:  int32(s.shard),
-			})
+			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
+				&sproto.NotifyAddNodeResp{
+					NodeID: msg.NodeID,
+					Store:  int32(s.shard),
+				}))
 		} else {
 			//发起proposal
 			s.rn.IssueConfChange(&ProposalConfChange{
@@ -660,23 +660,25 @@ func (s *kvstore) onNotifyAddNode(from *net.UDPAddr, msg *sproto.NotifyAddNode) 
 					NodeID:         uint64((int(msg.NodeID) << 16) + s.shard),
 				},
 				reply: func() {
-					s.kvnode.udpConn.SendTo(from, &sproto.NotifyAddNodeResp{
-						NodeID: msg.NodeID,
-						Store:  int32(s.shard),
-					})
+					s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
+						&sproto.NotifyAddNodeResp{
+							NodeID: msg.NodeID,
+							Store:  int32(s.shard),
+						}))
 				},
 			})
 		}
 	}
 }
 
-func (s *kvstore) onNotifyRemNode(from *net.UDPAddr, msg *sproto.NotifyRemNode) {
+func (s *kvstore) onNotifyRemNode(from *net.UDPAddr, msg *sproto.NotifyRemNode, context int64) {
 	if s.leader == s.raftID {
 		if !s.memberShip[int(msg.NodeID)] {
-			s.kvnode.udpConn.SendTo(from, &sproto.NotifyRemNodeResp{
-				NodeID: int32(int(msg.NodeID)),
-				Store:  int32(s.shard),
-			})
+			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
+				&sproto.NotifyRemNodeResp{
+					NodeID: int32(int(msg.NodeID)),
+					Store:  int32(s.shard),
+				}))
 		} else {
 			//发起proposal
 			s.rn.IssueConfChange(&ProposalConfChange{
@@ -685,32 +687,35 @@ func (s *kvstore) onNotifyRemNode(from *net.UDPAddr, msg *sproto.NotifyRemNode) 
 					NodeID:         uint64((int(msg.NodeID) << 16) + s.shard),
 				},
 				reply: func() {
-					s.kvnode.udpConn.SendTo(from, &sproto.NotifyRemNodeResp{
-						NodeID: msg.NodeID,
-						Store:  int32(s.shard),
-					})
+					s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
+						&sproto.NotifyRemNodeResp{
+							NodeID: msg.NodeID,
+							Store:  int32(s.shard),
+						}))
 				},
 			})
 		}
 	}
 }
 
-func (s *kvstore) onNotifySlotTransIn(from *net.UDPAddr, msg *sproto.NotifySlotTransIn) {
+func (s *kvstore) onNotifySlotTransIn(from *net.UDPAddr, msg *sproto.NotifySlotTransIn, context int64) {
 	if s.leader == s.raftID {
 		slot := int(msg.Slot)
 		if s.slots.Test(slot) {
-			s.kvnode.udpConn.SendTo(from, &sproto.NotifySlotTransInResp{
-				Slot: msg.Slot,
-			})
+			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
+				&sproto.NotifySlotTransInResp{
+					Slot: msg.Slot,
+				}))
 		} else {
 			s.rn.IssueProposal(&SlotTransferProposal{
 				slot:         slot,
 				transferType: slotTransferIn,
 				store:        s,
 				reply: func() {
-					s.kvnode.udpConn.SendTo(from, &sproto.NotifySlotTransInResp{
-						Slot: msg.Slot,
-					})
+					s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
+						&sproto.NotifySlotTransInResp{
+							Slot: msg.Slot,
+						}))
 				},
 			})
 		}
@@ -737,13 +742,14 @@ func (s *kvstore) processKickSlots(p *SlotTransferProposal) {
 	})
 }
 
-func (s *kvstore) onNotifySlotTransOut(from *net.UDPAddr, msg *sproto.NotifySlotTransOut) {
+func (s *kvstore) onNotifySlotTransOut(from *net.UDPAddr, msg *sproto.NotifySlotTransOut, context int64) {
 	if s.leader == s.raftID {
 		slot := int(msg.Slot)
 		if !s.slots.Test(slot) {
-			s.kvnode.udpConn.SendTo(from, &sproto.NotifySlotTransOutResp{
-				Slot: msg.Slot,
-			})
+			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
+				&sproto.NotifySlotTransOutResp{
+					Slot: msg.Slot,
+				}))
 		} else {
 			if nil == s.slotsTransferOut[slot] {
 				s.rn.IssueProposal(&SlotTransferProposal{
@@ -751,9 +757,10 @@ func (s *kvstore) onNotifySlotTransOut(from *net.UDPAddr, msg *sproto.NotifySlot
 					transferType: slotTransferOut,
 					store:        s,
 					reply: func() {
-						s.kvnode.udpConn.SendTo(from, &sproto.NotifySlotTransOutResp{
-							Slot: msg.Slot,
-						})
+						s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
+							&sproto.NotifySlotTransOutResp{
+								Slot: msg.Slot,
+							}))
 					},
 				})
 			}
@@ -761,17 +768,17 @@ func (s *kvstore) onNotifySlotTransOut(from *net.UDPAddr, msg *sproto.NotifySlot
 	}
 }
 
-func (s *kvstore) onUdpMsg(from *net.UDPAddr, m proto.Message) {
+func (s *kvstore) onUdpMsg(from *net.UDPAddr, m *snet.Message) {
 	if atomic.LoadInt32(&s.stoped) == 0 {
-		switch m.(type) {
+		switch m.Msg.(type) {
 		case *sproto.NotifyAddNode:
-			s.onNotifyAddNode(from, m.(*sproto.NotifyAddNode))
+			s.onNotifyAddNode(from, m.Msg.(*sproto.NotifyAddNode), m.Context)
 		case *sproto.NotifyRemNode:
-			s.onNotifyRemNode(from, m.(*sproto.NotifyRemNode))
+			s.onNotifyRemNode(from, m.Msg.(*sproto.NotifyRemNode), m.Context)
 		case *sproto.NotifySlotTransIn:
-			s.onNotifySlotTransIn(from, m.(*sproto.NotifySlotTransIn))
+			s.onNotifySlotTransIn(from, m.Msg.(*sproto.NotifySlotTransIn), m.Context)
 		case *sproto.NotifySlotTransOut:
-			s.onNotifySlotTransOut(from, m.(*sproto.NotifySlotTransOut))
+			s.onNotifySlotTransOut(from, m.Msg.(*sproto.NotifySlotTransOut), m.Context)
 		}
 	}
 }

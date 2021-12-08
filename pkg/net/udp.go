@@ -1,7 +1,6 @@
 package net
 
 import (
-	"github.com/gogo/protobuf/proto"
 	"net"
 )
 
@@ -9,11 +8,11 @@ type Udp struct {
 	address string
 	addr    *net.UDPAddr
 	conn    *net.UDPConn
-	unpack  func(b []byte) (msg proto.Message, err error)
-	pack    func(msg proto.Message) ([]byte, error)
+	unpack  func(b []byte) (msg interface{}, err error)
+	pack    func(msg interface{}) ([]byte, error)
 }
 
-func NewUdp(service string, pack func(proto.Message) ([]byte, error), unpack func([]byte) (proto.Message, error)) (*Udp, error) {
+func NewUdp(service string, pack func(interface{}) ([]byte, error), unpack func([]byte) (interface{}, error)) (*Udp, error) {
 	addr, err := net.ResolveUDPAddr("udp", service)
 	if nil != err {
 		return nil, err
@@ -33,7 +32,7 @@ func NewUdp(service string, pack func(proto.Message) ([]byte, error), unpack fun
 	}, nil
 }
 
-func (u *Udp) SendTo(addr *net.UDPAddr, msg proto.Message) error {
+func (u *Udp) SendTo(addr *net.UDPAddr, msg interface{}) error {
 	if b, err := u.pack(msg); nil != err {
 		return err
 	} else {
@@ -42,7 +41,7 @@ func (u *Udp) SendTo(addr *net.UDPAddr, msg proto.Message) error {
 	}
 }
 
-func (u *Udp) ReadFrom(recvBuff []byte) (*net.UDPAddr, proto.Message, error) {
+func (u *Udp) ReadFrom(recvBuff []byte) (*net.UDPAddr, interface{}, error) {
 	n, addr, err := u.conn.ReadFromUDP(recvBuff)
 	if nil != err {
 		return addr, nil, err

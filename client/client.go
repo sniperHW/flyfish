@@ -4,7 +4,6 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
-	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/movingAverage"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
@@ -228,11 +227,14 @@ func (this *Client) doCallBack(unikey string, cb callback, a interface{}) {
 }
 
 func QueryGate(pd []*net.UDPAddr) (ret []*sproto.Flygate) {
-	if resp := snet.UdpCall(pd, &sproto.GetFlyGateList{}, time.Second, func(respCh chan interface{}, r proto.Message) {
-		if resp, ok := r.(*sproto.GetFlyGateListResp); ok {
-			select {
-			case respCh <- resp.List:
-			default:
+	context := snet.MakeUniqueContext()
+	if resp := snet.UdpCall(pd, snet.MakeMessage(context, &sproto.GetFlyGateList{}), time.Second, func(respCh chan interface{}, r interface{}) {
+		if m, ok := r.(*snet.Message); ok {
+			if resp, ok := m.Msg.(*sproto.GetFlyGateListResp); ok && context == m.Context {
+				select {
+				case respCh <- resp.List:
+				default:
+				}
 			}
 		}
 	}); nil != resp {
@@ -473,11 +475,14 @@ func (this *Client) tryGateBalance() {
 	if nil != current && int(current.MsgPerSecond)-msgSendPerSend > average {
 		go func() {
 			req := &sproto.ChangeFlyGate{CurrentGate: current.Service, MsgSendPerSecond: int32(msgSendPerSend)}
-			if resp := snet.UdpCall(this.pdAddr, req, time.Second, func(respCh chan interface{}, r proto.Message) {
-				if resp, ok := r.(*sproto.ChangeFlyGateResp); ok {
-					select {
-					case respCh <- resp:
-					default:
+			context := snet.MakeUniqueContext()
+			if resp := snet.UdpCall(this.pdAddr, snet.MakeMessage(context, req), time.Second, func(respCh chan interface{}, r interface{}) {
+				if m, ok := r.(*snet.Message); ok {
+					if resp, ok := m.Msg.(*sproto.ChangeFlyGateResp); ok && context == m.Context {
+						select {
+						case respCh <- resp:
+						default:
+						}
 					}
 				}
 			}); nil != resp {

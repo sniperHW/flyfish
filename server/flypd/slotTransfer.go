@@ -2,12 +2,12 @@ package flypd
 
 import (
 	"encoding/json"
-	"time"
-	//"errors"
 	"fmt"
 	"github.com/sniperHW/flyfish/pkg/buffer"
+	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"net"
+	"time"
 )
 
 type TransSlotTransfer struct {
@@ -17,28 +17,32 @@ type TransSlotTransfer struct {
 	StoreTransferOutOk bool
 	SetIn              int
 	StoreTransferIn    int //迁入store
+	context            int64
 	timer              *time.Timer
 	pd                 *pd
 }
 
 func (tst *TransSlotTransfer) notify() {
+	tst.context = snet.MakeUniqueContext() //更新context,后续只接受相应context的应答
 	if !tst.StoreTransferOutOk {
 		setOut := tst.pd.deployment.sets[tst.SetOut]
 		for _, v := range setOut.nodes {
 			addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.host, v.servicePort))
-			tst.pd.udp.SendTo(addr, &sproto.NotifySlotTransOut{
-				Slot:  int32(tst.Slot),
-				Store: int32(tst.StoreTransferOut),
-			})
+			tst.pd.udp.SendTo(addr, snet.MakeMessage(tst.context,
+				&sproto.NotifySlotTransOut{
+					Slot:  int32(tst.Slot),
+					Store: int32(tst.StoreTransferOut),
+				}))
 		}
 	} else {
 		setIn := tst.pd.deployment.sets[tst.SetIn]
 		for _, v := range setIn.nodes {
 			addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.host, v.servicePort))
-			tst.pd.udp.SendTo(addr, &sproto.NotifySlotTransIn{
-				Slot:  int32(tst.Slot),
-				Store: int32(tst.StoreTransferIn),
-			})
+			tst.pd.udp.SendTo(addr, snet.MakeMessage(tst.context,
+				&sproto.NotifySlotTransIn{
+					Slot:  int32(tst.Slot),
+					Store: int32(tst.StoreTransferIn),
+				}))
 		}
 	}
 

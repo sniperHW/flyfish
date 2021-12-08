@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/buffer"
@@ -259,11 +258,14 @@ func doQueryRouteInfo(pdAddr []*net.UDPAddr, req *sproto.QueryRouteInfo) *sproto
 		return nil
 	}
 
-	if resp := snet.UdpCall(pdAddr, req, time.Second, func(respCh chan interface{}, r proto.Message) {
-		if resp, ok := r.(*sproto.QueryRouteInfoResp); ok {
-			select {
-			case respCh <- resp:
-			default:
+	context := snet.MakeUniqueContext()
+	if resp := snet.UdpCall(pdAddr, snet.MakeMessage(context, req), time.Second, func(respCh chan interface{}, r interface{}) {
+		if m, ok := r.(*snet.Message); ok {
+			if resp, ok := m.Msg.(*sproto.QueryRouteInfoResp); ok && context == m.Context {
+				select {
+				case respCh <- resp:
+				default:
+				}
 			}
 		}
 	}); nil != resp {
@@ -487,7 +489,7 @@ func (g *gate) Start() error {
 			}
 
 			for _, v := range g.pdAddr {
-				if nil != g.heartBeatUdp.SendTo(v, msg) {
+				if nil != g.heartBeatUdp.SendTo(v, snet.MakeMessage(0, msg)) {
 					return
 				}
 			}

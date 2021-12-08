@@ -1,6 +1,7 @@
 package net
 
 import (
+	"errors"
 	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/pkg/buffer"
@@ -41,10 +42,28 @@ func putUnCompressor(c compress.UnCompressorI) {
 	uncompressPool.Put(c)
 }
 
-func Unpack(b []byte) (msg proto.Message, err error) {
+type Message struct {
+	Context int64
+	Msg     proto.Message
+}
+
+func MakeMessage(context int64, msg proto.Message) *Message {
+	return &Message{
+		Context: context,
+		Msg:     msg,
+	}
+}
+
+func Unpack(b []byte) (msg interface{}, err error) {
 	r := buffer.NewReader(b)
 	var cmd uint16
 	cmd, err = r.CheckGetUint16()
+	if nil != err {
+		return
+	}
+
+	var context int64
+	context, err = r.CheckGetInt64()
 	if nil != err {
 		return
 	}
@@ -60,32 +79,53 @@ func Unpack(b []byte) (msg proto.Message, err error) {
 		return
 	}
 
-	if len(b[7:]) < int(l) {
+	if len(b[15:]) < int(l) {
 		err = fmt.Errorf("not enough data for unpack")
 		return
 	}
 
+	var data proto.Message
+
 	if c == byte(0) {
-		msg, err = pb.GetNamespace("sproto").Unmarshal(uint32(cmd), b[7:])
+		data, err = pb.GetNamespace("sproto").Unmarshal(uint32(cmd), b[15:])
+		if nil == err {
+			msg = &Message{
+				Context: context,
+				Msg:     data,
+			}
+		}
 	} else {
 		un := getUnCompressor()
 		var bb []byte
-		bb, err = un.UnCompress(b[7:])
+		bb, err = un.UnCompress(b[15:])
 		if nil != err {
 			return
 		}
-		msg, err = pb.GetNamespace("sproto").Unmarshal(uint32(cmd), bb)
+		data, err = pb.GetNamespace("sproto").Unmarshal(uint32(cmd), bb)
+		if nil == err {
+			msg = &Message{
+				Context: context,
+				Msg:     data,
+			}
+		}
 	}
 	return
 }
 
 var compressSize = 4096
 
-func Pack(msg proto.Message) ([]byte, error) {
+func Pack(m interface{}) ([]byte, error) {
+
+	msg, ok := m.(*Message)
+
+	if !ok {
+		return nil, errors.New("invaild msg type")
+	}
+
 	var data []byte
 	var cmd uint32
 	var err error
-	if data, cmd, err = pb.GetNamespace("sproto").Marshal(msg); nil != err {
+	if data, cmd, err = pb.GetNamespace("sproto").Marshal(msg.Msg); nil != err {
 		return nil, err
 	} else {
 		var b []byte
@@ -99,8 +139,9 @@ func Pack(msg proto.Message) ([]byte, error) {
 			flagCompress = byte(1)
 		}
 
-		b = make([]byte, 0, 7+len(data))
+		b = make([]byte, 0, 15+len(data))
 		b = buffer.AppendUint16(b, uint16(cmd))
+		b = buffer.AppendInt64(b, msg.Context)
 		b = buffer.AppendByte(b, flagCompress)
 		b = buffer.AppendInt32(b, int32(len(data)))
 		if len(data) > 0 {
@@ -110,7 +151,7 @@ func Pack(msg proto.Message) ([]byte, error) {
 	}
 }
 
-func UdpCall(remotes interface{}, req proto.Message, timeout time.Duration, onResp func(chan interface{}, proto.Message)) (ret interface{}) {
+func UdpCall(remotes interface{}, req *Message, timeout time.Duration, onResp func(chan interface{}, interface{})) (ret interface{}) {
 	var remoteAddrs []*net.UDPAddr
 	switch remotes.(type) {
 	case []string:
@@ -137,7 +178,7 @@ func UdpCall(remotes interface{}, req proto.Message, timeout time.Duration, onRe
 				uu[i] = u
 				_, r, err := u.ReadFrom(make([]byte, 65535))
 				if nil == err {
-					onResp(respCh, r.(proto.Message))
+					onResp(respCh, r)
 				}
 			}
 		}(k, v)
@@ -158,6 +199,11 @@ func UdpCall(remotes interface{}, req proto.Message, timeout time.Duration, onRe
 	}
 
 	return
+}
+
+//只要分钟级不重复即可
+func MakeUniqueContext() int64 {
+	return time.Now().UnixNano()
 }
 
 func init() {

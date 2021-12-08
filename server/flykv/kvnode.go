@@ -340,16 +340,19 @@ func (this *kvnode) getKvnodeBootInfo(pd []*net.UDPAddr) *sproto.KvnodeBootResp 
 	for {
 		respCh := make(chan *sproto.KvnodeBootResp)
 		uu := make([]*fnet.Udp, len(pd))
+		context := snet.MakeUniqueContext()
 		for k, v := range pd {
 			u, err := fnet.NewUdp(fmt.Sprintf(":0"), snet.Pack, snet.Unpack)
 			if nil == err {
 				uu[k] = u
 				go func(u *fnet.Udp, pdAddr *net.UDPAddr) {
-					u.SendTo(pdAddr, &sproto.KvnodeBoot{NodeID: int32(this.id)})
+					u.SendTo(pdAddr, snet.MakeMessage(context, &sproto.KvnodeBoot{NodeID: int32(this.id)}))
 					recvbuff := make([]byte, 65535)
 					_, r, err := u.ReadFrom(recvbuff)
 					if nil == err {
-						respCh <- r.(*sproto.KvnodeBootResp)
+						if m, ok := r.(*snet.Message); ok && context == m.Context {
+							respCh <- m.Msg.(*sproto.KvnodeBootResp)
+						}
 					}
 				}(u, v)
 			}

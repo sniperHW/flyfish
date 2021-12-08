@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/sniperHW/flyfish/pkg/buffer"
+	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"net"
 	"time"
@@ -256,6 +257,8 @@ func (p *pd) sendNotifyRemNode(rn *RemovingNode) {
 			NodeID: int32(rn.NodeID),
 		}
 
+		rn.context = snet.MakeUniqueContext() //更新context,后续只接受相应context的应答
+
 		for _, v := range s.stores {
 			find := false
 			for i := 0; i < len(rn.OkStores); i++ {
@@ -272,7 +275,7 @@ func (p *pd) sendNotifyRemNode(rn *RemovingNode) {
 
 		for _, v := range s.nodes {
 			addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.host, v.servicePort))
-			p.udp.SendTo(addr, notify)
+			p.udp.SendTo(addr, snet.MakeMessage(rn.context, notify))
 		}
 	}
 }
@@ -285,6 +288,8 @@ func (p *pd) sendNotifyAddNode(an *AddingNode) {
 			Host:     an.Host,
 			RaftPort: int32(an.RaftPort),
 		}
+
+		an.context = snet.MakeUniqueContext() //更新context,后续只接受相应context的应答
 
 		for _, v := range s.stores {
 			find := false
@@ -302,7 +307,7 @@ func (p *pd) sendNotifyAddNode(an *AddingNode) {
 		for _, v := range s.nodes {
 			addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.host, v.servicePort))
 			GetSugar().Infof("send notify add node to %s:%d", v.host, v.servicePort)
-			p.udp.SendTo(addr, notify)
+			p.udp.SendTo(addr, snet.MakeMessage(an.context, notify))
 		}
 	}
 }

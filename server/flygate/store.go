@@ -2,7 +2,6 @@ package flygate
 
 import (
 	"container/list"
-	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/queue"
@@ -82,11 +81,14 @@ func (s *store) queryLeader() {
 		if len(nodes) > 0 {
 			go func() {
 				var leader int
-				if resp := snet.UdpCall(nodes, &sproto.QueryLeader{Store: int32(s.id)}, time.Second, func(respCh chan interface{}, r proto.Message) {
-					if resp, ok := r.(*sproto.QueryLeaderResp); ok && 0 != resp.Leader {
-						select {
-						case respCh <- int(resp.Leader):
-						default:
+				context := snet.MakeUniqueContext()
+				if resp := snet.UdpCall(nodes, snet.MakeMessage(context, &sproto.QueryLeader{Store: int32(s.id)}), time.Second, func(respCh chan interface{}, r interface{}) {
+					if m, ok := r.(*snet.Message); ok {
+						if resp, ok := m.Msg.(*sproto.QueryLeaderResp); ok && context == m.Context && 0 != resp.Leader {
+							select {
+							case respCh <- int(resp.Leader):
+							default:
+							}
 						}
 					}
 				}); nil != resp {

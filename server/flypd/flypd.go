@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/queue"
@@ -30,6 +29,7 @@ type AddingNode struct {
 	KvNodeJson
 	SetID    int
 	OkStores []int
+	context  int64
 	timer    *time.Timer
 }
 
@@ -37,6 +37,7 @@ type RemovingNode struct {
 	NodeID   int
 	SetID    int
 	OkStores []int
+	context  int64
 	timer    *time.Timer
 }
 
@@ -135,7 +136,7 @@ type pd struct {
 	removingNode    map[int]*RemovingNode
 	slotTransfer    map[int]*TransSlotTransfer
 	markClearSet    map[int]*set
-	msgHandler      map[reflect.Type]func(*net.UDPAddr, proto.Message)
+	msgHandler      map[reflect.Type]func(*net.UDPAddr, *snet.Message)
 	stoponce        int32
 	startonce       int32
 	wait            sync.WaitGroup
@@ -156,7 +157,7 @@ func NewPd(id int, config *Config, udpService string, cluster string) *pd {
 	p := &pd{
 		id:           id,
 		mainque:      mainQueue,
-		msgHandler:   map[reflect.Type]func(*net.UDPAddr, proto.Message){},
+		msgHandler:   map[reflect.Type]func(*net.UDPAddr, *snet.Message){},
 		addingNode:   map[int]*AddingNode{},
 		removingNode: map[int]*RemovingNode{},
 		slotTransfer: map[int]*TransSlotTransfer{},
@@ -351,10 +352,10 @@ func (p *pd) startUdpService() error {
 				GetSugar().Errorf("read err:%v", err)
 				return
 			} else {
-				//GetSugar().Infof("got msg")
+				//GetSugar().Infof("got msg %v %v", err, msg)
 				p.mainque.append(func() {
 					if p.isLeader() && p.ready {
-						p.onMsg(from, msg)
+						p.onMsg(from, msg.(*snet.Message))
 					} else {
 						GetSugar().Infof("drop msg")
 					}
