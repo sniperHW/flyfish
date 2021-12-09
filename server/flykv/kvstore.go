@@ -134,18 +134,18 @@ func releaseCompressor(c compress.CompressorI) {
 	compressorPool.Put(c)
 }
 
-var uncompressorPool sync.Pool = sync.Pool{
+var decompressorPool sync.Pool = sync.Pool{
 	New: func() interface{} {
-		return &compress.ZipUnCompressor{}
+		return &compress.ZipDecompressor{}
 	},
 }
 
-func getUnCompressor() compress.UnCompressorI {
-	return uncompressorPool.Get().(compress.UnCompressorI)
+func getDecompressor() compress.DecompressorI {
+	return decompressorPool.Get().(compress.DecompressorI)
 }
 
-func releaseUnCompressor(c compress.UnCompressorI) {
-	uncompressorPool.Put(c)
+func releaseDecompressor(c compress.DecompressorI) {
+	decompressorPool.Put(c)
 }
 
 type kvstore struct {

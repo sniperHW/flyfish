@@ -70,17 +70,17 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 	bb := b[len(b)-1]
 	b = b[:len(b)-1]
 
-	var u compress.UnCompressorI
+	var dc compress.DecompressorI
 
 	defer func() {
-		if nil != u {
-			releaseUnCompressor(u)
+		if nil != dc {
+			releaseDecompressor(dc)
 		}
 	}()
 
 	if bb == byte(1) {
-		u = getUnCompressor()
-		b, err = u.UnCompress(b)
+		dc = getDecompressor()
+		b, err = dc.Decompress(b)
 		if nil != err {
 			GetSugar().Errorf("UnCompress error %v", err)
 			return err

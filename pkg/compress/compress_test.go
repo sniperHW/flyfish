@@ -23,19 +23,9 @@ func TestCompress(t *testing.T) {
 
 		fmt.Println("zip len", len(zipOut))
 
-		zipUnCompressor := &ZipUnCompressor{}
+		zipDecompressor := &ZipDecompressor{}
 
-		unzipOut, err := zipUnCompressor.UnCompress(zipOut)
-
-		if nil != err {
-			t.Fatal(err)
-		}
-
-		if string(unzipOut) != s {
-			t.Fatal(unzipOut)
-		}
-
-		unzipOut, err = zipUnCompressor.UnCompress(zipOut)
+		unzipOut, err := zipDecompressor.Decompress(zipOut)
 
 		if nil != err {
 			t.Fatal(err)
@@ -45,7 +35,17 @@ func TestCompress(t *testing.T) {
 			t.Fatal(unzipOut)
 		}
 
-		unzipOut, err = zipUnCompressor.UnCompress(zipOut)
+		unzipOut, err = zipDecompressor.Decompress(zipOut)
+
+		if nil != err {
+			t.Fatal(err)
+		}
+
+		if string(unzipOut) != s {
+			t.Fatal(unzipOut)
+		}
+
+		unzipOut, err = zipDecompressor.Decompress(zipOut)
 
 		if nil != err {
 			t.Fatal(err)
@@ -68,9 +68,9 @@ func TestCompress(t *testing.T) {
 
 		fmt.Println("gzip len", len(zipOut))
 
-		gzipUnCompressor := &GZipUnCompressor{}
+		gzipDecompressor := &GZipDecompressor{}
 
-		unzipOut, err := gzipUnCompressor.UnCompress(zipOut)
+		unzipOut, err := gzipDecompressor.Decompress(zipOut)
 
 		if nil != err {
 			t.Fatal(err)
@@ -80,7 +80,7 @@ func TestCompress(t *testing.T) {
 			t.Fatal(unzipOut)
 		}
 
-		unzipOut, err = gzipUnCompressor.UnCompress(zipOut)
+		unzipOut, err = gzipDecompressor.Decompress(zipOut)
 
 		if nil != err {
 			t.Fatal(err)
@@ -98,14 +98,14 @@ func BenchmarkZip(b *testing.B) {
 	numLoops := b.N
 	s := []byte(strings.Repeat("a", 4096))
 	zipCompressor := &ZipCompressor{}
-	zipUnCompressor := &ZipUnCompressor{}
+	zipDecompressor := &ZipDecompressor{}
 
 	for i := 0; i < numLoops; i++ {
 		zipOut, err := zipCompressor.Compress(s)
 		if nil != err {
 			b.Fatal(err)
 		}
-		_, err = zipUnCompressor.UnCompress(zipOut)
+		_, err = zipDecompressor.Decompress(zipOut)
 		if nil != err {
 			b.Fatal(err)
 		}
@@ -116,14 +116,14 @@ func BenchmarkGZip(b *testing.B) {
 	numLoops := b.N
 	s := []byte(strings.Repeat("a", 4096))
 	zipCompressor := &GZipCompressor{}
-	zipUnCompressor := &GZipUnCompressor{}
+	zipDecompressor := &GZipDecompressor{}
 
 	for i := 0; i < numLoops; i++ {
 		zipOut, err := zipCompressor.Compress(s)
 		if nil != err {
 			b.Fatal(err)
 		}
-		_, err = zipUnCompressor.UnCompress(zipOut)
+		_, err = zipDecompressor.Decompress(zipOut)
 		if nil != err {
 			b.Fatal(err)
 		}

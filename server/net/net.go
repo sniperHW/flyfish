@@ -28,18 +28,18 @@ func putCompressor(c compress.CompressorI) {
 	compressPool.Put(c)
 }
 
-var uncompressPool = &sync.Pool{
+var decompressPool = &sync.Pool{
 	New: func() interface{} {
-		return &compress.ZipUnCompressor{}
+		return &compress.ZipDecompressor{}
 	},
 }
 
-func getUnCompressor() compress.UnCompressorI {
-	return uncompressPool.Get().(compress.UnCompressorI)
+func getDecompressor() compress.DecompressorI {
+	return decompressPool.Get().(compress.DecompressorI)
 }
 
-func putUnCompressor(c compress.UnCompressorI) {
-	uncompressPool.Put(c)
+func putDecompressor(c compress.DecompressorI) {
+	decompressPool.Put(c)
 }
 
 type Message struct {
@@ -95,9 +95,9 @@ func Unpack(b []byte) (msg interface{}, err error) {
 			}
 		}
 	} else {
-		un := getUnCompressor()
+		un := getDecompressor()
 		var bb []byte
-		bb, err = un.UnCompress(b[15:])
+		bb, err = un.Decompress(b[15:])
 		if nil != err {
 			return
 		}

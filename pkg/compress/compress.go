@@ -13,9 +13,9 @@ type CompressorI interface {
 	Clone() CompressorI
 }
 
-type UnCompressorI interface {
-	UnCompress(in []byte) ([]byte, error)
-	Clone() UnCompressorI
+type DecompressorI interface {
+	Decompress(in []byte) ([]byte, error)
+	Clone() DecompressorI
 }
 
 type ZipCompressor struct {
@@ -52,16 +52,16 @@ func (this *ZipCompressor) Compress(in []byte) ([]byte, error) {
 	return out, nil
 }
 
-type ZipUnCompressor struct {
+type ZipDecompressor struct {
 	zipBuff   bytes.Buffer
 	zipReader io.ReadCloser
 }
 
-func (this *ZipUnCompressor) Clone() UnCompressorI {
-	return &ZipUnCompressor{}
+func (this *ZipDecompressor) Clone() DecompressorI {
+	return &ZipDecompressor{}
 }
 
-func (this *ZipUnCompressor) UnCompress(in []byte) ([]byte, error) {
+func (this *ZipDecompressor) Decompress(in []byte) ([]byte, error) {
 
 	var err error
 
@@ -128,16 +128,16 @@ func (this *GZipCompressor) Compress(in []byte) ([]byte, error) {
 	return out, nil
 }
 
-type GZipUnCompressor struct {
+type GZipDecompressor struct {
 	zipBuff   bytes.Buffer
 	zipReader *gzip.Reader
 }
 
-func (this *GZipUnCompressor) Clone() UnCompressorI {
-	return &GZipUnCompressor{}
+func (this *GZipDecompressor) Clone() DecompressorI {
+	return &GZipDecompressor{}
 }
 
-func (this *GZipUnCompressor) UnCompress(in []byte) ([]byte, error) {
+func (this *GZipDecompressor) Decompress(in []byte) ([]byte, error) {
 
 	this.zipBuff.Reset()
 	_, err := this.zipBuff.Write(in)
