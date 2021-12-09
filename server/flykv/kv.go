@@ -242,7 +242,6 @@ func (this *kv) process(cmd cmdI) {
 			if nil != linearizableRead {
 				err = this.store.rn.IssueLinearizableRead(linearizableRead)
 			} else {
-				proposal.check()
 				err = this.store.rn.IssueProposal(proposal)
 			}
 

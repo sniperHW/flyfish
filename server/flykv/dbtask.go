@@ -209,8 +209,6 @@ func (this *dbLoadTask) OnResult(err error, version int64, fields map[string]*fl
 
 		this.cmd.onLoadResult(err, proposal)
 
-		proposal.check()
-
 		if err = this.keyValue.store.rn.IssueProposal(proposal); nil != err {
 			GetSugar().Infof("reply retry")
 			this.onResultError(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"))
