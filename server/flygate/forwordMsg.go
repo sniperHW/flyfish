@@ -29,18 +29,18 @@ type forwordMsg struct {
 }
 
 func (r *forwordMsg) onTimeout() {
-	if nil != r.waitResponse {
-		delete(*r.waitResponse, r.seqno)
-		r.waitResponse = nil
-	}
+	if nil != r.deadlineTimer {
+		if nil != r.waitResponse {
+			delete(*r.waitResponse, r.seqno)
+		}
 
-	if nil != r.l && nil != r.listElement {
-		r.l.Remove(r.listElement)
-		r.l = nil
-		r.listElement = nil
+		if nil != r.l && nil != r.listElement {
+			r.l.Remove(r.listElement)
+			r.l = nil
+			r.listElement = nil
+		}
+		r.dropReply()
 	}
-
-	r.dropReply()
 }
 
 func (r *forwordMsg) reply(b []byte) {

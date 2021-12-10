@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/flyfish/errcode"
-	flynet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/net/cs"
 	protocol "github.com/sniperHW/flyfish/proto"
 	"sync"
@@ -79,39 +78,28 @@ type cmdContext struct {
 }
 
 func (this *cmdContext) onTimeout() {
-
-	ok := false
-
-	var session *flynet.Socket
-
 	this.mu.Lock()
+	if nil == this.deadlineTimer {
+		this.mu.Lock()
+		return
+	}
 
 	if this.waitResp == this.serverConn.waitResp {
 		delete(*this.serverConn.waitResp, this.req.Seqno)
-		this.waitResp = nil
-		ok = true
 	}
 
 	if nil != this.listElement {
 		this.l.Remove(this.listElement)
-		ok = true
 	}
 
 	if this.serverConn.removed && 0 == len(*this.serverConn.waitResp) {
-		session = this.serverConn.session
+		this.serverConn.session.Close(nil, 0)
 	}
 
 	this.mu.Unlock()
 
-	if nil != session {
-		session.Close(nil, 0)
-	}
-
-	if ok {
-		this.serverConn.doCallBack(this.unikey, this.cb, errcode.New(errcode.Errcode_timeout, "timeout"))
-		releaseCmdContext(this)
-	}
-
+	this.serverConn.doCallBack(this.unikey, this.cb, errcode.New(errcode.Errcode_timeout, "timeout"))
+	releaseCmdContext(this)
 }
 
 type StatusCmd struct {
@@ -539,24 +527,17 @@ func (this *serverConn) onMessage(msg *cs.RespMessage) {
 	cmd := protocol.CmdType(msg.Cmd)
 	if cmd != protocol.CmdType_Ping {
 
-		var session *flynet.Socket
-
 		this.mu.Lock()
 		ctx, ok := (*this.waitResp)[msg.Seqno]
 		if ok {
-			if ok = ctx.deadlineTimer.Stop(); ok {
-				delete(*this.waitResp, msg.Seqno)
-				ctx.waitResp = nil
-				if this.removed && 0 == len(*this.waitResp) {
-					session = this.session
-				}
+			ctx.deadlineTimer.Stop()
+			ctx.deadlineTimer = nil
+			delete(*this.waitResp, msg.Seqno)
+			if this.removed && 0 == len(*this.waitResp) {
+				this.session.Close(nil, 0)
 			}
 		}
 		this.mu.Unlock()
-
-		if nil != session {
-			session.Close(nil, 0)
-		}
 
 		if ok {
 			switch cmd {

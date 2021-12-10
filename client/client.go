@@ -87,13 +87,17 @@ func (this *serverConn) onDisconnected() {
 	this.session = nil
 	waitResp := *this.waitResp
 	this.waitResp = makeWaitResp()
+
+	for _, v := range waitResp {
+		v.deadlineTimer.Stop()
+		v.deadlineTimer = nil
+	}
+
 	this.mu.Unlock()
 
 	for _, v := range waitResp {
-		if v.deadlineTimer.Stop() {
-			this.doCallBack(v.unikey, v.cb, errcode.New(errcode.Errcode_error, "lose connection"))
-			releaseCmdContext(v)
-		}
+		this.doCallBack(v.unikey, v.cb, errcode.New(errcode.Errcode_error, "lose connection"))
+		releaseCmdContext(v)
 	}
 }
 
@@ -108,7 +112,7 @@ func (this *serverConn) onConnected(session *flynet.Socket) {
 	this.session.SetEncoder(&cs.ReqEncoder{})
 	this.session.SetCloseCallBack(func(sess *flynet.Socket, reason error) {
 		GetSugar().Infof("socket close %v", reason)
-		this.onDisconnected()
+		go this.onDisconnected()
 	}).BeginRecv(func(s *flynet.Socket, msg interface{}) {
 		this.onMessage(msg.(*cs.RespMessage))
 	})
@@ -316,20 +320,15 @@ func (this *Client) exec(c *cmdContext) {
 
 func (this *Client) Close() {
 	if atomic.CompareAndSwapInt32(&this.closed, 0, 1) {
+		this.mu.Lock()
+		defer this.mu.Unlock()
 		if "" != this.conf.SoloService {
-			this.mu.Lock()
-			session := this.usedConn.session
-			this.mu.Unlock()
-			if nil != session {
-				session.Close(nil, 0)
+			if nil != this.usedConn.session {
+				this.usedConn.session.Close(nil, 0)
 			}
 		} else {
-			this.mu.Lock()
 			this.usedConn = nil
-			serverConnMap := this.serverConnMap
-			this.serverConnMap = map[string]*serverConn{}
-			this.mu.Unlock()
-			for _, v := range serverConnMap {
+			for _, v := range this.serverConnMap {
 				v.session.Close(nil, 0)
 			}
 		}
@@ -394,8 +393,6 @@ func (this *Client) onGates(gates []*sproto.Flygate) {
 		this.serverConnMap[v.Service] = conn
 	}
 
-	closeSession := []*flynet.Socket{}
-
 	for _, v := range remove {
 		conn := this.serverConnMap[v]
 
@@ -407,7 +404,7 @@ func (this *Client) onGates(gates []*sproto.Flygate) {
 
 		if len(*conn.waitResp) == 0 {
 			if nil != conn.session {
-				closeSession = append(closeSession, conn.session)
+				conn.session.Close(nil, 0)
 			}
 		} else {
 			conn.removed = true
@@ -437,10 +434,6 @@ func (this *Client) onGates(gates []*sproto.Flygate) {
 	}
 
 	this.mu.Unlock()
-
-	for _, v := range closeSession {
-		v.Close(nil, 0)
-	}
 }
 
 func (this *Client) changeFlygate(newGate string) {

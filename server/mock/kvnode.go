@@ -11,7 +11,7 @@ import (
 	"github.com/sniperHW/flyfish/proto"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	snet "github.com/sniperHW/flyfish/server/net"
-	sproto "github.com/sniperHW/flyfish/server/proto"
+	//sproto "github.com/sniperHW/flyfish/server/proto"
 	"sync/atomic"
 	"time"
 )
@@ -158,12 +158,11 @@ func (this *Node) Stop() {
 
 func (this *Node) Start(leader bool, service string, console string, def *db.DbDef) error {
 
-	m, err := sql.CreateDbMeta(def)
-	if nil != err {
-		return err
-	}
+	m := sql.CreateDbMeta(1, def)
 
 	this.metaMgr = m
+
+	var err error
 
 	if this.listener, err = cs.NewListener("tcp", service, fnet.OutputBufLimit{}, verifyLogin); nil != err {
 		return err
@@ -196,7 +195,7 @@ func (this *Node) Start(leader bool, service string, console string, def *db.DbD
 		return err
 	}
 
-	go func() {
+	/*go func() {
 		recvbuff := make([]byte, 64*1024)
 		for {
 			from, msg, err := this.consoleConn.ReadFrom(recvbuff)
@@ -212,7 +211,7 @@ func (this *Node) Start(leader bool, service string, console string, def *db.DbD
 			}
 		}
 
-	}()
+	}()*/
 
 	return nil
 }

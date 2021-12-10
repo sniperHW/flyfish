@@ -9,7 +9,7 @@ import (
 )
 
 func (this *dbUpdateTask) GetTable() string {
-	return this.keyValue.tbmeta.TableName()
+	return this.kv.table
 }
 
 func (this *dbUpdateTask) isDoing() bool {
@@ -19,14 +19,14 @@ func (this *dbUpdateTask) isDoing() bool {
 }
 
 func (this *dbUpdateTask) CheckUpdateLease() bool {
-	return this.keyValue.store.lease.hasLease()
+	return this.kv.store.lease.hasLease()
 }
 
 func (this *dbUpdateTask) ReleaseLock() {
 	this.Lock()
 	defer this.Unlock()
 	this.doing = false
-	atomic.AddInt32(&this.keyValue.store.dbWriteBackCount, -1)
+	atomic.AddInt32(&this.kv.store.dbWriteBackCount, -1)
 }
 
 func (this *dbUpdateTask) Dirty() bool {
@@ -42,7 +42,7 @@ func (this *dbUpdateTask) ClearUpdateStateAndReleaseLock() {
 	this.updateFields = map[string]*flyproto.Field{}
 	this.doing = false
 	this.dbstate = db.DBState_none
-	atomic.AddInt32(&this.keyValue.store.dbWriteBackCount, -1)
+	atomic.AddInt32(&this.kv.store.dbWriteBackCount, -1)
 }
 
 func (this *dbUpdateTask) GetUpdateAndClearUpdateState() (updateState db.UpdateState) {
@@ -51,20 +51,20 @@ func (this *dbUpdateTask) GetUpdateAndClearUpdateState() (updateState db.UpdateS
 	updateState.Version = this.version
 	updateState.Fields = this.updateFields
 	updateState.State = this.dbstate
-	updateState.Meta = this.keyValue.tbmeta
-	updateState.Key = this.keyValue.key
-	updateState.Slot = this.keyValue.slot
+	updateState.Meta = this.kv.getTableMeta()
+	updateState.Key = this.kv.key
+	updateState.Slot = this.kv.slot
 	this.updateFields = map[string]*flyproto.Field{}
 	this.dbstate = db.DBState_none
 	return
 }
 
 func (this *dbUpdateTask) GetUniKey() string {
-	return this.keyValue.uniKey
+	return this.kv.uniKey
 }
 
 func (this *dbUpdateTask) issueFullDbWriteBack() error {
-	if !this.keyValue.store.hasLease() {
+	if !this.kv.store.hasLease() {
 		return errors.New("not has lease")
 	}
 
@@ -75,7 +75,7 @@ func (this *dbUpdateTask) issueFullDbWriteBack() error {
 		return errors.New("is doing")
 	}
 
-	switch this.keyValue.state {
+	switch this.kv.state {
 	case kv_ok:
 		this.dbstate = db.DBState_insert
 	case kv_no_record:
@@ -87,17 +87,17 @@ func (this *dbUpdateTask) issueFullDbWriteBack() error {
 		return errors.New("kv in invaild state")
 	}
 
-	this.version = this.keyValue.version
+	this.version = this.kv.version
 
 	if this.dbstate == db.DBState_insert {
-		for k, v := range this.keyValue.fields {
+		for k, v := range this.kv.fields {
 			this.updateFields[k] = v
 		}
 	}
 
 	this.doing = true
-	atomic.AddInt32(&this.keyValue.store.dbWriteBackCount, 1)
-	this.keyValue.store.db.issueUpdate(this) //这里不会出错，db要到最后才会stop
+	atomic.AddInt32(&this.kv.store.dbWriteBackCount, 1)
+	this.kv.store.db.issueUpdate(this) //这里不会出错，db要到最后才会stop
 
 	return nil
 }
@@ -108,14 +108,14 @@ func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields 
 		return errors.New("updateState error 1")
 	}
 
-	if !this.keyValue.store.hasLease() {
+	if !this.kv.store.hasLease() {
 		return nil
 	}
 
 	this.Lock()
 	defer this.Unlock()
 
-	GetSugar().Debugf("updateState %s %d %d", this.keyValue.uniKey, dbstate, this.dbstate)
+	GetSugar().Debugf("updateState %s %d %d", this.kv.uniKey, dbstate, this.dbstate)
 
 	switch this.dbstate {
 	case db.DBState_none:
@@ -156,36 +156,36 @@ func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields 
 
 	if !this.doing {
 		this.doing = true
-		atomic.AddInt32(&this.keyValue.store.dbWriteBackCount, 1)
-		this.keyValue.store.db.issueUpdate(this)
+		atomic.AddInt32(&this.kv.store.dbWriteBackCount, 1)
+		this.kv.store.db.issueUpdate(this)
 	}
 
 	return nil
 }
 
 func (this *dbLoadTask) GetTable() string {
-	return this.keyValue.tbmeta.TableName()
+	return this.kv.table
 }
 
 func (this *dbLoadTask) GetKey() string {
-	return this.keyValue.key
+	return this.kv.key
 }
 
 func (this *dbLoadTask) GetUniKey() string {
-	return this.keyValue.uniKey
+	return this.kv.uniKey
 }
 
 func (this *dbLoadTask) GetTableMeta() db.TableMeta {
-	return this.keyValue.tbmeta
+	return this.kv.getTableMeta()
 }
 
 func (this *dbLoadTask) onResultError(err errcode.Error) {
 	this.cmd.reply(err, nil, 0)
-	this.keyValue.store.mainQueue.AppendHighestPriotiryItem(func() {
-		this.keyValue.store.deleteKv(this.keyValue)
-		for f := this.keyValue.pendingCmd.front(); nil != f; f = this.keyValue.pendingCmd.front() {
+	this.kv.store.mainQueue.AppendHighestPriotiryItem(func() {
+		this.kv.store.deleteKv(this.kv)
+		for f := this.kv.pendingCmd.front(); nil != f; f = this.kv.pendingCmd.front() {
 			f.reply(err, nil, 0)
-			this.keyValue.pendingCmd.popFront()
+			this.kv.pendingCmd.popFront()
 		}
 	})
 }
@@ -197,9 +197,9 @@ func (this *dbLoadTask) OnResult(err error, version int64, fields map[string]*fl
 		 * 根据this.cmd产生正确的proposal
 		 */
 		proposal := &kvProposal{
-			ptype:    proposal_snapshot,
-			keyValue: this.keyValue,
-			cmds:     []cmdI{this.cmd},
+			ptype: proposal_snapshot,
+			kv:    this.kv,
+			cmds:  []cmdI{this.cmd},
 		}
 
 		if nil == err {
@@ -209,7 +209,7 @@ func (this *dbLoadTask) OnResult(err error, version int64, fields map[string]*fl
 
 		this.cmd.onLoadResult(err, proposal)
 
-		if err = this.keyValue.store.rn.IssueProposal(proposal); nil != err {
+		if err = this.kv.store.rn.IssueProposal(proposal); nil != err {
 			GetSugar().Infof("reply retry")
 			this.onResultError(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"))
 		}

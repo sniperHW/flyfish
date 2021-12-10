@@ -60,8 +60,7 @@ func TestDbmeta1(t *testing.T) {
 	assert.Nil(t, err)
 	fmt.Println(string(defStr))
 
-	mt, err := CreateDbMeta(&m)
-	assert.Nil(t, err)
+	mt := CreateDbMeta(1, &m)
 
 	td := mt.GetTableMeta("Table1").(*TableMeta)
 
@@ -84,8 +83,8 @@ func TestDbmeta1(t *testing.T) {
 	assert.Equal(t, td.GetDefaultValue("field5"), []byte{})
 
 	{
-		assert.Equal(t, getDefaultValue(proto.ValueType_int, ""), int64(0))
-		assert.Equal(t, getDefaultValue(proto.ValueType_float, ""), float64(0))
+		assert.Equal(t, db.GetDefaultValue(proto.ValueType_int, ""), int64(0))
+		assert.Equal(t, db.GetDefaultValue(proto.ValueType_float, ""), float64(0))
 	}
 
 	{
@@ -106,22 +105,17 @@ func TestDbmeta1(t *testing.T) {
 }
 
 func TestDbmeta2(t *testing.T) {
-	dbdef, err := db.CreateDbDefFromCsv([]string{"meta_version@10", "Table1@field1:int:1,field2:float:1.2,field3:string:hello,field4:string:,field5:blob:"})
+	dbdef, err := db.CreateDbDefFromCsv([]string{"Table1@field1:int:1,field2:float:1.2,field3:string:hello,field4:string:,field5:blob:"})
 
 	assert.Nil(t, err)
 
-	assert.Equal(t, dbdef.Version, int64(10))
-
-	mt, err := CreateDbMeta(dbdef)
-	assert.Nil(t, err)
+	mt := CreateDbMeta(1, dbdef)
 
 	defStr, err := db.DbDefToJsonString(dbdef)
 	assert.Nil(t, err)
 	fmt.Println(string(defStr))
 
 	td := mt.GetTableMeta("Table1").(*TableMeta)
-
-	assert.Equal(t, td.version, int64(10))
 
 	fmt.Println(td.GetQueryMeta().GetFieldNames())
 
@@ -142,8 +136,8 @@ func TestDbmeta2(t *testing.T) {
 	assert.Equal(t, td.GetDefaultValue("field5"), []byte{})
 
 	{
-		assert.Equal(t, getDefaultValue(proto.ValueType_int, ""), int64(0))
-		assert.Equal(t, getDefaultValue(proto.ValueType_float, ""), float64(0))
+		assert.Equal(t, db.GetDefaultValue(proto.ValueType_int, ""), int64(0))
+		assert.Equal(t, db.GetDefaultValue(proto.ValueType_float, ""), float64(0))
 	}
 
 	{
@@ -157,4 +151,15 @@ func TestDbmeta2(t *testing.T) {
 		b := []byte("string")
 		assert.Equal(t, convert_blob(&b), []byte("string"))
 	}
+
+	td1 := mt.CheckTableMeta(td)
+
+	assert.Equal(t, td1, td)
+
+	mt.UpdateMeta(2, dbdef)
+
+	td2 := mt.CheckTableMeta(td)
+
+	assert.NotEqual(t, td2, td)
+
 }

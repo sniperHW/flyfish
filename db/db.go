@@ -35,7 +35,6 @@ type TableDef struct {
 }
 
 type DbDef struct {
-	Version   int64 `json:"Version,omitempty"`
 	TableDefs []TableDef
 }
 
@@ -61,44 +60,33 @@ func CreateDbDefFromCsv(s []string) (*DbDef, error) {
 			return nil, fmt.Errorf("1 invaild table format(表名@字段1:类型:默认值,字段2:类型:默认值,...) %s", l)
 		}
 
-		if t1[0] == "meta_version" {
-			v, err := strconv.ParseInt(t1[1], 10, 64)
-			if nil != err {
-				return nil, err
-			} else {
-				dbDef.Version = v
-			}
-
-		} else {
-
-			tdef := TableDef{
-				Name: t1[0],
-			}
-
-			fields := strings.Split(t1[1], ",")
-
-			if len(fields) == 0 {
-				return nil, fmt.Errorf("2 invaild table format(表名@字段1:类型:默认值,字段2:类型:默认值,...) %s", l)
-			}
-
-			//处理其它字段
-			for _, v := range fields {
-				if v != "" {
-					field := strings.Split(v, ":")
-					if len(field) != 3 {
-						return nil, fmt.Errorf("3 invaild table format(表名@字段1:类型:默认值,字段2:类型:默认值,...) %s", l)
-					}
-
-					tdef.Fields = append(tdef.Fields, FieldDef{
-						Name:        field[0],
-						Type:        field[1],
-						DefautValue: field[2],
-					})
-				}
-			}
-
-			dbDef.TableDefs = append(dbDef.TableDefs, tdef)
+		tdef := TableDef{
+			Name: t1[0],
 		}
+
+		fields := strings.Split(t1[1], ",")
+
+		if len(fields) == 0 {
+			return nil, fmt.Errorf("2 invaild table format(表名@字段1:类型:默认值,字段2:类型:默认值,...) %s", l)
+		}
+
+		//处理其它字段
+		for _, v := range fields {
+			if v != "" {
+				field := strings.Split(v, ":")
+				if len(field) != 3 {
+					return nil, fmt.Errorf("3 invaild table format(表名@字段1:类型:默认值,字段2:类型:默认值,...) %s", l)
+				}
+
+				tdef.Fields = append(tdef.Fields, FieldDef{
+					Name:        field[0],
+					Type:        field[1],
+					DefautValue: field[2],
+				})
+			}
+		}
+
+		dbDef.TableDefs = append(dbDef.TableDefs, tdef)
 	}
 
 	return dbDef, nil
@@ -127,8 +115,42 @@ func GetTypeByStr(s string) proto.ValueType {
 	}
 }
 
+func GetDefaultValue(tt proto.ValueType, v string) interface{} {
+	if tt == proto.ValueType_string {
+		return v
+	} else if tt == proto.ValueType_int {
+		if v == "" {
+			return int64(0)
+		} else {
+			i, err := strconv.ParseInt(v, 10, 64)
+			if nil != err {
+				return nil
+			} else {
+				return i
+			}
+		}
+	} else if tt == proto.ValueType_float {
+		if v == "" {
+			return float64(0)
+		} else {
+			f, err := strconv.ParseFloat(v, 64)
+			if nil != err {
+				return nil
+			} else {
+				return f
+			}
+		}
+	} else if tt == proto.ValueType_blob {
+		return []byte{}
+	} else {
+		return nil
+	}
+}
+
 type DBMeta interface {
+	UpdateMeta(version int64, def *DbDef)
 	GetTableMeta(tab string) TableMeta
+	CheckTableMeta(tab TableMeta) TableMeta //如果tab与DBMeta版本一致，直接返回tab否则返回最新的TableMeta
 	GetVersion() int64
 }
 

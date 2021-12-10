@@ -6,8 +6,9 @@ import (
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/proto"
 	"reflect"
-	"strconv"
+	//"strconv"
 	"strings"
+	"sync"
 )
 
 //表查询元数据
@@ -54,11 +55,14 @@ func (this *FieldMeta) GetDefaultValue() interface{} {
 }
 
 type DBMeta struct {
+	sync.RWMutex
 	tables  map[string]*TableMeta
 	version int64
 }
 
 func (this *DBMeta) GetTableMeta(tab string) db.TableMeta {
+	this.RLock()
+	defer this.RUnlock()
 	if v, ok := this.tables[tab]; ok {
 		return v
 	} else {
@@ -67,7 +71,30 @@ func (this *DBMeta) GetTableMeta(tab string) db.TableMeta {
 }
 
 func (this *DBMeta) GetVersion() int64 {
+	this.RLock()
+	defer this.RUnlock()
 	return this.version
+}
+
+func (this *DBMeta) UpdateMeta(version int64, def *db.DbDef) {
+	this.Lock()
+	defer this.Unlock()
+	this.version = version
+	this.tables = createTableMetas(version, def)
+}
+
+func (this *DBMeta) CheckTableMeta(tab db.TableMeta) db.TableMeta {
+	this.RLock()
+	defer this.RUnlock()
+	if tab.GetVersion() == this.version {
+		return tab
+	} else {
+		if v, ok := this.tables[tab.TableName()]; ok {
+			return v
+		} else {
+			return nil
+		}
+	}
 }
 
 //表格的元信息
@@ -215,40 +242,7 @@ func getConvetor(tt proto.ValueType) func(interface{}) interface{} {
 	}
 }
 
-func getDefaultValue(tt proto.ValueType, v string) interface{} {
-	if tt == proto.ValueType_string {
-		return v
-	} else if tt == proto.ValueType_int {
-		if v == "" {
-			return int64(0)
-		} else {
-			i, err := strconv.ParseInt(v, 10, 64)
-			if nil != err {
-				return nil
-			} else {
-				return i
-			}
-		}
-	} else if tt == proto.ValueType_float {
-		if v == "" {
-			return float64(0)
-		} else {
-			f, err := strconv.ParseFloat(v, 64)
-			if nil != err {
-				return nil
-			} else {
-				return f
-			}
-		}
-	} else if tt == proto.ValueType_blob {
-		return []byte{}
-	} else {
-		return nil
-	}
-}
-
-func CreateDbMeta(def *db.DbDef) (db.DBMeta, error) {
-
+func createTableMetas(version int64, def *db.DbDef) map[string]*TableMeta {
 	table_metas := map[string]*TableMeta{}
 	for _, v := range def.TableDefs {
 		t_meta := &TableMeta{
@@ -260,7 +254,7 @@ func CreateDbMeta(def *db.DbDef) (db.DBMeta, error) {
 				field_receiver: []reflect.Type{},
 				field_convter:  []func(interface{}) interface{}{},
 			},
-			version: def.Version,
+			version: version,
 		}
 
 		//插入三个默认字段
@@ -280,19 +274,19 @@ func CreateDbMeta(def *db.DbDef) (db.DBMeta, error) {
 		for _, vv := range v.Fields {
 			//字段名不允许以__开头
 			if strings.HasPrefix(vv.Name, "__") {
-				return nil, errors.New("has prefix _")
+				panic(errors.New("has prefix _"))
 			}
 
 			ftype := db.GetTypeByStr(vv.Type)
 
 			if ftype == proto.ValueType_invaild {
-				return nil, errors.New("unsupport data type")
+				panic(errors.New("unsupport data type"))
 			}
 
-			defaultValue := getDefaultValue(ftype, vv.DefautValue)
+			defaultValue := db.GetDefaultValue(ftype, vv.DefautValue)
 
 			if nil == defaultValue {
-				return nil, errors.New("no default value")
+				panic(errors.New("no default value"))
 			}
 
 			t_meta.fieldMetas[vv.Name] = &FieldMeta{
@@ -317,9 +311,12 @@ func CreateDbMeta(def *db.DbDef) (db.DBMeta, error) {
 
 	}
 
-	return &DBMeta{
-		version: def.Version,
-		tables:  table_metas,
-	}, nil
+	return table_metas
+}
 
+func CreateDbMeta(version int64, def *db.DbDef) db.DBMeta {
+	return &DBMeta{
+		version: version,
+		tables:  createTableMetas(version, def),
+	}
 }

@@ -35,12 +35,12 @@ type dbUpdateTask struct {
 	updateFields map[string]*flyproto.Field
 	version      int64
 	dbstate      db.DBState
-	keyValue     *kv
+	kv           *kv
 }
 
 type dbLoadTask struct {
-	keyValue *kv
-	cmd      cmdI
+	kv  *kv
+	cmd cmdI
 }
 
 type cmdQueue struct {
@@ -51,13 +51,14 @@ type cmdQueue struct {
 type kv struct {
 	slot          int
 	lru           lruElement
+	table         string
 	uniKey        string //"table:key"组成的唯一全局唯一键
 	key           string
 	version       int64
 	state         kvState
 	kicking       bool
 	fields        map[string]*flyproto.Field //字段
-	tbmeta        db.TableMeta
+	meta          db.TableMeta
 	updateTask    dbUpdateTask
 	pendingCmd    cmdQueue
 	store         *kvstore
@@ -120,6 +121,11 @@ func mergeAbleCmd(cmdType flyproto.CmdType) bool {
 	}
 }
 
+func (this *kv) getTableMeta() db.TableMeta {
+	this.meta = this.store.meta.CheckTableMeta(this.meta) //确保this.meta一定是最新的
+	return this.meta
+}
+
 func (this *kv) kickable() bool {
 	if this.store.needWriteBackAll {
 		return false
@@ -141,8 +147,8 @@ func (this *kv) process(cmd cmdI) {
 		if this.state == kv_new {
 			//request load kv from database
 			l := &dbLoadTask{
-				cmd:      cmd,
-				keyValue: this,
+				cmd: cmd,
+				kv:  this,
 			}
 			if !this.store.db.issueLoad(l) {
 				cmd.reply(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"), nil, 0)
@@ -213,16 +219,16 @@ func (this *kv) process(cmd cmdI) {
 		switch cmds[0].cmdType() {
 		case flyproto.CmdType_Get:
 			linearizableRead = &kvLinearizableRead{
-				keyValue: this,
-				cmds:     cmds,
+				kv:   this,
+				cmds: cmds,
 			}
 		default:
 			proposal = &kvProposal{
-				ptype:    proposal_snapshot,
-				keyValue: this,
-				cmds:     cmds,
-				version:  this.version,
-				fields:   map[string]*flyproto.Field{},
+				ptype:   proposal_snapshot,
+				kv:      this,
+				cmds:    cmds,
+				version: this.version,
+				fields:  map[string]*flyproto.Field{},
 			}
 
 			for _, v := range cmds {

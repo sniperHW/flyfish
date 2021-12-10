@@ -10,8 +10,8 @@ import (
 
 type cmdSetNx struct {
 	cmdBase
-	tbmeta db.TableMeta
 	fields map[string]*flyproto.Field
+	kv     *kv
 }
 
 func (this *cmdSetNx) makeResponse(err errcode.Error, fields map[string]*flyproto.Field, version int64) *cs.RespMessage {
@@ -20,6 +20,7 @@ func (this *cmdSetNx) makeResponse(err errcode.Error, fields map[string]*flyprot
 	}
 
 	if nil != err && err == Err_record_exist {
+		meta := this.kv.getTableMeta()
 		for _, field := range this.fields {
 			v := fields[field.GetName()]
 			if nil != v {
@@ -28,7 +29,7 @@ func (this *cmdSetNx) makeResponse(err errcode.Error, fields map[string]*flyprot
 				/*
 				 * 表格新增加了列，但未设置过，使用默认值
 				 */
-				vv := this.tbmeta.GetDefaultValue(field.GetName())
+				vv := meta.GetDefaultValue(field.GetName())
 				if nil != vv {
 					pbdata.Fields = append(pbdata.Fields, flyproto.PackField(field.GetName(), vv))
 				}
@@ -47,7 +48,7 @@ func (this *cmdSetNx) onLoadResult(err error, proposal *kvProposal) {
 		//记录不存在，为记录生成版本号
 		proposal.version = genVersion()
 		//对于不在set中field,使用defalutValue填充
-		this.tbmeta.FillDefaultValues(this.fields)
+		this.kv.getTableMeta().FillDefaultValues(this.fields)
 		proposal.fields = this.fields
 		proposal.dbstate = db.DBState_insert
 	} else if nil == err {
@@ -59,7 +60,7 @@ func (this *cmdSetNx) do(keyvalue *kv, proposal *kvProposal) {
 	if keyvalue.state == kv_no_record {
 		proposal.version = genVersion()
 		proposal.dbstate = db.DBState_insert
-		this.tbmeta.FillDefaultValues(this.fields)
+		this.kv.getTableMeta().FillDefaultValues(this.fields)
 		proposal.fields = this.fields
 	} else {
 		proposal.ptype = proposal_none
@@ -67,17 +68,17 @@ func (this *cmdSetNx) do(keyvalue *kv, proposal *kvProposal) {
 	}
 }
 
-func (s *kvstore) makeSetNx(keyvalue *kv, processDeadline time.Time, respDeadline time.Time, c *conn, seqno int64, req *flyproto.SetNxReq) (cmdI, errcode.Error) {
+func (s *kvstore) makeSetNx(kv *kv, processDeadline time.Time, respDeadline time.Time, c *conn, seqno int64, req *flyproto.SetNxReq) (cmdI, errcode.Error) {
 	if len(req.GetFields()) == 0 {
 		return nil, errcode.New(errcode.Errcode_error, "setNx fields is empty")
 	}
 
-	if err := keyvalue.tbmeta.CheckFields(req.GetFields()...); nil != err {
+	if err := kv.getTableMeta().CheckFields(req.GetFields()...); nil != err {
 		return nil, errcode.New(errcode.Errcode_error, err.Error())
 	}
 
 	setNx := &cmdSetNx{
-		tbmeta: keyvalue.tbmeta,
+		kv:     kv,
 		fields: map[string]*flyproto.Field{},
 	}
 

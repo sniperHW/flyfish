@@ -375,6 +375,7 @@ func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
 		s, ok := g.routeInfo.slotToStore[req.slot]
 		if !ok {
 			req.deadlineTimer.Stop()
+			req.deadlineTimer = nil
 			replyCliError(req.cli, req.seqno, req.cmd, errcode.New(errcode.Errcode_error, "can't find store"))
 		} else {
 			req.store = s
@@ -395,6 +396,7 @@ func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
 					s, ok := g.routeInfo.slotToStore[req.slot]
 					if !ok {
 						req.deadlineTimer.Stop()
+						req.deadlineTimer = nil
 						replyCliError(req.cli, req.seqno, req.cmd, errcode.New(errcode.Errcode_error, "can't find store"))
 					} else {
 						req.store = s

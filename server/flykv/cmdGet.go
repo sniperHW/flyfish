@@ -1,18 +1,16 @@
 package flykv
 
 import (
-	"time"
-
-	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/net/cs"
 	flyproto "github.com/sniperHW/flyfish/proto"
+	"time"
 )
 
 type cmdGet struct {
 	cmdBase
-	tbmeta db.TableMeta
-	wants  []string
+	kv    *kv
+	wants []string
 }
 
 func (this *cmdGet) makeResponse(err errcode.Error, fields map[string]*flyproto.Field, version int64) *cs.RespMessage {
@@ -26,6 +24,7 @@ func (this *cmdGet) makeResponse(err errcode.Error, fields map[string]*flyproto.
 			if this.version != nil && *this.version == version {
 				err = Err_record_unchange
 			} else {
+				meta := this.kv.getTableMeta()
 				for _, name := range this.wants {
 					v := fields[name]
 					if nil != v {
@@ -34,7 +33,7 @@ func (this *cmdGet) makeResponse(err errcode.Error, fields map[string]*flyproto.
 						/*
 						 * 表格新增加了列，但未设置过，使用默认值
 						 */
-						vv := this.tbmeta.GetDefaultValue(name)
+						vv := meta.GetDefaultValue(name)
 						if nil != vv {
 							pbdata.Fields = append(pbdata.Fields, flyproto.PackField(name, vv))
 						}
@@ -56,22 +55,24 @@ func (this *cmdGet) onLoadResult(err error, proposal *kvProposal) {
 	return
 }
 
-func (s *kvstore) makeGet(keyvalue *kv, processDeadline time.Time, respDeadline time.Time, c *conn, seqno int64, req *flyproto.GetReq) (cmdI, errcode.Error) {
+func (s *kvstore) makeGet(kv *kv, processDeadline time.Time, respDeadline time.Time, c *conn, seqno int64, req *flyproto.GetReq) (cmdI, errcode.Error) {
+
+	meta := kv.getTableMeta()
 
 	if !req.GetAll() {
-		if err := keyvalue.tbmeta.CheckFieldsName(req.GetFields()); nil != err {
+		if err := meta.CheckFieldsName(req.GetFields()); nil != err {
 			return nil, errcode.New(errcode.Errcode_error, err.Error())
 		}
 	}
 
 	get := &cmdGet{
-		tbmeta: keyvalue.tbmeta,
+		kv: kv,
 	}
 
 	initCmdBase(&get.cmdBase, flyproto.CmdType_Get, c, seqno, req.Version, processDeadline, respDeadline, &s.wait4ReplyCount, get.makeResponse)
 
 	if req.GetAll() {
-		get.wants = keyvalue.tbmeta.GetAllFieldsName()
+		get.wants = meta.GetAllFieldsName()
 	} else {
 		get.wants = make([]string, 0, len(req.GetFields()))
 		for _, k := range req.GetFields() {

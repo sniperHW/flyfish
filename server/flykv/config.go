@@ -35,6 +35,7 @@ type Config struct {
 		RaftUrl     string
 		RaftCluster string
 		Stores      []int
+		Meta        []string
 	}
 
 	ClusterConfig struct {

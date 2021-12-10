@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/sniperHW/flyfish/db"
+	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
@@ -15,7 +16,6 @@ import (
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"github.com/sniperHW/flyfish/server/slot"
 	"net"
-	//"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -37,23 +37,22 @@ var (
 )
 
 type kvnode struct {
-	mu          sync.Mutex
-	muC         sync.Mutex
-	clients     map[*fnet.Socket]*fnet.Socket
-	muS         sync.RWMutex
-	stores      map[int]*kvstore
-	config      *Config
-	db          dbI
-	meta        db.DBMeta
-	listener    *cs.Listener
-	id          int
-	mutilRaft   *raft.MutilRaft
-	stopOnce    int32
-	startOnce   int32
-	metaCreator func(*db.DbDef) (db.DBMeta, error)
-	udpConn     *fnet.Udp
-	selfUrl     string
-	kvcount     int64
+	mu        sync.Mutex
+	muC       sync.Mutex
+	clients   map[*fnet.Socket]*fnet.Socket
+	muS       sync.RWMutex
+	stores    map[int]*kvstore
+	config    *Config
+	db        dbI
+	listener  *cs.Listener
+	id        int
+	mutilRaft *raft.MutilRaft
+	stopOnce  int32
+	startOnce int32
+	//metaCreator func(*db.DbDef) (db.DBMeta, error)
+	udpConn *fnet.Udp
+	selfUrl string
+	//kvcount int64
 }
 
 func verifyLogin(loginReq *flyproto.LoginReq) bool {
@@ -396,9 +395,22 @@ func (this *kvnode) Start() error {
 		this.mu.Lock()
 		defer this.mu.Unlock()
 
+		var meta db.DBMeta
+
+		var dbdef *db.DbDef
+
 		config := this.config
 
 		if config.Mode == "solo" {
+
+			//meta从config获取
+
+			if dbdef, err = db.CreateDbDefFromCsv(config.SoloConfig.Meta); nil != err {
+				return err
+			}
+
+			meta = sql.CreateDbMeta(1, dbdef)
+
 			this.selfUrl = config.SoloConfig.RaftUrl
 
 			err = this.db.start(config)
@@ -423,7 +435,7 @@ func (this *kvnode) Start() error {
 			if len(config.SoloConfig.Stores) > 0 {
 				storeBitmaps := makeStoreBitmap(config.SoloConfig.Stores)
 				for i, v := range config.SoloConfig.Stores {
-					if err = this.addStore(this.meta, v, config.SoloConfig.RaftCluster, storeBitmaps[i]); nil != err {
+					if err = this.addStore(meta, v, config.SoloConfig.RaftCluster, storeBitmaps[i]); nil != err {
 						return err
 					}
 				}
@@ -432,6 +444,8 @@ func (this *kvnode) Start() error {
 			GetSugar().Infof("flyfish start:%s:%d", config.SoloConfig.ServiceHost, config.SoloConfig.ServicePort)
 
 		} else {
+
+			//meta从flypd获取
 
 			pd := strings.Split(config.ClusterConfig.PD, ";")
 
@@ -485,7 +499,7 @@ func (this *kvnode) Start() error {
 					return err
 				}
 
-				if err = this.addStore(this.meta, int(v.Id), v.RaftCluster, slots); nil != err {
+				if err = this.addStore(meta, int(v.Id), v.RaftCluster, slots); nil != err {
 					return err
 				}
 			}
@@ -497,13 +511,7 @@ func (this *kvnode) Start() error {
 	return err
 }
 
-func NewKvNode(id int, config *Config, metaDef *db.DbDef, metaCreator func(*db.DbDef) (db.DBMeta, error), db dbI) *kvnode {
-
-	meta, err := metaCreator(metaDef)
-
-	if nil != err {
-		return nil
-	}
+func NewKvNode(id int, config *Config, db dbI) *kvnode {
 
 	if config.ProposalFlushInterval > 0 {
 		raft.ProposalFlushInterval = config.ProposalFlushInterval
@@ -534,13 +542,11 @@ func NewKvNode(id int, config *Config, metaDef *db.DbDef, metaCreator func(*db.D
 	}
 
 	return &kvnode{
-		id:          id,
-		mutilRaft:   raft.NewMutilRaft(),
-		clients:     map[*fnet.Socket]*fnet.Socket{},
-		stores:      map[int]*kvstore{},
-		db:          db,
-		meta:        meta,
-		metaCreator: metaCreator,
-		config:      config,
+		id:        id,
+		mutilRaft: raft.NewMutilRaft(),
+		clients:   map[*fnet.Socket]*fnet.Socket{},
+		stores:    map[int]*kvstore{},
+		db:        db,
+		config:    config,
 	}
 }

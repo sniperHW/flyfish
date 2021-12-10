@@ -10,8 +10,8 @@ import (
 
 type cmdDecr struct {
 	cmdBase
-	tbmeta db.TableMeta
-	v      *flyproto.Field
+	v  *flyproto.Field
+	kv *kv
 }
 
 func (this *cmdDecr) makeResponse(err errcode.Error, fields map[string]*flyproto.Field, version int64) *cs.RespMessage {
@@ -39,14 +39,14 @@ func (this *cmdDecr) onLoadResult(err error, proposal *kvProposal) {
 			proposal.version = genVersion()
 			//对于不在set中field,使用defalutValue填充
 			proposal.fields = map[string]*flyproto.Field{}
-			this.tbmeta.FillDefaultValues(proposal.fields)
+			this.kv.getTableMeta().FillDefaultValues(proposal.fields)
 			proposal.dbstate = db.DBState_insert
 		}
 
 		oldV := proposal.fields[this.v.GetName()]
 
 		if nil == oldV {
-			oldV = flyproto.PackField(this.v.GetName(), this.tbmeta.GetDefaultValue(this.v.GetName()))
+			oldV = flyproto.PackField(this.v.GetName(), this.kv.getTableMeta().GetDefaultValue(this.v.GetName()))
 		}
 
 		newV := flyproto.PackField(oldV.GetName(), oldV.GetInt()-this.v.GetInt())
@@ -58,19 +58,21 @@ func (this *cmdDecr) onLoadResult(err error, proposal *kvProposal) {
 	}
 }
 
-func (this *cmdDecr) do(keyvalue *kv, proposal *kvProposal) {
-	if keyvalue.state == kv_no_record {
+func (this *cmdDecr) do(kv *kv, proposal *kvProposal) {
+	meta := kv.getTableMeta()
+	if kv.state == kv_no_record {
 		//记录不存在，为记录生成版本号
 		proposal.version = genVersion()
 		//对于不在set中field,使用defalutValue填充
 		proposal.fields = map[string]*flyproto.Field{}
-		this.tbmeta.FillDefaultValues(proposal.fields)
+
+		meta.FillDefaultValues(proposal.fields)
 		proposal.dbstate = db.DBState_insert
 
 		oldV := proposal.fields[this.v.GetName()]
 
 		if nil == oldV {
-			oldV = flyproto.PackField(this.v.GetName(), this.tbmeta.GetDefaultValue(this.v.GetName()))
+			oldV = flyproto.PackField(this.v.GetName(), meta.GetDefaultValue(this.v.GetName()))
 		}
 
 		newV := flyproto.PackField(oldV.GetName(), oldV.GetInt()-this.v.GetInt())
@@ -81,10 +83,10 @@ func (this *cmdDecr) do(keyvalue *kv, proposal *kvProposal) {
 		proposal.version = incVersion(proposal.version)
 		proposal.dbstate = db.DBState_update
 
-		oldV := keyvalue.fields[this.v.GetName()]
+		oldV := kv.fields[this.v.GetName()]
 
 		if nil == oldV {
-			oldV = flyproto.PackField(this.v.GetName(), this.tbmeta.GetDefaultValue(this.v.GetName()))
+			oldV = flyproto.PackField(this.v.GetName(), meta.GetDefaultValue(this.v.GetName()))
 		}
 
 		newV := flyproto.PackField(oldV.GetName(), oldV.GetInt()-this.v.GetInt())
@@ -92,7 +94,7 @@ func (this *cmdDecr) do(keyvalue *kv, proposal *kvProposal) {
 	}
 }
 
-func (s *kvstore) makeDecr(keyvalue *kv, processDeadline time.Time, respDeadline time.Time, c *conn, seqno int64, req *flyproto.DecrByReq) (cmdI, errcode.Error) {
+func (s *kvstore) makeDecr(kv *kv, processDeadline time.Time, respDeadline time.Time, c *conn, seqno int64, req *flyproto.DecrByReq) (cmdI, errcode.Error) {
 	if nil == req.Field {
 		return nil, errcode.New(errcode.Errcode_error, "field is nil")
 	}
@@ -101,13 +103,13 @@ func (s *kvstore) makeDecr(keyvalue *kv, processDeadline time.Time, respDeadline
 		return nil, errcode.New(errcode.Errcode_error, "incrby accept int only")
 	}
 
-	if err := keyvalue.tbmeta.CheckFields(req.Field); nil != err {
+	if err := kv.getTableMeta().CheckFields(req.Field); nil != err {
 		return nil, errcode.New(errcode.Errcode_error, err.Error())
 	}
 
 	decr := &cmdDecr{
-		tbmeta: keyvalue.tbmeta,
-		v:      req.Field,
+		kv: kv,
+		v:  req.Field,
 	}
 
 	initCmdBase(&decr.cmdBase, flyproto.CmdType_CompareAndSet, c, seqno, req.Version, processDeadline, respDeadline, &s.wait4ReplyCount, decr.makeResponse)

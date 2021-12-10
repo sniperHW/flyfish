@@ -94,10 +94,12 @@ func (n *kvnode) dial() {
 					n.mainQueue.ForceAppend(1, func() {
 						n.session = nil
 						for _, v := range n.waitResponse {
-							if v.deadlineTimer.Stop() {
-								v.dropReply()
-							}
+							v.deadlineTimer.Stop()
+							v.deadlineTimer = nil
+							v.dropReply()
 						}
+						n.waitResponse = map[int64]*forwordMsg{}
+
 					})
 				}).BeginRecv(func(s *flynet.Socket, msg interface{}) {
 					n.mainQueue.ForceAppend(0, func() {
@@ -155,6 +157,7 @@ func (n *kvnode) onNodeResp(b []byte) {
 			})
 		default:
 			msg.deadlineTimer.Stop()
+			msg.deadlineTimer = nil
 			//恢复客户端的seqno
 			binary.BigEndian.PutUint64(b[4:], uint64(msg.oriSeqno))
 			msg.reply(b)

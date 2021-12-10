@@ -221,7 +221,6 @@ const kvCmdQueueSize = 32
 
 func (s *kvstore) deleteKv(k *kv) {
 	s.kvcount--
-	atomic.AddInt64(&s.kvnode.kvcount, -1)
 	delete(s.keyvals[k.groupID].kv, k.uniKey)
 	if sl := s.slotsKvMap[k.slot]; nil != sl {
 		delete(sl, k.uniKey)
@@ -240,20 +239,23 @@ func (s *kvstore) newkv(slot int, groupID int, unikey string, key string, table 
 		uniKey:  unikey,
 		key:     key,
 		state:   kv_new,
-		tbmeta:  tbmeta,
+		meta:    tbmeta,
 		store:   s,
 		groupID: groupID,
 		slot:    slot,
+		table:   table,
 	}
+
 	k.lru.keyvalue = k
 	k.updateTask = dbUpdateTask{
-		keyValue:     k,
+		kv:           k,
 		updateFields: map[string]*flyproto.Field{},
 	}
 
 	s.keyvals[groupID].kv[unikey] = k
+
 	s.kvcount++
-	atomic.AddInt64(&s.kvnode.kvcount, 1)
+
 	if sl := s.slotsKvMap[slot]; nil != sl {
 		sl[unikey] = k
 	} else {
@@ -261,6 +263,7 @@ func (s *kvstore) newkv(slot int, groupID int, unikey string, key string, table 
 		sl[unikey] = k
 		s.slotsKvMap[slot] = sl
 	}
+
 	return k, nil
 }
 
@@ -270,8 +273,8 @@ func (this *kvstore) tryKick(kv *kv) bool {
 	}
 
 	if err := this.rn.IssueProposal(&kvProposal{
-		ptype:    proposal_kick,
-		keyValue: kv,
+		ptype: proposal_kick,
+		kv:    kv,
 	}); nil != err {
 		return false
 	} else {
@@ -509,9 +512,6 @@ func (s *kvstore) gotLease() {
 		s.needWriteBackAll = false
 		for _, v := range s.keyvals {
 			for _, vv := range v.kv {
-				if vv.tbmeta.GetVersion() != s.meta.GetVersion() {
-					vv.tbmeta = s.meta.GetTableMeta(vv.tbmeta.TableName())
-				}
 				err := vv.updateTask.issueFullDbWriteBack()
 				if nil != err {
 					break

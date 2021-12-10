@@ -10,9 +10,9 @@ import (
 
 type cmdCompareAndSetNx struct {
 	cmdBase
-	tbmeta db.TableMeta
-	old    *flyproto.Field
-	new    *flyproto.Field
+	old *flyproto.Field
+	new *flyproto.Field
+	kv  *kv
 }
 
 func (this *cmdCompareAndSetNx) makeResponse(err errcode.Error, fields map[string]*flyproto.Field, version int64) *cs.RespMessage {
@@ -39,13 +39,13 @@ func (this *cmdCompareAndSetNx) onLoadResult(err error, proposal *kvProposal) {
 			//对于不在set中field,使用defalutValue填充
 			proposal.fields = map[string]*flyproto.Field{}
 			proposal.fields[this.new.GetName()] = this.new
-			this.tbmeta.FillDefaultValues(proposal.fields)
+			this.kv.getTableMeta().FillDefaultValues(proposal.fields)
 			proposal.dbstate = db.DBState_insert
 		} else {
 			oldV := proposal.fields[this.old.GetName()]
 			hasChange := false
 			if nil == oldV {
-				oldV = flyproto.PackField(this.old.GetName(), this.tbmeta.GetDefaultValue(this.old.GetName()))
+				oldV = flyproto.PackField(this.old.GetName(), this.kv.getTableMeta().GetDefaultValue(this.old.GetName()))
 				proposal.fields[this.old.GetName()] = oldV
 				hasChange = true
 			}
@@ -64,20 +64,20 @@ func (this *cmdCompareAndSetNx) onLoadResult(err error, proposal *kvProposal) {
 	}
 }
 
-func (this *cmdCompareAndSetNx) do(keyvalue *kv, proposal *kvProposal) {
-	if keyvalue.state == kv_no_record {
+func (this *cmdCompareAndSetNx) do(kv *kv, proposal *kvProposal) {
+	if kv.state == kv_no_record {
 		//记录不存在，为记录生成版本号
 		proposal.version = genVersion()
 		//对于不在set中field,使用defalutValue填充
 		proposal.fields = map[string]*flyproto.Field{}
 		proposal.fields[this.new.GetName()] = this.new
-		this.tbmeta.FillDefaultValues(proposal.fields)
+		kv.getTableMeta().FillDefaultValues(proposal.fields)
 		proposal.dbstate = db.DBState_insert
 	} else {
-		oldV := keyvalue.fields[this.old.GetName()]
+		oldV := kv.fields[this.old.GetName()]
 		hasChange := false
 		if nil == oldV {
-			oldV = flyproto.PackField(this.old.GetName(), this.tbmeta.GetDefaultValue(this.old.GetName()))
+			oldV = flyproto.PackField(this.old.GetName(), kv.getTableMeta().GetDefaultValue(this.old.GetName()))
 			hasChange = true
 		}
 
@@ -97,7 +97,7 @@ func (this *cmdCompareAndSetNx) do(keyvalue *kv, proposal *kvProposal) {
 	}
 }
 
-func (s *kvstore) makeCompareAndSetNx(keyvalue *kv, processDeadline time.Time, respDeadline time.Time, c *conn, seqno int64, req *flyproto.CompareAndSetNxReq) (cmdI, errcode.Error) {
+func (s *kvstore) makeCompareAndSetNx(kv *kv, processDeadline time.Time, respDeadline time.Time, c *conn, seqno int64, req *flyproto.CompareAndSetNxReq) (cmdI, errcode.Error) {
 	if req.New == nil {
 		return nil, errcode.New(errcode.Errcode_error, "new is nil")
 	}
@@ -110,14 +110,14 @@ func (s *kvstore) makeCompareAndSetNx(keyvalue *kv, processDeadline time.Time, r
 		return nil, errcode.New(errcode.Errcode_error, "new and old in different type")
 	}
 
-	if err := keyvalue.tbmeta.CheckFields(req.New); nil != err {
+	if err := kv.getTableMeta().CheckFields(req.New); nil != err {
 		return nil, errcode.New(errcode.Errcode_error, err.Error())
 	}
 
 	compareAndSetNx := &cmdCompareAndSetNx{
-		tbmeta: keyvalue.tbmeta,
-		new:    req.New,
-		old:    req.Old,
+		kv:  kv,
+		new: req.New,
+		old: req.Old,
 	}
 
 	initCmdBase(&compareAndSetNx.cmdBase, flyproto.CmdType_CompareAndSet, c, seqno, req.Version, processDeadline, respDeadline, &s.wait4ReplyCount, compareAndSetNx.makeResponse)

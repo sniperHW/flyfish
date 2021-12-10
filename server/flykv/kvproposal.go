@@ -8,17 +8,17 @@ import (
 )
 
 type kvProposal struct {
-	dbstate  db.DBState
-	ptype    proposalType
-	fields   map[string]*flyproto.Field
-	version  int64
-	cmds     []cmdI
-	keyValue *kv
+	dbstate db.DBState
+	ptype   proposalType
+	fields  map[string]*flyproto.Field
+	version int64
+	cmds    []cmdI
+	kv      *kv
 }
 
 type kvLinearizableRead struct {
-	keyValue *kv
-	cmds     []cmdI
+	kv   *kv
+	cmds []cmdI
 }
 
 func (this *kvProposal) Isurgent() bool {
@@ -33,21 +33,21 @@ func (this *kvProposal) OnError(err error) {
 		v.reply(errcode.New(errcode.Errcode_error, err.Error()), nil, 0)
 	}
 
-	this.keyValue.store.mainQueue.AppendHighestPriotiryItem(func() {
-		if this.keyValue.state == kv_loading {
-			for f := this.keyValue.pendingCmd.front(); nil != f; f = this.keyValue.pendingCmd.front() {
+	this.kv.store.mainQueue.AppendHighestPriotiryItem(func() {
+		if this.kv.state == kv_loading {
+			for f := this.kv.pendingCmd.front(); nil != f; f = this.kv.pendingCmd.front() {
 				f.reply(errcode.New(errcode.Errcode_error, err.Error()), nil, 0)
-				this.keyValue.pendingCmd.popFront()
+				this.kv.pendingCmd.popFront()
 			}
-			this.keyValue.store.deleteKv(this.keyValue /*, false*/)
+			this.kv.store.deleteKv(this.kv /*, false*/)
 		} else {
-			this.keyValue.process(nil)
+			this.kv.process(nil)
 		}
 	})
 }
 
 func (this *kvProposal) Serilize(b []byte) []byte {
-	return serilizeKv(b, this.ptype, this.keyValue.uniKey, this.version, this.fields)
+	return serilizeKv(b, this.ptype, this.kv.uniKey, this.version, this.fields)
 }
 
 func (this *kvProposal) OnMergeFinish(b []byte) (ret []byte) {
@@ -74,53 +74,53 @@ func (this *kvProposal) apply() {
 			v.reply(nil, nil, 0)
 		}
 
-		for f := this.keyValue.pendingCmd.front(); nil != f; f = this.keyValue.pendingCmd.front() {
+		for f := this.kv.pendingCmd.front(); nil != f; f = this.kv.pendingCmd.front() {
 			f.reply(errcode.New(errcode.Errcode_retry, "please try again"), nil, 0)
-			this.keyValue.pendingCmd.popFront()
+			this.kv.pendingCmd.popFront()
 		}
 
-		this.keyValue.store.deleteKv(this.keyValue)
+		this.kv.store.deleteKv(this.kv)
 
 		//GetSugar().Infof("kick:%s", this.keyValue.uniKey)
 
 	} else {
 
-		oldState := this.keyValue.state
+		oldState := this.kv.state
 
 		if this.version == 0 {
-			this.keyValue.state = kv_no_record
-			this.keyValue.fields = nil
+			this.kv.state = kv_no_record
+			this.kv.fields = nil
 		} else {
-			this.keyValue.state = kv_ok
+			this.kv.state = kv_ok
 		}
 
-		this.keyValue.version = this.version
+		this.kv.version = this.version
 		if len(this.fields) > 0 {
-			if nil == this.keyValue.fields {
-				this.keyValue.fields = map[string]*flyproto.Field{}
+			if nil == this.kv.fields {
+				this.kv.fields = map[string]*flyproto.Field{}
 			}
 			for _, v := range this.fields {
-				this.keyValue.fields[v.GetName()] = v
+				this.kv.fields[v.GetName()] = v
 			}
 		}
 
 		for _, v := range this.cmds {
-			v.reply(nil, this.keyValue.fields, this.version)
+			v.reply(nil, this.kv.fields, this.version)
 		}
 
 		//update dbUpdateTask
 		if this.dbstate != db.DBState_none {
-			err := this.keyValue.updateTask.updateState(this.dbstate, this.version, this.fields)
+			err := this.kv.updateTask.updateState(this.dbstate, this.version, this.fields)
 			if nil != err {
-				GetSugar().Errorf("%s updateState error:%v", this.keyValue.uniKey, err)
+				GetSugar().Errorf("%s updateState error:%v", this.kv.uniKey, err)
 			}
 		}
 
 		if oldState == kv_loading {
-			this.keyValue.store.lru.updateLRU(&this.keyValue.lru)
+			this.kv.store.lru.updateLRU(&this.kv.lru)
 		}
 
-		this.keyValue.process(nil)
+		this.kv.process(nil)
 
 	}
 }
@@ -134,17 +134,17 @@ func (this *kvLinearizableRead) OnError(err error) {
 		v.reply(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"), nil, 0)
 	}
 
-	this.keyValue.store.mainQueue.AppendHighestPriotiryItem(func() {
-		this.keyValue.process(nil)
+	this.kv.store.mainQueue.AppendHighestPriotiryItem(func() {
+		this.kv.process(nil)
 	})
 }
 
 func (this *kvLinearizableRead) ok() {
-	GetSugar().Debugf("kvLinearizableRead ok:%d version:%d", len(this.cmds), this.keyValue.version)
+	GetSugar().Debugf("kvLinearizableRead ok:%d version:%d", len(this.cmds), this.kv.version)
 
 	for _, v := range this.cmds {
-		v.reply(nil, this.keyValue.fields, this.keyValue.version)
+		v.reply(nil, this.kv.fields, this.kv.version)
 	}
 
-	this.keyValue.process(nil)
+	this.kv.process(nil)
 }

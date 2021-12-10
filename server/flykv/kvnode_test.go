@@ -8,7 +8,6 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/db"
-	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	"github.com/sniperHW/flyfish/server/flykv/metaLoader"
@@ -68,6 +67,7 @@ ServiceHost             = "127.0.0.1"
 ServicePort             = %d
 RaftCluster             = "1@http://127.0.0.1:12377"
 Stores                  = [1]
+Meta                    = ["users1@name:string:,age:int:,phone:string:"]
 
                   	
 [DBConfig]
@@ -165,7 +165,7 @@ func newMockDBBackEnd() dbI {
 
 func start1Node(b dbI) *kvnode {
 
-	node := NewKvNode(1, config, dbMeta, sql.CreateDbMeta, b)
+	node := NewKvNode(1, config, b)
 
 	if err := node.Start(); nil != err {
 		panic(err)
