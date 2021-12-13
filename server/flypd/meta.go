@@ -11,6 +11,7 @@ import (
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"net"
 	"strings"
+	"time"
 )
 
 type Meta struct {
@@ -196,10 +197,38 @@ type MetaTransaction struct {
 	MetaDef    *db.DbDef
 	Store      []MetaTransactionStore
 	Prepareing bool
+	Version    int64
+	timer      *time.Timer
 }
 
 func (m *MetaTransaction) notifyStore(p *pd) {
 
+	if nil == p.pState.MetaTransaction {
+		return
+	}
+
+	c := 0
+	for _, v := range m.Store {
+		if !v.Ok {
+			c++
+			s := p.deployment.getStoreByID(v.StoreID)
+			for _, vv := range s.set.nodes {
+				addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", vv.host, vv.servicePort))
+				p.udp.SendTo(addr, snet.MakeMessage(0,
+					&sproto.NotifyUpdateMeta{
+						Store:   int32(v.StoreID),
+						Version: int64(p.pState.Meta.Version),
+						Meta:    p.pState.Meta.MetaBytes,
+					}))
+			}
+		}
+	}
+
+	if c > 0 {
+		m.timer = time.AfterFunc(time.Second, func() {
+			p.mainque.AppendHighestPriotiryItem(m)
+		})
+	}
 }
 
 type ProposalUpdateMeta struct {
@@ -214,7 +243,7 @@ func (p *ProposalUpdateMeta) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalUpdateMeta) apply() {
-	p.pd.pState.Meta.Version++
+	p.pd.pState.Meta.Version = p.pd.pState.MetaTransaction.Version
 	p.pd.pState.Meta.MetaDef = p.pd.pState.MetaTransaction.MetaDef
 	p.pd.pState.Meta.MetaBytes, _ = db.DbDefToJsonString(p.pd.pState.Meta.MetaDef)
 	if len(p.pd.pState.MetaTransaction.Store) == 0 {
@@ -251,7 +280,7 @@ func (p *pd) replayUpdateMeta(reader *buffer.BufferReader) error {
 		return errors.New("nil != p.pState.MetaTransaction && p.pState.MetaTransaction.Prepareing")
 	}
 
-	p.pState.Meta.Version++
+	p.pState.Meta.Version = t.Version
 	p.pState.Meta.MetaDef = t.MetaDef
 	p.pState.Meta.MetaBytes, _ = db.DbDefToJsonString(p.pState.Meta.MetaDef)
 
@@ -277,6 +306,7 @@ func (p *pd) onUpdateMeta(from *net.UDPAddr, m *snet.Message) {
 	t := MetaTransaction{
 		Prepareing: true,
 		MetaDef:    p.pState.Meta.MetaDef.Clone(),
+		Version:    p.pState.Meta.Version + 1,
 	}
 
 	for _, v := range msg.Updates {
@@ -346,5 +376,81 @@ func (p *pd) onUpdateMeta(from *net.UDPAddr, m *snet.Message) {
 				Reason: err.Error(),
 			}))
 	}
+}
 
+type ProposalNotifyUpdateMetaResp struct {
+	*proposalBase
+	store int
+}
+
+func (p *ProposalNotifyUpdateMetaResp) Serilize(b []byte) []byte {
+	b = buffer.AppendByte(b, byte(proposalNotifyUpdateMetaResp))
+	return buffer.AppendUint32(b, uint32(p.store))
+}
+
+func (p *ProposalNotifyUpdateMetaResp) apply() {
+	t := p.pd.pState.MetaTransaction
+	c := 0
+	for k, v := range t.Store {
+		if v.StoreID == p.store {
+			t.Store[k].Ok = true
+		} else if !v.Ok {
+			c++
+		}
+	}
+
+	if c == 0 {
+		//所有store均已应答，事务结束
+		p.pd.pState.MetaTransaction = nil
+	}
+}
+
+func (p *pd) replayNotifyUpdateMetaResp(reader *buffer.BufferReader) error {
+
+	store, err := reader.CheckGetUint32()
+	if nil != err {
+		return err
+	}
+
+	t := p.pState.MetaTransaction
+	c := 0
+	for k, v := range t.Store {
+		if v.StoreID == int(store) {
+			t.Store[k].Ok = true
+		} else if !v.Ok {
+			c++
+		}
+	}
+
+	if c == 0 {
+		//所有store均已应答，事务结束
+		p.pState.MetaTransaction = nil
+	}
+
+	return nil
+}
+
+func (p *pd) onNotifyUpdateMetaResp(from *net.UDPAddr, m *snet.Message) {
+	msg := m.Msg.(*sproto.NotifyUpdateMetaResp)
+	t := p.pState.MetaTransaction
+	if t != nil && t.Version == msg.Version {
+		store := -1
+		for _, v := range t.Store {
+			if v.StoreID == int(msg.Store) {
+				if !v.Ok {
+					store = v.StoreID
+				}
+				break
+			}
+		}
+
+		if store != -1 {
+			p.issueProposal(&ProposalNotifyUpdateMetaResp{
+				store: store,
+				proposalBase: &proposalBase{
+					pd: p,
+				},
+			})
+		}
+	}
 }

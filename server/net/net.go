@@ -257,6 +257,9 @@ func init() {
 	namespace.Register(&sproto.NotifySlotTransIn{}, uint32(sproto.ServerCmdType_NotifySlotTransIn))
 	namespace.Register(&sproto.NotifySlotTransInResp{}, uint32(sproto.ServerCmdType_NotifySlotTransInResp))
 
+	namespace.Register(&sproto.NotifyUpdateMeta{}, uint32(sproto.ServerCmdType_NotifyUpdateMeta))
+	namespace.Register(&sproto.NotifyUpdateMetaResp{}, uint32(sproto.ServerCmdType_NotifyUpdateMetaResp))
+
 	//flygate <->pd
 	namespace.Register(&sproto.QueryRouteInfo{}, uint32(sproto.ServerCmdType_QueryRouteInfo))
 	namespace.Register(&sproto.QueryRouteInfoResp{}, uint32(sproto.ServerCmdType_QueryRouteInfoResp))

@@ -144,5 +144,5 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.GetMeta{}, p.onGetMeta)
 	p.registerMsgHandler(&sproto.SetMeta{}, p.onSetMeta)
 	p.registerMsgHandler(&sproto.UpdateMeta{}, p.onUpdateMeta)
-
+	p.registerMsgHandler(&sproto.NotifyUpdateMetaResp{}, p.onNotifyUpdateMetaResp)
 }

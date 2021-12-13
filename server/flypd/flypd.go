@@ -420,10 +420,15 @@ func (p *pd) onBecomeLeader() {
 		}
 	}
 
-	if nil != p.pState.MetaTransaction && p.pState.MetaTransaction.Prepareing {
-		//上次做leader时尚未提交的事务，在下次成为leader时要清除
-		p.pState.MetaTransaction = nil
+	if nil != p.pState.MetaTransaction {
+		if p.pState.MetaTransaction.Prepareing {
+			//上次做leader时尚未提交的事务，在下次成为leader时要清除
+			p.pState.MetaTransaction = nil
+		} else {
+			p.pState.MetaTransaction.notifyStore(p)
+		}
 	}
+
 }
 
 func (p *pd) onLeaderDemote() {
@@ -440,6 +445,11 @@ func (p *pd) onLeaderDemote() {
 	for _, v := range p.pState.SlotTransfer {
 		v.timer.Stop()
 		v.timer = nil
+	}
+
+	if nil != p.pState.MetaTransaction && nil != p.pState.MetaTransaction.timer {
+		p.pState.MetaTransaction.timer.Stop()
+		p.pState.MetaTransaction.timer = nil
 	}
 }
 
@@ -556,6 +566,10 @@ func (p *pd) serve() {
 					if _, ok := p.pState.SlotTransfer[v.(*TransSlotTransfer).Slot]; ok {
 						v.(*TransSlotTransfer).notify()
 					}
+				}
+			case *MetaTransaction:
+				if p.isLeader() {
+					v.(*MetaTransaction).notifyStore(p)
 				}
 			default:
 				GetSugar().Infof("here %v %s", v, reflect.TypeOf(v).String())

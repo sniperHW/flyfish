@@ -19,6 +19,7 @@ const (
 	proposalSetMarkClear           = 11
 	proposalSetMeta                = 12
 	proposalUpdateMeta             = 13
+	proposalNotifyUpdateMetaResp   = 14
 )
 
 type proposalBase struct {

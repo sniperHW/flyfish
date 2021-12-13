@@ -81,6 +81,15 @@ type deployment struct {
 	sets    map[int]*set
 }
 
+func (d deployment) getStoreByID(id int) *store {
+	for _, v := range d.sets {
+		if s, ok := v.stores[id]; ok {
+			return s
+		}
+	}
+	return nil
+}
+
 func (d deployment) queryRouteInfo(req *sproto.QueryRouteInfo) *sproto.QueryRouteInfoResp {
 	resp := &sproto.QueryRouteInfoResp{}
 	resp.Version = d.version

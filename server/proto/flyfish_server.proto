@@ -49,6 +49,8 @@ enum ServerCmdType {
   NotifySlotTransOutResp        = 217;
   NotifySlotTransIn             = 218;
   NotifySlotTransInResp         = 219;    
+  NotifyUpdateMeta              = 220;
+  NotifyUpdateMetaResp          = 221;
 
 
   //flygate <-> pd
@@ -308,6 +310,18 @@ message getMetaResp {
   optional int64 version  = 1;
   optional bytes meta     = 2;
 }
+
+message  notifyUpdateMeta {
+  optional int32 store    = 1;
+  optional int64 version  = 2;
+  optional bytes meta     = 3;
+}
+
+message  notifyUpdateMetaResp {
+  optional int32 store    = 1;
+  optional int64 version  = 2;  
+}
+
 
 
 
