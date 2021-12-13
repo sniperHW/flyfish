@@ -187,7 +187,7 @@ func NewPd(id int, config *Config, udpService string, cluster string) *pd {
 
 func (q applicationQueue) AppendHighestPriotiryItem(m interface{}) {
 	if err := q.q.ForceAppend(1, m); nil != err {
-		panic(err)
+		GetSugar().Errorf("%v", err)
 	}
 }
 
@@ -361,7 +361,6 @@ func (p *pd) startUdpService() error {
 				GetSugar().Errorf("read err:%v", err)
 				return
 			} else {
-				//GetSugar().Infof("got msg %v %v", err, msg)
 				p.mainque.append(func() {
 					if p.isLeader() && p.ready {
 						p.onMsg(from, msg.(*snet.Message))

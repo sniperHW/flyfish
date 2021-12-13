@@ -6,9 +6,9 @@ package flypd
 import (
 	"fmt"
 	//"github.com/sniperHW/flyfish/logger"
+	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
-	//"github.com/sniperHW/flyfish/pkg/compress"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
@@ -34,6 +34,54 @@ func waitCondition(fn func() bool) {
 		}
 	}()
 	wg.Wait()
+}
+
+func genMeta() *db.DbDef {
+	m := db.DbDef{}
+
+	t1 := db.TableDef{
+		Name: "Table1",
+	}
+
+	{
+		field1 := db.FieldDef{
+			Name:        "field1",
+			Type:        "int",
+			DefautValue: "1",
+		}
+
+		field2 := db.FieldDef{
+			Name:        "field2",
+			Type:        "float",
+			DefautValue: "1.2",
+		}
+
+		field3 := db.FieldDef{
+			Name:        "field3",
+			Type:        "string",
+			DefautValue: "hello",
+		}
+
+		field4 := db.FieldDef{
+			Name: "field4",
+			Type: "string",
+		}
+
+		field5 := db.FieldDef{
+			Name: "field5",
+			Type: "blob",
+		}
+
+		t1.Fields = append(t1.Fields, &field1)
+		t1.Fields = append(t1.Fields, &field2)
+		t1.Fields = append(t1.Fields, &field3)
+		t1.Fields = append(t1.Fields, &field4)
+		t1.Fields = append(t1.Fields, &field5)
+	}
+
+	m.TableDefs = append(m.TableDefs, &t1)
+
+	return &m
 }
 
 func TestSnapShot(t *testing.T) {
@@ -139,6 +187,19 @@ func TestSnapShot(t *testing.T) {
 		StoreTransferIn:  3,
 	}
 
+	{
+		m := genMeta()
+		p1.pState.Meta.Version = 1
+		p1.pState.Meta.MetaDef = m
+		p1.pState.Meta.MetaBytes, _ = db.DbDefToJsonString(m)
+		p1.pState.MetaTransaction = &MetaTransaction{
+			MetaDef:    m,
+			Store:      []MetaTransactionStore{MetaTransactionStore{StoreID: 1, Ok: true}},
+			Prepareing: true,
+			Version:    2,
+		}
+	}
+
 	bytes, err := p1.getSnapshot()
 
 	fmt.Println(len(bytes))
@@ -171,6 +232,15 @@ func TestSnapShot(t *testing.T) {
 	assert.Equal(t, 3, p2.pState.RemovingNode[3].NodeID)
 
 	assert.Equal(t, 2, p2.pState.SlotTransfer[2].Slot)
+
+	assert.Equal(t, p2.pState.Meta.Version, int64(1))
+	assert.Equal(t, p2.pState.MetaTransaction.Version, int64(2))
+
+	assert.Equal(t, p2.pState.MetaTransaction.Store[0].StoreID, 1)
+	assert.Equal(t, p2.pState.MetaTransaction.Store[0].Ok, true)
+	assert.Equal(t, p2.pState.MetaTransaction.Prepareing, true)
+
+	assert.Equal(t, len(p2.pState.Meta.MetaBytes), len(p1.pState.Meta.MetaBytes))
 
 }
 
@@ -214,7 +284,15 @@ func TestPd(t *testing.T) {
 		}
 	}
 
+	testSetMeta(t, p)
+
+	testUpdateMeta1(t, p)
+
 	testInstallDeployment(t, p)
+
+	testUpdateMeta2(t, p)
+
+	time.Sleep(time.Second)
 
 	testAddRemNode(t, p)
 
@@ -298,6 +376,90 @@ func testInstallDeployment(t *testing.T, p *pd) {
 
 }
 
+func testSetMeta(t *testing.T, p *pd) {
+	m := genMeta()
+	b, _ := db.DbDefToJsonString(m)
+
+	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
+	assert.Nil(t, err)
+
+	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
+
+	conn.SendTo(addr, snet.MakeMessage(0, &sproto.SetMeta{
+		Meta: b,
+	}))
+	recvbuff := make([]byte, 256)
+	_, r, err := conn.ReadFrom(recvbuff)
+
+	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.SetMetaResp).Ok, true)
+
+	conn.Close()
+}
+
+func testUpdateMeta1(t *testing.T, p *pd) {
+	t1 := sproto.MetaTable{
+		Name: "Table1",
+	}
+
+	t1.Fields = append(t1.Fields, &sproto.MetaFiled{
+		Name:    "field6",
+		Type:    "string",
+		Default: "hello",
+	})
+
+	t2 := sproto.MetaTable{
+		Name: "Table2",
+	}
+
+	t2.Fields = append(t2.Fields, &sproto.MetaFiled{
+		Name:    "field1",
+		Type:    "string",
+		Default: "hello",
+	})
+
+	u := &sproto.UpdateMeta{Updates: []*sproto.MetaTable{&t1, &t2}}
+
+	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
+	assert.Nil(t, err)
+
+	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
+
+	conn.SendTo(addr, snet.MakeMessage(0, u))
+	recvbuff := make([]byte, 256)
+	_, r, err := conn.ReadFrom(recvbuff)
+
+	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.UpdateMetaResp).Ok, true)
+
+	conn.Close()
+}
+
+func testUpdateMeta2(t *testing.T, p *pd) {
+	t1 := sproto.MetaTable{
+		Name: "Table1",
+	}
+
+	t1.Fields = append(t1.Fields, &sproto.MetaFiled{
+		Name:    "field7",
+		Type:    "string",
+		Default: "hello",
+	})
+
+	u := &sproto.UpdateMeta{Updates: []*sproto.MetaTable{&t1}}
+
+	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
+	assert.Nil(t, err)
+
+	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
+
+	conn.SendTo(addr, snet.MakeMessage(0, u))
+	recvbuff := make([]byte, 256)
+	_, r, err := conn.ReadFrom(recvbuff)
+
+	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.UpdateMetaResp).Ok, true)
+
+	conn.Close()
+}
+
 type testKvnode struct {
 	udp    *fnet.Udp
 	nodeId int
@@ -340,6 +502,12 @@ func (n *testKvnode) run() {
 				notify := msg.(*sproto.NotifySlotTransOut)
 				n.udp.SendTo(from, snet.MakeMessage(context, &sproto.NotifySlotTransOutResp{
 					Slot: notify.Slot,
+				}))
+			case *sproto.NotifyUpdateMeta:
+				notify := msg.(*sproto.NotifyUpdateMeta)
+				n.udp.SendTo(from, snet.MakeMessage(context, &sproto.NotifyUpdateMetaResp{
+					Store:   notify.Store,
+					Version: notify.Version,
 				}))
 			}
 		}

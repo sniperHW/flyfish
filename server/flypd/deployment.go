@@ -514,6 +514,15 @@ func (p *pd) onInstallDeployment(from *net.UDPAddr, m *snet.Message) {
 
 	msg := m.Msg.(*sproto.InstallDeployment)
 
+	if nil != p.pState.MetaTransaction {
+		p.udp.SendTo(from, snet.MakeMessage(m.Context,
+			&sproto.InstallDeploymentResp{
+				Ok:     false,
+				Reason: "wait for previous meta transaction finish",
+			}))
+		return
+	}
+
 	if nil != p.deployment {
 		p.udp.SendTo(from, snet.MakeMessage(m.Context,
 			&sproto.InstallDeploymentResp{
@@ -566,6 +575,16 @@ func (p *pd) onInstallDeployment(from *net.UDPAddr, m *snet.Message) {
 
 func (p *pd) onRemSet(from *net.UDPAddr, m *snet.Message) {
 	msg := m.Msg.(*sproto.RemSet)
+
+	if nil != p.pState.MetaTransaction {
+		p.udp.SendTo(from, snet.MakeMessage(m.Context,
+			&sproto.RemSetResp{
+				Ok:     false,
+				Reason: "wait for previous meta transaction finish",
+			}))
+		return
+	}
+
 	if nil == p.deployment {
 		p.udp.SendTo(from, snet.MakeMessage(m.Context,
 			&sproto.RemSetResp{
@@ -690,6 +709,16 @@ func (p *pd) onSetMarkClear(from *net.UDPAddr, m *snet.Message) {
 
 func (p *pd) onAddSet(from *net.UDPAddr, m *snet.Message) {
 	msg := m.Msg.(*sproto.AddSet)
+
+	if nil != p.pState.MetaTransaction {
+		p.udp.SendTo(from, snet.MakeMessage(m.Context,
+			&sproto.AddSetResp{
+				Ok:     false,
+				Reason: "wait for previous meta transaction finish",
+			}))
+		return
+	}
+
 	if nil == p.deployment {
 		p.udp.SendTo(from, snet.MakeMessage(m.Context,
 			&sproto.AddSetResp{

@@ -77,6 +77,10 @@ func (p *pd) replayProposal(proposal []byte) error {
 		return p.replaySetMarkClear(&reader)
 	case proposalSetMeta:
 		return p.replaySetMeta(&reader)
+	case proposalUpdateMeta:
+		return p.replayUpdateMeta(&reader)
+	case proposalNotifyUpdateMetaResp:
+		return p.replayNotifyUpdateMetaResp(&reader)
 	default:
 		return errors.New("invaild proposal type")
 	}
