@@ -46,6 +46,12 @@ const (
 	ServerCmdType_RemSetResp            ServerCmdType = 110
 	ServerCmdType_SetMarkClear          ServerCmdType = 111
 	ServerCmdType_SetMarkClearResp      ServerCmdType = 112
+	ServerCmdType_SetMeta               ServerCmdType = 113
+	ServerCmdType_SetMetaResp           ServerCmdType = 114
+	ServerCmdType_GetMeta               ServerCmdType = 115
+	ServerCmdType_GetMetaResp           ServerCmdType = 116
+	ServerCmdType_UpdateMeta            ServerCmdType = 117
+	ServerCmdType_UpdateMetaResp        ServerCmdType = 118
 	//kvnode <-> pd
 	ServerCmdType_KvnodeBoot             ServerCmdType = 210
 	ServerCmdType_KvnodeBootResp         ServerCmdType = 211
@@ -83,6 +89,12 @@ var ServerCmdType_name = map[int32]string{
 	110: "RemSetResp",
 	111: "SetMarkClear",
 	112: "SetMarkClearResp",
+	113: "SetMeta",
+	114: "SetMetaResp",
+	115: "GetMeta",
+	116: "GetMetaResp",
+	117: "UpdateMeta",
+	118: "UpdateMetaResp",
 	210: "KvnodeBoot",
 	211: "KvnodeBootResp",
 	212: "NotifyAddNode",
@@ -117,6 +129,12 @@ var ServerCmdType_value = map[string]int32{
 	"RemSetResp":             110,
 	"SetMarkClear":           111,
 	"SetMarkClearResp":       112,
+	"SetMeta":                113,
+	"SetMetaResp":            114,
+	"GetMeta":                115,
+	"GetMetaResp":            116,
+	"UpdateMeta":             117,
+	"UpdateMetaResp":         118,
 	"KvnodeBoot":             210,
 	"KvnodeBootResp":         211,
 	"NotifyAddNode":          212,
@@ -2087,6 +2105,390 @@ func (m *ChangeFlyGateResp) GetService() string {
 	return ""
 }
 
+type SetMeta struct {
+	Meta []byte `protobuf:"bytes,1,opt,name=meta" json:"meta"`
+}
+
+func (m *SetMeta) Reset()      { *m = SetMeta{} }
+func (*SetMeta) ProtoMessage() {}
+func (*SetMeta) Descriptor() ([]byte, []int) {
+	return fileDescriptor_03085fc3fc38bb42, []int{37}
+}
+func (m *SetMeta) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *SetMeta) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_SetMeta.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *SetMeta) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SetMeta.Merge(m, src)
+}
+func (m *SetMeta) XXX_Size() int {
+	return m.Size()
+}
+func (m *SetMeta) XXX_DiscardUnknown() {
+	xxx_messageInfo_SetMeta.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SetMeta proto.InternalMessageInfo
+
+func (m *SetMeta) GetMeta() []byte {
+	if m != nil {
+		return m.Meta
+	}
+	return nil
+}
+
+type SetMetaResp struct {
+	Ok     bool   `protobuf:"varint,1,opt,name=ok" json:"ok"`
+	Reason string `protobuf:"bytes,2,opt,name=reason" json:"reason"`
+}
+
+func (m *SetMetaResp) Reset()      { *m = SetMetaResp{} }
+func (*SetMetaResp) ProtoMessage() {}
+func (*SetMetaResp) Descriptor() ([]byte, []int) {
+	return fileDescriptor_03085fc3fc38bb42, []int{38}
+}
+func (m *SetMetaResp) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *SetMetaResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_SetMetaResp.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *SetMetaResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SetMetaResp.Merge(m, src)
+}
+func (m *SetMetaResp) XXX_Size() int {
+	return m.Size()
+}
+func (m *SetMetaResp) XXX_DiscardUnknown() {
+	xxx_messageInfo_SetMetaResp.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SetMetaResp proto.InternalMessageInfo
+
+func (m *SetMetaResp) GetOk() bool {
+	if m != nil {
+		return m.Ok
+	}
+	return false
+}
+
+func (m *SetMetaResp) GetReason() string {
+	if m != nil {
+		return m.Reason
+	}
+	return ""
+}
+
+type MetaFiled struct {
+	Name    string `protobuf:"bytes,1,opt,name=name" json:"name"`
+	Type    string `protobuf:"bytes,2,opt,name=type" json:"type"`
+	Default string `protobuf:"bytes,3,opt,name=default" json:"default"`
+}
+
+func (m *MetaFiled) Reset()      { *m = MetaFiled{} }
+func (*MetaFiled) ProtoMessage() {}
+func (*MetaFiled) Descriptor() ([]byte, []int) {
+	return fileDescriptor_03085fc3fc38bb42, []int{39}
+}
+func (m *MetaFiled) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *MetaFiled) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_MetaFiled.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *MetaFiled) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MetaFiled.Merge(m, src)
+}
+func (m *MetaFiled) XXX_Size() int {
+	return m.Size()
+}
+func (m *MetaFiled) XXX_DiscardUnknown() {
+	xxx_messageInfo_MetaFiled.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MetaFiled proto.InternalMessageInfo
+
+func (m *MetaFiled) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+func (m *MetaFiled) GetType() string {
+	if m != nil {
+		return m.Type
+	}
+	return ""
+}
+
+func (m *MetaFiled) GetDefault() string {
+	if m != nil {
+		return m.Default
+	}
+	return ""
+}
+
+type MetaTable struct {
+	Name   string       `protobuf:"bytes,1,opt,name=name" json:"name"`
+	Fields []*MetaFiled `protobuf:"bytes,2,rep,name=fields" json:"fields,omitempty"`
+}
+
+func (m *MetaTable) Reset()      { *m = MetaTable{} }
+func (*MetaTable) ProtoMessage() {}
+func (*MetaTable) Descriptor() ([]byte, []int) {
+	return fileDescriptor_03085fc3fc38bb42, []int{40}
+}
+func (m *MetaTable) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *MetaTable) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_MetaTable.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *MetaTable) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MetaTable.Merge(m, src)
+}
+func (m *MetaTable) XXX_Size() int {
+	return m.Size()
+}
+func (m *MetaTable) XXX_DiscardUnknown() {
+	xxx_messageInfo_MetaTable.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MetaTable proto.InternalMessageInfo
+
+func (m *MetaTable) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+func (m *MetaTable) GetFields() []*MetaFiled {
+	if m != nil {
+		return m.Fields
+	}
+	return nil
+}
+
+type UpdateMeta struct {
+	Updates []*MetaTable `protobuf:"bytes,1,rep,name=updates" json:"updates,omitempty"`
+}
+
+func (m *UpdateMeta) Reset()      { *m = UpdateMeta{} }
+func (*UpdateMeta) ProtoMessage() {}
+func (*UpdateMeta) Descriptor() ([]byte, []int) {
+	return fileDescriptor_03085fc3fc38bb42, []int{41}
+}
+func (m *UpdateMeta) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *UpdateMeta) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_UpdateMeta.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *UpdateMeta) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_UpdateMeta.Merge(m, src)
+}
+func (m *UpdateMeta) XXX_Size() int {
+	return m.Size()
+}
+func (m *UpdateMeta) XXX_DiscardUnknown() {
+	xxx_messageInfo_UpdateMeta.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_UpdateMeta proto.InternalMessageInfo
+
+func (m *UpdateMeta) GetUpdates() []*MetaTable {
+	if m != nil {
+		return m.Updates
+	}
+	return nil
+}
+
+type UpdateMetaResp struct {
+	Ok     bool   `protobuf:"varint,1,opt,name=ok" json:"ok"`
+	Reason string `protobuf:"bytes,2,opt,name=reason" json:"reason"`
+}
+
+func (m *UpdateMetaResp) Reset()      { *m = UpdateMetaResp{} }
+func (*UpdateMetaResp) ProtoMessage() {}
+func (*UpdateMetaResp) Descriptor() ([]byte, []int) {
+	return fileDescriptor_03085fc3fc38bb42, []int{42}
+}
+func (m *UpdateMetaResp) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *UpdateMetaResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_UpdateMetaResp.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *UpdateMetaResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_UpdateMetaResp.Merge(m, src)
+}
+func (m *UpdateMetaResp) XXX_Size() int {
+	return m.Size()
+}
+func (m *UpdateMetaResp) XXX_DiscardUnknown() {
+	xxx_messageInfo_UpdateMetaResp.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_UpdateMetaResp proto.InternalMessageInfo
+
+func (m *UpdateMetaResp) GetOk() bool {
+	if m != nil {
+		return m.Ok
+	}
+	return false
+}
+
+func (m *UpdateMetaResp) GetReason() string {
+	if m != nil {
+		return m.Reason
+	}
+	return ""
+}
+
+type GetMeta struct {
+}
+
+func (m *GetMeta) Reset()      { *m = GetMeta{} }
+func (*GetMeta) ProtoMessage() {}
+func (*GetMeta) Descriptor() ([]byte, []int) {
+	return fileDescriptor_03085fc3fc38bb42, []int{43}
+}
+func (m *GetMeta) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetMeta) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetMeta.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *GetMeta) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetMeta.Merge(m, src)
+}
+func (m *GetMeta) XXX_Size() int {
+	return m.Size()
+}
+func (m *GetMeta) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetMeta.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetMeta proto.InternalMessageInfo
+
+type GetMetaResp struct {
+	Version int64  `protobuf:"varint,1,opt,name=version" json:"version"`
+	Meta    []byte `protobuf:"bytes,2,opt,name=meta" json:"meta"`
+}
+
+func (m *GetMetaResp) Reset()      { *m = GetMetaResp{} }
+func (*GetMetaResp) ProtoMessage() {}
+func (*GetMetaResp) Descriptor() ([]byte, []int) {
+	return fileDescriptor_03085fc3fc38bb42, []int{44}
+}
+func (m *GetMetaResp) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetMetaResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetMetaResp.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *GetMetaResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetMetaResp.Merge(m, src)
+}
+func (m *GetMetaResp) XXX_Size() int {
+	return m.Size()
+}
+func (m *GetMetaResp) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetMetaResp.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetMetaResp proto.InternalMessageInfo
+
+func (m *GetMetaResp) GetVersion() int64 {
+	if m != nil {
+		return m.Version
+	}
+	return 0
+}
+
+func (m *GetMetaResp) GetMeta() []byte {
+	if m != nil {
+		return m.Meta
+	}
+	return nil
+}
+
 func init() {
 	proto.RegisterEnum("proto.ServerCmdType", ServerCmdType_name, ServerCmdType_value)
 	proto.RegisterType((*QueryRouteInfo)(nil), "proto.queryRouteInfo")
@@ -2126,90 +2528,109 @@ func init() {
 	proto.RegisterType((*FlyGateHeartBeat)(nil), "proto.flyGateHeartBeat")
 	proto.RegisterType((*ChangeFlyGate)(nil), "proto.changeFlyGate")
 	proto.RegisterType((*ChangeFlyGateResp)(nil), "proto.changeFlyGateResp")
+	proto.RegisterType((*SetMeta)(nil), "proto.setMeta")
+	proto.RegisterType((*SetMetaResp)(nil), "proto.setMetaResp")
+	proto.RegisterType((*MetaFiled)(nil), "proto.metaFiled")
+	proto.RegisterType((*MetaTable)(nil), "proto.metaTable")
+	proto.RegisterType((*UpdateMeta)(nil), "proto.updateMeta")
+	proto.RegisterType((*UpdateMetaResp)(nil), "proto.updateMetaResp")
+	proto.RegisterType((*GetMeta)(nil), "proto.getMeta")
+	proto.RegisterType((*GetMetaResp)(nil), "proto.getMetaResp")
 }
 
 func init() { proto.RegisterFile("flyfish_server.proto", fileDescriptor_03085fc3fc38bb42) }
 
 var fileDescriptor_03085fc3fc38bb42 = []byte{
-	// 1238 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x57, 0xcd, 0x6f, 0x1b, 0x45,
-	0x14, 0xf7, 0xec, 0xfa, 0xa3, 0x7d, 0x71, 0x9c, 0xc9, 0xd4, 0x49, 0x4d, 0xa8, 0x16, 0x6b, 0x85,
-	0x8a, 0x15, 0x89, 0x92, 0xf6, 0xd4, 0x0b, 0x12, 0x89, 0x43, 0x52, 0x93, 0xd6, 0x34, 0xeb, 0x9e,
-	0xb8, 0x44, 0xab, 0xec, 0xd8, 0x31, 0x5e, 0xef, 0xa4, 0xbb, 0x93, 0x48, 0x3e, 0x20, 0x95, 0x6b,
-	0x4f, 0x1c, 0x38, 0xf1, 0x71, 0x86, 0xbf, 0x00, 0xf8, 0x13, 0x72, 0x8c, 0xf8, 0x0c, 0x20, 0xa1,
-	0xc6, 0xb9, 0x70, 0xec, 0x9f, 0x80, 0x66, 0x76, 0xbd, 0x9e, 0xb5, 0x1d, 0x07, 0xb9, 0x70, 0xb2,
-	0xf7, 0xbd, 0xb7, 0xef, 0xfd, 0xde, 0xd7, 0x6f, 0x66, 0xa1, 0xd8, 0x74, 0x7b, 0xcd, 0x76, 0x70,
-	0xb0, 0x17, 0x50, 0xff, 0x98, 0xfa, 0x77, 0x0e, 0x7d, 0xc6, 0x19, 0xc9, 0xc8, 0x9f, 0x95, 0x62,
-	0x8b, 0xb5, 0x98, 0xfc, 0xfb, 0x8e, 0xf8, 0x17, 0x2a, 0xcd, 0x4d, 0x28, 0x3c, 0x3d, 0xa2, 0x7e,
-	0xcf, 0x62, 0x47, 0x9c, 0xd6, 0xbc, 0x26, 0x23, 0x06, 0xe4, 0x8e, 0xa9, 0x1f, 0xb4, 0x99, 0x57,
-	0x42, 0x65, 0x54, 0xd1, 0x37, 0xd2, 0x27, 0x7f, 0xbd, 0x91, 0xb2, 0x06, 0x42, 0x42, 0x20, 0x1d,
-	0x50, 0x1e, 0x94, 0xb4, 0xb2, 0x5e, 0xc9, 0x58, 0xf2, 0xbf, 0xf9, 0x14, 0x16, 0xfc, 0x81, 0x83,
-	0x9d, 0xe3, 0x3a, 0x73, 0x28, 0xb9, 0x05, 0x59, 0x8f, 0x39, 0xb4, 0xb6, 0x29, 0xbd, 0x64, 0x22,
-	0x2f, 0x91, 0x8c, 0x94, 0x20, 0x7d, 0xc0, 0x02, 0x5e, 0xd2, 0xca, 0xa8, 0x72, 0x3d, 0xd2, 0x49,
-	0x09, 0xb9, 0x0d, 0x73, 0x02, 0x7d, 0x7b, 0x9f, 0x3e, 0x66, 0x3e, 0x2f, 0xe9, 0xca, 0xcb, 0xaa,
-	0xc2, 0x7c, 0x8e, 0x20, 0x1f, 0xc7, 0x6c, 0x50, 0x4e, 0x56, 0x20, 0x13, 0x50, 0x3e, 0x12, 0x2f,
-	0x14, 0x91, 0x65, 0xc8, 0x06, 0x9c, 0xf9, 0x74, 0x80, 0x3a, 0x7a, 0x22, 0x45, 0xc8, 0x04, 0x2e,
-	0xe3, 0x41, 0x49, 0x2f, 0xeb, 0x95, 0xbc, 0x15, 0x3e, 0x90, 0x35, 0xc8, 0x75, 0x8e, 0x05, 0xd0,
-	0xa0, 0x94, 0x2e, 0xeb, 0x95, 0xb9, 0x7b, 0xcb, 0x61, 0xb1, 0xee, 0x8c, 0xe4, 0x68, 0x0d, 0xcc,
-	0xcc, 0x4f, 0x80, 0x24, 0xab, 0x68, 0xd1, 0xe0, 0x90, 0xbc, 0x15, 0x55, 0x0a, 0x49, 0x27, 0x37,
-	0x46, 0x9d, 0x34, 0x28, 0x0f, 0xcb, 0x47, 0x0c, 0x00, 0x9f, 0x76, 0xd9, 0x31, 0x6d, 0x0c, 0x0b,
-	0xab, 0x48, 0xd4, 0x96, 0xe8, 0x13, 0x5a, 0x62, 0xae, 0x42, 0x5e, 0x86, 0xdf, 0x73, 0xa9, 0xed,
-	0x50, 0x5f, 0x96, 0x42, 0x24, 0x38, 0x52, 0x0a, 0x21, 0x32, 0xef, 0xc2, 0xa2, 0x6a, 0xbb, 0xe7,
-	0x0b, 0xa4, 0xb7, 0x20, 0x1b, 0x3e, 0x26, 0x9b, 0x15, 0xca, 0xcc, 0xcf, 0x11, 0x60, 0x87, 0x1e,
-	0xba, 0xac, 0xd7, 0xa5, 0x1e, 0xdf, 0x91, 0x39, 0xff, 0xdf, 0xfd, 0x25, 0x65, 0xb8, 0xe6, 0xdb,
-	0x4d, 0x2e, 0x8d, 0xd2, 0x8a, 0x51, 0x2c, 0x35, 0x3f, 0x82, 0xf9, 0x21, 0xaa, 0xab, 0x26, 0xe0,
-	0x6d, 0xc8, 0x84, 0x1d, 0xd5, 0x64, 0x33, 0x6e, 0x46, 0xcd, 0x18, 0x4d, 0xcb, 0x0a, 0xad, 0xcc,
-	0x77, 0x61, 0xb1, 0xed, 0x05, 0xdc, 0x76, 0xdd, 0xcd, 0xd8, 0x82, 0x54, 0x12, 0xfd, 0x2c, 0x8e,
-	0xb9, 0x88, 0x1b, 0x6a, 0xee, 0xc0, 0xd2, 0xd8, 0xeb, 0x72, 0x24, 0x8a, 0xa0, 0xb1, 0x8e, 0xc4,
-	0x77, 0x2d, 0xc2, 0xa7, 0xb1, 0x8e, 0xa8, 0xa5, 0x4f, 0xed, 0x80, 0x79, 0x89, 0x7a, 0x45, 0x32,
-	0xf3, 0x1b, 0x04, 0x39, 0xdb, 0x71, 0xe4, 0x56, 0x4d, 0x4b, 0x71, 0xd8, 0x11, 0x6d, 0x4a, 0x47,
-	0xf4, 0xab, 0x3a, 0x92, 0xfe, 0x37, 0x1d, 0xc9, 0x4c, 0xec, 0xc8, 0x3a, 0xcc, 0x45, 0x40, 0x67,
-	0x4e, 0xb6, 0x0a, 0x39, 0x9f, 0x76, 0x5f, 0x2d, 0x57, 0x81, 0x23, 0x72, 0x32, 0x33, 0x8e, 0x55,
-	0x80, 0x70, 0xb9, 0x37, 0x18, 0xe3, 0xd3, 0x87, 0xdd, 0xa4, 0x70, 0x5d, 0xee, 0x96, 0xa4, 0xcf,
-	0x22, 0x68, 0x6d, 0x27, 0x61, 0xa6, 0xb5, 0x1d, 0x51, 0x63, 0x51, 0xa5, 0xaa, 0x7b, 0x14, 0x70,
-	0xea, 0x27, 0x22, 0xaa, 0x0a, 0x99, 0x73, 0x44, 0x48, 0xa8, 0x92, 0x8f, 0x73, 0x16, 0x22, 0xf3,
-	0x05, 0x82, 0xc2, 0x10, 0xd3, 0xac, 0x99, 0x29, 0xed, 0x7e, 0x30, 0x3a, 0x0f, 0xaa, 0xe2, 0xbf,
-	0x1b, 0x0b, 0x52, 0x89, 0xd9, 0x37, 0x2b, 0x37, 0x07, 0x47, 0x9b, 0x13, 0x17, 0x6d, 0xc0, 0xc7,
-	0xe6, 0xa7, 0x08, 0xe6, 0x3d, 0xc6, 0xdb, 0xcd, 0xde, 0x7a, 0x34, 0xf0, 0xb3, 0xd2, 0x8c, 0x8a,
-	0x4a, 0x9f, 0x88, 0x6a, 0x78, 0x26, 0xa4, 0xd5, 0x33, 0xc1, 0x7c, 0x04, 0x8b, 0x09, 0x08, 0x56,
-	0x44, 0x90, 0x53, 0x60, 0xc4, 0x7c, 0xab, 0x8d, 0xf3, 0xed, 0xfb, 0x83, 0x8c, 0xac, 0x68, 0xac,
-	0xa7, 0xbb, 0xba, 0xe4, 0xa4, 0x1a, 0xa2, 0xb2, 0x94, 0xc1, 0x9e, 0x1d, 0xd5, 0x07, 0x40, 0x42,
-	0x77, 0x0d, 0x97, 0xf1, 0x27, 0xbe, 0xed, 0x05, 0x1f, 0x1e, 0x71, 0x51, 0x4e, 0x31, 0x6a, 0x09,
-	0x6f, 0x52, 0x32, 0xd5, 0xd7, 0x3d, 0x58, 0x1e, 0xf7, 0x25, 0xf1, 0x5d, 0xea, 0xcf, 0xac, 0x0d,
-	0xd2, 0x89, 0xdf, 0xa9, 0x79, 0x33, 0x86, 0xbf, 0x0b, 0x4b, 0x63, 0xae, 0xae, 0x88, 0xbe, 0x06,
-	0x59, 0xdb, 0x71, 0xc4, 0x91, 0x71, 0x1b, 0xf4, 0x80, 0x86, 0x26, 0x97, 0x31, 0xba, 0x30, 0x30,
-	0xdf, 0x03, 0x08, 0xdf, 0x98, 0x99, 0x50, 0xde, 0x14, 0xda, 0xee, 0x15, 0xc7, 0x94, 0x88, 0x13,
-	0x5a, 0xbd, 0x02, 0x71, 0xe5, 0x03, 0xca, 0x1f, 0xd9, 0x7e, 0xa7, 0xea, 0x52, 0xdb, 0x9f, 0x1a,
-	0x6d, 0x0b, 0xb0, 0x6a, 0x3b, 0x73, 0xcc, 0x06, 0xe4, 0x9a, 0x6e, 0xaf, 0x65, 0x73, 0x2a, 0xae,
-	0x2a, 0x11, 0x39, 0x48, 0x1f, 0x03, 0xcb, 0x81, 0x90, 0x54, 0x20, 0xdf, 0x0d, 0x5a, 0x8f, 0xa9,
-	0xdf, 0xa0, 0xfb, 0xcc, 0x73, 0x12, 0x0d, 0x4d, 0x68, 0x4c, 0x0c, 0x85, 0x16, 0xe5, 0x5b, 0x6e,
-	0x6f, 0xdb, 0xe6, 0xf4, 0x61, 0x3b, 0xe0, 0xe6, 0x7d, 0x20, 0x49, 0x89, 0x04, 0x6c, 0x42, 0xda,
-	0x6d, 0x07, 0x3c, 0x3a, 0x95, 0x0b, 0x51, 0x0f, 0x23, 0x3c, 0x96, 0xd4, 0x99, 0xcf, 0x10, 0xe0,
-	0x66, 0xf8, 0xde, 0x03, 0x6a, 0xfb, 0x7c, 0x83, 0xda, 0x92, 0xe0, 0x84, 0x49, 0x63, 0x02, 0x5c,
-	0x55, 0x21, 0x2a, 0xc8, 0x59, 0x87, 0x26, 0x53, 0x0f, 0x45, 0x63, 0xe9, 0xe8, 0x97, 0xa6, 0xd3,
-	0x86, 0xf9, 0xfd, 0x03, 0xdb, 0x6b, 0xd1, 0x08, 0xbf, 0x08, 0xbf, 0x7f, 0xe4, 0xfb, 0xd4, 0xe3,
-	0xe2, 0x31, 0x19, 0x5e, 0x51, 0x90, 0x35, 0xc0, 0xdd, 0xa0, 0xd5, 0xa0, 0x9e, 0x33, 0xb9, 0x6a,
-	0x63, 0x5a, 0xb1, 0x5c, 0x89, 0x50, 0x53, 0xfa, 0xaa, 0xb4, 0x4b, 0x9b, 0xd0, 0xae, 0xd5, 0xe7,
-	0x19, 0x98, 0x6f, 0xc8, 0x8f, 0x89, 0x6a, 0xd7, 0x79, 0xd2, 0x3b, 0xa4, 0x64, 0x01, 0xe6, 0x76,
-	0xc5, 0xfd, 0xf1, 0xa1, 0xbc, 0x1b, 0x62, 0x44, 0x6e, 0xc0, 0x82, 0x22, 0x10, 0xb1, 0xb0, 0x46,
-	0x96, 0x60, 0xb1, 0x36, 0x7a, 0x01, 0xc2, 0x94, 0xbc, 0x06, 0x4b, 0xb5, 0x49, 0xf7, 0x22, 0xdc,
-	0x24, 0x73, 0x90, 0x8b, 0x08, 0x17, 0xb7, 0x44, 0x10, 0x85, 0x7d, 0xf1, 0x81, 0xd0, 0x46, 0xc4,
-	0x87, 0xdb, 0x42, 0xab, 0xb0, 0x20, 0xfe, 0x98, 0x00, 0x64, 0xd7, 0xe5, 0x76, 0xe2, 0x0e, 0x29,
-	0x00, 0xac, 0xc7, 0x9b, 0x8a, 0x5d, 0xa1, 0xb3, 0xe4, 0x46, 0xe1, 0xae, 0xd0, 0x59, 0xf1, 0x76,
-	0x61, 0x8f, 0x60, 0xc8, 0x37, 0x94, 0xf9, 0xc7, 0xe2, 0xf4, 0xc6, 0x8d, 0x91, 0x8d, 0xc0, 0x87,
-	0x64, 0x01, 0x60, 0x27, 0x3e, 0x78, 0xf1, 0x8f, 0x22, 0xe7, 0xc2, 0x4e, 0xe2, 0x24, 0xc6, 0x3f,
-	0x21, 0x42, 0x60, 0xbe, 0xae, 0x1e, 0x1c, 0xf8, 0x67, 0x44, 0x96, 0x61, 0xb1, 0x3e, 0x7a, 0x98,
-	0xe0, 0x5f, 0x14, 0xdb, 0x41, 0x56, 0xbf, 0x2a, 0xb6, 0x6a, 0x72, 0xbf, 0x21, 0x72, 0x13, 0x48,
-	0x7d, 0x8c, 0x5f, 0xf1, 0x19, 0x22, 0xaf, 0xc3, 0x72, 0x7d, 0x22, 0xf1, 0xe2, 0xdf, 0x15, 0x6f,
-	0x0a, 0x2d, 0xe2, 0x3f, 0x10, 0x59, 0x81, 0xa5, 0xfa, 0x24, 0xba, 0xc4, 0x7f, 0xca, 0xb4, 0x76,
-	0x13, 0x9f, 0x31, 0xf8, 0x3b, 0x4d, 0x84, 0xdf, 0x1d, 0xfb, 0xb6, 0xc1, 0xdf, 0x8b, 0x1e, 0xe3,
-	0xad, 0x91, 0x9d, 0xc2, 0x3f, 0x68, 0xc2, 0xc9, 0x76, 0x62, 0x4b, 0xf1, 0x17, 0xba, 0x70, 0xb2,
-	0x3d, 0xb6, 0xba, 0xf8, 0x4b, 0x5d, 0x14, 0xa2, 0xaa, 0xce, 0x2a, 0xfe, 0x4a, 0x17, 0xd0, 0xab,
-	0xa3, 0xf3, 0x8b, 0xbf, 0xd6, 0x37, 0xee, 0x9f, 0x9c, 0x1b, 0xe8, 0xf4, 0xdc, 0x40, 0x67, 0xe7,
-	0x46, 0xea, 0xe5, 0xb9, 0x81, 0x9e, 0xf5, 0x0d, 0xf4, 0x6d, 0xdf, 0x40, 0x27, 0x7d, 0x03, 0x9d,
-	0xf6, 0x0d, 0xf4, 0xa2, 0x6f, 0xa0, 0xbf, 0xfb, 0x46, 0xea, 0x65, 0xdf, 0x40, 0x9f, 0x5d, 0x18,
-	0xa9, 0xd3, 0x0b, 0x23, 0x75, 0x76, 0x61, 0xa4, 0xfe, 0x09, 0x00, 0x00, 0xff, 0xff, 0xe9, 0x89,
-	0x15, 0x29, 0x19, 0x0f, 0x00, 0x00,
+	// 1414 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x57, 0x4b, 0x6f, 0xdb, 0xc6,
+	0x13, 0xf7, 0x92, 0x7a, 0xc4, 0x63, 0x59, 0x5e, 0x6f, 0x6c, 0x47, 0xff, 0xfc, 0x03, 0xd6, 0x60,
+	0x8b, 0x54, 0x30, 0xd0, 0x34, 0xc9, 0x29, 0x97, 0x02, 0xb5, 0x9d, 0xda, 0x71, 0x9d, 0x38, 0x09,
+	0x95, 0x5c, 0x7a, 0x31, 0x58, 0x73, 0x25, 0xb3, 0xa6, 0x48, 0x87, 0x5c, 0x19, 0xd0, 0xa1, 0x40,
+	0x7a, 0xed, 0xa9, 0x87, 0x9e, 0xfa, 0x38, 0xb7, 0x9f, 0xa0, 0xed, 0x47, 0xc8, 0x31, 0xe8, 0x33,
+	0x6d, 0x81, 0x22, 0x96, 0x2f, 0x45, 0x4f, 0xf9, 0x08, 0xc5, 0x2c, 0x1f, 0x5a, 0x4a, 0xb2, 0x5c,
+	0x28, 0xed, 0x49, 0xe2, 0xcc, 0xec, 0xcc, 0x6f, 0x7e, 0xb3, 0x3b, 0xb3, 0x0b, 0x0b, 0x4d, 0xaf,
+	0xdb, 0x74, 0xa3, 0xfd, 0xdd, 0x88, 0x87, 0x47, 0x3c, 0xbc, 0x72, 0x18, 0x06, 0x22, 0x60, 0x45,
+	0xf9, 0x73, 0x71, 0xa1, 0x15, 0xb4, 0x02, 0xf9, 0xf7, 0x4d, 0xfc, 0x17, 0x2b, 0xcd, 0x9b, 0x50,
+	0x7d, 0xd4, 0xe1, 0x61, 0xd7, 0x0a, 0x3a, 0x82, 0x6f, 0xf9, 0xcd, 0x80, 0x19, 0x50, 0x3e, 0xe2,
+	0x61, 0xe4, 0x06, 0x7e, 0x8d, 0x2c, 0x93, 0xba, 0xbe, 0x56, 0x78, 0xf2, 0xc7, 0x2b, 0x53, 0x56,
+	0x2a, 0x64, 0x0c, 0x0a, 0x11, 0x17, 0x51, 0x4d, 0x5b, 0xd6, 0xeb, 0x45, 0x4b, 0xfe, 0x37, 0x1f,
+	0xc1, 0x5c, 0x98, 0x3a, 0xd8, 0x3e, 0xda, 0x09, 0x1c, 0xce, 0x2e, 0x41, 0xc9, 0x0f, 0x1c, 0xbe,
+	0x75, 0x53, 0x7a, 0x29, 0x26, 0x5e, 0x12, 0x19, 0xab, 0x41, 0x61, 0x3f, 0x88, 0x44, 0x4d, 0x5b,
+	0x26, 0xf5, 0xe9, 0x44, 0x27, 0x25, 0xec, 0x32, 0xcc, 0x20, 0x7a, 0x77, 0x8f, 0xdf, 0x0b, 0x42,
+	0x51, 0xd3, 0x95, 0xc5, 0xaa, 0xc2, 0xfc, 0x98, 0x40, 0x25, 0x8b, 0xd9, 0xe0, 0x82, 0x5d, 0x84,
+	0x62, 0xc4, 0xc5, 0x40, 0xbc, 0x58, 0xc4, 0x96, 0xa0, 0x14, 0x89, 0x20, 0xe4, 0x29, 0xea, 0xe4,
+	0x8b, 0x2d, 0x40, 0x31, 0xf2, 0x02, 0x11, 0xd5, 0xf4, 0x65, 0xbd, 0x5e, 0xb1, 0xe2, 0x0f, 0x76,
+	0x15, 0xca, 0x07, 0x47, 0x08, 0x34, 0xaa, 0x15, 0x96, 0xf5, 0xfa, 0xcc, 0xf5, 0xa5, 0x98, 0xac,
+	0x2b, 0x03, 0x39, 0x5a, 0xa9, 0x99, 0xf9, 0x21, 0xb0, 0x3c, 0x8b, 0x16, 0x8f, 0x0e, 0xd9, 0xeb,
+	0x09, 0x53, 0x44, 0x3a, 0x39, 0x3f, 0xe8, 0xa4, 0xc1, 0x45, 0x4c, 0x1f, 0x33, 0x00, 0x42, 0xde,
+	0x0e, 0x8e, 0x78, 0xa3, 0x4f, 0xac, 0x22, 0x51, 0x4b, 0xa2, 0x8f, 0x28, 0x89, 0xb9, 0x02, 0x15,
+	0x19, 0x7e, 0xd7, 0xe3, 0xb6, 0xc3, 0x43, 0x49, 0x05, 0x26, 0x38, 0x40, 0x05, 0x8a, 0xcc, 0x6b,
+	0x30, 0xaf, 0xda, 0xee, 0x86, 0x88, 0xf4, 0x12, 0x94, 0xe2, 0xcf, 0x7c, 0xb1, 0x62, 0x99, 0xf9,
+	0x29, 0x01, 0xea, 0xf0, 0x43, 0x2f, 0xe8, 0xb6, 0xb9, 0x2f, 0xb6, 0x65, 0xce, 0xff, 0x75, 0x7d,
+	0xd9, 0x32, 0x9c, 0x0b, 0xed, 0xa6, 0x90, 0x46, 0x05, 0xc5, 0x28, 0x93, 0x9a, 0xef, 0xc1, 0x6c,
+	0x1f, 0xd5, 0x59, 0x3b, 0xe0, 0x0d, 0x28, 0xc6, 0x15, 0xd5, 0x64, 0x31, 0x2e, 0x24, 0xc5, 0x18,
+	0x4c, 0xcb, 0x8a, 0xad, 0xcc, 0xb7, 0x60, 0xde, 0xf5, 0x23, 0x61, 0x7b, 0xde, 0xcd, 0xcc, 0x82,
+	0xd5, 0x73, 0xf5, 0x5c, 0x18, 0x72, 0x91, 0x15, 0xd4, 0xdc, 0x86, 0xc5, 0xa1, 0xe5, 0x72, 0x4b,
+	0x2c, 0x80, 0x16, 0x1c, 0x48, 0x7c, 0xe7, 0x12, 0x7c, 0x5a, 0x70, 0x80, 0x5c, 0x86, 0xdc, 0x8e,
+	0x02, 0x3f, 0xc7, 0x57, 0x22, 0x33, 0xbf, 0x22, 0x50, 0xb6, 0x1d, 0x47, 0x9e, 0xaa, 0x71, 0x29,
+	0xf6, 0x2b, 0xa2, 0x8d, 0xa9, 0x88, 0x7e, 0x56, 0x45, 0x0a, 0xff, 0xa4, 0x22, 0xc5, 0x91, 0x15,
+	0x59, 0x85, 0x99, 0x04, 0xe8, 0xc4, 0xc9, 0xae, 0x43, 0x39, 0xe4, 0xed, 0x97, 0xcb, 0x15, 0x71,
+	0x24, 0x4e, 0x26, 0xc6, 0xb1, 0x02, 0x10, 0x1f, 0xee, 0xb5, 0x20, 0x10, 0xe3, 0x37, 0xbb, 0xc9,
+	0x61, 0x5a, 0x9e, 0x2d, 0xd9, 0x3e, 0x17, 0x40, 0x73, 0x9d, 0x9c, 0x99, 0xe6, 0x3a, 0xc8, 0x31,
+	0xb2, 0xb4, 0xee, 0x75, 0x22, 0xc1, 0xc3, 0x5c, 0x44, 0x55, 0x21, 0x73, 0x4e, 0x1a, 0x12, 0xa9,
+	0x57, 0xb2, 0x9c, 0x51, 0x64, 0x3e, 0x27, 0x50, 0xed, 0x63, 0x9a, 0x34, 0x33, 0xa5, 0xdc, 0xb7,
+	0x06, 0xf7, 0x83, 0xaa, 0xf8, 0xf7, 0xb6, 0x05, 0xab, 0x67, 0xdd, 0xb7, 0x24, 0x4f, 0x0e, 0x4d,
+	0x4e, 0x4e, 0x46, 0x5a, 0xda, 0x8f, 0xcd, 0x8f, 0x08, 0xcc, 0xfa, 0x81, 0x70, 0x9b, 0xdd, 0xd5,
+	0x64, 0xc3, 0x4f, 0xda, 0x66, 0x54, 0x54, 0xfa, 0x48, 0x54, 0xfd, 0x99, 0x50, 0x50, 0x67, 0x82,
+	0x79, 0x07, 0xe6, 0x73, 0x10, 0xac, 0xa4, 0x41, 0x8e, 0x81, 0x91, 0xf5, 0x5b, 0x6d, 0xb8, 0xdf,
+	0xbe, 0x93, 0x66, 0x64, 0x25, 0xdb, 0x7a, 0xbc, 0xab, 0x53, 0x26, 0x55, 0x1f, 0x95, 0xa5, 0x6c,
+	0xec, 0xc9, 0x51, 0xbd, 0x0b, 0x2c, 0x76, 0xd7, 0xf0, 0x02, 0xf1, 0x20, 0xb4, 0xfd, 0xe8, 0x6e,
+	0x47, 0x20, 0x9d, 0xb8, 0xd5, 0x72, 0xde, 0xa4, 0x64, 0xac, 0xaf, 0xeb, 0xb0, 0x34, 0xec, 0x4b,
+	0xe2, 0x3b, 0xd5, 0x9f, 0xb9, 0x95, 0xa6, 0x93, 0xad, 0xd9, 0xf2, 0x27, 0x0c, 0x7f, 0x0d, 0x16,
+	0x87, 0x5c, 0x9d, 0x11, 0xfd, 0x2a, 0x94, 0x6c, 0xc7, 0xc1, 0x91, 0x71, 0x19, 0xf4, 0x88, 0xc7,
+	0x26, 0xa7, 0x75, 0x74, 0x34, 0x30, 0xdf, 0x06, 0x88, 0x57, 0x4c, 0xdc, 0x50, 0x5e, 0x43, 0x6d,
+	0xfb, 0x8c, 0x31, 0x85, 0x71, 0x62, 0xab, 0x97, 0x68, 0x5c, 0x95, 0x88, 0x8b, 0x3b, 0x76, 0x78,
+	0xb0, 0xee, 0x71, 0x3b, 0x1c, 0x1b, 0x6d, 0x03, 0xa8, 0x6a, 0x3b, 0x71, 0xcc, 0x06, 0x94, 0x9b,
+	0x5e, 0xb7, 0x65, 0x0b, 0x8e, 0x57, 0x95, 0xa4, 0x39, 0x48, 0x1f, 0xa9, 0x65, 0x2a, 0x64, 0x75,
+	0xa8, 0xb4, 0xa3, 0xd6, 0x3d, 0x1e, 0x36, 0xf8, 0x5e, 0xe0, 0x3b, 0xb9, 0x82, 0xe6, 0x34, 0x26,
+	0x85, 0x6a, 0x8b, 0x8b, 0x0d, 0xaf, 0xbb, 0x69, 0x0b, 0x7e, 0xdb, 0x8d, 0x84, 0x79, 0x03, 0x58,
+	0x5e, 0x22, 0x01, 0x9b, 0x50, 0xf0, 0xdc, 0x48, 0x24, 0x53, 0xb9, 0x9a, 0xd4, 0x30, 0xc1, 0x63,
+	0x49, 0x9d, 0xf9, 0x98, 0x00, 0x6d, 0xc6, 0xeb, 0x6e, 0x71, 0x3b, 0x14, 0x6b, 0xdc, 0x96, 0x0d,
+	0x0e, 0x4d, 0x1a, 0x23, 0xe0, 0xaa, 0x0a, 0x64, 0x50, 0x04, 0x07, 0x3c, 0x9f, 0x7a, 0x2c, 0x1a,
+	0x4a, 0x47, 0x3f, 0x35, 0x1d, 0x17, 0x66, 0xf7, 0xf6, 0x6d, 0xbf, 0xc5, 0x13, 0xfc, 0x18, 0x7e,
+	0xaf, 0x13, 0x86, 0xdc, 0x17, 0xf8, 0x99, 0x0f, 0xaf, 0x28, 0xd8, 0x55, 0xa0, 0xed, 0xa8, 0xd5,
+	0xe0, 0xbe, 0x33, 0x9a, 0xb5, 0x21, 0x2d, 0x1e, 0xae, 0x5c, 0xa8, 0x31, 0x75, 0x55, 0xca, 0xa5,
+	0x8d, 0x28, 0x97, 0xf9, 0x2a, 0xea, 0xc5, 0x1d, 0x2e, 0x6c, 0x3c, 0x4e, 0x6d, 0x2e, 0x6c, 0xe9,
+	0x22, 0x9d, 0x4c, 0x52, 0x82, 0xe3, 0x36, 0x31, 0x9a, 0x78, 0x07, 0xed, 0xc2, 0x34, 0xba, 0xda,
+	0x70, 0x3d, 0xee, 0x60, 0x24, 0xdf, 0x6e, 0xe7, 0x29, 0x91, 0x12, 0xd4, 0x88, 0xee, 0x61, 0x1e,
+	0xab, 0x94, 0x60, 0x22, 0x0e, 0x6f, 0xda, 0x1d, 0x2f, 0x3f, 0xd1, 0x52, 0xa1, 0x79, 0x37, 0x0e,
+	0xf0, 0xc0, 0x7e, 0xdf, 0xe3, 0x63, 0x02, 0xd4, 0xa1, 0xd4, 0x74, 0xb9, 0xe7, 0xa4, 0xf7, 0xc4,
+	0x74, 0x54, 0x65, 0xe0, 0xac, 0x44, 0x6f, 0xde, 0x00, 0xe8, 0x1c, 0x3a, 0xb6, 0xe0, 0x92, 0x9c,
+	0x15, 0x28, 0xc7, 0x5f, 0xe9, 0xed, 0x50, 0x5d, 0x28, 0x83, 0x5a, 0xa9, 0x01, 0x3e, 0xb9, 0xfa,
+	0x2b, 0x27, 0x66, 0x6c, 0x1a, 0xca, 0xad, 0x98, 0x74, 0x73, 0x13, 0x66, 0x5a, 0x0a, 0xff, 0x67,
+	0x3d, 0xe0, 0xd2, 0x42, 0x6a, 0x83, 0x85, 0x5c, 0xf9, 0xab, 0x08, 0xb3, 0x0d, 0xf9, 0x74, 0x5c,
+	0x6f, 0x3b, 0x0f, 0x90, 0xd6, 0x39, 0x98, 0xb9, 0x8f, 0xaf, 0x85, 0xdb, 0xf2, 0x25, 0x40, 0x09,
+	0x3b, 0x0f, 0x73, 0x8a, 0x00, 0xe3, 0x51, 0x8d, 0x2d, 0xc2, 0xfc, 0xd6, 0xe0, 0x75, 0x97, 0x72,
+	0xf6, 0x3f, 0x58, 0xdc, 0x1a, 0x75, 0x0b, 0xa6, 0x4d, 0x36, 0x03, 0xe5, 0x64, 0xbc, 0xd2, 0x16,
+	0x06, 0x51, 0x66, 0x2d, 0xdd, 0x47, 0x6d, 0x32, 0xe6, 0xa8, 0x8b, 0x5a, 0x65, 0xe6, 0xd1, 0x0f,
+	0x18, 0x40, 0x69, 0x55, 0xf6, 0x62, 0x7a, 0xc0, 0xaa, 0x00, 0xab, 0x59, 0x5f, 0xa6, 0x1e, 0xea,
+	0x2c, 0xd9, 0x3f, 0x69, 0x1b, 0x75, 0x56, 0xd6, 0x4b, 0xa9, 0xcf, 0x28, 0x54, 0x1a, 0x4a, 0xb7,
+	0xa3, 0x78, 0x57, 0xa3, 0x8d, 0x81, 0xfe, 0x47, 0x0f, 0x31, 0x7a, 0x23, 0xa6, 0x93, 0x3e, 0xc2,
+	0xe8, 0x8d, 0x3e, 0xb7, 0x34, 0x44, 0xed, 0x66, 0xa2, 0x8d, 0x50, 0xbb, 0xa9, 0x68, 0x05, 0xc6,
+	0x7c, 0x98, 0xd5, 0x96, 0x76, 0x18, 0x83, 0xea, 0xc3, 0x5c, 0xad, 0xe9, 0x11, 0x9b, 0x03, 0xd8,
+	0xce, 0xae, 0x71, 0xf4, 0x7b, 0xe4, 0xb4, 0xba, 0x9d, 0xbb, 0xd7, 0xd1, 0x1f, 0x08, 0x63, 0x30,
+	0xbb, 0xa3, 0x5e, 0x43, 0xe8, 0x8f, 0x84, 0x2d, 0xc1, 0xfc, 0xce, 0xe0, 0xd5, 0x84, 0xfe, 0xa4,
+	0xd8, 0xa6, 0xac, 0xfd, 0xac, 0xd8, 0xaa, 0xe4, 0xfd, 0x42, 0xd8, 0x05, 0x60, 0x3b, 0x43, 0xd3,
+	0x9a, 0x3e, 0x23, 0xec, 0xff, 0xb0, 0xb4, 0x33, 0x72, 0x8c, 0xd3, 0x5f, 0x15, 0x6f, 0xca, 0x90,
+	0xa5, 0xbf, 0x11, 0x76, 0x11, 0x16, 0x77, 0x46, 0x0d, 0x5f, 0xfa, 0xbb, 0x4c, 0xeb, 0x7e, 0xee,
+	0x51, 0x4c, 0xbf, 0xd1, 0x30, 0xfc, 0xfd, 0xa1, 0x97, 0x32, 0xfd, 0x16, 0xf7, 0x10, 0xdd, 0x18,
+	0xe8, 0xd0, 0xf4, 0x3b, 0x0d, 0x9d, 0x6c, 0xe6, 0x7a, 0x3e, 0xfd, 0x4c, 0x47, 0x27, 0x9b, 0x43,
+	0x83, 0x80, 0x7e, 0xae, 0x23, 0x11, 0xeb, 0x6a, 0xe7, 0xa3, 0x5f, 0xe8, 0x08, 0x7d, 0x7d, 0xb0,
+	0x1b, 0xd2, 0x2f, 0xf5, 0xb5, 0x1b, 0x4f, 0x8e, 0x0d, 0xf2, 0xf4, 0xd8, 0x20, 0xcf, 0x8e, 0x8d,
+	0xa9, 0x17, 0xc7, 0x06, 0x79, 0xdc, 0x33, 0xc8, 0xd7, 0x3d, 0x83, 0x3c, 0xe9, 0x19, 0xe4, 0x69,
+	0xcf, 0x20, 0xcf, 0x7b, 0x06, 0xf9, 0xb3, 0x67, 0x4c, 0xbd, 0xe8, 0x19, 0xe4, 0x93, 0x13, 0x63,
+	0xea, 0xe9, 0x89, 0x31, 0xf5, 0xec, 0xc4, 0x98, 0xfa, 0x3b, 0x00, 0x00, 0xff, 0xff, 0x2a, 0xa1,
+	0xce, 0xe1, 0x67, 0x11, 0x00, 0x00,
 }
 
 func (x ServerCmdType) String() string {
@@ -3293,6 +3714,223 @@ func (this *ChangeFlyGateResp) Equal(that interface{}) bool {
 	}
 	return true
 }
+func (this *SetMeta) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SetMeta)
+	if !ok {
+		that2, ok := that.(SetMeta)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !bytes.Equal(this.Meta, that1.Meta) {
+		return false
+	}
+	return true
+}
+func (this *SetMetaResp) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SetMetaResp)
+	if !ok {
+		that2, ok := that.(SetMetaResp)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Ok != that1.Ok {
+		return false
+	}
+	if this.Reason != that1.Reason {
+		return false
+	}
+	return true
+}
+func (this *MetaFiled) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*MetaFiled)
+	if !ok {
+		that2, ok := that.(MetaFiled)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Name != that1.Name {
+		return false
+	}
+	if this.Type != that1.Type {
+		return false
+	}
+	if this.Default != that1.Default {
+		return false
+	}
+	return true
+}
+func (this *MetaTable) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*MetaTable)
+	if !ok {
+		that2, ok := that.(MetaTable)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Name != that1.Name {
+		return false
+	}
+	if len(this.Fields) != len(that1.Fields) {
+		return false
+	}
+	for i := range this.Fields {
+		if !this.Fields[i].Equal(that1.Fields[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *UpdateMeta) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*UpdateMeta)
+	if !ok {
+		that2, ok := that.(UpdateMeta)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Updates) != len(that1.Updates) {
+		return false
+	}
+	for i := range this.Updates {
+		if !this.Updates[i].Equal(that1.Updates[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *UpdateMetaResp) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*UpdateMetaResp)
+	if !ok {
+		that2, ok := that.(UpdateMetaResp)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Ok != that1.Ok {
+		return false
+	}
+	if this.Reason != that1.Reason {
+		return false
+	}
+	return true
+}
+func (this *GetMeta) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*GetMeta)
+	if !ok {
+		that2, ok := that.(GetMeta)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *GetMetaResp) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*GetMetaResp)
+	if !ok {
+		that2, ok := that.(GetMetaResp)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Version != that1.Version {
+		return false
+	}
+	if !bytes.Equal(this.Meta, that1.Meta) {
+		return false
+	}
+	return true
+}
 func (this *QueryRouteInfo) GoString() string {
 	if this == nil {
 		return "nil"
@@ -3728,6 +4366,95 @@ func (this *ChangeFlyGateResp) GoString() string {
 	s = append(s, "&proto.ChangeFlyGateResp{")
 	s = append(s, "Ok: "+fmt.Sprintf("%#v", this.Ok)+",\n")
 	s = append(s, "Service: "+fmt.Sprintf("%#v", this.Service)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SetMeta) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&proto.SetMeta{")
+	s = append(s, "Meta: "+fmt.Sprintf("%#v", this.Meta)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SetMetaResp) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&proto.SetMetaResp{")
+	s = append(s, "Ok: "+fmt.Sprintf("%#v", this.Ok)+",\n")
+	s = append(s, "Reason: "+fmt.Sprintf("%#v", this.Reason)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *MetaFiled) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&proto.MetaFiled{")
+	s = append(s, "Name: "+fmt.Sprintf("%#v", this.Name)+",\n")
+	s = append(s, "Type: "+fmt.Sprintf("%#v", this.Type)+",\n")
+	s = append(s, "Default: "+fmt.Sprintf("%#v", this.Default)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *MetaTable) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&proto.MetaTable{")
+	s = append(s, "Name: "+fmt.Sprintf("%#v", this.Name)+",\n")
+	if this.Fields != nil {
+		s = append(s, "Fields: "+fmt.Sprintf("%#v", this.Fields)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *UpdateMeta) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&proto.UpdateMeta{")
+	if this.Updates != nil {
+		s = append(s, "Updates: "+fmt.Sprintf("%#v", this.Updates)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *UpdateMetaResp) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&proto.UpdateMetaResp{")
+	s = append(s, "Ok: "+fmt.Sprintf("%#v", this.Ok)+",\n")
+	s = append(s, "Reason: "+fmt.Sprintf("%#v", this.Reason)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *GetMeta) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&proto.GetMeta{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *GetMetaResp) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&proto.GetMetaResp{")
+	s = append(s, "Version: "+fmt.Sprintf("%#v", this.Version)+",\n")
+	s = append(s, "Meta: "+fmt.Sprintf("%#v", this.Meta)+",\n")
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
@@ -5008,6 +5735,281 @@ func (m *ChangeFlyGateResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
+func (m *SetMeta) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *SetMeta) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *SetMeta) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.Meta != nil {
+		i -= len(m.Meta)
+		copy(dAtA[i:], m.Meta)
+		i = encodeVarintFlyfishServer(dAtA, i, uint64(len(m.Meta)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *SetMetaResp) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *SetMetaResp) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *SetMetaResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	i -= len(m.Reason)
+	copy(dAtA[i:], m.Reason)
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(len(m.Reason)))
+	i--
+	dAtA[i] = 0x12
+	i--
+	if m.Ok {
+		dAtA[i] = 1
+	} else {
+		dAtA[i] = 0
+	}
+	i--
+	dAtA[i] = 0x8
+	return len(dAtA) - i, nil
+}
+
+func (m *MetaFiled) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *MetaFiled) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MetaFiled) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	i -= len(m.Default)
+	copy(dAtA[i:], m.Default)
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(len(m.Default)))
+	i--
+	dAtA[i] = 0x1a
+	i -= len(m.Type)
+	copy(dAtA[i:], m.Type)
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(len(m.Type)))
+	i--
+	dAtA[i] = 0x12
+	i -= len(m.Name)
+	copy(dAtA[i:], m.Name)
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(len(m.Name)))
+	i--
+	dAtA[i] = 0xa
+	return len(dAtA) - i, nil
+}
+
+func (m *MetaTable) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *MetaTable) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MetaTable) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.Fields) > 0 {
+		for iNdEx := len(m.Fields) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Fields[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintFlyfishServer(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x12
+		}
+	}
+	i -= len(m.Name)
+	copy(dAtA[i:], m.Name)
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(len(m.Name)))
+	i--
+	dAtA[i] = 0xa
+	return len(dAtA) - i, nil
+}
+
+func (m *UpdateMeta) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *UpdateMeta) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *UpdateMeta) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.Updates) > 0 {
+		for iNdEx := len(m.Updates) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Updates[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintFlyfishServer(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0xa
+		}
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *UpdateMetaResp) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *UpdateMetaResp) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *UpdateMetaResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	i -= len(m.Reason)
+	copy(dAtA[i:], m.Reason)
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(len(m.Reason)))
+	i--
+	dAtA[i] = 0x12
+	i--
+	if m.Ok {
+		dAtA[i] = 1
+	} else {
+		dAtA[i] = 0
+	}
+	i--
+	dAtA[i] = 0x8
+	return len(dAtA) - i, nil
+}
+
+func (m *GetMeta) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetMeta) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetMeta) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	return len(dAtA) - i, nil
+}
+
+func (m *GetMetaResp) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetMetaResp) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetMetaResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.Meta != nil {
+		i -= len(m.Meta)
+		copy(dAtA[i:], m.Meta)
+		i = encodeVarintFlyfishServer(dAtA, i, uint64(len(m.Meta)))
+		i--
+		dAtA[i] = 0x12
+	}
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(m.Version))
+	i--
+	dAtA[i] = 0x8
+	return len(dAtA) - i, nil
+}
+
 func encodeVarintFlyfishServer(dAtA []byte, offset int, v uint64) int {
 	offset -= sovFlyfishServer(v)
 	base := offset
@@ -5510,6 +6512,113 @@ func (m *ChangeFlyGateResp) Size() (n int) {
 	return n
 }
 
+func (m *SetMeta) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Meta != nil {
+		l = len(m.Meta)
+		n += 1 + l + sovFlyfishServer(uint64(l))
+	}
+	return n
+}
+
+func (m *SetMetaResp) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	n += 2
+	l = len(m.Reason)
+	n += 1 + l + sovFlyfishServer(uint64(l))
+	return n
+}
+
+func (m *MetaFiled) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Name)
+	n += 1 + l + sovFlyfishServer(uint64(l))
+	l = len(m.Type)
+	n += 1 + l + sovFlyfishServer(uint64(l))
+	l = len(m.Default)
+	n += 1 + l + sovFlyfishServer(uint64(l))
+	return n
+}
+
+func (m *MetaTable) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Name)
+	n += 1 + l + sovFlyfishServer(uint64(l))
+	if len(m.Fields) > 0 {
+		for _, e := range m.Fields {
+			l = e.Size()
+			n += 1 + l + sovFlyfishServer(uint64(l))
+		}
+	}
+	return n
+}
+
+func (m *UpdateMeta) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.Updates) > 0 {
+		for _, e := range m.Updates {
+			l = e.Size()
+			n += 1 + l + sovFlyfishServer(uint64(l))
+		}
+	}
+	return n
+}
+
+func (m *UpdateMetaResp) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	n += 2
+	l = len(m.Reason)
+	n += 1 + l + sovFlyfishServer(uint64(l))
+	return n
+}
+
+func (m *GetMeta) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	return n
+}
+
+func (m *GetMetaResp) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	n += 1 + sovFlyfishServer(uint64(m.Version))
+	if m.Meta != nil {
+		l = len(m.Meta)
+		n += 1 + l + sovFlyfishServer(uint64(l))
+	}
+	return n
+}
+
 func sovFlyfishServer(x uint64) (n int) {
 	return (math_bits.Len64(x|1) + 6) / 7
 }
@@ -5954,6 +7063,101 @@ func (this *ChangeFlyGateResp) String() string {
 	s := strings.Join([]string{`&ChangeFlyGateResp{`,
 		`Ok:` + fmt.Sprintf("%v", this.Ok) + `,`,
 		`Service:` + fmt.Sprintf("%v", this.Service) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SetMeta) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&SetMeta{`,
+		`Meta:` + fmt.Sprintf("%v", this.Meta) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SetMetaResp) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&SetMetaResp{`,
+		`Ok:` + fmt.Sprintf("%v", this.Ok) + `,`,
+		`Reason:` + fmt.Sprintf("%v", this.Reason) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *MetaFiled) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&MetaFiled{`,
+		`Name:` + fmt.Sprintf("%v", this.Name) + `,`,
+		`Type:` + fmt.Sprintf("%v", this.Type) + `,`,
+		`Default:` + fmt.Sprintf("%v", this.Default) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *MetaTable) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForFields := "[]*MetaFiled{"
+	for _, f := range this.Fields {
+		repeatedStringForFields += strings.Replace(fmt.Sprintf("%v", f), "MetaFiled", "MetaFiled", 1) + ","
+	}
+	repeatedStringForFields += "}"
+	s := strings.Join([]string{`&MetaTable{`,
+		`Name:` + fmt.Sprintf("%v", this.Name) + `,`,
+		`Fields:` + repeatedStringForFields + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *UpdateMeta) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForUpdates := "[]*MetaTable{"
+	for _, f := range this.Updates {
+		repeatedStringForUpdates += strings.Replace(fmt.Sprintf("%v", f), "MetaTable", "MetaTable", 1) + ","
+	}
+	repeatedStringForUpdates += "}"
+	s := strings.Join([]string{`&UpdateMeta{`,
+		`Updates:` + repeatedStringForUpdates + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *UpdateMetaResp) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&UpdateMetaResp{`,
+		`Ok:` + fmt.Sprintf("%v", this.Ok) + `,`,
+		`Reason:` + fmt.Sprintf("%v", this.Reason) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *GetMeta) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&GetMeta{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *GetMetaResp) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&GetMetaResp{`,
+		`Version:` + fmt.Sprintf("%v", this.Version) + `,`,
+		`Meta:` + fmt.Sprintf("%v", this.Meta) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -10065,6 +11269,817 @@ func (m *ChangeFlyGateResp) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Service = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *SetMeta) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFlyfishServer
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: setMeta: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: setMeta: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Meta", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Meta = append(m.Meta[:0], dAtA[iNdEx:postIndex]...)
+			if m.Meta == nil {
+				m.Meta = []byte{}
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *SetMetaResp) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFlyfishServer
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: setMetaResp: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: setMetaResp: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Ok", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Ok = bool(v != 0)
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Reason", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Reason = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *MetaFiled) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFlyfishServer
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: metaFiled: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: metaFiled: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Name", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Name = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Type", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Type = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Default", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Default = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *MetaTable) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFlyfishServer
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: metaTable: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: metaTable: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Name", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Name = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Fields", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Fields = append(m.Fields, &MetaFiled{})
+			if err := m.Fields[len(m.Fields)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *UpdateMeta) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFlyfishServer
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: updateMeta: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: updateMeta: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Updates", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Updates = append(m.Updates, &MetaTable{})
+			if err := m.Updates[len(m.Updates)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *UpdateMetaResp) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFlyfishServer
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: updateMetaResp: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: updateMetaResp: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Ok", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Ok = bool(v != 0)
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Reason", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Reason = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetMeta) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFlyfishServer
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: getMeta: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: getMeta: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetMetaResp) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFlyfishServer
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: getMetaResp: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: getMetaResp: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
+			}
+			m.Version = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Version |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Meta", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Meta = append(m.Meta[:0], dAtA[iNdEx:postIndex]...)
+			if m.Meta == nil {
+				m.Meta = []byte{}
+			}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

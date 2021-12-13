@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/queue"
@@ -124,6 +125,10 @@ func (f *flygateMgr) onHeartBeat(gateService string, token string, msgPerSecond 
 	g.msgPerSecond = msgPerSecond
 }
 
+//type persistenceState struct {
+//	 DeploymentJson
+//}
+
 type pd struct {
 	id              int
 	leader          int
@@ -146,6 +151,8 @@ type pd struct {
 	config          *Config
 	udpService      string
 	onBalanceFinish func()
+	meta            Meta
+	metaTransaction *MetaTransaction
 }
 
 func NewPd(id int, config *Config, udpService string, cluster string) *pd {
@@ -368,9 +375,7 @@ func (p *pd) startUdpService() error {
 }
 
 func (p *pd) onBecomeLeader() {
-
 	if nil != p.deployment {
-
 		//重置slotBalance相关的临时数据
 		for _, v := range p.deployment.sets {
 			v.SlotOutCount = 0
@@ -593,7 +598,12 @@ func (p *pd) getSnapshot() ([]byte, error) {
 		return nil, err
 	}
 
-	b := make([]byte, 0, 4*4+len(jsonDeployment)+len(jsonAddingNode)+len(jsonRemovingNode)+len(jsonSlotTransfer))
+	jsonMeta, err := json.Marshal(&p.meta)
+	if nil != err {
+		return nil, err
+	}
+
+	b := make([]byte, 0, 4*5+len(jsonDeployment)+len(jsonAddingNode)+len(jsonRemovingNode)+len(jsonSlotTransfer)+len(jsonMeta))
 
 	b = buffer.AppendInt32(b, int32(len(jsonDeployment)))
 	b = buffer.AppendBytes(b, jsonDeployment)
@@ -606,6 +616,9 @@ func (p *pd) getSnapshot() ([]byte, error) {
 
 	b = buffer.AppendInt32(b, int32(len(jsonSlotTransfer)))
 	b = buffer.AppendBytes(b, jsonSlotTransfer)
+
+	b = buffer.AppendInt32(b, int32(len(jsonMeta)))
+	b = buffer.AppendBytes(b, jsonMeta)
 
 	return b, nil
 }
@@ -658,6 +671,28 @@ func (p *pd) recoverFromSnapshot(b []byte) error {
 		v.pd = p
 		p.slotTransfer[int(v.Slot)] = v
 	}
+
+	l5 := reader.GetInt32()
+	var meta Meta
+	err = json.Unmarshal(reader.GetBytes(int(l5)), &meta)
+	if nil != err {
+		return err
+	}
+
+	def, err := db.CreateDbDefFromJsonString(meta.MetaBytes)
+	if nil != err {
+		return err
+	}
+
+	for _, v := range p.deployment.sets {
+		if v.markClear {
+			p.markClearSet[v.id] = v
+		}
+	}
+
+	p.meta.Version = meta.Version
+	p.meta.metaDef = def
+	p.meta.MetaBytes = meta.MetaBytes
 
 	return nil
 }

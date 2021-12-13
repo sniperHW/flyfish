@@ -197,3 +197,30 @@ func (p *pd) beginSlotTransfer(slot int, setOut int, storeOut int, setIn int, st
 		},
 	})
 }
+
+func (p *pd) onNotifySlotTransOutResp(from *net.UDPAddr, m *snet.Message) {
+	msg := m.Msg.(*sproto.NotifySlotTransOutResp)
+	if t, ok := p.slotTransfer[int(msg.Slot)]; ok && t.context == m.Context {
+		if !t.StoreTransferOutOk {
+			p.issueProposal(&ProposalNotifySlotTransOutResp{
+				slot: int(msg.Slot),
+				proposalBase: &proposalBase{
+					pd: p,
+				},
+			})
+
+		}
+	}
+}
+
+func (p *pd) onNotifySlotTransInResp(from *net.UDPAddr, m *snet.Message) {
+	msg := m.Msg.(*sproto.NotifySlotTransInResp)
+	if t, ok := p.slotTransfer[int(msg.Slot)]; ok && t.context == m.Context {
+		p.issueProposal(&ProposalNotifySlotTransInResp{
+			slot: int(msg.Slot),
+			proposalBase: &proposalBase{
+				pd: p,
+			},
+		})
+	}
+}

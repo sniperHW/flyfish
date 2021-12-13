@@ -229,6 +229,15 @@ func init() {
 	namespace.Register(&sproto.SetMarkClear{}, uint32(sproto.ServerCmdType_SetMarkClear))
 	namespace.Register(&sproto.SetMarkClearResp{}, uint32(sproto.ServerCmdType_SetMarkClearResp))
 
+	namespace.Register(&sproto.SetMeta{}, uint32(sproto.ServerCmdType_SetMeta))
+	namespace.Register(&sproto.SetMetaResp{}, uint32(sproto.ServerCmdType_SetMetaResp))
+
+	namespace.Register(&sproto.UpdateMeta{}, uint32(sproto.ServerCmdType_UpdateMeta))
+	namespace.Register(&sproto.UpdateMetaResp{}, uint32(sproto.ServerCmdType_UpdateMetaResp))
+
+	namespace.Register(&sproto.GetMeta{}, uint32(sproto.ServerCmdType_GetMeta))
+	namespace.Register(&sproto.GetMetaResp{}, uint32(sproto.ServerCmdType_GetMetaResp))
+
 	//flykv <-> pd
 	namespace.Register(&sproto.KvnodeBoot{}, uint32(sproto.ServerCmdType_KvnodeBoot))
 	namespace.Register(&sproto.KvnodeBootResp{}, uint32(sproto.ServerCmdType_KvnodeBootResp))

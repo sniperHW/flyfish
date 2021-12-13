@@ -30,12 +30,50 @@ type FieldDef struct {
 }
 
 type TableDef struct {
-	Name   string     `json:"Name,omitempty"`
-	Fields []FieldDef `json:"Fields,omitempty"`
+	Name   string      `json:"Name,omitempty"`
+	Fields []*FieldDef `json:"Fields,omitempty"`
+}
+
+func (t *TableDef) GetField(n string) *FieldDef {
+	for i, v := range t.Fields {
+		if v.Name == n {
+			return t.Fields[i]
+		}
+	}
+	return nil
+}
+
+func (t *TableDef) Clone() *TableDef {
+	ret := TableDef{
+		Name: t.Name,
+	}
+
+	for _, v := range t.Fields {
+		ret.Fields = append(ret.Fields, v)
+	}
+
+	return &ret
 }
 
 type DbDef struct {
-	TableDefs []TableDef
+	TableDefs []*TableDef
+}
+
+func (d *DbDef) GetTableDef(n string) *TableDef {
+	for i, v := range d.TableDefs {
+		if v.Name == n {
+			return d.TableDefs[i]
+		}
+	}
+	return nil
+}
+
+func (d *DbDef) Clone() *DbDef {
+	var ret DbDef
+	for _, v := range d.TableDefs {
+		ret.TableDefs = append(ret.TableDefs, v.Clone())
+	}
+	return &ret
 }
 
 func CreateDbDefFromJsonString(s []byte) (*DbDef, error) {
@@ -60,7 +98,7 @@ func CreateDbDefFromCsv(s []string) (*DbDef, error) {
 			return nil, fmt.Errorf("1 invaild table format(表名@字段1:类型:默认值,字段2:类型:默认值,...) %s", l)
 		}
 
-		tdef := TableDef{
+		tdef := &TableDef{
 			Name: t1[0],
 		}
 
@@ -78,7 +116,7 @@ func CreateDbDefFromCsv(s []string) (*DbDef, error) {
 					return nil, fmt.Errorf("3 invaild table format(表名@字段1:类型:默认值,字段2:类型:默认值,...) %s", l)
 				}
 
-				tdef.Fields = append(tdef.Fields, FieldDef{
+				tdef.Fields = append(tdef.Fields, &FieldDef{
 					Name:        field[0],
 					Type:        field[1],
 					DefautValue: field[2],

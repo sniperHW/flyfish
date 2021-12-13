@@ -30,6 +30,12 @@ enum ServerCmdType {
   RemSetResp                    = 110;
   SetMarkClear                  = 111;
   SetMarkClearResp              = 112;
+  SetMeta                       = 113;
+  SetMetaResp                   = 114;
+  GetMeta                       = 115;
+  GetMetaResp                   = 116;
+  UpdateMeta                    = 117;
+  UpdateMetaResp                = 118;
 
 
   //kvnode <-> pd
@@ -262,5 +268,46 @@ message changeFlyGateResp {
   optional bool ok        = 1;
   optional string service = 2;
 }
+
+
+message setMeta {
+  optional bytes meta     = 1;
+}
+
+message setMetaResp {
+  optional bool  ok       = 1;  
+  optional string reason  = 2;  
+}
+
+message metaFiled {
+  optional string name    = 1;
+  optional string type    = 2;
+  optional string default = 3;
+}
+
+message metaTable {
+  optional string name      = 1;
+  repeated metaFiled fields = 2;
+}
+
+message updateMeta {
+  repeated metaTable updates = 1;
+}
+
+message updateMetaResp {
+  optional bool  ok       = 1;  
+  optional string reason  = 2;  
+}
+
+
+message getMeta {
+ 
+}
+
+message getMetaResp {
+  optional int64 version  = 1;
+  optional bytes meta     = 2;
+}
+
 
 

@@ -47,14 +47,14 @@ func TestDbmeta1(t *testing.T) {
 			Type: "blob",
 		}
 
-		t1.Fields = append(t1.Fields, field1)
-		t1.Fields = append(t1.Fields, field2)
-		t1.Fields = append(t1.Fields, field3)
-		t1.Fields = append(t1.Fields, field4)
-		t1.Fields = append(t1.Fields, field5)
+		t1.Fields = append(t1.Fields, &field1)
+		t1.Fields = append(t1.Fields, &field2)
+		t1.Fields = append(t1.Fields, &field3)
+		t1.Fields = append(t1.Fields, &field4)
+		t1.Fields = append(t1.Fields, &field5)
 	}
 
-	m.TableDefs = append(m.TableDefs, t1)
+	m.TableDefs = append(m.TableDefs, &t1)
 
 	defStr, err := db.DbDefToJsonString(&m)
 	assert.Nil(t, err)
