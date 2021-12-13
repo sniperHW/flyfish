@@ -145,7 +145,7 @@ func (d deployment) queryRouteInfo(req *sproto.QueryRouteInfo) *sproto.QueryRout
 	return resp
 }
 
-func (d deployment) toJson() ([]byte, error) {
+func (d deployment) toDeploymentJson() DeploymentJson {
 	var deploymentJson DeploymentJson
 	deploymentJson.Version = d.version
 	for _, v := range d.sets {
@@ -174,18 +174,17 @@ func (d deployment) toJson() ([]byte, error) {
 		deploymentJson.Sets = append(deploymentJson.Sets, setJson)
 	}
 
+	return deploymentJson
+}
+
+func (d deployment) toJson() ([]byte, error) {
+	deploymentJson := d.toDeploymentJson()
 	return json.Marshal(&deploymentJson)
 }
 
-func (d *deployment) loadFromJson(jsonBytes []byte) error {
-	d.sets = map[int]*set{}
-
-	var deploymentJson DeploymentJson
+func (d *deployment) loadFromDeploymentJson(deploymentJson *DeploymentJson) error {
 	var err error
-	if err = json.Unmarshal(jsonBytes, &deploymentJson); err != nil {
-		return err
-	}
-
+	d.sets = map[int]*set{}
 	d.version = deploymentJson.Version
 	for _, v := range deploymentJson.Sets {
 		s := &set{
@@ -224,6 +223,16 @@ func (d *deployment) loadFromJson(jsonBytes []byte) error {
 
 	return nil
 
+}
+
+func (d *deployment) loadFromJson(jsonBytes []byte) error {
+	var deploymentJson DeploymentJson
+	var err error
+	if err = json.Unmarshal(jsonBytes, &deploymentJson); err != nil {
+		return err
+	} else {
+		return d.loadFromDeploymentJson(&deploymentJson)
+	}
 }
 
 func (d *deployment) loadFromPB(sets []*sproto.DeploymentSet) error {
@@ -778,7 +787,7 @@ func (p *pd) onAddNode(from *net.UDPAddr, m *snet.Message) {
 		return
 	}
 
-	_, ok := p.addingNode[int(msg.NodeID)]
+	_, ok := p.pState.AddingNode[int(msg.NodeID)]
 	if ok {
 		p.udp.SendTo(from, snet.MakeMessage(m.Context,
 			&sproto.AddNodeResp{
@@ -865,7 +874,7 @@ func (p *pd) onAddNode(from *net.UDPAddr, m *snet.Message) {
 func (p *pd) onNotifyAddNodeResp(from *net.UDPAddr, m *snet.Message) {
 
 	msg := m.Msg.(*sproto.NotifyAddNodeResp)
-	an, ok := p.addingNode[int(msg.NodeID)]
+	an, ok := p.pState.AddingNode[int(msg.NodeID)]
 	if ok && an.context == m.Context {
 
 		find := false
@@ -898,7 +907,7 @@ func (p *pd) onRemNode(from *net.UDPAddr, m *snet.Message) {
 		return
 	}
 
-	_, ok := p.removingNode[int(msg.NodeID)]
+	_, ok := p.pState.RemovingNode[int(msg.NodeID)]
 	if ok {
 		p.udp.SendTo(from, snet.MakeMessage(m.Context,
 			&sproto.RemNodeResp{
@@ -972,7 +981,7 @@ func (p *pd) onRemNode(from *net.UDPAddr, m *snet.Message) {
 
 func (p *pd) onNotifyRemNodeResp(from *net.UDPAddr, m *snet.Message) {
 	msg := m.Msg.(*sproto.NotifyRemNodeResp)
-	rn, ok := p.removingNode[int(msg.NodeID)]
+	rn, ok := p.pState.RemovingNode[int(msg.NodeID)]
 	if ok && rn.context == m.Context {
 		find := false
 		for i := 0; i < len(rn.OkStores); i++ {

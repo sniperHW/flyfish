@@ -66,8 +66,8 @@ func (p *ProposalBeginSlotTransfer) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalBeginSlotTransfer) apply() {
-	if _, ok := p.pd.slotTransfer[p.trans.Slot]; !ok {
-		p.pd.slotTransfer[p.trans.Slot] = p.trans
+	if _, ok := p.pd.pState.SlotTransfer[p.trans.Slot]; !ok {
+		p.pd.pState.SlotTransfer[p.trans.Slot] = p.trans
 
 		storeIn := p.pd.deployment.sets[p.trans.SetIn].stores[p.trans.StoreTransferIn]
 		storeIn.SlotInCount++
@@ -91,8 +91,8 @@ func (p *pd) replayBeginSlotTransfer(reader *buffer.BufferReader) error {
 		return err
 	}
 	trans.pd = p
-	if _, ok := p.slotTransfer[trans.Slot]; !ok {
-		p.slotTransfer[trans.Slot] = &trans
+	if _, ok := p.pState.SlotTransfer[trans.Slot]; !ok {
+		p.pState.SlotTransfer[trans.Slot] = &trans
 	}
 	return nil
 }
@@ -108,7 +108,7 @@ func (p *ProposalNotifySlotTransOutResp) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalNotifySlotTransOutResp) apply() {
-	if t, ok := p.pd.slotTransfer[p.slot]; ok {
+	if t, ok := p.pd.pState.SlotTransfer[p.slot]; ok {
 		if !t.StoreTransferOutOk {
 			t.StoreTransferOutOk = true
 			s := p.pd.deployment.sets[t.SetOut]
@@ -128,7 +128,7 @@ func (p *ProposalNotifySlotTransOutResp) apply() {
 
 func (p *pd) replayNotifySlotTransOutResp(reader *buffer.BufferReader) error {
 	slot := int(reader.GetInt32())
-	if t, ok := p.slotTransfer[slot]; ok {
+	if t, ok := p.pState.SlotTransfer[slot]; ok {
 		t.StoreTransferOutOk = true
 		s := p.deployment.sets[t.SetOut]
 		st := s.stores[t.StoreTransferOut]
@@ -150,8 +150,8 @@ func (p *ProposalNotifySlotTransInResp) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalNotifySlotTransInResp) apply() {
-	if t, ok := p.pd.slotTransfer[p.slot]; ok {
-		delete(p.pd.slotTransfer, p.slot)
+	if t, ok := p.pd.pState.SlotTransfer[p.slot]; ok {
+		delete(p.pd.pState.SlotTransfer, p.slot)
 		s := p.pd.deployment.sets[t.SetIn]
 		s.SlotInCount--
 		st := s.stores[t.StoreTransferIn]
@@ -168,8 +168,8 @@ func (p *ProposalNotifySlotTransInResp) apply() {
 
 func (p *pd) replayNotifySlotTransInResp(reader *buffer.BufferReader) error {
 	slot := int(reader.GetInt32())
-	if t, ok := p.slotTransfer[slot]; ok {
-		delete(p.slotTransfer, slot)
+	if t, ok := p.pState.SlotTransfer[slot]; ok {
+		delete(p.pState.SlotTransfer, slot)
 		s := p.deployment.sets[t.SetIn]
 		st := s.stores[t.StoreTransferIn]
 		st.slots.Set(int(t.Slot))
@@ -200,7 +200,7 @@ func (p *pd) beginSlotTransfer(slot int, setOut int, storeOut int, setIn int, st
 
 func (p *pd) onNotifySlotTransOutResp(from *net.UDPAddr, m *snet.Message) {
 	msg := m.Msg.(*sproto.NotifySlotTransOutResp)
-	if t, ok := p.slotTransfer[int(msg.Slot)]; ok && t.context == m.Context {
+	if t, ok := p.pState.SlotTransfer[int(msg.Slot)]; ok && t.context == m.Context {
 		if !t.StoreTransferOutOk {
 			p.issueProposal(&ProposalNotifySlotTransOutResp{
 				slot: int(msg.Slot),
@@ -215,7 +215,7 @@ func (p *pd) onNotifySlotTransOutResp(from *net.UDPAddr, m *snet.Message) {
 
 func (p *pd) onNotifySlotTransInResp(from *net.UDPAddr, m *snet.Message) {
 	msg := m.Msg.(*sproto.NotifySlotTransInResp)
-	if t, ok := p.slotTransfer[int(msg.Slot)]; ok && t.context == m.Context {
+	if t, ok := p.pState.SlotTransfer[int(msg.Slot)]; ok && t.context == m.Context {
 		p.issueProposal(&ProposalNotifySlotTransInResp{
 			slot: int(msg.Slot),
 			proposalBase: &proposalBase{

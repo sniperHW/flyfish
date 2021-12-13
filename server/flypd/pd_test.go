@@ -108,13 +108,15 @@ func TestSnapShot(t *testing.T) {
 	d.sets[1] = set1
 
 	p1 := &pd{
-		deployment:   d,
-		addingNode:   map[int]*AddingNode{},
-		removingNode: map[int]*RemovingNode{},
-		slotTransfer: map[int]*TransSlotTransfer{},
+		deployment: d,
+		pState: persistenceState{
+			AddingNode:   map[int]*AddingNode{},
+			RemovingNode: map[int]*RemovingNode{},
+			SlotTransfer: map[int]*TransSlotTransfer{},
+		},
 	}
 
-	p1.addingNode[11] = &AddingNode{
+	p1.pState.AddingNode[11] = &AddingNode{
 		KvNodeJson: KvNodeJson{
 			NodeID:      11,
 			Host:        "192.168.0.11",
@@ -124,12 +126,12 @@ func TestSnapShot(t *testing.T) {
 		SetID: 1,
 	}
 
-	p1.removingNode[3] = &RemovingNode{
+	p1.pState.RemovingNode[3] = &RemovingNode{
 		NodeID: 3,
 		SetID:  1,
 	}
 
-	p1.slotTransfer[2] = &TransSlotTransfer{
+	p1.pState.SlotTransfer[2] = &TransSlotTransfer{
 		Slot:             2,
 		SetOut:           1,
 		StoreTransferOut: 1,
@@ -144,9 +146,12 @@ func TestSnapShot(t *testing.T) {
 	assert.Nil(t, err)
 
 	p2 := &pd{
-		addingNode:   map[int]*AddingNode{},
-		removingNode: map[int]*RemovingNode{},
-		slotTransfer: map[int]*TransSlotTransfer{},
+		deployment: &deployment{},
+		pState: persistenceState{
+			AddingNode:   map[int]*AddingNode{},
+			RemovingNode: map[int]*RemovingNode{},
+			SlotTransfer: map[int]*TransSlotTransfer{},
+		},
 	}
 
 	err = p2.recoverFromSnapshot(bytes)
@@ -161,11 +166,11 @@ func TestSnapShot(t *testing.T) {
 
 	assert.Equal(t, false, p2.deployment.sets[1].stores[2].slots.Test(0))
 
-	assert.Equal(t, 1, p2.addingNode[11].SetID)
+	assert.Equal(t, 1, p2.pState.AddingNode[11].SetID)
 
-	assert.Equal(t, 3, p2.removingNode[3].NodeID)
+	assert.Equal(t, 3, p2.pState.RemovingNode[3].NodeID)
 
-	assert.Equal(t, 2, p2.slotTransfer[2].Slot)
+	assert.Equal(t, 2, p2.pState.SlotTransfer[2].Slot)
 
 }
 

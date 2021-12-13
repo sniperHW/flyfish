@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/queue"
@@ -125,9 +124,14 @@ func (f *flygateMgr) onHeartBeat(gateService string, token string, msgPerSecond 
 	g.msgPerSecond = msgPerSecond
 }
 
-//type persistenceState struct {
-//	 DeploymentJson
-//}
+type persistenceState struct {
+	Deployment      DeploymentJson
+	AddingNode      map[int]*AddingNode
+	RemovingNode    map[int]*RemovingNode
+	SlotTransfer    map[int]*TransSlotTransfer
+	Meta            Meta
+	MetaTransaction *MetaTransaction
+}
 
 type pd struct {
 	id              int
@@ -136,10 +140,6 @@ type pd struct {
 	mutilRaft       *raft.MutilRaft
 	mainque         applicationQueue
 	udp             *flynet.Udp
-	deployment      *deployment
-	addingNode      map[int]*AddingNode
-	removingNode    map[int]*RemovingNode
-	slotTransfer    map[int]*TransSlotTransfer
 	markClearSet    map[int]*set
 	msgHandler      map[reflect.Type]func(*net.UDPAddr, *snet.Message)
 	stoponce        int32
@@ -151,8 +151,8 @@ type pd struct {
 	config          *Config
 	udpService      string
 	onBalanceFinish func()
-	meta            Meta
-	metaTransaction *MetaTransaction
+	deployment      *deployment
+	pState          persistenceState
 }
 
 func NewPd(id int, config *Config, udpService string, cluster string) *pd {
@@ -165,9 +165,6 @@ func NewPd(id int, config *Config, udpService string, cluster string) *pd {
 		id:           id,
 		mainque:      mainQueue,
 		msgHandler:   map[reflect.Type]func(*net.UDPAddr, *snet.Message){},
-		addingNode:   map[int]*AddingNode{},
-		removingNode: map[int]*RemovingNode{},
-		slotTransfer: map[int]*TransSlotTransfer{},
 		markClearSet: map[int]*set{},
 		flygateMgr: flygateMgr{
 			flygateMap: map[string]*flygate{},
@@ -176,6 +173,11 @@ func NewPd(id int, config *Config, udpService string, cluster string) *pd {
 		raftCluster: cluster,
 		config:      config,
 		udpService:  udpService,
+		pState: persistenceState{
+			AddingNode:   map[int]*AddingNode{},
+			RemovingNode: map[int]*RemovingNode{},
+			SlotTransfer: map[int]*TransSlotTransfer{},
+		},
 	}
 
 	p.initMsgHandler()
@@ -213,7 +215,7 @@ func (p *pd) getNode(nodeID int32) *kvnode {
 }
 
 func (p *pd) slotBalance() {
-	if len(p.slotTransfer) >= CurrentTransferCount {
+	if len(p.pState.SlotTransfer) >= CurrentTransferCount {
 		return
 	}
 
@@ -274,7 +276,7 @@ func (p *pd) slotBalance() {
 		if nil != inStore && nil != outStore {
 			//从outStore选出一个slot
 			for _, v := range outStore.slots.GetOpenBits() {
-				if _, ok := p.slotTransfer[v]; !ok {
+				if _, ok := p.pState.SlotTransfer[v]; !ok {
 					p.beginSlotTransfer(v, outStore.set.id, outStore.id, inStore.set.id, inStore.id)
 					return
 				}
@@ -282,7 +284,7 @@ func (p *pd) slotBalance() {
 		}
 	}
 
-	if len(p.slotTransfer) == 0 && nil != p.onBalanceFinish {
+	if len(p.pState.SlotTransfer) == 0 && nil != p.onBalanceFinish {
 		p.onBalanceFinish()
 	}
 
@@ -384,7 +386,7 @@ func (p *pd) onBecomeLeader() {
 				vv.SlotOutCount = 0
 				vv.SlotInCount = 0
 				for _, vvv := range vv.slots.GetOpenBits() {
-					if t, ok := p.slotTransfer[vvv]; ok {
+					if t, ok := p.pState.SlotTransfer[vvv]; ok {
 						if vvv == t.StoreTransferIn {
 							vv.SlotInCount++
 							v.SlotInCount++
@@ -399,38 +401,43 @@ func (p *pd) onBecomeLeader() {
 
 		p.slotBalance()
 
-		for _, v := range p.addingNode {
+		for _, v := range p.pState.AddingNode {
 			p.sendNotifyAddNode(v)
 			v.timer = time.AfterFunc(time.Second*3, func() {
 				p.mainque.AppendHighestPriotiryItem(v)
 			})
 		}
 
-		for _, v := range p.removingNode {
+		for _, v := range p.pState.RemovingNode {
 			p.sendNotifyRemNode(v)
 			v.timer = time.AfterFunc(time.Second*3, func() {
 				p.mainque.AppendHighestPriotiryItem(v)
 			})
 		}
 
-		for _, v := range p.slotTransfer {
+		for _, v := range p.pState.SlotTransfer {
 			v.notify()
 		}
+	}
+
+	if nil != p.pState.MetaTransaction && p.pState.MetaTransaction.Prepareing {
+		//上次做leader时尚未提交的事务，在下次成为leader时要清除
+		p.pState.MetaTransaction = nil
 	}
 }
 
 func (p *pd) onLeaderDemote() {
-	for _, v := range p.addingNode {
+	for _, v := range p.pState.AddingNode {
 		v.timer.Stop()
 		v.timer = nil
 	}
 
-	for _, v := range p.removingNode {
+	for _, v := range p.pState.RemovingNode {
 		v.timer.Stop()
 		v.timer = nil
 	}
 
-	for _, v := range p.slotTransfer {
+	for _, v := range p.pState.SlotTransfer {
 		v.timer.Stop()
 		v.timer = nil
 	}
@@ -470,7 +477,7 @@ func (p *pd) processCommited(commited raft.Committed) {
 }
 
 func (p *pd) onAddNodeTimeout(an *AddingNode) {
-	ann := p.addingNode[an.NodeID]
+	ann := p.pState.AddingNode[an.NodeID]
 	if ann == an {
 		p.sendNotifyAddNode(an)
 		an.timer = time.AfterFunc(time.Second*3, func() {
@@ -480,7 +487,7 @@ func (p *pd) onAddNodeTimeout(an *AddingNode) {
 }
 
 func (p *pd) onRemNodeTimeout(rn *RemovingNode) {
-	rnn := p.removingNode[rn.NodeID]
+	rnn := p.pState.RemovingNode[rn.NodeID]
 	if rnn == rn {
 		p.sendNotifyRemNode(rn)
 		rn.timer = time.AfterFunc(time.Second*3, func() {
@@ -546,7 +553,7 @@ func (p *pd) serve() {
 				}
 			case *TransSlotTransfer:
 				if p.isLeader() {
-					if _, ok := p.slotTransfer[v.(*TransSlotTransfer).Slot]; ok {
+					if _, ok := p.pState.SlotTransfer[v.(*TransSlotTransfer).Slot]; ok {
 						v.(*TransSlotTransfer).notify()
 					}
 				}
@@ -560,128 +567,39 @@ func (p *pd) serve() {
 
 func (p *pd) getSnapshot() ([]byte, error) {
 
-	jsonDeployment, err := p.deployment.toJson()
-	if nil != err {
-		return nil, err
-	}
+	p.pState.Deployment = p.deployment.toDeploymentJson()
 
-	var addingNode []*AddingNode
-	for _, v := range p.addingNode {
-		addingNode = append(addingNode, v)
-	}
-
-	jsonAddingNode, err := json.Marshal(&addingNode)
+	persistenceState, err := json.Marshal(&p.pState)
 
 	if nil != err {
 		return nil, err
 	}
 
-	var removingNode []*RemovingNode
-	for _, v := range p.removingNode {
-		removingNode = append(removingNode, v)
-	}
+	b := make([]byte, 0, 4+len(persistenceState))
 
-	jsonRemovingNode, err := json.Marshal(&removingNode)
-
-	if nil != err {
-		return nil, err
-	}
-
-	var slotTransfer []*TransSlotTransfer
-	for _, v := range p.slotTransfer {
-		slotTransfer = append(slotTransfer, v)
-	}
-
-	jsonSlotTransfer, err := json.Marshal(&slotTransfer)
-
-	if nil != err {
-		return nil, err
-	}
-
-	jsonMeta, err := json.Marshal(&p.meta)
-	if nil != err {
-		return nil, err
-	}
-
-	b := make([]byte, 0, 4*5+len(jsonDeployment)+len(jsonAddingNode)+len(jsonRemovingNode)+len(jsonSlotTransfer)+len(jsonMeta))
-
-	b = buffer.AppendInt32(b, int32(len(jsonDeployment)))
-	b = buffer.AppendBytes(b, jsonDeployment)
-
-	b = buffer.AppendInt32(b, int32(len(jsonAddingNode)))
-	b = buffer.AppendBytes(b, jsonAddingNode)
-
-	b = buffer.AppendInt32(b, int32(len(jsonRemovingNode)))
-	b = buffer.AppendBytes(b, jsonRemovingNode)
-
-	b = buffer.AppendInt32(b, int32(len(jsonSlotTransfer)))
-	b = buffer.AppendBytes(b, jsonSlotTransfer)
-
-	b = buffer.AppendInt32(b, int32(len(jsonMeta)))
-	b = buffer.AppendBytes(b, jsonMeta)
-
+	b = buffer.AppendInt32(b, int32(len(persistenceState)))
+	b = buffer.AppendBytes(b, persistenceState)
 	return b, nil
 }
 
 func (p *pd) recoverFromSnapshot(b []byte) error {
 	reader := buffer.NewReader(b)
-	l1 := reader.GetInt32()
+	l := reader.GetInt32()
 
-	var d deployment
-	err := d.loadFromJson(reader.GetBytes(int(l1)))
-	p.deployment = &d
+	err := json.Unmarshal(reader.GetBytes(int(l)), &p.pState)
 
 	if nil != err {
 		return err
 	}
 
-	l2 := reader.GetInt32()
-	var addingNode []*AddingNode
+	err = p.deployment.loadFromDeploymentJson(&p.pState.Deployment)
 
-	err = json.Unmarshal(reader.GetBytes(int(l2)), &addingNode)
 	if nil != err {
 		return err
 	}
 
-	for _, v := range addingNode {
-		p.addingNode[int(v.NodeID)] = v
-	}
-
-	l3 := reader.GetInt32()
-	var removingNode []*RemovingNode
-
-	err = json.Unmarshal(reader.GetBytes(int(l3)), &removingNode)
-	if nil != err {
-		return err
-	}
-
-	for _, v := range removingNode {
-		p.removingNode[int(v.NodeID)] = v
-	}
-
-	l4 := reader.GetInt32()
-	var slotTransfer []*TransSlotTransfer
-
-	err = json.Unmarshal(reader.GetBytes(int(l4)), &slotTransfer)
-	if nil != err {
-		return err
-	}
-
-	for _, v := range slotTransfer {
+	for _, v := range p.pState.SlotTransfer {
 		v.pd = p
-		p.slotTransfer[int(v.Slot)] = v
-	}
-
-	l5 := reader.GetInt32()
-	var meta Meta
-	err = json.Unmarshal(reader.GetBytes(int(l5)), &meta)
-	if nil != err {
-		return err
-	}
-
-	def, err := db.CreateDbDefFromJsonString(meta.MetaBytes)
-	if nil != err {
-		return err
 	}
 
 	for _, v := range p.deployment.sets {
@@ -689,10 +607,6 @@ func (p *pd) recoverFromSnapshot(b []byte) error {
 			p.markClearSet[v.id] = v
 		}
 	}
-
-	p.meta.Version = meta.Version
-	p.meta.metaDef = def
-	p.meta.MetaBytes = meta.MetaBytes
 
 	return nil
 }

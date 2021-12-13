@@ -16,7 +16,7 @@ import (
 type Meta struct {
 	Version   int64
 	MetaBytes []byte
-	metaDef   *db.DbDef
+	MetaDef   *db.DbDef
 }
 
 func (m Meta) isEqual(b []byte) bool {
@@ -81,8 +81,8 @@ func (p *pd) checkMeta(meta []byte) (*db.DbDef, error) {
 func (p *pd) onGetMeta(from *net.UDPAddr, m *snet.Message) {
 	p.udp.SendTo(from, snet.MakeMessage(m.Context,
 		&sproto.GetMetaResp{
-			Version: p.meta.Version,
-			Meta:    p.meta.MetaBytes,
+			Version: p.pState.Meta.Version,
+			Meta:    p.pState.Meta.MetaBytes,
 		}))
 }
 
@@ -99,9 +99,9 @@ func (p *ProposalSetMeta) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalSetMeta) apply() {
-	p.pd.meta.Version++
-	p.pd.meta.metaDef = p.metaDef
-	p.pd.meta.MetaBytes = p.metaBytes
+	p.pd.pState.Meta.Version++
+	p.pd.pState.Meta.MetaDef = p.metaDef
+	p.pd.pState.Meta.MetaBytes = p.metaBytes
 	if nil != p.reply {
 		p.reply()
 	}
@@ -124,9 +124,9 @@ func (p *pd) replaySetMeta(reader *buffer.BufferReader) error {
 		return err
 	}
 
-	p.meta.Version++
-	p.meta.metaDef = def
-	p.meta.MetaBytes = b
+	p.pState.Meta.Version++
+	p.pState.Meta.MetaDef = def
+	p.pState.Meta.MetaBytes = b
 
 	return nil
 }
@@ -138,7 +138,7 @@ func (p *pd) replaySetMeta(reader *buffer.BufferReader) error {
 func (p *pd) onSetMeta(from *net.UDPAddr, m *snet.Message) {
 	msg := m.Msg.(*sproto.SetMeta)
 
-	if p.meta.isEqual(msg.Meta) {
+	if p.pState.Meta.isEqual(msg.Meta) {
 		p.udp.SendTo(from, snet.MakeMessage(m.Context,
 			&sproto.SetMetaResp{
 				Ok: true,
@@ -208,21 +208,21 @@ type ProposalUpdateMeta struct {
 
 func (p *ProposalUpdateMeta) Serilize(b []byte) []byte {
 	b = buffer.AppendByte(b, byte(proposalUpdateMeta))
-	j, _ := json.Marshal(p.pd.metaTransaction)
+	j, _ := json.Marshal(p.pd.pState.MetaTransaction)
 	b = buffer.AppendUint32(b, uint32(len(j)))
 	return buffer.AppendBytes(b, j)
 }
 
 func (p *ProposalUpdateMeta) apply() {
-	p.pd.meta.Version++
-	p.pd.meta.metaDef = p.pd.metaTransaction.MetaDef
-	p.pd.meta.MetaBytes, _ = db.DbDefToJsonString(p.pd.meta.metaDef)
-	if len(p.pd.metaTransaction.Store) == 0 {
+	p.pd.pState.Meta.Version++
+	p.pd.pState.Meta.MetaDef = p.pd.pState.MetaTransaction.MetaDef
+	p.pd.pState.Meta.MetaBytes, _ = db.DbDefToJsonString(p.pd.pState.Meta.MetaDef)
+	if len(p.pd.pState.MetaTransaction.Store) == 0 {
 		//无需通知任何store,事务结束
-		p.pd.metaTransaction = nil
+		p.pd.pState.MetaTransaction = nil
 	} else {
-		p.pd.metaTransaction.Prepareing = false
-		p.pd.metaTransaction.notifyStore(p.pd)
+		p.pd.pState.MetaTransaction.Prepareing = false
+		p.pd.pState.MetaTransaction.notifyStore(p.pd)
 	}
 	if nil != p.reply {
 		p.reply()
@@ -247,16 +247,16 @@ func (p *pd) replayUpdateMeta(reader *buffer.BufferReader) error {
 		return err
 	}
 
-	if nil != p.metaTransaction {
-		return errors.New("nil != p.pd.metaTransaction")
+	if nil != p.pState.MetaTransaction && p.pState.MetaTransaction.Prepareing {
+		return errors.New("nil != p.pState.MetaTransaction && p.pState.MetaTransaction.Prepareing")
 	}
 
-	p.meta.Version++
-	p.meta.metaDef = t.MetaDef
-	p.meta.MetaBytes, _ = db.DbDefToJsonString(p.meta.metaDef)
+	p.pState.Meta.Version++
+	p.pState.Meta.MetaDef = t.MetaDef
+	p.pState.Meta.MetaBytes, _ = db.DbDefToJsonString(p.pState.Meta.MetaDef)
 
 	if len(t.Store) > 0 {
-		p.metaTransaction = t
+		p.pState.MetaTransaction = t
 	}
 
 	return nil
@@ -265,7 +265,7 @@ func (p *pd) replayUpdateMeta(reader *buffer.BufferReader) error {
 //运行期间更新meta，只允许添加
 func (p *pd) onUpdateMeta(from *net.UDPAddr, m *snet.Message) {
 	msg := m.Msg.(*sproto.UpdateMeta)
-	if nil != p.metaTransaction {
+	if nil != p.pState.MetaTransaction {
 		p.udp.SendTo(from, snet.MakeMessage(m.Context,
 			&sproto.UpdateMetaResp{
 				Ok:     false,
@@ -276,7 +276,7 @@ func (p *pd) onUpdateMeta(from *net.UDPAddr, m *snet.Message) {
 
 	t := MetaTransaction{
 		Prepareing: true,
-		MetaDef:    p.meta.metaDef.Clone(),
+		MetaDef:    p.pState.Meta.MetaDef.Clone(),
 	}
 
 	for _, v := range msg.Updates {
@@ -317,7 +317,7 @@ func (p *pd) onUpdateMeta(from *net.UDPAddr, m *snet.Message) {
 		}
 	}
 
-	p.metaTransaction = &t
+	p.pState.MetaTransaction = &t
 
 	err := p.issueProposal(&ProposalUpdateMeta{
 		proposalBase: &proposalBase{

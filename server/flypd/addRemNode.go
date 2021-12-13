@@ -36,7 +36,7 @@ func (p *ProposalAddNode) apply() {
 		SetID: int(p.msg.SetID),
 	}
 
-	p.pd.addingNode[int(p.msg.NodeID)] = an
+	p.pd.pState.AddingNode[int(p.msg.NodeID)] = an
 	if p.sendNotify {
 		//向set内节点广播通告
 		p.pd.sendNotifyAddNode(an)
@@ -82,7 +82,7 @@ func (p *ProposalNotifyAddNodeResp) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalNotifyAddNodeResp) apply() {
-	an, ok := p.pd.addingNode[int(p.msg.NodeID)]
+	an, ok := p.pd.pState.AddingNode[int(p.msg.NodeID)]
 
 	if ok {
 
@@ -107,7 +107,7 @@ func (p *ProposalNotifyAddNodeResp) apply() {
 			}
 
 			//接收到所有store的应答
-			delete(p.pd.addingNode, int(p.msg.NodeID))
+			delete(p.pd.pState.AddingNode, int(p.msg.NodeID))
 
 			//添加到deployment中
 			s := p.pd.deployment.sets[an.SetID]
@@ -159,7 +159,7 @@ func (p *ProposalRemNode) apply() {
 		SetID:  int(p.msg.SetID),
 	}
 
-	p.pd.removingNode[int(p.msg.NodeID)] = rn
+	p.pd.pState.RemovingNode[int(p.msg.NodeID)] = rn
 	if p.sendNotify {
 		//向set内节点广播通告
 		p.pd.sendNotifyRemNode(rn)
@@ -205,7 +205,7 @@ func (p *ProposalNotifyRemNodeResp) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalNotifyRemNodeResp) apply() {
-	rn, ok := p.pd.removingNode[int(p.msg.NodeID)]
+	rn, ok := p.pd.pState.RemovingNode[int(p.msg.NodeID)]
 	if ok {
 		find := false
 		for i := 0; i < len(rn.OkStores); i++ {
@@ -226,7 +226,7 @@ func (p *ProposalNotifyRemNodeResp) apply() {
 			}
 
 			//接收到所有store的应答
-			delete(p.pd.removingNode, int(p.msg.NodeID))
+			delete(p.pd.pState.RemovingNode, int(p.msg.NodeID))
 
 			//从deployment中移除
 			s := p.pd.deployment.sets[rn.SetID]
