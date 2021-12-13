@@ -292,9 +292,17 @@ func TestPd(t *testing.T) {
 
 	testUpdateMeta2(t, p)
 
-	time.Sleep(time.Second)
+	node := testAddRemNode(t, p)
 
-	testAddRemNode(t, p)
+	waitCondition(func() bool {
+		if p.pState.MetaTransaction == nil {
+			return true
+		} else {
+			return false
+		}
+	})
+
+	node.stop()
 
 	testAddRemSet(t, p)
 
@@ -504,6 +512,7 @@ func (n *testKvnode) run() {
 					Slot: notify.Slot,
 				}))
 			case *sproto.NotifyUpdateMeta:
+				fmt.Println("on NotifyUpdateMeta")
 				notify := msg.(*sproto.NotifyUpdateMeta)
 				n.udp.SendTo(from, snet.MakeMessage(context, &sproto.NotifyUpdateMetaResp{
 					Store:   notify.Store,
@@ -518,7 +527,7 @@ func (n *testKvnode) stop() {
 	n.udp.Close()
 }
 
-func testAddRemNode(t *testing.T, p *pd) {
+func testAddRemNode(t *testing.T, p *pd) *testKvnode {
 
 	node1 := &testKvnode{
 		nodeId: 1,
@@ -574,7 +583,9 @@ func testAddRemNode(t *testing.T, p *pd) {
 
 	conn.Close()
 
-	node1.stop()
+	//node1.stop()
+
+	return node1
 
 }
 

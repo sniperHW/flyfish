@@ -202,7 +202,6 @@ type MetaTransaction struct {
 }
 
 func (m *MetaTransaction) notifyStore(p *pd) {
-
 	if nil == p.pState.MetaTransaction {
 		return
 	}
@@ -398,7 +397,6 @@ func (p *ProposalNotifyUpdateMetaResp) apply() {
 			c++
 		}
 	}
-
 	if c == 0 {
 		//所有store均已应答，事务结束
 		p.pd.pState.MetaTransaction = nil

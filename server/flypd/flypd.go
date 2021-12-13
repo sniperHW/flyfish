@@ -237,9 +237,11 @@ func (p *pd) slotBalance() {
 		}
 	}
 
-	setAverageSlotCount := slot.SlotCount / (len(p.deployment.sets) - len(p.markClearSet))
+	lSets, lMCSets := len(p.deployment.sets), len(p.markClearSet)
 
-	storeAverageSlotCount := slot.SlotCount / ((len(p.deployment.sets) - len(p.markClearSet)) * StorePerSet)
+	setAverageSlotCount := slot.SlotCount / (lSets - lMCSets)
+
+	storeAverageSlotCount := slot.SlotCount / ((lSets - lMCSets) * StorePerSet)
 
 	if nil == outStore {
 		for _, v := range p.deployment.sets {
