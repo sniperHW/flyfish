@@ -3,8 +3,10 @@ package flykv
 import (
 	"fmt"
 	"github.com/sniperHW/flyfish/db"
+	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
+	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/pkg/compress"
 	"github.com/sniperHW/flyfish/pkg/net/cs"
 	"github.com/sniperHW/flyfish/pkg/queue"
@@ -32,6 +34,27 @@ const (
 	proposal_slot_transfer = proposalType(6)
 	proposal_meta          = proposalType(7)
 )
+
+type proposalBase struct {
+}
+
+func (this *proposalBase) OnMergeFinish(b []byte) (ret []byte) {
+	if len(b) >= 1024 {
+		c := getCompressor()
+		cb, err := c.Compress(b)
+		if nil != err {
+			ret = buffer.AppendByte(b, byte(0))
+		} else {
+			b = b[:0]
+			b = buffer.AppendBytes(b, cb)
+			ret = buffer.AppendByte(b, byte(1))
+		}
+		releaseCompressor(c)
+	} else {
+		ret = buffer.AppendByte(b, byte(0))
+	}
+	return
+}
 
 type applyable interface {
 	apply()
@@ -229,10 +252,22 @@ const kvCmdQueueSize = 32
 func (s *kvstore) deleteKv(k *kv) {
 	s.kvcount--
 	delete(s.keyvals[k.groupID].kv, k.uniKey)
-	if sl := s.slotsKvMap[k.slot]; nil != sl {
-		delete(sl, k.uniKey)
-	}
 	s.lru.removeLRU(&k.lru)
+
+	sl := s.slotsKvMap[k.slot]
+	delete(sl, k.uniKey)
+	if len(sl) == 0 {
+		//当前slot的kv已经全部清除，如果当前slot正在迁出，结束迁出事务
+		p := s.slotsTransferOut[k.slot]
+		if nil != p {
+			delete(s.slotsKvMap, k.slot)
+			delete(s.slotsTransferOut, k.slot)
+			s.slots.Set(k.slot)
+			if nil != p.reply {
+				p.reply()
+			}
+		}
+	}
 }
 
 func (s *kvstore) newkv(slot int, groupID int, unikey string, key string, table string) (*kv, errcode.Error) {
@@ -641,11 +676,10 @@ func (s *kvstore) serve() {
 					s.needWriteBackAll = true
 					s.lease.becomeLeader()
 				}
-
-				s.slotsTransferOut = map[int]*SlotTransferProposal{}
-
 			case *SlotTransferProposal:
-				s.processKickSlots(v.(*SlotTransferProposal))
+				if s.leader == s.raftID {
+					s.processSlotTransferOut(v.(*SlotTransferProposal))
+				}
 			default:
 				GetSugar().Infof("here %v %s", v, reflect.TypeOf(v).String())
 			}
@@ -732,39 +766,23 @@ func (s *kvstore) onNotifySlotTransIn(from *net.UDPAddr, msg *sproto.NotifySlotT
 	}
 }
 
-func (s *kvstore) processKickSlots(p *SlotTransferProposal) {
-	if p != s.slotsTransferOut[p.slot] {
-		return
-	}
-
-	if s.leader != s.raftID {
-		delete(s.slotsTransferOut, p.slot)
-		return
-	}
-
-	if s.ready {
-		kvs := s.slotsKvMap[p.slot]
-		if nil == kvs || 0 == len(kvs) {
-			delete(s.slotsTransferOut, p.slot)
-			p.reply()
-			return
-		} else {
-			for _, v := range kvs {
-				s.tryKick(v)
-			}
+func (s *kvstore) processSlotTransferOut(p *SlotTransferProposal) {
+	kvs := s.slotsKvMap[p.slot]
+	if nil != kvs && len(kvs) > 0 {
+		for _, v := range kvs {
+			s.tryKick(v)
 		}
-	}
 
-	p.timer = time.AfterFunc(time.Millisecond*100, func() {
-		s.mainQueue.AppendHighestPriotiryItem(p)
-	})
+		p.timer = time.AfterFunc(time.Millisecond*100, func() {
+			s.mainQueue.AppendHighestPriotiryItem(p)
+		})
+	}
 }
 
 func (s *kvstore) onNotifySlotTransOut(from *net.UDPAddr, msg *sproto.NotifySlotTransOut, context int64) {
 	if s.leader == s.raftID {
 		slot := int(msg.Slot)
-		kvs := s.slotsKvMap[slot]
-		if (nil == kvs || 0 == len(kvs)) && !s.slots.Test(slot) {
+		if !s.slots.Test(slot) {
 			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
 				&sproto.NotifySlotTransOutResp{
 					Slot: msg.Slot,
@@ -797,6 +815,30 @@ func (s *kvstore) onNotifySlotTransOut(from *net.UDPAddr, msg *sproto.NotifySlot
 	}
 }
 
+func (s *kvstore) onNotifyUpdateMeta(from *net.UDPAddr, msg *sproto.NotifyUpdateMeta, context int64) {
+	if s.leader == s.raftID {
+		if s.meta.GetVersion() == msg.Version {
+			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
+				&sproto.NotifyUpdateMetaResp{
+					Store:   msg.Store,
+					Version: msg.Version,
+				}))
+		} else if meta, err := sql.CreateDbMetaFromJson(msg.Meta); nil != err {
+			s.rn.IssueProposal(&ProposalUpdateMeta{
+				meta:  meta,
+				store: s,
+				reply: func() {
+					s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
+						&sproto.NotifyUpdateMetaResp{
+							Store:   msg.Store,
+							Version: msg.Version,
+						}))
+				},
+			})
+		}
+	}
+}
+
 func (s *kvstore) onUdpMsg(from *net.UDPAddr, m *snet.Message) {
 	if atomic.LoadInt32(&s.stoped) == 0 {
 		switch m.Msg.(type) {
@@ -808,6 +850,8 @@ func (s *kvstore) onUdpMsg(from *net.UDPAddr, m *snet.Message) {
 			s.onNotifySlotTransIn(from, m.Msg.(*sproto.NotifySlotTransIn), m.Context)
 		case *sproto.NotifySlotTransOut:
 			s.onNotifySlotTransOut(from, m.Msg.(*sproto.NotifySlotTransOut), m.Context)
+		case *sproto.NotifyUpdateMeta:
+			s.onNotifyUpdateMeta(from, m.Msg.(*sproto.NotifyUpdateMeta), m.Context)
 		}
 	}
 }

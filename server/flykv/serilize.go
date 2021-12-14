@@ -2,6 +2,7 @@ package flykv
 
 import (
 	"errors"
+	"fmt"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
@@ -53,6 +54,28 @@ func appendField(b []byte, field *flyproto.Field) []byte {
 		panic("invaild field value type")
 	}
 	return b
+}
+
+func serilizeSlots(slots *bitmap.Bitmap, b []byte) []byte {
+	slotB := slots.ToJson()
+	b = buffer.AppendByte(b, byte(proposal_slots))
+	b = buffer.AppendInt32(b, int32(len(slotB)))
+	return buffer.AppendBytes(b, slotB)
+}
+
+func serilizeMeta(meta db.DBMeta, b []byte) []byte {
+	metaB, _ := meta.ToJson()
+	b = buffer.AppendByte(b, byte(proposal_meta))
+	b = buffer.AppendInt32(b, int32(len(metaB)))
+	return buffer.AppendBytes(b, metaB)
+}
+
+func serilizeLease(b []byte, nodeid int, begtime time.Time) []byte {
+	b = buffer.AppendByte(b, byte(proposal_lease))
+	b = buffer.AppendInt32(b, int32(nodeid))
+	bb, _ := begtime.MarshalBinary()
+	b = buffer.AppendInt32(b, int32(len(bb)))
+	return buffer.AppendBytes(b, bb)
 }
 
 func serilizeKv(b []byte, ptype proposalType, unikey string, version int64, fields map[string]*flyproto.Field) []byte {
@@ -149,17 +172,20 @@ func (this *proposalReader) read() (isOver bool, ptype proposalType, data interf
 				var l int32
 				l, err = this.reader.CheckGetInt32()
 				if nil != err {
+					err = fmt.Errorf("proposal_meta CheckGetInt32:%v", err)
 					return
 				}
 				var bb []byte
-				bb, err = this.reader.CopyBytes(int(l))
+				bb, err = this.reader.CheckGetBytes(int(l))
 				if nil != err {
+					err = fmt.Errorf("proposal_meta CheckGetBytes:%v", err)
 					return
 				}
 				var meta db.DBMeta
 				meta, err = sql.CreateDbMetaFromJson(bb)
 
 				if nil != err {
+					err = fmt.Errorf("proposal_meta CreateDbMetaFromJson:%v", err)
 					return
 				}
 
@@ -169,16 +195,22 @@ func (this *proposalReader) read() (isOver bool, ptype proposalType, data interf
 				var l int32
 				l, err = this.reader.CheckGetInt32()
 				if nil != err {
+					err = fmt.Errorf("proposal_slots CheckGetInt32:%v", err)
 					return
 				}
 				var bb []byte
-				bb, err = this.reader.CopyBytes(int(l))
+				bb, err = this.reader.CheckGetBytes(int(l))
 				if nil != err {
+					err = fmt.Errorf("proposal_slots CheckGetBytes:%v", err)
 					return
 				}
 				var slots *bitmap.Bitmap
 				slots, err = bitmap.CreateFromJson(bb)
-				data = slots
+				if nil != err {
+					err = fmt.Errorf("proposal_slots CreateFromJson:%v", err)
+				} else {
+					data = slots
+				}
 			case proposal_slot_transfer:
 				var tt byte
 				tt, err = this.reader.CheckGetByte()
@@ -204,22 +236,26 @@ func (this *proposalReader) read() (isOver bool, ptype proposalType, data interf
 				var id int32
 				id, err = this.reader.CheckGetInt32()
 				if nil != err {
+					err = fmt.Errorf("proposal_lease read id:%v", err)
 					return
 				}
 				var l int32
 				l, err = this.reader.CheckGetInt32()
 				if nil != err {
+					err = fmt.Errorf("proposal_lease read l:%v", err)
 					return
 				}
 				var bb []byte
 				bb, err = this.reader.CheckGetBytes(int(l))
 				if nil != err {
+					err = fmt.Errorf("proposal_lease CheckGetBytes:%v", err)
 					return
 				}
 
 				var t time.Time
 				err = t.UnmarshalBinary(bb)
 				if nil != err {
+					err = fmt.Errorf("proposal_lease UnmarshalBinary:%v", err)
 					return
 				}
 

@@ -3,11 +3,11 @@ package flykv
 import (
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/pkg/buffer"
 	flyproto "github.com/sniperHW/flyfish/proto"
 )
 
 type kvProposal struct {
+	proposalBase
 	dbstate db.DBState
 	ptype   proposalType
 	fields  map[string]*flyproto.Field
@@ -39,7 +39,7 @@ func (this *kvProposal) OnError(err error) {
 				f.reply(errcode.New(errcode.Errcode_error, err.Error()), nil, 0)
 				this.kv.pendingCmd.popFront()
 			}
-			this.kv.store.deleteKv(this.kv /*, false*/)
+			this.kv.store.deleteKv(this.kv)
 		} else {
 			this.kv.process(nil)
 		}
@@ -48,24 +48,6 @@ func (this *kvProposal) OnError(err error) {
 
 func (this *kvProposal) Serilize(b []byte) []byte {
 	return serilizeKv(b, this.ptype, this.kv.uniKey, this.version, this.fields)
-}
-
-func (this *kvProposal) OnMergeFinish(b []byte) (ret []byte) {
-	if len(b) >= 1024 {
-		c := getCompressor()
-		cb, err := c.Compress(b)
-		if nil != err {
-			ret = buffer.AppendByte(b, byte(0))
-		} else {
-			b = b[:0]
-			b = buffer.AppendBytes(b, cb)
-			ret = buffer.AppendByte(b, byte(1))
-		}
-		releaseCompressor(c)
-	} else {
-		ret = buffer.AppendByte(b, byte(0))
-	}
-	return
 }
 
 func (this *kvProposal) apply() {
@@ -78,11 +60,7 @@ func (this *kvProposal) apply() {
 			f.reply(errcode.New(errcode.Errcode_retry, "please try again"), nil, 0)
 			this.kv.pendingCmd.popFront()
 		}
-
 		this.kv.store.deleteKv(this.kv)
-
-		//GetSugar().Infof("kick:%s", this.keyValue.uniKey)
-
 	} else {
 
 		oldState := this.kv.state

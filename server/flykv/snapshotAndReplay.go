@@ -109,7 +109,7 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 			if p.transferType == slotTransferIn {
 				s.slots.Set(p.slot)
 			} else if p.transferType == slotTransferOut {
-				s.slots.Clear(p.slot)
+				s.slotsTransferOut[p.slot] = p
 			}
 		} else if ptype == proposal_slots {
 			s.slots = data.(*bitmap.Bitmap)
@@ -143,9 +143,7 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 				for k, v := range p.fields {
 					keyvalue.fields[k] = v
 				}
-
 				s.lru.updateLRU(&keyvalue.lru)
-
 			case proposal_snapshot:
 				keyvalue.version = p.version
 				keyvalue.fields = p.fields
@@ -163,28 +161,6 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 	}
 }
 
-//将data序列化到一个单独块中
-func snapshotBytes(b []byte, ptype byte, data []byte) []byte {
-	ll := len(b)
-	b = buffer.AppendInt32(b, 0) //占位符
-	b = buffer.AppendByte(b, ptype)
-	b = buffer.AppendInt32(b, int32(len(data)))
-	b = buffer.AppendBytes(b, data)
-	b = append(b, byte(0)) //写入无压缩标记
-	binary.BigEndian.PutUint32(b[ll:ll+4], uint32(len(b)-ll-4))
-	return b
-}
-
-func snapshotSlots(slots *bitmap.Bitmap, b []byte) []byte {
-	slotB := slots.ToJson()
-	return snapshotBytes(b, byte(proposal_slots), slotB)
-}
-
-func snapshotMeta(meta db.DBMeta, b []byte) []byte {
-	metaB, _ := meta.ToJson()
-	return snapshotBytes(b, byte(proposal_meta), metaB)
-}
-
 func (s *kvstore) makeSnapshot(notifyer *raft.SnapshotNotify) {
 	beg := time.Now()
 
@@ -195,14 +171,15 @@ func (s *kvstore) makeSnapshot(notifyer *raft.SnapshotNotify) {
 
 	buff := make([]byte, 0, buffsize)
 
-	//写入slots
-	buff = snapshotSlots(s.slots, buff)
-
-	//写入meta
-	buff = snapshotMeta(s.meta, buff)
-
-	//写入lease
-	buff = s.lease.snapshot(buff)
+	{
+		ll := len(buff)
+		buff = buffer.AppendInt32(buff, 0) //占位符
+		buff = serilizeSlots(s.slots, buff)
+		buff = serilizeMeta(s.meta, buff)
+		buff = s.lease.snapshot(buff)
+		buff = append(buff, byte(0)) //写入无压缩标记
+		binary.BigEndian.PutUint32(buff[ll:ll+4], uint32(len(buff)-ll-4))
+	}
 
 	//多线程序列化和压缩
 	for i, _ := range s.keyvals {

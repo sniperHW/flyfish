@@ -50,13 +50,15 @@ func (this *kvnode) processUdpMsg(from *net.UDPAddr, m *snet.Message) {
 		}
 		this.muS.RUnlock()
 
-	case *sproto.NotifySlotTransIn, *sproto.NotifySlotTransOut:
+	case *sproto.NotifySlotTransIn, *sproto.NotifySlotTransOut, *sproto.NotifyUpdateMeta:
 		var store int
 		switch m.Msg.(type) {
 		case *sproto.NotifySlotTransIn:
 			store = int(m.Msg.(*sproto.NotifySlotTransIn).Store)
 		case *sproto.NotifySlotTransOut:
 			store = int(m.Msg.(*sproto.NotifySlotTransOut).Store)
+		case *sproto.NotifyUpdateMeta:
+			store = int(m.Msg.(*sproto.NotifyUpdateMeta).Store)
 		}
 
 		this.muS.RLock()
@@ -67,6 +69,7 @@ func (this *kvnode) processUdpMsg(from *net.UDPAddr, m *snet.Message) {
 			})
 		}
 		this.muS.RUnlock()
+
 	}
 }
 

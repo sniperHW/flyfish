@@ -1,8 +1,6 @@
 package flykv
 
 import (
-	"encoding/binary"
-	"github.com/sniperHW/flyfish/pkg/buffer"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -15,6 +13,7 @@ const (
 )
 
 type leaseProposal struct {
+	proposalBase
 	beginTime time.Time
 	notifyCh  chan error
 	store     *kvstore
@@ -25,6 +24,7 @@ func (this *leaseProposal) Isurgent() bool {
 }
 
 func (this *leaseProposal) OnError(err error) {
+	GetSugar().Errorf("leaseProposal error:%v", err)
 	select {
 	case this.notifyCh <- err:
 	default:
@@ -34,24 +34,6 @@ func (this *leaseProposal) OnError(err error) {
 func (this *leaseProposal) Serilize(b []byte) []byte {
 	this.beginTime = time.Now()
 	return serilizeLease(b, this.store.raftID, this.beginTime)
-}
-
-func (this *leaseProposal) OnMergeFinish(b []byte) (ret []byte) {
-	if len(b) >= 1024 {
-		c := getCompressor()
-		cb, err := c.Compress(b)
-		if nil != err {
-			ret = buffer.AppendByte(b, byte(0))
-		} else {
-			b = b[:0]
-			b = buffer.AppendBytes(b, cb)
-			ret = buffer.AppendByte(b, byte(1))
-		}
-		releaseCompressor(c)
-	} else {
-		ret = buffer.AppendByte(b, byte(0))
-	}
-	return
 }
 
 func (this *leaseProposal) apply() {
@@ -155,23 +137,10 @@ func (l *lease) hasLease() bool {
 	}
 }
 
-func serilizeLease(b []byte, nodeid int, begtime time.Time) []byte {
-	b = buffer.AppendByte(b, byte(proposal_lease))
-	b = buffer.AppendInt32(b, int32(nodeid))
-	bb, _ := begtime.MarshalBinary()
-	b = buffer.AppendInt32(b, int32(len(bb)))
-	return buffer.AppendBytes(b, bb)
-}
-
 func (l *lease) snapshot(b []byte) []byte {
 	l.Lock()
 	defer l.Unlock()
-	ll := len(b)
-	b = buffer.AppendInt32(b, 0) //占位符
-	b = serilizeLease(b, l.owner, l.beginTime)
-	b = append(b, byte(0)) //写入无压缩标记
-	binary.BigEndian.PutUint32(b[ll:ll+4], uint32(len(b)-ll-4))
-	return b
+	return serilizeLease(b, l.owner, l.beginTime)
 }
 
 func (l *lease) stop() {

@@ -1,7 +1,7 @@
 package flykv
 
 import (
-	//"github.com/sniperHW/flyfish/backend/db"
+	"github.com/sniperHW/flyfish/db"
 	//"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	//flyproto "github.com/sniperHW/flyfish/proto"
@@ -28,7 +28,32 @@ func (this *ProposalConfChange) GetNodeID() uint64 {
 }
 
 func (this *ProposalConfChange) OnError(err error) {
+	GetSugar().Errorf("ProposalConfChange error:%v", err)
+}
 
+type ProposalUpdateMeta struct {
+	proposalBase
+	meta  db.DBMeta
+	store *kvstore
+	reply func()
+}
+
+func (this *ProposalUpdateMeta) Isurgent() bool {
+	return true
+}
+
+func (this *ProposalUpdateMeta) OnError(err error) {
+	GetSugar().Errorf("ProposalUpdateMeta error:%v", err)
+}
+
+func (this *ProposalUpdateMeta) Serilize(b []byte) []byte {
+	return serilizeMeta(this.meta, b)
+
+}
+
+func (this *ProposalUpdateMeta) apply() {
+	this.meta.MoveTo(this.store.meta)
+	this.reply()
 }
 
 type slotTransferType byte
@@ -39,6 +64,7 @@ const (
 )
 
 type SlotTransferProposal struct {
+	proposalBase
 	slot         int
 	transferType slotTransferType
 	store        *kvstore
@@ -51,6 +77,7 @@ func (this *SlotTransferProposal) Isurgent() bool {
 }
 
 func (this *SlotTransferProposal) OnError(err error) {
+	GetSugar().Errorf("SlotTransferProposal error:%v", err)
 	this.store.mainQueue.AppendHighestPriotiryItem(func() {
 		delete(this.store.slotsTransferOut, this.slot)
 	})
@@ -62,30 +89,17 @@ func (this *SlotTransferProposal) Serilize(b []byte) []byte {
 	return buffer.AppendInt32(b, int32(this.slot))
 }
 
-func (this *SlotTransferProposal) OnMergeFinish(b []byte) (ret []byte) {
-	if len(b) >= 1024 {
-		c := getCompressor()
-		cb, err := c.Compress(b)
-		if nil != err {
-			ret = buffer.AppendByte(b, byte(0))
-		} else {
-			b = b[:0]
-			b = buffer.AppendBytes(b, cb)
-			ret = buffer.AppendByte(b, byte(1))
-		}
-		releaseCompressor(c)
-	} else {
-		ret = buffer.AppendByte(b, byte(0))
-	}
-	return
-}
-
 func (this *SlotTransferProposal) apply() {
 	if this.transferType == slotTransferIn {
 		this.store.slots.Set(this.slot)
 		this.reply()
 	} else if this.transferType == slotTransferOut {
-		this.store.slots.Clear(this.slot)
-		this.store.processKickSlots(this)
+		if nil == this.store.slotsKvMap[this.slot] {
+			delete(this.store.slotsTransferOut, this.slot)
+			this.store.slots.Set(this.slot)
+			this.reply()
+		} else {
+			this.store.processSlotTransferOut(this)
+		}
 	}
 }
