@@ -19,26 +19,25 @@ type TransSlotTransfer struct {
 	StoreTransferIn    int //迁入store
 	context            int64
 	timer              *time.Timer
-	pd                 *pd
 }
 
-func (tst *TransSlotTransfer) notify() {
+func (tst *TransSlotTransfer) notify(pd *pd) {
 	tst.context = snet.MakeUniqueContext() //更新context,后续只接受相应context的应答
 	if !tst.StoreTransferOutOk {
-		setOut := tst.pd.deployment.sets[tst.SetOut]
+		setOut := pd.pState.deployment.sets[tst.SetOut]
 		for _, v := range setOut.nodes {
 			addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.host, v.servicePort))
-			tst.pd.udp.SendTo(addr, snet.MakeMessage(tst.context,
+			pd.udp.SendTo(addr, snet.MakeMessage(tst.context,
 				&sproto.NotifySlotTransOut{
 					Slot:  int32(tst.Slot),
 					Store: int32(tst.StoreTransferOut),
 				}))
 		}
 	} else {
-		setIn := tst.pd.deployment.sets[tst.SetIn]
+		setIn := pd.pState.deployment.sets[tst.SetIn]
 		for _, v := range setIn.nodes {
 			addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.host, v.servicePort))
-			tst.pd.udp.SendTo(addr, snet.MakeMessage(tst.context,
+			pd.udp.SendTo(addr, snet.MakeMessage(tst.context,
 				&sproto.NotifySlotTransIn{
 					Slot:  int32(tst.Slot),
 					Store: int32(tst.StoreTransferIn),
@@ -47,7 +46,7 @@ func (tst *TransSlotTransfer) notify() {
 	}
 
 	tst.timer = time.AfterFunc(time.Second, func() {
-		tst.pd.mainque.AppendHighestPriotiryItem(tst)
+		pd.mainque.AppendHighestPriotiryItem(tst)
 	})
 }
 
@@ -69,15 +68,15 @@ func (p *ProposalBeginSlotTransfer) apply() {
 	if _, ok := p.pd.pState.SlotTransfer[p.trans.Slot]; !ok {
 		p.pd.pState.SlotTransfer[p.trans.Slot] = p.trans
 
-		storeIn := p.pd.deployment.sets[p.trans.SetIn].stores[p.trans.StoreTransferIn]
+		storeIn := p.pd.pState.deployment.sets[p.trans.SetIn].stores[p.trans.StoreTransferIn]
 		storeIn.SlotInCount++
 		storeIn.set.SlotInCount++
 
-		storeOut := p.pd.deployment.sets[p.trans.SetOut].stores[p.trans.StoreTransferOut]
+		storeOut := p.pd.pState.deployment.sets[p.trans.SetOut].stores[p.trans.StoreTransferOut]
 		storeOut.SlotOutCount++
 		storeOut.set.SlotOutCount++
 
-		p.trans.notify()
+		p.trans.notify(p.pd)
 	}
 
 	if nil != p.reply {
@@ -90,7 +89,6 @@ func (p *pd) replayBeginSlotTransfer(reader *buffer.BufferReader) error {
 	if err := json.Unmarshal(reader.GetAll(), &trans); nil != err {
 		return err
 	}
-	trans.pd = p
 	if _, ok := p.pState.SlotTransfer[trans.Slot]; !ok {
 		p.pState.SlotTransfer[trans.Slot] = &trans
 	}
@@ -111,16 +109,16 @@ func (p *ProposalNotifySlotTransOutResp) apply() {
 	if t, ok := p.pd.pState.SlotTransfer[p.slot]; ok {
 		if !t.StoreTransferOutOk {
 			t.StoreTransferOutOk = true
-			s := p.pd.deployment.sets[t.SetOut]
+			s := p.pd.pState.deployment.sets[t.SetOut]
 			s.SlotOutCount--
 			st := s.stores[t.StoreTransferOut]
 			st.SlotOutCount--
 			st.slots.Clear(int(t.Slot))
-			p.pd.deployment.version++
-			s.version = p.pd.deployment.version
+			p.pd.pState.deployment.version++
+			s.version = p.pd.pState.deployment.version
 			//迁出已经完成，通知迁入
 			if t.timer == nil || t.timer.Stop() {
-				t.notify()
+				t.notify(p.pd)
 			}
 		}
 	}
@@ -130,11 +128,11 @@ func (p *pd) replayNotifySlotTransOutResp(reader *buffer.BufferReader) error {
 	slot := int(reader.GetInt32())
 	if t, ok := p.pState.SlotTransfer[slot]; ok {
 		t.StoreTransferOutOk = true
-		s := p.deployment.sets[t.SetOut]
+		s := p.pState.deployment.sets[t.SetOut]
 		st := s.stores[t.StoreTransferOut]
 		st.slots.Clear(int(t.Slot))
-		p.deployment.version++
-		s.version = p.deployment.version
+		p.pState.deployment.version++
+		s.version = p.pState.deployment.version
 	}
 	return nil
 }
@@ -152,13 +150,13 @@ func (p *ProposalNotifySlotTransInResp) Serilize(b []byte) []byte {
 func (p *ProposalNotifySlotTransInResp) apply() {
 	if t, ok := p.pd.pState.SlotTransfer[p.slot]; ok {
 		delete(p.pd.pState.SlotTransfer, p.slot)
-		s := p.pd.deployment.sets[t.SetIn]
+		s := p.pd.pState.deployment.sets[t.SetIn]
 		s.SlotInCount--
 		st := s.stores[t.StoreTransferIn]
 		st.SlotInCount--
 		st.slots.Set(int(t.Slot))
-		p.pd.deployment.version++
-		s.version = p.pd.deployment.version
+		p.pd.pState.deployment.version++
+		s.version = p.pd.pState.deployment.version
 		if nil != t.timer {
 			t.timer.Stop()
 		}
@@ -170,11 +168,11 @@ func (p *pd) replayNotifySlotTransInResp(reader *buffer.BufferReader) error {
 	slot := int(reader.GetInt32())
 	if t, ok := p.pState.SlotTransfer[slot]; ok {
 		delete(p.pState.SlotTransfer, slot)
-		s := p.deployment.sets[t.SetIn]
+		s := p.pState.deployment.sets[t.SetIn]
 		st := s.stores[t.StoreTransferIn]
 		st.slots.Set(int(t.Slot))
-		p.deployment.version++
-		s.version = p.deployment.version
+		p.pState.deployment.version++
+		s.version = p.pState.deployment.version
 	}
 	return nil
 }
@@ -190,7 +188,6 @@ func (p *pd) beginSlotTransfer(slot int, setOut int, storeOut int, setIn int, st
 			StoreTransferOut: storeOut,
 			SetIn:            setIn,
 			StoreTransferIn:  storeIn,
-			pd:               p,
 		},
 		proposalBase: &proposalBase{
 			pd: p,

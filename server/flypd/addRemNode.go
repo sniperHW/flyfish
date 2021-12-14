@@ -110,7 +110,7 @@ func (p *ProposalNotifyAddNodeResp) apply() {
 			delete(p.pd.pState.AddingNode, int(p.msg.NodeID))
 
 			//添加到deployment中
-			s := p.pd.deployment.sets[an.SetID]
+			s := p.pd.pState.deployment.sets[an.SetID]
 
 			s.nodes[int(p.msg.NodeID)] = &kvnode{
 				id:          int(an.NodeID),
@@ -229,7 +229,7 @@ func (p *ProposalNotifyRemNodeResp) apply() {
 			delete(p.pd.pState.RemovingNode, int(p.msg.NodeID))
 
 			//从deployment中移除
-			s := p.pd.deployment.sets[rn.SetID]
+			s := p.pd.pState.deployment.sets[rn.SetID]
 			delete(s.nodes, rn.NodeID)
 		}
 	}
@@ -252,7 +252,7 @@ func (p *pd) replayNotifyRemNodeResp(reader *buffer.BufferReader) error {
 
 func (p *pd) sendNotifyRemNode(rn *RemovingNode) {
 	if len(rn.OkStores) < StorePerSet {
-		s := p.deployment.sets[rn.SetID]
+		s := p.pState.deployment.sets[rn.SetID]
 		notify := &sproto.NotifyRemNode{
 			NodeID: int32(rn.NodeID),
 		}
@@ -282,7 +282,7 @@ func (p *pd) sendNotifyRemNode(rn *RemovingNode) {
 
 func (p *pd) sendNotifyAddNode(an *AddingNode) {
 	if len(an.OkStores) < StorePerSet {
-		s := p.deployment.sets[an.SetID]
+		s := p.pState.deployment.sets[an.SetID]
 		notify := &sproto.NotifyAddNode{
 			NodeID:   int32(an.NodeID),
 			Host:     an.Host,

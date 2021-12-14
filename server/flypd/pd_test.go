@@ -156,11 +156,13 @@ func TestSnapShot(t *testing.T) {
 	d.sets[1] = set1
 
 	p1 := &pd{
-		deployment: d,
+
 		pState: persistenceState{
+			deployment:   d,
 			AddingNode:   map[int]*AddingNode{},
 			RemovingNode: map[int]*RemovingNode{},
 			SlotTransfer: map[int]*TransSlotTransfer{},
+			markClearSet: map[int]*set{},
 		},
 	}
 
@@ -207,11 +209,12 @@ func TestSnapShot(t *testing.T) {
 	assert.Nil(t, err)
 
 	p2 := &pd{
-		deployment: &deployment{},
 		pState: persistenceState{
+			deployment:   &deployment{},
 			AddingNode:   map[int]*AddingNode{},
 			RemovingNode: map[int]*RemovingNode{},
 			SlotTransfer: map[int]*TransSlotTransfer{},
+			markClearSet: map[int]*set{},
 		},
 	}
 
@@ -219,13 +222,13 @@ func TestSnapShot(t *testing.T) {
 
 	assert.Nil(t, err)
 
-	assert.Equal(t, 1, len(p2.deployment.sets))
+	assert.Equal(t, 1, len(p2.pState.deployment.sets))
 
-	assert.Equal(t, p2.deployment.sets[1].nodes[2].host, "192.168.0.2")
+	assert.Equal(t, p2.pState.deployment.sets[1].nodes[2].host, "192.168.0.2")
 
-	assert.Equal(t, true, p2.deployment.sets[1].stores[2].slots.Test(11))
+	assert.Equal(t, true, p2.pState.deployment.sets[1].stores[2].slots.Test(11))
 
-	assert.Equal(t, false, p2.deployment.sets[1].stores[2].slots.Test(0))
+	assert.Equal(t, false, p2.pState.deployment.sets[1].stores[2].slots.Test(0))
 
 	assert.Equal(t, 1, p2.pState.AddingNode[11].SetID)
 
@@ -308,8 +311,6 @@ func TestPd(t *testing.T) {
 
 	testSlotTransfer(t, p)
 
-	//testFlygate(t, p)
-
 	p.Stop()
 
 	p = NewPd(1, conf, "localhost:8110", "1@http://localhost:8110")
@@ -327,23 +328,6 @@ func TestPd(t *testing.T) {
 	p.Stop()
 
 }
-
-/*func testFlygate(t *testing.T, p *pd) {
-	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
-	assert.Nil(t, err)
-	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
-
-	conn.SendTo(addr, snet.MakeMessage(0, &sproto.QueryRouteInfo{Version: 0}))
-	_, r, err := conn.ReadFrom(make([]byte, 65535))
-
-	assert.Equal(t, r.(*sproto.QueryRouteInfoResp).Version, p.deployment.version)
-
-	conn.SendTo(addr, snet.MakeMessage(0, &sproto.GetFlyGate{}))
-	_, r, err = conn.ReadFrom(make([]byte, 65535))
-
-	assert.Equal(t, r.(*sproto.GetFlyGateResp).GateService, "localhost:8119")
-
-}*/
 
 func testInstallDeployment(t *testing.T, p *pd) {
 
@@ -365,7 +349,7 @@ func testInstallDeployment(t *testing.T, p *pd) {
 	install.Sets = append(install.Sets, set1)
 
 	conn.SendTo(addr, snet.MakeMessage(0, install))
-	recvbuff := make([]byte, 256)
+	recvbuff := make([]byte, 4096)
 	_, r, err := conn.ReadFrom(recvbuff)
 
 	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.InstallDeploymentResp).Ok, false)
@@ -379,6 +363,15 @@ func testInstallDeployment(t *testing.T, p *pd) {
 	_, r, err = conn.ReadFrom(recvbuff)
 
 	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.InstallDeploymentResp).Ok, true)
+
+	conn.SendTo(addr, snet.MakeMessage(0, &sproto.KvnodeBoot{
+		NodeID: 1,
+	}))
+
+	_, r, err = conn.ReadFrom(recvbuff)
+
+	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.KvnodeBootResp).Ok, true)
+	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.KvnodeBootResp).ServiceHost, "localhost")
 
 	conn.Close()
 
@@ -557,7 +550,7 @@ func testAddRemNode(t *testing.T, p *pd) *testKvnode {
 	assert.Equal(t, true, r.(*snet.Message).Msg.(*sproto.AddNodeResp).Ok)
 
 	waitCondition(func() bool {
-		if len(p.deployment.sets[1].nodes) == 2 {
+		if len(p.pState.deployment.sets[1].nodes) == 2 {
 			return true
 		} else {
 			return false
@@ -574,7 +567,7 @@ func testAddRemNode(t *testing.T, p *pd) *testKvnode {
 	assert.Equal(t, true, r.(*snet.Message).Msg.(*sproto.RemNodeResp).Ok)
 
 	waitCondition(func() bool {
-		if len(p.deployment.sets[1].nodes) == 1 {
+		if len(p.pState.deployment.sets[1].nodes) == 1 {
 			return true
 		} else {
 			return false
@@ -617,14 +610,14 @@ func testAddRemSet(t *testing.T, p *pd) {
 	assert.Equal(t, true, r.(*snet.Message).Msg.(*sproto.AddSetResp).Ok)
 
 	waitCondition(func() bool {
-		if len(p.deployment.sets) == 2 {
+		if len(p.pState.deployment.sets) == 2 {
 			return true
 		} else {
 			return false
 		}
 	})
 
-	assert.Equal(t, 3, int(p.deployment.sets[2].nodes[3].id))
+	assert.Equal(t, 3, int(p.pState.deployment.sets[2].nodes[3].id))
 
 	conn.SendTo(addr, snet.MakeMessage(0, &sproto.RemSet{
 		SetID: 2,
@@ -635,7 +628,7 @@ func testAddRemSet(t *testing.T, p *pd) {
 	assert.Equal(t, true, r.(*snet.Message).Msg.(*sproto.RemSetResp).Ok)
 
 	waitCondition(func() bool {
-		if len(p.deployment.sets) == 1 {
+		if len(p.pState.deployment.sets) == 1 {
 			return true
 		} else {
 			return false
@@ -653,7 +646,7 @@ func testSlotTransfer(t *testing.T, p *pd) {
 	ch := make(chan struct{})
 
 	p.onBalanceFinish = func() {
-		for _, v := range p.deployment.sets {
+		for _, v := range p.pState.deployment.sets {
 			for _, vv := range v.stores {
 				fmt.Printf("store:%d slotCount:%d slots%v\n", vv.id, len(vv.slots.GetOpenBits()), vv.slots.GetOpenBits())
 			}
@@ -687,7 +680,7 @@ func testSlotTransfer(t *testing.T, p *pd) {
 	assert.Equal(t, true, r.(*snet.Message).Msg.(*sproto.AddSetResp).Ok)
 
 	waitCondition(func() bool {
-		if len(p.deployment.sets) == 2 {
+		if len(p.pState.deployment.sets) == 2 {
 			return true
 		} else {
 			return false

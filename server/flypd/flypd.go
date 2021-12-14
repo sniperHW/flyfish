@@ -131,6 +131,35 @@ type persistenceState struct {
 	SlotTransfer    map[int]*TransSlotTransfer
 	Meta            Meta
 	MetaTransaction *MetaTransaction
+	deployment      *deployment
+	markClearSet    map[int]*set
+}
+
+func (p *persistenceState) toJson() ([]byte, error) {
+	p.Deployment = p.deployment.toDeploymentJson()
+	return json.Marshal(&p)
+}
+
+func (p *persistenceState) loadFromJson(j []byte) error {
+	err := json.Unmarshal(j, p)
+
+	if nil != err {
+		return err
+	}
+
+	err = p.deployment.loadFromDeploymentJson(&p.Deployment)
+
+	if nil != err {
+		return err
+	}
+
+	for _, v := range p.deployment.sets {
+		if v.markClear {
+			p.markClearSet[v.id] = v
+		}
+	}
+
+	return nil
 }
 
 type pd struct {
@@ -140,7 +169,6 @@ type pd struct {
 	mutilRaft       *raft.MutilRaft
 	mainque         applicationQueue
 	udp             *flynet.Udp
-	markClearSet    map[int]*set
 	msgHandler      map[reflect.Type]func(*net.UDPAddr, *snet.Message)
 	stoponce        int32
 	startonce       int32
@@ -151,7 +179,6 @@ type pd struct {
 	config          *Config
 	udpService      string
 	onBalanceFinish func()
-	deployment      *deployment
 	pState          persistenceState
 }
 
@@ -162,10 +189,9 @@ func NewPd(id int, config *Config, udpService string, cluster string) *pd {
 	}
 
 	p := &pd{
-		id:           id,
-		mainque:      mainQueue,
-		msgHandler:   map[reflect.Type]func(*net.UDPAddr, *snet.Message){},
-		markClearSet: map[int]*set{},
+		id:         id,
+		mainque:    mainQueue,
+		msgHandler: map[reflect.Type]func(*net.UDPAddr, *snet.Message){},
 		flygateMgr: flygateMgr{
 			flygateMap: map[string]*flygate{},
 			mainque:    mainQueue,
@@ -177,6 +203,7 @@ func NewPd(id int, config *Config, udpService string, cluster string) *pd {
 			AddingNode:   map[int]*AddingNode{},
 			RemovingNode: map[int]*RemovingNode{},
 			SlotTransfer: map[int]*TransSlotTransfer{},
+			markClearSet: map[int]*set{},
 		},
 	}
 
@@ -204,8 +231,8 @@ func (q applicationQueue) close() {
 }
 
 func (p *pd) getNode(nodeID int32) *kvnode {
-	if nil != p.deployment {
-		for _, v := range p.deployment.sets {
+	if nil != p.pState.deployment {
+		for _, v := range p.pState.deployment.sets {
 			if n, ok := v.nodes[int(nodeID)]; ok {
 				return n
 			}
@@ -221,8 +248,8 @@ func (p *pd) slotBalance() {
 
 	var outStore *store
 
-	if len(p.markClearSet) > 0 {
-		for _, v := range p.markClearSet {
+	if len(p.pState.markClearSet) > 0 {
+		for _, v := range p.pState.markClearSet {
 			if v.getTotalSlotCount()-v.SlotOutCount > 0 {
 				for _, vv := range v.stores {
 					if len(vv.slots.GetOpenBits())-vv.SlotOutCount > 0 {
@@ -237,14 +264,14 @@ func (p *pd) slotBalance() {
 		}
 	}
 
-	lSets, lMCSets := len(p.deployment.sets), len(p.markClearSet)
+	lSets, lMCSets := len(p.pState.deployment.sets), len(p.pState.markClearSet)
 
 	setAverageSlotCount := slot.SlotCount / (lSets - lMCSets)
 
 	storeAverageSlotCount := slot.SlotCount / ((lSets - lMCSets) * StorePerSet)
 
 	if nil == outStore {
-		for _, v := range p.deployment.sets {
+		for _, v := range p.pState.deployment.sets {
 			if !v.markClear && v.getTotalSlotCount()-v.SlotOutCount > setAverageSlotCount+1 {
 				for _, vv := range v.stores {
 					if len(vv.slots.GetOpenBits())-vv.SlotOutCount > storeAverageSlotCount+1 {
@@ -261,7 +288,7 @@ func (p *pd) slotBalance() {
 
 	if nil != outStore {
 		var inStore *store
-		for _, v := range p.deployment.sets {
+		for _, v := range p.pState.deployment.sets {
 			if !v.markClear && v.getTotalSlotCount()-v.SlotInCount < setAverageSlotCount+1 {
 				for _, vv := range v.stores {
 					if len(vv.slots.GetOpenBits())-vv.SlotInCount < storeAverageSlotCount+1 {
@@ -378,9 +405,9 @@ func (p *pd) startUdpService() error {
 }
 
 func (p *pd) onBecomeLeader() {
-	if nil != p.deployment {
+	if nil != p.pState.deployment {
 		//重置slotBalance相关的临时数据
-		for _, v := range p.deployment.sets {
+		for _, v := range p.pState.deployment.sets {
 			v.SlotOutCount = 0
 			v.SlotInCount = 0
 			for _, vv := range v.stores {
@@ -417,7 +444,7 @@ func (p *pd) onBecomeLeader() {
 		}
 
 		for _, v := range p.pState.SlotTransfer {
-			v.notify()
+			v.notify(p)
 		}
 	}
 
@@ -565,7 +592,7 @@ func (p *pd) serve() {
 			case *TransSlotTransfer:
 				if p.isLeader() {
 					if _, ok := p.pState.SlotTransfer[v.(*TransSlotTransfer).Slot]; ok {
-						v.(*TransSlotTransfer).notify()
+						v.(*TransSlotTransfer).notify(p)
 					}
 				}
 			case *MetaTransaction:
@@ -582,14 +609,10 @@ func (p *pd) serve() {
 
 func (p *pd) getSnapshot() ([]byte, error) {
 
-	p.pState.Deployment = p.deployment.toDeploymentJson()
-
-	persistenceState, err := json.Marshal(&p.pState)
-
+	persistenceState, err := p.pState.toJson()
 	if nil != err {
 		return nil, err
 	}
-
 	b := make([]byte, 0, 4+len(persistenceState))
 
 	b = buffer.AppendInt32(b, int32(len(persistenceState)))
@@ -600,28 +623,5 @@ func (p *pd) getSnapshot() ([]byte, error) {
 func (p *pd) recoverFromSnapshot(b []byte) error {
 	reader := buffer.NewReader(b)
 	l := reader.GetInt32()
-
-	err := json.Unmarshal(reader.GetBytes(int(l)), &p.pState)
-
-	if nil != err {
-		return err
-	}
-
-	err = p.deployment.loadFromDeploymentJson(&p.pState.Deployment)
-
-	if nil != err {
-		return err
-	}
-
-	for _, v := range p.pState.SlotTransfer {
-		v.pd = p
-	}
-
-	for _, v := range p.deployment.sets {
-		if v.markClear {
-			p.markClearSet[v.id] = v
-		}
-	}
-
-	return nil
+	return p.pState.loadFromJson(reader.GetBytes(int(l)))
 }

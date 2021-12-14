@@ -210,7 +210,7 @@ func (m *MetaTransaction) notifyStore(p *pd) {
 	for _, v := range m.Store {
 		if !v.Ok {
 			c++
-			s := p.deployment.getStoreByID(v.StoreID)
+			s := p.pState.deployment.getStoreByID(v.StoreID)
 			for _, vv := range s.set.nodes {
 				addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", vv.host, vv.servicePort))
 				p.udp.SendTo(addr, snet.MakeMessage(0,
@@ -335,8 +335,8 @@ func (p *pd) onUpdateMeta(from *net.UDPAddr, m *snet.Message) {
 		return
 	}
 
-	if nil != p.deployment {
-		for _, s := range p.deployment.sets {
+	if nil != p.pState.deployment {
+		for _, s := range p.pState.deployment.sets {
 			for kk, _ := range s.stores {
 				t.Store = append(t.Store, MetaTransactionStore{
 					StoreID: kk,

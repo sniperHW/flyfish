@@ -64,8 +64,8 @@ func (p *pd) onKvnodeBoot(from *net.UDPAddr, m *snet.Message) {
 
 func (p *pd) onQueryRouteInfo(from *net.UDPAddr, m *snet.Message) {
 	msg := m.Msg.(*sproto.QueryRouteInfo)
-	if nil != p.deployment {
-		resp := p.deployment.queryRouteInfo(msg)
+	if nil != p.pState.deployment {
+		resp := p.pState.deployment.queryRouteInfo(msg)
 		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 	}
 }

@@ -347,7 +347,7 @@ func (p *ProposalInstallDeployment) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalInstallDeployment) apply() {
-	p.pd.deployment = p.d
+	p.pd.pState.deployment = p.d
 	p.reply()
 }
 
@@ -356,7 +356,7 @@ func (p *pd) replayInstallDeployment(reader *buffer.BufferReader) error {
 	if err := d.loadFromJson(reader.GetAll()); nil != err {
 		return err
 	}
-	p.deployment = d
+	p.pState.deployment = d
 	return nil
 }
 
@@ -394,7 +394,7 @@ func (p *ProposalAddSet) doApply() {
 
 	var stores []int
 
-	for _, v := range p.pd.deployment.sets {
+	for _, v := range p.pd.pState.deployment.sets {
 		for _, vv := range v.stores {
 			stores = append(stores, vv.id)
 		}
@@ -430,9 +430,9 @@ func (p *ProposalAddSet) doApply() {
 		s.stores[st.id] = st
 	}
 
-	p.pd.deployment.version++
-	s.version = p.pd.deployment.version
-	p.pd.deployment.sets[s.id] = s
+	p.pd.pState.deployment.version++
+	s.version = p.pd.pState.deployment.version
+	p.pd.pState.deployment.sets[s.id] = s
 
 }
 
@@ -470,15 +470,15 @@ func (p *ProposalRemSet) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalRemSet) apply() {
-	delete(p.pd.deployment.sets, p.setID)
-	p.pd.deployment.version++
+	delete(p.pd.pState.deployment.sets, p.setID)
+	p.pd.pState.deployment.version++
 	p.reply()
 }
 
 func (p *pd) replayRemSet(reader *buffer.BufferReader) error {
 	setID := int(reader.GetInt32())
-	delete(p.deployment.sets, setID)
-	p.deployment.version++
+	delete(p.pState.deployment.sets, setID)
+	p.pState.deployment.version++
 	return nil
 }
 
@@ -493,9 +493,9 @@ func (p *ProposalSetMarkClear) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalSetMarkClear) apply() {
-	if set, ok := p.pd.deployment.sets[p.setID]; ok && !set.markClear {
+	if set, ok := p.pd.pState.deployment.sets[p.setID]; ok && !set.markClear {
 		set.markClear = true
-		p.pd.markClearSet[p.setID] = set
+		p.pd.pState.markClearSet[p.setID] = set
 		p.pd.slotBalance()
 	}
 	p.reply()
@@ -503,9 +503,9 @@ func (p *ProposalSetMarkClear) apply() {
 
 func (p *pd) replaySetMarkClear(reader *buffer.BufferReader) error {
 	setID := int(reader.GetInt32())
-	if set, ok := p.deployment.sets[setID]; ok && !set.markClear {
+	if set, ok := p.pState.deployment.sets[setID]; ok && !set.markClear {
 		set.markClear = true
-		p.markClearSet[setID] = set
+		p.pState.markClearSet[setID] = set
 	}
 	return nil
 }
@@ -523,7 +523,7 @@ func (p *pd) onInstallDeployment(from *net.UDPAddr, m *snet.Message) {
 		return
 	}
 
-	if nil != p.deployment {
+	if nil != p.pState.deployment {
 		p.udp.SendTo(from, snet.MakeMessage(m.Context,
 			&sproto.InstallDeploymentResp{
 				Ok:     false,
@@ -585,7 +585,7 @@ func (p *pd) onRemSet(from *net.UDPAddr, m *snet.Message) {
 		return
 	}
 
-	if nil == p.deployment {
+	if nil == p.pState.deployment {
 		p.udp.SendTo(from, snet.MakeMessage(m.Context,
 			&sproto.RemSetResp{
 				Ok:     false,
@@ -594,7 +594,7 @@ func (p *pd) onRemSet(from *net.UDPAddr, m *snet.Message) {
 		return
 	}
 
-	s, ok := p.deployment.sets[int(msg.SetID)]
+	s, ok := p.pState.deployment.sets[int(msg.SetID)]
 	if !ok {
 		p.udp.SendTo(from, snet.MakeMessage(m.Context,
 			&sproto.RemSetResp{
@@ -649,7 +649,7 @@ func (p *pd) onRemSet(from *net.UDPAddr, m *snet.Message) {
 
 func (p *pd) onSetMarkClear(from *net.UDPAddr, m *snet.Message) {
 	msg := m.Msg.(*sproto.SetMarkClear)
-	if nil == p.deployment {
+	if nil == p.pState.deployment {
 		p.udp.SendTo(from, snet.MakeMessage(m.Context,
 			&sproto.SetMarkClearResp{
 				Ok:     false,
@@ -658,7 +658,7 @@ func (p *pd) onSetMarkClear(from *net.UDPAddr, m *snet.Message) {
 		return
 	}
 
-	s, ok := p.deployment.sets[int(msg.SetID)]
+	s, ok := p.pState.deployment.sets[int(msg.SetID)]
 	if !ok {
 		p.udp.SendTo(from, snet.MakeMessage(m.Context,
 			&sproto.SetMarkClearResp{
@@ -719,7 +719,7 @@ func (p *pd) onAddSet(from *net.UDPAddr, m *snet.Message) {
 		return
 	}
 
-	if nil == p.deployment {
+	if nil == p.pState.deployment {
 		p.udp.SendTo(from, snet.MakeMessage(m.Context,
 			&sproto.AddSetResp{
 				Ok:     false,
@@ -728,7 +728,7 @@ func (p *pd) onAddSet(from *net.UDPAddr, m *snet.Message) {
 		return
 	}
 
-	_, ok := p.deployment.sets[int(msg.Set.SetID)]
+	_, ok := p.pState.deployment.sets[int(msg.Set.SetID)]
 	if ok {
 		p.udp.SendTo(from, snet.MakeMessage(m.Context,
 			&sproto.AddSetResp{
@@ -743,7 +743,7 @@ func (p *pd) onAddSet(from *net.UDPAddr, m *snet.Message) {
 	nodeServices := map[string]bool{}
 	nodeRafts := map[string]bool{}
 
-	for _, v := range p.deployment.sets {
+	for _, v := range p.pState.deployment.sets {
 		for _, vv := range v.nodes {
 			nodeIDS[vv.id] = true
 			nodeServices[fmt.Sprintf("%s:%d", vv.host, vv.servicePort)] = true
@@ -816,7 +816,7 @@ func (p *pd) onAddSet(from *net.UDPAddr, m *snet.Message) {
 
 func (p *pd) onAddNode(from *net.UDPAddr, m *snet.Message) {
 	msg := m.Msg.(*sproto.AddNode)
-	if nil == p.deployment {
+	if nil == p.pState.deployment {
 		p.udp.SendTo(from, snet.MakeMessage(m.Context,
 			&sproto.AddNodeResp{
 				Ok:     false,
@@ -834,7 +834,7 @@ func (p *pd) onAddNode(from *net.UDPAddr, m *snet.Message) {
 		return
 	}
 
-	s, ok := p.deployment.sets[int(msg.SetID)]
+	s, ok := p.pState.deployment.sets[int(msg.SetID)]
 	if !ok {
 		p.udp.SendTo(from, snet.MakeMessage(m.Context,
 			&sproto.AddNodeResp{
@@ -855,7 +855,7 @@ func (p *pd) onAddNode(from *net.UDPAddr, m *snet.Message) {
 	}
 
 	//检查是否存在重复服务地址
-	for _, v := range p.deployment.sets {
+	for _, v := range p.pState.deployment.sets {
 		for _, vv := range v.nodes {
 			if vv.host == msg.Host && vv.servicePort == int(msg.ServicePort) {
 				p.udp.SendTo(from, snet.MakeMessage(m.Context,
@@ -936,7 +936,7 @@ func (p *pd) onNotifyAddNodeResp(from *net.UDPAddr, m *snet.Message) {
 
 func (p *pd) onRemNode(from *net.UDPAddr, m *snet.Message) {
 	msg := m.Msg.(*sproto.RemNode)
-	if nil == p.deployment {
+	if nil == p.pState.deployment {
 		p.udp.SendTo(from, snet.MakeMessage(m.Context,
 			&sproto.RemNodeResp{
 				Ok:     false,
@@ -954,7 +954,7 @@ func (p *pd) onRemNode(from *net.UDPAddr, m *snet.Message) {
 		return
 	}
 
-	s, ok := p.deployment.sets[int(msg.SetID)]
+	s, ok := p.pState.deployment.sets[int(msg.SetID)]
 	if !ok {
 		p.udp.SendTo(from, snet.MakeMessage(m.Context,
 			&sproto.RemNodeResp{
