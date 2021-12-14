@@ -52,7 +52,7 @@ func (this *leaseProposal) apply() {
 }
 
 type lease struct {
-	sync.Mutex
+	sync.RWMutex
 	store        *kvstore
 	owner        int
 	beginTime    time.Time
@@ -71,10 +71,10 @@ func newLease(store *kvstore) *lease {
 		for 0 == atomic.LoadInt32(&l.stoped) {
 			<-l.leaderWaitCh //等待成为leader
 			if 0 == atomic.LoadInt32(&l.stoped) {
-				l.Lock()
+				l.RLock()
 				owner := l.owner
 				beginTime := l.beginTime
-				l.Unlock()
+				l.RUnlock()
 
 				if owner != 0 && owner != l.store.raftID {
 					//之前的lease不是自己持有，且尚未过期，需要等待过期之后才能申请lease
@@ -120,14 +120,14 @@ func (l *lease) becomeLeader() {
 
 func (l *lease) update(owner int, beginTime time.Time) {
 	l.Lock()
+	defer l.Unlock()
 	l.beginTime = time.Time(beginTime)
 	l.owner = owner
-	l.Unlock()
 }
 
 func (l *lease) hasLease() bool {
-	l.Lock()
-	defer l.Unlock()
+	l.RLock()
+	defer l.RUnlock()
 	if !l.store.isLeader() {
 		return false
 	} else if l.owner != l.store.raftID || time.Now().Sub(l.beginTime) >= leaseOwnerTimeout {
@@ -138,8 +138,7 @@ func (l *lease) hasLease() bool {
 }
 
 func (l *lease) snapshot(b []byte) []byte {
-	l.Lock()
-	defer l.Unlock()
+	//lease.update在主线程执行，snapshot也在主线程执行，无需加锁
 	return serilizeLease(b, l.owner, l.beginTime)
 }
 

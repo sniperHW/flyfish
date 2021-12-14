@@ -37,7 +37,6 @@ var (
 )
 
 type kvnode struct {
-	mu        sync.Mutex
 	muC       sync.Mutex
 	clients   map[*fnet.Socket]*fnet.Socket
 	muS       sync.RWMutex
@@ -49,10 +48,8 @@ type kvnode struct {
 	mutilRaft *raft.MutilRaft
 	stopOnce  int32
 	startOnce int32
-	//metaCreator func(*db.DbDef) (db.DBMeta, error)
-	udpConn *fnet.Udp
-	selfUrl string
-	//kvcount int64
+	udpConn   *fnet.Udp
+	selfUrl   string
 }
 
 func verifyLogin(loginReq *flyproto.LoginReq) bool {
@@ -231,9 +228,6 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, cluster string, slots 
 
 func (this *kvnode) Stop() {
 	if atomic.CompareAndSwapInt32(&this.stopOnce, 0, 1) {
-		this.mu.Lock()
-		defer this.mu.Unlock()
-
 		//首先关闭监听,不在接受新到达的连接
 		this.listener.Close()
 
@@ -391,8 +385,6 @@ var outputBufLimit fnet.OutputBufLimit = fnet.OutputBufLimit{
 func (this *kvnode) Start() error {
 	var err error
 	if atomic.CompareAndSwapInt32(&this.startOnce, 0, 1) {
-		this.mu.Lock()
-		defer this.mu.Unlock()
 
 		var meta db.DBMeta
 

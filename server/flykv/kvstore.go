@@ -179,7 +179,7 @@ func releaseDecompressor(c compress.DecompressorI) {
 }
 
 type kvstore struct {
-	raftMtx              sync.Mutex
+	raftMtx              sync.RWMutex
 	raftID               int
 	leader               int
 	snapshotter          *snap.Snapshotter
@@ -215,14 +215,14 @@ func (s *kvstore) hasLease() bool {
 }
 
 func (s *kvstore) isLeader() bool {
-	s.raftMtx.Lock()
-	defer s.raftMtx.Unlock()
+	s.raftMtx.RLock()
+	defer s.raftMtx.RUnlock()
 	return s.leader == s.raftID
 }
 
 func (s *kvstore) getLeaderNodeID() int {
-	s.raftMtx.Lock()
-	defer s.raftMtx.Unlock()
+	s.raftMtx.RLock()
+	defer s.raftMtx.RUnlock()
 	return int(s.leader >> 16)
 }
 
