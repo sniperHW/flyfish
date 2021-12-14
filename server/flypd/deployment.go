@@ -13,9 +13,9 @@ import (
 	"sort"
 )
 
-var StorePerSet int = 5          //每个set含有多少个store
+var StorePerSet int = 6          //每个set含有多少个store
 var KvNodePerSet int = 1         //每个set含有多少kvnode
-var CurrentTransferCount int = 5 //最大并发transfer的slot数量
+var CurrentTransferCount int = 6 //最大并发transfer的slot数量
 
 type KvNodeJson struct {
 	NodeID      int

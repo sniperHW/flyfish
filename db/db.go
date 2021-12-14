@@ -186,10 +186,12 @@ func GetDefaultValue(tt proto.ValueType, v string) interface{} {
 }
 
 type DBMeta interface {
-	UpdateMeta(version int64, def *DbDef)
 	GetTableMeta(tab string) TableMeta
 	CheckTableMeta(tab TableMeta) TableMeta //如果tab与DBMeta版本一致，直接返回tab否则返回最新的TableMeta
 	GetVersion() int64
+	ToJson() ([]byte, error)
+	GetDef() *DbDef
+	MoveTo(DBMeta)
 }
 
 type TableMeta interface {
@@ -199,7 +201,6 @@ type TableMeta interface {
 	GetAllFieldsName() []string
 	TableName() string
 	FillDefaultValues(fields map[string]*proto.Field)
-	GetVersion() int64
 }
 
 type DBLoadTask interface {

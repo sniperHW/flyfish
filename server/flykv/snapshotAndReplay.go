@@ -3,6 +3,7 @@ package flykv
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/buffer"
@@ -105,10 +106,15 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 			s.lease.update(p.nodeid, p.begtime)
 		} else if ptype == proposal_slot_transfer {
 			p := data.(*SlotTransferProposal)
-			p.store = s
-			p.apply()
+			if p.transferType == slotTransferIn {
+				s.slots.Set(p.slot)
+			} else if p.transferType == slotTransferOut {
+				s.slots.Clear(p.slot)
+			}
 		} else if ptype == proposal_slots {
 			s.slots = data.(*bitmap.Bitmap)
+		} else if ptype == proposal_meta {
+			data.(db.DBMeta).MoveTo(s.meta)
 		} else {
 			p := data.(ppkv)
 			groupID := sslot.StringHash(p.unikey) % len(s.keyvals)
@@ -157,6 +163,28 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 	}
 }
 
+//将data序列化到一个单独块中
+func snapshotBytes(b []byte, ptype byte, data []byte) []byte {
+	ll := len(b)
+	b = buffer.AppendInt32(b, 0) //占位符
+	b = buffer.AppendByte(b, ptype)
+	b = buffer.AppendInt32(b, int32(len(data)))
+	b = buffer.AppendBytes(b, data)
+	b = append(b, byte(0)) //写入无压缩标记
+	binary.BigEndian.PutUint32(b[ll:ll+4], uint32(len(b)-ll-4))
+	return b
+}
+
+func snapshotSlots(slots *bitmap.Bitmap, b []byte) []byte {
+	slotB := slots.ToJson()
+	return snapshotBytes(b, byte(proposal_slots), slotB)
+}
+
+func snapshotMeta(meta db.DBMeta, b []byte) []byte {
+	metaB, _ := meta.ToJson()
+	return snapshotBytes(b, byte(proposal_meta), metaB)
+}
+
 func (s *kvstore) makeSnapshot(notifyer *raft.SnapshotNotify) {
 	beg := time.Now()
 
@@ -168,8 +196,12 @@ func (s *kvstore) makeSnapshot(notifyer *raft.SnapshotNotify) {
 	buff := make([]byte, 0, buffsize)
 
 	//写入slots
-	buff = serilizeSlots(s.slots, buff)
+	buff = snapshotSlots(s.slots, buff)
 
+	//写入meta
+	buff = snapshotMeta(s.meta, buff)
+
+	//写入lease
 	buff = s.lease.snapshot(buff)
 
 	//多线程序列化和压缩

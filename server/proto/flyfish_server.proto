@@ -167,6 +167,8 @@ message kvnodeBootResp {
   optional int32  servicePort  = 4;
   optional int32  raftPort     = 5;   
   repeated storeInfo stores    = 6;
+  optional int64  metaVersion  = 7;
+  optional bytes  meta         = 8;
 }
 
 message notifyAddNode {
@@ -319,7 +321,7 @@ message  notifyUpdateMeta {
 
 message  notifyUpdateMetaResp {
   optional int32 store    = 1;
-  optional int64 version  = 2;  
+  optional int64 version  = 2; 
 }
 
 

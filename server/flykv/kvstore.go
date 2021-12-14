@@ -22,6 +22,17 @@ import (
 	"time"
 )
 
+const (
+	proposal_none          = proposalType(0)
+	proposal_snapshot      = proposalType(1) //全量数据kv快照,
+	proposal_update        = proposalType(2) //fields变更
+	proposal_kick          = proposalType(3) //从缓存移除kv
+	proposal_lease         = proposalType(4) //数据库update权租约
+	proposal_slots         = proposalType(5)
+	proposal_slot_transfer = proposalType(6)
+	proposal_meta          = proposalType(7)
+)
+
 type applyable interface {
 	apply()
 }
@@ -49,13 +60,9 @@ type applicationQueue struct {
 
 func (q applicationQueue) AppendHighestPriotiryItem(m interface{}) {
 	if err := q.q.ForceAppend(1, m); nil != err {
-		panic(err)
+		GetSugar().Errorf("%v", err)
 	}
 }
-
-//func (q applicationQueue) append(m interface{}) {
-//	q.q.ForceAppend(0, m)
-//}
 
 func (q applicationQueue) pop() (closed bool, v interface{}) {
 	return q.q.Pop()
@@ -634,6 +641,9 @@ func (s *kvstore) serve() {
 					s.needWriteBackAll = true
 					s.lease.becomeLeader()
 				}
+
+				s.slotsTransferOut = map[int]*SlotTransferProposal{}
+
 			case *SlotTransferProposal:
 				s.processKickSlots(v.(*SlotTransferProposal))
 			default:
@@ -723,17 +733,25 @@ func (s *kvstore) onNotifySlotTransIn(from *net.UDPAddr, msg *sproto.NotifySlotT
 }
 
 func (s *kvstore) processKickSlots(p *SlotTransferProposal) {
-	kvs := s.slotsKvMap[p.slot]
-	if s.ready && (nil == kvs || 0 == len(kvs)) {
-		delete(s.slotsTransferOut, p.slot)
-		s.slots.Clear(p.slot)
-		if nil != p.reply {
-			p.reply()
-		}
+	if p != s.slotsTransferOut[p.slot] {
 		return
-	} else if s.leader == s.raftID {
-		for _, v := range kvs {
-			s.tryKick(v)
+	}
+
+	if s.leader != s.raftID {
+		delete(s.slotsTransferOut, p.slot)
+		return
+	}
+
+	if s.ready {
+		kvs := s.slotsKvMap[p.slot]
+		if nil == kvs || 0 == len(kvs) {
+			delete(s.slotsTransferOut, p.slot)
+			p.reply()
+			return
+		} else {
+			for _, v := range kvs {
+				s.tryKick(v)
+			}
 		}
 	}
 
@@ -745,24 +763,35 @@ func (s *kvstore) processKickSlots(p *SlotTransferProposal) {
 func (s *kvstore) onNotifySlotTransOut(from *net.UDPAddr, msg *sproto.NotifySlotTransOut, context int64) {
 	if s.leader == s.raftID {
 		slot := int(msg.Slot)
-		if !s.slots.Test(slot) {
+		kvs := s.slotsKvMap[slot]
+		if (nil == kvs || 0 == len(kvs)) && !s.slots.Test(slot) {
 			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
 				&sproto.NotifySlotTransOutResp{
 					Slot: msg.Slot,
 				}))
 		} else {
-			if nil == s.slotsTransferOut[slot] {
-				s.rn.IssueProposal(&SlotTransferProposal{
+			p := s.slotsTransferOut[slot]
+
+			reply := func() {
+				s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
+					&sproto.NotifySlotTransOutResp{
+						Slot: msg.Slot,
+					}))
+			}
+
+			if nil == p {
+				p = &SlotTransferProposal{
 					slot:         slot,
 					transferType: slotTransferOut,
 					store:        s,
-					reply: func() {
-						s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
-							&sproto.NotifySlotTransOutResp{
-								Slot: msg.Slot,
-							}))
-					},
-				})
+					reply:        reply,
+				}
+
+				s.slotsTransferOut[slot] = p
+
+				s.rn.IssueProposal(p)
+			} else {
+				p.reply = reply
 			}
 		}
 	}

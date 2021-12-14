@@ -109,7 +109,7 @@ func TestDbmeta2(t *testing.T) {
 
 	assert.Nil(t, err)
 
-	mt := CreateDbMeta(1, dbdef)
+	mt, _ := CreateDbMeta(1, dbdef)
 
 	defStr, err := db.DbDefToJsonString(dbdef)
 	assert.Nil(t, err)
@@ -156,7 +156,11 @@ func TestDbmeta2(t *testing.T) {
 
 	assert.Equal(t, td1, td)
 
-	mt.UpdateMeta(2, dbdef)
+	dbdef2, _ := db.CreateDbDefFromCsv([]string{"Table1@field1:int:1,field2:float:1.2,field3:string:hello,field4:string:,field5:blob:"})
+
+	mt2, _ := CreateDbMeta(2, dbdef2)
+
+	mt2.MoveTo(mt)
 
 	td2 := mt.CheckTableMeta(td)
 

@@ -51,7 +51,9 @@ func (this *SlotTransferProposal) Isurgent() bool {
 }
 
 func (this *SlotTransferProposal) OnError(err error) {
-
+	this.store.mainQueue.AppendHighestPriotiryItem(func() {
+		delete(this.store.slotsTransferOut, this.slot)
+	})
 }
 
 func (this *SlotTransferProposal) Serilize(b []byte) []byte {
@@ -81,19 +83,9 @@ func (this *SlotTransferProposal) OnMergeFinish(b []byte) (ret []byte) {
 func (this *SlotTransferProposal) apply() {
 	if this.transferType == slotTransferIn {
 		this.store.slots.Set(this.slot)
-		if nil != this.reply {
-			this.reply()
-		}
+		this.reply()
 	} else if this.transferType == slotTransferOut {
-		p := this.store.slotsTransferOut[this.slot]
-		if nil == p {
-			this.store.slotsTransferOut[this.slot] = this
-			this.store.processKickSlots(this)
-		} else {
-			//应答最后一个请求
-			if this.reply != nil {
-				p.reply = this.reply
-			}
-		}
+		this.store.slots.Clear(this.slot)
+		this.store.processKickSlots(this)
 	}
 }

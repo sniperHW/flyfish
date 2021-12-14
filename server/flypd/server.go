@@ -40,6 +40,8 @@ func (p *pd) onKvnodeBoot(from *net.UDPAddr, m *snet.Message) {
 		ServiceHost: node.host,
 		ServicePort: int32(node.servicePort),
 		RaftPort:    int32(node.raftPort),
+		MetaVersion: p.pState.Meta.Version,
+		Meta:        p.pState.Meta.MetaBytes,
 	}
 
 	raftCluster := []string{}

@@ -1,8 +1,9 @@
 package flykv
 
 import (
-	"encoding/binary"
 	"errors"
+	"github.com/sniperHW/flyfish/db"
+	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	flyproto "github.com/sniperHW/flyfish/proto"
@@ -51,26 +52,6 @@ func appendField(b []byte, field *flyproto.Field) []byte {
 	default:
 		panic("invaild field value type")
 	}
-	return b
-}
-
-func serilizeLease(b []byte, nodeid int, begtime time.Time) []byte {
-	b = buffer.AppendByte(b, byte(proposal_lease))
-	b = buffer.AppendInt32(b, int32(nodeid))
-	bb, _ := begtime.MarshalBinary()
-	b = buffer.AppendInt32(b, int32(len(bb)))
-	return buffer.AppendBytes(b, bb)
-}
-
-func serilizeSlots(slots *bitmap.Bitmap, b []byte) []byte {
-	ll := len(b)
-	b = buffer.AppendInt32(b, 0) //占位符
-	slotB := slots.ToJson()
-	b = buffer.AppendByte(b, byte(proposal_slots))
-	b = buffer.AppendInt32(b, int32(len(slotB)))
-	b = buffer.AppendBytes(b, slotB)
-	b = append(b, byte(0)) //写入无压缩标记
-	binary.BigEndian.PutUint32(b[ll:ll+4], uint32(len(b)-ll-4))
 	return b
 }
 
@@ -164,6 +145,26 @@ func (this *proposalReader) read() (isOver bool, ptype proposalType, data interf
 		if nil == err {
 			ptype = proposalType(b)
 			switch ptype {
+			case proposal_meta:
+				var l int32
+				l, err = this.reader.CheckGetInt32()
+				if nil != err {
+					return
+				}
+				var bb []byte
+				bb, err = this.reader.CopyBytes(int(l))
+				if nil != err {
+					return
+				}
+				var meta db.DBMeta
+				meta, err = sql.CreateDbMetaFromJson(bb)
+
+				if nil != err {
+					return
+				}
+
+				data = meta
+
 			case proposal_slots:
 				var l int32
 				l, err = this.reader.CheckGetInt32()

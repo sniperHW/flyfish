@@ -10,7 +10,6 @@ import (
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/pkg/raft"
-	"github.com/sniperHW/flyfish/server/flykv/metaLoader"
 	"github.com/sniperHW/flyfish/server/mock"
 	"github.com/sniperHW/flyfish/server/slot"
 	"github.com/stretchr/testify/assert"
@@ -121,8 +120,6 @@ func (d *mockBackEnd) stop() {
 	d.d.Stop()
 }
 
-var dbMeta *db.DbDef
-
 var config *Config
 
 func init() {
@@ -142,13 +139,6 @@ func init() {
 	if nil != err {
 		panic(err)
 	}
-
-	fmt.Println(config.Mode)
-
-	dbConfig := config.DBConfig
-
-	dbMeta, _ = metaLoader.LoadDBMetaFromSqlCsv(config.DBType, dbConfig.Host, dbConfig.Port, dbConfig.DB, dbConfig.User, dbConfig.Password)
-
 }
 
 func GetStore(unikey string) int {

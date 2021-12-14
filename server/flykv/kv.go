@@ -19,16 +19,6 @@ const (
 	kv_no_record = kvState(4)
 )
 
-const (
-	proposal_none          = proposalType(0)
-	proposal_snapshot      = proposalType(1) //全量数据kv快照,
-	proposal_update        = proposalType(2) //fields变更
-	proposal_kick          = proposalType(3) //从缓存移除kv
-	proposal_lease         = proposalType(4) //数据库update权租约
-	proposal_slots         = proposalType(5)
-	proposal_slot_transfer = proposalType(6)
-)
-
 type dbUpdateTask struct {
 	sync.Mutex
 	doing        bool

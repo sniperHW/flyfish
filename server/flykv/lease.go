@@ -2,11 +2,10 @@ package flykv
 
 import (
 	"encoding/binary"
+	"github.com/sniperHW/flyfish/pkg/buffer"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/sniperHW/flyfish/pkg/buffer"
 )
 
 const (
@@ -154,6 +153,14 @@ func (l *lease) hasLease() bool {
 	} else {
 		return true
 	}
+}
+
+func serilizeLease(b []byte, nodeid int, begtime time.Time) []byte {
+	b = buffer.AppendByte(b, byte(proposal_lease))
+	b = buffer.AppendInt32(b, int32(nodeid))
+	bb, _ := begtime.MarshalBinary()
+	b = buffer.AppendInt32(b, int32(len(bb)))
+	return buffer.AppendBytes(b, bb)
 }
 
 func (l *lease) snapshot(b []byte) []byte {

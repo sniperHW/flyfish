@@ -1,12 +1,12 @@
 package sql
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/proto"
 	"reflect"
-	//"strconv"
 	"strings"
 	"sync"
 )
@@ -54,10 +54,30 @@ func (this *FieldMeta) GetDefaultValue() interface{} {
 	return this.defaultValue
 }
 
+type dBMetaJson struct {
+	Version int64
+	Def     *db.DbDef
+}
+
 type DBMeta struct {
 	sync.RWMutex
 	tables  map[string]*TableMeta
 	version int64
+	def     *db.DbDef
+}
+
+func (this *DBMeta) GetDef() *db.DbDef {
+	this.RLock()
+	defer this.RUnlock()
+	return this.def
+}
+
+func (this *DBMeta) ToJson() ([]byte, error) {
+	j := dBMetaJson{
+		Version: this.version,
+		Def:     this.def,
+	}
+	return json.Marshal(&j)
 }
 
 func (this *DBMeta) GetTableMeta(tab string) db.TableMeta {
@@ -76,17 +96,25 @@ func (this *DBMeta) GetVersion() int64 {
 	return this.version
 }
 
-func (this *DBMeta) UpdateMeta(version int64, def *db.DbDef) {
+func (this *DBMeta) MoveTo(other db.DBMeta) {
 	this.Lock()
 	defer this.Unlock()
-	this.version = version
-	this.tables = createTableMetas(version, def)
+	o := other.(*DBMeta)
+	o.Lock()
+	defer o.Unlock()
+	if nil != this.tables {
+		o.def = this.def
+		o.version = this.version
+		o.tables = this.tables
+		this.def = nil
+		this.tables = nil
+	}
 }
 
 func (this *DBMeta) CheckTableMeta(tab db.TableMeta) db.TableMeta {
 	this.RLock()
 	defer this.RUnlock()
-	if tab.GetVersion() == this.version {
+	if tab.(*TableMeta).def == this.def {
 		return tab
 	} else {
 		if v, ok := this.tables[tab.TableName()]; ok {
@@ -105,11 +133,7 @@ type TableMeta struct {
 	insertPrefix     string
 	selectPrefix     string
 	insertFieldOrder []string
-	version          int64
-}
-
-func (this *TableMeta) GetVersion() int64 {
-	return this.version
+	def              *db.DbDef
 }
 
 func (this *TableMeta) TableName() string {
@@ -242,81 +266,104 @@ func getConvetor(tt proto.ValueType) func(interface{}) interface{} {
 	}
 }
 
-func createTableMetas(version int64, def *db.DbDef) map[string]*TableMeta {
+func createTableMetas(def *db.DbDef) (map[string]*TableMeta, error) {
 	table_metas := map[string]*TableMeta{}
-	for _, v := range def.TableDefs {
-		t_meta := &TableMeta{
-			table:            v.Name,
-			fieldMetas:       map[string]*FieldMeta{},
-			insertFieldOrder: []string{},
-			queryMeta: &QueryMeta{
-				field_names:    []string{},
-				field_receiver: []reflect.Type{},
-				field_convter:  []func(interface{}) interface{}{},
-			},
-			version: version,
+	if nil != def {
+		for _, v := range def.TableDefs {
+			t_meta := &TableMeta{
+				table:            v.Name,
+				fieldMetas:       map[string]*FieldMeta{},
+				insertFieldOrder: []string{},
+				queryMeta: &QueryMeta{
+					field_names:    []string{},
+					field_receiver: []reflect.Type{},
+					field_convter:  []func(interface{}) interface{}{},
+				},
+				def: def,
+			}
+
+			//插入三个默认字段
+			t_meta.queryMeta.field_names = append(t_meta.queryMeta.field_names, "__key__")
+			t_meta.queryMeta.field_receiver = append(t_meta.queryMeta.field_receiver, getReceiver(proto.ValueType_string))
+			t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter, getConvetor(proto.ValueType_string))
+
+			t_meta.queryMeta.field_names = append(t_meta.queryMeta.field_names, "__version__")
+			t_meta.queryMeta.field_receiver = append(t_meta.queryMeta.field_receiver, getReceiver(proto.ValueType_int))
+			t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter, getConvetor(proto.ValueType_int))
+
+			t_meta.queryMeta.field_names = append(t_meta.queryMeta.field_names, "__slot__")
+			t_meta.queryMeta.field_receiver = append(t_meta.queryMeta.field_receiver, getReceiver(proto.ValueType_int))
+			t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter, getConvetor(proto.ValueType_int))
+
+			//处理其它字段
+			for _, vv := range v.Fields {
+				//字段名不允许以__开头
+				if strings.HasPrefix(vv.Name, "__") {
+					return nil, errors.New("has prefix _")
+				}
+
+				ftype := db.GetTypeByStr(vv.Type)
+
+				if ftype == proto.ValueType_invaild {
+					return nil, errors.New("unsupport data type")
+				}
+
+				defaultValue := db.GetDefaultValue(ftype, vv.DefautValue)
+
+				if nil == defaultValue {
+					return nil, errors.New("no default value")
+				}
+
+				t_meta.fieldMetas[vv.Name] = &FieldMeta{
+					name:         vv.Name,
+					tt:           ftype,
+					defaultValue: defaultValue,
+				}
+
+				t_meta.insertFieldOrder = append(t_meta.insertFieldOrder, vv.Name)
+
+				t_meta.queryMeta.field_names = append(t_meta.queryMeta.field_names, vv.Name)
+
+				t_meta.queryMeta.field_receiver = append(t_meta.queryMeta.field_receiver, getReceiver(ftype))
+
+				t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter, getConvetor(ftype))
+			}
+
+			table_metas[v.Name] = t_meta
+
+			t_meta.selectPrefix = fmt.Sprintf("SELECT %s FROM %s where __key__ in(", strings.Join(t_meta.queryMeta.field_names, ","), t_meta.table)
+			t_meta.insertPrefix = fmt.Sprintf("INSERT INTO %s(__key__,__version__,__slot__,%s) VALUES (", t_meta.table, strings.Join(t_meta.insertFieldOrder, ","))
+
 		}
-
-		//插入三个默认字段
-		t_meta.queryMeta.field_names = append(t_meta.queryMeta.field_names, "__key__")
-		t_meta.queryMeta.field_receiver = append(t_meta.queryMeta.field_receiver, getReceiver(proto.ValueType_string))
-		t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter, getConvetor(proto.ValueType_string))
-
-		t_meta.queryMeta.field_names = append(t_meta.queryMeta.field_names, "__version__")
-		t_meta.queryMeta.field_receiver = append(t_meta.queryMeta.field_receiver, getReceiver(proto.ValueType_int))
-		t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter, getConvetor(proto.ValueType_int))
-
-		t_meta.queryMeta.field_names = append(t_meta.queryMeta.field_names, "__slot__")
-		t_meta.queryMeta.field_receiver = append(t_meta.queryMeta.field_receiver, getReceiver(proto.ValueType_int))
-		t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter, getConvetor(proto.ValueType_int))
-
-		//处理其它字段
-		for _, vv := range v.Fields {
-			//字段名不允许以__开头
-			if strings.HasPrefix(vv.Name, "__") {
-				panic(errors.New("has prefix _"))
-			}
-
-			ftype := db.GetTypeByStr(vv.Type)
-
-			if ftype == proto.ValueType_invaild {
-				panic(errors.New("unsupport data type"))
-			}
-
-			defaultValue := db.GetDefaultValue(ftype, vv.DefautValue)
-
-			if nil == defaultValue {
-				panic(errors.New("no default value"))
-			}
-
-			t_meta.fieldMetas[vv.Name] = &FieldMeta{
-				name:         vv.Name,
-				tt:           ftype,
-				defaultValue: defaultValue,
-			}
-
-			t_meta.insertFieldOrder = append(t_meta.insertFieldOrder, vv.Name)
-
-			t_meta.queryMeta.field_names = append(t_meta.queryMeta.field_names, vv.Name)
-
-			t_meta.queryMeta.field_receiver = append(t_meta.queryMeta.field_receiver, getReceiver(ftype))
-
-			t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter, getConvetor(ftype))
-		}
-
-		table_metas[v.Name] = t_meta
-
-		t_meta.selectPrefix = fmt.Sprintf("SELECT %s FROM %s where __key__ in(", strings.Join(t_meta.queryMeta.field_names, ","), t_meta.table)
-		t_meta.insertPrefix = fmt.Sprintf("INSERT INTO %s(__key__,__version__,__slot__,%s) VALUES (", t_meta.table, strings.Join(t_meta.insertFieldOrder, ","))
-
 	}
-
-	return table_metas
+	return table_metas, nil
 }
 
-func CreateDbMeta(version int64, def *db.DbDef) db.DBMeta {
-	return &DBMeta{
-		version: version,
-		tables:  createTableMetas(version, def),
+func CreateDbMeta(version int64, def *db.DbDef) (db.DBMeta, error) {
+	if tables, err := createTableMetas(def); nil != err {
+		return nil, err
+	} else {
+		return &DBMeta{
+			version: version,
+			def:     def,
+			tables:  tables,
+		}, nil
+	}
+}
+
+func CreateDbMetaFromJson(j []byte) (db.DBMeta, error) {
+	var jj dBMetaJson
+	if err := json.Unmarshal(j, &jj); nil != err {
+		return nil, err
+	}
+
+	if tables, err := createTableMetas(jj.Def); nil != err {
+		return nil, err
+	} else {
+		return &DBMeta{
+			version: jj.Version,
+			def:     jj.Def,
+			tables:  tables,
+		}, nil
 	}
 }

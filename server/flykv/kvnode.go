@@ -218,7 +218,6 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, cluster string, slots 
 
 	for i := 0; i < len(store.keyvals); i++ {
 		store.keyvals[i].kv = map[string]*kv{}
-		//store.keyvals[i].kicks = map[string]bool{}
 	}
 
 	store.lru.init()
@@ -409,7 +408,11 @@ func (this *kvnode) Start() error {
 				return err
 			}
 
-			meta = sql.CreateDbMeta(1, dbdef)
+			meta, err = sql.CreateDbMeta(1, dbdef)
+
+			if nil != err {
+				return err
+			}
 
 			this.selfUrl = config.SoloConfig.RaftUrl
 
@@ -464,6 +467,16 @@ func (this *kvnode) Start() error {
 
 			if !resp.Ok {
 				return errors.New(resp.Reason)
+			}
+
+			if dbdef, err = db.CreateDbDefFromJsonString(resp.Meta); nil != err {
+				return err
+			}
+
+			meta, err = sql.CreateDbMeta(resp.MetaVersion, dbdef)
+
+			if nil != err {
+				return err
 			}
 
 			this.selfUrl = fmt.Sprintf("http://%s:%d", resp.ServiceHost, resp.RaftPort)
