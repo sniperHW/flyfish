@@ -9,19 +9,14 @@ import (
 	"time"
 )
 
-type replyAble interface {
+type cmdI interface {
 	getSeqno() int64
 	reply(err errcode.Error, fields map[string]*flyproto.Field, version int64)
 	isTimeout() bool
 	dropReply()
-}
-
-type cmdI interface {
-	replyAble
 	cmdType() flyproto.CmdType
 	onLoadResult(err error, proposal *kvProposal) //call when err==nil or err==ERR_RecordNotExist
-	checkVersion() bool
-	check(*kv) bool
+	versionMatch(*kv) bool
 	getNext() cmdI
 	setNext(cmdI)
 }
@@ -61,10 +56,6 @@ func (this *cmdBase) setNext(n cmdI) {
 	this.ppnext = n
 }
 
-func (this *cmdBase) checkVersion() bool {
-	return this.version != nil
-}
-
 func (this *cmdBase) cmdType() flyproto.CmdType {
 	return this.cmd
 }
@@ -72,18 +63,6 @@ func (this *cmdBase) cmdType() flyproto.CmdType {
 func (this *cmdBase) getSeqno() int64 {
 	return this.seqno
 }
-
-/*func (this *cmdBase) isCancel() bool {
-	if this.peer.isClosed() {
-		return true
-	}
-
-	if !this.peer.checkPendingCmd(this) {
-		return true
-	}
-
-	return false
-}*/
 
 func (this *cmdBase) isTimeout() bool {
 	return time.Now().After(this.processDeadline)
@@ -108,14 +87,12 @@ func (this *cmdBase) dropReply() {
 	}
 }
 
-func (this *cmdBase) check(kv *kv) bool {
-	switch this.cmd {
-	case flyproto.CmdType_Get:
-	default:
-		if nil != this.version && *this.version != kv.version {
-			this.reply(Err_version_mismatch, nil, 0)
-			return false
-		}
+func (this *cmdBase) versionMatch(kv *kv) bool {
+	if nil == this.version {
+		return true
+	} else if !(this.cmd == flyproto.CmdType_Get || this.cmd == flyproto.CmdType_Kick) && *this.version != kv.version {
+		return false
+	} else {
+		return true
 	}
-	return true
 }

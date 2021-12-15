@@ -54,7 +54,6 @@ type kv struct {
 	store         *kvstore
 	asynTaskCount int
 	groupID       int
-	//snapshot      bool //是否需要快照
 }
 
 /*
@@ -164,35 +163,24 @@ func (this *kv) process(cmd cmdI) {
 
 	for {
 		cmds := []cmdI{}
-		for {
-			c := this.pendingCmd.front()
-			if nil == c {
-				break
-			}
 
+		for c := this.pendingCmd.front(); nil != c; c = this.pendingCmd.front() {
 			if c.isTimeout() {
 				c.dropReply()
-			} else if !c.check(this) {
+			} else if !c.versionMatch(this) {
 				this.pendingCmd.popFront()
+				c.reply(Err_version_mismatch, nil, 0)
 			} else {
 				if 0 == len(cmds) {
 					cmds = append(cmds, c)
 					this.pendingCmd.popFront()
 				} else {
 					f := cmds[0]
-					if mergeAbleCmd(f.cmdType()) {
-						if f.cmdType() != c.cmdType() {
-							//不同类命令，不能合并
-							break
-						} else if f.cmdType() != flyproto.CmdType_Get && c.checkVersion() {
-							//命令要检查版本号，不能跟之前的命令合并
-							break
-						} else {
-							cmds = append(cmds, c)
-							this.pendingCmd.popFront()
-						}
-					} else {
+					if !mergeAbleCmd(f.cmdType()) || f.cmdType() != c.cmdType() {
 						break
+					} else {
+						cmds = append(cmds, c)
+						this.pendingCmd.popFront()
 					}
 				}
 			}
