@@ -5,9 +5,9 @@ import (
 	"encoding/binary"
 	"github.com/sniperHW/flyfish/errcode"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
-	"github.com/sniperHW/flyfish/pkg/net/cs"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	flyproto "github.com/sniperHW/flyfish/proto"
+	"github.com/sniperHW/flyfish/proto/cs"
 	"time"
 )
 

@@ -2,8 +2,9 @@ package flykv
 
 import (
 	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/pkg/net/cs"
+	"github.com/sniperHW/flyfish/pkg/net"
 	flyproto "github.com/sniperHW/flyfish/proto"
+	"github.com/sniperHW/flyfish/proto/cs"
 	"time"
 )
 
@@ -55,7 +56,7 @@ func (this *cmdGet) onLoadResult(err error, proposal *kvProposal) {
 	return
 }
 
-func (s *kvstore) makeGet(kv *kv, processDeadline time.Time, respDeadline time.Time, c *conn, seqno int64, req *flyproto.GetReq) (cmdI, errcode.Error) {
+func (s *kvstore) makeGet(kv *kv, processDeadline time.Time, respDeadline time.Time, c *net.Socket, seqno int64, req *flyproto.GetReq) (cmdI, errcode.Error) {
 
 	meta := kv.getTableMeta()
 
@@ -69,7 +70,7 @@ func (s *kvstore) makeGet(kv *kv, processDeadline time.Time, respDeadline time.T
 		kv: kv,
 	}
 
-	initCmdBase(&get.cmdBase, flyproto.CmdType_Get, c, seqno, req.Version, processDeadline, respDeadline, &s.wait4ReplyCount, get.makeResponse)
+	get.cmdBase.init(flyproto.CmdType_Get, c, seqno, req.Version, processDeadline, respDeadline, &s.wait4ReplyCount, get.makeResponse)
 
 	if req.GetAll() {
 		get.wants = meta.GetAllFieldsName()

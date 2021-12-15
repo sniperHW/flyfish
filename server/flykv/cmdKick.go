@@ -2,8 +2,9 @@ package flykv
 
 import (
 	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/pkg/net/cs"
+	"github.com/sniperHW/flyfish/pkg/net"
 	flyproto "github.com/sniperHW/flyfish/proto"
+	"github.com/sniperHW/flyfish/proto/cs"
 	"time"
 )
 
@@ -32,11 +33,11 @@ func (this *cmdKick) do(keyvalue *kv, proposal *kvProposal) {
 	}
 }
 
-func (s *kvstore) makeKick(keyvalue *kv, processDeadline time.Time, respDeadline time.Time, c *conn, seqno int64, req *flyproto.KickReq) (cmdI, errcode.Error) {
+func (s *kvstore) makeKick(keyvalue *kv, processDeadline time.Time, respDeadline time.Time, c *net.Socket, seqno int64, req *flyproto.KickReq) (cmdI, errcode.Error) {
 
 	kick := &cmdKick{}
 
-	initCmdBase(&kick.cmdBase, flyproto.CmdType_Kick, c, seqno, nil, processDeadline, respDeadline, &s.wait4ReplyCount, kick.makeResponse)
+	kick.cmdBase.init(flyproto.CmdType_Kick, c, seqno, nil, processDeadline, respDeadline, &s.wait4ReplyCount, kick.makeResponse)
 
 	return kick, nil
 }

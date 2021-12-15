@@ -5,7 +5,7 @@ import (
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
-	"github.com/sniperHW/flyfish/pkg/net/cs"
+	"github.com/sniperHW/flyfish/proto/cs"
 	"sync/atomic"
 	"time"
 )

@@ -151,7 +151,7 @@ func (this *kv) process(cmd cmdI) {
 		} else {
 			this.pendingCmd.add(cmd)
 			if this.state == kv_ok || this.state == kv_no_record {
-				this.store.lru.updateLRU(&this.lru)
+				this.store.lru.update(&this.lru)
 			}
 		}
 	} else {
@@ -170,9 +170,8 @@ func (this *kv) process(cmd cmdI) {
 				break
 			}
 
-			if c.isTimeout() || c.isCancel() {
-				this.pendingCmd.popFront()
-				c.dontReply()
+			if c.isTimeout() {
+				c.dropReply()
 			} else if !c.check(this) {
 				this.pendingCmd.popFront()
 			} else {

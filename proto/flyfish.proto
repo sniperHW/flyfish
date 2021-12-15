@@ -22,7 +22,6 @@ enum CmdType {
   CompareAndSet = 8;
   CompareAndSetNx = 9;
   Kick = 10;
-  Cancel = 11; 
 }
 
 message loginReq {
@@ -182,9 +181,4 @@ message kick_req {
 message kick_resp {
   
 }
-
-message cancel {
-  repeated int64 seqs = 1;//所有需要取消的seqno 
-}
-
 

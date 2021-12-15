@@ -95,7 +95,7 @@ func (this *kvProposal) apply() {
 		}
 
 		if oldState == kv_loading {
-			this.kv.store.lru.updateLRU(&this.kv.lru)
+			this.kv.store.lru.update(&this.kv.lru)
 		}
 
 		this.kv.process(nil)

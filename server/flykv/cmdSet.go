@@ -3,8 +3,9 @@ package flykv
 import (
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/pkg/net/cs"
+	"github.com/sniperHW/flyfish/pkg/net"
 	flyproto "github.com/sniperHW/flyfish/proto"
+	"github.com/sniperHW/flyfish/proto/cs"
 	"time"
 )
 
@@ -58,7 +59,7 @@ func (this *cmdSet) do(keyvalue *kv, proposal *kvProposal) {
 	}
 }
 
-func (s *kvstore) makeSet(kv *kv, processDeadline time.Time, respDeadline time.Time, c *conn, seqno int64, req *flyproto.SetReq) (cmdI, errcode.Error) {
+func (s *kvstore) makeSet(kv *kv, processDeadline time.Time, respDeadline time.Time, c *net.Socket, seqno int64, req *flyproto.SetReq) (cmdI, errcode.Error) {
 	if len(req.GetFields()) == 0 {
 		return nil, errcode.New(errcode.Errcode_error, "set fields is empty")
 	}
@@ -72,7 +73,7 @@ func (s *kvstore) makeSet(kv *kv, processDeadline time.Time, respDeadline time.T
 		fields: map[string]*flyproto.Field{},
 	}
 
-	initCmdBase(&set.cmdBase, flyproto.CmdType_Set, c, seqno, req.Version, processDeadline, respDeadline, &s.wait4ReplyCount, set.makeResponse)
+	set.cmdBase.init(flyproto.CmdType_Set, c, seqno, req.Version, processDeadline, respDeadline, &s.wait4ReplyCount, set.makeResponse)
 
 	for _, v := range req.GetFields() {
 		set.fields[v.GetName()] = v

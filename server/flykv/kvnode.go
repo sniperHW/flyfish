@@ -8,10 +8,10 @@ import (
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
-	"github.com/sniperHW/flyfish/pkg/net/cs"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	flyproto "github.com/sniperHW/flyfish/proto"
+	"github.com/sniperHW/flyfish/proto/cs"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"github.com/sniperHW/flyfish/server/slot"
@@ -60,12 +60,12 @@ func (this *kvnode) startListener() {
 	this.listener.Serve(func(session *fnet.Socket) {
 		go func() {
 
-			session.SetUserData(
-				&conn{
-					session:    session,
-					pendingCmd: map[int64]replyAble{},
-				},
-			)
+			//session.SetUserData(
+			//	&conn{
+			//		session:    session,
+			//		pendingCmd: map[int64]replyAble{},
+			//	},
+			//)
 
 			this.muC.Lock()
 			this.clients[session] = session
@@ -76,12 +76,6 @@ func (this *kvnode) startListener() {
 			session.SetInBoundProcessor(cs.NewReqInboundProcessor())
 			session.SetEncoder(&cs.RespEncoder{})
 			session.SetCloseCallBack(func(session *fnet.Socket, reason error) {
-				if u := session.GetUserData(); nil != u {
-					switch u.(type) {
-					case *conn:
-						u.(*conn).clear()
-					}
-				}
 				this.muC.Lock()
 				delete(this.clients, session)
 				this.muC.Unlock()
@@ -90,11 +84,6 @@ func (this *kvnode) startListener() {
 			session.BeginRecv(func(session *fnet.Socket, v interface{}) {
 
 				if atomic.LoadInt32(&this.stopOnce) == 1 {
-					return
-				}
-
-				c := session.GetUserData()
-				if nil == c {
 					return
 				}
 
@@ -109,13 +98,7 @@ func (this *kvnode) startListener() {
 							Timestamp: time.Now().UnixNano(),
 						},
 					})
-				case flyproto.CmdType_Cancel:
-					req := msg.Data.(*flyproto.Cancel)
-					for _, v := range req.GetSeqs() {
-						c.(*conn).removePendingCmdBySeqno(v)
-					}
 				default:
-
 					this.muS.RLock()
 					store, ok := this.stores[msg.Store]
 					this.muS.RUnlock()
@@ -127,7 +110,7 @@ func (this *kvnode) startListener() {
 						})
 					} else {
 						store.addCliMessage(clientRequest{
-							from: c.(*conn),
+							from: session,
 							msg:  msg,
 						})
 					}
@@ -197,16 +180,18 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, cluster string, slots 
 	}
 
 	store := &kvstore{
-		db:               this.db,
-		mainQueue:        mainQueue,
-		keyvals:          make([]kvmgr, groupSize),
-		kvnode:           this,
-		shard:            storeID,
-		slots:            slots,
-		meta:             meta,
-		memberShip:       map[int]bool{},
-		slotsKvMap:       map[int]map[string]*kv{},
-		slotsTransferOut: map[int]*SlotTransferProposal{},
+		db:         this.db,
+		mainQueue:  mainQueue,
+		kvnode:     this,
+		shard:      storeID,
+		meta:       meta,
+		memberShip: map[int]bool{},
+		kvmgr: kvmgr{
+			kv:               make([]map[string]*kv, groupSize),
+			slotsKvMap:       map[int]map[string]*kv{},
+			slots:            slots,
+			slotsTransferOut: map[int]*SlotTransferProposal{},
+		},
 	}
 
 	rn := raft.NewRaftNode(this.mutilRaft, mainQueue, (this.id<<16)+storeID, peers, false, this.config.RaftLogDir, this.config.RaftLogPrefix)
@@ -214,8 +199,8 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, cluster string, slots 
 	store.rn = rn
 	store.raftID = rn.ID()
 
-	for i := 0; i < len(store.keyvals); i++ {
-		store.keyvals[i].kv = map[string]*kv{}
+	for i := 0; i < len(store.kv); i++ {
+		store.kv[i] = map[string]*kv{}
 	}
 
 	store.lru.init()

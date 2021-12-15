@@ -7,11 +7,11 @@ import (
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/buffer"
-	"github.com/sniperHW/flyfish/pkg/compress"
-	"github.com/sniperHW/flyfish/pkg/net/cs"
+	fnet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	flyproto "github.com/sniperHW/flyfish/proto"
+	"github.com/sniperHW/flyfish/proto/cs"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	sslot "github.com/sniperHW/flyfish/server/slot"
@@ -96,100 +96,29 @@ func (q applicationQueue) close() {
 }
 
 type clientRequest struct {
-	from *conn
+	from *fnet.Socket
 	msg  *cs.ReqMessage
 	slot int
 }
 
-type lruElement struct {
-	pprev    *lruElement
-	nnext    *lruElement
-	keyvalue *kv
-}
-
-type lruList struct {
-	head lruElement
-	tail lruElement
-}
-
-func (this *lruList) init() {
-	this.head.nnext = &this.tail
-	this.tail.pprev = &this.head
-}
-
-/*
- * lru每个kv被访问后重新插入列表头部，尾部表示最久未被访问的kv，可以从cache中kick
- */
-func (this *lruList) updateLRU(e *lruElement) {
-	if e.nnext != nil || e.pprev != nil {
-		//先移除
-		e.pprev.nnext = e.nnext
-		e.nnext.pprev = e.pprev
-		e.nnext = nil
-		e.pprev = nil
-	}
-
-	//插入头部
-	e.nnext = this.head.nnext
-	e.nnext.pprev = e
-	e.pprev = &this.head
-	this.head.nnext = e
-
-}
-
-func (this *lruList) removeLRU(e *lruElement) {
-	if e.nnext != nil && e.pprev != nil {
-		e.pprev.nnext = e.nnext
-		e.nnext.pprev = e.pprev
-		e.nnext = nil
-		e.pprev = nil
-	}
-}
-
 type kvmgr struct {
-	kv map[string]*kv
-}
-
-var compressorPool sync.Pool = sync.Pool{
-	New: func() interface{} {
-		return &compress.ZipCompressor{}
-	},
-}
-
-func getCompressor() compress.CompressorI {
-	return compressorPool.Get().(compress.CompressorI)
-}
-
-func releaseCompressor(c compress.CompressorI) {
-	compressorPool.Put(c)
-}
-
-var decompressorPool sync.Pool = sync.Pool{
-	New: func() interface{} {
-		return &compress.ZipDecompressor{}
-	},
-}
-
-func getDecompressor() compress.DecompressorI {
-	return decompressorPool.Get().(compress.DecompressorI)
-}
-
-func releaseDecompressor(c compress.DecompressorI) {
-	decompressorPool.Put(c)
+	kv               []map[string]*kv
+	slotsKvMap       map[int]map[string]*kv
+	slots            *bitmap.Bitmap
+	slotsTransferOut map[int]*SlotTransferProposal //正在迁出的slot
+	kvcount          int
+	lru              lruList
 }
 
 type kvstore struct {
+	kvmgr
 	raftMtx              sync.RWMutex
 	raftID               int
 	leader               int
 	snapshotter          *snap.Snapshotter
 	rn                   *raft.RaftNode
 	mainQueue            applicationQueue
-	keyvals              []kvmgr
-	kvcount              int
-	slotsKvMap           map[int]map[string]*kv
 	db                   dbI
-	lru                  lruList
 	wait4ReplyCount      int32
 	lease                *lease
 	stoped               int32
@@ -197,10 +126,8 @@ type kvstore struct {
 	kvnode               *kvnode
 	needWriteBackAll     bool
 	shard                int
-	slots                *bitmap.Bitmap
 	meta                 db.DBMeta
 	memberShip           map[int]bool
-	slotsTransferOut     map[int]*SlotTransferProposal //正在迁出的slot
 	dbWriteBackCount     int32
 	SoftLimitReachedTime int64
 	unixNow              int64
@@ -239,7 +166,7 @@ func (s *kvstore) loadSnapshot() (*raftpb.Snapshot, error) {
 
 func (s *kvstore) addCliMessage(req clientRequest) {
 	if nil != s.mainQueue.q.Append(0, req) {
-		req.from.send(&cs.RespMessage{
+		req.from.Send(&cs.RespMessage{
 			Cmd:   req.msg.Cmd,
 			Seqno: req.msg.Seqno,
 			Err:   errcode.New(errcode.Errcode_retry, "kvstore busy,please retry later"),
@@ -251,8 +178,8 @@ const kvCmdQueueSize = 32
 
 func (s *kvstore) deleteKv(k *kv) {
 	s.kvcount--
-	delete(s.keyvals[k.groupID].kv, k.uniKey)
-	s.lru.removeLRU(&k.lru)
+	delete(s.kv[k.groupID], k.uniKey)
+	s.lru.remove(&k.lru)
 
 	sl := s.slotsKvMap[k.slot]
 	delete(sl, k.uniKey)
@@ -294,7 +221,7 @@ func (s *kvstore) newkv(slot int, groupID int, unikey string, key string, table 
 		updateFields: map[string]*flyproto.Field{},
 	}
 
-	s.keyvals[groupID].kv[unikey] = k
+	s.kv[groupID][unikey] = k
 
 	s.kvcount++
 
@@ -416,7 +343,7 @@ func (s *kvstore) checkReqLimit() bool {
 
 func (s *kvstore) processClientMessage(req clientRequest) {
 	if !s.checkReqLimit() {
-		req.from.send(&cs.RespMessage{
+		req.from.Send(&cs.RespMessage{
 			Cmd:   req.msg.Cmd,
 			Seqno: req.msg.Seqno,
 			Err:   errcode.New(errcode.Errcode_retry, "kvstore busy,please retry later"),
@@ -428,7 +355,7 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 
 	if !s.slots.Test(slot) {
 		//unikey不归当前store管理,路由信息已经stale
-		req.from.send(&cs.RespMessage{
+		req.from.Send(&cs.RespMessage{
 			Cmd:   req.msg.Cmd,
 			Seqno: req.msg.Seqno,
 			Err:   errcode.New(errcode.Errcode_route_info_stale, ""),
@@ -438,7 +365,7 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 
 	if s.slotsTransferOut[slot] != nil {
 		//正在迁出
-		req.from.send(&cs.RespMessage{
+		req.from.Send(&cs.RespMessage{
 			Cmd:   req.msg.Cmd,
 			Seqno: req.msg.Seqno,
 			Err:   errcode.New(errcode.Errcode_slot_transfering, ""),
@@ -447,13 +374,13 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 	}
 
 	if s.leader != s.raftID {
-		req.from.send(&cs.RespMessage{
+		req.from.Send(&cs.RespMessage{
 			Cmd:   req.msg.Cmd,
 			Seqno: req.msg.Seqno,
 			Err:   errcode.New(errcode.Errcode_not_leader, ""),
 		})
 	} else if !s.ready || s.meta == nil {
-		req.from.send(&cs.RespMessage{
+		req.from.Send(&cs.RespMessage{
 			Cmd:   req.msg.Cmd,
 			Seqno: req.msg.Seqno,
 			Err:   errcode.New(errcode.Errcode_retry, "kvstore not start ok,please retry later"),
@@ -461,26 +388,26 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 	} else {
 
 		var (
-			err      errcode.Error
-			cmd      cmdI
-			keyvalue *kv
-			ok       bool
+			err errcode.Error
+			cmd cmdI
+			kv  *kv
+			ok  bool
 		)
 
-		groupID := sslot.StringHash(req.msg.UniKey) % len(s.keyvals)
+		groupID := sslot.StringHash(req.msg.UniKey) % len(s.kv)
 
-		keyvalue, ok = s.keyvals[groupID].kv[req.msg.UniKey]
+		kv, ok = s.kv[groupID][req.msg.UniKey]
 
 		if !ok {
 			if req.msg.Cmd == flyproto.CmdType_Kick { //kv不在缓存中,kick操作直接返回ok
-				req.from.send(&cs.RespMessage{
+				req.from.Send(&cs.RespMessage{
 					Seqno: req.msg.Seqno,
 					Cmd:   req.msg.Cmd,
 				})
 				return
 			} else {
 				if s.kvcount > (s.kvnode.config.MaxCachePerStore*3)/2 {
-					req.from.send(&cs.RespMessage{
+					req.from.Send(&cs.RespMessage{
 						Cmd:   req.msg.Cmd,
 						Seqno: req.msg.Seqno,
 						Err:   errcode.New(errcode.Errcode_retry, "kvstore busy,please retry later"),
@@ -488,8 +415,8 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 					return
 				} else {
 					table, key := splitUniKey(req.msg.UniKey)
-					if keyvalue, err = s.newkv(slot, groupID, req.msg.UniKey, key, table); nil != err {
-						req.from.send(&cs.RespMessage{
+					if kv, err = s.newkv(slot, groupID, req.msg.UniKey, key, table); nil != err {
+						req.from.Send(&cs.RespMessage{
 							Cmd:   req.msg.Cmd,
 							Seqno: req.msg.Seqno,
 							Err:   err,
@@ -500,14 +427,14 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 			}
 		}
 
-		if cmd, err = s.makeCmd(keyvalue, req); nil != err {
-			req.from.send(&cs.RespMessage{
+		if cmd, err = s.makeCmd(kv, req); nil != err {
+			req.from.Send(&cs.RespMessage{
 				Cmd:   req.msg.Cmd,
 				Seqno: req.msg.Seqno,
 				Err:   err,
 			})
 		} else {
-			keyvalue.process(cmd)
+			kv.process(cmd)
 		}
 	}
 }
@@ -552,8 +479,8 @@ func (s *kvstore) gotLease() {
 	if s.needWriteBackAll {
 		GetSugar().Info("WriteBackAll")
 		s.needWriteBackAll = false
-		for _, v := range s.keyvals {
-			for _, vv := range v.kv {
+		for _, v := range s.kv {
+			for _, vv := range v {
 				err := vv.updateTask.issueFullDbWriteBack()
 				if nil != err {
 					break

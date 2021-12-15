@@ -1,7 +1,7 @@
 package flykv
 
-//go test -covermode=count -v -coverprofile=coverage.out -run=.
-//go tool cover -html=coverage.out
+//go test -covermode=count -v -coverprofile=../coverage.out -run=.
+//go tool cover -html=../coverage.out
 
 import (
 	"fmt"
@@ -634,11 +634,11 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 
 	time.Sleep(time.Second * 2)
 
-	assert.Equal(t, 299, len(node.stores[1].keyvals[0].kv))
+	assert.Equal(t, 299, len(node.stores[1].kv[0]))
 
-	assert.Nil(t, node.stores[1].keyvals[0].kv["users1:sniperHW:199"])
+	assert.Nil(t, node.stores[1].kv[0]["users1:sniperHW:199"])
 
-	assert.NotNil(t, node.stores[1].keyvals[0].kv["users1:sniperHW:99"])
+	assert.NotNil(t, node.stores[1].kv[0]["users1:sniperHW:99"])
 
 	node.Stop()
 

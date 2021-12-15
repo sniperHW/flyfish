@@ -3,8 +3,9 @@ package flykv
 import (
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/pkg/net/cs"
+	"github.com/sniperHW/flyfish/pkg/net"
 	flyproto "github.com/sniperHW/flyfish/proto"
+	"github.com/sniperHW/flyfish/proto/cs"
 	"time"
 )
 
@@ -87,7 +88,7 @@ func (this *cmdCompareAndSet) do(keyvalue *kv, proposal *kvProposal) {
 	}
 }
 
-func (s *kvstore) makeCompareAndSet(kv *kv, processDeadline time.Time, respDeadline time.Time, c *conn, seqno int64, req *flyproto.CompareAndSetReq) (cmdI, errcode.Error) {
+func (s *kvstore) makeCompareAndSet(kv *kv, processDeadline time.Time, respDeadline time.Time, c *net.Socket, seqno int64, req *flyproto.CompareAndSetReq) (cmdI, errcode.Error) {
 	if req.New == nil {
 		return nil, errcode.New(errcode.Errcode_error, "new is nil")
 	}
@@ -110,7 +111,7 @@ func (s *kvstore) makeCompareAndSet(kv *kv, processDeadline time.Time, respDeadl
 		old: req.Old,
 	}
 
-	initCmdBase(&compareAndSet.cmdBase, flyproto.CmdType_CompareAndSet, c, seqno, req.Version, processDeadline, respDeadline, &s.wait4ReplyCount, compareAndSet.makeResponse)
+	compareAndSet.cmdBase.init(flyproto.CmdType_CompareAndSet, c, seqno, req.Version, processDeadline, respDeadline, &s.wait4ReplyCount, compareAndSet.makeResponse)
 
 	return compareAndSet, nil
 }

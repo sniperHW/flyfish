@@ -117,8 +117,8 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 			data.(db.DBMeta).MoveTo(s.meta)
 		} else {
 			p := data.(ppkv)
-			groupID := sslot.StringHash(p.unikey) % len(s.keyvals)
-			keyvalue, ok := s.keyvals[groupID].kv[p.unikey]
+			groupID := sslot.StringHash(p.unikey) % len(s.kv)
+			kv, ok := s.kv[groupID][p.unikey]
 			if !ok {
 				if ptype == proposal_kick {
 					return fmt.Errorf("bad data,%s with a bad proposal_type:%d", p.unikey, ptype)
@@ -128,7 +128,7 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 					var e errcode.Error
 					table, key := splitUniKey(p.unikey)
 					slot := sslot.Unikey2Slot(p.unikey)
-					keyvalue, e = s.newkv(slot, groupID, p.unikey, key, table)
+					kv, e = s.newkv(slot, groupID, p.unikey, key, table)
 					if nil != e {
 						return fmt.Errorf("bad data,%s is no table define", p.unikey)
 					}
@@ -137,23 +137,23 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 
 			switch ptype {
 			case proposal_kick:
-				s.deleteKv(keyvalue)
+				s.deleteKv(kv)
 			case proposal_update:
-				keyvalue.version = p.version
+				kv.version = p.version
 				for k, v := range p.fields {
-					keyvalue.fields[k] = v
+					kv.fields[k] = v
 				}
-				s.lru.updateLRU(&keyvalue.lru)
+				s.lru.update(&kv.lru)
 			case proposal_snapshot:
-				keyvalue.version = p.version
-				keyvalue.fields = p.fields
-				if keyvalue.version != 0 {
-					keyvalue.state = kv_ok
+				kv.version = p.version
+				kv.fields = p.fields
+				if kv.version != 0 {
+					kv.state = kv_ok
 				} else {
-					keyvalue.state = kv_no_record
+					kv.state = kv_no_record
 				}
 
-				s.lru.updateLRU(&keyvalue.lru)
+				s.lru.update(&kv.lru)
 
 			}
 			GetSugar().Debugf("%s ok", p.unikey)
@@ -165,9 +165,9 @@ func (s *kvstore) makeSnapshot(notifyer *raft.SnapshotNotify) {
 	beg := time.Now()
 
 	var waitGroup sync.WaitGroup
-	waitGroup.Add(len(s.keyvals))
+	waitGroup.Add(len(s.kv))
 
-	snaps := make([][]*kv, len(s.keyvals))
+	snaps := make([][]*kv, len(s.kv))
 
 	buff := make([]byte, 0, buffsize)
 
@@ -182,27 +182,27 @@ func (s *kvstore) makeSnapshot(notifyer *raft.SnapshotNotify) {
 	}
 
 	//多线程序列化和压缩
-	for i, _ := range s.keyvals {
-		go func(i int, m *kvmgr) {
-			var snapkvs []*kv
-			for _, v := range m.kv {
-				skv := &kv{
+	for i, v := range s.kv {
+		go func(i int, m map[string]*kv) {
+			var snapkv []*kv
+			for _, v := range m {
+				kv := &kv{
 					uniKey:  v.uniKey,
 					version: v.version,
 					fields:  map[string]*flyproto.Field{},
 				}
 
 				for kk, vv := range v.fields {
-					skv.fields[kk] = vv
+					kv.fields[kk] = vv
 				}
 
-				snapkvs = append(snapkvs, skv)
+				snapkv = append(snapkv, kv)
 			}
-			snaps[i] = snapkvs
+			snaps[i] = snapkv
 
 			waitGroup.Done()
 
-		}(i, &s.keyvals[i])
+		}(i, v)
 	}
 
 	waitGroup.Wait()

@@ -3,8 +3,9 @@ package flykv
 import (
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/pkg/net/cs"
+	"github.com/sniperHW/flyfish/pkg/net"
 	flyproto "github.com/sniperHW/flyfish/proto"
+	"github.com/sniperHW/flyfish/proto/cs"
 	"time"
 )
 
@@ -96,7 +97,7 @@ func (this *cmdIncr) do(kv *kv, proposal *kvProposal) {
 	}
 }
 
-func (s *kvstore) makeIncr(kv *kv, processDeadline time.Time, respDeadline time.Time, c *conn, seqno int64, req *flyproto.IncrByReq) (cmdI, errcode.Error) {
+func (s *kvstore) makeIncr(kv *kv, processDeadline time.Time, respDeadline time.Time, c *net.Socket, seqno int64, req *flyproto.IncrByReq) (cmdI, errcode.Error) {
 	if nil == req.Field {
 		return nil, errcode.New(errcode.Errcode_error, "field is nil")
 	}
@@ -114,7 +115,7 @@ func (s *kvstore) makeIncr(kv *kv, processDeadline time.Time, respDeadline time.
 		kv: kv,
 	}
 
-	initCmdBase(&incr.cmdBase, flyproto.CmdType_CompareAndSet, c, seqno, req.Version, processDeadline, respDeadline, &s.wait4ReplyCount, incr.makeResponse)
+	incr.cmdBase.init(flyproto.CmdType_CompareAndSet, c, seqno, req.Version, processDeadline, respDeadline, &s.wait4ReplyCount, incr.makeResponse)
 
 	return incr, nil
 }
