@@ -39,16 +39,13 @@ const (
 )
 
 type raftTask struct {
-	lelement *list.Element
-	tt       int
-	id       uint64
-	deadline time.Time
+	listE *list.Element
+	tt    int
+	id    uint64
+	other interface{}
 	//for LinearizableRead use only
-	ptrridx        *uint64
-	ridx           uint64
-	other          interface{}
-	onTimeout      func()
-	onLeaderDemote func()
+	ptrridx *uint64
+	ridx    uint64
 }
 
 type raftTaskMgr struct {
@@ -57,18 +54,27 @@ type raftTaskMgr struct {
 	dict map[uint64]*raftTask
 }
 
-func (this *raftTaskMgr) insert(t *raftTask) {
+func (this *raftTaskMgr) addToDict(t *raftTask) {
 	this.Lock()
 	defer this.Unlock()
-	t.lelement = this.l.PushBack(t)
 	this.dict[t.id] = t
-	GetSugar().Debugf("raftTaskMgr insert %d", t.id)
+	GetSugar().Debugf("raftTaskMgr add %d", t.id)
+}
+
+func (this *raftTaskMgr) addToDictAndList(t *raftTask) {
+	this.Lock()
+	defer this.Unlock()
+	t.listE = this.l.PushBack(t)
+	this.dict[t.id] = t
+	GetSugar().Debugf("raftTaskMgr add %d", t.id)
 }
 
 func (this *raftTaskMgr) remove(t *raftTask) {
 	this.Lock()
 	defer this.Unlock()
-	this.l.Remove(t.lelement)
+	if nil != t.listE {
+		this.l.Remove(t.listE)
+	}
 	delete(this.dict, t.id)
 	GetSugar().Debugf("raftTaskMgr remove %d", t.id)
 }
@@ -79,7 +85,9 @@ func (this *raftTaskMgr) getAndRemoveByID(id uint64) *raftTask {
 	t, ok := this.dict[id]
 	if ok {
 		GetSugar().Debugf("raftTaskMgr getAndRemoveByID %d", t.id)
-		this.l.Remove(t.lelement)
+		if nil != t.listE {
+			this.l.Remove(t.listE)
+		}
 		delete(this.dict, t.id)
 		return t
 	} else {
@@ -87,51 +95,11 @@ func (this *raftTaskMgr) getAndRemoveByID(id uint64) *raftTask {
 	}
 }
 
-func (this *raftTaskMgr) runTimeoutCheck(rc *RaftNode) {
-
-	var timeouts []*raftTask
-	for {
-		select {
-		case <-rc.stopc:
-			return
-		default:
-		}
-		time.Sleep(time.Millisecond * 10)
-		now := time.Now()
-		this.Lock()
-		for e := this.l.Front(); e != nil; e = this.l.Front() {
-			v := e.Value.(*raftTask)
-			if v.deadline.IsZero() {
-				break
-			} else if now.After(v.deadline) {
-				if nil != v.onTimeout {
-					timeouts = append(timeouts, v)
-				}
-				this.l.Remove(e)
-				delete(this.dict, v.id)
-			} else {
-				break
-			}
-		}
-		this.Unlock()
-		if len(timeouts) > 0 {
-			for _, v := range timeouts {
-				v.onTimeout()
-			}
-			timeouts = timeouts[:0]
-		}
-	}
-}
-
 func (this *raftTaskMgr) onLeaderDemote() {
 	this.Lock()
-	dict := this.dict
 	this.l = list.New()
 	this.dict = map[uint64]*raftTask{}
 	this.Unlock()
-	for _, v := range dict {
-		v.onLeaderDemote()
-	}
 }
 
 type RaftNode struct {
@@ -499,8 +467,6 @@ func (rc *RaftNode) serveChannels() {
 
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
-
-	go rc.linearizableReadMgr.runTimeoutCheck(rc)
 
 	rc.waitStop.Add(3)
 

@@ -25,7 +25,7 @@ func (rc *RaftNode) checkLinearizableRead() {
 		} else {
 			rc.commitC.AppendHighestPriotiryItem(v.other.([]LinearizableRead))
 			delete(rc.linearizableReadMgr.dict, v.id)
-			rc.linearizableReadMgr.l.Remove(v.lelement)
+			rc.linearizableReadMgr.l.Remove(v.listE)
 		}
 	}
 }
@@ -48,45 +48,17 @@ func (rc *RaftNode) linearizableRead(batchRead []LinearizableRead) {
 	t := &raftTask{
 		id:    rc.genNextIndex(),
 		other: batchRead,
-		onTimeout: func() {
-			for _, v := range batchRead {
-				v.OnError(ERR_TIMEOUT)
-			}
-		},
-		onLeaderDemote: func() {
-			for _, v := range batchRead {
-				v.OnError(ERR_LEADER_DEMOTE)
-			}
-		},
 	}
 
 	ctxToSend := make([]byte, 8)
 	binary.BigEndian.PutUint64(ctxToSend, t.id)
 
-	rc.linearizableReadMgr.insert(t)
-
-	begin := time.Now()
-
-	cctx, cancel := context.WithTimeout(context.Background(), ReadTimeout)
-	err := rc.node.ReadIndex(cctx, ctxToSend)
-	cancel()
-	if nil != err {
+	rc.linearizableReadMgr.addToDictAndList(t)
+	if err := rc.node.ReadIndex(context.TODO(), ctxToSend); nil != err {
 		rc.linearizableReadMgr.remove(t)
-
-		if err == cctx.Err() {
-			err = ERR_TIMEOUT
-		}
-
 		for _, v := range batchRead {
 			v.OnError(err)
 		}
-
-	} else {
-		now := time.Now()
-		elapse := now.Sub(begin)
-		rc.linearizableReadMgr.Lock()
-		t.deadline = now.Add(ReadTimeout - elapse)
-		rc.linearizableReadMgr.Unlock()
 	}
 }
 

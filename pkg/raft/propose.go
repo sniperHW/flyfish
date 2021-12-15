@@ -2,11 +2,10 @@ package raft
 
 import (
 	"context"
-	"sync"
-	"time"
-
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	"go.etcd.io/etcd/raft/raftpb"
+	"sync"
+	"time"
 )
 
 type Proposal interface {
@@ -63,9 +62,6 @@ func (rc *RaftNode) proposeConfChange(proposal ProposalConfChange) {
 	t := &raftTask{
 		id:    rc.genNextIndex(),
 		other: proposal,
-		onLeaderDemote: func() {
-			proposal.OnError(ERR_LEADER_DEMOTE)
-		},
 	}
 
 	buff := make([]byte, 0, 8+len(proposal.GetUrl()))
@@ -79,7 +75,7 @@ func (rc *RaftNode) proposeConfChange(proposal ProposalConfChange) {
 		Context: buff,
 	}
 
-	rc.confChangeMgr.insert(t)
+	rc.confChangeMgr.addToDict(t)
 	if err := rc.node.ProposeConfChange(context.TODO(), cfChange); nil != err {
 		rc.confChangeMgr.remove(t)
 		proposal.OnError(err)
@@ -126,14 +122,9 @@ func (rc *RaftNode) propose(batchProposal []Proposal) {
 	t := &raftTask{
 		id:    rc.genNextIndex(),
 		other: batchProposal,
-		onLeaderDemote: func() {
-			for _, v := range batchProposal {
-				v.OnError(ERR_LEADER_DEMOTE)
-			}
-		},
 	}
 
-	buff := getProposeBuff() //make([]byte, 0, 4096)
+	buff := getProposeBuff()
 
 	for _, v := range batchProposal {
 		buff = v.Serilize(buff)
@@ -147,7 +138,7 @@ func (rc *RaftNode) propose(batchProposal []Proposal) {
 
 	releaseProposeBuff(buff)
 
-	rc.proposalMgr.insert(t)
+	rc.proposalMgr.addToDict(t)
 	if err := rc.node.Propose(context.TODO(), b); nil != err {
 		GetSugar().Errorf("proposalError %v", err)
 		rc.proposalMgr.remove(t)

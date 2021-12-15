@@ -85,14 +85,6 @@ func (self *ArrayQueue) Close() bool {
 	return true
 }
 
-/*func (self *ArrayQueue) SetCap(newSize int) {
-	if newSize > 0 {
-		self.mtx.Lock()
-		self.fullSize = newSize
-		self.mtx.Unlock()
-	}
-}*/
-
 func (self *ArrayQueue) Len() int {
 	self.mtx.Lock()
 	defer self.mtx.Unlock()

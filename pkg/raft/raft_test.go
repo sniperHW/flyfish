@@ -1,7 +1,7 @@
 package raft
 
-//go test -covermode=count -v -coverprofile=coverage.out -run=.
-//go tool cover -html=coverage.out
+//go test -covermode=count -v -coverprofile=../coverage.out -run=.
+//go tool cover -html=../coverage.out
 
 import (
 	"encoding/json"
