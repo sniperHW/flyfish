@@ -75,7 +75,6 @@ func (this *SlotTransferProposal) Isurgent() bool {
 }
 
 func (this *SlotTransferProposal) OnError(err error) {
-	GetSugar().Errorf("SlotTransferProposal error:%v", err)
 	this.store.mainQueue.AppendHighestPriotiryItem(func() {
 		delete(this.store.slotsTransferOut, this.slot)
 	})

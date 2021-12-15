@@ -197,15 +197,16 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, cluster string, slots 
 	}
 
 	store := &kvstore{
-		db:         this.db,
-		mainQueue:  mainQueue,
-		keyvals:    make([]kvmgr, groupSize),
-		kvnode:     this,
-		shard:      storeID,
-		slots:      slots,
-		meta:       meta,
-		memberShip: map[int]bool{},
-		slotsKvMap: map[int]map[string]*kv{},
+		db:               this.db,
+		mainQueue:        mainQueue,
+		keyvals:          make([]kvmgr, groupSize),
+		kvnode:           this,
+		shard:            storeID,
+		slots:            slots,
+		meta:             meta,
+		memberShip:       map[int]bool{},
+		slotsKvMap:       map[int]map[string]*kv{},
+		slotsTransferOut: map[int]*SlotTransferProposal{},
 	}
 
 	rn := raft.NewRaftNode(this.mutilRaft, mainQueue, (this.id<<16)+storeID, peers, false, this.config.RaftLogDir, this.config.RaftLogPrefix)
@@ -415,6 +416,12 @@ func (this *kvnode) Start() error {
 			}
 
 			service := fmt.Sprintf("%s:%d", config.SoloConfig.ServiceHost, config.SoloConfig.ServicePort)
+
+			err = this.initUdp(service)
+
+			if nil != err {
+				return err
+			}
 
 			this.listener, err = cs.NewListener("tcp", service, outputBufLimit, verifyLogin)
 

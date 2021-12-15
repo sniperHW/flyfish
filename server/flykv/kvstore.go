@@ -809,6 +809,7 @@ func (s *kvstore) onNotifySlotTransOut(from *net.UDPAddr, msg *sproto.NotifySlot
 
 				s.rn.IssueProposal(p)
 			} else {
+				//应答最后一个消息
 				p.reply = reply
 			}
 		}
@@ -823,18 +824,29 @@ func (s *kvstore) onNotifyUpdateMeta(from *net.UDPAddr, msg *sproto.NotifyUpdate
 					Store:   msg.Store,
 					Version: msg.Version,
 				}))
-		} else if meta, err := sql.CreateDbMetaFromJson(msg.Meta); nil != err {
-			s.rn.IssueProposal(&ProposalUpdateMeta{
-				meta:  meta,
-				store: s,
-				reply: func() {
-					s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
-						&sproto.NotifyUpdateMetaResp{
-							Store:   msg.Store,
-							Version: msg.Version,
-						}))
-				},
-			})
+		} else {
+			var meta db.DBMeta
+			var err error
+			var def *db.DbDef
+			if def, err = db.CreateDbDefFromJsonString(msg.Meta); nil == err {
+				meta, err = sql.CreateDbMeta(msg.Version, def)
+			}
+
+			if nil == err {
+				s.rn.IssueProposal(&ProposalUpdateMeta{
+					meta:  meta,
+					store: s,
+					reply: func() {
+						s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
+							&sproto.NotifyUpdateMetaResp{
+								Store:   msg.Store,
+								Version: msg.Version,
+							}))
+					},
+				})
+			} else {
+				GetSugar().Infof("onNotifyUpdateMeta ")
+			}
 		}
 	}
 }

@@ -80,12 +80,13 @@ func (this *kvnode) initUdp(service string) error {
 		return err
 	}
 
+	GetSugar().Infof("flykv:%d start udp service at %s", this.id, service)
+
 	go func() {
 		recvbuff := make([]byte, 64*1024)
 		for {
 			from, msg, err := this.udpConn.ReadFrom(recvbuff)
 			if nil != err {
-				GetSugar().Errorf("read err:%v", err)
 				return
 			} else {
 				this.processUdpMsg(from, msg.(*snet.Message))
