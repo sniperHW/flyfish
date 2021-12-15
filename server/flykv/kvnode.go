@@ -38,7 +38,7 @@ var (
 
 type kvnode struct {
 	muC       sync.Mutex
-	clients   map[*fnet.Socket]*fnet.Socket
+	clients   map[*fnet.Socket]struct{}
 	muS       sync.RWMutex
 	stores    map[int]*kvstore
 	config    *Config
@@ -59,16 +59,8 @@ func verifyLogin(loginReq *flyproto.LoginReq) bool {
 func (this *kvnode) startListener() {
 	this.listener.Serve(func(session *fnet.Socket) {
 		go func() {
-
-			//session.SetUserData(
-			//	&conn{
-			//		session:    session,
-			//		pendingCmd: map[int64]replyAble{},
-			//	},
-			//)
-
 			this.muC.Lock()
-			this.clients[session] = session
+			this.clients[session] = struct{}{}
 			this.muC.Unlock()
 
 			session.SetRecvTimeout(flyproto.PingTime * 10)
@@ -231,8 +223,8 @@ func (this *kvnode) Stop() {
 
 		//关闭现有连接
 		this.muC.Lock()
-		for _, v := range this.clients {
-			go v.Close(nil, time.Second*5)
+		for c, _ := range this.clients {
+			go c.Close(nil, time.Second*5)
 		}
 		this.muC.Unlock()
 
@@ -541,7 +533,7 @@ func NewKvNode(id int, config *Config, db dbI) *kvnode {
 	return &kvnode{
 		id:        id,
 		mutilRaft: raft.NewMutilRaft(),
-		clients:   map[*fnet.Socket]*fnet.Socket{},
+		clients:   map[*fnet.Socket]struct{}{},
 		stores:    map[int]*kvstore{},
 		db:        db,
 		config:    config,

@@ -1,6 +1,7 @@
 package flykv
 
 import (
+	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -86,23 +87,30 @@ func newLease(store *kvstore) *lease {
 				}
 
 				for 0 == atomic.LoadInt32(&l.stoped) && l.store.isLeader() {
-					proposal := &leaseProposal{
+					notifyCh := make(chan error, 1)
+					if nil == l.store.rn.IssueProposal(&leaseProposal{
 						store:     l.store,
-						notifyCh:  make(chan error, 1),
+						notifyCh:  notifyCh,
 						beginTime: time.Now(),
-					}
+					}) {
 
-					if nil != l.store.rn.IssueProposal(proposal) {
-						return
-					}
-
-					if r := <-proposal.notifyCh; nil == r {
-						elapse := time.Now().Sub(l.beginTime)
-						if elapse < renewTime {
-							time.Sleep(renewTime - elapse)
+						var r error
+						ticker := time.NewTicker(10 * time.Second)
+						select {
+						case r = <-notifyCh:
+						case <-ticker.C:
+							r = errors.New("timeout")
 						}
-					} else {
-						GetSugar().Errorf("lease error:%v", r)
+						ticker.Stop()
+
+						if nil == r {
+							elapse := time.Now().Sub(l.beginTime)
+							if elapse < renewTime {
+								time.Sleep(renewTime - elapse)
+							}
+						} else {
+							GetSugar().Errorf("lease error:%v", r)
+						}
 					}
 				}
 			}
@@ -143,5 +151,7 @@ func (l *lease) snapshot(b []byte) []byte {
 }
 
 func (l *lease) stop() {
-	atomic.StoreInt32(&l.stoped, 1)
+	if atomic.CompareAndSwapInt32(&l.stoped, 0, 1) {
+		close(l.leaderWaitCh)
+	}
 }
