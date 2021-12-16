@@ -347,7 +347,7 @@ func (p *pd) Start() error {
 
 	p.mutilRaft = raft.NewMutilRaft()
 
-	p.rn = raft.NewRaftNode(p.mutilRaft, p.mainque, (p.id<<16)+1, peers, false, p.config.RaftLogDir, p.config.RaftLogPrefix)
+	p.rn = raft.NewRaftNode(1, p.mutilRaft, p.mainque, (p.id<<16)+1, peers, false, p.config.RaftLogDir, p.config.RaftLogPrefix)
 
 	if err := p.startUdpService(); nil != err {
 		p.rn.Stop()

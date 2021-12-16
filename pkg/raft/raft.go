@@ -19,7 +19,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -143,7 +142,7 @@ type RaftNode struct {
 	confChangeMgr       raftTaskMgr
 	linearizableReadMgr raftTaskMgr
 
-	term uint64
+	//term uint64
 
 	mutilRaft *MutilRaft
 
@@ -443,6 +442,10 @@ func (rc *RaftNode) publishEntries(ents []raftpb.Entry) {
 func (rc *RaftNode) processMessages(ms []raftpb.Message) []raftpb.Message {
 	sentAppResp := false
 	for i := len(ms) - 1; i >= 0; i-- {
+		if rc.IsIDRemoved(ms[i].To) {
+			ms[i].To = 0
+		}
+
 		if ms[i].Type == raftpb.MsgAppResp {
 			if sentAppResp {
 				ms[i].To = 0
@@ -508,7 +511,6 @@ func (rc *RaftNode) serveChannels() {
 		// store raft entries to wal, then publish over commit channel
 		case rd := <-rc.node.Ready():
 			if rd.SoftState != nil {
-				rc.term = rd.HardState.Term
 				if !(rc.softState.Lead == rd.SoftState.Lead && rc.softState.RaftState == rd.SoftState.RaftState) {
 					oldSoftState := rc.softState
 					rc.softState = *rd.SoftState
@@ -586,7 +588,7 @@ func (rc *RaftNode) Stop() {
 	}
 }
 
-func (rc *RaftNode) startRaft() {
+func (rc *RaftNode) startRaft(clusterID int32) {
 
 	if !fileutil.Exist(rc.snapdir) {
 		if err := os.Mkdir(rc.snapdir, 0750); err != nil {
@@ -627,29 +629,29 @@ func (rc *RaftNode) startRaft() {
 		rc.node = raft.RestartNode(c)
 	} else {
 		rc.node = raft.StartNode(c, rpeers)
+		for k, v := range rc.peers {
+			id := k<<16 + rc.region
+			if id != rc.id {
+				GetSugar().Infof("AddPeer %s", types.ID(id).String())
+				rc.transport.AddPeer(types.ID(id), []string{v})
+			}
+		}
 	}
 
 	rc.transport = &rafthttp.Transport{
 		Logger:      GetLogger(),
 		ID:          types.ID(rc.id),
-		ClusterID:   0x10000,
+		ClusterID:   types.ID(clusterID),
 		Raft:        rc,
-		ServerStats: stats.NewServerStats("", ""),
-		LeaderStats: stats.NewLeaderStats(strconv.Itoa(rc.id)),
+		ServerStats: stats.NewServerStats(types.ID(rc.id).String(), types.ID(rc.id).String()),
+		LeaderStats: stats.NewLeaderStats(types.ID(rc.id).String()),
 		ErrorC:      make(chan error),
 		Snapshotter: rc.snapshotter,
 	}
 
 	rc.mutilRaft.addTransport(types.ID(rc.id), rc.transport)
-	rc.transport.Start()
 
-	for k, v := range rc.peers {
-		id := k<<16 + rc.region
-		if id != rc.id {
-			GetSugar().Infof("AddPeer %s", types.ID(id).String())
-			rc.transport.AddPeer(types.ID(id), []string{v})
-		}
-	}
+	rc.transport.Start()
 
 	go rc.serveChannels()
 }
@@ -688,7 +690,7 @@ func (rc *RaftNode) IssueConfChange(p ProposalConfChange) error {
 	return rc.confChangeC.ForceAppend(p)
 }
 
-func NewRaftNode(mutilRaft *MutilRaft, commitC ApplicationQueue, id int, peers map[int]string, join bool, logDir string, raftLogPrefix string) *RaftNode {
+func NewRaftNode(clusterID int32, mutilRaft *MutilRaft, commitC ApplicationQueue, id int, peers map[int]string, join bool, logDir string, raftLogPrefix string) *RaftNode {
 
 	nodeID := id >> 16
 	region := id & 0xFFFF
@@ -733,6 +735,6 @@ func NewRaftNode(mutilRaft *MutilRaft, commitC ApplicationQueue, id int, peers m
 		}
 	}
 
-	go rc.startRaft()
+	go rc.startRaft(clusterID)
 	return rc
 }

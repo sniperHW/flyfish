@@ -408,7 +408,7 @@ func newKvNode(id int, cluster string) *kvnode {
 
 	mutilRaft := NewMutilRaft()
 
-	rn := NewRaftNode(mutilRaft, mainQueue, (id<<16)+1, peers, false, "log", "kv")
+	rn := NewRaftNode(1, mutilRaft, mainQueue, (id<<16)+1, peers, false, "log", "kv")
 
 	store := newKVStore(mainQueue, rn)
 
