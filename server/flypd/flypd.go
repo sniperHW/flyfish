@@ -483,10 +483,7 @@ func (p *pd) onLeaderDemote() {
 
 func (p *pd) Stop() {
 	if atomic.CompareAndSwapInt32(&p.stoponce, 0, 1) {
-		GetSugar().Info("Stop")
-		p.udp.Close()
 		p.rn.Stop()
-		p.mutilRaft.Stop()
 		p.wait.Wait()
 	}
 }
@@ -538,15 +535,16 @@ func (p *pd) serve() {
 
 	go func() {
 		defer func() {
-			p.wait.Done()
+			p.udp.Close()
+			p.mutilRaft.Stop()
 			p.mainque.close()
+			p.wait.Done()
 		}()
 		for {
 			_, v := p.mainque.pop()
 			switch v.(type) {
-			case error:
-				GetSugar().Errorf("error for raft:%v", v.(error))
-				return
+			case raft.TransportError:
+				GetSugar().Errorf("error for raft transport:%v", v.(raft.TransportError))
 			case func():
 				v.(func())()
 			case raft.Committed:
@@ -556,8 +554,7 @@ func (p *pd) serve() {
 			case raft.ConfChange:
 				c := v.(raft.ConfChange)
 				if c.CCType == raftpb.ConfChangeRemoveNode && c.NodeID == p.id {
-					GetSugar().Info("RemoveFromCluster")
-					return
+					p.rn.Stop()
 				}
 			case raft.ReplayOK:
 				p.ready = true

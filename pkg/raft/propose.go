@@ -159,7 +159,7 @@ func (rc *RaftNode) runProposePipeline() {
 		for {
 			time.Sleep(time.Millisecond * sleepTime)
 			//发送信号，触发batch提交
-			if rc.proposePipeline.ForceAppend(nil) != nil {
+			if rc.proposePipeline.ForceAppend(struct{}{}) != nil {
 				return
 			}
 		}
@@ -184,12 +184,14 @@ func (rc *RaftNode) runProposePipeline() {
 
 			for k, vv := range localList {
 				issuePropose := false
-				if nil == vv {
+
+				switch vv.(type) {
+				case struct{}:
 					//触发时间到达
 					if len(batch) > 0 {
 						issuePropose = true
 					}
-				} else {
+				case Proposal:
 					batch = append(batch, vv.(Proposal))
 					if vv.(Proposal).Isurgent() || len(batch) == cap(batch) {
 						issuePropose = true
@@ -200,6 +202,7 @@ func (rc *RaftNode) runProposePipeline() {
 					rc.propose(batch)
 					batch = make([]Proposal, 0, ProposalBatchCount)
 				}
+
 				localList[k] = nil
 			}
 

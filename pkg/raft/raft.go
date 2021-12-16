@@ -151,6 +151,10 @@ type RaftNode struct {
 
 	idcounter int32
 	stoponce  int32
+
+	memberShip map[uint64]struct{}
+	muRemoved  sync.RWMutex
+	removed    map[uint64]struct{}
 }
 
 func readWALNames(dirpath string) []string {
@@ -372,13 +376,29 @@ func (rc *RaftNode) publishEntries(ents []raftpb.Entry) {
 			case raftpb.ConfChangeAddNode, raftpb.ConfChangeAddLearnerNode:
 				if len(cc.Context) > 0 {
 					raftUrl = string(cc.Context[8:])
-					GetSugar().Infof("ConfChangeAddNode %s %s", types.ID(cc.NodeID).String(), raftUrl)
 					rc.transport.AddPeer(types.ID(cc.NodeID), []string{raftUrl})
+
 				}
+				if cc.Type == raftpb.ConfChangeAddNode {
+					GetSugar().Infof("%x ConfChangeAddNode %s %s", rc.id, types.ID(cc.NodeID).String(), raftUrl)
+				} else {
+					GetSugar().Infof("%x ConfChangeAddLearnerNode %s %s", rc.id, types.ID(cc.NodeID).String(), raftUrl)
+				}
+				rc.memberShip[cc.NodeID] = struct{}{}
+				rc.muRemoved.Lock()
+				delete(rc.removed, cc.NodeID)
+				rc.muRemoved.Unlock()
+
 			case raftpb.ConfChangeRemoveNode:
-				GetSugar().Infof("ConfChangeRemoveNode %s", types.ID(cc.NodeID).String())
+				GetSugar().Infof("%x ConfChangeRemoveNode %s", rc.id, types.ID(cc.NodeID).String())
 				rc.transport.RemovePeer(types.ID(cc.NodeID))
+				delete(rc.memberShip, cc.NodeID)
+				rc.muRemoved.Lock()
+				rc.removed[cc.NodeID] = struct{}{}
+				rc.muRemoved.Unlock()
 			}
+
+			GetSugar().Infof("%x memberShip %v", rc.id, rc.memberShip)
 
 			if len(cc.Context) > 0 {
 				index := binary.BigEndian.Uint64(cc.Context[0:8])
@@ -415,7 +435,6 @@ func (rc *RaftNode) publishEntries(ents []raftpb.Entry) {
 
 		// special nil commit to signal replay has finished
 		if ents[i].Index == rc.lastIndex {
-			GetSugar().Infof("ReplayOK 1")
 			rc.commitC.AppendHighestPriotiryItem(ReplayOK{})
 		}
 	}
@@ -459,9 +478,9 @@ func (rc *RaftNode) serveChannels() {
 	rc.appliedIndex = snap.Metadata.Index
 
 	defer func() {
-		GetSugar().Infof("serveChannels break")
+		GetSugar().Infof("%x serveChannels break", rc.id)
 		rc.wal.Close()
-		GetSugar().Infof("send RaftStopOK")
+		GetSugar().Infof("%x send RaftStopOK", rc.id)
 		rc.commitC.AppendHighestPriotiryItem(RaftStopOK{})
 	}()
 
@@ -476,7 +495,7 @@ func (rc *RaftNode) serveChannels() {
 
 	go func() {
 		rc.waitStop.Wait()
-		GetSugar().Infof("close stopc")
+		GetSugar().Infof("%x close stopc", rc.id)
 		close(rc.stopc)
 	}()
 
@@ -514,7 +533,7 @@ func (rc *RaftNode) serveChannels() {
 			}
 
 			if err := rc.wal.Save(rd.HardState, rd.Entries); nil != err {
-				GetSugar().Fatalf("failed to sync Raft snapshot %v", err)
+				GetSugar().Fatalf("%x failed to sync Raft snapshot %v", rc.id, err)
 			}
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
@@ -541,8 +560,7 @@ func (rc *RaftNode) serveChannels() {
 			rc.node.Advance()
 
 		case err := <-rc.transport.ErrorC:
-			rc.commitC.AppendHighestPriotiryItem(err)
-			return
+			rc.commitC.AppendHighestPriotiryItem(TransportError(err))
 		case <-rc.stopc:
 			rc.transport.Stop()
 			rc.mutilRaft.removeTransport(types.ID(rc.id))
@@ -641,8 +659,13 @@ func (rc *RaftNode) Process(ctx context.Context, m raftpb.Message) error {
 }
 
 func (rc *RaftNode) IsIDRemoved(id uint64) bool {
-	//todo member check
-	return false
+	rc.muRemoved.RLock()
+	defer rc.muRemoved.RUnlock()
+	if _, ok := rc.removed[id]; ok {
+		return true
+	} else {
+		return false
+	}
 }
 
 func (rc *RaftNode) ReportUnreachable(id uint64) {
@@ -700,6 +723,8 @@ func NewRaftNode(mutilRaft *MutilRaft, commitC ApplicationQueue, id int, peers m
 		confChangeC:     queue.NewArrayQueue(),
 		proposePipeline: queue.NewArrayQueue(10000),
 		readPipeline:    queue.NewArrayQueue(10000),
+		memberShip:      map[uint64]struct{}{},
+		removed:         map[uint64]struct{}{},
 	}
 
 	if !fileutil.Exist(rc.logDir) {

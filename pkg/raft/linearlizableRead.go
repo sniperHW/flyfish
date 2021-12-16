@@ -70,7 +70,7 @@ func (rc *RaftNode) runReadPipeline() {
 		for {
 			time.Sleep(time.Millisecond * sleepTime)
 			//发送信号，触发batch提交
-			if rc.readPipeline.ForceAppend(nil) != nil {
+			if rc.readPipeline.ForceAppend(struct{}{}) != nil {
 				return
 			}
 		}
@@ -93,14 +93,15 @@ func (rc *RaftNode) runReadPipeline() {
 				break
 			}
 
-			for _, vv := range localList {
+			for k, vv := range localList {
 				issueRead := false
-				if nil == vv {
+				switch vv.(type) {
+				case struct{}:
 					//触发时间到达
 					if len(batch) > 0 {
 						issueRead = true
 					}
-				} else {
+				case LinearizableRead:
 					batch = append(batch, vv.(LinearizableRead))
 					if len(batch) == cap(batch) {
 						issueRead = true
@@ -111,6 +112,8 @@ func (rc *RaftNode) runReadPipeline() {
 					rc.linearizableRead(batch)
 					batch = make([]LinearizableRead, 0, ReadBatchCount)
 				}
+
+				localList[k] = nil
 			}
 		}
 	}()

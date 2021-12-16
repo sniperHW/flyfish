@@ -127,7 +127,7 @@ type kvstore struct {
 	needWriteBackAll     bool
 	shard                int
 	meta                 db.DBMeta
-	memberShip           map[int]bool
+	memberShip           map[int]struct{}
 	dbWriteBackCount     int32
 	SoftLimitReachedTime int64
 	unixNow              int64
@@ -470,7 +470,6 @@ func (s *kvstore) processConfChange(p raft.ProposalConfChange) {
 
 func (s *kvstore) stop() {
 	if atomic.CompareAndSwapInt32(&s.stoped, 0, 1) {
-		s.lease.stop()
 		s.rn.Stop()
 	}
 }
@@ -528,11 +527,11 @@ func (s *kvstore) serve() {
 
 	go func() {
 		defer func() {
-			s.stop()
+			s.lease.stop()
+			s.mainQueue.close()
 			s.kvnode.muS.Lock()
 			delete(s.kvnode.stores, s.shard)
 			s.kvnode.muS.Unlock()
-			s.mainQueue.close()
 		}()
 
 		for {
@@ -541,9 +540,8 @@ func (s *kvstore) serve() {
 			switch v.(type) {
 			case *udpMsg:
 				s.onUdpMsg(v.(*udpMsg).from, v.(*udpMsg).m)
-			case error:
-				GetSugar().Errorf("error for raft:%v", v.(error))
-				return
+			case raft.TransportError:
+				GetSugar().Errorf("%x error for raft transport:%v", s.rn.ID(), v.(raft.TransportError))
 			case func():
 				v.(func())()
 			case clientRequest:
@@ -560,16 +558,16 @@ func (s *kvstore) serve() {
 				if c.CCType == raftpb.ConfChangeRemoveNode {
 					delete(s.memberShip, c.NodeID)
 					if c.NodeID == s.kvnode.id {
-						GetSugar().Info("RemoveFromCluster")
-						return
+						GetSugar().Infof("%x RemoveFromCluster", s.rn.ID())
+						s.stop()
 					}
 				} else if c.CCType == raftpb.ConfChangeAddNode {
-					s.memberShip[c.NodeID] = true
+					s.memberShip[c.NodeID] = struct{}{}
 				}
 			case raft.ReplayOK:
 				s.ready = true
 			case raft.RaftStopOK:
-				GetSugar().Info("RaftStopOK")
+				GetSugar().Infof("%x RaftStopOK", s.rn.ID())
 				return
 			case raftpb.Snapshot:
 				snapshot := v.(raftpb.Snapshot)
@@ -616,7 +614,7 @@ func (s *kvstore) serve() {
 
 func (s *kvstore) onNotifyAddNode(from *net.UDPAddr, msg *sproto.NotifyAddNode, context int64) {
 	if s.leader == s.raftID {
-		if s.memberShip[int(msg.NodeID)] {
+		if _, ok := s.memberShip[int(msg.NodeID)]; ok {
 			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
 				&sproto.NotifyAddNodeResp{
 					NodeID: msg.NodeID,
@@ -644,7 +642,7 @@ func (s *kvstore) onNotifyAddNode(from *net.UDPAddr, msg *sproto.NotifyAddNode, 
 
 func (s *kvstore) onNotifyRemNode(from *net.UDPAddr, msg *sproto.NotifyRemNode, context int64) {
 	if s.leader == s.raftID {
-		if !s.memberShip[int(msg.NodeID)] {
+		if _, ok := s.memberShip[int(msg.NodeID)]; !ok {
 			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
 				&sproto.NotifyRemNodeResp{
 					NodeID: int32(int(msg.NodeID)),
@@ -779,7 +777,7 @@ func (s *kvstore) onNotifyUpdateMeta(from *net.UDPAddr, msg *sproto.NotifyUpdate
 }
 
 func (s *kvstore) onUdpMsg(from *net.UDPAddr, m *snet.Message) {
-	if atomic.LoadInt32(&s.stoped) == 0 {
+	if s.ready && atomic.LoadInt32(&s.stoped) == 0 {
 		switch m.Msg.(type) {
 		case *sproto.NotifyAddNode:
 			s.onNotifyAddNode(from, m.Msg.(*sproto.NotifyAddNode), m.Context)

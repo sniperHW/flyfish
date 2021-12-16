@@ -177,7 +177,7 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, cluster string, slots 
 		kvnode:     this,
 		shard:      storeID,
 		meta:       meta,
-		memberShip: map[int]bool{},
+		memberShip: map[int]struct{}{},
 		kvmgr: kvmgr{
 			kv:               make([]map[string]*kv, groupSize),
 			slotsKvMap:       map[int]map[string]*kv{},
@@ -197,7 +197,7 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, cluster string, slots 
 
 	store.lru.init()
 	store.lease = newLease(store)
-	store.memberShip[this.id] = true
+	//store.memberShip[this.id] = struct{}{}
 	this.stores[storeID] = store
 	store.serve()
 

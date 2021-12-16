@@ -286,7 +286,6 @@ func (s *kvstore) processConfChange(p ProposalConfChange) {
 
 func (s *kvstore) processCommited(commited *Committed) {
 	if len(commited.Proposals) > 0 {
-		fmt.Println("processCommited1")
 		for _, v := range commited.Proposals {
 			o := v.(*KVProposal)
 			s.kvStore[o.v.Key] = o.v.Val
@@ -294,7 +293,6 @@ func (s *kvstore) processCommited(commited *Committed) {
 		}
 	} else {
 		r := buffer.NewReader(commited.Data)
-		fmt.Println("processCommited2")
 		for {
 			if l := r.GetUint32(); l == 0 {
 				break
@@ -304,7 +302,7 @@ func (s *kvstore) processCommited(commited *Committed) {
 				if err := json.Unmarshal(bytes, &v); err != nil {
 					break
 				}
-				fmt.Println("set", v.Key, "=", v.Val)
+				//fmt.Println("set", v.Key, "=", v.Val)
 				s.kvStore[v.Key] = v.Val
 			}
 		}
@@ -332,7 +330,8 @@ func (s *kvstore) serve() {
 			return
 		} else {
 			switch v.(type) {
-			case error:
+			case TransportError:
+				GetSugar().Infof("(raft error) %x %v", s.rn.id, v.(TransportError))
 			case *operationGet, *operationSet:
 				s.processOperation(v)
 			case Committed:

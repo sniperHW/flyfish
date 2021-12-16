@@ -30,3 +30,5 @@ type RaftStopOK struct{}
 type LeaderChange struct {
 	Leader int
 }
+
+type TransportError error

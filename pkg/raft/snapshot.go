@@ -25,11 +25,11 @@ type SnapshotNotify struct {
 }
 
 func (this *SnapshotNotify) Notify(snapshot []byte) {
-	GetSugar().Infof("snapshot notify")
+	GetSugar().Debugf("snapshot notify")
 	this.notify.snapshot = snapshot
 	select {
 	case this.ch <- this.notify:
-		GetSugar().Infof("snapshot notify ok")
+		GetSugar().Debugf("snapshot notify ok")
 	case <-this.rc.stopc:
 	}
 }
@@ -43,7 +43,7 @@ func (rc *RaftNode) maybeTriggerSnapshot(index uint64) bool {
 		return false
 	}
 
-	GetSugar().Infof("maybeTriggerSnapshot %d %d", index, rc.snapshotIndex)
+	GetSugar().Debugf("maybeTriggerSnapshot %d %d", index, rc.snapshotIndex)
 
 	rc.snapshotting = true
 
@@ -52,7 +52,7 @@ func (rc *RaftNode) maybeTriggerSnapshot(index uint64) bool {
 
 func (rc *RaftNode) onTriggerSnapshotOK(snap raftpb.Snapshot) {
 
-	GetSugar().Infof("onTriggerSnapshotOK")
+	GetSugar().Debugf("onTriggerSnapshotOK")
 
 	compactIndex := uint64(1)
 	if snap.Metadata.Index > SnapshotCatchUpEntriesN {
@@ -79,7 +79,7 @@ func (rc *RaftNode) onTriggerSnapshotOK(snap raftpb.Snapshot) {
 }
 
 func (rc *RaftNode) triggerSnapshot(st snapshotNotifyst) {
-	GetSugar().Infof("triggerSnapshot")
+	GetSugar().Debugf("triggerSnapshot")
 
 	var err error
 	var snap raftpb.Snapshot
@@ -137,8 +137,8 @@ func (rc *RaftNode) publishSnapshot(snapshotToSave raftpb.Snapshot) {
 		return
 	}
 
-	GetSugar().Infof("publishing snapshot at index %d", rc.snapshotIndex)
-	defer GetSugar().Infof("finished publishing snapshot at index %d", rc.snapshotIndex)
+	GetSugar().Debugf("publishing snapshot at index %d", rc.snapshotIndex)
+	defer GetSugar().Debugf("finished publishing snapshot at index %d", rc.snapshotIndex)
 
 	if snapshotToSave.Metadata.Index <= rc.appliedIndex {
 		GetSugar().Fatalf("snapshot index [%d] should > progress.appliedIndex [%d]", snapshotToSave.Metadata.Index, rc.appliedIndex)
@@ -183,9 +183,9 @@ func (rc *RaftNode) sendSnapshot(m raftpb.Message) {
 
 	copy(data, m.Snapshot.Data)
 
-	pr := newSnapshotReaderCloser(data) //(b.Bytes())
+	pr := newSnapshotReaderCloser(data)
 
-	snapMsg := *snap.NewMessage(m, pr, int64(len(data))) //int64(b.Len()))
+	snapMsg := *snap.NewMessage(m, pr, int64(len(data)))
 
 	go func() {
 
