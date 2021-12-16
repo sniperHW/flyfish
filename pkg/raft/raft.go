@@ -142,18 +142,12 @@ type RaftNode struct {
 	confChangeMgr       raftTaskMgr
 	linearizableReadMgr raftTaskMgr
 
-	//term uint64
-
 	mutilRaft *MutilRaft
 
 	softState raft.SoftState
 
 	idcounter int32
 	stoponce  int32
-
-	memberShip map[uint64]struct{}
-	muRemoved  sync.RWMutex
-	removed    map[uint64]struct{}
 }
 
 func readWALNames(dirpath string) []string {
@@ -373,31 +367,22 @@ func (rc *RaftNode) publishEntries(ents []raftpb.Entry) {
 
 			switch cc.Type {
 			case raftpb.ConfChangeAddNode, raftpb.ConfChangeAddLearnerNode:
+
 				if len(cc.Context) > 0 {
 					raftUrl = string(cc.Context[8:])
 					rc.transport.AddPeer(types.ID(cc.NodeID), []string{raftUrl})
-
 				}
+
 				if cc.Type == raftpb.ConfChangeAddNode {
 					GetSugar().Infof("%x ConfChangeAddNode %s %s", rc.id, types.ID(cc.NodeID).String(), raftUrl)
 				} else {
 					GetSugar().Infof("%x ConfChangeAddLearnerNode %s %s", rc.id, types.ID(cc.NodeID).String(), raftUrl)
 				}
-				rc.memberShip[cc.NodeID] = struct{}{}
-				rc.muRemoved.Lock()
-				delete(rc.removed, cc.NodeID)
-				rc.muRemoved.Unlock()
 
 			case raftpb.ConfChangeRemoveNode:
 				GetSugar().Infof("%x ConfChangeRemoveNode %s", rc.id, types.ID(cc.NodeID).String())
 				rc.transport.RemovePeer(types.ID(cc.NodeID))
-				delete(rc.memberShip, cc.NodeID)
-				rc.muRemoved.Lock()
-				rc.removed[cc.NodeID] = struct{}{}
-				rc.muRemoved.Unlock()
 			}
-
-			GetSugar().Infof("%x memberShip %v", rc.id, rc.memberShip)
 
 			if len(cc.Context) > 0 {
 				index := binary.BigEndian.Uint64(cc.Context[0:8])
@@ -629,13 +614,6 @@ func (rc *RaftNode) startRaft(clusterID int32) {
 		rc.node = raft.RestartNode(c)
 	} else {
 		rc.node = raft.StartNode(c, rpeers)
-		for k, v := range rc.peers {
-			id := k<<16 + rc.region
-			if id != rc.id {
-				GetSugar().Infof("AddPeer %s", types.ID(id).String())
-				rc.transport.AddPeer(types.ID(id), []string{v})
-			}
-		}
 	}
 
 	rc.transport = &rafthttp.Transport{
@@ -653,6 +631,14 @@ func (rc *RaftNode) startRaft(clusterID int32) {
 
 	rc.transport.Start()
 
+	for k, v := range rc.peers {
+		id := k<<16 + rc.region
+		if id != rc.id {
+			GetSugar().Infof("AddPeer %s", types.ID(id).String())
+			rc.transport.AddPeer(types.ID(id), []string{v})
+		}
+	}
+
 	go rc.serveChannels()
 }
 
@@ -661,13 +647,7 @@ func (rc *RaftNode) Process(ctx context.Context, m raftpb.Message) error {
 }
 
 func (rc *RaftNode) IsIDRemoved(id uint64) bool {
-	rc.muRemoved.RLock()
-	defer rc.muRemoved.RUnlock()
-	if _, ok := rc.removed[id]; ok {
-		return true
-	} else {
-		return false
-	}
+	return false
 }
 
 func (rc *RaftNode) ReportUnreachable(id uint64) {
@@ -725,8 +705,6 @@ func NewRaftNode(clusterID int32, mutilRaft *MutilRaft, commitC ApplicationQueue
 		confChangeC:     queue.NewArrayQueue(),
 		proposePipeline: queue.NewArrayQueue(10000),
 		readPipeline:    queue.NewArrayQueue(10000),
-		memberShip:      map[uint64]struct{}{},
-		removed:         map[uint64]struct{}{},
 	}
 
 	if !fileutil.Exist(rc.logDir) {
