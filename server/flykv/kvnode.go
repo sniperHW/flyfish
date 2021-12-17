@@ -10,11 +10,13 @@ import (
 	fnet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
+	"github.com/sniperHW/flyfish/pkg/raft/membership"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"github.com/sniperHW/flyfish/server/slot"
+	"go.etcd.io/etcd/pkg/types"
 	"net"
 	"runtime"
 	"strconv"
@@ -37,19 +39,19 @@ var (
 )
 
 type kvnode struct {
-	muC       sync.Mutex
-	clients   map[*fnet.Socket]struct{}
-	muS       sync.RWMutex
-	stores    map[int]*kvstore
-	config    *Config
-	db        dbI
-	listener  *cs.Listener
-	id        int
-	mutilRaft *raft.MutilRaft
-	stopOnce  int32
-	startOnce int32
-	udpConn   *fnet.Udp
-	selfUrl   string
+	muC         sync.Mutex
+	clients     map[*fnet.Socket]struct{}
+	muS         sync.RWMutex
+	stores      map[int]*kvstore
+	config      *Config
+	db          dbI
+	listener    *cs.Listener
+	id          int
+	mutilRaft   *raft.MutilRaft
+	stopOnce    int32
+	startOnce   int32
+	udpConn     *fnet.Udp
+	soloStorage Storage //for solo mode use only
 }
 
 func verifyLogin(loginReq *flyproto.LoginReq) bool {
@@ -127,30 +129,9 @@ func waitCondition(fn func() bool) {
 	wg.Wait()
 }
 
-func (this *kvnode) addStore(meta db.DBMeta, storeID int, cluster string, slots *bitmap.Bitmap) error {
-	clusterArray := strings.Split(cluster, ",")
-
-	peers := map[int]string{}
-
-	var selfUrl string
-
-	for _, v := range clusterArray {
-		t := strings.Split(v, "@")
-		if len(t) != 2 {
-			panic("invaild peer")
-		}
-		i, err := strconv.Atoi(t[0])
-		if nil != err {
-			panic(err)
-		}
-		peers[i] = t[1]
-		if i == this.id {
-			selfUrl = t[1]
-		}
-	}
-
-	if selfUrl != this.selfUrl {
-		return errors.New("cluster not contain self")
+func (this *kvnode) addStore(meta db.DBMeta, storeID int, mb *membership.MemberShip, slots *bitmap.Bitmap) error {
+	if nil == mb.Member(types.ID(raft.MakeInstanceID(uint16(this.id), uint16(storeID)))) {
+		return errors.New("member not contain self")
 	}
 
 	this.muS.Lock()
@@ -172,12 +153,11 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, cluster string, slots 
 	}
 
 	store := &kvstore{
-		db:         this.db,
-		mainQueue:  mainQueue,
-		kvnode:     this,
-		shard:      storeID,
-		meta:       meta,
-		memberShip: map[int]struct{}{},
+		db:        this.db,
+		mainQueue: mainQueue,
+		kvnode:    this,
+		shard:     storeID,
+		meta:      meta,
 		kvmgr: kvmgr{
 			kv:               make([]map[string]*kv, groupSize),
 			slotsKvMap:       map[int]map[string]*kv{},
@@ -186,10 +166,9 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, cluster string, slots 
 		},
 	}
 
-	rn := raft.NewRaftNode(int32(storeID), this.mutilRaft, mainQueue, (this.id<<16)+storeID, peers, false, this.config.RaftLogDir, this.config.RaftLogPrefix)
+	rn := raft.NewInstance(uint16(this.id), uint16(storeID), this.mutilRaft, mainQueue, mb, false, this.config.RaftLogDir, this.config.RaftLogPrefix)
 
 	store.rn = rn
-	store.raftID = rn.ID()
 
 	for i := 0; i < len(store.kv); i++ {
 		store.kv[i] = map[string]*kv{}
@@ -197,7 +176,6 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, cluster string, slots 
 
 	store.lru.init()
 	store.lease = newLease(store)
-	//store.memberShip[this.id] = struct{}{}
 	this.stores[storeID] = store
 	store.serve()
 
@@ -368,23 +346,33 @@ func (this *kvnode) Start() error {
 
 		var dbdef *db.DbDef
 
+		var err error
+
 		config := this.config
 
 		if config.Mode == "solo" {
 
-			//meta从config获取
-
-			if dbdef, err = db.CreateDbDefFromCsv(config.SoloConfig.Meta); nil != err {
+			if meta, err = this.soloStorage.LoadMeta(GetLogger()); nil != err {
 				return err
 			}
 
-			meta, err = sql.CreateDbMeta(1, dbdef)
+			if nil == meta {
+				if dbdef, err = db.CreateDbDefFromCsv(config.SoloConfig.Meta); nil != err {
+					return err
+				}
 
-			if nil != err {
-				return err
+				meta, err = sql.CreateDbMeta(1, dbdef)
+
+				if nil != err {
+					return err
+				}
+
+				if j, err := meta.ToJson(); nil != err {
+					return err
+				} else if err = this.soloStorage.SaveMeta(GetLogger(), j); nil != err {
+					return err
+				}
 			}
-
-			this.selfUrl = config.SoloConfig.RaftUrl
 
 			err = this.db.start(config)
 
@@ -406,15 +394,47 @@ func (this *kvnode) Start() error {
 				return err
 			}
 
-			go this.mutilRaft.Serve(this.selfUrl)
+			go this.mutilRaft.Serve([]string{config.SoloConfig.RaftUrl})
 
 			this.startListener()
 
 			//添加store
 			if len(config.SoloConfig.Stores) > 0 {
+				clusterArray := strings.Split(config.SoloConfig.RaftCluster, ",")
+				peers := map[int]string{}
+				for _, v := range clusterArray {
+					t := strings.Split(v, "@")
+					if len(t) != 2 {
+						panic("invaild peer")
+					}
+					i, err := strconv.Atoi(t[0])
+					if nil != err {
+						panic(err)
+					}
+					peers[i] = t[1]
+				}
+
 				storeBitmaps := makeStoreBitmap(config.SoloConfig.Stores)
 				for i, v := range config.SoloConfig.Stores {
-					if err = this.addStore(meta, v, config.SoloConfig.RaftCluster, storeBitmaps[i]); nil != err {
+					//首先尝试从storage加载membership
+					mb, err := this.soloStorage.LoadMemberShip(GetLogger(), types.ID(v), types.ID(this.id))
+					if nil != err {
+						return err
+					}
+
+					if nil == mb {
+						//storage中没有从配置文件中创建
+						membs := []*membership.Member{}
+						for kk, vv := range peers {
+							u, _ := types.NewURLs([]string{vv})
+							membs = append(membs, membership.NewMember(types.ID(raft.MakeInstanceID(uint16(kk), uint16(v))), u))
+						}
+						mb = membership.NewMemberShipMembers(GetLogger(), types.ID(this.id), types.ID(v), membs)
+						mb.SetStorage(this.soloStorage)
+						mb.Save()
+					}
+
+					if err = this.addStore(meta, v, mb, storeBitmaps[i]); nil != err {
 						return err
 					}
 				}
@@ -426,81 +446,81 @@ func (this *kvnode) Start() error {
 
 			//meta从flypd获取
 
-			pd := strings.Split(config.ClusterConfig.PD, ";")
+			/*			pd := strings.Split(config.ClusterConfig.PD, ";")
 
-			var pdAddr []*net.UDPAddr
+						var pdAddr []*net.UDPAddr
 
-			for _, v := range pd {
-				addr, err := net.ResolveUDPAddr("udp", v)
-				if nil != err {
-					return err
-				} else {
-					pdAddr = append(pdAddr, addr)
-				}
-			}
+						for _, v := range pd {
+							addr, err := net.ResolveUDPAddr("udp", v)
+							if nil != err {
+								return err
+							} else {
+								pdAddr = append(pdAddr, addr)
+							}
+						}
 
-			resp := this.getKvnodeBootInfo(pdAddr)
+						resp := this.getKvnodeBootInfo(pdAddr)
 
-			if !resp.Ok {
-				return errors.New(resp.Reason)
-			}
+						if !resp.Ok {
+							return errors.New(resp.Reason)
+						}
 
-			if dbdef, err = db.CreateDbDefFromJsonString(resp.Meta); nil != err {
-				return err
-			}
+						if dbdef, err = db.CreateDbDefFromJsonString(resp.Meta); nil != err {
+							return err
+						}
 
-			meta, err = sql.CreateDbMeta(resp.MetaVersion, dbdef)
+						meta, err = sql.CreateDbMeta(resp.MetaVersion, dbdef)
 
-			if nil != err {
-				return err
-			}
+						if nil != err {
+							return err
+						}
 
-			this.selfUrl = fmt.Sprintf("http://%s:%d", resp.ServiceHost, resp.RaftPort)
+						this.selfUrl = fmt.Sprintf("http://%s:%d", resp.ServiceHost, resp.RaftPort)
 
-			err = this.initUdp(fmt.Sprintf("%s:%d", resp.ServiceHost, resp.ServicePort))
+						err = this.initUdp(fmt.Sprintf("%s:%d", resp.ServiceHost, resp.ServicePort))
 
-			if nil != err {
-				return err
-			}
+						if nil != err {
+							return err
+						}
 
-			err = this.db.start(config)
+						err = this.db.start(config)
 
-			if nil != err {
-				return err
-			}
+						if nil != err {
+							return err
+						}
 
-			service := fmt.Sprintf("%s:%d", resp.ServiceHost, resp.ServicePort)
+						service := fmt.Sprintf("%s:%d", resp.ServiceHost, resp.ServicePort)
 
-			this.listener, err = cs.NewListener("tcp", service, outputBufLimit, verifyLogin)
+						this.listener, err = cs.NewListener("tcp", service, outputBufLimit, verifyLogin)
 
-			if nil != err {
-				return err
-			}
+						if nil != err {
+							return err
+						}
 
-			go this.mutilRaft.Serve(this.selfUrl)
+						go this.mutilRaft.Serve(this.selfUrl)
 
-			this.startListener()
+						this.startListener()
 
-			for _, v := range resp.Stores {
-				slots, err := bitmap.CreateFromJson(v.Slots)
+						for _, v := range resp.Stores {
+							slots, err := bitmap.CreateFromJson(v.Slots)
 
-				if nil != err {
-					return err
-				}
+							if nil != err {
+								return err
+							}
 
-				if err = this.addStore(meta, int(v.Id), v.RaftCluster, slots); nil != err {
-					return err
-				}
-			}
+							if err = this.addStore(meta, int(v.Id), v.RaftCluster, slots); nil != err {
+								return err
+							}
+						}
 
-			GetSugar().Infof("flyfish start:%s:%d", resp.ServiceHost, resp.ServicePort)
+						GetSugar().Infof("flyfish start:%s:%d", resp.ServiceHost, resp.ServicePort)*/
 		}
 
 	}
 	return err
 }
 
-func NewKvNode(id int, config *Config, db dbI) *kvnode {
+func NewKvNode(id int, config *Config, db dbI, s Storage) *kvnode {
 
 	if config.ProposalFlushInterval > 0 {
 		raft.ProposalFlushInterval = config.ProposalFlushInterval
@@ -531,11 +551,12 @@ func NewKvNode(id int, config *Config, db dbI) *kvnode {
 	}
 
 	return &kvnode{
-		id:        id,
-		mutilRaft: raft.NewMutilRaft(),
-		clients:   map[*fnet.Socket]struct{}{},
-		stores:    map[int]*kvstore{},
-		db:        db,
-		config:    config,
+		id:          id,
+		mutilRaft:   raft.NewMutilRaft(),
+		clients:     map[*fnet.Socket]struct{}{},
+		stores:      map[int]*kvstore{},
+		db:          db,
+		config:      config,
+		soloStorage: s,
 	}
 }

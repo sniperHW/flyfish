@@ -103,7 +103,7 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 
 		if ptype == proposal_lease {
 			p := data.(pplease)
-			s.lease.update(p.nodeid, p.begtime)
+			s.lease.update(raft.RaftInstanceID(p.nodeid), p.begtime)
 		} else if ptype == proposal_slot_transfer {
 			p := data.(*SlotTransferProposal)
 			if p.transferType == slotTransferIn {

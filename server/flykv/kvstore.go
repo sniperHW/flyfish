@@ -113,10 +113,9 @@ type kvmgr struct {
 type kvstore struct {
 	kvmgr
 	raftMtx              sync.RWMutex
-	raftID               int
-	leader               int
+	leader               raft.RaftInstanceID
 	snapshotter          *snap.Snapshotter
-	rn                   *raft.RaftNode
+	rn                   *raft.RaftInstance
 	mainQueue            applicationQueue
 	db                   dbI
 	wait4ReplyCount      int32
@@ -127,7 +126,6 @@ type kvstore struct {
 	needWriteBackAll     bool
 	shard                int
 	meta                 db.DBMeta
-	memberShip           map[int]struct{}
 	dbWriteBackCount     int32
 	SoftLimitReachedTime int64
 	unixNow              int64
@@ -144,13 +142,13 @@ func (s *kvstore) hasLease() bool {
 func (s *kvstore) isLeader() bool {
 	s.raftMtx.RLock()
 	defer s.raftMtx.RUnlock()
-	return s.leader == s.raftID
+	return s.leader == s.rn.ID()
 }
 
 func (s *kvstore) getLeaderNodeID() int {
 	s.raftMtx.RLock()
 	defer s.raftMtx.RUnlock()
-	return int(s.leader >> 16)
+	return int(s.leader.GetNodeID())
 }
 
 func (s *kvstore) loadSnapshot() (*raftpb.Snapshot, error) {
@@ -259,7 +257,7 @@ func (s *kvstore) checkLru(ch chan struct{}) {
 		default:
 		}
 	}()
-	if s.ready && s.leader == s.raftID && atomic.LoadInt32(&s.stoped) == 0 {
+	if s.ready && s.leader == s.rn.ID() && atomic.LoadInt32(&s.stoped) == 0 {
 		if s.kvcount > s.kvnode.config.MaxCachePerStore && s.lru.head.nnext != &s.lru.tail {
 			k := 0
 			cur := s.lru.tail.pprev
@@ -373,7 +371,7 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 		return
 	}
 
-	if s.leader != s.raftID {
+	if s.leader != s.rn.ID() {
 		req.from.Send(&cs.RespMessage{
 			Cmd:   req.msg.Cmd,
 			Seqno: req.msg.Seqno,
@@ -556,13 +554,10 @@ func (s *kvstore) serve() {
 			case raft.ConfChange:
 				c := v.(raft.ConfChange)
 				if c.CCType == raftpb.ConfChangeRemoveNode {
-					delete(s.memberShip, c.NodeID)
-					if c.NodeID == s.kvnode.id {
+					if s.rn.ID() == raft.RaftInstanceID(c.NodeID) {
 						GetSugar().Infof("%x RemoveFromCluster", s.rn.ID())
 						s.stop()
 					}
-				} else if c.CCType == raftpb.ConfChangeAddNode {
-					s.memberShip[c.NodeID] = struct{}{}
 				}
 			case raft.ReplayOK:
 				s.ready = true
@@ -592,8 +587,8 @@ func (s *kvstore) serve() {
 			case raft.LeaderChange:
 				becomeLeader := false
 				s.raftMtx.Lock()
-				s.leader = v.(raft.LeaderChange).Leader
-				if s.leader == s.raftID {
+				s.leader = raft.RaftInstanceID(v.(raft.LeaderChange).Leader)
+				if s.leader == s.rn.ID() {
 					becomeLeader = true
 				}
 				s.raftMtx.Unlock()
@@ -602,7 +597,7 @@ func (s *kvstore) serve() {
 					s.lease.becomeLeader()
 				}
 			case *SlotTransferProposal:
-				if s.leader == s.raftID {
+				if s.leader == s.rn.ID() {
 					s.processSlotTransferOut(v.(*SlotTransferProposal))
 				}
 			default:
@@ -613,8 +608,8 @@ func (s *kvstore) serve() {
 }
 
 func (s *kvstore) onNotifyAddNode(from *net.UDPAddr, msg *sproto.NotifyAddNode, context int64) {
-	if s.leader == s.raftID {
-		if _, ok := s.memberShip[int(msg.NodeID)]; ok {
+	if s.leader == s.rn.ID() {
+		if s.rn.IsMember(uint64(msg.NodeID)) {
 			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
 				&sproto.NotifyAddNodeResp{
 					NodeID: msg.NodeID,
@@ -626,7 +621,7 @@ func (s *kvstore) onNotifyAddNode(from *net.UDPAddr, msg *sproto.NotifyAddNode, 
 				ProposalConfChangeBase: raft.ProposalConfChangeBase{
 					ConfChangeType: raftpb.ConfChangeAddNode,
 					Url:            fmt.Sprintf("http://%s:%d", msg.Host, msg.RaftPort),
-					NodeID:         uint64((int(msg.NodeID) << 16) + s.shard),
+					NodeID:         uint64(raft.MakeInstanceID(uint16(msg.NodeID), uint16(s.shard))),
 				},
 				reply: func() {
 					s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
@@ -641,8 +636,8 @@ func (s *kvstore) onNotifyAddNode(from *net.UDPAddr, msg *sproto.NotifyAddNode, 
 }
 
 func (s *kvstore) onNotifyRemNode(from *net.UDPAddr, msg *sproto.NotifyRemNode, context int64) {
-	if s.leader == s.raftID {
-		if _, ok := s.memberShip[int(msg.NodeID)]; !ok {
+	if s.leader == s.rn.ID() {
+		if !s.rn.IsMember(uint64(msg.NodeID)) {
 			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
 				&sproto.NotifyRemNodeResp{
 					NodeID: int32(int(msg.NodeID)),
@@ -653,7 +648,7 @@ func (s *kvstore) onNotifyRemNode(from *net.UDPAddr, msg *sproto.NotifyRemNode, 
 			s.rn.IssueConfChange(&ProposalConfChange{
 				ProposalConfChangeBase: raft.ProposalConfChangeBase{
 					ConfChangeType: raftpb.ConfChangeRemoveNode,
-					NodeID:         uint64((int(msg.NodeID) << 16) + s.shard),
+					NodeID:         uint64(raft.MakeInstanceID(uint16(msg.NodeID), uint16(s.shard))),
 				},
 				reply: func() {
 					s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
@@ -668,7 +663,7 @@ func (s *kvstore) onNotifyRemNode(from *net.UDPAddr, msg *sproto.NotifyRemNode, 
 }
 
 func (s *kvstore) onNotifySlotTransIn(from *net.UDPAddr, msg *sproto.NotifySlotTransIn, context int64) {
-	if s.leader == s.raftID {
+	if s.leader == s.rn.ID() {
 		slot := int(msg.Slot)
 		if s.slots.Test(slot) {
 			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
@@ -705,7 +700,7 @@ func (s *kvstore) processSlotTransferOut(p *SlotTransferProposal) {
 }
 
 func (s *kvstore) onNotifySlotTransOut(from *net.UDPAddr, msg *sproto.NotifySlotTransOut, context int64) {
-	if s.leader == s.raftID {
+	if s.leader == s.rn.ID() {
 		slot := int(msg.Slot)
 		if !s.slots.Test(slot) {
 			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
@@ -742,7 +737,7 @@ func (s *kvstore) onNotifySlotTransOut(from *net.UDPAddr, msg *sproto.NotifySlot
 }
 
 func (s *kvstore) onNotifyUpdateMeta(from *net.UDPAddr, msg *sproto.NotifyUpdateMeta, context int64) {
-	if s.leader == s.raftID {
+	if s.leader == s.rn.ID() {
 		if s.meta.GetVersion() == msg.Version {
 			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
 				&sproto.NotifyUpdateMetaResp{

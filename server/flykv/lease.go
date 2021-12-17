@@ -2,6 +2,7 @@ package flykv
 
 import (
 	"errors"
+	"github.com/sniperHW/flyfish/pkg/raft"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -34,11 +35,11 @@ func (this *leaseProposal) OnError(err error) {
 
 func (this *leaseProposal) Serilize(b []byte) []byte {
 	this.beginTime = time.Now()
-	return serilizeLease(b, this.store.raftID, this.beginTime)
+	return serilizeLease(b, int(this.store.rn.ID()), this.beginTime)
 }
 
 func (this *leaseProposal) apply() {
-	this.store.lease.update(this.store.raftID, this.beginTime)
+	this.store.lease.update(this.store.rn.ID(), this.beginTime)
 	/*
 	 *  如果proposal被commited的延时过长就可能发生lease超时的情况
 	 */
@@ -55,7 +56,7 @@ func (this *leaseProposal) apply() {
 type lease struct {
 	sync.RWMutex
 	store        *kvstore
-	owner        int
+	owner        raft.RaftInstanceID
 	beginTime    time.Time
 	nextRenew    time.Time
 	leaderWaitCh chan struct{}
@@ -77,7 +78,7 @@ func newLease(store *kvstore) *lease {
 				beginTime := l.beginTime
 				l.RUnlock()
 
-				if owner != 0 && owner != l.store.raftID {
+				if owner != 0 && owner != store.rn.ID() {
 					//之前的lease不是自己持有，且尚未过期，需要等待过期之后才能申请lease
 					now := time.Now()
 					deadline := beginTime.Add(leaseTimeout)
@@ -126,7 +127,7 @@ func (l *lease) becomeLeader() {
 	}
 }
 
-func (l *lease) update(owner int, beginTime time.Time) {
+func (l *lease) update(owner raft.RaftInstanceID, beginTime time.Time) {
 	l.Lock()
 	defer l.Unlock()
 	l.beginTime = time.Time(beginTime)
@@ -138,7 +139,7 @@ func (l *lease) hasLease() bool {
 	defer l.RUnlock()
 	if !l.store.isLeader() {
 		return false
-	} else if l.owner != l.store.raftID || time.Now().Sub(l.beginTime) >= leaseOwnerTimeout {
+	} else if l.owner != l.store.rn.ID() || time.Now().Sub(l.beginTime) >= leaseOwnerTimeout {
 		return false
 	} else {
 		return true
@@ -147,7 +148,7 @@ func (l *lease) hasLease() bool {
 
 func (l *lease) snapshot(b []byte) []byte {
 	//lease.update在主线程执行，snapshot也在主线程执行，无需加锁
-	return serilizeLease(b, l.owner, l.beginTime)
+	return serilizeLease(b, int(l.owner), l.beginTime)
 }
 
 func (l *lease) stop() {
