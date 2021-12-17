@@ -21,7 +21,7 @@ type snapshotNotifyst struct {
 type SnapshotNotify struct {
 	notify snapshotNotifyst
 	ch     chan interface{}
-	rc     *RaftNode
+	rc     *RaftInstance
 }
 
 func (this *SnapshotNotify) Notify(snapshot []byte) {
@@ -34,7 +34,7 @@ func (this *SnapshotNotify) Notify(snapshot []byte) {
 	}
 }
 
-func (rc *RaftNode) maybeTriggerSnapshot(index uint64) bool {
+func (rc *RaftInstance) maybeTriggerSnapshot(index uint64) bool {
 	if rc.snapshotting {
 		return false
 	}
@@ -50,7 +50,7 @@ func (rc *RaftNode) maybeTriggerSnapshot(index uint64) bool {
 	return true
 }
 
-func (rc *RaftNode) onTriggerSnapshotOK(snap raftpb.Snapshot) {
+func (rc *RaftInstance) onTriggerSnapshotOK(snap raftpb.Snapshot) {
 
 	GetSugar().Debugf("onTriggerSnapshotOK")
 
@@ -78,7 +78,7 @@ func (rc *RaftNode) onTriggerSnapshotOK(snap raftpb.Snapshot) {
 
 }
 
-func (rc *RaftNode) triggerSnapshot(st snapshotNotifyst) {
+func (rc *RaftInstance) triggerSnapshot(st snapshotNotifyst) {
 	GetSugar().Debugf("triggerSnapshot")
 
 	var err error
@@ -106,7 +106,7 @@ func (rc *RaftNode) triggerSnapshot(st snapshotNotifyst) {
 	}()
 }
 
-func (rc *RaftNode) saveSnap(snap raftpb.Snapshot) error {
+func (rc *RaftInstance) saveSnap(snap raftpb.Snapshot) error {
 	// must save the snapshot index to the WAL before saving the
 	// snapshot to maintain the invariant that we only Open the
 	// wal at previously-saved snapshot indexes.
@@ -124,7 +124,7 @@ func (rc *RaftNode) saveSnap(snap raftpb.Snapshot) error {
 	return rc.wal.ReleaseLockTo(snap.Metadata.Index)
 }
 
-func (rc *RaftNode) loadSnapshot() *raftpb.Snapshot {
+func (rc *RaftInstance) loadSnapshot() *raftpb.Snapshot {
 	snapshot, err := rc.snapshotter.Load()
 	if err != nil && err != snap.ErrNoSnapshot {
 		GetSugar().Fatalf("raftexample: error loading snapshot (%v)", err)
@@ -132,7 +132,7 @@ func (rc *RaftNode) loadSnapshot() *raftpb.Snapshot {
 	return snapshot
 }
 
-func (rc *RaftNode) publishSnapshot(snapshotToSave raftpb.Snapshot) {
+func (rc *RaftInstance) publishSnapshot(snapshotToSave raftpb.Snapshot) {
 	if raft.IsEmptySnap(snapshotToSave) {
 		return
 	}
@@ -178,7 +178,7 @@ func newSnapshotReaderCloser(data []byte) io.ReadCloser {
 	return pr
 }
 
-func (rc *RaftNode) sendSnapshot(m raftpb.Message) {
+func (rc *RaftInstance) sendSnapshot(m raftpb.Message) {
 	data := make([]byte, len(m.Snapshot.Data))
 
 	copy(data, m.Snapshot.Data)
@@ -193,7 +193,7 @@ func (rc *RaftNode) sendSnapshot(m raftpb.Message) {
 		rc.transport.SendSnapshot(snapMsg)
 
 		fields := []zap.Field{
-			zap.Int("from", rc.ID()),
+			zap.String("from", types.ID(int(rc.ID())).String()),
 			zap.String("to", types.ID(snapMsg.To).String()),
 			zap.Int64("bytes", snapMsg.TotalSize),
 			zap.String("size", humanize.Bytes(uint64(snapMsg.TotalSize))),

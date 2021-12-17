@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/sniperHW/flyfish/pkg/queue"
+	"github.com/sniperHW/flyfish/pkg/raft/membership"
 	"github.com/sniperHW/flyfish/pkg/raft/rafthttp"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	stats "go.etcd.io/etcd/etcdserver/api/v2stats"
@@ -101,53 +102,44 @@ func (this *raftTaskMgr) onLeaderDemote() {
 	this.Unlock()
 }
 
-type RaftNode struct {
-	inflightSnapshots int64
-	confChangeC       *queue.ArrayQueue
-	proposePipeline   *queue.ArrayQueue
-	readPipeline      *queue.ArrayQueue
-	commitC           ApplicationQueue
+type RaftInstanceID uint32
 
-	waitStop sync.WaitGroup
-
-	nodeID int
-	region int
-
-	id        int // client ID for raft session
-	peers     map[int]string
-	join      bool   // node is joining an existing cluster
-	waldir    string // path to WAL directory
-	snapdir   string // path to snapshot directory
-	logDir    string
-	lastIndex uint64 // index of log at start
-
-	confState     raftpb.ConfState
-	snapshotIndex uint64
-	appliedIndex  uint64
-
-	// raft backing for the commit/error channel
-	node         raft.Node
-	raftStorage  *raft.MemoryStorage
-	wal          *wal.WAL
-	snapshotter  *snap.Snapshotter
-	snapshotCh   chan interface{}
-	snapshotting bool //当前是否正在做快照
-
-	snapCount uint64
-	transport *rafthttp.Transport
-	stopc     chan struct{} // signals proposal channel closed
-	stopping  chan struct{}
-
+type RaftInstance struct {
+	inflightSnapshots   int64
+	confChangeC         *queue.ArrayQueue
+	proposePipeline     *queue.ArrayQueue
+	readPipeline        *queue.ArrayQueue
+	commitC             ApplicationQueue
+	waitStop            sync.WaitGroup
+	id                  RaftInstanceID // raft instanceID
+	nodeID              uint16
+	shard               uint16
+	join                bool   // node is joining an existing cluster
+	waldir              string // path to WAL directory
+	snapdir             string // path to snapshot directory
+	logDir              string
+	lastIndex           uint64 // index of log at start
+	confState           raftpb.ConfState
+	snapshotIndex       uint64
+	appliedIndex        uint64
+	node                raft.Node
+	raftStorage         *raft.MemoryStorage
+	wal                 *wal.WAL
+	snapshotter         *snap.Snapshotter
+	snapshotCh          chan interface{}
+	snapshotting        bool //当前是否正在做快照
+	snapCount           uint64
+	transport           *rafthttp.Transport
+	stopc               chan struct{} // signals proposal channel closed
+	stopping            chan struct{}
 	proposalMgr         raftTaskMgr
 	confChangeMgr       raftTaskMgr
 	linearizableReadMgr raftTaskMgr
-
-	mutilRaft *MutilRaft
-
-	softState raft.SoftState
-
-	idcounter int32
-	stoponce  int32
+	mutilRaft           *MutilRaft
+	softState           raft.SoftState
+	idcounter           int32
+	stoponce            int32
+	mb                  *membership.MemberShip
 }
 
 func readWALNames(dirpath string) []string {
@@ -195,20 +187,32 @@ func searchIndex(names []string, index uint64) (int, bool) {
 	return -1, false
 }
 
-func (rc *RaftNode) ID() int {
+func MakeInstanceID(nodeID uint16, shard uint16) RaftInstanceID {
+	return RaftInstanceID(uint32(nodeID)<<16 + uint32(shard))
+}
+
+func (r RaftInstanceID) GetNodeID() uint16 {
+	return uint16(uint32(r) >> 16)
+}
+
+func (r RaftInstanceID) GetShard() uint16 {
+	return uint16(uint32(r) & 0x0000FFFF)
+}
+
+func (rc *RaftInstance) ID() RaftInstanceID {
 	return rc.id
 }
 
-func (rc *RaftNode) isLeader() bool {
+func (rc *RaftInstance) isLeader() bool {
 	return rc.softState.RaftState == raft.StateLeader
 }
 
-func (rc *RaftNode) genNextIndex() uint64 {
+func (rc *RaftInstance) genNextIndex() uint64 {
 	v := atomic.AddInt32(&rc.idcounter, 1)
 	return uint64(rc.id)<<32 + uint64(v)
 }
 
-func (rc *RaftNode) removeOldWal(index uint64) {
+func (rc *RaftInstance) removeOldWal(index uint64) {
 	names := readWALNames(rc.waldir)
 	if names == nil {
 		return
@@ -223,7 +227,7 @@ func (rc *RaftNode) removeOldWal(index uint64) {
 	}
 }
 
-func (rc *RaftNode) removeOldSnapAndWal(term uint64, index uint64) {
+func (rc *RaftInstance) removeOldSnapAndWal(term uint64, index uint64) {
 	filepath.Walk(rc.snapdir,
 		func(path string, f os.FileInfo, err error) error {
 			if f == nil {
@@ -251,7 +255,7 @@ func (rc *RaftNode) removeOldSnapAndWal(term uint64, index uint64) {
 }
 
 // openWAL returns a WAL ready for reading.
-func (rc *RaftNode) openWAL(snapshot *raftpb.Snapshot) *wal.WAL {
+func (rc *RaftInstance) openWAL(snapshot *raftpb.Snapshot) *wal.WAL {
 	if !wal.Exist(rc.waldir) {
 		if err := os.Mkdir(rc.waldir, 0750); err != nil {
 			GetSugar().Fatalf("raftexample: cannot create dir for wal (%v)", err)
@@ -279,7 +283,7 @@ func (rc *RaftNode) openWAL(snapshot *raftpb.Snapshot) *wal.WAL {
 }
 
 // replayWAL replays WAL entries into the raft instance.
-func (rc *RaftNode) replayWAL() *wal.WAL {
+func (rc *RaftInstance) replayWAL() *wal.WAL {
 	GetSugar().Infof("replaying WAL of member %d", rc.id)
 	snapshot := rc.loadSnapshot()
 	w := rc.openWAL(snapshot)
@@ -312,7 +316,7 @@ func (rc *RaftNode) replayWAL() *wal.WAL {
 	return w
 }
 
-func (rc *RaftNode) entriesToApply(ents []raftpb.Entry) (nents []raftpb.Entry) {
+func (rc *RaftInstance) entriesToApply(ents []raftpb.Entry) (nents []raftpb.Entry) {
 	if len(ents) == 0 {
 		return ents
 	}
@@ -328,7 +332,7 @@ func (rc *RaftNode) entriesToApply(ents []raftpb.Entry) (nents []raftpb.Entry) {
 
 // publishEntries writes committed log entries to commit channel and returns
 // whether all entries could be published.
-func (rc *RaftNode) publishEntries(ents []raftpb.Entry) {
+func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 	for i := range ents {
 
 		var committed *Committed
@@ -367,21 +371,26 @@ func (rc *RaftNode) publishEntries(ents []raftpb.Entry) {
 
 			switch cc.Type {
 			case raftpb.ConfChangeAddNode, raftpb.ConfChangeAddLearnerNode:
-
 				if len(cc.Context) > 0 {
 					raftUrl = string(cc.Context[8:])
 					rc.transport.AddPeer(types.ID(cc.NodeID), []string{raftUrl})
-				}
+					m := membership.Member{
+						ID:       types.ID(cc.NodeID),
+						PeerURLs: []string{raftUrl},
+					}
 
-				if cc.Type == raftpb.ConfChangeAddNode {
-					GetSugar().Infof("%x ConfChangeAddNode %s %s", rc.id, types.ID(cc.NodeID).String(), raftUrl)
-				} else {
-					GetSugar().Infof("%x ConfChangeAddLearnerNode %s %s", rc.id, types.ID(cc.NodeID).String(), raftUrl)
+					if cc.Type == raftpb.ConfChangeAddNode {
+						GetSugar().Infof("%x ConfChangeAddNode %s %s", rc.id, types.ID(cc.NodeID).String(), raftUrl)
+					} else {
+						m.IsLearner = true
+						GetSugar().Infof("%x ConfChangeAddLearnerNode %s %s", rc.id, types.ID(cc.NodeID).String(), raftUrl)
+					}
+					rc.mb.AddMember(&m)
 				}
-
 			case raftpb.ConfChangeRemoveNode:
 				GetSugar().Infof("%x ConfChangeRemoveNode %s", rc.id, types.ID(cc.NodeID).String())
 				rc.transport.RemovePeer(types.ID(cc.NodeID))
+				rc.mb.RemoveMember(types.ID(cc.NodeID))
 			}
 
 			if len(cc.Context) > 0 {
@@ -391,14 +400,12 @@ func (rc *RaftNode) publishEntries(ents []raftpb.Entry) {
 						rc.commitC.AppendHighestPriotiryItem(t.other.(ProposalConfChange))
 					}
 				}
+				rc.commitC.AppendHighestPriotiryItem(ConfChange{
+					CCType:  cc.Type,
+					NodeID:  int(cc.NodeID),
+					RaftUrl: raftUrl,
+				})
 			}
-
-			rc.commitC.AppendHighestPriotiryItem(ConfChange{
-				CCType:  cc.Type,
-				NodeID:  int(cc.NodeID >> 16),
-				RaftUrl: raftUrl,
-			})
-
 		}
 
 		if committed != nil {
@@ -424,7 +431,7 @@ func (rc *RaftNode) publishEntries(ents []raftpb.Entry) {
 	}
 }
 
-func (rc *RaftNode) processMessages(ms []raftpb.Message) []raftpb.Message {
+func (rc *RaftInstance) processMessages(ms []raftpb.Message) []raftpb.Message {
 	sentAppResp := false
 	for i := len(ms) - 1; i >= 0; i-- {
 		if rc.IsIDRemoved(ms[i].To) {
@@ -456,7 +463,7 @@ func (rc *RaftNode) processMessages(ms []raftpb.Message) []raftpb.Message {
 	return ms
 }
 
-func (rc *RaftNode) serveChannels() {
+func (rc *RaftInstance) serveChannels() {
 	snap, err := rc.raftStorage.Snapshot()
 	if err != nil {
 		panic(err)
@@ -563,9 +570,9 @@ func (rc *RaftNode) serveChannels() {
 	}
 }
 
-func (rc *RaftNode) Stop() {
+func (rc *RaftInstance) Stop() {
 	if atomic.CompareAndSwapInt32(&rc.stoponce, 0, 1) {
-		GetSugar().Infof("RaftNode.Stop()")
+		GetSugar().Infof("RaftInstance.Stop()")
 		close(rc.stopping)
 		rc.confChangeC.Close()
 		rc.proposePipeline.Close()
@@ -573,7 +580,7 @@ func (rc *RaftNode) Stop() {
 	}
 }
 
-func (rc *RaftNode) startRaft(clusterID int32) {
+func (rc *RaftInstance) start() {
 
 	if !fileutil.Exist(rc.snapdir) {
 		if err := os.Mkdir(rc.snapdir, 0750); err != nil {
@@ -583,13 +590,6 @@ func (rc *RaftNode) startRaft(clusterID int32) {
 	rc.snapshotter = snap.New(GetLogger(), rc.snapdir)
 	oldwal := wal.Exist(rc.waldir)
 	rc.wal = rc.replayWAL()
-
-	rpeers := []raft.Peer{}
-
-	for k, _ := range rc.peers {
-		id := k<<16 + rc.region
-		rpeers = append(rpeers, raft.Peer{ID: uint64(id)})
-	}
 
 	rloger := raftLogger{
 		loger: GetLogger().WithOptions(zap.AddCallerSkip(1)),
@@ -613,13 +613,18 @@ func (rc *RaftNode) startRaft(clusterID int32) {
 	if oldwal || rc.join {
 		rc.node = raft.RestartNode(c)
 	} else {
+		rpeers := []raft.Peer{}
+		for _, v := range rc.mb.Members() {
+			rpeers = append(rpeers, raft.Peer{ID: uint64(v.ID)})
+		}
+
 		rc.node = raft.StartNode(c, rpeers)
 	}
 
 	rc.transport = &rafthttp.Transport{
 		Logger:      GetLogger(),
 		ID:          types.ID(rc.id),
-		ClusterID:   types.ID(clusterID),
+		ClusterID:   types.ID(rc.shard),
 		Raft:        rc,
 		ServerStats: stats.NewServerStats(types.ID(rc.id).String(), types.ID(rc.id).String()),
 		LeaderStats: stats.NewLeaderStats(types.ID(rc.id).String()),
@@ -631,58 +636,57 @@ func (rc *RaftNode) startRaft(clusterID int32) {
 
 	rc.transport.Start()
 
-	for k, v := range rc.peers {
-		id := k<<16 + rc.region
-		if id != rc.id {
-			GetSugar().Infof("AddPeer %s", types.ID(id).String())
-			rc.transport.AddPeer(types.ID(id), []string{v})
+	for _, v := range rc.mb.Members() {
+		if v.ID != types.ID(rc.id) {
+			GetSugar().Infof("AddPeer %s", v.ID.String())
+			rc.transport.AddPeer(v.ID, v.PeerURLs)
 		}
 	}
 
 	go rc.serveChannels()
 }
 
-func (rc *RaftNode) Process(ctx context.Context, m raftpb.Message) error {
+func (rc *RaftInstance) Process(ctx context.Context, m raftpb.Message) error {
 	return rc.node.Step(ctx, m)
 }
 
-func (rc *RaftNode) IsIDRemoved(id uint64) bool {
-	return false
+func (rc *RaftInstance) IsIDRemoved(id uint64) bool {
+	return rc.mb.IsIDRemoved(types.ID(id))
 }
 
-func (rc *RaftNode) ReportUnreachable(id uint64) {
+func (rc *RaftInstance) IsMember(id uint64) bool {
+	return rc.mb.Member(types.ID(id)) != nil
+}
+
+func (rc *RaftInstance) ReportUnreachable(id uint64) {
 	rc.node.ReportUnreachable(id)
 }
 
-func (rc *RaftNode) ReportSnapshot(id uint64, status raft.SnapshotStatus) {
+func (rc *RaftInstance) ReportSnapshot(id uint64, status raft.SnapshotStatus) {
 	rc.node.ReportSnapshot(id, status)
 }
 
-func (rc *RaftNode) IssueLinearizableRead(r LinearizableRead) error {
+func (rc *RaftInstance) IssueLinearizableRead(r LinearizableRead) error {
 	return rc.readPipeline.ForceAppend(r)
 }
 
-func (rc *RaftNode) IssueProposal(p Proposal) error {
+func (rc *RaftInstance) IssueProposal(p Proposal) error {
 	return rc.proposePipeline.ForceAppend(p)
 }
 
-func (rc *RaftNode) IssueConfChange(p ProposalConfChange) error {
+func (rc *RaftInstance) IssueConfChange(p ProposalConfChange) error {
 	return rc.confChangeC.ForceAppend(p)
 }
 
-func NewRaftNode(clusterID int32, mutilRaft *MutilRaft, commitC ApplicationQueue, id int, peers map[int]string, join bool, logDir string, raftLogPrefix string) *RaftNode {
-
-	nodeID := id >> 16
-	region := id & 0xFFFF
-
-	rc := &RaftNode{
+func NewInstance(nodeID uint16, shard uint16, mutilRaft *MutilRaft, commitC ApplicationQueue, mb *membership.MemberShip, join bool, logDir string, raftLogPrefix string) *RaftInstance {
+	rc := &RaftInstance{
 		commitC:    commitC,
-		id:         id,
-		peers:      peers,
+		id:         MakeInstanceID(nodeID, shard),
+		mb:         mb,
 		join:       join,
 		logDir:     logDir,
-		waldir:     fmt.Sprintf("%s/%s-%d-%d", logDir, raftLogPrefix, nodeID, region),
-		snapdir:    fmt.Sprintf("%s/%s-%d-%d-snap", logDir, raftLogPrefix, nodeID, region),
+		waldir:     fmt.Sprintf("%s/%s-%d-%d", logDir, raftLogPrefix, nodeID, shard),
+		snapdir:    fmt.Sprintf("%s/%s-%d-%d-snap", logDir, raftLogPrefix, nodeID, shard),
 		snapCount:  DefaultSnapshotCount,
 		stopc:      make(chan struct{}),
 		stopping:   make(chan struct{}),
@@ -701,7 +705,7 @@ func NewRaftNode(clusterID int32, mutilRaft *MutilRaft, commitC ApplicationQueue
 		},
 		mutilRaft:       mutilRaft,
 		nodeID:          nodeID,
-		region:          region,
+		shard:           shard,
 		confChangeC:     queue.NewArrayQueue(),
 		proposePipeline: queue.NewArrayQueue(10000),
 		readPipeline:    queue.NewArrayQueue(10000),
@@ -713,6 +717,6 @@ func NewRaftNode(clusterID int32, mutilRaft *MutilRaft, commitC ApplicationQueue
 		}
 	}
 
-	go rc.startRaft(clusterID)
+	go rc.start()
 	return rc
 }

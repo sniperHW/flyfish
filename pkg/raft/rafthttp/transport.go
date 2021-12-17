@@ -127,7 +127,7 @@ type Transport struct {
 	pipelineRt http.RoundTripper // roundTripper used by pipelines
 
 	mu      sync.RWMutex         // protect the remote and peer map
-	remotes map[types.ID]*remote // remotes map that helps newly joined member to catch up
+	remotes map[types.ID]*remote // remotes map that helps newly joined member to catch up,use to send snapshot only
 	peers   map[types.ID]Peer    // peers map
 
 	pipelineProber probing.Prober

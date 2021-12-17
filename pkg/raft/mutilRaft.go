@@ -20,11 +20,15 @@ type raftHandler struct {
 	snapHandler     http.Handler
 }
 
+type httpServer struct {
+	httpdonec chan struct{}
+}
+
 type MutilRaft struct {
 	sync.RWMutex
-	httpstopc  chan struct{}
-	httpdonec  chan struct{}
-	transports map[types.ID]*raftHandler
+	httpstopc   chan struct{}
+	httpservers []*httpServer
+	transports  map[types.ID]*raftHandler
 }
 
 type mutilRaftHandler struct {
@@ -141,52 +145,63 @@ func (this *MutilRaft) Handler() http.Handler {
 	}
 }
 
-func (this *MutilRaft) Serve(urlStr string) {
-	url, err := url.Parse(urlStr)
-	if err != nil {
-		GetSugar().Fatalf("raftexample: Failed parsing URL %v", err)
-	}
+func (this *MutilRaft) Serve(urls []string) {
+	for _, v := range urls {
 
-	var ln *stoppableListener
-
-	for {
-		ln, err = newStoppableListener(url.Host, this.httpstopc)
+		url, err := url.Parse(v)
 		if err != nil {
-			GetSugar().Infof("raftexample: Failed to listen rafthttp %v", err)
-			select {
-			case <-this.httpstopc:
-				close(this.httpdonec)
-				return
-			default:
-			}
-			time.Sleep(time.Second)
-		} else {
-			break
+			GetSugar().Fatalf("raftexample: Failed parsing URL %v", err)
 		}
+
+		var ln *stoppableListener
+
+		hs := &httpServer{
+			httpdonec: make(chan struct{}),
+		}
+
+		this.httpservers = append(this.httpservers, hs)
+
+		for {
+			ln, err = newStoppableListener(url.Host, this.httpstopc)
+			if err != nil {
+				GetSugar().Infof("raftexample: Failed to listen rafthttp %v", err)
+				select {
+				case <-this.httpstopc:
+					close(hs.httpdonec)
+					return
+				default:
+				}
+				time.Sleep(time.Second)
+			} else {
+				break
+			}
+		}
+
+		GetSugar().Infof("serve:%s", url)
+
+		err = (&http.Server{Handler: this.Handler()}).Serve(ln)
+
+		select {
+		case <-this.httpstopc:
+		default:
+			GetSugar().Fatalf("raftexample: Failed to serve rafthttp %v", err)
+		}
+
+		close(hs.httpdonec)
+
 	}
-
-	GetSugar().Infof("serve:%s", urlStr)
-
-	err = (&http.Server{Handler: this.Handler()}).Serve(ln)
-
-	select {
-	case <-this.httpstopc:
-	default:
-		GetSugar().Fatalf("raftexample: Failed to serve rafthttp %v", err)
-	}
-
-	close(this.httpdonec)
 }
 
 func (this *MutilRaft) Stop() {
 	close(this.httpstopc)
-	<-this.httpdonec
+	for _, v := range this.httpservers {
+		<-v.httpdonec
+	}
 }
 
 func NewMutilRaft() *MutilRaft {
 	return &MutilRaft{
 		httpstopc:  make(chan struct{}),
-		httpdonec:  make(chan struct{}),
 		transports: map[types.ID]*raftHandler{},
 	}
 }

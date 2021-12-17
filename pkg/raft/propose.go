@@ -57,7 +57,7 @@ func (this Committed) GetSnapshotNotify() *SnapshotNotify {
 	return this.snapshotNotify
 }
 
-func (rc *RaftNode) proposeConfChange(proposal ProposalConfChange) {
+func (rc *RaftInstance) proposeConfChange(proposal ProposalConfChange) {
 
 	t := &raftTask{
 		id:    rc.genNextIndex(),
@@ -82,7 +82,7 @@ func (rc *RaftNode) proposeConfChange(proposal ProposalConfChange) {
 	}
 }
 
-func (rc *RaftNode) runConfChange() {
+func (rc *RaftInstance) runConfChange() {
 	go func() {
 		defer rc.waitStop.Done()
 		localList := []interface{}{}
@@ -118,7 +118,7 @@ func releaseProposeBuff(b []byte) {
 	proposeBuffPool.Put(b[:0])
 }
 
-func (rc *RaftNode) propose(batchProposal []Proposal) {
+func (rc *RaftInstance) propose(batchProposal []Proposal) {
 	t := &raftTask{
 		id:    rc.genNextIndex(),
 		other: batchProposal,
@@ -151,7 +151,7 @@ func (rc *RaftNode) propose(batchProposal []Proposal) {
 /*
  * 等待来自应用层的proposal(对应一个操作),按策略将多个应用层proposal合并成单个raft proposal
  */
-func (rc *RaftNode) runProposePipeline() {
+func (rc *RaftInstance) runProposePipeline() {
 
 	sleepTime := time.Duration(ProposalFlushInterval)
 

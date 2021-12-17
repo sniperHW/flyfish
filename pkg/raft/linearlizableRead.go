@@ -13,7 +13,7 @@ type LinearizableRead interface {
 	OnError(error)
 }
 
-func (rc *RaftNode) checkLinearizableRead() {
+func (rc *RaftInstance) checkLinearizableRead() {
 	rc.linearizableReadMgr.Lock()
 	defer rc.linearizableReadMgr.Unlock()
 	for e := rc.linearizableReadMgr.l.Front(); e != nil; e = rc.linearizableReadMgr.l.Front() {
@@ -30,7 +30,7 @@ func (rc *RaftNode) checkLinearizableRead() {
 	}
 }
 
-func (rc *RaftNode) processReadStates(readStates []raft.ReadState) {
+func (rc *RaftInstance) processReadStates(readStates []raft.ReadState) {
 	rc.linearizableReadMgr.Lock()
 	defer rc.linearizableReadMgr.Unlock()
 	for _, rs := range readStates {
@@ -43,7 +43,7 @@ func (rc *RaftNode) processReadStates(readStates []raft.ReadState) {
 	}
 }
 
-func (rc *RaftNode) linearizableRead(batchRead []LinearizableRead) {
+func (rc *RaftInstance) linearizableRead(batchRead []LinearizableRead) {
 
 	t := &raftTask{
 		id:    rc.genNextIndex(),
@@ -62,7 +62,7 @@ func (rc *RaftNode) linearizableRead(batchRead []LinearizableRead) {
 	}
 }
 
-func (rc *RaftNode) runReadPipeline() {
+func (rc *RaftInstance) runReadPipeline() {
 
 	sleepTime := time.Duration(ProposalFlushInterval)
 

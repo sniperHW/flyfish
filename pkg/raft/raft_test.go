@@ -7,23 +7,39 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/sniperHW/flyfish/logger"
+	"github.com/sniperHW/flyfish/pkg/buffer"
+	"github.com/sniperHW/flyfish/pkg/queue"
+	"github.com/sniperHW/flyfish/pkg/raft/membership"
+	"github.com/stretchr/testify/assert"
+	"go.etcd.io/etcd/raft/raftpb"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"reflect"
-	"strconv"
-	"strings"
+	//"strconv"
+	"go.etcd.io/etcd/pkg/types"
+	"go.uber.org/zap"
+	//"strings"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/sniperHW/flyfish/logger"
-	"github.com/sniperHW/flyfish/pkg/buffer"
-	"github.com/sniperHW/flyfish/pkg/queue"
-	"github.com/stretchr/testify/assert"
-	"go.etcd.io/etcd/raft/raftpb"
 )
+
+type testStorage struct {
+	storage []byte
+}
+
+func (s *testStorage) SaveMemberShip(_ *zap.Logger, cid types.ID, localID types.ID, data []byte) error {
+	GetSugar().Infof("SaveMemberShip:%v %v", cid, localID)
+	s.storage = data
+	return nil
+}
+
+func (s *testStorage) LoadMemberShip(lg *zap.Logger, cid types.ID, localID types.ID) (*membership.MemberShip, error) {
+	return membership.NewMemberShipFromJson(lg, s.storage)
+}
 
 func init() {
 	pprof := flag.String("pprof", "localhost:8899", "pprof")
@@ -122,7 +138,7 @@ type kvstore struct {
 	mu           sync.RWMutex
 	mainQueue    applicationQueue
 	kvStore      map[string]string // current committed key-value pairs
-	rn           *RaftNode
+	rn           *RaftInstance
 	becomeLeader func()
 	startOK      func()
 	//onApplySnapOK func()
@@ -134,7 +150,7 @@ type kv struct {
 	Val string
 }
 
-func newKVStore(mainQueue applicationQueue, rn *RaftNode) *kvstore {
+func newKVStore(mainQueue applicationQueue, rn *RaftInstance) *kvstore {
 	s := &kvstore{
 		mainQueue:  mainQueue,
 		kvStore:    make(map[string]string),
@@ -354,7 +370,7 @@ func (s *kvstore) serve() {
 					log.Panic(err)
 				}
 			case LeaderChange:
-				if v.(LeaderChange).Leader == s.rn.ID() {
+				if v.(LeaderChange).Leader == int(s.rn.ID()) {
 					if nil != s.becomeLeader {
 						s.becomeLeader()
 					}
@@ -375,31 +391,18 @@ func init() {
 
 type kvnode struct {
 	mutilRaft *MutilRaft
-	rn        *RaftNode
+	rn        *RaftInstance
 	store     *kvstore
 }
 
-func newKvNode(id int, cluster string) *kvnode {
+func newKvNode(nodeID uint16, shard uint16, mb *membership.MemberShip) *kvnode {
 
-	clusterArray := strings.Split(cluster, ",")
+	var selfUrl []string
 
-	peers := map[int]string{}
+	id := makeInstanceID(nodeID, shard)
 
-	var selfUrl string
-
-	for _, v := range clusterArray {
-		t := strings.Split(v, "@")
-		if len(t) != 2 {
-			panic("invaild peer")
-		}
-		i, err := strconv.Atoi(t[0])
-		if nil != err {
-			panic(err)
-		}
-		peers[i] = t[1]
-		if i == id {
-			selfUrl = t[1]
-		}
+	if m := mb.Member(types.ID(id)); nil != m {
+		selfUrl = m.PeerURLs
 	}
 
 	mainQueue := applicationQueue{
@@ -408,7 +411,7 @@ func newKvNode(id int, cluster string) *kvnode {
 
 	mutilRaft := NewMutilRaft()
 
-	rn := NewRaftNode(1, mutilRaft, mainQueue, (id<<16)+1, peers, false, "log", "kv")
+	rn := NewInstance(nodeID, shard, mutilRaft, mainQueue, mb, false, "log", "kv")
 
 	store := newKVStore(mainQueue, rn)
 
@@ -433,6 +436,12 @@ func TestSingleNode(t *testing.T) {
 	//先删除所有kv文件
 	os.RemoveAll("./log/kv-1-1")
 	os.RemoveAll("./log/kv-1-1-snap")
+	os.RemoveAll("./log/kv-2-1")
+	os.RemoveAll("./log/kv-2-1-snap")
+	os.RemoveAll("./log/kv-3-1")
+	os.RemoveAll("./log/kv-3-1-snap")
+	os.RemoveAll("./log/kv-4-1")
+	os.RemoveAll("./log/kv-4-1-snap")
 
 	ProposalFlushInterval = 10
 	ProposalBatchCount = 1
@@ -441,10 +450,21 @@ func TestSingleNode(t *testing.T) {
 	DefaultSnapshotCount = 100
 	SnapshotCatchUpEntriesN = 100
 
-	{
-		id := 1
+	u, _ := types.NewURLs([]string{"http://127.0.0.1:12379"})
 
-		node := newKvNode(id, "1@http://127.0.0.1:12379")
+	membs := []*membership.Member{
+		membership.NewMember(types.ID(makeInstanceID(1, 1)), u),
+	}
+
+	st := &testStorage{}
+	mb := membership.NewMemberShipMembers(GetLogger(), types.ID(1), types.ID(1), membs)
+	mb.SetStorage(st)
+
+	fmt.Println(mb.Members())
+
+	{
+
+		node := newKvNode(1, 1, mb)
 
 		startOkCh := make(chan struct{})
 
@@ -483,9 +503,7 @@ func TestSingleNode(t *testing.T) {
 
 	{
 		//start again
-		id := 1
-
-		node := newKvNode(id, "1@http://127.0.0.1:12379")
+		node := newKvNode(1, 1, mb)
 
 		startOkCh := make(chan struct{})
 
@@ -525,9 +543,22 @@ func TestCluster(t *testing.T) {
 	DefaultSnapshotCount = 100
 	SnapshotCatchUpEntriesN = 100
 
-	cluster := "1@http://127.0.0.1:22378,2@http://127.0.0.1:22379,3@http://127.0.0.1:22380"
+	u1, _ := types.NewURLs([]string{"http://127.0.0.1:22378"})
+	u2, _ := types.NewURLs([]string{"http://127.0.0.1:22379"})
+	u3, _ := types.NewURLs([]string{"http://127.0.0.1:22380"})
+	u4, _ := types.NewURLs([]string{"http://127.0.0.1:22381"})
 
-	node1 := newKvNode(1, cluster)
+	membs1 := []*membership.Member{
+		membership.NewMember(types.ID(makeInstanceID(1, 1)), u1),
+		membership.NewMember(types.ID(makeInstanceID(2, 1)), u2),
+		membership.NewMember(types.ID(makeInstanceID(3, 1)), u3),
+	}
+
+	st1 := &testStorage{}
+	mb1 := membership.NewMemberShipMembers(GetLogger(), types.ID(1), types.ID(1), membs1)
+	mb1.SetStorage(st1)
+
+	node1 := newKvNode(1, 1, mb1)
 
 	becomeLeaderCh1 := make(chan *kvnode, 1)
 
@@ -535,7 +566,11 @@ func TestCluster(t *testing.T) {
 		becomeLeaderCh1 <- node1
 	}
 
-	node2 := newKvNode(2, cluster)
+	st2 := &testStorage{}
+	mb2 := membership.NewMemberShipMembers(GetLogger(), types.ID(2), types.ID(1), membs1)
+	mb2.SetStorage(st2)
+
+	node2 := newKvNode(2, 1, mb2)
 
 	becomeLeaderCh2 := make(chan *kvnode, 1)
 
@@ -543,7 +578,11 @@ func TestCluster(t *testing.T) {
 		becomeLeaderCh2 <- node2
 	}
 
-	node3 := newKvNode(3, cluster)
+	st3 := &testStorage{}
+	mb3 := membership.NewMemberShipMembers(GetLogger(), types.ID(3), types.ID(1), membs1)
+	mb3.SetStorage(st3)
+
+	node3 := newKvNode(3, 1, mb3)
 
 	becomeLeaderCh3 := make(chan *kvnode, 1)
 
@@ -575,13 +614,22 @@ func TestCluster(t *testing.T) {
 	time.Sleep(time.Second)
 
 	//加入新节点
-	cluster = "1@http://127.0.0.1:22378,2@http://127.0.0.1:22379,3@http://127.0.0.1:22380,4@http://127.0.0.1:22381"
-
 	newNodeID := uint64((4 << 16) + 1)
 	err := leader.store.AddNode(newNodeID, "http://127.0.0.1:22381")
 	assert.Nil(t, err)
 
-	node4 := newKvNode(4, cluster)
+	membs2 := []*membership.Member{
+		membership.NewMember(types.ID(makeInstanceID(1, 1)), u1),
+		membership.NewMember(types.ID(makeInstanceID(2, 1)), u2),
+		membership.NewMember(types.ID(makeInstanceID(3, 1)), u3),
+		membership.NewMember(types.ID(makeInstanceID(4, 1)), u4),
+	}
+
+	st4 := &testStorage{}
+	mb4 := membership.NewMemberShipMembers(GetLogger(), types.ID(4), types.ID(1), membs2)
+	mb4.SetStorage(st4)
+
+	node4 := newKvNode(4, 1, mb4)
 
 	startOkCh4 := make(chan struct{}, 1)
 
@@ -604,8 +652,6 @@ func TestCluster(t *testing.T) {
 		}
 	}
 
-	//assert.Equal(t, "sniperHW", node4.store.kvStore["sniperHW"])
-
 	//test remove node
 	leader.store.RemoveNode(uint64((4 << 16) + 1))
 
@@ -627,8 +673,10 @@ func TestProposeTimeout(t *testing.T) {
 	os.RemoveAll("./log/kv-1-1-snap")
 	os.RemoveAll("./log/kv-2-1")
 	os.RemoveAll("./log/kv-2-1-snap")
-	//os.RemoveAll("./log/kv-3-1")
-	//os.RemoveAll("./log/kv-3-1-snap")
+	os.RemoveAll("./log/kv-3-1")
+	os.RemoveAll("./log/kv-3-1-snap")
+	os.RemoveAll("./log/kv-4-1")
+	os.RemoveAll("./log/kv-4-1-snap")
 
 	ProposalFlushInterval = 10
 	ProposalBatchCount = 1
@@ -637,9 +685,19 @@ func TestProposeTimeout(t *testing.T) {
 	DefaultSnapshotCount = 100
 	SnapshotCatchUpEntriesN = 100
 
-	cluster := "1@http://127.0.0.1:22378,2@http://127.0.0.1:22379" //,3@http://127.0.0.1:22380"
+	u1, _ := types.NewURLs([]string{"http://127.0.0.1:32378"})
+	u2, _ := types.NewURLs([]string{"http://127.0.0.1:32379"})
 
-	node1 := newKvNode(1, cluster)
+	membs1 := []*membership.Member{
+		membership.NewMember(types.ID(makeInstanceID(1, 1)), u1),
+		membership.NewMember(types.ID(makeInstanceID(2, 1)), u2),
+	}
+
+	st1 := &testStorage{}
+	mb1 := membership.NewMemberShipMembers(GetLogger(), types.ID(1), types.ID(1), membs1)
+	mb1.SetStorage(st1)
+
+	node1 := newKvNode(1, 1, mb1)
 
 	becomeLeaderCh1 := make(chan *kvnode, 1)
 
@@ -647,7 +705,11 @@ func TestProposeTimeout(t *testing.T) {
 		becomeLeaderCh1 <- node1
 	}
 
-	node2 := newKvNode(2, cluster)
+	st2 := &testStorage{}
+	mb2 := membership.NewMemberShipMembers(GetLogger(), types.ID(1), types.ID(2), membs1)
+	mb2.SetStorage(st2)
+
+	node2 := newKvNode(2, 1, mb2)
 
 	becomeLeaderCh2 := make(chan *kvnode, 1)
 
@@ -687,18 +749,18 @@ func TestProposeTimeout(t *testing.T) {
 	}()
 
 	if node1 == nil {
-		node1 = newKvNode(1, cluster)
+		node1 = newKvNode(1, 1, mb1)
 	}
 
 	if node2 == nil {
-		node2 = newKvNode(2, cluster)
+		node2 = newKvNode(2, 1, mb2)
 	}
 
 	time.Sleep(time.Second * 5)
 
 }
 
-func TestAddNode(t *testing.T) {
+func TestAddLearner(t *testing.T) {
 	//先删除所有kv文件
 	os.RemoveAll("./log/kv-1-1")
 	os.RemoveAll("./log/kv-1-1-snap")
@@ -716,9 +778,18 @@ func TestAddNode(t *testing.T) {
 	DefaultSnapshotCount = 100
 	SnapshotCatchUpEntriesN = 100
 
-	cluster := "1@http://127.0.0.1:22378"
+	u1, _ := types.NewURLs([]string{"http://127.0.0.1:42378"})
+	u2, _ := types.NewURLs([]string{"http://127.0.0.1:42379"})
 
-	node1 := newKvNode(1, cluster)
+	membs1 := []*membership.Member{
+		membership.NewMember(types.ID(makeInstanceID(1, 1)), u1),
+	}
+
+	st1 := &testStorage{}
+	mb1 := membership.NewMemberShipMembers(GetLogger(), types.ID(1), types.ID(1), membs1)
+	mb1.SetStorage(st1)
+
+	node1 := newKvNode(1, 1, mb1)
 
 	becomeLeaderCh1 := make(chan *kvnode, 1)
 
@@ -735,54 +806,60 @@ func TestAddNode(t *testing.T) {
 
 	leader := getLeader()
 
-	newNodeID := uint64((4 << 16) + 1)
-	err := leader.store.AddLearner(newNodeID, "http://127.0.0.1:22381")
+	newNodeID := uint64((2 << 16) + 1)
+	err := leader.store.AddLearner(newNodeID, "http://127.0.0.1:42379")
 	assert.Nil(t, err)
 
-	//加入新节点
-	cluster = "1@http://127.0.0.1:22378,4@http://127.0.0.1:22381"
+	membs2 := []*membership.Member{
+		membership.NewMember(types.ID(makeInstanceID(1, 1)), u1),
+		membership.NewMember(types.ID(makeInstanceID(2, 1)), u2),
+	}
 
-	node4 := newKvNode(4, cluster)
+	st2 := &testStorage{}
+	mb2 := membership.NewMemberShipMembers(GetLogger(), types.ID(1), types.ID(2), membs2)
+	mb2.SetStorage(st2)
 
-	startOkCh4 := make(chan struct{}, 1)
+	node2 := newKvNode(2, 1, mb2)
 
-	node4.store.startOK = func() {
+	startOkCh2 := make(chan struct{}, 1)
+
+	node2.store.startOK = func() {
 		select {
-		case startOkCh4 <- struct{}{}:
+		case startOkCh2 <- struct{}{}:
 		default:
 		}
 	}
 
-	<-startOkCh4
+	<-startOkCh2
 
 	time.Sleep(time.Second * 5)
 
 	node1.stop()
 
-	node1 = newKvNode(1, "1@http://127.0.0.1:22378")
+	node1 = newKvNode(1, 1, mb1)
 
 	becomeLeaderCh1 = make(chan *kvnode, 1)
-	becomeLeaderCh4 := make(chan *kvnode, 1)
+	becomeLeaderCh2 := make(chan *kvnode, 1)
 
 	node1.store.becomeLeader = func() {
 		becomeLeaderCh1 <- node1
 	}
 
-	node4.store.becomeLeader = func() {
-		becomeLeaderCh4 <- node4
+	node2.store.becomeLeader = func() {
+		becomeLeaderCh2 <- node2
 	}
 
 	getLeader = func() *kvnode {
 		select {
 		case n := <-becomeLeaderCh1:
 			return n
-		case n := <-becomeLeaderCh4:
+		case n := <-becomeLeaderCh2:
 			return n
 		}
 	}
 
 	leader = getLeader()
 
-	node4.stop()
+	node2.stop()
 
 }
