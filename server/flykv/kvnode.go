@@ -446,74 +446,90 @@ func (this *kvnode) Start() error {
 
 			//meta从flypd获取
 
-			/*			pd := strings.Split(config.ClusterConfig.PD, ";")
+			pd := strings.Split(config.ClusterConfig.PD, ";")
 
-						var pdAddr []*net.UDPAddr
+			var pdAddr []*net.UDPAddr
 
-						for _, v := range pd {
-							addr, err := net.ResolveUDPAddr("udp", v)
-							if nil != err {
-								return err
-							} else {
-								pdAddr = append(pdAddr, addr)
-							}
-						}
+			for _, v := range pd {
+				addr, err := net.ResolveUDPAddr("udp", v)
+				if nil != err {
+					return err
+				} else {
+					pdAddr = append(pdAddr, addr)
+				}
+			}
 
-						resp := this.getKvnodeBootInfo(pdAddr)
+			resp := this.getKvnodeBootInfo(pdAddr)
 
-						if !resp.Ok {
-							return errors.New(resp.Reason)
-						}
+			if !resp.Ok {
+				return errors.New(resp.Reason)
+			}
 
-						if dbdef, err = db.CreateDbDefFromJsonString(resp.Meta); nil != err {
-							return err
-						}
+			if dbdef, err = db.CreateDbDefFromJsonString(resp.Meta); nil != err {
+				return err
+			}
 
-						meta, err = sql.CreateDbMeta(resp.MetaVersion, dbdef)
+			meta, err = sql.CreateDbMeta(resp.MetaVersion, dbdef)
 
-						if nil != err {
-							return err
-						}
+			if nil != err {
+				return err
+			}
 
-						this.selfUrl = fmt.Sprintf("http://%s:%d", resp.ServiceHost, resp.RaftPort)
+			err = this.initUdp(fmt.Sprintf("%s:%d", resp.ServiceHost, resp.ServicePort))
 
-						err = this.initUdp(fmt.Sprintf("%s:%d", resp.ServiceHost, resp.ServicePort))
+			if nil != err {
+				return err
+			}
 
-						if nil != err {
-							return err
-						}
+			err = this.db.start(config)
 
-						err = this.db.start(config)
+			if nil != err {
+				return err
+			}
 
-						if nil != err {
-							return err
-						}
+			service := fmt.Sprintf("%s:%d", resp.ServiceHost, resp.ServicePort)
 
-						service := fmt.Sprintf("%s:%d", resp.ServiceHost, resp.ServicePort)
+			this.listener, err = cs.NewListener("tcp", service, outputBufLimit, verifyLogin)
 
-						this.listener, err = cs.NewListener("tcp", service, outputBufLimit, verifyLogin)
+			if nil != err {
+				return err
+			}
 
-						if nil != err {
-							return err
-						}
+			go this.mutilRaft.Serve([]string{fmt.Sprintf("http://%s:%d", resp.ServiceHost, resp.RaftPort)})
 
-						go this.mutilRaft.Serve(this.selfUrl)
+			this.startListener()
 
-						this.startListener()
+			//cluster模式下membership由pd负责管理,节点每次启动从pd获取
+			for _, v := range resp.Stores {
+				slots, err := bitmap.CreateFromJson(v.Slots)
 
-						for _, v := range resp.Stores {
-							slots, err := bitmap.CreateFromJson(v.Slots)
+				if nil != err {
+					return err
+				}
 
-							if nil != err {
-								return err
-							}
+				membs := []*membership.Member{}
 
-							if err = this.addStore(meta, int(v.Id), v.RaftCluster, slots); nil != err {
-								return err
-							}
-						}
+				for _, vv := range strings.Split(v.RaftCluster, ",") {
+					t := strings.Split(vv, "@")
+					if len(t) != 2 {
+						panic("invaild peer")
+					}
+					i, err := strconv.Atoi(t[0])
+					if nil != err {
+						panic(err)
+					}
+					u, _ := types.NewURLs([]string{t[1]})
+					membs = append(membs, membership.NewMember(types.ID(raft.MakeInstanceID(uint16(i), uint16(v.Id))), u))
+				}
 
-						GetSugar().Infof("flyfish start:%s:%d", resp.ServiceHost, resp.ServicePort)*/
+				mb := membership.NewMemberShipMembers(GetLogger(), types.ID(this.id), types.ID(v.Id), membs)
+
+				if err = this.addStore(meta, int(v.Id), mb, slots); nil != err {
+					return err
+				}
+			}
+
+			GetSugar().Infof("flyfish start:%s:%d", resp.ServiceHost, resp.ServicePort)
 		}
 
 	}
