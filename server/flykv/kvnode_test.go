@@ -11,14 +11,14 @@ import (
 	"github.com/sniperHW/flyfish/logger"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/raft"
-	"github.com/sniperHW/flyfish/pkg/raft/membership"
+	//"github.com/sniperHW/flyfish/pkg/raft/membership"
 	"github.com/sniperHW/flyfish/server/mock"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"github.com/sniperHW/flyfish/server/slot"
 	"github.com/stretchr/testify/assert"
-	"go.etcd.io/etcd/pkg/types"
-	"go.uber.org/zap"
+	//"go.etcd.io/etcd/pkg/types"
+	//"go.uber.org/zap"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
@@ -97,33 +97,6 @@ MaxBackups      = 10
 
 `
 
-type testStorage struct {
-	m map[string][]byte
-}
-
-func (s *testStorage) SaveMemberShip(lg *zap.Logger, cid types.ID, localID types.ID, data []byte) error {
-	key := fmt.Sprintf("%v:%v", localID, cid)
-	s.m[key] = data
-	return nil
-}
-
-func (s *testStorage) LoadMemberShip(lg *zap.Logger, cid types.ID, localID types.ID) (*membership.MemberShip, error) {
-	key := fmt.Sprintf("%v:%v", localID, cid)
-	data, ok := s.m[key]
-	if !ok {
-		return nil, nil
-	}
-	return membership.NewMemberShipFromJson(lg, data)
-}
-
-func (s *testStorage) SaveMeta(lg *zap.Logger, data []byte) error {
-	return nil
-}
-
-func (s *testStorage) LoadMeta(lg *zap.Logger) (db.DBMeta, error) {
-	return nil, nil
-}
-
 type mockBackEnd struct {
 	d *mock.DB
 }
@@ -187,9 +160,9 @@ func newMockDBBackEnd() dbI {
 	return newMockDB()
 }
 
-func start1Node(b dbI, s Storage) *kvnode {
+func start1Node(b dbI) *kvnode {
 
-	node := NewKvNode(1, config, b, s)
+	node := NewKvNode(1, config, b)
 
 	if err := node.Start(); nil != err {
 		panic(err)
@@ -538,11 +511,7 @@ func Test1Node1Store1(t *testing.T) {
 
 	client.InitLogger(GetLogger())
 
-	storage1 := &testStorage{
-		m: map[string][]byte{},
-	}
-
-	node := start1Node(newSqlDBBackEnd(), storage1)
+	node := start1Node(newSqlDBBackEnd())
 
 	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
 
@@ -567,7 +536,7 @@ func Test1Node1Store1(t *testing.T) {
 	fmt.Println("stop ok")
 
 	//start again
-	node = start1Node(newSqlDBBackEnd(), storage1)
+	node = start1Node(newSqlDBBackEnd())
 
 	time.Sleep(time.Second * 2)
 
@@ -585,11 +554,7 @@ func Test1Node1Store2(t *testing.T) {
 
 	client.InitLogger(GetLogger())
 
-	storage1 := &testStorage{
-		m: map[string][]byte{},
-	}
-
-	node := start1Node(newSqlDBBackEnd(), storage1)
+	node := start1Node(newSqlDBBackEnd())
 
 	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
 
@@ -620,11 +585,7 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 
 	client.InitLogger(GetLogger())
 
-	storage1 := &testStorage{
-		m: map[string][]byte{},
-	}
-
-	node := start1Node(newMockDBBackEnd(), storage1)
+	node := start1Node(newMockDBBackEnd())
 
 	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
 
@@ -672,7 +633,7 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 
 	node.Stop()
 
-	node = start1Node(newSqlDBBackEnd(), storage1)
+	node = start1Node(newSqlDBBackEnd())
 
 	time.Sleep(time.Second * 2)
 
@@ -705,11 +666,7 @@ func Test1Node1StoreSnapshot2(t *testing.T) {
 
 	client.InitLogger(GetLogger())
 
-	storage1 := &testStorage{
-		m: map[string][]byte{},
-	}
-
-	node := start1Node(newMockDBBackEnd(), storage1)
+	node := start1Node(newMockDBBackEnd())
 
 	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
 
@@ -741,7 +698,7 @@ func Test1Node1StoreSnapshot2(t *testing.T) {
 
 	node.Stop()
 
-	node = start1Node(newSqlDBBackEnd(), storage1)
+	node = start1Node(newSqlDBBackEnd())
 
 	time.Sleep(time.Second * 2)
 
@@ -760,11 +717,7 @@ func TestUseMockDB(t *testing.T) {
 
 	client.InitLogger(GetLogger())
 
-	storage1 := &testStorage{
-		m: map[string][]byte{},
-	}
-
-	node := start1Node(newMockDBBackEnd(), storage1)
+	node := start1Node(newMockDBBackEnd())
 
 	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
 
@@ -783,11 +736,7 @@ func TestKick(t *testing.T) {
 
 	client.InitLogger(GetLogger())
 
-	storage1 := &testStorage{
-		m: map[string][]byte{},
-	}
-
-	node := start1Node(newMockDBBackEnd(), storage1)
+	node := start1Node(newMockDBBackEnd())
 
 	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
 
@@ -802,7 +751,7 @@ func TestKick(t *testing.T) {
 
 	node.Stop()
 
-	node = start1Node(newMockDBBackEnd(), storage1)
+	node = start1Node(newMockDBBackEnd())
 
 	time.Sleep(time.Second * 5)
 
@@ -824,11 +773,7 @@ func TestUpdateMeta(t *testing.T) {
 
 	client.InitLogger(GetLogger())
 
-	storage1 := &testStorage{
-		m: map[string][]byte{},
-	}
-
-	node := start1Node(newMockDBBackEnd(), storage1)
+	node := start1Node(newMockDBBackEnd())
 
 	def, _ := db.CreateDbDefFromCsv([]string{"users1@name:string:,age:int:,phone:string:"})
 
@@ -880,11 +825,7 @@ func TestSlotTransferIn(t *testing.T) {
 
 	client.InitLogger(GetLogger())
 
-	storage1 := &testStorage{
-		m: map[string][]byte{},
-	}
-
-	node := start1Node(newMockDBBackEnd(), storage1)
+	node := start1Node(newMockDBBackEnd())
 
 	store1 := node.stores[1]
 	slots := store1.slots.GetOpenBits()
@@ -935,11 +876,7 @@ func TestSlotTransferOut(t *testing.T) {
 
 	client.InitLogger(GetLogger())
 
-	storage1 := &testStorage{
-		m: map[string][]byte{},
-	}
-
-	node := start1Node(newMockDBBackEnd(), storage1)
+	node := start1Node(newMockDBBackEnd())
 
 	store1 := node.stores[1]
 	slots := store1.slots.GetOpenBits()

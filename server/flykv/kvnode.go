@@ -39,19 +39,18 @@ var (
 )
 
 type kvnode struct {
-	muC         sync.Mutex
-	clients     map[*fnet.Socket]struct{}
-	muS         sync.RWMutex
-	stores      map[int]*kvstore
-	config      *Config
-	db          dbI
-	listener    *cs.Listener
-	id          int
-	mutilRaft   *raft.MutilRaft
-	stopOnce    int32
-	startOnce   int32
-	udpConn     *fnet.Udp
-	soloStorage Storage //for solo mode use only
+	muC       sync.Mutex
+	clients   map[*fnet.Socket]struct{}
+	muS       sync.RWMutex
+	stores    map[int]*kvstore
+	config    *Config
+	db        dbI
+	listener  *cs.Listener
+	id        int
+	mutilRaft *raft.MutilRaft
+	stopOnce  int32
+	startOnce int32
+	udpConn   *fnet.Udp
 }
 
 func verifyLogin(loginReq *flyproto.LoginReq) bool {
@@ -352,26 +351,14 @@ func (this *kvnode) Start() error {
 
 		if config.Mode == "solo" {
 
-			if meta, err = this.soloStorage.LoadMeta(GetLogger()); nil != err {
+			if dbdef, err = db.CreateDbDefFromCsv(config.SoloConfig.Meta); nil != err {
 				return err
 			}
 
-			if nil == meta {
-				if dbdef, err = db.CreateDbDefFromCsv(config.SoloConfig.Meta); nil != err {
-					return err
-				}
+			meta, err = sql.CreateDbMeta(1, dbdef)
 
-				meta, err = sql.CreateDbMeta(1, dbdef)
-
-				if nil != err {
-					return err
-				}
-
-				if j, err := meta.ToJson(); nil != err {
-					return err
-				} else if err = this.soloStorage.SaveMeta(GetLogger(), j); nil != err {
-					return err
-				}
+			if nil != err {
+				return err
 			}
 
 			err = this.db.start(config)
@@ -416,23 +403,14 @@ func (this *kvnode) Start() error {
 
 				storeBitmaps := makeStoreBitmap(config.SoloConfig.Stores)
 				for i, v := range config.SoloConfig.Stores {
-					//首先尝试从storage加载membership
-					mb, err := this.soloStorage.LoadMemberShip(GetLogger(), types.ID(v), types.ID(this.id))
-					if nil != err {
-						return err
-					}
 
-					if nil == mb {
-						//storage中没有从配置文件中创建
-						membs := []*membership.Member{}
-						for kk, vv := range peers {
-							u, _ := types.NewURLs([]string{vv})
-							membs = append(membs, membership.NewMember(types.ID(raft.MakeInstanceID(uint16(kk), uint16(v))), u))
-						}
-						mb = membership.NewMemberShipMembers(GetLogger(), types.ID(this.id), types.ID(v), membs)
-						mb.SetStorage(this.soloStorage)
-						mb.Save()
+					//storage中没有从配置文件中创建
+					membs := []*membership.Member{}
+					for kk, vv := range peers {
+						u, _ := types.NewURLs([]string{vv})
+						membs = append(membs, membership.NewMember(types.ID(raft.MakeInstanceID(uint16(kk), uint16(v))), u))
 					}
+					mb := membership.NewMemberShipMembers(GetLogger(), types.ID(this.id), types.ID(v), membs)
 
 					if err = this.addStore(meta, v, mb, storeBitmaps[i]); nil != err {
 						return err
@@ -536,7 +514,7 @@ func (this *kvnode) Start() error {
 	return err
 }
 
-func NewKvNode(id int, config *Config, db dbI, s Storage) *kvnode {
+func NewKvNode(id int, config *Config, db dbI) *kvnode {
 
 	if config.ProposalFlushInterval > 0 {
 		raft.ProposalFlushInterval = config.ProposalFlushInterval
@@ -567,12 +545,11 @@ func NewKvNode(id int, config *Config, db dbI, s Storage) *kvnode {
 	}
 
 	return &kvnode{
-		id:          id,
-		mutilRaft:   raft.NewMutilRaft(),
-		clients:     map[*fnet.Socket]struct{}{},
-		stores:      map[int]*kvstore{},
-		db:          db,
-		config:      config,
-		soloStorage: s,
+		id:        id,
+		mutilRaft: raft.NewMutilRaft(),
+		clients:   map[*fnet.Socket]struct{}{},
+		stores:    map[int]*kvstore{},
+		db:        db,
+		config:    config,
 	}
 }
