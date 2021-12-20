@@ -114,20 +114,27 @@ func (p *KVLinearizableRead) OnError(err error) {
 }
 
 type TestConfChange struct {
-	ProposalConfChangeBase
-	ch chan error
+	confChangeType raftpb.ConfChangeType
+	isPromote      bool
+	url            string //for add
+	nodeID         uint64
+	ch             chan error
+}
+
+func (this TestConfChange) IsPromote() bool {
+	return this.isPromote
 }
 
 func (this TestConfChange) GetType() raftpb.ConfChangeType {
-	return this.ConfChangeType
+	return this.confChangeType
 }
 
-func (this TestConfChange) GetUrl() string {
-	return this.Url
+func (this TestConfChange) GetURL() string {
+	return this.url
 }
 
 func (this TestConfChange) GetNodeID() uint64 {
-	return this.NodeID
+	return this.nodeID
 }
 
 func (this TestConfChange) OnError(err error) {
@@ -200,45 +207,87 @@ func (s *kvstore) Set(key string, val string) error {
 	}
 }
 
-func (s *kvstore) AddNode(id uint64, url string) error {
-	o := TestConfChange{
-		ProposalConfChangeBase: ProposalConfChangeBase{
-			ConfChangeType: raftpb.ConfChangeAddNode,
-			Url:            url,
-			NodeID:         id,
-		},
-		ch: make(chan error, 1),
+func (s *kvstore) AddMember(id uint64, url string) error {
+
+	if err := s.rn.MayAddMember(membership.Member{
+		ID:       types.ID(id),
+		PeerURLs: []string{url},
+	}); nil != err {
+		return err
 	}
 
-	s.rn.IssueConfChange(o)
+	o := TestConfChange{
+		confChangeType: raftpb.ConfChangeAddNode,
+		url:            url,
+		nodeID:         id,
+		ch:             make(chan error, 1),
+	}
+
+	if err := s.rn.IssueConfChange(o); nil != err {
+		return err
+	}
 
 	return <-o.ch
 }
 
 func (s *kvstore) AddLearner(id uint64, url string) error {
-	o := TestConfChange{
-		ProposalConfChangeBase: ProposalConfChangeBase{
-			ConfChangeType: raftpb.ConfChangeAddLearnerNode,
-			Url:            url,
-			NodeID:         id,
-		},
-		ch: make(chan error, 1),
+
+	if err := s.rn.MayAddMember(membership.Member{
+		ID:        types.ID(id),
+		PeerURLs:  []string{url},
+		IsLearner: true,
+	}); nil != err {
+		return err
 	}
 
-	s.rn.IssueConfChange(o)
+	o := TestConfChange{
+		confChangeType: raftpb.ConfChangeAddLearnerNode,
+		url:            url,
+		nodeID:         id,
+		ch:             make(chan error, 1),
+	}
+
+	if err := s.rn.IssueConfChange(o); nil != err {
+		return err
+	}
 
 	return <-o.ch
 }
 
-func (s *kvstore) RemoveNode(id uint64) error {
-	o := TestConfChange{
-		ProposalConfChangeBase: ProposalConfChangeBase{
-			ConfChangeType: raftpb.ConfChangeRemoveNode,
-			NodeID:         id,
-		},
-		ch: make(chan error, 1),
+func (s *kvstore) PromoteLearner(id uint64) error {
+	if err := s.rn.IsLearnerReady(id); nil != err {
+		return err
 	}
-	s.rn.IssueConfChange(o)
+
+	o := TestConfChange{
+		confChangeType: raftpb.ConfChangeAddNode,
+		nodeID:         id,
+		ch:             make(chan error, 1),
+		isPromote:      true,
+	}
+
+	if err := s.rn.IssueConfChange(o); nil != err {
+		return err
+	}
+
+	return <-o.ch
+
+}
+
+func (s *kvstore) RemoveMember(id uint64) error {
+	if err := s.rn.MayRemoveMember(types.ID(id)); nil != err {
+		return err
+	}
+
+	o := TestConfChange{
+		confChangeType: raftpb.ConfChangeRemoveNode,
+		nodeID:         id,
+		ch:             make(chan error, 1),
+	}
+
+	if err := s.rn.IssueConfChange(o); nil != err {
+		return err
+	}
 
 	return <-o.ch
 }
@@ -399,7 +448,7 @@ func newKvNode(nodeID uint16, shard uint16, mb *membership.MemberShip) *kvnode {
 
 	var selfUrl []string
 
-	id := makeInstanceID(nodeID, shard)
+	id := MakeInstanceID(nodeID, shard)
 
 	if m := mb.Member(types.ID(id)); nil != m {
 		selfUrl = m.PeerURLs
@@ -411,7 +460,11 @@ func newKvNode(nodeID uint16, shard uint16, mb *membership.MemberShip) *kvnode {
 
 	mutilRaft := NewMutilRaft()
 
-	rn := NewInstance(nodeID, shard, mutilRaft, mainQueue, mb, false, "log", "kv")
+	rn, err := NewInstance(nodeID, shard, mutilRaft, mainQueue, mb, "log", "kv")
+
+	if nil != err {
+		fmt.Println(err)
+	}
 
 	store := newKVStore(mainQueue, rn)
 
@@ -434,13 +487,13 @@ func (this *kvnode) stop() {
 func TestSingleNode(t *testing.T) {
 
 	//先删除所有kv文件
-	os.RemoveAll("./log/kv-1-1")
+	os.RemoveAll("./log/kv-1-1-wal")
 	os.RemoveAll("./log/kv-1-1-snap")
-	os.RemoveAll("./log/kv-2-1")
+	os.RemoveAll("./log/kv-2-1-wal")
 	os.RemoveAll("./log/kv-2-1-snap")
-	os.RemoveAll("./log/kv-3-1")
+	os.RemoveAll("./log/kv-3-1-wal")
 	os.RemoveAll("./log/kv-3-1-snap")
-	os.RemoveAll("./log/kv-4-1")
+	os.RemoveAll("./log/kv-4-1-wal")
 	os.RemoveAll("./log/kv-4-1-snap")
 
 	ProposalFlushInterval = 10
@@ -453,7 +506,7 @@ func TestSingleNode(t *testing.T) {
 	u, _ := types.NewURLs([]string{"http://127.0.0.1:12379"})
 
 	membs := []*membership.Member{
-		membership.NewMember(types.ID(makeInstanceID(1, 1)), u),
+		membership.NewMember(types.ID(MakeInstanceID(1, 1)), u),
 	}
 
 	st := &testStorage{}
@@ -527,13 +580,13 @@ func TestSingleNode(t *testing.T) {
 
 func TestCluster(t *testing.T) {
 	//先删除所有kv文件
-	os.RemoveAll("./log/kv-1-1")
+	os.RemoveAll("./log/kv-1-1-wal")
 	os.RemoveAll("./log/kv-1-1-snap")
-	os.RemoveAll("./log/kv-2-1")
+	os.RemoveAll("./log/kv-2-1-wal")
 	os.RemoveAll("./log/kv-2-1-snap")
-	os.RemoveAll("./log/kv-3-1")
+	os.RemoveAll("./log/kv-3-1-wal")
 	os.RemoveAll("./log/kv-3-1-snap")
-	os.RemoveAll("./log/kv-4-1")
+	os.RemoveAll("./log/kv-4-1-wal")
 	os.RemoveAll("./log/kv-4-1-snap")
 
 	ProposalFlushInterval = 10
@@ -549,9 +602,9 @@ func TestCluster(t *testing.T) {
 	u4, _ := types.NewURLs([]string{"http://127.0.0.1:22381"})
 
 	membs1 := []*membership.Member{
-		membership.NewMember(types.ID(makeInstanceID(1, 1)), u1),
-		membership.NewMember(types.ID(makeInstanceID(2, 1)), u2),
-		membership.NewMember(types.ID(makeInstanceID(3, 1)), u3),
+		membership.NewMember(types.ID(MakeInstanceID(1, 1)), u1),
+		membership.NewMember(types.ID(MakeInstanceID(2, 1)), u2),
+		membership.NewMember(types.ID(MakeInstanceID(3, 1)), u3),
 	}
 
 	st1 := &testStorage{}
@@ -615,14 +668,16 @@ func TestCluster(t *testing.T) {
 
 	//加入新节点
 	newNodeID := uint64((4 << 16) + 1)
-	err := leader.store.AddNode(newNodeID, "http://127.0.0.1:22381")
+	err := leader.store.AddLearner(newNodeID, "http://127.0.0.1:22381")
 	assert.Nil(t, err)
 
+	fmt.Println("AddLearner ok")
+
 	membs2 := []*membership.Member{
-		membership.NewMember(types.ID(makeInstanceID(1, 1)), u1),
-		membership.NewMember(types.ID(makeInstanceID(2, 1)), u2),
-		membership.NewMember(types.ID(makeInstanceID(3, 1)), u3),
-		membership.NewMember(types.ID(makeInstanceID(4, 1)), u4),
+		membership.NewMember(types.ID(MakeInstanceID(1, 1)), u1),
+		membership.NewMember(types.ID(MakeInstanceID(2, 1)), u2),
+		membership.NewMember(types.ID(MakeInstanceID(3, 1)), u3),
+		membership.NewMember(types.ID(MakeInstanceID(4, 1)), u4),
 	}
 
 	st4 := &testStorage{}
@@ -644,6 +699,14 @@ func TestCluster(t *testing.T) {
 
 	GetSugar().Info("startOkCh4")
 
+	for nil != leader.rn.IsLearnerReady(newNodeID) {
+		fmt.Println("wait for learner ready")
+		time.Sleep(time.Second)
+	}
+
+	err = leader.store.PromoteLearner(newNodeID)
+	assert.Nil(t, err)
+
 	for {
 		_, ok := node4.store.kvStore["sniperHW"]
 		if ok {
@@ -653,7 +716,7 @@ func TestCluster(t *testing.T) {
 	}
 
 	//test remove node
-	leader.store.RemoveNode(uint64((4 << 16) + 1))
+	leader.store.RemoveMember(uint64((4 << 16) + 1))
 
 	node4.stop()
 
@@ -669,13 +732,13 @@ func TestCluster(t *testing.T) {
 
 func TestProposeTimeout(t *testing.T) {
 	//先删除所有kv文件
-	os.RemoveAll("./log/kv-1-1")
+	os.RemoveAll("./log/kv-1-1-wal")
 	os.RemoveAll("./log/kv-1-1-snap")
-	os.RemoveAll("./log/kv-2-1")
+	os.RemoveAll("./log/kv-2-1-wal")
 	os.RemoveAll("./log/kv-2-1-snap")
-	os.RemoveAll("./log/kv-3-1")
+	os.RemoveAll("./log/kv-3-1-wal")
 	os.RemoveAll("./log/kv-3-1-snap")
-	os.RemoveAll("./log/kv-4-1")
+	os.RemoveAll("./log/kv-4-1-wal")
 	os.RemoveAll("./log/kv-4-1-snap")
 
 	ProposalFlushInterval = 10
@@ -689,8 +752,8 @@ func TestProposeTimeout(t *testing.T) {
 	u2, _ := types.NewURLs([]string{"http://127.0.0.1:32379"})
 
 	membs1 := []*membership.Member{
-		membership.NewMember(types.ID(makeInstanceID(1, 1)), u1),
-		membership.NewMember(types.ID(makeInstanceID(2, 1)), u2),
+		membership.NewMember(types.ID(MakeInstanceID(1, 1)), u1),
+		membership.NewMember(types.ID(MakeInstanceID(2, 1)), u2),
 	}
 
 	st1 := &testStorage{}
@@ -757,109 +820,5 @@ func TestProposeTimeout(t *testing.T) {
 	}
 
 	time.Sleep(time.Second * 5)
-
-}
-
-func TestAddLearner(t *testing.T) {
-	//先删除所有kv文件
-	os.RemoveAll("./log/kv-1-1")
-	os.RemoveAll("./log/kv-1-1-snap")
-	os.RemoveAll("./log/kv-2-1")
-	os.RemoveAll("./log/kv-2-1-snap")
-	os.RemoveAll("./log/kv-3-1")
-	os.RemoveAll("./log/kv-3-1-snap")
-	os.RemoveAll("./log/kv-4-1")
-	os.RemoveAll("./log/kv-4-1-snap")
-
-	ProposalFlushInterval = 10
-	ProposalBatchCount = 1
-	ReadFlushInterval = 10
-	ReadBatchCount = 1
-	DefaultSnapshotCount = 100
-	SnapshotCatchUpEntriesN = 100
-
-	u1, _ := types.NewURLs([]string{"http://127.0.0.1:42378"})
-	u2, _ := types.NewURLs([]string{"http://127.0.0.1:42379"})
-
-	membs1 := []*membership.Member{
-		membership.NewMember(types.ID(makeInstanceID(1, 1)), u1),
-	}
-
-	st1 := &testStorage{}
-	mb1 := membership.NewMemberShipMembers(GetLogger(), types.ID(1), types.ID(1), membs1)
-	mb1.SetStorage(st1)
-
-	node1 := newKvNode(1, 1, mb1)
-
-	becomeLeaderCh1 := make(chan *kvnode, 1)
-
-	node1.store.becomeLeader = func() {
-		becomeLeaderCh1 <- node1
-	}
-
-	getLeader := func() *kvnode {
-		select {
-		case n := <-becomeLeaderCh1:
-			return n
-		}
-	}
-
-	leader := getLeader()
-
-	newNodeID := uint64((2 << 16) + 1)
-	err := leader.store.AddLearner(newNodeID, "http://127.0.0.1:42379")
-	assert.Nil(t, err)
-
-	membs2 := []*membership.Member{
-		membership.NewMember(types.ID(makeInstanceID(1, 1)), u1),
-		membership.NewMember(types.ID(makeInstanceID(2, 1)), u2),
-	}
-
-	st2 := &testStorage{}
-	mb2 := membership.NewMemberShipMembers(GetLogger(), types.ID(1), types.ID(2), membs2)
-	mb2.SetStorage(st2)
-
-	node2 := newKvNode(2, 1, mb2)
-
-	startOkCh2 := make(chan struct{}, 1)
-
-	node2.store.startOK = func() {
-		select {
-		case startOkCh2 <- struct{}{}:
-		default:
-		}
-	}
-
-	<-startOkCh2
-
-	time.Sleep(time.Second * 5)
-
-	node1.stop()
-
-	node1 = newKvNode(1, 1, mb1)
-
-	becomeLeaderCh1 = make(chan *kvnode, 1)
-	becomeLeaderCh2 := make(chan *kvnode, 1)
-
-	node1.store.becomeLeader = func() {
-		becomeLeaderCh1 <- node1
-	}
-
-	node2.store.becomeLeader = func() {
-		becomeLeaderCh2 <- node2
-	}
-
-	getLeader = func() *kvnode {
-		select {
-		case n := <-becomeLeaderCh1:
-			return n
-		case n := <-becomeLeaderCh2:
-			return n
-		}
-	}
-
-	leader = getLeader()
-
-	node2.stop()
 
 }

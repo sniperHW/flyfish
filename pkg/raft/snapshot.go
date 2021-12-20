@@ -6,6 +6,7 @@ import (
 	"go.etcd.io/etcd/pkg/types"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
+	"go.etcd.io/etcd/wal"
 	"go.etcd.io/etcd/wal/walpb"
 	"go.uber.org/zap"
 	"io"
@@ -124,12 +125,27 @@ func (rc *RaftInstance) saveSnap(snap raftpb.Snapshot) error {
 	return rc.wal.ReleaseLockTo(snap.Metadata.Index)
 }
 
-func (rc *RaftInstance) loadSnapshot() *raftpb.Snapshot {
-	snapshot, err := rc.snapshotter.Load()
-	if err != nil && err != snap.ErrNoSnapshot {
-		GetSugar().Fatalf("raftexample: error loading snapshot (%v)", err)
+func (rc *RaftInstance) loadSnapshot(haveWAL bool) (*raftpb.Snapshot, error) {
+	var snapshot *raftpb.Snapshot
+	var err error
+
+	if haveWAL {
+		walSnaps, err := wal.ValidSnapshotEntries(GetLogger(), rc.waldir)
+		if err != nil {
+			GetSugar().Errorf("ValidSnapshotEntries :%v", err)
+			return nil, err
+		}
+		snapshot, err = rc.snapshotter.LoadNewestAvailable(walSnaps)
+
+	} else {
+		snapshot, err = rc.snapshotter.Load()
 	}
-	return snapshot
+
+	if err != nil && err != snap.ErrNoSnapshot {
+		return nil, err
+	} else {
+		return snapshot, nil
+	}
 }
 
 func (rc *RaftInstance) publishSnapshot(snapshotToSave raftpb.Snapshot) {

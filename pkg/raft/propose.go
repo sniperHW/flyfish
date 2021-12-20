@@ -2,6 +2,7 @@ package raft
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	"go.etcd.io/etcd/raft/raftpb"
 	"sync"
@@ -30,15 +31,18 @@ type Proposal interface {
 	OnMergeFinish([]byte) []byte
 }
 
-type ProposalConfChangeBase struct {
+type proposalConfChange struct {
+	Index          uint64
 	ConfChangeType raftpb.ConfChangeType
+	IsPromote      bool
 	Url            string //for add
 	NodeID         uint64
 }
 
 type ProposalConfChange interface {
 	GetType() raftpb.ConfChangeType
-	GetUrl() string
+	IsPromote() bool
+	GetURL() string
 	GetNodeID() uint64
 	OnError(error)
 }
@@ -64,14 +68,20 @@ func (rc *RaftInstance) proposeConfChange(proposal ProposalConfChange) {
 		other: proposal,
 	}
 
-	buff := make([]byte, 0, 8+len(proposal.GetUrl()))
-	buff = buffer.AppendUint64(buff, t.id)
-	buff = buffer.AppendString(buff, proposal.GetUrl())
+	pc := proposalConfChange{
+		Index:          t.id,
+		ConfChangeType: proposal.GetType(),
+		IsPromote:      proposal.IsPromote(),
+		Url:            proposal.GetURL(),
+		NodeID:         proposal.GetNodeID(),
+	}
+
+	buff, _ := json.Marshal(&pc)
 
 	cfChange := raftpb.ConfChange{
-		ID:      t.id,
-		Type:    proposal.GetType(),
-		NodeID:  proposal.GetNodeID(),
+		ID:      pc.Index,
+		Type:    pc.ConfChangeType,
+		NodeID:  pc.NodeID,
 		Context: buff,
 	}
 

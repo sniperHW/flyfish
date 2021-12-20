@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft/membership"
@@ -17,14 +18,21 @@ import (
 	"go.etcd.io/etcd/wal"
 	"go.etcd.io/etcd/wal/walpb"
 	"go.uber.org/zap"
+	"io"
 	"math"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 //应用程序队列必须Append必须是非阻塞的，最好支持优先级
 type ApplicationQueue interface {
@@ -104,6 +112,10 @@ func (this *raftTaskMgr) onLeaderDemote() {
 
 type RaftInstanceID uint32
 
+func (i RaftInstanceID) String() string {
+	return strconv.FormatUint(uint64(i), 16)
+}
+
 type RaftInstance struct {
 	inflightSnapshots   int64
 	confChangeC         *queue.ArrayQueue
@@ -117,7 +129,7 @@ type RaftInstance struct {
 	join                bool   // node is joining an existing cluster
 	waldir              string // path to WAL directory
 	snapdir             string // path to snapshot directory
-	logDir              string
+	logdir              string
 	lastIndex           uint64 // index of log at start
 	confState           raftpb.ConfState
 	snapshotIndex       uint64
@@ -254,68 +266,6 @@ func (rc *RaftInstance) removeOldSnapAndWal(term uint64, index uint64) {
 		})
 }
 
-// openWAL returns a WAL ready for reading.
-func (rc *RaftInstance) openWAL(snapshot *raftpb.Snapshot) *wal.WAL {
-	if !wal.Exist(rc.waldir) {
-		if err := os.Mkdir(rc.waldir, 0750); err != nil {
-			GetSugar().Fatalf("raftexample: cannot create dir for wal (%v)", err)
-		}
-
-		w, err := wal.Create(GetLogger(), rc.waldir, nil)
-		if err != nil {
-			GetSugar().Fatalf("raftexample: create wal error (%v)", err)
-		}
-		w.Close()
-	}
-
-	walsnap := walpb.Snapshot{}
-	if snapshot != nil {
-		walsnap.Index, walsnap.Term = snapshot.Metadata.Index, snapshot.Metadata.Term
-	}
-
-	GetSugar().Infof("loading WAL at term %d and index %d", walsnap.Term, walsnap.Index)
-	w, err := wal.Open(GetLogger(), rc.waldir, walsnap)
-	if err != nil {
-		GetSugar().Fatalf("raftexample: error loading wal (%v)", err)
-	}
-
-	return w
-}
-
-// replayWAL replays WAL entries into the raft instance.
-func (rc *RaftInstance) replayWAL() *wal.WAL {
-	GetSugar().Infof("replaying WAL of member %d", rc.id)
-	snapshot := rc.loadSnapshot()
-	w := rc.openWAL(snapshot)
-	_, st, ents, err := w.ReadAll()
-	if err != nil {
-		GetSugar().Fatalf("raftexample: failed to read WAL (%v)", err)
-	} else {
-		GetSugar().Infof("ents:%d", len(ents))
-	}
-	rc.raftStorage = raft.NewMemoryStorage()
-	if snapshot != nil {
-		rc.raftStorage.ApplySnapshot(*snapshot)
-	}
-	rc.raftStorage.SetHardState(st)
-
-	if snapshot != nil {
-		GetSugar().Info("send replaySnapshot")
-		rc.commitC.AppendHighestPriotiryItem(*snapshot)
-	}
-
-	// append to storage so raft starts at the right place in log
-	rc.raftStorage.Append(ents)
-	// send nil once lastIndex is published so client knows commit channel is current
-	if len(ents) > 0 {
-		rc.lastIndex = ents[len(ents)-1].Index
-	} else {
-		GetSugar().Info("ReplayOK 2")
-		rc.commitC.AppendHighestPriotiryItem(ReplayOK{})
-	}
-	return w
-}
-
 func (rc *RaftInstance) entriesToApply(ents []raftpb.Entry) (nents []raftpb.Entry) {
 	if len(ents) == 0 {
 		return ents
@@ -367,25 +317,37 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 
 			GetSugar().Infof("%x raftpb.EntryConfChange %d %d %v", rc.id, cc.Type, cc, rc.confState)
 
-			var raftUrl string
+			var pc *proposalConfChange
+			if len(cc.Context) > 0 {
+				var tmp proposalConfChange
+				if err := json.Unmarshal(cc.Context, &tmp); nil != err {
+					GetSugar().Fatalf("Unmarshal proposalConfChange error:%v", err)
+				}
+				pc = &tmp
+			}
+
+			//var raftUrl string
 
 			switch cc.Type {
 			case raftpb.ConfChangeAddNode, raftpb.ConfChangeAddLearnerNode:
-				if len(cc.Context) > 0 {
-					raftUrl = string(cc.Context[8:])
-					rc.transport.AddPeer(types.ID(cc.NodeID), []string{raftUrl})
-					m := membership.Member{
-						ID:       types.ID(cc.NodeID),
-						PeerURLs: []string{raftUrl},
-					}
+				if nil != pc {
+					if !pc.IsPromote {
+						rc.transport.AddPeer(types.ID(cc.NodeID), []string{pc.Url})
+						m := membership.Member{
+							ID:       types.ID(cc.NodeID),
+							PeerURLs: []string{pc.Url},
+						}
 
-					if cc.Type == raftpb.ConfChangeAddNode {
-						GetSugar().Infof("%x ConfChangeAddNode %s %s", rc.id, types.ID(cc.NodeID).String(), raftUrl)
+						if cc.Type == raftpb.ConfChangeAddNode {
+							GetSugar().Infof("%x ConfChangeAddNode %s %s", rc.id, types.ID(cc.NodeID).String(), pc.Url)
+						} else {
+							m.IsLearner = true
+							GetSugar().Infof("%x ConfChangeAddLearnerNode %s %s", rc.id, types.ID(cc.NodeID).String(), pc.Url)
+						}
+						rc.mb.AddMember(&m)
 					} else {
-						m.IsLearner = true
-						GetSugar().Infof("%x ConfChangeAddLearnerNode %s %s", rc.id, types.ID(cc.NodeID).String(), raftUrl)
+						rc.mb.PromoteMember(types.ID(cc.NodeID))
 					}
-					rc.mb.AddMember(&m)
 				}
 			case raftpb.ConfChangeRemoveNode:
 				GetSugar().Infof("%x ConfChangeRemoveNode %s", rc.id, types.ID(cc.NodeID).String())
@@ -393,17 +355,16 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 				rc.mb.RemoveMember(types.ID(cc.NodeID))
 			}
 
-			if len(cc.Context) > 0 {
-				index := binary.BigEndian.Uint64(cc.Context[0:8])
+			if nil != pc {
 				if rc.isLeader() {
-					if t := rc.confChangeMgr.getAndRemoveByID(index); nil != t {
+					if t := rc.confChangeMgr.getAndRemoveByID(pc.Index); nil != t {
 						rc.commitC.AppendHighestPriotiryItem(t.other.(ProposalConfChange))
 					}
 				}
 				rc.commitC.AppendHighestPriotiryItem(ConfChange{
 					CCType:  cc.Type,
 					NodeID:  int(cc.NodeID),
-					RaftUrl: raftUrl,
+					RaftUrl: pc.Url,
 				})
 			}
 		}
@@ -580,72 +541,6 @@ func (rc *RaftInstance) Stop() {
 	}
 }
 
-func (rc *RaftInstance) start() {
-
-	if !fileutil.Exist(rc.snapdir) {
-		if err := os.Mkdir(rc.snapdir, 0750); err != nil {
-			GetSugar().Fatalf("raftexample: cannot create dir for snapshot (%v)", err)
-		}
-	}
-	rc.snapshotter = snap.New(GetLogger(), rc.snapdir)
-	oldwal := wal.Exist(rc.waldir)
-	rc.wal = rc.replayWAL()
-
-	rloger := raftLogger{
-		loger: GetLogger().WithOptions(zap.AddCallerSkip(1)),
-	}
-	rloger.sugar = rloger.loger.Sugar()
-
-	c := &raft.Config{
-		ID:                        uint64(rc.id),
-		ElectionTick:              10,
-		HeartbeatTick:             1,
-		Storage:                   rc.raftStorage,
-		MaxSizePerMsg:             math.MaxUint64, //1024 * 1024,
-		MaxInflightMsgs:           256,
-		MaxUncommittedEntriesSize: 1 << 30,
-		Logger:                    rloger,
-		DisableProposalForwarding: true, //禁止非leader转发proposal
-		CheckQuorum:               true,
-		PreVote:                   true,
-	}
-
-	if oldwal || rc.join {
-		rc.node = raft.RestartNode(c)
-	} else {
-		rpeers := []raft.Peer{}
-		for _, v := range rc.mb.Members() {
-			rpeers = append(rpeers, raft.Peer{ID: uint64(v.ID)})
-		}
-
-		rc.node = raft.StartNode(c, rpeers)
-	}
-
-	rc.transport = &rafthttp.Transport{
-		Logger:      GetLogger(),
-		ID:          types.ID(rc.id),
-		ClusterID:   types.ID(rc.shard),
-		Raft:        rc,
-		ServerStats: stats.NewServerStats(types.ID(rc.id).String(), types.ID(rc.id).String()),
-		LeaderStats: stats.NewLeaderStats(types.ID(rc.id).String()),
-		ErrorC:      make(chan error),
-		Snapshotter: rc.snapshotter,
-	}
-
-	rc.mutilRaft.addTransport(types.ID(rc.id), rc.transport)
-
-	rc.transport.Start()
-
-	for _, v := range rc.mb.Members() {
-		if v.ID != types.ID(rc.id) {
-			GetSugar().Infof("AddPeer %s", v.ID.String())
-			rc.transport.AddPeer(v.ID, v.PeerURLs)
-		}
-	}
-
-	go rc.serveChannels()
-}
-
 func (rc *RaftInstance) Process(ctx context.Context, m raftpb.Message) error {
 	return rc.node.Step(ctx, m)
 }
@@ -678,15 +573,239 @@ func (rc *RaftInstance) IssueConfChange(p ProposalConfChange) error {
 	return rc.confChangeC.ForceAppend(p)
 }
 
-func NewInstance(nodeID uint16, shard uint16, mutilRaft *MutilRaft, commitC ApplicationQueue, mb *membership.MemberShip, join bool, logDir string, raftLogPrefix string) *RaftInstance {
+func (rc *RaftInstance) raftStatus() raft.Status {
+	return rc.node.Status()
+}
+
+// openWAL returns a WAL ready for reading.
+func (rc *RaftInstance) openWAL(snapshot *raftpb.Snapshot) (*wal.WAL, error) {
+	if !wal.Exist(rc.waldir) {
+		if err := os.Mkdir(rc.waldir, 0750); err != nil {
+			GetSugar().Fatalf("raftexample: cannot create dir for wal (%v)", err)
+			return nil, err
+		}
+
+		w, err := wal.Create(GetLogger(), rc.waldir, nil)
+		if err != nil {
+			GetSugar().Fatalf("raftexample: create wal error (%v)", err)
+			return nil, err
+		}
+		w.Close()
+	}
+
+	walsnap := walpb.Snapshot{}
+	if snapshot != nil {
+		walsnap.Index, walsnap.Term = snapshot.Metadata.Index, snapshot.Metadata.Term
+	}
+
+	GetSugar().Infof("loading WAL at term %d and index %d", walsnap.Term, walsnap.Index)
+	w, err := wal.Open(GetLogger(), rc.waldir, walsnap)
+	if err != nil {
+		GetSugar().Fatalf("raftexample: error loading wal (%v)", err)
+		return nil, err
+	}
+
+	return w, nil
+}
+
+// replayWAL replays WAL entries into the raft instance.
+func (rc *RaftInstance) replayWAL(haveWAL bool) (*wal.WAL, error) {
+	GetSugar().Infof("replaying WAL of member %d", rc.id)
+	if snap, err := rc.loadSnapshot(haveWAL); nil != err {
+		return nil, err
+	} else {
+		var walsnap walpb.Snapshot
+		var st raftpb.HardState
+		var ents []raftpb.Entry
+		if snap != nil {
+			walsnap.Index, walsnap.Term = snap.Metadata.Index, snap.Metadata.Term
+		}
+
+		var w *wal.WAL
+		var err error
+
+		repaired := false
+		for {
+			if w, err = rc.openWAL(snap); err != nil {
+				GetLogger().Fatal("failed to open WAL", zap.Error(err))
+			}
+
+			if _, st, ents, err = w.ReadAll(); err != nil {
+				w.Close()
+				// we can only repair ErrUnexpectedEOF and we never repair twice.
+				if repaired || err != io.ErrUnexpectedEOF {
+					GetLogger().Fatal("failed to read WAL, cannot be repaired", zap.Error(err))
+				}
+				if !wal.Repair(GetLogger(), rc.waldir) {
+					GetLogger().Fatal("failed to repair WAL", zap.Error(err))
+				} else {
+					GetLogger().Info("repaired WAL", zap.Error(err))
+					repaired = true
+				}
+				continue
+			}
+			break
+		}
+
+		rc.raftStorage = raft.NewMemoryStorage()
+		if snap != nil {
+			rc.raftStorage.ApplySnapshot(*snap)
+		}
+		rc.raftStorage.SetHardState(st)
+
+		if snap != nil {
+			GetSugar().Info("send replaySnapshot")
+			rc.commitC.AppendHighestPriotiryItem(*snap)
+		}
+
+		// append to storage so raft starts at the right place in log
+		rc.raftStorage.Append(ents)
+		// send nil once lastIndex is published so client knows commit channel is current
+		if len(ents) > 0 {
+			rc.lastIndex = ents[len(ents)-1].Index
+		} else {
+			GetSugar().Info("ReplayOK 2")
+			rc.commitC.AppendHighestPriotiryItem(ReplayOK{})
+		}
+		return w, nil
+	}
+}
+
+// isConnectedToQuorumSince checks whether the local member is connected to the
+// quorum of the cluster since the given time.
+func isConnectedToQuorumSince(transport rafthttp.Transporter, since time.Time, self types.ID, members []*membership.Member) bool {
+	return numConnectedSince(transport, since, self, members) >= (len(members)/2)+1
+}
+
+// isConnectedSince checks whether the local member is connected to the
+// remote member since the given time.
+func isConnectedSince(transport rafthttp.Transporter, since time.Time, remote types.ID) bool {
+	t := transport.ActiveSince(remote)
+	return !t.IsZero() && t.Before(since)
+}
+
+// isConnectedFullySince checks whether the local member is connected to all
+// members in the cluster since the given time.
+func isConnectedFullySince(transport rafthttp.Transporter, since time.Time, self types.ID, members []*membership.Member) bool {
+	return numConnectedSince(transport, since, self, members) == len(members)
+}
+
+// numConnectedSince counts how many members are connected to the local member
+// since the given time.
+func numConnectedSince(transport rafthttp.Transporter, since time.Time, self types.ID, members []*membership.Member) int {
+	connectedNum := 0
+	for _, m := range members {
+		if m.ID == self || isConnectedSince(transport, since, m.ID) {
+			connectedNum++
+		}
+	}
+	return connectedNum
+}
+
+func (rc *RaftInstance) MayRemoveMember(id types.ID) error {
+
+	isLearner := rc.mb.IsMemberExist(id) && rc.mb.Member(id).IsLearner
+	// no need to check quorum when removing non-voting member
+	if isLearner {
+		return nil
+	}
+
+	/*if !rc.mb.IsReadyToRemoveVotingMember(uint64(id)) {
+		lg.Warn(
+			"rejecting member remove request; not enough healthy members",
+			zap.String("local-member-id", s.ID().String()),
+			zap.String("requested-member-remove-id", id.String()),
+			zap.Error(ErrNotEnoughStartedMembers),
+		)
+		return ErrNotEnoughStartedMembers
+	}*/
+
+	// downed member is safe to remove since it's not part of the active quorum
+	if t := rc.transport.ActiveSince(id); id != types.ID(rc.ID()) && t.IsZero() {
+		return nil
+	}
+
+	// protect quorum if some members are down
+	m := rc.mb.VotingMembers()
+	active := numConnectedSince(rc.transport, time.Now().Add(-HealthInterval), types.ID(rc.ID()), m)
+	if (active - 1) < 1+((len(m)-1)/2) {
+		GetSugar().Warn(
+			"rejecting member remove request; local member has not been connected to all peers, reconfigure breaks active quorum",
+			zap.String("local-member-id", rc.ID().String()),
+			zap.String("requested-member-remove", id.String()),
+			zap.Int("active-peers", active),
+			zap.Error(ErrUnhealthy),
+		)
+		return ErrUnhealthy
+	}
+
+	return nil
+}
+
+func (rc *RaftInstance) MayAddMember(memb membership.Member) error {
+	// protect quorum when adding voting member
+	/*if !memb.IsLearner && !s.cluster.IsReadyToAddVotingMember() {
+		lg.Warn(
+			"rejecting member add request; not enough healthy members",
+			zap.String("local-member-id", s.ID().String()),
+			zap.String("requested-member-add", fmt.Sprintf("%+v", memb)),
+			zap.Error(ErrNotEnoughStartedMembers),
+		)
+		return ErrNotEnoughStartedMembers
+	}*/
+
+	if /*!isConnectedFullySince*/ !isConnectedToQuorumSince(rc.transport, time.Now().Add(-HealthInterval), types.ID(rc.ID()), rc.mb.VotingMembers()) {
+		GetSugar().Warn(
+			"rejecting member add request; local member has not been connected to all peers, reconfigure breaks active quorum",
+			zap.String("local-member-id", rc.ID().String()),
+			zap.String("requested-member-add", fmt.Sprintf("%+v", memb)),
+			zap.Error(ErrUnhealthy),
+		)
+		return ErrUnhealthy
+	}
+
+	return nil
+}
+
+func (rc *RaftInstance) IsLearnerReady(id uint64) error {
+	rs := rc.raftStatus()
+
+	// leader's raftStatus.Progress is not nil
+	if rs.Progress == nil {
+		return ErrNotLeader
+	}
+
+	var learnerMatch uint64
+	isFound := false
+	leaderID := rs.ID
+	for memberID, progress := range rs.Progress {
+		if id == memberID {
+			// check its status
+			learnerMatch = progress.Match
+			isFound = true
+			break
+		}
+	}
+
+	if isFound {
+		leaderMatch := rs.Progress[leaderID].Match
+		// the learner's Match not caught up with leader yet
+		if float64(learnerMatch) < float64(leaderMatch)*ReadyPercent {
+			return ErrLearnerNotReady
+		}
+	}
+
+	return nil
+}
+
+func NewInstance(nodeID uint16, shard uint16, mutilRaft *MutilRaft, commitC ApplicationQueue, mb *membership.MemberShip, logdir string, raftLogPrefix string) (*RaftInstance, error) {
 	rc := &RaftInstance{
 		commitC:    commitC,
 		id:         MakeInstanceID(nodeID, shard),
 		mb:         mb,
-		join:       join,
-		logDir:     logDir,
-		waldir:     fmt.Sprintf("%s/%s-%d-%d", logDir, raftLogPrefix, nodeID, shard),
-		snapdir:    fmt.Sprintf("%s/%s-%d-%d-snap", logDir, raftLogPrefix, nodeID, shard),
+		logdir:     logdir,
+		waldir:     fmt.Sprintf("%s/%s-%d-%d-wal", logdir, raftLogPrefix, nodeID, shard),
+		snapdir:    fmt.Sprintf("%s/%s-%d-%d-snap", logdir, raftLogPrefix, nodeID, shard),
 		snapCount:  DefaultSnapshotCount,
 		stopc:      make(chan struct{}),
 		stopping:   make(chan struct{}),
@@ -711,12 +830,81 @@ func NewInstance(nodeID uint16, shard uint16, mutilRaft *MutilRaft, commitC Appl
 		readPipeline:    queue.NewArrayQueue(10000),
 	}
 
-	if !fileutil.Exist(rc.logDir) {
-		if err := os.Mkdir(rc.logDir, 0750); err != nil {
-			GetSugar().Fatalf("raftexample: cannot create dir for logDir:%s (%v)", rc.logDir, err)
+	rloger := raftLogger{
+		loger: GetLogger().WithOptions(zap.AddCallerSkip(1)),
+	}
+
+	rloger.sugar = rloger.loger.Sugar()
+
+	var err error
+
+	if err = fileutil.TouchDirAll(rc.snapdir); err != nil {
+		return nil, fmt.Errorf("cannot access snapdir: %v ", err)
+	}
+
+	if err = fileutil.TouchDirAll(rc.logdir); err != nil {
+		return nil, fmt.Errorf("cannot access logdir: %v ", err)
+	}
+
+	rc.snapshotter = snap.New(GetLogger(), rc.snapdir)
+
+	haveWAL := wal.Exist(rc.waldir)
+
+	if rc.wal, err = rc.replayWAL(haveWAL); err != nil {
+		return nil, fmt.Errorf("replayWAL : %v ", err)
+	}
+
+	c := &raft.Config{
+		ID:                        uint64(rc.id),
+		ElectionTick:              10,
+		HeartbeatTick:             1,
+		Storage:                   rc.raftStorage,
+		MaxSizePerMsg:             math.MaxUint64, //1024 * 1024,
+		MaxInflightMsgs:           256,
+		MaxUncommittedEntriesSize: 1 << 30,
+		Logger:                    rloger,
+		DisableProposalForwarding: true, //禁止非leader转发proposal
+		CheckQuorum:               true,
+		PreVote:                   true,
+	}
+
+	if haveWAL {
+		rc.node = raft.RestartNode(c)
+	} else {
+		rpeers := []raft.Peer{}
+		for _, v := range rc.mb.Members() {
+			rpeers = append(rpeers, raft.Peer{ID: uint64(v.ID)})
+		}
+		if len(rpeers) == 0 {
+			rc.node = raft.RestartNode(c)
+		} else {
+			rc.node = raft.StartNode(c, rpeers)
+		}
+
+	}
+
+	rc.transport = &rafthttp.Transport{
+		Logger:      GetLogger(),
+		ID:          types.ID(rc.id),
+		ClusterID:   types.ID(rc.shard),
+		Raft:        rc,
+		ServerStats: stats.NewServerStats(types.ID(rc.id).String(), types.ID(rc.id).String()),
+		LeaderStats: stats.NewLeaderStats(types.ID(rc.id).String()),
+		ErrorC:      make(chan error),
+		Snapshotter: rc.snapshotter,
+	}
+
+	rc.mutilRaft.addTransport(types.ID(rc.id), rc.transport)
+
+	rc.transport.Start()
+
+	for _, v := range rc.mb.Members() {
+		if v.ID != types.ID(rc.id) {
+			GetSugar().Infof("AddPeer %s", v.ID.String())
+			rc.transport.AddPeer(v.ID, v.PeerURLs)
 		}
 	}
 
-	go rc.start()
-	return rc
+	go rc.serveChannels()
+	return rc, nil
 }

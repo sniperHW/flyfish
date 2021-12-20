@@ -15,6 +15,8 @@ var (
 	SnapshotCatchUpEntriesN   uint64 = 1000
 	MaxInFlightMsgSnap        int64  = 16
 	ReleaseDelayAfterSnapshot        = 30 * time.Second
+	ReadyPercent                     = 0.9
+	HealthInterval                   = 5 * time.Second
 )
 
 type ConfChange struct {
