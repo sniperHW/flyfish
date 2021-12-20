@@ -2,12 +2,12 @@ package raft
 
 import (
 	"github.com/dustin/go-humanize"
-	"go.etcd.io/etcd/etcdserver/api/snap"
-	"go.etcd.io/etcd/pkg/types"
-	"go.etcd.io/etcd/raft"
-	"go.etcd.io/etcd/raft/raftpb"
-	"go.etcd.io/etcd/wal"
-	"go.etcd.io/etcd/wal/walpb"
+	"github.com/sniperHW/flyfish/pkg/etcd/etcdserver/api/snap"
+	"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
+	"github.com/sniperHW/flyfish/pkg/etcd/raft"
+	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
+	"github.com/sniperHW/flyfish/pkg/etcd/wal"
+	"github.com/sniperHW/flyfish/pkg/etcd/wal/walpb"
 	"go.uber.org/zap"
 	"io"
 	"sync/atomic"

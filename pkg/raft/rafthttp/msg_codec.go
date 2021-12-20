@@ -19,8 +19,8 @@ import (
 	"errors"
 	"io"
 
-	"go.etcd.io/etcd/pkg/pbutil"
-	"go.etcd.io/etcd/raft/raftpb"
+	"github.com/sniperHW/flyfish/pkg/etcd/pkg/pbutil"
+	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
 )
 
 // messageEncoder is a encoder that can encode all kinds of messages.

@@ -20,7 +20,7 @@ import (
 	"sync"
 	"time"
 
-	"go.etcd.io/etcd/pkg/types"
+	"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
 
 	"go.uber.org/zap"
 )

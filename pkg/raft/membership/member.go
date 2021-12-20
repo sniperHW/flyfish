@@ -1,7 +1,7 @@
 package membership
 
 import (
-	"go.etcd.io/etcd/pkg/types"
+	"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
 )
 
 type Member struct {

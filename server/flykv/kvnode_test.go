@@ -17,7 +17,7 @@ import (
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"github.com/sniperHW/flyfish/server/slot"
 	"github.com/stretchr/testify/assert"
-	//"go.etcd.io/etcd/pkg/types"
+	//"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
 	//"go.uber.org/zap"
 	"net"
 	"net/http"

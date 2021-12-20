@@ -1,7 +1,7 @@
 package raft
 
 import (
-	"go.etcd.io/etcd/raft/raftpb"
+	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
 	"time"
 )
 

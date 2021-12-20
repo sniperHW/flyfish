@@ -25,12 +25,12 @@ import (
 	"sync"
 	"time"
 
-	stats "go.etcd.io/etcd/etcdserver/api/v2stats"
-	"go.etcd.io/etcd/pkg/httputil"
-	"go.etcd.io/etcd/pkg/transport"
-	"go.etcd.io/etcd/pkg/types"
-	"go.etcd.io/etcd/raft/raftpb"
-	"go.etcd.io/etcd/version"
+	stats "github.com/sniperHW/flyfish/pkg/etcd/etcdserver/api/v2stats"
+	"github.com/sniperHW/flyfish/pkg/etcd/pkg/httputil"
+	"github.com/sniperHW/flyfish/pkg/etcd/pkg/transport"
+	"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
+	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
+	"github.com/sniperHW/flyfish/pkg/etcd/version"
 
 	"github.com/coreos/go-semver/semver"
 	"go.uber.org/zap"

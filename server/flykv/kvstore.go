@@ -7,6 +7,8 @@ import (
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/buffer"
+	"github.com/sniperHW/flyfish/pkg/etcd/etcdserver/api/snap"
+	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
@@ -15,8 +17,6 @@ import (
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	sslot "github.com/sniperHW/flyfish/server/slot"
-	"go.etcd.io/etcd/etcdserver/api/snap"
-	"go.etcd.io/etcd/raft/raftpb"
 	"net"
 	"reflect"
 	"sync"
@@ -618,11 +618,9 @@ func (s *kvstore) onNotifyAddNode(from *net.UDPAddr, msg *sproto.NotifyAddNode, 
 		} else {
 			//发起proposal
 			s.rn.IssueConfChange(&ProposalConfChange{
-				ProposalConfChangeBase: raft.ProposalConfChangeBase{
-					ConfChangeType: raftpb.ConfChangeAddNode,
-					Url:            fmt.Sprintf("http://%s:%d", msg.Host, msg.RaftPort),
-					NodeID:         uint64(raft.MakeInstanceID(uint16(msg.NodeID), uint16(s.shard))),
-				},
+				confChangeType: raftpb.ConfChangeAddNode,
+				url:            fmt.Sprintf("http://%s:%d", msg.Host, msg.RaftPort),
+				nodeID:         uint64(raft.MakeInstanceID(uint16(msg.NodeID), uint16(s.shard))),
 				reply: func() {
 					s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
 						&sproto.NotifyAddNodeResp{
@@ -646,10 +644,8 @@ func (s *kvstore) onNotifyRemNode(from *net.UDPAddr, msg *sproto.NotifyRemNode, 
 		} else {
 			//发起proposal
 			s.rn.IssueConfChange(&ProposalConfChange{
-				ProposalConfChangeBase: raft.ProposalConfChangeBase{
-					ConfChangeType: raftpb.ConfChangeRemoveNode,
-					NodeID:         uint64(raft.MakeInstanceID(uint16(msg.NodeID), uint16(s.shard))),
-				},
+				confChangeType: raftpb.ConfChangeRemoveNode,
+				nodeID:         uint64(raft.MakeInstanceID(uint16(msg.NodeID), uint16(s.shard))),
 				reply: func() {
 					s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
 						&sproto.NotifyRemNodeResp{

@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"time"
 
-	"go.etcd.io/etcd/raft"
+	"github.com/sniperHW/flyfish/pkg/etcd/raft"
 )
 
 //一致性读请求

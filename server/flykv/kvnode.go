@@ -7,6 +7,7 @@ import (
 	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
+	"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
@@ -16,7 +17,6 @@ import (
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"github.com/sniperHW/flyfish/server/slot"
-	"go.etcd.io/etcd/pkg/types"
 	"net"
 	"runtime"
 	"strconv"
@@ -165,7 +165,11 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, mb *membership.MemberS
 		},
 	}
 
-	rn := raft.NewInstance(uint16(this.id), uint16(storeID), this.mutilRaft, mainQueue, mb, false, this.config.RaftLogDir, this.config.RaftLogPrefix)
+	rn, err := raft.NewInstance(uint16(this.id), uint16(storeID), this.mutilRaft, mainQueue, mb, this.config.RaftLogDir, this.config.RaftLogPrefix)
+
+	if nil != err {
+		return err
+	}
 
 	store.rn = rn
 

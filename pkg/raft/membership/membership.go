@@ -2,7 +2,7 @@ package membership
 
 import (
 	"encoding/json"
-	"go.etcd.io/etcd/pkg/types"
+	"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
 	"go.uber.org/zap"
 	"sort"
 	"sync"

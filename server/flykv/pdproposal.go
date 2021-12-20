@@ -3,26 +3,32 @@ package flykv
 import (
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/pkg/buffer"
-	"github.com/sniperHW/flyfish/pkg/raft"
-	"go.etcd.io/etcd/raft/raftpb"
+	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
 	"time"
 )
 
 type ProposalConfChange struct {
-	raft.ProposalConfChangeBase
-	reply func()
+	confChangeType raftpb.ConfChangeType
+	isPromote      bool
+	url            string //for add
+	nodeID         uint64
+	reply          func()
 }
 
 func (this *ProposalConfChange) GetType() raftpb.ConfChangeType {
-	return this.ConfChangeType
+	return this.confChangeType
 }
 
-func (this *ProposalConfChange) GetUrl() string {
-	return this.Url
+func (this *ProposalConfChange) GetURL() string {
+	return this.url
 }
 
 func (this *ProposalConfChange) GetNodeID() uint64 {
-	return this.NodeID
+	return this.nodeID
+}
+
+func (this *ProposalConfChange) IsPromote() bool {
+	return this.isPromote
 }
 
 func (this *ProposalConfChange) OnError(err error) {

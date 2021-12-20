@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
 	"github.com/sniperHW/flyfish/pkg/raft/rafthttp"
 	"github.com/xiang90/probing"
-	"go.etcd.io/etcd/pkg/types"
 )
 
 type raftHandler struct {

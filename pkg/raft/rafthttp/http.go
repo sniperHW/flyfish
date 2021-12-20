@@ -26,11 +26,11 @@ import (
 	"strings"
 	"time"
 
-	"go.etcd.io/etcd/etcdserver/api/snap"
-	pioutil "go.etcd.io/etcd/pkg/ioutil"
-	"go.etcd.io/etcd/pkg/types"
-	"go.etcd.io/etcd/raft/raftpb"
-	"go.etcd.io/etcd/version"
+	"github.com/sniperHW/flyfish/pkg/etcd/etcdserver/api/snap"
+	pioutil "github.com/sniperHW/flyfish/pkg/etcd/pkg/ioutil"
+	"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
+	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
+	"github.com/sniperHW/flyfish/pkg/etcd/version"
 
 	humanize "github.com/dustin/go-humanize"
 	"go.uber.org/zap"

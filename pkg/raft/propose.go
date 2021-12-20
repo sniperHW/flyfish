@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/sniperHW/flyfish/pkg/buffer"
-	"go.etcd.io/etcd/raft/raftpb"
+	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
 	"sync"
 	"time"
 )
