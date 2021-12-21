@@ -513,7 +513,6 @@ func (n *node) ApplyConfChange(cc pb.ConfChangeI) *pb.ConfState {
 	var cs pb.ConfState
 	select {
 	case n.confc <- cc.AsV2():
-	//	CallStack(100)
 	case <-n.done:
 	}
 	select {

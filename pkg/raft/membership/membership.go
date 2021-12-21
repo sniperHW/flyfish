@@ -3,10 +3,13 @@ package membership
 import (
 	"encoding/json"
 	"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
+	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
 	"go.uber.org/zap"
 	"sort"
 	"sync"
 )
+
+const MaxLearners = 1
 
 type MemberShip struct {
 	sync.Mutex // guards the fields below
@@ -27,13 +30,12 @@ type MemberShipJson struct {
 	Removed map[types.ID]bool
 }
 
-// ConfigChangeContext represents a context for confChange.
-type ConfigChangeContext struct {
-	Member
-	// IsPromote indicates if the config change is for promoting a learner member.
-	// This flag is needed because both adding a new member and promoting a learner member
-	// uses the same config change type 'ConfChangeAddNode'.
-	IsPromote bool `json:"isPromote"`
+type ConfChangeContext struct {
+	Index          uint64
+	ConfChangeType raftpb.ConfChangeType
+	IsPromote      bool
+	Url            string //for add
+	NodeID         uint64
 }
 
 func NewMemberShip(lg *zap.Logger, localID, cid types.ID) *MemberShip {
@@ -163,13 +165,13 @@ func (c *MemberShip) VotingMemberIDs() []types.ID {
 }
 
 func (c *MemberShip) save() error {
-	return c.st.SaveMemberShip(c.lg, c.cid, c.localID, c.toJson())
+	return c.st.SaveMemberShip(c.lg, c.toJson())
 }
 
 func (c *MemberShip) Save() error {
 	c.Lock()
 	defer c.Unlock()
-	return c.st.SaveMemberShip(c.lg, c.cid, c.localID, c.toJson())
+	return c.st.SaveMemberShip(c.lg, c.toJson())
 }
 
 // AddMember adds a new Member into the cluster, and saves the given member's
@@ -255,4 +257,99 @@ func (c *MemberShip) PromoteMember(id types.ID) {
 		zap.String("cluster-id", c.cid.String()),
 		zap.String("local-member-id", c.localID.String()),
 	)
+}
+
+func membersFromStore(lg *zap.Logger, st Storage) (map[types.ID]*Member, map[types.ID]bool) {
+	members := make(map[types.ID]*Member)
+	removed := make(map[types.ID]bool)
+	if nil == st {
+		return members, removed
+	}
+
+	mb, err := st.LoadMemberShip(lg)
+	if err != nil {
+		if st.IsKeyNotFound(err) {
+			return members, removed
+		}
+		lg.Panic("failed to get members from store", zap.Error(err))
+	}
+
+	members, removed = mb.members, mb.removed
+
+	return members, removed
+}
+
+func (c *MemberShip) ValidateConfigurationChange(cc *ConfChangeContext) error {
+	c.Lock()
+	defer c.Unlock()
+
+	members, removed := membersFromStore(c.lg, c.st)
+	id := types.ID(cc.NodeID)
+	if removed[id] {
+		return ErrIDRemoved
+	}
+	switch cc.ConfChangeType {
+	case raftpb.ConfChangeAddNode, raftpb.ConfChangeAddLearnerNode:
+		if cc.IsPromote { // promoting a learner member to voting member
+			if members[id] == nil {
+				return ErrIDNotFound
+			}
+			if !members[id].IsLearner {
+				return ErrMemberNotLearner
+			}
+		} else { // adding a new member
+			if members[id] != nil {
+				return ErrIDExists
+			}
+
+			urls := make(map[string]bool)
+			for _, m := range members {
+				for _, u := range m.PeerURLs {
+					urls[u] = true
+				}
+			}
+
+			if urls[cc.Url] {
+				return ErrPeerURLexists
+			}
+
+			if cc.ConfChangeType == raftpb.ConfChangeAddLearnerNode { // the new member is a learner
+				numLearners := 0
+				for _, m := range members {
+					if m.IsLearner {
+						numLearners++
+					}
+				}
+				if numLearners+1 > MaxLearners {
+					return ErrTooManyLearners
+				}
+			}
+		}
+	case raftpb.ConfChangeRemoveNode:
+		if members[id] == nil {
+			return ErrIDNotFound
+		}
+
+	case raftpb.ConfChangeUpdateNode:
+		if members[id] == nil {
+			return ErrIDNotFound
+		}
+		urls := make(map[string]bool)
+		for _, m := range members {
+			if m.ID == id {
+				continue
+			}
+			for _, u := range m.PeerURLs {
+				urls[u] = true
+			}
+		}
+
+		if urls[cc.Url] {
+			return ErrPeerURLexists
+		}
+
+	default:
+		c.lg.Panic("unknown ConfChange type", zap.String("type", cc.ConfChangeType.String()))
+	}
+	return nil
 }

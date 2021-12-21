@@ -287,19 +287,21 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 
 		var committed *Committed
 
-		switch ents[i].Type {
+		e := ents[i]
+
+		switch e.Type {
 		case raftpb.EntryNormal:
-			if len(ents[i].Data) == 0 {
+			if len(e.Data) == 0 {
 				// ignore empty messages
 				break
 			}
 
-			index := binary.BigEndian.Uint64(ents[i].Data[0:8])
+			index := binary.BigEndian.Uint64(e.Data[0:8])
 
 			GetSugar().Debugf("entrie %d", index)
 
 			committed = &Committed{
-				Data: ents[i].Data[8:],
+				Data: e.Data[8:],
 			}
 
 			if rc.isLeader() {
@@ -312,65 +314,70 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 		case raftpb.EntryConfChange:
 
 			var cc raftpb.ConfChange
-			cc.Unmarshal(ents[i].Data)
-			rc.confState = *rc.node.ApplyConfChange(cc)
 
-			GetSugar().Infof("%x raftpb.EntryConfChange %d %d %v", rc.id, cc.Type, cc, rc.confState)
+			cc.Unmarshal(e.Data)
 
-			var pc *proposalConfChange
+			GetSugar().Infof("%s raftpb.EntryConfChange %d %d %v", rc.id.String(), cc.Type, cc, rc.confState)
 			if len(cc.Context) > 0 {
-				var tmp proposalConfChange
-				if err := json.Unmarshal(cc.Context, &tmp); nil != err {
-					GetSugar().Fatalf("Unmarshal proposalConfChange error:%v", err)
+				var pc membership.ConfChangeContext
+				if err := json.Unmarshal(cc.Context, &pc); nil != err {
+					GetSugar().Panicf("Unmarshal proposalConfChange error:%v", err)
 				}
-				pc = &tmp
-			}
+				if err := rc.mb.ValidateConfigurationChange(&pc); nil == err {
+					rc.confState = *rc.node.ApplyConfChange(cc)
+					switch cc.Type {
+					case raftpb.ConfChangeAddNode, raftpb.ConfChangeAddLearnerNode:
+						if !pc.IsPromote {
+							if types.ID(rc.id) != types.ID(cc.NodeID) {
+								rc.transport.AddPeer(types.ID(cc.NodeID), []string{pc.Url})
+							}
+							m := membership.Member{
+								ID:       types.ID(cc.NodeID),
+								PeerURLs: []string{pc.Url},
+							}
 
-			//var raftUrl string
-
-			switch cc.Type {
-			case raftpb.ConfChangeAddNode, raftpb.ConfChangeAddLearnerNode:
-				if nil != pc {
-					if !pc.IsPromote {
-						rc.transport.AddPeer(types.ID(cc.NodeID), []string{pc.Url})
-						m := membership.Member{
-							ID:       types.ID(cc.NodeID),
-							PeerURLs: []string{pc.Url},
-						}
-
-						if cc.Type == raftpb.ConfChangeAddNode {
-							GetSugar().Infof("%x ConfChangeAddNode %s %s", rc.id, types.ID(cc.NodeID).String(), pc.Url)
+							if cc.Type == raftpb.ConfChangeAddNode {
+								GetSugar().Infof("%s ConfChangeAddNode %s %s", rc.id.String(), types.ID(cc.NodeID).String(), pc.Url)
+							} else {
+								m.IsLearner = true
+								GetSugar().Infof("%s ConfChangeAddLearnerNode %s %s", rc.id.String(), types.ID(cc.NodeID).String(), pc.Url)
+							}
+							rc.mb.AddMember(&m)
 						} else {
-							m.IsLearner = true
-							GetSugar().Infof("%x ConfChangeAddLearnerNode %s %s", rc.id, types.ID(cc.NodeID).String(), pc.Url)
+							rc.mb.PromoteMember(types.ID(cc.NodeID))
 						}
-						rc.mb.AddMember(&m)
-					} else {
-						rc.mb.PromoteMember(types.ID(cc.NodeID))
-					}
-				}
-			case raftpb.ConfChangeRemoveNode:
-				GetSugar().Infof("%x ConfChangeRemoveNode %s", rc.id, types.ID(cc.NodeID).String())
-				rc.transport.RemovePeer(types.ID(cc.NodeID))
-				rc.mb.RemoveMember(types.ID(cc.NodeID))
-			}
 
-			if nil != pc {
-				if rc.isLeader() {
-					if t := rc.confChangeMgr.getAndRemoveByID(pc.Index); nil != t {
-						rc.commitC.AppendHighestPriotiryItem(t.other.(ProposalConfChange))
+					case raftpb.ConfChangeRemoveNode:
+						GetSugar().Infof("%s ConfChangeRemoveNode %s", rc.id.String(), types.ID(cc.NodeID).String())
+						if types.ID(rc.id) != types.ID(cc.NodeID) {
+							rc.transport.RemovePeer(types.ID(cc.NodeID))
+						}
+						rc.mb.RemoveMember(types.ID(cc.NodeID))
 					}
+
+					if rc.isLeader() {
+						if t := rc.confChangeMgr.getAndRemoveByID(pc.Index); nil != t {
+							rc.commitC.AppendHighestPriotiryItem(t.other.(ProposalConfChange))
+						}
+					}
+					rc.commitC.AppendHighestPriotiryItem(ConfChange{
+						CCType:  cc.Type,
+						NodeID:  int(cc.NodeID),
+						RaftUrl: pc.Url,
+					})
+
+				} else {
+					GetSugar().Errorf("%s %s ValidateConfigurationChange %s err:%v", rc.id.String(), cc.Type.String(), types.ID(cc.NodeID).String(), err)
+					cc.NodeID = raft.None
+					rc.confState = *rc.node.ApplyConfChange(cc)
 				}
-				rc.commitC.AppendHighestPriotiryItem(ConfChange{
-					CCType:  cc.Type,
-					NodeID:  int(cc.NodeID),
-					RaftUrl: pc.Url,
-				})
+			} else {
+				rc.confState = *rc.node.ApplyConfChange(cc)
 			}
 		}
 
 		if committed != nil {
-			if rc.maybeTriggerSnapshot(ents[i].Index) {
+			if rc.maybeTriggerSnapshot(e.Index) {
 				committed.snapshotNotify = &SnapshotNotify{
 					notify: snapshotNotifyst{
 						applyIdx: ents[i].Index,
@@ -383,10 +390,10 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 		}
 
 		// after commit, update appliedIndex
-		rc.appliedIndex = ents[i].Index
+		rc.appliedIndex = e.Index
 
 		// special nil commit to signal replay has finished
-		if ents[i].Index == rc.lastIndex {
+		if e.Index == rc.lastIndex {
 			rc.commitC.AppendHighestPriotiryItem(ReplayOK{})
 		}
 	}
@@ -434,9 +441,9 @@ func (rc *RaftInstance) serveChannels() {
 	rc.appliedIndex = snap.Metadata.Index
 
 	defer func() {
-		GetSugar().Infof("%x serveChannels break", rc.id)
+		GetSugar().Infof("%s serveChannels break", rc.id.String())
 		rc.wal.Close()
-		GetSugar().Infof("%x send RaftStopOK", rc.id)
+		GetSugar().Infof("%s send RaftStopOK", rc.id.String())
 		rc.commitC.AppendHighestPriotiryItem(RaftStopOK{})
 	}()
 
@@ -451,7 +458,7 @@ func (rc *RaftInstance) serveChannels() {
 
 	go func() {
 		rc.waitStop.Wait()
-		GetSugar().Infof("%x close stopc", rc.id)
+		GetSugar().Infof("%s close stopc", rc.id.String())
 		close(rc.stopc)
 	}()
 
@@ -474,7 +481,7 @@ func (rc *RaftInstance) serveChannels() {
 							rc.linearizableReadMgr.onLeaderDemote()
 						}
 					} else if rc.softState.RaftState == raft.StateLeader {
-						GetSugar().Infof("becomeLeader id:%x", rc.id)
+						GetSugar().Infof("becomeLeader id:%s", rc.id.String())
 					}
 
 					if oldSoftState.Lead != rc.softState.Lead {
@@ -488,7 +495,7 @@ func (rc *RaftInstance) serveChannels() {
 			}
 
 			if err := rc.wal.Save(rd.HardState, rd.Entries); nil != err {
-				GetSugar().Fatalf("%x failed to sync Raft snapshot %v", rc.id, err)
+				GetSugar().Fatalf("%s failed to sync Raft snapshot %v", rc.id.String(), err)
 			}
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
@@ -710,16 +717,6 @@ func (rc *RaftInstance) MayRemoveMember(id types.ID) error {
 		return nil
 	}
 
-	/*if !rc.mb.IsReadyToRemoveVotingMember(uint64(id)) {
-		lg.Warn(
-			"rejecting member remove request; not enough healthy members",
-			zap.String("local-member-id", s.ID().String()),
-			zap.String("requested-member-remove-id", id.String()),
-			zap.Error(ErrNotEnoughStartedMembers),
-		)
-		return ErrNotEnoughStartedMembers
-	}*/
-
 	// downed member is safe to remove since it's not part of the active quorum
 	if t := rc.transport.ActiveSince(id); id != types.ID(rc.ID()) && t.IsZero() {
 		return nil
@@ -743,17 +740,6 @@ func (rc *RaftInstance) MayRemoveMember(id types.ID) error {
 }
 
 func (rc *RaftInstance) MayAddMember(memb membership.Member) error {
-	// protect quorum when adding voting member
-	/*if !memb.IsLearner && !s.cluster.IsReadyToAddVotingMember() {
-		lg.Warn(
-			"rejecting member add request; not enough healthy members",
-			zap.String("local-member-id", s.ID().String()),
-			zap.String("requested-member-add", fmt.Sprintf("%+v", memb)),
-			zap.Error(ErrNotEnoughStartedMembers),
-		)
-		return ErrNotEnoughStartedMembers
-	}*/
-
 	if /*!isConnectedFullySince*/ !isConnectedToQuorumSince(rc.transport, time.Now().Add(-HealthInterval), types.ID(rc.ID()), rc.mb.VotingMembers()) {
 		GetSugar().Warn(
 			"rejecting member add request; local member has not been connected to all peers, reconfigure breaks active quorum",

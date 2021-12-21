@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
+	"github.com/sniperHW/flyfish/pkg/raft/membership"
 	"sync"
 	"time"
 )
@@ -29,14 +30,6 @@ type Proposal interface {
 	 * 用户可以对合并后的[]byte做进一步的处理（例如，如果[]byte超过一定大小就执行压缩）,如果无需处理则直接把参数返回即可
 	 */
 	OnMergeFinish([]byte) []byte
-}
-
-type proposalConfChange struct {
-	Index          uint64
-	ConfChangeType raftpb.ConfChangeType
-	IsPromote      bool
-	Url            string //for add
-	NodeID         uint64
 }
 
 type ProposalConfChange interface {
@@ -68,7 +61,7 @@ func (rc *RaftInstance) proposeConfChange(proposal ProposalConfChange) {
 		other: proposal,
 	}
 
-	pc := proposalConfChange{
+	pc := membership.ConfChangeContext{
 		Index:          t.id,
 		ConfChangeType: proposal.GetType(),
 		IsPromote:      proposal.IsPromote(),

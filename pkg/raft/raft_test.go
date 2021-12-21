@@ -22,6 +22,7 @@ import (
 	"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
 	"go.uber.org/zap"
 	//"strings"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -31,14 +32,25 @@ type testStorage struct {
 	storage []byte
 }
 
-func (s *testStorage) SaveMemberShip(_ *zap.Logger, cid types.ID, localID types.ID, data []byte) error {
-	GetSugar().Infof("SaveMemberShip:%v %v", cid, localID)
+func (s *testStorage) SaveMemberShip(_ *zap.Logger, data []byte) error {
 	s.storage = data
 	return nil
 }
 
-func (s *testStorage) LoadMemberShip(lg *zap.Logger, cid types.ID, localID types.ID) (*membership.MemberShip, error) {
-	return membership.NewMemberShipFromJson(lg, s.storage)
+func (s *testStorage) LoadMemberShip(lg *zap.Logger) (*membership.MemberShip, error) {
+	if len(s.storage) == 0 {
+		return nil, errors.New("key not found")
+	} else {
+		return membership.NewMemberShipFromJson(lg, s.storage)
+	}
+}
+
+func (s *testStorage) IsKeyNotFound(err error) bool {
+	if "key not found" == err.Error() {
+		return true
+	} else {
+		return false
+	}
 }
 
 func init() {
