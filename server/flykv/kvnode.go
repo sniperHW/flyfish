@@ -7,11 +7,9 @@ import (
 	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
-	"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
-	"github.com/sniperHW/flyfish/pkg/raft/membership"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
 	snet "github.com/sniperHW/flyfish/server/net"
@@ -19,7 +17,6 @@ import (
 	"github.com/sniperHW/flyfish/server/slot"
 	"net"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -128,10 +125,7 @@ func waitCondition(fn func() bool) {
 	wg.Wait()
 }
 
-func (this *kvnode) addStore(meta db.DBMeta, storeID int, mb *membership.MemberShip, slots *bitmap.Bitmap) error {
-	if nil == mb.Member(types.ID(raft.MakeInstanceID(uint16(this.id), uint16(storeID)))) {
-		return errors.New("member not contain self")
-	}
+func (this *kvnode) addStore(meta db.DBMeta, storeID int, peers map[uint16]raft.Member, slots *bitmap.Bitmap) error {
 
 	this.muS.Lock()
 	defer this.muS.Unlock()
@@ -165,7 +159,7 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, mb *membership.MemberS
 		},
 	}
 
-	rn, err := raft.NewInstance(uint16(this.id), uint16(storeID), this.mutilRaft, mainQueue, mb, this.config.RaftLogDir, this.config.RaftLogPrefix)
+	rn, err := raft.NewInstance(uint16(this.id), uint16(storeID), this.mutilRaft, mainQueue, peers, nil, this.config.RaftLogDir, this.config.RaftLogPrefix)
 
 	if nil != err {
 		return err
@@ -391,32 +385,15 @@ func (this *kvnode) Start() error {
 
 			//添加store
 			if len(config.SoloConfig.Stores) > 0 {
-				clusterArray := strings.Split(config.SoloConfig.RaftCluster, ",")
-				peers := map[int]string{}
-				for _, v := range clusterArray {
-					t := strings.Split(v, "@")
-					if len(t) != 2 {
-						panic("invaild peer")
-					}
-					i, err := strconv.Atoi(t[0])
-					if nil != err {
-						panic(err)
-					}
-					peers[i] = t[1]
+				peers, err := raft.SplitPeers(config.SoloConfig.RaftCluster)
+
+				if nil != err {
+					return err
 				}
 
 				storeBitmaps := makeStoreBitmap(config.SoloConfig.Stores)
 				for i, v := range config.SoloConfig.Stores {
-
-					//storage中没有从配置文件中创建
-					membs := []*membership.Member{}
-					for kk, vv := range peers {
-						u, _ := types.NewURLs([]string{vv})
-						membs = append(membs, membership.NewMember(types.ID(raft.MakeInstanceID(uint16(kk), uint16(v))), u))
-					}
-					mb := membership.NewMemberShipMembers(GetLogger(), types.ID(this.id), types.ID(v), membs)
-
-					if err = this.addStore(meta, v, mb, storeBitmaps[i]); nil != err {
+					if err = this.addStore(meta, v, peers, storeBitmaps[i]); nil != err {
 						return err
 					}
 				}
@@ -489,24 +466,13 @@ func (this *kvnode) Start() error {
 					return err
 				}
 
-				membs := []*membership.Member{}
+				peers, err := raft.SplitPeers(v.RaftCluster)
 
-				for _, vv := range strings.Split(v.RaftCluster, ",") {
-					t := strings.Split(vv, "@")
-					if len(t) != 2 {
-						panic("invaild peer")
-					}
-					i, err := strconv.Atoi(t[0])
-					if nil != err {
-						panic(err)
-					}
-					u, _ := types.NewURLs([]string{t[1]})
-					membs = append(membs, membership.NewMember(types.ID(raft.MakeInstanceID(uint16(i), uint16(v.Id))), u))
+				if nil != err {
+					return err
 				}
 
-				mb := membership.NewMemberShipMembers(GetLogger(), types.ID(this.id), types.ID(v.Id), membs)
-
-				if err = this.addStore(meta, int(v.Id), mb, slots); nil != err {
+				if err = this.addStore(meta, int(v.Id), peers, slots); nil != err {
 					return err
 				}
 			}

@@ -880,10 +880,14 @@ func NewInstance(nodeID uint16, shard uint16, mutilRaft *MutilRaft, commitC Appl
 
 	haveWAL := wal.Exist(rc.waldir)
 
-	mb, err := st.LoadMemberShip(GetLogger())
+	var mb *membership.MemberShip
 
-	if nil != err && !st.IsKeyNotFound(err) {
-		return nil, err
+	if nil != st {
+		mb, err = st.LoadMemberShip(GetLogger())
+
+		if nil != err && !st.IsKeyNotFound(err) {
+			return nil, err
+		}
 	}
 
 	if nil == mb {

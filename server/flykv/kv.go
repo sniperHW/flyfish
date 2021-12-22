@@ -219,26 +219,17 @@ func (this *kv) process(cmd cmdI) {
 			}
 		}
 
-		if linearizableRead != nil || proposal != nil {
-			var err error
-
-			if nil != linearizableRead {
-				err = this.store.rn.IssueLinearizableRead(linearizableRead)
-			} else {
-				err = this.store.rn.IssueProposal(proposal)
+		if nil != linearizableRead {
+			this.store.rn.IssueLinearizableRead(linearizableRead)
+			this.asynTaskCount++
+			return
+		} else if nil != proposal {
+			this.store.rn.IssueProposal(proposal)
+			if proposal.ptype == proposal_kick {
+				this.kicking = true
 			}
-
-			if nil != err {
-				for _, v := range cmds {
-					v.reply(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"), nil, 0)
-				}
-			} else {
-				if nil != proposal && proposal.ptype == proposal_kick {
-					this.kicking = true
-				}
-				this.asynTaskCount++
-				return
-			}
+			this.asynTaskCount++
+			return
 		}
 	}
 }

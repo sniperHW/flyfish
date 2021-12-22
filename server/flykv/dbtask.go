@@ -179,17 +179,6 @@ func (this *dbLoadTask) GetTableMeta() db.TableMeta {
 	return this.kv.getTableMeta()
 }
 
-func (this *dbLoadTask) onResultError(err errcode.Error) {
-	this.cmd.reply(err, nil, 0)
-	this.kv.store.mainQueue.AppendHighestPriotiryItem(func() {
-		this.kv.store.deleteKv(this.kv)
-		for f := this.kv.pendingCmd.front(); nil != f; f = this.kv.pendingCmd.front() {
-			f.reply(err, nil, 0)
-			this.kv.pendingCmd.popFront()
-		}
-	})
-}
-
 func (this *dbLoadTask) OnResult(err error, version int64, fields map[string]*flyproto.Field) {
 
 	if err == nil || err == db.ERR_RecordNotExist {
@@ -209,12 +198,17 @@ func (this *dbLoadTask) OnResult(err error, version int64, fields map[string]*fl
 
 		this.cmd.onLoadResult(err, proposal)
 
-		if err = this.kv.store.rn.IssueProposal(proposal); nil != err {
-			GetSugar().Infof("reply retry")
-			this.onResultError(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"))
-		}
+		this.kv.store.rn.IssueProposal(proposal)
 
 	} else {
-		this.onResultError(errcode.New(errcode.Errcode_error, err.Error()))
+		errCode := errcode.New(errcode.Errcode_error, err.Error())
+		this.cmd.reply(errCode, nil, 0)
+		this.kv.store.mainQueue.AppendHighestPriotiryItem(func() {
+			this.kv.store.deleteKv(this.kv)
+			for f := this.kv.pendingCmd.front(); nil != f; f = this.kv.pendingCmd.front() {
+				f.reply(errCode, nil, 0)
+				this.kv.pendingCmd.popFront()
+			}
+		})
 	}
 }

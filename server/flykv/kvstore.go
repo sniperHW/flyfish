@@ -239,15 +239,13 @@ func (this *kvstore) tryKick(kv *kv) bool {
 		return false
 	}
 
-	if err := this.rn.IssueProposal(&kvProposal{
+	this.rn.IssueProposal(&kvProposal{
 		ptype: proposal_kick,
 		kv:    kv,
-	}); nil != err {
-		return false
-	} else {
-		kv.kicking = true
-		return true
-	}
+	})
+
+	kv.kicking = true
+	return true
 }
 
 func (s *kvstore) checkLru(ch chan struct{}) {
@@ -463,7 +461,7 @@ func (s *kvstore) processLinearizableRead(r []raft.LinearizableRead) {
 }
 
 func (s *kvstore) processConfChange(p raft.ProposalConfChange) {
-	p.(*ProposalConfChange).reply()
+	p.(*ProposalConfChange).reply(nil)
 }
 
 func (s *kvstore) stop() {
@@ -478,6 +476,7 @@ func (s *kvstore) gotLease() {
 		s.needWriteBackAll = false
 		for _, v := range s.kv {
 			for _, vv := range v {
+				vv.kicking = false
 				err := vv.updateTask.issueFullDbWriteBack()
 				if nil != err {
 					break
@@ -608,7 +607,7 @@ func (s *kvstore) serve() {
 }
 
 func (s *kvstore) onNotifyAddNode(from *net.UDPAddr, msg *sproto.NotifyAddNode, context int64) {
-	if s.leader == s.rn.ID() {
+	/*if s.leader == s.rn.ID() {
 		if s.rn.IsMember(uint64(msg.NodeID)) {
 			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
 				&sproto.NotifyAddNodeResp{
@@ -621,7 +620,7 @@ func (s *kvstore) onNotifyAddNode(from *net.UDPAddr, msg *sproto.NotifyAddNode, 
 				confChangeType: raftpb.ConfChangeAddNode,
 				url:            fmt.Sprintf("http://%s:%d", msg.Host, msg.RaftPort),
 				nodeID:         uint64(raft.MakeInstanceID(uint16(msg.NodeID), uint16(s.shard))),
-				reply: func() {
+				reply: func(err error) {
 					s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
 						&sproto.NotifyAddNodeResp{
 							NodeID: msg.NodeID,
@@ -630,11 +629,11 @@ func (s *kvstore) onNotifyAddNode(from *net.UDPAddr, msg *sproto.NotifyAddNode, 
 				},
 			})
 		}
-	}
+	}*/
 }
 
 func (s *kvstore) onNotifyRemNode(from *net.UDPAddr, msg *sproto.NotifyRemNode, context int64) {
-	if s.leader == s.rn.ID() {
+	/*if s.leader == s.rn.ID() {
 		if !s.rn.IsMember(uint64(msg.NodeID)) {
 			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
 				&sproto.NotifyRemNodeResp{
@@ -646,7 +645,7 @@ func (s *kvstore) onNotifyRemNode(from *net.UDPAddr, msg *sproto.NotifyRemNode, 
 			s.rn.IssueConfChange(&ProposalConfChange{
 				confChangeType: raftpb.ConfChangeRemoveNode,
 				nodeID:         uint64(raft.MakeInstanceID(uint16(msg.NodeID), uint16(s.shard))),
-				reply: func() {
+				reply: func(err error) {
 					s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
 						&sproto.NotifyRemNodeResp{
 							NodeID: msg.NodeID,
@@ -655,7 +654,7 @@ func (s *kvstore) onNotifyRemNode(from *net.UDPAddr, msg *sproto.NotifyRemNode, 
 				},
 			})
 		}
-	}
+	}*/
 }
 
 func (s *kvstore) onNotifySlotTransIn(from *net.UDPAddr, msg *sproto.NotifySlotTransIn, context int64) {

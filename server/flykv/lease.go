@@ -89,29 +89,29 @@ func newLease(store *kvstore) *lease {
 
 				for 0 == atomic.LoadInt32(&l.stoped) && l.store.isLeader() {
 					notifyCh := make(chan error, 1)
-					if nil == l.store.rn.IssueProposal(&leaseProposal{
+
+					l.store.rn.IssueProposal(&leaseProposal{
 						store:     l.store,
 						notifyCh:  notifyCh,
 						beginTime: time.Now(),
-					}) {
+					})
 
-						var r error
-						ticker := time.NewTicker(10 * time.Second)
-						select {
-						case r = <-notifyCh:
-						case <-ticker.C:
-							r = errors.New("timeout")
-						}
-						ticker.Stop()
+					var r error
+					ticker := time.NewTicker(10 * time.Second)
+					select {
+					case r = <-notifyCh:
+					case <-ticker.C:
+						r = errors.New("timeout")
+					}
+					ticker.Stop()
 
-						if nil == r {
-							elapse := time.Now().Sub(l.beginTime)
-							if elapse < renewTime {
-								time.Sleep(renewTime - elapse)
-							}
-						} else {
-							GetSugar().Errorf("lease error:%v", r)
+					if nil == r {
+						elapse := time.Now().Sub(l.beginTime)
+						if elapse < renewTime {
+							time.Sleep(renewTime - elapse)
 						}
+					} else {
+						GetSugar().Errorf("lease error:%v", r)
 					}
 				}
 			}

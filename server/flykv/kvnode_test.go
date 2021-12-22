@@ -71,7 +71,7 @@ RaftLogPrefix           = "flykv"
 RaftUrl                 = "http://127.0.0.1:12377"
 ServiceHost             = "127.0.0.1"
 ServicePort             = %d
-RaftCluster             = "1@http://127.0.0.1:12377"
+RaftCluster             = "1@http://127.0.0.1:12377@"
 Stores                  = [1]
 Meta                    = ["users1@name:string:,age:int:,phone:string:"]
 
