@@ -11,25 +11,6 @@ import (
 
 const MaxLearners = 1
 
-type MemberShip struct {
-	sync.Mutex // guards the fields below
-	lg         *zap.Logger
-	localID    types.ID
-	cid        types.ID
-	members    map[types.ID]*Member
-	// removed contains the ids of removed members in the cluster.
-	// removed id cannot be reused.
-	removed map[types.ID]bool
-	st      Storage
-}
-
-type MemberShipJson struct {
-	LocalID types.ID
-	Cid     types.ID
-	Members map[types.ID]*Member
-	Removed map[types.ID]bool
-}
-
 type ConfChangeContext struct {
 	Index          uint64
 	ConfChangeType raftpb.ConfChangeType
@@ -38,13 +19,29 @@ type ConfChangeContext struct {
 	NodeID         uint64
 }
 
+type MemberShipJson struct {
+	LocalID types.ID
+	Cid     types.ID
+	Members map[types.ID]*Member
+}
+
+type MemberShip struct {
+	sync.Mutex  // guards the fields below
+	lg          *zap.Logger
+	localID     types.ID
+	cid         types.ID
+	members     map[types.ID]*Member //未经raft确认的members
+	raftmembers map[types.ID]*Member //从raft中获取到的members
+	st          Storage
+}
+
 func NewMemberShip(lg *zap.Logger, localID, cid types.ID) *MemberShip {
 	return &MemberShip{
-		lg:      lg,
-		localID: localID,
-		cid:     cid,
-		members: make(map[types.ID]*Member),
-		removed: make(map[types.ID]bool),
+		lg:          lg,
+		localID:     localID,
+		cid:         cid,
+		members:     make(map[types.ID]*Member),
+		raftmembers: make(map[types.ID]*Member),
 	}
 }
 
@@ -54,11 +51,11 @@ func NewMemberShipFromJson(lg *zap.Logger, b []byte) (*MemberShip, error) {
 		return nil, err
 	} else {
 		return &MemberShip{
-			lg:      lg,
-			localID: m.LocalID,
-			cid:     m.Cid,
-			members: m.Members,
-			removed: m.Removed,
+			lg:          lg,
+			localID:     m.LocalID,
+			cid:         m.Cid,
+			members:     m.Members,
+			raftmembers: make(map[types.ID]*Member),
 		}, nil
 	}
 }
@@ -80,7 +77,6 @@ func (c *MemberShip) toJson() (b []byte) {
 		LocalID: c.localID,
 		Cid:     c.cid,
 		Members: c.members,
-		Removed: c.removed,
 	})
 	return
 }
@@ -102,17 +98,28 @@ func (c *MemberShip) Members() []*Member {
 	return []*Member(ms)
 }
 
-func (c *MemberShip) Member(id types.ID) *Member {
+func (c *MemberShip) RaftMembers() []*Member {
 	c.Lock()
 	defer c.Unlock()
-	return c.members[id].Clone()
+	var ms MembersByID
+	for _, m := range c.raftmembers {
+		ms = append(ms, m.Clone())
+	}
+	sort.Sort(ms)
+	return []*Member(ms)
+}
+
+func (c *MemberShip) RaftMember(id types.ID) *Member {
+	c.Lock()
+	defer c.Unlock()
+	return c.raftmembers[id].Clone()
 }
 
 func (c *MemberShip) VotingMembers() []*Member {
 	c.Lock()
 	defer c.Unlock()
 	var ms MembersByID
-	for _, m := range c.members {
+	for _, m := range c.raftmembers {
 		if !m.IsLearner {
 			ms = append(ms, m.Clone())
 		}
@@ -121,17 +128,11 @@ func (c *MemberShip) VotingMembers() []*Member {
 	return []*Member(ms)
 }
 
-func (c *MemberShip) IsIDRemoved(id types.ID) bool {
-	c.Lock()
-	defer c.Unlock()
-	return c.removed[id]
-}
-
 // IsLocalMemberLearner returns if the local member is raft learner
 func (c *MemberShip) IsLocalMemberLearner() bool {
 	c.Lock()
 	defer c.Unlock()
-	localMember, ok := c.members[c.localID]
+	localMember, ok := c.raftmembers[c.localID]
 	if !ok {
 		c.lg.Panic(
 			"failed to find local ID in cluster members",
@@ -143,19 +144,19 @@ func (c *MemberShip) IsLocalMemberLearner() bool {
 }
 
 // IsMemberExist returns if the member with the given id exists in cluster.
-func (c *MemberShip) IsMemberExist(id types.ID) bool {
+func (c *MemberShip) IsRaftMemberExist(id types.ID) bool {
 	c.Lock()
 	defer c.Unlock()
-	_, ok := c.members[id]
+	_, ok := c.raftmembers[id]
 	return ok
 }
 
 // VotingMemberIDs returns the ID of voting members in cluster.
-func (c *MemberShip) VotingMemberIDs() []types.ID {
+func (c *MemberShip) VotingRaftMemberIDs() []types.ID {
 	c.Lock()
 	defer c.Unlock()
 	var ids []types.ID
-	for _, m := range c.members {
+	for _, m := range c.raftmembers {
 		if !m.IsLearner {
 			ids = append(ids, m.ID)
 		}
@@ -165,22 +166,43 @@ func (c *MemberShip) VotingMemberIDs() []types.ID {
 }
 
 func (c *MemberShip) save() error {
-	return c.st.SaveMemberShip(c.lg, c.toJson())
+	if nil != c.st {
+		return c.st.SaveMemberShip(c.lg, c.toJson())
+	} else {
+		return nil
+	}
 }
 
 func (c *MemberShip) Save() error {
 	c.Lock()
 	defer c.Unlock()
-	return c.st.SaveMemberShip(c.lg, c.toJson())
+	return c.save()
 }
 
 // AddMember adds a new Member into the cluster, and saves the given member's
 // raftAttributes into the store. The given member should have empty attributes.
 // A Member with a matching id must not exist.
-func (c *MemberShip) AddMember(m *Member) {
+func (c *MemberShip) AddRaftMember(id types.ID, isLearner bool, m *Member) {
 	c.Lock()
 	defer c.Unlock()
-	c.members[m.ID] = m
+
+	rm := c.raftmembers[id]
+	if nil == rm {
+		if nil == m {
+			m = c.members[id]
+		}
+
+		if nil == m {
+			c.lg.Panic("AddRaftMember error")
+		}
+	}
+
+	if isLearner != m.IsLearner {
+		c.lg.Panic("isLearner missmatch")
+	}
+
+	c.raftmembers[id] = m
+	c.members[id] = m
 
 	if c.st != nil {
 		if err := c.save(); nil != err {
@@ -190,8 +212,9 @@ func (c *MemberShip) AddMember(m *Member) {
 			)
 		}
 	}
+
 	c.lg.Info(
-		"added member",
+		"added raft member",
 		zap.String("cluster-id", c.cid.String()),
 		zap.String("local-member-id", c.localID.String()),
 		zap.String("added-peer-id", m.ID.String()),
@@ -201,13 +224,17 @@ func (c *MemberShip) AddMember(m *Member) {
 
 // RemoveMember removes a member from the store.
 // The given id MUST exist, or the function panics.
-func (c *MemberShip) RemoveMember(id types.ID) {
+func (c *MemberShip) RemoveRaftMember(id types.ID) {
 	c.Lock()
 	defer c.Unlock()
 
-	m, ok := c.members[id]
+	m, ok := c.raftmembers[id]
+	if !ok {
+		c.lg.Panic("RemoveRaftMember error")
+	}
+
+	delete(c.raftmembers, id)
 	delete(c.members, id)
-	c.removed[id] = true
 
 	if c.st != nil {
 		if err := c.save(); nil != err {
@@ -218,30 +245,26 @@ func (c *MemberShip) RemoveMember(id types.ID) {
 		}
 	}
 
-	if ok {
-		c.lg.Info(
-			"removed member",
-			zap.String("cluster-id", c.cid.String()),
-			zap.String("local-member-id", c.localID.String()),
-			zap.String("removed-remote-peer-id", id.String()),
-			zap.Strings("removed-remote-peer-urls", m.PeerURLs),
-		)
-	} else {
-		c.lg.Warn(
-			"skipped removing already removed member",
-			zap.String("cluster-id", c.cid.String()),
-			zap.String("local-member-id", c.localID.String()),
-			zap.String("removed-remote-peer-id", id.String()),
-		)
-	}
+	c.lg.Info(
+		"removed raft member",
+		zap.String("cluster-id", c.cid.String()),
+		zap.String("local-member-id", c.localID.String()),
+		zap.String("removed-remote-peer-id", id.String()),
+		zap.Strings("removed-remote-peer-urls", m.PeerURLs),
+	)
 }
 
 // PromoteMember marks the member's IsLearner RaftAttributes to false.
-func (c *MemberShip) PromoteMember(id types.ID) {
+func (c *MemberShip) PromoteRaftMember(id types.ID) {
 	c.Lock()
 	defer c.Unlock()
 
-	c.members[id].IsLearner = false
+	m, ok := c.raftmembers[id]
+	if !ok {
+		c.lg.Panic("PromoteRaftMember error")
+	}
+
+	m.IsLearner = false
 
 	if c.st != nil {
 		if err := c.save(); nil != err {
@@ -259,35 +282,14 @@ func (c *MemberShip) PromoteMember(id types.ID) {
 	)
 }
 
-func membersFromStore(lg *zap.Logger, st Storage) (map[types.ID]*Member, map[types.ID]bool) {
-	members := make(map[types.ID]*Member)
-	removed := make(map[types.ID]bool)
-	if nil == st {
-		return members, removed
-	}
-
-	mb, err := st.LoadMemberShip(lg)
-	if err != nil {
-		if st.IsKeyNotFound(err) {
-			return members, removed
-		}
-		lg.Panic("failed to get members from store", zap.Error(err))
-	}
-
-	members, removed = mb.members, mb.removed
-
-	return members, removed
-}
-
 func (c *MemberShip) ValidateConfigurationChange(cc *ConfChangeContext) error {
 	c.Lock()
 	defer c.Unlock()
 
-	members, removed := membersFromStore(c.lg, c.st)
 	id := types.ID(cc.NodeID)
-	if removed[id] {
-		return ErrIDRemoved
-	}
+
+	members := c.raftmembers
+
 	switch cc.ConfChangeType {
 	case raftpb.ConfChangeAddNode, raftpb.ConfChangeAddLearnerNode:
 		if cc.IsPromote { // promoting a learner member to voting member
