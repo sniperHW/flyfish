@@ -23,4 +23,5 @@ var (
 	ErrUnhealthy                  = errors.New("flyfish: unhealthy cluster")
 	ErrCorrupt                    = errors.New("flyfish: corrupt cluster")
 	ErrBadLeaderTransferee        = errors.New("flyfish: bad leader transferee")
+	ErrRaftBusy                   = errors.New("flyfish: raft is busy")
 )

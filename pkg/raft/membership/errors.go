@@ -5,7 +5,6 @@ import (
 )
 
 var (
-	ErrIDRemoved        = errors.New("membership: ID removed")
 	ErrIDExists         = errors.New("membership: ID exists")
 	ErrIDNotFound       = errors.New("membership: ID not found")
 	ErrPeerURLexists    = errors.New("membership: peerURL exists")

@@ -17,6 +17,7 @@ var (
 	ReleaseDelayAfterSnapshot        = 30 * time.Second
 	ReadyPercent                     = 0.9
 	HealthInterval                   = 5 * time.Second
+	MaxRaftTaskCount                 = 1000
 )
 
 type ConfChange struct {

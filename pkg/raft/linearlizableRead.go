@@ -46,20 +46,27 @@ func (rc *RaftInstance) processReadStates(readStates []raft.ReadState) {
 func (rc *RaftInstance) linearizableRead(batchRead []LinearizableRead) {
 
 	t := &raftTask{
-		id:    rc.genNextIndex(),
+		id:    rc.reqIDGen.Next(),
 		other: batchRead,
 	}
 
 	ctxToSend := make([]byte, 8)
 	binary.BigEndian.PutUint64(ctxToSend, t.id)
 
-	rc.linearizableReadMgr.addToDictAndList(t)
-	if err := rc.node.ReadIndex(context.TODO(), ctxToSend); nil != err {
-		rc.linearizableReadMgr.remove(t)
+	var err error
+
+	if err = rc.linearizableReadMgr.addToDictAndList(t); nil == err {
+		if err = rc.node.ReadIndex(context.TODO(), ctxToSend); nil != err {
+			rc.linearizableReadMgr.remove(t)
+		}
+	}
+
+	if nil != err {
 		for _, v := range batchRead {
 			v.OnError(err)
 		}
 	}
+
 }
 
 func (rc *RaftInstance) runReadPipeline() {

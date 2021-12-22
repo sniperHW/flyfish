@@ -55,14 +55,7 @@ func (this Committed) GetSnapshotNotify() *SnapshotNotify {
 }
 
 func (rc *RaftInstance) proposeConfChange(proposal ProposalConfChange) {
-
-	t := &raftTask{
-		id:    rc.genNextIndex(),
-		other: proposal,
-	}
-
 	pc := membership.ConfChangeContext{
-		Index:          t.id,
 		ConfChangeType: proposal.GetType(),
 		IsPromote:      proposal.IsPromote(),
 		Url:            proposal.GetURL(),
@@ -71,40 +64,42 @@ func (rc *RaftInstance) proposeConfChange(proposal ProposalConfChange) {
 
 	buff, _ := json.Marshal(&pc)
 
-	cfChange := raftpb.ConfChange{
-		ID:      pc.Index,
+	cc := raftpb.ConfChange{
+		ID:      rc.reqIDGen.Next(),
 		Type:    pc.ConfChangeType,
 		NodeID:  pc.NodeID,
 		Context: buff,
 	}
 
-	rc.confChangeMgr.addToDict(t)
-	if err := rc.node.ProposeConfChange(context.TODO(), cfChange); nil != err {
-		rc.confChangeMgr.remove(t)
-		proposal.OnError(err)
-	}
-}
+	ctx, cancel := context.WithTimeout(context.TODO(), 5*time.Second)
+	defer cancel()
 
-func (rc *RaftInstance) runConfChange() {
-	go func() {
-		defer rc.waitStop.Done()
-		localList := []interface{}{}
-		closed := false
-		for {
+	var err error
 
-			localList, closed = rc.confChangeC.Pop(localList)
+	ch := rc.w.Register(cc.ID)
 
-			if closed {
-				GetSugar().Info("runConfChange break")
-				break
+	if err = rc.node.ProposeConfChange(ctx, cc); err != nil {
+		rc.w.Trigger(cc.ID, nil)
+	} else {
+		select {
+		case x := <-ch:
+			if nil != x {
+				err = x.(error)
 			}
-
-			for k, vv := range localList {
-				rc.proposeConfChange(vv.(ProposalConfChange))
-				localList[k] = nil
-			}
+		case <-ctx.Done():
+			err = ErrTimeout
+			rc.w.Trigger(cc.ID, nil)
+		case <-rc.stopping:
+			rc.w.Trigger(cc.ID, nil)
+			err = ErrStopped
 		}
-	}()
+	}
+
+	if nil != err {
+		proposal.OnError(err)
+	} else {
+		rc.commitC.AppendHighestPriotiryItem(proposal)
+	}
 }
 
 var proposeBuffPool sync.Pool = sync.Pool{
@@ -123,7 +118,7 @@ func releaseProposeBuff(b []byte) {
 
 func (rc *RaftInstance) propose(batchProposal []Proposal) {
 	t := &raftTask{
-		id:    rc.genNextIndex(),
+		id:    rc.reqIDGen.Next(),
 		other: batchProposal,
 	}
 
@@ -141,10 +136,16 @@ func (rc *RaftInstance) propose(batchProposal []Proposal) {
 
 	releaseProposeBuff(buff)
 
-	rc.proposalMgr.addToDict(t)
-	if err := rc.node.Propose(context.TODO(), b); nil != err {
-		GetSugar().Errorf("proposalError %v", err)
-		rc.proposalMgr.remove(t)
+	var err error
+
+	if err = rc.proposalMgr.addToDict(t); nil == err {
+		if err = rc.node.Propose(context.TODO(), b); nil != err {
+			GetSugar().Errorf("proposalError %v", err)
+			rc.proposalMgr.remove(t)
+		}
+	}
+
+	if nil != err {
 		for _, v := range batchProposal {
 			v.OnError(err)
 		}

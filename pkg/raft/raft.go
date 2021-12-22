@@ -10,7 +10,9 @@ import (
 	"github.com/sniperHW/flyfish/pkg/etcd/etcdserver/api/snap"
 	stats "github.com/sniperHW/flyfish/pkg/etcd/etcdserver/api/v2stats"
 	"github.com/sniperHW/flyfish/pkg/etcd/pkg/fileutil"
+	"github.com/sniperHW/flyfish/pkg/etcd/pkg/idutil"
 	"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
+	"github.com/sniperHW/flyfish/pkg/etcd/pkg/wait"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
 	"github.com/sniperHW/flyfish/pkg/etcd/wal"
@@ -63,19 +65,29 @@ type raftTaskMgr struct {
 	dict map[uint64]*raftTask
 }
 
-func (this *raftTaskMgr) addToDict(t *raftTask) {
+func (this *raftTaskMgr) addToDict(t *raftTask) error {
 	this.Lock()
 	defer this.Unlock()
-	this.dict[t.id] = t
-	GetSugar().Debugf("raftTaskMgr add %d", t.id)
+	if len(this.dict) > MaxRaftTaskCount {
+		return ErrRaftBusy
+	} else {
+		this.dict[t.id] = t
+		GetSugar().Debugf("raftTaskMgr add %d", t.id)
+		return nil
+	}
 }
 
-func (this *raftTaskMgr) addToDictAndList(t *raftTask) {
+func (this *raftTaskMgr) addToDictAndList(t *raftTask) error {
 	this.Lock()
 	defer this.Unlock()
-	t.listE = this.l.PushBack(t)
-	this.dict[t.id] = t
-	GetSugar().Debugf("raftTaskMgr add %d", t.id)
+	if len(this.dict) > MaxRaftTaskCount {
+		return ErrRaftBusy
+	} else {
+		t.listE = this.l.PushBack(t)
+		this.dict[t.id] = t
+		GetSugar().Debugf("raftTaskMgr add %d", t.id)
+		return nil
+	}
 }
 
 func (this *raftTaskMgr) remove(t *raftTask) {
@@ -119,7 +131,6 @@ func (i RaftInstanceID) String() string {
 
 type RaftInstance struct {
 	inflightSnapshots   int64
-	confChangeC         *queue.ArrayQueue
 	proposePipeline     *queue.ArrayQueue
 	readPipeline        *queue.ArrayQueue
 	commitC             ApplicationQueue
@@ -146,13 +157,13 @@ type RaftInstance struct {
 	stopc               chan struct{} // signals proposal channel closed
 	stopping            chan struct{}
 	proposalMgr         raftTaskMgr
-	confChangeMgr       raftTaskMgr
 	linearizableReadMgr raftTaskMgr
 	mutilRaft           *MutilRaft
 	softState           raft.SoftState
-	idcounter           int32
 	stoponce            int32
 	mb                  *membership.MemberShip
+	w                   wait.Wait
+	reqIDGen            *idutil.Generator
 }
 
 func readWALNames(dirpath string) []string {
@@ -218,11 +229,6 @@ func (rc *RaftInstance) ID() RaftInstanceID {
 
 func (rc *RaftInstance) isLeader() bool {
 	return rc.softState.RaftState == raft.StateLeader
-}
-
-func (rc *RaftInstance) genNextIndex() uint64 {
-	v := atomic.AddInt32(&rc.idcounter, 1)
-	return uint64(rc.id)<<32 + uint64(v)
 }
 
 func (rc *RaftInstance) removeOldWal(index uint64) {
@@ -318,14 +324,14 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 
 			cc.Unmarshal(e.Data)
 
-			//GetSugar().Infof("%s raftpb.EntryConfChange %d %d %v", rc.id.String(), cc.Type, cc, rc.confState)
+			var err error
 
 			var pc membership.ConfChangeContext
-			if err := json.Unmarshal(cc.Context, &pc); nil != err {
+			if err = json.Unmarshal(cc.Context, &pc); nil != err {
 				GetSugar().Panicf("Unmarshal proposalConfChange error:%v", err)
 			}
 
-			if err := rc.mb.ValidateConfigurationChange(&pc); nil == err {
+			if err = rc.mb.ValidateConfigurationChange(&pc); nil == err {
 				rc.confState = *rc.node.ApplyConfChange(cc)
 				switch cc.Type {
 				case raftpb.ConfChangeAddNode, raftpb.ConfChangeAddLearnerNode:
@@ -372,9 +378,7 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 			}
 
 			if rc.isLeader() {
-				if t := rc.confChangeMgr.getAndRemoveByID(pc.Index); nil != t {
-					rc.commitC.AppendHighestPriotiryItem(t.other.(ProposalConfChange))
-				}
+				rc.w.Trigger(cc.ID, err)
 			}
 		}
 
@@ -452,9 +456,9 @@ func (rc *RaftInstance) serveChannels() {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
-	rc.waitStop.Add(3)
+	rc.waitStop.Add(2)
 
-	rc.runConfChange()
+	//rc.runConfChange()
 	rc.runProposePipeline()
 	rc.runReadPipeline()
 
@@ -479,7 +483,6 @@ func (rc *RaftInstance) serveChannels() {
 					if oldSoftState.RaftState == raft.StateLeader {
 						if rc.softState.RaftState != raft.StateLeader {
 							rc.proposalMgr.onLeaderDemote()
-							rc.confChangeMgr.onLeaderDemote()
 							rc.linearizableReadMgr.onLeaderDemote()
 						}
 					} else if rc.softState.RaftState == raft.StateLeader {
@@ -544,7 +547,6 @@ func (rc *RaftInstance) Stop() {
 	if atomic.CompareAndSwapInt32(&rc.stoponce, 0, 1) {
 		GetSugar().Infof("RaftInstance.Stop()")
 		close(rc.stopping)
-		rc.confChangeC.Close()
 		rc.proposePipeline.Close()
 		rc.readPipeline.Close()
 	}
@@ -558,10 +560,6 @@ func (rc *RaftInstance) IsIDRemoved(id uint64) bool {
 	return false
 }
 
-//func (rc *RaftInstance) IsMember(id uint64) bool {
-//	return rc.mb.Member(types.ID(id)) != nil
-//}
-
 func (rc *RaftInstance) ReportUnreachable(id uint64) {
 	rc.node.ReportUnreachable(id)
 }
@@ -570,16 +568,20 @@ func (rc *RaftInstance) ReportSnapshot(id uint64, status raft.SnapshotStatus) {
 	rc.node.ReportSnapshot(id, status)
 }
 
-func (rc *RaftInstance) IssueLinearizableRead(r LinearizableRead) error {
-	return rc.readPipeline.ForceAppend(r)
+func (rc *RaftInstance) IssueLinearizableRead(r LinearizableRead) {
+	if err := rc.readPipeline.ForceAppend(r); nil != err {
+		r.OnError(err)
+	}
 }
 
-func (rc *RaftInstance) IssueProposal(p Proposal) error {
-	return rc.proposePipeline.ForceAppend(p)
+func (rc *RaftInstance) IssueProposal(p Proposal) {
+	if err := rc.proposePipeline.ForceAppend(p); nil != err {
+		p.OnError(err)
+	}
 }
 
-func (rc *RaftInstance) IssueConfChange(p ProposalConfChange) error {
-	return rc.confChangeC.ForceAppend(p)
+func (rc *RaftInstance) IssueConfChange(p ProposalConfChange) {
+	rc.proposeConfChange(p)
 }
 
 func (rc *RaftInstance) raftStatus() raft.Status {
@@ -845,10 +847,6 @@ func NewInstance(nodeID uint16, shard uint16, mutilRaft *MutilRaft, commitC Appl
 			l:    list.New(),
 			dict: map[uint64]*raftTask{},
 		},
-		confChangeMgr: raftTaskMgr{
-			l:    list.New(),
-			dict: map[uint64]*raftTask{},
-		},
 		linearizableReadMgr: raftTaskMgr{
 			l:    list.New(),
 			dict: map[uint64]*raftTask{},
@@ -856,9 +854,10 @@ func NewInstance(nodeID uint16, shard uint16, mutilRaft *MutilRaft, commitC Appl
 		mutilRaft:       mutilRaft,
 		nodeID:          nodeID,
 		shard:           shard,
-		confChangeC:     queue.NewArrayQueue(),
 		proposePipeline: queue.NewArrayQueue(10000),
 		readPipeline:    queue.NewArrayQueue(10000),
+		w:               wait.New(),
+		reqIDGen:        idutil.NewGenerator(nodeID, time.Now()),
 	}
 
 	rloger := raftLogger{

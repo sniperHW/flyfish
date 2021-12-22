@@ -331,25 +331,24 @@ func (c *MemberShip) ValidateConfigurationChange(cc *ConfChangeContext) error {
 		if members[id] == nil {
 			return ErrIDNotFound
 		}
-
-	case raftpb.ConfChangeUpdateNode:
-		if members[id] == nil {
-			return ErrIDNotFound
+	/*case raftpb.ConfChangeUpdateNode:
+	if members[id] == nil {
+		return ErrIDNotFound
+	}
+	urls := make(map[string]bool)
+	for _, m := range members {
+		if m.ID == id {
+			continue
 		}
-		urls := make(map[string]bool)
-		for _, m := range members {
-			if m.ID == id {
-				continue
-			}
-			for _, u := range m.PeerURLs {
-				urls[u] = true
-			}
+		for _, u := range m.PeerURLs {
+			urls[u] = true
 		}
+	}
 
-		if urls[cc.Url] {
-			return ErrPeerURLexists
-		}
-
+	if urls[cc.Url] {
+		return ErrPeerURLexists
+	}
+	*/
 	default:
 		c.lg.Panic("unknown ConfChange type", zap.String("type", cc.ConfChangeType.String()))
 	}

@@ -233,10 +233,7 @@ func (s *kvstore) AddMember(id uint64, url string) error {
 		ch:             make(chan error, 1),
 	}
 
-	if err := s.rn.IssueConfChange(o); nil != err {
-		return err
-	}
-
+	s.rn.IssueConfChange(o)
 	return <-o.ch
 }
 
@@ -257,10 +254,7 @@ func (s *kvstore) AddLearner(id uint64, url string) error {
 		ch:             make(chan error, 1),
 	}
 
-	if err := s.rn.IssueConfChange(o); nil != err {
-		return err
-	}
-
+	s.rn.IssueConfChange(o)
 	return <-o.ch
 }
 
@@ -276,9 +270,7 @@ func (s *kvstore) PromoteLearner(id uint64) error {
 		isPromote:      true,
 	}
 
-	if err := s.rn.IssueConfChange(o); nil != err {
-		return err
-	}
+	s.rn.IssueConfChange(o)
 
 	return <-o.ch
 
@@ -295,10 +287,7 @@ func (s *kvstore) RemoveMember(id uint64) error {
 		ch:             make(chan error, 1),
 	}
 
-	if err := s.rn.IssueConfChange(o); nil != err {
-		return err
-	}
-
+	s.rn.IssueConfChange(o)
 	return <-o.ch
 }
 
@@ -579,7 +568,7 @@ func TestSingleNode(t *testing.T) {
 		assert.Nil(t, err)
 
 		err = node.store.AddLearner(newNodeID, "http://127.0.0.1:22381")
-		assert.Nil(t, err)
+		assert.Equal(t, membership.ErrIDExists, err)
 
 		for i := 0; i < 500; i++ {
 			node.store.Set(fmt.Sprintf("sniperHW:%d", i), fmt.Sprintf("sniperHW:%d", i))
