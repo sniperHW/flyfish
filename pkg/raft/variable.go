@@ -18,11 +18,12 @@ var (
 	ReadyPercent                     = 0.9
 	HealthInterval                   = 5 * time.Second
 	MaxRaftTaskCount                 = 1000
+	CheckQuorum               bool   = true
 )
 
 type ConfChange struct {
 	CCType  raftpb.ConfChangeType
-	NodeID  int
+	NodeID  RaftInstanceID
 	RaftUrl string
 }
 
@@ -31,7 +32,7 @@ type ReplayOK struct{}
 type RaftStopOK struct{}
 
 type LeaderChange struct {
-	Leader int
+	Leader RaftInstanceID
 }
 
 type TransportError error

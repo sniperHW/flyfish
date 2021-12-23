@@ -459,12 +459,9 @@ func (n *node) stepWait(ctx context.Context, m pb.Message) error {
 // Step advances the state machine using msgs. The ctx.Err() will be returned,
 // if any.
 func (n *node) stepWithWaitOption(ctx context.Context, m pb.Message, wait bool) error {
-	//fmt.Println("stepWithWaitOption")
 	if m.Type != pb.MsgProp {
 		select {
 		case n.recvc <- m:
-			//fmt.Println("stepWithWaitOption n.recvc <- m")
-			//CallStack(100)
 			return nil
 		case <-ctx.Done():
 			return ctx.Err()
@@ -472,6 +469,7 @@ func (n *node) stepWithWaitOption(ctx context.Context, m pb.Message, wait bool) 
 			return ErrStopped
 		}
 	}
+
 	ch := n.propc
 	pm := msgWithResult{m: m}
 	if wait {

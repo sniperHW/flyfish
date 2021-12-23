@@ -47,7 +47,7 @@ func (this *kvProposal) OnError(err error) {
 				this.kv.pendingCmd.popFront()
 			}
 		} else {
-			this.kv.process(nil)
+			this.kv.processPendingCmd()
 		}
 	})
 }
@@ -104,7 +104,7 @@ func (this *kvProposal) apply() {
 			this.kv.store.lru.update(&this.kv.lru)
 		}
 
-		this.kv.process(nil)
+		this.kv.processPendingCmd()
 
 	}
 }
@@ -119,7 +119,7 @@ func (this *kvLinearizableRead) OnError(err error) {
 	}
 
 	this.kv.store.mainQueue.AppendHighestPriotiryItem(func() {
-		this.kv.process(nil)
+		this.kv.processPendingCmd()
 	})
 }
 
@@ -130,7 +130,7 @@ func (this *kvLinearizableRead) ok() {
 		v.reply(nil, this.kv.fields, this.kv.version)
 	}
 
-	this.kv.process(nil)
+	this.kv.processPendingCmd()
 }
 
 type ProposalConfChange struct {

@@ -186,9 +186,11 @@ func (s *kvstore) Get(key string) (string, error) {
 		ch:  make(chan []interface{}, 1),
 	}
 	err := s.mainQueue.AppendOp(o)
+
 	if nil != err {
-		fmt.Println(err)
+		return "", err
 	}
+
 	r := <-o.ch
 	if r[1] == nil {
 		return r[0].(string), nil
@@ -207,7 +209,7 @@ func (s *kvstore) Set(key string, val string) error {
 	}
 	err := s.mainQueue.AppendOp(o)
 	if nil != err {
-		fmt.Println(err)
+		return err
 	}
 	r := <-o.ch
 	if nil == r {
@@ -215,6 +217,29 @@ func (s *kvstore) Set(key string, val string) error {
 	} else {
 		return r.(error)
 	}
+}
+
+func (s *kvstore) SetDirectly(key string, val string) error {
+
+	ch := make(chan error, 1)
+
+	p := &KVProposal{
+		v: kv{
+			Key: key,
+			Val: val,
+		},
+		ch: ch,
+	}
+
+	s.rn.propose([]Proposal{p})
+
+	r := <-ch
+	if nil == r {
+		return nil
+	} else {
+		return r.(error)
+	}
+
 }
 
 func (s *kvstore) AddMember(id uint64, url string) error {
@@ -736,7 +761,7 @@ func TestCluster(t *testing.T) {
 
 }
 
-func TestProposeTimeout(t *testing.T) {
+func TestDownToFollower(t *testing.T) {
 	//先删除所有kv文件
 	os.RemoveAll("./log/kv-1-1-wal")
 	os.RemoveAll("./log/kv-1-1-snap")
@@ -789,6 +814,86 @@ func TestProposeTimeout(t *testing.T) {
 
 	leader := getLeader()
 
+	go func() {
+		time.Sleep(time.Millisecond * 10)
+		if node1 != leader {
+			node1.stop()
+			node1 = nil
+		}
+
+		if node2 != leader {
+			node2.stop()
+			node2 = nil
+		}
+	}()
+
+	ret := leader.store.SetDirectly("sniperHW", "ok")
+
+	fmt.Println("set result", ret)
+
+	if node1 != nil {
+		node1.stop()
+	}
+
+	if node2 != nil {
+		node2.stop()
+	}
+}
+
+func TestOneNodeDownAndRestart(t *testing.T) {
+	//先删除所有kv文件
+	os.RemoveAll("./log/kv-1-1-wal")
+	os.RemoveAll("./log/kv-1-1-snap")
+	os.RemoveAll("./log/kv-2-1-wal")
+	os.RemoveAll("./log/kv-2-1-snap")
+	os.RemoveAll("./log/kv-3-1-wal")
+	os.RemoveAll("./log/kv-3-1-snap")
+	os.RemoveAll("./log/kv-4-1-wal")
+	os.RemoveAll("./log/kv-4-1-snap")
+
+	ProposalFlushInterval = 10
+	ProposalBatchCount = 1
+	ReadFlushInterval = 10
+	ReadBatchCount = 1
+	DefaultSnapshotCount = 100
+	SnapshotCatchUpEntriesN = 100
+	CheckQuorum = false
+
+	cluster := "1@http://127.0.0.1:22378@,2@http://127.0.0.1:22379@"
+
+	st1 := &testStorage{}
+
+	node1 := newKvNode(1, 1, cluster, st1)
+
+	becomeLeaderCh1 := make(chan *kvnode, 1)
+
+	node1.store.becomeLeader = func() {
+		becomeLeaderCh1 <- node1
+	}
+
+	st2 := &testStorage{}
+
+	node2 := newKvNode(2, 1, cluster, st2)
+
+	becomeLeaderCh2 := make(chan *kvnode, 1)
+
+	node2.store.becomeLeader = func() {
+		becomeLeaderCh2 <- node2
+	}
+
+	getLeader := func() *kvnode {
+		select {
+		case n := <-becomeLeaderCh1:
+			fmt.Println("node1 becomeLeader")
+			return n
+		case n := <-becomeLeaderCh2:
+			fmt.Println("node2 becomeLeader")
+			return n
+		}
+	}
+
+	leader := getLeader()
+
 	if node1 != leader {
 		node1.stop()
 		node1 = nil
@@ -800,23 +905,30 @@ func TestProposeTimeout(t *testing.T) {
 	}
 
 	go func() {
-		/*
-		 *  只剩下一个节点,propose无法提交
-		 *  当另一个节点恢复后，最终将成功提交
-		 */
-		fmt.Println("set", leader.store.Set("sniperHW", "ok"))
+		time.Sleep(time.Second * 10)
+		if node1 == nil {
+			node1 = newKvNode(1, 1, cluster, st1)
+		}
+
+		if node2 == nil {
+			node2 = newKvNode(2, 1, cluster, st2)
+		}
+
 	}()
 
-	if node1 == nil {
-		node1 = newKvNode(1, 1, cluster, st1)
+	//在另一个节点重启完成后成功
+	begin := time.Now()
+	ret := leader.store.Set("sniperHW", "ok")
+	fmt.Println("set result", ret, "use", time.Now().Sub(begin))
+
+	if node1 != nil {
+		node1.stop()
 	}
 
-	time.Sleep(time.Second * 5)
-
-	if node2 == nil {
-		node2 = newKvNode(2, 1, cluster, st2)
+	if node2 != nil {
+		node2.stop()
 	}
 
-	time.Sleep(time.Second * 5)
+	CheckQuorum = true
 
 }

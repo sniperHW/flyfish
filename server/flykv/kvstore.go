@@ -8,10 +8,12 @@ import (
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/pkg/etcd/etcdserver/api/snap"
+	//"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
+	//"github.com/sniperHW/flyfish/pkg/raft/membership"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
 	snet "github.com/sniperHW/flyfish/server/net"
@@ -19,7 +21,6 @@ import (
 	sslot "github.com/sniperHW/flyfish/server/slot"
 	"net"
 	"reflect"
-	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -112,8 +113,7 @@ type kvmgr struct {
 
 type kvstore struct {
 	kvmgr
-	raftMtx              sync.RWMutex
-	leader               raft.RaftInstanceID
+	leader               uint64
 	snapshotter          *snap.Snapshotter
 	rn                   *raft.RaftInstance
 	mainQueue            applicationQueue
@@ -140,15 +140,11 @@ func (s *kvstore) hasLease() bool {
 }
 
 func (s *kvstore) isLeader() bool {
-	s.raftMtx.RLock()
-	defer s.raftMtx.RUnlock()
-	return s.leader == s.rn.ID()
+	return raft.RaftInstanceID(atomic.LoadUint64(&s.leader)) == s.rn.ID()
 }
 
 func (s *kvstore) getLeaderNodeID() int {
-	s.raftMtx.RLock()
-	defer s.raftMtx.RUnlock()
-	return int(s.leader.GetNodeID())
+	return int(raft.RaftInstanceID(atomic.LoadUint64(&s.leader)).GetNodeID())
 }
 
 func (s *kvstore) loadSnapshot() (*raftpb.Snapshot, error) {
@@ -237,15 +233,11 @@ func (s *kvstore) newkv(slot int, groupID int, unikey string, key string, table 
 func (this *kvstore) tryKick(kv *kv) bool {
 	if !kv.kickable() {
 		return false
+	} else {
+		cmd, _ := this.makeKick(kv, time.Time{}, time.Time{}, nil, 0, nil)
+		kv.pushCmd(cmd)
+		return true
 	}
-
-	this.rn.IssueProposal(&kvProposal{
-		ptype: proposal_kick,
-		kv:    kv,
-	})
-
-	kv.kicking = true
-	return true
 }
 
 func (s *kvstore) checkLru(ch chan struct{}) {
@@ -255,7 +247,7 @@ func (s *kvstore) checkLru(ch chan struct{}) {
 		default:
 		}
 	}()
-	if s.ready && s.leader == s.rn.ID() && atomic.LoadInt32(&s.stoped) == 0 {
+	if s.ready && s.isLeader() && atomic.LoadInt32(&s.stoped) == 0 {
 		if s.kvcount > s.kvnode.config.MaxCachePerStore && s.lru.head.nnext != &s.lru.tail {
 			k := 0
 			cur := s.lru.tail.pprev
@@ -354,7 +346,7 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 		req.from.Send(&cs.RespMessage{
 			Cmd:   req.msg.Cmd,
 			Seqno: req.msg.Seqno,
-			Err:   errcode.New(errcode.Errcode_route_info_stale, ""),
+			Err:   errcode.New(errcode.Errcode_route_info_stale),
 		})
 		return
 	}
@@ -364,16 +356,16 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 		req.from.Send(&cs.RespMessage{
 			Cmd:   req.msg.Cmd,
 			Seqno: req.msg.Seqno,
-			Err:   errcode.New(errcode.Errcode_slot_transfering, ""),
+			Err:   errcode.New(errcode.Errcode_slot_transfering),
 		})
 		return
 	}
 
-	if s.leader != s.rn.ID() {
+	if !s.isLeader() {
 		req.from.Send(&cs.RespMessage{
 			Cmd:   req.msg.Cmd,
 			Seqno: req.msg.Seqno,
-			Err:   errcode.New(errcode.Errcode_not_leader, ""),
+			Err:   errcode.New(errcode.Errcode_not_leader),
 		})
 	} else if !s.ready || s.meta == nil {
 		req.from.Send(&cs.RespMessage{
@@ -430,7 +422,7 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 				Err:   err,
 			})
 		} else {
-			kv.process(cmd)
+			kv.pushCmd(cmd)
 		}
 	}
 }
@@ -476,7 +468,6 @@ func (s *kvstore) gotLease() {
 		s.needWriteBackAll = false
 		for _, v := range s.kv {
 			for _, vv := range v {
-				vv.kicking = false
 				err := vv.updateTask.issueFullDbWriteBack()
 				if nil != err {
 					break
@@ -584,19 +575,13 @@ func (s *kvstore) serve() {
 					}
 				}
 			case raft.LeaderChange:
-				becomeLeader := false
-				s.raftMtx.Lock()
-				s.leader = raft.RaftInstanceID(v.(raft.LeaderChange).Leader)
-				if s.leader == s.rn.ID() {
-					becomeLeader = true
-				}
-				s.raftMtx.Unlock()
-				if becomeLeader {
+				atomic.StoreUint64(&s.leader, uint64(v.(raft.LeaderChange).Leader))
+				if raft.RaftInstanceID(v.(raft.LeaderChange).Leader) == s.rn.ID() {
 					s.needWriteBackAll = true
 					s.lease.becomeLeader()
 				}
 			case *SlotTransferProposal:
-				if s.leader == s.rn.ID() {
+				if s.isLeader() {
 					s.processSlotTransferOut(v.(*SlotTransferProposal))
 				}
 			default:
@@ -606,59 +591,93 @@ func (s *kvstore) serve() {
 	}()
 }
 
-func (s *kvstore) onNotifyAddNode(from *net.UDPAddr, msg *sproto.NotifyAddNode, context int64) {
-	/*if s.leader == s.rn.ID() {
-		if s.rn.IsMember(uint64(msg.NodeID)) {
-			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
-				&sproto.NotifyAddNodeResp{
+/*
+func (s *kvstore) onNotifyAddLearner(from *net.UDPAddr, msg *sproto.NotifyAddLearner, context int64) {
+	if s.isLeader() {
+		reply := func(err error) {
+			if nil == err || err == membership.ErrIDExists {
+				s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context, &sproto.NotifyAddLearnerResp{
 					NodeID: msg.NodeID,
 					Store:  int32(s.shard),
 				}))
-		} else {
-			//发起proposal
+			} else {
+				switch err {
+				case membership.ErrPeerURLexists, membership.ErrTooManyLearners:
+					//pd做了控制，不应该出现这些错误
+					GetSugar().Errorf("NotifyAddLearner error node:%d store:%d err:%v", s.kvnode.id, s.shard, err)
+				default:
+					return
+				}
+			}
+		}
+
+		s.rn.IssueConfChange(&ProposalConfChange{
+			confChangeType: raftpb.ConfChangeAddLearnerNode,
+			url:            fmt.Sprintf("http://%s:%d", msg.Host, msg.RaftPort),
+			nodeID:         uint64(raft.MakeInstanceID(uint16(msg.NodeID), uint16(s.shard))),
+			reply:          reply,
+		})
+	}
+}
+
+func (s *kvstore) onNotifyPromoteLearner(from *net.UDPAddr, msg *sproto.NotifyPromoteLearner, context int64) {
+	if s.isLeader() {
+		reply := func(err error) {
+			if nil == err || err == membership.ErrMemberNotLearner {
+				s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context, &sproto.NotifyPromoteLearnerResp{
+					NodeID: msg.NodeID,
+					Store:  int32(s.shard),
+				}))
+			} else {
+				switch err {
+				case membership.ErrIDNotFound:
+					//pd做了控制，不应该出现这些错误
+					GetSugar().Errorf("NotifyPromoteLearner error node:%d store:%d err:%v", s.kvnode.id, s.shard, err)
+				default:
+					return
+				}
+			}
+		}
+
+		if err := s.rn.IsLearnerReady(uint64(raft.MakeInstanceID(uint16(msg.NodeID), uint16(s.shard)))); nil == err {
 			s.rn.IssueConfChange(&ProposalConfChange{
 				confChangeType: raftpb.ConfChangeAddNode,
-				url:            fmt.Sprintf("http://%s:%d", msg.Host, msg.RaftPort),
+				isPromote:      true,
 				nodeID:         uint64(raft.MakeInstanceID(uint16(msg.NodeID), uint16(s.shard))),
-				reply: func(err error) {
-					s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
-						&sproto.NotifyAddNodeResp{
-							NodeID: msg.NodeID,
-							Store:  int32(s.shard),
-						}))
-				},
+				reply:          reply,
 			})
+		} else if err == membership.ErrIDNotFound {
+			//pd做了控制，不应该出现这些错误
+			GetSugar().Errorf("NotifyPromoteLearner error node:%d store:%d err:%v", s.kvnode.id, s.shard, err)
 		}
-	}*/
+	}
 }
 
 func (s *kvstore) onNotifyRemNode(from *net.UDPAddr, msg *sproto.NotifyRemNode, context int64) {
-	/*if s.leader == s.rn.ID() {
-		if !s.rn.IsMember(uint64(msg.NodeID)) {
-			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
-				&sproto.NotifyRemNodeResp{
-					NodeID: int32(int(msg.NodeID)),
+	if s.isLeader() {
+		reply := func(err error) {
+			if nil == err || err == membership.ErrIDNotFound {
+				s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context, &sproto.NotifyRemNodeResp{
+					NodeID: msg.NodeID,
 					Store:  int32(s.shard),
 				}))
-		} else {
-			//发起proposal
+			}
+		}
+
+		if nil == s.rn.MayRemoveMember(types.ID(raft.MakeInstanceID(uint16(msg.NodeID), uint16(s.shard)))) {
 			s.rn.IssueConfChange(&ProposalConfChange{
 				confChangeType: raftpb.ConfChangeRemoveNode,
 				nodeID:         uint64(raft.MakeInstanceID(uint16(msg.NodeID), uint16(s.shard))),
-				reply: func(err error) {
-					s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
-						&sproto.NotifyRemNodeResp{
-							NodeID: msg.NodeID,
-							Store:  int32(s.shard),
-						}))
-				},
+				reply:          reply,
 			})
 		}
-	}*/
+
+	}
 }
+*/
 
 func (s *kvstore) onNotifySlotTransIn(from *net.UDPAddr, msg *sproto.NotifySlotTransIn, context int64) {
-	if s.leader == s.rn.ID() {
+	if s.isLeader() {
 		slot := int(msg.Slot)
 		if s.slots.Test(slot) {
 			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
@@ -695,7 +714,7 @@ func (s *kvstore) processSlotTransferOut(p *SlotTransferProposal) {
 }
 
 func (s *kvstore) onNotifySlotTransOut(from *net.UDPAddr, msg *sproto.NotifySlotTransOut, context int64) {
-	if s.leader == s.rn.ID() {
+	if s.isLeader() {
 		slot := int(msg.Slot)
 		if !s.slots.Test(slot) {
 			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
@@ -732,7 +751,7 @@ func (s *kvstore) onNotifySlotTransOut(from *net.UDPAddr, msg *sproto.NotifySlot
 }
 
 func (s *kvstore) onNotifyUpdateMeta(from *net.UDPAddr, msg *sproto.NotifyUpdateMeta, context int64) {
-	if s.leader == s.rn.ID() {
+	if s.isLeader() {
 		if s.meta.GetVersion() == msg.Version {
 			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
 				&sproto.NotifyUpdateMetaResp{
@@ -769,10 +788,12 @@ func (s *kvstore) onNotifyUpdateMeta(from *net.UDPAddr, msg *sproto.NotifyUpdate
 func (s *kvstore) onUdpMsg(from *net.UDPAddr, m *snet.Message) {
 	if s.ready && atomic.LoadInt32(&s.stoped) == 0 {
 		switch m.Msg.(type) {
-		case *sproto.NotifyAddNode:
-			s.onNotifyAddNode(from, m.Msg.(*sproto.NotifyAddNode), m.Context)
-		case *sproto.NotifyRemNode:
-			s.onNotifyRemNode(from, m.Msg.(*sproto.NotifyRemNode), m.Context)
+		//case *sproto.NotifyAddLearner:
+		//	s.onNotifyAddLearner(from, m.Msg.(*sproto.NotifyAddLearner), m.Context)
+		//case *sproto.NotifyPromoteLearner:
+		//	s.onNotifyPromoteLearner(from, m.Msg.(*sproto.NotifyPromoteLearner), m.Context)
+		//case *sproto.NotifyRemNode:
+		//	s.onNotifyRemNode(from, m.Msg.(*sproto.NotifyRemNode), m.Context)
 		case *sproto.NotifySlotTransIn:
 			s.onNotifySlotTransIn(from, m.Msg.(*sproto.NotifySlotTransIn), m.Context)
 		case *sproto.NotifySlotTransOut:

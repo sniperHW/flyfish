@@ -27,12 +27,12 @@ import (
  *  这些预定义的Error类型，可以从其名字推出Desc,因此Desc全部设置为空字符串，以节省网络传输字节数
  */
 var (
-	Err_version_mismatch errcode.Error = errcode.New(errcode.Errcode_version_mismatch, "")
-	Err_record_exist     errcode.Error = errcode.New(errcode.Errcode_record_exist, "")
-	Err_record_notexist  errcode.Error = errcode.New(errcode.Errcode_record_notexist, "")
-	Err_record_unchange  errcode.Error = errcode.New(errcode.Errcode_record_unchange, "")
-	Err_cas_not_equal    errcode.Error = errcode.New(errcode.Errcode_cas_not_equal, "")
-	Err_timeout          errcode.Error = errcode.New(errcode.Errcode_timeout, "")
+	Err_version_mismatch errcode.Error = errcode.New(errcode.Errcode_version_mismatch)
+	Err_record_exist     errcode.Error = errcode.New(errcode.Errcode_record_exist)
+	Err_record_notexist  errcode.Error = errcode.New(errcode.Errcode_record_notexist)
+	Err_record_unchange  errcode.Error = errcode.New(errcode.Errcode_record_unchange)
+	Err_cas_not_equal    errcode.Error = errcode.New(errcode.Errcode_cas_not_equal)
+	Err_timeout          errcode.Error = errcode.New(errcode.Errcode_timeout)
 )
 
 type kvnode struct {

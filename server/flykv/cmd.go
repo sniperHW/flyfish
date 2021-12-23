@@ -65,17 +65,23 @@ func (this *cmdBase) getSeqno() int64 {
 }
 
 func (this *cmdBase) isTimeout() bool {
-	return time.Now().After(this.processDeadline)
+	if this.processDeadline.IsZero() {
+		return false
+	} else {
+		return time.Now().After(this.processDeadline)
+	}
 }
 
 func (this *cmdBase) reply(err errcode.Error, fields map[string]*flyproto.Field, version int64) {
 	if atomic.CompareAndSwapInt32(&this.replied, 0, 1) {
 		atomic.AddInt32(this.wait4ReplyCount, -1)
-		if !time.Now().After(this.respDeadline) {
-			resp := this.fnMakeResponse(err, fields, version)
-			e := this.peer.Send(resp)
-			if nil != e {
-				GetSugar().Errorf("send resp error:%v", e)
+		if nil != this.peer {
+			if !time.Now().After(this.respDeadline) {
+				resp := this.fnMakeResponse(err, fields, version)
+				e := this.peer.Send(resp)
+				if nil != e {
+					GetSugar().Errorf("send resp error:%v", e)
+				}
 			}
 		}
 	}

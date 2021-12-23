@@ -69,7 +69,7 @@ func (this *raftTaskMgr) addToDict(t *raftTask) error {
 	this.Lock()
 	defer this.Unlock()
 	if len(this.dict) > MaxRaftTaskCount {
-		return ErrRaftBusy
+		return ErrTooManyRequests
 	} else {
 		this.dict[t.id] = t
 		GetSugar().Debugf("raftTaskMgr add %d", t.id)
@@ -81,7 +81,7 @@ func (this *raftTaskMgr) addToDictAndList(t *raftTask) error {
 	this.Lock()
 	defer this.Unlock()
 	if len(this.dict) > MaxRaftTaskCount {
-		return ErrRaftBusy
+		return ErrTooManyRequests
 	} else {
 		t.listE = this.l.PushBack(t)
 		this.dict[t.id] = t
@@ -116,11 +116,24 @@ func (this *raftTaskMgr) getAndRemoveByID(id uint64) *raftTask {
 	}
 }
 
-func (this *raftTaskMgr) onLeaderDemote() {
+func (this *raftTaskMgr) onLeaderDownToFollower() {
 	this.Lock()
 	this.l = list.New()
+	dict := this.dict
 	this.dict = map[uint64]*raftTask{}
 	this.Unlock()
+	for _, v := range dict {
+		switch v.other.(type) {
+		case []LinearizableRead:
+			for _, vv := range v.other.([]LinearizableRead) {
+				vv.OnError(ErrLeaderDownToFollower)
+			}
+		case []Proposal:
+			for _, vv := range v.other.([]Proposal) {
+				vv.OnError(ErrLeaderDownToFollower)
+			}
+		}
+	}
 }
 
 type RaftInstanceID uint32
@@ -367,7 +380,7 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 
 				rc.commitC.AppendHighestPriotiryItem(ConfChange{
 					CCType:  cc.Type,
-					NodeID:  int(cc.NodeID),
+					NodeID:  RaftInstanceID(cc.NodeID),
 					RaftUrl: pc.Url,
 				})
 
@@ -456,9 +469,6 @@ func (rc *RaftInstance) serveChannels() {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
-	rc.waitStop.Add(2)
-
-	//rc.runConfChange()
 	rc.runProposePipeline()
 	rc.runReadPipeline()
 
@@ -482,15 +492,16 @@ func (rc *RaftInstance) serveChannels() {
 					rc.softState = *rd.SoftState
 					if oldSoftState.RaftState == raft.StateLeader {
 						if rc.softState.RaftState != raft.StateLeader {
-							rc.proposalMgr.onLeaderDemote()
-							rc.linearizableReadMgr.onLeaderDemote()
+							GetSugar().Infof("(%s) down to follower", rc.id.String())
+							rc.proposalMgr.onLeaderDownToFollower()
+							rc.linearizableReadMgr.onLeaderDownToFollower()
 						}
 					} else if rc.softState.RaftState == raft.StateLeader {
-						GetSugar().Infof("becomeLeader id:%s", rc.id.String())
+						GetSugar().Infof("(%s) becomeLeader", rc.id.String())
 					}
 
 					if oldSoftState.Lead != rc.softState.Lead {
-						rc.commitC.AppendHighestPriotiryItem(LeaderChange{Leader: int(rc.softState.Lead)})
+						rc.commitC.AppendHighestPriotiryItem(LeaderChange{Leader: RaftInstanceID(rc.softState.Lead)})
 					}
 				}
 			}
@@ -794,9 +805,12 @@ func (rc *RaftInstance) IsLearnerReady(id uint64) error {
 		if float64(learnerMatch) < float64(leaderMatch)*ReadyPercent {
 			return ErrLearnerNotReady
 		}
-	}
 
-	return nil
+		return nil
+
+	} else {
+		return membership.ErrIDNotFound
+	}
 }
 
 type Member struct {
@@ -926,7 +940,7 @@ func NewInstance(nodeID uint16, shard uint16, mutilRaft *MutilRaft, commitC Appl
 		MaxUncommittedEntriesSize: 1 << 30,
 		Logger:                    rloger,
 		DisableProposalForwarding: true, //禁止非leader转发proposal
-		CheckQuorum:               true,
+		CheckQuorum:               CheckQuorum,
 		PreVote:                   true,
 	}
 

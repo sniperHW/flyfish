@@ -131,7 +131,23 @@ func (this *kv) kickable() bool {
 	}
 }
 
-func (this *kv) process(cmd cmdI) {
+func (this *kv) pushCmd(cmd cmdI) {
+	this.processCmd(cmd)
+}
+
+func (this *kv) processPendingCmd() {
+	if !this.store.isLeader() {
+		this.asynTaskCount--
+		for c := this.pendingCmd.front(); nil != c; c = this.pendingCmd.front() {
+			this.pendingCmd.popFront()
+			c.reply(errcode.New(errcode.Errcode_not_leader), nil, 0)
+		}
+	} else {
+		this.processCmd(nil)
+	}
+}
+
+func (this *kv) processCmd(cmd cmdI) {
 	if nil != cmd {
 		if this.state == kv_new {
 			//request load kv from database

@@ -66,9 +66,12 @@ func GetErrorDesc(e Error) string {
 	}
 }
 
-func New(code int16, desc string) Error {
-	return &error{
+func New(code int16, desc ...string) Error {
+	err := &error{
 		Code: code,
-		Desc: desc,
 	}
+	if len(desc) > 0 {
+		err.Desc = desc[0]
+	}
+	return err
 }

@@ -3,9 +3,8 @@ package raft
 import (
 	"context"
 	"encoding/binary"
-	"time"
-
 	"github.com/sniperHW/flyfish/pkg/etcd/raft"
+	"time"
 )
 
 //一致性读请求
@@ -66,10 +65,10 @@ func (rc *RaftInstance) linearizableRead(batchRead []LinearizableRead) {
 			v.OnError(err)
 		}
 	}
-
 }
 
 func (rc *RaftInstance) runReadPipeline() {
+	rc.waitStop.Add(1)
 
 	sleepTime := time.Duration(ProposalFlushInterval)
 

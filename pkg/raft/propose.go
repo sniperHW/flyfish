@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/sniperHW/flyfish/pkg/buffer"
+	"github.com/sniperHW/flyfish/pkg/etcd/raft"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
 	"github.com/sniperHW/flyfish/pkg/raft/membership"
 	"sync"
@@ -84,7 +85,12 @@ func (rc *RaftInstance) proposeConfChange(proposal ProposalConfChange) {
 		select {
 		case x := <-ch:
 			if nil != x {
-				err = x.(error)
+				GetSugar().Errorf("ProposeConfChange Error %v", x.(error))
+				if x.(error) == raft.ErrProposalDropped {
+					err = ErrProposalDropped
+				} else {
+					err = x.(error)
+				}
 			}
 		case <-ctx.Done():
 			err = ErrTimeout
@@ -142,6 +148,9 @@ func (rc *RaftInstance) propose(batchProposal []Proposal) {
 		if err = rc.node.Propose(context.TODO(), b); nil != err {
 			GetSugar().Errorf("proposalError %v", err)
 			rc.proposalMgr.remove(t)
+			if err == raft.ErrProposalDropped {
+				err = ErrProposalDropped
+			}
 		}
 	}
 
@@ -156,6 +165,7 @@ func (rc *RaftInstance) propose(batchProposal []Proposal) {
  * 等待来自应用层的proposal(对应一个操作),按策略将多个应用层proposal合并成单个raft proposal
  */
 func (rc *RaftInstance) runProposePipeline() {
+	rc.waitStop.Add(1)
 
 	sleepTime := time.Duration(ProposalFlushInterval)
 
