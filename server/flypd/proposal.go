@@ -24,7 +24,7 @@ const (
 
 type proposalBase struct {
 	pd    *pd
-	reply func(...error)
+	reply func(error)
 }
 
 type applyable interface {
@@ -55,14 +55,14 @@ func (p *pd) replayProposal(proposal []byte) error {
 	switch int(proposalType) {
 	case proposalInstallDeployment:
 		return p.replayInstallDeployment(&reader)
-	case proposalAddNode:
-		return p.replayAddNode(&reader)
-	case proposalNotifyAddNodeResp:
-		return p.replayNotifyAddNodeResp(&reader)
-	case proposalRemNode:
-		return p.replayRemNode(&reader)
-	case proposalNotifyRemNodeResp:
-		return p.replayNotifyRemNodeResp(&reader)
+	//case proposalAddNode:
+	//	return p.replayAddNode(&reader)
+	//case proposalNotifyAddNodeResp:
+	//	return p.replayNotifyAddNodeResp(&reader)
+	//case proposalRemNode:
+	//	return p.replayRemNode(&reader)
+	//case proposalNotifyRemNodeResp:
+	//	return p.replayNotifyRemNodeResp(&reader)
 	case proposalBeginSlotTransfer:
 		return p.replayBeginSlotTransfer(&reader)
 	case proposalNotifySlotTransOutResp:

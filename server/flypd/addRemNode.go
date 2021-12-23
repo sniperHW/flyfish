@@ -2,18 +2,17 @@ package flypd
 
 import (
 	"encoding/json"
-	"fmt"
+	//"fmt"
 	"github.com/sniperHW/flyfish/pkg/buffer"
-	snet "github.com/sniperHW/flyfish/server/net"
+	//snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
-	"net"
-	"time"
+	//"net"
+	//"time"
 )
 
 type ProposalAddNode struct {
 	*proposalBase
-	msg        *sproto.AddNode
-	sendNotify bool
+	msg *sproto.AddNode
 }
 
 func (p *ProposalAddNode) Serilize(b []byte) []byte {
@@ -26,28 +25,25 @@ func (p *ProposalAddNode) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalAddNode) apply() {
-	an := &AddingNode{
-		KvNodeJson: KvNodeJson{
-			NodeID:      int(p.msg.NodeID),
-			Host:        p.msg.Host,
-			ServicePort: int(p.msg.ServicePort),
-			RaftPort:    int(p.msg.RaftPort),
-		},
-		SetID: int(p.msg.SetID),
-	}
+	//an := &AddingNode{
+	//	KvNodeJson: KvNodeJson{
+	//		NodeID:      int(p.msg.NodeID),
+	//		Host:        p.msg.Host,
+	//		ServicePort: int(p.msg.ServicePort),
+	//		RaftPort:    int(p.msg.RaftPort),
+	//	},
+	//	SetID: int(p.msg.SetID),
+	//}
 
-	p.pd.pState.AddingNode[int(p.msg.NodeID)] = an
-	if p.sendNotify {
-		//向set内节点广播通告
-		p.pd.sendNotifyAddNode(an)
-		//启动定时器
-		an.timer = time.AfterFunc(time.Second*3, func() {
-			p.pd.mainque.AppendHighestPriotiryItem(an)
-		})
-	}
+	//p.pd.pState.AddingNode[int(p.msg.NodeID)] = an
 
+	s := p.pd.pState.deployment.sets[int(p.msg.SetID)]
+	if _, ok := s.nodes[int(p.msg.NodeID)]; !ok {
+		n := &kvnode{}
+		s.nodes[int(p.msg.NodeID)] = n
+	}
 	if nil != p.reply {
-		p.reply()
+		p.reply(nil)
 	}
 }
 
@@ -67,6 +63,7 @@ func (p *pd) replayAddNode(reader *buffer.BufferReader) error {
 	return nil
 }
 
+/*
 type ProposalNotifyAddNodeResp struct {
 	*proposalBase
 	msg *sproto.NotifyAddNodeResp
@@ -311,3 +308,5 @@ func (p *pd) sendNotifyAddNode(an *AddingNode) {
 		}
 	}
 }
+
+*/

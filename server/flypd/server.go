@@ -46,7 +46,11 @@ func (p *pd) onKvnodeBoot(from *net.UDPAddr, m *snet.Message) {
 
 	raftCluster := []string{}
 	for _, v := range node.set.nodes {
-		raftCluster = append(raftCluster, fmt.Sprintf("%d@http://%s:%d", v.id, v.host, v.raftPort))
+		role := "member"
+		if len(v.learnerStore) > 0 {
+			role = "learner"
+		}
+		raftCluster = append(raftCluster, fmt.Sprintf("%d@http://%s:%d@%s", v.id, v.host, v.raftPort, role))
 	}
 
 	strRaftCluster := strings.Join(raftCluster, ",")
@@ -133,9 +137,9 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.RemSet{}, p.onRemSet)
 	p.registerMsgHandler(&sproto.SetMarkClear{}, p.onSetMarkClear)
 	p.registerMsgHandler(&sproto.AddNode{}, p.onAddNode)
-	p.registerMsgHandler(&sproto.NotifyAddNodeResp{}, p.onNotifyAddNodeResp)
-	p.registerMsgHandler(&sproto.RemNode{}, p.onRemNode)
-	p.registerMsgHandler(&sproto.NotifyRemNodeResp{}, p.onNotifyRemNodeResp)
+	//p.registerMsgHandler(&sproto.NotifyAddLearnerNodeResp{}, p.onNotifyAddLearnerNodeResp)
+	//p.registerMsgHandler(&sproto.RemNode{}, p.onRemNode)
+	//p.registerMsgHandler(&sproto.NotifyRemNodeResp{}, p.onNotifyRemNodeResp)
 	p.registerMsgHandler(&sproto.NotifySlotTransOutResp{}, p.onNotifySlotTransOutResp)
 	p.registerMsgHandler(&sproto.NotifySlotTransInResp{}, p.onNotifySlotTransInResp)
 	p.registerMsgHandler(&sproto.KvnodeBoot{}, p.onKvnodeBoot)

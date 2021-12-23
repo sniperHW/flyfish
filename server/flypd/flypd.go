@@ -10,12 +10,11 @@ import (
 	flynet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
+	"github.com/sniperHW/flyfish/pkg/raft/membership"
 	snet "github.com/sniperHW/flyfish/server/net"
 	"github.com/sniperHW/flyfish/server/slot"
 	"net"
 	"reflect"
-	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -25,21 +24,19 @@ type applicationQueue struct {
 	q *queue.PriorityQueue
 }
 
-type AddingNode struct {
+/*type AddingNode struct {
 	KvNodeJson
-	SetID    int
-	OkStores []int
-	context  int64
-	timer    *time.Timer
+	SetID   int
+	context int64
+	timer   *time.Timer
 }
 
 type RemovingNode struct {
-	NodeID   int
-	SetID    int
-	OkStores []int
-	context  int64
-	timer    *time.Timer
-}
+	NodeID  int
+	SetID   int
+	context int64
+	timer   *time.Timer
+}*/
 
 type flygate struct {
 	service       string
@@ -125,9 +122,9 @@ func (f *flygateMgr) onHeartBeat(gateService string, token string, msgPerSecond 
 }
 
 type persistenceState struct {
-	Deployment      DeploymentJson
-	AddingNode      map[int]*AddingNode
-	RemovingNode    map[int]*RemovingNode
+	Deployment DeploymentJson
+	//AddingNode      map[int]*AddingNode
+	//RemovingNode    map[int]*RemovingNode
 	SlotTransfer    map[int]*TransSlotTransfer
 	Meta            Meta
 	MetaTransaction *MetaTransaction
@@ -163,9 +160,8 @@ func (p *persistenceState) loadFromJson(j []byte) error {
 }
 
 type pd struct {
-	id              int
-	leader          int
-	rn              *raft.RaftNode
+	leader          raft.RaftInstanceID
+	rn              *raft.RaftInstance
 	mutilRaft       *raft.MutilRaft
 	mainque         applicationQueue
 	udp             *flynet.Udp
@@ -175,33 +171,30 @@ type pd struct {
 	wait            sync.WaitGroup
 	ready           bool
 	flygateMgr      flygateMgr
-	raftCluster     string
 	config          *Config
 	udpService      string
 	onBalanceFinish func()
 	pState          persistenceState
 }
 
-func NewPd(id int, config *Config, udpService string, cluster string) *pd {
+func NewPd(id uint16, config *Config, udpService string, clusterStr string, st membership.Storage) (*pd, error) {
 
 	mainQueue := applicationQueue{
 		q: queue.NewPriorityQueue(2, 10000),
 	}
 
 	p := &pd{
-		id:         id,
 		mainque:    mainQueue,
 		msgHandler: map[reflect.Type]func(*net.UDPAddr, *snet.Message){},
 		flygateMgr: flygateMgr{
 			flygateMap: map[string]*flygate{},
 			mainque:    mainQueue,
 		},
-		raftCluster: cluster,
-		config:      config,
-		udpService:  udpService,
+		config:     config,
+		udpService: udpService,
 		pState: persistenceState{
-			AddingNode:   map[int]*AddingNode{},
-			RemovingNode: map[int]*RemovingNode{},
+			//AddingNode:   map[int]*AddingNode{},
+			//RemovingNode: map[int]*RemovingNode{},
 			SlotTransfer: map[int]*TransSlotTransfer{},
 			markClearSet: map[int]*set{},
 		},
@@ -209,7 +202,39 @@ func NewPd(id int, config *Config, udpService string, cluster string) *pd {
 
 	p.initMsgHandler()
 
-	return p
+	peers, err := raft.SplitPeers(clusterStr)
+
+	if nil != err {
+		return nil, err
+	}
+
+	self, ok := peers[id]
+
+	if !ok {
+		return nil, errors.New("cluster not contain self")
+	}
+
+	p.mutilRaft = raft.NewMutilRaft()
+
+	p.rn, err = raft.NewInstance(id, 0, p.mutilRaft, p.mainque, peers, st, p.config.RaftLogDir, p.config.RaftLogPrefix)
+
+	if nil != err {
+		return nil, err
+	}
+
+	if err = p.startUdpService(); nil != err {
+		p.rn.Stop()
+		return nil, err
+	}
+
+	GetSugar().Infof("mutilRaft serve on:%s", self.URL)
+
+	go p.mutilRaft.Serve([]string{self.URL})
+
+	p.wait.Add(1)
+	go p.serve()
+
+	return p, nil
 }
 
 func (q applicationQueue) AppendHighestPriotiryItem(m interface{}) {
@@ -319,57 +344,12 @@ func (p *pd) slotBalance() {
 
 }
 
-func (p *pd) Start() error {
-	clusterArray := strings.Split(p.raftCluster, ",")
-
-	peers := map[int]string{}
-
-	var selfUrl string
-
-	for _, v := range clusterArray {
-		t := strings.Split(v, "@")
-		if len(t) != 2 {
-			panic("invaild peer")
-		}
-		i, err := strconv.Atoi(t[0])
-		if nil != err {
-			panic(err)
-		}
-		peers[i] = t[1]
-		if i == p.id {
-			selfUrl = t[1]
-		}
-	}
-
-	if selfUrl == "" {
-		return errors.New("cluster not contain self")
-	}
-
-	p.mutilRaft = raft.NewMutilRaft()
-
-	p.rn = raft.NewRaftNode(1, p.mutilRaft, p.mainque, (p.id<<16)+1, peers, false, p.config.RaftLogDir, p.config.RaftLogPrefix)
-
-	if err := p.startUdpService(); nil != err {
-		p.rn.Stop()
-		return err
-	}
-
-	GetSugar().Infof("mutilRaft serve on:%s", selfUrl)
-
-	go p.mutilRaft.Serve(selfUrl)
-
-	p.wait.Add(1)
-	go p.serve()
-
-	return nil
-}
-
 func (p *pd) isLeader() bool {
 	return p.leader == p.rn.ID()
 }
 
-func (p *pd) issueProposal(proposal raft.Proposal) error {
-	return p.rn.IssueProposal(proposal)
+func (p *pd) issueProposal(proposal raft.Proposal) {
+	p.rn.IssueProposal(proposal)
 }
 
 func (p *pd) startUdpService() error {
@@ -405,7 +385,7 @@ func (p *pd) startUdpService() error {
 }
 
 func (p *pd) onBecomeLeader() {
-	if nil != p.pState.deployment {
+	/*if nil != p.pState.deployment {
 		//重置slotBalance相关的临时数据
 		for _, v := range p.pState.deployment.sets {
 			v.SlotOutCount = 0
@@ -455,21 +435,11 @@ func (p *pd) onBecomeLeader() {
 		} else {
 			p.pState.MetaTransaction.notifyStore(p)
 		}
-	}
+	}*/
 
 }
 
-func (p *pd) onLeaderDemote() {
-	for _, v := range p.pState.AddingNode {
-		v.timer.Stop()
-		v.timer = nil
-	}
-
-	for _, v := range p.pState.RemovingNode {
-		v.timer.Stop()
-		v.timer = nil
-	}
-
+func (p *pd) onLeaderDownToFollower() {
 	for _, v := range p.pState.SlotTransfer {
 		v.timer.Stop()
 		v.timer = nil
@@ -511,6 +481,7 @@ func (p *pd) processCommited(commited raft.Committed) {
 	}
 }
 
+/*
 func (p *pd) onAddNodeTimeout(an *AddingNode) {
 	ann := p.pState.AddingNode[an.NodeID]
 	if ann == an {
@@ -530,6 +501,7 @@ func (p *pd) onRemNodeTimeout(rn *RemovingNode) {
 		})
 	}
 }
+*/
 
 func (p *pd) serve() {
 
@@ -553,7 +525,7 @@ func (p *pd) serve() {
 			case raft.ProposalConfChange:
 			case raft.ConfChange:
 				c := v.(raft.ConfChange)
-				if c.CCType == raftpb.ConfChangeRemoveNode && c.NodeID == p.id {
+				if c.CCType == raftpb.ConfChangeRemoveNode && c.NodeID == p.rn.ID() {
 					p.rn.Stop()
 				}
 			case raft.ReplayOK:
@@ -575,10 +547,10 @@ func (p *pd) serve() {
 				}
 
 				if oldLeader == p.rn.ID() && !p.isLeader() {
-					p.onLeaderDemote()
+					p.onLeaderDownToFollower()
 				}
 
-			case *AddingNode:
+			/*case *AddingNode:
 				if p.isLeader() {
 					p.onAddNodeTimeout(v.(*AddingNode))
 				}
@@ -586,6 +558,7 @@ func (p *pd) serve() {
 				if p.isLeader() {
 					p.onRemNodeTimeout(v.(*RemovingNode))
 				}
+			*/
 			case *TransSlotTransfer:
 				if p.isLeader() {
 					if _, ok := p.pState.SlotTransfer[v.(*TransSlotTransfer).Slot]; ok {

@@ -80,7 +80,7 @@ func (p *ProposalBeginSlotTransfer) apply() {
 	}
 
 	if nil != p.reply {
-		p.reply()
+		p.reply(nil)
 	}
 }
 
@@ -177,11 +177,11 @@ func (p *pd) replayNotifySlotTransInResp(reader *buffer.BufferReader) error {
 	return nil
 }
 
-func (p *pd) beginSlotTransfer(slot int, setOut int, storeOut int, setIn int, storeIn int) error {
+func (p *pd) beginSlotTransfer(slot int, setOut int, storeOut int, setIn int, storeIn int) {
 
 	GetSugar().Infof("beginSlotTransfer slot:%d setOut:%d setIn:%d storeOut:%d storeIn:%d", slot, setOut, setIn, storeOut, storeIn)
 
-	return p.issueProposal(&ProposalBeginSlotTransfer{
+	p.issueProposal(&ProposalBeginSlotTransfer{
 		trans: &TransSlotTransfer{
 			Slot:             slot,
 			SetOut:           setOut,

@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"github.com/sniperHW/flyfish/server/slot"
 	"net"
+	"reflect"
 	"sort"
 )
 
@@ -18,15 +20,17 @@ var KvNodePerSet int = 1         //每个set含有多少kvnode
 var CurrentTransferCount int = 6 //最大并发transfer的slot数量
 
 type KvNodeJson struct {
-	NodeID      int
-	Host        string
-	ServicePort int
-	RaftPort    int
+	NodeID       int
+	Host         string
+	ServicePort  int
+	RaftPort     int
+	LearnerStore []int
 }
 
 type StoreJson struct {
-	StoreID int
-	Slots   []byte
+	StoreID   int
+	Slots     []byte
+	IsLearner bool
 }
 
 type SetJson struct {
@@ -43,11 +47,12 @@ type DeploymentJson struct {
 }
 
 type kvnode struct {
-	id          int
-	host        string
-	servicePort int
-	raftPort    int
-	set         *set
+	id           int
+	host         string
+	servicePort  int
+	raftPort     int
+	set          *set
+	learnerStore map[int]struct{}
 }
 
 type store struct {
@@ -165,12 +170,16 @@ func (d deployment) toDeploymentJson() DeploymentJson {
 		}
 
 		for _, vv := range v.nodes {
-			setJson.KvNodes = append(setJson.KvNodes, KvNodeJson{
+			nj := KvNodeJson{
 				NodeID:      vv.id,
 				Host:        vv.host,
 				ServicePort: vv.servicePort,
 				RaftPort:    vv.raftPort,
-			})
+			}
+
+			for k, _ := range vv.learnerStore {
+				nj.LearnerStore = append(nj.LearnerStore, k)
+			}
 		}
 
 		for _, vv := range v.stores {
@@ -206,12 +215,18 @@ func (d *deployment) loadFromDeploymentJson(deploymentJson *DeploymentJson) erro
 
 		for _, vv := range v.KvNodes {
 			n := &kvnode{
-				id:          vv.NodeID,
-				host:        vv.Host,
-				servicePort: vv.ServicePort,
-				raftPort:    vv.RaftPort,
-				set:         s,
+				id:           vv.NodeID,
+				host:         vv.Host,
+				servicePort:  vv.ServicePort,
+				raftPort:     vv.RaftPort,
+				set:          s,
+				learnerStore: map[int]struct{}{},
 			}
+
+			for _, v := range vv.LearnerStore {
+				n.learnerStore[v] = struct{}{}
+			}
+
 			s.nodes[vv.NodeID] = n
 		}
 
@@ -348,7 +363,7 @@ func (p *ProposalInstallDeployment) Serilize(b []byte) []byte {
 
 func (p *ProposalInstallDeployment) apply() {
 	p.pd.pState.deployment = p.d
-	p.reply()
+	p.reply(nil)
 }
 
 func (p *pd) replayInstallDeployment(reader *buffer.BufferReader) error {
@@ -438,7 +453,7 @@ func (p *ProposalAddSet) doApply() {
 
 func (p *ProposalAddSet) apply() {
 	p.doApply()
-	p.reply()
+	p.reply(nil)
 	//添加新set的操作通过，开始执行slot平衡
 	p.pd.slotBalance()
 }
@@ -472,7 +487,7 @@ func (p *ProposalRemSet) Serilize(b []byte) []byte {
 func (p *ProposalRemSet) apply() {
 	delete(p.pd.pState.deployment.sets, p.setID)
 	p.pd.pState.deployment.version++
-	p.reply()
+	p.reply(nil)
 }
 
 func (p *pd) replayRemSet(reader *buffer.BufferReader) error {
@@ -498,7 +513,7 @@ func (p *ProposalSetMarkClear) apply() {
 		p.pd.pState.markClearSet[p.setID] = set
 		p.pd.slotBalance()
 	}
-	p.reply()
+	p.reply(nil)
 }
 
 func (p *pd) replaySetMarkClear(reader *buffer.BufferReader) error {
@@ -510,231 +525,163 @@ func (p *pd) replaySetMarkClear(reader *buffer.BufferReader) error {
 	return nil
 }
 
+func (p *pd) makeReplyFunc(from *net.UDPAddr, m *snet.Message, resp proto.Message) func(error) {
+	return func(err error) {
+		v := reflect.ValueOf(resp).Elem()
+		if nil == err {
+			v.FieldByName("Ok").SetBool(true)
+		} else {
+			v.FieldByName("Ok").SetBool(false)
+			v.FieldByName("Reason").SetString(err.Error())
+		}
+		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp.(proto.Message)))
+	}
+}
+
 func (p *pd) onInstallDeployment(from *net.UDPAddr, m *snet.Message) {
 
 	msg := m.Msg.(*sproto.InstallDeployment)
 
+	resp := &sproto.InstallDeploymentResp{}
+
 	if nil != p.pState.MetaTransaction {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
-			&sproto.InstallDeploymentResp{
-				Ok:     false,
-				Reason: "wait for previous meta transaction finish",
-			}))
+		resp.Ok = false
+		resp.Reason = "wait for previous meta transaction finish"
+		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 		return
 	}
 
 	if nil != p.pState.deployment {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
-			&sproto.InstallDeploymentResp{
-				Ok:     false,
-				Reason: "already install",
-			}))
+		resp.Ok = false
+		resp.Reason = "already install"
+		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 		return
 	}
 
 	d := &deployment{}
 	if err := d.loadFromPB(msg.Sets); nil != err {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
-			&sproto.InstallDeploymentResp{
-				Ok:     false,
-				Reason: err.Error(),
-			}))
+		resp.Ok = false
+		resp.Reason = err.Error()
+		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 		return
 	}
 
-	err := p.issueProposal(&ProposalInstallDeployment{
+	p.issueProposal(&ProposalInstallDeployment{
 		d: d,
 		proposalBase: &proposalBase{
-			pd: p,
-			reply: func(err ...error) {
-				if len(err) == 0 {
-					p.udp.SendTo(from, snet.MakeMessage(m.Context,
-						&sproto.InstallDeploymentResp{
-							Ok: true,
-						}))
-				} else {
-					p.udp.SendTo(from, snet.MakeMessage(m.Context,
-						&sproto.InstallDeploymentResp{
-							Ok:     false,
-							Reason: err[0].Error(),
-						}))
-				}
-			},
+			pd:    p,
+			reply: p.makeReplyFunc(from, m, resp),
 		},
 	})
-
-	if nil != err {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
-			&sproto.InstallDeploymentResp{
-				Ok:     false,
-				Reason: err.Error(),
-			}))
-	}
 
 }
 
 func (p *pd) onRemSet(from *net.UDPAddr, m *snet.Message) {
 	msg := m.Msg.(*sproto.RemSet)
 
+	resp := &sproto.RemSetResp{}
+
 	if nil != p.pState.MetaTransaction {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
-			&sproto.RemSetResp{
-				Ok:     false,
-				Reason: "wait for previous meta transaction finish",
-			}))
+		resp.Ok = false
+		resp.Reason = "wait for previous meta transaction finish"
+		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 		return
 	}
 
 	if nil == p.pState.deployment {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
-			&sproto.RemSetResp{
-				Ok:     false,
-				Reason: "no deployment",
-			}))
+		resp.Ok = false
+		resp.Reason = "no deployment"
+		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 		return
 	}
 
 	s, ok := p.pState.deployment.sets[int(msg.SetID)]
 	if !ok {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
-			&sproto.RemSetResp{
-				Ok:     false,
-				Reason: "set not exists",
-			}))
+		resp.Ok = false
+		resp.Reason = "set not exists"
+		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 		return
 	}
 
 	//只有当s中所有的store都不存在slot时才能移除
 	for _, v := range s.stores {
 		if len(v.slots.GetOpenBits()) != 0 {
-			p.udp.SendTo(from, snet.MakeMessage(m.Context,
-				&sproto.RemSetResp{
-					Ok:     false,
-					Reason: fmt.Sprintf("there are slots in store:%d", v.id),
-				}))
+			resp.Ok = false
+			resp.Reason = fmt.Sprintf("there are slots in store:%d", v.id)
+			p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 			return
 		}
 	}
 
-	err := p.issueProposal(&ProposalRemSet{
+	p.issueProposal(&ProposalRemSet{
 		setID: int(msg.SetID),
 		proposalBase: &proposalBase{
-			pd: p,
-			reply: func(err ...error) {
-				if len(err) == 0 {
-					p.udp.SendTo(from, snet.MakeMessage(m.Context,
-						&sproto.RemSetResp{
-							Ok: true,
-						}))
-				} else {
-					p.udp.SendTo(from, snet.MakeMessage(m.Context,
-						&sproto.RemSetResp{
-							Ok:     false,
-							Reason: err[0].Error(),
-						}))
-				}
-			},
+			pd:    p,
+			reply: p.makeReplyFunc(from, m, resp),
 		},
 	})
-
-	if nil != err {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
-			&sproto.RemSetResp{
-				Ok:     false,
-				Reason: err.Error(),
-			}))
-	}
-
 }
 
 func (p *pd) onSetMarkClear(from *net.UDPAddr, m *snet.Message) {
 	msg := m.Msg.(*sproto.SetMarkClear)
+
+	resp := &sproto.SetMarkClearResp{}
+
 	if nil == p.pState.deployment {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
-			&sproto.SetMarkClearResp{
-				Ok:     false,
-				Reason: "no deployment",
-			}))
+		resp.Ok = false
+		resp.Reason = "no deployment"
+		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 		return
 	}
 
 	s, ok := p.pState.deployment.sets[int(msg.SetID)]
 	if !ok {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
-			&sproto.SetMarkClearResp{
-				Ok:     false,
-				Reason: "set not exists",
-			}))
+		resp.Ok = false
+		resp.Reason = "set not exists"
+		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 		return
 	}
 
 	if s.markClear {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
-			&sproto.SetMarkClearResp{
-				Ok: true,
-			}))
+		resp.Ok = true
+		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 		return
 	}
 
-	err := p.issueProposal(&ProposalSetMarkClear{
+	p.issueProposal(&ProposalSetMarkClear{
 		setID: int(msg.SetID),
 		proposalBase: &proposalBase{
-			pd: p,
-			reply: func(err ...error) {
-				if len(err) == 0 {
-					p.udp.SendTo(from, snet.MakeMessage(m.Context,
-						&sproto.SetMarkClearResp{
-							Ok: true,
-						}))
-				} else {
-					p.udp.SendTo(from, snet.MakeMessage(m.Context,
-						&sproto.SetMarkClearResp{
-							Ok:     false,
-							Reason: err[0].Error(),
-						}))
-				}
-			},
+			pd:    p,
+			reply: p.makeReplyFunc(from, m, resp),
 		},
 	})
-
-	if nil != err {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
-			&sproto.SetMarkClearResp{
-				Ok:     false,
-				Reason: err.Error(),
-			}))
-	}
 
 }
 
 func (p *pd) onAddSet(from *net.UDPAddr, m *snet.Message) {
 	msg := m.Msg.(*sproto.AddSet)
 
+	resp := &sproto.AddSetResp{}
+
 	if nil != p.pState.MetaTransaction {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
-			&sproto.AddSetResp{
-				Ok:     false,
-				Reason: "wait for previous meta transaction finish",
-			}))
+		resp.Ok = false
+		resp.Reason = "wait for previous meta transaction finish"
+		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 		return
 	}
 
 	if nil == p.pState.deployment {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
-			&sproto.AddSetResp{
-				Ok:     false,
-				Reason: "no deployment",
-			}))
+		resp.Ok = false
+		resp.Reason = "no deployment"
+		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 		return
 	}
 
 	_, ok := p.pState.deployment.sets[int(msg.Set.SetID)]
 	if ok {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
-			&sproto.AddSetResp{
-				Ok:     false,
-				Reason: "set already exists",
-			}))
+		resp.Ok = false
+		resp.Reason = "set already exists"
+		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 		return
 	}
 
@@ -753,28 +700,23 @@ func (p *pd) onAddSet(from *net.UDPAddr, m *snet.Message) {
 
 	for _, v := range msg.Set.Nodes {
 		if nodeIDS[int(v.NodeID)] {
-			p.udp.SendTo(from, snet.MakeMessage(m.Context,
-				&sproto.AddSetResp{
-					Ok:     false,
-					Reason: fmt.Sprintf("duplicate node:%d", v.NodeID),
-				}))
+			resp.Ok = false
+			resp.Reason = fmt.Sprintf("duplicate node:%d", v.NodeID)
+			p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 			return
 		}
 
 		if nodeServices[fmt.Sprintf("%s:%d", v.Host, v.ServicePort)] {
-			p.udp.SendTo(from, snet.MakeMessage(m.Context,
-				&sproto.AddSetResp{
-					Ok:     false,
-					Reason: fmt.Sprintf("duplicate service:%s:%d", v.Host, v.ServicePort),
-				}))
+			resp.Ok = false
+			resp.Reason = fmt.Sprintf("duplicate service:%s:%d", v.Host, v.ServicePort)
+			p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 			return
 		}
 
 		if nodeRafts[fmt.Sprintf("%s:%d", v.Host, v.RaftPort)] {
-			p.udp.SendTo(from, &sproto.AddSetResp{
-				Ok:     false,
-				Reason: fmt.Sprintf("duplicate inter:%s:%d", v.Host, v.RaftPort),
-			})
+			resp.Ok = false
+			resp.Reason = fmt.Sprintf("duplicate inter:%s:%d", v.Host, v.RaftPort)
+			p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 			return
 		}
 
@@ -783,74 +725,44 @@ func (p *pd) onAddSet(from *net.UDPAddr, m *snet.Message) {
 		nodeRafts[fmt.Sprintf("%s:%d", v.Host, v.RaftPort)] = true
 	}
 
-	err := p.issueProposal(&ProposalAddSet{
+	p.issueProposal(&ProposalAddSet{
 		msg: msg,
 		proposalBase: &proposalBase{
-			pd: p,
-			reply: func(err ...error) {
-				if len(err) == 0 {
-					p.udp.SendTo(from, snet.MakeMessage(m.Context,
-						&sproto.AddSetResp{
-							Ok: true,
-						}))
-				} else {
-					p.udp.SendTo(from, snet.MakeMessage(m.Context,
-						&sproto.AddSetResp{
-							Ok:     false,
-							Reason: err[0].Error(),
-						}))
-				}
-			},
+			pd:    p,
+			reply: p.makeReplyFunc(from, m, resp),
 		},
 	})
-
-	if nil != err {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
-			&sproto.AddSetResp{
-				Ok:     false,
-				Reason: err.Error(),
-			}))
-	}
 
 }
 
 func (p *pd) onAddNode(from *net.UDPAddr, m *snet.Message) {
 	msg := m.Msg.(*sproto.AddNode)
-	if nil == p.pState.deployment {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
-			&sproto.AddNodeResp{
-				Ok:     false,
-				Reason: "no deployment",
-			}))
-		return
-	}
+	resp := &sproto.AddNodeResp{}
 
-	_, ok := p.pState.AddingNode[int(msg.NodeID)]
-	if ok {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
-			&sproto.AddNodeResp{
-				Ok: true,
-			}))
+	if nil == p.pState.deployment {
+		resp.Ok = false
+		resp.Reason = "must init deployment first"
+		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 		return
 	}
 
 	s, ok := p.pState.deployment.sets[int(msg.SetID)]
 	if !ok {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
-			&sproto.AddNodeResp{
-				Ok:     false,
-				Reason: "set not found",
-			}))
+		resp.Ok = true
+		resp.Reason = "set not found"
+		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 		return
 	}
 
 	_, ok = s.nodes[int(msg.NodeID)]
 	if ok {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
-			&sproto.AddNodeResp{
-				Ok:     false,
-				Reason: "duplicate node id",
-			}))
+		if s.id == int(msg.SetID) {
+			resp.Ok = true
+		} else {
+			resp.Ok = false
+			resp.Reason = "duplicate node id"
+		}
+		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 		return
 	}
 
@@ -858,57 +770,31 @@ func (p *pd) onAddNode(from *net.UDPAddr, m *snet.Message) {
 	for _, v := range p.pState.deployment.sets {
 		for _, vv := range v.nodes {
 			if vv.host == msg.Host && vv.servicePort == int(msg.ServicePort) {
-				p.udp.SendTo(from, snet.MakeMessage(m.Context,
-					&sproto.AddNodeResp{
-						Ok:     false,
-						Reason: "duplicate service addr",
-					}))
+				resp.Ok = false
+				resp.Reason = "duplicate service addr"
+				p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 				return
 			}
 
 			if vv.host == msg.Host && vv.raftPort == int(msg.RaftPort) {
-				p.udp.SendTo(from, snet.MakeMessage(m.Context,
-					&sproto.AddNodeResp{
-						Ok:     false,
-						Reason: "duplicate inter addr",
-					}))
+				resp.Ok = false
+				resp.Reason = "duplicate raft addr"
+				p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 				return
 			}
 		}
 	}
 
-	err := p.issueProposal(&ProposalAddNode{
-		msg:        msg,
-		sendNotify: true,
+	p.issueProposal(&ProposalAddNode{
+		msg: msg,
 		proposalBase: &proposalBase{
-			pd: p,
-			reply: func(err ...error) {
-				if len(err) == 0 {
-					p.udp.SendTo(from, snet.MakeMessage(m.Context,
-						&sproto.AddNodeResp{
-							Ok: true,
-						}))
-				} else {
-					p.udp.SendTo(from, snet.MakeMessage(m.Context,
-						&sproto.AddNodeResp{
-							Ok:     false,
-							Reason: err[0].Error(),
-						}))
-				}
-			},
+			pd:    p,
+			reply: p.makeReplyFunc(from, m, resp),
 		},
 	})
-
-	if nil != err {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
-			&sproto.AddNodeResp{
-				Ok:     false,
-				Reason: err.Error(),
-			}))
-	}
-
 }
 
+/*
 func (p *pd) onNotifyAddNodeResp(from *net.UDPAddr, m *snet.Message) {
 
 	msg := m.Msg.(*sproto.NotifyAddNodeResp)
@@ -1038,4 +924,4 @@ func (p *pd) onNotifyRemNodeResp(from *net.UDPAddr, m *snet.Message) {
 			})
 		}
 	}
-}
+}*/

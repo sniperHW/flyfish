@@ -104,7 +104,7 @@ func (p *ProposalSetMeta) apply() {
 	p.pd.pState.Meta.MetaDef = p.metaDef
 	p.pd.pState.Meta.MetaBytes = p.metaBytes
 	if nil != p.reply {
-		p.reply()
+		p.reply(nil)
 	}
 }
 
@@ -138,54 +138,30 @@ func (p *pd) replaySetMeta(reader *buffer.BufferReader) error {
 
 func (p *pd) onSetMeta(from *net.UDPAddr, m *snet.Message) {
 	msg := m.Msg.(*sproto.SetMeta)
+	resp := &sproto.SetMetaResp{}
 
 	if p.pState.Meta.isEqual(msg.Meta) {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
-			&sproto.SetMetaResp{
-				Ok: true,
-			}))
+		resp.Ok = true
+		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 		return
 	}
 
 	def, err := p.checkMeta(msg.Meta)
 	if nil != err {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
-			&sproto.SetMetaResp{
-				Ok:     false,
-				Reason: err.Error(),
-			}))
+		resp.Ok = false
+		resp.Reason = err.Error()
+		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 		return
 	}
 
-	err = p.issueProposal(&ProposalSetMeta{
+	p.issueProposal(&ProposalSetMeta{
 		metaBytes: msg.Meta,
 		metaDef:   def,
 		proposalBase: &proposalBase{
-			pd: p,
-			reply: func(err ...error) {
-				if len(err) == 0 {
-					p.udp.SendTo(from, snet.MakeMessage(m.Context,
-						&sproto.SetMetaResp{
-							Ok: true,
-						}))
-				} else {
-					p.udp.SendTo(from, snet.MakeMessage(m.Context,
-						&sproto.SetMetaResp{
-							Ok:     false,
-							Reason: err[0].Error(),
-						}))
-				}
-			},
+			pd:    p,
+			reply: p.makeReplyFunc(from, m, resp),
 		},
 	})
-
-	if nil != err {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
-			&sproto.SetMetaResp{
-				Ok:     false,
-				Reason: err.Error(),
-			}))
-	}
 }
 
 type MetaTransactionStore struct {
@@ -253,7 +229,7 @@ func (p *ProposalUpdateMeta) apply() {
 		p.pd.pState.MetaTransaction.notifyStore(p.pd)
 	}
 	if nil != p.reply {
-		p.reply()
+		p.reply(nil)
 	}
 }
 
@@ -293,12 +269,12 @@ func (p *pd) replayUpdateMeta(reader *buffer.BufferReader) error {
 //运行期间更新meta，只允许添加
 func (p *pd) onUpdateMeta(from *net.UDPAddr, m *snet.Message) {
 	msg := m.Msg.(*sproto.UpdateMeta)
+	resp := &sproto.UpdateMetaResp{}
+
 	if nil != p.pState.MetaTransaction {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
-			&sproto.UpdateMetaResp{
-				Ok:     false,
-				Reason: "wait for previous meta transaction finish",
-			}))
+		resp.Ok = false
+		resp.Reason = "wait for previous meta transaction finish"
+		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 		return
 	}
 
@@ -348,33 +324,12 @@ func (p *pd) onUpdateMeta(from *net.UDPAddr, m *snet.Message) {
 
 	p.pState.MetaTransaction = &t
 
-	err := p.issueProposal(&ProposalUpdateMeta{
+	p.issueProposal(&ProposalUpdateMeta{
 		proposalBase: &proposalBase{
-			pd: p,
-			reply: func(err ...error) {
-				if len(err) == 0 {
-					p.udp.SendTo(from, snet.MakeMessage(m.Context,
-						&sproto.UpdateMetaResp{
-							Ok: true,
-						}))
-				} else {
-					p.udp.SendTo(from, snet.MakeMessage(m.Context,
-						&sproto.UpdateMetaResp{
-							Ok:     false,
-							Reason: err[0].Error(),
-						}))
-				}
-			},
+			pd:    p,
+			reply: p.makeReplyFunc(from, m, resp),
 		},
 	})
-
-	if nil != err {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
-			&sproto.UpdateMetaResp{
-				Ok:     false,
-				Reason: err.Error(),
-			}))
-	}
 }
 
 type ProposalNotifyUpdateMetaResp struct {

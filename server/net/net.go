@@ -226,6 +226,12 @@ func init() {
 	namespace.Register(&sproto.AddNode{}, uint32(sproto.ServerCmdType_AddNode))
 	namespace.Register(&sproto.AddNodeResp{}, uint32(sproto.ServerCmdType_AddNodeResp))
 
+	//namespace.Register(&sproto.PromoteLearnerNode{}, uint32(sproto.ServerCmdType_PromoteLearnerNode))
+	//namespace.Register(&sproto.PromoteLearnerNodeResp{}, uint32(sproto.ServerCmdType_PromoteLearnerNodeResp))
+
+	namespace.Register(&sproto.RemNode{}, uint32(sproto.ServerCmdType_RemNode))
+	namespace.Register(&sproto.RemNodeResp{}, uint32(sproto.ServerCmdType_RemNodeResp))
+
 	namespace.Register(&sproto.SetMarkClear{}, uint32(sproto.ServerCmdType_SetMarkClear))
 	namespace.Register(&sproto.SetMarkClearResp{}, uint32(sproto.ServerCmdType_SetMarkClearResp))
 
@@ -242,14 +248,17 @@ func init() {
 	namespace.Register(&sproto.KvnodeBoot{}, uint32(sproto.ServerCmdType_KvnodeBoot))
 	namespace.Register(&sproto.KvnodeBootResp{}, uint32(sproto.ServerCmdType_KvnodeBootResp))
 
-	namespace.Register(&sproto.NotifyAddNode{}, uint32(sproto.ServerCmdType_NotifyAddNode))
-	namespace.Register(&sproto.NotifyAddNodeResp{}, uint32(sproto.ServerCmdType_NotifyAddNodeResp))
+	//namespace.Register(&sproto.NotifyAddLearner{}, uint32(sproto.ServerCmdType_NotifyAddLearner))
+	//namespace.Register(&sproto.NotifyAddLearnerResp{}, uint32(sproto.ServerCmdType_NotifyAddLearnerResp))
 
-	namespace.Register(&sproto.RemNode{}, uint32(sproto.ServerCmdType_RemNode))
-	namespace.Register(&sproto.RemNodeResp{}, uint32(sproto.ServerCmdType_RemNodeResp))
+	//namespace.Register(&sproto.NotifyPromoteLearner{}, uint32(sproto.ServerCmdType_NotifyPromoteLearner))
+	//namespace.Register(&sproto.NotifyPromoteLearnerResp{}, uint32(sproto.ServerCmdType_NotifyPromoteLearnerResp))
 
-	namespace.Register(&sproto.NotifyRemNode{}, uint32(sproto.ServerCmdType_NotifyRemNode))
-	namespace.Register(&sproto.NotifyRemNodeResp{}, uint32(sproto.ServerCmdType_NotifyRemNodeResp))
+	//namespace.Register(&sproto.RemNode{}, uint32(sproto.ServerCmdType_RemNode))
+	//namespace.Register(&sproto.RemNodeResp{}, uint32(sproto.ServerCmdType_RemNodeResp))
+
+	//namespace.Register(&sproto.NotifyRemNode{}, uint32(sproto.ServerCmdType_NotifyRemNode))
+	//namespace.Register(&sproto.NotifyRemNodeResp{}, uint32(sproto.ServerCmdType_NotifyRemNodeResp))
 
 	namespace.Register(&sproto.NotifySlotTransOut{}, uint32(sproto.ServerCmdType_NotifySlotTransOut))
 	namespace.Register(&sproto.NotifySlotTransOutResp{}, uint32(sproto.ServerCmdType_NotifySlotTransOutResp))

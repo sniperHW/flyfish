@@ -22,35 +22,37 @@ enum ServerCmdType {
   InstallDeploymentResp         = 102;
   AddNode                       = 103;
   AddNodeResp                   = 104;
-  RemNode                       = 105;
-  RemNodeResp                   = 106;
-  AddSet                        = 107;
-  AddSetResp                    = 108;
-  RemSet                        = 109;
-  RemSetResp                    = 110;
-  SetMarkClear                  = 111;
-  SetMarkClearResp              = 112;
-  SetMeta                       = 113;
-  SetMetaResp                   = 114;
-  GetMeta                       = 115;
-  GetMetaResp                   = 116;
-  UpdateMeta                    = 117;
-  UpdateMetaResp                = 118;
+  RemNode                       = 107;
+  RemNodeResp                   = 108;
+  AddSet                        = 109;
+  AddSetResp                    = 110;
+  RemSet                        = 111;
+  RemSetResp                    = 112;
+  SetMarkClear                  = 113;
+  SetMarkClearResp              = 114;
+  SetMeta                       = 115;
+  SetMetaResp                   = 116;
+  GetMeta                       = 117;
+  GetMetaResp                   = 118;
+  UpdateMeta                    = 119;
+  UpdateMetaResp                = 120;
 
 
   //kvnode <-> pd
   KvnodeBoot                    = 210;                   //kvnode冷启登录  
   KvnodeBootResp                = 211;
-  NotifyAddNode                 = 212;
-  NotifyAddNodeResp             = 213;
-  NotifyRemNode                 = 214;
-  NotifyRemNodeResp             = 215;
-  NotifySlotTransOut            = 216;
-  NotifySlotTransOutResp        = 217;
-  NotifySlotTransIn             = 218;
-  NotifySlotTransInResp         = 219;    
-  NotifyUpdateMeta              = 220;
-  NotifyUpdateMetaResp          = 221;
+  //NotifyAddLearner              = 212;
+  //NotifyAddLearnerResp          = 213;
+  //NotifyPromoteLearner          = 214;
+  //NotifyPromoteLearnerResp      = 215; 
+  //NotifyRemNode                 = 216;
+  //NotifyRemNodeResp             = 217;
+  NotifySlotTransOut            = 218;
+  NotifySlotTransOutResp        = 219;
+  NotifySlotTransIn             = 220;
+  NotifySlotTransInResp         = 221;    
+  NotifyUpdateMeta              = 222;
+  NotifyUpdateMetaResp          = 223;
 
 
   //flygate <-> pd
@@ -129,7 +131,7 @@ message addNode {
   optional int32  nodeID      = 2;
   optional string host        = 3;
   optional int32  servicePort = 4;
-  optional int32  raftPort   = 5;      
+  optional int32  raftPort    = 5;      
 }
 
 
@@ -171,18 +173,29 @@ message kvnodeBootResp {
   optional bytes  meta         = 8;
 }
 
-message notifyAddNode {
+/*
+message notifyAddLearner {
   optional int32  nodeID      = 1;
   optional string host        = 2;
   optional int32  raftPort    = 3;
   repeated int32  stores      = 4; 
 }
 
-message notifyAddNodeResp {
+message notifyAddLearnerResp {
   optional int32  nodeID      = 1;
   optional int32  store       = 2;
 }
 
+
+message notifyPromoteLearner {
+  optional int32  nodeID      = 1;
+  repeated int32  stores      = 2;   
+}
+
+message notifyPromoteLearnerResp {
+  optional int32  nodeID      = 1;
+  optional int32  store       = 2;   
+}
 
 message notifyRemNode {
   optional int32  nodeID      = 1;
@@ -193,6 +206,7 @@ message notifyRemNodeResp {
   optional int32  nodeID      = 1;
   optional int32  store       = 2;
 }
+*/
 
 
 message notifySlotTransOut {
