@@ -144,6 +144,11 @@ func (i RaftInstanceID) String() string {
 
 type RaftInstance struct {
 	inflightSnapshots   int64
+	snapshotIndex       uint64
+	appliedIndex        uint64
+	lastIndex           uint64 // index of log at start
+	snapCount           uint64
+	stoponce            int32
 	proposePipeline     *queue.ArrayQueue
 	readPipeline        *queue.ArrayQueue
 	commitC             ApplicationQueue
@@ -155,17 +160,13 @@ type RaftInstance struct {
 	waldir              string // path to WAL directory
 	snapdir             string // path to snapshot directory
 	logdir              string
-	lastIndex           uint64 // index of log at start
 	confState           raftpb.ConfState
-	snapshotIndex       uint64
-	appliedIndex        uint64
 	node                raft.Node
 	raftStorage         *raft.MemoryStorage
 	wal                 *wal.WAL
 	snapshotter         *snap.Snapshotter
 	snapshotCh          chan interface{}
 	snapshotting        bool //当前是否正在做快照
-	snapCount           uint64
 	transport           *rafthttp.Transport
 	stopc               chan struct{} // signals proposal channel closed
 	stopping            chan struct{}
@@ -173,7 +174,6 @@ type RaftInstance struct {
 	linearizableReadMgr raftTaskMgr
 	mutilRaft           *MutilRaft
 	softState           raft.SoftState
-	stoponce            int32
 	mb                  *membership.MemberShip
 	w                   wait.Wait
 	reqIDGen            *idutil.Generator
@@ -344,6 +344,8 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 				GetSugar().Panicf("Unmarshal proposalConfChange error:%v", err)
 			}
 
+			cc.Type = pc.ConfChangeType
+
 			if err = rc.mb.ValidateConfigurationChange(&pc); nil == err {
 				rc.confState = *rc.node.ApplyConfChange(cc)
 				switch cc.Type {
@@ -367,6 +369,7 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 						}
 
 					} else {
+						GetSugar().Infof("%s PromoteRaftMember %s", rc.id.String(), types.ID(cc.NodeID).String())
 						rc.mb.PromoteRaftMember(types.ID(cc.NodeID))
 					}
 
@@ -385,7 +388,7 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 				})
 
 			} else {
-				GetSugar().Errorf("%s %s ValidateConfigurationChange %s err:%v", rc.id.String(), cc.Type.String(), types.ID(cc.NodeID).String(), err)
+				GetSugar().Errorf("%s %s ValidateConfigurationChange IsPromote:%v %s err:%v", rc.id.String(), cc.Type.String(), pc.IsPromote, types.ID(cc.NodeID).String(), err)
 				cc.NodeID = raft.None
 				rc.confState = *rc.node.ApplyConfChange(cc)
 			}
@@ -526,13 +529,12 @@ func (rc *RaftInstance) serveChannels() {
 			rc.publishEntries(rc.entriesToApply(rd.CommittedEntries))
 
 			if rc.isLeader() {
-
-				//处理LinearizableRead
+				rc.linearizableReadMgr.Lock()
 				if len(rd.ReadStates) != 0 {
 					rc.processReadStates(rd.ReadStates)
 				}
-
 				rc.checkLinearizableRead()
+				rc.linearizableReadMgr.Unlock()
 			}
 
 			rc.node.Advance()
@@ -677,6 +679,7 @@ func (rc *RaftInstance) replayWAL(haveWAL bool) (*wal.WAL, error) {
 		rc.raftStorage.SetHardState(st)
 
 		if snap != nil {
+
 			GetSugar().Info("send replaySnapshot")
 
 			for _, v := range snap.Metadata.ConfState.Voters {
@@ -956,6 +959,7 @@ func NewInstance(nodeID uint16, shard uint16, mutilRaft *MutilRaft, commitC Appl
 
 			if v.IsLearner {
 				cc.ConfChangeType = raftpb.ConfChangeAddLearnerNode
+				GetSugar().Infof("%s %v", rc.ID().String(), cc)
 			} else {
 				cc.ConfChangeType = raftpb.ConfChangeAddNode
 			}

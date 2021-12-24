@@ -10,6 +10,7 @@ import (
 	"github.com/sniperHW/flyfish/pkg/etcd/wal/walpb"
 	"go.uber.org/zap"
 	"io"
+	"sort"
 	"sync/atomic"
 	"time"
 )
@@ -74,7 +75,7 @@ func (rc *RaftInstance) onTriggerSnapshotOK(snap raftpb.Snapshot) {
 	}
 
 	if err := rc.raftStorage.Compact(compactIndex); err != nil {
-		panic(err)
+		GetLogger().Panic("raftStorage.Compact", zap.Error(err))
 	}
 
 }
@@ -160,12 +161,56 @@ func (rc *RaftInstance) publishSnapshot(snapshotToSave raftpb.Snapshot) {
 		GetSugar().Fatalf("snapshot index [%d] should > progress.appliedIndex [%d]", snapshotToSave.Metadata.Index, rc.appliedIndex)
 	}
 
-	// trigger kvstore to load snapshot
-	rc.commitC.AppendHighestPriotiryItem(snapshotToSave)
-
 	rc.confState = snapshotToSave.Metadata.ConfState
 	rc.snapshotIndex = snapshotToSave.Metadata.Index
 	rc.appliedIndex = snapshotToSave.Metadata.Index
+
+	rc.transport.RemoveAllPeers()
+
+	for _, v := range snapshotToSave.Metadata.ConfState.Voters {
+		m := rc.mb.AddRaftMember(types.ID(v), false, nil)
+		if RaftInstanceID(v) != rc.ID() {
+			rc.transport.AddPeer(types.ID(v), m.PeerURLs)
+		}
+	}
+
+	for _, v := range snapshotToSave.Metadata.ConfState.Learners {
+		m := rc.mb.AddRaftMember(types.ID(v), true, nil)
+		if RaftInstanceID(v) != rc.ID() {
+			rc.transport.AddPeer(types.ID(v), m.PeerURLs)
+		}
+	}
+
+	//移除ConfState中不存在的成员
+	snapMembers := []uint64{}
+	snapMembers = append(snapMembers, snapshotToSave.Metadata.ConfState.Voters...)
+	snapMembers = append(snapMembers, snapshotToSave.Metadata.ConfState.Learners...)
+	sort.Slice(snapMembers, func(i, j int) bool {
+		return snapMembers[i] < snapMembers[j]
+	})
+	members := rc.mb.RaftMembers()
+
+	i := 0
+	j := 0
+
+	for i < len(snapMembers) && j < len(members) {
+		if types.ID(snapMembers[i]) == members[j].ID {
+			i++
+			j++
+		} else if types.ID(snapMembers[i]) > members[j].ID {
+			rc.mb.RemoveRaftMember(members[j].ID)
+			j++
+		} else {
+			i++
+		}
+	}
+
+	for ; j < len(members); j++ {
+		rc.mb.RemoveRaftMember(members[j].ID)
+	}
+
+	// trigger kvstore to load snapshot
+	rc.commitC.AppendHighestPriotiryItem(snapshotToSave)
 }
 
 func newSnapshotReaderCloser(data []byte) io.ReadCloser {

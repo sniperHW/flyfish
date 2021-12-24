@@ -443,7 +443,7 @@ func (s *kvstore) serve() {
 					log.Panic(err)
 				}
 			case LeaderChange:
-				if v.(LeaderChange).Leader == int(s.rn.ID()) {
+				if v.(LeaderChange).Leader == s.rn.ID() {
 					if nil != s.becomeLeader {
 						s.becomeLeader()
 					}
@@ -484,7 +484,7 @@ func newKvNode(nodeID uint16, shard uint16, cluster string, st membership.Storag
 
 	mutilRaft := NewMutilRaft()
 
-	rn, err := NewInstance(nodeID, shard, mutilRaft, mainQueue, peers, st, "log", "kv")
+	rn, err := NewInstance(nodeID, shard, mutilRaft, mainQueue, peers, st, "./log/raftLog", "kv")
 
 	if nil != err {
 		fmt.Println(err)
@@ -511,14 +511,7 @@ func (this *kvnode) stop() {
 func TestSingleNode(t *testing.T) {
 
 	//先删除所有kv文件
-	os.RemoveAll("./log/kv-1-1-wal")
-	os.RemoveAll("./log/kv-1-1-snap")
-	os.RemoveAll("./log/kv-2-1-wal")
-	os.RemoveAll("./log/kv-2-1-snap")
-	os.RemoveAll("./log/kv-3-1-wal")
-	os.RemoveAll("./log/kv-3-1-snap")
-	os.RemoveAll("./log/kv-4-1-wal")
-	os.RemoveAll("./log/kv-4-1-snap")
+	os.RemoveAll("./log/raftLog")
 
 	ProposalFlushInterval = 10
 	ProposalBatchCount = 1
@@ -630,14 +623,7 @@ func TestSingleNode(t *testing.T) {
 
 func TestCluster(t *testing.T) {
 	//先删除所有kv文件
-	os.RemoveAll("./log/kv-1-1-wal")
-	os.RemoveAll("./log/kv-1-1-snap")
-	os.RemoveAll("./log/kv-2-1-wal")
-	os.RemoveAll("./log/kv-2-1-snap")
-	os.RemoveAll("./log/kv-3-1-wal")
-	os.RemoveAll("./log/kv-3-1-snap")
-	os.RemoveAll("./log/kv-4-1-wal")
-	os.RemoveAll("./log/kv-4-1-snap")
+	os.RemoveAll("./log/raftLog")
 
 	ProposalFlushInterval = 10
 	ProposalBatchCount = 1
@@ -763,14 +749,7 @@ func TestCluster(t *testing.T) {
 
 func TestDownToFollower(t *testing.T) {
 	//先删除所有kv文件
-	os.RemoveAll("./log/kv-1-1-wal")
-	os.RemoveAll("./log/kv-1-1-snap")
-	os.RemoveAll("./log/kv-2-1-wal")
-	os.RemoveAll("./log/kv-2-1-snap")
-	os.RemoveAll("./log/kv-3-1-wal")
-	os.RemoveAll("./log/kv-3-1-snap")
-	os.RemoveAll("./log/kv-4-1-wal")
-	os.RemoveAll("./log/kv-4-1-snap")
+	os.RemoveAll("./log/raftLog")
 
 	ProposalFlushInterval = 10
 	ProposalBatchCount = 1
@@ -842,14 +821,7 @@ func TestDownToFollower(t *testing.T) {
 
 func TestOneNodeDownAndRestart(t *testing.T) {
 	//先删除所有kv文件
-	os.RemoveAll("./log/kv-1-1-wal")
-	os.RemoveAll("./log/kv-1-1-snap")
-	os.RemoveAll("./log/kv-2-1-wal")
-	os.RemoveAll("./log/kv-2-1-snap")
-	os.RemoveAll("./log/kv-3-1-wal")
-	os.RemoveAll("./log/kv-3-1-snap")
-	os.RemoveAll("./log/kv-4-1-wal")
-	os.RemoveAll("./log/kv-4-1-snap")
+	os.RemoveAll("./log/raftLog")
 
 	ProposalFlushInterval = 10
 	ProposalBatchCount = 1

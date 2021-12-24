@@ -182,24 +182,39 @@ func (c *MemberShip) Save() error {
 // AddMember adds a new Member into the cluster, and saves the given member's
 // raftAttributes into the store. The given member should have empty attributes.
 // A Member with a matching id must not exist.
-func (c *MemberShip) AddRaftMember(id types.ID, isLearner bool, m *Member) {
+func (c *MemberShip) AddRaftMember(id types.ID, isLearner bool, m *Member) *Member {
 	c.Lock()
 	defer c.Unlock()
 
-	rm := c.raftmembers[id]
-	if nil == rm {
+	if nil == m {
+		m = c.raftmembers[id]
 		if nil == m {
 			m = c.members[id]
 		}
+	} else {
+		rm := c.raftmembers[id]
+		if nil != rm {
+			if len(rm.PeerURLs) != len(m.PeerURLs) {
+				c.lg.Panic("member URLS missmatch")
+			}
 
-		if nil == m {
-			c.lg.Panic("AddRaftMember error")
+			for i := 0; i < len(m.PeerURLs); i++ {
+				if rm.PeerURLs[i] != m.PeerURLs[i] {
+					c.lg.Panic("member URLS missmatch")
+				}
+			}
 		}
+	}
+
+	if nil == m {
+		c.lg.Panic("AddRaftMember error")
 	}
 
 	if isLearner != m.IsLearner {
 		c.lg.Panic("isLearner missmatch")
 	}
+
+	//m.IsLearner = isLearner
 
 	c.raftmembers[id] = m
 	c.members[id] = m
@@ -220,6 +235,8 @@ func (c *MemberShip) AddRaftMember(id types.ID, isLearner bool, m *Member) {
 		zap.String("added-peer-id", m.ID.String()),
 		zap.Strings("added-peer-peer-urls", m.PeerURLs),
 	)
+
+	return m
 }
 
 // RemoveMember removes a member from the store.

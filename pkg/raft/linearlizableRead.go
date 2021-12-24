@@ -13,8 +13,6 @@ type LinearizableRead interface {
 }
 
 func (rc *RaftInstance) checkLinearizableRead() {
-	rc.linearizableReadMgr.Lock()
-	defer rc.linearizableReadMgr.Unlock()
 	for e := rc.linearizableReadMgr.l.Front(); e != nil; e = rc.linearizableReadMgr.l.Front() {
 		v := e.Value.(*raftTask)
 		if nil == v.ptrridx {
@@ -30,14 +28,18 @@ func (rc *RaftInstance) checkLinearizableRead() {
 }
 
 func (rc *RaftInstance) processReadStates(readStates []raft.ReadState) {
-	rc.linearizableReadMgr.Lock()
-	defer rc.linearizableReadMgr.Unlock()
 	for _, rs := range readStates {
 		index := binary.BigEndian.Uint64(rs.RequestCtx)
 		v, ok := rc.linearizableReadMgr.dict[index]
 		if ok {
-			v.ridx = rs.Index
-			v.ptrridx = &v.ridx
+			if rc.appliedIndex < v.ridx {
+				v.ridx = rs.Index
+				v.ptrridx = &v.ridx
+			} else {
+				rc.commitC.AppendHighestPriotiryItem(v.other.([]LinearizableRead))
+				delete(rc.linearizableReadMgr.dict, v.id)
+				rc.linearizableReadMgr.l.Remove(v.listE)
+			}
 		}
 	}
 }
