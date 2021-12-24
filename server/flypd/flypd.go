@@ -426,7 +426,7 @@ func (p *pd) onBecomeLeader() {
 		for _, v := range p.pState.SlotTransfer {
 			v.notify(p)
 		}
-	}
+	}*/
 
 	if nil != p.pState.MetaTransaction {
 		if p.pState.MetaTransaction.Prepareing {
@@ -435,7 +435,7 @@ func (p *pd) onBecomeLeader() {
 		} else {
 			p.pState.MetaTransaction.notifyStore(p)
 		}
-	}*/
+	}
 
 }
 

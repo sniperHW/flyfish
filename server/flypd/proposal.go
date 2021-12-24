@@ -8,9 +8,7 @@ import (
 const (
 	proposalInstallDeployment      = 1
 	proposalAddNode                = 2
-	proposalNotifyAddNodeResp      = 3
 	proposalRemNode                = 4
-	proposalNotifyRemNodeResp      = 5
 	proposalBeginSlotTransfer      = 6
 	proposalNotifySlotTransOutResp = 7
 	proposalNotifySlotTransInResp  = 8
@@ -55,14 +53,10 @@ func (p *pd) replayProposal(proposal []byte) error {
 	switch int(proposalType) {
 	case proposalInstallDeployment:
 		return p.replayInstallDeployment(&reader)
-	//case proposalAddNode:
-	//	return p.replayAddNode(&reader)
-	//case proposalNotifyAddNodeResp:
-	//	return p.replayNotifyAddNodeResp(&reader)
+	case proposalAddNode:
+		return p.replayAddNode(&reader)
 	//case proposalRemNode:
 	//	return p.replayRemNode(&reader)
-	//case proposalNotifyRemNodeResp:
-	//	return p.replayNotifyRemNodeResp(&reader)
 	case proposalBeginSlotTransfer:
 		return p.replayBeginSlotTransfer(&reader)
 	case proposalNotifySlotTransOutResp:
