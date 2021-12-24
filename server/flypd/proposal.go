@@ -18,6 +18,9 @@ const (
 	proposalSetMeta                = 12
 	proposalUpdateMeta             = 13
 	proposalNotifyUpdateMetaResp   = 14
+	proposalAddLearnerStoreToNode  = 15
+	proposalFlyKvCommited          = 16
+	proposalPromoteLearnerStore    = 17
 )
 
 type proposalBase struct {

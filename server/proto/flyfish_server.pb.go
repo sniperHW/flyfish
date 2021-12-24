@@ -34,24 +34,28 @@ const (
 	ServerCmdType_QueryLeader     ServerCmdType = 1
 	ServerCmdType_QueryLeaderResp ServerCmdType = 2
 	//console <-> pd
-	ServerCmdType_InstallDeployment     ServerCmdType = 101
-	ServerCmdType_InstallDeploymentResp ServerCmdType = 102
-	ServerCmdType_AddNode               ServerCmdType = 103
-	ServerCmdType_AddNodeResp           ServerCmdType = 104
-	ServerCmdType_RemNode               ServerCmdType = 107
-	ServerCmdType_RemNodeResp           ServerCmdType = 108
-	ServerCmdType_AddSet                ServerCmdType = 109
-	ServerCmdType_AddSetResp            ServerCmdType = 110
-	ServerCmdType_RemSet                ServerCmdType = 111
-	ServerCmdType_RemSetResp            ServerCmdType = 112
-	ServerCmdType_SetMarkClear          ServerCmdType = 113
-	ServerCmdType_SetMarkClearResp      ServerCmdType = 114
-	ServerCmdType_SetMeta               ServerCmdType = 115
-	ServerCmdType_SetMetaResp           ServerCmdType = 116
-	ServerCmdType_GetMeta               ServerCmdType = 117
-	ServerCmdType_GetMetaResp           ServerCmdType = 118
-	ServerCmdType_UpdateMeta            ServerCmdType = 119
-	ServerCmdType_UpdateMetaResp        ServerCmdType = 120
+	ServerCmdType_InstallDeployment         ServerCmdType = 101
+	ServerCmdType_InstallDeploymentResp     ServerCmdType = 102
+	ServerCmdType_AddNode                   ServerCmdType = 103
+	ServerCmdType_AddNodeResp               ServerCmdType = 104
+	ServerCmdType_AddLearnerStoreToNode     ServerCmdType = 105
+	ServerCmdType_AddLearnerStoreToNodeResp ServerCmdType = 106
+	ServerCmdType_PromoteLearnerStore       ServerCmdType = 107
+	ServerCmdType_PromoteLearnerStoreResp   ServerCmdType = 108
+	ServerCmdType_RemNode                   ServerCmdType = 109
+	ServerCmdType_RemNodeResp               ServerCmdType = 110
+	ServerCmdType_AddSet                    ServerCmdType = 111
+	ServerCmdType_AddSetResp                ServerCmdType = 112
+	ServerCmdType_RemSet                    ServerCmdType = 113
+	ServerCmdType_RemSetResp                ServerCmdType = 114
+	ServerCmdType_SetMarkClear              ServerCmdType = 115
+	ServerCmdType_SetMarkClearResp          ServerCmdType = 116
+	ServerCmdType_SetMeta                   ServerCmdType = 117
+	ServerCmdType_SetMetaResp               ServerCmdType = 118
+	ServerCmdType_GetMeta                   ServerCmdType = 119
+	ServerCmdType_GetMetaResp               ServerCmdType = 120
+	ServerCmdType_UpdateMeta                ServerCmdType = 121
+	ServerCmdType_UpdateMetaResp            ServerCmdType = 122
 	//kvnode <-> pd
 	ServerCmdType_KvnodeBoot     ServerCmdType = 210
 	ServerCmdType_KvnodeBootResp ServerCmdType = 211
@@ -85,20 +89,24 @@ var ServerCmdType_name = map[int32]string{
 	102: "InstallDeploymentResp",
 	103: "AddNode",
 	104: "AddNodeResp",
-	107: "RemNode",
-	108: "RemNodeResp",
-	109: "AddSet",
-	110: "AddSetResp",
-	111: "RemSet",
-	112: "RemSetResp",
-	113: "SetMarkClear",
-	114: "SetMarkClearResp",
-	115: "SetMeta",
-	116: "SetMetaResp",
-	117: "GetMeta",
-	118: "GetMetaResp",
-	119: "UpdateMeta",
-	120: "UpdateMetaResp",
+	105: "AddLearnerStoreToNode",
+	106: "AddLearnerStoreToNodeResp",
+	107: "PromoteLearnerStore",
+	108: "PromoteLearnerStoreResp",
+	109: "RemNode",
+	110: "RemNodeResp",
+	111: "AddSet",
+	112: "AddSetResp",
+	113: "RemSet",
+	114: "RemSetResp",
+	115: "SetMarkClear",
+	116: "SetMarkClearResp",
+	117: "SetMeta",
+	118: "SetMetaResp",
+	119: "GetMeta",
+	120: "GetMetaResp",
+	121: "UpdateMeta",
+	122: "UpdateMetaResp",
 	210: "KvnodeBoot",
 	211: "KvnodeBootResp",
 	218: "NotifySlotTransOut",
@@ -117,41 +125,45 @@ var ServerCmdType_name = map[int32]string{
 }
 
 var ServerCmdType_value = map[string]int32{
-	"QueryLeader":            1,
-	"QueryLeaderResp":        2,
-	"InstallDeployment":      101,
-	"InstallDeploymentResp":  102,
-	"AddNode":                103,
-	"AddNodeResp":            104,
-	"RemNode":                107,
-	"RemNodeResp":            108,
-	"AddSet":                 109,
-	"AddSetResp":             110,
-	"RemSet":                 111,
-	"RemSetResp":             112,
-	"SetMarkClear":           113,
-	"SetMarkClearResp":       114,
-	"SetMeta":                115,
-	"SetMetaResp":            116,
-	"GetMeta":                117,
-	"GetMetaResp":            118,
-	"UpdateMeta":             119,
-	"UpdateMetaResp":         120,
-	"KvnodeBoot":             210,
-	"KvnodeBootResp":         211,
-	"NotifySlotTransOut":     218,
-	"NotifySlotTransOutResp": 219,
-	"NotifySlotTransIn":      220,
-	"NotifySlotTransInResp":  221,
-	"NotifyUpdateMeta":       222,
-	"NotifyUpdateMetaResp":   223,
-	"QueryRouteInfo":         310,
-	"QueryRouteInfoResp":     311,
-	"FlyGateHeartBeat":       312,
-	"GetFlyGateList":         410,
-	"GetFlyGateListResp":     411,
-	"ChangeFlyGate":          412,
-	"ChangeFlyGateResp":      413,
+	"QueryLeader":               1,
+	"QueryLeaderResp":           2,
+	"InstallDeployment":         101,
+	"InstallDeploymentResp":     102,
+	"AddNode":                   103,
+	"AddNodeResp":               104,
+	"AddLearnerStoreToNode":     105,
+	"AddLearnerStoreToNodeResp": 106,
+	"PromoteLearnerStore":       107,
+	"PromoteLearnerStoreResp":   108,
+	"RemNode":                   109,
+	"RemNodeResp":               110,
+	"AddSet":                    111,
+	"AddSetResp":                112,
+	"RemSet":                    113,
+	"RemSetResp":                114,
+	"SetMarkClear":              115,
+	"SetMarkClearResp":          116,
+	"SetMeta":                   117,
+	"SetMetaResp":               118,
+	"GetMeta":                   119,
+	"GetMetaResp":               120,
+	"UpdateMeta":                121,
+	"UpdateMetaResp":            122,
+	"KvnodeBoot":                210,
+	"KvnodeBootResp":            211,
+	"NotifySlotTransOut":        218,
+	"NotifySlotTransOutResp":    219,
+	"NotifySlotTransIn":         220,
+	"NotifySlotTransInResp":     221,
+	"NotifyUpdateMeta":          222,
+	"NotifyUpdateMetaResp":      223,
+	"QueryRouteInfo":            310,
+	"QueryRouteInfoResp":        311,
+	"FlyGateHeartBeat":          312,
+	"GetFlyGateList":            410,
+	"GetFlyGateListResp":        411,
+	"ChangeFlyGate":             412,
+	"ChangeFlyGateResp":         413,
 }
 
 func (x ServerCmdType) Enum() *ServerCmdType {
@@ -838,6 +850,226 @@ func (m *AddNodeResp) GetReason() string {
 	return ""
 }
 
+type AddLearnerStoreToNode struct {
+	SetID  int32 `protobuf:"varint,1,opt,name=setID" json:"setID"`
+	NodeID int32 `protobuf:"varint,2,opt,name=nodeID" json:"nodeID"`
+	Store  int32 `protobuf:"varint,3,opt,name=store" json:"store"`
+}
+
+func (m *AddLearnerStoreToNode) Reset()      { *m = AddLearnerStoreToNode{} }
+func (*AddLearnerStoreToNode) ProtoMessage() {}
+func (*AddLearnerStoreToNode) Descriptor() ([]byte, []int) {
+	return fileDescriptor_03085fc3fc38bb42, []int{12}
+}
+func (m *AddLearnerStoreToNode) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *AddLearnerStoreToNode) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_AddLearnerStoreToNode.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *AddLearnerStoreToNode) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_AddLearnerStoreToNode.Merge(m, src)
+}
+func (m *AddLearnerStoreToNode) XXX_Size() int {
+	return m.Size()
+}
+func (m *AddLearnerStoreToNode) XXX_DiscardUnknown() {
+	xxx_messageInfo_AddLearnerStoreToNode.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_AddLearnerStoreToNode proto.InternalMessageInfo
+
+func (m *AddLearnerStoreToNode) GetSetID() int32 {
+	if m != nil {
+		return m.SetID
+	}
+	return 0
+}
+
+func (m *AddLearnerStoreToNode) GetNodeID() int32 {
+	if m != nil {
+		return m.NodeID
+	}
+	return 0
+}
+
+func (m *AddLearnerStoreToNode) GetStore() int32 {
+	if m != nil {
+		return m.Store
+	}
+	return 0
+}
+
+type AddLearnerStoreToNodeResp struct {
+	Ok     bool   `protobuf:"varint,1,opt,name=ok" json:"ok"`
+	Reason string `protobuf:"bytes,2,opt,name=reason" json:"reason"`
+}
+
+func (m *AddLearnerStoreToNodeResp) Reset()      { *m = AddLearnerStoreToNodeResp{} }
+func (*AddLearnerStoreToNodeResp) ProtoMessage() {}
+func (*AddLearnerStoreToNodeResp) Descriptor() ([]byte, []int) {
+	return fileDescriptor_03085fc3fc38bb42, []int{13}
+}
+func (m *AddLearnerStoreToNodeResp) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *AddLearnerStoreToNodeResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_AddLearnerStoreToNodeResp.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *AddLearnerStoreToNodeResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_AddLearnerStoreToNodeResp.Merge(m, src)
+}
+func (m *AddLearnerStoreToNodeResp) XXX_Size() int {
+	return m.Size()
+}
+func (m *AddLearnerStoreToNodeResp) XXX_DiscardUnknown() {
+	xxx_messageInfo_AddLearnerStoreToNodeResp.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_AddLearnerStoreToNodeResp proto.InternalMessageInfo
+
+func (m *AddLearnerStoreToNodeResp) GetOk() bool {
+	if m != nil {
+		return m.Ok
+	}
+	return false
+}
+
+func (m *AddLearnerStoreToNodeResp) GetReason() string {
+	if m != nil {
+		return m.Reason
+	}
+	return ""
+}
+
+type PromoteLearnerStore struct {
+	SetID  int32 `protobuf:"varint,1,opt,name=setID" json:"setID"`
+	NodeID int32 `protobuf:"varint,2,opt,name=nodeID" json:"nodeID"`
+	Store  int32 `protobuf:"varint,3,opt,name=store" json:"store"`
+}
+
+func (m *PromoteLearnerStore) Reset()      { *m = PromoteLearnerStore{} }
+func (*PromoteLearnerStore) ProtoMessage() {}
+func (*PromoteLearnerStore) Descriptor() ([]byte, []int) {
+	return fileDescriptor_03085fc3fc38bb42, []int{14}
+}
+func (m *PromoteLearnerStore) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *PromoteLearnerStore) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_PromoteLearnerStore.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *PromoteLearnerStore) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PromoteLearnerStore.Merge(m, src)
+}
+func (m *PromoteLearnerStore) XXX_Size() int {
+	return m.Size()
+}
+func (m *PromoteLearnerStore) XXX_DiscardUnknown() {
+	xxx_messageInfo_PromoteLearnerStore.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_PromoteLearnerStore proto.InternalMessageInfo
+
+func (m *PromoteLearnerStore) GetSetID() int32 {
+	if m != nil {
+		return m.SetID
+	}
+	return 0
+}
+
+func (m *PromoteLearnerStore) GetNodeID() int32 {
+	if m != nil {
+		return m.NodeID
+	}
+	return 0
+}
+
+func (m *PromoteLearnerStore) GetStore() int32 {
+	if m != nil {
+		return m.Store
+	}
+	return 0
+}
+
+type PromoteLearnerStoreResp struct {
+	Ok     bool   `protobuf:"varint,1,opt,name=ok" json:"ok"`
+	Reason string `protobuf:"bytes,2,opt,name=reason" json:"reason"`
+}
+
+func (m *PromoteLearnerStoreResp) Reset()      { *m = PromoteLearnerStoreResp{} }
+func (*PromoteLearnerStoreResp) ProtoMessage() {}
+func (*PromoteLearnerStoreResp) Descriptor() ([]byte, []int) {
+	return fileDescriptor_03085fc3fc38bb42, []int{15}
+}
+func (m *PromoteLearnerStoreResp) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *PromoteLearnerStoreResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_PromoteLearnerStoreResp.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *PromoteLearnerStoreResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PromoteLearnerStoreResp.Merge(m, src)
+}
+func (m *PromoteLearnerStoreResp) XXX_Size() int {
+	return m.Size()
+}
+func (m *PromoteLearnerStoreResp) XXX_DiscardUnknown() {
+	xxx_messageInfo_PromoteLearnerStoreResp.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_PromoteLearnerStoreResp proto.InternalMessageInfo
+
+func (m *PromoteLearnerStoreResp) GetOk() bool {
+	if m != nil {
+		return m.Ok
+	}
+	return false
+}
+
+func (m *PromoteLearnerStoreResp) GetReason() string {
+	if m != nil {
+		return m.Reason
+	}
+	return ""
+}
+
 type RemNode struct {
 	SetID  int32 `protobuf:"varint,1,opt,name=setID" json:"setID"`
 	NodeID int32 `protobuf:"varint,2,opt,name=nodeID" json:"nodeID"`
@@ -846,7 +1078,7 @@ type RemNode struct {
 func (m *RemNode) Reset()      { *m = RemNode{} }
 func (*RemNode) ProtoMessage() {}
 func (*RemNode) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{12}
+	return fileDescriptor_03085fc3fc38bb42, []int{16}
 }
 func (m *RemNode) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -897,7 +1129,7 @@ type RemNodeResp struct {
 func (m *RemNodeResp) Reset()      { *m = RemNodeResp{} }
 func (*RemNodeResp) ProtoMessage() {}
 func (*RemNodeResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{13}
+	return fileDescriptor_03085fc3fc38bb42, []int{17}
 }
 func (m *RemNodeResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -947,7 +1179,7 @@ type KvnodeBoot struct {
 func (m *KvnodeBoot) Reset()      { *m = KvnodeBoot{} }
 func (*KvnodeBoot) ProtoMessage() {}
 func (*KvnodeBoot) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{14}
+	return fileDescriptor_03085fc3fc38bb42, []int{18}
 }
 func (m *KvnodeBoot) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -992,7 +1224,7 @@ type StoreInfo struct {
 func (m *StoreInfo) Reset()      { *m = StoreInfo{} }
 func (*StoreInfo) ProtoMessage() {}
 func (*StoreInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{15}
+	return fileDescriptor_03085fc3fc38bb42, []int{19}
 }
 func (m *StoreInfo) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1056,7 +1288,7 @@ type KvnodeBootResp struct {
 func (m *KvnodeBootResp) Reset()      { *m = KvnodeBootResp{} }
 func (*KvnodeBootResp) ProtoMessage() {}
 func (*KvnodeBootResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{16}
+	return fileDescriptor_03085fc3fc38bb42, []int{20}
 }
 func (m *KvnodeBootResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1149,7 +1381,7 @@ type NotifySlotTransOut struct {
 func (m *NotifySlotTransOut) Reset()      { *m = NotifySlotTransOut{} }
 func (*NotifySlotTransOut) ProtoMessage() {}
 func (*NotifySlotTransOut) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{17}
+	return fileDescriptor_03085fc3fc38bb42, []int{21}
 }
 func (m *NotifySlotTransOut) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1199,7 +1431,7 @@ type NotifySlotTransOutResp struct {
 func (m *NotifySlotTransOutResp) Reset()      { *m = NotifySlotTransOutResp{} }
 func (*NotifySlotTransOutResp) ProtoMessage() {}
 func (*NotifySlotTransOutResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{18}
+	return fileDescriptor_03085fc3fc38bb42, []int{22}
 }
 func (m *NotifySlotTransOutResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1243,7 +1475,7 @@ type NotifySlotTransIn struct {
 func (m *NotifySlotTransIn) Reset()      { *m = NotifySlotTransIn{} }
 func (*NotifySlotTransIn) ProtoMessage() {}
 func (*NotifySlotTransIn) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{19}
+	return fileDescriptor_03085fc3fc38bb42, []int{23}
 }
 func (m *NotifySlotTransIn) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1293,7 +1525,7 @@ type NotifySlotTransInResp struct {
 func (m *NotifySlotTransInResp) Reset()      { *m = NotifySlotTransInResp{} }
 func (*NotifySlotTransInResp) ProtoMessage() {}
 func (*NotifySlotTransInResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{20}
+	return fileDescriptor_03085fc3fc38bb42, []int{24}
 }
 func (m *NotifySlotTransInResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1336,7 +1568,7 @@ type AddSet struct {
 func (m *AddSet) Reset()      { *m = AddSet{} }
 func (*AddSet) ProtoMessage() {}
 func (*AddSet) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{21}
+	return fileDescriptor_03085fc3fc38bb42, []int{25}
 }
 func (m *AddSet) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1380,7 +1612,7 @@ type AddSetResp struct {
 func (m *AddSetResp) Reset()      { *m = AddSetResp{} }
 func (*AddSetResp) ProtoMessage() {}
 func (*AddSetResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{22}
+	return fileDescriptor_03085fc3fc38bb42, []int{26}
 }
 func (m *AddSetResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1430,7 +1662,7 @@ type RemSet struct {
 func (m *RemSet) Reset()      { *m = RemSet{} }
 func (*RemSet) ProtoMessage() {}
 func (*RemSet) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{23}
+	return fileDescriptor_03085fc3fc38bb42, []int{27}
 }
 func (m *RemSet) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1474,7 +1706,7 @@ type RemSetResp struct {
 func (m *RemSetResp) Reset()      { *m = RemSetResp{} }
 func (*RemSetResp) ProtoMessage() {}
 func (*RemSetResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{24}
+	return fileDescriptor_03085fc3fc38bb42, []int{28}
 }
 func (m *RemSetResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1524,7 +1756,7 @@ type SetMarkClear struct {
 func (m *SetMarkClear) Reset()      { *m = SetMarkClear{} }
 func (*SetMarkClear) ProtoMessage() {}
 func (*SetMarkClear) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{25}
+	return fileDescriptor_03085fc3fc38bb42, []int{29}
 }
 func (m *SetMarkClear) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1568,7 +1800,7 @@ type SetMarkClearResp struct {
 func (m *SetMarkClearResp) Reset()      { *m = SetMarkClearResp{} }
 func (*SetMarkClearResp) ProtoMessage() {}
 func (*SetMarkClearResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{26}
+	return fileDescriptor_03085fc3fc38bb42, []int{30}
 }
 func (m *SetMarkClearResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1619,7 +1851,7 @@ type Flygate struct {
 func (m *Flygate) Reset()      { *m = Flygate{} }
 func (*Flygate) ProtoMessage() {}
 func (*Flygate) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{27}
+	return fileDescriptor_03085fc3fc38bb42, []int{31}
 }
 func (m *Flygate) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1668,7 +1900,7 @@ type GetFlyGateList struct {
 func (m *GetFlyGateList) Reset()      { *m = GetFlyGateList{} }
 func (*GetFlyGateList) ProtoMessage() {}
 func (*GetFlyGateList) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{28}
+	return fileDescriptor_03085fc3fc38bb42, []int{32}
 }
 func (m *GetFlyGateList) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1704,7 +1936,7 @@ type GetFlyGateListResp struct {
 func (m *GetFlyGateListResp) Reset()      { *m = GetFlyGateListResp{} }
 func (*GetFlyGateListResp) ProtoMessage() {}
 func (*GetFlyGateListResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{29}
+	return fileDescriptor_03085fc3fc38bb42, []int{33}
 }
 func (m *GetFlyGateListResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1749,7 +1981,7 @@ type FlyGateHeartBeat struct {
 func (m *FlyGateHeartBeat) Reset()      { *m = FlyGateHeartBeat{} }
 func (*FlyGateHeartBeat) ProtoMessage() {}
 func (*FlyGateHeartBeat) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{30}
+	return fileDescriptor_03085fc3fc38bb42, []int{34}
 }
 func (m *FlyGateHeartBeat) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1807,7 +2039,7 @@ type ChangeFlyGate struct {
 func (m *ChangeFlyGate) Reset()      { *m = ChangeFlyGate{} }
 func (*ChangeFlyGate) ProtoMessage() {}
 func (*ChangeFlyGate) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{31}
+	return fileDescriptor_03085fc3fc38bb42, []int{35}
 }
 func (m *ChangeFlyGate) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1858,7 +2090,7 @@ type ChangeFlyGateResp struct {
 func (m *ChangeFlyGateResp) Reset()      { *m = ChangeFlyGateResp{} }
 func (*ChangeFlyGateResp) ProtoMessage() {}
 func (*ChangeFlyGateResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{32}
+	return fileDescriptor_03085fc3fc38bb42, []int{36}
 }
 func (m *ChangeFlyGateResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1908,7 +2140,7 @@ type SetMeta struct {
 func (m *SetMeta) Reset()      { *m = SetMeta{} }
 func (*SetMeta) ProtoMessage() {}
 func (*SetMeta) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{33}
+	return fileDescriptor_03085fc3fc38bb42, []int{37}
 }
 func (m *SetMeta) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1952,7 +2184,7 @@ type SetMetaResp struct {
 func (m *SetMetaResp) Reset()      { *m = SetMetaResp{} }
 func (*SetMetaResp) ProtoMessage() {}
 func (*SetMetaResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{34}
+	return fileDescriptor_03085fc3fc38bb42, []int{38}
 }
 func (m *SetMetaResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2004,7 +2236,7 @@ type MetaFiled struct {
 func (m *MetaFiled) Reset()      { *m = MetaFiled{} }
 func (*MetaFiled) ProtoMessage() {}
 func (*MetaFiled) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{35}
+	return fileDescriptor_03085fc3fc38bb42, []int{39}
 }
 func (m *MetaFiled) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2062,7 +2294,7 @@ type MetaTable struct {
 func (m *MetaTable) Reset()      { *m = MetaTable{} }
 func (*MetaTable) ProtoMessage() {}
 func (*MetaTable) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{36}
+	return fileDescriptor_03085fc3fc38bb42, []int{40}
 }
 func (m *MetaTable) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2112,7 +2344,7 @@ type UpdateMeta struct {
 func (m *UpdateMeta) Reset()      { *m = UpdateMeta{} }
 func (*UpdateMeta) ProtoMessage() {}
 func (*UpdateMeta) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{37}
+	return fileDescriptor_03085fc3fc38bb42, []int{41}
 }
 func (m *UpdateMeta) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2156,7 +2388,7 @@ type UpdateMetaResp struct {
 func (m *UpdateMetaResp) Reset()      { *m = UpdateMetaResp{} }
 func (*UpdateMetaResp) ProtoMessage() {}
 func (*UpdateMetaResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{38}
+	return fileDescriptor_03085fc3fc38bb42, []int{42}
 }
 func (m *UpdateMetaResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2205,7 +2437,7 @@ type GetMeta struct {
 func (m *GetMeta) Reset()      { *m = GetMeta{} }
 func (*GetMeta) ProtoMessage() {}
 func (*GetMeta) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{39}
+	return fileDescriptor_03085fc3fc38bb42, []int{43}
 }
 func (m *GetMeta) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2242,7 +2474,7 @@ type GetMetaResp struct {
 func (m *GetMetaResp) Reset()      { *m = GetMetaResp{} }
 func (*GetMetaResp) ProtoMessage() {}
 func (*GetMetaResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{40}
+	return fileDescriptor_03085fc3fc38bb42, []int{44}
 }
 func (m *GetMetaResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2294,7 +2526,7 @@ type NotifyUpdateMeta struct {
 func (m *NotifyUpdateMeta) Reset()      { *m = NotifyUpdateMeta{} }
 func (*NotifyUpdateMeta) ProtoMessage() {}
 func (*NotifyUpdateMeta) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{41}
+	return fileDescriptor_03085fc3fc38bb42, []int{45}
 }
 func (m *NotifyUpdateMeta) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2352,7 +2584,7 @@ type NotifyUpdateMetaResp struct {
 func (m *NotifyUpdateMetaResp) Reset()      { *m = NotifyUpdateMetaResp{} }
 func (*NotifyUpdateMetaResp) ProtoMessage() {}
 func (*NotifyUpdateMetaResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_03085fc3fc38bb42, []int{42}
+	return fileDescriptor_03085fc3fc38bb42, []int{46}
 }
 func (m *NotifyUpdateMetaResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2409,6 +2641,10 @@ func init() {
 	proto.RegisterType((*InstallDeploymentResp)(nil), "proto.installDeploymentResp")
 	proto.RegisterType((*AddNode)(nil), "proto.addNode")
 	proto.RegisterType((*AddNodeResp)(nil), "proto.addNodeResp")
+	proto.RegisterType((*AddLearnerStoreToNode)(nil), "proto.addLearnerStoreToNode")
+	proto.RegisterType((*AddLearnerStoreToNodeResp)(nil), "proto.addLearnerStoreToNodeResp")
+	proto.RegisterType((*PromoteLearnerStore)(nil), "proto.promoteLearnerStore")
+	proto.RegisterType((*PromoteLearnerStoreResp)(nil), "proto.promoteLearnerStoreResp")
 	proto.RegisterType((*RemNode)(nil), "proto.remNode")
 	proto.RegisterType((*RemNodeResp)(nil), "proto.remNodeResp")
 	proto.RegisterType((*KvnodeBoot)(nil), "proto.kvnodeBoot")
@@ -2445,95 +2681,101 @@ func init() {
 func init() { proto.RegisterFile("flyfish_server.proto", fileDescriptor_03085fc3fc38bb42) }
 
 var fileDescriptor_03085fc3fc38bb42 = []byte{
-	// 1402 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x57, 0xcd, 0x73, 0xdb, 0x54,
-	0x10, 0xcf, 0x93, 0xfc, 0xd1, 0xac, 0x1d, 0xe7, 0xe5, 0xd5, 0x49, 0xdd, 0xd2, 0x11, 0x19, 0xc1,
-	0x14, 0x4f, 0x66, 0x28, 0x6d, 0x4f, 0xbd, 0x30, 0x43, 0x92, 0x4e, 0xd2, 0x90, 0xd6, 0x6d, 0xa5,
-	0xc2, 0x81, 0x4b, 0x46, 0x44, 0xcf, 0x8e, 0x27, 0xb2, 0x94, 0x4a, 0xcf, 0x01, 0x1f, 0x98, 0xe9,
-	0x99, 0x13, 0x07, 0x4e, 0x7c, 0x5c, 0xb8, 0xc0, 0x5f, 0x00, 0xfc, 0x01, 0x1c, 0x7a, 0xec, 0xc0,
-	0xa5, 0xc3, 0x47, 0x21, 0xee, 0x85, 0x63, 0xff, 0x04, 0x66, 0x9f, 0x64, 0x59, 0x1f, 0xae, 0xc3,
-	0xb8, 0x70, 0xb2, 0xb5, 0xbb, 0xda, 0xdf, 0xee, 0xfe, 0xf6, 0xed, 0x5b, 0x41, 0xbd, 0xed, 0x0c,
-	0xda, 0xdd, 0xe0, 0x60, 0x2f, 0xe0, 0xfe, 0x31, 0xf7, 0x2f, 0x1f, 0xf9, 0x9e, 0xf0, 0x58, 0x51,
-	0xfe, 0x5c, 0xa8, 0x77, 0xbc, 0x8e, 0x27, 0xff, 0xbe, 0x85, 0xff, 0x42, 0xa5, 0x7e, 0x03, 0x6a,
-	0x0f, 0xfa, 0xdc, 0x1f, 0x18, 0x5e, 0x5f, 0xf0, 0x1d, 0xb7, 0xed, 0x31, 0x0d, 0xca, 0xc7, 0xdc,
-	0x0f, 0xba, 0x9e, 0xdb, 0x20, 0xab, 0xa4, 0xa9, 0x6e, 0x14, 0x1e, 0x3d, 0x7d, 0x75, 0xce, 0x18,
-	0x09, 0x19, 0x83, 0x42, 0xc0, 0x45, 0xd0, 0x50, 0x56, 0xd5, 0x66, 0xd1, 0x90, 0xff, 0xf5, 0x07,
-	0xb0, 0xe8, 0x8f, 0x1c, 0xec, 0x1e, 0xb7, 0x3c, 0x9b, 0xb3, 0x8b, 0x50, 0x72, 0x3d, 0x9b, 0xef,
-	0xdc, 0x90, 0x5e, 0x8a, 0x91, 0x97, 0x48, 0xc6, 0x1a, 0x50, 0x38, 0xf0, 0x02, 0xd1, 0x50, 0x56,
-	0x49, 0x73, 0x3e, 0xd2, 0x49, 0x09, 0xbb, 0x04, 0x15, 0x8c, 0xbe, 0xbb, 0xcf, 0xef, 0x7a, 0xbe,
-	0x68, 0xa8, 0x89, 0x97, 0x93, 0x0a, 0xfd, 0x53, 0x02, 0xd5, 0x18, 0xd3, 0xe4, 0x82, 0x5d, 0x80,
-	0x62, 0xc0, 0x45, 0x06, 0x2f, 0x14, 0xb1, 0x15, 0x28, 0x05, 0xc2, 0xf3, 0xf9, 0x28, 0xea, 0xe8,
-	0x89, 0xd5, 0xa1, 0x18, 0x38, 0x9e, 0x08, 0x1a, 0xea, 0xaa, 0xda, 0xac, 0x1a, 0xe1, 0x03, 0xbb,
-	0x02, 0xe5, 0xc3, 0x63, 0x0c, 0x34, 0x68, 0x14, 0x56, 0xd5, 0x66, 0xe5, 0xda, 0x4a, 0x58, 0xac,
-	0xcb, 0x99, 0x1c, 0x8d, 0x91, 0x99, 0xfe, 0x09, 0xb0, 0x74, 0x15, 0x0d, 0x1e, 0x1c, 0xb1, 0x37,
-	0xa2, 0x4a, 0x11, 0xe9, 0xe4, 0x6c, 0xd6, 0x89, 0xc9, 0x45, 0x58, 0x3e, 0xa6, 0x01, 0xf8, 0xbc,
-	0xe7, 0x1d, 0x73, 0x73, 0x5c, 0xd8, 0x84, 0x24, 0x49, 0x89, 0x3a, 0x81, 0x12, 0x7d, 0x0d, 0xaa,
-	0x12, 0x7e, 0xcf, 0xe1, 0x96, 0xcd, 0x7d, 0x59, 0x0a, 0x4c, 0x30, 0x53, 0x0a, 0x14, 0xe9, 0x57,
-	0x61, 0x29, 0x69, 0xbb, 0xe7, 0x63, 0xa4, 0x17, 0xa1, 0x14, 0x3e, 0xa6, 0xc9, 0x0a, 0x65, 0xfa,
-	0xe7, 0x04, 0xa8, 0xcd, 0x8f, 0x1c, 0x6f, 0xd0, 0xe3, 0xae, 0xd8, 0x95, 0x39, 0xff, 0xdf, 0xfc,
-	0xb2, 0x55, 0x38, 0xe3, 0x5b, 0x6d, 0x21, 0x8d, 0x0a, 0x09, 0xa3, 0x58, 0xaa, 0x7f, 0x00, 0x0b,
-	0xe3, 0xa8, 0x4e, 0xeb, 0x80, 0x37, 0xa1, 0x18, 0x32, 0xaa, 0x48, 0x32, 0xce, 0x45, 0x64, 0x64,
-	0xd3, 0x32, 0x42, 0x2b, 0xfd, 0x6d, 0x58, 0xea, 0xba, 0x81, 0xb0, 0x1c, 0xe7, 0x46, 0x6c, 0xc1,
-	0x9a, 0x29, 0x3e, 0xeb, 0x39, 0x17, 0x31, 0xa1, 0xfa, 0x2e, 0x2c, 0xe7, 0x5e, 0x97, 0x2d, 0x51,
-	0x07, 0xc5, 0x3b, 0x94, 0xf1, 0x9d, 0x89, 0xe2, 0x53, 0xbc, 0x43, 0xac, 0xa5, 0xcf, 0xad, 0xc0,
-	0x73, 0x53, 0xf5, 0x8a, 0x64, 0xfa, 0xb7, 0x04, 0xca, 0x96, 0x6d, 0xcb, 0x53, 0x35, 0x2d, 0xc5,
-	0x31, 0x23, 0xca, 0x14, 0x46, 0xd4, 0xd3, 0x18, 0x29, 0xfc, 0x1b, 0x46, 0x8a, 0x13, 0x19, 0x59,
-	0x87, 0x4a, 0x14, 0xe8, 0xcc, 0xc9, 0x6e, 0x42, 0xd9, 0xe7, 0xbd, 0x97, 0xcb, 0x15, 0xe3, 0x88,
-	0x9c, 0xcc, 0x1c, 0xc7, 0x1a, 0x40, 0x78, 0xb8, 0x37, 0x3c, 0x4f, 0x4c, 0x6f, 0x76, 0x9d, 0xc3,
-	0xbc, 0x3c, 0x5b, 0x72, 0x7c, 0xd6, 0x41, 0xe9, 0xda, 0x29, 0x33, 0xa5, 0x6b, 0x63, 0x8d, 0xb1,
-	0x4a, 0x9b, 0x4e, 0x3f, 0x10, 0xdc, 0x4f, 0x21, 0x26, 0x15, 0x32, 0xe7, 0x68, 0x20, 0x91, 0x66,
-	0x35, 0xce, 0x19, 0x45, 0xfa, 0x37, 0x0a, 0xd4, 0xc6, 0x31, 0xcd, 0x9a, 0x59, 0x82, 0xee, 0x9b,
-	0xd9, 0x7e, 0x48, 0x2a, 0xfe, 0xbb, 0xb6, 0x60, 0xcd, 0x78, 0xfa, 0x96, 0xe4, 0xc9, 0xa1, 0xd1,
-	0xc9, 0x89, 0x8b, 0x16, 0xcf, 0xe3, 0x4b, 0x50, 0xe9, 0x71, 0x61, 0xbd, 0x1f, 0x0d, 0xbb, 0x72,
-	0x62, 0xd8, 0x25, 0x15, 0xd8, 0xcc, 0xf8, 0xd8, 0x38, 0x93, 0xa8, 0x92, 0x94, 0xe8, 0xef, 0x02,
-	0x73, 0x3d, 0xd1, 0x6d, 0x0f, 0x4c, 0xc7, 0x13, 0xf7, 0x7d, 0xcb, 0x0d, 0xee, 0xf4, 0x05, 0xda,
-	0x63, 0x0d, 0x53, 0xb4, 0x48, 0xc9, 0x78, 0x54, 0x2a, 0xf9, 0x51, 0x79, 0x0d, 0x56, 0xf2, 0xbe,
-	0x64, 0xdd, 0x5f, 0xe8, 0x4f, 0xdf, 0x81, 0xa5, 0xcc, 0x3b, 0x3b, 0xee, 0x8c, 0xf0, 0x57, 0x61,
-	0x39, 0xe7, 0xea, 0x14, 0xf4, 0x2b, 0x50, 0xb2, 0x6c, 0x1b, 0x67, 0xe1, 0x25, 0x50, 0x03, 0x1e,
-	0x9a, 0xbc, 0x68, 0x54, 0xa1, 0x81, 0xfe, 0x0e, 0x40, 0xf8, 0xc6, 0xcc, 0x27, 0xe5, 0x75, 0xd4,
-	0xf6, 0x4e, 0x99, 0xbf, 0x88, 0x13, 0x5a, 0xbd, 0xc4, 0x89, 0xac, 0x06, 0x5c, 0xdc, 0xb6, 0xfc,
-	0xc3, 0x4d, 0x87, 0x5b, 0xfe, 0x54, 0xb4, 0x2d, 0xa0, 0x49, 0xdb, 0x99, 0x31, 0x4d, 0x28, 0xb7,
-	0x9d, 0x41, 0xc7, 0x12, 0x1c, 0xef, 0xe0, 0xa8, 0xeb, 0xa5, 0x8f, 0x91, 0xe5, 0x48, 0xc8, 0x9a,
-	0x50, 0xed, 0x05, 0x9d, 0xbb, 0xdc, 0x37, 0xf9, 0xbe, 0xe7, 0xda, 0x29, 0x42, 0x53, 0x1a, 0x9d,
-	0x42, 0xad, 0xc3, 0xc5, 0x96, 0x33, 0xd8, 0xb6, 0x04, 0xbf, 0xd5, 0x0d, 0x84, 0x7e, 0x1d, 0x58,
-	0x5a, 0x22, 0x03, 0xd6, 0xa1, 0xe0, 0x74, 0x03, 0x11, 0x5d, 0x37, 0xb5, 0x88, 0xc3, 0x28, 0x1e,
-	0x43, 0xea, 0xf4, 0x87, 0x04, 0x68, 0x3b, 0x7c, 0xef, 0x26, 0xb7, 0x7c, 0xb1, 0xc1, 0x2d, 0x79,
-	0x72, 0xd1, 0xc4, 0x9c, 0x10, 0x6e, 0x52, 0x81, 0x15, 0x14, 0xde, 0x21, 0x4f, 0xa7, 0x1e, 0x8a,
-	0x72, 0xe9, 0xa8, 0x2f, 0x4c, 0xa7, 0x0b, 0x0b, 0xfb, 0x07, 0x96, 0xdb, 0xe1, 0x51, 0xfc, 0x08,
-	0xbf, 0xdf, 0xf7, 0x7d, 0xee, 0x0a, 0x7c, 0x4c, 0xc3, 0x27, 0x14, 0xec, 0x0a, 0xd0, 0x5e, 0xd0,
-	0x31, 0xb9, 0x6b, 0x4f, 0xae, 0x5a, 0x4e, 0x8b, 0x87, 0x2b, 0x05, 0x35, 0x85, 0xd7, 0x04, 0x5d,
-	0xca, 0x04, 0xba, 0xf4, 0xd7, 0x50, 0x2f, 0x6e, 0x73, 0x61, 0xc5, 0xc3, 0x84, 0xe4, 0x86, 0xc9,
-	0x3a, 0x8e, 0x40, 0x69, 0x34, 0x73, 0x07, 0xed, 0xc1, 0x3c, 0xba, 0xda, 0xea, 0x3a, 0xdc, 0x46,
-	0x24, 0xd7, 0xea, 0xa5, 0x4b, 0x22, 0x25, 0xa8, 0x11, 0x83, 0xa3, 0x74, 0xac, 0x52, 0x82, 0x89,
-	0xd8, 0xbc, 0x6d, 0xf5, 0x9d, 0xf4, 0xa8, 0x1e, 0x09, 0xf5, 0x3b, 0x21, 0xc0, 0x7d, 0xeb, 0x43,
-	0x87, 0x4f, 0x01, 0x68, 0x42, 0xa9, 0xdd, 0xe5, 0x8e, 0x3d, 0x5a, 0x80, 0x46, 0x33, 0x38, 0x0e,
-	0xce, 0x88, 0xf4, 0xfa, 0x75, 0x80, 0xfe, 0x91, 0x6d, 0x09, 0x2e, 0x8b, 0xb3, 0x06, 0xe5, 0xf0,
-	0x69, 0xb4, 0xf6, 0x24, 0x5f, 0x94, 0xa0, 0xc6, 0xc8, 0x00, 0xbf, 0x25, 0xc6, 0x6f, 0xce, 0x5c,
-	0xb1, 0x79, 0x28, 0x77, 0xc2, 0xa2, 0xeb, 0xdb, 0x50, 0xe9, 0x24, 0xea, 0x7f, 0xda, 0x97, 0xc9,
-	0x88, 0x48, 0x25, 0x47, 0xe4, 0x01, 0xd0, 0x70, 0x94, 0xbe, 0x37, 0xce, 0x6c, 0xca, 0x92, 0x9c,
-	0x44, 0x52, 0xa6, 0x21, 0xa9, 0x39, 0x24, 0x03, 0xea, 0x59, 0x24, 0x19, 0xfb, 0x4b, 0xa0, 0xad,
-	0xfd, 0x54, 0x84, 0x05, 0x53, 0x7e, 0xd1, 0x6d, 0xf6, 0xec, 0xfb, 0xd8, 0x14, 0x8b, 0x50, 0xb9,
-	0x87, 0x4b, 0xfc, 0x2d, 0xb9, 0xa0, 0x53, 0xc2, 0xce, 0xc2, 0x62, 0x42, 0x80, 0x88, 0x54, 0x61,
-	0xcb, 0xb0, 0xb4, 0x93, 0xdd, 0x42, 0x29, 0x67, 0xe7, 0x61, 0x79, 0x67, 0xd2, 0x72, 0x4a, 0xdb,
-	0xac, 0x02, 0xe5, 0xf5, 0x70, 0x81, 0xa3, 0x1d, 0x04, 0x59, 0x1f, 0x6f, 0x73, 0xf4, 0x00, 0xb5,
-	0x46, 0xb8, 0x56, 0xd1, 0x43, 0xd4, 0x1a, 0xe3, 0x1d, 0x8b, 0x3a, 0x0c, 0xa0, 0xb4, 0x2e, 0x6f,
-	0x12, 0xda, 0x63, 0x35, 0x80, 0xf5, 0xf8, 0x56, 0xa1, 0x2e, 0xea, 0x0c, 0x39, 0xfd, 0xa9, 0x87,
-	0x3a, 0x23, 0xbe, 0x09, 0xe8, 0x11, 0xa3, 0x50, 0x35, 0x13, 0xb3, 0x9a, 0x3e, 0x60, 0x75, 0xa0,
-	0x66, 0x66, 0x7a, 0x53, 0x1f, 0xd1, 0xcd, 0xb0, 0x19, 0x68, 0x80, 0xe8, 0xe6, 0xb8, 0x33, 0xa8,
-	0x40, 0xed, 0x76, 0xa4, 0xed, 0xa3, 0x76, 0x3b, 0xa1, 0x3d, 0x46, 0xcc, 0x31, 0x1f, 0xf4, 0x23,
-	0xc6, 0xa0, 0x96, 0xe6, 0x87, 0x7e, 0xcc, 0x16, 0x01, 0x76, 0xe3, 0xed, 0x8a, 0xfe, 0x8c, 0x35,
-	0xad, 0xed, 0xa6, 0xd6, 0x2d, 0xfa, 0x0b, 0x61, 0xe7, 0x80, 0xb5, 0x72, 0x3b, 0x01, 0xfd, 0x95,
-	0xb0, 0x57, 0x60, 0xa5, 0x35, 0x71, 0x59, 0xa0, 0xbf, 0x11, 0xb6, 0x02, 0x4b, 0xad, 0xec, 0x55,
-	0x4e, 0x7f, 0x27, 0xec, 0x02, 0x2c, 0xb7, 0x26, 0x5d, 0xf1, 0xf4, 0x0f, 0xc2, 0x96, 0x81, 0xb6,
-	0x32, 0x9d, 0x44, 0x9f, 0x12, 0x76, 0x1e, 0xea, 0xad, 0x09, 0x0d, 0x46, 0xff, 0x94, 0x01, 0xdf,
-	0x4b, 0x7d, 0x85, 0xd2, 0xef, 0x15, 0x0c, 0xf8, 0x5e, 0xee, 0xd3, 0x94, 0xfe, 0x80, 0xdd, 0x41,
-	0xb7, 0x32, 0x37, 0x07, 0xfd, 0x51, 0x41, 0x27, 0xdb, 0xa9, 0xbb, 0x88, 0x7e, 0xa1, 0xa2, 0x93,
-	0xed, 0xdc, 0x05, 0x45, 0xbf, 0x54, 0x19, 0x83, 0x85, 0xcd, 0xe4, 0x44, 0xa6, 0x5f, 0xa9, 0x98,
-	0xec, 0x66, 0x76, 0x4a, 0xd3, 0xaf, 0xd5, 0x8d, 0xeb, 0x8f, 0x4e, 0x34, 0xf2, 0xf8, 0x44, 0x23,
-	0x4f, 0x4e, 0xb4, 0xb9, 0xe7, 0x27, 0x1a, 0x79, 0x38, 0xd4, 0xc8, 0x77, 0x43, 0x8d, 0x3c, 0x1a,
-	0x6a, 0xe4, 0xf1, 0x50, 0x23, 0x7f, 0x0d, 0x35, 0xf2, 0xf7, 0x50, 0x9b, 0x7b, 0x3e, 0xd4, 0xc8,
-	0x67, 0xcf, 0xb4, 0xb9, 0xc7, 0xcf, 0xb4, 0xb9, 0x27, 0xcf, 0xb4, 0xb9, 0x7f, 0x02, 0x00, 0x00,
-	0xff, 0xff, 0xdc, 0xb0, 0x60, 0x72, 0xd8, 0x10, 0x00, 0x00,
+	// 1493 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x58, 0x4b, 0x6f, 0xdb, 0xc6,
+	0x16, 0x36, 0x49, 0x3d, 0xe2, 0x23, 0x59, 0x1e, 0x8f, 0x25, 0x5b, 0x4e, 0x72, 0x79, 0x0d, 0xde,
+	0x8b, 0x5c, 0xc1, 0xc0, 0x4d, 0x93, 0xac, 0xb2, 0x29, 0x50, 0xd9, 0x81, 0x1d, 0xd7, 0x89, 0xe2,
+	0x90, 0x6e, 0x17, 0xdd, 0x18, 0xac, 0x39, 0x92, 0x55, 0x51, 0x1c, 0x85, 0x1c, 0xb9, 0x55, 0x81,
+	0x02, 0x59, 0x77, 0xd5, 0x45, 0x57, 0x7d, 0x6c, 0xba, 0x69, 0x7f, 0x40, 0xd1, 0xf6, 0x27, 0x64,
+	0x19, 0xb4, 0x9b, 0xa0, 0x8f, 0xb4, 0x56, 0x36, 0x5d, 0xe6, 0x27, 0x14, 0x33, 0xa4, 0x28, 0x3e,
+	0x64, 0xb9, 0x90, 0x9b, 0x95, 0x38, 0xe7, 0x9c, 0x39, 0xdf, 0x79, 0xcd, 0x9c, 0x33, 0x82, 0x72,
+	0xd3, 0x1e, 0x34, 0xdb, 0xde, 0xf1, 0xa1, 0x47, 0xdc, 0x13, 0xe2, 0x5e, 0xef, 0xb9, 0x94, 0x51,
+	0x9c, 0x15, 0x3f, 0x97, 0xcb, 0x2d, 0xda, 0xa2, 0xe2, 0xf3, 0x35, 0xfe, 0xe5, 0x33, 0xb5, 0x3b,
+	0x50, 0x7a, 0xd4, 0x27, 0xee, 0x40, 0xa7, 0x7d, 0x46, 0x76, 0x9d, 0x26, 0xc5, 0x2a, 0xe4, 0x4f,
+	0x88, 0xeb, 0xb5, 0xa9, 0x53, 0x95, 0xd6, 0xa5, 0x9a, 0xb2, 0x99, 0x79, 0xf2, 0xfc, 0xdf, 0x73,
+	0xfa, 0x88, 0x88, 0x31, 0x64, 0x3c, 0xc2, 0xbc, 0xaa, 0xbc, 0xae, 0xd4, 0xb2, 0xba, 0xf8, 0xd6,
+	0x1e, 0xc1, 0xa2, 0x3b, 0x52, 0xb0, 0x77, 0xd2, 0xa0, 0x16, 0xc1, 0x57, 0x21, 0xe7, 0x50, 0x8b,
+	0xec, 0xde, 0x11, 0x5a, 0xb2, 0x81, 0x96, 0x80, 0x86, 0xab, 0x90, 0x39, 0xa6, 0x1e, 0xab, 0xca,
+	0xeb, 0x52, 0x6d, 0x3e, 0xe0, 0x09, 0x0a, 0xbe, 0x06, 0x05, 0x6e, 0x7d, 0xfb, 0x88, 0xec, 0x53,
+	0x97, 0x55, 0x95, 0xc8, 0xe6, 0x28, 0x43, 0xfb, 0x58, 0x82, 0x62, 0x88, 0x69, 0x10, 0x86, 0x2f,
+	0x43, 0xd6, 0x23, 0x2c, 0x81, 0xe7, 0x93, 0xf0, 0x0a, 0xe4, 0x3c, 0x46, 0x5d, 0x32, 0xb2, 0x3a,
+	0x58, 0xe1, 0x32, 0x64, 0x3d, 0x9b, 0x32, 0xaf, 0xaa, 0xac, 0x2b, 0xb5, 0xa2, 0xee, 0x2f, 0xf0,
+	0x0d, 0xc8, 0x77, 0x4e, 0xb8, 0xa1, 0x5e, 0x35, 0xb3, 0xae, 0xd4, 0x0a, 0xb7, 0x56, 0xfc, 0x60,
+	0x5d, 0x4f, 0xf8, 0xa8, 0x8f, 0xc4, 0xb4, 0x8f, 0x00, 0xc7, 0xa3, 0xa8, 0x13, 0xaf, 0x87, 0xff,
+	0x17, 0x44, 0x4a, 0x12, 0x4a, 0x96, 0x93, 0x4a, 0x0c, 0xc2, 0xfc, 0xf0, 0x61, 0x15, 0xc0, 0x25,
+	0x5d, 0x7a, 0x42, 0x8c, 0x71, 0x60, 0x23, 0x94, 0x68, 0x4a, 0x94, 0x09, 0x29, 0xd1, 0x36, 0xa0,
+	0x28, 0xe0, 0x0f, 0x6d, 0x62, 0x5a, 0xc4, 0x15, 0xa1, 0xe0, 0x0e, 0x26, 0x42, 0xc1, 0x49, 0xda,
+	0x4d, 0x58, 0x8a, 0xca, 0x1e, 0xba, 0xdc, 0xd2, 0xab, 0x90, 0xf3, 0x97, 0xf1, 0x64, 0xf9, 0x34,
+	0xed, 0x53, 0x09, 0x90, 0x45, 0x7a, 0x36, 0x1d, 0x74, 0x89, 0xc3, 0xf6, 0x84, 0xcf, 0xaf, 0x3a,
+	0xbf, 0x78, 0x1d, 0x2e, 0xb9, 0x66, 0x93, 0x09, 0xa1, 0x4c, 0x44, 0x28, 0xa4, 0x6a, 0xef, 0xc0,
+	0xc2, 0xd8, 0xaa, 0xf3, 0x2a, 0xe0, 0xff, 0x90, 0xf5, 0x33, 0x2a, 0x8b, 0x64, 0xac, 0x06, 0xc9,
+	0x48, 0xba, 0xa5, 0xfb, 0x52, 0xda, 0xeb, 0xb0, 0xd4, 0x76, 0x3c, 0x66, 0xda, 0xf6, 0x9d, 0x50,
+	0x02, 0xd7, 0x62, 0xf9, 0x2c, 0xa7, 0x54, 0x84, 0x09, 0xd5, 0xf6, 0xa0, 0x92, 0xda, 0x2e, 0x4a,
+	0xa2, 0x0c, 0x32, 0xed, 0x08, 0xfb, 0x2e, 0x05, 0xf6, 0xc9, 0xb4, 0xc3, 0x63, 0xe9, 0x12, 0xd3,
+	0xa3, 0x4e, 0x2c, 0x5e, 0x01, 0x4d, 0xfb, 0x5a, 0x82, 0xbc, 0x69, 0x59, 0xe2, 0x54, 0x4d, 0x73,
+	0x71, 0x9c, 0x11, 0x79, 0x4a, 0x46, 0x94, 0xf3, 0x32, 0x92, 0xf9, 0x3b, 0x19, 0xc9, 0x4e, 0xcc,
+	0x48, 0x1d, 0x0a, 0x81, 0xa1, 0x33, 0x3b, 0xdb, 0x85, 0x8a, 0x69, 0x59, 0xf7, 0x88, 0xe9, 0x3a,
+	0xc4, 0x35, 0x78, 0xc5, 0x1e, 0xd0, 0x0b, 0x7a, 0x1e, 0x9e, 0x06, 0x25, 0x7d, 0x1a, 0x1e, 0xc0,
+	0xda, 0x44, 0xb8, 0x99, 0xed, 0xef, 0xc0, 0x72, 0xcf, 0xa5, 0x5d, 0xca, 0x48, 0x54, 0xe9, 0x2b,
+	0xb2, 0xfe, 0x3e, 0xac, 0x4e, 0x00, 0x9b, 0xd9, 0xf6, 0x2d, 0xc8, 0xbb, 0xa4, 0x7b, 0xb1, 0x68,
+	0xf3, 0x1a, 0x08, 0x94, 0xcc, 0x6c, 0xc7, 0x06, 0x80, 0x7f, 0xb1, 0x6e, 0x52, 0xca, 0xa6, 0x5f,
+	0x34, 0x1a, 0x81, 0x79, 0x11, 0x0b, 0xd1, 0xba, 0xca, 0x20, 0xb7, 0xad, 0x98, 0x98, 0xdc, 0xb6,
+	0x78, 0x7d, 0xf3, 0x0a, 0xdd, 0xb2, 0xfb, 0x1e, 0x23, 0x6e, 0x0c, 0x31, 0xca, 0x10, 0x3e, 0x07,
+	0xcd, 0x40, 0xaa, 0x15, 0x43, 0x9f, 0x39, 0x49, 0xfb, 0x4a, 0x86, 0xd2, 0xd8, 0xa6, 0x59, 0x3d,
+	0x8b, 0x1c, 0xb5, 0xbb, 0xc9, 0xb3, 0x18, 0x65, 0xfc, 0x73, 0x47, 0x12, 0xd7, 0xc2, 0xce, 0x97,
+	0x13, 0xb7, 0x16, 0x0a, 0x6e, 0xad, 0x30, 0x68, 0x61, 0x2f, 0xbc, 0x06, 0x85, 0x2e, 0x61, 0xe6,
+	0xdb, 0x41, 0xa3, 0xc9, 0x47, 0x1a, 0x4d, 0x94, 0xc1, 0x2f, 0x12, 0xbe, 0xac, 0x5e, 0x8a, 0x44,
+	0x49, 0x50, 0xb4, 0x37, 0x01, 0x3b, 0x94, 0xb5, 0x9b, 0x03, 0xc3, 0xa6, 0xec, 0xc0, 0x35, 0x1d,
+	0xef, 0x41, 0x9f, 0x71, 0x79, 0x1e, 0xc3, 0x58, 0x5a, 0x04, 0x65, 0x5c, 0xda, 0x72, 0xba, 0xb4,
+	0x6f, 0xc1, 0x4a, 0x5a, 0x97, 0x88, 0xfb, 0x99, 0xfa, 0xb4, 0x5d, 0x58, 0x4a, 0xec, 0xd9, 0x75,
+	0x66, 0x84, 0xbf, 0x09, 0x95, 0x94, 0xaa, 0x73, 0xd0, 0x6f, 0x40, 0xce, 0xb4, 0x2c, 0xde, 0x87,
+	0xae, 0x81, 0xe2, 0x11, 0x5f, 0xe4, 0xac, 0x36, 0xc1, 0x05, 0xb4, 0x37, 0x00, 0xfc, 0x1d, 0x33,
+	0x9f, 0x94, 0xff, 0x72, 0x6e, 0xf7, 0x9c, 0xde, 0xc7, 0x71, 0x7c, 0xa9, 0x0b, 0x9c, 0xc8, 0xa2,
+	0x47, 0xd8, 0x7d, 0xd3, 0xed, 0x6c, 0xd9, 0xc4, 0x74, 0xa7, 0xa2, 0x6d, 0x03, 0x8a, 0xca, 0xce,
+	0x8c, 0x69, 0x40, 0xbe, 0x69, 0x0f, 0x5a, 0x26, 0x23, 0x7c, 0xfe, 0x09, 0xaa, 0x5e, 0xe8, 0x18,
+	0x49, 0x8e, 0x88, 0xb8, 0x06, 0xc5, 0xae, 0xd7, 0xda, 0x27, 0xae, 0x41, 0x8e, 0xa8, 0x63, 0xc5,
+	0x12, 0x1a, 0xe3, 0x68, 0x08, 0x4a, 0x2d, 0xc2, 0xb6, 0xed, 0xc1, 0x8e, 0xc9, 0xc8, 0xbd, 0xb6,
+	0xc7, 0xb4, 0xdb, 0x80, 0xe3, 0x14, 0x61, 0xb0, 0x06, 0x19, 0xbb, 0xed, 0xb1, 0xa0, 0xd5, 0x97,
+	0x82, 0x1c, 0x06, 0xf6, 0xe8, 0x82, 0xa7, 0x3d, 0x96, 0x00, 0x35, 0xfd, 0x7d, 0x77, 0x89, 0xe9,
+	0xb2, 0x4d, 0x62, 0x8a, 0x93, 0xcb, 0x45, 0x8c, 0x09, 0xe6, 0x46, 0x19, 0x3c, 0x82, 0x8c, 0x76,
+	0x48, 0xdc, 0x75, 0x9f, 0x94, 0x72, 0x47, 0x39, 0xd3, 0x9d, 0x36, 0x2c, 0x1c, 0x1d, 0x9b, 0x4e,
+	0x8b, 0x04, 0xf6, 0x73, 0xf8, 0xa3, 0xbe, 0xeb, 0x12, 0x87, 0xf1, 0x65, 0x1c, 0x3e, 0xc2, 0xc0,
+	0x37, 0x00, 0x75, 0xbd, 0x96, 0x41, 0x1c, 0x6b, 0x72, 0xd4, 0x52, 0x5c, 0x7e, 0xb8, 0x62, 0x50,
+	0x53, 0xf2, 0x1a, 0x49, 0x97, 0x3c, 0x21, 0x5d, 0xda, 0x7f, 0x38, 0x9f, 0xdd, 0x27, 0xcc, 0x0c,
+	0x2f, 0x13, 0x29, 0x75, 0x99, 0xd4, 0xf9, 0x15, 0x28, 0x84, 0x66, 0xae, 0xa0, 0x43, 0x98, 0xe7,
+	0xaa, 0xb6, 0xdb, 0x36, 0xb1, 0x38, 0x92, 0x63, 0x76, 0xe3, 0x21, 0x11, 0x14, 0xce, 0x61, 0x83,
+	0x5e, 0xdc, 0x56, 0x41, 0xe1, 0x8e, 0x58, 0xa4, 0x69, 0xf6, 0xed, 0xf8, 0x55, 0x3d, 0x22, 0x6a,
+	0x0f, 0x7c, 0x80, 0x03, 0xf3, 0x5d, 0x9b, 0x4c, 0x01, 0xa8, 0x41, 0xae, 0xd9, 0x26, 0xb6, 0x35,
+	0x1a, 0x3e, 0x47, 0x77, 0x70, 0x68, 0x9c, 0x1e, 0xf0, 0xb5, 0xdb, 0x00, 0xfd, 0x9e, 0x65, 0x32,
+	0x22, 0x82, 0xb3, 0x01, 0x79, 0x7f, 0x35, 0x1a, 0x39, 0xa3, 0x1b, 0x05, 0xa8, 0x3e, 0x12, 0xe0,
+	0xef, 0xb8, 0xf1, 0xce, 0x99, 0x23, 0x36, 0x0f, 0xf9, 0x96, 0x1f, 0x74, 0x6d, 0x07, 0x0a, 0xad,
+	0x48, 0xfc, 0xcf, 0x7b, 0x15, 0x8e, 0x12, 0x29, 0xa7, 0x12, 0x79, 0x0c, 0xc8, 0xbf, 0x4a, 0xdf,
+	0x1a, 0x7b, 0x36, 0xe5, 0x81, 0x12, 0x45, 0x92, 0xa7, 0x21, 0x29, 0x29, 0x24, 0x1d, 0xca, 0x49,
+	0x24, 0x61, 0xfb, 0x05, 0xd0, 0x36, 0xbe, 0xcd, 0xc1, 0x82, 0x21, 0x5e, 0xd3, 0x5b, 0x5d, 0xeb,
+	0x80, 0x17, 0xc5, 0x22, 0x14, 0x1e, 0xf2, 0x07, 0xd4, 0x3d, 0xf1, 0x38, 0x42, 0x12, 0x5e, 0x86,
+	0xc5, 0x08, 0x81, 0x23, 0x22, 0x19, 0x57, 0x60, 0x69, 0x37, 0xf9, 0x02, 0x40, 0x04, 0xaf, 0x41,
+	0x65, 0x77, 0xd2, 0xc3, 0x00, 0x35, 0x71, 0x01, 0xf2, 0x75, 0x7f, 0x78, 0x46, 0x2d, 0x0e, 0x52,
+	0x1f, 0x4f, 0xd2, 0xe8, 0x98, 0x6f, 0xac, 0x4f, 0x1a, 0x54, 0x51, 0x1b, 0xff, 0x0b, 0xd6, 0xea,
+	0x67, 0xcd, 0xb0, 0xe8, 0x3d, 0xbc, 0x0a, 0xcb, 0xfb, 0xe9, 0x21, 0x11, 0x75, 0xf0, 0x15, 0x58,
+	0xdd, 0x9f, 0x3c, 0x3d, 0x22, 0x9b, 0x5b, 0xa3, 0xfb, 0x63, 0x1c, 0xea, 0x72, 0x6b, 0xf4, 0xf1,
+	0x4c, 0x87, 0x1c, 0x0c, 0x90, 0xab, 0x8b, 0xce, 0x85, 0x28, 0x2e, 0x01, 0xd4, 0xc3, 0x2e, 0x86,
+	0x7a, 0x9c, 0xa7, 0x8b, 0x6e, 0x83, 0x1e, 0x71, 0x9e, 0x1e, 0x76, 0x1e, 0xe4, 0x62, 0x04, 0x45,
+	0x23, 0xd2, 0x1b, 0x10, 0x7f, 0x81, 0x23, 0x23, 0xd1, 0x2d, 0x10, 0xe3, 0xe8, 0x86, 0x5f, 0x7c,
+	0xa8, 0xcf, 0xd1, 0x8d, 0x71, 0x25, 0xa2, 0x13, 0xce, 0xdd, 0x09, 0xb8, 0xef, 0x73, 0xee, 0x4e,
+	0x84, 0xfb, 0x01, 0xc7, 0x1c, 0xe7, 0x1f, 0x0d, 0x30, 0x86, 0x52, 0xbc, 0x1e, 0xd0, 0x87, 0x78,
+	0x11, 0x60, 0x2f, 0x9c, 0xe6, 0xd0, 0x8f, 0x3c, 0x87, 0xa5, 0xbd, 0xd8, 0x78, 0x87, 0x7e, 0x92,
+	0xf0, 0x2a, 0xe0, 0x46, 0x6a, 0x06, 0x41, 0x3f, 0x4b, 0xf8, 0x0a, 0xac, 0x34, 0x26, 0x0e, 0x27,
+	0xe8, 0x17, 0x09, 0xaf, 0xc0, 0x52, 0x23, 0x39, 0x3a, 0xa0, 0x5f, 0x25, 0x7c, 0x19, 0x2a, 0x8d,
+	0x49, 0x23, 0x05, 0xfa, 0x4d, 0xc2, 0x15, 0x40, 0x8d, 0x44, 0xe5, 0xa2, 0xe7, 0x12, 0x5e, 0x83,
+	0x72, 0x63, 0x42, 0x41, 0xa3, 0xdf, 0x85, 0xc1, 0x0f, 0x63, 0xff, 0x38, 0xa0, 0xef, 0x64, 0x6e,
+	0xf0, 0xc3, 0xd4, 0xdf, 0x10, 0xe8, 0x7b, 0x5e, 0x8d, 0x68, 0x3b, 0xd1, 0xa9, 0xd0, 0x0f, 0x32,
+	0x57, 0xb2, 0x13, 0xeb, 0x7d, 0xe8, 0x33, 0x85, 0x2b, 0xd9, 0x49, 0x35, 0x44, 0xf4, 0xb9, 0x82,
+	0x31, 0x2c, 0x6c, 0x45, 0x3b, 0x00, 0xfa, 0x42, 0xe1, 0xce, 0x6e, 0x25, 0xbb, 0x02, 0xfa, 0x52,
+	0xd9, 0xbc, 0xfd, 0xe4, 0x54, 0x95, 0x9e, 0x9e, 0xaa, 0xd2, 0xb3, 0x53, 0x75, 0xee, 0xe5, 0xa9,
+	0x2a, 0x3d, 0x1e, 0xaa, 0xd2, 0x37, 0x43, 0x55, 0x7a, 0x32, 0x54, 0xa5, 0xa7, 0x43, 0x55, 0xfa,
+	0x63, 0xa8, 0x4a, 0x7f, 0x0e, 0xd5, 0xb9, 0x97, 0x43, 0x55, 0xfa, 0xe4, 0x85, 0x3a, 0xf7, 0xf4,
+	0x85, 0x3a, 0xf7, 0xec, 0x85, 0x3a, 0xf7, 0x57, 0x00, 0x00, 0x00, 0xff, 0xff, 0x1d, 0x20, 0xb1,
+	0x23, 0xc4, 0x12, 0x00, 0x00,
 }
 
 func (x ServerCmdType) String() string {
@@ -2906,6 +3148,120 @@ func (this *AddNodeResp) Equal(that interface{}) bool {
 	that1, ok := that.(*AddNodeResp)
 	if !ok {
 		that2, ok := that.(AddNodeResp)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Ok != that1.Ok {
+		return false
+	}
+	if this.Reason != that1.Reason {
+		return false
+	}
+	return true
+}
+func (this *AddLearnerStoreToNode) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*AddLearnerStoreToNode)
+	if !ok {
+		that2, ok := that.(AddLearnerStoreToNode)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.SetID != that1.SetID {
+		return false
+	}
+	if this.NodeID != that1.NodeID {
+		return false
+	}
+	if this.Store != that1.Store {
+		return false
+	}
+	return true
+}
+func (this *AddLearnerStoreToNodeResp) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*AddLearnerStoreToNodeResp)
+	if !ok {
+		that2, ok := that.(AddLearnerStoreToNodeResp)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Ok != that1.Ok {
+		return false
+	}
+	if this.Reason != that1.Reason {
+		return false
+	}
+	return true
+}
+func (this *PromoteLearnerStore) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*PromoteLearnerStore)
+	if !ok {
+		that2, ok := that.(PromoteLearnerStore)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.SetID != that1.SetID {
+		return false
+	}
+	if this.NodeID != that1.NodeID {
+		return false
+	}
+	if this.Store != that1.Store {
+		return false
+	}
+	return true
+}
+func (this *PromoteLearnerStoreResp) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*PromoteLearnerStoreResp)
+	if !ok {
+		that2, ok := that.(PromoteLearnerStoreResp)
 		if ok {
 			that1 = &that2
 		} else {
@@ -3927,6 +4283,52 @@ func (this *AddNodeResp) GoString() string {
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
+func (this *AddLearnerStoreToNode) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&proto.AddLearnerStoreToNode{")
+	s = append(s, "SetID: "+fmt.Sprintf("%#v", this.SetID)+",\n")
+	s = append(s, "NodeID: "+fmt.Sprintf("%#v", this.NodeID)+",\n")
+	s = append(s, "Store: "+fmt.Sprintf("%#v", this.Store)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *AddLearnerStoreToNodeResp) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&proto.AddLearnerStoreToNodeResp{")
+	s = append(s, "Ok: "+fmt.Sprintf("%#v", this.Ok)+",\n")
+	s = append(s, "Reason: "+fmt.Sprintf("%#v", this.Reason)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *PromoteLearnerStore) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&proto.PromoteLearnerStore{")
+	s = append(s, "SetID: "+fmt.Sprintf("%#v", this.SetID)+",\n")
+	s = append(s, "NodeID: "+fmt.Sprintf("%#v", this.NodeID)+",\n")
+	s = append(s, "Store: "+fmt.Sprintf("%#v", this.Store)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *PromoteLearnerStoreResp) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&proto.PromoteLearnerStoreResp{")
+	s = append(s, "Ok: "+fmt.Sprintf("%#v", this.Ok)+",\n")
+	s = append(s, "Reason: "+fmt.Sprintf("%#v", this.Reason)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
 func (this *RemNode) GoString() string {
 	if this == nil {
 		return "nil"
@@ -4711,6 +5113,142 @@ func (m *AddNodeResp) MarshalTo(dAtA []byte) (int, error) {
 }
 
 func (m *AddNodeResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	i -= len(m.Reason)
+	copy(dAtA[i:], m.Reason)
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(len(m.Reason)))
+	i--
+	dAtA[i] = 0x12
+	i--
+	if m.Ok {
+		dAtA[i] = 1
+	} else {
+		dAtA[i] = 0
+	}
+	i--
+	dAtA[i] = 0x8
+	return len(dAtA) - i, nil
+}
+
+func (m *AddLearnerStoreToNode) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *AddLearnerStoreToNode) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *AddLearnerStoreToNode) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(m.Store))
+	i--
+	dAtA[i] = 0x18
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(m.NodeID))
+	i--
+	dAtA[i] = 0x10
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(m.SetID))
+	i--
+	dAtA[i] = 0x8
+	return len(dAtA) - i, nil
+}
+
+func (m *AddLearnerStoreToNodeResp) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *AddLearnerStoreToNodeResp) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *AddLearnerStoreToNodeResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	i -= len(m.Reason)
+	copy(dAtA[i:], m.Reason)
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(len(m.Reason)))
+	i--
+	dAtA[i] = 0x12
+	i--
+	if m.Ok {
+		dAtA[i] = 1
+	} else {
+		dAtA[i] = 0
+	}
+	i--
+	dAtA[i] = 0x8
+	return len(dAtA) - i, nil
+}
+
+func (m *PromoteLearnerStore) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *PromoteLearnerStore) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *PromoteLearnerStore) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(m.Store))
+	i--
+	dAtA[i] = 0x18
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(m.NodeID))
+	i--
+	dAtA[i] = 0x10
+	i = encodeVarintFlyfishServer(dAtA, i, uint64(m.SetID))
+	i--
+	dAtA[i] = 0x8
+	return len(dAtA) - i, nil
+}
+
+func (m *PromoteLearnerStoreResp) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *PromoteLearnerStoreResp) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *PromoteLearnerStoreResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
@@ -5961,6 +6499,54 @@ func (m *AddNodeResp) Size() (n int) {
 	return n
 }
 
+func (m *AddLearnerStoreToNode) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	n += 1 + sovFlyfishServer(uint64(m.SetID))
+	n += 1 + sovFlyfishServer(uint64(m.NodeID))
+	n += 1 + sovFlyfishServer(uint64(m.Store))
+	return n
+}
+
+func (m *AddLearnerStoreToNodeResp) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	n += 2
+	l = len(m.Reason)
+	n += 1 + l + sovFlyfishServer(uint64(l))
+	return n
+}
+
+func (m *PromoteLearnerStore) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	n += 1 + sovFlyfishServer(uint64(m.SetID))
+	n += 1 + sovFlyfishServer(uint64(m.NodeID))
+	n += 1 + sovFlyfishServer(uint64(m.Store))
+	return n
+}
+
+func (m *PromoteLearnerStoreResp) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	n += 2
+	l = len(m.Reason)
+	n += 1 + l + sovFlyfishServer(uint64(l))
+	return n
+}
+
 func (m *RemNode) Size() (n int) {
 	if m == nil {
 		return 0
@@ -6513,6 +7099,52 @@ func (this *AddNodeResp) String() string {
 		return "nil"
 	}
 	s := strings.Join([]string{`&AddNodeResp{`,
+		`Ok:` + fmt.Sprintf("%v", this.Ok) + `,`,
+		`Reason:` + fmt.Sprintf("%v", this.Reason) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *AddLearnerStoreToNode) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&AddLearnerStoreToNode{`,
+		`SetID:` + fmt.Sprintf("%v", this.SetID) + `,`,
+		`NodeID:` + fmt.Sprintf("%v", this.NodeID) + `,`,
+		`Store:` + fmt.Sprintf("%v", this.Store) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *AddLearnerStoreToNodeResp) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&AddLearnerStoreToNodeResp{`,
+		`Ok:` + fmt.Sprintf("%v", this.Ok) + `,`,
+		`Reason:` + fmt.Sprintf("%v", this.Reason) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *PromoteLearnerStore) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&PromoteLearnerStore{`,
+		`SetID:` + fmt.Sprintf("%v", this.SetID) + `,`,
+		`NodeID:` + fmt.Sprintf("%v", this.NodeID) + `,`,
+		`Store:` + fmt.Sprintf("%v", this.Store) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *PromoteLearnerStoreResp) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&PromoteLearnerStoreResp{`,
 		`Ok:` + fmt.Sprintf("%v", this.Ok) + `,`,
 		`Reason:` + fmt.Sprintf("%v", this.Reason) + `,`,
 		`}`,
@@ -8324,6 +8956,436 @@ func (m *AddNodeResp) Unmarshal(dAtA []byte) error {
 		}
 		if fieldNum <= 0 {
 			return fmt.Errorf("proto: addNodeResp: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Ok", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Ok = bool(v != 0)
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Reason", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Reason = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *AddLearnerStoreToNode) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFlyfishServer
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: addLearnerStoreToNode: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: addLearnerStoreToNode: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SetID", wireType)
+			}
+			m.SetID = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.SetID |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NodeID", wireType)
+			}
+			m.NodeID = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.NodeID |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Store", wireType)
+			}
+			m.Store = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Store |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *AddLearnerStoreToNodeResp) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFlyfishServer
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: addLearnerStoreToNodeResp: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: addLearnerStoreToNodeResp: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Ok", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Ok = bool(v != 0)
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Reason", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Reason = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *PromoteLearnerStore) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFlyfishServer
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: promoteLearnerStore: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: promoteLearnerStore: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SetID", wireType)
+			}
+			m.SetID = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.SetID |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NodeID", wireType)
+			}
+			m.NodeID = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.NodeID |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Store", wireType)
+			}
+			m.Store = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfishServer
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Store |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFlyfishServer(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthFlyfishServer
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *PromoteLearnerStoreResp) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFlyfishServer
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: promoteLearnerStoreResp: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: promoteLearnerStoreResp: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:

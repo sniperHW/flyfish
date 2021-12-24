@@ -19,13 +19,28 @@ var StorePerSet int = 6          //每个set含有多少个store
 var MinReplicaPerSet int = 1     //最少副本数
 var CurrentTransferCount int = 6 //最大并发transfer的slot数量
 
+type FlyKvStoreStateType uint16
+type FlyKvStoreStateValue uint16
+
+const (
+	LearnerStore  = FlyKvStoreStateType(1)
+	VoterStore    = FlyKvStoreStateType(2)
+	RemoveStore   = FlyKvStoreStateType(3)
+	FlyKvCommited = FlyKvStoreStateValue(1)
+	FlyKvUnCommit = FlyKvStoreStateValue(2)
+)
+
+type FlyKvStoreState struct {
+	Type  FlyKvStoreStateType
+	Value FlyKvStoreStateValue
+}
+
 type KvNodeJson struct {
-	NodeID       int
-	Host         string
-	ServicePort  int
-	RaftPort     int
-	LearnerStore []int
-	VoterStore   []int
+	NodeID      int
+	Host        string
+	ServicePort int
+	RaftPort    int
+	Store       map[int]*FlyKvStoreState
 }
 
 type StoreJson struct {
@@ -47,23 +62,22 @@ type DeploymentJson struct {
 }
 
 type kvnode struct {
-	id           int
-	host         string
-	servicePort  int
-	raftPort     int
-	set          *set
-	learnerStore map[int]struct{}
-	voterStore   map[int]struct{}
+	id          int
+	host        string
+	servicePort int
+	raftPort    int
+	set         *set
+	store       map[int]*FlyKvStoreState
 }
 
-func (n *kvnode) isVoter(store int) (yes bool) {
-	_, yes = n.voterStore[store]
-	return
+func (n *kvnode) isVoter(store int) bool {
+	s, ok := n.store[store]
+	return ok && s.Type == VoterStore
 }
 
 func (n *kvnode) isLearner(store int) (yes bool) {
-	_, yes = n.learnerStore[store]
-	return
+	s, ok := n.store[store]
+	return ok && s.Type == LearnerStore
 }
 
 type store struct {
@@ -186,14 +200,7 @@ func (d deployment) toDeploymentJson() DeploymentJson {
 				Host:        vv.host,
 				ServicePort: vv.servicePort,
 				RaftPort:    vv.raftPort,
-			}
-
-			for k, _ := range vv.learnerStore {
-				nj.LearnerStore = append(nj.LearnerStore, k)
-			}
-
-			for k, _ := range vv.voterStore {
-				nj.VoterStore = append(nj.VoterStore, k)
+				Store:       vv.store,
 			}
 
 			setJson.KvNodes = append(setJson.KvNodes, nj)
@@ -232,20 +239,12 @@ func (d *deployment) loadFromDeploymentJson(deploymentJson *DeploymentJson) erro
 
 		for _, vv := range v.KvNodes {
 			n := &kvnode{
-				id:           vv.NodeID,
-				host:         vv.Host,
-				servicePort:  vv.ServicePort,
-				raftPort:     vv.RaftPort,
-				set:          s,
-				learnerStore: map[int]struct{}{},
-			}
-
-			for _, v := range vv.LearnerStore {
-				n.learnerStore[v] = struct{}{}
-			}
-
-			for _, v := range vv.VoterStore {
-				n.voterStore[v] = struct{}{}
+				id:          vv.NodeID,
+				host:        vv.Host,
+				servicePort: vv.ServicePort,
+				raftPort:    vv.RaftPort,
+				set:         s,
+				store:       vv.Store,
 			}
 
 			s.nodes[vv.NodeID] = n
@@ -343,13 +342,12 @@ func (d *deployment) loadFromPB(sets []*sproto.DeploymentSet) error {
 			rafts[raft] = true
 
 			n := &kvnode{
-				id:           int(vv.NodeID),
-				host:         vv.Host,
-				servicePort:  int(vv.ServicePort),
-				raftPort:     int(vv.RaftPort),
-				set:          s,
-				voterStore:   map[int]struct{}{},
-				learnerStore: map[int]struct{}{},
+				id:          int(vv.NodeID),
+				host:        vv.Host,
+				servicePort: int(vv.ServicePort),
+				raftPort:    int(vv.RaftPort),
+				set:         s,
+				store:       map[int]*FlyKvStoreState{},
 			}
 			s.nodes[int(vv.NodeID)] = n
 		}
@@ -366,7 +364,10 @@ func (d *deployment) loadFromPB(sets []*sproto.DeploymentSet) error {
 
 		for _, vvv := range s.nodes {
 			for j := 0; j < StorePerSet; j++ {
-				vvv.voterStore[i+j+1] = struct{}{}
+				vvv.store[i+j+1] = &FlyKvStoreState{
+					Type:  VoterStore,
+					Value: FlyKvCommited,
+				}
 			}
 		}
 

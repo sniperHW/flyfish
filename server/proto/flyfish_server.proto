@@ -22,20 +22,24 @@ enum ServerCmdType {
   InstallDeploymentResp         = 102;
   AddNode                       = 103;
   AddNodeResp                   = 104;
-  RemNode                       = 107;
-  RemNodeResp                   = 108;
-  AddSet                        = 109;
-  AddSetResp                    = 110;
-  RemSet                        = 111;
-  RemSetResp                    = 112;
-  SetMarkClear                  = 113;
-  SetMarkClearResp              = 114;
-  SetMeta                       = 115;
-  SetMetaResp                   = 116;
-  GetMeta                       = 117;
-  GetMetaResp                   = 118;
-  UpdateMeta                    = 119;
-  UpdateMetaResp                = 120;
+  AddLearnerStoreToNode         = 105;
+  AddLearnerStoreToNodeResp     = 106;
+  PromoteLearnerStore           = 107;
+  PromoteLearnerStoreResp       = 108;
+  RemNode                       = 109;
+  RemNodeResp                   = 110;
+  AddSet                        = 111;
+  AddSetResp                    = 112;
+  RemSet                        = 113;
+  RemSetResp                    = 114;
+  SetMarkClear                  = 115;
+  SetMarkClearResp              = 116;
+  SetMeta                       = 117;
+  SetMetaResp                   = 118;
+  GetMeta                       = 119;
+  GetMetaResp                   = 120;
+  UpdateMeta                    = 121;
+  UpdateMetaResp                = 122;
 
 
   //kvnode <-> pd
@@ -139,6 +143,29 @@ message addNodeResp  {
   optional bool ok            = 1;
   optional string reason      = 2;
 }
+
+message addLearnerStoreToNode {
+  optional int32  setID       = 1;
+  optional int32  nodeID      = 2;
+  optional int32  store       = 3;  
+}
+  
+message addLearnerStoreToNodeResp {
+  optional bool ok            = 1;
+  optional string reason      = 2;  
+}
+  
+message promoteLearnerStore {
+  optional int32  setID       = 1;
+  optional int32  nodeID      = 2;
+  optional int32  store       = 3;  
+}
+
+message promoteLearnerStoreResp {
+  optional bool ok            = 1;
+  optional string reason      = 2; 
+}
+
 
 message remNode {
   optional int32  setID       = 1;

@@ -24,20 +24,6 @@ type applicationQueue struct {
 	q *queue.PriorityQueue
 }
 
-/*type AddingNode struct {
-	KvNodeJson
-	SetID   int
-	context int64
-	timer   *time.Timer
-}
-
-type RemovingNode struct {
-	NodeID  int
-	SetID   int
-	context int64
-	timer   *time.Timer
-}*/
-
 type flygate struct {
 	service       string
 	msgPerSecond  int
@@ -122,9 +108,7 @@ func (f *flygateMgr) onHeartBeat(gateService string, token string, msgPerSecond 
 }
 
 type persistenceState struct {
-	Deployment DeploymentJson
-	//AddingNode      map[int]*AddingNode
-	//RemovingNode    map[int]*RemovingNode
+	Deployment      DeploymentJson
 	SlotTransfer    map[int]*TransSlotTransfer
 	Meta            Meta
 	MetaTransaction *MetaTransaction
@@ -193,8 +177,6 @@ func NewPd(id uint16, config *Config, udpService string, clusterStr string, st m
 		config:     config,
 		udpService: udpService,
 		pState: persistenceState{
-			//AddingNode:   map[int]*AddingNode{},
-			//RemovingNode: map[int]*RemovingNode{},
 			SlotTransfer: map[int]*TransSlotTransfer{},
 			markClearSet: map[int]*set{},
 		},
