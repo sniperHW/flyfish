@@ -392,16 +392,40 @@ func (p *ProposalInstallDeployment) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalInstallDeployment) apply() {
-	p.pd.pState.deployment = p.d
-	p.reply(nil)
+	err := func() error {
+		if nil != p.pd.pState.MetaTransaction {
+			return errors.New("wait for previous meta transaction finish")
+		}
+
+		if nil != p.pd.pState.deployment {
+			return errors.New("already install")
+		}
+		return nil
+	}()
+
+	if nil == err {
+		p.pd.pState.deployment = p.d
+	}
+
+	if nil != p.reply {
+		p.reply(err)
+	}
 }
 
 func (p *pd) replayInstallDeployment(reader *buffer.BufferReader) error {
+
 	d := &deployment{}
 	if err := d.loadFromJson(reader.GetAll()); nil != err {
 		return err
 	}
-	p.pState.deployment = d
+
+	pa := &ProposalInstallDeployment{
+		proposalBase: &proposalBase{
+			pd: p,
+		},
+		d: d,
+	}
+	pa.apply()
 	return nil
 }
 
@@ -421,85 +445,37 @@ func (p *pd) makeReplyFunc(from *net.UDPAddr, m *snet.Message, resp proto.Messag
 func (p *pd) onInstallDeployment(from *net.UDPAddr, m *snet.Message) {
 
 	msg := m.Msg.(*sproto.InstallDeployment)
-
 	resp := &sproto.InstallDeploymentResp{}
+	var d *deployment
 
-	if nil != p.pState.MetaTransaction {
-		resp.Ok = false
-		resp.Reason = "wait for previous meta transaction finish"
-		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
-		return
-	}
+	err := func() error {
+		if nil != p.pState.MetaTransaction {
+			return errors.New("wait for previous meta transaction finish")
+		}
 
-	if nil != p.pState.deployment {
-		resp.Ok = false
-		resp.Reason = "already install"
-		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
-		return
-	}
+		if nil != p.pState.deployment {
+			return errors.New("already install")
+		}
 
-	d := &deployment{}
-	if err := d.loadFromPB(msg.Sets); nil != err {
+		d = &deployment{}
+		if err := d.loadFromPB(msg.Sets); nil != err {
+			return err
+		}
+
+		return nil
+	}()
+
+	if nil != err {
 		resp.Ok = false
 		resp.Reason = err.Error()
 		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
-		return
-	}
-
-	p.issueProposal(&ProposalInstallDeployment{
-		d: d,
-		proposalBase: &proposalBase{
-			pd:    p,
-			reply: p.makeReplyFunc(from, m, resp),
-		},
-	})
-}
-
-/*
-func (p *pd) onNotifyAddNodeResp(from *net.UDPAddr, m *snet.Message) {
-
-	msg := m.Msg.(*sproto.NotifyAddNodeResp)
-	an, ok := p.pState.AddingNode[int(msg.NodeID)]
-	if ok && an.context == m.Context {
-
-		find := false
-		for i := 0; i < len(an.OkStores); i++ {
-			if an.OkStores[i] == int(msg.Store) {
-				find = true
-				break
-			}
-		}
-
-		if !find {
-			p.issueProposal(&ProposalNotifyAddNodeResp{
-				msg: msg,
-				proposalBase: &proposalBase{
-					pd: p,
-				},
-			})
-		}
+	} else {
+		p.issueProposal(&ProposalInstallDeployment{
+			d: d,
+			proposalBase: &proposalBase{
+				pd:    p,
+				reply: p.makeReplyFunc(from, m, resp),
+			},
+		})
 	}
 }
-
-func (p *pd) onNotifyRemNodeResp(from *net.UDPAddr, m *snet.Message) {
-	msg := m.Msg.(*sproto.NotifyRemNodeResp)
-	rn, ok := p.pState.RemovingNode[int(msg.NodeID)]
-	if ok && rn.context == m.Context {
-		find := false
-		for i := 0; i < len(rn.OkStores); i++ {
-			if rn.OkStores[i] == int(msg.Store) {
-				find = true
-				break
-			}
-		}
-
-		if !find {
-			p.issueProposal(&ProposalNotifyRemNodeResp{
-				msg: msg,
-				proposalBase: &proposalBase{
-					pd: p,
-				},
-			})
-		}
-	}
-}*/

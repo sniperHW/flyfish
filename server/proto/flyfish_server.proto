@@ -26,37 +26,35 @@ enum ServerCmdType {
   AddLearnerStoreToNodeResp     = 106;
   PromoteLearnerStore           = 107;
   PromoteLearnerStoreResp       = 108;
-  RemNode                       = 109;
-  RemNodeResp                   = 110;
-  AddSet                        = 111;
-  AddSetResp                    = 112;
-  RemSet                        = 113;
-  RemSetResp                    = 114;
-  SetMarkClear                  = 115;
-  SetMarkClearResp              = 116;
-  SetMeta                       = 117;
-  SetMetaResp                   = 118;
-  GetMeta                       = 119;
-  GetMetaResp                   = 120;
-  UpdateMeta                    = 121;
-  UpdateMetaResp                = 122;
+  RemoveNodeStore               = 109;
+  RemoveNodeStoreResp           = 110;
+  RemNode                       = 111;
+  RemNodeResp                   = 112;
+  AddSet                        = 113;
+  AddSetResp                    = 114;
+  RemSet                        = 115;
+  RemSetResp                    = 116;
+  SetMarkClear                  = 117;
+  SetMarkClearResp              = 118;
+  SetMeta                       = 119;
+  SetMetaResp                   = 120;
+  GetMeta                       = 121;
+  GetMetaResp                   = 122;
+  UpdateMeta                    = 123;
+  UpdateMetaResp                = 124;
 
 
   //kvnode <-> pd
   KvnodeBoot                    = 210;                   //kvnode冷启登录  
   KvnodeBootResp                = 211;
-  //NotifyAddLearner              = 212;
-  //NotifyAddLearnerResp          = 213;
-  //NotifyPromoteLearner          = 214;
-  //NotifyPromoteLearnerResp      = 215; 
-  //NotifyRemNode                 = 216;
-  //NotifyRemNodeResp             = 217;
+  NotifyNodeStoreOp             = 212;
+  NodeStoreOpOk                 = 213;
   NotifySlotTransOut            = 218;
-  NotifySlotTransOutResp        = 219;
+  SlotTransOutOk                = 219;
   NotifySlotTransIn             = 220;
-  NotifySlotTransInResp         = 221;    
+  SlotTransInOk                 = 221;    
   NotifyUpdateMeta              = 222;
-  NotifyUpdateMetaResp          = 223;
+  StoreUpdateMetaOk             = 223;
 
 
   //flygate <-> pd
@@ -166,6 +164,17 @@ message promoteLearnerStoreResp {
   optional string reason      = 2; 
 }
 
+message removeNodeStore {
+  optional int32  setID       = 1;
+  optional int32  nodeID      = 2;
+  optional int32  store       = 3;  
+}
+
+message removeNodeStoreResp {
+  optional bool ok            = 1;
+  optional string reason      = 2; 
+}
+
 
 message remNode {
   optional int32  setID       = 1;
@@ -200,40 +209,25 @@ message kvnodeBootResp {
   optional bytes  meta         = 8;
 }
 
-/*
-message notifyAddLearner {
-  optional int32  nodeID      = 1;
-  optional string host        = 2;
-  optional int32  raftPort    = 3;
-  repeated int32  stores      = 4; 
+
+enum StoreOpType {
+  AddLearner = 1;
+  PromoteLearner = 2;
+  RemoveStore = 3;
 }
 
-message notifyAddLearnerResp {
-  optional int32  nodeID      = 1;
-  optional int32  store       = 2;
+message notifyNodeStoreOp {
+  optional int32  op          = 1;
+  optional int32  nodeID      = 2;
+  optional string host        = 3;
+  optional int32  raftPort    = 4;
+  optional int32  store       = 5; 
 }
 
+message nodeStoreOpOk {
 
-message notifyPromoteLearner {
-  optional int32  nodeID      = 1;
-  repeated int32  stores      = 2;   
 }
 
-message notifyPromoteLearnerResp {
-  optional int32  nodeID      = 1;
-  optional int32  store       = 2;   
-}
-
-message notifyRemNode {
-  optional int32  nodeID      = 1;
-  repeated int32  stores      = 2; 
-}
-
-message notifyRemNodeResp {
-  optional int32  nodeID      = 1;
-  optional int32  store       = 2;
-}
-*/
 
 
 message notifySlotTransOut {
@@ -241,7 +235,7 @@ message notifySlotTransOut {
   optional int32  store       = 2;  
 }
   
-message notifySlotTransOutResp {
+message slotTransOutOk {
   optional int32  slot        = 1; 
 }  
 
@@ -250,7 +244,7 @@ message  notifySlotTransIn {
   optional int32  store       = 2; 
 }
 
-message notifySlotTransInResp {
+message slotTransInOk {
   optional int32  slot        = 1; 
 }  
 
@@ -360,7 +354,7 @@ message  notifyUpdateMeta {
   optional bytes meta     = 3;
 }
 
-message  notifyUpdateMetaResp {
+message  storeUpdateMetaOk {
   optional int32 store    = 1;
   optional int64 version  = 2; 
 }

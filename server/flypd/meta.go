@@ -170,11 +170,10 @@ type MetaTransactionStore struct {
 }
 
 type MetaTransaction struct {
-	MetaDef    *db.DbDef
-	Store      []MetaTransactionStore
-	Prepareing bool
-	Version    int64
-	timer      *time.Timer
+	MetaDef *db.DbDef
+	Store   []MetaTransactionStore
+	Version int64
+	timer   *time.Timer
 }
 
 func (m *MetaTransaction) notifyStore(p *pd) {
@@ -208,6 +207,7 @@ func (m *MetaTransaction) notifyStore(p *pd) {
 
 type ProposalUpdateMeta struct {
 	*proposalBase
+	tran *MetaTransaction
 }
 
 func (p *ProposalUpdateMeta) Serilize(b []byte) []byte {
@@ -218,18 +218,21 @@ func (p *ProposalUpdateMeta) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalUpdateMeta) apply() {
-	p.pd.pState.Meta.Version = p.pd.pState.MetaTransaction.Version
-	p.pd.pState.Meta.MetaDef = p.pd.pState.MetaTransaction.MetaDef
-	p.pd.pState.Meta.MetaBytes, _ = db.DbDefToJsonString(p.pd.pState.Meta.MetaDef)
-	if len(p.pd.pState.MetaTransaction.Store) == 0 {
-		//无需通知任何store,事务结束
-		p.pd.pState.MetaTransaction = nil
+	var err error
+	if nil != p.pd.pState.MetaTransaction {
+		err = errors.New("wait for previous meta transaction finish")
 	} else {
-		p.pd.pState.MetaTransaction.Prepareing = false
-		p.pd.pState.MetaTransaction.notifyStore(p.pd)
+		p.pd.pState.Meta.Version = p.tran.Version
+		p.pd.pState.Meta.MetaDef = p.tran.MetaDef
+		p.pd.pState.Meta.MetaBytes, _ = db.DbDefToJsonString(p.pd.pState.Meta.MetaDef)
+		if len(p.tran.Store) > 0 {
+			p.pd.pState.MetaTransaction = p.tran
+			p.pd.pState.MetaTransaction.notifyStore(p.pd)
+		}
 	}
+
 	if nil != p.reply {
-		p.reply(nil)
+		p.reply(err)
 	}
 }
 
@@ -251,18 +254,13 @@ func (p *pd) replayUpdateMeta(reader *buffer.BufferReader) error {
 		return err
 	}
 
-	if nil != p.pState.MetaTransaction && p.pState.MetaTransaction.Prepareing {
-		return errors.New("nil != p.pState.MetaTransaction && p.pState.MetaTransaction.Prepareing")
+	pa := &ProposalUpdateMeta{
+		proposalBase: &proposalBase{
+			pd: p,
+		},
+		tran: t,
 	}
-
-	p.pState.Meta.Version = t.Version
-	p.pState.Meta.MetaDef = t.MetaDef
-	p.pState.Meta.MetaBytes, _ = db.DbDefToJsonString(p.pState.Meta.MetaDef)
-
-	if len(t.Store) > 0 {
-		p.pState.MetaTransaction = t
-	}
-
+	pa.apply()
 	return nil
 }
 
@@ -278,10 +276,9 @@ func (p *pd) onUpdateMeta(from *net.UDPAddr, m *snet.Message) {
 		return
 	}
 
-	t := MetaTransaction{
-		Prepareing: true,
-		MetaDef:    p.pState.Meta.MetaDef.Clone(),
-		Version:    p.pState.Meta.Version + 1,
+	t := &MetaTransaction{
+		MetaDef: p.pState.Meta.MetaDef.Clone(),
+		Version: p.pState.Meta.Version + 1,
 	}
 
 	for _, v := range msg.Updates {
@@ -322,27 +319,26 @@ func (p *pd) onUpdateMeta(from *net.UDPAddr, m *snet.Message) {
 		}
 	}
 
-	p.pState.MetaTransaction = &t
-
 	p.issueProposal(&ProposalUpdateMeta{
 		proposalBase: &proposalBase{
 			pd:    p,
 			reply: p.makeReplyFunc(from, m, resp),
 		},
+		tran: t,
 	})
 }
 
-type ProposalNotifyUpdateMetaResp struct {
+type ProposalStoreUpdateMetaOk struct {
 	*proposalBase
 	store int
 }
 
-func (p *ProposalNotifyUpdateMetaResp) Serilize(b []byte) []byte {
-	b = buffer.AppendByte(b, byte(proposalNotifyUpdateMetaResp))
+func (p *ProposalStoreUpdateMetaOk) Serilize(b []byte) []byte {
+	b = buffer.AppendByte(b, byte(proposalStoreUpdateMetaOk))
 	return buffer.AppendUint32(b, uint32(p.store))
 }
 
-func (p *ProposalNotifyUpdateMetaResp) apply() {
+func (p *ProposalStoreUpdateMetaOk) apply() {
 	t := p.pd.pState.MetaTransaction
 	c := 0
 	for k, v := range t.Store {
@@ -358,7 +354,7 @@ func (p *ProposalNotifyUpdateMetaResp) apply() {
 	}
 }
 
-func (p *pd) replayNotifyUpdateMetaResp(reader *buffer.BufferReader) error {
+func (p *pd) replayStoreUpdateMetaOk(reader *buffer.BufferReader) error {
 
 	store, err := reader.CheckGetUint32()
 	if nil != err {
@@ -383,8 +379,8 @@ func (p *pd) replayNotifyUpdateMetaResp(reader *buffer.BufferReader) error {
 	return nil
 }
 
-func (p *pd) onNotifyUpdateMetaResp(from *net.UDPAddr, m *snet.Message) {
-	msg := m.Msg.(*sproto.NotifyUpdateMetaResp)
+func (p *pd) onStoreUpdateMetaOk(from *net.UDPAddr, m *snet.Message) {
+	msg := m.Msg.(*sproto.StoreUpdateMetaOk)
 	t := p.pState.MetaTransaction
 	if t != nil && t.Version == msg.Version {
 		store := -1
@@ -398,7 +394,7 @@ func (p *pd) onNotifyUpdateMetaResp(from *net.UDPAddr, m *snet.Message) {
 		}
 
 		if store != -1 {
-			p.issueProposal(&ProposalNotifyUpdateMetaResp{
+			p.issueProposal(&ProposalStoreUpdateMetaOk{
 				store: store,
 				proposalBase: &proposalBase{
 					pd: p,

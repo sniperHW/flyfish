@@ -6,21 +6,22 @@ import (
 )
 
 const (
-	proposalInstallDeployment      = 1
-	proposalAddNode                = 2
-	proposalRemNode                = 4
-	proposalBeginSlotTransfer      = 6
-	proposalNotifySlotTransOutResp = 7
-	proposalNotifySlotTransInResp  = 8
-	proposalAddSet                 = 9
-	proposalRemSet                 = 10
-	proposalSetMarkClear           = 11
-	proposalSetMeta                = 12
-	proposalUpdateMeta             = 13
-	proposalNotifyUpdateMetaResp   = 14
-	proposalAddLearnerStoreToNode  = 15
-	proposalFlyKvCommited          = 16
-	proposalPromoteLearnerStore    = 17
+	proposalInstallDeployment     = 1
+	proposalAddNode               = 2
+	proposalRemNode               = 4
+	proposalBeginSlotTransfer     = 6
+	proposalSlotTransOutOk        = 7
+	proposalSlotTransInOk         = 8
+	proposalAddSet                = 9
+	proposalRemSet                = 10
+	proposalSetMarkClear          = 11
+	proposalSetMeta               = 12
+	proposalUpdateMeta            = 13
+	proposalStoreUpdateMetaOk     = 14
+	proposalAddLearnerStoreToNode = 15
+	proposalFlyKvCommited         = 16
+	proposalPromoteLearnerStore   = 17
+	proposalRemoveNodeStore       = 17
 )
 
 type proposalBase struct {
@@ -58,14 +59,14 @@ func (p *pd) replayProposal(proposal []byte) error {
 		return p.replayInstallDeployment(&reader)
 	case proposalAddNode:
 		return p.replayAddNode(&reader)
-	//case proposalRemNode:
-	//	return p.replayRemNode(&reader)
+	case proposalRemNode:
+		return p.replayRemNode(&reader)
 	case proposalBeginSlotTransfer:
 		return p.replayBeginSlotTransfer(&reader)
-	case proposalNotifySlotTransOutResp:
-		return p.replayNotifySlotTransOutResp(&reader)
-	case proposalNotifySlotTransInResp:
-		return p.replayNotifySlotTransInResp(&reader)
+	case proposalSlotTransOutOk:
+		return p.replaySlotTransOutOk(&reader)
+	case proposalSlotTransInOk:
+		return p.replaySlotTransInOk(&reader)
 	case proposalAddSet:
 		return p.replayAddSet(&reader)
 	case proposalRemSet:
@@ -76,8 +77,8 @@ func (p *pd) replayProposal(proposal []byte) error {
 		return p.replaySetMeta(&reader)
 	case proposalUpdateMeta:
 		return p.replayUpdateMeta(&reader)
-	case proposalNotifyUpdateMetaResp:
-		return p.replayNotifyUpdateMetaResp(&reader)
+	case proposalStoreUpdateMetaOk:
+		return p.replayStoreUpdateMetaOk(&reader)
 	default:
 		return errors.New("invaild proposal type")
 	}

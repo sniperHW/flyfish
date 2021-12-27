@@ -251,26 +251,17 @@ func init() {
 	namespace.Register(&sproto.KvnodeBoot{}, uint32(sproto.ServerCmdType_KvnodeBoot))
 	namespace.Register(&sproto.KvnodeBootResp{}, uint32(sproto.ServerCmdType_KvnodeBootResp))
 
-	//namespace.Register(&sproto.NotifyAddLearner{}, uint32(sproto.ServerCmdType_NotifyAddLearner))
-	//namespace.Register(&sproto.NotifyAddLearnerResp{}, uint32(sproto.ServerCmdType_NotifyAddLearnerResp))
-
-	//namespace.Register(&sproto.NotifyPromoteLearner{}, uint32(sproto.ServerCmdType_NotifyPromoteLearner))
-	//namespace.Register(&sproto.NotifyPromoteLearnerResp{}, uint32(sproto.ServerCmdType_NotifyPromoteLearnerResp))
-
-	//namespace.Register(&sproto.RemNode{}, uint32(sproto.ServerCmdType_RemNode))
-	//namespace.Register(&sproto.RemNodeResp{}, uint32(sproto.ServerCmdType_RemNodeResp))
-
-	//namespace.Register(&sproto.NotifyRemNode{}, uint32(sproto.ServerCmdType_NotifyRemNode))
-	//namespace.Register(&sproto.NotifyRemNodeResp{}, uint32(sproto.ServerCmdType_NotifyRemNodeResp))
+	namespace.Register(&sproto.NotifyNodeStoreOp{}, uint32(sproto.ServerCmdType_NotifyNodeStoreOp))
+	namespace.Register(&sproto.NodeStoreOpOk{}, uint32(sproto.ServerCmdType_NodeStoreOpOk))
 
 	namespace.Register(&sproto.NotifySlotTransOut{}, uint32(sproto.ServerCmdType_NotifySlotTransOut))
-	namespace.Register(&sproto.NotifySlotTransOutResp{}, uint32(sproto.ServerCmdType_NotifySlotTransOutResp))
+	namespace.Register(&sproto.SlotTransOutOk{}, uint32(sproto.ServerCmdType_SlotTransOutOk))
 
 	namespace.Register(&sproto.NotifySlotTransIn{}, uint32(sproto.ServerCmdType_NotifySlotTransIn))
-	namespace.Register(&sproto.NotifySlotTransInResp{}, uint32(sproto.ServerCmdType_NotifySlotTransInResp))
+	namespace.Register(&sproto.SlotTransInOk{}, uint32(sproto.ServerCmdType_SlotTransInOk))
 
 	namespace.Register(&sproto.NotifyUpdateMeta{}, uint32(sproto.ServerCmdType_NotifyUpdateMeta))
-	namespace.Register(&sproto.NotifyUpdateMetaResp{}, uint32(sproto.ServerCmdType_NotifyUpdateMetaResp))
+	namespace.Register(&sproto.StoreUpdateMetaOk{}, uint32(sproto.ServerCmdType_StoreUpdateMetaOk))
 
 	//flygate <->pd
 	namespace.Register(&sproto.QueryRouteInfo{}, uint32(sproto.ServerCmdType_QueryRouteInfo))

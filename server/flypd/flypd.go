@@ -113,7 +113,6 @@ type persistenceState struct {
 	Meta            Meta
 	MetaTransaction *MetaTransaction
 	deployment      *deployment
-	markClearSet    map[int]*set
 }
 
 func (p *persistenceState) toJson() ([]byte, error) {
@@ -121,7 +120,7 @@ func (p *persistenceState) toJson() ([]byte, error) {
 	return json.Marshal(&p)
 }
 
-func (p *persistenceState) loadFromJson(j []byte) error {
+func (p *persistenceState) loadFromJson(pd *pd, j []byte) error {
 	err := json.Unmarshal(j, p)
 
 	if nil != err {
@@ -136,7 +135,7 @@ func (p *persistenceState) loadFromJson(j []byte) error {
 
 	for _, v := range p.deployment.sets {
 		if v.markClear {
-			p.markClearSet[v.id] = v
+			pd.markClearSet[v.id] = v
 		}
 	}
 
@@ -159,6 +158,8 @@ type pd struct {
 	udpService      string
 	onBalanceFinish func()
 	pState          persistenceState
+	storeTask       map[uint64]*storeTask
+	markClearSet    map[int]*set
 }
 
 func NewPd(id uint16, config *Config, udpService string, clusterStr string, st membership.Storage) (*pd, error) {
@@ -174,11 +175,12 @@ func NewPd(id uint16, config *Config, udpService string, clusterStr string, st m
 			flygateMap: map[string]*flygate{},
 			mainque:    mainQueue,
 		},
-		config:     config,
-		udpService: udpService,
+		config:       config,
+		udpService:   udpService,
+		storeTask:    map[uint64]*storeTask{},
+		markClearSet: map[int]*set{},
 		pState: persistenceState{
 			SlotTransfer: map[int]*TransSlotTransfer{},
-			markClearSet: map[int]*set{},
 		},
 	}
 
@@ -255,8 +257,8 @@ func (p *pd) slotBalance() {
 
 	var outStore *store
 
-	if len(p.pState.markClearSet) > 0 {
-		for _, v := range p.pState.markClearSet {
+	if len(p.markClearSet) > 0 {
+		for _, v := range p.markClearSet {
 			if v.getTotalSlotCount()-v.SlotOutCount > 0 {
 				for _, vv := range v.stores {
 					if len(vv.slots.GetOpenBits())-vv.SlotOutCount > 0 {
@@ -271,7 +273,7 @@ func (p *pd) slotBalance() {
 		}
 	}
 
-	lSets, lMCSets := len(p.pState.deployment.sets), len(p.pState.markClearSet)
+	lSets, lMCSets := len(p.pState.deployment.sets), len(p.markClearSet)
 
 	setAverageSlotCount := slot.SlotCount / (lSets - lMCSets)
 
@@ -367,7 +369,7 @@ func (p *pd) startUdpService() error {
 }
 
 func (p *pd) onBecomeLeader() {
-	/*if nil != p.pState.deployment {
+	if nil != p.pState.deployment {
 		//重置slotBalance相关的临时数据
 		for _, v := range p.pState.deployment.sets {
 			v.SlotOutCount = 0
@@ -387,36 +389,33 @@ func (p *pd) onBecomeLeader() {
 					}
 				}
 			}
+
+			for _, node := range v.nodes {
+				for store, state := range node.store {
+					if state.Value == FlyKvUnCommit {
+						taskID := uint64(node.id)<<32 + uint64(store)
+						t := &storeTask{
+							node:           node,
+							pd:             p,
+							store:          store,
+							storeStateType: state.Type,
+						}
+						p.storeTask[taskID] = t
+						t.notifyFlyKv()
+					}
+				}
+			}
 		}
 
 		p.slotBalance()
 
-		for _, v := range p.pState.AddingNode {
-			p.sendNotifyAddNode(v)
-			v.timer = time.AfterFunc(time.Second*3, func() {
-				p.mainque.AppendHighestPriotiryItem(v)
-			})
-		}
-
-		for _, v := range p.pState.RemovingNode {
-			p.sendNotifyRemNode(v)
-			v.timer = time.AfterFunc(time.Second*3, func() {
-				p.mainque.AppendHighestPriotiryItem(v)
-			})
-		}
-
 		for _, v := range p.pState.SlotTransfer {
 			v.notify(p)
 		}
-	}*/
+	}
 
 	if nil != p.pState.MetaTransaction {
-		if p.pState.MetaTransaction.Prepareing {
-			//上次做leader时尚未提交的事务，在下次成为leader时要清除
-			p.pState.MetaTransaction = nil
-		} else {
-			p.pState.MetaTransaction.notifyStore(p)
-		}
+		p.pState.MetaTransaction.notifyStore(p)
 	}
 
 }
@@ -462,28 +461,6 @@ func (p *pd) processCommited(commited raft.Committed) {
 		snapshotNotify.Notify(snapshot)
 	}
 }
-
-/*
-func (p *pd) onAddNodeTimeout(an *AddingNode) {
-	ann := p.pState.AddingNode[an.NodeID]
-	if ann == an {
-		p.sendNotifyAddNode(an)
-		an.timer = time.AfterFunc(time.Second*3, func() {
-			p.mainque.AppendHighestPriotiryItem(an)
-		})
-	}
-}
-
-func (p *pd) onRemNodeTimeout(rn *RemovingNode) {
-	rnn := p.pState.RemovingNode[rn.NodeID]
-	if rnn == rn {
-		p.sendNotifyRemNode(rn)
-		rn.timer = time.AfterFunc(time.Second*3, func() {
-			p.mainque.AppendHighestPriotiryItem(rn)
-		})
-	}
-}
-*/
 
 func (p *pd) serve() {
 
@@ -531,16 +508,6 @@ func (p *pd) serve() {
 				if oldLeader == p.rn.ID() && !p.isLeader() {
 					p.onLeaderDownToFollower()
 				}
-
-			/*case *AddingNode:
-				if p.isLeader() {
-					p.onAddNodeTimeout(v.(*AddingNode))
-				}
-			case *RemovingNode:
-				if p.isLeader() {
-					p.onRemNodeTimeout(v.(*RemovingNode))
-				}
-			*/
 			case *TransSlotTransfer:
 				if p.isLeader() {
 					if _, ok := p.pState.SlotTransfer[v.(*TransSlotTransfer).Slot]; ok {
@@ -575,5 +542,5 @@ func (p *pd) getSnapshot() ([]byte, error) {
 func (p *pd) recoverFromSnapshot(b []byte) error {
 	reader := buffer.NewReader(b)
 	l := reader.GetInt32()
-	return p.pState.loadFromJson(reader.GetBytes(int(l)))
+	return p.pState.loadFromJson(p, reader.GetBytes(int(l)))
 }
