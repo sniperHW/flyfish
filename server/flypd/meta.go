@@ -1,11 +1,9 @@
 package flypd
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/sniperHW/flyfish/db"
-	"github.com/sniperHW/flyfish/pkg/buffer"
 	fproto "github.com/sniperHW/flyfish/proto"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
@@ -88,47 +86,28 @@ func (p *pd) onGetMeta(from *net.UDPAddr, m *snet.Message) {
 }
 
 type ProposalSetMeta struct {
-	*proposalBase
-	metaBytes []byte
+	proposalBase
+	MetaBytes []byte
 	metaDef   *db.DbDef
 }
 
 func (p *ProposalSetMeta) Serilize(b []byte) []byte {
-	b = buffer.AppendByte(b, byte(proposalSetMeta))
-	b = buffer.AppendUint32(b, uint32(len(p.metaBytes)))
-	return buffer.AppendBytes(b, p.metaBytes)
+	return serilizeProposal(b, proposalSetMeta, p)
 }
 
-func (p *ProposalSetMeta) apply() {
-	p.pd.pState.Meta.Version++
-	p.pd.pState.Meta.MetaDef = p.metaDef
-	p.pd.pState.Meta.MetaBytes = p.metaBytes
+func (p *ProposalSetMeta) apply(pd *pd) {
+	pd.pState.Meta.Version++
+	pd.pState.Meta.MetaDef = p.metaDef
+	pd.pState.Meta.MetaBytes = p.MetaBytes
+
 	if nil != p.reply {
 		p.reply(nil)
 	}
 }
 
-func (p *pd) replaySetMeta(reader *buffer.BufferReader) error {
-	l, err := reader.CheckGetUint32()
-	if nil != err {
-		return err
-	}
-
-	b, err := reader.CheckGetBytes(int(l))
-	if nil != err {
-		return err
-	}
-
-	def, err := db.CreateDbDefFromJsonString(b)
-	if nil != err {
-		return err
-	}
-
-	p.pState.Meta.Version++
-	p.pState.Meta.MetaDef = def
-	p.pState.Meta.MetaBytes = b
-
-	return nil
+func (p *ProposalSetMeta) replay(pd *pd) {
+	p.metaDef, _ = db.CreateDbDefFromJsonString(p.MetaBytes)
+	p.apply(pd)
 }
 
 /*
@@ -154,10 +133,9 @@ func (p *pd) onSetMeta(from *net.UDPAddr, m *snet.Message) {
 	}
 
 	p.issueProposal(&ProposalSetMeta{
-		metaBytes: msg.Meta,
+		MetaBytes: msg.Meta,
 		metaDef:   def,
-		proposalBase: &proposalBase{
-			pd:    p,
+		proposalBase: proposalBase{
 			reply: p.makeReplyFunc(from, m, resp),
 		},
 	})
@@ -205,28 +183,25 @@ func (m *MetaTransaction) notifyStore(p *pd) {
 }
 
 type ProposalUpdateMeta struct {
-	*proposalBase
-	tran *MetaTransaction
+	proposalBase
+	Tran *MetaTransaction
 }
 
 func (p *ProposalUpdateMeta) Serilize(b []byte) []byte {
-	b = buffer.AppendByte(b, byte(proposalUpdateMeta))
-	j, _ := json.Marshal(p.tran)
-	b = buffer.AppendUint32(b, uint32(len(j)))
-	return buffer.AppendBytes(b, j)
+	return serilizeProposal(b, proposalUpdateMeta, p)
 }
 
-func (p *ProposalUpdateMeta) apply() {
+func (p *ProposalUpdateMeta) apply(pd *pd) {
 	var err error
-	if nil != p.pd.pState.MetaTransaction {
+	if nil != pd.pState.MetaTransaction {
 		err = errors.New("wait for previous meta transaction finish")
 	} else {
-		p.pd.pState.Meta.Version = p.tran.Version
-		p.pd.pState.Meta.MetaDef = p.tran.MetaDef
-		p.pd.pState.Meta.MetaBytes, _ = db.DbDefToJsonString(p.pd.pState.Meta.MetaDef)
-		if len(p.tran.Store) > 0 {
-			p.pd.pState.MetaTransaction = p.tran
-			p.pd.pState.MetaTransaction.notifyStore(p.pd)
+		pd.pState.Meta.Version = p.Tran.Version
+		pd.pState.Meta.MetaDef = p.Tran.MetaDef
+		pd.pState.Meta.MetaBytes, _ = db.DbDefToJsonString(pd.pState.Meta.MetaDef)
+		if len(p.Tran.Store) > 0 {
+			pd.pState.MetaTransaction = p.Tran
+			pd.pState.MetaTransaction.notifyStore(pd)
 		}
 	}
 
@@ -235,32 +210,8 @@ func (p *ProposalUpdateMeta) apply() {
 	}
 }
 
-func (p *pd) replayUpdateMeta(reader *buffer.BufferReader) error {
-
-	l, err := reader.CheckGetUint32()
-	if nil != err {
-		return err
-	}
-
-	b, err := reader.CheckGetBytes(int(l))
-	if nil != err {
-		return err
-	}
-
-	t := &MetaTransaction{}
-	err = json.Unmarshal(b, t)
-	if nil != err {
-		return err
-	}
-
-	pa := &ProposalUpdateMeta{
-		proposalBase: &proposalBase{
-			pd: p,
-		},
-		tran: t,
-	}
-	pa.apply()
-	return nil
+func (p *ProposalUpdateMeta) replay(pd *pd) {
+	p.apply(pd)
 }
 
 //运行期间更新meta，只允许添加
@@ -319,29 +270,27 @@ func (p *pd) onUpdateMeta(from *net.UDPAddr, m *snet.Message) {
 	}
 
 	p.issueProposal(&ProposalUpdateMeta{
-		proposalBase: &proposalBase{
-			pd:    p,
+		proposalBase: proposalBase{
 			reply: p.makeReplyFunc(from, m, resp),
 		},
-		tran: t,
+		Tran: t,
 	})
 }
 
 type ProposalStoreUpdateMetaOk struct {
-	*proposalBase
-	store int
+	proposalBase
+	Store int
 }
 
 func (p *ProposalStoreUpdateMetaOk) Serilize(b []byte) []byte {
-	b = buffer.AppendByte(b, byte(proposalStoreUpdateMetaOk))
-	return buffer.AppendUint32(b, uint32(p.store))
+	return serilizeProposal(b, proposalStoreUpdateMetaOk, p)
 }
 
-func (p *ProposalStoreUpdateMetaOk) apply() {
-	t := p.pd.pState.MetaTransaction
+func (p *ProposalStoreUpdateMetaOk) apply(pd *pd) {
+	t := pd.pState.MetaTransaction
 	c := 0
 	for k, v := range t.Store {
-		if v.StoreID == p.store {
+		if v.StoreID == p.Store {
 			t.Store[k].Ok = true
 		} else if !v.Ok {
 			c++
@@ -349,24 +298,12 @@ func (p *ProposalStoreUpdateMetaOk) apply() {
 	}
 	if c == 0 {
 		//所有store均已应答，事务结束
-		p.pd.pState.MetaTransaction = nil
+		pd.pState.MetaTransaction = nil
 	}
 }
 
-func (p *pd) replayStoreUpdateMetaOk(reader *buffer.BufferReader) error {
-
-	store, err := reader.CheckGetUint32()
-	if nil != err {
-		return err
-	}
-	pa := &ProposalStoreUpdateMetaOk{
-		proposalBase: &proposalBase{
-			pd: p,
-		},
-		store: int(store),
-	}
-	pa.apply()
-	return nil
+func (p *ProposalStoreUpdateMetaOk) replay(pd *pd) {
+	p.apply(pd)
 }
 
 func (p *pd) onStoreUpdateMetaOk(from *net.UDPAddr, m *snet.Message) {
@@ -385,10 +322,7 @@ func (p *pd) onStoreUpdateMetaOk(from *net.UDPAddr, m *snet.Message) {
 
 		if store != -1 {
 			p.issueProposal(&ProposalStoreUpdateMetaOk{
-				store: store,
-				proposalBase: &proposalBase{
-					pd: p,
-				},
+				Store: store,
 			})
 		}
 	}

@@ -260,9 +260,9 @@ func (p *pd) slotBalance() {
 
 	if len(p.markClearSet) > 0 {
 		for _, v := range p.markClearSet {
-			if v.getTotalSlotCount()-v.SlotOutCount > 0 {
+			if v.getTotalSlotCount()-v.slotOutCount > 0 {
 				for _, vv := range v.stores {
-					if len(vv.slots.GetOpenBits())-vv.SlotOutCount > 0 {
+					if len(vv.slots.GetOpenBits())-vv.slotOutCount > 0 {
 						outStore = vv
 						break
 					}
@@ -282,9 +282,9 @@ func (p *pd) slotBalance() {
 
 	if nil == outStore {
 		for _, v := range p.pState.deployment.sets {
-			if !v.markClear && v.getTotalSlotCount()-v.SlotOutCount > setAverageSlotCount+1 {
+			if !v.markClear && v.getTotalSlotCount()-v.slotOutCount > setAverageSlotCount+1 {
 				for _, vv := range v.stores {
-					if len(vv.slots.GetOpenBits())-vv.SlotOutCount > storeAverageSlotCount+1 {
+					if len(vv.slots.GetOpenBits())-vv.slotOutCount > storeAverageSlotCount+1 {
 						outStore = vv
 						break
 					}
@@ -299,9 +299,9 @@ func (p *pd) slotBalance() {
 	if nil != outStore {
 		var inStore *store
 		for _, v := range p.pState.deployment.sets {
-			if !v.markClear && v.getTotalSlotCount()-v.SlotInCount < setAverageSlotCount+1 {
+			if !v.markClear && v.getTotalSlotCount()-v.slotInCount < setAverageSlotCount+1 {
 				for _, vv := range v.stores {
-					if len(vv.slots.GetOpenBits())-vv.SlotInCount < storeAverageSlotCount+1 {
+					if len(vv.slots.GetOpenBits())-vv.slotInCount < storeAverageSlotCount+1 {
 						inStore = vv
 						break
 					}
@@ -373,19 +373,19 @@ func (p *pd) onBecomeLeader() {
 	if nil != p.pState.deployment {
 		//重置slotBalance相关的临时数据
 		for _, v := range p.pState.deployment.sets {
-			v.SlotOutCount = 0
-			v.SlotInCount = 0
+			v.slotOutCount = 0
+			v.slotInCount = 0
 			for _, vv := range v.stores {
-				vv.SlotOutCount = 0
-				vv.SlotInCount = 0
+				vv.slotOutCount = 0
+				vv.slotInCount = 0
 				for _, vvv := range vv.slots.GetOpenBits() {
 					if t, ok := p.pState.SlotTransfer[vvv]; ok {
 						if vvv == t.StoreTransferIn {
-							vv.SlotInCount++
-							v.SlotInCount++
+							vv.slotInCount++
+							v.slotInCount++
 						} else if vvv == t.StoreTransferOut {
-							vv.SlotOutCount++
-							v.SlotOutCount++
+							vv.slotOutCount++
+							v.slotOutCount++
 						}
 					}
 				}
@@ -452,7 +452,7 @@ func (p *pd) Stop() {
 func (p *pd) processCommited(commited raft.Committed) {
 	if len(commited.Proposals) > 0 {
 		for _, v := range commited.Proposals {
-			v.(applyable).apply()
+			v.(applyable).apply(p)
 		}
 	} else {
 		err := p.replayProposal(commited.Data)

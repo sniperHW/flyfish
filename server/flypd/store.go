@@ -1,10 +1,8 @@
 package flypd
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/pkg/raft/membership"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
@@ -38,7 +36,7 @@ func (st *storeTask) notifyFlyKv() {
 				msg.RaftPort = int32(st.node.raftPort)
 			}
 
-			var remotes []interface{}
+			var remotes []string
 
 			for _, v := range st.node.set.nodes {
 				if v != st.node {
@@ -63,9 +61,6 @@ func (st *storeTask) notifyFlyKv() {
 
 				if nil != resp {
 					st.pd.issueProposal(&ProposalFlyKvCommited{
-						proposalBase: &proposalBase{
-							pd: st.pd,
-						},
 						Set:   st.node.set.id,
 						Node:  st.node.id,
 						Store: st.store,
@@ -97,7 +92,7 @@ func (p *pd) startStoreNotifyTask(node *kvnode, store int, storeStateType FlyKvS
 }
 
 type ProposalFlyKvCommited struct {
-	*proposalBase
+	proposalBase
 	Set   int
 	Node  int
 	Store int
@@ -105,16 +100,14 @@ type ProposalFlyKvCommited struct {
 }
 
 func (p *ProposalFlyKvCommited) Serilize(b []byte) []byte {
-	b = buffer.AppendByte(b, byte(proposalFlyKvCommited))
-	bb, err := json.Marshal(p)
-	if nil != err {
-		panic(err)
-	}
-	return buffer.AppendBytes(b, bb)
+	return serilizeProposal(b, proposalFlyKvCommited, p)
 }
 
-func (p *ProposalFlyKvCommited) apply() {
-	s := p.pd.pState.deployment.sets[p.Set]
+func (p *ProposalFlyKvCommited) apply(pd *pd) {
+
+	GetSugar().Infof("ProposalFlyKvCommited apply %v", p.Type)
+
+	s := pd.pState.deployment.sets[p.Set]
 	n := s.nodes[p.Node]
 
 	st := n.store[p.Store]
@@ -126,55 +119,45 @@ func (p *ProposalFlyKvCommited) apply() {
 		delete(n.store, p.Store)
 	}
 
+	pd.pState.deployment.version++
+
 	taskID := uint64(p.Node)<<32 + uint64(p.Store)
 
-	_, ok := p.pd.storeTask[taskID]
+	_, ok := pd.storeTask[taskID]
 	if ok {
-		delete(p.pd.storeTask, taskID)
+		delete(pd.storeTask, taskID)
 	}
 }
 
-func (p *pd) replayProposalFlyKvCommited(reader *buffer.BufferReader) error {
-	pa := &ProposalFlyKvCommited{}
-	if err := json.Unmarshal(reader.GetAll(), &pa); nil != err {
-		return err
-	} else {
-		pa.pd = p
-		pa.apply()
-		return nil
-	}
+func (p *ProposalFlyKvCommited) replay(pd *pd) {
+	p.apply(pd)
 }
 
 type ProposalAddLearnerStoreToNode struct {
-	*proposalBase
-	msg *sproto.AddLearnerStoreToNode
+	proposalBase
+	Msg *sproto.AddLearnerStoreToNode
 }
 
 func (p *ProposalAddLearnerStoreToNode) Serilize(b []byte) []byte {
-	b = buffer.AppendByte(b, byte(proposalAddLearnerStoreToNode))
-	bb, err := json.Marshal(p.msg)
-	if nil != err {
-		panic(err)
-	}
-	return buffer.AppendBytes(b, bb)
+	return serilizeProposal(b, proposalAddLearnerStoreToNode, p)
 }
 
-func (p *ProposalAddLearnerStoreToNode) apply() {
+func (p *ProposalAddLearnerStoreToNode) apply(pd *pd) {
 
-	s := p.pd.pState.deployment.sets[int(p.msg.SetID)]
+	s := pd.pState.deployment.sets[int(p.Msg.SetID)]
 
-	n := s.nodes[int(p.msg.NodeID)]
+	n := s.nodes[int(p.Msg.NodeID)]
 
 	err := func() error {
 
-		if _, ok := n.store[int(p.msg.Store)]; ok {
+		if _, ok := n.store[int(p.Msg.Store)]; ok {
 			return errors.New("store already exists")
 		}
 
 		learnerNum := 0
 
 		for _, v := range s.nodes {
-			if v.isLearner(int(p.msg.Store)) {
+			if v.isLearner(int(p.Msg.Store)) {
 				learnerNum++
 			}
 		}
@@ -189,12 +172,12 @@ func (p *ProposalAddLearnerStoreToNode) apply() {
 	}()
 
 	if nil == err {
-		n.store[int(p.msg.Store)] = &FlyKvStoreState{
+		n.store[int(p.Msg.Store)] = &FlyKvStoreState{
 			Type:  LearnerStore,
 			Value: FlyKvUnCommit,
 		}
 		//通告set中flykv添加learner
-		p.pd.startStoreNotifyTask(n, int(p.msg.Store), LearnerStore)
+		pd.startStoreNotifyTask(n, int(p.Msg.Store), LearnerStore)
 	}
 
 	if nil != p.reply {
@@ -202,53 +185,36 @@ func (p *ProposalAddLearnerStoreToNode) apply() {
 	}
 }
 
-func (p *pd) replayAddLearnerStoreToNode(reader *buffer.BufferReader) error {
-	var msg sproto.AddLearnerStoreToNode
-	if err := json.Unmarshal(reader.GetAll(), &msg); nil != err {
-		return err
-	}
-
-	pa := &ProposalAddLearnerStoreToNode{
-		proposalBase: &proposalBase{
-			pd: p,
-		},
-		msg: &msg,
-	}
-	pa.apply()
-	return nil
+func (p *ProposalAddLearnerStoreToNode) replay(pd *pd) {
+	p.apply(pd)
 }
 
 type ProposalPromoteLearnerStore struct {
-	*proposalBase
-	msg *sproto.PromoteLearnerStore
+	proposalBase
+	Msg *sproto.PromoteLearnerStore
 }
 
 func (p *ProposalPromoteLearnerStore) Serilize(b []byte) []byte {
-	b = buffer.AppendByte(b, byte(proposalPromoteLearnerStore))
-	bb, err := json.Marshal(p.msg)
-	if nil != err {
-		panic(err)
-	}
-	return buffer.AppendBytes(b, bb)
+	return serilizeProposal(b, proposalPromoteLearnerStore, p)
 }
 
-func (p *ProposalPromoteLearnerStore) apply() {
+func (p *ProposalPromoteLearnerStore) apply(pd *pd) {
 
 	var st *FlyKvStoreState
 	var n *kvnode
 
 	err := func() error {
-		s, ok := p.pd.pState.deployment.sets[int(p.msg.SetID)]
+		s, ok := pd.pState.deployment.sets[int(p.Msg.SetID)]
 		if !ok {
 			return errors.New("set not found")
 		}
 
-		n, ok = s.nodes[int(p.msg.NodeID)]
+		n, ok = s.nodes[int(p.Msg.NodeID)]
 		if !ok {
 			return errors.New("node not found")
 		}
 
-		st, ok = n.store[int(p.msg.Store)]
+		st, ok = n.store[int(p.Msg.Store)]
 		if ok {
 			if st.Type == VoterStore {
 				return errors.New("store is already a voter")
@@ -270,7 +236,7 @@ func (p *ProposalPromoteLearnerStore) apply() {
 		st.Type = VoterStore
 		st.Value = FlyKvUnCommit
 		//通告set中flykv promote
-		p.pd.startStoreNotifyTask(n, int(p.msg.Store), VoterStore)
+		pd.startStoreNotifyTask(n, int(p.Msg.Store), VoterStore)
 	}
 
 	if nil != p.reply {
@@ -278,40 +244,26 @@ func (p *ProposalPromoteLearnerStore) apply() {
 	}
 }
 
-func (p *pd) replayPromoteLearnerStore(reader *buffer.BufferReader) error {
-	var msg sproto.PromoteLearnerStore
-	if err := json.Unmarshal(reader.GetAll(), &msg); nil != err {
-		return err
-	}
-
-	pa := &ProposalPromoteLearnerStore{
-		proposalBase: &proposalBase{
-			pd: p,
-		},
-		msg: &msg,
-	}
-	pa.apply()
-	return nil
+func (p *ProposalPromoteLearnerStore) replay(pd *pd) {
+	p.apply(pd)
 }
 
 type ProposalRemoveNodeStore struct {
-	*proposalBase
-	msg *sproto.RemoveNodeStore
+	proposalBase
+	Msg *sproto.RemoveNodeStore
 }
 
 func (p *ProposalRemoveNodeStore) Serilize(b []byte) []byte {
-	b = buffer.AppendByte(b, byte(proposalRemoveNodeStore))
-	bb, err := json.Marshal(p.msg)
-	if nil != err {
-		panic(err)
-	}
-	return buffer.AppendBytes(b, bb)
+	return serilizeProposal(b, proposalRemoveNodeStore, p)
 }
 
-func (p *ProposalRemoveNodeStore) apply() {
-	s := p.pd.pState.deployment.sets[int(p.msg.SetID)]
-	n := s.nodes[int(p.msg.NodeID)]
-	store := n.store[int(p.msg.Store)]
+func (p *ProposalRemoveNodeStore) apply(pd *pd) {
+
+	GetSugar().Infof("ProposalRemoveNodeStore apply")
+
+	s := pd.pState.deployment.sets[int(p.Msg.SetID)]
+	n := s.nodes[int(p.Msg.NodeID)]
+	store := n.store[int(p.Msg.Store)]
 
 	err := func() error {
 		if nil == store {
@@ -328,28 +280,17 @@ func (p *ProposalRemoveNodeStore) apply() {
 	if nil == err {
 		store.Type = RemoveStore
 		store.Value = FlyKvUnCommit
-		p.pd.startStoreNotifyTask(n, int(p.msg.Store), RemoveStore)
-	} else {
-		if nil != p.reply {
-			p.reply(err)
-		}
+		pd.startStoreNotifyTask(n, int(p.Msg.Store), RemoveStore)
 	}
+
+	if nil != p.reply {
+		p.reply(err)
+	}
+
 }
 
-func (p *pd) replayProposalRemoveNodeStore(reader *buffer.BufferReader) error {
-	var msg sproto.RemoveNodeStore
-	if err := json.Unmarshal(reader.GetAll(), &msg); nil != err {
-		return err
-	}
-
-	pa := &ProposalRemoveNodeStore{
-		proposalBase: &proposalBase{
-			pd: p,
-		},
-		msg: &msg,
-	}
-	pa.apply()
-	return nil
+func (p *ProposalRemoveNodeStore) replay(pd *pd) {
+	p.apply(pd)
 }
 
 /*
@@ -398,17 +339,16 @@ func (p *pd) onAddLearnerStoreToNode(from *net.UDPAddr, m *snet.Message) {
 		return nil
 	}()
 
-	if nil == err {
+	if nil != err {
 		resp.Ok = false
 		resp.Reason = err.Error()
 		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 	} else {
 		p.issueProposal(&ProposalAddLearnerStoreToNode{
-			proposalBase: &proposalBase{
-				pd:    p,
+			proposalBase: proposalBase{
 				reply: p.makeReplyFunc(from, m, resp),
 			},
-			msg: msg,
+			Msg: msg,
 		})
 	}
 }
@@ -460,16 +400,18 @@ func (p *pd) onPromoteLearnerStore(from *net.UDPAddr, m *snet.Message) {
 		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 	} else {
 		p.issueProposal(&ProposalPromoteLearnerStore{
-			proposalBase: &proposalBase{
-				pd:    p,
+			proposalBase: proposalBase{
 				reply: p.makeReplyFunc(from, m, resp),
 			},
-			msg: msg,
+			Msg: msg,
 		})
 	}
 }
 
 func (p *pd) onRemoveNodeStore(from *net.UDPAddr, m *snet.Message) {
+
+	GetSugar().Infof("onRemoveNodeStore")
+
 	msg := m.Msg.(*sproto.RemoveNodeStore)
 	resp := &sproto.RemoveNodeStoreResp{}
 
@@ -495,11 +437,10 @@ func (p *pd) onRemoveNodeStore(from *net.UDPAddr, m *snet.Message) {
 		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 	} else {
 		p.issueProposal(&ProposalRemoveNodeStore{
-			proposalBase: &proposalBase{
-				pd:    p,
+			proposalBase: proposalBase{
 				reply: p.makeReplyFunc(from, m, resp),
 			},
-			msg: msg,
+			Msg: msg,
 		})
 	}
 }

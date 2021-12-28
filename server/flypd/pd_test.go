@@ -271,6 +271,8 @@ func TestPd(t *testing.T) {
 
 	testUpdateMeta2(t, p)
 
+	//testAddRemNode(t, p)
+
 	testSlotTransfer(t, p)
 
 	p.Stop()
@@ -472,6 +474,69 @@ func testAddRemNode(t *testing.T, p *pd) {
 		}
 	})
 
+	node1 := &testKvnode{
+		nodeId: 1,
+	}
+
+	node1.udp, _ = fnet.NewUdp("localhost:9110", snet.Pack, snet.Unpack)
+
+	go node1.run()
+
+	//add learnstore
+	conn.SendTo(addr, snet.MakeMessage(0, &sproto.AddLearnerStoreToNode{
+		SetID:  1,
+		NodeID: 2,
+		Store:  1,
+	}))
+
+	_, r, err = conn.ReadFrom(recvbuff)
+
+	assert.Equal(t, true, r.(*snet.Message).Msg.(*sproto.AddLearnerStoreToNodeResp).Ok)
+
+	fmt.Println("promote to voter")
+
+	//promote to voter
+	for {
+		conn.SendTo(addr, snet.MakeMessage(0, &sproto.PromoteLearnerStore{
+			SetID:  1,
+			NodeID: 2,
+			Store:  1,
+		}))
+
+		_, r, err = conn.ReadFrom(recvbuff)
+
+		ret := r.(*snet.Message).Msg.(*sproto.PromoteLearnerStoreResp)
+
+		if ret.Reason == "store is already a voter" {
+			break
+		}
+
+		time.Sleep(time.Second)
+	}
+
+	//remove store
+	fmt.Println("remove store")
+
+	for {
+		conn.SendTo(addr, snet.MakeMessage(0, &sproto.RemoveNodeStore{
+			SetID:  1,
+			NodeID: 2,
+			Store:  1,
+		}))
+
+		_, r, err = conn.ReadFrom(recvbuff)
+
+		ret := r.(*snet.Message).Msg.(*sproto.RemoveNodeStoreResp)
+
+		fmt.Println(ret.Reason)
+
+		if ret.Reason == "store not exists" {
+			break
+		}
+
+		time.Sleep(time.Second)
+	}
+
 	conn.SendTo(addr, snet.MakeMessage(0, &sproto.RemNode{
 		SetID:  1,
 		NodeID: 2,
@@ -488,6 +553,8 @@ func testAddRemNode(t *testing.T, p *pd) {
 			return false
 		}
 	})
+
+	node1.stop()
 
 	conn.Close()
 }
@@ -542,7 +609,11 @@ func testAddRemSet(t *testing.T, p *pd) {
 		nodeId: 1,
 	}
 
-	node1.udp, _ = fnet.NewUdp("localhost:9110", snet.Pack, snet.Unpack)
+	node1.udp, err = fnet.NewUdp("localhost:9110", snet.Pack, snet.Unpack)
+
+	if nil != err {
+		panic(err)
+	}
 
 	go node1.run()
 

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
-	"github.com/sniperHW/flyfish/pkg/buffer"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"github.com/sniperHW/flyfish/server/slot"
@@ -84,8 +83,8 @@ type store struct {
 	id           int
 	slots        *bitmap.Bitmap
 	set          *set
-	SlotOutCount int //待迁出的slot数量
-	SlotInCount  int //待迁入的slot数量
+	slotOutCount int //待迁出的slot数量
+	slotInCount  int //待迁入的slot数量
 }
 
 type set struct {
@@ -94,8 +93,8 @@ type set struct {
 	markClear    bool
 	nodes        map[int]*kvnode
 	stores       map[int]*store
-	SlotOutCount int //待迁出的slot数量
-	SlotInCount  int //待迁入的slot数量
+	slotOutCount int //待迁出的slot数量
+	slotInCount  int //待迁入的slot数量
 }
 
 func (s *set) getTotalSlotCount() int {
@@ -378,33 +377,29 @@ func (d *deployment) loadFromPB(sets []*sproto.DeploymentSet) error {
 }
 
 type ProposalInstallDeployment struct {
-	*proposalBase
-	d *deployment
+	proposalBase
+	D DeploymentJson
 }
 
 func (p *ProposalInstallDeployment) Serilize(b []byte) []byte {
-	b = buffer.AppendByte(b, byte(proposalInstallDeployment))
-	bb, err := p.d.toJson()
-	if nil != err {
-		panic(err)
-	}
-	return buffer.AppendBytes(b, bb)
+	return serilizeProposal(b, proposalInstallDeployment, p)
 }
 
-func (p *ProposalInstallDeployment) apply() {
+func (p *ProposalInstallDeployment) apply(pd *pd) {
 	err := func() error {
-		if nil != p.pd.pState.MetaTransaction {
+		if nil != pd.pState.MetaTransaction {
 			return errors.New("wait for previous meta transaction finish")
 		}
 
-		if nil != p.pd.pState.deployment {
+		if nil != pd.pState.deployment {
 			return errors.New("already install")
 		}
 		return nil
 	}()
 
 	if nil == err {
-		p.pd.pState.deployment = p.d
+		pd.pState.deployment = &deployment{}
+		pd.pState.deployment.loadFromDeploymentJson(&p.D)
 	}
 
 	if nil != p.reply {
@@ -412,21 +407,8 @@ func (p *ProposalInstallDeployment) apply() {
 	}
 }
 
-func (p *pd) replayInstallDeployment(reader *buffer.BufferReader) error {
-
-	d := &deployment{}
-	if err := d.loadFromJson(reader.GetAll()); nil != err {
-		return err
-	}
-
-	pa := &ProposalInstallDeployment{
-		proposalBase: &proposalBase{
-			pd: p,
-		},
-		d: d,
-	}
-	pa.apply()
-	return nil
+func (p *ProposalInstallDeployment) replay(pd *pd) {
+	p.apply(pd)
 }
 
 func (p *pd) makeReplyFunc(from *net.UDPAddr, m *snet.Message, resp proto.Message) func(error) {
@@ -471,9 +453,8 @@ func (p *pd) onInstallDeployment(from *net.UDPAddr, m *snet.Message) {
 		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 	} else {
 		p.issueProposal(&ProposalInstallDeployment{
-			d: d,
-			proposalBase: &proposalBase{
-				pd:    p,
+			D: d.toDeploymentJson(),
+			proposalBase: proposalBase{
 				reply: p.makeReplyFunc(from, m, resp),
 			},
 		})

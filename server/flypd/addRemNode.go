@@ -1,49 +1,44 @@
 package flypd
 
 import (
-	"encoding/json"
+	//"encoding/json"
 	"errors"
-	"github.com/sniperHW/flyfish/pkg/buffer"
+	//"github.com/sniperHW/flyfish/pkg/buffer"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"net"
 )
 
 type ProposalAddNode struct {
-	*proposalBase
-	msg *sproto.AddNode
+	proposalBase
+	Msg *sproto.AddNode
 }
 
 func (p *ProposalAddNode) Serilize(b []byte) []byte {
-	b = buffer.AppendByte(b, byte(proposalAddNode))
-	bb, err := json.Marshal(p.msg)
-	if nil != err {
-		panic(err)
-	}
-	return buffer.AppendBytes(b, bb)
+	return serilizeProposal(b, proposalAddNode, p)
 }
 
-func (p *ProposalAddNode) apply() {
+func (p *ProposalAddNode) apply(pd *pd) {
 	var s *set
 	var ok bool
 
 	err := func() error {
-		s, ok = p.pd.pState.deployment.sets[int(p.msg.SetID)]
+		s, ok = pd.pState.deployment.sets[int(p.Msg.SetID)]
 		if !ok {
 			return errors.New("set not found")
 		}
 
-		for _, v := range p.pd.pState.deployment.sets {
+		for _, v := range pd.pState.deployment.sets {
 			for _, vv := range v.nodes {
-				if vv.id == int(p.msg.NodeID) {
+				if vv.id == int(p.Msg.NodeID) {
 					return errors.New("duplicate node id")
 				}
 
-				if vv.host == p.msg.Host && vv.servicePort == int(p.msg.ServicePort) {
+				if vv.host == p.Msg.Host && vv.servicePort == int(p.Msg.ServicePort) {
 					return errors.New("duplicate service addr")
 				}
 
-				if vv.host == p.msg.Host && vv.raftPort == int(p.msg.RaftPort) {
+				if vv.host == p.Msg.Host && vv.raftPort == int(p.Msg.RaftPort) {
 					return errors.New("duplicate raft addr")
 				}
 			}
@@ -53,15 +48,15 @@ func (p *ProposalAddNode) apply() {
 
 	if nil == err {
 		n := &kvnode{
-			id:          int(p.msg.NodeID),
-			host:        p.msg.Host,
-			servicePort: int(p.msg.ServicePort),
-			raftPort:    int(p.msg.RaftPort),
+			id:          int(p.Msg.NodeID),
+			host:        p.Msg.Host,
+			servicePort: int(p.Msg.ServicePort),
+			raftPort:    int(p.Msg.RaftPort),
 			set:         s,
 			store:       map[int]*FlyKvStoreState{},
 		}
-		s.nodes[int(p.msg.NodeID)] = n
-		p.pd.pState.deployment.version++
+		s.nodes[int(p.Msg.NodeID)] = n
+		pd.pState.deployment.version++
 	}
 
 	if nil != p.reply {
@@ -69,49 +64,32 @@ func (p *ProposalAddNode) apply() {
 	}
 }
 
-func (p *pd) replayAddNode(reader *buffer.BufferReader) error {
-	var msg sproto.AddNode
-	if err := json.Unmarshal(reader.GetAll(), &msg); nil != err {
-		return err
-	}
-
-	pa := &ProposalAddNode{
-		proposalBase: &proposalBase{
-			pd: p,
-		},
-		msg: &msg,
-	}
-	pa.apply()
-	return nil
+func (p *ProposalAddNode) replay(pd *pd) {
+	p.apply(pd)
 }
 
 type ProposalRemNode struct {
-	*proposalBase
-	msg *sproto.RemNode
+	proposalBase
+	Msg *sproto.RemNode
 }
 
 func (p *ProposalRemNode) Serilize(b []byte) []byte {
-	b = buffer.AppendByte(b, byte(proposalRemNode))
-	bb, err := json.Marshal(p.msg)
-	if nil != err {
-		panic(err)
-	}
-	return buffer.AppendBytes(b, bb)
+	return serilizeProposal(b, proposalRemNode, p)
 }
 
-func (p *ProposalRemNode) apply() {
+func (p *ProposalRemNode) apply(pd *pd) {
 
 	var s *set
 	var ok bool
 
 	err := func() error {
 
-		s, ok = p.pd.pState.deployment.sets[int(p.msg.SetID)]
+		s, ok = pd.pState.deployment.sets[int(p.Msg.SetID)]
 		if !ok {
 			return errors.New("set not found")
 		}
 
-		n, ok := s.nodes[int(p.msg.NodeID)]
+		n, ok := s.nodes[int(p.Msg.NodeID)]
 		if !ok {
 			return errors.New("node not found")
 		}
@@ -123,8 +101,8 @@ func (p *ProposalRemNode) apply() {
 	}()
 
 	if nil == err {
-		delete(s.nodes, int(p.msg.NodeID))
-		p.pd.pState.deployment.version++
+		delete(s.nodes, int(p.Msg.NodeID))
+		pd.pState.deployment.version++
 	}
 
 	if nil != p.reply {
@@ -132,20 +110,8 @@ func (p *ProposalRemNode) apply() {
 	}
 }
 
-func (p *pd) replayRemNode(reader *buffer.BufferReader) error {
-	var msg sproto.RemNode
-	if err := json.Unmarshal(reader.GetAll(), &msg); nil != err {
-		return err
-	}
-
-	pr := &ProposalRemNode{
-		proposalBase: &proposalBase{
-			pd: p,
-		},
-		msg: &msg,
-	}
-	pr.apply()
-	return nil
+func (p *ProposalRemNode) replay(pd *pd) {
+	p.apply(pd)
 }
 
 func (p *pd) onAddNode(from *net.UDPAddr, m *snet.Message) {
@@ -187,9 +153,8 @@ func (p *pd) onAddNode(from *net.UDPAddr, m *snet.Message) {
 	} else {
 
 		p.issueProposal(&ProposalAddNode{
-			msg: msg,
-			proposalBase: &proposalBase{
-				pd:    p,
+			Msg: msg,
+			proposalBase: proposalBase{
 				reply: p.makeReplyFunc(from, m, resp),
 			},
 		})
@@ -229,9 +194,8 @@ func (p *pd) onRemNode(from *net.UDPAddr, m *snet.Message) {
 	} else {
 
 		p.issueProposal(&ProposalRemNode{
-			msg: msg,
-			proposalBase: &proposalBase{
-				pd:    p,
+			Msg: msg,
+			proposalBase: proposalBase{
 				reply: p.makeReplyFunc(from, m, resp),
 			},
 		})

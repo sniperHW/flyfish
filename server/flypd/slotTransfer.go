@@ -1,9 +1,7 @@
 package flypd
 
 import (
-	"encoding/json"
 	"fmt"
-	"github.com/sniperHW/flyfish/pkg/buffer"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"net"
@@ -51,130 +49,110 @@ func (tst *TransSlotTransfer) notify(pd *pd) {
 }
 
 type ProposalBeginSlotTransfer struct {
-	*proposalBase
-	trans *TransSlotTransfer
+	proposalBase
+	Trans *TransSlotTransfer
 }
 
 func (p *ProposalBeginSlotTransfer) Serilize(b []byte) []byte {
-	b = buffer.AppendByte(b, byte(proposalBeginSlotTransfer))
-	bb, err := json.Marshal(p.trans)
-	if nil != err {
-		panic(err)
-	}
-	return buffer.AppendBytes(b, bb)
+	return serilizeProposal(b, proposalBeginSlotTransfer, p)
 }
 
-func (p *ProposalBeginSlotTransfer) apply() {
-	if _, ok := p.pd.pState.SlotTransfer[p.trans.Slot]; !ok {
-		p.pd.pState.SlotTransfer[p.trans.Slot] = p.trans
+func (p *ProposalBeginSlotTransfer) apply(pd *pd) {
+	if _, ok := pd.pState.SlotTransfer[p.Trans.Slot]; !ok {
+		pd.pState.SlotTransfer[p.Trans.Slot] = p.Trans
 
-		storeIn := p.pd.pState.deployment.sets[p.trans.SetIn].stores[p.trans.StoreTransferIn]
-		storeIn.SlotInCount++
-		storeIn.set.SlotInCount++
+		storeIn := pd.pState.deployment.sets[p.Trans.SetIn].stores[p.Trans.StoreTransferIn]
+		storeIn.slotInCount++
+		storeIn.set.slotInCount++
 
-		storeOut := p.pd.pState.deployment.sets[p.trans.SetOut].stores[p.trans.StoreTransferOut]
-		storeOut.SlotOutCount++
-		storeOut.set.SlotOutCount++
+		storeOut := pd.pState.deployment.sets[p.Trans.SetOut].stores[p.Trans.StoreTransferOut]
+		storeOut.slotOutCount++
+		storeOut.set.slotOutCount++
 
-		p.trans.notify(p.pd)
-	}
-
-	if nil != p.reply {
-		p.reply(nil)
+		p.Trans.notify(pd)
 	}
 }
 
-func (p *pd) replayBeginSlotTransfer(reader *buffer.BufferReader) error {
-	var trans TransSlotTransfer
-	if err := json.Unmarshal(reader.GetAll(), &trans); nil != err {
-		return err
+func (p *ProposalBeginSlotTransfer) replay(pd *pd) {
+	if _, ok := pd.pState.SlotTransfer[p.Trans.Slot]; !ok {
+		pd.pState.SlotTransfer[p.Trans.Slot] = p.Trans
 	}
-	if _, ok := p.pState.SlotTransfer[trans.Slot]; !ok {
-		p.pState.SlotTransfer[trans.Slot] = &trans
-	}
-	return nil
 }
 
 type ProposalSlotTransOutOk struct {
-	*proposalBase
-	slot int
+	proposalBase
+	Slot int
 }
 
 func (p *ProposalSlotTransOutOk) Serilize(b []byte) []byte {
-	b = buffer.AppendByte(b, byte(proposalSlotTransOutOk))
-	return buffer.AppendInt32(b, int32(p.slot))
+	return serilizeProposal(b, proposalSlotTransOutOk, p)
 }
 
-func (p *ProposalSlotTransOutOk) apply() {
-	if t, ok := p.pd.pState.SlotTransfer[p.slot]; ok {
+func (p *ProposalSlotTransOutOk) apply(pd *pd) {
+	if t, ok := pd.pState.SlotTransfer[p.Slot]; ok {
 		if !t.StoreTransferOutOk {
 			t.StoreTransferOutOk = true
-			s := p.pd.pState.deployment.sets[t.SetOut]
-			s.SlotOutCount--
+			s := pd.pState.deployment.sets[t.SetOut]
+			s.slotOutCount--
 			st := s.stores[t.StoreTransferOut]
-			st.SlotOutCount--
+			st.slotOutCount--
 			st.slots.Clear(int(t.Slot))
-			p.pd.pState.deployment.version++
-			s.version = p.pd.pState.deployment.version
+			pd.pState.deployment.version++
+			s.version = pd.pState.deployment.version
 			//迁出已经完成，通知迁入
 			if t.timer == nil || t.timer.Stop() {
-				t.notify(p.pd)
+				t.notify(pd)
 			}
 		}
 	}
 }
 
-func (p *pd) replaySlotTransOutOk(reader *buffer.BufferReader) error {
-	slot := int(reader.GetInt32())
-	if t, ok := p.pState.SlotTransfer[slot]; ok {
+func (p *ProposalSlotTransOutOk) replay(pd *pd) {
+	if t, ok := pd.pState.SlotTransfer[p.Slot]; ok {
 		t.StoreTransferOutOk = true
-		s := p.pState.deployment.sets[t.SetOut]
+		s := pd.pState.deployment.sets[t.SetOut]
 		st := s.stores[t.StoreTransferOut]
 		st.slots.Clear(int(t.Slot))
-		p.pState.deployment.version++
-		s.version = p.pState.deployment.version
+		pd.pState.deployment.version++
+		s.version = pd.pState.deployment.version
 	}
-	return nil
 }
 
 type ProposalSlotTransInOk struct {
-	*proposalBase
-	slot int
+	proposalBase
+	Slot int
 }
 
 func (p *ProposalSlotTransInOk) Serilize(b []byte) []byte {
-	b = buffer.AppendByte(b, byte(proposalSlotTransInOk))
-	return buffer.AppendInt32(b, int32(p.slot))
+	return serilizeProposal(b, proposalSlotTransInOk, p)
 }
 
-func (p *ProposalSlotTransInOk) apply() {
-	if t, ok := p.pd.pState.SlotTransfer[p.slot]; ok {
-		delete(p.pd.pState.SlotTransfer, p.slot)
-		s := p.pd.pState.deployment.sets[t.SetIn]
-		s.SlotInCount--
+func (p *ProposalSlotTransInOk) apply(pd *pd) {
+	if t, ok := pd.pState.SlotTransfer[p.Slot]; ok {
+		delete(pd.pState.SlotTransfer, p.Slot)
+		s := pd.pState.deployment.sets[t.SetIn]
+		s.slotInCount--
 		st := s.stores[t.StoreTransferIn]
-		st.SlotInCount--
+		st.slotInCount--
 		st.slots.Set(int(t.Slot))
-		p.pd.pState.deployment.version++
-		s.version = p.pd.pState.deployment.version
+		pd.pState.deployment.version++
+		s.version = pd.pState.deployment.version
 		if nil != t.timer {
 			t.timer.Stop()
 		}
-		p.pd.slotBalance()
+		pd.slotBalance()
 	}
 }
 
-func (p *pd) replaySlotTransInOk(reader *buffer.BufferReader) error {
-	slot := int(reader.GetInt32())
-	if t, ok := p.pState.SlotTransfer[slot]; ok {
-		delete(p.pState.SlotTransfer, slot)
-		s := p.pState.deployment.sets[t.SetIn]
+func (p *ProposalSlotTransInOk) replay(pd *pd) {
+	if t, ok := pd.pState.SlotTransfer[p.Slot]; ok {
+		delete(pd.pState.SlotTransfer, p.Slot)
+		s := pd.pState.deployment.sets[t.SetIn]
 		st := s.stores[t.StoreTransferIn]
 		st.slots.Set(int(t.Slot))
-		p.pState.deployment.version++
-		s.version = p.pState.deployment.version
+		pd.pState.deployment.version++
+		s.version = pd.pState.deployment.version
 	}
-	return nil
 }
 
 func (p *pd) beginSlotTransfer(slot int, setOut int, storeOut int, setIn int, storeIn int) {
@@ -182,15 +160,12 @@ func (p *pd) beginSlotTransfer(slot int, setOut int, storeOut int, setIn int, st
 	GetSugar().Infof("beginSlotTransfer slot:%d setOut:%d setIn:%d storeOut:%d storeIn:%d", slot, setOut, setIn, storeOut, storeIn)
 
 	p.issueProposal(&ProposalBeginSlotTransfer{
-		trans: &TransSlotTransfer{
+		Trans: &TransSlotTransfer{
 			Slot:             slot,
 			SetOut:           setOut,
 			StoreTransferOut: storeOut,
 			SetIn:            setIn,
 			StoreTransferIn:  storeIn,
-		},
-		proposalBase: &proposalBase{
-			pd: p,
 		},
 	})
 }
@@ -200,10 +175,7 @@ func (p *pd) onSlotTransOutOk(from *net.UDPAddr, m *snet.Message) {
 	if t, ok := p.pState.SlotTransfer[int(msg.Slot)]; ok && t.context == m.Context {
 		if !t.StoreTransferOutOk {
 			p.issueProposal(&ProposalSlotTransOutOk{
-				slot: int(msg.Slot),
-				proposalBase: &proposalBase{
-					pd: p,
-				},
+				Slot: int(msg.Slot),
 			})
 
 		}
@@ -214,10 +186,7 @@ func (p *pd) onSlotTransInOk(from *net.UDPAddr, m *snet.Message) {
 	msg := m.Msg.(*sproto.SlotTransInOk)
 	if t, ok := p.pState.SlotTransfer[int(msg.Slot)]; ok && t.context == m.Context {
 		p.issueProposal(&ProposalSlotTransInOk{
-			slot: int(msg.Slot),
-			proposalBase: &proposalBase{
-				pd: p,
-			},
+			Slot: int(msg.Slot),
 		})
 	}
 }

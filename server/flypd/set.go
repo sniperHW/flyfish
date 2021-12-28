@@ -1,11 +1,9 @@
 package flypd
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
-	"github.com/sniperHW/flyfish/pkg/buffer"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"github.com/sniperHW/flyfish/server/slot"
@@ -13,36 +11,30 @@ import (
 )
 
 type ProposalAddSet struct {
-	*proposalBase
-	msg *sproto.AddSet
+	proposalBase
+	Msg *sproto.AddSet
 }
 
 func (p *ProposalAddSet) Serilize(b []byte) []byte {
-	b = buffer.AppendByte(b, byte(proposalAddSet))
-	bb, err := json.Marshal(p.msg)
-	if nil != err {
-		panic(err)
-	}
-	return buffer.AppendBytes(b, bb)
+	return serilizeProposal(b, proposalAddSet, p)
 }
 
-func (p *ProposalAddSet) doApply() error {
-
-	if nil != p.pd.pState.MetaTransaction {
+func (p *ProposalAddSet) doApply(pd *pd) error {
+	if nil != pd.pState.MetaTransaction {
 		return errors.New("wait for previous meta transaction finish")
 	}
 
-	if _, ok := p.pd.pState.deployment.sets[int(p.msg.Set.SetID)]; ok {
+	if _, ok := pd.pState.deployment.sets[int(p.Msg.Set.SetID)]; ok {
 		return errors.New("set already exists")
 	}
 
 	s := &set{
-		id:     int(p.msg.Set.SetID),
+		id:     int(p.Msg.Set.SetID),
 		nodes:  map[int]*kvnode{},
 		stores: map[int]*store{},
 	}
 
-	for _, v := range p.msg.Set.Nodes {
+	for _, v := range p.Msg.Set.Nodes {
 		s.nodes[int(v.NodeID)] = &kvnode{
 			id:          int(v.NodeID),
 			host:        v.Host,
@@ -61,20 +53,20 @@ func (p *ProposalAddSet) doApply() error {
 		s.stores[st.id] = st
 	}
 
-	p.pd.pState.deployment.version++
-	s.version = p.pd.pState.deployment.version
-	p.pd.pState.deployment.sets[s.id] = s
+	pd.pState.deployment.version++
+	s.version = pd.pState.deployment.version
+	pd.pState.deployment.sets[s.id] = s
 
 	return nil
 
 }
 
-func (p *ProposalAddSet) apply() {
-	err := p.doApply()
+func (p *ProposalAddSet) apply(pd *pd) {
+	err := p.doApply(pd)
 
 	if nil == err {
 		//添加新set的操作通过，开始执行slot平衡
-		p.pd.slotBalance()
+		pd.slotBalance()
 	}
 
 	if nil != p.reply {
@@ -83,43 +75,27 @@ func (p *ProposalAddSet) apply() {
 
 }
 
-func (p *pd) replayAddSet(reader *buffer.BufferReader) error {
-	var msg sproto.AddSet
-	if err := json.Unmarshal(reader.GetAll(), &msg); nil != err {
-		return err
-	}
-
-	pr := &ProposalAddSet{
-		proposalBase: &proposalBase{
-			pd: p,
-		},
-		msg: &msg,
-	}
-	pr.doApply()
-
-	return nil
+func (p *ProposalAddSet) replay(pd *pd) {
+	p.doApply(pd)
 }
 
 type ProposalRemSet struct {
-	*proposalBase
-	setID int
+	proposalBase
+	SetID int
 }
 
 func (p *ProposalRemSet) Serilize(b []byte) []byte {
-	b = buffer.AppendByte(b, byte(proposalRemSet))
-	return buffer.AppendInt32(b, int32(p.setID))
+	return serilizeProposal(b, proposalRemSet, p)
 }
 
-func (p *ProposalRemSet) apply() {
-
-	GetSugar().Infof("ProposalRemSet.apply %v %d", len(p.pd.pState.deployment.sets), p.setID)
+func (p *ProposalRemSet) apply(pd *pd) {
 
 	err := func() error {
-		if nil != p.pd.pState.MetaTransaction {
+		if nil != pd.pState.MetaTransaction {
 			return errors.New("wait for previous meta transaction finish")
 		}
 
-		s, ok := p.pd.pState.deployment.sets[int(p.setID)]
+		s, ok := pd.pState.deployment.sets[int(p.SetID)]
 		if !ok {
 			return errors.New("set not exists")
 		}
@@ -132,7 +108,7 @@ func (p *ProposalRemSet) apply() {
 		}
 
 		//如果有slot要向set迁移，不允许删除
-		for _, v := range p.pd.pState.SlotTransfer {
+		for _, v := range pd.pState.SlotTransfer {
 			if v.SetIn == s.id {
 				return errors.New("there are slots trans in")
 			}
@@ -142,9 +118,9 @@ func (p *ProposalRemSet) apply() {
 	}()
 
 	if nil == err {
-		delete(p.pd.pState.deployment.sets, p.setID)
-		delete(p.pd.markClearSet, p.setID)
-		p.pd.pState.deployment.version++
+		delete(pd.pState.deployment.sets, p.SetID)
+		delete(pd.markClearSet, p.SetID)
+		pd.pState.deployment.version++
 	}
 
 	if nil != p.reply {
@@ -153,32 +129,24 @@ func (p *ProposalRemSet) apply() {
 
 }
 
-func (p *pd) replayRemSet(reader *buffer.BufferReader) error {
-	pa := &ProposalRemSet{
-		setID: int(reader.GetInt32()),
-		proposalBase: &proposalBase{
-			pd: p,
-		},
-	}
-	pa.apply()
-	return nil
+func (p *ProposalRemSet) replay(pd *pd) {
+	p.apply(pd)
 }
 
 type ProposalSetMarkClear struct {
-	*proposalBase
-	setID int
+	proposalBase
+	SetID int
 }
 
 func (p *ProposalSetMarkClear) Serilize(b []byte) []byte {
-	b = buffer.AppendByte(b, byte(proposalSetMarkClear))
-	return buffer.AppendInt32(b, int32(p.setID))
+	return serilizeProposal(b, proposalSetMarkClear, p)
 }
 
-func (p *ProposalSetMarkClear) doApply() error {
+func (p *ProposalSetMarkClear) doApply(pd *pd) error {
 	var ok bool
 	var s *set
 	err := func() error {
-		s, ok = p.pd.pState.deployment.sets[int(p.setID)]
+		s, ok = pd.pState.deployment.sets[int(p.SetID)]
 		if !ok {
 			return errors.New("set not exists")
 		}
@@ -192,17 +160,17 @@ func (p *ProposalSetMarkClear) doApply() error {
 
 	if nil == err {
 		s.markClear = true
-		p.pd.markClearSet[p.setID] = s
+		pd.markClearSet[p.SetID] = s
 	}
 
 	return err
 
 }
 
-func (p *ProposalSetMarkClear) apply() {
-	err := p.doApply()
+func (p *ProposalSetMarkClear) apply(pd *pd) {
+	err := p.doApply(pd)
 	if nil == err {
-		p.pd.slotBalance()
+		pd.slotBalance()
 	}
 
 	if nil != p.reply {
@@ -211,15 +179,8 @@ func (p *ProposalSetMarkClear) apply() {
 
 }
 
-func (p *pd) replaySetMarkClear(reader *buffer.BufferReader) error {
-	pa := &ProposalSetMarkClear{
-		setID: int(reader.GetInt32()),
-		proposalBase: &proposalBase{
-			pd: p,
-		},
-	}
-	pa.doApply()
-	return nil
+func (p *ProposalSetMarkClear) replay(pd *pd) {
+	p.doApply(pd)
 }
 
 func (p *pd) onRemSet(from *net.UDPAddr, m *snet.Message) {
@@ -264,9 +225,8 @@ func (p *pd) onRemSet(from *net.UDPAddr, m *snet.Message) {
 		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 	} else {
 		p.issueProposal(&ProposalRemSet{
-			setID: int(msg.SetID),
-			proposalBase: &proposalBase{
-				pd:    p,
+			SetID: int(msg.SetID),
+			proposalBase: proposalBase{
 				reply: p.makeReplyFunc(from, m, resp),
 			},
 		})
@@ -297,9 +257,8 @@ func (p *pd) onSetMarkClear(from *net.UDPAddr, m *snet.Message) {
 
 	if nil == err {
 		p.issueProposal(&ProposalSetMarkClear{
-			setID: int(msg.SetID),
-			proposalBase: &proposalBase{
-				pd:    p,
+			SetID: int(msg.SetID),
+			proposalBase: proposalBase{
 				reply: p.makeReplyFunc(from, m, resp),
 			},
 		})
@@ -367,9 +326,8 @@ func (p *pd) onAddSet(from *net.UDPAddr, m *snet.Message) {
 		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 	} else {
 		p.issueProposal(&ProposalAddSet{
-			msg: msg,
-			proposalBase: &proposalBase{
-				pd:    p,
+			Msg: msg,
+			proposalBase: proposalBase{
 				reply: p.makeReplyFunc(from, m, resp),
 			},
 		})
