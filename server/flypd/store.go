@@ -21,6 +21,10 @@ type storeTask struct {
 }
 
 func (st *storeTask) notifyFlyKv() {
+	if !st.pd.isLeader() {
+		return
+	}
+
 	taskID := uint64(st.node.id)<<32 + uint64(st.store)
 	t, ok := st.pd.storeTask[taskID]
 	if ok && t == st {

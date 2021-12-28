@@ -251,6 +251,7 @@ func (p *pd) getNode(nodeID int32) *kvnode {
 }
 
 func (p *pd) slotBalance() {
+
 	if len(p.pState.SlotTransfer) >= CurrentTransferCount {
 		return
 	}
@@ -390,6 +391,8 @@ func (p *pd) onBecomeLeader() {
 				}
 			}
 
+			p.storeTask = map[uint64]*storeTask{}
+
 			for _, node := range v.nodes {
 				for store, state := range node.store {
 					if state.Value == FlyKvUnCommit {
@@ -430,6 +433,13 @@ func (p *pd) onLeaderDownToFollower() {
 		p.pState.MetaTransaction.timer.Stop()
 		p.pState.MetaTransaction.timer = nil
 	}
+
+	for _, v := range p.storeTask {
+		v.timer.Stop()
+		v.timer = nil
+	}
+
+	p.storeTask = map[uint64]*storeTask{}
 }
 
 func (p *pd) Stop() {

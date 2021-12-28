@@ -10,7 +10,6 @@ import (
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"github.com/sniperHW/flyfish/server/slot"
 	"net"
-	"sort"
 )
 
 type ProposalAddSet struct {
@@ -53,38 +52,9 @@ func (p *ProposalAddSet) doApply() error {
 		}
 	}
 
-	var stores []int
-
-	for _, v := range p.pd.pState.deployment.sets {
-		for _, vv := range v.stores {
-			stores = append(stores, vv.id)
-		}
-	}
-
-	sort.Slice(stores, func(i, j int) bool {
-		return stores[i] < stores[j]
-	})
-
-	var i int
-	for i := 0; i < len(stores)-1; i++ {
-		if stores[i]+1 != stores[i+1] {
-			break
-		}
-	}
-
-	var beg int
-	if stores[i]+1 != stores[i+1] {
-		beg = stores[i] + 1
-		if beg+StorePerSet >= stores[i+1] {
-			panic("error here")
-		}
-	} else {
-		beg = stores[i+1] + 1
-	}
-
 	for i := 0; i < StorePerSet; i++ {
 		st := &store{
-			id:    beg + i,
+			id:    i + 1,
 			slots: bitmap.New(slot.SlotCount),
 			set:   s,
 		}
@@ -142,6 +112,8 @@ func (p *ProposalRemSet) Serilize(b []byte) []byte {
 
 func (p *ProposalRemSet) apply() {
 
+	GetSugar().Infof("ProposalRemSet.apply %v %d", len(p.pd.pState.deployment.sets), p.setID)
+
 	err := func() error {
 		if nil != p.pd.pState.MetaTransaction {
 			return errors.New("wait for previous meta transaction finish")
@@ -171,6 +143,7 @@ func (p *ProposalRemSet) apply() {
 
 	if nil == err {
 		delete(p.pd.pState.deployment.sets, p.setID)
+		delete(p.pd.markClearSet, p.setID)
 		p.pd.pState.deployment.version++
 	}
 
@@ -288,6 +261,7 @@ func (p *pd) onRemSet(from *net.UDPAddr, m *snet.Message) {
 	if nil != err {
 		resp.Ok = false
 		resp.Reason = err.Error()
+		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 	} else {
 		p.issueProposal(&ProposalRemSet{
 			setID: int(msg.SetID),
@@ -322,7 +296,6 @@ func (p *pd) onSetMarkClear(from *net.UDPAddr, m *snet.Message) {
 	}()
 
 	if nil == err {
-
 		p.issueProposal(&ProposalSetMarkClear{
 			setID: int(msg.SetID),
 			proposalBase: &proposalBase{
@@ -335,7 +308,6 @@ func (p *pd) onSetMarkClear(from *net.UDPAddr, m *snet.Message) {
 		resp.Reason = err.Error()
 		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 	}
-
 }
 
 func (p *pd) onAddSet(from *net.UDPAddr, m *snet.Message) {
@@ -402,5 +374,4 @@ func (p *pd) onAddSet(from *net.UDPAddr, m *snet.Message) {
 			},
 		})
 	}
-
 }

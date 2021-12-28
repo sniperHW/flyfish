@@ -109,7 +109,6 @@ func (p *ProposalSetMeta) apply() {
 }
 
 func (p *pd) replaySetMeta(reader *buffer.BufferReader) error {
-
 	l, err := reader.CheckGetUint32()
 	if nil != err {
 		return err
@@ -212,7 +211,7 @@ type ProposalUpdateMeta struct {
 
 func (p *ProposalUpdateMeta) Serilize(b []byte) []byte {
 	b = buffer.AppendByte(b, byte(proposalUpdateMeta))
-	j, _ := json.Marshal(p.pd.pState.MetaTransaction)
+	j, _ := json.Marshal(p.tran)
 	b = buffer.AppendUint32(b, uint32(len(j)))
 	return buffer.AppendBytes(b, j)
 }
@@ -360,22 +359,13 @@ func (p *pd) replayStoreUpdateMetaOk(reader *buffer.BufferReader) error {
 	if nil != err {
 		return err
 	}
-
-	t := p.pState.MetaTransaction
-	c := 0
-	for k, v := range t.Store {
-		if v.StoreID == int(store) {
-			t.Store[k].Ok = true
-		} else if !v.Ok {
-			c++
-		}
+	pa := &ProposalStoreUpdateMetaOk{
+		proposalBase: &proposalBase{
+			pd: p,
+		},
+		store: int(store),
 	}
-
-	if c == 0 {
-		//所有store均已应答，事务结束
-		p.pState.MetaTransaction = nil
-	}
-
+	pa.apply()
 	return nil
 }
 

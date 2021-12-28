@@ -35,7 +35,7 @@ func (p *ProposalAddNode) apply() {
 
 		for _, v := range p.pd.pState.deployment.sets {
 			for _, vv := range v.nodes {
-				if vv.id == int(p.msg.SetID) {
+				if vv.id == int(p.msg.NodeID) {
 					return errors.New("duplicate node id")
 				}
 
@@ -164,7 +164,7 @@ func (p *pd) onAddNode(from *net.UDPAddr, m *snet.Message) {
 
 		for _, v := range p.pState.deployment.sets {
 			for _, vv := range v.nodes {
-				if vv.id == int(msg.SetID) {
+				if vv.id == int(msg.NodeID) {
 					return errors.New("duplicate node id")
 				}
 

@@ -354,7 +354,7 @@ func (d *deployment) loadFromPB(sets []*sproto.DeploymentSet) error {
 
 		for j := 0; j < StorePerSet; j++ {
 			st := &store{
-				id:    i + j + 1,
+				id:    j + 1,
 				slots: storeBitmaps[i+j],
 				set:   s,
 			}
@@ -364,7 +364,7 @@ func (d *deployment) loadFromPB(sets []*sproto.DeploymentSet) error {
 
 		for _, vvv := range s.nodes {
 			for j := 0; j < StorePerSet; j++ {
-				vvv.store[i+j+1] = &FlyKvStoreState{
+				vvv.store[j+1] = &FlyKvStoreState{
 					Type:  VoterStore,
 					Value: FlyKvCommited,
 				}
