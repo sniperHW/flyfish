@@ -8,14 +8,15 @@ import (
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/pkg/etcd/etcdserver/api/snap"
-	//"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
+	"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
-	//"github.com/sniperHW/flyfish/pkg/raft/membership"
+	"github.com/sniperHW/flyfish/pkg/raft/membership"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
+	"github.com/sniperHW/flyfish/server/flypd"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	sslot "github.com/sniperHW/flyfish/server/slot"
@@ -591,43 +592,36 @@ func (s *kvstore) serve() {
 	}()
 }
 
-/*
-func (s *kvstore) onNotifyAddLearner(from *net.UDPAddr, msg *sproto.NotifyAddLearner, context int64) {
-	if s.isLeader() {
-		reply := func(err error) {
-			if nil == err || err == membership.ErrIDExists {
-				s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context, &sproto.NotifyAddLearnerResp{
-					NodeID: msg.NodeID,
-					Store:  int32(s.shard),
-				}))
-			} else {
-				switch err {
-				case membership.ErrPeerURLexists, membership.ErrTooManyLearners:
-					//pd做了控制，不应该出现这些错误
-					GetSugar().Errorf("NotifyAddLearner error node:%d store:%d err:%v", s.kvnode.id, s.shard, err)
-				default:
-					return
-				}
+//将nodeID作为learner加入当前store的raft配置
+func (s *kvstore) onAddLearnerNode(from *net.UDPAddr, nodeID int32, host string, raftPort int32, context int64) {
+	reply := func(err error) {
+		if nil == err || err == membership.ErrIDExists {
+			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context, &sproto.NodeStoreOpOk{}))
+		} else {
+			switch err {
+			case membership.ErrPeerURLexists, membership.ErrTooManyLearners:
+				//pd做了控制，不应该出现这些错误
+				GetSugar().Errorf("NotifyAddLearner error node:%d store:%d err:%v", s.kvnode.id, s.shard, err)
+			default:
+				return
 			}
 		}
-
-		s.rn.IssueConfChange(&ProposalConfChange{
-			confChangeType: raftpb.ConfChangeAddLearnerNode,
-			url:            fmt.Sprintf("http://%s:%d", msg.Host, msg.RaftPort),
-			nodeID:         uint64(raft.MakeInstanceID(uint16(msg.NodeID), uint16(s.shard))),
-			reply:          reply,
-		})
 	}
+
+	s.rn.IssueConfChange(&ProposalConfChange{
+		confChangeType: raftpb.ConfChangeAddLearnerNode,
+		url:            fmt.Sprintf("http://%s:%d", host, raftPort),
+		nodeID:         uint64(raft.MakeInstanceID(uint16(nodeID), uint16(s.shard))),
+		reply:          reply,
+	})
 }
 
-func (s *kvstore) onNotifyPromoteLearner(from *net.UDPAddr, msg *sproto.NotifyPromoteLearner, context int64) {
+//将nodeID提升为当前store的raft配置的voter
+func (s *kvstore) onPromoteLearnerNode(from *net.UDPAddr, nodeID int32, context int64) {
 	if s.isLeader() {
 		reply := func(err error) {
 			if nil == err || err == membership.ErrMemberNotLearner {
-				s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context, &sproto.NotifyPromoteLearnerResp{
-					NodeID: msg.NodeID,
-					Store:  int32(s.shard),
-				}))
+				s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context, &sproto.NodeStoreOpOk{}))
 			} else {
 				switch err {
 				case membership.ErrIDNotFound:
@@ -639,11 +633,11 @@ func (s *kvstore) onNotifyPromoteLearner(from *net.UDPAddr, msg *sproto.NotifyPr
 			}
 		}
 
-		if err := s.rn.IsLearnerReady(uint64(raft.MakeInstanceID(uint16(msg.NodeID), uint16(s.shard)))); nil == err {
+		if err := s.rn.IsLearnerReady(uint64(raft.MakeInstanceID(uint16(nodeID), uint16(s.shard)))); nil == err {
 			s.rn.IssueConfChange(&ProposalConfChange{
 				confChangeType: raftpb.ConfChangeAddNode,
 				isPromote:      true,
-				nodeID:         uint64(raft.MakeInstanceID(uint16(msg.NodeID), uint16(s.shard))),
+				nodeID:         uint64(raft.MakeInstanceID(uint16(nodeID), uint16(s.shard))),
 				reply:          reply,
 			})
 		} else if err == membership.ErrIDNotFound {
@@ -653,35 +647,43 @@ func (s *kvstore) onNotifyPromoteLearner(from *net.UDPAddr, msg *sproto.NotifyPr
 	}
 }
 
-func (s *kvstore) onNotifyRemNode(from *net.UDPAddr, msg *sproto.NotifyRemNode, context int64) {
+//将nodeID从当前store的raft配置中移除
+func (s *kvstore) onRemoveNode(from *net.UDPAddr, nodeID int32, context int64) {
 	if s.isLeader() {
 		reply := func(err error) {
 			if nil == err || err == membership.ErrIDNotFound {
-				s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context, &sproto.NotifyRemNodeResp{
-					NodeID: msg.NodeID,
-					Store:  int32(s.shard),
-				}))
+				s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context, &sproto.NodeStoreOpOk{}))
 			}
 		}
 
-		if nil == s.rn.MayRemoveMember(types.ID(raft.MakeInstanceID(uint16(msg.NodeID), uint16(s.shard)))) {
+		if nil == s.rn.MayRemoveMember(types.ID(raft.MakeInstanceID(uint16(nodeID), uint16(s.shard)))) {
 			s.rn.IssueConfChange(&ProposalConfChange{
 				confChangeType: raftpb.ConfChangeRemoveNode,
-				nodeID:         uint64(raft.MakeInstanceID(uint16(msg.NodeID), uint16(s.shard))),
+				nodeID:         uint64(raft.MakeInstanceID(uint16(nodeID), uint16(s.shard))),
 				reply:          reply,
 			})
 		}
 
 	}
 }
-*/
+
+func (s *kvstore) onNotifyNodeStoreOp(from *net.UDPAddr, msg *sproto.NotifyNodeStoreOp, context int64) {
+	switch msg.Op {
+	case int32(flypd.LearnerStore):
+		s.onAddLearnerNode(from, msg.NodeID, msg.Host, msg.RaftPort, context)
+	case int32(flypd.VoterStore):
+		s.onPromoteLearnerNode(from, msg.NodeID, context)
+	case int32(flypd.RemoveStore):
+		s.onRemoveNode(from, msg.NodeID, context)
+	}
+}
 
 func (s *kvstore) onNotifySlotTransIn(from *net.UDPAddr, msg *sproto.NotifySlotTransIn, context int64) {
 	if s.isLeader() {
 		slot := int(msg.Slot)
 		if s.slots.Test(slot) {
 			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
-				&sproto.NotifySlotTransInResp{
+				&sproto.SlotTransInOk{
 					Slot: msg.Slot,
 				}))
 		} else {
@@ -691,7 +693,7 @@ func (s *kvstore) onNotifySlotTransIn(from *net.UDPAddr, msg *sproto.NotifySlotT
 				store:        s,
 				reply: func() {
 					s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
-						&sproto.NotifySlotTransInResp{
+						&sproto.SlotTransInOk{
 							Slot: msg.Slot,
 						}))
 				},
@@ -718,7 +720,7 @@ func (s *kvstore) onNotifySlotTransOut(from *net.UDPAddr, msg *sproto.NotifySlot
 		slot := int(msg.Slot)
 		if !s.slots.Test(slot) {
 			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
-				&sproto.NotifySlotTransOutResp{
+				&sproto.SlotTransOutOk{
 					Slot: msg.Slot,
 				}))
 		} else {
@@ -726,7 +728,7 @@ func (s *kvstore) onNotifySlotTransOut(from *net.UDPAddr, msg *sproto.NotifySlot
 
 			reply := func() {
 				s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
-					&sproto.NotifySlotTransOutResp{
+					&sproto.SlotTransOutOk{
 						Slot: msg.Slot,
 					}))
 			}
@@ -754,7 +756,7 @@ func (s *kvstore) onNotifyUpdateMeta(from *net.UDPAddr, msg *sproto.NotifyUpdate
 	if s.isLeader() {
 		if s.meta.GetVersion() == msg.Version {
 			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
-				&sproto.NotifyUpdateMetaResp{
+				&sproto.StoreUpdateMetaOk{
 					Store:   msg.Store,
 					Version: msg.Version,
 				}))
@@ -772,7 +774,7 @@ func (s *kvstore) onNotifyUpdateMeta(from *net.UDPAddr, msg *sproto.NotifyUpdate
 					store: s,
 					reply: func() {
 						s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
-							&sproto.NotifyUpdateMetaResp{
+							&sproto.StoreUpdateMetaOk{
 								Store:   msg.Store,
 								Version: msg.Version,
 							}))
@@ -788,12 +790,8 @@ func (s *kvstore) onNotifyUpdateMeta(from *net.UDPAddr, msg *sproto.NotifyUpdate
 func (s *kvstore) onUdpMsg(from *net.UDPAddr, m *snet.Message) {
 	if s.ready && atomic.LoadInt32(&s.stoped) == 0 {
 		switch m.Msg.(type) {
-		//case *sproto.NotifyAddLearner:
-		//	s.onNotifyAddLearner(from, m.Msg.(*sproto.NotifyAddLearner), m.Context)
-		//case *sproto.NotifyPromoteLearner:
-		//	s.onNotifyPromoteLearner(from, m.Msg.(*sproto.NotifyPromoteLearner), m.Context)
-		//case *sproto.NotifyRemNode:
-		//	s.onNotifyRemNode(from, m.Msg.(*sproto.NotifyRemNode), m.Context)
+		case *sproto.NotifyNodeStoreOp:
+			s.onNotifyNodeStoreOp(from, m.Msg.(*sproto.NotifyNodeStoreOp), m.Context)
 		case *sproto.NotifySlotTransIn:
 			s.onNotifySlotTransIn(from, m.Msg.(*sproto.NotifySlotTransIn), m.Context)
 		case *sproto.NotifySlotTransOut:

@@ -256,6 +256,26 @@ func (p *pd) slotBalance() {
 		return
 	}
 
+	for _, v := range p.pState.deployment.sets {
+		v.slotOutCount = 0
+		v.slotInCount = 0
+		for _, vv := range v.stores {
+			vv.slotOutCount = 0
+			vv.slotInCount = 0
+			for _, vvv := range vv.slots.GetOpenBits() {
+				if t, ok := p.pState.SlotTransfer[vvv]; ok {
+					if vvv == t.StoreTransferIn {
+						vv.slotInCount++
+						v.slotInCount++
+					} else if vvv == t.StoreTransferOut {
+						vv.slotOutCount++
+						v.slotOutCount++
+					}
+				}
+			}
+		}
+	}
+
 	var outStore *store
 
 	if len(p.markClearSet) > 0 {
@@ -373,26 +393,7 @@ func (p *pd) onBecomeLeader() {
 	if nil != p.pState.deployment {
 		//重置slotBalance相关的临时数据
 		for _, v := range p.pState.deployment.sets {
-			v.slotOutCount = 0
-			v.slotInCount = 0
-			for _, vv := range v.stores {
-				vv.slotOutCount = 0
-				vv.slotInCount = 0
-				for _, vvv := range vv.slots.GetOpenBits() {
-					if t, ok := p.pState.SlotTransfer[vvv]; ok {
-						if vvv == t.StoreTransferIn {
-							vv.slotInCount++
-							v.slotInCount++
-						} else if vvv == t.StoreTransferOut {
-							vv.slotOutCount++
-							v.slotOutCount++
-						}
-					}
-				}
-			}
-
 			p.storeTask = map[uint64]*storeTask{}
-
 			for _, node := range v.nodes {
 				for store, state := range node.store {
 					if state.Value == FlyKvUnCommit {

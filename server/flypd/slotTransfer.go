@@ -57,26 +57,23 @@ func (p *ProposalBeginSlotTransfer) Serilize(b []byte) []byte {
 	return serilizeProposal(b, proposalBeginSlotTransfer, p)
 }
 
-func (p *ProposalBeginSlotTransfer) apply(pd *pd) {
+func (p *ProposalBeginSlotTransfer) doApply(pd *pd) bool {
 	if _, ok := pd.pState.SlotTransfer[p.Trans.Slot]; !ok {
 		pd.pState.SlotTransfer[p.Trans.Slot] = p.Trans
+		return true
+	} else {
+		return false
+	}
+}
 
-		storeIn := pd.pState.deployment.sets[p.Trans.SetIn].stores[p.Trans.StoreTransferIn]
-		storeIn.slotInCount++
-		storeIn.set.slotInCount++
-
-		storeOut := pd.pState.deployment.sets[p.Trans.SetOut].stores[p.Trans.StoreTransferOut]
-		storeOut.slotOutCount++
-		storeOut.set.slotOutCount++
-
+func (p *ProposalBeginSlotTransfer) apply(pd *pd) {
+	if p.doApply(pd) {
 		p.Trans.notify(pd)
 	}
 }
 
 func (p *ProposalBeginSlotTransfer) replay(pd *pd) {
-	if _, ok := pd.pState.SlotTransfer[p.Trans.Slot]; !ok {
-		pd.pState.SlotTransfer[p.Trans.Slot] = p.Trans
-	}
+	p.doApply(pd)
 }
 
 type ProposalSlotTransOutOk struct {
@@ -93,9 +90,7 @@ func (p *ProposalSlotTransOutOk) apply(pd *pd) {
 		if !t.StoreTransferOutOk {
 			t.StoreTransferOutOk = true
 			s := pd.pState.deployment.sets[t.SetOut]
-			s.slotOutCount--
 			st := s.stores[t.StoreTransferOut]
-			st.slotOutCount--
 			st.slots.Clear(int(t.Slot))
 			pd.pState.deployment.version++
 			s.version = pd.pState.deployment.version
@@ -108,14 +103,7 @@ func (p *ProposalSlotTransOutOk) apply(pd *pd) {
 }
 
 func (p *ProposalSlotTransOutOk) replay(pd *pd) {
-	if t, ok := pd.pState.SlotTransfer[p.Slot]; ok {
-		t.StoreTransferOutOk = true
-		s := pd.pState.deployment.sets[t.SetOut]
-		st := s.stores[t.StoreTransferOut]
-		st.slots.Clear(int(t.Slot))
-		pd.pState.deployment.version++
-		s.version = pd.pState.deployment.version
-	}
+	p.apply(pd)
 }
 
 type ProposalSlotTransInOk struct {
@@ -127,32 +115,31 @@ func (p *ProposalSlotTransInOk) Serilize(b []byte) []byte {
 	return serilizeProposal(b, proposalSlotTransInOk, p)
 }
 
-func (p *ProposalSlotTransInOk) apply(pd *pd) {
+func (p *ProposalSlotTransInOk) doApply(pd *pd) bool {
 	if t, ok := pd.pState.SlotTransfer[p.Slot]; ok {
 		delete(pd.pState.SlotTransfer, p.Slot)
 		s := pd.pState.deployment.sets[t.SetIn]
-		s.slotInCount--
 		st := s.stores[t.StoreTransferIn]
-		st.slotInCount--
 		st.slots.Set(int(t.Slot))
 		pd.pState.deployment.version++
 		s.version = pd.pState.deployment.version
 		if nil != t.timer {
 			t.timer.Stop()
 		}
+		return true
+	} else {
+		return false
+	}
+}
+
+func (p *ProposalSlotTransInOk) apply(pd *pd) {
+	if p.doApply(pd) {
 		pd.slotBalance()
 	}
 }
 
 func (p *ProposalSlotTransInOk) replay(pd *pd) {
-	if t, ok := pd.pState.SlotTransfer[p.Slot]; ok {
-		delete(pd.pState.SlotTransfer, p.Slot)
-		s := pd.pState.deployment.sets[t.SetIn]
-		st := s.stores[t.StoreTransferIn]
-		st.slots.Set(int(t.Slot))
-		pd.pState.deployment.version++
-		s.version = pd.pState.deployment.version
-	}
+	p.doApply(pd)
 }
 
 func (p *pd) beginSlotTransfer(slot int, setOut int, storeOut int, setIn int, storeIn int) {

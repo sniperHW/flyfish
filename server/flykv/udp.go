@@ -26,34 +26,9 @@ func (this *kvnode) processUdpMsg(from *net.UDPAddr, m *snet.Message) {
 		} else {
 			GetSugar().Infof("store:%d not in %d", m.Msg.(*sproto.QueryLeader).GetStore(), this.id)
 		}
-
 		GetSugar().Infof("store:%d on QueryLeader leader:%d", m.Msg.(*sproto.QueryLeader).GetStore(), leader)
-
 		this.udpConn.SendTo(from, snet.MakeMessage(m.Context, &sproto.QueryLeaderResp{Leader: leader}))
-		/*	case *sproto.NotifyAddLearner, *sproto.NotifyPromoteLearner, *sproto.NotifyRemNode:
-			var stores []int32
-			switch m.Msg.(type) {
-			case *sproto.NotifyAddLearner:
-				stores = m.Msg.(*sproto.NotifyAddLearner).Stores
-			case *sproto.NotifyPromoteLearner:
-				stores = m.Msg.(*sproto.NotifyPromoteLearner).Stores
-			case *sproto.NotifyRemNode:
-				stores = m.Msg.(*sproto.NotifyRemNode).Stores
-			}
-
-			this.muS.RLock()
-			for _, v := range stores {
-				if s, ok := this.stores[int(v)]; ok {
-					s.mainQueue.AppendHighestPriotiryItem(&udpMsg{
-						from: from,
-						m:    m,
-					})
-				}
-			}
-			this.muS.RUnlock()
-		*/
-
-	case *sproto.NotifySlotTransIn, *sproto.NotifySlotTransOut, *sproto.NotifyUpdateMeta:
+	case *sproto.NotifySlotTransIn, *sproto.NotifySlotTransOut, *sproto.NotifyUpdateMeta, *sproto.NotifyNodeStoreOp:
 		var store int
 		switch m.Msg.(type) {
 		case *sproto.NotifySlotTransIn:
@@ -62,6 +37,8 @@ func (this *kvnode) processUdpMsg(from *net.UDPAddr, m *snet.Message) {
 			store = int(m.Msg.(*sproto.NotifySlotTransOut).Store)
 		case *sproto.NotifyUpdateMeta:
 			store = int(m.Msg.(*sproto.NotifyUpdateMeta).Store)
+		case *sproto.NotifyNodeStoreOp:
+			store = int(m.Msg.(*sproto.NotifyNodeStoreOp).Store)
 		}
 
 		this.muS.RLock()
@@ -72,7 +49,6 @@ func (this *kvnode) processUdpMsg(from *net.UDPAddr, m *snet.Message) {
 			})
 		}
 		this.muS.RUnlock()
-
 	}
 }
 
