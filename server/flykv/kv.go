@@ -211,9 +211,16 @@ func (this *kv) processCmd(cmd cmdI) {
 
 		switch cmds[0].cmdType() {
 		case flyproto.CmdType_Get:
-			linearizableRead = &kvLinearizableRead{
-				kv:   this,
-				cmds: cmds,
+			if !this.store.kvnode.config.LinearizableRead {
+				//没有开启一致性读，直接返回
+				for _, v := range cmds {
+					v.reply(nil, this.fields, this.version)
+				}
+			} else {
+				linearizableRead = &kvLinearizableRead{
+					kv:   this,
+					cmds: cmds,
+				}
 			}
 		default:
 			proposal = &kvProposal{

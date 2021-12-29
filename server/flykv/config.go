@@ -66,6 +66,8 @@ type Config struct {
 
 	MainQueueMaxSize int //store主处理队列容量上限,超过上限客户端的命令无法入列将返回retry
 
+	LinearizableRead bool
+
 	DBConfig struct {
 		Host     string
 		Port     int

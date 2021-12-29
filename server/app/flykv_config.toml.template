@@ -22,6 +22,8 @@ ProposalBatchCount      = 200
 
 ReadBatchCount          = 100
 
+LinearizableRead        = false                #是否启用一致性读
+
 RaftLogDir              = "raftLog"
 
 RaftLogPrefix           = "flykv"
