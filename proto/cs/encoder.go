@@ -32,7 +32,7 @@ func (this *ReqEncoder) EnCode(o interface{}, buff *buffer.Buffer) error {
 	m, ok := o.(*ReqMessage)
 
 	if !ok {
-		if nil == m {
+		if nil == o {
 			panic("o is nil")
 		}
 		return fmt.Errorf("invaild object to encode:%s", reflect.TypeOf(o).String())

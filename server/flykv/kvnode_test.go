@@ -169,7 +169,7 @@ func start1Node(b dbI) *kvnode {
 		node.muS.RLock()
 		defer node.muS.RUnlock()
 		for _, v := range node.stores {
-			if !v.isLeader() {
+			if !v.isReady() {
 				return false
 			}
 		}
@@ -791,9 +791,9 @@ func TestUpdateMeta(t *testing.T) {
 	recvbuff := make([]byte, 256)
 	_, r, err := conn.ReadFrom(recvbuff)
 
-	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.NotifyUpdateMetaResp).Store, int32(1))
+	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.StoreUpdateMetaOk).Store, int32(1))
 
-	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.NotifyUpdateMetaResp).Version, int64(2))
+	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.StoreUpdateMetaOk).Version, int64(2))
 
 	//again
 
@@ -801,9 +801,9 @@ func TestUpdateMeta(t *testing.T) {
 
 	_, r, err = conn.ReadFrom(recvbuff)
 
-	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.NotifyUpdateMetaResp).Store, int32(1))
+	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.StoreUpdateMetaOk).Store, int32(1))
 
-	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.NotifyUpdateMetaResp).Version, int64(2))
+	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.StoreUpdateMetaOk).Version, int64(2))
 
 	conn.Close()
 
@@ -841,7 +841,7 @@ func TestSlotTransferIn(t *testing.T) {
 	recvbuff := make([]byte, 256)
 	_, r, err := conn.ReadFrom(recvbuff)
 
-	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.NotifySlotTransInResp).Slot, int32(slots[0]))
+	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.SlotTransInOk).Slot, int32(slots[0]))
 
 	//again
 
@@ -852,7 +852,7 @@ func TestSlotTransferIn(t *testing.T) {
 
 	_, r, err = conn.ReadFrom(recvbuff)
 
-	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.NotifySlotTransInResp).Slot, int32(slots[0]))
+	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.SlotTransInOk).Slot, int32(slots[0]))
 
 	conn.Close()
 
@@ -929,7 +929,7 @@ func TestSlotTransferOut(t *testing.T) {
 		conn.Close()
 
 		if nil != ret {
-			assert.Equal(t, ret.Msg.(*sproto.NotifySlotTransOutResp).Slot, int32(outSlot))
+			assert.Equal(t, ret.Msg.(*sproto.SlotTransOutOk).Slot, int32(outSlot))
 			break
 		}
 

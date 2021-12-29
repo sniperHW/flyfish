@@ -115,6 +115,8 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 			s.slots = data.(*bitmap.Bitmap)
 		} else if ptype == proposal_meta {
 			data.(db.DBMeta).MoveTo(s.meta)
+		} else if ptype == proposal_nop {
+
 		} else {
 			p := data.(ppkv)
 			groupID := sslot.StringHash(p.unikey) % len(s.kv)

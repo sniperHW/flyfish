@@ -14,6 +14,7 @@ const (
 	Errcode_gate_busy
 	Errcode_slot_transfering
 	Errcode_route_info_stale
+	Errcode_not_in_cache
 )
 
 type Error *error

@@ -6,7 +6,6 @@ import (
 	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
-	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/pkg/etcd/etcdserver/api/snap"
 	"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
@@ -25,38 +24,6 @@ import (
 	"sync/atomic"
 	"time"
 )
-
-const (
-	proposal_none          = proposalType(0)
-	proposal_snapshot      = proposalType(1) //全量数据kv快照,
-	proposal_update        = proposalType(2) //fields变更
-	proposal_kick          = proposalType(3) //从缓存移除kv
-	proposal_lease         = proposalType(4) //数据库update权租约
-	proposal_slots         = proposalType(5)
-	proposal_slot_transfer = proposalType(6)
-	proposal_meta          = proposalType(7)
-)
-
-type proposalBase struct {
-}
-
-func (this *proposalBase) OnMergeFinish(b []byte) (ret []byte) {
-	if len(b) >= 1024 {
-		c := getCompressor()
-		cb, err := c.Compress(b)
-		if nil != err {
-			ret = buffer.AppendByte(b, byte(0))
-		} else {
-			b = b[:0]
-			b = buffer.AppendBytes(b, cb)
-			ret = buffer.AppendByte(b, byte(1))
-		}
-		releaseCompressor(c)
-	} else {
-		ret = buffer.AppendByte(b, byte(0))
-	}
-	return
-}
 
 type applyable interface {
 	apply()
@@ -142,6 +109,10 @@ func (s *kvstore) hasLease() bool {
 
 func (s *kvstore) isLeader() bool {
 	return raft.RaftInstanceID(atomic.LoadUint64(&s.leader)) == s.rn.ID()
+}
+
+func (s *kvstore) isReady() bool {
+	return s.isLeader() && s.ready
 }
 
 func (s *kvstore) getLeaderNodeID() int {
@@ -248,7 +219,7 @@ func (s *kvstore) checkLru(ch chan struct{}) {
 		default:
 		}
 	}()
-	if s.ready && s.isLeader() && atomic.LoadInt32(&s.stoped) == 0 {
+	if s.isReady() && atomic.LoadInt32(&s.stoped) == 0 {
 		if s.kvcount > s.kvnode.config.MaxCachePerStore && s.lru.head.nnext != &s.lru.tail {
 			k := 0
 			cur := s.lru.tail.pprev
@@ -331,100 +302,76 @@ func (s *kvstore) checkReqLimit() bool {
 }
 
 func (s *kvstore) processClientMessage(req clientRequest) {
-	if !s.checkReqLimit() {
-		req.from.Send(&cs.RespMessage{
-			Cmd:   req.msg.Cmd,
-			Seqno: req.msg.Seqno,
-			Err:   errcode.New(errcode.Errcode_retry, "kvstore busy,please retry later"),
-		})
-		return
+
+	resp := &cs.RespMessage{
+		Cmd:   req.msg.Cmd,
+		Seqno: req.msg.Seqno,
 	}
 
-	slot := sslot.Unikey2Slot(req.msg.UniKey)
+	var (
+		err errcode.Error
+		cmd cmdI
+		kv  *kv
+		ok  bool
+	)
 
-	if !s.slots.Test(slot) {
-		//unikey不归当前store管理,路由信息已经stale
-		req.from.Send(&cs.RespMessage{
-			Cmd:   req.msg.Cmd,
-			Seqno: req.msg.Seqno,
-			Err:   errcode.New(errcode.Errcode_route_info_stale),
-		})
-		return
-	}
+	err = func() errcode.Error {
+		if !s.checkReqLimit() {
+			return errcode.New(errcode.Errcode_retry, "kvstore busy,please retry later")
+		}
 
-	if s.slotsTransferOut[slot] != nil {
-		//正在迁出
-		req.from.Send(&cs.RespMessage{
-			Cmd:   req.msg.Cmd,
-			Seqno: req.msg.Seqno,
-			Err:   errcode.New(errcode.Errcode_slot_transfering),
-		})
-		return
-	}
+		slot := sslot.Unikey2Slot(req.msg.UniKey)
 
-	if !s.isLeader() {
-		req.from.Send(&cs.RespMessage{
-			Cmd:   req.msg.Cmd,
-			Seqno: req.msg.Seqno,
-			Err:   errcode.New(errcode.Errcode_not_leader),
-		})
-	} else if !s.ready || s.meta == nil {
-		req.from.Send(&cs.RespMessage{
-			Cmd:   req.msg.Cmd,
-			Seqno: req.msg.Seqno,
-			Err:   errcode.New(errcode.Errcode_retry, "kvstore not start ok,please retry later"),
-		})
-	} else {
+		if !s.slots.Test(slot) {
+			//unikey不归当前store管理,路由信息已经stale
+			return errcode.New(errcode.Errcode_route_info_stale)
+		}
 
-		var (
-			err errcode.Error
-			cmd cmdI
-			kv  *kv
-			ok  bool
-		)
+		if s.slotsTransferOut[slot] != nil {
+			//正在迁出
+			return errcode.New(errcode.Errcode_slot_transfering)
+		}
 
-		groupID := sslot.StringHash(req.msg.UniKey) % len(s.kv)
+		if !s.isLeader() {
+			return errcode.New(errcode.Errcode_not_leader)
+		} else if !s.ready || s.meta == nil {
+			return errcode.New(errcode.Errcode_retry, "kvstore not start ok,please retry later")
+		} else {
 
-		kv, ok = s.kv[groupID][req.msg.UniKey]
+			groupID := sslot.StringHash(req.msg.UniKey) % len(s.kv)
 
-		if !ok {
-			if req.msg.Cmd == flyproto.CmdType_Kick { //kv不在缓存中,kick操作直接返回ok
-				req.from.Send(&cs.RespMessage{
-					Seqno: req.msg.Seqno,
-					Cmd:   req.msg.Cmd,
-				})
-				return
-			} else {
-				if s.kvcount > (s.kvnode.config.MaxCachePerStore*3)/2 {
-					req.from.Send(&cs.RespMessage{
-						Cmd:   req.msg.Cmd,
-						Seqno: req.msg.Seqno,
-						Err:   errcode.New(errcode.Errcode_retry, "kvstore busy,please retry later"),
-					})
-					return
+			kv, ok = s.kv[groupID][req.msg.UniKey]
+
+			if !ok {
+				if req.msg.Cmd == flyproto.CmdType_Kick { //kv不在缓存中,kick操作直接返回ok
+					return errcode.New(errcode.Errcode_not_in_cache)
 				} else {
-					table, key := splitUniKey(req.msg.UniKey)
-					if kv, err = s.newkv(slot, groupID, req.msg.UniKey, key, table); nil != err {
-						req.from.Send(&cs.RespMessage{
-							Cmd:   req.msg.Cmd,
-							Seqno: req.msg.Seqno,
-							Err:   err,
-						})
-						return
+					if s.kvcount > (s.kvnode.config.MaxCachePerStore*3)/2 {
+						return errcode.New(errcode.Errcode_retry, "kvstore busy,please retry later")
+					} else {
+						table, key := splitUniKey(req.msg.UniKey)
+						if kv, err = s.newkv(slot, groupID, req.msg.UniKey, key, table); nil != err {
+							return err
+						}
 					}
 				}
 			}
 		}
+		return nil
+	}()
 
+	if nil == err {
 		if cmd, err = s.makeCmd(kv, req); nil != err {
-			req.from.Send(&cs.RespMessage{
-				Cmd:   req.msg.Cmd,
-				Seqno: req.msg.Seqno,
-				Err:   err,
-			})
+			resp.Err = err
+			req.from.Send(resp)
 		} else {
 			kv.pushCmd(cmd)
 		}
+	} else {
+		if errcode.GetCode(err) != errcode.Errcode_not_in_cache {
+			resp.Err = err
+		}
+		req.from.Send(resp)
 	}
 }
 
@@ -551,13 +498,11 @@ func (s *kvstore) serve() {
 					}
 				}
 			case raft.ReplayOK:
-				s.ready = true
 			case raft.RaftStopOK:
 				GetSugar().Infof("%x RaftStopOK", s.rn.ID())
 				return
 			case raftpb.Snapshot:
 				snapshot := v.(raftpb.Snapshot)
-
 				GetSugar().Infof("%x loading snapshot at term %d and index %d", s.rn.ID(), snapshot.Metadata.Term, snapshot.Metadata.Index)
 				r := newSnapshotReader(snapshot.Data)
 				var data []byte
@@ -576,13 +521,18 @@ func (s *kvstore) serve() {
 					}
 				}
 			case raft.LeaderChange:
+				oldLeader := s.leader
 				atomic.StoreUint64(&s.leader, uint64(v.(raft.LeaderChange).Leader))
 				if raft.RaftInstanceID(v.(raft.LeaderChange).Leader) == s.rn.ID() {
-					s.needWriteBackAll = true
-					s.lease.becomeLeader()
+					s.becomeLeader()
 				}
+
+				if raft.RaftInstanceID(oldLeader) == s.rn.ID() && !s.isLeader() {
+					s.onLeaderDownToFollower()
+				}
+
 			case *SlotTransferProposal:
-				if s.isLeader() {
+				if s.isReady() {
 					s.processSlotTransferOut(v.(*SlotTransferProposal))
 				}
 			default:
@@ -590,6 +540,16 @@ func (s *kvstore) serve() {
 			}
 		}
 	}()
+}
+
+func (s *kvstore) becomeLeader() {
+	s.rn.IssueProposal(&proposalNop{store: s})
+	s.needWriteBackAll = true
+	s.lease.becomeLeader()
+}
+
+func (s *kvstore) onLeaderDownToFollower() {
+	s.ready = false
 }
 
 //将nodeID作为learner加入当前store的raft配置
@@ -679,26 +639,24 @@ func (s *kvstore) onNotifyNodeStoreOp(from *net.UDPAddr, msg *sproto.NotifyNodeS
 }
 
 func (s *kvstore) onNotifySlotTransIn(from *net.UDPAddr, msg *sproto.NotifySlotTransIn, context int64) {
-	if s.isLeader() {
-		slot := int(msg.Slot)
-		if s.slots.Test(slot) {
-			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
-				&sproto.SlotTransInOk{
-					Slot: msg.Slot,
-				}))
-		} else {
-			s.rn.IssueProposal(&SlotTransferProposal{
-				slot:         slot,
-				transferType: slotTransferIn,
-				store:        s,
-				reply: func() {
-					s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
-						&sproto.SlotTransInOk{
-							Slot: msg.Slot,
-						}))
-				},
-			})
-		}
+	slot := int(msg.Slot)
+	if s.slots.Test(slot) {
+		s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
+			&sproto.SlotTransInOk{
+				Slot: msg.Slot,
+			}))
+	} else {
+		s.rn.IssueProposal(&SlotTransferProposal{
+			slot:         slot,
+			transferType: slotTransferIn,
+			store:        s,
+			reply: func() {
+				s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
+					&sproto.SlotTransInOk{
+						Slot: msg.Slot,
+					}))
+			},
+		})
 	}
 }
 
@@ -716,79 +674,75 @@ func (s *kvstore) processSlotTransferOut(p *SlotTransferProposal) {
 }
 
 func (s *kvstore) onNotifySlotTransOut(from *net.UDPAddr, msg *sproto.NotifySlotTransOut, context int64) {
-	if s.isLeader() {
-		slot := int(msg.Slot)
-		if !s.slots.Test(slot) {
+	slot := int(msg.Slot)
+	if !s.slots.Test(slot) {
+		s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
+			&sproto.SlotTransOutOk{
+				Slot: msg.Slot,
+			}))
+	} else {
+		p := s.slotsTransferOut[slot]
+
+		reply := func() {
 			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
 				&sproto.SlotTransOutOk{
 					Slot: msg.Slot,
 				}))
+		}
+
+		if nil == p {
+			p = &SlotTransferProposal{
+				slot:         slot,
+				transferType: slotTransferOut,
+				store:        s,
+				reply:        reply,
+			}
+
+			s.slotsTransferOut[slot] = p
+
+			s.rn.IssueProposal(p)
 		} else {
-			p := s.slotsTransferOut[slot]
-
-			reply := func() {
-				s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
-					&sproto.SlotTransOutOk{
-						Slot: msg.Slot,
-					}))
-			}
-
-			if nil == p {
-				p = &SlotTransferProposal{
-					slot:         slot,
-					transferType: slotTransferOut,
-					store:        s,
-					reply:        reply,
-				}
-
-				s.slotsTransferOut[slot] = p
-
-				s.rn.IssueProposal(p)
-			} else {
-				//应答最后一个消息
-				p.reply = reply
-			}
+			//应答最后一个消息
+			p.reply = reply
 		}
 	}
 }
 
 func (s *kvstore) onNotifyUpdateMeta(from *net.UDPAddr, msg *sproto.NotifyUpdateMeta, context int64) {
-	if s.isLeader() {
-		if s.meta.GetVersion() == msg.Version {
-			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
-				&sproto.StoreUpdateMetaOk{
-					Store:   msg.Store,
-					Version: msg.Version,
-				}))
-		} else {
-			var meta db.DBMeta
-			var err error
-			var def *db.DbDef
-			if def, err = db.CreateDbDefFromJsonString(msg.Meta); nil == err {
-				meta, err = sql.CreateDbMeta(msg.Version, def)
-			}
+	if s.meta.GetVersion() == msg.Version {
+		s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
+			&sproto.StoreUpdateMetaOk{
+				Store:   msg.Store,
+				Version: msg.Version,
+			}))
+	} else {
+		var meta db.DBMeta
+		var err error
+		var def *db.DbDef
+		if def, err = db.CreateDbDefFromJsonString(msg.Meta); nil == err {
+			meta, err = sql.CreateDbMeta(msg.Version, def)
+		}
 
-			if nil == err {
-				s.rn.IssueProposal(&ProposalUpdateMeta{
-					meta:  meta,
-					store: s,
-					reply: func() {
-						s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
-							&sproto.StoreUpdateMetaOk{
-								Store:   msg.Store,
-								Version: msg.Version,
-							}))
-					},
-				})
-			} else {
-				GetSugar().Infof("onNotifyUpdateMeta ")
-			}
+		if nil == err {
+			s.rn.IssueProposal(&ProposalUpdateMeta{
+				meta:  meta,
+				store: s,
+				reply: func() {
+					s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
+						&sproto.StoreUpdateMetaOk{
+							Store:   msg.Store,
+							Version: msg.Version,
+						}))
+				},
+			})
+		} else {
+			GetSugar().Infof("onNotifyUpdateMeta ")
 		}
 	}
 }
 
 func (s *kvstore) onUdpMsg(from *net.UDPAddr, m *snet.Message) {
-	if s.ready && atomic.LoadInt32(&s.stoped) == 0 {
+	if s.isReady() && atomic.LoadInt32(&s.stoped) == 0 {
 		switch m.Msg.(type) {
 		case *sproto.NotifyNodeStoreOp:
 			s.onNotifyNodeStoreOp(from, m.Msg.(*sproto.NotifyNodeStoreOp), m.Context)
