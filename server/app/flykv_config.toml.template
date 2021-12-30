@@ -32,15 +32,16 @@ RaftLogPrefix           = "flykv"
 SoftLimit               = 50000
 HardLimit               = 100000
 SoftLimitSeconds        = 10
+LinearizableRead        = true
 
 
 [SoloConfig]
 RaftUrl                 = "http://127.0.0.1:12377"
 ServiceHost             = "127.0.0.1"
 ServicePort             = 8110
-RaftCluster             = "1@http://127.0.0.1:12377"
-Stores                  = [1,2,3,4,5]
-
+RaftCluster             = "1@http://127.0.0.1:12377@voter"
+Stores                  = [1,2,3,4,5,6]
+Meta                    = ["users1@name:string:,age:int:,phone:string:"]
 
 [ClusterConfig]
 PD                      = "ip:port;ip:port"

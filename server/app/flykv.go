@@ -3,10 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/server/flykv"
-	"github.com/sniperHW/flyfish/server/flykv/metaLoader"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -37,16 +35,7 @@ func main() {
 
 	flykv.InitLogger(logger.NewZapLogger(logname, conf.Log.LogDir, conf.Log.LogLevel, conf.Log.MaxLogfileSize, conf.Log.MaxAge, conf.Log.MaxBackups, conf.Log.EnableStdout))
 
-	dbConfig := conf.DBConfig
-
-	meta, err := metaLoader.LoadDBMetaFromSqlCsv(conf.DBType, dbConfig.Host, dbConfig.Port, dbConfig.DB, dbConfig.User, dbConfig.Password)
-
-	if nil != err {
-		flykv.GetSugar().Error(err)
-		return
-	}
-
-	node := flykv.NewKvNode(*id, conf, meta, sql.CreateDbMeta, flykv.NewSqlDB())
+	node := flykv.NewKvNode(*id, conf, flykv.NewSqlDB())
 
 	err = node.Start()
 	if nil == err {

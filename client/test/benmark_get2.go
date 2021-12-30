@@ -93,7 +93,7 @@ func main() {
 
 	if cfg.Mode == "solo" {
 		clientCfg.SoloService = cfg.Service
-		clientCfg.UnikeyPlacement = flykv.MakeUnikeyPlacement([]int{1, 2, 3, 4, 5})
+		clientCfg.UnikeyPlacement = flykv.MakeUnikeyPlacement(cfg.Stores)
 	} else {
 		clientCfg.PD = strings.Split(cfg.PD, ";")
 	}
