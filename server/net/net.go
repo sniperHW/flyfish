@@ -6,6 +6,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/pkg/compress"
+	"github.com/sniperHW/flyfish/pkg/crypto"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/net/pb"
 	sproto "github.com/sniperHW/flyfish/server/proto"
@@ -54,40 +55,63 @@ func MakeMessage(context int64, msg proto.Message) *Message {
 	}
 }
 
-func Unpack(b []byte) (msg interface{}, err error) {
-	r := buffer.NewReader(b)
+var compressSize = 4096
+
+func unpack(key []byte, b []byte) (msg interface{}, err error) {
+	if len(b) < 1 {
+		err = errors.New("invaild packet")
+		return
+	}
+
+	var encryptFlag byte
 	var cmd uint16
-	cmd, err = r.CheckGetUint16()
-	if nil != err {
-		return
-	}
-
 	var context int64
-	context, err = r.CheckGetInt64()
-	if nil != err {
-		return
-	}
-
-	var c byte
-	c, err = r.CheckGetByte()
-	if nil != err {
-		return
-	}
+	var compressFlag byte
+	var protoBytes []byte
 	var l int32
-	l, err = r.CheckGetInt32()
-	if nil != err {
+	encryptFlag = b[0]
+
+	if encryptFlag == byte(1) && len(key) == 0 {
+		err = errors.New("invaild packet")
 		return
 	}
 
-	if len(b[15:]) < int(l) {
-		err = fmt.Errorf("not enough data for unpack")
+	var r buffer.BufferReader
+	if encryptFlag == byte(0) {
+		r = buffer.NewReader(b[1:])
+	} else {
+		var plainbyte []byte
+		if plainbyte, err = crypto.AESCBCDecrypter(key, b[1:]); nil != err {
+			return
+		} else {
+			r = buffer.NewReader(plainbyte)
+		}
+	}
+
+	if cmd, err = r.CheckGetUint16(); nil != err {
+		return
+	}
+
+	if context, err = r.CheckGetInt64(); nil != err {
+		return
+	}
+
+	if compressFlag, err = r.CheckGetByte(); nil != err {
+		return
+	}
+
+	if l, err = r.CheckGetInt32(); nil != err {
+		return
+	}
+
+	if protoBytes, err = r.CheckGetBytes(int(l)); nil != err {
 		return
 	}
 
 	var data proto.Message
 
-	if c == byte(0) {
-		data, err = pb.GetNamespace("sproto").Unmarshal(uint32(cmd), b[15:])
+	if compressFlag == byte(0) {
+		data, err = pb.GetNamespace("sproto").Unmarshal(uint32(cmd), protoBytes)
 		if nil == err {
 			msg = &Message{
 				Context: context,
@@ -95,9 +119,10 @@ func Unpack(b []byte) (msg interface{}, err error) {
 			}
 		}
 	} else {
-		un := getDecompressor()
+		de := getDecompressor()
+		defer putDecompressor(de)
 		var bb []byte
-		bb, err = un.Decompress(b[15:])
+		bb, err = de.Decompress(protoBytes)
 		if nil != err {
 			return
 		}
@@ -112,9 +137,11 @@ func Unpack(b []byte) (msg interface{}, err error) {
 	return
 }
 
-var compressSize = 4096
+func Unpack(b []byte) (msg interface{}, err error) {
+	return unpack(nil, b)
+}
 
-func Pack(m interface{}) ([]byte, error) {
+func pack(key []byte, m interface{}) ([]byte, error) {
 
 	msg, ok := m.(*Message)
 
@@ -132,6 +159,7 @@ func Pack(m interface{}) ([]byte, error) {
 		var flagCompress byte
 		if len(data) >= compressSize {
 			c := getCompressor()
+			defer putCompressor(c)
 			data, err = c.Compress(data)
 			if nil != err {
 				return nil, err
@@ -139,16 +167,39 @@ func Pack(m interface{}) ([]byte, error) {
 			flagCompress = byte(1)
 		}
 
-		b = make([]byte, 0, 15+len(data))
-		b = buffer.AppendUint16(b, uint16(cmd))
-		b = buffer.AppendInt64(b, msg.Context)
-		b = buffer.AppendByte(b, flagCompress)
-		b = buffer.AppendInt32(b, int32(len(data)))
+		if len(key) > 0 {
+			bb := make([]byte, 0, 15+len(data))
+			bb = buffer.AppendUint16(bb, uint16(cmd))
+			bb = buffer.AppendInt64(bb, msg.Context)
+			bb = buffer.AppendByte(bb, flagCompress)
+			bb = buffer.AppendInt32(bb, int32(len(data)))
+			if len(data) > 0 {
+				bb = buffer.AppendBytes(bb, data)
+			}
+			if data, err = crypto.AESCBCEncrypt(key, bb); nil != err {
+				return nil, err
+			}
+			b = make([]byte, 0, len(data)+1)
+			b = buffer.AppendByte(b, byte(1))
+		} else {
+			b = make([]byte, 0, 16+len(data))
+			b = buffer.AppendByte(b, byte(0))
+			b = buffer.AppendUint16(b, uint16(cmd))
+			b = buffer.AppendInt64(b, msg.Context)
+			b = buffer.AppendByte(b, flagCompress)
+			b = buffer.AppendInt32(b, int32(len(data)))
+		}
+
 		if len(data) > 0 {
 			b = buffer.AppendBytes(b, data)
 		}
+
 		return b, nil
 	}
+}
+
+func Pack(m interface{}) ([]byte, error) {
+	return pack(nil, m)
 }
 
 func UdpCall(remotes interface{}, req *Message, timeout time.Duration, onResp func(chan interface{}, interface{})) (ret interface{}) {
@@ -277,5 +328,8 @@ func init() {
 
 	namespace.Register(&sproto.ChangeFlyGate{}, uint32(sproto.ServerCmdType_ChangeFlyGate))
 	namespace.Register(&sproto.ChangeFlyGateResp{}, uint32(sproto.ServerCmdType_ChangeFlyGateResp))
+
+	//for test
+	namespace.Register(&sproto.PacketTest{}, uint32(sproto.ServerCmdType_PacketTest))
 
 }

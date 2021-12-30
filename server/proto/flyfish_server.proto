@@ -68,6 +68,9 @@ enum ServerCmdType {
   GetFlyGateListResp            = 411;
   ChangeFlyGate                 = 412;
   ChangeFlyGateResp             = 413;
+
+  //for test
+  PacketTest                    = 1000;
 }
 
 
@@ -357,6 +360,10 @@ message  notifyUpdateMeta {
 message  storeUpdateMetaOk {
   optional int32 store    = 1;
   optional int64 version  = 2; 
+}
+
+message packetTest {
+  optional string message = 1;
 }
 
 
