@@ -13,6 +13,7 @@ type udpMsg struct {
 }
 
 func (this *kvnode) processUdpMsg(from *net.UDPAddr, m *snet.Message) {
+	GetSugar().Infof("processUdpMsg %v", m.Msg)
 	switch m.Msg.(type) {
 	case *sproto.QueryLeader:
 		this.muS.RLock()

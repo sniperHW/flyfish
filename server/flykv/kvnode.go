@@ -46,7 +46,6 @@ type kvnode struct {
 	id        int
 	mutilRaft *raft.MutilRaft
 	stopOnce  int32
-	startOnce int32
 	udpConn   *fnet.Udp
 }
 
@@ -335,156 +334,152 @@ var outputBufLimit fnet.OutputBufLimit = fnet.OutputBufLimit{
 	OutPutLimitHard:        cs.MaxPacketSize * 10,
 }
 
-func (this *kvnode) Start() error {
+func (this *kvnode) start() error {
+	var meta db.DBMeta
+
+	var dbdef *db.DbDef
+
 	var err error
-	if atomic.CompareAndSwapInt32(&this.startOnce, 0, 1) {
 
-		var meta db.DBMeta
+	config := this.config
 
-		var dbdef *db.DbDef
+	if config.Mode == "solo" {
 
-		var err error
-
-		config := this.config
-
-		if config.Mode == "solo" {
-
-			if dbdef, err = db.CreateDbDefFromCsv(config.SoloConfig.Meta); nil != err {
-				return err
-			}
-
-			meta, err = sql.CreateDbMeta(1, dbdef)
-
-			if nil != err {
-				return err
-			}
-
-			err = this.db.start(config)
-
-			if nil != err {
-				return err
-			}
-
-			service := fmt.Sprintf("%s:%d", config.SoloConfig.ServiceHost, config.SoloConfig.ServicePort)
-
-			err = this.initUdp(service)
-
-			if nil != err {
-				return err
-			}
-
-			this.listener, err = cs.NewListener("tcp", service, outputBufLimit, verifyLogin)
-
-			if nil != err {
-				return err
-			}
-
-			go this.mutilRaft.Serve([]string{config.SoloConfig.RaftUrl})
-
-			this.startListener()
-
-			//添加store
-			if len(config.SoloConfig.Stores) > 0 {
-				peers, err := raft.SplitPeers(config.SoloConfig.RaftCluster)
-
-				if nil != err {
-					return err
-				}
-
-				storeBitmaps := makeStoreBitmap(config.SoloConfig.Stores)
-				for i, v := range config.SoloConfig.Stores {
-					if err = this.addStore(meta, v, peers, storeBitmaps[i]); nil != err {
-						return err
-					}
-				}
-			}
-
-			GetSugar().Infof("flyfish start:%s:%d", config.SoloConfig.ServiceHost, config.SoloConfig.ServicePort)
-
-		} else {
-
-			//meta从flypd获取
-
-			pd := strings.Split(config.ClusterConfig.PD, ";")
-
-			var pdAddr []*net.UDPAddr
-
-			for _, v := range pd {
-				addr, err := net.ResolveUDPAddr("udp", v)
-				if nil != err {
-					return err
-				} else {
-					pdAddr = append(pdAddr, addr)
-				}
-			}
-
-			resp := this.getKvnodeBootInfo(pdAddr)
-
-			if !resp.Ok {
-				return errors.New(resp.Reason)
-			}
-
-			if dbdef, err = db.CreateDbDefFromJsonString(resp.Meta); nil != err {
-				return err
-			}
-
-			meta, err = sql.CreateDbMeta(resp.MetaVersion, dbdef)
-
-			if nil != err {
-				return err
-			}
-
-			err = this.initUdp(fmt.Sprintf("%s:%d", resp.ServiceHost, resp.ServicePort))
-
-			if nil != err {
-				return err
-			}
-
-			err = this.db.start(config)
-
-			if nil != err {
-				return err
-			}
-
-			service := fmt.Sprintf("%s:%d", resp.ServiceHost, resp.ServicePort)
-
-			this.listener, err = cs.NewListener("tcp", service, outputBufLimit, verifyLogin)
-
-			if nil != err {
-				return err
-			}
-
-			go this.mutilRaft.Serve([]string{fmt.Sprintf("http://%s:%d", resp.ServiceHost, resp.RaftPort)})
-
-			this.startListener()
-
-			//cluster模式下membership由pd负责管理,节点每次启动从pd获取
-			for _, v := range resp.Stores {
-				slots, err := bitmap.CreateFromJson(v.Slots)
-
-				if nil != err {
-					return err
-				}
-
-				peers, err := raft.SplitPeers(v.RaftCluster)
-
-				if nil != err {
-					return err
-				}
-
-				if err = this.addStore(meta, int(v.Id), peers, slots); nil != err {
-					return err
-				}
-			}
-
-			GetSugar().Infof("flyfish start:%s:%d", resp.ServiceHost, resp.ServicePort)
+		if dbdef, err = db.CreateDbDefFromCsv(config.SoloConfig.Meta); nil != err {
+			return err
 		}
 
+		meta, err = sql.CreateDbMeta(1, dbdef)
+
+		if nil != err {
+			return err
+		}
+
+		err = this.db.start(config)
+
+		if nil != err {
+			return err
+		}
+
+		service := fmt.Sprintf("%s:%d", config.SoloConfig.ServiceHost, config.SoloConfig.ServicePort)
+
+		err = this.initUdp(service)
+
+		if nil != err {
+			return err
+		}
+
+		this.listener, err = cs.NewListener("tcp", service, outputBufLimit, verifyLogin)
+
+		if nil != err {
+			return err
+		}
+
+		go this.mutilRaft.Serve([]string{config.SoloConfig.RaftUrl})
+
+		this.startListener()
+
+		//添加store
+		if len(config.SoloConfig.Stores) > 0 {
+			peers, err := raft.SplitPeers(config.SoloConfig.RaftCluster)
+
+			if nil != err {
+				return err
+			}
+
+			storeBitmaps := makeStoreBitmap(config.SoloConfig.Stores)
+			for i, v := range config.SoloConfig.Stores {
+				if err = this.addStore(meta, v, peers, storeBitmaps[i]); nil != err {
+					return err
+				}
+			}
+		}
+
+		GetSugar().Infof("flyfish start:%s:%d", config.SoloConfig.ServiceHost, config.SoloConfig.ServicePort)
+
+	} else {
+
+		//meta从flypd获取
+
+		pd := strings.Split(config.ClusterConfig.PD, ";")
+
+		var pdAddr []*net.UDPAddr
+
+		for _, v := range pd {
+			addr, err := net.ResolveUDPAddr("udp", v)
+			if nil != err {
+				return err
+			} else {
+				pdAddr = append(pdAddr, addr)
+			}
+		}
+
+		resp := this.getKvnodeBootInfo(pdAddr)
+
+		if !resp.Ok {
+			return errors.New(resp.Reason)
+		}
+
+		if dbdef, err = db.CreateDbDefFromJsonString(resp.Meta); nil != err {
+			return err
+		}
+
+		meta, err = sql.CreateDbMeta(resp.MetaVersion, dbdef)
+
+		if nil != err {
+			return err
+		}
+
+		err = this.initUdp(fmt.Sprintf("%s:%d", resp.ServiceHost, resp.ServicePort))
+
+		if nil != err {
+			return err
+		}
+
+		err = this.db.start(config)
+
+		if nil != err {
+			return err
+		}
+
+		service := fmt.Sprintf("%s:%d", resp.ServiceHost, resp.ServicePort)
+
+		this.listener, err = cs.NewListener("tcp", service, outputBufLimit, verifyLogin)
+
+		if nil != err {
+			return err
+		}
+
+		go this.mutilRaft.Serve([]string{fmt.Sprintf("http://%s:%d", resp.ServiceHost, resp.RaftPort)})
+
+		this.startListener()
+
+		//cluster模式下membership由pd负责管理,节点每次启动从pd获取
+		for _, v := range resp.Stores {
+			slots, err := bitmap.CreateFromJson(v.Slots)
+
+			if nil != err {
+				return err
+			}
+
+			peers, err := raft.SplitPeers(v.RaftCluster)
+
+			if nil != err {
+				return err
+			}
+
+			if err = this.addStore(meta, int(v.Id), peers, slots); nil != err {
+				return err
+			}
+		}
+
+		GetSugar().Infof("flyfish start:%s:%d", resp.ServiceHost, resp.ServicePort)
 	}
+
 	return err
 }
 
-func NewKvNode(id int, config *Config, db dbI) *kvnode {
+func NewKvNode(id int, config *Config, db dbI) (*kvnode, error) {
 
 	if config.ProposalFlushInterval > 0 {
 		raft.ProposalFlushInterval = config.ProposalFlushInterval
@@ -514,7 +509,7 @@ func NewKvNode(id int, config *Config, db dbI) *kvnode {
 		config.StoreReqLimit.SoftLimitSeconds = 10
 	}
 
-	return &kvnode{
+	node := &kvnode{
 		id:        id,
 		mutilRaft: raft.NewMutilRaft(),
 		clients:   map[*fnet.Socket]struct{}{},
@@ -522,4 +517,8 @@ func NewKvNode(id int, config *Config, db dbI) *kvnode {
 		db:        db,
 		config:    config,
 	}
+
+	err := node.start()
+
+	return node, err
 }

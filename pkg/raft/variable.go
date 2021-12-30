@@ -15,7 +15,7 @@ var (
 	SnapshotCatchUpEntriesN   uint64 = 1000
 	MaxInFlightMsgSnap        int64  = 16
 	ReleaseDelayAfterSnapshot        = 30 * time.Second
-	ReadyPercent                     = 0.9
+	ReadyPercent                     = 1.0
 	HealthInterval                   = 5 * time.Second
 	MaxRaftTaskCount                 = 1000
 	CheckQuorum               bool   = true

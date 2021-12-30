@@ -2,8 +2,6 @@ package flygate
 
 import (
 	"container/list"
-	"crypto/md5"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"github.com/sniperHW/flyfish/errcode"
@@ -236,7 +234,6 @@ func (m *routeErrorAndSlotTransferingReqMgr) addSlotTransferingReq(msg *forwordM
 type gate struct {
 	config          *Config
 	stopOnce        int32
-	startOnce       int32
 	listener        *cs.Listener
 	totalPendingMsg int64
 	clients         map[*flynet.Socket]*flynet.Socket
@@ -245,7 +242,6 @@ type gate struct {
 	mainQueue       *queue.PriorityQueue
 	serviceAddr     string
 	seqCounter      int64
-	pdToken         string
 	pdAddr          []*net.UDPAddr
 	reSendReqMgr    routeErrorAndSlotTransferingReqMgr
 	msgPerSecond    *movingAverage.MovingAverage //每秒客户端转发请求量的移动平均值
@@ -275,7 +271,7 @@ func doQueryRouteInfo(pdAddr []*net.UDPAddr, req *sproto.QueryRouteInfo) *sproto
 	}
 }
 
-func NewFlyGate(config *Config, service string) *gate {
+func NewFlyGate(config *Config, service string) (*gate, error) {
 	mainQueue := queue.NewPriorityQueue(2)
 	g := &gate{
 		config:    config,
@@ -303,11 +299,15 @@ func NewFlyGate(config *Config, service string) *gate {
 		}
 	}
 
-	g.heartBeatUdp, _ = flynet.NewUdp(fmt.Sprintf(":0"), snet.Pack, snet.Unpack)
-	tmp := md5.Sum([]byte(g.serviceAddr + "magicNum"))
-	g.pdToken = base64.StdEncoding.EncodeToString(tmp[:])
+	if len(g.pdAddr) == 0 {
+		return nil, errors.New("pd is empty")
+	}
 
-	return g
+	g.heartBeatUdp, _ = flynet.NewUdp(fmt.Sprintf(":0"), snet.Pack, snet.Unpack)
+
+	err := g.start()
+
+	return g, err
 }
 
 func (g *gate) startListener() {
@@ -455,57 +455,52 @@ func (g *gate) startQueryTimer(timeout time.Duration) {
 	})
 }
 
-func (g *gate) Start() error {
-	if len(g.pdAddr) == 0 {
-		return errors.New("pd is empty")
-	}
-
+func (g *gate) start() error {
 	var err error
-	if atomic.CompareAndSwapInt32(&g.startOnce, 0, 1) {
-		g.listener, err = cs.NewListener("tcp", g.serviceAddr, flynet.OutputBufLimit{
-			OutPutLimitSoft:        1024 * 1024 * 10,
-			OutPutLimitSoftSeconds: 10,
-			OutPutLimitHard:        1024 * 1024 * 50,
-		}, verifyLogin)
 
-		if nil != err {
-			return err
-		}
+	g.listener, err = cs.NewListener("tcp", g.serviceAddr, flynet.OutputBufLimit{
+		OutPutLimitSoft:        1024 * 1024 * 10,
+		OutPutLimitSoftSeconds: 10,
+		OutPutLimitHard:        1024 * 1024 * 50,
+	}, verifyLogin)
 
-		for {
-
-			resp := doQueryRouteInfo(g.pdAddr, &sproto.QueryRouteInfo{})
-
-			if nil != resp {
-				g.routeInfo.onQueryRouteInfoResp(g, resp)
-				break
-			}
-		}
-
-		var heartbeat func()
-		heartbeat = func() {
-			msg := &sproto.FlyGateHeartBeat{
-				GateService:  g.serviceAddr,
-				MsgPerSecond: int32(g.msgPerSecond.GetAverage()),
-			}
-
-			for _, v := range g.pdAddr {
-				if nil != g.heartBeatUdp.SendTo(v, snet.MakeMessage(0, msg)) {
-					return
-				}
-			}
-
-			time.AfterFunc(time.Second, heartbeat)
-		}
-
-		heartbeat()
-
-		go g.mainLoop()
-
-		g.startListener()
-
-		g.startQueryTimer(time.Second * 10)
+	if nil != err {
+		return err
 	}
+
+	for {
+
+		resp := doQueryRouteInfo(g.pdAddr, &sproto.QueryRouteInfo{})
+
+		if nil != resp {
+			g.routeInfo.onQueryRouteInfoResp(g, resp)
+			break
+		}
+	}
+
+	var heartbeat func()
+	heartbeat = func() {
+		msg := &sproto.FlyGateHeartBeat{
+			GateService:  g.serviceAddr,
+			MsgPerSecond: int32(g.msgPerSecond.GetAverage()),
+		}
+
+		for _, v := range g.pdAddr {
+			if nil != g.heartBeatUdp.SendTo(v, snet.MakeMessage(0, msg)) {
+				return
+			}
+		}
+
+		time.AfterFunc(time.Second, heartbeat)
+	}
+
+	heartbeat()
+
+	go g.mainLoop()
+
+	g.startListener()
+
+	g.startQueryTimer(time.Second * 10)
 
 	return nil
 }

@@ -159,9 +159,9 @@ func newMockDBBackEnd() dbI {
 
 func start1Node(b dbI) *kvnode {
 
-	node := NewKvNode(1, config, b)
+	node, err := NewKvNode(1, config, b)
 
-	if err := node.Start(); nil != err {
+	if nil != err {
 		panic(err)
 	}
 

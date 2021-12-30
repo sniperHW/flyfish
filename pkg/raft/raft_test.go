@@ -376,6 +376,7 @@ func (s *kvstore) processConfChange(p ProposalConfChange) {
 func (s *kvstore) processCommited(commited *Committed) {
 	if len(commited.Proposals) > 0 {
 		for _, v := range commited.Proposals {
+			GetSugar().Infof("processCommited %v", s.rn.ID())
 			o := v.(*KVProposal)
 			s.kvStore[o.v.Key] = o.v.Val
 			o.ch <- nil
@@ -393,6 +394,7 @@ func (s *kvstore) processCommited(commited *Committed) {
 				}
 				//fmt.Println("set", v.Key, "=", v.Val)
 				s.kvStore[v.Key] = v.Val
+				GetSugar().Infof("processCommited %v", s.rn.ID())
 			}
 		}
 	}
@@ -676,15 +678,16 @@ func TestCluster(t *testing.T) {
 
 	leader := getLeader()
 
-	for i := 0; i < 500; i++ {
+	/*for i := 0; i < 500; i++ {
 		leader.store.Set(fmt.Sprintf("sniperHW:%d", i), fmt.Sprintf("sniperHW:%d", i))
 	}
 
 	leader.store.Set("sniperHW", "sniperHW")
 	r, _ := leader.store.Get("sniperHW")
 	assert.Equal(t, r, "sniperHW")
+	*/
 
-	time.Sleep(time.Second)
+	time.Sleep(time.Second * 5)
 
 	//加入新节点
 	newNodeID := uint64((4 << 16) + 1)
@@ -696,6 +699,10 @@ func TestCluster(t *testing.T) {
 	}
 
 	fmt.Println("AddLearner ok")
+
+	for i := 0; i < 50; i++ {
+		leader.store.Set(fmt.Sprintf("sniperHW:%d", i), fmt.Sprintf("sniperHW:%d", i))
+	}
 
 	cluster = "1@http://127.0.0.1:22378@,2@http://127.0.0.1:22379@,3@http://127.0.0.1:22380@,4@http://127.0.0.1:22381@learner"
 

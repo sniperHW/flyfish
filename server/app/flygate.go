@@ -35,9 +35,7 @@ func main() {
 
 	flygate.InitLogger(logger.NewZapLogger(logname, conf.Log.LogDir, conf.Log.LogLevel, conf.Log.MaxLogfileSize, conf.Log.MaxAge, conf.Log.MaxBackups, conf.Log.EnableStdout))
 
-	gate := flygate.NewFlyGate(conf, *service)
-
-	err = gate.Start()
+	gate, err := flygate.NewFlyGate(conf, *service)
 	if nil == err {
 		c := make(chan os.Signal)
 		signal.Notify(c, syscall.SIGINT) //监听指定信号

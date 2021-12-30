@@ -30,7 +30,9 @@ func (st *storeTask) notifyFlyKv() {
 			msg := &sproto.NotifyNodeStoreOp{
 				NodeID: int32(st.node.id),
 				Store:  int32(st.store),
+				Op:     int32(st.storeStateType),
 			}
+
 			if st.storeStateType == LearnerStore {
 				msg.Host = st.node.host
 				msg.RaftPort = int32(st.node.raftPort)
@@ -318,9 +320,23 @@ func (p *pd) onAddLearnerStoreToNode(from *net.UDPAddr, m *snet.Message) {
 			return errors.New("node not found")
 		}
 
-		_, ok = n.store[int(msg.Store)]
+		st, ok := n.store[int(msg.Store)]
 		if ok {
-			return errors.New("store already exists")
+			if st.Type == LearnerStore {
+				if st.Value == FlyKvUnCommit {
+					return errors.New("learner wait for commit by flykv")
+				} else {
+					return errors.New("learner store already exists")
+				}
+			} else if st.Type == VoterStore {
+				if st.Value == FlyKvUnCommit {
+					return errors.New("voter store wait for commit by flykv")
+				} else {
+					return errors.New("store is voter")
+				}
+			} else {
+				return errors.New("remove store wait for commit by flykv")
+			}
 		}
 
 		learnerNum := 0
@@ -379,15 +395,19 @@ func (p *pd) onPromoteLearnerStore(from *net.UDPAddr, m *snet.Message) {
 		st, ok := n.store[int(msg.Store)]
 		if ok {
 			if st.Type == VoterStore {
-				return errors.New("store is already a voter")
+				if st.Value == FlyKvUnCommit {
+					return errors.New("voter wait for commit by flykv")
+				} else {
+					return errors.New("store is already a voter")
+				}
 			} else if st.Type == LearnerStore {
 				if st.Value == FlyKvUnCommit {
-					return errors.New("wait for commit by flykv")
+					return errors.New("learner wait for commit by flykv")
 				} else {
 					return nil
 				}
 			} else {
-				return errors.New("store is removing")
+				return errors.New("remove store wait for commit by flykv")
 			}
 		} else {
 			return errors.New("store is not found")

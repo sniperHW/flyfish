@@ -805,6 +805,7 @@ func (rc *RaftInstance) IsLearnerReady(id uint64) error {
 	if isFound {
 		leaderMatch := rs.Progress[leaderID].Match
 		// the learner's Match not caught up with leader yet
+		GetSugar().Infof("leaderMatch:%d,learnerMatch:%d", leaderMatch, learnerMatch)
 		if float64(learnerMatch) < float64(leaderMatch)*ReadyPercent {
 			return ErrLearnerNotReady
 		}
@@ -814,6 +815,36 @@ func (rc *RaftInstance) IsLearnerReady(id uint64) error {
 	} else {
 		return membership.ErrIDNotFound
 	}
+}
+
+func (rc *RaftInstance) GetMemberProgress(id uint64) (error, float64) {
+	rs := rc.raftStatus()
+
+	// leader's raftStatus.Progress is not nil
+	if rs.Progress == nil {
+		return ErrNotLeader, 0.0
+	}
+
+	var learnerMatch uint64
+	isFound := false
+	leaderID := rs.ID
+	for memberID, progress := range rs.Progress {
+		if id == memberID {
+			// check its status
+			learnerMatch = progress.Match
+			isFound = true
+			break
+		}
+	}
+
+	if isFound {
+		leaderMatch := rs.Progress[leaderID].Match
+		GetSugar().Infof("leaderMatch:%d,learnerMatch:%d", leaderMatch, learnerMatch)
+		return nil, float64(learnerMatch) / float64(leaderMatch)
+	} else {
+		return membership.ErrIDNotFound, 0.0
+	}
+
 }
 
 type Member struct {
