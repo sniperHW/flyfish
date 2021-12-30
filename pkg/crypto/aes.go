@@ -10,7 +10,25 @@ import (
 	"io"
 )
 
-func padding(ciphertext []byte, blockSize int) []byte {
+func fixKey(key []byte) []byte {
+	if len(key) > 32 {
+		return key[:32]
+	} else {
+		var size int
+		if len(key) < 16 {
+			size = 16
+		} else if len(key) < 24 {
+			size = 24
+		} else {
+			size = 32
+		}
+		padding := size - (len(key))%size
+		padtext := bytes.Repeat([]byte{byte(padding)}, padding)
+		return append(key, padtext...)
+	}
+}
+
+func paddingData(ciphertext []byte, blockSize int) []byte {
 	paddingSize := blockSize - (len(ciphertext)+4)%blockSize
 	ret := make([]byte, 4, len(ciphertext)+4+paddingSize)
 	binary.BigEndian.PutUint32(ret, uint32(len(ciphertext)))
@@ -29,7 +47,9 @@ func padding(ciphertext []byte, blockSize int) []byte {
 
 func AESCBCEncrypt(keybyte, plainbyte []byte) (cipherbyte []byte, err error) {
 
-	plainbyte = padding(plainbyte, aes.BlockSize)
+	keybyte = fixKey(keybyte)
+
+	plainbyte = paddingData(plainbyte, aes.BlockSize)
 
 	block, err := aes.NewCipher(keybyte)
 	if err != nil {
@@ -54,6 +74,8 @@ func AESCBCEncrypt(keybyte, plainbyte []byte) (cipherbyte []byte, err error) {
    plaintext：解密后的字符串
 */
 func AESCBCDecrypter(keybyte, cipherbyte []byte) (plainbyte []byte, err error) {
+	keybyte = fixKey(keybyte)
+
 	block, err := aes.NewCipher(keybyte)
 	if err != nil {
 		return

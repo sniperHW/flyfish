@@ -11,8 +11,6 @@ import (
 )
 
 func TestUdp(t *testing.T) {
-	key := []byte("example key 1234")
-
 	{
 
 		packet := &sproto.PacketTest{
@@ -35,11 +33,11 @@ func TestUdp(t *testing.T) {
 
 		//
 
-		b, err = pack(key, MakeMessage(100, packet))
+		b, err = pack(nil, MakeMessage(100, packet))
 
 		assert.Nil(t, err)
 
-		m, err = unpack(key, b)
+		m, err = unpack(nil, b)
 
 		assert.Nil(t, err)
 
@@ -73,11 +71,11 @@ func TestUdp(t *testing.T) {
 
 		//
 
-		b, err = pack(key, MakeMessage(100, packet))
+		b, err = pack(nil, MakeMessage(100, packet))
 
 		assert.Nil(t, err)
 
-		m, err = unpack(key, b)
+		m, err = unpack(nil, b)
 
 		assert.Nil(t, err)
 

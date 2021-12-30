@@ -85,7 +85,7 @@ func (p *pd) onGetFlyGateList(from *net.UDPAddr, m *snet.Message) {
 
 func (p *pd) onFlyGateHeartBeat(from *net.UDPAddr, m *snet.Message) {
 	msg := m.Msg.(*sproto.FlyGateHeartBeat)
-	p.flygateMgr.onHeartBeat(msg.GateService, msg.Token, int(msg.MsgPerSecond))
+	p.flygateMgr.onHeartBeat(msg.GateService, int(msg.MsgPerSecond))
 }
 
 func (p *pd) changeFlyGate(from *net.UDPAddr, m *snet.Message) {

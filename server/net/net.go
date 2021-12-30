@@ -57,6 +57,8 @@ func MakeMessage(context int64, msg proto.Message) *Message {
 
 var compressSize = 4096
 
+var defaultKey []byte = []byte("feiyu_tech_2021")
+
 func unpack(key []byte, b []byte) (msg interface{}, err error) {
 	if len(b) < 1 {
 		err = errors.New("invaild packet")
@@ -138,7 +140,7 @@ func unpack(key []byte, b []byte) (msg interface{}, err error) {
 }
 
 func Unpack(b []byte) (msg interface{}, err error) {
-	return unpack(nil, b)
+	return unpack(defaultKey, b)
 }
 
 func pack(key []byte, m interface{}) ([]byte, error) {
@@ -199,7 +201,7 @@ func pack(key []byte, m interface{}) ([]byte, error) {
 }
 
 func Pack(m interface{}) ([]byte, error) {
-	return pack(nil, m)
+	return pack(defaultKey, m)
 }
 
 func UdpCall(remotes interface{}, req *Message, timeout time.Duration, onResp func(chan interface{}, interface{})) (ret interface{}) {

@@ -1,8 +1,6 @@
 package flypd
 
 import (
-	"crypto/md5"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"github.com/sniperHW/flyfish/pkg/buffer"
@@ -28,7 +26,6 @@ type flygate struct {
 	service       string
 	msgPerSecond  int
 	deadlineTimer *time.Timer
-	token         string
 }
 
 type flygateMgr struct {
@@ -55,23 +52,17 @@ func isValidTcpService(service string, token string) bool {
 	}
 
 	if _, err := net.ResolveTCPAddr("tcp", service); nil == err {
-		tmp := md5.Sum([]byte(service + "magicNum"))
-		if token == base64.StdEncoding.EncodeToString(tmp[:]) {
-			return true
-		}
+		return true
 	}
 
 	return false
 }
 
-func (f *flygateMgr) onHeartBeat(gateService string, token string, msgPerSecond int) {
+func (f *flygateMgr) onHeartBeat(gateService string, msgPerSecond int) {
 	var g *flygate
 	var ok bool
 
 	if g, ok = f.flygateMap[gateService]; ok {
-		if g.token != token {
-			return
-		}
 		g.deadlineTimer.Stop()
 	} else {
 
@@ -83,14 +74,8 @@ func (f *flygateMgr) onHeartBeat(gateService string, token string, msgPerSecond 
 			return
 		}
 
-		tmp := md5.Sum([]byte(gateService + "magicNum"))
-		if token != base64.StdEncoding.EncodeToString(tmp[:]) {
-			return
-		}
-
 		g = &flygate{
 			service: gateService,
-			token:   token,
 		}
 		f.flygateMap[gateService] = g
 	}

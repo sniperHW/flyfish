@@ -486,7 +486,6 @@ func (g *gate) Start() error {
 		heartbeat = func() {
 			msg := &sproto.FlyGateHeartBeat{
 				GateService:  g.serviceAddr,
-				Token:        g.pdToken,
 				MsgPerSecond: int32(g.msgPerSecond.GetAverage()),
 			}
 

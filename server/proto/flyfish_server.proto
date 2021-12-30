@@ -297,8 +297,7 @@ message getFlyGateListResp {
 
 message flyGateHeartBeat {
   optional string gateService  = 1;
-  optional string token        = 2;
-  optional int32  msgPerSecond = 3;
+  optional int32  msgPerSecond = 2;
 }
 
 message changeFlyGate {
