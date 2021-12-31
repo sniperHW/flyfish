@@ -244,10 +244,6 @@ func getDeadline(timeout uint32) (time.Time, time.Time) {
 }
 
 func (s *kvstore) makeCmd(keyvalue *kv, req clientRequest) (cmdI, errcode.Error) {
-	if keyvalue.kicking {
-		return nil, errcode.New(errcode.Errcode_retry, "please retry later")
-	}
-
 	cmd := req.msg.Cmd
 	data := req.msg.Data
 	processDeadline, respDeadline := getDeadline(req.msg.Timeout)
@@ -337,14 +333,11 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 		} else if !s.ready || s.meta == nil {
 			return errcode.New(errcode.Errcode_retry, "kvstore not start ok,please retry later")
 		} else {
-
 			groupID := sslot.StringHash(req.msg.UniKey) % len(s.kv)
-
 			kv, ok = s.kv[groupID][req.msg.UniKey]
-
 			if !ok {
 				if req.msg.Cmd == flyproto.CmdType_Kick { //kv不在缓存中,kick操作直接返回ok
-					return errcode.New(errcode.Errcode_not_in_cache)
+					return errcode.New(errcode.Errcode_ok)
 				} else {
 					if s.kvcount > (s.kvnode.config.MaxCachePerStore*3)/2 {
 						return errcode.New(errcode.Errcode_retry, "kvstore busy,please retry later")
@@ -355,20 +348,19 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 						}
 					}
 				}
+			} else if kv.kicking {
+				return errcode.New(errcode.Errcode_retry, "please retry later")
 			}
 		}
-		return nil
+
+		cmd, err = s.makeCmd(kv, req)
+		return err
 	}()
 
 	if nil == err {
-		if cmd, err = s.makeCmd(kv, req); nil != err {
-			resp.Err = err
-			req.from.Send(resp)
-		} else {
-			kv.pushCmd(cmd)
-		}
+		kv.pushCmd(cmd)
 	} else {
-		if errcode.GetCode(err) != errcode.Errcode_not_in_cache {
+		if errcode.GetCode(err) != errcode.Errcode_ok {
 			resp.Err = err
 		}
 		req.from.Send(resp)

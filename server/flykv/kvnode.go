@@ -176,7 +176,7 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, peers map[uint16]raft.
 	this.stores[storeID] = store
 	store.serve()
 
-	GetSugar().Infof("AddStore %v slots:%v", rn.ID().String(), slots.GetOpenBits())
+	//GetSugar().Infof("AddStore %v slots:%v", rn.ID().String(), slots.GetOpenBits())
 
 	return nil
 }

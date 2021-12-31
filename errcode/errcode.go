@@ -14,8 +14,24 @@ const (
 	Errcode_gate_busy
 	Errcode_slot_transfering
 	Errcode_route_info_stale
-	Errcode_not_in_cache
+	Errcode_end
 )
+
+var errDesc []string = []string{
+	"no error",
+	"version mismatch",
+	"record is exist already",
+	"record is not exist",
+	"record is unchange",
+	"cas old value is not equal",
+	"timeout",
+	"please retry later",
+	"other error",
+	"not leader",
+	"gate busy",
+	"slot is transfering",
+	"route info stale",
+}
 
 type Error *error
 
@@ -35,35 +51,12 @@ func GetCode(e Error) int16 {
 func GetErrorDesc(e Error) string {
 	if nil == e {
 		return "no error"
+	} else if e.Desc != "" {
+		return e.Desc
+	} else if e.Code >= Errcode_ok && e.Code < Errcode_end {
+		return errDesc[e.Code]
 	} else {
-		switch e.Code {
-		case Errcode_version_mismatch:
-			return "version mismatch"
-		case Errcode_record_exist:
-			return "record is exist already"
-		case Errcode_record_notexist:
-			return "record is not exist"
-		case Errcode_record_unchange:
-			return "record is unchange"
-		case Errcode_cas_not_equal:
-			return "cas old value is not equal"
-		case Errcode_not_leader:
-			return "not leader"
-		case Errcode_gate_busy:
-			return "gate busy"
-		case Errcode_retry:
-			if "" == e.Desc {
-				return "please retry later"
-			} else {
-				return e.Desc
-			}
-		case Errcode_slot_transfering:
-			return "slot transfering"
-		case Errcode_route_info_stale:
-			return "Errcode_route_info_stale"
-		default:
-			return e.Desc
-		}
+		return "invaild error code"
 	}
 }
 
