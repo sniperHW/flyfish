@@ -424,12 +424,18 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 func (rc *RaftInstance) processMessages(ms []raftpb.Message) []raftpb.Message {
 	sentAppResp := false
 	for i := len(ms) - 1; i >= 0; i-- {
+		//if ms[i].To == uint64(MakeInstanceID(uint16(4), uint16(1))) {
+		//	GetSugar().Infof("send to %v", MakeInstanceID(uint16(4), uint16(1)).String())
+		//}
+
 		if rc.IsIDRemoved(ms[i].To) {
+			//GetSugar().Infof("set 0 %v", MakeInstanceID(uint16(4), uint16(1)).String())
 			ms[i].To = 0
 		}
 
 		if ms[i].Type == raftpb.MsgAppResp {
 			if sentAppResp {
+				//GetSugar().Infof("set 0 %v", MakeInstanceID(uint16(4), uint16(1)).String())
 				ms[i].To = 0
 			} else {
 				sentAppResp = true
@@ -447,6 +453,7 @@ func (rc *RaftInstance) processMessages(ms []raftpb.Message) []raftpb.Message {
 					rc.sendSnapshot(ms[i])
 				}
 			}
+			//GetSugar().Infof("set 0 %v", MakeInstanceID(uint16(4), uint16(1)).String())
 			ms[i].To = 0
 		}
 	}
@@ -805,7 +812,6 @@ func (rc *RaftInstance) IsLearnerReady(id uint64) error {
 	if isFound {
 		leaderMatch := rs.Progress[leaderID].Match
 		// the learner's Match not caught up with leader yet
-		GetSugar().Infof("leaderMatch:%d,learnerMatch:%d", leaderMatch, learnerMatch)
 		if float64(learnerMatch) < float64(leaderMatch)*ReadyPercent {
 			return ErrLearnerNotReady
 		}
@@ -839,7 +845,6 @@ func (rc *RaftInstance) GetMemberProgress(id uint64) (error, float64) {
 
 	if isFound {
 		leaderMatch := rs.Progress[leaderID].Match
-		GetSugar().Infof("leaderMatch:%d,learnerMatch:%d", leaderMatch, learnerMatch)
 		return nil, float64(learnerMatch) / float64(leaderMatch)
 	} else {
 		return membership.ErrIDNotFound, 0.0
@@ -880,7 +885,7 @@ func SplitPeers(s string) (map[uint16]Member, error) {
 	return peers, nil
 }
 
-func NewInstance(nodeID uint16, shard uint16, mutilRaft *MutilRaft, commitC ApplicationQueue, peers map[uint16]Member, st membership.Storage, logdir string, raftLogPrefix string) (*RaftInstance, error) {
+func NewInstance(nodeID uint16, shard uint16, join bool, mutilRaft *MutilRaft, commitC ApplicationQueue, peers map[uint16]Member, st membership.Storage, logdir string, raftLogPrefix string) (*RaftInstance, error) {
 	rc := &RaftInstance{
 		commitC:    commitC,
 		id:         MakeInstanceID(nodeID, shard),
@@ -978,7 +983,7 @@ func NewInstance(nodeID uint16, shard uint16, mutilRaft *MutilRaft, commitC Appl
 		PreVote:                   true,
 	}
 
-	if haveWAL {
+	if haveWAL || join {
 		rc.node = raft.RestartNode(c)
 	} else {
 		rpeers := []raft.Peer{}
