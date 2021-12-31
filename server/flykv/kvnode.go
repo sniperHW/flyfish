@@ -47,6 +47,7 @@ type kvnode struct {
 	mutilRaft *raft.MutilRaft
 	stopOnce  int32
 	udpConn   *fnet.Udp
+	join      bool
 }
 
 func verifyLogin(loginReq *flyproto.LoginReq) bool {
@@ -158,7 +159,7 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, peers map[uint16]raft.
 		},
 	}
 
-	rn, err := raft.NewInstance(uint16(this.id), uint16(storeID), this.mutilRaft, mainQueue, peers, nil, this.config.RaftLogDir, this.config.RaftLogPrefix)
+	rn, err := raft.NewInstance(uint16(this.id), uint16(storeID), this.join, this.mutilRaft, mainQueue, peers, nil, this.config.RaftLogDir, this.config.RaftLogPrefix)
 
 	if nil != err {
 		return err
@@ -479,7 +480,7 @@ func (this *kvnode) start() error {
 	return err
 }
 
-func NewKvNode(id int, config *Config, db dbI) (*kvnode, error) {
+func NewKvNode(id int, join bool, config *Config, db dbI) (*kvnode, error) {
 
 	if config.ProposalFlushInterval > 0 {
 		raft.ProposalFlushInterval = config.ProposalFlushInterval
@@ -516,6 +517,7 @@ func NewKvNode(id int, config *Config, db dbI) (*kvnode, error) {
 		stores:    map[int]*kvstore{},
 		db:        db,
 		config:    config,
+		join:      join,
 	}
 
 	err := node.start()

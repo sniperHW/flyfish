@@ -240,7 +240,7 @@ type StopAble interface {
 func newPD(t *testing.T) StopAble {
 	conf, _ := flypd.LoadConfigStr(pdConfigStr)
 
-	pd, _ := flypd.NewPd(1, conf, "localhost:8110", "1@http://localhost:8110@voter", nil)
+	pd, _ := flypd.NewPd(1, false, conf, "localhost:8110", "1@http://localhost:8110@voter", nil)
 
 	for {
 		if !setMeta(t) {
@@ -284,13 +284,13 @@ func TestFlygate(t *testing.T) {
 		panic(err)
 	}
 
-	node1, err := flykv.NewKvNode(1, kvConf, flykv.NewSqlDB())
+	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
 	}
 
-	node2, err := flykv.NewKvNode(2, kvConf, flykv.NewSqlDB())
+	node2, err := flykv.NewKvNode(2, false, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
@@ -395,7 +395,7 @@ func TestAddRemoveNode(t *testing.T) {
 
 	assert.Equal(t, true, r.(*snet.Message).Msg.(*sproto.AddNodeResp).Ok)
 
-	node1, err := flykv.NewKvNode(1, kvConf, flykv.NewSqlDB())
+	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
@@ -425,7 +425,7 @@ func TestAddRemoveNode(t *testing.T) {
 
 	logger.GetSugar().Infof("--------------------add learner 3:1 OK------------------------")
 
-	node3, err := flykv.NewKvNode(3, kvConf, flykv.NewSqlDB())
+	node3, err := flykv.NewKvNode(3, true, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
@@ -450,48 +450,47 @@ func TestAddRemoveNode(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 
-	/*
-		//remove store
-		fmt.Println("remove store")
+	//remove store
+	fmt.Println("remove store")
 
-		for {
-			conn.SendTo(addr, snet.MakeMessage(0, &sproto.RemoveNodeStore{
-				SetID:  1,
-				NodeID: 3,
-				Store:  1,
-			}))
+	for {
+		conn.SendTo(addr, snet.MakeMessage(0, &sproto.RemoveNodeStore{
+			SetID:  1,
+			NodeID: 3,
+			Store:  1,
+		}))
 
-			_, r, err = conn.ReadFrom(recvbuff)
+		_, r, err = conn.ReadFrom(recvbuff)
 
-			ret := r.(*snet.Message).Msg.(*sproto.RemoveNodeStoreResp)
+		ret := r.(*snet.Message).Msg.(*sproto.RemoveNodeStoreResp)
 
-			fmt.Println(ret.Reason)
+		fmt.Println(ret.Reason)
 
-			if ret.Reason == "store not exists" {
-				break
-			}
-
-			time.Sleep(time.Second)
+		if ret.Reason == "store not exists" {
+			break
 		}
 
-		//remove node
-		fmt.Println("remove node")
+		time.Sleep(time.Second)
+	}
 
-		for {
-			conn.SendTo(addr, snet.MakeMessage(0, &sproto.RemNode{
-				SetID:  1,
-				NodeID: 3,
-			}))
+	//remove node
+	fmt.Println("remove node")
 
-			_, r, err = conn.ReadFrom(recvbuff)
+	for {
+		conn.SendTo(addr, snet.MakeMessage(0, &sproto.RemNode{
+			SetID:  1,
+			NodeID: 3,
+		}))
 
-			ret := r.(*snet.Message).Msg.(*sproto.RemNodeResp)
+		_, r, err = conn.ReadFrom(recvbuff)
 
-			if ret.Reason == "node not found" {
-				break
-			}
-			time.Sleep(time.Second)
-		}*/
+		ret := r.(*snet.Message).Msg.(*sproto.RemNodeResp)
+
+		if ret.Reason == "node not found" {
+			break
+		}
+		time.Sleep(time.Second)
+	}
 
 	node3.Stop()
 

@@ -19,6 +19,7 @@ func main() {
 	config := flag.String("config", "flypd_config.toml", "config")
 	service := flag.String("service", "localhost:8111", "ip:port")
 	raftcluster := flag.String("raftcluster", "1@http://localhost:8111@voter", "raftcluster")
+	join := flag.String("join", false, "set true if the node is new join node")
 
 	go func() {
 		http.ListenAndServe(*pprof, nil)
@@ -37,7 +38,7 @@ func main() {
 
 	flypd.InitLogger(logger.NewZapLogger(logname, conf.Log.LogDir, conf.Log.LogLevel, conf.Log.MaxLogfileSize, conf.Log.MaxAge, conf.Log.MaxBackups, conf.Log.EnableStdout))
 
-	pd, err := flypd.NewPd(uint16(*id), conf, *service, *raftcluster, nil)
+	pd, err := flypd.NewPd(uint16(*id), *join, conf, *service, *raftcluster, nil)
 
 	if nil == err {
 		c := make(chan os.Signal)

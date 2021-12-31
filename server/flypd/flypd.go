@@ -147,7 +147,7 @@ type pd struct {
 	markClearSet    map[int]*set
 }
 
-func NewPd(id uint16, config *Config, udpService string, clusterStr string, st membership.Storage) (*pd, error) {
+func NewPd(id uint16, join bool, config *Config, udpService string, clusterStr string, st membership.Storage) (*pd, error) {
 
 	mainQueue := applicationQueue{
 		q: queue.NewPriorityQueue(2, 10000),
@@ -185,7 +185,7 @@ func NewPd(id uint16, config *Config, udpService string, clusterStr string, st m
 
 	p.mutilRaft = raft.NewMutilRaft()
 
-	p.rn, err = raft.NewInstance(id, 0, p.mutilRaft, p.mainque, peers, st, p.config.RaftLogDir, p.config.RaftLogPrefix)
+	p.rn, err = raft.NewInstance(id, 0, join, p.mutilRaft, p.mainque, peers, st, p.config.RaftLogDir, p.config.RaftLogPrefix)
 
 	if nil != err {
 		return nil, err
@@ -207,9 +207,7 @@ func NewPd(id uint16, config *Config, udpService string, clusterStr string, st m
 }
 
 func (q applicationQueue) AppendHighestPriotiryItem(m interface{}) {
-	if err := q.q.ForceAppend(1, m); nil != err {
-		GetSugar().Errorf("%v", err)
-	}
+	q.q.ForceAppend(1, m)
 }
 
 func (q applicationQueue) append(m interface{}) error {

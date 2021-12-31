@@ -249,7 +249,7 @@ func TestPd(t *testing.T) {
 
 	conf, _ := LoadConfigStr(configStr)
 
-	p, _ := NewPd(1, conf, "localhost:8110", "1@http://localhost:8110@", nil)
+	p, _ := NewPd(1, false, conf, "localhost:8110", "1@http://localhost:8110@", nil)
 
 	for {
 		if p.isLeader() && p.ready {
@@ -277,7 +277,7 @@ func TestPd(t *testing.T) {
 
 	p.Stop()
 
-	p, _ = NewPd(1, conf, "localhost:8110", "1@http://localhost:8110@", nil)
+	p, _ = NewPd(1, false, conf, "localhost:8110", "1@http://localhost:8110@", nil)
 
 	for {
 		if p.isLeader() && p.ready {

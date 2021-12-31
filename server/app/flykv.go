@@ -17,6 +17,7 @@ func main() {
 	id := flag.Int("id", 1, "node ID")
 	pprof := flag.String("pprof", "localhost:8899", "pprof")
 	config := flag.String("config", "flykv_config.toml", "config")
+	join := flag.String("join", false, "set true if the node is new join node")
 
 	go func() {
 		http.ListenAndServe(*pprof, nil)
@@ -35,7 +36,7 @@ func main() {
 
 	flykv.InitLogger(logger.NewZapLogger(logname, conf.Log.LogDir, conf.Log.LogLevel, conf.Log.MaxLogfileSize, conf.Log.MaxAge, conf.Log.MaxBackups, conf.Log.EnableStdout))
 
-	node, err := flykv.NewKvNode(*id, conf, flykv.NewSqlDB())
+	node, err := flykv.NewKvNode(*id, *join, conf, flykv.NewSqlDB())
 	if nil == err {
 		c := make(chan os.Signal)
 		signal.Notify(c, syscall.SIGINT) //监听指定信号
