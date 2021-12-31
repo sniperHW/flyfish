@@ -53,7 +53,7 @@ func (r *forwordMsg) reply(b []byte) {
 func (r *forwordMsg) replyErr(err errcode.Error) {
 	if atomic.CompareAndSwapInt32(&r.replyed, 0, 1) {
 		atomic.AddInt64(r.totalPendingMsg, -1)
-		replyCliError(r.cli, r.seqno, r.cmd, err)
+		replyCliError(r.cli, r.oriSeqno, r.cmd, err)
 	}
 }
 

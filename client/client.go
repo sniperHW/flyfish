@@ -77,9 +77,9 @@ type serverConn struct {
 	connecting      int32
 	closed          *int32
 	UnikeyPlacement func(string) int
-	doCallBack      func(unikey string, cb callback, a interface{})
-	c               *Client
-	removed         bool
+	//doCallBack      func(unikey string, cb callback, a interface{})
+	c       *Client
+	removed bool
 }
 
 func (this *serverConn) onDisconnected() {
@@ -89,14 +89,16 @@ func (this *serverConn) onDisconnected() {
 	this.waitResp = makeWaitResp()
 
 	for _, v := range waitResp {
-		v.deadlineTimer.Stop()
-		v.deadlineTimer = nil
+		if nil != v.deadlineTimer {
+			v.deadlineTimer.Stop()
+			v.deadlineTimer = nil
+		}
 	}
 
 	this.mu.Unlock()
 
 	for _, v := range waitResp {
-		this.doCallBack(v.unikey, v.cb, errcode.New(errcode.Errcode_error, "lose connection"))
+		v.doCallBack(v.unikey, v.cb, errcode.New(errcode.Errcode_error, "lose connection"))
 		releaseCmdContext(v)
 	}
 }
@@ -116,6 +118,8 @@ func (this *serverConn) onConnected(session *flynet.Socket) {
 	}).BeginRecv(func(s *flynet.Socket, msg interface{}) {
 		this.onMessage(msg.(*cs.RespMessage))
 	})
+
+	GetSugar().Infof("connect to flygate ok")
 
 	now := time.Now()
 	//发送被排队的请求
@@ -289,6 +293,8 @@ func (this *Client) onConnectFailed(conn *serverConn) bool {
 func (this *Client) exec(c *cmdContext) {
 	var errCode errcode.Error
 
+	c.doCallBack = this.doCallBack
+
 	this.mu.Lock()
 
 	if atomic.LoadInt32(&this.closed) == 1 {
@@ -386,7 +392,6 @@ func (this *Client) onGates(gates []*sproto.Flygate) {
 			service:     v.Service,
 			pendingSend: list.New(),
 			waitResp:    makeWaitResp(),
-			doCallBack:  this.doCallBack,
 			closed:      &this.closed,
 			c:           this,
 		}
@@ -525,7 +530,6 @@ func OpenClient(conf ClientConf) (*Client, error) {
 				pendingSend:     list.New(),
 				waitResp:        makeWaitResp(),
 				UnikeyPlacement: conf.UnikeyPlacement,
-				doCallBack:      c.doCallBack,
 				closed:          &c.closed,
 				c:               c,
 			}

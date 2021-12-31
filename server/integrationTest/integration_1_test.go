@@ -264,7 +264,7 @@ func newPD(t *testing.T) StopAble {
 func TestFlygate(t *testing.T) {
 	sslot.SlotCount = 128
 	flypd.MinReplicaPerSet = 1
-	flypd.StorePerSet = 1
+	flypd.StorePerSet = 2
 
 	os.RemoveAll("./testRaftLog")
 
@@ -322,16 +322,25 @@ func TestFlygate(t *testing.T) {
 
 	c, _ := client.OpenClient(client.ClientConf{PD: []string{"localhost:8110"}})
 
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 100; i++ {
 		fields := map[string]interface{}{}
 		fields["age"] = 12
 		name := fmt.Sprintf("sniperHW:%d", i)
 		fields["name"] = name
 		fields["phone"] = "123456789123456789123456789"
 
-		r := c.Set("users1", name, fields).Exec()
+		beg := time.Now()
+		for {
+			r := c.Set("users1", name, fields).Exec()
+			if nil == r.ErrCode {
+				break
+			} else {
+				fmt.Println(name, r.ErrCode)
+			}
+		}
 
-		fmt.Println("set resp", r.ErrCode)
+		fmt.Printf("use %v\n", time.Now().Sub(beg))
+
 	}
 
 	fmt.Println("Stop gate")
@@ -355,8 +364,6 @@ func TestAddRemoveNode(t *testing.T) {
 	sslot.SlotCount = 128
 	flypd.MinReplicaPerSet = 1
 	flypd.StorePerSet = 1
-
-	os.RemoveAll("./log")
 	os.RemoveAll("./testRaftLog")
 
 	var err error

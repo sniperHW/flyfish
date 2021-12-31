@@ -75,6 +75,7 @@ type cmdContext struct {
 	listElement   *list.Element
 	l             *list.List
 	waitResp      *map[int64]*cmdContext
+	doCallBack    func(unikey string, cb callback, a interface{})
 }
 
 func (this *cmdContext) onTimeout() {
@@ -84,7 +85,7 @@ func (this *cmdContext) onTimeout() {
 		return
 	}
 
-	if this.waitResp == this.serverConn.waitResp {
+	if nil != this.serverConn && this.waitResp == this.serverConn.waitResp {
 		delete(*this.serverConn.waitResp, this.req.Seqno)
 	}
 
@@ -92,13 +93,13 @@ func (this *cmdContext) onTimeout() {
 		this.l.Remove(this.listElement)
 	}
 
-	if this.serverConn.removed && 0 == len(*this.serverConn.waitResp) {
+	if nil != this.serverConn && this.serverConn.removed && 0 == len(*this.serverConn.waitResp) {
 		this.serverConn.session.Close(nil, 0)
 	}
 
 	this.mu.Unlock()
 
-	this.serverConn.doCallBack(this.unikey, this.cb, errcode.New(errcode.Errcode_timeout, "timeout"))
+	this.doCallBack(this.unikey, this.cb, errcode.New(errcode.Errcode_timeout, "timeout"))
 	releaseCmdContext(this)
 }
 
@@ -409,7 +410,7 @@ func (this *serverConn) onGetResp(c *cmdContext, errCode errcode.Error, resp *pr
 		}
 	}
 
-	this.doCallBack(c.unikey, c.cb, &ret)
+	c.doCallBack(c.unikey, c.cb, &ret)
 
 }
 
@@ -418,7 +419,7 @@ func (this *serverConn) onSetResp(c *cmdContext, errCode errcode.Error, resp *pr
 		ErrCode: errCode,
 		Version: resp.GetVersion(),
 	}
-	this.doCallBack(c.unikey, c.cb, &ret)
+	c.doCallBack(c.unikey, c.cb, &ret)
 }
 
 func (this *serverConn) onSetNxResp(c *cmdContext, errCode errcode.Error, resp *protocol.SetNxResp) {
@@ -435,7 +436,7 @@ func (this *serverConn) onSetNxResp(c *cmdContext, errCode errcode.Error, resp *
 		}
 	}
 
-	this.doCallBack(c.unikey, c.cb, &ret)
+	c.doCallBack(c.unikey, c.cb, &ret)
 
 }
 
@@ -451,7 +452,7 @@ func (this *serverConn) onCompareAndSetResp(c *cmdContext, errCode errcode.Error
 		ret.Fields[resp.GetValue().GetName()] = (*Field)(resp.GetValue())
 	}
 
-	this.doCallBack(c.unikey, c.cb, &ret)
+	c.doCallBack(c.unikey, c.cb, &ret)
 
 }
 
@@ -467,7 +468,7 @@ func (this *serverConn) onCompareAndSetNxResp(c *cmdContext, errCode errcode.Err
 		ret.Fields[resp.GetValue().GetName()] = (*Field)(resp.GetValue())
 	}
 
-	this.doCallBack(c.unikey, c.cb, &ret)
+	c.doCallBack(c.unikey, c.cb, &ret)
 
 }
 
@@ -478,7 +479,7 @@ func (this *serverConn) onDelResp(c *cmdContext, errCode errcode.Error, resp *pr
 		Version: resp.GetVersion(),
 	}
 
-	this.doCallBack(c.unikey, c.cb, &ret)
+	c.doCallBack(c.unikey, c.cb, &ret)
 
 }
 
@@ -494,7 +495,7 @@ func (this *serverConn) onIncrByResp(c *cmdContext, errCode errcode.Error, resp 
 		ret.Fields[resp.GetField().GetName()] = (*Field)(resp.GetField())
 	}
 
-	this.doCallBack(c.unikey, c.cb, &ret)
+	c.doCallBack(c.unikey, c.cb, &ret)
 }
 
 func (this *serverConn) onDecrByResp(c *cmdContext, errCode errcode.Error, resp *protocol.DecrByResp) {
@@ -509,7 +510,7 @@ func (this *serverConn) onDecrByResp(c *cmdContext, errCode errcode.Error, resp 
 		ret.Fields[resp.GetField().GetName()] = (*Field)(resp.GetField())
 	}
 
-	this.doCallBack(c.unikey, c.cb, &ret)
+	c.doCallBack(c.unikey, c.cb, &ret)
 
 }
 
@@ -519,14 +520,13 @@ func (this *serverConn) onKickResp(c *cmdContext, errCode errcode.Error, resp *p
 		ErrCode: errCode,
 	}
 
-	this.doCallBack(c.unikey, c.cb, &ret)
+	c.doCallBack(c.unikey, c.cb, &ret)
 
 }
 
 func (this *serverConn) onMessage(msg *cs.RespMessage) {
 	cmd := protocol.CmdType(msg.Cmd)
 	if cmd != protocol.CmdType_Ping {
-
 		this.mu.Lock()
 		ctx, ok := (*this.waitResp)[msg.Seqno]
 		if ok {

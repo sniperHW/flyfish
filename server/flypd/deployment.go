@@ -303,6 +303,10 @@ func (d *deployment) loadFromPB(sets []*sproto.DeploymentSet) error {
 		jj = (jj + 1) % storeCount
 	}
 
+	for _, j := range storeBitmaps {
+		GetSugar().Infof("onInstallDeployment slots:%v", j.GetOpenBits())
+	}
+
 	for i, v := range sets {
 		if _, ok := d.sets[int(v.SetID)]; ok {
 			return fmt.Errorf("duplicate set:%d", v.SetID)
@@ -354,7 +358,7 @@ func (d *deployment) loadFromPB(sets []*sproto.DeploymentSet) error {
 		for j := 0; j < StorePerSet; j++ {
 			st := &store{
 				id:    j + 1,
-				slots: storeBitmaps[i+j],
+				slots: storeBitmaps[i*StorePerSet+j],
 				set:   s,
 			}
 
@@ -372,6 +376,12 @@ func (d *deployment) loadFromPB(sets []*sproto.DeploymentSet) error {
 
 		d.sets[int(v.SetID)] = s
 	}
+
+	/*for _, v := range d.sets {
+		for _, vv := range v.stores {
+			GetSugar().Infof("onInstallDeployment set:%d store:%d,slots:%v", v.id, vv.id, vv.slots.GetOpenBits())
+		}
+	}*/
 
 	return nil
 }

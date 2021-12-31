@@ -351,7 +351,8 @@ func (g *gate) mainLoop() {
 			msg := v.(*forwordMsg)
 			s, ok := g.routeInfo.slotToStore[msg.slot]
 			if !ok {
-				replyCliError(msg.cli, msg.seqno, msg.cmd, errcode.New(errcode.Errcode_error, "can't find store"))
+				GetSugar().Infof("store not found slot:%d seqno:%d", msg.slot, msg.oriSeqno)
+				replyCliError(msg.cli, msg.oriSeqno, msg.cmd, errcode.New(errcode.Errcode_error, "can't find store"))
 			} else {
 				g.seqCounter++
 				msg.seqno = g.seqCounter
@@ -376,7 +377,7 @@ func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
 		if !ok {
 			req.deadlineTimer.Stop()
 			req.deadlineTimer = nil
-			replyCliError(req.cli, req.seqno, req.cmd, errcode.New(errcode.Errcode_error, "can't find store"))
+			replyCliError(req.cli, req.oriSeqno, req.cmd, errcode.New(errcode.Errcode_error, "can't find store"))
 		} else {
 			req.store = s
 			s.onCliMsg(req)
@@ -397,7 +398,7 @@ func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
 					if !ok {
 						req.deadlineTimer.Stop()
 						req.deadlineTimer = nil
-						replyCliError(req.cli, req.seqno, req.cmd, errcode.New(errcode.Errcode_error, "can't find store"))
+						replyCliError(req.cli, req.oriSeqno, req.cmd, errcode.New(errcode.Errcode_error, "can't find store"))
 					} else {
 						req.store = s
 						s.onCliMsg(req)
