@@ -240,7 +240,7 @@ type StopAble interface {
 func newPD(t *testing.T) StopAble {
 	conf, _ := flypd.LoadConfigStr(pdConfigStr)
 
-	pd, _ := flypd.NewPd(1, false, conf, "localhost:8110", "1@http://localhost:8110@voter", nil)
+	pd, _ := flypd.NewPd(1, false, conf, "localhost:8110", "1@http://localhost:8110@voter")
 
 	for {
 		if !setMeta(t) {

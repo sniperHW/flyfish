@@ -2,6 +2,7 @@ package raft
 
 import (
 	"github.com/dustin/go-humanize"
+	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/pkg/etcd/etcdserver/api/snap"
 	"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft"
@@ -10,7 +11,7 @@ import (
 	"github.com/sniperHW/flyfish/pkg/etcd/wal/walpb"
 	"go.uber.org/zap"
 	"io"
-	"sort"
+	//"sort"
 	"sync/atomic"
 	"time"
 )
@@ -81,10 +82,16 @@ func (rc *RaftInstance) onTriggerSnapshotOK(snap raftpb.Snapshot) {
 }
 
 func (rc *RaftInstance) triggerSnapshot(st snapshotNotifyst) {
-	GetSugar().Debugf("triggerSnapshot")
 
 	var err error
 	var snap raftpb.Snapshot
+
+	//将membership写入snapshot尾部
+	mbJson := rc.mb.ToJson()
+	st.snapshot = buffer.AppendBytes(st.snapshot, mbJson)
+	st.snapshot = buffer.AppendUint32(st.snapshot, uint32(len(mbJson)))
+
+	//GetSugar().Infof("triggerSnapshot %v memberCount:%d snapshot Len:%d mbJson len:%d", rc.id.String(), len(rc.mb.RaftMembers()), len(st.snapshot), len(mbJson))
 
 	snap, err = rc.raftStorage.CreateSnapshot(st.applyIdx, &rc.confState, st.snapshot)
 	if err != nil {
@@ -149,68 +156,49 @@ func (rc *RaftInstance) loadSnapshot(haveWAL bool) (*raftpb.Snapshot, error) {
 	}
 }
 
-func (rc *RaftInstance) publishSnapshot(snapshotToSave raftpb.Snapshot) {
-	if raft.IsEmptySnap(snapshotToSave) {
+func (rc *RaftInstance) recoverMemberShipFromSnapshot(snap *raftpb.Snapshot) {
+	dataLen := len(snap.Data)
+
+	r := buffer.NewReader(snap.Data[dataLen-4:])
+	l := int(r.GetUint32())
+	r = buffer.NewReader(snap.Data[dataLen-4-l : dataLen-4])
+	mbJson := r.GetBytes(l)
+
+	if err := rc.mb.RecoverFromJson(mbJson); nil != err {
+		panic(err)
+	}
+
+	//丢弃membership相关数据
+	snap.Data = snap.Data[:dataLen-4-l]
+}
+
+func (rc *RaftInstance) publishSnapshot(snap raftpb.Snapshot) {
+	if raft.IsEmptySnap(snap) {
 		return
 	}
 
 	GetSugar().Debugf("publishing snapshot at index %d", rc.snapshotIndex)
 	defer GetSugar().Debugf("finished publishing snapshot at index %d", rc.snapshotIndex)
 
-	if snapshotToSave.Metadata.Index <= rc.appliedIndex {
-		GetSugar().Fatalf("snapshot index [%d] should > progress.appliedIndex [%d]", snapshotToSave.Metadata.Index, rc.appliedIndex)
+	if snap.Metadata.Index <= rc.appliedIndex {
+		GetSugar().Fatalf("snapshot index [%d] should > progress.appliedIndex [%d]", snap.Metadata.Index, rc.appliedIndex)
 	}
 
-	rc.confState = snapshotToSave.Metadata.ConfState
-	rc.snapshotIndex = snapshotToSave.Metadata.Index
-	rc.appliedIndex = snapshotToSave.Metadata.Index
+	rc.confState = snap.Metadata.ConfState
+	rc.snapshotIndex = snap.Metadata.Index
+	rc.appliedIndex = snap.Metadata.Index
 
 	rc.transport.RemoveAllPeers()
 
-	for _, v := range snapshotToSave.Metadata.ConfState.Voters {
-		m := rc.mb.AddRaftMember(types.ID(v), false, nil)
-		if RaftInstanceID(v) != rc.ID() {
-			rc.transport.AddPeer(types.ID(v), m.PeerURLs)
+	rc.recoverMemberShipFromSnapshot(&snap)
+
+	for _, v := range rc.mb.Members() {
+		if RaftInstanceID(v.ID) != rc.ID() {
+			rc.transport.AddPeer(types.ID(v.ID), v.PeerURLs)
 		}
 	}
-
-	for _, v := range snapshotToSave.Metadata.ConfState.Learners {
-		m := rc.mb.AddRaftMember(types.ID(v), true, nil)
-		if RaftInstanceID(v) != rc.ID() {
-			rc.transport.AddPeer(types.ID(v), m.PeerURLs)
-		}
-	}
-
-	//移除ConfState中不存在的成员
-	snapMembers := []uint64{}
-	snapMembers = append(snapMembers, snapshotToSave.Metadata.ConfState.Voters...)
-	snapMembers = append(snapMembers, snapshotToSave.Metadata.ConfState.Learners...)
-	sort.Slice(snapMembers, func(i, j int) bool {
-		return snapMembers[i] < snapMembers[j]
-	})
-	members := rc.mb.RaftMembers()
-
-	i := 0
-	j := 0
-
-	for i < len(snapMembers) && j < len(members) {
-		if types.ID(snapMembers[i]) == members[j].ID {
-			i++
-			j++
-		} else if types.ID(snapMembers[i]) > members[j].ID {
-			rc.mb.RemoveRaftMember(members[j].ID)
-			j++
-		} else {
-			i++
-		}
-	}
-
-	for ; j < len(members); j++ {
-		rc.mb.RemoveRaftMember(members[j].ID)
-	}
-
 	// trigger kvstore to load snapshot
-	rc.commitC.AppendHighestPriotiryItem(snapshotToSave)
+	rc.commitC.AppendHighestPriotiryItem(snap)
 }
 
 func newSnapshotReaderCloser(data []byte) io.ReadCloser {

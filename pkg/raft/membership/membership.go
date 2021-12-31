@@ -26,22 +26,19 @@ type MemberShipJson struct {
 }
 
 type MemberShip struct {
-	sync.Mutex  // guards the fields below
-	lg          *zap.Logger
-	localID     types.ID
-	cid         types.ID
-	members     map[types.ID]*Member //未经raft确认的members
-	raftmembers map[types.ID]*Member //从raft中获取到的members
-	st          Storage
+	sync.Mutex // guards the fields below
+	lg         *zap.Logger
+	localID    types.ID
+	cid        types.ID
+	members    map[types.ID]*Member
 }
 
 func NewMemberShip(lg *zap.Logger, localID, cid types.ID) *MemberShip {
 	return &MemberShip{
-		lg:          lg,
-		localID:     localID,
-		cid:         cid,
-		members:     make(map[types.ID]*Member),
-		raftmembers: make(map[types.ID]*Member),
+		lg:      lg,
+		localID: localID,
+		cid:     cid,
+		members: make(map[types.ID]*Member),
 	}
 }
 
@@ -51,11 +48,10 @@ func NewMemberShipFromJson(lg *zap.Logger, b []byte) (*MemberShip, error) {
 		return nil, err
 	} else {
 		return &MemberShip{
-			lg:          lg,
-			localID:     m.LocalID,
-			cid:         m.Cid,
-			members:     m.Members,
-			raftmembers: make(map[types.ID]*Member),
+			lg:      lg,
+			localID: m.LocalID,
+			cid:     m.Cid,
+			members: m.Members,
 		}, nil
 	}
 }
@@ -68,8 +64,16 @@ func NewMemberShipMembers(lg *zap.Logger, localID, cid types.ID, membs []*Member
 	return c
 }
 
-func (c *MemberShip) SetStorage(st Storage) {
-	c.st = st
+func (c *MemberShip) RecoverFromJson(b []byte) error {
+	mb, err := NewMemberShipFromJson(c.lg, b)
+	if nil != err {
+		return err
+	} else {
+		c.Lock()
+		defer c.Unlock()
+		c.members = mb.members
+		return nil
+	}
 }
 
 func (c *MemberShip) toJson() (b []byte) {
@@ -98,28 +102,17 @@ func (c *MemberShip) Members() []*Member {
 	return []*Member(ms)
 }
 
-func (c *MemberShip) RaftMembers() []*Member {
+func (c *MemberShip) Member(id types.ID) *Member {
 	c.Lock()
 	defer c.Unlock()
-	var ms MembersByID
-	for _, m := range c.raftmembers {
-		ms = append(ms, m.Clone())
-	}
-	sort.Sort(ms)
-	return []*Member(ms)
-}
-
-func (c *MemberShip) RaftMember(id types.ID) *Member {
-	c.Lock()
-	defer c.Unlock()
-	return c.raftmembers[id].Clone()
+	return c.members[id].Clone()
 }
 
 func (c *MemberShip) VotingMembers() []*Member {
 	c.Lock()
 	defer c.Unlock()
 	var ms MembersByID
-	for _, m := range c.raftmembers {
+	for _, m := range c.members {
 		if !m.IsLearner {
 			ms = append(ms, m.Clone())
 		}
@@ -132,7 +125,7 @@ func (c *MemberShip) VotingMembers() []*Member {
 func (c *MemberShip) IsLocalMemberLearner() bool {
 	c.Lock()
 	defer c.Unlock()
-	localMember, ok := c.raftmembers[c.localID]
+	localMember, ok := c.members[c.localID]
 	if !ok {
 		c.lg.Panic(
 			"failed to find local ID in cluster members",
@@ -144,19 +137,19 @@ func (c *MemberShip) IsLocalMemberLearner() bool {
 }
 
 // IsMemberExist returns if the member with the given id exists in cluster.
-func (c *MemberShip) IsRaftMemberExist(id types.ID) bool {
+func (c *MemberShip) IsMemberExist(id types.ID) bool {
 	c.Lock()
 	defer c.Unlock()
-	_, ok := c.raftmembers[id]
+	_, ok := c.members[id]
 	return ok
 }
 
 // VotingMemberIDs returns the ID of voting members in cluster.
-func (c *MemberShip) VotingRaftMemberIDs() []types.ID {
+func (c *MemberShip) VotingMemberIDs() []types.ID {
 	c.Lock()
 	defer c.Unlock()
 	var ids []types.ID
-	for _, m := range c.raftmembers {
+	for _, m := range c.members {
 		if !m.IsLearner {
 			ids = append(ids, m.ID)
 		}
@@ -165,68 +158,15 @@ func (c *MemberShip) VotingRaftMemberIDs() []types.ID {
 	return ids
 }
 
-func (c *MemberShip) save() error {
-	if nil != c.st {
-		return c.st.SaveMemberShip(c.lg, c.toJson())
-	} else {
-		return nil
-	}
-}
-
-func (c *MemberShip) Save() error {
-	c.Lock()
-	defer c.Unlock()
-	return c.save()
-}
-
-// AddMember adds a new Member into the cluster, and saves the given member's
-// raftAttributes into the store. The given member should have empty attributes.
-// A Member with a matching id must not exist.
-func (c *MemberShip) AddRaftMember(id types.ID, isLearner bool, m *Member) *Member {
+func (c *MemberShip) AddMember(id types.ID, isLearner bool, m *Member) *Member {
 	c.Lock()
 	defer c.Unlock()
 
-	if nil == m {
-		m = c.raftmembers[id]
-		if nil == m {
-			m = c.members[id]
-		}
-	} else {
-		rm := c.raftmembers[id]
-		if nil != rm {
-			if len(rm.PeerURLs) != len(m.PeerURLs) {
-				c.lg.Panic("member URLS missmatch")
-			}
-
-			for i := 0; i < len(m.PeerURLs); i++ {
-				if rm.PeerURLs[i] != m.PeerURLs[i] {
-					c.lg.Panic("member URLS missmatch")
-				}
-			}
-		}
-	}
-
-	if nil == m {
+	if _, ok := c.members[id]; ok {
 		c.lg.Panic("AddRaftMember error")
 	}
 
-	if isLearner != m.IsLearner {
-		c.lg.Panic("isLearner missmatch")
-	}
-
-	//m.IsLearner = isLearner
-
-	c.raftmembers[id] = m
 	c.members[id] = m
-
-	if c.st != nil {
-		if err := c.save(); nil != err {
-			c.lg.Panic(
-				"failed to save membership",
-				zap.Error(err),
-			)
-		}
-	}
 
 	c.lg.Info(
 		"added raft member",
@@ -241,26 +181,16 @@ func (c *MemberShip) AddRaftMember(id types.ID, isLearner bool, m *Member) *Memb
 
 // RemoveMember removes a member from the store.
 // The given id MUST exist, or the function panics.
-func (c *MemberShip) RemoveRaftMember(id types.ID) {
+func (c *MemberShip) RemoveMember(id types.ID) {
 	c.Lock()
 	defer c.Unlock()
 
-	m, ok := c.raftmembers[id]
+	m, ok := c.members[id]
 	if !ok {
 		c.lg.Panic("RemoveRaftMember error")
 	}
 
-	delete(c.raftmembers, id)
 	delete(c.members, id)
-
-	if c.st != nil {
-		if err := c.save(); nil != err {
-			c.lg.Panic(
-				"failed to save membership",
-				zap.Error(err),
-			)
-		}
-	}
 
 	c.lg.Info(
 		"removed raft member",
@@ -272,25 +202,16 @@ func (c *MemberShip) RemoveRaftMember(id types.ID) {
 }
 
 // PromoteMember marks the member's IsLearner RaftAttributes to false.
-func (c *MemberShip) PromoteRaftMember(id types.ID) {
+func (c *MemberShip) PromoteMember(id types.ID) {
 	c.Lock()
 	defer c.Unlock()
 
-	m, ok := c.raftmembers[id]
+	m, ok := c.members[id]
 	if !ok {
 		c.lg.Panic("PromoteRaftMember error")
 	}
 
 	m.IsLearner = false
-
-	if c.st != nil {
-		if err := c.save(); nil != err {
-			c.lg.Panic(
-				"failed to save membership",
-				zap.Error(err),
-			)
-		}
-	}
 
 	c.lg.Info(
 		"promote member",
@@ -305,7 +226,7 @@ func (c *MemberShip) ValidateConfigurationChange(cc *ConfChangeContext) error {
 
 	id := types.ID(cc.NodeID)
 
-	members := c.raftmembers
+	members := c.members
 
 	switch cc.ConfChangeType {
 	case raftpb.ConfChangeAddNode, raftpb.ConfChangeAddLearnerNode:

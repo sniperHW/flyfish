@@ -8,7 +8,6 @@ import (
 	flynet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
-	"github.com/sniperHW/flyfish/pkg/raft/membership"
 	snet "github.com/sniperHW/flyfish/server/net"
 	"github.com/sniperHW/flyfish/server/slot"
 	"net"
@@ -147,7 +146,7 @@ type pd struct {
 	markClearSet    map[int]*set
 }
 
-func NewPd(id uint16, join bool, config *Config, udpService string, clusterStr string, st membership.Storage) (*pd, error) {
+func NewPd(id uint16, join bool, config *Config, udpService string, clusterStr string) (*pd, error) {
 
 	mainQueue := applicationQueue{
 		q: queue.NewPriorityQueue(2, 10000),
@@ -185,7 +184,7 @@ func NewPd(id uint16, join bool, config *Config, udpService string, clusterStr s
 
 	p.mutilRaft = raft.NewMutilRaft()
 
-	p.rn, err = raft.NewInstance(id, 0, join, p.mutilRaft, p.mainque, peers, st, p.config.RaftLogDir, p.config.RaftLogPrefix)
+	p.rn, err = raft.NewInstance(id, 0, join, p.mutilRaft, p.mainque, peers, p.config.RaftLogDir, p.config.RaftLogPrefix)
 
 	if nil != err {
 		return nil, err

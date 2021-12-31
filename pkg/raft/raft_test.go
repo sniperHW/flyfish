@@ -5,7 +5,7 @@ package raft
 
 import (
 	"encoding/json"
-	"errors"
+	//"errors"
 	"flag"
 	"fmt"
 	"github.com/sniperHW/flyfish/logger"
@@ -15,7 +15,7 @@ import (
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft/membership"
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/zap"
+	//"go.uber.org/zap"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -25,31 +25,6 @@ import (
 	"testing"
 	"time"
 )
-
-type testStorage struct {
-	storage []byte
-}
-
-func (s *testStorage) SaveMemberShip(_ *zap.Logger, data []byte) error {
-	s.storage = data
-	return nil
-}
-
-func (s *testStorage) LoadMemberShip(lg *zap.Logger) (*membership.MemberShip, error) {
-	if len(s.storage) == 0 {
-		return nil, errors.New("key not found")
-	} else {
-		return membership.NewMemberShipFromJson(lg, s.storage)
-	}
-}
-
-func (s *testStorage) IsKeyNotFound(err error) bool {
-	if "key not found" == err.Error() {
-		return true
-	} else {
-		return false
-	}
-}
 
 func init() {
 	pprof := flag.String("pprof", "localhost:8899", "pprof")
@@ -466,7 +441,7 @@ type kvnode struct {
 	store     *kvstore
 }
 
-func newKvNode(nodeID uint16, shard uint16, join bool, cluster string, st membership.Storage) *kvnode {
+func newKvNode(nodeID uint16, shard uint16, join bool, cluster string) *kvnode {
 
 	peers, err := SplitPeers(cluster)
 
@@ -482,7 +457,7 @@ func newKvNode(nodeID uint16, shard uint16, join bool, cluster string, st member
 
 	mutilRaft := NewMutilRaft()
 
-	rn, err := NewInstance(nodeID, shard, join, mutilRaft, mainQueue, peers, st, "./log/raftLog", "kv")
+	rn, err := NewInstance(nodeID, shard, join, mutilRaft, mainQueue, peers, "./log/raftLog", "kv")
 
 	if nil != err {
 		fmt.Println(err)
@@ -518,11 +493,9 @@ func TestSingleNode(t *testing.T) {
 	DefaultSnapshotCount = 100
 	SnapshotCatchUpEntriesN = 100
 
-	st := &testStorage{}
-
 	{
 
-		node := newKvNode(1, 1, false, "1@http://127.0.0.1:12379@", st)
+		node := newKvNode(1, 1, false, "1@http://127.0.0.1:12379@")
 
 		startOkCh := make(chan struct{})
 
@@ -561,7 +534,7 @@ func TestSingleNode(t *testing.T) {
 
 	{
 		//start again
-		node := newKvNode(1, 1, false, "1@http://127.0.0.1:12379@", st)
+		node := newKvNode(1, 1, false, "1@http://127.0.0.1:12379@")
 
 		startOkCh := make(chan struct{})
 
@@ -596,7 +569,7 @@ func TestSingleNode(t *testing.T) {
 	{
 
 		//start again
-		node := newKvNode(1, 1, false, "1@http://127.0.0.1:12379@", st)
+		node := newKvNode(1, 1, false, "1@http://127.0.0.1:12379@")
 
 		startOkCh := make(chan struct{})
 
@@ -631,10 +604,9 @@ func TestCluster(t *testing.T) {
 	DefaultSnapshotCount = 100
 	SnapshotCatchUpEntriesN = 100
 
-	st1 := &testStorage{}
 	cluster := "1@http://127.0.0.1:22378@,2@http://127.0.0.1:22379@,3@http://127.0.0.1:22380@"
 
-	node1 := newKvNode(1, 1, false, cluster, st1)
+	node1 := newKvNode(1, 1, false, cluster)
 
 	becomeLeaderCh1 := make(chan *kvnode, 1)
 
@@ -642,9 +614,7 @@ func TestCluster(t *testing.T) {
 		becomeLeaderCh1 <- node1
 	}
 
-	st2 := &testStorage{}
-
-	node2 := newKvNode(2, 1, false, cluster, st2)
+	node2 := newKvNode(2, 1, false, cluster)
 
 	becomeLeaderCh2 := make(chan *kvnode, 1)
 
@@ -652,9 +622,7 @@ func TestCluster(t *testing.T) {
 		becomeLeaderCh2 <- node2
 	}
 
-	st3 := &testStorage{}
-
-	node3 := newKvNode(3, 1, false, cluster, st3)
+	node3 := newKvNode(3, 1, false, cluster)
 
 	becomeLeaderCh3 := make(chan *kvnode, 1)
 
@@ -675,7 +643,7 @@ func TestCluster(t *testing.T) {
 
 	leader := getLeader()
 
-	for i := 0; i < 500; i++ {
+	for i := 0; i < 100; i++ {
 		leader.store.Set(fmt.Sprintf("sniperHW:%d", i), fmt.Sprintf("sniperHW:%d", i))
 	}
 
@@ -683,24 +651,25 @@ func TestCluster(t *testing.T) {
 	r, _ := leader.store.Get("sniperHW")
 	assert.Equal(t, r, "sniperHW")
 
-	//time.Sleep(time.Second * 5)
-
 	//加入新节点
 	newNodeID := uint64((4 << 16) + 1)
-	err := leader.store.AddLearner(newNodeID, "http://127.0.0.1:22381")
-	assert.Nil(t, err)
 
-	if nil != err {
-		panic(err)
+	var err error
+
+	for {
+		err = leader.store.AddLearner(newNodeID, "http://127.0.0.1:22381")
+		if nil == err {
+			break
+		} else {
+			time.Sleep(time.Second)
+		}
 	}
 
 	fmt.Println("AddLearner ok")
 
 	cluster = "1@http://127.0.0.1:22378@,2@http://127.0.0.1:22379@,3@http://127.0.0.1:22380@,4@http://127.0.0.1:22381@learner"
 
-	st4 := &testStorage{}
-
-	node4 := newKvNode(4, 1, true, cluster, st4)
+	node4 := newKvNode(4, 1, true, cluster)
 
 	startOkCh4 := make(chan struct{}, 1)
 
@@ -759,9 +728,7 @@ func TestDownToFollower(t *testing.T) {
 
 	cluster := "1@http://127.0.0.1:22378@,2@http://127.0.0.1:22379@"
 
-	st1 := &testStorage{}
-
-	node1 := newKvNode(1, 1, false, cluster, st1)
+	node1 := newKvNode(1, 1, false, cluster)
 
 	becomeLeaderCh1 := make(chan *kvnode, 1)
 
@@ -769,9 +736,7 @@ func TestDownToFollower(t *testing.T) {
 		becomeLeaderCh1 <- node1
 	}
 
-	st2 := &testStorage{}
-
-	node2 := newKvNode(2, 1, false, cluster, st2)
+	node2 := newKvNode(2, 1, false, cluster)
 
 	becomeLeaderCh2 := make(chan *kvnode, 1)
 
@@ -832,9 +797,7 @@ func TestOneNodeDownAndRestart(t *testing.T) {
 
 	cluster := "1@http://127.0.0.1:22378@,2@http://127.0.0.1:22379@"
 
-	st1 := &testStorage{}
-
-	node1 := newKvNode(1, 1, false, cluster, st1)
+	node1 := newKvNode(1, 1, false, cluster)
 
 	becomeLeaderCh1 := make(chan *kvnode, 1)
 
@@ -842,9 +805,7 @@ func TestOneNodeDownAndRestart(t *testing.T) {
 		becomeLeaderCh1 <- node1
 	}
 
-	st2 := &testStorage{}
-
-	node2 := newKvNode(2, 1, false, cluster, st2)
+	node2 := newKvNode(2, 1, false, cluster)
 
 	becomeLeaderCh2 := make(chan *kvnode, 1)
 
@@ -878,11 +839,11 @@ func TestOneNodeDownAndRestart(t *testing.T) {
 	go func() {
 		time.Sleep(time.Second * 10)
 		if node1 == nil {
-			node1 = newKvNode(1, 1, false, cluster, st1)
+			node1 = newKvNode(1, 1, false, cluster)
 		}
 
 		if node2 == nil {
-			node2 = newKvNode(2, 1, false, cluster, st2)
+			node2 = newKvNode(2, 1, false, cluster)
 		}
 
 	}()

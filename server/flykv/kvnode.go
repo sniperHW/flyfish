@@ -159,7 +159,7 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, peers map[uint16]raft.
 		},
 	}
 
-	rn, err := raft.NewInstance(uint16(this.id), uint16(storeID), this.join, this.mutilRaft, mainQueue, peers, nil, this.config.RaftLogDir, this.config.RaftLogPrefix)
+	rn, err := raft.NewInstance(uint16(this.id), uint16(storeID), this.join, this.mutilRaft, mainQueue, peers, this.config.RaftLogDir, this.config.RaftLogPrefix)
 
 	if nil != err {
 		return err

@@ -245,6 +245,7 @@ type gate struct {
 	pdAddr          []*net.UDPAddr
 	reSendReqMgr    routeErrorAndSlotTransferingReqMgr
 	msgPerSecond    *movingAverage.MovingAverage //每秒客户端转发请求量的移动平均值
+	msgRecv         int32
 	heartBeatUdp    *flynet.Udp
 }
 
@@ -307,7 +308,17 @@ func NewFlyGate(config *Config, service string) (*gate, error) {
 
 	err := g.start()
 
+	g.refreshMsgPerSecond()
+
 	return g, err
+}
+
+func (g *gate) refreshMsgPerSecond() {
+	if atomic.LoadInt32(&g.stopOnce) == 0 {
+		g.msgPerSecond.Add(int(atomic.LoadInt32(&g.msgRecv)))
+		atomic.StoreInt32(&g.msgRecv, 0)
+		time.AfterFunc(time.Second, g.refreshMsgPerSecond)
+	}
 }
 
 func (g *gate) startListener() {
@@ -329,7 +340,7 @@ func (g *gate) startListener() {
 					//服务关闭不再接受新新的请求
 					return
 				}
-				g.msgPerSecond.Add(1)
+				atomic.AddInt32(&g.msgRecv, 1)
 				msg := v.(*forwordMsg)
 				msg.cli = session
 				g.mainQueue.ForceAppend(0, msg)

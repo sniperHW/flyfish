@@ -77,9 +77,8 @@ type serverConn struct {
 	connecting      int32
 	closed          *int32
 	UnikeyPlacement func(string) int
-	//doCallBack      func(unikey string, cb callback, a interface{})
-	c       *Client
-	removed bool
+	c               *Client
+	removed         bool
 }
 
 func (this *serverConn) onDisconnected() {
@@ -210,6 +209,7 @@ type Client struct {
 	pendingSend   *list.List //usedConn==nil时被排队等待发送的请求
 	pdAddr        []*net.UDPAddr
 	msgPerSecond  *movingAverage.MovingAverage
+	msgSend       int32
 	gates         []*sproto.Flygate
 }
 
@@ -320,7 +320,7 @@ func (this *Client) exec(c *cmdContext) {
 		this.doCallBack(c.unikey, c.cb, errCode)
 		releaseCmdContext(c)
 	} else {
-		this.msgPerSecond.Add(1)
+		atomic.AddInt32(&this.msgSend, 1)
 	}
 }
 
@@ -513,6 +513,14 @@ func (this *Client) queryRouteInfo() {
 	}()
 }
 
+func (this *Client) refreshMsgPerSecond() {
+	if atomic.LoadInt32(&this.closed) == 0 {
+		this.msgPerSecond.Add(int(atomic.LoadInt32(&this.msgSend)))
+		atomic.StoreInt32(&this.msgSend, 0)
+		time.AfterFunc(time.Second, this.refreshMsgPerSecond)
+	}
+}
+
 func OpenClient(conf ClientConf) (*Client, error) {
 	if "" == conf.SoloService && len(conf.PD) == 0 {
 		return nil, errors.New("cluster mode,but pd empty")
@@ -548,7 +556,7 @@ func OpenClient(conf ClientConf) (*Client, error) {
 			c.serverConnMap = map[string]*serverConn{}
 			c.queryRouteInfo()
 		}
-
+		c.refreshMsgPerSecond()
 		return c, nil
 	}
 }
