@@ -17,19 +17,36 @@ type TransSlotTransfer struct {
 	StoreTransferIn    int //迁入store
 	context            int64
 	timer              *time.Timer
+	ready              bool
 }
 
 func (tst *TransSlotTransfer) notify(pd *pd) {
 	tst.context = snet.MakeUniqueContext() //更新context,后续只接受相应context的应答
 	if !tst.StoreTransferOutOk {
-		setOut := pd.pState.deployment.sets[tst.SetOut]
-		for _, v := range setOut.nodes {
-			addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.host, v.servicePort))
-			pd.udp.SendTo(addr, snet.MakeMessage(tst.context,
-				&sproto.NotifySlotTransOut{
-					Slot:  int32(tst.Slot),
-					Store: int32(tst.StoreTransferOut),
-				}))
+		if !tst.ready {
+			/*
+			 *  如果迁入store尚未启动或没有leader，则不应该启动迁出，否则迁移slot将没有store装载，导致无法服务
+			 *  因此，启动迁出之前应该先询问待迁入store是否已经准备好迁入。
+			 */
+			setIn := pd.pState.deployment.sets[tst.SetIn]
+			for _, v := range setIn.nodes {
+				addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.host, v.servicePort))
+				pd.udp.SendTo(addr, snet.MakeMessage(tst.context,
+					&sproto.IsTransInReady{
+						Store: int32(tst.StoreTransferIn),
+						Slot:  int32(tst.Slot),
+					}))
+			}
+		} else {
+			setOut := pd.pState.deployment.sets[tst.SetOut]
+			for _, v := range setOut.nodes {
+				addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.host, v.servicePort))
+				pd.udp.SendTo(addr, snet.MakeMessage(tst.context,
+					&sproto.NotifySlotTransOut{
+						Slot:  int32(tst.Slot),
+						Store: int32(tst.StoreTransferOut),
+					}))
+			}
 		}
 	} else {
 		setIn := pd.pState.deployment.sets[tst.SetIn]
@@ -155,6 +172,18 @@ func (p *pd) beginSlotTransfer(slot int, setOut int, storeOut int, setIn int, st
 			StoreTransferIn:  storeIn,
 		},
 	})
+}
+
+func (p *pd) onSlotTransInReady(from *net.UDPAddr, m *snet.Message) {
+	msg := m.Msg.(*sproto.IsTransInReadyResp)
+	if t, ok := p.pState.SlotTransfer[int(msg.Slot)]; ok && t.context == m.Context {
+		if msg.Ready && t.ready == false {
+			t.ready = true
+			if t.timer == nil || t.timer.Stop() {
+				t.notify(p)
+			}
+		}
+	}
 }
 
 func (p *pd) onSlotTransOutOk(from *net.UDPAddr, m *snet.Message) {

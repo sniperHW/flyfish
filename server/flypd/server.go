@@ -127,6 +127,45 @@ func (p *pd) changeFlyGate(from *net.UDPAddr, m *snet.Message) {
 	}
 }
 
+func (p *pd) onGetSetStatus(from *net.UDPAddr, m *snet.Message) {
+	if nil != p.pState.deployment {
+		resp := &sproto.GetSetStatusResp{}
+		for _, v := range p.pState.deployment.sets {
+			s := &sproto.SetStatus{
+				SetID:     int32(v.id),
+				MarkClear: v.markClear,
+			}
+
+			for _, vv := range v.nodes {
+				n := &sproto.KvnodeStatus{
+					NodeID: int32(vv.id),
+				}
+
+				for k, vvv := range vv.store {
+					n.Stores = append(n.Stores, &sproto.KvnodeStoreStatus{
+						StoreID: int32(k),
+						Type:    int32(vvv.Type),
+						Value:   int32(vvv.Value),
+					})
+				}
+
+				s.Nodes = append(s.Nodes, n)
+			}
+
+			for _, vv := range v.stores {
+				s.Stores = append(s.Stores, &sproto.StoreStatus{
+					StoreID: int32(vv.id),
+					Slots:   vv.slots.ToJson(),
+				})
+			}
+
+			resp.Sets = append(resp.Sets, s)
+		}
+
+		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
+	}
+}
+
 func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.InstallDeployment{}, p.onInstallDeployment)
 	p.registerMsgHandler(&sproto.AddSet{}, p.onAddSet)
@@ -137,6 +176,7 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.AddLearnerStoreToNode{}, p.onAddLearnerStoreToNode)
 	p.registerMsgHandler(&sproto.PromoteLearnerStore{}, p.onPromoteLearnerStore)
 	p.registerMsgHandler(&sproto.RemoveNodeStore{}, p.onRemoveNodeStore)
+	p.registerMsgHandler(&sproto.IsTransInReadyResp{}, p.onSlotTransInReady)
 	p.registerMsgHandler(&sproto.SlotTransOutOk{}, p.onSlotTransOutOk)
 	p.registerMsgHandler(&sproto.SlotTransInOk{}, p.onSlotTransInOk)
 	p.registerMsgHandler(&sproto.KvnodeBoot{}, p.onKvnodeBoot)
@@ -148,4 +188,5 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.SetMeta{}, p.onSetMeta)
 	p.registerMsgHandler(&sproto.UpdateMeta{}, p.onUpdateMeta)
 	p.registerMsgHandler(&sproto.StoreUpdateMetaOk{}, p.onStoreUpdateMetaOk)
+	p.registerMsgHandler(&sproto.GetSetStatus{}, p.onGetSetStatus)
 }

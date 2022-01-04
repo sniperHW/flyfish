@@ -280,15 +280,27 @@ func (p *pd) slotBalance() {
 
 	lSets, lMCSets := len(p.pState.deployment.sets), len(p.markClearSet)
 
-	setAverageSlotCount := slot.SlotCount / (lSets - lMCSets)
+	var setAverageSlotCount, storeAverageSlotCount int
 
-	storeAverageSlotCount := slot.SlotCount / ((lSets - lMCSets) * StorePerSet)
+	if slot.SlotCount%(lSets-lMCSets) == 0 {
+		setAverageSlotCount = slot.SlotCount / (lSets - lMCSets)
+	} else {
+		setAverageSlotCount = (slot.SlotCount / (lSets - lMCSets)) + 1
+	}
+
+	if slot.SlotCount%((lSets-lMCSets)*StorePerSet) == 0 {
+		storeAverageSlotCount = slot.SlotCount / ((lSets - lMCSets) * StorePerSet)
+	} else {
+		storeAverageSlotCount = (slot.SlotCount / ((lSets - lMCSets) * StorePerSet)) + 1
+	}
+
+	GetSugar().Infof("setAverageSlotCount:%d storeAverageSlotCount:%d", setAverageSlotCount, storeAverageSlotCount)
 
 	if nil == outStore {
 		for _, v := range p.pState.deployment.sets {
-			if !v.markClear && v.getTotalSlotCount()-v.slotOutCount > setAverageSlotCount+1 {
+			if !v.markClear && v.getTotalSlotCount()-v.slotOutCount > setAverageSlotCount {
 				for _, vv := range v.stores {
-					if len(vv.slots.GetOpenBits())-vv.slotOutCount > storeAverageSlotCount+1 {
+					if len(vv.slots.GetOpenBits())-vv.slotOutCount > storeAverageSlotCount {
 						outStore = vv
 						break
 					}
@@ -303,10 +315,11 @@ func (p *pd) slotBalance() {
 	if nil != outStore {
 		var inStore *store
 		for _, v := range p.pState.deployment.sets {
-			if !v.markClear && v.getTotalSlotCount()-v.slotInCount < setAverageSlotCount+1 {
+			if !v.markClear && v.getTotalSlotCount()-v.slotInCount < setAverageSlotCount {
 				for _, vv := range v.stores {
-					if len(vv.slots.GetOpenBits())-vv.slotInCount < storeAverageSlotCount+1 {
+					if len(vv.slots.GetOpenBits())-vv.slotInCount < storeAverageSlotCount {
 						inStore = vv
+						GetSugar().Infof("setID:%d,inSet:%d,inStore:%d", v.id, v.getTotalSlotCount()-v.slotInCount, len(vv.slots.GetOpenBits())-vv.slotInCount)
 						break
 					}
 				}

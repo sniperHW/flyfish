@@ -639,6 +639,14 @@ func (s *kvstore) onNotifyNodeStoreOp(from *net.UDPAddr, msg *sproto.NotifyNodeS
 	}
 }
 
+func (s *kvstore) onIsTransInReady(from *net.UDPAddr, msg *sproto.IsTransInReady, context int64) {
+	s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
+		&sproto.IsTransInReadyResp{
+			Ready: true,
+			Slot:  msg.Slot,
+		}))
+}
+
 func (s *kvstore) onNotifySlotTransIn(from *net.UDPAddr, msg *sproto.NotifySlotTransIn, context int64) {
 	slot := int(msg.Slot)
 	if s.slots.Test(slot) {
@@ -753,6 +761,8 @@ func (s *kvstore) onUdpMsg(from *net.UDPAddr, m *snet.Message) {
 			s.onNotifySlotTransOut(from, m.Msg.(*sproto.NotifySlotTransOut), m.Context)
 		case *sproto.NotifyUpdateMeta:
 			s.onNotifyUpdateMeta(from, m.Msg.(*sproto.NotifyUpdateMeta), m.Context)
+		case *sproto.IsTransInReady:
+			s.onIsTransInReady(from, m.Msg.(*sproto.IsTransInReady), m.Context)
 		}
 	}
 }

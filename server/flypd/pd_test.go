@@ -273,7 +273,7 @@ func TestPd(t *testing.T) {
 
 	//testAddRemNode(t, p)
 
-	testSlotTransfer(t, p)
+	//testSlotTransfer(t, p)
 
 	p.Stop()
 
@@ -694,7 +694,7 @@ func (n *testKvnode) stop() {
 	n.udp.Close()
 }
 
-func testSlotTransfer(t *testing.T, p *pd) {
+/*func testSlotTransfer(t *testing.T, p *pd) {
 
 	fmt.Println("testSlotTransfer")
 
@@ -788,7 +788,7 @@ func testSlotTransfer(t *testing.T, p *pd) {
 	node1.stop()
 	node2.stop()
 
-}
+}*/
 
 /*
 func makeInstallDeployment(setCount int) *sproto.InstallDeployment {

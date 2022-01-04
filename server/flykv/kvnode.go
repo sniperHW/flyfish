@@ -328,6 +328,8 @@ func (this *kvnode) getKvnodeBootInfo(pd []*net.UDPAddr) *sproto.KvnodeBootResp 
 		}
 	}
 
+	//GetSugar().Infof("getKvnodeBootInfo %v", *resp)
+
 	return resp
 }
 
@@ -420,28 +422,33 @@ func (this *kvnode) start() error {
 		resp := this.getKvnodeBootInfo(pdAddr)
 
 		if !resp.Ok {
+			GetSugar().Errorf("getKvnodeBootInfo err:%v", resp.Reason)
 			return errors.New(resp.Reason)
 		}
 
 		if dbdef, err = db.CreateDbDefFromJsonString(resp.Meta); nil != err {
+			GetSugar().Errorf("CreateDbDefFromJsonString err:%v", err)
 			return err
 		}
 
 		meta, err = sql.CreateDbMeta(resp.MetaVersion, dbdef)
 
 		if nil != err {
+			GetSugar().Errorf("CreateDbMeta err:%v", err)
 			return err
 		}
 
 		err = this.initUdp(fmt.Sprintf("%s:%d", resp.ServiceHost, resp.ServicePort))
 
 		if nil != err {
+			GetSugar().Errorf("initUdp err:%v", err)
 			return err
 		}
 
 		err = this.db.start(config)
 
 		if nil != err {
+			GetSugar().Errorf("db.start err:%v", err)
 			return err
 		}
 
@@ -450,6 +457,7 @@ func (this *kvnode) start() error {
 		this.listener, err = cs.NewListener("tcp", service, outputBufLimit, verifyLogin)
 
 		if nil != err {
+			GetSugar().Errorf("NewListener err:%v", err)
 			return err
 		}
 
@@ -462,16 +470,19 @@ func (this *kvnode) start() error {
 			slots, err := bitmap.CreateFromJson(v.Slots)
 
 			if nil != err {
+				GetSugar().Errorf("CreateFromJson err:%v", err)
 				return err
 			}
 
 			peers, err := raft.SplitPeers(v.RaftCluster)
 
 			if nil != err {
+				GetSugar().Errorf("SplitPeers err:%v,origin:%v", err, v.RaftCluster)
 				return err
 			}
 
 			if err = this.addStore(meta, int(v.Id), peers, slots); nil != err {
+				GetSugar().Errorf("addStore err:%v", err)
 				return err
 			}
 		}

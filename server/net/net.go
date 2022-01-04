@@ -303,12 +303,18 @@ func init() {
 	namespace.Register(&sproto.GetMeta{}, uint32(sproto.ServerCmdType_GetMeta))
 	namespace.Register(&sproto.GetMetaResp{}, uint32(sproto.ServerCmdType_GetMetaResp))
 
+	namespace.Register(&sproto.GetSetStatus{}, uint32(sproto.ServerCmdType_GetSetStatus))
+	namespace.Register(&sproto.GetSetStatusResp{}, uint32(sproto.ServerCmdType_GetSetStatusResp))
+
 	//flykv <-> pd
 	namespace.Register(&sproto.KvnodeBoot{}, uint32(sproto.ServerCmdType_KvnodeBoot))
 	namespace.Register(&sproto.KvnodeBootResp{}, uint32(sproto.ServerCmdType_KvnodeBootResp))
 
 	namespace.Register(&sproto.NotifyNodeStoreOp{}, uint32(sproto.ServerCmdType_NotifyNodeStoreOp))
 	namespace.Register(&sproto.NodeStoreOpOk{}, uint32(sproto.ServerCmdType_NodeStoreOpOk))
+
+	namespace.Register(&sproto.IsTransInReady{}, uint32(sproto.ServerCmdType_IsTransInReady))
+	namespace.Register(&sproto.IsTransInReadyResp{}, uint32(sproto.ServerCmdType_IsTransInReadyResp))
 
 	namespace.Register(&sproto.NotifySlotTransOut{}, uint32(sproto.ServerCmdType_NotifySlotTransOut))
 	namespace.Register(&sproto.SlotTransOutOk{}, uint32(sproto.ServerCmdType_SlotTransOutOk))

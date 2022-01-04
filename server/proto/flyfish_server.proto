@@ -42,6 +42,9 @@ enum ServerCmdType {
   GetMetaResp                   = 122;
   UpdateMeta                    = 123;
   UpdateMetaResp                = 124;
+  GetSetStatus                  = 125;
+  GetSetStatusResp              = 126;
+
 
 
   //kvnode <-> pd
@@ -49,6 +52,8 @@ enum ServerCmdType {
   KvnodeBootResp                = 211;
   NotifyNodeStoreOp             = 212;
   NodeStoreOpOk                 = 213;
+  IsTransInReady                = 214;
+  IsTransInReadyResp            = 215;
   NotifySlotTransOut            = 218;
   SlotTransOutOk                = 219;
   NotifySlotTransIn             = 220;
@@ -233,6 +238,16 @@ message nodeStoreOpOk {
 
 
 
+message  isTransInReady {
+  optional int32  store       = 1;
+  optional int32  slot        = 2; 
+}
+
+message  isTransInReadyResp {
+  optional bool   ready       = 1;
+  optional int32  slot        = 2;
+}
+
 message notifySlotTransOut {
   optional int32  slot        = 1;  
   optional int32  store       = 2;  
@@ -367,6 +382,40 @@ message packetTest {
   optional string message = 1;
 }
 
+
+
+message getSetStatus {
+  
+}
+
+message storeStatus {
+  optional int32 storeID = 1;
+  optional int32 leader  = 2;
+  optional bytes slots   = 3;
+}
+
+
+message kvnodeStoreStatus {
+  optional int32 storeID = 1;
+  optional int32 type    = 2;
+  optional int32 value   = 3;
+}
+
+message kvnodeStatus {
+  optional int32 nodeID  = 1;
+  repeated kvnodeStoreStatus stores  = 2;
+}
+
+message setStatus {
+  optional int32 setID = 1;
+  optional bool  markClear = 2;
+  repeated storeStatus stores = 3;
+  repeated kvnodeStatus nodes = 4;
+}
+
+message getSetStatusResp {
+  repeated setStatus sets = 1;
+}
 
 
 

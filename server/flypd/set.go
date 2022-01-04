@@ -41,6 +41,7 @@ func (p *ProposalAddSet) doApply(pd *pd) error {
 			servicePort: int(v.ServicePort),
 			raftPort:    int(v.RaftPort),
 			set:         s,
+			store:       map[int]*FlyKvStoreState{},
 		}
 	}
 
@@ -53,9 +54,20 @@ func (p *ProposalAddSet) doApply(pd *pd) error {
 		s.stores[st.id] = st
 	}
 
+	for _, v := range s.nodes {
+		for _, vv := range s.stores {
+			v.store[vv.id] = &FlyKvStoreState{
+				Type:  VoterStore,
+				Value: FlyKvCommited,
+			}
+		}
+	}
+
 	pd.pState.deployment.version++
 	s.version = pd.pState.deployment.version
 	pd.pState.deployment.sets[s.id] = s
+
+	GetSugar().Infof("ProposalAddSet apply %v", s)
 
 	return nil
 
@@ -325,6 +337,7 @@ func (p *pd) onAddSet(from *net.UDPAddr, m *snet.Message) {
 		resp.Reason = err.Error()
 		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 	} else {
+		GetSugar().Infof("onAddSet %v", *msg)
 		p.issueProposal(&ProposalAddSet{
 			Msg: msg,
 			proposalBase: proposalBase{
