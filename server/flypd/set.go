@@ -67,7 +67,7 @@ func (p *ProposalAddSet) doApply(pd *pd) error {
 	s.version = pd.pState.deployment.version
 	pd.pState.deployment.sets[s.id] = s
 
-	GetSugar().Infof("ProposalAddSet apply %v", s)
+	GetSugar().Debugf("ProposalAddSet apply %v", s)
 
 	return nil
 
@@ -337,7 +337,7 @@ func (p *pd) onAddSet(from *net.UDPAddr, m *snet.Message) {
 		resp.Reason = err.Error()
 		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 	} else {
-		GetSugar().Infof("onAddSet %v", *msg)
+		GetSugar().Debugf("onAddSet %v", *msg)
 		p.issueProposal(&ProposalAddSet{
 			Msg: msg,
 			proposalBase: proposalBase{

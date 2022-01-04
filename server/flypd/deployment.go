@@ -304,7 +304,7 @@ func (d *deployment) loadFromPB(sets []*sproto.DeploymentSet) error {
 	}
 
 	for _, j := range storeBitmaps {
-		GetSugar().Infof("onInstallDeployment slots:%v", j.GetOpenBits())
+		GetSugar().Debugf("onInstallDeployment slots:%v", j.GetOpenBits())
 	}
 
 	for i, v := range sets {

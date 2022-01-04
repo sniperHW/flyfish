@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"net"
 	"os"
+	"sync"
 	"testing"
 	"time"
 )
@@ -114,6 +115,326 @@ func newPD(t *testing.T) StopAble {
 	return pd
 }
 
+func testkv(t *testing.T, c *client.Client) {
+	fields := map[string]interface{}{}
+	fields["age"] = 12
+	fields["name"] = "sniperHW"
+
+	fmt.Println("-----------------------------1----------------------------------")
+
+	{
+		var wait sync.WaitGroup
+		wait.Add(10)
+		for i := 0; i < 10; i++ {
+			c.Set("users1", "sniperHW", fields).AsyncExec(func(r *client.StatusResult) {
+				assert.Nil(t, r.ErrCode)
+				fmt.Println("version-----------", r.Version)
+				wait.Done()
+			})
+		}
+
+		c.GetAll("users1", "sniperHW").AsyncExec(func(r *client.SliceResult) {
+			assert.Nil(t, r.ErrCode)
+		})
+
+		wait.Wait()
+	}
+	fmt.Println("-----------------------------get----------------------------------")
+	{
+		r := c.GetAll("users1", "sniperHW").Exec()
+		assert.Nil(t, r.ErrCode)
+
+		r = c.GetAllWithVersion("users1", "sniperHW", r.Version).Exec()
+		assert.Equal(t, r.ErrCode, flykv.Err_record_unchange)
+
+		r1 := c.Del("users1", "sniperHW", 1).Exec()
+		assert.Equal(t, r1.ErrCode, flykv.Err_version_mismatch)
+
+		r1 = c.Del("users1", "sniperHW", r.Version).Exec()
+		assert.Nil(t, r1.ErrCode)
+
+		r = c.GetAll("users1", "sniperHW").Exec()
+		assert.Equal(t, r.ErrCode, flykv.Err_record_notexist)
+
+		time.Sleep(time.Second)
+
+		r2 := c.Kick("users1", "sniperHW").Exec()
+		assert.Nil(t, r2.ErrCode)
+
+		r3 := c.Del("users1", "sniperHW").Exec()
+		assert.Equal(t, r3.ErrCode, flykv.Err_record_notexist)
+
+		r3 = c.Del("users1", "sniperHW").Exec()
+		assert.Equal(t, r3.ErrCode, flykv.Err_record_notexist)
+
+	}
+
+	fmt.Println("-----------------------------set----------------------------------")
+
+	{
+		r1 := c.Set("users1", "sniperHW", fields).Exec()
+		assert.Nil(t, r1.ErrCode)
+
+		time.Sleep(time.Second)
+
+		r2 := c.Kick("users1", "sniperHW").Exec()
+		assert.Nil(t, r2.ErrCode)
+
+		r1 = c.Set("users1", "sniperHW", fields).Exec()
+		assert.Nil(t, r1.ErrCode)
+
+		time.Sleep(time.Second)
+
+		r2 = c.Kick("users1", "sniperHW").Exec()
+		assert.Nil(t, r2.ErrCode)
+
+		r1 = c.Set("users1", "sniperHW", fields, 1).Exec()
+		assert.Equal(t, r1.ErrCode, flykv.Err_version_mismatch)
+
+		r2 = c.Del("users1", "sniperHW").Exec()
+		assert.Nil(t, r2.ErrCode)
+
+		time.Sleep(time.Second)
+
+		r2 = c.Kick("users1", "sniperHW").Exec()
+		assert.Nil(t, r2.ErrCode)
+
+		r1 = c.Set("users1", "sniperHW", fields).Exec()
+		assert.Nil(t, r1.ErrCode)
+
+	}
+
+	fmt.Println("-----------------------------setNx----------------------------------")
+
+	{
+		r1 := c.SetNx("users1", "sniperHW", fields).Exec()
+		assert.Equal(t, r1.ErrCode, flykv.Err_record_exist)
+
+		r2 := c.Del("users1", "sniperHW").Exec()
+		assert.Nil(t, r2.ErrCode)
+
+		r1 = c.SetNx("users1", "sniperHW", fields).Exec()
+		assert.Nil(t, r1.ErrCode)
+
+		time.Sleep(time.Second)
+
+		r3 := c.Kick("users1", "sniperHW").Exec()
+		assert.Nil(t, r3.ErrCode)
+
+		r1 = c.SetNx("users1", "sniperHW", fields).Exec()
+		assert.Equal(t, r1.ErrCode, flykv.Err_record_exist)
+
+		r2 = c.Del("users1", "sniperHW").Exec()
+		assert.Nil(t, r2.ErrCode)
+
+		time.Sleep(time.Second)
+
+		r3 = c.Kick("users1", "sniperHW").Exec()
+		assert.Nil(t, r3.ErrCode)
+
+		r1 = c.SetNx("users1", "sniperHW", fields).Exec()
+		assert.Nil(t, r1.ErrCode)
+
+	}
+
+	fmt.Println("-----------------------------compareAndSet----------------------------------")
+	{
+		r1 := c.Get("users1", "sniperHW", "age").Exec()
+		assert.Nil(t, r1.ErrCode)
+
+		r2 := c.CompareAndSet("users1", "sniperHW", "age", r1.Fields["age"].GetValue(), 10).Exec()
+		assert.Nil(t, r2.ErrCode)
+
+		r2 = c.CompareAndSet("users1", "sniperHW", "age", 11, 10).Exec()
+		assert.Equal(t, r2.ErrCode, flykv.Err_cas_not_equal)
+
+		r3 := c.Del("users1", "sniperHW").Exec()
+		assert.Nil(t, r3.ErrCode)
+
+		r2 = c.CompareAndSet("users1", "sniperHW", "age", 11, 10).Exec()
+		assert.Equal(t, r2.ErrCode, flykv.Err_record_notexist)
+
+		time.Sleep(time.Second)
+
+		r3 = c.Kick("users1", "sniperHW").Exec()
+		assert.Nil(t, r3.ErrCode)
+
+		r2 = c.CompareAndSet("users1", "sniperHW", "age", 11, 10).Exec()
+		assert.Equal(t, r2.ErrCode, flykv.Err_record_notexist)
+
+		time.Sleep(time.Second)
+
+		r3 = c.Kick("users1", "sniperHW").Exec()
+		assert.Nil(t, r3.ErrCode)
+
+		r2 = c.CompareAndSet("users1", "sniperHW", "age", 10, 11).Exec()
+		assert.Equal(t, r2.ErrCode, flykv.Err_record_notexist)
+
+		r4 := c.Set("users1", "sniperHW", fields).Exec()
+		assert.Nil(t, r4.ErrCode)
+
+		time.Sleep(time.Second)
+
+		r3 = c.Kick("users1", "sniperHW").Exec()
+		assert.Nil(t, r3.ErrCode)
+
+		r2 = c.CompareAndSet("users1", "sniperHW", "age", 12, 11).Exec()
+		assert.Nil(t, r2.ErrCode)
+
+		time.Sleep(time.Second)
+
+		r3 = c.Kick("users1", "sniperHW").Exec()
+		assert.Nil(t, r3.ErrCode)
+
+		r2 = c.CompareAndSet("users1", "sniperHW", "age", 12, 11, 1).Exec()
+		assert.Equal(t, r2.ErrCode, flykv.Err_version_mismatch)
+
+	}
+
+	fmt.Println("-----------------------------compareAndSetNx----------------------------------")
+
+	{
+		r2 := c.CompareAndSetNx("users1", "sniperHW", "age", 1, 10).Exec()
+		assert.Equal(t, r2.ErrCode, flykv.Err_cas_not_equal)
+
+		r2 = c.CompareAndSetNx("users1", "sniperHW", "age", 11, 12).Exec()
+		assert.Nil(t, r2.ErrCode)
+
+		r3 := c.Del("users1", "sniperHW").Exec()
+		assert.Nil(t, r3.ErrCode)
+
+		r2 = c.CompareAndSetNx("users1", "sniperHW", "age", 11, 12).Exec()
+		assert.Nil(t, r2.ErrCode)
+
+		time.Sleep(time.Second)
+
+		r3 = c.Kick("users1", "sniperHW").Exec()
+		assert.Nil(t, r3.ErrCode)
+
+		r2 = c.CompareAndSetNx("users1", "sniperHW", "age", 11, 12, 1).Exec()
+		assert.Equal(t, r2.ErrCode, flykv.Err_version_mismatch)
+
+		r3 = c.Del("users1", "sniperHW").Exec()
+		assert.Nil(t, r3.ErrCode)
+
+		time.Sleep(time.Second)
+
+		r3 = c.Kick("users1", "sniperHW").Exec()
+		assert.Nil(t, r3.ErrCode)
+
+		r2 = c.CompareAndSetNx("users1", "sniperHW", "age", 11, 12).Exec()
+		assert.Nil(t, r2.ErrCode)
+
+		time.Sleep(time.Second)
+
+		r3 = c.Kick("users1", "sniperHW").Exec()
+		assert.Nil(t, r3.ErrCode)
+
+		r2 = c.CompareAndSetNx("users1", "sniperHW", "age", 12, 11).Exec()
+		assert.Nil(t, r2.ErrCode)
+
+	}
+
+	fmt.Println("-----------------------------incr----------------------------------")
+
+	{
+		r1 := c.IncrBy("users1", "sniperHW", "age", 2).Exec()
+		assert.Nil(t, r1.ErrCode)
+		assert.Equal(t, r1.Fields["age"].GetInt(), int64(13))
+
+		r2 := c.Del("users1", "sniperHW").Exec()
+		assert.Nil(t, r2.ErrCode)
+
+		r1 = c.IncrBy("users1", "sniperHW", "age", 2).Exec()
+		assert.Nil(t, r1.ErrCode)
+		assert.Equal(t, r1.Fields["age"].GetInt(), int64(2))
+
+		time.Sleep(time.Second)
+
+		r3 := c.Kick("users1", "sniperHW").Exec()
+		assert.Nil(t, r3.ErrCode)
+
+		r1 = c.IncrBy("users1", "sniperHW", "age", 2, 1).Exec()
+		assert.Equal(t, r1.ErrCode, flykv.Err_version_mismatch)
+
+		r2 = c.Del("users1", "sniperHW").Exec()
+		assert.Nil(t, r2.ErrCode)
+
+		time.Sleep(time.Second)
+		r3 = c.Kick("users1", "sniperHW").Exec()
+		assert.Nil(t, r3.ErrCode)
+
+		r1 = c.IncrBy("users1", "sniperHW", "age", 2).Exec()
+		assert.Nil(t, r1.ErrCode)
+		assert.Equal(t, r1.Fields["age"].GetInt(), int64(2))
+
+		time.Sleep(time.Second)
+		r3 = c.Kick("users1", "sniperHW").Exec()
+		assert.Nil(t, r3.ErrCode)
+
+		r1 = c.IncrBy("users1", "sniperHW", "age", 2).Exec()
+		assert.Nil(t, r1.ErrCode)
+		assert.Equal(t, r1.Fields["age"].GetInt(), int64(4))
+
+	}
+
+	fmt.Println("-----------------------------decr----------------------------------")
+
+	{
+
+		r := c.Set("users1", "sniperHW", fields).Exec()
+		assert.Nil(t, r.ErrCode)
+
+		r1 := c.DecrBy("users1", "sniperHW", "age", 2).Exec()
+		assert.Nil(t, r1.ErrCode)
+		assert.Equal(t, r1.Fields["age"].GetInt(), int64(10))
+
+		r2 := c.Del("users1", "sniperHW").Exec()
+		assert.Nil(t, r2.ErrCode)
+
+		r1 = c.DecrBy("users1", "sniperHW", "age", 2).Exec()
+		assert.Nil(t, r1.ErrCode)
+		assert.Equal(t, r1.Fields["age"].GetInt(), int64(-2))
+
+		time.Sleep(time.Second)
+
+		r3 := c.Kick("users1", "sniperHW").Exec()
+		assert.Nil(t, r3.ErrCode)
+
+		r1 = c.DecrBy("users1", "sniperHW", "age", 2, 1).Exec()
+		assert.Equal(t, r1.ErrCode, flykv.Err_version_mismatch)
+
+		r2 = c.Del("users1", "sniperHW").Exec()
+		assert.Nil(t, r2.ErrCode)
+
+		time.Sleep(time.Second)
+		r3 = c.Kick("users1", "sniperHW").Exec()
+		assert.Nil(t, r3.ErrCode)
+
+		r1 = c.DecrBy("users1", "sniperHW", "age", 2).Exec()
+		assert.Nil(t, r1.ErrCode)
+		assert.Equal(t, r1.Fields["age"].GetInt(), int64(-2))
+
+		time.Sleep(time.Second)
+		r3 = c.Kick("users1", "sniperHW").Exec()
+		assert.Nil(t, r3.ErrCode)
+
+		r1 = c.DecrBy("users1", "sniperHW", "age", 2).Exec()
+		assert.Nil(t, r1.ErrCode)
+		assert.Equal(t, r1.Fields["age"].GetInt(), int64(-4))
+
+		time.Sleep(time.Second)
+		r3 = c.Kick("users1", "sniperHW").Exec()
+		assert.Nil(t, r3.ErrCode)
+
+		fmt.Println("---------------------------------")
+
+		time.Sleep(time.Second)
+		r3 = c.Kick("users1", "sniperHW").Exec()
+		assert.Nil(t, r3.ErrCode)
+	}
+}
+
 func TestFlygate(t *testing.T) {
 	sslot.SlotCount = 128
 	flypd.MinReplicaPerSet = 1
@@ -195,6 +516,8 @@ func TestFlygate(t *testing.T) {
 		fmt.Printf("use %v\n", time.Now().Sub(beg))
 
 	}
+
+	testkv(t, c)
 
 	fmt.Println("Stop gate")
 

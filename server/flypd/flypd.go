@@ -294,7 +294,7 @@ func (p *pd) slotBalance() {
 		storeAverageSlotCount = (slot.SlotCount / ((lSets - lMCSets) * StorePerSet)) + 1
 	}
 
-	GetSugar().Infof("setAverageSlotCount:%d storeAverageSlotCount:%d", setAverageSlotCount, storeAverageSlotCount)
+	GetSugar().Debugf("setAverageSlotCount:%d storeAverageSlotCount:%d", setAverageSlotCount, storeAverageSlotCount)
 
 	if nil == outStore {
 		for _, v := range p.pState.deployment.sets {
@@ -319,7 +319,6 @@ func (p *pd) slotBalance() {
 				for _, vv := range v.stores {
 					if len(vv.slots.GetOpenBits())-vv.slotInCount < storeAverageSlotCount {
 						inStore = vv
-						GetSugar().Infof("setID:%d,inSet:%d,inStore:%d", v.id, v.getTotalSlotCount()-v.slotInCount, len(vv.slots.GetOpenBits())-vv.slotInCount)
 						break
 					}
 				}
@@ -376,7 +375,7 @@ func (p *pd) startUdpService() error {
 					if p.isLeader() && p.ready {
 						p.onMsg(from, msg.(*snet.Message))
 					} else {
-						GetSugar().Infof("drop msg")
+						GetSugar().Debugf("drop msg")
 					}
 				})
 			}

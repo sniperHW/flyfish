@@ -168,7 +168,7 @@ func (c *MemberShip) AddMember(id types.ID, isLearner bool, m *Member) *Member {
 
 	c.members[id] = m
 
-	c.lg.Info(
+	c.lg.Debug(
 		"added raft member",
 		zap.String("cluster-id", c.cid.String()),
 		zap.String("local-member-id", c.localID.String()),
@@ -192,7 +192,7 @@ func (c *MemberShip) RemoveMember(id types.ID) {
 
 	delete(c.members, id)
 
-	c.lg.Info(
+	c.lg.Debug(
 		"removed raft member",
 		zap.String("cluster-id", c.cid.String()),
 		zap.String("local-member-id", c.localID.String()),
@@ -213,7 +213,7 @@ func (c *MemberShip) PromoteMember(id types.ID) {
 
 	m.IsLearner = false
 
-	c.lg.Info(
+	c.lg.Debug(
 		"promote member",
 		zap.String("cluster-id", c.cid.String()),
 		zap.String("local-member-id", c.localID.String()),

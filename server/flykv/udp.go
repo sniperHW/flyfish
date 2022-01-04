@@ -13,7 +13,7 @@ type udpMsg struct {
 }
 
 func (this *kvnode) processUdpMsg(from *net.UDPAddr, m *snet.Message) {
-	GetSugar().Infof("processUdpMsg %v", m.Msg)
+	GetSugar().Debugf("processUdpMsg %v", m.Msg)
 	switch m.Msg.(type) {
 	case *sproto.QueryLeader:
 		this.muS.RLock()
@@ -25,9 +25,9 @@ func (this *kvnode) processUdpMsg(from *net.UDPAddr, m *snet.Message) {
 		if ok {
 			leader = int32(store.getLeaderNodeID())
 		} else {
-			GetSugar().Infof("store:%d not in %d", m.Msg.(*sproto.QueryLeader).GetStore(), this.id)
+			GetSugar().Debugf("store:%d not in %d", m.Msg.(*sproto.QueryLeader).GetStore(), this.id)
 		}
-		GetSugar().Infof("store:%d on QueryLeader leader:%d", m.Msg.(*sproto.QueryLeader).GetStore(), leader)
+		GetSugar().Debugf("store:%d on QueryLeader leader:%d", m.Msg.(*sproto.QueryLeader).GetStore(), leader)
 		this.udpConn.SendTo(from, snet.MakeMessage(m.Context, &sproto.QueryLeaderResp{Leader: leader}))
 	case *sproto.NotifySlotTransIn, *sproto.NotifySlotTransOut, *sproto.NotifyUpdateMeta, *sproto.NotifyNodeStoreOp, *sproto.IsTransInReady:
 		var store int

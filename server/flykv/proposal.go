@@ -459,7 +459,6 @@ func (this *proposalNop) Serilize(b []byte) []byte {
 }
 
 func (this *proposalNop) apply() {
-	GetSugar().Infof("proposalNop apply")
 	this.store.ready = true
 }
 
