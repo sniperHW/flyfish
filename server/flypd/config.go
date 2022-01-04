@@ -25,9 +25,11 @@ func LoadConfig(path string) (*Config, error) {
 }
 
 type Config struct {
-	RaftLogDir    string //raft日志存放目录
-	RaftLogPrefix string
-	Log           struct {
+	RaftLogDir        string //raft日志存放目录
+	RaftLogPrefix     string
+	InitDepoymentPath string
+	InitMetaPath      string
+	Log               struct {
 		MaxLogfileSize int
 		LogDir         string
 		LogPrefix      string

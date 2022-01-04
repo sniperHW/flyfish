@@ -146,12 +146,13 @@ func (p *pd) onAddNode(from *net.UDPAddr, m *snet.Message) {
 		return nil
 	}()
 
+	GetSugar().Infof("onAddNode %v", err)
+
 	if nil != err {
 		resp.Ok = false
 		resp.Reason = err.Error()
 		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 	} else {
-
 		p.issueProposal(&ProposalAddNode{
 			Msg: msg,
 			proposalBase: proposalBase{

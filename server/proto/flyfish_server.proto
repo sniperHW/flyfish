@@ -313,6 +313,7 @@ message changeFlyGateResp {
 
 message setMeta {
   optional bytes meta     = 1;
+  optional int64 version  = 2;
 }
 
 message setMetaResp {
@@ -333,6 +334,7 @@ message metaTable {
 
 message updateMeta {
   repeated metaTable updates = 1;
+  optional int64     version = 2;
 }
 
 message updateMetaResp {

@@ -88,6 +88,7 @@ func (p *pd) onGetMeta(from *net.UDPAddr, m *snet.Message) {
 type ProposalSetMeta struct {
 	proposalBase
 	MetaBytes []byte
+	Version   int64
 	metaDef   *db.DbDef
 }
 
@@ -96,12 +97,21 @@ func (p *ProposalSetMeta) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalSetMeta) apply(pd *pd) {
-	pd.pState.Meta.Version++
-	pd.pState.Meta.MetaDef = p.metaDef
-	pd.pState.Meta.MetaBytes = p.MetaBytes
+
+	var err error
+	if nil != pd.pState.MetaTransaction {
+		err = errors.New("wait for previous meta transaction finish")
+	} else if pd.pState.Meta.Version != p.Version {
+		err = errors.New("version mismatch")
+	} else {
+		pd.pState.Meta.Version++
+		pd.pState.Meta.MetaDef = p.metaDef
+		pd.pState.Meta.MetaBytes = p.MetaBytes
+		//GetSugar().Infof("%v", string(p.MetaBytes))
+	}
 
 	if nil != p.reply {
-		p.reply(nil)
+		p.reply(err)
 	}
 }
 
@@ -117,6 +127,13 @@ func (p *ProposalSetMeta) replay(pd *pd) {
 func (p *pd) onSetMeta(from *net.UDPAddr, m *snet.Message) {
 	msg := m.Msg.(*sproto.SetMeta)
 	resp := &sproto.SetMetaResp{}
+
+	if p.pState.Meta.Version != msg.Version {
+		resp.Ok = false
+		resp.Reason = "version mismatch"
+		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
+		return
+	}
 
 	if p.pState.Meta.isEqual(msg.Meta) {
 		resp.Ok = true
@@ -134,6 +151,7 @@ func (p *pd) onSetMeta(from *net.UDPAddr, m *snet.Message) {
 
 	p.issueProposal(&ProposalSetMeta{
 		MetaBytes: msg.Meta,
+		Version:   msg.Version,
 		metaDef:   def,
 		proposalBase: proposalBase{
 			reply: p.makeReplyFunc(from, m, resp),
@@ -185,6 +203,7 @@ func (m *MetaTransaction) notifyStore(p *pd) {
 type ProposalUpdateMeta struct {
 	proposalBase
 	Tran *MetaTransaction
+	Msg  *sproto.UpdateMeta
 }
 
 func (p *ProposalUpdateMeta) Serilize(b []byte) []byte {
@@ -195,6 +214,8 @@ func (p *ProposalUpdateMeta) apply(pd *pd) {
 	var err error
 	if nil != pd.pState.MetaTransaction {
 		err = errors.New("wait for previous meta transaction finish")
+	} else if pd.pState.Meta.Version != p.Msg.Version {
+		err = errors.New("version mismatch")
 	} else {
 		pd.pState.Meta.Version = p.Tran.Version
 		pd.pState.Meta.MetaDef = p.Tran.MetaDef
@@ -219,62 +240,65 @@ func (p *pd) onUpdateMeta(from *net.UDPAddr, m *snet.Message) {
 	msg := m.Msg.(*sproto.UpdateMeta)
 	resp := &sproto.UpdateMetaResp{}
 
-	if nil != p.pState.MetaTransaction {
-		resp.Ok = false
-		resp.Reason = "wait for previous meta transaction finish"
-		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
-		return
-	}
+	t, err := func() (*MetaTransaction, error) {
+		if nil != p.pState.MetaTransaction {
+			return nil, errors.New("wait for previous meta transaction finish")
+		}
 
-	t := &MetaTransaction{
-		MetaDef: p.pState.Meta.MetaDef.Clone(),
-		Version: p.pState.Meta.Version + 1,
-	}
+		if p.pState.Meta.Version != msg.Version {
+			return nil, errors.New("version mismatch")
+		}
 
-	for _, v := range msg.Updates {
-		tb := t.MetaDef.GetTableDef(v.Name)
-		if nil == tb {
-			tb = &db.TableDef{
-				Name: v.Name,
+		t := &MetaTransaction{
+			MetaDef: p.pState.Meta.MetaDef.Clone(),
+			Version: p.pState.Meta.Version + 1,
+		}
+
+		for _, v := range msg.Updates {
+			tb := t.MetaDef.GetTableDef(v.Name)
+			if nil == tb {
+				tb = &db.TableDef{
+					Name: v.Name,
+				}
+				t.MetaDef.TableDefs = append(t.MetaDef.TableDefs, tb)
 			}
-			t.MetaDef.TableDefs = append(t.MetaDef.TableDefs, tb)
-		}
 
-		for _, vv := range v.Fields {
-			tb.Fields = append(tb.Fields, &db.FieldDef{
-				Name:        vv.Name,
-				Type:        vv.Type,
-				DefautValue: vv.Default,
-			})
-		}
-	}
-
-	if err := checkDbDef(t.MetaDef); nil != err {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
-			&sproto.UpdateMetaResp{
-				Ok:     false,
-				Reason: err.Error(),
-			}))
-		return
-	}
-
-	if nil != p.pState.deployment {
-		for _, s := range p.pState.deployment.sets {
-			for kk, _ := range s.stores {
-				t.Store = append(t.Store, MetaTransactionStore{
-					StoreID: kk,
-					Ok:      false,
+			for _, vv := range v.Fields {
+				tb.Fields = append(tb.Fields, &db.FieldDef{
+					Name:        vv.Name,
+					Type:        vv.Type,
+					DefautValue: vv.Default,
 				})
 			}
 		}
-	}
 
-	p.issueProposal(&ProposalUpdateMeta{
-		proposalBase: proposalBase{
-			reply: p.makeReplyFunc(from, m, resp),
-		},
-		Tran: t,
-	})
+		return t, checkDbDef(t.MetaDef)
+	}()
+
+	if nil != err {
+		resp.Ok = false
+		resp.Reason = err.Error()
+		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
+	} else {
+		if nil != p.pState.deployment {
+			for _, s := range p.pState.deployment.sets {
+				for kk, _ := range s.stores {
+					t.Store = append(t.Store, MetaTransactionStore{
+						StoreID: kk,
+						Ok:      false,
+					})
+				}
+			}
+		}
+
+		p.issueProposal(&ProposalUpdateMeta{
+			proposalBase: proposalBase{
+				reply: p.makeReplyFunc(from, m, resp),
+			},
+			Tran: t,
+			Msg:  msg,
+		})
+	}
 }
 
 type ProposalStoreUpdateMetaOk struct {

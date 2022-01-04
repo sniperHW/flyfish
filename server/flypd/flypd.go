@@ -9,8 +9,10 @@ import (
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	snet "github.com/sniperHW/flyfish/server/net"
+	sproto "github.com/sniperHW/flyfish/server/proto"
 	"github.com/sniperHW/flyfish/server/slot"
 	"net"
+	"os"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -371,8 +373,92 @@ func (p *pd) startUdpService() error {
 	return nil
 }
 
+func (p *pd) loadInitDeployment() {
+	if "" != p.config.InitDepoymentPath {
+		f, err := os.Open(p.config.InitDepoymentPath)
+		if nil == err {
+			var b []byte
+			for {
+				data := make([]byte, 4096)
+				count, err := f.Read(data)
+				if count > 0 {
+					b = append(b, data[:count]...)
+				}
+
+				if nil != err {
+					break
+				}
+			}
+
+			var deploymentJson DeploymentJson
+			var err error
+			if err = json.Unmarshal(b, &deploymentJson); err != nil {
+				GetSugar().Errorf("loadInitDeployment err:%v", err)
+				return
+			}
+
+			var sets []*sproto.DeploymentSet
+
+			for _, v := range deploymentJson.Sets {
+				s := &sproto.DeploymentSet{
+					SetID: int32(v.SetID),
+				}
+				for _, vv := range v.KvNodes {
+					s.Nodes = append(s.Nodes, &sproto.DeploymentKvnode{
+						NodeID:      int32(vv.NodeID),
+						Host:        vv.Host,
+						ServicePort: int32(vv.ServicePort),
+						RaftPort:    int32(vv.RaftPort),
+					})
+				}
+				sets = append(sets, s)
+			}
+			var deployment deployment
+			if nil == deployment.loadFromPB(sets) {
+				p.issueProposal(&ProposalInstallDeployment{
+					D: deployment.toDeploymentJson(),
+				})
+			}
+		}
+	}
+}
+
+func (p *pd) loadInitMeta() {
+	if "" != p.config.InitMetaPath {
+		f, err := os.Open(p.config.InitMetaPath)
+		if nil == err {
+			var b []byte
+			for {
+				data := make([]byte, 4096)
+				count, err := f.Read(data)
+				if count > 0 {
+					b = append(b, data[:count]...)
+				}
+
+				if nil != err {
+					break
+				}
+			}
+
+			def, err := p.checkMeta(b)
+			if nil != err {
+				return
+			}
+
+			p.issueProposal(&ProposalSetMeta{
+				MetaBytes: b,
+				Version:   0,
+				metaDef:   def,
+			})
+		}
+	}
+}
+
 func (p *pd) onBecomeLeader() {
-	if nil != p.pState.deployment {
+
+	if nil == p.pState.deployment {
+		p.loadInitDeployment()
+	} else {
 		//重置slotBalance相关的临时数据
 		for _, v := range p.pState.deployment.sets {
 			p.storeTask = map[uint64]*storeTask{}
@@ -398,6 +484,10 @@ func (p *pd) onBecomeLeader() {
 		for _, v := range p.pState.SlotTransfer {
 			v.notify(p)
 		}
+	}
+
+	if 0 == p.pState.Meta.Version {
+		p.loadInitMeta()
 	}
 
 	if nil != p.pState.MetaTransaction {

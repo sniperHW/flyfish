@@ -2,6 +2,9 @@ RaftLogDir = "raftLog"
 
 RaftLogPrefix = "pd"
 
+InitDepoymentPath       = "../test/deployment.json"
+InitMetaPath            = "../test/meta.json"	
+
 [Log]
 MaxLogfileSize  = 104857600 # 100mb
 LogDir          = "log"

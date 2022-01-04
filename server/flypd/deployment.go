@@ -410,6 +410,8 @@ func (p *ProposalInstallDeployment) apply(pd *pd) {
 	if nil == err {
 		pd.pState.deployment = &deployment{}
 		pd.pState.deployment.loadFromDeploymentJson(&p.D)
+		//j, _ := pd.pState.deployment.toJson()
+		//GetSugar().Infof("%v", string(j))
 	}
 
 	if nil != p.reply {

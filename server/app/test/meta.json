@@ -1,0 +1,9 @@
+{
+	"TableDefs":[
+	{"Name":"users1",
+	 "Fields":[
+	 	{"Name":"name","Type":"string","DefautValue":""},
+	 	{"Name":"age","Type":"int","DefautValue":"1"},
+	 	{"Name":"phone","Type":"string","DefautValue":""}]
+	}]
+}

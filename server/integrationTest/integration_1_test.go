@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/sniperHW/flyfish/client"
-	"github.com/sniperHW/flyfish/db"
+	//"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/logger"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
 	flygate "github.com/sniperHW/flyfish/server/flygate"
@@ -30,137 +30,6 @@ type dbconf struct {
 	Usr    string
 	Pwd    string
 	Db     string
-}
-
-func setMeta(t *testing.T) bool {
-	m := &db.DbDef{
-		TableDefs: []*db.TableDef{
-			&db.TableDef{
-				Name: "users1",
-				Fields: []*db.FieldDef{
-					&db.FieldDef{
-						Name:        "name",
-						Type:        "string",
-						DefautValue: "",
-					},
-					&db.FieldDef{
-						Name:        "age",
-						Type:        "int",
-						DefautValue: "",
-					},
-					&db.FieldDef{
-						Name:        "phone",
-						Type:        "string",
-						DefautValue: "",
-					},
-				},
-			},
-		},
-	}
-
-	b, _ := db.DbDefToJsonString(m)
-
-	conn, _ := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
-
-	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
-
-	conn.SendTo(addr, snet.MakeMessage(0, &sproto.SetMeta{
-		Meta: b,
-	}))
-
-	ch := make(chan interface{})
-
-	go func() {
-		recvbuff := make([]byte, 256)
-		_, r, err := conn.ReadFrom(recvbuff)
-		if nil == err {
-			select {
-			case ch <- r.(*snet.Message).Msg:
-			default:
-			}
-		}
-	}()
-
-	ticker := time.NewTicker(3 * time.Second)
-
-	var r interface{}
-
-	select {
-	case r = <-ch:
-	case <-ticker.C:
-	}
-	ticker.Stop()
-
-	conn.Close()
-
-	if r == nil {
-		return false
-	} else {
-		return r.(*sproto.SetMetaResp).Ok
-	}
-
-}
-
-func installDeployment(t *testing.T) bool {
-
-	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
-	assert.Nil(t, err)
-
-	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
-
-	install := &sproto.InstallDeployment{}
-	set1 := &sproto.DeploymentSet{SetID: 1}
-	set1.Nodes = append(set1.Nodes, &sproto.DeploymentKvnode{
-		NodeID:      1,
-		Host:        "localhost",
-		ServicePort: 9110,
-		RaftPort:    9111,
-	})
-	install.Sets = append(install.Sets, set1)
-
-	set2 := &sproto.DeploymentSet{SetID: 2}
-	set2.Nodes = append(set2.Nodes, &sproto.DeploymentKvnode{
-		NodeID:      2,
-		Host:        "localhost",
-		ServicePort: 9210,
-		RaftPort:    9211,
-	})
-	install.Sets = append(install.Sets, set2)
-
-	conn.SendTo(addr, snet.MakeMessage(0, install))
-
-	ch := make(chan interface{})
-
-	go func() {
-		recvbuff := make([]byte, 256)
-		_, r, err := conn.ReadFrom(recvbuff)
-		if nil == err {
-			select {
-			case ch <- r.(*snet.Message).Msg:
-			default:
-			}
-		}
-	}()
-
-	ticker := time.NewTicker(3 * time.Second)
-
-	var r interface{}
-
-	select {
-	case r = <-ch:
-	case <-ticker.C:
-	}
-	ticker.Stop()
-
-	conn.Close()
-
-	fmt.Println("installDeployment", r)
-
-	if r == nil {
-		return false
-	} else {
-		return r.(*sproto.InstallDeploymentResp).Ok
-	}
 }
 
 var flyKvConfigStr string = `
@@ -215,6 +84,8 @@ var pdConfigStr string = `
 	MainQueueMaxSize = 1000
 	RaftLogDir              = "testRaftLog"
 	RaftLogPrefix           = "flypd"
+	InitDepoymentPath       = "./deployment.json"
+	InitMetaPath            = "./meta.json"	
 `
 
 var flyGateConfigStr string = `  
@@ -239,25 +110,7 @@ type StopAble interface {
 
 func newPD(t *testing.T) StopAble {
 	conf, _ := flypd.LoadConfigStr(pdConfigStr)
-
 	pd, _ := flypd.NewPd(1, false, conf, "localhost:8110", "1@http://localhost:8110@voter")
-
-	for {
-		if !setMeta(t) {
-			time.Sleep(time.Second)
-		} else {
-			break
-		}
-	}
-
-	for {
-		if !installDeployment(t) {
-			time.Sleep(time.Second)
-		} else {
-			break
-		}
-	}
-
 	return pd
 }
 
@@ -388,19 +241,31 @@ func TestAddRemoveNode(t *testing.T) {
 
 	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
 
-	conn.SendTo(addr, snet.MakeMessage(0, &sproto.AddNode{
-		SetID:       1,
-		NodeID:      3,
-		Host:        "localhost",
-		ServicePort: 9320,
-		RaftPort:    9321,
-	}))
+	for {
+		resp := snet.UdpCall([]*net.UDPAddr{addr},
+			snet.MakeMessage(0, &sproto.AddNode{
+				SetID:       1,
+				NodeID:      3,
+				Host:        "localhost",
+				ServicePort: 9320,
+				RaftPort:    9321,
+			}),
+			time.Second,
+			func(respCh chan interface{}, r interface{}) {
+				if m, ok := r.(*snet.Message); ok {
+					if resp, ok := m.Msg.(*sproto.AddNodeResp); ok {
+						select {
+						case respCh <- resp:
+						default:
+						}
+					}
+				}
+			})
 
-	recvbuff := make([]byte, 256)
-
-	_, r, err := conn.ReadFrom(recvbuff)
-
-	assert.Equal(t, true, r.(*snet.Message).Msg.(*sproto.AddNodeResp).Ok)
+		if resp != nil && resp.(*sproto.AddNodeResp).Reason == "duplicate node id" {
+			break
+		}
+	}
 
 	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
 
@@ -408,26 +273,32 @@ func TestAddRemoveNode(t *testing.T) {
 		panic(err)
 	}
 
+	logger.GetSugar().Infof("add node")
+
 	//add learnstore
 
 	for {
+		resp := snet.UdpCall([]*net.UDPAddr{addr},
+			snet.MakeMessage(0, &sproto.AddLearnerStoreToNode{
+				SetID:  1,
+				NodeID: 3,
+				Store:  1,
+			}),
+			time.Second,
+			func(respCh chan interface{}, r interface{}) {
+				if m, ok := r.(*snet.Message); ok {
+					if resp, ok := m.Msg.(*sproto.AddLearnerStoreToNodeResp); ok {
+						select {
+						case respCh <- resp:
+						default:
+						}
+					}
+				}
+			})
 
-		conn.SendTo(addr, snet.MakeMessage(0, &sproto.AddLearnerStoreToNode{
-			SetID:  1,
-			NodeID: 3,
-			Store:  1,
-		}))
-
-		_, r, err = conn.ReadFrom(recvbuff)
-
-		ret := r.(*snet.Message).Msg.(*sproto.AddLearnerStoreToNodeResp)
-
-		if ret.Reason == "learner store already exists" {
+		if resp != nil && resp.(*sproto.AddLearnerStoreToNodeResp).Reason == "learner store already exists" {
 			break
 		}
-
-		time.Sleep(time.Second)
-
 	}
 
 	logger.GetSugar().Infof("--------------------add learner 3:1 OK------------------------")
@@ -440,63 +311,81 @@ func TestAddRemoveNode(t *testing.T) {
 
 	//promote to voter
 	for {
-		conn.SendTo(addr, snet.MakeMessage(0, &sproto.PromoteLearnerStore{
-			SetID:  1,
-			NodeID: 3,
-			Store:  1,
-		}))
+		resp := snet.UdpCall([]*net.UDPAddr{addr},
+			snet.MakeMessage(0, &sproto.PromoteLearnerStore{
+				SetID:  1,
+				NodeID: 3,
+				Store:  1,
+			}),
+			time.Second,
+			func(respCh chan interface{}, r interface{}) {
+				if m, ok := r.(*snet.Message); ok {
+					if resp, ok := m.Msg.(*sproto.PromoteLearnerStoreResp); ok {
+						select {
+						case respCh <- resp:
+						default:
+						}
+					}
+				}
+			})
 
-		_, r, err = conn.ReadFrom(recvbuff)
-
-		ret := r.(*snet.Message).Msg.(*sproto.PromoteLearnerStoreResp)
-
-		if ret.Reason == "store is already a voter" {
+		if resp != nil && resp.(*sproto.PromoteLearnerStoreResp).Reason == "store is already a voter" {
 			break
 		}
 
-		time.Sleep(time.Second)
 	}
 
 	//remove store
 	fmt.Println("remove store")
 
 	for {
-		conn.SendTo(addr, snet.MakeMessage(0, &sproto.RemoveNodeStore{
-			SetID:  1,
-			NodeID: 3,
-			Store:  1,
-		}))
+		resp := snet.UdpCall([]*net.UDPAddr{addr},
+			snet.MakeMessage(0, &sproto.RemoveNodeStore{
+				SetID:  1,
+				NodeID: 3,
+				Store:  1,
+			}),
+			time.Second,
+			func(respCh chan interface{}, r interface{}) {
+				if m, ok := r.(*snet.Message); ok {
+					if resp, ok := m.Msg.(*sproto.RemoveNodeStoreResp); ok {
+						select {
+						case respCh <- resp:
+						default:
+						}
+					}
+				}
+			})
 
-		_, r, err = conn.ReadFrom(recvbuff)
-
-		ret := r.(*snet.Message).Msg.(*sproto.RemoveNodeStoreResp)
-
-		fmt.Println(ret.Reason)
-
-		if ret.Reason == "store not exists" {
+		if resp != nil && resp.(*sproto.RemoveNodeStoreResp).Reason == "store not exists" {
 			break
 		}
-
-		time.Sleep(time.Second)
 	}
 
 	//remove node
 	fmt.Println("remove node")
 
 	for {
-		conn.SendTo(addr, snet.MakeMessage(0, &sproto.RemNode{
-			SetID:  1,
-			NodeID: 3,
-		}))
+		resp := snet.UdpCall([]*net.UDPAddr{addr},
+			snet.MakeMessage(0, &sproto.RemNode{
+				SetID:  1,
+				NodeID: 3,
+			}),
+			time.Second,
+			func(respCh chan interface{}, r interface{}) {
+				if m, ok := r.(*snet.Message); ok {
+					if resp, ok := m.Msg.(*sproto.RemNodeResp); ok {
+						select {
+						case respCh <- resp:
+						default:
+						}
+					}
+				}
+			})
 
-		_, r, err = conn.ReadFrom(recvbuff)
-
-		ret := r.(*snet.Message).Msg.(*sproto.RemNodeResp)
-
-		if ret.Reason == "node not found" {
+		if resp != nil && resp.(*sproto.RemNodeResp).Reason == "node not found" {
 			break
 		}
-		time.Sleep(time.Second)
 	}
 
 	node3.Stop()

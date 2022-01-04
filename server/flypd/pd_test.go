@@ -380,7 +380,7 @@ func testUpdateMeta1(t *testing.T, p *pd) {
 		Default: "hello",
 	})
 
-	u := &sproto.UpdateMeta{Updates: []*sproto.MetaTable{&t1, &t2}}
+	u := &sproto.UpdateMeta{Updates: []*sproto.MetaTable{&t1, &t2}, Version: 1}
 
 	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
 	assert.Nil(t, err)
@@ -416,7 +416,7 @@ func testUpdateMeta2(t *testing.T, p *pd) {
 		Default: "hello",
 	})
 
-	u := &sproto.UpdateMeta{Updates: []*sproto.MetaTable{&t1}}
+	u := &sproto.UpdateMeta{Updates: []*sproto.MetaTable{&t1}, Version: 2}
 
 	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
 	assert.Nil(t, err)
