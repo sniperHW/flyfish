@@ -9,6 +9,7 @@ import (
 	"net"
 	"reflect"
 	"strings"
+	"time"
 )
 
 func (p *pd) registerMsgHandler(msg proto.Message, handler func(*net.UDPAddr, *snet.Message)) {
@@ -38,13 +39,15 @@ func (p *pd) onKvnodeBoot(from *net.UDPAddr, m *snet.Message) {
 	resp := &sproto.KvnodeBootResp{
 		Ok:          true,
 		ServiceHost: node.host,
+		SetID:       int32(node.set.id),
 		ServicePort: int32(node.servicePort),
 		RaftPort:    int32(node.raftPort),
 		MetaVersion: p.pState.Meta.Version,
 		Meta:        p.pState.Meta.MetaBytes,
 	}
 
-	for _, store := range node.set.stores {
+	for storeId, _ := range node.store {
+		store := node.set.stores[storeId]
 		raftCluster := []string{}
 		for _, n := range node.set.nodes {
 			if n.isVoter(store.id) {
@@ -60,8 +63,8 @@ func (p *pd) onKvnodeBoot(from *net.UDPAddr, m *snet.Message) {
 		}
 		resp.Stores = append(resp.Stores, s)
 	}
-	p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 
+	p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 }
 
 func (p *pd) onQueryRouteInfo(from *net.UDPAddr, m *snet.Message) {
@@ -143,9 +146,10 @@ func (p *pd) onGetSetStatus(from *net.UDPAddr, m *snet.Message) {
 
 				for k, vvv := range vv.store {
 					n.Stores = append(n.Stores, &sproto.KvnodeStoreStatus{
-						StoreID: int32(k),
-						Type:    int32(vvv.Type),
-						Value:   int32(vvv.Value),
+						StoreID:  int32(k),
+						Type:     int32(vvv.Type),
+						Value:    int32(vvv.Value),
+						IsLeader: vvv.isLeader(),
 					})
 				}
 
@@ -164,6 +168,29 @@ func (p *pd) onGetSetStatus(from *net.UDPAddr, m *snet.Message) {
 
 		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 	}
+}
+
+func (p *pd) onStoreReportStatus(from *net.UDPAddr, m *snet.Message) {
+	msg := m.Msg.(*sproto.StoreReportStatus)
+	set := p.pState.deployment.sets[int(msg.SetID)]
+	if nil == set {
+		return
+	}
+	node := set.nodes[int(msg.NodeID)]
+	if nil == node {
+		return
+	}
+	store := node.store[int(msg.StoreID)]
+	if nil == store {
+		return
+	}
+
+	GetSugar().Infof("onStoreReportStatus node:%d store:%d isLeader:%v", msg.NodeID, msg.StoreID, msg.Isleader)
+
+	store.lastReport = time.Now()
+	store.isLead = msg.Isleader
+	store.kvcount = int(msg.Kvcount)
+	store.progress = msg.Progress
 }
 
 func (p *pd) initMsgHandler() {
@@ -189,4 +216,5 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.UpdateMeta{}, p.onUpdateMeta)
 	p.registerMsgHandler(&sproto.StoreUpdateMetaOk{}, p.onStoreUpdateMetaOk)
 	p.registerMsgHandler(&sproto.GetSetStatus{}, p.onGetSetStatus)
+	p.registerMsgHandler(&sproto.StoreReportStatus{}, p.onStoreReportStatus)
 }

@@ -2,6 +2,7 @@ package flykv
 
 import (
 	fnet "github.com/sniperHW/flyfish/pkg/net"
+	"github.com/sniperHW/flyfish/pkg/raft"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"net"
@@ -17,7 +18,7 @@ func (this *kvnode) processUdpMsg(from *net.UDPAddr, m *snet.Message) {
 	switch m.Msg.(type) {
 	case *sproto.QueryLeader:
 		this.muS.RLock()
-		store, ok := this.stores[int(m.Msg.(*sproto.QueryLeader).GetStore())]
+		store, ok := this.stores[int(m.Msg.(*sproto.QueryLeader).Store)]
 		this.muS.RUnlock()
 
 		var leader int32
@@ -25,10 +26,19 @@ func (this *kvnode) processUdpMsg(from *net.UDPAddr, m *snet.Message) {
 		if ok {
 			leader = int32(store.getLeaderNodeID())
 		} else {
-			GetSugar().Debugf("store:%d not in %d", m.Msg.(*sproto.QueryLeader).GetStore(), this.id)
+			GetSugar().Debugf("store:%d not in %d", m.Msg.(*sproto.QueryLeader).Store, this.id)
 		}
-		GetSugar().Debugf("store:%d on QueryLeader leader:%d", m.Msg.(*sproto.QueryLeader).GetStore(), leader)
+		GetSugar().Debugf("store:%d on QueryLeader leader:%d", m.Msg.(*sproto.QueryLeader).Store, leader)
 		this.udpConn.SendTo(from, snet.MakeMessage(m.Context, &sproto.QueryLeaderResp{Leader: leader}))
+
+	case *sproto.TrasnferLeader:
+		this.muS.RLock()
+		store, ok := this.stores[int(m.Msg.(*sproto.TrasnferLeader).StoreID)]
+		this.muS.RUnlock()
+		if ok {
+			GetSugar().Infof("req TransferLeadership to %v", raft.RaftInstanceID(m.Msg.(*sproto.TrasnferLeader).Transferee).String())
+			store.rn.TransferLeadership(m.Msg.(*sproto.TrasnferLeader).Transferee)
+		}
 	case *sproto.NotifySlotTransIn, *sproto.NotifySlotTransOut, *sproto.NotifyUpdateMeta, *sproto.NotifyNodeStoreOp, *sproto.IsTransInReady:
 		var store int
 		switch m.Msg.(type) {

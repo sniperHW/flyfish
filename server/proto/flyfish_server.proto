@@ -60,6 +60,8 @@ enum ServerCmdType {
   SlotTransInOk                 = 221;    
   NotifyUpdateMeta              = 222;
   StoreUpdateMetaOk             = 223;
+  StoreReportStatus             = 224;
+  TrasnferLeader                = 225;
 
 
   //flygate <-> pd
@@ -209,12 +211,13 @@ message storeInfo {
 message kvnodeBootResp {
   optional bool   ok           = 1;
   optional string reason       = 2;
-  optional string serviceHost  = 3;
-  optional int32  servicePort  = 4;
-  optional int32  raftPort     = 5;   
-  repeated storeInfo stores    = 6;
-  optional int64  metaVersion  = 7;
-  optional bytes  meta         = 8;
+  optional int32  setID        = 3;
+  optional string serviceHost  = 4;
+  optional int32  servicePort  = 5;
+  optional int32  raftPort     = 6;   
+  repeated storeInfo stores    = 7;
+  optional int64  metaVersion  = 8;
+  optional bytes  meta         = 9;
 }
 
 
@@ -390,15 +393,15 @@ message getSetStatus {
 
 message storeStatus {
   optional int32 storeID = 1;
-  optional int32 leader  = 2;
-  optional bytes slots   = 3;
+  optional bytes slots   = 2;
 }
 
 
 message kvnodeStoreStatus {
-  optional int32 storeID = 1;
-  optional int32 type    = 2;
-  optional int32 value   = 3;
+  optional int32 storeID  = 1;
+  optional int32 type     = 2;
+  optional int32 value    = 3;
+  optional bool  isLeader = 4;
 }
 
 message kvnodeStatus {
@@ -417,5 +420,18 @@ message getSetStatusResp {
   repeated setStatus sets = 1;
 }
 
+message storeReportStatus {
+  optional int32  setID    = 1;
+  optional int32  nodeID   = 2;
+  optional int32  storeID  = 3;
+  optional bool   isleader = 4;
+  optional int32  kvcount  = 5;
+  optional uint64 progress = 6;
+}
+
+message trasnferLeader {
+  optional int32  storeID    = 1;
+  optional uint64 transferee = 2; 
+}
 
 

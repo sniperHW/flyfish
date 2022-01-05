@@ -186,7 +186,7 @@ func (rc *RaftInstance) publishSnapshot(snap raftpb.Snapshot) {
 
 	rc.confState = snap.Metadata.ConfState
 	rc.snapshotIndex = snap.Metadata.Index
-	rc.appliedIndex = snap.Metadata.Index
+	atomic.StoreUint64(&rc.appliedIndex, snap.Metadata.Index)
 
 	rc.transport.RemoveAllPeers()
 

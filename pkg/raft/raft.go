@@ -229,6 +229,10 @@ func MakeInstanceID(nodeID uint16, shard uint16) RaftInstanceID {
 	return RaftInstanceID(uint32(nodeID)<<16 + uint32(shard))
 }
 
+func (rc *RaftInstance) GetApplyIndex() uint64 {
+	return atomic.LoadUint64(&rc.appliedIndex)
+}
+
 func (r RaftInstanceID) GetNodeID() uint16 {
 	return uint16(uint32(r) >> 16)
 }
@@ -242,7 +246,7 @@ func (rc *RaftInstance) ID() RaftInstanceID {
 }
 
 func (rc *RaftInstance) isLeader() bool {
-	return rc.softState.RaftState == raft.StateLeader
+	return rc.Lead() == uint64(rc.id)
 }
 
 func (rc *RaftInstance) Lead() uint64 {
@@ -417,7 +421,7 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 		}
 
 		// after commit, update appliedIndex
-		rc.appliedIndex = e.Index
+		atomic.StoreUint64(&rc.appliedIndex, e.Index)
 
 		// special nil commit to signal replay has finished
 		if e.Index == rc.lastIndex {
@@ -465,7 +469,7 @@ func (rc *RaftInstance) serveChannels() {
 	}
 	rc.confState = snap.Metadata.ConfState
 	rc.snapshotIndex = snap.Metadata.Index
-	rc.appliedIndex = snap.Metadata.Index
+	atomic.StoreUint64(&rc.appliedIndex, snap.Metadata.Index)
 
 	defer func() {
 		GetSugar().Infof("%s serveChannels break", rc.id.String())

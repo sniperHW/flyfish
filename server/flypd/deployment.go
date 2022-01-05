@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
+	"github.com/sniperHW/flyfish/pkg/raft"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"github.com/sniperHW/flyfish/server/slot"
 	"net"
 	"reflect"
 	"sort"
+	"time"
 )
 
 var StorePerSet int = 6          //每个set含有多少个store
@@ -30,8 +32,29 @@ const (
 )
 
 type FlyKvStoreState struct {
-	Type  FlyKvStoreStateType
-	Value FlyKvStoreStateValue
+	Type       FlyKvStoreStateType
+	Value      FlyKvStoreStateValue
+	isLead     bool
+	kvcount    int
+	lastReport time.Time
+	progress   uint64
+}
+
+func (f *FlyKvStoreState) isActive() bool {
+	if f.lastReport.IsZero() {
+		return false
+	} else if time.Now().Sub(f.lastReport) > time.Second*3 {
+		return false
+	} else {
+		return true
+	}
+}
+
+func (f *FlyKvStoreState) isLeader() bool {
+	if !f.isActive() {
+		f.isLead = false
+	}
+	return f.isLead
 }
 
 type KvNodeJson struct {
@@ -79,6 +102,20 @@ func (n *kvnode) isLearner(store int) (yes bool) {
 	return ok && s.Type == LearnerStore
 }
 
+func (n *kvnode) leaderCount() (leaderCount int) {
+	for _, v := range n.store {
+		if v.isLeader() {
+			leaderCount++
+		}
+	}
+	return
+}
+
+func (n *kvnode) canTransferLeader(store int) bool {
+	s, ok := n.store[store]
+	return ok && s.Type == VoterStore && s.Value == FlyKvCommited
+}
+
 type store struct {
 	id           int
 	slots        *bitmap.Bitmap
@@ -103,6 +140,53 @@ func (s *set) getTotalSlotCount() int {
 		totalSlotCount += len(v.slots.GetOpenBits())
 	}
 	return totalSlotCount
+}
+
+//将leader均分到kvnode
+func (s *set) storeBalance(pd *pd) {
+	leaderPerSet := StorePerSet / len(s.nodes)
+	if StorePerSet%len(s.nodes) != 0 {
+		leaderPerSet++
+	}
+
+	var maxNode *kvnode
+	max := 0
+
+	for _, v := range s.nodes {
+		lc := v.leaderCount()
+		if lc > max {
+			max = lc
+			maxNode = v
+		}
+	}
+
+	if max > leaderPerSet {
+		for store, state := range maxNode.store {
+			if !state.isLeader() {
+				continue
+			}
+			var candidates []*kvnode
+			for _, v := range s.nodes {
+				if v != maxNode && v.canTransferLeader(store) && v.leaderCount()+1 <= leaderPerSet {
+					candidates = append(candidates, v)
+				}
+			}
+
+			if len(candidates) > 0 {
+				sort.Slice(candidates, func(i, j int) bool {
+					return len(candidates[i].store) < len(candidates[j].store)
+				})
+				transferee := candidates[0]
+				if addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", maxNode.host, maxNode.servicePort)); nil == err {
+					pd.udp.SendTo(addr, snet.MakeMessage(0, &sproto.TrasnferLeader{
+						StoreID:    int32(store),
+						Transferee: uint64(raft.MakeInstanceID(uint16(transferee.id), uint16(store))),
+					}))
+					return
+				}
+			}
+		}
+	}
 }
 
 type deployment struct {

@@ -325,6 +325,10 @@ func init() {
 	namespace.Register(&sproto.NotifyUpdateMeta{}, uint32(sproto.ServerCmdType_NotifyUpdateMeta))
 	namespace.Register(&sproto.StoreUpdateMetaOk{}, uint32(sproto.ServerCmdType_StoreUpdateMetaOk))
 
+	namespace.Register(&sproto.StoreReportStatus{}, uint32(sproto.ServerCmdType_StoreReportStatus))
+
+	namespace.Register(&sproto.TrasnferLeader{}, uint32(sproto.ServerCmdType_TrasnferLeader))
+
 	//flygate <->pd
 	namespace.Register(&sproto.QueryRouteInfo{}, uint32(sproto.ServerCmdType_QueryRouteInfo))
 	namespace.Register(&sproto.QueryRouteInfoResp{}, uint32(sproto.ServerCmdType_QueryRouteInfoResp))

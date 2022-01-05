@@ -43,11 +43,13 @@ type kvnode struct {
 	config    *Config
 	db        dbI
 	listener  *cs.Listener
+	setID     int
 	id        int
 	mutilRaft *raft.MutilRaft
 	stopOnce  int32
 	udpConn   *fnet.Udp
 	join      bool
+	pdAddr    []*net.UDPAddr
 }
 
 func verifyLogin(loginReq *flyproto.LoginReq) bool {
@@ -408,23 +410,23 @@ func (this *kvnode) start() error {
 
 		pd := strings.Split(config.ClusterConfig.PD, ";")
 
-		var pdAddr []*net.UDPAddr
-
 		for _, v := range pd {
 			addr, err := net.ResolveUDPAddr("udp", v)
 			if nil != err {
 				return err
 			} else {
-				pdAddr = append(pdAddr, addr)
+				this.pdAddr = append(this.pdAddr, addr)
 			}
 		}
 
-		resp := this.getKvnodeBootInfo(pdAddr)
+		resp := this.getKvnodeBootInfo(this.pdAddr)
 
 		if !resp.Ok {
 			GetSugar().Errorf("getKvnodeBootInfo err:%v", resp.Reason)
 			return errors.New(resp.Reason)
 		}
+
+		this.setID = int(resp.SetID)
 
 		if dbdef, err = db.CreateDbDefFromJsonString(resp.Meta); nil != err {
 			GetSugar().Errorf("CreateDbDefFromJsonString err:%v", err)

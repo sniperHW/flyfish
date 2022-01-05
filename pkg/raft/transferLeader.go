@@ -55,7 +55,7 @@ func (rc *RaftInstance) TransferLeadership(transferee uint64) error {
 		lg.Info(
 			"skipped leadership transfer; local server is not leader",
 			zap.String("local-member-id", rc.id.String()),
-			zap.String("current-leader-member-id", rc.id.String()),
+			zap.String("current-leader-member-id", RaftInstanceID(rc.Lead()).String()),
 		)
 		return nil
 	}
@@ -64,7 +64,7 @@ func (rc *RaftInstance) TransferLeadership(transferee uint64) error {
 		lg.Info(
 			"skipped leadership transfer for single voting member cluster",
 			zap.String("local-member-id", rc.id.String()),
-			zap.String("current-leader-member-id", rc.id.String()),
+			zap.String("current-leader-member-id", RaftInstanceID(rc.Lead()).String()),
 		)
 		return nil
 	}

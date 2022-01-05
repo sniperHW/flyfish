@@ -417,7 +417,30 @@ func (s *kvstore) gotLease() {
 	}
 }
 
+func (s *kvstore) reportStatus() {
+	s.mainQueue.q.Append(1, func() {
+		msg := &sproto.StoreReportStatus{
+			SetID:    int32(s.kvnode.setID),
+			NodeID:   int32(s.rn.ID().GetNodeID()),
+			StoreID:  int32(s.rn.ID().GetShard()),
+			Isleader: s.isLeader(),
+			Kvcount:  int32(s.kvcount),
+			Progress: s.rn.GetApplyIndex(),
+		}
+
+		go func() {
+			for _, v := range s.kvnode.pdAddr {
+				s.kvnode.udpConn.SendTo(v, snet.MakeMessage(0, msg))
+			}
+		}()
+
+		time.AfterFunc(time.Second, s.reportStatus)
+	})
+}
+
 func (s *kvstore) serve() {
+
+	s.reportStatus()
 
 	go func() {
 		ch := make(chan struct{}, 1)
@@ -452,6 +475,12 @@ func (s *kvstore) serve() {
 			}
 		}
 	}()*/
+
+	//go func() {
+	//	for atomic.LoadInt32(&s.stoped) == 0 {
+	//		time.Sleep(time.Second)
+	//	}
+	//}()
 
 	go func() {
 		defer func() {
@@ -535,6 +564,9 @@ func (s *kvstore) serve() {
 }
 
 func (s *kvstore) becomeLeader() {
+
+	GetSugar().Infof("becomeLeader %v", s.rn.ID().String())
+
 	s.rn.IssueProposal(&proposalNop{store: s})
 	s.needWriteBackAll = true
 	s.lease.becomeLeader()

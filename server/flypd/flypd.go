@@ -223,6 +223,19 @@ func (q applicationQueue) close() {
 	q.q.Close()
 }
 
+func (p *pd) storeBalance() {
+	time.AfterFunc(time.Second*3, func() {
+		p.mainque.AppendHighestPriotiryItem(func() {
+			if p.isLeader() {
+				for _, v := range p.pState.deployment.sets {
+					v.storeBalance(p)
+				}
+			}
+			p.storeBalance()
+		})
+	})
+}
+
 func (p *pd) getNode(nodeID int32) *kvnode {
 	if nil != p.pState.deployment {
 		for _, v := range p.pState.deployment.sets {
@@ -558,6 +571,8 @@ func (p *pd) processCommited(commited raft.Committed) {
 }
 
 func (p *pd) serve() {
+
+	p.storeBalance()
 
 	go func() {
 		defer func() {
