@@ -154,6 +154,7 @@ type RaftInstance struct {
 	commitC             ApplicationQueue
 	waitStop            sync.WaitGroup
 	id                  RaftInstanceID // raft instanceID
+	lead                uint64
 	nodeID              uint16
 	shard               uint16
 	join                bool   // node is joining an existing cluster
@@ -242,6 +243,10 @@ func (rc *RaftInstance) ID() RaftInstanceID {
 
 func (rc *RaftInstance) isLeader() bool {
 	return rc.softState.RaftState == raft.StateLeader
+}
+
+func (rc *RaftInstance) Lead() uint64 {
+	return atomic.LoadUint64(&rc.lead)
 }
 
 func (rc *RaftInstance) removeOldWal(index uint64) {
@@ -493,6 +498,7 @@ func (rc *RaftInstance) serveChannels() {
 				if !(rc.softState.Lead == rd.SoftState.Lead && rc.softState.RaftState == rd.SoftState.RaftState) {
 					oldSoftState := rc.softState
 					rc.softState = *rd.SoftState
+					atomic.StoreUint64(&rc.lead, rc.softState.Lead)
 					if oldSoftState.RaftState == raft.StateLeader {
 						if rc.softState.RaftState != raft.StateLeader {
 							GetSugar().Infof("(%s) down to follower", rc.id.String())

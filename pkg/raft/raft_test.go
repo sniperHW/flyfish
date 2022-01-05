@@ -864,3 +864,65 @@ func TestOneNodeDownAndRestart(t *testing.T) {
 	CheckQuorum = true
 
 }
+
+func TestTransferLeader(t *testing.T) {
+	//先删除所有kv文件
+	os.RemoveAll("./log/raftLog")
+
+	ProposalFlushInterval = 10
+	ProposalBatchCount = 1
+	ReadFlushInterval = 10
+	ReadBatchCount = 1
+	DefaultSnapshotCount = 100
+	SnapshotCatchUpEntriesN = 100
+
+	cluster := "1@http://127.0.0.1:22378@,2@http://127.0.0.1:22379@"
+
+	node1 := newKvNode(1, 1, false, cluster)
+
+	becomeLeaderCh1 := make(chan *kvnode, 1)
+
+	node1.store.becomeLeader = func() {
+		becomeLeaderCh1 <- node1
+	}
+
+	node2 := newKvNode(2, 1, false, cluster)
+
+	becomeLeaderCh2 := make(chan *kvnode, 1)
+
+	node2.store.becomeLeader = func() {
+		becomeLeaderCh2 <- node2
+	}
+
+	getLeader := func() *kvnode {
+		select {
+		case n := <-becomeLeaderCh1:
+			fmt.Println("node1 becomeLeader")
+			return n
+		case n := <-becomeLeaderCh2:
+			fmt.Println("node2 becomeLeader")
+			return n
+		}
+	}
+
+	leader := getLeader()
+
+	for i := 0; i < 10; i++ {
+		leader.store.Set(fmt.Sprintf("sniperHW:%d", i), fmt.Sprintf("sniperHW:%d", i))
+	}
+
+	var follower *kvnode
+	if leader == node1 {
+		follower = node2
+	} else {
+		follower = node1
+	}
+
+	for follower.rn.Lead() != uint64(follower.rn.id) {
+		err := leader.rn.TransferLeadership(uint64(follower.rn.id))
+		fmt.Println(err)
+	}
+
+	node1.stop()
+	node2.stop()
+}
