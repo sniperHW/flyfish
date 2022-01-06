@@ -989,8 +989,8 @@ func NewInstance(nodeID uint16, shard uint16, join bool, mutilRaft *MutilRaft, c
 		ID:          types.ID(rc.id),
 		ClusterID:   types.ID(rc.shard),
 		Raft:        rc,
-		ServerStats: stats.NewServerStats(types.ID(rc.id).String(), types.ID(rc.id).String()),
-		LeaderStats: stats.NewLeaderStats(types.ID(rc.id).String()),
+		ServerStats: stats.NewServerStats(rc.id.String(), rc.id.String()),
+		LeaderStats: stats.NewLeaderStats(rc.id.String()),
 		ErrorC:      make(chan error),
 		Snapshotter: rc.snapshotter,
 	}
