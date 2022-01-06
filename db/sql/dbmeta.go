@@ -13,9 +13,9 @@ import (
 
 //表查询元数据
 type QueryMeta struct {
-	field_names    []string //所有的字段名
-	field_convter  []func(interface{}) interface{}
-	field_receiver []reflect.Type
+	field_names   []string //所有的字段名
+	field_convter []func(interface{}) interface{}
+	field_type    []reflect.Type
 }
 
 func (this *QueryMeta) GetFieldNames() []string {
@@ -36,8 +36,8 @@ func (this *QueryMeta) GetFieldConvter() []func(interface{}) interface{} {
 }
 
 func (this *QueryMeta) GetReceiver() []interface{} {
-	receiver := make([]interface{}, len(this.field_receiver))
-	for i, v := range this.field_receiver {
+	receiver := make([]interface{}, len(this.field_type))
+	for i, v := range this.field_type {
 		receiver[i] = reflect.New(v).Interface()
 	}
 	return receiver
@@ -212,13 +212,13 @@ func (this *TableMeta) CheckFieldsName(fields []string) error {
 	for _, v := range fields {
 		_, ok := this.fieldMetas[v]
 		if !ok {
-			fmt.Errorf("fileds %s not define in table:%s", v, this.table)
+			return fmt.Errorf("fileds %s not define in table:%s", v, this.table)
 		}
 	}
 	return nil
 }
 
-func getReceiver(tt proto.ValueType) reflect.Type {
+func getReceiverType(tt proto.ValueType) reflect.Type {
 	if tt == proto.ValueType_int {
 		var v int64
 		return reflect.TypeOf(v)
@@ -275,24 +275,24 @@ func createTableMetas(def *db.DbDef) (map[string]*TableMeta, error) {
 				fieldMetas:       map[string]*FieldMeta{},
 				insertFieldOrder: []string{},
 				queryMeta: &QueryMeta{
-					field_names:    []string{},
-					field_receiver: []reflect.Type{},
-					field_convter:  []func(interface{}) interface{}{},
+					field_names:   []string{},
+					field_type:    []reflect.Type{},
+					field_convter: []func(interface{}) interface{}{},
 				},
 				def: def,
 			}
 
 			//插入三个默认字段
 			t_meta.queryMeta.field_names = append(t_meta.queryMeta.field_names, "__key__")
-			t_meta.queryMeta.field_receiver = append(t_meta.queryMeta.field_receiver, getReceiver(proto.ValueType_string))
+			t_meta.queryMeta.field_type = append(t_meta.queryMeta.field_type, getReceiverType(proto.ValueType_string))
 			t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter, getConvetor(proto.ValueType_string))
 
 			t_meta.queryMeta.field_names = append(t_meta.queryMeta.field_names, "__version__")
-			t_meta.queryMeta.field_receiver = append(t_meta.queryMeta.field_receiver, getReceiver(proto.ValueType_int))
+			t_meta.queryMeta.field_type = append(t_meta.queryMeta.field_type, getReceiverType(proto.ValueType_int))
 			t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter, getConvetor(proto.ValueType_int))
 
 			t_meta.queryMeta.field_names = append(t_meta.queryMeta.field_names, "__slot__")
-			t_meta.queryMeta.field_receiver = append(t_meta.queryMeta.field_receiver, getReceiver(proto.ValueType_int))
+			t_meta.queryMeta.field_type = append(t_meta.queryMeta.field_type, getReceiverType(proto.ValueType_int))
 			t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter, getConvetor(proto.ValueType_int))
 
 			//处理其它字段
@@ -324,7 +324,7 @@ func createTableMetas(def *db.DbDef) (map[string]*TableMeta, error) {
 
 				t_meta.queryMeta.field_names = append(t_meta.queryMeta.field_names, vv.Name)
 
-				t_meta.queryMeta.field_receiver = append(t_meta.queryMeta.field_receiver, getReceiver(ftype))
+				t_meta.queryMeta.field_type = append(t_meta.queryMeta.field_type, getReceiverType(ftype))
 
 				t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter, getConvetor(ftype))
 			}

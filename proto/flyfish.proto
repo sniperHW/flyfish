@@ -22,6 +22,7 @@ enum CmdType {
   CompareAndSet = 8;
   CompareAndSetNx = 9;
   Kick = 10;
+  Scan = 11;
 }
 
 message loginReq {
@@ -180,5 +181,24 @@ message kick_req {
 
 message kick_resp {
   
+}
+
+message make_scaner {
+  repeated string fields   = 1;
+  optional bool   all      = 2;  //获取所有字段
+}
+
+message scan_req {  
+  optional int32  count    = 1;  
+}
+
+message row {
+  required string key      = 1;
+  required int64  version  = 2;
+  repeated field  fields   = 3;
+}
+
+message scan_resp {  
+  repeated row rows = 1;
 }
 

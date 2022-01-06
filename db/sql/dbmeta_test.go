@@ -60,7 +60,7 @@ func TestDbmeta1(t *testing.T) {
 	assert.Nil(t, err)
 	fmt.Println(string(defStr))
 
-	mt := CreateDbMeta(1, &m)
+	mt, _ := CreateDbMeta(1, &m)
 
 	td := mt.GetTableMeta("Table1").(*TableMeta)
 
