@@ -491,6 +491,8 @@ func (rc *RaftInstance) serveChannels() {
 	}()
 
 	// event loop on raft state machine updates
+
+	islead := false
 	for {
 		select {
 		case <-ticker.C:
@@ -516,7 +518,16 @@ func (rc *RaftInstance) serveChannels() {
 					if oldSoftState.Lead != rc.softState.Lead {
 						rc.commitC.AppendHighestPriotiryItem(LeaderChange{Leader: RaftInstanceID(rc.softState.Lead)})
 					}
+
+					islead = rd.RaftState == raft.StateLeader
 				}
+			}
+
+			// the leader can write to its disk in parallel with replicating to the followers and them
+			// writing to their disks.
+			// For more details, check raft thesis 10.2.1
+			if islead {
+				rc.transport.Send(rc.processMessages(rd.Messages))
 			}
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
@@ -534,11 +545,13 @@ func (rc *RaftInstance) serveChannels() {
 
 			rc.raftStorage.Append(rd.Entries)
 
-			rc.transport.Send(rc.processMessages(rd.Messages))
+			if !islead {
+				rc.transport.Send(rc.processMessages(rd.Messages))
+			}
 
 			rc.publishEntries(rc.entriesToApply(rd.CommittedEntries))
 
-			if rc.isLeader() {
+			if islead {
 				rc.linearizableReadMgr.Lock()
 				if len(rd.ReadStates) != 0 {
 					rc.processReadStates(rd.ReadStates)
