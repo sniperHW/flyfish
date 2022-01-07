@@ -1,71 +1,22 @@
 package flykv
 
 import (
-	"encoding/binary"
 	"errors"
-	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/db/sql"
-	"github.com/sniperHW/flyfish/pkg/buffer"
-	fnet "github.com/sniperHW/flyfish/pkg/net"
 	flyproto "github.com/sniperHW/flyfish/proto"
+	"github.com/sniperHW/flyfish/proto/cs"
 	"net"
 	"time"
 )
 
-func send(conn net.Conn, msg proto.Message, timeout time.Duration) error {
-	b := buffer.Get()
-	defer b.Free()
-	data, _ := proto.Marshal(msg)
-	b.AppendUint32(uint32(len(data)))
-	b.AppendBytes(data)
-
-	conn.SetWriteDeadline(time.Now().Add(timeout))
-	_, err := conn.Write(b.Bytes())
-	conn.SetWriteDeadline(time.Time{})
-	return err
-}
-
-func recv(conn net.Conn, maxbuff int, msg proto.Message, timeout time.Duration) error {
-	b := make([]byte, maxbuff)
-	w := 0
-	pbsize := 0
-	for {
-		conn.SetReadDeadline(time.Now().Add(timeout))
-		n, err := conn.Read(b[w:])
-		conn.SetReadDeadline(time.Time{})
-
-		if nil != err {
-			return err
-		}
-
-		w = w + n
-
-		if w >= 4 {
-			pbsize = int(binary.BigEndian.Uint32(b[:4]))
-		}
-
-		if pbsize > len(b)-4 {
-			return errors.New("invaild packet")
-		}
-
-		if w >= pbsize+4 {
-			if err = proto.Unmarshal(b[4:w], msg); err == nil {
-				return nil
-			} else {
-				return err
-			}
-		}
-	}
-}
-
 func SendScanerResp(conn net.Conn, resp *flyproto.MakeScannerResp) error {
-	return send(conn, resp, time.Second*5)
+	return cs.Send(conn, resp, time.Now().Add(time.Second*5))
 }
 
 func RecvScanerReq(conn net.Conn) (*flyproto.MakeScanerReq, error) {
 	req := &flyproto.MakeScanerReq{}
-	err := recv(conn, 1024, req, time.Second*5)
+	err := cs.Recv(conn, 1024, req, time.Now().Add(time.Second*5))
 	return req, err
 }
 
@@ -86,10 +37,8 @@ type scanner struct {
 	table      string
 }
 
-func (this *kvnode) onScanner(session *fnet.Socket) {
+func (this *kvnode) onScanner(conn net.Conn) {
 	go func() {
-		//GetSugar().Infof("onScanner")
-		conn := session.GetUnderConn()
 		req, err := RecvScanerReq(conn)
 		if nil != err {
 			conn.Close()
@@ -98,6 +47,7 @@ func (this *kvnode) onScanner(session *fnet.Socket) {
 
 		var store *kvstore
 		var ok bool
+		var tbmeta db.TableMeta
 
 		this.muS.RLock()
 
@@ -116,27 +66,25 @@ func (this *kvnode) onScanner(session *fnet.Socket) {
 
 		this.muS.RUnlock()
 
-		if !ok {
-			SendScanerResp(conn, &flyproto.MakeScannerResp{
-				Ok:     false,
-				Reason: "store not found",
-			})
-			conn.Close()
-			return
-		} else if !store.isLeader() {
-			SendScanerResp(conn, &flyproto.MakeScannerResp{
-				Ok:     false,
-				Reason: "store is not leader",
-			})
-			conn.Close()
-			return
-		}
+		err = func() error {
+			if !ok {
+				return errors.New("store not found")
+			} else if !store.isLeader() {
+				return errors.New("store is not leader")
+			}
 
-		tbmeta := store.meta.GetTableMeta(req.Table)
-		if nil == tbmeta {
+			tbmeta = store.meta.GetTableMeta(req.Table)
+			if nil == tbmeta {
+				return errors.New("store not found")
+			}
+
+			return nil
+		}()
+
+		if nil != err {
 			SendScanerResp(conn, &flyproto.MakeScannerResp{
 				Ok:     false,
-				Reason: "store not found",
+				Reason: err.Error(),
 			})
 			conn.Close()
 			return
@@ -175,28 +123,22 @@ func (this *kvnode) onScanner(session *fnet.Socket) {
 		}); nil != err {
 			conn.Close()
 		} else {
-			this.muC.Lock()
-			this.clients[session] = struct{}{}
-			this.muC.Unlock()
-			go scanner.loop(this, session)
+			go scanner.loop(this, conn)
 		}
 	}()
 }
 
 func (sc *scanner) recv(conn net.Conn) (*flyproto.ScanReq, error) {
 	req := &flyproto.ScanReq{}
-	err := recv(conn, 8192, req, time.Second*30)
+	err := cs.Recv(conn, 8192, req, time.Now().Add(time.Second*30))
 	return req, err
 }
 
 func (sc *scanner) response(conn net.Conn, resp *flyproto.ScanResp) error {
-	return send(conn, resp, time.Second*5)
+	return cs.Send(conn, resp, time.Now().Add(time.Second*5))
 }
 
-func (sc *scanner) loop(kvnode *kvnode, session *fnet.Socket) {
-	//GetSugar().Infof("scanner.loop slot:%d", sc.slot)
-	conn := session.GetUnderConn()
-
+func (sc *scanner) loop(kvnode *kvnode, conn net.Conn) {
 	dbConfig := sc.config.DBConfig
 
 	dbc, err := sqlOpen(sc.config.DBType, dbConfig.Host, dbConfig.Port, dbConfig.DB, dbConfig.User, dbConfig.Password)
@@ -217,9 +159,6 @@ func (sc *scanner) loop(kvnode *kvnode, session *fnet.Socket) {
 	defer func() {
 		scanner.Close()
 		dbc.Close()
-		kvnode.muC.Lock()
-		delete(kvnode.clients, session)
-		kvnode.muC.Unlock()
 		conn.Close()
 	}()
 	for {
@@ -304,9 +243,10 @@ func (sc *scanner) next(scanner *sql.Scanner, count int) (rows []*flyproto.Row, 
 				Version: v.Version,
 				Fields:  sc.fillDefault(v.Fields),
 			})
-			count--
 		}
 	}
+
+	count -= len(r)
 
 	for count > 0 && sc.offset < len(sc.kv) {
 		rows = append(rows, &flyproto.Row{
@@ -318,7 +258,7 @@ func (sc *scanner) next(scanner *sql.Scanner, count int) (rows []*flyproto.Row, 
 		sc.offset++
 	}
 
-	if count > 0 && sc.offset >= len(sc.kv) {
+	if len(r) == 0 && sc.offset >= len(sc.kv) {
 		finish = true
 	}
 

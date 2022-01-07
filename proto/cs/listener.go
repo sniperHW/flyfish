@@ -3,11 +3,20 @@ package cs
 import (
 	flynet "github.com/sniperHW/flyfish/pkg/net"
 	protocol "github.com/sniperHW/flyfish/proto"
-	"github.com/sniperHW/flyfish/proto/login"
 	"net"
 	"sync/atomic"
 	"time"
 )
+
+func SendLoginResp(conn net.Conn, loginResp *protocol.LoginResp, deadline time.Time) bool {
+	return Send(conn, loginResp, deadline) == nil
+}
+
+func RecvLoginReq(conn net.Conn, deadline time.Time) (*protocol.LoginReq, error) {
+	loginReq := &protocol.LoginReq{}
+	err := Recv(conn, 128, loginReq, deadline)
+	return loginReq, err
+}
 
 type Listener struct {
 	l              *net.TCPListener
@@ -38,9 +47,9 @@ func (this *Listener) Close() {
 	}
 }
 
-func (this *Listener) Serve(onNewClient func(*flynet.Socket), onScanner ...func(*flynet.Socket)) {
+func (this *Listener) Serve(onNewClient func(*flynet.Socket), onScanner ...func(net.Conn)) {
 
-	var onscanner func(*flynet.Socket)
+	var onscanner func(net.Conn)
 
 	if len(onScanner) > 0 {
 		onscanner = onScanner[0]
@@ -61,7 +70,7 @@ func (this *Listener) Serve(onNewClient func(*flynet.Socket), onScanner ...func(
 					go func() {
 						deadline := time.Now().Add(time.Second * 5)
 
-						loginReq, err := login.RecvLoginReq(conn, deadline)
+						loginReq, err := RecvLoginReq(conn, deadline)
 						if nil != err {
 							conn.Close()
 							return
@@ -79,14 +88,14 @@ func (this *Listener) Serve(onNewClient func(*flynet.Socket), onScanner ...func(
 							loginResp.Ok = true
 						}
 
-						if !login.SendLoginResp(conn, loginResp, deadline) {
+						if !SendLoginResp(conn, loginResp, deadline) {
 							conn.Close()
 							return
 						}
 
 						if loginResp.Ok {
 							if loginReq.Scanner {
-								onscanner(flynet.NewSocket(conn, this.outputBufLimit))
+								onscanner(conn)
 							} else {
 								onNewClient(flynet.NewSocket(conn, this.outputBufLimit))
 							}

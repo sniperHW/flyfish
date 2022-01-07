@@ -1,13 +1,10 @@
 package client
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/gogo/protobuf/proto"
-	"github.com/sniperHW/flyfish/pkg/buffer"
 	flyproto "github.com/sniperHW/flyfish/proto"
-	"github.com/sniperHW/flyfish/proto/login"
+	"github.com/sniperHW/flyfish/proto/cs"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"github.com/sniperHW/flyfish/server/slot"
@@ -63,61 +60,15 @@ func MakeScanner(conf ClientConf, Table string, fields []string, all ...bool) (*
 
 }
 
-func send(conn net.Conn, msg proto.Message, deadline time.Time) error {
-	b := buffer.Get()
-	defer b.Free()
-	data, _ := proto.Marshal(msg)
-	b.AppendUint32(uint32(len(data)))
-	b.AppendBytes(data)
-
-	conn.SetWriteDeadline(deadline)
-	_, err := conn.Write(b.Bytes())
-	conn.SetWriteDeadline(time.Time{})
-	return err
-}
-
-func recv(conn net.Conn, maxbuff int, msg proto.Message, deadline time.Time) error {
-	b := make([]byte, maxbuff)
-	w := 0
-	pbsize := 0
-	for {
-		conn.SetReadDeadline(deadline)
-		n, err := conn.Read(b[w:])
-		conn.SetReadDeadline(time.Time{})
-
-		if nil != err {
-			return err
-		}
-
-		w = w + n
-
-		if w >= 4 {
-			pbsize = int(binary.BigEndian.Uint32(b[:4]))
-		}
-
-		if pbsize > len(b)-4 {
-			return errors.New("invaild packet")
-		}
-
-		if w >= pbsize+4 {
-			if err = proto.Unmarshal(b[4:w], msg); err == nil {
-				return nil
-			} else {
-				return err
-			}
-		}
-	}
-}
-
 func recvMakeScannerResp(conn net.Conn, deadline time.Time) (*flyproto.MakeScannerResp, error) {
 	resp := &flyproto.MakeScannerResp{}
-	err := recv(conn, 4096, resp, deadline)
+	err := cs.Recv(conn, 4096, resp, deadline)
 	return resp, err
 }
 
 func recvScanResp(conn net.Conn, deadline time.Time) (*flyproto.ScanResp, error) {
 	resp := &flyproto.ScanResp{}
-	err := recv(conn, 4096*1024, resp, deadline)
+	err := cs.Recv(conn, 4096*1024, resp, deadline)
 	return resp, err
 }
 
@@ -161,26 +112,24 @@ func (sc *Scanner) Next(count int, deadline time.Time) ([]*Row, error) {
 			service = sc.soloService
 		}
 
-		//GetSugar().Infof("next slot:%d", sc.slot)
-
 		dialer := &net.Dialer{Timeout: deadline.Sub(time.Now())}
 		conn, err := dialer.Dial("tcp", service)
 		if err != nil {
 			return nil, err
 		}
 
-		if !login.SendLoginReq(conn, &flyproto.LoginReq{Scanner: true}, deadline) {
+		if !cs.SendLoginReq(conn, &flyproto.LoginReq{Scanner: true}, deadline) {
 			conn.Close()
 			return nil, fmt.Errorf("login failed")
 		}
 
-		loginResp, err := login.RecvLoginResp(conn, deadline)
+		loginResp, err := cs.RecvLoginResp(conn, deadline)
 		if nil != err || !loginResp.GetOk() {
 			conn.Close()
 			return nil, fmt.Errorf("login failed")
 		}
 
-		err = send(conn, &flyproto.MakeScanerReq{
+		err = cs.Send(conn, &flyproto.MakeScanerReq{
 			Table:  sc.table,
 			Slot:   int32(sc.slot),
 			Store:  int32(store),
@@ -204,7 +153,7 @@ func (sc *Scanner) Next(count int, deadline time.Time) ([]*Row, error) {
 		sc.conn = conn
 	}
 
-	err := send(sc.conn, &flyproto.ScanReq{Count: int32(count)}, deadline)
+	err := cs.Send(sc.conn, &flyproto.ScanReq{Count: int32(count)}, deadline)
 	if nil != err {
 		return nil, err
 	}

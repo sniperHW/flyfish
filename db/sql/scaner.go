@@ -75,7 +75,6 @@ func (sc *Scanner) Next(count int) (rows []*ScannerRow, err error) {
 
 			err = sc.rows.Scan(field_receiver...)
 			if err != nil {
-				fmt.Println(err)
 				return
 			}
 
