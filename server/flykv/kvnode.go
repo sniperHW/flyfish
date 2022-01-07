@@ -56,60 +56,62 @@ func verifyLogin(loginReq *flyproto.LoginReq) bool {
 	return true
 }
 
-func (this *kvnode) startListener() {
-	this.listener.Serve(func(session *fnet.Socket) {
-		go func() {
+func (this *kvnode) onClient(session *fnet.Socket) {
+	go func() {
+		this.muC.Lock()
+		this.clients[session] = struct{}{}
+		this.muC.Unlock()
+
+		session.SetRecvTimeout(flyproto.PingTime * 10)
+		//只有配置了压缩开启同时客户端支持压缩才开启通信压缩
+		session.SetInBoundProcessor(cs.NewReqInboundProcessor())
+		session.SetEncoder(&cs.RespEncoder{})
+		session.SetCloseCallBack(func(session *fnet.Socket, reason error) {
 			this.muC.Lock()
-			this.clients[session] = struct{}{}
+			delete(this.clients, session)
 			this.muC.Unlock()
+		})
 
-			session.SetRecvTimeout(flyproto.PingTime * 10)
-			//只有配置了压缩开启同时客户端支持压缩才开启通信压缩
-			session.SetInBoundProcessor(cs.NewReqInboundProcessor())
-			session.SetEncoder(&cs.RespEncoder{})
-			session.SetCloseCallBack(func(session *fnet.Socket, reason error) {
-				this.muC.Lock()
-				delete(this.clients, session)
-				this.muC.Unlock()
-			})
+		session.BeginRecv(func(session *fnet.Socket, v interface{}) {
 
-			session.BeginRecv(func(session *fnet.Socket, v interface{}) {
+			if atomic.LoadInt32(&this.stopOnce) == 1 {
+				return
+			}
 
-				if atomic.LoadInt32(&this.stopOnce) == 1 {
-					return
-				}
+			msg := v.(*cs.ReqMessage)
 
-				msg := v.(*cs.ReqMessage)
-
-				switch msg.Cmd {
-				case flyproto.CmdType_Ping:
+			switch msg.Cmd {
+			case flyproto.CmdType_Ping:
+				session.Send(&cs.RespMessage{
+					Cmd:   msg.Cmd,
+					Seqno: msg.Seqno,
+					Data: &flyproto.PingResp{
+						Timestamp: time.Now().UnixNano(),
+					},
+				})
+			default:
+				this.muS.RLock()
+				store, ok := this.stores[msg.Store]
+				this.muS.RUnlock()
+				if !ok {
 					session.Send(&cs.RespMessage{
-						Cmd:   msg.Cmd,
 						Seqno: msg.Seqno,
-						Data: &flyproto.PingResp{
-							Timestamp: time.Now().UnixNano(),
-						},
+						Cmd:   msg.Cmd,
+						Err:   errcode.New(errcode.Errcode_error, fmt.Sprintf("%s not in current server", msg.UniKey)),
 					})
-				default:
-					this.muS.RLock()
-					store, ok := this.stores[msg.Store]
-					this.muS.RUnlock()
-					if !ok {
-						session.Send(&cs.RespMessage{
-							Seqno: msg.Seqno,
-							Cmd:   msg.Cmd,
-							Err:   errcode.New(errcode.Errcode_error, fmt.Sprintf("%s not in current server", msg.UniKey)),
-						})
-					} else {
-						store.addCliMessage(clientRequest{
-							from: session,
-							msg:  msg,
-						})
-					}
+				} else {
+					store.addCliMessage(clientRequest{
+						from: session,
+						msg:  msg,
+					})
 				}
-			})
-		}()
-	})
+			}
+		})
+	}()
+}
+
+func (this *kvnode) startListener() {
+	this.listener.Serve(this.onClient, this.onScanner)
 }
 
 func waitCondition(fn func() bool) {

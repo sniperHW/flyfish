@@ -27,11 +27,13 @@ enum CmdType {
 
 message loginReq {
   optional bool compress = 1; //客户端是否支持压缩
+  optional bool scanner  = 2; //是否scanner连接
 }
 
 message loginResp {
-  optional bool ok = 1;
-  optional bool compress = 2;
+  optional bool   ok = 1;
+  optional bool   compress = 2;
+  optional string reason = 3;
 }
 
 enum ValueType {
@@ -183,9 +185,17 @@ message kick_resp {
   
 }
 
-message make_scaner {
-  repeated string fields   = 1;
-  optional bool   all      = 2;  //获取所有字段
+message make_scaner_req {
+  optional string table    = 1;
+  optional int32  slot     = 2;
+  optional int32  store    = 3;
+  repeated string fields   = 4;
+  optional bool   all      = 5;  //获取所有字段
+}
+
+message make_scanner_resp {
+  optional bool   ok = 1;
+  optional string reason = 2;
 }
 
 message scan_req {  
@@ -198,7 +208,9 @@ message row {
   repeated field  fields   = 3;
 }
 
-message scan_resp {  
-  repeated row rows = 1;
+message scan_resp {
+  optional string error  = 1;  
+  repeated row    rows   = 2;
+  optional bool   finish = 3;
 }
 

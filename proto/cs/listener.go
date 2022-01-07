@@ -6,6 +6,7 @@ import (
 	"github.com/sniperHW/flyfish/proto/login"
 	"net"
 	"sync/atomic"
+	"time"
 )
 
 type Listener struct {
@@ -37,7 +38,14 @@ func (this *Listener) Close() {
 	}
 }
 
-func (this *Listener) Serve(onNewClient func(*flynet.Socket)) {
+func (this *Listener) Serve(onNewClient func(*flynet.Socket), onScanner ...func(*flynet.Socket)) {
+
+	var onscanner func(*flynet.Socket)
+
+	if len(onScanner) > 0 {
+		onscanner = onScanner[0]
+	}
+
 	if atomic.CompareAndSwapInt32(&this.startOnce, 0, 1) {
 		go func() {
 			for {
@@ -51,27 +59,40 @@ func (this *Listener) Serve(onNewClient func(*flynet.Socket)) {
 
 				} else {
 					go func() {
-						loginReq, err := login.RecvLoginReq(conn.(*net.TCPConn))
+						deadline := time.Now().Add(time.Second * 5)
+
+						loginReq, err := login.RecvLoginReq(conn, deadline)
 						if nil != err {
 							conn.Close()
 							return
 						}
 
+						loginResp := &protocol.LoginResp{}
+
 						if !this.verifyLogin(loginReq) {
+							loginResp.Ok = false
+							loginResp.Reason = "verify failed"
+						} else if loginReq.Scanner && onscanner == nil {
+							loginResp.Ok = false
+							loginResp.Reason = "unsupported scanner client"
+						} else {
+							loginResp.Ok = true
+						}
+
+						if !login.SendLoginResp(conn, loginResp, deadline) {
 							conn.Close()
 							return
 						}
 
-						loginResp := &protocol.LoginResp{
-							Ok: true,
-						}
-
-						if !login.SendLoginResp(conn.(*net.TCPConn), loginResp) {
+						if loginResp.Ok {
+							if loginReq.Scanner {
+								onscanner(flynet.NewSocket(conn, this.outputBufLimit))
+							} else {
+								onNewClient(flynet.NewSocket(conn, this.outputBufLimit))
+							}
+						} else {
 							conn.Close()
-							return
 						}
-
-						onNewClient(flynet.NewSocket(conn, this.outputBufLimit))
 					}()
 				}
 			}

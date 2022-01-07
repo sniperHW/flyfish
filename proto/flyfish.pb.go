@@ -150,6 +150,7 @@ func (ValueType) EnumDescriptor() ([]byte, []int) {
 
 type LoginReq struct {
 	Compress bool `protobuf:"varint,1,opt,name=compress" json:"compress"`
+	Scanner  bool `protobuf:"varint,2,opt,name=scanner" json:"scanner"`
 }
 
 func (m *LoginReq) Reset()      { *m = LoginReq{} }
@@ -191,9 +192,17 @@ func (m *LoginReq) GetCompress() bool {
 	return false
 }
 
+func (m *LoginReq) GetScanner() bool {
+	if m != nil {
+		return m.Scanner
+	}
+	return false
+}
+
 type LoginResp struct {
-	Ok       bool `protobuf:"varint,1,opt,name=ok" json:"ok"`
-	Compress bool `protobuf:"varint,2,opt,name=compress" json:"compress"`
+	Ok       bool   `protobuf:"varint,1,opt,name=ok" json:"ok"`
+	Compress bool   `protobuf:"varint,2,opt,name=compress" json:"compress"`
+	Reason   string `protobuf:"bytes,3,opt,name=reason" json:"reason"`
 }
 
 func (m *LoginResp) Reset()      { *m = LoginResp{} }
@@ -240,6 +249,13 @@ func (m *LoginResp) GetCompress() bool {
 		return m.Compress
 	}
 	return false
+}
+
+func (m *LoginResp) GetReason() string {
+	if m != nil {
+		return m.Reason
+	}
+	return ""
 }
 
 type Value struct {
@@ -1359,22 +1375,25 @@ func (m *KickResp) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_KickResp proto.InternalMessageInfo
 
-type MakeScaner struct {
-	Fields []string `protobuf:"bytes,1,rep,name=fields" json:"fields,omitempty"`
-	All    bool     `protobuf:"varint,2,opt,name=all" json:"all"`
+type MakeScanerReq struct {
+	Table  string   `protobuf:"bytes,1,opt,name=table" json:"table"`
+	Slot   int32    `protobuf:"varint,2,opt,name=slot" json:"slot"`
+	Store  int32    `protobuf:"varint,3,opt,name=store" json:"store"`
+	Fields []string `protobuf:"bytes,4,rep,name=fields" json:"fields,omitempty"`
+	All    bool     `protobuf:"varint,5,opt,name=all" json:"all"`
 }
 
-func (m *MakeScaner) Reset()      { *m = MakeScaner{} }
-func (*MakeScaner) ProtoMessage() {}
-func (*MakeScaner) Descriptor() ([]byte, []int) {
+func (m *MakeScanerReq) Reset()      { *m = MakeScanerReq{} }
+func (*MakeScanerReq) ProtoMessage() {}
+func (*MakeScanerReq) Descriptor() ([]byte, []int) {
 	return fileDescriptor_178c4910b45e4c52, []int{24}
 }
-func (m *MakeScaner) XXX_Unmarshal(b []byte) error {
+func (m *MakeScanerReq) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *MakeScaner) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *MakeScanerReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_MakeScaner.Marshal(b, m, deterministic)
+		return xxx_messageInfo_MakeScanerReq.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -1384,30 +1403,102 @@ func (m *MakeScaner) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return b[:n], nil
 	}
 }
-func (m *MakeScaner) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_MakeScaner.Merge(m, src)
+func (m *MakeScanerReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MakeScanerReq.Merge(m, src)
 }
-func (m *MakeScaner) XXX_Size() int {
+func (m *MakeScanerReq) XXX_Size() int {
 	return m.Size()
 }
-func (m *MakeScaner) XXX_DiscardUnknown() {
-	xxx_messageInfo_MakeScaner.DiscardUnknown(m)
+func (m *MakeScanerReq) XXX_DiscardUnknown() {
+	xxx_messageInfo_MakeScanerReq.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_MakeScaner proto.InternalMessageInfo
+var xxx_messageInfo_MakeScanerReq proto.InternalMessageInfo
 
-func (m *MakeScaner) GetFields() []string {
+func (m *MakeScanerReq) GetTable() string {
+	if m != nil {
+		return m.Table
+	}
+	return ""
+}
+
+func (m *MakeScanerReq) GetSlot() int32 {
+	if m != nil {
+		return m.Slot
+	}
+	return 0
+}
+
+func (m *MakeScanerReq) GetStore() int32 {
+	if m != nil {
+		return m.Store
+	}
+	return 0
+}
+
+func (m *MakeScanerReq) GetFields() []string {
 	if m != nil {
 		return m.Fields
 	}
 	return nil
 }
 
-func (m *MakeScaner) GetAll() bool {
+func (m *MakeScanerReq) GetAll() bool {
 	if m != nil {
 		return m.All
 	}
 	return false
+}
+
+type MakeScannerResp struct {
+	Ok     bool   `protobuf:"varint,1,opt,name=ok" json:"ok"`
+	Reason string `protobuf:"bytes,2,opt,name=reason" json:"reason"`
+}
+
+func (m *MakeScannerResp) Reset()      { *m = MakeScannerResp{} }
+func (*MakeScannerResp) ProtoMessage() {}
+func (*MakeScannerResp) Descriptor() ([]byte, []int) {
+	return fileDescriptor_178c4910b45e4c52, []int{25}
+}
+func (m *MakeScannerResp) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *MakeScannerResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_MakeScannerResp.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *MakeScannerResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MakeScannerResp.Merge(m, src)
+}
+func (m *MakeScannerResp) XXX_Size() int {
+	return m.Size()
+}
+func (m *MakeScannerResp) XXX_DiscardUnknown() {
+	xxx_messageInfo_MakeScannerResp.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MakeScannerResp proto.InternalMessageInfo
+
+func (m *MakeScannerResp) GetOk() bool {
+	if m != nil {
+		return m.Ok
+	}
+	return false
+}
+
+func (m *MakeScannerResp) GetReason() string {
+	if m != nil {
+		return m.Reason
+	}
+	return ""
 }
 
 type ScanReq struct {
@@ -1417,7 +1508,7 @@ type ScanReq struct {
 func (m *ScanReq) Reset()      { *m = ScanReq{} }
 func (*ScanReq) ProtoMessage() {}
 func (*ScanReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{25}
+	return fileDescriptor_178c4910b45e4c52, []int{26}
 }
 func (m *ScanReq) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1462,7 +1553,7 @@ type Row struct {
 func (m *Row) Reset()      { *m = Row{} }
 func (*Row) ProtoMessage() {}
 func (*Row) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{26}
+	return fileDescriptor_178c4910b45e4c52, []int{27}
 }
 func (m *Row) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1513,13 +1604,15 @@ func (m *Row) GetFields() []*Field {
 }
 
 type ScanResp struct {
-	Rows []*Row `protobuf:"bytes,1,rep,name=rows" json:"rows,omitempty"`
+	Error  string `protobuf:"bytes,1,opt,name=error" json:"error"`
+	Rows   []*Row `protobuf:"bytes,2,rep,name=rows" json:"rows,omitempty"`
+	Finish bool   `protobuf:"varint,3,opt,name=finish" json:"finish"`
 }
 
 func (m *ScanResp) Reset()      { *m = ScanResp{} }
 func (*ScanResp) ProtoMessage() {}
 func (*ScanResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_178c4910b45e4c52, []int{27}
+	return fileDescriptor_178c4910b45e4c52, []int{28}
 }
 func (m *ScanResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1548,11 +1641,25 @@ func (m *ScanResp) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ScanResp proto.InternalMessageInfo
 
+func (m *ScanResp) GetError() string {
+	if m != nil {
+		return m.Error
+	}
+	return ""
+}
+
 func (m *ScanResp) GetRows() []*Row {
 	if m != nil {
 		return m.Rows
 	}
 	return nil
+}
+
+func (m *ScanResp) GetFinish() bool {
+	if m != nil {
+		return m.Finish
+	}
+	return false
 }
 
 func init() {
@@ -1582,7 +1689,8 @@ func init() {
 	proto.RegisterType((*DelResp)(nil), "proto.del_resp")
 	proto.RegisterType((*KickReq)(nil), "proto.kick_req")
 	proto.RegisterType((*KickResp)(nil), "proto.kick_resp")
-	proto.RegisterType((*MakeScaner)(nil), "proto.make_scaner")
+	proto.RegisterType((*MakeScanerReq)(nil), "proto.make_scaner_req")
+	proto.RegisterType((*MakeScannerResp)(nil), "proto.make_scanner_resp")
 	proto.RegisterType((*ScanReq)(nil), "proto.scan_req")
 	proto.RegisterType((*Row)(nil), "proto.row")
 	proto.RegisterType((*ScanResp)(nil), "proto.scan_resp")
@@ -1591,58 +1699,64 @@ func init() {
 func init() { proto.RegisterFile("flyfish.proto", fileDescriptor_178c4910b45e4c52) }
 
 var fileDescriptor_178c4910b45e4c52 = []byte{
-	// 814 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0x55, 0x41, 0x6f, 0xe3, 0x44,
-	0x14, 0xce, 0xd8, 0x71, 0x6d, 0x3f, 0x77, 0xc1, 0xcc, 0x56, 0xc5, 0xea, 0x61, 0x88, 0x46, 0x08,
-	0x85, 0x82, 0xba, 0x52, 0x4f, 0x5c, 0xf6, 0x40, 0xbb, 0x12, 0x42, 0x2b, 0x2d, 0xbb, 0x2e, 0x42,
-	0x02, 0x09, 0x45, 0x8e, 0x3d, 0x09, 0xa3, 0x38, 0x33, 0x5e, 0xdb, 0x4d, 0x9b, 0x1b, 0x12, 0x67,
-	0x24, 0x7e, 0x06, 0x3f, 0xa5, 0xc7, 0x1e, 0xf7, 0x84, 0x68, 0x7a, 0xe1, 0xb8, 0x3f, 0x01, 0xcd,
-	0xd8, 0x6e, 0x9a, 0x5d, 0x53, 0x59, 0x22, 0xa7, 0xbc, 0x7c, 0xef, 0xbd, 0xef, 0x7d, 0xef, 0x79,
-	0xe6, 0x0d, 0x3c, 0x9a, 0xa4, 0xcb, 0x09, 0x2f, 0x7e, 0x39, 0xca, 0x72, 0x59, 0x4a, 0x6c, 0xe9,
-	0x9f, 0x83, 0xbd, 0xa9, 0x9c, 0x4a, 0x6d, 0x3e, 0x51, 0x56, 0xe5, 0xa4, 0x5f, 0x82, 0x93, 0xca,
-	0x29, 0x17, 0x21, 0x7b, 0x8d, 0x07, 0xe0, 0xc4, 0x72, 0x9e, 0xe5, 0xac, 0x28, 0x02, 0x34, 0x40,
-	0x43, 0xe7, 0xa4, 0x7f, 0xf5, 0xd7, 0x27, 0xbd, 0xf0, 0x0e, 0xa5, 0xa7, 0xe0, 0xd6, 0xd1, 0x45,
-	0x86, 0xf7, 0xc0, 0x90, 0xb3, 0x8d, 0x40, 0x43, 0xce, 0x36, 0x48, 0x8c, 0x56, 0x92, 0xdf, 0x10,
-	0x58, 0x8b, 0x28, 0x3d, 0x67, 0xf8, 0x10, 0xfa, 0xe5, 0x32, 0x63, 0x01, 0x1a, 0x18, 0xc3, 0x0f,
-	0x8e, 0xfd, 0x4a, 0xd2, 0xd1, 0x0f, 0xca, 0xf7, 0xfd, 0x32, 0x63, 0x75, 0xa6, 0x8e, 0xc1, 0x18,
-	0x10, 0xd7, 0x84, 0x66, 0x0d, 0x23, 0xae, 0xb0, 0x49, 0x60, 0x0e, 0xd0, 0x10, 0x35, 0xd8, 0x44,
-	0x61, 0x45, 0xd0, 0x1f, 0xa0, 0xa1, 0xdb, 0x60, 0x85, 0xc2, 0xc6, 0x81, 0x35, 0x40, 0xc3, 0xdd,
-	0x06, 0x1b, 0xd3, 0xa7, 0x60, 0x4d, 0x38, 0x4b, 0x13, 0x1c, 0x40, 0x5f, 0x44, 0x73, 0xa6, 0x1b,
-	0x69, 0x72, 0x34, 0x82, 0x0f, 0x00, 0x2d, 0x74, 0x49, 0xef, 0x78, 0xb7, 0xd6, 0xa6, 0x75, 0x87,
-	0x68, 0x41, 0x8f, 0xc0, 0xc9, 0xb8, 0x98, 0x8e, 0x72, 0xf6, 0x1a, 0x53, 0x70, 0x4b, 0x3e, 0x67,
-	0x45, 0x19, 0xcd, 0x33, 0x4d, 0xd3, 0x48, 0x5c, 0xc3, 0xf4, 0x09, 0xb8, 0x75, 0x7c, 0x91, 0x6d,
-	0x26, 0x18, 0xed, 0x09, 0x3f, 0x82, 0x3d, 0x65, 0xa5, 0xe6, 0x27, 0x60, 0x2f, 0x58, 0x5e, 0x70,
-	0x29, 0xee, 0xb1, 0xa3, 0xb0, 0x01, 0xf1, 0x3e, 0xec, 0xe8, 0x56, 0xd4, 0xc0, 0xcd, 0xa1, 0x1b,
-	0xd6, 0xff, 0xf0, 0x3e, 0x98, 0x51, 0x9a, 0xea, 0x01, 0x35, 0x5f, 0x41, 0x01, 0xf4, 0x25, 0x38,
-	0x15, 0x75, 0x91, 0xb5, 0x73, 0xf7, 0xd6, 0xdc, 0x9f, 0x6e, 0x70, 0xaf, 0x07, 0xa1, 0xc1, 0xa6,
-	0x12, 0xfd, 0x0e, 0xec, 0xa2, 0xa3, 0xd8, 0x6e, 0x84, 0x87, 0xe0, 0x14, 0x1d, 0x25, 0xd2, 0x10,
-	0x40, 0xc5, 0x8a, 0xcb, 0x2d, 0xd6, 0x3f, 0x03, 0xef, 0x8e, 0x73, 0x6b, 0x53, 0x7a, 0x05, 0x1e,
-	0x17, 0x71, 0x3e, 0x1a, 0x2f, 0x3b, 0x29, 0xa5, 0xf5, 0x09, 0x0d, 0x8c, 0x81, 0xf1, 0x1e, 0x67,
-	0xe5, 0xa2, 0x21, 0xec, 0xae, 0x29, 0x3b, 0x08, 0xbd, 0xc7, 0x89, 0xfe, 0x8b, 0xf3, 0x15, 0x78,
-	0x09, 0xdb, 0xba, 0xcc, 0x35, 0xe5, 0x96, 0x64, 0x9e, 0xc3, 0x63, 0xb5, 0x52, 0xa2, 0x9c, 0x8d,
-	0x22, 0x91, 0x8c, 0xba, 0x9e, 0x3f, 0x02, 0xa6, 0x60, 0x17, 0xad, 0x62, 0x95, 0x43, 0xf9, 0x65,
-	0x9a, 0x04, 0x66, 0x9b, 0x5f, 0xa6, 0x09, 0xfd, 0x09, 0xf6, 0xde, 0x2f, 0xdb, 0xad, 0x25, 0xbd,
-	0x3c, 0xda, 0x5b, 0xd2, 0x2e, 0x7a, 0x09, 0xfb, 0xef, 0x72, 0x77, 0x3c, 0xd5, 0xff, 0xb7, 0xab,
-	0x9f, 0xe1, 0xe3, 0xd6, 0xca, 0x5b, 0x6a, 0xec, 0x73, 0xb0, 0x13, 0x96, 0x76, 0xe9, 0x44, 0xdd,
-	0xfc, 0x2a, 0xb4, 0xc3, 0xcd, 0x07, 0x70, 0x66, 0x3c, 0x9e, 0x29, 0x5e, 0xea, 0x81, 0x5b, 0xdb,
-	0x45, 0x46, 0x9f, 0x82, 0x37, 0x8f, 0x66, 0x6c, 0x54, 0xc4, 0x91, 0x60, 0xf9, 0xbd, 0x05, 0x89,
-	0xda, 0x16, 0xa4, 0xf1, 0xee, 0x82, 0xfc, 0x0c, 0x1c, 0x95, 0xa9, 0xf5, 0x1e, 0x80, 0x15, 0xcb,
-	0x73, 0x51, 0x6a, 0x05, 0x56, 0x1d, 0x55, 0x41, 0x34, 0x06, 0x33, 0x97, 0x17, 0x8a, 0x66, 0xc6,
-	0x96, 0xfa, 0x15, 0x6b, 0x1e, 0x10, 0x05, 0xdc, 0x97, 0xaf, 0x3e, 0xcc, 0x03, 0x5b, 0xc3, 0x7c,
-	0x60, 0x6b, 0x7c, 0x01, 0x6e, 0x2d, 0x46, 0x4f, 0xa4, 0x9f, 0xcb, 0x8b, 0xaa, 0x0f, 0xef, 0x18,
-	0xea, 0x84, 0x5c, 0x5e, 0x84, 0x1a, 0x3f, 0xfc, 0x1d, 0x81, 0x7d, 0x3a, 0x4f, 0xd4, 0xeb, 0x89,
-	0x1d, 0xe8, 0xbf, 0xe4, 0x62, 0xea, 0x23, 0x6c, 0x83, 0x79, 0xc6, 0x4a, 0xdf, 0x50, 0xc6, 0x37,
-	0xac, 0xf4, 0x4d, 0x65, 0x3c, 0x63, 0xa9, 0xdf, 0xc7, 0x00, 0x3b, 0xdf, 0x8a, 0x38, 0x3f, 0x59,
-	0xfa, 0x96, 0xb2, 0x9f, 0x31, 0x6d, 0xef, 0x60, 0x17, 0xac, 0x33, 0x56, 0xbe, 0xb8, 0xf4, 0x6d,
-	0xfc, 0x11, 0x3c, 0x3a, 0xad, 0xce, 0xc6, 0xd7, 0x22, 0x51, 0x3c, 0x0e, 0x7e, 0x0c, 0x1f, 0x6e,
-	0x40, 0x2f, 0x2e, 0x7d, 0x57, 0xd5, 0x7b, 0xce, 0xe3, 0x99, 0x0f, 0xca, 0x3a, 0x8b, 0x23, 0xe1,
-	0x7b, 0x87, 0xcf, 0xc1, 0xbd, 0x7b, 0xce, 0xb1, 0x07, 0x36, 0x17, 0x8b, 0x88, 0xa7, 0x89, 0xdf,
-	0x53, 0x0a, 0x04, 0x4f, 0x7d, 0xa4, 0xaa, 0x16, 0x65, 0xae, 0x84, 0x6a, 0x7d, 0x5c, 0x28, 0x7d,
-	0x2e, 0x58, 0x93, 0x54, 0x46, 0xa5, 0xdf, 0x57, 0x64, 0xe3, 0x54, 0x8e, 0x7d, 0xeb, 0xe4, 0xab,
-	0xab, 0x1b, 0x82, 0xae, 0x6f, 0x08, 0x7a, 0x73, 0x43, 0x7a, 0x6f, 0x6f, 0x08, 0xfa, 0x75, 0x45,
-	0xd0, 0x9f, 0x2b, 0x82, 0xae, 0x56, 0x04, 0x5d, 0xaf, 0x08, 0xfa, 0x7b, 0x45, 0xd0, 0x3f, 0x2b,
-	0xd2, 0x7b, 0xbb, 0x22, 0xe8, 0x8f, 0x5b, 0xd2, 0xbb, 0xbe, 0x25, 0xbd, 0x37, 0xb7, 0xa4, 0xf7,
-	0x6f, 0x00, 0x00, 0x00, 0xff, 0xff, 0xd8, 0x1d, 0x40, 0x64, 0x12, 0x09, 0x00, 0x00,
+	// 905 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0x56, 0xcf, 0x8b, 0xdb, 0x46,
+	0x14, 0xf6, 0x48, 0xd6, 0x5a, 0x7a, 0xde, 0x34, 0xca, 0x64, 0xd9, 0x8a, 0xa5, 0x4c, 0x8d, 0x28,
+	0xc5, 0xdd, 0xc3, 0x06, 0x72, 0xea, 0xa5, 0x87, 0x6e, 0x02, 0xa1, 0xa4, 0xa4, 0x89, 0xb7, 0x14,
+	0x5a, 0x28, 0x46, 0x96, 0xc6, 0xce, 0x60, 0x79, 0x46, 0x99, 0xd1, 0x7a, 0xd7, 0xb7, 0x42, 0xcf,
+	0x85, 0x42, 0xff, 0x89, 0xfe, 0x29, 0x7b, 0xdc, 0x63, 0x4e, 0xa5, 0xeb, 0xbd, 0xf4, 0x98, 0x3f,
+	0xa1, 0xcc, 0x48, 0xf2, 0x8f, 0x44, 0x09, 0x82, 0xf8, 0xe4, 0xe7, 0xef, 0xcd, 0x7c, 0xdf, 0xf7,
+	0x46, 0xa3, 0xf7, 0x04, 0x77, 0xc6, 0xe9, 0x62, 0xcc, 0xd4, 0xcb, 0x93, 0x4c, 0x8a, 0x5c, 0x60,
+	0xc7, 0xfc, 0x1c, 0x1d, 0x4c, 0xc4, 0x44, 0x98, 0xf0, 0x81, 0x8e, 0x8a, 0x64, 0xf8, 0x3d, 0xb8,
+	0xa9, 0x98, 0x30, 0x3e, 0xa0, 0xaf, 0x70, 0x0f, 0xdc, 0x58, 0xcc, 0x32, 0x49, 0x95, 0x0a, 0x50,
+	0x0f, 0xf5, 0xdd, 0xd3, 0xf6, 0xd5, 0x3f, 0x9f, 0xb7, 0x06, 0x2b, 0x14, 0x13, 0xe8, 0xa8, 0x38,
+	0xe2, 0x9c, 0xca, 0xc0, 0xda, 0x58, 0x50, 0x81, 0x61, 0x04, 0x5e, 0xc9, 0xa6, 0x32, 0x7c, 0x00,
+	0x96, 0x98, 0x6e, 0x11, 0x59, 0x62, 0xba, 0x25, 0x62, 0xd5, 0x8a, 0x7c, 0x06, 0x7b, 0x92, 0x46,
+	0x4a, 0xf0, 0xc0, 0xee, 0xa1, 0xbe, 0x57, 0xe6, 0x4b, 0x2c, 0xfc, 0x1d, 0x81, 0x33, 0x8f, 0xd2,
+	0x73, 0x8a, 0x8f, 0xa1, 0x9d, 0x2f, 0x32, 0x1a, 0xa0, 0x9e, 0xd5, 0xff, 0xe4, 0xa1, 0x5f, 0x14,
+	0x74, 0xf2, 0x93, 0xce, 0xfd, 0xb8, 0xc8, 0x68, 0xb9, 0xcf, 0xac, 0xc1, 0x18, 0x10, 0x33, 0x72,
+	0x76, 0x09, 0x23, 0xa6, 0xb1, 0xb1, 0x91, 0x40, 0x15, 0x36, 0xd6, 0x98, 0x0a, 0xda, 0x1b, 0xb2,
+	0x48, 0x69, 0x6c, 0x14, 0x38, 0x3d, 0xd4, 0xdf, 0xaf, 0xb0, 0x51, 0xf8, 0x0d, 0x38, 0x63, 0x46,
+	0xd3, 0x04, 0x07, 0xd0, 0xe6, 0xd1, 0x8c, 0x9a, 0x32, 0xab, 0x3d, 0x06, 0xc1, 0x47, 0x80, 0xe6,
+	0x46, 0xb2, 0xfb, 0x70, 0xbf, 0xf4, 0x66, 0x7c, 0x0f, 0xd0, 0x3c, 0x3c, 0x01, 0x37, 0x63, 0x7c,
+	0x32, 0x94, 0xf4, 0x15, 0x0e, 0xc1, 0xcb, 0xd9, 0x8c, 0xaa, 0x3c, 0x9a, 0x65, 0x86, 0xa6, 0xb2,
+	0xb8, 0x86, 0xc3, 0x07, 0xe0, 0x95, 0xeb, 0x55, 0xb6, 0xbd, 0xc1, 0xaa, 0xdf, 0xf0, 0x33, 0x74,
+	0x26, 0x34, 0x37, 0xfc, 0x04, 0x3a, 0x73, 0x2a, 0x15, 0x13, 0x7c, 0x83, 0x1d, 0x0d, 0x2a, 0x10,
+	0x1f, 0xc2, 0x9e, 0x29, 0x45, 0x3f, 0x0e, 0xbb, 0xef, 0x0d, 0xca, 0x7f, 0xf8, 0x10, 0xec, 0x28,
+	0x4d, 0xcd, 0x01, 0x55, 0xcf, 0x48, 0x03, 0xe1, 0x73, 0x70, 0x0b, 0x6a, 0x95, 0xd5, 0x73, 0xb7,
+	0xd6, 0xdc, 0x5f, 0x6c, 0x71, 0xaf, 0x0f, 0xc2, 0x80, 0x95, 0x52, 0xf8, 0x03, 0x74, 0x54, 0x43,
+	0xb3, 0xcd, 0x08, 0x8f, 0xc1, 0x55, 0x0d, 0x2d, 0x86, 0x03, 0x00, 0xbd, 0x96, 0x5f, 0xee, 0x50,
+	0xff, 0x0c, 0xba, 0x2b, 0xce, 0x9d, 0x9d, 0xd2, 0x0b, 0xe8, 0x32, 0x1e, 0xcb, 0xe1, 0x68, 0xd1,
+	0xc8, 0x69, 0x58, 0xde, 0xd0, 0xc0, 0xea, 0x59, 0xef, 0x70, 0x16, 0xa9, 0x70, 0x00, 0xfb, 0x6b,
+	0xca, 0x06, 0x46, 0x37, 0x38, 0xd1, 0xfb, 0x38, 0x5f, 0x40, 0x37, 0xa1, 0x3b, 0xb7, 0xb9, 0xa6,
+	0xdc, 0x91, 0xcd, 0x73, 0xb8, 0xaf, 0x1b, 0x4e, 0x24, 0xe9, 0x30, 0xe2, 0xc9, 0xb0, 0xe9, 0xfd,
+	0x23, 0x60, 0x73, 0x7a, 0x51, 0x6b, 0x56, 0x27, 0x74, 0x5e, 0xa4, 0x49, 0x60, 0xd7, 0xe5, 0x45,
+	0x9a, 0x84, 0xbf, 0xc0, 0xc1, 0xbb, 0xb2, 0xcd, 0x4a, 0x32, 0xcd, 0xa3, 0xbe, 0x24, 0x93, 0x0a,
+	0x2f, 0xe1, 0xf0, 0x6d, 0xee, 0x86, 0xb7, 0xfa, 0x63, 0xab, 0xfa, 0x15, 0x3e, 0xad, 0x55, 0xde,
+	0x51, 0x61, 0x5f, 0x41, 0x27, 0xa1, 0x69, 0x93, 0x4a, 0xf4, 0x9b, 0x5f, 0x2c, 0x6d, 0xf0, 0xe6,
+	0x03, 0xb8, 0x53, 0x16, 0x4f, 0x35, 0x6f, 0xd8, 0x05, 0xaf, 0x8c, 0x55, 0x16, 0xfe, 0x85, 0xe0,
+	0xee, 0x2c, 0x9a, 0xd2, 0xa1, 0x1e, 0x6b, 0x54, 0x1a, 0xe1, 0x23, 0x70, 0xf2, 0x68, 0x94, 0x6e,
+	0x37, 0xfa, 0x02, 0xd2, 0x33, 0x40, 0xa5, 0x22, 0x37, 0x25, 0x38, 0xd5, 0x0c, 0xd0, 0x88, 0xde,
+	0xa5, 0x72, 0x21, 0xa9, 0xe9, 0xa2, 0x55, 0xaa, 0x80, 0x36, 0xfa, 0x6e, 0xbb, 0xae, 0xef, 0x3a,
+	0x6f, 0xf7, 0xdd, 0x27, 0x70, 0x6f, 0x65, 0xaa, 0x70, 0xf5, 0xde, 0x19, 0xbb, 0x9e, 0xa0, 0x56,
+	0xcd, 0x04, 0xfd, 0x12, 0x5c, 0xcd, 0x51, 0x95, 0x15, 0x8b, 0x73, 0x9e, 0x1b, 0x8a, 0x95, 0x41,
+	0x03, 0x85, 0x31, 0xd8, 0x52, 0x5c, 0x68, 0x3f, 0x53, 0xba, 0x30, 0x53, 0xb6, 0x62, 0xd2, 0xc0,
+	0xe6, 0xf1, 0xea, 0x8b, 0xf3, 0x81, 0xae, 0x66, 0x7f, 0xa0, 0xab, 0x51, 0xf0, 0x4a, 0x33, 0x2a,
+	0xd3, 0x6e, 0xa8, 0x94, 0x42, 0x6e, 0x1f, 0xb2, 0x81, 0x30, 0x81, 0xb6, 0x14, 0x17, 0x55, 0x8b,
+	0x84, 0x92, 0x4c, 0x8a, 0x8b, 0x81, 0xc1, 0x75, 0xcd, 0x63, 0xc6, 0x99, 0x7a, 0xb9, 0x35, 0xb1,
+	0x4a, 0xec, 0xf8, 0x0f, 0x04, 0x9d, 0x47, 0xb3, 0x44, 0x7f, 0x17, 0x60, 0x17, 0xda, 0xcf, 0x19,
+	0x9f, 0xf8, 0x08, 0x77, 0xc0, 0x3e, 0xa3, 0xb9, 0x6f, 0xe9, 0xe0, 0x09, 0xcd, 0x7d, 0x5b, 0x07,
+	0x8f, 0x69, 0xea, 0xb7, 0x31, 0xc0, 0xde, 0x77, 0x3c, 0x96, 0xa7, 0x0b, 0xdf, 0xd1, 0xf1, 0x63,
+	0x6a, 0xe2, 0x3d, 0xec, 0x81, 0x73, 0x46, 0xf3, 0x67, 0x97, 0x7e, 0x07, 0xdf, 0x83, 0x3b, 0x8f,
+	0x8a, 0x5b, 0xff, 0x2d, 0x4f, 0x34, 0x8f, 0x8b, 0xef, 0xc3, 0xdd, 0x2d, 0xe8, 0xd9, 0xa5, 0xef,
+	0x69, 0xbd, 0xa7, 0x2c, 0x9e, 0xfa, 0xa0, 0xa3, 0xb3, 0x38, 0xe2, 0x7e, 0xf7, 0xf8, 0x29, 0x78,
+	0xab, 0x0f, 0x15, 0xdc, 0x85, 0x0e, 0xe3, 0xf3, 0x88, 0xa5, 0x89, 0xdf, 0xd2, 0x0e, 0x38, 0x4b,
+	0x7d, 0xa4, 0x55, 0x55, 0x2e, 0xb5, 0x51, 0xe3, 0x8f, 0x71, 0xed, 0xcf, 0x03, 0x67, 0x9c, 0x8a,
+	0x28, 0xf7, 0xdb, 0x9a, 0x6c, 0x94, 0x8a, 0x91, 0xef, 0x9c, 0x7e, 0x7d, 0x75, 0x43, 0xd0, 0xf5,
+	0x0d, 0x41, 0xaf, 0x6f, 0x48, 0xeb, 0xcd, 0x0d, 0x41, 0xbf, 0x2d, 0x09, 0xfa, 0x7b, 0x49, 0xd0,
+	0xd5, 0x92, 0xa0, 0xeb, 0x25, 0x41, 0xff, 0x2e, 0x09, 0xfa, 0x6f, 0x49, 0x5a, 0x6f, 0x96, 0x04,
+	0xfd, 0x79, 0x4b, 0x5a, 0xd7, 0xb7, 0xa4, 0xf5, 0xfa, 0x96, 0xb4, 0xfe, 0x0f, 0x00, 0x00, 0xff,
+	0xff, 0x38, 0x50, 0x23, 0x11, 0x2a, 0x0a, 0x00, 0x00,
 }
 
 func (x CmdType) String() string {
@@ -1681,6 +1795,9 @@ func (this *LoginReq) Equal(that interface{}) bool {
 	if this.Compress != that1.Compress {
 		return false
 	}
+	if this.Scanner != that1.Scanner {
+		return false
+	}
 	return true
 }
 func (this *LoginResp) Equal(that interface{}) bool {
@@ -1706,6 +1823,9 @@ func (this *LoginResp) Equal(that interface{}) bool {
 		return false
 	}
 	if this.Compress != that1.Compress {
+		return false
+	}
+	if this.Reason != that1.Reason {
 		return false
 	}
 	return true
@@ -2368,14 +2488,14 @@ func (this *KickResp) Equal(that interface{}) bool {
 	}
 	return true
 }
-func (this *MakeScaner) Equal(that interface{}) bool {
+func (this *MakeScanerReq) Equal(that interface{}) bool {
 	if that == nil {
 		return this == nil
 	}
 
-	that1, ok := that.(*MakeScaner)
+	that1, ok := that.(*MakeScanerReq)
 	if !ok {
-		that2, ok := that.(MakeScaner)
+		that2, ok := that.(MakeScanerReq)
 		if ok {
 			that1 = &that2
 		} else {
@@ -2387,6 +2507,15 @@ func (this *MakeScaner) Equal(that interface{}) bool {
 	} else if this == nil {
 		return false
 	}
+	if this.Table != that1.Table {
+		return false
+	}
+	if this.Slot != that1.Slot {
+		return false
+	}
+	if this.Store != that1.Store {
+		return false
+	}
 	if len(this.Fields) != len(that1.Fields) {
 		return false
 	}
@@ -2396,6 +2525,33 @@ func (this *MakeScaner) Equal(that interface{}) bool {
 		}
 	}
 	if this.All != that1.All {
+		return false
+	}
+	return true
+}
+func (this *MakeScannerResp) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*MakeScannerResp)
+	if !ok {
+		that2, ok := that.(MakeScannerResp)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Ok != that1.Ok {
+		return false
+	}
+	if this.Reason != that1.Reason {
 		return false
 	}
 	return true
@@ -2478,6 +2634,9 @@ func (this *ScanResp) Equal(that interface{}) bool {
 	} else if this == nil {
 		return false
 	}
+	if this.Error != that1.Error {
+		return false
+	}
 	if len(this.Rows) != len(that1.Rows) {
 		return false
 	}
@@ -2486,15 +2645,19 @@ func (this *ScanResp) Equal(that interface{}) bool {
 			return false
 		}
 	}
+	if this.Finish != that1.Finish {
+		return false
+	}
 	return true
 }
 func (this *LoginReq) GoString() string {
 	if this == nil {
 		return "nil"
 	}
-	s := make([]string, 0, 5)
+	s := make([]string, 0, 6)
 	s = append(s, "&proto.LoginReq{")
 	s = append(s, "Compress: "+fmt.Sprintf("%#v", this.Compress)+",\n")
+	s = append(s, "Scanner: "+fmt.Sprintf("%#v", this.Scanner)+",\n")
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
@@ -2502,10 +2665,11 @@ func (this *LoginResp) GoString() string {
 	if this == nil {
 		return "nil"
 	}
-	s := make([]string, 0, 6)
+	s := make([]string, 0, 7)
 	s = append(s, "&proto.LoginResp{")
 	s = append(s, "Ok: "+fmt.Sprintf("%#v", this.Ok)+",\n")
 	s = append(s, "Compress: "+fmt.Sprintf("%#v", this.Compress)+",\n")
+	s = append(s, "Reason: "+fmt.Sprintf("%#v", this.Reason)+",\n")
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
@@ -2796,16 +2960,30 @@ func (this *KickResp) GoString() string {
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
-func (this *MakeScaner) GoString() string {
+func (this *MakeScanerReq) GoString() string {
 	if this == nil {
 		return "nil"
 	}
-	s := make([]string, 0, 6)
-	s = append(s, "&proto.MakeScaner{")
+	s := make([]string, 0, 9)
+	s = append(s, "&proto.MakeScanerReq{")
+	s = append(s, "Table: "+fmt.Sprintf("%#v", this.Table)+",\n")
+	s = append(s, "Slot: "+fmt.Sprintf("%#v", this.Slot)+",\n")
+	s = append(s, "Store: "+fmt.Sprintf("%#v", this.Store)+",\n")
 	if this.Fields != nil {
 		s = append(s, "Fields: "+fmt.Sprintf("%#v", this.Fields)+",\n")
 	}
 	s = append(s, "All: "+fmt.Sprintf("%#v", this.All)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *MakeScannerResp) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&proto.MakeScannerResp{")
+	s = append(s, "Ok: "+fmt.Sprintf("%#v", this.Ok)+",\n")
+	s = append(s, "Reason: "+fmt.Sprintf("%#v", this.Reason)+",\n")
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
@@ -2837,11 +3015,13 @@ func (this *ScanResp) GoString() string {
 	if this == nil {
 		return "nil"
 	}
-	s := make([]string, 0, 5)
+	s := make([]string, 0, 7)
 	s = append(s, "&proto.ScanResp{")
+	s = append(s, "Error: "+fmt.Sprintf("%#v", this.Error)+",\n")
 	if this.Rows != nil {
 		s = append(s, "Rows: "+fmt.Sprintf("%#v", this.Rows)+",\n")
 	}
+	s = append(s, "Finish: "+fmt.Sprintf("%#v", this.Finish)+",\n")
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
@@ -2874,6 +3054,14 @@ func (m *LoginReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	var l int
 	_ = l
 	i--
+	if m.Scanner {
+		dAtA[i] = 1
+	} else {
+		dAtA[i] = 0
+	}
+	i--
+	dAtA[i] = 0x10
+	i--
 	if m.Compress {
 		dAtA[i] = 1
 	} else {
@@ -2904,6 +3092,11 @@ func (m *LoginResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	i -= len(m.Reason)
+	copy(dAtA[i:], m.Reason)
+	i = encodeVarintFlyfish(dAtA, i, uint64(len(m.Reason)))
+	i--
+	dAtA[i] = 0x1a
 	i--
 	if m.Compress {
 		dAtA[i] = 1
@@ -3743,7 +3936,7 @@ func (m *KickResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *MakeScaner) Marshal() (dAtA []byte, err error) {
+func (m *MakeScanerReq) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -3753,12 +3946,12 @@ func (m *MakeScaner) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *MakeScaner) MarshalTo(dAtA []byte) (int, error) {
+func (m *MakeScanerReq) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *MakeScaner) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *MakeScanerReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
@@ -3770,16 +3963,63 @@ func (m *MakeScaner) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		dAtA[i] = 0
 	}
 	i--
-	dAtA[i] = 0x10
+	dAtA[i] = 0x28
 	if len(m.Fields) > 0 {
 		for iNdEx := len(m.Fields) - 1; iNdEx >= 0; iNdEx-- {
 			i -= len(m.Fields[iNdEx])
 			copy(dAtA[i:], m.Fields[iNdEx])
 			i = encodeVarintFlyfish(dAtA, i, uint64(len(m.Fields[iNdEx])))
 			i--
-			dAtA[i] = 0xa
+			dAtA[i] = 0x22
 		}
 	}
+	i = encodeVarintFlyfish(dAtA, i, uint64(m.Store))
+	i--
+	dAtA[i] = 0x18
+	i = encodeVarintFlyfish(dAtA, i, uint64(m.Slot))
+	i--
+	dAtA[i] = 0x10
+	i -= len(m.Table)
+	copy(dAtA[i:], m.Table)
+	i = encodeVarintFlyfish(dAtA, i, uint64(len(m.Table)))
+	i--
+	dAtA[i] = 0xa
+	return len(dAtA) - i, nil
+}
+
+func (m *MakeScannerResp) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *MakeScannerResp) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MakeScannerResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	i -= len(m.Reason)
+	copy(dAtA[i:], m.Reason)
+	i = encodeVarintFlyfish(dAtA, i, uint64(len(m.Reason)))
+	i--
+	dAtA[i] = 0x12
+	i--
+	if m.Ok {
+		dAtA[i] = 1
+	} else {
+		dAtA[i] = 0
+	}
+	i--
+	dAtA[i] = 0x8
 	return len(dAtA) - i, nil
 }
 
@@ -3874,6 +4114,14 @@ func (m *ScanResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	i--
+	if m.Finish {
+		dAtA[i] = 1
+	} else {
+		dAtA[i] = 0
+	}
+	i--
+	dAtA[i] = 0x18
 	if len(m.Rows) > 0 {
 		for iNdEx := len(m.Rows) - 1; iNdEx >= 0; iNdEx-- {
 			{
@@ -3885,9 +4133,14 @@ func (m *ScanResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 				i = encodeVarintFlyfish(dAtA, i, uint64(size))
 			}
 			i--
-			dAtA[i] = 0xa
+			dAtA[i] = 0x12
 		}
 	}
+	i -= len(m.Error)
+	copy(dAtA[i:], m.Error)
+	i = encodeVarintFlyfish(dAtA, i, uint64(len(m.Error)))
+	i--
+	dAtA[i] = 0xa
 	return len(dAtA) - i, nil
 }
 
@@ -3909,6 +4162,7 @@ func (m *LoginReq) Size() (n int) {
 	var l int
 	_ = l
 	n += 2
+	n += 2
 	return n
 }
 
@@ -3920,6 +4174,8 @@ func (m *LoginResp) Size() (n int) {
 	_ = l
 	n += 2
 	n += 2
+	l = len(m.Reason)
+	n += 1 + l + sovFlyfish(uint64(l))
 	return n
 }
 
@@ -4241,12 +4497,16 @@ func (m *KickResp) Size() (n int) {
 	return n
 }
 
-func (m *MakeScaner) Size() (n int) {
+func (m *MakeScanerReq) Size() (n int) {
 	if m == nil {
 		return 0
 	}
 	var l int
 	_ = l
+	l = len(m.Table)
+	n += 1 + l + sovFlyfish(uint64(l))
+	n += 1 + sovFlyfish(uint64(m.Slot))
+	n += 1 + sovFlyfish(uint64(m.Store))
 	if len(m.Fields) > 0 {
 		for _, s := range m.Fields {
 			l = len(s)
@@ -4254,6 +4514,18 @@ func (m *MakeScaner) Size() (n int) {
 		}
 	}
 	n += 2
+	return n
+}
+
+func (m *MakeScannerResp) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	n += 2
+	l = len(m.Reason)
+	n += 1 + l + sovFlyfish(uint64(l))
 	return n
 }
 
@@ -4291,12 +4563,15 @@ func (m *ScanResp) Size() (n int) {
 	}
 	var l int
 	_ = l
+	l = len(m.Error)
+	n += 1 + l + sovFlyfish(uint64(l))
 	if len(m.Rows) > 0 {
 		for _, e := range m.Rows {
 			l = e.Size()
 			n += 1 + l + sovFlyfish(uint64(l))
 		}
 	}
+	n += 2
 	return n
 }
 
@@ -4312,6 +4587,7 @@ func (this *LoginReq) String() string {
 	}
 	s := strings.Join([]string{`&LoginReq{`,
 		`Compress:` + fmt.Sprintf("%v", this.Compress) + `,`,
+		`Scanner:` + fmt.Sprintf("%v", this.Scanner) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -4323,6 +4599,7 @@ func (this *LoginResp) String() string {
 	s := strings.Join([]string{`&LoginResp{`,
 		`Ok:` + fmt.Sprintf("%v", this.Ok) + `,`,
 		`Compress:` + fmt.Sprintf("%v", this.Compress) + `,`,
+		`Reason:` + fmt.Sprintf("%v", this.Reason) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -4586,13 +4863,27 @@ func (this *KickResp) String() string {
 	}, "")
 	return s
 }
-func (this *MakeScaner) String() string {
+func (this *MakeScanerReq) String() string {
 	if this == nil {
 		return "nil"
 	}
-	s := strings.Join([]string{`&MakeScaner{`,
+	s := strings.Join([]string{`&MakeScanerReq{`,
+		`Table:` + fmt.Sprintf("%v", this.Table) + `,`,
+		`Slot:` + fmt.Sprintf("%v", this.Slot) + `,`,
+		`Store:` + fmt.Sprintf("%v", this.Store) + `,`,
 		`Fields:` + fmt.Sprintf("%v", this.Fields) + `,`,
 		`All:` + fmt.Sprintf("%v", this.All) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *MakeScannerResp) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&MakeScannerResp{`,
+		`Ok:` + fmt.Sprintf("%v", this.Ok) + `,`,
+		`Reason:` + fmt.Sprintf("%v", this.Reason) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -4634,7 +4925,9 @@ func (this *ScanResp) String() string {
 	}
 	repeatedStringForRows += "}"
 	s := strings.Join([]string{`&ScanResp{`,
+		`Error:` + fmt.Sprintf("%v", this.Error) + `,`,
 		`Rows:` + repeatedStringForRows + `,`,
+		`Finish:` + fmt.Sprintf("%v", this.Finish) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -4696,6 +4989,26 @@ func (m *LoginReq) Unmarshal(dAtA []byte) error {
 				}
 			}
 			m.Compress = bool(v != 0)
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Scanner", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfish
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Scanner = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skipFlyfish(dAtA[iNdEx:])
@@ -4789,6 +5102,38 @@ func (m *LoginResp) Unmarshal(dAtA []byte) error {
 				}
 			}
 			m.Compress = bool(v != 0)
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Reason", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfish
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthFlyfish
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfish
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Reason = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipFlyfish(dAtA[iNdEx:])
@@ -7093,7 +7438,7 @@ func (m *KickResp) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *MakeScaner) Unmarshal(dAtA []byte) error {
+func (m *MakeScanerReq) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -7116,13 +7461,83 @@ func (m *MakeScaner) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: make_scaner: wiretype end group for non-group")
+			return fmt.Errorf("proto: make_scaner_req: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: make_scaner: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: make_scaner_req: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Table", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfish
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthFlyfish
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfish
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Table = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Slot", wireType)
+			}
+			m.Slot = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfish
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Slot |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Store", wireType)
+			}
+			m.Store = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfish
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Store |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 4:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Fields", wireType)
 			}
@@ -7154,7 +7569,7 @@ func (m *MakeScaner) Unmarshal(dAtA []byte) error {
 			}
 			m.Fields = append(m.Fields, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
-		case 2:
+		case 5:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field All", wireType)
 			}
@@ -7174,6 +7589,111 @@ func (m *MakeScaner) Unmarshal(dAtA []byte) error {
 				}
 			}
 			m.All = bool(v != 0)
+		default:
+			iNdEx = preIndex
+			skippy, err := skipFlyfish(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthFlyfish
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthFlyfish
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *MakeScannerResp) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowFlyfish
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: make_scanner_resp: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: make_scanner_resp: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Ok", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfish
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Ok = bool(v != 0)
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Reason", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfish
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthFlyfish
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfish
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Reason = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipFlyfish(dAtA[iNdEx:])
@@ -7448,6 +7968,38 @@ func (m *ScanResp) Unmarshal(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Error", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfish
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthFlyfish
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfish
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Error = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Rows", wireType)
 			}
 			var msglen int
@@ -7480,6 +8032,26 @@ func (m *ScanResp) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Finish", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFlyfish
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Finish = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skipFlyfish(dAtA[iNdEx:])

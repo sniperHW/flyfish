@@ -341,6 +341,9 @@ func init() {
 	namespace.Register(&sproto.ChangeFlyGate{}, uint32(sproto.ServerCmdType_ChangeFlyGate))
 	namespace.Register(&sproto.ChangeFlyGateResp{}, uint32(sproto.ServerCmdType_ChangeFlyGateResp))
 
+	namespace.Register(&sproto.GetSlotStore{}, uint32(sproto.ServerCmdType_GetSlotStore))
+	namespace.Register(&sproto.GetSlotStoreResp{}, uint32(sproto.ServerCmdType_GetSlotStoreResp))
+
 	//for test
 	namespace.Register(&sproto.PacketTest{}, uint32(sproto.ServerCmdType_PacketTest))
 

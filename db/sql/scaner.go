@@ -2,7 +2,6 @@ package sql
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
@@ -28,12 +27,7 @@ type Scanner struct {
 	rows          *sql.Rows
 }
 
-func NewScanner(meta db.DBMeta, dbc *sqlx.DB, slot int, table string, wantFields []string, exclude []string) (*Scanner, error) {
-	tbmeta := meta.GetTableMeta(table)
-	if nil == tbmeta {
-		return nil, errors.New("table not define")
-	}
-
+func NewScanner(tbmeta db.TableMeta, dbc *sqlx.DB, slot int, table string, wantFields []string, exclude []string) (*Scanner, error) {
 	if err := tbmeta.CheckFieldsName(wantFields); nil != err {
 		return nil, err
 	}
@@ -41,8 +35,6 @@ func NewScanner(meta db.DBMeta, dbc *sqlx.DB, slot int, table string, wantFields
 	queryFields := append([]string{"__key__", "__version__"}, wantFields...)
 
 	sqlStr := fmt.Sprintf(selectTemplate, strings.Join(queryFields, ","), table, slot, strings.Join(exclude, "','"))
-
-	fmt.Println(sqlStr)
 
 	rows, err := dbc.Query(sqlStr)
 
@@ -77,38 +69,37 @@ func (sc *Scanner) makeFieldReceiver() (receiver []interface{}) {
 }
 
 func (sc *Scanner) Next(count int) (rows []*ScannerRow, err error) {
-	if 0 >= count {
-		count = 50
-	} else if count > 200 {
-		count = 200
-	}
+	if count > 0 {
+		for sc.rows.Next() {
+			field_receiver := sc.makeFieldReceiver()
 
-	for sc.rows.Next() {
-		field_receiver := sc.makeFieldReceiver()
+			err = sc.rows.Scan(field_receiver...)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
 
-		err = sc.rows.Scan(field_receiver...)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
+			fields := []*proto.Field{}
+			for i := 0; i < len(sc.wantFields); i++ {
+				fields = append(fields, proto.PackField(sc.wantFields[i], sc.field_convter[i](field_receiver[i+2])))
+			}
 
-		fields := []*proto.Field{}
-		for i := 0; i < len(sc.wantFields); i++ {
-			fields = append(fields, proto.PackField(sc.wantFields[i], sc.field_convter[i](field_receiver[i+2])))
-		}
+			rows = append(rows, &ScannerRow{
+				Key:     *field_receiver[0].(*string),
+				Version: *field_receiver[1].(*int64),
+				Fields:  fields,
+			})
 
-		rows = append(rows, &ScannerRow{
-			Key:     *field_receiver[0].(*string),
-			Version: *field_receiver[1].(*int64),
-			Fields:  fields,
-		})
+			count--
 
-		count--
-
-		if count == 0 {
-			break
+			if count == 0 {
+				break
+			}
 		}
 	}
-
 	return
+}
+
+func (sc *Scanner) Close() {
+	sc.rows.Close()
 }

@@ -102,6 +102,11 @@ func (n *kvnode) isLearner(store int) (yes bool) {
 	return ok && s.Type == LearnerStore
 }
 
+func (n *kvnode) isLeader(store int) (yes bool) {
+	s, ok := n.store[store]
+	return ok && s.isLeader()
+}
+
 func (n *kvnode) leaderCount() (leaderCount int) {
 	for _, v := range n.store {
 		if v.isLeader() {
