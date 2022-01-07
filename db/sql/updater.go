@@ -29,7 +29,6 @@ func isRetryError(err error) bool {
 
 type updater struct {
 	dbc       *sqlx.DB
-	lastTime  time.Time
 	count     int
 	que       *queue.ArrayQueue
 	waitGroup *sync.WaitGroup
@@ -52,15 +51,6 @@ func (this *updater) Start() {
 	this.startOnce.Do(func() {
 		this.waitGroup.Add(1)
 		go func() {
-			for {
-				time.Sleep(time.Second * 60)
-				if nil != this.que.ForceAppend(sqlping) {
-					return
-				}
-			}
-		}()
-
-		go func() {
 			defer this.waitGroup.Done()
 			localList := make([]interface{}, 0, 200)
 			closed := false
@@ -77,8 +67,6 @@ func (this *updater) Start() {
 					localList[i] = nil
 				}
 			}
-
-			this.dbc.Close()
 		}()
 	})
 }
@@ -86,15 +74,6 @@ func (this *updater) Start() {
 func (this *updater) exec(v interface{}) {
 
 	switch v.(type) {
-	case ping:
-		if time.Now().Sub(this.lastTime) > time.Second*5*60 {
-			//空闲超过5分钟发送ping
-			err := this.dbc.Ping()
-			if nil != err {
-				GetSugar().Errorf("ping error %v\n", err)
-			}
-			this.lastTime = time.Now()
-		}
 	case db.DBUpdateTask:
 		task := v.(db.DBUpdateTask)
 		//检查是否还持有更新租约

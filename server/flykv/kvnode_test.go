@@ -6,6 +6,7 @@ package flykv
 import (
 	"fmt"
 	"github.com/BurntSushi/toml"
+	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/logger"
@@ -107,7 +108,7 @@ func newMockDB() *mockBackEnd {
 	return d
 }
 
-func (d *mockBackEnd) start(config *Config) error {
+func (d *mockBackEnd) start(config *Config, dbc *sqlx.DB) error {
 	d.d.Start()
 	return nil
 }

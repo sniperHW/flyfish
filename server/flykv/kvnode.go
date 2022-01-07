@@ -3,6 +3,7 @@ package flykv
 import (
 	"errors"
 	"fmt"
+	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/errcode"
@@ -41,6 +42,7 @@ type kvnode struct {
 	muS       sync.RWMutex
 	stores    map[int]*kvstore
 	config    *Config
+	dbc       *sqlx.DB
 	db        dbI
 	listener  *cs.Listener
 	setID     int
@@ -234,6 +236,7 @@ func (this *kvnode) Stop() {
 		}
 
 		this.db.stop()
+		this.dbc.Close()
 
 	}
 }
@@ -285,56 +288,25 @@ func MakeUnikeyPlacement(stores []int) (fn func(string) int) {
 	return
 }
 
-func (this *kvnode) getKvnodeBootInfo(pd []*net.UDPAddr) *sproto.KvnodeBootResp {
-	var resp *sproto.KvnodeBootResp
-
+func (this *kvnode) getKvnodeBootInfo(pd []*net.UDPAddr) (resp *sproto.KvnodeBootResp) {
 	for {
-		respCh := make(chan *sproto.KvnodeBootResp)
-		uu := make([]*fnet.Udp, len(pd))
 		context := snet.MakeUniqueContext()
-		for k, v := range pd {
-			u, err := fnet.NewUdp(fmt.Sprintf(":0"), snet.Pack, snet.Unpack)
-			if nil == err {
-				uu[k] = u
-				go func(u *fnet.Udp, pdAddr *net.UDPAddr) {
-					u.SendTo(pdAddr, snet.MakeMessage(context, &sproto.KvnodeBoot{NodeID: int32(this.id)}))
-					recvbuff := make([]byte, 65535)
-					_, r, err := u.ReadFrom(recvbuff)
-					if nil == err {
-						if m, ok := r.(*snet.Message); ok && context == m.Context {
-							respCh <- m.Msg.(*sproto.KvnodeBootResp)
-						}
+		r := snet.UdpCall(pd, snet.MakeMessage(context, &sproto.KvnodeBoot{NodeID: int32(this.id)}), time.Second, func(respCh chan interface{}, r interface{}) {
+			if m, ok := r.(*snet.Message); ok {
+				if resp, ok := m.Msg.(*sproto.KvnodeBootResp); ok && context == m.Context {
+					select {
+					case respCh <- resp:
+					default:
 					}
-				}(u, v)
+				}
 			}
-		}
+		})
 
-		ticker := time.NewTicker(3 * time.Second)
-
-		select {
-
-		case v := <-respCh:
-			resp = v
-		case <-ticker.C:
-
-		}
-
-		ticker.Stop()
-
-		for _, v := range uu {
-			if nil != v {
-				v.Close()
-			}
-		}
-
-		if nil != resp {
-			break
+		if nil != r {
+			resp = r.(*sproto.KvnodeBootResp)
+			return
 		}
 	}
-
-	//GetSugar().Infof("getKvnodeBootInfo %v", *resp)
-
-	return resp
 }
 
 var outputBufLimit fnet.OutputBufLimit = fnet.OutputBufLimit{
@@ -352,6 +324,20 @@ func (this *kvnode) start() error {
 
 	config := this.config
 
+	dbConfig := config.DBConfig
+
+	this.dbc, err = sqlOpen(config.DBType, dbConfig.Host, dbConfig.Port, dbConfig.DB, dbConfig.User, dbConfig.Password)
+
+	if nil != err {
+		return err
+	}
+
+	err = this.db.start(config, this.dbc)
+
+	if nil != err {
+		return err
+	}
+
 	if config.Mode == "solo" {
 
 		if dbdef, err = db.CreateDbDefFromCsv(config.SoloConfig.Meta); nil != err {
@@ -359,12 +345,6 @@ func (this *kvnode) start() error {
 		}
 
 		meta, err = sql.CreateDbMeta(1, dbdef)
-
-		if nil != err {
-			return err
-		}
-
-		err = this.db.start(config)
 
 		if nil != err {
 			return err
@@ -446,13 +426,6 @@ func (this *kvnode) start() error {
 
 		if nil != err {
 			GetSugar().Errorf("initUdp err:%v", err)
-			return err
-		}
-
-		err = this.db.start(config)
-
-		if nil != err {
-			GetSugar().Errorf("db.start err:%v", err)
 			return err
 		}
 

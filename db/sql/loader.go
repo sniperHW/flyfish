@@ -42,7 +42,6 @@ type loader struct {
 	queryGroup map[string]*query //要获取的结果集
 	max        int
 	dbc        *sqlx.DB
-	lastTime   time.Time
 	que        *queue.ArrayQueue
 	stoponce   int32
 	startOnce  sync.Once
@@ -60,16 +59,6 @@ func (this *loader) Stop() {
 
 func (this *loader) Start() {
 	this.startOnce.Do(func() {
-
-		go func() {
-			for {
-				time.Sleep(time.Second * 60)
-				if nil != this.que.ForceAppend(sqlping) {
-					return
-				}
-			}
-		}()
-
 		go func() {
 			localList := make([]interface{}, 0, 200)
 			closed := false
@@ -88,22 +77,12 @@ func (this *loader) Start() {
 
 				this.exec()
 			}
-			this.dbc.Close()
 		}()
 	})
 }
 
 func (this *loader) append(v interface{}) {
 	switch v.(type) {
-	case ping:
-		if time.Now().Sub(this.lastTime) > time.Second*5*60 {
-			//空闲超过5分钟发送ping
-			err := this.dbc.Ping()
-			if nil != err {
-				GetSugar().Errorf("ping error %v\n", err)
-			}
-			this.lastTime = time.Now()
-		}
 	case db.DBLoadTask:
 		task := v.(db.DBLoadTask)
 		table := task.GetTable()
@@ -143,8 +122,6 @@ func (this *loader) exec() {
 	}
 
 	defer this.reset()
-
-	this.lastTime = time.Now()
 
 	for _, v := range this.queryGroup {
 		buff := buffer.Get()

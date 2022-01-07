@@ -32,7 +32,6 @@ type scanner struct {
 	offset     int
 	tbmeta     db.TableMeta
 	exclude    []string
-	config     *Config
 	slot       int
 	table      string
 }
@@ -103,7 +102,6 @@ func (this *kvnode) onScanner(conn net.Conn) {
 			tbmeta:     tbmeta,
 			slot:       int(req.Slot),
 			table:      req.Table,
-			config:     this.config,
 		}
 
 		ch := make(chan struct{})
@@ -139,16 +137,7 @@ func (sc *scanner) response(conn net.Conn, resp *flyproto.ScanResp) error {
 }
 
 func (sc *scanner) loop(kvnode *kvnode, conn net.Conn) {
-	dbConfig := sc.config.DBConfig
-
-	dbc, err := sqlOpen(sc.config.DBType, dbConfig.Host, dbConfig.Port, dbConfig.DB, dbConfig.User, dbConfig.Password)
-	if nil != err {
-		sc.response(conn, &flyproto.ScanResp{Error: err.Error()})
-		conn.Close()
-		return
-	}
-
-	scanner, err := sql.NewScanner(sc.tbmeta, dbc, sc.slot, sc.table, sc.wantFields, sc.exclude)
+	scanner, err := sql.NewScanner(sc.tbmeta, kvnode.dbc, sc.slot, sc.table, sc.wantFields, sc.exclude)
 
 	if nil != err {
 		sc.response(conn, &flyproto.ScanResp{Error: err.Error()})
@@ -158,7 +147,6 @@ func (sc *scanner) loop(kvnode *kvnode, conn net.Conn) {
 
 	defer func() {
 		scanner.Close()
-		dbc.Close()
 		conn.Close()
 	}()
 	for {

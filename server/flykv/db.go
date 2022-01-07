@@ -15,7 +15,7 @@ type dbI interface {
 	issueLoad(l db.DBLoadTask) bool
 	issueUpdate(u db.DBUpdateTask) bool
 	stop()
-	start(config *Config) error
+	start(config *Config, dbc *sqlx.DB) error
 }
 
 type sqlDB struct {
@@ -46,30 +46,15 @@ func NewSqlDB() *sqlDB {
 	return &sqlDB{}
 }
 
-func (d *sqlDB) start(config *Config) error {
-	dbConfig := config.DBConfig
-
+func (d *sqlDB) start(config *Config, dbc *sqlx.DB) error {
 	for i := 0; i < config.SqlLoaderCount; i++ {
-		dbl, err := sqlOpen(config.DBType, dbConfig.Host, dbConfig.Port, dbConfig.DB, dbConfig.User, dbConfig.Password)
-		if nil != err {
-			return err
-		}
-
-		l := sql.NewLoader(dbl, 200, 5000)
-
+		l := sql.NewLoader(dbc, 200, 5000)
 		d.loaders = append(d.loaders, l)
-
 		l.Start()
 	}
 
 	for i := 0; i < config.SqlLoaderCount; i++ {
-		dbw, err := sqlOpen(config.DBType, dbConfig.Host, dbConfig.Port, dbConfig.DB, dbConfig.User, dbConfig.Password)
-		if nil != err {
-			return err
-		}
-
-		w := sql.NewUpdater(dbw, config.DBType, &d.wait)
-
+		w := sql.NewUpdater(dbc, config.DBType, &d.wait)
 		d.updaters = append(d.updaters, w)
 		w.Start()
 	}
