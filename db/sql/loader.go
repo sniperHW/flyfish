@@ -88,6 +88,7 @@ func (this *loader) Start() {
 
 				this.exec()
 			}
+			this.dbc.Close()
 		}()
 	})
 }

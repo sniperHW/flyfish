@@ -34,7 +34,7 @@ type Scaner struct {
 	finish      bool
 }
 
-func MakeScanner(conf ClientConf, Table string, fields []string) (*Scaner, error) {
+func MakeScanner(conf ClientConf, Table string, fields []string, all ...bool) (*Scaner, error) {
 	if "" == conf.SoloService && len(conf.PD) == 0 {
 		return nil, errors.New("cluster mode,but pd empty")
 	}
@@ -54,10 +54,9 @@ func MakeScanner(conf ClientConf, Table string, fields []string) (*Scaner, error
 		sc.soloService = conf.SoloService
 	}
 
-	if len(fields) == 0 {
-		sc.all = true
-	} else {
-		sc.fields = fields
+	sc.fields = fields
+	if len(all) > 0 {
+		sc.all = all[0]
 	}
 
 	return sc, nil
@@ -122,11 +121,13 @@ func recvScanResp(conn net.Conn, deadline time.Time) (*flyproto.ScanResp, error)
 	return resp, err
 }
 
+var ErrScanFinish error = errors.New("scan finish")
+
 func (sc *Scaner) Next(count int, deadline time.Time) ([]*Row, error) {
 	sc.Lock()
 	defer sc.Unlock()
 	if sc.finish {
-		return nil, nil
+		return nil, ErrScanFinish
 	}
 
 	if nil == sc.conn {
@@ -159,6 +160,8 @@ func (sc *Scaner) Next(count int, deadline time.Time) ([]*Row, error) {
 		} else {
 			service = sc.soloService
 		}
+
+		//GetSugar().Infof("next slot:%d", sc.slot)
 
 		dialer := &net.Dialer{Timeout: deadline.Sub(time.Now())}
 		conn, err := dialer.Dial("tcp", service)
@@ -230,9 +233,10 @@ func (sc *Scaner) Next(count int, deadline time.Time) ([]*Row, error) {
 	}
 
 	if resp.Finish {
+		sc.conn.Close()
 		sc.conn = nil
 		sc.slot++
-		if sc.slot > slot.SlotCount {
+		if sc.slot >= slot.SlotCount {
 			sc.finish = true
 		}
 	}

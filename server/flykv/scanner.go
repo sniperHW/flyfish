@@ -10,7 +10,6 @@ import (
 	fnet "github.com/sniperHW/flyfish/pkg/net"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"net"
-	"sync/atomic"
 	"time"
 )
 
@@ -80,14 +79,16 @@ type scanner struct {
 	wantFields []string
 	kv         []*cacheKv
 	offset     int
-	scanner    *sql.Scanner
 	tbmeta     db.TableMeta
 	exclude    []string
-	closed     int32
+	config     *Config
+	slot       int
+	table      string
 }
 
 func (this *kvnode) onScanner(session *fnet.Socket) {
 	go func() {
+		//GetSugar().Infof("onScanner")
 		conn := session.GetUnderConn()
 		req, err := RecvScanerReq(conn)
 		if nil != err {
@@ -152,51 +153,22 @@ func (this *kvnode) onScanner(session *fnet.Socket) {
 		scanner := &scanner{
 			wantFields: fields,
 			tbmeta:     tbmeta,
+			slot:       int(req.Slot),
+			table:      req.Table,
+			config:     this.config,
 		}
 
-		ch := make(chan error)
+		ch := make(chan struct{})
 
 		store.mainQueue.q.Append(0, func() {
 			kvs := store.slotsKvMap[int(req.Slot)]
-			if nil == kvs {
-				ch <- errors.New("slot not in store")
-			} else {
+			if nil != kvs {
 				scanner.makeCachekvs(req.Table, kvs)
-				ch <- nil
 			}
+			close(ch)
 		})
 
-		if err = <-ch; nil != err {
-			SendScanerResp(conn, &flyproto.MakeScannerResp{
-				Ok:     false,
-				Reason: err.Error(),
-			})
-			conn.Close()
-			return
-		}
-
-		dbConfig := this.config.DBConfig
-
-		dbc, err := sqlOpen(this.config.DBType, dbConfig.Host, dbConfig.Port, dbConfig.DB, dbConfig.User, dbConfig.Password)
-		if nil != err {
-			SendScanerResp(conn, &flyproto.MakeScannerResp{
-				Ok:     false,
-				Reason: err.Error(),
-			})
-			conn.Close()
-			return
-		}
-
-		scanner.scanner, err = sql.NewScanner(tbmeta, dbc, int(req.Slot), req.Table, scanner.wantFields, scanner.exclude)
-
-		if nil != err {
-			SendScanerResp(conn, &flyproto.MakeScannerResp{
-				Ok:     false,
-				Reason: err.Error(),
-			})
-			conn.Close()
-			return
-		}
+		<-ch
 
 		if err = SendScanerResp(conn, &flyproto.MakeScannerResp{
 			Ok: true,
@@ -211,19 +183,40 @@ func (this *kvnode) onScanner(session *fnet.Socket) {
 	}()
 }
 
-func (sc *scanner) recv(conn *net.TCPConn) (*flyproto.ScanReq, error) {
+func (sc *scanner) recv(conn net.Conn) (*flyproto.ScanReq, error) {
 	req := &flyproto.ScanReq{}
 	err := recv(conn, 8192, req, time.Second*30)
 	return req, err
 }
 
-func (sc *scanner) response(conn *net.TCPConn, resp *flyproto.ScanResp) error {
+func (sc *scanner) response(conn net.Conn, resp *flyproto.ScanResp) error {
 	return send(conn, resp, time.Second*5)
 }
 
 func (sc *scanner) loop(kvnode *kvnode, session *fnet.Socket) {
-	conn := session.GetUnderConn().(*net.TCPConn)
+	//GetSugar().Infof("scanner.loop slot:%d", sc.slot)
+	conn := session.GetUnderConn()
+
+	dbConfig := sc.config.DBConfig
+
+	dbc, err := sqlOpen(sc.config.DBType, dbConfig.Host, dbConfig.Port, dbConfig.DB, dbConfig.User, dbConfig.Password)
+	if nil != err {
+		sc.response(conn, &flyproto.ScanResp{Error: err.Error()})
+		conn.Close()
+		return
+	}
+
+	scanner, err := sql.NewScanner(sc.tbmeta, dbc, sc.slot, sc.table, sc.wantFields, sc.exclude)
+
+	if nil != err {
+		sc.response(conn, &flyproto.ScanResp{Error: err.Error()})
+		conn.Close()
+		return
+	}
+
 	defer func() {
+		scanner.Close()
+		dbc.Close()
 		kvnode.muC.Lock()
 		delete(kvnode.clients, session)
 		kvnode.muC.Unlock()
@@ -234,7 +227,7 @@ func (sc *scanner) loop(kvnode *kvnode, session *fnet.Socket) {
 		if nil != err {
 			return
 		}
-		rows, finish, err := sc.next(int(req.Count))
+		rows, finish, err := sc.next(scanner, int(req.Count))
 		resp := &flyproto.ScanResp{}
 		if nil == err {
 			resp.Rows = rows
@@ -248,12 +241,6 @@ func (sc *scanner) loop(kvnode *kvnode, session *fnet.Socket) {
 		if nil != errResp || nil != err || finish {
 			return
 		}
-	}
-}
-
-func (sc *scanner) close() {
-	if atomic.CompareAndSwapInt32(&sc.closed, 0, 1) {
-		sc.scanner.Close()
 	}
 }
 
@@ -299,7 +286,7 @@ func (sc *scanner) fillDefault(fields []*flyproto.Field) []*flyproto.Field {
 	return fields
 }
 
-func (sc *scanner) next(count int) (rows []*flyproto.Row, finish bool, err error) {
+func (sc *scanner) next(scanner *sql.Scanner, count int) (rows []*flyproto.Row, finish bool, err error) {
 	if 0 >= count {
 		count = 200
 	} else if count > 200 {
@@ -308,7 +295,7 @@ func (sc *scanner) next(count int) (rows []*flyproto.Row, finish bool, err error
 
 	var r []*sql.ScannerRow
 
-	if r, err = sc.scanner.Next(count); nil != err {
+	if r, err = scanner.Next(count); nil != err {
 		return
 	} else {
 		for _, v := range r {
@@ -331,7 +318,7 @@ func (sc *scanner) next(count int) (rows []*flyproto.Row, finish bool, err error
 		sc.offset++
 	}
 
-	if count > 0 && sc.offset > len(sc.kv) {
+	if count > 0 && sc.offset >= len(sc.kv) {
 		finish = true
 	}
 

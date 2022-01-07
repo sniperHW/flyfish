@@ -50,7 +50,6 @@ func (this *updater) Stop() {
 
 func (this *updater) Start() {
 	this.startOnce.Do(func() {
-
 		this.waitGroup.Add(1)
 		go func() {
 			for {
@@ -78,6 +77,8 @@ func (this *updater) Start() {
 					localList[i] = nil
 				}
 			}
+
+			this.dbc.Close()
 		}()
 	})
 }
