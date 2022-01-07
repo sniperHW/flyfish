@@ -22,7 +22,7 @@ type Row struct {
 	Fields  map[string]*Field
 }
 
-type Scaner struct {
+type Scanner struct {
 	sync.Mutex
 	pdAddr      []*net.UDPAddr
 	soloService string
@@ -34,12 +34,12 @@ type Scaner struct {
 	finish      bool
 }
 
-func MakeScanner(conf ClientConf, Table string, fields []string, all ...bool) (*Scaner, error) {
+func MakeScanner(conf ClientConf, Table string, fields []string, all ...bool) (*Scanner, error) {
 	if "" == conf.SoloService && len(conf.PD) == 0 {
 		return nil, errors.New("cluster mode,but pd empty")
 	}
 
-	sc := &Scaner{table: Table}
+	sc := &Scanner{table: Table}
 
 	if "" == conf.SoloService {
 		for _, v := range conf.PD {
@@ -123,7 +123,7 @@ func recvScanResp(conn net.Conn, deadline time.Time) (*flyproto.ScanResp, error)
 
 var ErrScanFinish error = errors.New("scan finish")
 
-func (sc *Scaner) Next(count int, deadline time.Time) ([]*Row, error) {
+func (sc *Scanner) Next(count int, deadline time.Time) ([]*Row, error) {
 	sc.Lock()
 	defer sc.Unlock()
 	if sc.finish {
