@@ -25,6 +25,16 @@ func New(max int) *Bitmap {
 	}
 }
 
+func (b *Bitmap) Clone() *Bitmap {
+	o := &Bitmap{
+		max:   b.max,
+		bits:  make([]byte, len(b.bits), len(b.bits)),
+		dirty: true,
+	}
+	copy(o.bits, b.bits)
+	return o
+}
+
 func (b *Bitmap) GetOpenBits() []int {
 	if b.dirty {
 		b.dirty = false

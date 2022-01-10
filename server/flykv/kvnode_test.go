@@ -15,7 +15,7 @@ import (
 	"github.com/sniperHW/flyfish/server/mock"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
-	"github.com/sniperHW/flyfish/server/slot"
+	sslot "github.com/sniperHW/flyfish/server/slot"
 	"github.com/stretchr/testify/assert"
 	"net"
 	"net/http"
@@ -759,8 +759,8 @@ func TestKick(t *testing.T) {
 }
 
 func TestMakeUnikeyPlacement(t *testing.T) {
-	fn := MakeUnikeyPlacement([]int{1, 2, 3, 4, 5})
-	fmt.Println(fn("users1:huangwei:247100"), slot.Unikey2Slot("users1:huangwei:247100"))
+	fn := sslot.MakeUnikeyPlacement([]int{1, 2, 3, 4, 5})
+	fmt.Println(fn("users1:huangwei:247100"), sslot.Unikey2Slot("users1:huangwei:247100"))
 }
 
 func TestUpdateMeta(t *testing.T) {
@@ -813,8 +813,8 @@ func TestUpdateMeta(t *testing.T) {
 }
 
 func TestSlotTransferIn(t *testing.T) {
-	oldSlotCount := slot.SlotCount
-	slot.SlotCount = 16
+	oldSlotCount := sslot.SlotCount
+	sslot.SlotCount = 16
 
 	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
 
@@ -857,15 +857,15 @@ func TestSlotTransferIn(t *testing.T) {
 
 	conn.Close()
 
-	slot.SlotCount = oldSlotCount
+	sslot.SlotCount = oldSlotCount
 
 	node.Stop()
 
 }
 
 func TestSlotTransferOut(t *testing.T) {
-	oldSlotCount := slot.SlotCount
-	slot.SlotCount = 16
+	oldSlotCount := sslot.SlotCount
+	sslot.SlotCount = 16
 
 	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
 
@@ -936,7 +936,7 @@ func TestSlotTransferOut(t *testing.T) {
 
 	}
 
-	slot.SlotCount = oldSlotCount
+	sslot.SlotCount = oldSlotCount
 
 	node.Stop()
 

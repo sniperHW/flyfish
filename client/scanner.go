@@ -5,8 +5,9 @@ import (
 	"fmt"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
-	snet "github.com/sniperHW/flyfish/server/net"
-	sproto "github.com/sniperHW/flyfish/server/proto"
+	//snet "github.com/sniperHW/flyfish/server/net"
+	//sproto "github.com/sniperHW/flyfish/server/proto"
+	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/server/slot"
 	"net"
 	"sync"
@@ -19,12 +20,22 @@ type Row struct {
 	Fields  map[string]*Field
 }
 
+type storeContext struct {
+	id    int
+	slots *bitmap.Bitmap
+	conn  net.Conn
+}
+
+type soloContext struct {
+	soloService string
+	offset      int
+	stores      []*storeContext
+}
+
 type Scanner struct {
 	sync.Mutex
 	pdAddr      []*net.UDPAddr
-	soloService string
-	slot        int
-	conn        net.Conn
+	soloContext *soloContext
 	table       string
 	fields      []string
 	all         bool
@@ -48,7 +59,16 @@ func MakeScanner(conf ClientConf, Table string, fields []string, all ...bool) (*
 			return nil, errors.New("pd is empty")
 		}
 	} else {
-		sc.soloService = conf.SoloService
+		sc.soloContext = &soloContext{
+			soloService: conf.SoloService,
+		}
+		st := slot.MakeStoreBitmap(conf.Stores)
+		for i := 0; i < len(conf.Stores); i++ {
+			sc.soloContext.stores = append(sc.soloContext.stores, &storeContext{
+				id:    conf.Stores[i],
+				slots: st[i],
+			})
+		}
 	}
 
 	sc.fields = fields
@@ -62,7 +82,7 @@ func MakeScanner(conf ClientConf, Table string, fields []string, all ...bool) (*
 
 func recvMakeScannerResp(conn net.Conn, deadline time.Time) (*flyproto.MakeScannerResp, error) {
 	resp := &flyproto.MakeScannerResp{}
-	err := cs.Recv(conn, 4096, resp, deadline)
+	err := cs.Recv(conn, 65535, resp, deadline)
 	return resp, err
 }
 
@@ -74,8 +94,130 @@ func recvScanResp(conn net.Conn, deadline time.Time) (*flyproto.ScanResp, error)
 
 var ErrScanFinish error = errors.New("scan finish")
 
-func (sc *Scanner) Next(count int, deadline time.Time) ([]*Row, error) {
+func (st *storeContext) next(scaner *Scanner, service string, count int, deadline time.Time) ([]*Row, bool, error) {
+	if nil == st.conn {
+		dialer := &net.Dialer{Timeout: deadline.Sub(time.Now())}
+		conn, err := dialer.Dial("tcp", service)
+		if err != nil {
+			return nil, false, err
+		}
+
+		if !cs.SendLoginReq(conn, &flyproto.LoginReq{Scanner: true}, deadline) {
+			conn.Close()
+			return nil, false, fmt.Errorf("login failed")
+		}
+
+		loginResp, err := cs.RecvLoginResp(conn, deadline)
+		if nil != err || !loginResp.GetOk() {
+			conn.Close()
+			return nil, false, fmt.Errorf("login failed")
+		}
+
+		err = cs.Send(conn, &flyproto.MakeScanerReq{
+			Table:  scaner.table,
+			Slots:  st.slots.ToJson(),
+			Store:  int32(st.id),
+			Fields: scaner.fields,
+			All:    scaner.all,
+		}, deadline)
+
+		if nil != err {
+			conn.Close()
+			return nil, false, err
+		}
+
+		makeScanerResp, err := recvMakeScannerResp(conn, deadline)
+		if nil != err {
+			conn.Close()
+			return nil, false, err
+		} else if !makeScanerResp.Ok {
+			conn.Close()
+			return nil, false, errors.New(makeScanerResp.Reason)
+		}
+
+		st.conn = conn
+	}
+
+	err := cs.Send(st.conn, &flyproto.ScanReq{Count: int32(count)}, deadline)
+	if nil != err {
+		return nil, false, err
+	}
+
+	resp, err := recvScanResp(st.conn, deadline)
+
+	if nil != err {
+		return nil, false, err
+	} else if "" != resp.Error {
+		return nil, false, errors.New(resp.Error)
+	}
+
+	var rows []*Row
+	for _, v := range resp.Rows {
+		r := &Row{
+			Key:     v.Key,
+			Version: v.Version,
+			Fields:  map[string]*Field{},
+		}
+
+		for _, vv := range v.Fields {
+			r.Fields[vv.Name] = (*Field)(vv)
+		}
+
+		rows = append(rows, r)
+	}
+
+	finish := false
+
+	if resp.Slot == -1 && resp.Finish {
+		finish = true
+	}
+
+	return rows, finish, nil
+
+}
+
+func (sc *soloContext) next(scaner *Scanner, count int, deadline time.Time) (rows []*Row, finish bool, err error) {
+	if sc.offset >= len(sc.stores) {
+		finish = true
+		return
+	}
+
+	st := sc.stores[sc.offset]
+	rows, finish, err = st.next(scaner, sc.soloService, count, deadline)
+	if finish {
+		finish = false
+		sc.offset++
+		if sc.offset >= len(sc.stores) {
+			finish = true
+		}
+	}
+
+	if nil != err && nil != st.conn {
+		st.conn.Close()
+	}
+
+	return
+}
+
+func (sc *Scanner) nextSolo(count int, deadline time.Time) (rows []*Row, err error) {
 	sc.Lock()
+	defer sc.Unlock()
+	if !sc.finish {
+		rows, sc.finish, err = sc.soloContext.next(sc, count, deadline)
+	} else {
+		err = ErrScanFinish
+	}
+	return
+}
+
+func (sc *Scanner) Next(count int, deadline time.Time) ([]*Row, error) {
+	if nil != sc.soloContext {
+		return sc.nextSolo(count, deadline)
+	} else {
+		return nil, ErrScanFinish
+	}
+
+	/*sc.Lock()
 	defer sc.Unlock()
 	if sc.finish {
 		return nil, ErrScanFinish
@@ -190,6 +332,5 @@ func (sc *Scanner) Next(count int, deadline time.Time) ([]*Row, error) {
 		}
 	}
 
-	return rows, nil
-
+	return rows, nil*/
 }

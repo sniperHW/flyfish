@@ -61,6 +61,7 @@ type ClientConf struct {
 	//solo模式
 	UnikeyPlacement func(string) int //返回unikey所在的store,对于连接proxy的方式无需提供,store字段由proxy填写
 	SoloService     string
+	Stores          []int
 }
 
 func makeWaitResp() *map[int64]*cmdContext {

@@ -1,46 +1,46 @@
-遍历table
-
-flyfish是一个热缓存，更新操作采用异步回写模式。因此，对数据库执行select all无法保证能返回所有的数据。
-
-例如:
-
-向flyfish发起一个set操作，因为key不存在，所以执行insert回写。
-当set操作返回响应之后，立刻向db执行select不一定能返回刚insert的key,因为insert可能尚未执行。
+scan返回整个表的行
 
 
-为了能正确的处理因为回写延后执行导致select无法准确返回记录的情况。select返回的记录需要结合DB和flyfish的缓存内容。
+表中的行由内存热数据以及db中的冷数据构成，每个kv对应db中的一行，创建时根据其key哈希计算出一个slot，这个slot将被保存到db中。
+
+我们以slot为单位，获取行数据，请求发往store,由store负责构建slot相关的行数据并返回给客户端。
+
+每个store管理着一系列slot。并且slot可能在store之间动态均衡。
 
 
-首先，我们为每个key在数据库的记录添加一个__slot__字段，这个字段是根据key计算出来的，永远不会被改变。
+1）依次遍历slot
 
-其次，每个store管理固定的slot。
+我们可以从slot=0开始，依次查询slot在哪个store然后向store建立连接请求对应slot的行数据。
 
-在执行遍历时，以store为单位，依次执行。
+但是，slot是动态分配的不同store上的，连续的slot可能在不同的store上。如果slot的数量比较大，一次完成的遍历将要
 
-store生成select * from xxxx where __slot__ in (store管理的所有slot);
-
-由此返回的记录就是与当前store相关的。
-
-store结合缓存中的数据以及select返回的结果，生成一个记录集返回给客户端。
+向store请求建立slot数量的连接数（并非同时建立，依次建立）。
 
 
-问题：
+2）以store为单位遍历
 
-1）无法保证返回的结果集不重复。
+我们也可以以store为单位遍历，首先选择一个store建立连接，请求它把由它管理的slot的所有行数据返回给客户端。
 
-例如：slot:1当前归store:1管理，store:1生成包含slot:1的结果集返回给客户端。
-
-接着遍历store:2,正好在这个时候发生slot迁移，slot:1迁移到store:2。slot:1的结果集再一次返回给客户端。
+但是，因为slot是动态均衡的，这可能产生以下两个问题
 
 
-2）同理，也无法完全保证结果集不丢失数据。
+1）slot的重复返回
+
+slot:1在遍历store:1的时候已经返回，之后处理store:2,在此期间slot:1被迁移到store:3,处理store:3,slot:1被再次返回。
+
+对此问题，客户端可以记录以及处理过的slot,请求发往store的时候把已经处理过的slot带上，store就可以忽略掉已经处理过的slot。
 
 
-slot迁移只会发生在set的扩/缩容期间。因此在set的扩/缩容期间执行遍历可能无法得到正确的结果集。
+2）slot的遗漏
+
+先处理store:1，接着处理store:2,在此期间store:3上的slot:3被迁移到store:1。处理store:3,slot:3丢失。
+
+为了处理此问题，store遍历完毕后，client需要检查是否还有slot被遗漏，如有遗漏，再次请求遗漏的slot。
 
 
+最优的处理办法应该是scan交给pd来处理，pd发现有scan任务尚未完毕的时候不触发迁移任务。
 
-为了完全避免以上问题，可以以slot为单位挨个slot遍历。
+考虑到scan并不是flyfish推荐的常用操作，flyfish选择在scan发现slot遗漏的情况下直接将错误告知客户端。让客户端后续重试。
 
 
 

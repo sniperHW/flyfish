@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/db/sql"
+	"github.com/sniperHW/flyfish/pkg/bitmap"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
 	"net"
@@ -16,7 +17,7 @@ func SendScanerResp(conn net.Conn, resp *flyproto.MakeScannerResp) error {
 
 func RecvScanerReq(conn net.Conn) (*flyproto.MakeScanerReq, error) {
 	req := &flyproto.MakeScanerReq{}
-	err := cs.Recv(conn, 1024, req, time.Now().Add(time.Second*5))
+	err := cs.Recv(conn, 65535, req, time.Now().Add(time.Second*5))
 	return req, err
 }
 
@@ -26,14 +27,20 @@ type cacheKv struct {
 	fields  []*flyproto.Field //字段
 }
 
+type slot struct {
+	slot    int
+	kv      []*cacheKv
+	offset  int
+	exclude []string
+}
+
 type scanner struct {
 	wantFields []string
-	kv         []*cacheKv
-	offset     int
 	tbmeta     db.TableMeta
-	exclude    []string
-	slot       int
 	table      string
+	slots      []*slot
+	offset     int
+	scanner    *sql.Scanner
 }
 
 func (this *kvnode) onScanner(conn net.Conn) {
@@ -49,21 +56,10 @@ func (this *kvnode) onScanner(conn net.Conn) {
 		var tbmeta db.TableMeta
 
 		this.muS.RLock()
-
-		if req.Store > 0 {
-			store, ok = this.stores[int(req.Store)]
-		} else {
-			//solo mode,slot should not transfer
-			for _, v := range this.stores {
-				if v.slots.Test(int(req.Slot)) {
-					store = v
-					ok = true
-					break
-				}
-			}
-		}
-
+		store, ok = this.stores[int(req.Store)]
 		this.muS.RUnlock()
+
+		var wantSlots *bitmap.Bitmap
 
 		err = func() error {
 			if !ok {
@@ -77,7 +73,9 @@ func (this *kvnode) onScanner(conn net.Conn) {
 				return errors.New("store not found")
 			}
 
-			return nil
+			wantSlots, err = bitmap.CreateFromJson(req.Slots)
+
+			return err
 		}()
 
 		if nil != err {
@@ -100,16 +98,16 @@ func (this *kvnode) onScanner(conn net.Conn) {
 		scanner := &scanner{
 			wantFields: fields,
 			tbmeta:     tbmeta,
-			slot:       int(req.Slot),
 			table:      req.Table,
 		}
 
 		ch := make(chan struct{})
 
 		store.mainQueue.q.Append(0, func() {
-			kvs := store.slotsKvMap[int(req.Slot)]
-			if nil != kvs {
-				scanner.makeCachekvs(req.Table, kvs)
+			for _, v := range wantSlots.GetOpenBits() {
+				if store.slots.Test(v) {
+					scanner.makeCachekvs(req.Table, v, store.slotsKvMap[v])
+				}
 			}
 			close(ch)
 		})
@@ -137,26 +135,22 @@ func (sc *scanner) response(conn net.Conn, resp *flyproto.ScanResp) error {
 }
 
 func (sc *scanner) loop(kvnode *kvnode, conn net.Conn) {
-	scanner, err := sql.NewScanner(sc.tbmeta, kvnode.dbc, sc.slot, sc.table, sc.wantFields, sc.exclude)
-
-	if nil != err {
-		sc.response(conn, &flyproto.ScanResp{Error: err.Error()})
-		conn.Close()
-		return
-	}
-
 	defer func() {
-		scanner.Close()
 		conn.Close()
+		if nil != sc.scanner {
+			sc.scanner.Close()
+		}
 	}()
 	for {
 		req, err := sc.recv(conn)
 		if nil != err {
 			return
 		}
-		rows, finish, err := sc.next(scanner, int(req.Count))
+
+		rows, slot, finish, err := sc.next(kvnode, int(req.Count))
 		resp := &flyproto.ScanResp{}
 		if nil == err {
+			resp.Slot = int32(slot)
 			resp.Rows = rows
 			resp.Finish = finish
 		} else {
@@ -165,30 +159,99 @@ func (sc *scanner) loop(kvnode *kvnode, conn net.Conn) {
 
 		errResp := sc.response(conn, resp)
 
-		if nil != errResp || nil != err || finish {
+		if nil != errResp || nil != err || (slot == -1 && finish) {
 			return
 		}
 	}
 }
 
-func (sc *scanner) makeCachekvs(table string, kvs map[string]*kv) {
-	for _, v := range kvs {
-		if v.state == kv_ok && v.table == table {
-			ckv := &cacheKv{
-				key:     v.key,
-				version: v.version,
-			}
+func (sc *scanner) next(kvnode *kvnode, count int) (rows []*flyproto.Row, slot int, finish bool, err error) {
+	if sc.offset >= len(sc.slots) {
+		slot = -1
+		finish = true
+		return
+	}
 
-			for _, k := range sc.wantFields {
-				if f, ok := v.fields[k]; ok {
-					ckv.fields = append(ckv.fields, f)
-				}
-			}
+	if 0 >= count {
+		count = 200
+	} else if count > 200 {
+		count = 200
+	}
 
-			sc.kv = append(sc.kv, ckv)
-			sc.exclude = append(sc.exclude, v.key)
+	s := sc.slots[sc.offset]
+	slot = s.slot
+
+	if nil == sc.scanner {
+		sc.scanner, err = sql.NewScanner(sc.tbmeta, kvnode.dbc, s.slot, sc.table, sc.wantFields, s.exclude)
+		if nil != err {
+			return
 		}
 	}
+
+	var r []*sql.ScannerRow
+
+	if r, err = sc.scanner.Next(count); nil != err {
+		return
+	} else {
+		for _, v := range r {
+			rows = append(rows, &flyproto.Row{
+				Key:     v.Key,
+				Version: v.Version,
+				Fields:  sc.fillDefault(v.Fields),
+			})
+		}
+	}
+
+	count -= len(r)
+
+	for count > 0 && s.offset < len(s.kv) {
+		rows = append(rows, &flyproto.Row{
+			Key:     s.kv[s.offset].key,
+			Version: s.kv[s.offset].version,
+			Fields:  sc.fillDefault(s.kv[s.offset].fields),
+		})
+		count--
+		s.offset++
+	}
+
+	if len(r) == 0 && s.offset >= len(s.kv) {
+		finish = true
+		sc.offset++
+		sc.scanner.Close()
+		sc.scanner = nil
+	}
+
+	return
+}
+
+func (sc *scanner) makeCachekvs(table string, slotNo int, kvs map[string]*kv) {
+
+	s := &slot{
+		slot: slotNo,
+	}
+
+	if nil != kvs {
+		for _, v := range kvs {
+			if v.state == kv_ok && v.table == table {
+				ckv := &cacheKv{
+					key:     v.key,
+					version: v.version,
+				}
+
+				for _, k := range sc.wantFields {
+					if f, ok := v.fields[k]; ok {
+						ckv.fields = append(ckv.fields, f)
+					}
+				}
+
+				s.kv = append(s.kv, ckv)
+				s.exclude = append(s.exclude, v.key)
+			}
+		}
+	}
+
+	sc.slots = append(sc.slots, s)
+
 }
 
 func (sc *scanner) fillDefault(fields []*flyproto.Field) []*flyproto.Field {
@@ -211,44 +274,4 @@ func (sc *scanner) fillDefault(fields []*flyproto.Field) []*flyproto.Field {
 	}
 
 	return fields
-}
-
-func (sc *scanner) next(scanner *sql.Scanner, count int) (rows []*flyproto.Row, finish bool, err error) {
-	if 0 >= count {
-		count = 200
-	} else if count > 200 {
-		count = 200
-	}
-
-	var r []*sql.ScannerRow
-
-	if r, err = scanner.Next(count); nil != err {
-		return
-	} else {
-		for _, v := range r {
-			rows = append(rows, &flyproto.Row{
-				Key:     v.Key,
-				Version: v.Version,
-				Fields:  sc.fillDefault(v.Fields),
-			})
-		}
-	}
-
-	count -= len(r)
-
-	for count > 0 && sc.offset < len(sc.kv) {
-		rows = append(rows, &flyproto.Row{
-			Key:     sc.kv[sc.offset].key,
-			Version: sc.kv[sc.offset].version,
-			Fields:  sc.fillDefault(sc.kv[sc.offset].fields),
-		})
-		count--
-		sc.offset++
-	}
-
-	if len(r) == 0 && sc.offset >= len(sc.kv) {
-		finish = true
-	}
-
-	return
 }

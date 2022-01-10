@@ -15,7 +15,7 @@ import (
 	"github.com/sniperHW/flyfish/proto/cs"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
-	"github.com/sniperHW/flyfish/server/slot"
+	sslot "github.com/sniperHW/flyfish/server/slot"
 	"net"
 	"runtime"
 	"strings"
@@ -241,53 +241,6 @@ func (this *kvnode) Stop() {
 	}
 }
 
-func makeStoreBitmap(stores []int) (b []*bitmap.Bitmap) {
-	if len(stores) > 0 {
-		slotPerStore := slot.SlotCount / len(stores)
-		for i, _ := range stores {
-			storeBitmap := bitmap.New(slot.SlotCount)
-			j := i * slotPerStore
-			for ; j < (i+1)*slotPerStore; j++ {
-				storeBitmap.Set(j)
-			}
-
-			//不能正好平分，剩余的slot全部交给最后一个store
-			if i == len(stores)-1 && j < slot.SlotCount {
-				for ; j < slot.SlotCount; j++ {
-					storeBitmap.Set(j)
-				}
-			}
-			b = append(b, storeBitmap)
-		}
-	}
-	return
-}
-
-func MakeUnikeyPlacement(stores []int) (fn func(string) int) {
-	if len(stores) > 0 {
-		slot2Store := map[int]int{}
-		slotPerStore := slot.SlotCount / len(stores)
-		for i, v := range stores {
-			j := i * slotPerStore
-			for ; j < (i+1)*slotPerStore; j++ {
-				slot2Store[j] = v
-			}
-
-			//不能正好平分，剩余的slot全部交给最后一个store
-			if i == len(stores)-1 && j < slot.SlotCount {
-				for ; j < slot.SlotCount; j++ {
-					slot2Store[j] = v
-				}
-			}
-		}
-
-		fn = func(unikey string) int {
-			return slot2Store[slot.Unikey2Slot(unikey)]
-		}
-	}
-	return
-}
-
 func (this *kvnode) getKvnodeBootInfo(pd []*net.UDPAddr) (resp *sproto.KvnodeBootResp) {
 	for {
 		context := snet.MakeUniqueContext()
@@ -376,7 +329,7 @@ func (this *kvnode) start() error {
 				return err
 			}
 
-			storeBitmaps := makeStoreBitmap(config.SoloConfig.Stores)
+			storeBitmaps := sslot.MakeStoreBitmap(config.SoloConfig.Stores)
 			for i, v := range config.SoloConfig.Stores {
 				if err = this.addStore(meta, v, peers, storeBitmaps[i]); nil != err {
 					return err
