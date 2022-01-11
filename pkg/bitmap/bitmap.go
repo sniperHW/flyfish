@@ -53,6 +53,21 @@ func (b *Bitmap) GetOpenBits() []int {
 	return b.openBits
 }
 
+func (b *Bitmap) GetCloseBits() []int {
+	var closeBits []int
+	for i := 0; i < len(b.bits); i++ {
+		v := b.bits[i]
+		if v > 0 {
+			for j := 0; j < 8; j++ {
+				if v&(1<<j) == 0 {
+					closeBits = append(closeBits, i*8+j)
+				}
+			}
+		}
+	}
+	return closeBits
+}
+
 func (b *Bitmap) Set(i int, o ...int) {
 	b.set(i)
 	for _, v := range o {

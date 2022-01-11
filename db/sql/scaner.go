@@ -28,9 +28,6 @@ type Scanner struct {
 }
 
 func NewScanner(tbmeta db.TableMeta, dbc *sqlx.DB, slot int, table string, wantFields []string, exclude []string) (*Scanner, error) {
-	if err := tbmeta.CheckFieldsName(wantFields); nil != err {
-		return nil, err
-	}
 
 	queryFields := append([]string{"__key__", "__version__"}, wantFields...)
 

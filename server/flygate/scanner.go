@@ -13,28 +13,6 @@ import (
 	"time"
 )
 
-func SendScanerResp(conn net.Conn, resp *flyproto.MakeScannerResp) error {
-	return cs.Send(conn, resp, time.Now().Add(time.Second*5))
-}
-
-func RecvScanerReq(conn net.Conn) (*flyproto.MakeScanerReq, error) {
-	req := &flyproto.MakeScanerReq{}
-	err := cs.Recv(conn, 65535, req, time.Now().Add(time.Second*5))
-	return req, err
-}
-
-func recvMakeScannerResp(conn net.Conn, deadline time.Time) (*flyproto.MakeScannerResp, error) {
-	resp := &flyproto.MakeScannerResp{}
-	err := cs.Recv(conn, 65535, resp, deadline)
-	return resp, err
-}
-
-func recvScanResp(conn net.Conn, deadline time.Time) (*flyproto.ScanResp, error) {
-	resp := &flyproto.ScanResp{}
-	err := cs.Recv(conn, 4096*1024, resp, deadline)
-	return resp, err
-}
-
 type storeContext struct {
 	id       int
 	slots    *bitmap.Bitmap
@@ -96,7 +74,7 @@ func (g *gate) onScanner(conn net.Conn) {
 		}); nil != err {
 			conn.Close()
 		} else {
-			go sc.loop(conn)
+			go sc.loop(g, conn)
 		}
 	}()
 }
@@ -199,7 +177,7 @@ func (st *storeContext) next(sc *scanner, count int) (*flyproto.ScanResp, error)
 	}
 }
 
-func (sc *scanner) loop(conn net.Conn) {
+func (sc *scanner) loop(g *gate, conn net.Conn) {
 	defer func() {
 		conn.Close()
 	}()
@@ -216,18 +194,60 @@ func (sc *scanner) loop(conn net.Conn) {
 			return
 		}
 
-		if resp.Slot == -1 && resp.Finish {
-			sc.stores[sc.offset].conn.Close()
-			sc.offset++
+		if resp.Finish {
+			if resp.Slot == -1 {
+				sc.stores[sc.offset].conn.Close()
+				sc.offset++
+			} else {
+				sc.okSlots.Set(int(resp.Slot))
+			}
 		}
 
+		finish := true
+
 		if sc.offset >= len(sc.stores) {
-			//全部slot遍历完毕
+			//store遍历完毕，检查是否有slot因为迁移被遗漏
+			if slots := sc.okSlots.GetCloseBits(); len(slots) > 0 {
+				sc.stores = sc.stores[:0]
+				sc.offset = 0
+				ch := make(chan struct{})
+				g.mainQueue.Append(0, func() {
+
+					stores := map[int]*store{}
+
+					for _, v := range slots {
+						if s, ok := g.routeInfo.slotToStore[v]; ok {
+							stores[v] = s
+						}
+
+					}
+
+					for _, vv := range stores {
+						st := &storeContext{
+							id:       vv.id,
+							slots:    vv.slots.Clone(),
+							services: map[int]string{},
+						}
+						for _, vvv := range vv.set.nodes {
+							if !vvv.removed {
+								st.services[vvv.id] = vvv.service
+							}
+						}
+						sc.stores = append(sc.stores, st)
+					}
+
+					close(ch)
+				})
+				<-ch
+			}
+			finish = false
 		}
+
+		resp.Finish = finish
 
 		err = sc.response(conn, resp)
 
-		if nil != err {
+		if nil != err || finish {
 			return
 		}
 	}

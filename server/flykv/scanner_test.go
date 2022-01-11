@@ -40,22 +40,26 @@ func TestScaner(t *testing.T) {
 
 	fmt.Println("set ok")
 
-	sc, _ := client.MakeScanner(client.ClientConf{SoloService: "localhost:10018", Stores: []int{1}}, "users1", nil, true)
+	sc, _ := client.NewScanner(client.ClientConf{SoloService: "localhost:10018", Stores: []int{1}}, "users1", nil, true)
 
 	count := 0
 
 	for {
-		rows, err := sc.Next(10, time.Now().Add(time.Second*5))
-		if client.ErrScanFinish == err {
-			break
-		} else if nil != err {
+		row, err := sc.Next(time.Now().Add(time.Second * 5))
+
+		if nil != err {
 			panic(err)
 		}
-		for _, v := range rows {
-			fmt.Println(v.Key)
+
+		if nil != row {
+			fmt.Println(row.Key)
 			count++
+		} else {
+			break
 		}
 	}
+
+	fmt.Println("count", count)
 
 	node.Stop()
 
@@ -65,24 +69,26 @@ func TestScaner(t *testing.T) {
 
 	node = start1Node(newSqlDBBackEnd())
 
-	sc, _ = client.MakeScanner(client.ClientConf{SoloService: "localhost:10018", Stores: []int{1}}, "users1", nil, true)
+	sc, _ = client.NewScanner(client.ClientConf{SoloService: "localhost:10018", Stores: []int{1}}, "users1", nil, true)
 
 	count = 0
 
 	for {
-		rows, err := sc.Next(10, time.Now().Add(time.Second*5))
-		if client.ErrScanFinish == err {
-			break
-		} else if nil != err {
+		row, err := sc.Next(time.Now().Add(time.Second * 5))
+
+		if nil != err {
 			panic(err)
 		}
 
-		//fmt.Println(len(rows))
-		for _, v := range rows {
-			fmt.Println(v.Key)
+		if nil != row {
+			fmt.Println(row.Key)
 			count++
+		} else {
+			break
 		}
 	}
+
+	fmt.Println("count", count)
 
 	node.Stop()
 

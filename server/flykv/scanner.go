@@ -1,25 +1,15 @@
 package flykv
 
 import (
-	"errors"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
+	"github.com/sniperHW/flyfish/proto/cs/scan"
 	"net"
 	"time"
 )
-
-func SendScanerResp(conn net.Conn, resp *flyproto.MakeScannerResp) error {
-	return cs.Send(conn, resp, time.Now().Add(time.Second*5))
-}
-
-func RecvScanerReq(conn net.Conn) (*flyproto.MakeScanerReq, error) {
-	req := &flyproto.MakeScanerReq{}
-	err := cs.Recv(conn, 65535, req, time.Now().Add(time.Second*5))
-	return req, err
-}
 
 type cacheKv struct {
 	key     string
@@ -45,7 +35,7 @@ type scanner struct {
 
 func (this *kvnode) onScanner(conn net.Conn) {
 	go func() {
-		req, err := RecvScanerReq(conn)
+		req, err := scan.RecvScannerReq(conn, time.Now().Add(time.Second*5))
 		if nil != err {
 			conn.Close()
 			return
@@ -60,39 +50,41 @@ func (this *kvnode) onScanner(conn net.Conn) {
 		this.muS.RUnlock()
 
 		var wantSlots *bitmap.Bitmap
+		var fields []string
 
-		err = func() error {
+		errCode := func() int {
 			if !ok {
-				return errors.New("store not found")
-			} else if !store.isLeader() {
-				return errors.New("store is not leader")
+				return scan.Err_invaild_store
+			} else if !store.isReady() {
+				return scan.Err_store_not_ready
 			}
 
 			tbmeta = store.meta.GetTableMeta(req.Table)
 			if nil == tbmeta {
-				return errors.New("store not found")
+				return scan.Err_invaild_table
 			}
 
-			wantSlots, err = bitmap.CreateFromJson(req.Slots)
+			if wantSlots, err = bitmap.CreateFromJson(req.Slots); nil != err {
+				return scan.Err_unpack
+			}
 
-			return err
+			if req.All {
+				fields = tbmeta.GetAllFieldsName()
+			} else {
+				fields = req.Fields
+				if err := tbmeta.CheckFieldsName(fields); nil != err {
+					return scan.Err_invaild_field
+				}
+			}
+
+			return scan.Err_ok
+
 		}()
 
-		if nil != err {
-			SendScanerResp(conn, &flyproto.MakeScannerResp{
-				Ok:     false,
-				Reason: err.Error(),
-			})
+		if errCode != scan.Err_ok {
+			scan.SendScannerResp(conn, errCode, time.Now().Add(time.Second))
 			conn.Close()
 			return
-		}
-
-		var fields []string
-
-		if req.All {
-			fields = tbmeta.GetAllFieldsName()
-		} else {
-			fields = req.Fields
 		}
 
 		scanner := &scanner{
@@ -114,24 +106,12 @@ func (this *kvnode) onScanner(conn net.Conn) {
 
 		<-ch
 
-		if err = SendScanerResp(conn, &flyproto.MakeScannerResp{
-			Ok: true,
-		}); nil != err {
+		if err = scan.SendScannerResp(conn, scan.Err_ok, time.Now().Add(time.Second)); nil != err {
 			conn.Close()
 		} else {
 			go scanner.loop(this, conn)
 		}
 	}()
-}
-
-func (sc *scanner) recv(conn net.Conn) (*flyproto.ScanReq, error) {
-	req := &flyproto.ScanReq{}
-	err := cs.Recv(conn, 8192, req, time.Now().Add(time.Second*30))
-	return req, err
-}
-
-func (sc *scanner) response(conn net.Conn, resp *flyproto.ScanResp) error {
-	return cs.Send(conn, resp, time.Now().Add(time.Second*5))
 }
 
 func (sc *scanner) loop(kvnode *kvnode, conn net.Conn) {
@@ -142,33 +122,30 @@ func (sc *scanner) loop(kvnode *kvnode, conn net.Conn) {
 		}
 	}()
 	for {
-		req, err := sc.recv(conn)
+		req, err := scan.RecvScanNextReq(conn, time.Now().Add(time.Second*15))
 		if nil != err {
 			return
 		}
 
-		rows, slot, finish, err := sc.next(kvnode, int(req.Count))
-		resp := &flyproto.ScanResp{}
-		if nil == err {
-			resp.Slot = int32(slot)
-			resp.Rows = rows
-			resp.Finish = finish
-		} else {
-			resp.Error = err.Error()
-		}
-
-		errResp := sc.response(conn, resp)
-
-		if nil != errResp || nil != err || (slot == -1 && finish) {
+		if breakloop := sc.next(kvnode, conn, int(req.Count)); breakloop {
 			return
 		}
 	}
 }
 
-func (sc *scanner) next(kvnode *kvnode, count int) (rows []*flyproto.Row, slot int, finish bool, err error) {
+func (sc *scanner) next(kvnode *kvnode, conn net.Conn, count int) (breakloop bool) {
+	resp := &flyproto.ScanNextResp{}
+	defer func() {
+		if nil != cs.Send(conn, resp, time.Now().Add(time.Second)) {
+			breakloop = true
+		} else {
+			breakloop = breakloop || resp.ErrCode != int32(scan.Err_ok)
+		}
+	}()
+
 	if sc.offset >= len(sc.slots) {
-		slot = -1
-		finish = true
+		resp.Rows = append(resp.Rows, scan.MakeSentinelRow(scan.SentinelStore))
+		breakloop = true
 		return
 	}
 
@@ -178,12 +155,15 @@ func (sc *scanner) next(kvnode *kvnode, count int) (rows []*flyproto.Row, slot i
 		count = 200
 	}
 
+	var err error
+
 	s := sc.slots[sc.offset]
-	slot = s.slot
+	resp.Slot = int32(s.slot)
 
 	if nil == sc.scanner {
 		sc.scanner, err = sql.NewScanner(sc.tbmeta, kvnode.dbc, s.slot, sc.table, sc.wantFields, s.exclude)
 		if nil != err {
+			resp.ErrCode = int32(scan.Err_db)
 			return
 		}
 	}
@@ -191,10 +171,11 @@ func (sc *scanner) next(kvnode *kvnode, count int) (rows []*flyproto.Row, slot i
 	var r []*sql.ScannerRow
 
 	if r, err = sc.scanner.Next(count); nil != err {
+		resp.ErrCode = int32(scan.Err_db)
 		return
 	} else {
 		for _, v := range r {
-			rows = append(rows, &flyproto.Row{
+			resp.Rows = append(resp.Rows, &flyproto.Row{
 				Key:     v.Key,
 				Version: v.Version,
 				Fields:  sc.fillDefault(v.Fields),
@@ -205,7 +186,7 @@ func (sc *scanner) next(kvnode *kvnode, count int) (rows []*flyproto.Row, slot i
 	count -= len(r)
 
 	for count > 0 && s.offset < len(s.kv) {
-		rows = append(rows, &flyproto.Row{
+		resp.Rows = append(resp.Rows, &flyproto.Row{
 			Key:     s.kv[s.offset].key,
 			Version: s.kv[s.offset].version,
 			Fields:  sc.fillDefault(s.kv[s.offset].fields),
@@ -215,7 +196,7 @@ func (sc *scanner) next(kvnode *kvnode, count int) (rows []*flyproto.Row, slot i
 	}
 
 	if len(r) == 0 && s.offset >= len(s.kv) {
-		finish = true
+		resp.Rows = append(resp.Rows, scan.MakeSentinelRow(scan.SentinelSlot))
 		sc.offset++
 		sc.scanner.Close()
 		sc.scanner = nil

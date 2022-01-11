@@ -37,7 +37,7 @@ func init() {
 	requestSpace.Register(&protocol.CompareAndSetReq{}, uint32(protocol.CmdType_CompareAndSet))
 	requestSpace.Register(&protocol.CompareAndSetNxReq{}, uint32(protocol.CmdType_CompareAndSetNx))
 	requestSpace.Register(&protocol.KickReq{}, uint32(protocol.CmdType_Kick))
-	requestSpace.Register(&protocol.ScanReq{}, uint32(protocol.CmdType_Scan))
+	requestSpace.Register(&protocol.ScanNextReq{}, uint32(protocol.CmdType_ScanNext))
 
 	responseSpace := pb.GetNamespace("response")
 
@@ -52,5 +52,5 @@ func init() {
 	responseSpace.Register(&protocol.CompareAndSetNxResp{}, uint32(protocol.CmdType_CompareAndSetNx))
 	responseSpace.Register(&protocol.CompareAndSetNxResp{}, uint32(protocol.CmdType_CompareAndSetNx))
 	responseSpace.Register(&protocol.KickResp{}, uint32(protocol.CmdType_Kick))
-	responseSpace.Register(&protocol.ScanResp{}, uint32(protocol.CmdType_Scan))
+	responseSpace.Register(&protocol.ScanNextResp{}, uint32(protocol.CmdType_ScanNext))
 }
