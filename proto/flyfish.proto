@@ -205,7 +205,7 @@ message row {
   required string key      = 1;
   required int64  version  = 2;
   repeated field  fields   = 3;
-  optional bool   sentinel = 4;
+  optional bool   dummy    = 4;
 }
 
 message scan_next_resp {

@@ -75,8 +75,6 @@ enum ServerCmdType {
   GetFlyGateListResp            = 411;
   ChangeFlyGate                 = 412;
   ChangeFlyGateResp             = 413;
-  GetSlotStore                  = 414;
-  GetSlotStoreResp              = 415;
 
   //for test
   PacketTest                    = 1000;
@@ -434,15 +432,6 @@ message storeReportStatus {
 message trasnferLeader {
   optional int32  storeID    = 1;
   optional uint64 transferee = 2; 
-}
-
-message getSlotStore {
-  optional int32 slot = 1;
-}
-
-message getSlotStoreResp {
-  optional int32  store   = 1;
-  optional string service = 2;
 }
 
 

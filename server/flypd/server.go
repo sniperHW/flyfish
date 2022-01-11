@@ -193,30 +193,6 @@ func (p *pd) onStoreReportStatus(from *net.UDPAddr, m *snet.Message) {
 	store.progress = msg.Progress
 }
 
-func (p *pd) onGetSlotStore(from *net.UDPAddr, m *snet.Message) {
-	msg := m.Msg.(*sproto.GetSlotStore)
-	store, leader := func() (int, string) {
-		for _, v := range p.pState.deployment.sets {
-			for _, vv := range v.stores {
-				if vv.slots.Test(int(msg.Slot)) {
-					for _, vvv := range v.nodes {
-						if vvv.isLeader(vv.id) {
-							return vv.id, fmt.Sprintf("%s:%d", vvv.host, vvv.servicePort)
-						}
-					}
-					return 0, ""
-				}
-			}
-		}
-		return 0, ""
-	}()
-
-	p.udp.SendTo(from, snet.MakeMessage(m.Context, &sproto.GetSlotStoreResp{
-		Store:   int32(store),
-		Service: leader,
-	}))
-}
-
 func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.InstallDeployment{}, p.onInstallDeployment)
 	p.registerMsgHandler(&sproto.AddSet{}, p.onAddSet)
@@ -241,5 +217,4 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.StoreUpdateMetaOk{}, p.onStoreUpdateMetaOk)
 	p.registerMsgHandler(&sproto.GetSetStatus{}, p.onGetSetStatus)
 	p.registerMsgHandler(&sproto.StoreReportStatus{}, p.onStoreReportStatus)
-	p.registerMsgHandler(&sproto.GetSlotStore{}, p.onGetSlotStore)
 }

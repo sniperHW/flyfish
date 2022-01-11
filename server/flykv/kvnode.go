@@ -48,7 +48,7 @@ type kvnode struct {
 	setID     int
 	id        int
 	mutilRaft *raft.MutilRaft
-	stopOnce  int32
+	closed    int32
 	udpConn   *fnet.Udp
 	join      bool
 	pdAddr    []*net.UDPAddr
@@ -76,7 +76,7 @@ func (this *kvnode) onClient(session *fnet.Socket) {
 
 		session.BeginRecv(func(session *fnet.Socket, v interface{}) {
 
-			if atomic.LoadInt32(&this.stopOnce) == 1 {
+			if atomic.LoadInt32(&this.closed) == 1 {
 				return
 			}
 
@@ -188,7 +188,7 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, peers map[uint16]raft.
 }
 
 func (this *kvnode) Stop() {
-	if atomic.CompareAndSwapInt32(&this.stopOnce, 0, 1) {
+	if atomic.CompareAndSwapInt32(&this.closed, 0, 1) {
 		//首先关闭监听,不在接受新到达的连接
 		this.listener.Close()
 

@@ -29,12 +29,15 @@ var err []error = []error{
 	errors.New("db error"),
 }
 
-type SentinelType int
+const RecvScanNextReqTimeout time.Duration = time.Minute * 15
+
+type DummyType int
 
 const (
-	SentinelNone  = 0
-	SentinelSlot  = 1 //slot已经scan完毕
-	SentinelStore = 2 //store已经scan完毕
+	DummyNone  = 0
+	DummySlot  = 1 //slot已经scan完毕
+	DummyStore = 2 //store已经scan完毕
+	DummyScan  = 3 //scan已经完毕
 )
 
 func ToError(errcode int) error {
@@ -47,27 +50,29 @@ func ToError(errcode int) error {
 	}
 }
 
-func MakeSentinelRow(tt SentinelType) *flyproto.Row {
-	row := &flyproto.Row{Sentinel: true}
+func MakeDummyRow(tt DummyType) *flyproto.Row {
+	row := &flyproto.Row{Dummy: true}
 	switch tt {
-	case SentinelSlot:
-		row.Key = "SentinelSlot"
-	case SentinelStore:
-		row.Key = "SentinelStore"
+	case DummySlot:
+		row.Key = "DummySlot"
+	case DummyStore:
+		row.Key = "DummyStore"
+	case DummyScan:
+		row.Key = "DummyScan"
 	default:
-		row.Key = "SentinelNone"
+		row.Key = "DummyNone"
 	}
 	return row
 }
 
-func GetSentinelType(row *flyproto.Row) SentinelType {
+func GetDummyType(row *flyproto.Row) DummyType {
 	switch row.Key {
-	case "SentinelSlot":
-		return SentinelSlot
-	case "SentinelStore":
-		return SentinelStore
+	case "DummySlot":
+		return DummySlot
+	case "DummyStore":
+		return DummyStore
 	default:
-		return SentinelNone
+		return DummyNone
 	}
 }
 

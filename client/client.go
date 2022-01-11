@@ -235,9 +235,9 @@ func (this *Client) doCallBack(unikey string, cb callback, a interface{}) {
 	}
 }
 
-func QueryGate(pd []*net.UDPAddr) (ret []*sproto.Flygate) {
+func QueryGate(pd []*net.UDPAddr, timeout time.Duration) (ret []*sproto.Flygate) {
 	context := snet.MakeUniqueContext()
-	if resp := snet.UdpCall(pd, snet.MakeMessage(context, &sproto.GetFlyGateList{}), time.Second, func(respCh chan interface{}, r interface{}) {
+	if resp := snet.UdpCall(pd, snet.MakeMessage(context, &sproto.GetFlyGateList{}), timeout, func(respCh chan interface{}, r interface{}) {
 		if m, ok := r.(*snet.Message); ok {
 			if resp, ok := m.Msg.(*sproto.GetFlyGateListResp); ok && context == m.Context {
 				select {
@@ -496,7 +496,7 @@ func (this *Client) tryGateBalance() {
 
 func (this *Client) queryRouteInfo() {
 	go func() {
-		gates := QueryGate(this.pdAddr)
+		gates := QueryGate(this.pdAddr, time.Second)
 
 		if atomic.LoadInt32(&this.closed) == 1 {
 			return

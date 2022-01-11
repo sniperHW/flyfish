@@ -233,7 +233,7 @@ func (m *routeErrorAndSlotTransferingReqMgr) addSlotTransferingReq(msg *forwordM
 
 type gate struct {
 	config          *Config
-	stopOnce        int32
+	closed          int32
 	listener        *cs.Listener
 	totalPendingMsg int64
 	clients         map[*flynet.Socket]*flynet.Socket
@@ -314,7 +314,7 @@ func NewFlyGate(config *Config, service string) (*gate, error) {
 }
 
 func (g *gate) refreshMsgPerSecond() {
-	if atomic.LoadInt32(&g.stopOnce) == 0 {
+	if atomic.LoadInt32(&g.closed) == 0 {
 		g.msgPerSecond.Add(int(atomic.LoadInt32(&g.msgRecv)))
 		atomic.StoreInt32(&g.msgRecv, 0)
 		time.AfterFunc(time.Second, g.refreshMsgPerSecond)
@@ -336,7 +336,7 @@ func (g *gate) startListener() {
 			})
 
 			session.BeginRecv(func(session *flynet.Socket, v interface{}) {
-				if atomic.LoadInt32(&g.stopOnce) == 1 {
+				if atomic.LoadInt32(&g.closed) == 1 {
 					//服务关闭不再接受新新的请求
 					return
 				}
@@ -346,7 +346,7 @@ func (g *gate) startListener() {
 				g.mainQueue.ForceAppend(0, msg)
 			})
 		})
-	})
+	}, g.onScanner)
 	GetSugar().Infof("flygate start on %s", g.serviceAddr)
 }
 
@@ -540,7 +540,7 @@ func (g *gate) waitCondition(fn func() bool) {
 }
 
 func (g *gate) Stop() {
-	if atomic.CompareAndSwapInt32(&g.stopOnce, 0, 1) {
+	if atomic.CompareAndSwapInt32(&g.closed, 0, 1) {
 		//首先关闭监听,不在接受新到达的连接
 		g.listener.Close()
 

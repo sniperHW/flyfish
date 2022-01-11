@@ -31,6 +31,7 @@ type scanner struct {
 	slots      []*slot
 	offset     int
 	scanner    *sql.Scanner
+	conn       net.Conn
 }
 
 func (this *kvnode) onScanner(conn net.Conn) {
@@ -122,7 +123,7 @@ func (sc *scanner) loop(kvnode *kvnode, conn net.Conn) {
 		}
 	}()
 	for {
-		req, err := scan.RecvScanNextReq(conn, time.Now().Add(time.Second*15))
+		req, err := scan.RecvScanNextReq(conn, time.Now().Add(scan.RecvScanNextReqTimeout))
 		if nil != err {
 			return
 		}
@@ -144,7 +145,8 @@ func (sc *scanner) next(kvnode *kvnode, conn net.Conn, count int) (breakloop boo
 	}()
 
 	if sc.offset >= len(sc.slots) {
-		resp.Rows = append(resp.Rows, scan.MakeSentinelRow(scan.SentinelStore))
+		//插入哑元标识store遍历结束
+		resp.Rows = append(resp.Rows, scan.MakeDummyRow(scan.DummyStore))
 		breakloop = true
 		return
 	}
@@ -196,7 +198,8 @@ func (sc *scanner) next(kvnode *kvnode, conn net.Conn, count int) (breakloop boo
 	}
 
 	if len(r) == 0 && s.offset >= len(s.kv) {
-		resp.Rows = append(resp.Rows, scan.MakeSentinelRow(scan.SentinelSlot))
+		//插入哑元标识slot遍历结束
+		resp.Rows = append(resp.Rows, scan.MakeDummyRow(scan.DummySlot))
 		sc.offset++
 		sc.scanner.Close()
 		sc.scanner = nil

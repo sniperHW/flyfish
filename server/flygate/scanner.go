@@ -6,6 +6,7 @@ import (
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
+	"github.com/sniperHW/flyfish/proto/cs/scan"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	sslot "github.com/sniperHW/flyfish/server/slot"
@@ -13,7 +14,7 @@ import (
 	"time"
 )
 
-type storeContext struct {
+type storeScanner struct {
 	id       int
 	slots    *bitmap.Bitmap
 	conn     net.Conn
@@ -24,14 +25,14 @@ type scanner struct {
 	wantFields []string
 	all        bool
 	okSlots    *bitmap.Bitmap
-	stores     []*storeContext
+	stores     []*storeScanner
 	offset     int
 	table      string
 }
 
 func (g *gate) onScanner(conn net.Conn) {
 	go func() {
-		req, err := RecvScanerReq(conn)
+		req, err := scan.RecvScannerReq(conn, time.Now().Add(time.Second*5))
 		if nil != err {
 			conn.Close()
 			return
@@ -50,7 +51,7 @@ func (g *gate) onScanner(conn net.Conn) {
 			for _, v := range g.routeInfo.sets {
 				if !v.removed {
 					for _, vv := range v.stores {
-						st := &storeContext{
+						st := &storeScanner{
 							id:       vv.id,
 							slots:    vv.slots.Clone(),
 							services: map[int]string{},
@@ -69,9 +70,7 @@ func (g *gate) onScanner(conn net.Conn) {
 
 		<-ch
 
-		if err = SendScanerResp(conn, &flyproto.MakeScannerResp{
-			Ok: true,
-		}); nil != err {
+		if err = scan.SendScannerResp(conn, scan.Err_ok, time.Now().Add(time.Second)); nil != err {
 			conn.Close()
 		} else {
 			go sc.loop(g, conn)
@@ -79,17 +78,7 @@ func (g *gate) onScanner(conn net.Conn) {
 	}()
 }
 
-func (sc *scanner) recv(conn net.Conn) (*flyproto.ScanReq, error) {
-	req := &flyproto.ScanReq{}
-	err := cs.Recv(conn, 8192, req, time.Now().Add(time.Second*30))
-	return req, err
-}
-
-func (sc *scanner) response(conn net.Conn, resp *flyproto.ScanResp) error {
-	return cs.Send(conn, resp, time.Now().Add(time.Second*5))
-}
-
-func (st *storeContext) next(sc *scanner, count int) (*flyproto.ScanResp, error) {
+func (st *storeScanner) next(sc *scanner, count int) (*flyproto.ScanNextResp, error) {
 	if nil == st.conn {
 		var leader int
 		nodes := []string{}
@@ -134,26 +123,20 @@ func (st *storeContext) next(sc *scanner, count int) (*flyproto.ScanResp, error)
 			return nil, fmt.Errorf("login failed")
 		}
 
-		err = cs.Send(conn, &flyproto.MakeScanerReq{
-			Table:  sc.table,
-			Slots:  st.slots.ToJson(),
-			Store:  int32(st.id),
-			Fields: sc.wantFields,
-			All:    sc.all,
-		}, deadline)
+		err = scan.SendScannerReq(conn, sc.table, st.slots.ToJson(), st.id, sc.wantFields, sc.all, time.Now().Add(time.Second))
 
 		if nil != err {
 			conn.Close()
 			return nil, err
 		}
 
-		makeScanerResp, err := recvMakeScannerResp(conn, deadline)
+		scannerResp, err := scan.RecvScannerResp(conn, deadline)
 		if nil != err {
 			conn.Close()
 			return nil, err
-		} else if !makeScanerResp.Ok {
+		} else if int(scannerResp.ErrCode) != scan.Err_ok {
 			conn.Close()
-			return nil, errors.New(makeScanerResp.Reason)
+			return nil, scan.ToError(int(scannerResp.ErrCode))
 		}
 
 		st.conn = conn
@@ -161,17 +144,15 @@ func (st *storeContext) next(sc *scanner, count int) (*flyproto.ScanResp, error)
 
 	deadline := time.Now().Add(time.Second * 10)
 
-	err := cs.Send(st.conn, &flyproto.ScanReq{Count: int32(count)}, deadline)
+	err := scan.SendScanNextReq(st.conn, count, deadline)
 	if nil != err {
 		return nil, err
 	}
 
-	resp, err := recvScanResp(st.conn, deadline)
+	resp, err := scan.RecvScanNextResp(st.conn, deadline)
 
 	if nil != err {
 		return nil, err
-	} else if "" != resp.Error {
-		return nil, errors.New(resp.Error)
 	} else {
 		return resp, nil
 	}
@@ -183,7 +164,7 @@ func (sc *scanner) loop(g *gate, conn net.Conn) {
 	}()
 
 	for {
-		req, err := sc.recv(conn)
+		req, err := scan.RecvScanNextReq(conn, time.Now().Add(scan.RecvScanNextReqTimeout))
 		if nil != err {
 			return
 		}
@@ -194,60 +175,68 @@ func (sc *scanner) loop(g *gate, conn net.Conn) {
 			return
 		}
 
-		if resp.Finish {
-			if resp.Slot == -1 {
+		if scan.Err_ok != int(resp.ErrCode) {
+			scan.SendScanNextResp(conn, int(resp.ErrCode), 0, nil, time.Now().Add(time.Second))
+			return
+		}
+
+		var dummy *flyproto.Row
+		if len(resp.Rows) > 0 && resp.Rows[len(resp.Rows)-1].Dummy {
+			dummy = resp.Rows[len(resp.Rows)-1]
+			//丢弃dummy
+			resp.Rows = resp.Rows[:len(resp.Rows)-1]
+		}
+
+		breakLoop := false
+
+		if nil != dummy {
+			switch scan.GetDummyType(dummy) {
+			case scan.DummySlot:
+				sc.okSlots.Set(int(resp.Slot))
+			case scan.DummyStore:
 				sc.stores[sc.offset].conn.Close()
 				sc.offset++
-			} else {
-				sc.okSlots.Set(int(resp.Slot))
-			}
-		}
-
-		finish := true
-
-		if sc.offset >= len(sc.stores) {
-			//store遍历完毕，检查是否有slot因为迁移被遗漏
-			if slots := sc.okSlots.GetCloseBits(); len(slots) > 0 {
-				sc.stores = sc.stores[:0]
-				sc.offset = 0
-				ch := make(chan struct{})
-				g.mainQueue.Append(0, func() {
-
-					stores := map[int]*store{}
-
-					for _, v := range slots {
-						if s, ok := g.routeInfo.slotToStore[v]; ok {
-							stores[v] = s
-						}
-
-					}
-
-					for _, vv := range stores {
-						st := &storeContext{
-							id:       vv.id,
-							slots:    vv.slots.Clone(),
-							services: map[int]string{},
-						}
-						for _, vvv := range vv.set.nodes {
-							if !vvv.removed {
-								st.services[vvv.id] = vvv.service
+				if sc.offset >= len(sc.stores) {
+					//store遍历完毕，检查是否有slot因为迁移被遗漏
+					if slots := sc.okSlots.GetCloseBits(); len(slots) > 0 {
+						sc.stores = sc.stores[:0]
+						sc.offset = 0
+						ch := make(chan struct{})
+						g.mainQueue.Append(0, func() {
+							stores := map[int]*store{}
+							for _, v := range slots {
+								if s, ok := g.routeInfo.slotToStore[v]; ok {
+									stores[v] = s
+								}
 							}
-						}
-						sc.stores = append(sc.stores, st)
+							for _, vv := range stores {
+								st := &storeScanner{
+									id:       vv.id,
+									slots:    vv.slots.Clone(),
+									services: map[int]string{},
+								}
+								for _, vvv := range vv.set.nodes {
+									if !vvv.removed {
+										st.services[vvv.id] = vvv.service
+									}
+								}
+								sc.stores = append(sc.stores, st)
+							}
+							close(ch)
+						})
+						<-ch
+					} else {
+						//加入dummy通告scan结束
+						resp.Rows = append(resp.Rows, scan.MakeDummyRow(scan.DummyScan))
+						breakLoop = true
 					}
-
-					close(ch)
-				})
-				<-ch
+				}
+			default:
+				return
 			}
-			finish = false
 		}
 
-		resp.Finish = finish
-
-		err = sc.response(conn, resp)
-
-		if nil != err || finish {
+		if nil != scan.SendScanNextResp(conn, 0, 0, resp.Rows, time.Now().Add(time.Second)) || breakLoop {
 			return
 		}
 	}
