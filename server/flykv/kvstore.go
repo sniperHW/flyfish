@@ -73,6 +73,7 @@ type clientRequest struct {
 type kvmgr struct {
 	kv               []map[string]*kv
 	slotsKvMap       map[int]map[string]*kv
+	tableKvMap       map[string]map[string]*kv
 	slots            *bitmap.Bitmap
 	slotsTransferOut map[int]*SlotTransferProposal //正在迁出的slot
 	kvcount          int
@@ -147,13 +148,19 @@ func (s *kvstore) deleteKv(k *kv) {
 	delete(s.kv[k.groupID], k.uniKey)
 	s.lru.remove(&k.lru)
 
-	sl := s.slotsKvMap[k.slot]
-	delete(sl, k.uniKey)
-	if len(sl) == 0 {
+	kvs := s.tableKvMap[k.table]
+	delete(kvs, k.uniKey)
+	if len(kvs) == 0 {
+		delete(s.tableKvMap, k.table)
+	}
+
+	kvs = s.slotsKvMap[k.slot]
+	delete(kvs, k.uniKey)
+	if len(kvs) == 0 {
+		delete(s.slotsKvMap, k.slot)
 		//当前slot的kv已经全部清除，如果当前slot正在迁出，结束迁出事务
 		p := s.slotsTransferOut[k.slot]
 		if nil != p {
-			delete(s.slotsKvMap, k.slot)
 			delete(s.slotsTransferOut, k.slot)
 			s.slots.Set(k.slot)
 			if nil != p.reply {
@@ -191,12 +198,20 @@ func (s *kvstore) newkv(slot int, groupID int, unikey string, key string, table 
 
 	s.kvcount++
 
-	if sl := s.slotsKvMap[slot]; nil != sl {
-		sl[unikey] = k
+	if kvs := s.slotsKvMap[slot]; nil != kvs {
+		kvs[unikey] = k
 	} else {
-		sl = map[string]*kv{}
-		sl[unikey] = k
-		s.slotsKvMap[slot] = sl
+		kvs = map[string]*kv{}
+		kvs[unikey] = k
+		s.slotsKvMap[slot] = kvs
+	}
+
+	if kvs := s.tableKvMap[table]; nil != kvs {
+		kvs[unikey] = k
+	} else {
+		kvs = map[string]*kv{}
+		kvs[unikey] = k
+		s.tableKvMap[table] = kvs
 	}
 
 	return k, nil
@@ -703,7 +718,7 @@ func (s *kvstore) onNotifySlotTransIn(from *net.UDPAddr, msg *sproto.NotifySlotT
 
 func (s *kvstore) processSlotTransferOut(p *SlotTransferProposal) {
 	kvs := s.slotsKvMap[p.slot]
-	if nil != kvs && len(kvs) > 0 {
+	if nil != kvs {
 		for _, v := range kvs {
 			s.tryKick(v)
 		}

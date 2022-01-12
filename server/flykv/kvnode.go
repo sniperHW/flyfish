@@ -160,6 +160,7 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, peers map[uint16]raft.
 		kvmgr: kvmgr{
 			kv:               make([]map[string]*kv, groupSize),
 			slotsKvMap:       map[int]map[string]*kv{},
+			tableKvMap:       map[string]map[string]*kv{},
 			slots:            slots,
 			slotsTransferOut: map[int]*SlotTransferProposal{},
 		},
