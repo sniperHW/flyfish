@@ -14,7 +14,7 @@ func SendLoginResp(conn net.Conn, loginResp *protocol.LoginResp, deadline time.T
 
 func RecvLoginReq(conn net.Conn, deadline time.Time) (*protocol.LoginReq, error) {
 	loginReq := &protocol.LoginReq{}
-	err := Recv(conn, 128, loginReq, deadline)
+	err := Recv(conn, loginReq, deadline)
 	return loginReq, err
 }
 

@@ -430,7 +430,7 @@ func (p *pd) onPromoteLearnerStore(from *net.UDPAddr, m *snet.Message) {
 
 func (p *pd) onRemoveNodeStore(from *net.UDPAddr, m *snet.Message) {
 
-	GetSugar().Infof("onRemoveNodeStore")
+	GetSugar().Debugf("onRemoveNodeStore")
 
 	msg := m.Msg.(*sproto.RemoveNodeStore)
 	resp := &sproto.RemoveNodeStoreResp{}

@@ -492,9 +492,8 @@ func TestFlygate(t *testing.T) {
 		gate := client.QueryGate([]*net.UDPAddr{addr}, time.Second)
 		if len(gate) > 0 {
 			break
-		} else {
-			time.Sleep(time.Second)
 		}
+		time.Sleep(time.Second)
 	}
 
 	fmt.Println("run client")
@@ -593,6 +592,7 @@ func TestAddRemoveNode(t *testing.T) {
 		if resp != nil && resp.(*sproto.AddNodeResp).Reason == "duplicate node id" {
 			break
 		}
+		time.Sleep(time.Second)
 	}
 
 	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
@@ -627,6 +627,7 @@ func TestAddRemoveNode(t *testing.T) {
 		if resp != nil && resp.(*sproto.AddLearnerStoreToNodeResp).Reason == "learner store already exists" {
 			break
 		}
+		time.Sleep(time.Second)
 	}
 
 	logger.GetSugar().Infof("--------------------add learner 3:1 OK------------------------")
@@ -660,6 +661,7 @@ func TestAddRemoveNode(t *testing.T) {
 		if resp != nil && resp.(*sproto.PromoteLearnerStoreResp).Reason == "store is already a voter" {
 			break
 		}
+		time.Sleep(time.Second)
 
 	}
 
@@ -688,6 +690,7 @@ func TestAddRemoveNode(t *testing.T) {
 		if resp != nil && resp.(*sproto.RemoveNodeStoreResp).Reason == "store not exists" {
 			break
 		}
+		time.Sleep(time.Second)
 	}
 
 	//remove node
@@ -714,6 +717,7 @@ func TestAddRemoveNode(t *testing.T) {
 		if resp != nil && resp.(*sproto.RemNodeResp).Reason == "node not found" {
 			break
 		}
+		time.Sleep(time.Second)
 	}
 
 	node3.Stop()
@@ -779,6 +783,7 @@ func TestAddSet(t *testing.T) {
 		if resp != nil && resp.(*sproto.AddSetResp).Reason == "set already exists" {
 			break
 		}
+		time.Sleep(time.Second)
 	}
 
 	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
@@ -838,6 +843,7 @@ func TestAddSet(t *testing.T) {
 				break
 			}
 		}
+		time.Sleep(time.Second)
 	}
 
 	for {
@@ -860,6 +866,7 @@ func TestAddSet(t *testing.T) {
 		if resp != nil && resp.(*sproto.SetMarkClearResp).Reason == "already mark clear" {
 			break
 		}
+		time.Sleep(time.Second)
 	}
 
 	//等待
@@ -902,6 +909,7 @@ func TestAddSet(t *testing.T) {
 				break
 			}
 		}
+		time.Sleep(time.Second)
 	}
 
 	for {
@@ -924,6 +932,7 @@ func TestAddSet(t *testing.T) {
 		if resp != nil && resp.(*sproto.RemSetResp).Reason == "set not exists" {
 			break
 		}
+		time.Sleep(time.Second)
 	}
 
 	pd.Stop()
@@ -989,6 +998,7 @@ func TestStoreBalance(t *testing.T) {
 		if resp != nil && resp.(*sproto.AddNodeResp).Reason == "duplicate node id" {
 			break
 		}
+		time.Sleep(time.Second)
 	}
 
 	//add learnstore
@@ -1015,6 +1025,7 @@ func TestStoreBalance(t *testing.T) {
 		if resp != nil && resp.(*sproto.AddLearnerStoreToNodeResp).Reason == "learner store already exists" {
 			break
 		}
+		time.Sleep(time.Second)
 	}
 
 	logger.GetSugar().Infof("--------------------add learner 2:2 OK------------------------")
@@ -1048,6 +1059,7 @@ func TestStoreBalance(t *testing.T) {
 		if resp != nil && resp.(*sproto.PromoteLearnerStoreResp).Reason == "store is already a voter" {
 			break
 		}
+		time.Sleep(time.Second)
 	}
 
 	//增加node3
@@ -1075,6 +1087,7 @@ func TestStoreBalance(t *testing.T) {
 		if resp != nil && resp.(*sproto.AddNodeResp).Reason == "duplicate node id" {
 			break
 		}
+		time.Sleep(time.Second)
 	}
 
 	//add learnstore
@@ -1101,6 +1114,7 @@ func TestStoreBalance(t *testing.T) {
 		if resp != nil && resp.(*sproto.AddLearnerStoreToNodeResp).Reason == "learner store already exists" {
 			break
 		}
+		time.Sleep(time.Second)
 	}
 
 	logger.GetSugar().Infof("--------------------add learner 3:3 OK------------------------")
@@ -1134,6 +1148,7 @@ func TestStoreBalance(t *testing.T) {
 		if resp != nil && resp.(*sproto.PromoteLearnerStoreResp).Reason == "store is already a voter" {
 			break
 		}
+		time.Sleep(time.Second)
 	}
 
 	/////////////////
@@ -1183,6 +1198,7 @@ func TestStoreBalance(t *testing.T) {
 				}
 			}
 		}
+		time.Sleep(time.Second)
 	}
 
 	node1.Stop()
@@ -1240,9 +1256,8 @@ func TestScan(t *testing.T) {
 		gate := client.QueryGate([]*net.UDPAddr{addr}, time.Second)
 		if len(gate) > 0 {
 			break
-		} else {
-			time.Sleep(time.Second)
 		}
+		time.Sleep(time.Second)
 	}
 
 	fmt.Println("run client")

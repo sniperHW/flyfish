@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+var FetchRowCount int = 100
+
 type Row struct {
 	Key     string
 	Version int64
@@ -44,6 +46,7 @@ type Scanner struct {
 	fields         []string
 	allfields      bool
 	rows           []*Row
+	fetchRowCount  int
 }
 
 func NewScanner(conf ClientConf, Table string, fields []string, allfields ...bool) (*Scanner, error) {
@@ -51,7 +54,11 @@ func NewScanner(conf ClientConf, Table string, fields []string, allfields ...boo
 		return nil, errors.New("cluster mode,but pd empty")
 	}
 
-	sc := &Scanner{table: Table}
+	sc := &Scanner{table: Table, fetchRowCount: conf.FetchRowCount}
+
+	if 0 >= sc.fetchRowCount {
+		sc.fetchRowCount = 100
+	}
 
 	if "" == conf.SoloService {
 
@@ -189,7 +196,7 @@ func (st *storeScanner) fetchRows(scanner *Scanner, service string, deadline tim
 
 	for len(rows) == 0 {
 
-		err := scan.SendScanNextReq(st.conn, 100, deadline)
+		err := scan.SendScanNextReq(st.conn, scanner.fetchRowCount, deadline)
 		if nil != err {
 			return nil, false, err
 		}
@@ -257,7 +264,7 @@ func (sc *clusterScanner) fetchRows(scanner *Scanner, deadline time.Time) (err e
 			}
 		}
 
-		err = scan.SendScanNextReq(sc.conn, 100, deadline)
+		err = scan.SendScanNextReq(sc.conn, scanner.fetchRowCount, deadline)
 		if nil != err {
 			return
 		}

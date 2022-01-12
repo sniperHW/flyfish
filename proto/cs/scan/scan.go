@@ -105,24 +105,24 @@ func SendScanNextReq(conn net.Conn, count int, deadline time.Time) error {
 
 func RecvScannerReq(conn net.Conn, deadline time.Time) (*flyproto.ScannerReq, error) {
 	req := &flyproto.ScannerReq{}
-	err := cs.Recv(conn, 65535, req, deadline)
+	err := cs.Recv(conn, req, deadline)
 	return req, err
 }
 
 func RecvScannerResp(conn net.Conn, deadline time.Time) (*flyproto.ScannerResp, error) {
 	req := &flyproto.ScannerResp{}
-	err := cs.Recv(conn, 65535, req, deadline)
+	err := cs.Recv(conn, req, deadline)
 	return req, err
 }
 
 func RecvScanNextReq(conn net.Conn, deadline time.Time) (*flyproto.ScanNextReq, error) {
 	resp := &flyproto.ScanNextReq{}
-	err := cs.Recv(conn, 65535, resp, deadline)
+	err := cs.Recv(conn, resp, deadline)
 	return resp, err
 }
 
 func RecvScanNextResp(conn net.Conn, deadline time.Time) (*flyproto.ScanNextResp, error) {
 	resp := &flyproto.ScanNextResp{}
-	err := cs.Recv(conn, 4096*1024, resp, deadline)
+	err := cs.Recv(conn, resp, deadline)
 	return resp, err
 }

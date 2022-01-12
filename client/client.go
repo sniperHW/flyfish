@@ -62,6 +62,7 @@ type ClientConf struct {
 	UnikeyPlacement func(string) int //返回unikey所在的store,对于连接proxy的方式无需提供,store字段由proxy填写
 	SoloService     string
 	Stores          []int
+	FetchRowCount   int //scanner一次从服务器获取的最大行数量，如果行数据比较大应将此值设小一点，避免数据包超过大小限制
 }
 
 func makeWaitResp() *map[int64]*cmdContext {

@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+const maxpacket_size int = 1024 * 1024 * 100
+
 func Send(conn net.Conn, msg proto.Message, deadline time.Time) error {
 	b := buffer.Get()
 	defer b.Free()
@@ -22,15 +24,14 @@ func Send(conn net.Conn, msg proto.Message, deadline time.Time) error {
 	return err
 }
 
-func Recv(conn net.Conn, maxbuff int, msg proto.Message, deadline time.Time) error {
-	b := make([]byte, maxbuff)
+func Recv(conn net.Conn, msg proto.Message, deadline time.Time) error {
+	b := make([]byte, 64)
 	w := 0
 	pbsize := 0
+	conn.SetReadDeadline(deadline)
+	defer conn.SetReadDeadline(time.Time{})
 	for {
-		conn.SetReadDeadline(deadline)
 		n, err := conn.Read(b[w:])
-		conn.SetReadDeadline(time.Time{})
-
 		if nil != err {
 			return err
 		}
@@ -41,8 +42,14 @@ func Recv(conn net.Conn, maxbuff int, msg proto.Message, deadline time.Time) err
 			pbsize = int(binary.BigEndian.Uint32(b[:4]))
 		}
 
-		if pbsize > len(b)-4 {
-			return errors.New("invaild packet")
+		if pbsize > maxpacket_size {
+			return errors.New("packet too large")
+		}
+
+		if pbsize+4 > len(b) {
+			bb := make([]byte, pbsize+4)
+			copy(bb, b[:n])
+			b = bb
 		}
 
 		if w >= pbsize+4 {
