@@ -43,6 +43,20 @@ slot:1在遍历store:1的时候已经返回，之后处理store:2,在此期间sl
 考虑到scan并不是flyfish推荐的常用操作，flyfish选择在scan发现slot遗漏的情况下直接将错误告知客户端。让客户端后续重试。
 
 
+where语法设计
+
+makeWhere(fieldName,"op",value1)
+
+支持的op
+
+==
+!=
+>
+>=
+<
+<=
+
+
 
 
 

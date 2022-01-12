@@ -1,114 +1,80 @@
 package proto
 
-func (m *Field) GetType() ValueType {
-	if m.V == nil {
-		return ValueType_nil
-	}
-	return m.V.GetType()
-}
-
-func (m *Field) IsNil() bool {
-	return m.GetType() == ValueType_nil
-}
-
-func (m *Field) IsString() bool {
-	return m.GetType() == ValueType_string
-}
-
-func (m *Field) IsInt() bool {
-	return m.GetType() == ValueType_int
-}
-
-func (m *Field) IsFloat() bool {
-	return m.GetType() == ValueType_float
-}
-
-func (m *Field) IsBlob() bool {
-	return m.GetType() == ValueType_blob
-}
-
-func (m *Field) GetValue() interface{} {
-	return UnpackField(m)
-}
-
-func (m *Field) GetString() string {
-
-	if !m.IsString() {
-		panic("v is not string")
+func ToValue(v interface{}) (vv *Value) {
+	vv = &Value{}
+	if nil == v {
+		vv.Type = ValueType_nil
+		return
 	}
 
-	return m.V.GetS()
-}
-
-func (m *Field) GetBlob() []byte {
-
-	if !m.IsBlob() {
-		panic("v is not blob")
+	switch v.(type) {
+	case []byte:
+		vv.Type = ValueType_blob
+		vv.Blob = v.([]byte)
+	case string:
+		vv.Type = ValueType_string
+		vv.String_ = v.(string)
+	case int:
+		vv.Type = ValueType_int
+		vv.Int = int64(v.(int))
+	case uint:
+		vv.Type = ValueType_int
+		vv.Int = int64(v.(uint))
+	case int8:
+		vv.Type = ValueType_int
+		vv.Int = int64(v.(int8))
+	case uint8:
+		vv.Type = ValueType_int
+		vv.Int = int64(v.(uint8))
+	case int16:
+		vv.Type = ValueType_int
+		vv.Int = int64(v.(int16))
+	case uint16:
+		vv.Type = ValueType_int
+		vv.Int = int64(v.(uint16))
+	case int32:
+		vv.Type = ValueType_int
+		vv.Int = int64(v.(int32))
+	case uint32:
+		vv.Type = ValueType_int
+		vv.Int = int64(v.(uint32))
+	case int64:
+		vv.Type = ValueType_int
+		vv.Int = int64(v.(int64))
+	case uint64:
+		vv.Type = ValueType_int
+		vv.Int = int64(v.(uint64))
+	case float32:
+		vv.Type = ValueType_float
+		vv.Float = float64(v.(float32))
+	case float64:
+		vv.Type = ValueType_float
+		vv.Float = float64(v.(float64))
+	default:
+		vv.Type = ValueType_invaild
 	}
 
-	return m.V.GetB()
+	return
 }
 
-func (m *Field) GetInt() int64 {
-	if !m.IsInt() {
-		panic("v is not int")
-	}
-
-	return m.V.GetI()
+func (v *Value) GetString() string {
+	return v.GetString_()
 }
 
-func (m *Field) GetFloat() float64 {
-	if !m.IsFloat() {
-		panic("v is not float")
-	}
-
-	return m.V.GetF()
-}
-
-func (m *Field) SetInt(v int64) {
-	if !m.IsInt() {
-		panic("v is not int")
-	}
-	m.V.I = v
-}
-
-func (m *Field) SetString(v string) {
-	if !m.IsString() {
-		panic("v is not string")
-	}
-	m.V.S = v
-}
-
-func (m *Field) SetFloat(v float64) {
-	if !m.IsFloat() {
-		panic("v is not float")
-	}
-	m.V.F = v
-}
-
-func (m *Field) SetBlob(v []byte) {
-	if !m.IsBlob() {
-		panic("v is not Blob")
-	}
-	m.V.B = v
-}
-
-func (m *Field) IsEqual(o *Field) bool {
-	if nil == o {
-		return false
-	} else if m.GetType() != o.GetType() {
+func (v *Value) IsEqual(o *Value) bool {
+	if v.GetType() != o.GetType() {
 		return false
 	}
 
-	switch m.GetType() {
+	switch v.GetType() {
 	case ValueType_string:
-		return m.GetString() == o.GetString()
+		return v.GetString() == o.GetString()
 	case ValueType_float:
-		return m.GetFloat() == o.GetFloat()
+		return v.GetFloat() == o.GetFloat()
 	case ValueType_int:
-		return m.GetInt() == o.GetInt()
+		return v.GetInt() == o.GetInt()
 	case ValueType_blob:
-		mm := m.GetBlob()
+		mm := v.GetBlob()
 		oo := o.GetBlob()
 		if len(mm) != len(oo) {
 			return false
@@ -126,87 +92,70 @@ func (m *Field) IsEqual(o *Field) bool {
 	}
 }
 
-func UnpackField(filed *Field) interface{} {
-	if nil == filed {
-		return nil
-	}
+func (m *Field) GetType() ValueType {
+	return m.V.GetType()
+}
 
-	switch filed.GetType() {
+func (m *Field) IsNil() bool {
+	return m.V.GetType() == ValueType_nil
+}
+
+func (m *Field) IsString() bool {
+	return m.V.GetType() == ValueType_string
+}
+
+func (m *Field) IsInt() bool {
+	return m.V.GetType() == ValueType_int
+}
+
+func (m *Field) IsFloat() bool {
+	return m.V.GetType() == ValueType_float
+}
+
+func (m *Field) IsBlob() bool {
+	return m.V.GetType() == ValueType_blob
+}
+
+func (m *Field) GetValue() interface{} {
+	switch m.V.GetType() {
 	case ValueType_string:
-		return filed.GetString()
+		return m.V.GetString()
 	case ValueType_int:
-		return filed.GetInt()
+		return m.V.GetInt()
 	case ValueType_float:
-		return filed.GetFloat()
+		return m.V.GetFloat()
 	case ValueType_blob:
-		return filed.GetBlob()
+		return m.V.GetBlob()
 	default:
 		return nil
 	}
 }
 
+func (m *Field) GetString() string {
+	return m.V.GetString()
+}
+
+func (m *Field) GetBlob() []byte {
+	return m.V.GetBlob()
+}
+
+func (m *Field) GetInt() int64 {
+	return m.V.GetInt()
+}
+
+func (m *Field) GetFloat() float64 {
+	return m.V.GetFloat()
+}
+
+func (m *Field) IsEqual(o *Field) bool {
+	return m.V.IsEqual(o.V)
+}
+
 func PackField(name string, v interface{}) *Field {
-
-	field := &Field{
-		V:    &Value{},
+	return &Field{
 		Name: name,
+		V:    ToValue(v),
 	}
-
-	if nil == v {
-		field.V.Type = ValueType_nil
-		return field
-	}
-
-	var vvI int64
-	var vvF float64
-
-	switch v.(type) {
-	case []byte:
-		field.V.B = v.([]byte)
-		field.V.Type = ValueType_blob
-		return field
-	case string:
-		field.V.S = v.(string)
-		field.V.Type = ValueType_string
-		return field
-	case int:
-		field.V.Type = ValueType_int
-		vvI = int64(v.(int))
-		break
-	case int8:
-		field.V.Type = ValueType_int
-		vvI = int64(v.(int8))
-		break
-	case int16:
-		field.V.Type = ValueType_int
-		vvI = int64(v.(int16))
-		break
-	case int32:
-		field.V.Type = ValueType_int
-		vvI = int64(v.(int32))
-		break
-	case int64:
-		field.V.Type = ValueType_int
-		vvI = int64(v.(int64))
-		break
-	case float32:
-		field.V.Type = ValueType_float
-		vvF = float64(v.(float32))
-		break
-	case float64:
-		field.V.Type = ValueType_float
-		vvF = float64(v.(float64))
-		break
-	default:
-		return nil
-	}
-
-	if field.GetType() == ValueType_float {
-		field.V.F = vvF
-	} else {
-		field.V.I = vvI
-	}
-	return field
 }
 
 func PackFields(out_fields []*Field, in_fields map[string]interface{}) []*Field {

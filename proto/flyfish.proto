@@ -46,11 +46,11 @@ enum ValueType {
 }
 
 message value {
-    required ValueType type    = 1;
-    optional int64     i       = 2;
-    optional double    f       = 3;
-    optional string    s       = 4;
-    optional bytes     b       = 5;
+    required ValueType Type     = 1;
+    optional int64     Int      = 2;
+    optional double    Float    = 3;
+    optional string    String   = 4;
+    optional bytes     Blob     = 5;
 }
 
 message field {
