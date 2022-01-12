@@ -138,7 +138,6 @@ type pd struct {
 	stoponce        int32
 	startonce       int32
 	wait            sync.WaitGroup
-	ready           bool
 	flygateMgr      flygateMgr
 	config          *Config
 	udpService      string
@@ -385,7 +384,7 @@ func (p *pd) startUdpService() error {
 				return
 			} else {
 				p.mainque.append(func() {
-					if p.isLeader() && p.ready {
+					if p.isLeader() {
 						p.onMsg(from, msg.(*snet.Message))
 					} else {
 						GetSugar().Debugf("drop msg")
@@ -598,7 +597,6 @@ func (p *pd) serve() {
 					p.rn.Stop()
 				}
 			case raft.ReplayOK:
-				p.ready = true
 			case raft.RaftStopOK:
 				GetSugar().Info("RaftStopOK")
 				return

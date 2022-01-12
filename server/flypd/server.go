@@ -25,46 +25,50 @@ func (p *pd) onMsg(from *net.UDPAddr, msg *snet.Message) {
 }
 
 func (p *pd) onKvnodeBoot(from *net.UDPAddr, m *snet.Message) {
-	msg := m.Msg.(*sproto.KvnodeBoot)
-	node := p.getNode(msg.NodeID)
-	if nil == node {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
-			&sproto.KvnodeBootResp{
-				Ok:     false,
-				Reason: fmt.Sprintf("node:%d not in deployment", msg.NodeID),
-			}))
-		return
-	}
+	if nil != p.pState.deployment {
+		msg := m.Msg.(*sproto.KvnodeBoot)
+		node := p.getNode(msg.NodeID)
+		if nil == node {
+			p.udp.SendTo(from, snet.MakeMessage(m.Context,
+				&sproto.KvnodeBootResp{
+					Ok:     false,
+					Reason: fmt.Sprintf("node:%d not in deployment", msg.NodeID),
+				}))
+			return
+		}
 
-	resp := &sproto.KvnodeBootResp{
-		Ok:          true,
-		ServiceHost: node.host,
-		SetID:       int32(node.set.id),
-		ServicePort: int32(node.servicePort),
-		RaftPort:    int32(node.raftPort),
-		MetaVersion: p.pState.Meta.Version,
-		Meta:        p.pState.Meta.MetaBytes,
-	}
+		resp := &sproto.KvnodeBootResp{
+			Ok:          true,
+			ServiceHost: node.host,
+			SetID:       int32(node.set.id),
+			ServicePort: int32(node.servicePort),
+			RaftPort:    int32(node.raftPort),
+			MetaVersion: p.pState.Meta.Version,
+			Meta:        p.pState.Meta.MetaBytes,
+		}
 
-	for storeId, _ := range node.store {
-		store := node.set.stores[storeId]
-		raftCluster := []string{}
-		for _, n := range node.set.nodes {
-			if n.isVoter(store.id) {
-				raftCluster = append(raftCluster, fmt.Sprintf("%d@http://%s:%d@voter", n.id, n.host, n.raftPort))
-			} else if n.isLearner(store.id) {
-				raftCluster = append(raftCluster, fmt.Sprintf("%d@http://%s:%d@learner", n.id, n.host, n.raftPort))
+		for storeId, _ := range node.store {
+			store := node.set.stores[storeId]
+			raftCluster := []string{}
+			for _, n := range node.set.nodes {
+				if n.isVoter(store.id) {
+					raftCluster = append(raftCluster, fmt.Sprintf("%d@http://%s:%d@voter", n.id, n.host, n.raftPort))
+				} else if n.isLearner(store.id) {
+					raftCluster = append(raftCluster, fmt.Sprintf("%d@http://%s:%d@learner", n.id, n.host, n.raftPort))
+				}
 			}
+			s := &sproto.StoreInfo{
+				Id:          int32(store.id),
+				Slots:       store.slots.ToJson(),
+				RaftCluster: strings.Join(raftCluster, ","),
+			}
+			resp.Stores = append(resp.Stores, s)
 		}
-		s := &sproto.StoreInfo{
-			Id:          int32(store.id),
-			Slots:       store.slots.ToJson(),
-			RaftCluster: strings.Join(raftCluster, ","),
-		}
-		resp.Stores = append(resp.Stores, s)
-	}
 
-	p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
+		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
+	} else {
+		GetSugar().Errorf("onKvnodeBoot but deployment == nil")
+	}
 }
 
 func (p *pd) onQueryRouteInfo(from *net.UDPAddr, m *snet.Message) {
@@ -185,7 +189,7 @@ func (p *pd) onStoreReportStatus(from *net.UDPAddr, m *snet.Message) {
 		return
 	}
 
-	GetSugar().Infof("onStoreReportStatus node:%d store:%d isLeader:%v", msg.NodeID, msg.StoreID, msg.Isleader)
+	GetSugar().Debugf("onStoreReportStatus node:%d store:%d isLeader:%v", msg.NodeID, msg.StoreID, msg.Isleader)
 
 	store.lastReport = time.Now()
 	store.isLead = msg.Isleader

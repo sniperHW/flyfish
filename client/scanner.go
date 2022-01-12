@@ -89,6 +89,7 @@ func NewScanner(conf ClientConf, Table string, fields []string, allfields ...boo
 
 //don't call Next concurrently
 func (sc *Scanner) Next(deadline time.Time) (*Row, error) {
+
 	err := sc.fetchRows(deadline)
 	if nil != err {
 		return nil, err
@@ -112,6 +113,43 @@ func (sc *Scanner) fetchRows(deadline time.Time) error {
 		} else {
 			return sc.clusterScanner.fetchRows(sc, deadline)
 		}
+	}
+}
+
+func (sc *Scanner) connectServer(service string, slots []byte, storeID int, deadline time.Time) (conn net.Conn, err error) {
+	dialer := &net.Dialer{Timeout: deadline.Sub(time.Now())}
+	conn, err = dialer.Dial("tcp", service)
+	if err != nil {
+		return nil, err
+	}
+
+	if !cs.SendLoginReq(conn, &flyproto.LoginReq{Scanner: true}, deadline) {
+		conn.Close()
+		return nil, fmt.Errorf("login failed")
+	}
+
+	loginResp, err := cs.RecvLoginResp(conn, deadline)
+	if nil != err || !loginResp.GetOk() {
+		conn.Close()
+		return nil, fmt.Errorf("login failed")
+	}
+
+	err = scan.SendScannerReq(conn, sc.table, slots, storeID, sc.fields, sc.allfields, deadline)
+
+	if nil != err {
+		conn.Close()
+		return nil, err
+	}
+
+	scannerResp, err := scan.RecvScannerResp(conn, deadline)
+	if nil != err {
+		conn.Close()
+		return nil, err
+	} else if int(scannerResp.ErrCode) != scan.Err_ok {
+		conn.Close()
+		return nil, scan.ToError(int(scannerResp.ErrCode))
+	} else {
+		return conn, nil
 	}
 }
 
@@ -140,40 +178,11 @@ func (sc *soloScanner) fetchRows(scanner *Scanner, deadline time.Time) (err erro
 
 func (st *storeScanner) fetchRows(scanner *Scanner, service string, deadline time.Time) ([]*Row, bool, error) {
 	if nil == st.conn {
-		dialer := &net.Dialer{Timeout: deadline.Sub(time.Now())}
-		conn, err := dialer.Dial("tcp", service)
-		if err != nil {
+		if conn, err := scanner.connectServer(service, st.slots.ToJson(), st.id, deadline); nil != err {
 			return nil, false, err
+		} else {
+			st.conn = conn
 		}
-
-		if !cs.SendLoginReq(conn, &flyproto.LoginReq{Scanner: true}, deadline) {
-			conn.Close()
-			return nil, false, fmt.Errorf("login failed")
-		}
-
-		loginResp, err := cs.RecvLoginResp(conn, deadline)
-		if nil != err || !loginResp.GetOk() {
-			conn.Close()
-			return nil, false, fmt.Errorf("login failed")
-		}
-
-		err = scan.SendScannerReq(conn, scanner.table, st.slots.ToJson(), st.id, scanner.fields, scanner.allfields, deadline)
-
-		if nil != err {
-			conn.Close()
-			return nil, false, err
-		}
-
-		scannerResp, err := scan.RecvScannerResp(conn, deadline)
-		if nil != err {
-			conn.Close()
-			return nil, false, err
-		} else if int(scannerResp.ErrCode) != scan.Err_ok {
-			conn.Close()
-			return nil, false, scan.ToError(int(scannerResp.ErrCode))
-		}
-
-		st.conn = conn
 	}
 
 	var rows []*Row
@@ -220,46 +229,17 @@ func (sc *clusterScanner) connectGate(scanner *Scanner, deadline time.Time) erro
 	for len(gates) == 0 && time.Now().Before(deadline) {
 		gates = QueryGate(sc.pdAddr, deadline.Sub(time.Now()))
 	}
+
 	if len(gates) == 0 {
 		return errors.New("no available gate")
 	}
 
-	dialer := &net.Dialer{Timeout: deadline.Sub(time.Now())}
-	conn, err := dialer.Dial("tcp", gates[0].Service)
-	if err != nil {
+	if conn, err := scanner.connectServer(gates[0].Service, nil, 0, deadline); nil != err {
 		return err
+	} else {
+		sc.conn = conn
+		return nil
 	}
-
-	if !cs.SendLoginReq(conn, &flyproto.LoginReq{Scanner: true}, deadline) {
-		conn.Close()
-		return fmt.Errorf("login failed")
-	}
-
-	loginResp, err := cs.RecvLoginResp(conn, deadline)
-	if nil != err || !loginResp.GetOk() {
-		conn.Close()
-		return fmt.Errorf("login failed")
-	}
-
-	err = scan.SendScannerReq(conn, scanner.table, nil, 0, scanner.fields, scanner.allfields, deadline)
-
-	if nil != err {
-		conn.Close()
-		return err
-	}
-
-	scannerResp, err := scan.RecvScannerResp(conn, deadline)
-	if nil != err {
-		conn.Close()
-		return err
-	} else if int(scannerResp.ErrCode) != scan.Err_ok {
-		conn.Close()
-		return scan.ToError(int(scannerResp.ErrCode))
-	}
-
-	sc.conn = conn
-
-	return nil
 }
 
 func (sc *clusterScanner) fetchRows(scanner *Scanner, deadline time.Time) (err error) {
