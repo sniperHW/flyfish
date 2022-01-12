@@ -34,9 +34,12 @@ func (g *gate) onScanner(conn net.Conn) {
 	go func() {
 		req, err := scan.RecvScannerReq(conn, time.Now().Add(time.Second*5))
 		if nil != err {
+			GetSugar().Infof("RecvScannerReq error:%v", err)
 			conn.Close()
 			return
 		}
+
+		deadline := time.Now().Add(time.Duration(req.Timeout))
 
 		sc := &scanner{
 			wantFields: req.Fields,
@@ -70,7 +73,10 @@ func (g *gate) onScanner(conn net.Conn) {
 
 		<-ch
 
-		if err = scan.SendScannerResp(conn, scan.Err_ok, time.Now().Add(time.Second)); nil != err {
+		if time.Now().After(deadline) {
+			conn.Close()
+		} else if err = scan.SendScannerResp(conn, scan.Err_ok, time.Now().Add(time.Second)); nil != err {
+			GetSugar().Infof("SendScannerResp error:%v", err)
 			conn.Close()
 		} else {
 			go sc.loop(g, conn)
@@ -78,7 +84,7 @@ func (g *gate) onScanner(conn net.Conn) {
 	}()
 }
 
-func (st *storeScanner) next(sc *scanner, count int) (*flyproto.ScanNextResp, error) {
+func (st *storeScanner) next(sc *scanner, count int, deadline time.Time) (*flyproto.ScanNextResp, error) {
 	if nil == st.conn {
 		var leader int
 		nodes := []string{}
@@ -86,31 +92,31 @@ func (st *storeScanner) next(sc *scanner, count int) (*flyproto.ScanNextResp, er
 			nodes = append(nodes, v)
 		}
 
-		context := snet.MakeUniqueContext()
-		if resp := snet.UdpCall(nodes, snet.MakeMessage(context, &sproto.QueryLeader{Store: int32(st.id)}), time.Second, func(respCh chan interface{}, r interface{}) {
-			if m, ok := r.(*snet.Message); ok {
-				if resp, ok := m.Msg.(*sproto.QueryLeaderResp); ok && context == m.Context && 0 != resp.Leader {
-					select {
-					case respCh <- int(resp.Leader):
-					default:
+		for 0 == leader && deadline.After(time.Now()) {
+			context := snet.MakeUniqueContext()
+			if resp := snet.UdpCall(nodes, snet.MakeMessage(context, &sproto.QueryLeader{Store: int32(st.id)}), time.Second, func(respCh chan interface{}, r interface{}) {
+				if m, ok := r.(*snet.Message); ok {
+					if resp, ok := m.Msg.(*sproto.QueryLeaderResp); ok && context == m.Context && 0 != resp.Leader {
+						select {
+						case respCh <- int(resp.Leader):
+						default:
+						}
 					}
 				}
+			}); nil != resp {
+				leader = resp.(int)
 			}
-		}); nil != resp {
-			leader = resp.(int)
 		}
 
 		if 0 == leader {
 			return nil, errors.New("no leader")
 		}
 
-		dialer := &net.Dialer{Timeout: time.Second * 5}
+		dialer := &net.Dialer{Timeout: deadline.Sub(time.Now())}
 		conn, err := dialer.Dial("tcp", st.services[leader])
 		if err != nil {
 			return nil, err
 		}
-
-		deadline := time.Now().Add(time.Second * 5)
 
 		if !cs.SendLoginReq(conn, &flyproto.LoginReq{Scanner: true}, deadline) {
 			conn.Close()
@@ -123,7 +129,7 @@ func (st *storeScanner) next(sc *scanner, count int) (*flyproto.ScanNextResp, er
 			return nil, fmt.Errorf("login failed")
 		}
 
-		err = scan.SendScannerReq(conn, sc.table, st.slots.ToJson(), st.id, sc.wantFields, sc.all, time.Now().Add(time.Second))
+		err = scan.SendScannerReq(conn, sc.table, st.slots.ToJson(), st.id, sc.wantFields, sc.all, deadline)
 
 		if nil != err {
 			conn.Close()
@@ -141,8 +147,6 @@ func (st *storeScanner) next(sc *scanner, count int) (*flyproto.ScanNextResp, er
 
 		st.conn = conn
 	}
-
-	deadline := time.Now().Add(time.Second * 10)
 
 	err := scan.SendScanNextReq(st.conn, count, deadline)
 	if nil != err {
@@ -169,9 +173,12 @@ func (sc *scanner) loop(g *gate, conn net.Conn) {
 			return
 		}
 
-		resp, err := sc.stores[sc.offset].next(sc, int(req.Count))
+		deadline := time.Now().Add(time.Duration(req.Timeout))
+
+		resp, err := sc.stores[sc.offset].next(sc, int(req.Count), deadline)
 
 		if nil != err {
+			GetSugar().Infof("next error:%v", err)
 			return
 		}
 

@@ -217,7 +217,7 @@ func (st *storeScanner) fetchRows(scanner *Scanner, service string, deadline tim
 
 func (sc *clusterScanner) connectGate(scanner *Scanner, deadline time.Time) error {
 	var gates []*sproto.Flygate
-	for time.Now().Before(deadline) {
+	for len(gates) == 0 && time.Now().Before(deadline) {
 		gates = QueryGate(sc.pdAddr, deadline.Sub(time.Now()))
 	}
 	if len(gates) == 0 {

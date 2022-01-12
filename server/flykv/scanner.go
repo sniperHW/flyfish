@@ -42,6 +42,8 @@ func (this *kvnode) onScanner(conn net.Conn) {
 			return
 		}
 
+		deadline := time.Now().Add(time.Duration(req.Timeout))
+
 		var store *kvstore
 		var ok bool
 		var tbmeta db.TableMeta
@@ -81,6 +83,11 @@ func (this *kvnode) onScanner(conn net.Conn) {
 			return scan.Err_ok
 
 		}()
+
+		if time.Now().After(deadline) {
+			conn.Close()
+			return
+		}
 
 		if errCode != scan.Err_ok {
 			scan.SendScannerResp(conn, errCode, time.Now().Add(time.Second))
@@ -128,16 +135,18 @@ func (sc *scanner) loop(kvnode *kvnode, conn net.Conn) {
 			return
 		}
 
-		if breakloop := sc.next(kvnode, conn, int(req.Count)); breakloop {
+		if breakloop := sc.next(kvnode, conn, int(req.Count), time.Now().Add(time.Duration(req.Timeout))); breakloop {
 			return
 		}
 	}
 }
 
-func (sc *scanner) next(kvnode *kvnode, conn net.Conn, count int) (breakloop bool) {
+func (sc *scanner) next(kvnode *kvnode, conn net.Conn, count int, deadline time.Time) (breakloop bool) {
 	resp := &flyproto.ScanNextResp{}
 	defer func() {
-		if nil != cs.Send(conn, resp, time.Now().Add(time.Second)) {
+		if time.Now().After(deadline) {
+			breakloop = true
+		} else if nil != cs.Send(conn, resp, time.Now().Add(time.Second)) {
 			breakloop = true
 		} else {
 			breakloop = breakloop || resp.ErrCode != int32(scan.Err_ok)

@@ -78,11 +78,12 @@ func GetDummyType(row *flyproto.Row) DummyType {
 
 func SendScannerReq(conn net.Conn, table string, slots []byte, store int, fields []string, allfields bool, deadline time.Time) error {
 	return cs.Send(conn, &flyproto.ScannerReq{
-		Table:  table,
-		Slots:  slots,
-		Store:  int32(store),
-		Fields: fields,
-		All:    allfields,
+		Table:   table,
+		Slots:   slots,
+		Store:   int32(store),
+		Fields:  fields,
+		All:     allfields,
+		Timeout: int32(deadline.Sub(time.Now())),
 	}, deadline)
 }
 
@@ -99,7 +100,7 @@ func SendScanNextResp(conn net.Conn, errCode int, slot int, rows []*flyproto.Row
 }
 
 func SendScanNextReq(conn net.Conn, count int, deadline time.Time) error {
-	return cs.Send(conn, &flyproto.ScanNextReq{Count: int32(count)}, deadline)
+	return cs.Send(conn, &flyproto.ScanNextReq{Count: int32(count), Timeout: int32(deadline.Sub(time.Now()))}, deadline)
 }
 
 func RecvScannerReq(conn net.Conn, deadline time.Time) (*flyproto.ScannerReq, error) {

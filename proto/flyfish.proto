@@ -191,6 +191,7 @@ message scanner_req {
   optional int32  store    = 3;
   repeated string fields   = 4;
   optional bool   all      = 5;  //获取所有字段
+  optional int32  timeout  = 6;
 }
 
 message scanner_resp {
@@ -199,6 +200,7 @@ message scanner_resp {
 
 message scan_next_req {  
   optional int32  count    = 1;  
+  optional int32  timeout  = 2; 
 }
 
 message row {

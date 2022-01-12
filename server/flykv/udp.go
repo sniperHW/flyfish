@@ -23,8 +23,8 @@ func (this *kvnode) processUdpMsg(from *net.UDPAddr, m *snet.Message) {
 
 		var leader int32
 
-		if ok {
-			leader = int32(store.getLeaderNodeID())
+		if ok && store.isReady() {
+			leader = int32(store.rn.ID().GetNodeID())
 		} else {
 			GetSugar().Debugf("store:%d not in %d", m.Msg.(*sproto.QueryLeader).Store, this.id)
 		}
