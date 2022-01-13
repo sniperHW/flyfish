@@ -85,80 +85,6 @@ func (p *pd) onGetMeta(from *net.UDPAddr, m *snet.Message) {
 		}))
 }
 
-type ProposalSetMeta struct {
-	proposalBase
-	MetaBytes []byte
-	Version   int64
-	metaDef   *db.DbDef
-}
-
-func (p *ProposalSetMeta) Serilize(b []byte) []byte {
-	return serilizeProposal(b, proposalSetMeta, p)
-}
-
-func (p *ProposalSetMeta) apply(pd *pd) {
-
-	var err error
-	if nil != pd.pState.MetaTransaction {
-		err = errors.New("wait for previous meta transaction finish")
-	} else if pd.pState.Meta.Version != p.Version {
-		err = errors.New("version mismatch")
-	} else {
-		pd.pState.Meta.Version++
-		pd.pState.Meta.MetaDef = p.metaDef
-		pd.pState.Meta.MetaBytes = p.MetaBytes
-		//GetSugar().Infof("%v", string(p.MetaBytes))
-	}
-
-	if nil != p.reply {
-		p.reply(err)
-	}
-}
-
-func (p *ProposalSetMeta) replay(pd *pd) {
-	p.metaDef, _ = db.CreateDbDefFromJsonString(p.MetaBytes)
-	p.apply(pd)
-}
-
-/*
- *  直接设置meta,可以对表或字段执行变更，不应当在flykv运行阶段执行
- */
-
-func (p *pd) onSetMeta(from *net.UDPAddr, m *snet.Message) {
-	msg := m.Msg.(*sproto.SetMeta)
-	resp := &sproto.SetMetaResp{}
-
-	if p.pState.Meta.Version != msg.Version {
-		resp.Ok = false
-		resp.Reason = "version mismatch"
-		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
-		return
-	}
-
-	if p.pState.Meta.isEqual(msg.Meta) {
-		resp.Ok = true
-		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
-		return
-	}
-
-	def, err := p.checkMeta(msg.Meta)
-	if nil != err {
-		resp.Ok = false
-		resp.Reason = err.Error()
-		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
-		return
-	}
-
-	p.issueProposal(&ProposalSetMeta{
-		MetaBytes: msg.Meta,
-		Version:   msg.Version,
-		metaDef:   def,
-		proposalBase: proposalBase{
-			reply: p.makeReplyFunc(from, m, resp),
-		},
-	})
-}
-
 type MetaTransactionStore struct {
 	StoreID int
 	Ok      bool
@@ -214,7 +140,7 @@ func (p *ProposalUpdateMeta) apply(pd *pd) {
 	var err error
 	if nil != pd.pState.MetaTransaction {
 		err = errors.New("wait for previous meta transaction finish")
-	} else if pd.pState.Meta.Version != p.Msg.Version {
+	} else if nil != p.Msg && pd.pState.Meta.Version != p.Msg.Version {
 		err = errors.New("version mismatch")
 	} else {
 		pd.pState.Meta.Version = p.Tran.Version
@@ -250,8 +176,13 @@ func (p *pd) onUpdateMeta(from *net.UDPAddr, m *snet.Message) {
 		}
 
 		t := &MetaTransaction{
-			MetaDef: p.pState.Meta.MetaDef.Clone(),
 			Version: p.pState.Meta.Version + 1,
+		}
+
+		if nil != p.pState.Meta.MetaDef {
+			t.MetaDef = p.pState.Meta.MetaDef.Clone()
+		} else {
+			t.MetaDef, _ = db.CreateDbDefFromJsonString([]byte("{}"))
 		}
 
 		for _, v := range msg.Updates {

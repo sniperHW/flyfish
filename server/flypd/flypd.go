@@ -469,10 +469,11 @@ func (p *pd) loadInitMeta() {
 				return
 			}
 
-			p.issueProposal(&ProposalSetMeta{
-				MetaBytes: b,
-				Version:   0,
-				metaDef:   def,
+			p.issueProposal(&ProposalUpdateMeta{
+				Tran: &MetaTransaction{
+					Version: 1,
+					MetaDef: def,
+				},
 			})
 		}
 	}

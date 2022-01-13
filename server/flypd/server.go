@@ -25,7 +25,10 @@ func (p *pd) onMsg(from *net.UDPAddr, msg *snet.Message) {
 }
 
 func (p *pd) onKvnodeBoot(from *net.UDPAddr, m *snet.Message) {
-	if nil != p.pState.deployment {
+	if nil == p.pState.Meta.MetaDef {
+		//meta尚未初始化
+		return
+	} else if nil != p.pState.deployment {
 		msg := m.Msg.(*sproto.KvnodeBoot)
 		node := p.getNode(msg.NodeID)
 		if nil == node {
@@ -216,7 +219,6 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.FlyGateHeartBeat{}, p.onFlyGateHeartBeat)
 	p.registerMsgHandler(&sproto.ChangeFlyGate{}, p.changeFlyGate)
 	p.registerMsgHandler(&sproto.GetMeta{}, p.onGetMeta)
-	p.registerMsgHandler(&sproto.SetMeta{}, p.onSetMeta)
 	p.registerMsgHandler(&sproto.UpdateMeta{}, p.onUpdateMeta)
 	p.registerMsgHandler(&sproto.StoreUpdateMetaOk{}, p.onStoreUpdateMetaOk)
 	p.registerMsgHandler(&sproto.GetSetStatus{}, p.onGetSetStatus)

@@ -36,14 +36,12 @@ enum ServerCmdType {
   RemSetResp                    = 116;
   SetMarkClear                  = 117;
   SetMarkClearResp              = 118;
-  SetMeta                       = 119;
-  SetMetaResp                   = 120;
-  GetMeta                       = 121;
-  GetMetaResp                   = 122;
-  UpdateMeta                    = 123;
-  UpdateMetaResp                = 124;
-  GetSetStatus                  = 125;
-  GetSetStatusResp              = 126;
+  GetMeta                       = 119;
+  GetMetaResp                   = 120;
+  UpdateMeta                    = 121;
+  UpdateMetaResp                = 122;
+  GetSetStatus                  = 123;
+  GetSetStatusResp              = 124;
 
 
 
@@ -326,17 +324,6 @@ message changeFlyGate {
 message changeFlyGateResp {
   optional bool ok        = 1;
   optional string service = 2;
-}
-
-
-message setMeta {
-  optional bytes meta     = 1;
-  optional int64 version  = 2;
-}
-
-message setMetaResp {
-  optional bool  ok       = 1;  
-  optional string reason  = 2;  
 }
 
 message metaFiled {
