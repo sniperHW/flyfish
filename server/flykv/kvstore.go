@@ -365,6 +365,15 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 				}
 			} else if kv.kicking {
 				return errcode.New(errcode.Errcode_retry, "please retry later")
+			} else {
+				tbmeta := s.meta.CheckTableMeta(kv.meta)
+				if nil == tbmeta {
+					//在最新的meta中kv.table已经被删除
+					s.tryKick(kv)
+					return errcode.New(errcode.Errcode_error, fmt.Sprintf("table:%s no define", kv.table))
+				} else {
+					kv.meta = tbmeta
+				}
 			}
 		}
 
@@ -423,9 +432,11 @@ func (s *kvstore) gotLease() {
 		s.needWriteBackAll = false
 		for _, v := range s.kv {
 			for _, vv := range v {
-				err := vv.updateTask.issueFullDbWriteBack()
-				if nil != err {
-					break
+				if meta := s.meta.CheckTableMeta(vv.meta); meta != nil {
+					vv.meta = meta
+					vv.updateTask.issueFullDbWriteBack()
+				} else {
+					s.tryKick(vv)
 				}
 			}
 		}

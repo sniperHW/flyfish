@@ -34,9 +34,10 @@ type cmdBase struct {
 	wait4ReplyCount *int32
 	fnMakeResponse  MakeResponse
 	ppnext          cmdI
+	kv              *kv
 }
 
-func (this *cmdBase) init(cmd flyproto.CmdType, peer *net.Socket, seqno int64, version *int64, processDeadline time.Time, respDeadline time.Time, wait4ReplyCount *int32, makeResponse MakeResponse) {
+func (this *cmdBase) init(kv *kv, cmd flyproto.CmdType, peer *net.Socket, seqno int64, version *int64, processDeadline time.Time, respDeadline time.Time, wait4ReplyCount *int32, makeResponse MakeResponse) {
 	atomic.AddInt32(wait4ReplyCount, 1)
 	this.peer = peer
 	this.respDeadline = respDeadline
@@ -46,6 +47,7 @@ func (this *cmdBase) init(cmd flyproto.CmdType, peer *net.Socket, seqno int64, v
 	this.cmd = cmd
 	this.wait4ReplyCount = wait4ReplyCount
 	this.fnMakeResponse = makeResponse
+	this.kv = kv
 }
 
 func (this *cmdBase) getNext() cmdI {

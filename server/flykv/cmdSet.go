@@ -12,7 +12,6 @@ import (
 type cmdSet struct {
 	cmdBase
 	fields map[string]*flyproto.Field
-	kv     *kv
 }
 
 func (this *cmdSet) makeResponse(err errcode.Error, fields map[string]*flyproto.Field, version int64) *cs.RespMessage {
@@ -32,7 +31,7 @@ func (this *cmdSet) onLoadResult(err error, proposal *kvProposal) {
 			//记录不存在，为记录生成版本号
 			proposal.version = genVersion()
 			//对于不在set中field,使用defalutValue填充
-			this.kv.getTableMeta().FillDefaultValues(this.fields)
+			this.kv.meta.FillDefaultValues(this.fields)
 			proposal.fields = this.fields
 			proposal.dbstate = db.DBState_insert
 		} else {
@@ -45,11 +44,11 @@ func (this *cmdSet) onLoadResult(err error, proposal *kvProposal) {
 	}
 }
 
-func (this *cmdSet) do(keyvalue *kv, proposal *kvProposal) {
-	if keyvalue.state == kv_no_record {
+func (this *cmdSet) do(proposal *kvProposal) {
+	if this.kv.state == kv_no_record {
 		proposal.version = genVersion()
 		proposal.dbstate = db.DBState_insert
-		this.kv.getTableMeta().FillDefaultValues(this.fields)
+		this.kv.meta.FillDefaultValues(this.fields)
 		proposal.fields = this.fields
 	} else {
 		proposal.ptype = proposal_update
@@ -64,16 +63,15 @@ func (s *kvstore) makeSet(kv *kv, processDeadline time.Time, respDeadline time.T
 		return nil, errcode.New(errcode.Errcode_error, "set fields is empty")
 	}
 
-	if err := kv.getTableMeta().CheckFields(req.GetFields()...); nil != err {
+	if err := kv.meta.CheckFields(req.GetFields()...); nil != err {
 		return nil, errcode.New(errcode.Errcode_error, err.Error())
 	}
 
 	set := &cmdSet{
-		kv:     kv,
 		fields: map[string]*flyproto.Field{},
 	}
 
-	set.cmdBase.init(flyproto.CmdType_Set, c, seqno, req.Version, processDeadline, respDeadline, &s.wait4ReplyCount, set.makeResponse)
+	set.cmdBase.init(kv, flyproto.CmdType_Set, c, seqno, req.Version, processDeadline, respDeadline, &s.wait4ReplyCount, set.makeResponse)
 
 	for _, v := range req.GetFields() {
 		set.fields[v.GetName()] = v

@@ -110,11 +110,6 @@ func mergeAbleCmd(cmdType flyproto.CmdType) bool {
 	}
 }
 
-func (this *kv) getTableMeta() db.TableMeta {
-	this.meta = this.store.meta.CheckTableMeta(this.meta) //确保this.meta一定是最新的
-	return this.meta
-}
-
 func (this *kv) kickable() bool {
 	if this.store.needWriteBackAll {
 		return false
@@ -233,8 +228,8 @@ func (this *kv) processCmd(cmd cmdI) {
 
 			for _, v := range cmds {
 				v.(interface {
-					do(*kv, *kvProposal)
-				}).do(this, proposal)
+					do(*kvProposal)
+				}).do(proposal)
 			}
 
 			if proposal.ptype == proposal_none {

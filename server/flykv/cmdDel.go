@@ -30,8 +30,8 @@ func (this *cmdDel) onLoadResult(err error, proposal *kvProposal) {
 	}
 }
 
-func (this *cmdDel) do(keyvalue *kv, proposal *kvProposal) {
-	if keyvalue.state == kv_ok {
+func (this *cmdDel) do(proposal *kvProposal) {
+	if this.kv.state == kv_ok {
 		proposal.dbstate = db.DBState_delete
 		proposal.version = 0
 	} else {
@@ -40,11 +40,11 @@ func (this *cmdDel) do(keyvalue *kv, proposal *kvProposal) {
 	}
 }
 
-func (s *kvstore) makeDel(keyvalue *kv, processDeadline time.Time, respDeadline time.Time, c *net.Socket, seqno int64, req *flyproto.DelReq) (cmdI, errcode.Error) {
+func (s *kvstore) makeDel(kv *kv, processDeadline time.Time, respDeadline time.Time, c *net.Socket, seqno int64, req *flyproto.DelReq) (cmdI, errcode.Error) {
 
 	del := &cmdDel{}
 
-	del.cmdBase.init(flyproto.CmdType_Del, c, seqno, req.Version, processDeadline, respDeadline, &s.wait4ReplyCount, del.makeResponse)
+	del.cmdBase.init(kv, flyproto.CmdType_Del, c, seqno, req.Version, processDeadline, respDeadline, &s.wait4ReplyCount, del.makeResponse)
 
 	return del, nil
 }

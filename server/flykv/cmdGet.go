@@ -10,7 +10,6 @@ import (
 
 type cmdGet struct {
 	cmdBase
-	kv    *kv
 	wants []string
 }
 
@@ -25,7 +24,6 @@ func (this *cmdGet) makeResponse(err errcode.Error, fields map[string]*flyproto.
 			if this.version != nil && *this.version == version {
 				err = Err_record_unchange
 			} else {
-				meta := this.kv.getTableMeta()
 				for _, name := range this.wants {
 					v := fields[name]
 					if nil != v {
@@ -34,7 +32,7 @@ func (this *cmdGet) makeResponse(err errcode.Error, fields map[string]*flyproto.
 						/*
 						 * 表格新增加了列，但未设置过，使用默认值
 						 */
-						vv := meta.GetDefaultValue(name)
+						vv := this.kv.meta.GetDefaultValue(name)
 						if nil != vv {
 							pbdata.Fields = append(pbdata.Fields, flyproto.PackField(name, vv))
 						}
@@ -58,22 +56,18 @@ func (this *cmdGet) onLoadResult(err error, proposal *kvProposal) {
 
 func (s *kvstore) makeGet(kv *kv, processDeadline time.Time, respDeadline time.Time, c *net.Socket, seqno int64, req *flyproto.GetReq) (cmdI, errcode.Error) {
 
-	meta := kv.getTableMeta()
-
 	if !req.GetAll() {
-		if err := meta.CheckFieldsName(req.GetFields()); nil != err {
+		if err := kv.meta.CheckFieldsName(req.GetFields()); nil != err {
 			return nil, errcode.New(errcode.Errcode_error, err.Error())
 		}
 	}
 
-	get := &cmdGet{
-		kv: kv,
-	}
+	get := &cmdGet{}
 
-	get.cmdBase.init(flyproto.CmdType_Get, c, seqno, req.Version, processDeadline, respDeadline, &s.wait4ReplyCount, get.makeResponse)
+	get.cmdBase.init(kv, flyproto.CmdType_Get, c, seqno, req.Version, processDeadline, respDeadline, &s.wait4ReplyCount, get.makeResponse)
 
 	if req.GetAll() {
-		get.wants = meta.GetAllFieldsName()
+		get.wants = kv.meta.GetAllFieldsName()
 	} else {
 		get.wants = make([]string, 0, len(req.GetFields()))
 		for _, k := range req.GetFields() {

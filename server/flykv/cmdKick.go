@@ -23,8 +23,8 @@ func (this *cmdKick) onLoadResult(err error, proposal *kvProposal) {
 	return
 }
 
-func (this *cmdKick) do(keyvalue *kv, proposal *kvProposal) {
-	if keyvalue.kickable() {
+func (this *cmdKick) do(proposal *kvProposal) {
+	if this.kv.kickable() {
 		proposal.ptype = proposal_kick
 	} else {
 		proposal.ptype = proposal_none
@@ -33,11 +33,11 @@ func (this *cmdKick) do(keyvalue *kv, proposal *kvProposal) {
 	}
 }
 
-func (s *kvstore) makeKick(keyvalue *kv, processDeadline time.Time, respDeadline time.Time, c *net.Socket, seqno int64, req *flyproto.KickReq) (cmdI, errcode.Error) {
+func (s *kvstore) makeKick(kv *kv, processDeadline time.Time, respDeadline time.Time, c *net.Socket, seqno int64, req *flyproto.KickReq) (cmdI, errcode.Error) {
 
 	kick := &cmdKick{}
 
-	kick.cmdBase.init(flyproto.CmdType_Kick, c, seqno, nil, processDeadline, respDeadline, &s.wait4ReplyCount, kick.makeResponse)
+	kick.cmdBase.init(kv, flyproto.CmdType_Kick, c, seqno, nil, processDeadline, respDeadline, &s.wait4ReplyCount, kick.makeResponse)
 
 	return kick, nil
 }

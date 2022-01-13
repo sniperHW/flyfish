@@ -51,7 +51,7 @@ func (this *dbUpdateTask) GetUpdateAndClearUpdateState() (updateState db.UpdateS
 	updateState.Version = this.version
 	updateState.Fields = this.updateFields
 	updateState.State = this.dbstate
-	updateState.Meta = this.kv.getTableMeta()
+	updateState.Meta = this.kv.meta
 	updateState.Key = this.kv.key
 	updateState.Slot = this.kv.slot
 	this.updateFields = map[string]*flyproto.Field{}
@@ -64,10 +64,6 @@ func (this *dbUpdateTask) GetUniKey() string {
 }
 
 func (this *dbUpdateTask) issueFullDbWriteBack() error {
-	if !this.kv.store.hasLease() {
-		return errors.New("not has lease")
-	}
-
 	this.Lock()
 	defer this.Unlock()
 
@@ -176,7 +172,7 @@ func (this *dbLoadTask) GetUniKey() string {
 }
 
 func (this *dbLoadTask) GetTableMeta() db.TableMeta {
-	return this.kv.getTableMeta()
+	return this.kv.meta
 }
 
 func (this *dbLoadTask) onError(err errcode.Error) {
