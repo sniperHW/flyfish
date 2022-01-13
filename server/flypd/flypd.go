@@ -306,7 +306,7 @@ func (p *pd) slotBalance() {
 		storeAverageSlotCount = (slot.SlotCount / ((lSets - lMCSets) * StorePerSet)) + 1
 	}
 
-	GetSugar().Debugf("setAverageSlotCount:%d storeAverageSlotCount:%d", setAverageSlotCount, storeAverageSlotCount)
+	GetSugar().Infof("setAverageSlotCount:%d storeAverageSlotCount:%d", setAverageSlotCount, storeAverageSlotCount)
 
 	if nil == outStore {
 		for _, v := range p.pState.deployment.sets {

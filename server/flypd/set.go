@@ -173,6 +173,12 @@ func (p *ProposalSetMarkClear) doApply(pd *pd) error {
 	if nil == err {
 		s.markClear = true
 		pd.markClearSet[p.SetID] = s
+		//检查是否有待迁入但!ready的TransSlotTransfer,有的话将其删除
+		for k, v := range pd.pState.SlotTransfer {
+			if v.SetIn == s.id && !v.ready {
+				delete(pd.pState.SlotTransfer, k)
+			}
+		}
 	}
 
 	return err

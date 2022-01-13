@@ -102,7 +102,10 @@ func (p *ProposalRemNode) apply(pd *pd) {
 
 	if nil == err {
 		delete(s.nodes, int(p.Msg.NodeID))
+		GetSugar().Infof("ProposalRemNode.apply set:%d,remnode:%d nodecount:%d", p.Msg.SetID, p.Msg.NodeID, len(s.nodes))
 		pd.pState.deployment.version++
+	} else {
+		GetSugar().Infof("ProposalRemNode.apply error:%v", err)
 	}
 
 	if nil != p.reply {

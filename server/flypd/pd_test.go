@@ -252,7 +252,7 @@ func TestPd(t *testing.T) {
 	p, _ := NewPd(1, false, conf, "localhost:8110", "1@http://localhost:8110@")
 
 	for {
-		if p.isLeader() && p.ready {
+		if p.isLeader() {
 			break
 		} else {
 			time.Sleep(time.Second)
@@ -280,7 +280,7 @@ func TestPd(t *testing.T) {
 	p, _ = NewPd(1, false, conf, "localhost:8110", "1@http://localhost:8110@")
 
 	for {
-		if p.isLeader() && p.ready {
+		if p.isLeader() {
 			break
 		} else {
 			time.Sleep(time.Second)
@@ -537,14 +537,23 @@ func testAddRemNode(t *testing.T, p *pd) {
 		time.Sleep(time.Second)
 	}
 
-	conn.SendTo(addr, snet.MakeMessage(0, &sproto.RemNode{
-		SetID:  1,
-		NodeID: 2,
-	}))
+	for {
 
-	_, r, err = conn.ReadFrom(recvbuff)
+		conn.SendTo(addr, snet.MakeMessage(0, &sproto.RemNode{
+			SetID:  1,
+			NodeID: 2,
+		}))
 
-	assert.Equal(t, true, r.(*snet.Message).Msg.(*sproto.RemNodeResp).Ok)
+		_, r, err = conn.ReadFrom(recvbuff)
+
+		ret := r.(*snet.Message).Msg.(*sproto.RemNodeResp)
+
+		if ret.Reason == "node not found" {
+			break
+		}
+		time.Sleep(time.Second)
+
+	}
 
 	waitCondition(func() bool {
 		if len(p.pState.deployment.sets[1].nodes) == 1 {
@@ -605,26 +614,6 @@ func testAddRemSet(t *testing.T, p *pd) {
 
 	assert.Equal(t, false, r.(*snet.Message).Msg.(*sproto.RemSetResp).Ok)
 
-	node1 := &testKvnode{
-		nodeId: 1,
-	}
-
-	node1.udp, err = fnet.NewUdp("localhost:9110", snet.Pack, snet.Unpack)
-
-	if nil != err {
-		panic(err)
-	}
-
-	go node1.run()
-
-	node3 := &testKvnode{
-		nodeId: 3,
-	}
-
-	node3.udp, _ = fnet.NewUdp("localhost:8311", snet.Pack, snet.Unpack)
-
-	go node3.run()
-
 	conn.SendTo(addr, snet.MakeMessage(0, &sproto.SetMarkClear{
 		SetID: 2,
 	}))
@@ -640,14 +629,10 @@ func testAddRemSet(t *testing.T, p *pd) {
 			conn.SendTo(addr, snet.MakeMessage(0, &sproto.RemSet{
 				SetID: 2,
 			}))
-			conn.ReadFrom(recvbuff)
+			_, r, err = conn.ReadFrom(recvbuff)
 			return false
 		}
 	})
-
-	node1.stop()
-
-	node3.stop()
 }
 
 type testKvnode struct {
@@ -670,11 +655,13 @@ func (n *testKvnode) run() {
 				n.udp.SendTo(from, snet.MakeMessage(context, &sproto.NodeStoreOpOk{}))
 			case *sproto.NotifySlotTransIn:
 				notify := msg.(*sproto.NotifySlotTransIn)
+				fmt.Println("on slot trans in", notify.Slot, n.nodeId)
 				n.udp.SendTo(from, snet.MakeMessage(context, &sproto.SlotTransInOk{
 					Slot: notify.Slot,
 				}))
 			case *sproto.NotifySlotTransOut:
 				notify := msg.(*sproto.NotifySlotTransOut)
+				fmt.Println("on slot trans out", notify.Slot, n.nodeId)
 				n.udp.SendTo(from, snet.MakeMessage(context, &sproto.SlotTransOutOk{
 					Slot: notify.Slot,
 				}))
@@ -684,6 +671,11 @@ func (n *testKvnode) run() {
 				n.udp.SendTo(from, snet.MakeMessage(context, &sproto.StoreUpdateMetaOk{
 					Store:   notify.Store,
 					Version: notify.Version,
+				}))
+			case *sproto.IsTransInReady:
+				n.udp.SendTo(from, snet.MakeMessage(context, &sproto.IsTransInReadyResp{
+					Ready: true,
+					Slot:  msg.(*sproto.IsTransInReady).Slot,
 				}))
 			}
 		}
