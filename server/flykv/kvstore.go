@@ -489,26 +489,6 @@ func (s *kvstore) serve() {
 		}
 	}()
 
-	/*go func() {
-		for atomic.LoadInt32(&s.stoped) == 0 {
-			time.Sleep(time.Second)
-			err := s.mainQueue.q.ForceAppend(1, func() {
-				s.unixNow = time.Now().Unix()
-				//GetSugar().Infof("store:%d kvcount:%d", s.shard, s.kvcount())
-			})
-
-			if err == queue.ErrQueueClosed {
-				return
-			}
-		}
-	}()*/
-
-	//go func() {
-	//	for atomic.LoadInt32(&s.stoped) == 0 {
-	//		time.Sleep(time.Second)
-	//	}
-	//}()
-
 	go func() {
 		defer func() {
 			s.lease.stop()
