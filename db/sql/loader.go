@@ -177,9 +177,14 @@ func (this *loader) exec() {
 						version := field_convter[1](filed_receiver[1]).(int64)
 						fields := map[string]*proto.Field{}
 
-						for i := 3; i < len(filed_receiver); i++ {
+						//for i := 3; i < len(filed_receiver); i++ {
+						//	name := field_names[i]
+						//	fields[name] = proto.PackField(name, field_convter[i](filed_receiver[i]))
+						//}
+
+						for i := 0; i < len(field_names); i++ {
 							name := field_names[i]
-							fields[name] = proto.PackField(name, field_convter[i](filed_receiver[i]))
+							fields[name] = proto.PackField(name, field_convter[i+3](filed_receiver[i+3]))
 						}
 
 						delete(v.tasks, key)
