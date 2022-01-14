@@ -3,8 +3,10 @@ package sql
 //go test -tags=aio -covermode=count -v -coverprofile=coverage.out -run=.
 //go tool cover -html=coverage.out
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/sniperHW/flyfish/db"
+	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/stretchr/testify/assert"
 	"reflect"
@@ -12,10 +14,13 @@ import (
 )
 
 func TestDbmeta1(t *testing.T) {
-	m := db.DbDef{}
+	m := db.DbDef{
+		Version: 1,
+	}
 
 	t1 := db.TableDef{
-		Name: "Table1",
+		Version: 2,
+		Name:    "Table1",
 	}
 
 	{
@@ -56,11 +61,14 @@ func TestDbmeta1(t *testing.T) {
 
 	m.TableDefs = append(m.TableDefs, &t1)
 
-	defStr, err := db.DbDefToJsonString(&m)
-	assert.Nil(t, err)
-	fmt.Println(string(defStr))
+	//defStr, err := db.DbDefToJsonString(&m)
+	//assert.Nil(t, err)
 
-	mt, _ := CreateDbMeta(1, &m)
+	prettyJSON, _ := json.MarshalIndent(&m, "", "    ")
+
+	fmt.Println(string(prettyJSON))
+
+	mt, _ := CreateDbMeta(&m)
 
 	td := mt.GetTableMeta("Table1").(*TableMeta)
 
@@ -102,68 +110,57 @@ func TestDbmeta1(t *testing.T) {
 	fmt.Println(td.GetInsertPrefix())
 	fmt.Println(td.GetSelectPrefix())
 
+	testSqlString(t, td)
+
 }
 
-func TestDbmeta2(t *testing.T) {
-	dbdef, err := db.CreateDbDefFromCsv([]string{"Table1@field1:int:1,field2:float:1.2,field3:string:hello,field4:string:,field5:blob:"})
-
-	assert.Nil(t, err)
-
-	mt, _ := CreateDbMeta(1, dbdef)
-
-	defStr, err := db.DbDefToJsonString(dbdef)
-	assert.Nil(t, err)
-	fmt.Println(string(defStr))
-
-	td := mt.GetTableMeta("Table1").(*TableMeta)
-
-	fmt.Println(td.GetQueryMeta().GetFieldNames())
-
-	r := td.GetQueryMeta().GetReceiver()
-
-	assert.Equal(t, reflect.TypeOf(r[0]).String(), "*string")
-	assert.Equal(t, reflect.TypeOf(r[1]).String(), "*int64")
-	assert.Equal(t, reflect.TypeOf(r[3]).String(), "*int64")
-	assert.Equal(t, reflect.TypeOf(r[4]).String(), "*float64")
-	assert.Equal(t, reflect.TypeOf(r[5]).String(), "*string")
-	assert.Equal(t, reflect.TypeOf(r[6]).String(), "*string")
-	assert.Equal(t, reflect.TypeOf(r[7]).String(), "*[]uint8")
-
-	assert.Equal(t, td.GetDefaultValue("field1"), int64(1))
-	assert.Equal(t, td.GetDefaultValue("field2"), float64(1.2))
-	assert.Equal(t, td.GetDefaultValue("field3"), "hello")
-	assert.Equal(t, td.GetDefaultValue("field4"), "")
-	assert.Equal(t, td.GetDefaultValue("field5"), []byte{})
-
-	{
-		assert.Equal(t, db.GetDefaultValue(proto.ValueType_int, ""), int64(0))
-		assert.Equal(t, db.GetDefaultValue(proto.ValueType_float, ""), float64(0))
+func testSqlString(t *testing.T, meta db.TableMeta) {
+	us := &db.UpdateState{
+		Version: 1,
+		Key:     "hello",
+		Slot:    1,
+		Fields:  map[string]*proto.Field{},
+		Meta:    meta,
 	}
 
-	{
-		s := "hello"
-		assert.Equal(t, td.GetQueryMeta().GetConvetorByName("field4")(&s), "hello")
-		i := int64(1)
-		assert.Equal(t, convert_int64(&i), int64(1))
-		f := float64(1.2)
-		assert.Equal(t, convert_float(&f), float64(1.2))
+	us.Fields["field1"] = proto.PackField("field1", 1)
+	us.Fields["field2"] = proto.PackField("field2", 1.2)
 
-		b := []byte("string")
-		assert.Equal(t, convert_blob(&b), []byte("string"))
+	pg := &sqlstring{
+		binarytostr: binaryTopgSqlStr,
 	}
 
-	td1 := mt.CheckTableMeta(td)
+	pg.buildInsertUpdateString = pg.insertUpdateStatementPgSql
 
-	assert.Equal(t, td1, td)
+	b := buffer.New()
+	pg.insertStatement(b, us)
 
-	dbdef2, _ := db.CreateDbDefFromCsv([]string{"Table1@field1:int:1,field2:float:1.2,field3:string:hello,field4:string:,field5:blob:"})
+	fmt.Println(string(b.Bytes()))
 
-	mt2, _ := CreateDbMeta(2, dbdef2)
+	b = buffer.New()
 
-	mt2.MoveTo(mt)
+	pg.deleteStatement(b, us)
+	fmt.Println(string(b.Bytes()))
 
-	td2 := mt.CheckTableMeta(td)
+	b = buffer.New()
 
-	assert.NotEqual(t, td2, td)
+	pg.updateStatement(b, us)
+	fmt.Println(string(b.Bytes()))
+
+	b = buffer.New()
+
+	pg.insertUpdateStatement(b, us)
+	fmt.Println(string(b.Bytes()))
+
+	mysql := &sqlstring{
+		binarytostr: binaryTomySqlStr,
+	}
+
+	mysql.buildInsertUpdateString = mysql.insertUpdateStatementMySql
+
+	b = buffer.New()
+
+	mysql.insertUpdateStatement(b, us)
+	fmt.Println(string(b.Bytes()))
 
 }

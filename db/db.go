@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/sniperHW/flyfish/proto"
 	"strconv"
-	"strings"
 )
 
 var (
@@ -30,8 +29,9 @@ type FieldDef struct {
 }
 
 type TableDef struct {
-	Name   string      `json:"Name,omitempty"`
-	Fields []*FieldDef `json:"Fields,omitempty"`
+	Version int64
+	Name    string      `json:"Name,omitempty"`
+	Fields  []*FieldDef `json:"Fields,omitempty"`
 }
 
 func (t *TableDef) GetField(n string) *FieldDef {
@@ -41,6 +41,10 @@ func (t *TableDef) GetField(n string) *FieldDef {
 		}
 	}
 	return nil
+}
+
+func (t *TableDef) GetRealFieldName(name string) string {
+	return fmt.Sprintf("%s_%d", name, t.Version)
 }
 
 func (t *TableDef) Clone() *TableDef {
@@ -56,6 +60,7 @@ func (t *TableDef) Clone() *TableDef {
 }
 
 type DbDef struct {
+	Version   int64
 	TableDefs []*TableDef
 }
 
@@ -76,65 +81,32 @@ func (d *DbDef) Clone() *DbDef {
 	return &ret
 }
 
-func CreateDbDefFromJsonString(s []byte) (*DbDef, error) {
+func (d *DbDef) ToJson() ([]byte, error) {
+	if data, err := json.Marshal(d); err != nil {
+		return nil, err
+	} else {
+		return data, nil
+	}
+}
+
+func (d *DbDef) ToPrettyJson() ([]byte, error) {
+	if data, err := json.MarshalIndent(d, "", "    "); err != nil {
+		return nil, err
+	} else {
+		return data, nil
+	}
+}
+
+func (d *DbDef) GetRealTableName(name string) string {
+	return fmt.Sprintf("%s_%d", name, d.Version)
+}
+
+func MakeDbDefFromJsonString(s []byte) (*DbDef, error) {
 	var def DbDef
 	if err := json.Unmarshal(s, &def); nil != err {
 		return nil, err
 	} else {
 		return &def, nil
-	}
-}
-
-/*
- * 每个string为一个table
- * 表名@字段1:类型:默认值,字段2:类型:默认值,...
- */
-
-func CreateDbDefFromCsv(s []string) (*DbDef, error) {
-	dbDef := &DbDef{}
-	for _, l := range s {
-		t1 := strings.Split(l, "@")
-		if len(t1) != 2 {
-			return nil, fmt.Errorf("1 invaild table format(表名@字段1:类型:默认值,字段2:类型:默认值,...) %s", l)
-		}
-
-		tdef := &TableDef{
-			Name: t1[0],
-		}
-
-		fields := strings.Split(t1[1], ",")
-
-		if len(fields) == 0 {
-			return nil, fmt.Errorf("2 invaild table format(表名@字段1:类型:默认值,字段2:类型:默认值,...) %s", l)
-		}
-
-		//处理其它字段
-		for _, v := range fields {
-			if v != "" {
-				field := strings.Split(v, ":")
-				if len(field) != 3 {
-					return nil, fmt.Errorf("3 invaild table format(表名@字段1:类型:默认值,字段2:类型:默认值,...) %s", l)
-				}
-
-				tdef.Fields = append(tdef.Fields, &FieldDef{
-					Name:        field[0],
-					Type:        field[1],
-					DefautValue: field[2],
-				})
-			}
-		}
-
-		dbDef.TableDefs = append(dbDef.TableDefs, tdef)
-	}
-
-	return dbDef, nil
-}
-
-func DbDefToJsonString(def *DbDef) ([]byte, error) {
-	if data, err := json.Marshal(def); err != nil {
-		return nil, err
-	} else {
-		return data, nil
 	}
 }
 
@@ -190,6 +162,7 @@ type DBMeta interface {
 	CheckTableMeta(tab TableMeta) TableMeta //如果tab与DBMeta版本一致，直接返回tab否则返回最新的TableMeta
 	GetVersion() int64
 	ToJson() ([]byte, error)
+	ToPrettyJson() ([]byte, error)
 	GetDef() *DbDef
 	MoveTo(DBMeta)
 }

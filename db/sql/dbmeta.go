@@ -1,7 +1,6 @@
 package sql
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/sniperHW/flyfish/db"
@@ -13,9 +12,10 @@ import (
 
 //表查询元数据
 type QueryMeta struct {
-	field_names   []string //所有的字段名
-	field_convter []func(interface{}) interface{}
-	field_type    []reflect.Type
+	field_names      []string //所有的字段名
+	real_field_names []string
+	field_convter    []func(interface{}) interface{}
+	field_type       []reflect.Type
 }
 
 func (this *QueryMeta) GetFieldNames() []string {
@@ -25,7 +25,7 @@ func (this *QueryMeta) GetFieldNames() []string {
 func (this *QueryMeta) GetConvetorByName(name string) func(interface{}) interface{} {
 	for i := 0; i < len(this.field_names); i++ {
 		if this.field_names[i] == name {
-			return this.field_convter[i]
+			return this.field_convter[i+3]
 		}
 	}
 	return nil
@@ -54,16 +54,10 @@ func (this *FieldMeta) GetDefaultValue() interface{} {
 	return this.defaultValue
 }
 
-type dBMetaJson struct {
-	Version int64
-	Def     *db.DbDef
-}
-
 type DBMeta struct {
 	sync.RWMutex
-	tables  map[string]*TableMeta
-	version int64
-	def     *db.DbDef
+	tables map[string]*TableMeta
+	def    *db.DbDef
 }
 
 func (this *DBMeta) GetDef() *db.DbDef {
@@ -73,11 +67,11 @@ func (this *DBMeta) GetDef() *db.DbDef {
 }
 
 func (this *DBMeta) ToJson() ([]byte, error) {
-	j := dBMetaJson{
-		Version: this.version,
-		Def:     this.def,
-	}
-	return json.Marshal(&j)
+	return this.def.ToJson()
+}
+
+func (this *DBMeta) ToPrettyJson() ([]byte, error) {
+	return this.def.ToPrettyJson()
 }
 
 func (this *DBMeta) GetTableMeta(tab string) db.TableMeta {
@@ -93,7 +87,7 @@ func (this *DBMeta) GetTableMeta(tab string) db.TableMeta {
 func (this *DBMeta) GetVersion() int64 {
 	this.RLock()
 	defer this.RUnlock()
-	return this.version
+	return this.def.Version
 }
 
 func (this *DBMeta) MoveTo(other db.DBMeta) {
@@ -104,7 +98,6 @@ func (this *DBMeta) MoveTo(other db.DBMeta) {
 	defer o.Unlock()
 	if nil != this.tables {
 		o.def = this.def
-		o.version = this.version
 		o.tables = this.tables
 		this.def = nil
 		this.tables = nil
@@ -127,13 +120,18 @@ func (this *DBMeta) CheckTableMeta(tab db.TableMeta) db.TableMeta {
 
 //表格的元信息
 type TableMeta struct {
-	table            string                //表名
-	fieldMetas       map[string]*FieldMeta //所有字段元信息
-	queryMeta        *QueryMeta
-	insertPrefix     string
-	selectPrefix     string
-	insertFieldOrder []string
-	def              *db.DbDef
+	version        int64
+	real_tableName string
+	table          string                //表名
+	fieldMetas     map[string]*FieldMeta //所有字段元信息
+	queryMeta      *QueryMeta
+	insertPrefix   string
+	selectPrefix   string
+	def            *db.DbDef
+}
+
+func (t *TableMeta) getRealFieldName(name string) string {
+	return fmt.Sprintf("%s_%d", name, t.version)
 }
 
 func (this *TableMeta) TableName() string {
@@ -155,11 +153,7 @@ func (this *TableMeta) FillDefaultValues(fields map[string]*proto.Field) {
 }
 
 func (this *TableMeta) GetAllFieldsName() []string {
-	return this.insertFieldOrder
-}
-
-func (this *TableMeta) GetInsertOrder() []string {
-	return this.insertFieldOrder
+	return this.queryMeta.field_names
 }
 
 func (this *TableMeta) GetQueryMeta() *QueryMeta {
@@ -271,27 +265,29 @@ func createTableMetas(def *db.DbDef) (map[string]*TableMeta, error) {
 	if nil != def {
 		for _, v := range def.TableDefs {
 			t_meta := &TableMeta{
-				table:            v.Name,
-				fieldMetas:       map[string]*FieldMeta{},
-				insertFieldOrder: []string{},
+				table:          v.Name,
+				version:        v.Version,
+				real_tableName: def.GetRealTableName(v.Name),
+				fieldMetas:     map[string]*FieldMeta{},
 				queryMeta: &QueryMeta{
-					field_names:   []string{},
-					field_type:    []reflect.Type{},
-					field_convter: []func(interface{}) interface{}{},
+					field_names:      []string{},
+					real_field_names: []string{},
+					field_type:       []reflect.Type{},
+					field_convter:    []func(interface{}) interface{}{},
 				},
 				def: def,
 			}
 
 			//插入三个默认字段
-			t_meta.queryMeta.field_names = append(t_meta.queryMeta.field_names, "__key__")
+			t_meta.queryMeta.real_field_names = append(t_meta.queryMeta.real_field_names, "__key__")
 			t_meta.queryMeta.field_type = append(t_meta.queryMeta.field_type, getReceiverType(proto.ValueType_string))
 			t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter, getConvetor(proto.ValueType_string))
 
-			t_meta.queryMeta.field_names = append(t_meta.queryMeta.field_names, "__version__")
+			t_meta.queryMeta.real_field_names = append(t_meta.queryMeta.real_field_names, "__version__")
 			t_meta.queryMeta.field_type = append(t_meta.queryMeta.field_type, getReceiverType(proto.ValueType_int))
 			t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter, getConvetor(proto.ValueType_int))
 
-			t_meta.queryMeta.field_names = append(t_meta.queryMeta.field_names, "__slot__")
+			t_meta.queryMeta.real_field_names = append(t_meta.queryMeta.real_field_names, "__slot__")
 			t_meta.queryMeta.field_type = append(t_meta.queryMeta.field_type, getReceiverType(proto.ValueType_int))
 			t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter, getConvetor(proto.ValueType_int))
 
@@ -320,9 +316,9 @@ func createTableMetas(def *db.DbDef) (map[string]*TableMeta, error) {
 					defaultValue: defaultValue,
 				}
 
-				t_meta.insertFieldOrder = append(t_meta.insertFieldOrder, vv.Name)
-
 				t_meta.queryMeta.field_names = append(t_meta.queryMeta.field_names, vv.Name)
+
+				t_meta.queryMeta.real_field_names = append(t_meta.queryMeta.real_field_names, v.GetRealFieldName(vv.Name))
 
 				t_meta.queryMeta.field_type = append(t_meta.queryMeta.field_type, getReceiverType(ftype))
 
@@ -331,39 +327,29 @@ func createTableMetas(def *db.DbDef) (map[string]*TableMeta, error) {
 
 			table_metas[v.Name] = t_meta
 
-			t_meta.selectPrefix = fmt.Sprintf("SELECT %s FROM %s where __key__ in(", strings.Join(t_meta.queryMeta.field_names, ","), t_meta.table)
-			t_meta.insertPrefix = fmt.Sprintf("INSERT INTO %s(__key__,__version__,__slot__,%s) VALUES (", t_meta.table, strings.Join(t_meta.insertFieldOrder, ","))
+			t_meta.selectPrefix = fmt.Sprintf("SELECT %s FROM %s where __key__ in(", strings.Join(t_meta.queryMeta.real_field_names, ","), t_meta.real_tableName)
+			t_meta.insertPrefix = fmt.Sprintf("INSERT INTO %s(%s) VALUES (", t_meta.real_tableName, strings.Join(t_meta.queryMeta.real_field_names, ","))
 
 		}
 	}
 	return table_metas, nil
 }
 
-func CreateDbMeta(version int64, def *db.DbDef) (db.DBMeta, error) {
+func CreateDbMeta(def *db.DbDef) (db.DBMeta, error) {
 	if tables, err := createTableMetas(def); nil != err {
 		return nil, err
 	} else {
 		return &DBMeta{
-			version: version,
-			def:     def,
-			tables:  tables,
+			def:    def,
+			tables: tables,
 		}, nil
 	}
 }
 
 func CreateDbMetaFromJson(j []byte) (db.DBMeta, error) {
-	var jj dBMetaJson
-	if err := json.Unmarshal(j, &jj); nil != err {
+	def, err := db.MakeDbDefFromJsonString(j)
+	if nil != err {
 		return nil, err
 	}
-
-	if tables, err := createTableMetas(jj.Def); nil != err {
-		return nil, err
-	} else {
-		return &DBMeta{
-			version: jj.Version,
-			def:     jj.Def,
-			tables:  tables,
-		}, nil
-	}
+	return CreateDbMeta(def)
 }

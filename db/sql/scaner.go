@@ -27,11 +27,11 @@ type Scanner struct {
 	rows          *sql.Rows
 }
 
-func NewScanner(tbmeta db.TableMeta, dbc *sqlx.DB, slot int, table string, wantFields []string, exclude []string) (*Scanner, error) {
+func NewScanner(tbmeta db.TableMeta, dbc *sqlx.DB, slot int, wantFields []string, exclude []string) (*Scanner, error) {
 
 	queryFields := append([]string{"__key__", "__version__"}, wantFields...)
 
-	sqlStr := fmt.Sprintf(selectTemplate, strings.Join(queryFields, ","), table, slot, strings.Join(exclude, "','"))
+	sqlStr := fmt.Sprintf(selectTemplate, strings.Join(queryFields, ","), tbmeta.(*TableMeta).real_tableName, slot, strings.Join(exclude, "','"))
 
 	rows, err := dbc.Query(sqlStr)
 

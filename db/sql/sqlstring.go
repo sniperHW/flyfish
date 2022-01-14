@@ -58,7 +58,7 @@ func (this *sqlstring) buildInsert(b *buffer.Buffer, s *db.UpdateState) *proto.F
 	this.appendFieldStr(b, slot)
 	b.AppendString(",")
 
-	fields := meta.GetInsertOrder()
+	fields := meta.GetAllFieldsName()
 	i := 0
 	for _, name := range fields {
 		v, ok := s.Fields[name]
@@ -82,19 +82,21 @@ func (this *sqlstring) buildInsert(b *buffer.Buffer, s *db.UpdateState) *proto.F
 
 func (this *sqlstring) insertUpdateStatementPgSql(b *buffer.Buffer, s *db.UpdateState, version *proto.Field) {
 
+	meta := s.Meta.(*TableMeta)
+
 	b.AppendString(" ON conflict(__key__)  DO UPDATE SET ")
 
 	for _, v := range s.Fields {
-		b.AppendString(v.GetName()).AppendString("=")
+		b.AppendString(meta.getRealFieldName(v.GetName())).AppendString("=")
 		this.appendFieldStr(b, v)
 		b.AppendString(",")
 	}
 
 	b.AppendString("__version__=")
 	this.appendFieldStr(b, version)
-	b.AppendString(" where ").AppendString(s.Meta.(*TableMeta).GetTable()).AppendString(".__key__ = '").AppendString(s.Key).AppendString("';")
+	b.AppendString(" where ").AppendString(s.Meta.(*TableMeta).real_tableName).AppendString(".__key__ = '").AppendString(s.Key).AppendString("';")
 
-	GetSugar().Debug(b.ToStrUnsafe())
+	//GetSugar().Debug(b.ToStrUnsafe())
 }
 
 /*
@@ -102,11 +104,12 @@ func (this *sqlstring) insertUpdateStatementPgSql(b *buffer.Buffer, s *db.Update
  */
 
 func (this *sqlstring) insertUpdateStatementMySql(b *buffer.Buffer, s *db.UpdateState, version *proto.Field) {
+	meta := s.Meta.(*TableMeta)
 
 	b.AppendString(" on duplicate key update ")
 
 	for _, v := range s.Fields {
-		b.AppendString(v.GetName()).AppendString("=")
+		b.AppendString(meta.getRealFieldName(v.GetName())).AppendString("=")
 		this.appendFieldStr(b, v)
 		b.AppendString(",")
 	}
@@ -114,7 +117,7 @@ func (this *sqlstring) insertUpdateStatementMySql(b *buffer.Buffer, s *db.Update
 	this.appendFieldStr(b, version)
 	b.AppendString(";")
 
-	GetSugar().Debug(b.ToStrUnsafe())
+	//GetSugar().Debug(b.ToStrUnsafe())
 }
 
 func (this *sqlstring) insertUpdateStatement(b *buffer.Buffer, s *db.UpdateState) {
@@ -129,12 +132,12 @@ func (this *sqlstring) insertStatement(b *buffer.Buffer, s *db.UpdateState) {
 
 func (this *sqlstring) updateStatement(b *buffer.Buffer, s *db.UpdateState) {
 	meta := s.Meta.(*TableMeta)
-	b.AppendString("update ").AppendString(meta.GetTable()).AppendString(" set ")
+	b.AppendString("update ").AppendString(meta.real_tableName).AppendString(" set ")
 	version := proto.PackField("__version__", s.Version)
 
 	for k, v := range s.Fields {
 		if nil == meta.CheckFields(v) {
-			b.AppendString(k).AppendString("=")
+			b.AppendString(meta.getRealFieldName(k)).AppendString("=")
 			this.appendFieldStr(b, v)
 			b.AppendString(",")
 		}
@@ -144,12 +147,12 @@ func (this *sqlstring) updateStatement(b *buffer.Buffer, s *db.UpdateState) {
 	this.appendFieldStr(b, version)
 	b.AppendString(" where __key__ = '").AppendString(s.Key).AppendString("';")
 
-	GetSugar().Debug(b.ToStrUnsafe())
+	//GetSugar().Debug(b.ToStrUnsafe())
 }
 
 func (this *sqlstring) deleteStatement(b *buffer.Buffer, s *db.UpdateState) {
 	meta := s.Meta.(*TableMeta)
-	b.AppendString("delete from ").AppendString(meta.GetTable()).AppendString(" where __key__ = '").AppendString(s.Key).AppendString("';")
+	b.AppendString("delete from ").AppendString(meta.real_tableName).AppendString(" where __key__ = '").AppendString(s.Key).AppendString("';")
 
-	GetSugar().Debug(b.ToStrUnsafe())
+	//GetSugar().Debug(b.ToStrUnsafe())
 }

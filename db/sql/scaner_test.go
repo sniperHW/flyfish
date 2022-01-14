@@ -2,7 +2,7 @@ package sql
 
 //go test -covermode=count -v -coverprofile=coverage.out -run=TestScaner
 //go tool cover -html=coverage.out
-import (
+/*import (
 	"fmt"
 	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/db"
@@ -36,7 +36,7 @@ func TestScaner(t *testing.T) {
 	dbc, err := sqlOpen("pgsql", "localhost", 5432, "test", "sniper", "123456")
 	assert.Nil(t, err)
 
-	scaner, err := NewScanner(meta, dbc, 2, "users1", []string{"name"}, []string{"huangwei:3", "sniper"})
+	scaner, err := NewScanner(meta.GetTableMeta("users1"), dbc, 2, "users1", []string{"name"}, []string{"huangwei:3", "sniper"})
 	assert.Nil(t, err)
 
 	rows, err := scaner.Next(10)
@@ -46,4 +46,4 @@ func TestScaner(t *testing.T) {
 		fmt.Println(v.Key, v.Version, v.Fields)
 	}
 
-}
+}*/
