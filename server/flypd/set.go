@@ -20,10 +20,6 @@ func (p *ProposalAddSet) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalAddSet) doApply(pd *pd) error {
-	if nil != pd.pState.MetaTransaction {
-		return errors.New("wait for previous meta transaction finish")
-	}
-
 	if _, ok := pd.pState.deployment.sets[int(p.Msg.Set.SetID)]; ok {
 		return errors.New("set already exists")
 	}
@@ -103,10 +99,6 @@ func (p *ProposalRemSet) Serilize(b []byte) []byte {
 func (p *ProposalRemSet) apply(pd *pd) {
 
 	err := func() error {
-		if nil != pd.pState.MetaTransaction {
-			return errors.New("wait for previous meta transaction finish")
-		}
-
 		s, ok := pd.pState.deployment.sets[int(p.SetID)]
 		if !ok {
 			return errors.New("set not exists")
@@ -207,10 +199,6 @@ func (p *pd) onRemSet(from *net.UDPAddr, m *snet.Message) {
 	resp := &sproto.RemSetResp{}
 
 	err := func() error {
-		if nil != p.pState.MetaTransaction {
-			return errors.New("wait for previous meta transaction finish")
-		}
-
 		if nil == p.pState.deployment {
 			return errors.New("no deployment")
 		}
@@ -292,10 +280,6 @@ func (p *pd) onAddSet(from *net.UDPAddr, m *snet.Message) {
 	resp := &sproto.AddSetResp{}
 
 	err := func() error {
-		if nil != p.pState.MetaTransaction {
-			return errors.New("wait for previous meta transaction finish")
-		}
-
 		if nil == p.pState.deployment {
 			return errors.New("no deployment")
 		}

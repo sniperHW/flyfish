@@ -176,11 +176,6 @@ func TestSnapShot(t *testing.T) {
 		p1.pState.Meta.Version = 1
 		p1.pState.Meta.MetaDef = m
 		p1.pState.Meta.MetaBytes, _ = db.DbDefToJsonString(m)
-		p1.pState.MetaTransaction = &MetaTransaction{
-			MetaDef: m,
-			Store:   []MetaTransactionStore{MetaTransactionStore{StoreID: 1, Ok: true}},
-			Version: 2,
-		}
 	}
 
 	bytes, err := p1.getSnapshot()
@@ -212,10 +207,6 @@ func TestSnapShot(t *testing.T) {
 	assert.Equal(t, 2, p2.pState.SlotTransfer[2].Slot)
 
 	assert.Equal(t, p2.pState.Meta.Version, int64(1))
-	assert.Equal(t, p2.pState.MetaTransaction.Version, int64(2))
-
-	assert.Equal(t, p2.pState.MetaTransaction.Store[0].StoreID, 1)
-	assert.Equal(t, p2.pState.MetaTransaction.Store[0].Ok, true)
 
 	assert.Equal(t, len(p2.pState.Meta.MetaBytes), len(p1.pState.Meta.MetaBytes))
 
@@ -339,27 +330,9 @@ func testInstallDeployment(t *testing.T, p *pd) {
 
 }
 
-func testSetMeta(t *testing.T, p *pd) {
-	m := genMeta()
-	b, _ := db.DbDefToJsonString(m)
-
-	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
-	assert.Nil(t, err)
-
-	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
-
-	conn.SendTo(addr, snet.MakeMessage(0, &sproto.SetMeta{
-		Meta: b,
-	}))
-	recvbuff := make([]byte, 256)
-	_, r, err := conn.ReadFrom(recvbuff)
-
-	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.SetMetaResp).Ok, true)
-
-	conn.Close()
-}
-
 func testUpdateMeta1(t *testing.T, p *pd) {
+	fmt.Println("testUpdateMeta1")
+
 	t1 := sproto.MetaTable{
 		Name: "Table1",
 	}
@@ -397,6 +370,7 @@ func testUpdateMeta1(t *testing.T, p *pd) {
 }
 
 func testUpdateMeta2(t *testing.T, p *pd) {
+	fmt.Println("testUpdateMeta2")
 
 	node1 := &testKvnode{
 		nodeId: 1,
@@ -405,6 +379,19 @@ func testUpdateMeta2(t *testing.T, p *pd) {
 	node1.udp, _ = fnet.NewUdp("localhost:9110", snet.Pack, snet.Unpack)
 
 	go node1.run()
+
+	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
+	assert.Nil(t, err)
+
+	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
+
+	conn.SendTo(addr, snet.MakeMessage(0, &sproto.StoreReportStatus{
+		SetID:       int32(1),
+		NodeID:      int32(1),
+		StoreID:     int32(1),
+		Isleader:    true,
+		MetaVersion: 0,
+	}))
 
 	t1 := sproto.MetaTable{
 		Name: "Table1",
@@ -418,26 +405,21 @@ func testUpdateMeta2(t *testing.T, p *pd) {
 
 	u := &sproto.UpdateMeta{Updates: []*sproto.MetaTable{&t1}, Version: 1}
 
-	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
-	assert.Nil(t, err)
-
-	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
-
 	conn.SendTo(addr, snet.MakeMessage(0, u))
 	recvbuff := make([]byte, 256)
 	_, r, err := conn.ReadFrom(recvbuff)
 
 	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.UpdateMetaResp).Ok, true)
 
-	conn.Close()
-
-	waitCondition(func() bool {
-		if p.pState.MetaTransaction == nil {
-			return true
+	for {
+		if node1.metaVersion == 2 {
+			break
 		} else {
-			return false
+			time.Sleep(time.Second)
 		}
-	})
+	}
+
+	conn.Close()
 
 	node1.stop()
 
@@ -636,8 +618,9 @@ func testAddRemSet(t *testing.T, p *pd) {
 }
 
 type testKvnode struct {
-	udp    *fnet.Udp
-	nodeId int
+	udp         *fnet.Udp
+	nodeId      int
+	metaVersion int64
 }
 
 func (n *testKvnode) run() {
@@ -666,12 +649,9 @@ func (n *testKvnode) run() {
 					Slot: notify.Slot,
 				}))
 			case *sproto.NotifyUpdateMeta:
-				fmt.Println("on NotifyUpdateMeta")
 				notify := msg.(*sproto.NotifyUpdateMeta)
-				n.udp.SendTo(from, snet.MakeMessage(context, &sproto.StoreUpdateMetaOk{
-					Store:   notify.Store,
-					Version: notify.Version,
-				}))
+				n.metaVersion = notify.Version
+				fmt.Println("on NotifyUpdateMeta", notify.Version)
 			case *sproto.IsTransInReady:
 				n.udp.SendTo(from, snet.MakeMessage(context, &sproto.IsTransInReadyResp{
 					Ready: true,

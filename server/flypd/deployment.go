@@ -486,10 +486,6 @@ func (p *ProposalInstallDeployment) Serilize(b []byte) []byte {
 
 func (p *ProposalInstallDeployment) apply(pd *pd) {
 	err := func() error {
-		if nil != pd.pState.MetaTransaction {
-			return errors.New("wait for previous meta transaction finish")
-		}
-
 		if nil != pd.pState.deployment {
 			return errors.New("already install")
 		}
@@ -532,10 +528,6 @@ func (p *pd) onInstallDeployment(from *net.UDPAddr, m *snet.Message) {
 	var d *deployment
 
 	err := func() error {
-		if nil != p.pState.MetaTransaction {
-			return errors.New("wait for previous meta transaction finish")
-		}
-
 		if nil != p.pState.deployment {
 			return errors.New("already install")
 		}

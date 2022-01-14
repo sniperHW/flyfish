@@ -446,12 +446,13 @@ func (s *kvstore) gotLease() {
 func (s *kvstore) reportStatus() {
 	s.mainQueue.q.Append(1, func() {
 		msg := &sproto.StoreReportStatus{
-			SetID:    int32(s.kvnode.setID),
-			NodeID:   int32(s.rn.ID().GetNodeID()),
-			StoreID:  int32(s.rn.ID().GetShard()),
-			Isleader: s.isLeader(),
-			Kvcount:  int32(s.kvcount),
-			Progress: s.rn.GetApplyIndex(),
+			SetID:       int32(s.kvnode.setID),
+			NodeID:      int32(s.rn.ID().GetNodeID()),
+			StoreID:     int32(s.rn.ID().GetShard()),
+			Isleader:    s.isLeader(),
+			Kvcount:     int32(s.kvcount),
+			Progress:    s.rn.GetApplyIndex(),
+			MetaVersion: s.meta.GetVersion(),
 		}
 
 		go func() {
@@ -777,11 +778,7 @@ func (s *kvstore) onNotifySlotTransOut(from *net.UDPAddr, msg *sproto.NotifySlot
 
 func (s *kvstore) onNotifyUpdateMeta(from *net.UDPAddr, msg *sproto.NotifyUpdateMeta, context int64) {
 	if s.meta.GetVersion() == msg.Version {
-		s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
-			&sproto.StoreUpdateMetaOk{
-				Store:   msg.Store,
-				Version: msg.Version,
-			}))
+		return
 	} else {
 		var meta db.DBMeta
 		var err error
@@ -794,13 +791,6 @@ func (s *kvstore) onNotifyUpdateMeta(from *net.UDPAddr, msg *sproto.NotifyUpdate
 			s.rn.IssueProposal(&ProposalUpdateMeta{
 				meta:  meta,
 				store: s,
-				reply: func() {
-					s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
-						&sproto.StoreUpdateMetaOk{
-							Store:   msg.Store,
-							Version: msg.Version,
-						}))
-				},
 			})
 		} else {
 			GetSugar().Infof("onNotifyUpdateMeta ")

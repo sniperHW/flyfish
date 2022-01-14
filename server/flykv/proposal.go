@@ -419,7 +419,6 @@ type ProposalUpdateMeta struct {
 	proposalBase
 	meta  db.DBMeta
 	store *kvstore
-	reply func()
 }
 
 func (this *ProposalUpdateMeta) Isurgent() bool {
@@ -437,7 +436,6 @@ func (this *ProposalUpdateMeta) Serilize(b []byte) []byte {
 
 func (this *ProposalUpdateMeta) apply() {
 	this.meta.MoveTo(this.store.meta)
-	this.reply()
 }
 
 type proposalNop struct {

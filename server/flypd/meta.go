@@ -9,7 +9,6 @@ import (
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"net"
 	"strings"
-	"time"
 )
 
 type Meta struct {
@@ -85,51 +84,10 @@ func (p *pd) onGetMeta(from *net.UDPAddr, m *snet.Message) {
 		}))
 }
 
-type MetaTransactionStore struct {
-	StoreID int
-	Ok      bool
-}
-
-type MetaTransaction struct {
-	MetaDef *db.DbDef
-	Store   []MetaTransactionStore
-	Version int64
-	timer   *time.Timer
-}
-
-func (m *MetaTransaction) notifyStore(p *pd) {
-	if nil == p.pState.MetaTransaction {
-		return
-	}
-
-	c := 0
-	for _, v := range m.Store {
-		if !v.Ok {
-			c++
-			s := p.pState.deployment.getStoreByID(v.StoreID)
-			for _, vv := range s.set.nodes {
-				addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", vv.host, vv.servicePort))
-				p.udp.SendTo(addr, snet.MakeMessage(0,
-					&sproto.NotifyUpdateMeta{
-						Store:   int32(v.StoreID),
-						Version: int64(p.pState.Meta.Version),
-						Meta:    p.pState.Meta.MetaBytes,
-					}))
-			}
-		}
-	}
-
-	if c > 0 {
-		m.timer = time.AfterFunc(time.Second, func() {
-			p.mainque.AppendHighestPriotiryItem(m)
-		})
-	}
-}
-
 type ProposalUpdateMeta struct {
 	proposalBase
-	Tran *MetaTransaction
-	Msg  *sproto.UpdateMeta
+	Msg     *sproto.UpdateMeta
+	MetaDef *db.DbDef
 }
 
 func (p *ProposalUpdateMeta) Serilize(b []byte) []byte {
@@ -137,19 +95,67 @@ func (p *ProposalUpdateMeta) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalUpdateMeta) apply(pd *pd) {
-	var err error
-	if nil != pd.pState.MetaTransaction {
-		err = errors.New("wait for previous meta transaction finish")
-	} else if nil != p.Msg && pd.pState.Meta.Version != p.Msg.Version {
-		err = errors.New("version mismatch")
-	} else {
-		pd.pState.Meta.Version = p.Tran.Version
-		pd.pState.Meta.MetaDef = p.Tran.MetaDef
-		pd.pState.Meta.MetaBytes, _ = db.DbDefToJsonString(pd.pState.Meta.MetaDef)
-		if len(p.Tran.Store) > 0 {
-			pd.pState.MetaTransaction = p.Tran
-			pd.pState.MetaTransaction.notifyStore(pd)
+	meta, err := func() (*db.DbDef, error) {
+		var meta *db.DbDef
+		if nil != p.Msg {
+			if pd.pState.Meta.Version != p.Msg.Version {
+				return nil, errors.New("version mismatch")
+			}
+
+			if nil != pd.pState.Meta.MetaDef {
+				meta = pd.pState.Meta.MetaDef.Clone()
+			} else {
+				meta, _ = db.CreateDbDefFromJsonString([]byte("{}"))
+			}
+
+			for _, v := range p.Msg.Updates {
+				tb := meta.GetTableDef(v.Name)
+				if nil == tb {
+					tb = &db.TableDef{
+						Name: v.Name,
+					}
+					meta.TableDefs = append(meta.TableDefs, tb)
+				}
+
+				for _, vv := range v.Fields {
+					tb.Fields = append(tb.Fields, &db.FieldDef{
+						Name:        vv.Name,
+						Type:        vv.Type,
+						DefautValue: vv.Default,
+					})
+				}
+			}
+		} else {
+			meta = p.MetaDef
 		}
+		return meta, checkDbDef(meta)
+	}()
+
+	if nil == err {
+		pd.pState.Meta.Version++
+		pd.pState.Meta.MetaDef = meta
+		pd.pState.Meta.MetaBytes, _ = db.DbDefToJsonString(pd.pState.Meta.MetaDef)
+
+		//notify all store leader
+		if nil != pd.pState.deployment {
+			for _, set := range pd.pState.deployment.sets {
+				for _, node := range set.nodes {
+					for storeID, store := range node.store {
+						if store.isLead {
+							addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.host, node.servicePort))
+							pd.udp.SendTo(addr, snet.MakeMessage(0,
+								&sproto.NotifyUpdateMeta{
+									Store:   int32(storeID),
+									Version: int64(pd.pState.Meta.Version),
+									Meta:    pd.pState.Meta.MetaBytes,
+								}))
+						}
+					}
+				}
+			}
+		}
+	} else {
+		GetSugar().Infof("ProposalUpdateMeta.apply err:%v", err)
 	}
 
 	if nil != p.reply {
@@ -163,122 +169,10 @@ func (p *ProposalUpdateMeta) replay(pd *pd) {
 
 //运行期间更新meta，只允许添加
 func (p *pd) onUpdateMeta(from *net.UDPAddr, m *snet.Message) {
-	msg := m.Msg.(*sproto.UpdateMeta)
-	resp := &sproto.UpdateMetaResp{}
-
-	t, err := func() (*MetaTransaction, error) {
-		if nil != p.pState.MetaTransaction {
-			return nil, errors.New("wait for previous meta transaction finish")
-		}
-
-		if p.pState.Meta.Version != msg.Version {
-			return nil, errors.New("version mismatch")
-		}
-
-		t := &MetaTransaction{
-			Version: p.pState.Meta.Version + 1,
-		}
-
-		if nil != p.pState.Meta.MetaDef {
-			t.MetaDef = p.pState.Meta.MetaDef.Clone()
-		} else {
-			t.MetaDef, _ = db.CreateDbDefFromJsonString([]byte("{}"))
-		}
-
-		for _, v := range msg.Updates {
-			tb := t.MetaDef.GetTableDef(v.Name)
-			if nil == tb {
-				tb = &db.TableDef{
-					Name: v.Name,
-				}
-				t.MetaDef.TableDefs = append(t.MetaDef.TableDefs, tb)
-			}
-
-			for _, vv := range v.Fields {
-				tb.Fields = append(tb.Fields, &db.FieldDef{
-					Name:        vv.Name,
-					Type:        vv.Type,
-					DefautValue: vv.Default,
-				})
-			}
-		}
-
-		return t, checkDbDef(t.MetaDef)
-	}()
-
-	if nil != err {
-		resp.Ok = false
-		resp.Reason = err.Error()
-		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
-	} else {
-		if nil != p.pState.deployment {
-			for _, s := range p.pState.deployment.sets {
-				for kk, _ := range s.stores {
-					t.Store = append(t.Store, MetaTransactionStore{
-						StoreID: kk,
-						Ok:      false,
-					})
-				}
-			}
-		}
-
-		p.issueProposal(&ProposalUpdateMeta{
-			proposalBase: proposalBase{
-				reply: p.makeReplyFunc(from, m, resp),
-			},
-			Tran: t,
-			Msg:  msg,
-		})
-	}
-}
-
-type ProposalStoreUpdateMetaOk struct {
-	proposalBase
-	Store int
-}
-
-func (p *ProposalStoreUpdateMetaOk) Serilize(b []byte) []byte {
-	return serilizeProposal(b, proposalStoreUpdateMetaOk, p)
-}
-
-func (p *ProposalStoreUpdateMetaOk) apply(pd *pd) {
-	t := pd.pState.MetaTransaction
-	c := 0
-	for k, v := range t.Store {
-		if v.StoreID == p.Store {
-			t.Store[k].Ok = true
-		} else if !v.Ok {
-			c++
-		}
-	}
-	if c == 0 {
-		//所有store均已应答，事务结束
-		pd.pState.MetaTransaction = nil
-	}
-}
-
-func (p *ProposalStoreUpdateMetaOk) replay(pd *pd) {
-	p.apply(pd)
-}
-
-func (p *pd) onStoreUpdateMetaOk(from *net.UDPAddr, m *snet.Message) {
-	msg := m.Msg.(*sproto.StoreUpdateMetaOk)
-	t := p.pState.MetaTransaction
-	if t != nil && t.Version == msg.Version {
-		store := -1
-		for _, v := range t.Store {
-			if v.StoreID == int(msg.Store) {
-				if !v.Ok {
-					store = v.StoreID
-				}
-				break
-			}
-		}
-
-		if store != -1 {
-			p.issueProposal(&ProposalStoreUpdateMetaOk{
-				Store: store,
-			})
-		}
-	}
+	p.issueProposal(&ProposalUpdateMeta{
+		proposalBase: proposalBase{
+			reply: p.makeReplyFunc(from, m, &sproto.UpdateMetaResp{}),
+		},
+		Msg: m.Msg.(*sproto.UpdateMeta),
+	})
 }

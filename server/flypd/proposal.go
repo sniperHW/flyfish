@@ -17,11 +17,10 @@ const (
 	proposalRemSet                = 10
 	proposalSetMarkClear          = 11
 	proposalUpdateMeta            = 12
-	proposalStoreUpdateMetaOk     = 13
-	proposalAddLearnerStoreToNode = 14
-	proposalFlyKvCommited         = 15
-	proposalPromoteLearnerStore   = 16
-	proposalRemoveNodeStore       = 17
+	proposalAddLearnerStoreToNode = 13
+	proposalFlyKvCommited         = 14
+	proposalPromoteLearnerStore   = 15
+	proposalRemoveNodeStore       = 16
 )
 
 type proposalBase struct {
@@ -96,8 +95,6 @@ func (p *pd) replayProposal(proposal []byte) error {
 		err = unmarshal(&ProposalSetMarkClear{})
 	case proposalUpdateMeta:
 		err = unmarshal(&ProposalUpdateMeta{})
-	case proposalStoreUpdateMetaOk:
-		err = unmarshal(&ProposalStoreUpdateMetaOk{})
 	case proposalFlyKvCommited:
 		err = unmarshal(&ProposalFlyKvCommited{})
 	case proposalAddLearnerStoreToNode:

@@ -57,9 +57,8 @@ enum ServerCmdType {
   NotifySlotTransIn             = 220;
   SlotTransInOk                 = 221;    
   NotifyUpdateMeta              = 222;
-  StoreUpdateMetaOk             = 223;
-  StoreReportStatus             = 224;
-  TrasnferLeader                = 225;
+  StoreReportStatus             = 223;
+  TrasnferLeader                = 224;
 
 
   //flygate <-> pd
@@ -363,16 +362,9 @@ message  notifyUpdateMeta {
   optional bytes meta     = 3;
 }
 
-message  storeUpdateMetaOk {
-  optional int32 store    = 1;
-  optional int64 version  = 2; 
-}
-
 message packetTest {
   optional string message = 1;
 }
-
-
 
 message getSetStatus {
   
@@ -408,12 +400,13 @@ message getSetStatusResp {
 }
 
 message storeReportStatus {
-  optional int32  setID    = 1;
-  optional int32  nodeID   = 2;
-  optional int32  storeID  = 3;
-  optional bool   isleader = 4;
-  optional int32  kvcount  = 5;
-  optional uint64 progress = 6;
+  optional int32  setID       = 1;
+  optional int32  nodeID      = 2;
+  optional int32  storeID     = 3;
+  optional bool   isleader    = 4;
+  optional int32  kvcount     = 5;
+  optional uint64 progress    = 6;
+  optional int64  metaVersion = 7;
 }
 
 message trasnferLeader {

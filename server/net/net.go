@@ -320,7 +320,6 @@ func init() {
 	namespace.Register(&sproto.SlotTransInOk{}, uint32(sproto.ServerCmdType_SlotTransInOk))
 
 	namespace.Register(&sproto.NotifyUpdateMeta{}, uint32(sproto.ServerCmdType_NotifyUpdateMeta))
-	namespace.Register(&sproto.StoreUpdateMetaOk{}, uint32(sproto.ServerCmdType_StoreUpdateMetaOk))
 
 	namespace.Register(&sproto.StoreReportStatus{}, uint32(sproto.ServerCmdType_StoreReportStatus))
 

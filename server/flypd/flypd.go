@@ -94,11 +94,10 @@ func (f *flygateMgr) onHeartBeat(gateService string, msgPerSecond int) {
 }
 
 type persistenceState struct {
-	Deployment      DeploymentJson
-	SlotTransfer    map[int]*TransSlotTransfer
-	Meta            Meta
-	MetaTransaction *MetaTransaction
-	deployment      *deployment
+	Deployment   DeploymentJson
+	SlotTransfer map[int]*TransSlotTransfer
+	Meta         Meta
+	deployment   *deployment
 }
 
 func (p *persistenceState) toJson() ([]byte, error) {
@@ -470,10 +469,7 @@ func (p *pd) loadInitMeta() {
 			}
 
 			p.issueProposal(&ProposalUpdateMeta{
-				Tran: &MetaTransaction{
-					Version: 1,
-					MetaDef: def,
-				},
+				MetaDef: def,
 			})
 		}
 	}
@@ -514,22 +510,12 @@ func (p *pd) onBecomeLeader() {
 	if 0 == p.pState.Meta.Version {
 		p.loadInitMeta()
 	}
-
-	if nil != p.pState.MetaTransaction {
-		p.pState.MetaTransaction.notifyStore(p)
-	}
-
 }
 
 func (p *pd) onLeaderDownToFollower() {
 	for _, v := range p.pState.SlotTransfer {
 		v.timer.Stop()
 		v.timer = nil
-	}
-
-	if nil != p.pState.MetaTransaction && nil != p.pState.MetaTransaction.timer {
-		p.pState.MetaTransaction.timer.Stop()
-		p.pState.MetaTransaction.timer = nil
 	}
 
 	for _, v := range p.storeTask {
@@ -622,10 +608,6 @@ func (p *pd) serve() {
 					if _, ok := p.pState.SlotTransfer[v.(*TransSlotTransfer).Slot]; ok {
 						v.(*TransSlotTransfer).notify(p)
 					}
-				}
-			case *MetaTransaction:
-				if p.isLeader() {
-					v.(*MetaTransaction).notifyStore(p)
 				}
 			default:
 				GetSugar().Infof("here %v %s", v, reflect.TypeOf(v).String())
