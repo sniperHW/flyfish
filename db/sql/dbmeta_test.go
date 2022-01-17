@@ -6,12 +6,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/sniperHW/flyfish/db"
+	"github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/proto"
 	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
 )
+
+func init() {
+	InitLogger(logger.NewZapLogger("sql.log", "./log", "debug", 4096, 1, 1, true))
+}
 
 func TestDbmeta1(t *testing.T) {
 	m := db.DbDef{

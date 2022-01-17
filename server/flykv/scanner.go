@@ -172,7 +172,7 @@ func (sc *scanner) next(kvnode *kvnode, conn net.Conn, count int, deadline time.
 	resp.Slot = int32(s.slot)
 
 	if nil == sc.scanner {
-		sc.scanner, err = sql.NewScanner(sc.tbmeta, kvnode.dbc, s.slot, sc.table, sc.wantFields, s.exclude)
+		sc.scanner, err = sql.NewScanner(sc.tbmeta, kvnode.dbc, s.slot, sc.wantFields, s.exclude)
 		if nil != err {
 			resp.ErrCode = int32(scan.Err_db)
 			return

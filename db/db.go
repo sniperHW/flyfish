@@ -27,6 +27,7 @@ type FieldDef struct {
 	TabVersion  int64  //TableDef.Version when field create
 	Name        string `json:"Name,omitempty"`
 	Type        string `json:"Type,omitempty"`
+	StrCap      int    `json:"StrCap,omitempty"`
 	DefautValue string `json:"DefautValue,omitempty"`
 }
 
@@ -62,7 +63,13 @@ func (t *TableDef) Clone() *TableDef {
 	}
 
 	for _, v := range t.Fields {
-		ret.Fields = append(ret.Fields, v)
+		ret.Fields = append(ret.Fields, &FieldDef{
+			TabVersion:  v.TabVersion,
+			Name:        v.Name,
+			Type:        v.Type,
+			StrCap:      v.StrCap,
+			DefautValue: v.DefautValue,
+		})
 	}
 
 	return &ret

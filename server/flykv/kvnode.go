@@ -269,6 +269,51 @@ var outputBufLimit fnet.OutputBufLimit = fnet.OutputBufLimit{
 	OutPutLimitHard:        cs.MaxPacketSize * 10,
 }
 
+/*
+ * 每个string为一个table
+ * 表名@字段1:类型:默认值,字段2:类型:默认值,...
+ */
+
+func CreateDbDefFromCsv(s []string) (*db.DbDef, error) {
+	dbDef := &db.DbDef{}
+	for _, l := range s {
+		t1 := strings.Split(l, "@")
+		if len(t1) != 2 {
+			return nil, fmt.Errorf("1 invaild table format(表名@字段1:类型:默认值,字段2:类型:默认值,...) %s", l)
+		}
+
+		tdef := &db.TableDef{
+			Name: t1[0],
+		}
+
+		fields := strings.Split(t1[1], ",")
+
+		if len(fields) == 0 {
+			return nil, fmt.Errorf("2 invaild table format(表名@字段1:类型:默认值,字段2:类型:默认值,...) %s", l)
+		}
+
+		//处理其它字段
+		for _, v := range fields {
+			if v != "" {
+				field := strings.Split(v, ":")
+				if len(field) != 3 {
+					return nil, fmt.Errorf("3 invaild table format(表名@字段1:类型:默认值,字段2:类型:默认值,...) %s", l)
+				}
+
+				tdef.Fields = append(tdef.Fields, &db.FieldDef{
+					Name:        field[0],
+					Type:        field[1],
+					DefautValue: field[2],
+				})
+			}
+		}
+
+		dbDef.TableDefs = append(dbDef.TableDefs, tdef)
+	}
+
+	return dbDef, nil
+}
+
 func (this *kvnode) start() error {
 	var meta db.DBMeta
 
@@ -280,7 +325,7 @@ func (this *kvnode) start() error {
 
 	dbConfig := config.DBConfig
 
-	this.dbc, err = sqlOpen(config.DBType, dbConfig.Host, dbConfig.Port, dbConfig.DB, dbConfig.User, dbConfig.Password)
+	this.dbc, err = sql.SqlOpen(config.DBType, dbConfig.Host, dbConfig.Port, dbConfig.DB, dbConfig.User, dbConfig.Password)
 
 	if nil != err {
 		return err
@@ -294,11 +339,11 @@ func (this *kvnode) start() error {
 
 	if config.Mode == "solo" {
 
-		if dbdef, err = db.CreateDbDefFromCsv(config.SoloConfig.Meta); nil != err {
+		if dbdef, err = CreateDbDefFromCsv(config.SoloConfig.Meta); nil != err {
 			return err
 		}
 
-		meta, err = sql.CreateDbMeta(1, dbdef)
+		meta, err = sql.CreateDbMeta(dbdef)
 
 		if nil != err {
 			return err
@@ -364,12 +409,12 @@ func (this *kvnode) start() error {
 
 		this.setID = int(resp.SetID)
 
-		if dbdef, err = db.CreateDbDefFromJsonString(resp.Meta); nil != err {
+		if dbdef, err = db.MakeDbDefFromJsonString(resp.Meta); nil != err {
 			GetSugar().Errorf("CreateDbDefFromJsonString err:%v", err)
 			return err
 		}
 
-		meta, err = sql.CreateDbMeta(resp.MetaVersion, dbdef)
+		meta, err = sql.CreateDbMeta(dbdef)
 
 		if nil != err {
 			GetSugar().Errorf("CreateDbMeta err:%v", err)

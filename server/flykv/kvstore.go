@@ -763,8 +763,8 @@ func (s *kvstore) onNotifyUpdateMeta(from *net.UDPAddr, msg *sproto.NotifyUpdate
 		var meta db.DBMeta
 		var err error
 		var def *db.DbDef
-		if def, err = db.CreateDbDefFromJsonString(msg.Meta); nil == err {
-			meta, err = sql.CreateDbMeta(msg.Version, def)
+		if def, err = db.MakeDbDefFromJsonString(msg.Meta); nil == err {
+			meta, err = sql.CreateDbMeta(def)
 		}
 
 		if nil == err {
