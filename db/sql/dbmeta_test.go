@@ -19,37 +19,43 @@ func TestDbmeta1(t *testing.T) {
 	}
 
 	t1 := db.TableDef{
-		Version: 2,
-		Name:    "Table1",
+		DbVersion: 3,
+		Version:   1,
+		Name:      "Table1",
 	}
 
 	{
 		field1 := db.FieldDef{
+			TabVersion:  4,
 			Name:        "field1",
 			Type:        "int",
 			DefautValue: "1",
 		}
 
 		field2 := db.FieldDef{
+			TabVersion:  4,
 			Name:        "field2",
 			Type:        "float",
 			DefautValue: "1.2",
 		}
 
 		field3 := db.FieldDef{
+			TabVersion:  3,
 			Name:        "field3",
 			Type:        "string",
 			DefautValue: "hello",
 		}
 
 		field4 := db.FieldDef{
-			Name: "field4",
-			Type: "string",
+			TabVersion: 2,
+			Name:       "field4",
+			Type:       "string",
 		}
 
 		field5 := db.FieldDef{
-			Name: "field5",
-			Type: "blob",
+			TabVersion: 1,
+			Name:       "field5",
+			Type:       "blob",
 		}
 
 		t1.Fields = append(t1.Fields, &field1)
@@ -109,6 +115,26 @@ func TestDbmeta1(t *testing.T) {
 
 	fmt.Println(td.GetInsertPrefix())
 	fmt.Println(td.GetSelectPrefix())
+
+	assert.Nil(t, t1.AddField(db.FieldDef{
+		Name:        "field6",
+		Type:        "int",
+		DefautValue: "0",
+	}))
+
+	assert.NotNil(t, t1.AddField(db.FieldDef{
+		Name:        "field6",
+		Type:        "int",
+		DefautValue: "0",
+	}))
+
+	assert.NotNil(t, t1.AddField(db.FieldDef{
+		Name:        "field7",
+		Type:        "int",
+		DefautValue: "ab",
+	}))
+
+	fmt.Println(td.GetInsertPrefix())
 
 	testSqlString(t, td)
 

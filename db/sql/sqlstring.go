@@ -87,9 +87,11 @@ func (this *sqlstring) insertUpdateStatementPgSql(b *buffer.Buffer, s *db.Update
 	b.AppendString(" ON conflict(__key__)  DO UPDATE SET ")
 
 	for _, v := range s.Fields {
-		b.AppendString(meta.getRealFieldName(v.GetName())).AppendString("=")
-		this.appendFieldStr(b, v)
-		b.AppendString(",")
+		if nil == meta.CheckFields(v) {
+			b.AppendString(meta.getRealFieldName(v.GetName())).AppendString("=")
+			this.appendFieldStr(b, v)
+			b.AppendString(",")
+		}
 	}
 
 	b.AppendString("__version__=")
@@ -109,9 +111,11 @@ func (this *sqlstring) insertUpdateStatementMySql(b *buffer.Buffer, s *db.Update
 	b.AppendString(" on duplicate key update ")
 
 	for _, v := range s.Fields {
-		b.AppendString(meta.getRealFieldName(v.GetName())).AppendString("=")
-		this.appendFieldStr(b, v)
-		b.AppendString(",")
+		if nil == meta.CheckFields(v) {
+			b.AppendString(meta.getRealFieldName(v.GetName())).AppendString("=")
+			this.appendFieldStr(b, v)
+			b.AppendString(",")
+		}
 	}
 	b.AppendString("__version__=")
 	this.appendFieldStr(b, version)

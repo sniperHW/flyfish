@@ -45,6 +45,7 @@ func (this *QueryMeta) GetReceiver() []interface{} {
 
 //字段元信息
 type FieldMeta struct {
+	tabVersion   int64
 	name         string          //字段名
 	tt           proto.ValueType //字段类型
 	defaultValue interface{}     //字段默认值
@@ -52,6 +53,10 @@ type FieldMeta struct {
 
 func (this *FieldMeta) GetDefaultValue() interface{} {
 	return this.defaultValue
+}
+
+func (this *FieldMeta) getRealName() string {
+	return fmt.Sprintf("%s_%d", this.name, this.tabVersion)
 }
 
 type DBMeta struct {
@@ -121,6 +126,7 @@ func (this *DBMeta) CheckTableMeta(tab db.TableMeta) db.TableMeta {
 //表格的元信息
 type TableMeta struct {
 	version        int64
+	dbVersion      int64
 	real_tableName string
 	table          string                //表名
 	fieldMetas     map[string]*FieldMeta //所有字段元信息
@@ -131,7 +137,11 @@ type TableMeta struct {
 }
 
 func (t *TableMeta) getRealFieldName(name string) string {
-	return fmt.Sprintf("%s_%d", name, t.version)
+	if f := t.fieldMetas[name]; nil != f {
+		return f.getRealName()
+	} else {
+		return ""
+	}
 }
 
 func (this *TableMeta) TableName() string {
@@ -267,7 +277,8 @@ func createTableMetas(def *db.DbDef) (map[string]*TableMeta, error) {
 			t_meta := &TableMeta{
 				table:          v.Name,
 				version:        v.Version,
-				real_tableName: def.GetRealTableName(v.Name),
+				dbVersion:      v.DbVersion,
+				real_tableName: v.GetRealName(),
 				fieldMetas:     map[string]*FieldMeta{},
 				queryMeta: &QueryMeta{
 					field_names:      []string{},
@@ -314,11 +325,12 @@ func createTableMetas(def *db.DbDef) (map[string]*TableMeta, error) {
 					name:         vv.Name,
 					tt:           ftype,
 					defaultValue: defaultValue,
+					tabVersion:   vv.TabVersion,
 				}
 
 				t_meta.queryMeta.field_names = append(t_meta.queryMeta.field_names, vv.Name)
 
-				t_meta.queryMeta.real_field_names = append(t_meta.queryMeta.real_field_names, v.GetRealFieldName(vv.Name))
+				t_meta.queryMeta.real_field_names = append(t_meta.queryMeta.real_field_names, vv.GetRealName())
 
 				t_meta.queryMeta.field_type = append(t_meta.queryMeta.field_type, getReceiverType(ftype))
 

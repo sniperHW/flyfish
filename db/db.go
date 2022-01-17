@@ -23,15 +23,21 @@ const (
 )
 
 type FieldDef struct {
+	TabVersion  int64  //TableDef.Version when field create
 	Name        string `json:"Name,omitempty"`
 	Type        string `json:"Type,omitempty"`
 	DefautValue string `json:"DefautValue,omitempty"`
 }
 
+func (f *FieldDef) GetRealName() string {
+	return fmt.Sprintf("%s_%d", f.Name, f.TabVersion)
+}
+
 type TableDef struct {
-	Version int64
-	Name    string      `json:"Name,omitempty"`
-	Fields  []*FieldDef `json:"Fields,omitempty"`
+	DbVersion int64 //DbDef.Version when table create
+	Version   int64
+	Name      string      `json:"Name,omitempty"`
+	Fields    []*FieldDef `json:"Fields,omitempty"`
 }
 
 func (t *TableDef) GetField(n string) *FieldDef {
@@ -43,13 +49,15 @@ func (t *TableDef) GetField(n string) *FieldDef {
 	return nil
 }
 
-func (t *TableDef) GetRealFieldName(name string) string {
-	return fmt.Sprintf("%s_%d", name, t.Version)
+func (t *TableDef) GetRealName() string {
+	return fmt.Sprintf("%s_%d", t.Name, t.DbVersion)
 }
 
 func (t *TableDef) Clone() *TableDef {
 	ret := TableDef{
-		Name: t.Name,
+		Name:      t.Name,
+		DbVersion: t.DbVersion,
+		Version:   t.Version,
 	}
 
 	for _, v := range t.Fields {
@@ -57,6 +65,75 @@ func (t *TableDef) Clone() *TableDef {
 	}
 
 	return &ret
+}
+
+func (t *TableDef) AddField(f FieldDef) error {
+	if f.Name == "" {
+		return errors.New("empty filed.Name")
+	}
+
+	for _, v := range t.Fields {
+		if v.Name == f.Name {
+			return errors.New(fmt.Sprintf("duplicate filed.Name:%s", f.Name))
+		}
+	}
+
+	tt := GetTypeByStr(f.Type)
+
+	if tt == proto.ValueType_invaild {
+		return errors.New(fmt.Sprintf("invaild filed.Type:%s", f.Type))
+	}
+
+	if nil == GetDefaultValue(tt, f.DefautValue) {
+		return errors.New(fmt.Sprintf("filed.Type:%s invaild DefautValue:%s", f.Type, f.DefautValue))
+	}
+
+	t.Fields = append(t.Fields, &FieldDef{
+		TabVersion:  t.Version,
+		Name:        f.Name,
+		Type:        f.Type,
+		DefautValue: f.DefautValue,
+	})
+
+	return nil
+}
+
+func (t *TableDef) RemoveField(name string) error {
+	for k, v := range t.Fields {
+		if v.Name == name {
+			t.Fields[k], t.Fields[len(t.Fields)-1] = t.Fields[len(t.Fields)-1], t.Fields[k]
+			t.Fields = t.Fields[:len(t.Fields)-1]
+			return nil
+		}
+	}
+	return errors.New(fmt.Sprintf("%s not found", name))
+}
+
+func (t *TableDef) check() error {
+	names := map[string]bool{}
+	for _, v := range t.Fields {
+		if v.Name == "" {
+			return errors.New(fmt.Sprintf("emtpy filed.Name"))
+		}
+
+		if names[v.Name] {
+			return errors.New(fmt.Sprintf("duplicate filed.Name:%s", v.Name))
+		}
+
+		tt := GetTypeByStr(v.Type)
+
+		if tt == proto.ValueType_invaild {
+			return errors.New(fmt.Sprintf("invaild filed.Type:%s", v.Type))
+		}
+
+		if nil == GetDefaultValue(tt, v.DefautValue) {
+			return errors.New(fmt.Sprintf("filed.Type:%s invaild DefautValue:%s", v.Type, v.DefautValue))
+		}
+
+		names[v.Name] = true
+	}
+
+	return nil
 }
 
 type DbDef struct {
@@ -97,8 +174,34 @@ func (d *DbDef) ToPrettyJson() ([]byte, error) {
 	}
 }
 
-func (d *DbDef) GetRealTableName(name string) string {
-	return fmt.Sprintf("%s_%d", name, d.Version)
+func (d *DbDef) AddTable(t TableDef) error {
+	tt := t.Clone()
+	for _, v := range d.TableDefs {
+		if v.Name == tt.Name {
+			return errors.New(fmt.Sprintf("duplicate table %s", v.Name))
+		}
+	}
+
+	if err := tt.check(); nil != err {
+		return err
+	}
+
+	tt.DbVersion = d.Version
+
+	d.TableDefs = append(d.TableDefs, tt)
+
+	return nil
+}
+
+func (d *DbDef) RemoveTable(name string) error {
+	for k, v := range d.TableDefs {
+		if v.Name == name {
+			d.TableDefs[k], d.TableDefs[len(d.TableDefs)-1] = d.TableDefs[len(d.TableDefs)-1], d.TableDefs[k]
+			d.TableDefs = d.TableDefs[:len(d.TableDefs)-1]
+			return nil
+		}
+	}
+	return errors.New(fmt.Sprintf("%s not found", name))
 }
 
 func MakeDbDefFromJsonString(s []byte) (*DbDef, error) {
