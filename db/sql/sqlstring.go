@@ -81,13 +81,15 @@ func (this *sqlstring) buildInsert(b *buffer.Buffer, s *db.UpdateState) *proto.F
  */
 
 func (this *sqlstring) insertUpdateStatementPgSql(b *buffer.Buffer, s *db.UpdateState, version *proto.Field) {
-
+	meta := s.Meta.(*TableMeta)
 	b.AppendString(" ON conflict(__key__)  DO UPDATE SET ")
 
 	for _, v := range s.Fields {
-		b.AppendString(v.GetName()).AppendString("=")
-		this.appendFieldStr(b, v)
-		b.AppendString(",")
+		if nil == meta.CheckFields(v) {
+			b.AppendString(v.GetName()).AppendString("=")
+			this.appendFieldStr(b, v)
+			b.AppendString(",")
+		}
 	}
 
 	b.AppendString("__version__=")
@@ -102,13 +104,15 @@ func (this *sqlstring) insertUpdateStatementPgSql(b *buffer.Buffer, s *db.Update
  */
 
 func (this *sqlstring) insertUpdateStatementMySql(b *buffer.Buffer, s *db.UpdateState, version *proto.Field) {
-
+	meta := s.Meta.(*TableMeta)
 	b.AppendString(" on duplicate key update ")
 
 	for _, v := range s.Fields {
-		b.AppendString(v.GetName()).AppendString("=")
-		this.appendFieldStr(b, v)
-		b.AppendString(",")
+		if nil == meta.CheckFields(v) {
+			b.AppendString(v.GetName()).AppendString("=")
+			this.appendFieldStr(b, v)
+			b.AppendString(",")
+		}
 	}
 	b.AppendString("__version__=")
 	this.appendFieldStr(b, version)
