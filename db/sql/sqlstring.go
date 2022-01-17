@@ -81,9 +81,7 @@ func (this *sqlstring) buildInsert(b *buffer.Buffer, s *db.UpdateState) *proto.F
  */
 
 func (this *sqlstring) insertUpdateStatementPgSql(b *buffer.Buffer, s *db.UpdateState, version *proto.Field) {
-
 	meta := s.Meta.(*TableMeta)
-
 	b.AppendString(" ON conflict(__key__)  DO UPDATE SET ")
 
 	for _, v := range s.Fields {

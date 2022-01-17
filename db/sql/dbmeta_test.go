@@ -1,6 +1,6 @@
 package sql
 
-//go test -tags=aio -covermode=count -v -coverprofile=coverage.out -run=.
+//go test -covermode=count -v -coverprofile=coverage.out -run=.
 //go tool cover -html=coverage.out
 import (
 	"encoding/json"
