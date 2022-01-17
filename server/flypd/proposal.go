@@ -16,7 +16,7 @@ const (
 	proposalAddSet                = 9
 	proposalRemSet                = 10
 	proposalSetMarkClear          = 11
-	proposalUpdateMeta            = 12
+	proposalInitMeta              = 12
 	proposalAddLearnerStoreToNode = 13
 	proposalFlyKvCommited         = 14
 	proposalPromoteLearnerStore   = 15
@@ -93,8 +93,8 @@ func (p *pd) replayProposal(proposal []byte) error {
 		err = unmarshal(&ProposalRemSet{})
 	case proposalSetMarkClear:
 		err = unmarshal(&ProposalSetMarkClear{})
-	case proposalUpdateMeta:
-		err = unmarshal(&ProposalUpdateMeta{})
+	case proposalInitMeta:
+		err = unmarshal(&ProposalInitMeta{})
 	case proposalFlyKvCommited:
 		err = unmarshal(&ProposalFlyKvCommited{})
 	case proposalAddLearnerStoreToNode:

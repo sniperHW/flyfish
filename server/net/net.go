@@ -294,14 +294,17 @@ func init() {
 	namespace.Register(&sproto.SetMarkClear{}, uint32(sproto.ServerCmdType_SetMarkClear))
 	namespace.Register(&sproto.SetMarkClearResp{}, uint32(sproto.ServerCmdType_SetMarkClearResp))
 
-	namespace.Register(&sproto.UpdateMeta{}, uint32(sproto.ServerCmdType_UpdateMeta))
-	namespace.Register(&sproto.UpdateMetaResp{}, uint32(sproto.ServerCmdType_UpdateMetaResp))
-
 	namespace.Register(&sproto.GetMeta{}, uint32(sproto.ServerCmdType_GetMeta))
 	namespace.Register(&sproto.GetMetaResp{}, uint32(sproto.ServerCmdType_GetMetaResp))
 
 	namespace.Register(&sproto.GetSetStatus{}, uint32(sproto.ServerCmdType_GetSetStatus))
 	namespace.Register(&sproto.GetSetStatusResp{}, uint32(sproto.ServerCmdType_GetSetStatusResp))
+
+	namespace.Register(&sproto.MetaAddTable{}, uint32(sproto.ServerCmdType_MetaAddTable))
+	namespace.Register(&sproto.MetaAddTableResp{}, uint32(sproto.ServerCmdType_MetaAddTableResp))
+
+	namespace.Register(&sproto.MetaAddFields{}, uint32(sproto.ServerCmdType_MetaAddFields))
+	namespace.Register(&sproto.MetaAddFieldsResp{}, uint32(sproto.ServerCmdType_MetaAddFieldsResp))
 
 	//flykv <-> pd
 	namespace.Register(&sproto.KvnodeBoot{}, uint32(sproto.ServerCmdType_KvnodeBoot))

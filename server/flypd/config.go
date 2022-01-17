@@ -28,8 +28,23 @@ type Config struct {
 	RaftLogDir        string //raft日志存放目录
 	RaftLogPrefix     string
 	InitDepoymentPath string
-	InitMetaPath      string
-	Log               struct {
+
+	InitMeta struct {
+		Path     string
+		CreateDB bool //是否执行DB创表操作,如果table已经创建将这个参数设置为false,否则创建失败panic
+	}
+
+	DBType string
+
+	DBConfig struct {
+		Host     string
+		Port     int
+		User     string
+		Password string
+		DB       string
+	}
+
+	Log struct {
 		MaxLogfileSize int
 		LogDir         string
 		LogPrefix      string

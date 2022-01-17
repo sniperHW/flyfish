@@ -38,10 +38,12 @@ enum ServerCmdType {
   SetMarkClearResp              = 118;
   GetMeta                       = 119;
   GetMetaResp                   = 120;
-  UpdateMeta                    = 121;
-  UpdateMetaResp                = 122;
-  GetSetStatus                  = 123;
-  GetSetStatusResp              = 124;
+  GetSetStatus                  = 121;
+  GetSetStatusResp              = 122;
+  MetaAddTable                  = 123;
+  MetaAddTableResp              = 124;
+  MetaAddFields                 = 125;
+  MetaAddFieldsResp             = 126;                
 
 
 
@@ -331,21 +333,30 @@ message metaFiled {
   optional string default = 3;
 }
 
-message metaTable {
+
+message metaAddTable {
   optional string name      = 1;
   repeated metaFiled fields = 2;
+  optional int64    version = 3;
 }
 
-message updateMeta {
-  repeated metaTable updates = 1;
-  optional int64     version = 2;
-}
 
-message updateMetaResp {
+message metaAddTableResp {
   optional bool  ok       = 1;  
-  optional string reason  = 2;  
+  optional string reason  = 2; 
 }
 
+
+message metaAddFields {
+  optional string table     = 1;
+  repeated metaFiled fields = 2;
+  optional int64    version = 3;
+}
+
+message metaAddFieldsResp {
+  optional bool  ok       = 1;  
+  optional string reason  = 2; 
+}
 
 message getMeta {
  

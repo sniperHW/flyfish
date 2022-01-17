@@ -1,12 +1,14 @@
 package flypd
 
 import (
-	"errors"
-	"fmt"
+	//"errors"
+	//"fmt"
 	"github.com/sniperHW/flyfish/db"
+	"github.com/sniperHW/flyfish/db/sql"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"net"
+	"os"
 )
 
 func (p *pd) checkMeta(meta []byte) (*db.DbDef, error) {
@@ -33,6 +35,84 @@ func (p *pd) onGetMeta(from *net.UDPAddr, m *snet.Message) {
 		}))
 }
 
+func (p *pd) loadInitMeta() {
+	if "" != p.config.InitMeta.Path {
+		f, err := os.Open(p.config.InitMeta.Path)
+		if nil == err {
+			var b []byte
+			for {
+				data := make([]byte, 4096)
+				count, err := f.Read(data)
+				if count > 0 {
+					b = append(b, data[:count]...)
+				}
+
+				if nil != err {
+					break
+				}
+			}
+
+			def, err := p.checkMeta(b)
+			if nil != err {
+				return
+			}
+
+			if p.config.InitMeta.CreateDB {
+				dbc, err := sql.SqlOpen(p.config.DBType, p.config.DBConfig.Host, p.config.DBConfig.Port, p.config.DBConfig.DB, p.config.DBConfig.User, p.config.DBConfig.Password)
+				if nil != err {
+					GetSugar().Panic(err)
+				}
+
+				err = sql.CreateTables(dbc, p.config.DBType, def.TableDefs...)
+
+				if nil != err {
+					GetSugar().Panic(err)
+				}
+
+				dbc.Close()
+			}
+
+			p.issueProposal(&ProposalInitMeta{
+				MetaDef: def,
+			})
+		}
+	}
+}
+
+type ProposalInitMeta struct {
+	proposalBase
+	MetaDef *db.DbDef
+}
+
+func (p *ProposalInitMeta) Serilize(b []byte) []byte {
+	return serilizeProposal(b, proposalInitMeta, p)
+}
+
+func (p *ProposalInitMeta) apply(pd *pd) {
+	p.MetaDef.Version++
+	for _, v := range p.MetaDef.TableDefs {
+		v.Version++
+	}
+	pd.pState.Meta = p.MetaDef
+	pd.pState.MetaBytes, _ = p.MetaDef.ToJson()
+	GetSugar().Infof("ProposalInitMeta apply version:%d", pd.pState.Meta.Version)
+}
+
+func (p *ProposalInitMeta) replay(pd *pd) {
+	p.apply(pd)
+}
+
+//添加一个table
+func (p *pd) onMetaAddTable(from *net.UDPAddr, m *snet.Message) {
+
+}
+
+//向table添加fields
+func (p *pd) onMetaAddFields(from *net.UDPAddr, m *snet.Message) {
+
+}
+
+/*
 type ProposalUpdateMeta struct {
 	proposalBase
 	Msg     *sproto.UpdateMeta
@@ -139,4 +219,4 @@ func (p *pd) onUpdateMeta(from *net.UDPAddr, m *snet.Message) {
 		},
 		Msg: m.Msg.(*sproto.UpdateMeta),
 	})
-}
+}*/

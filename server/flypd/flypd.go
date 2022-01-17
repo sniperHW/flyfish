@@ -448,35 +448,6 @@ func (p *pd) loadInitDeployment() {
 	}
 }
 
-func (p *pd) loadInitMeta() {
-	if "" != p.config.InitMetaPath {
-		f, err := os.Open(p.config.InitMetaPath)
-		if nil == err {
-			var b []byte
-			for {
-				data := make([]byte, 4096)
-				count, err := f.Read(data)
-				if count > 0 {
-					b = append(b, data[:count]...)
-				}
-
-				if nil != err {
-					break
-				}
-			}
-
-			def, err := p.checkMeta(b)
-			if nil != err {
-				return
-			}
-
-			p.issueProposal(&ProposalUpdateMeta{
-				MetaDef: def,
-			})
-		}
-	}
-}
-
 func (p *pd) onBecomeLeader() {
 
 	if nil == p.pState.deployment {

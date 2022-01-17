@@ -101,3 +101,11 @@ func AlterTable(dbc *sqlx.DB, sqlType string, tabDef *db.TableDef) error {
 		return errors.New("unsupport sql type")
 	}
 }
+
+func DropTablePgSql(dbc *sqlx.DB, sqlType string, tabDef *db.TableDef) error {
+	if sqlType == "pgsql" {
+		return dropTablePgSql(dbc, tabDef)
+	} else {
+		return errors.New("unsupport sql type")
+	}
+}

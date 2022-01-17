@@ -230,7 +230,7 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.FlyGateHeartBeat{}, p.onFlyGateHeartBeat)
 	p.registerMsgHandler(&sproto.ChangeFlyGate{}, p.changeFlyGate)
 	p.registerMsgHandler(&sproto.GetMeta{}, p.onGetMeta)
-	p.registerMsgHandler(&sproto.UpdateMeta{}, p.onUpdateMeta)
+	//p.registerMsgHandler(&sproto.UpdateMeta{}, p.onUpdateMeta)
 	p.registerMsgHandler(&sproto.GetSetStatus{}, p.onGetSetStatus)
 	p.registerMsgHandler(&sproto.StoreReportStatus{}, p.onStoreReportStatus)
 }

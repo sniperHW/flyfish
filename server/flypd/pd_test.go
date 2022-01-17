@@ -7,6 +7,7 @@ import (
 	"fmt"
 	//"github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/db"
+	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
@@ -216,13 +217,26 @@ func TestPd(t *testing.T) {
 	sslot.SlotCount = 128
 
 	os.RemoveAll("./raftLog")
-	os.RemoveAll("./raftLog")
 
 	var configStr string = `
 
 	MainQueueMaxSize = 1000
 	RaftLogDir       = "raftLog"
 	RaftLogPrefix    = "pd"
+	DBType           = "pgsql"
+
+
+	[InitMeta]
+		Path = "./initmeta.json"
+		CreateDB = true
+
+	[DBConfig]
+		Host          = "localhost"
+		Port          = 5432
+		User	      = "sniper"
+		Password      = "123456"
+		DB            = "test"
+
 	[Log]
 		MaxLogfileSize  = 104857600 # 100mb
 		LogDir          = "log"
@@ -239,6 +253,20 @@ func TestPd(t *testing.T) {
 
 	conf, _ := LoadConfigStr(configStr)
 
+	fmt.Println("conf.DBType", conf.DBType)
+
+	//先删除table1
+	dbc, err := sql.SqlOpen(conf.DBType, conf.DBConfig.Host, conf.DBConfig.Port, conf.DBConfig.DB, conf.DBConfig.User, conf.DBConfig.Password)
+
+	fmt.Println(err)
+
+	sql.DropTablePgSql(dbc, conf.DBType, &db.TableDef{
+		Name:      "table1",
+		DbVersion: 0,
+	})
+
+	dbc.Close()
+
 	p, _ := NewPd(1, false, conf, "localhost:8110", "1@http://localhost:8110@")
 
 	for {
@@ -251,15 +279,15 @@ func TestPd(t *testing.T) {
 
 	//testSetMeta(t, p)
 
-	testUpdateMeta1(t, p)
+	//testUpdateMeta1(t, p)
 
-	testInstallDeployment(t, p)
+	//testInstallDeployment(t, p)
 
-	testAddRemNode(t, p)
+	//testAddRemNode(t, p)
 
-	testAddRemSet(t, p)
+	//testAddRemSet(t, p)
 
-	testUpdateMeta2(t, p)
+	//testUpdateMeta2(t, p)
 
 	//testAddRemNode(t, p)
 
@@ -329,6 +357,7 @@ func testInstallDeployment(t *testing.T, p *pd) {
 
 }
 
+/*
 func testUpdateMeta1(t *testing.T, p *pd) {
 	fmt.Println("testUpdateMeta1")
 
@@ -422,7 +451,7 @@ func testUpdateMeta2(t *testing.T, p *pd) {
 
 	node1.stop()
 
-}
+}*/
 
 func testAddRemNode(t *testing.T, p *pd) {
 
