@@ -25,7 +25,7 @@ func (p *pd) onMsg(from *net.UDPAddr, msg *snet.Message) {
 }
 
 func (p *pd) onKvnodeBoot(from *net.UDPAddr, m *snet.Message) {
-	if nil == p.pState.Meta.MetaDef {
+	if nil == p.pState.Meta {
 		GetSugar().Infof("Meta not set")
 		//meta尚未初始化
 		return
@@ -48,7 +48,7 @@ func (p *pd) onKvnodeBoot(from *net.UDPAddr, m *snet.Message) {
 			ServicePort: int32(node.servicePort),
 			RaftPort:    int32(node.raftPort),
 			MetaVersion: p.pState.Meta.Version,
-			Meta:        p.pState.Meta.MetaBytes,
+			Meta:        p.pState.MetaBytes,
 		}
 
 		for storeId, _ := range node.store {
@@ -200,13 +200,13 @@ func (p *pd) onStoreReportStatus(from *net.UDPAddr, m *snet.Message) {
 	store.kvcount = int(msg.Kvcount)
 	store.progress = msg.Progress
 
-	if msg.Isleader && msg.MetaVersion != p.pState.Meta.Version {
+	if msg.Isleader && nil != p.pState.Meta && msg.MetaVersion != p.pState.Meta.Version {
 		addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.host, node.servicePort))
 		p.udp.SendTo(addr, snet.MakeMessage(0,
 			&sproto.NotifyUpdateMeta{
 				Store:   int32(msg.StoreID),
-				Version: int64(p.pState.Meta.Version),
-				Meta:    p.pState.Meta.MetaBytes,
+				Version: p.pState.Meta.Version,
+				Meta:    p.pState.MetaBytes,
 			}))
 	}
 }

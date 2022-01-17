@@ -116,19 +116,19 @@ func TestDbmeta1(t *testing.T) {
 	fmt.Println(td.GetInsertPrefix())
 	fmt.Println(td.GetSelectPrefix())
 
-	assert.Nil(t, t1.AddField(db.FieldDef{
+	assert.Nil(t, t1.AddField(&db.FieldDef{
 		Name:        "field6",
 		Type:        "int",
 		DefautValue: "0",
 	}))
 
-	assert.NotNil(t, t1.AddField(db.FieldDef{
+	assert.NotNil(t, t1.AddField(&db.FieldDef{
 		Name:        "field6",
 		Type:        "int",
 		DefautValue: "0",
 	}))
 
-	assert.NotNil(t, t1.AddField(db.FieldDef{
+	assert.NotNil(t, t1.AddField(&db.FieldDef{
 		Name:        "field7",
 		Type:        "int",
 		DefautValue: "ab",

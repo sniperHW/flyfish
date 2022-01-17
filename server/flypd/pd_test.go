@@ -173,9 +173,8 @@ func TestSnapShot(t *testing.T) {
 
 	{
 		m := genMeta()
-		p1.pState.Meta.Version = 1
-		p1.pState.Meta.MetaDef = m
-		p1.pState.Meta.MetaBytes, _ = db.DbDefToJsonString(m)
+		p1.pState.Meta = m
+		p1.pState.MetaBytes, _ = m.ToJson()
 	}
 
 	bytes, err := p1.getSnapshot()
@@ -206,9 +205,9 @@ func TestSnapShot(t *testing.T) {
 
 	assert.Equal(t, 2, p2.pState.SlotTransfer[2].Slot)
 
-	assert.Equal(t, p2.pState.Meta.Version, int64(1))
+	assert.Equal(t, p2.pState.Meta.Version, int64(0))
 
-	assert.Equal(t, len(p2.pState.Meta.MetaBytes), len(p1.pState.Meta.MetaBytes))
+	assert.Equal(t, len(p2.pState.MetaBytes), len(p1.pState.MetaBytes))
 
 }
 

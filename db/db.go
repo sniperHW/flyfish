@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/sniperHW/flyfish/proto"
 	"strconv"
+	"strings"
 )
 
 var (
@@ -67,9 +68,13 @@ func (t *TableDef) Clone() *TableDef {
 	return &ret
 }
 
-func (t *TableDef) AddField(f FieldDef) error {
+func (t *TableDef) AddField(f *FieldDef) error {
 	if f.Name == "" {
 		return errors.New("empty filed.Name")
+	}
+
+	if strings.HasPrefix(f.Name, "__") {
+		return errors.New(fmt.Sprintf("invaild filed.Name:%s", f.Name))
 	}
 
 	for _, v := range t.Fields {
@@ -88,12 +93,9 @@ func (t *TableDef) AddField(f FieldDef) error {
 		return errors.New(fmt.Sprintf("filed.Type:%s invaild DefautValue:%s", f.Type, f.DefautValue))
 	}
 
-	t.Fields = append(t.Fields, &FieldDef{
-		TabVersion:  t.Version,
-		Name:        f.Name,
-		Type:        f.Type,
-		DefautValue: f.DefautValue,
-	})
+	f.TabVersion = t.Version
+
+	t.Fields = append(t.Fields, f)
 
 	return nil
 }
@@ -114,6 +116,10 @@ func (t *TableDef) check() error {
 	for _, v := range t.Fields {
 		if v.Name == "" {
 			return errors.New(fmt.Sprintf("emtpy filed.Name"))
+		}
+
+		if strings.HasPrefix(v.Name, "__") {
+			return errors.New(fmt.Sprintf("invaild filed.Name:%s", v.Name))
 		}
 
 		if names[v.Name] {
@@ -141,6 +147,23 @@ type DbDef struct {
 	TableDefs []*TableDef
 }
 
+func (d *DbDef) Check() error {
+	tbs := map[string]bool{}
+	for _, v := range d.TableDefs {
+		if _, ok := tbs[v.Name]; ok {
+			return errors.New(fmt.Sprintf("duplicate table %s", v.Name))
+		}
+
+		if err := v.check(); nil != err {
+			return err
+		}
+
+		tbs[v.Name] = true
+	}
+
+	return nil
+}
+
 func (d *DbDef) GetTableDef(n string) *TableDef {
 	for i, v := range d.TableDefs {
 		if v.Name == n {
@@ -151,14 +174,18 @@ func (d *DbDef) GetTableDef(n string) *TableDef {
 }
 
 func (d *DbDef) Clone() *DbDef {
-	var ret DbDef
+	ret := &DbDef{
+		Version: d.Version,
+	}
+
 	for _, v := range d.TableDefs {
 		ret.TableDefs = append(ret.TableDefs, v.Clone())
 	}
-	return &ret
+	return ret
 }
 
 func (d *DbDef) ToJson() ([]byte, error) {
+
 	if data, err := json.Marshal(d); err != nil {
 		return nil, err
 	} else {
@@ -174,8 +201,7 @@ func (d *DbDef) ToPrettyJson() ([]byte, error) {
 	}
 }
 
-func (d *DbDef) AddTable(t TableDef) error {
-	tt := t.Clone()
+func (d *DbDef) AddTable(tt *TableDef) error {
 	for _, v := range d.TableDefs {
 		if v.Name == tt.Name {
 			return errors.New(fmt.Sprintf("duplicate table %s", v.Name))

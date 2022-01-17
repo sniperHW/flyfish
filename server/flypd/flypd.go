@@ -3,6 +3,7 @@ package flypd
 import (
 	"encoding/json"
 	"errors"
+	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
@@ -96,7 +97,8 @@ func (f *flygateMgr) onHeartBeat(gateService string, msgPerSecond int) {
 type persistenceState struct {
 	Deployment   DeploymentJson
 	SlotTransfer map[int]*TransSlotTransfer
-	Meta         Meta
+	Meta         *db.DbDef
+	MetaBytes    []byte
 	deployment   *deployment
 }
 
@@ -507,7 +509,7 @@ func (p *pd) onBecomeLeader() {
 		}
 	}
 
-	if 0 == p.pState.Meta.Version {
+	if nil == p.pState.Meta {
 		p.loadInitMeta()
 	}
 }
