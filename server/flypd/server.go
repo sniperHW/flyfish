@@ -25,7 +25,7 @@ func (p *pd) onMsg(from *net.UDPAddr, msg *snet.Message) {
 }
 
 func (p *pd) onKvnodeBoot(from *net.UDPAddr, m *snet.Message) {
-	if nil == p.pState.Meta {
+	if 0 == p.pState.Meta.Version {
 		GetSugar().Infof("Meta not set")
 		//meta尚未初始化
 		return
@@ -194,7 +194,7 @@ func (p *pd) onStoreReportStatus(from *net.UDPAddr, m *snet.Message) {
 	store.kvcount = int(msg.Kvcount)
 	store.progress = msg.Progress
 
-	if msg.Isleader && nil != p.pState.Meta && msg.MetaVersion != p.pState.Meta.Version {
+	if msg.Isleader && msg.MetaVersion != p.pState.Meta.Version {
 		addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.host, node.servicePort))
 		p.udp.SendTo(addr, snet.MakeMessage(0,
 			&sproto.NotifyUpdateMeta{
@@ -206,7 +206,6 @@ func (p *pd) onStoreReportStatus(from *net.UDPAddr, m *snet.Message) {
 }
 
 func (p *pd) initMsgHandler() {
-	//p.registerMsgHandler(&sproto.InstallDeployment{}, p.onInstallDeployment)
 	p.registerMsgHandler(&sproto.AddSet{}, p.onAddSet)
 	p.registerMsgHandler(&sproto.RemSet{}, p.onRemSet)
 	p.registerMsgHandler(&sproto.SetMarkClear{}, p.onSetMarkClear)

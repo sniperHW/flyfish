@@ -267,9 +267,6 @@ func init() {
 	namespace.Register(&sproto.QueryLeaderResp{}, uint32(sproto.ServerCmdType_QueryLeaderResp))
 
 	//console <-> pd
-	namespace.Register(&sproto.InstallDeployment{}, uint32(sproto.ServerCmdType_InstallDeployment))
-	namespace.Register(&sproto.InstallDeploymentResp{}, uint32(sproto.ServerCmdType_InstallDeploymentResp))
-
 	namespace.Register(&sproto.AddSet{}, uint32(sproto.ServerCmdType_AddSet))
 	namespace.Register(&sproto.AddSetResp{}, uint32(sproto.ServerCmdType_AddSetResp))
 

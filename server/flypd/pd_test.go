@@ -37,182 +37,6 @@ func waitCondition(fn func() bool) {
 	wg.Wait()
 }
 
-/*
-func genMeta() *db.DbDef {
-	m := db.DbDef{}
-
-	t1 := db.TableDef{
-		Name: "Table1",
-	}
-
-	{
-		field1 := db.FieldDef{
-			Name:        "field1",
-			Type:        "int",
-			DefautValue: "1",
-		}
-
-		field2 := db.FieldDef{
-			Name:        "field2",
-			Type:        "float",
-			DefautValue: "1.2",
-		}
-
-		field3 := db.FieldDef{
-			Name:        "field3",
-			Type:        "string",
-			DefautValue: "hello",
-		}
-
-		field4 := db.FieldDef{
-			Name: "field4",
-			Type: "string",
-		}
-
-		field5 := db.FieldDef{
-			Name: "field5",
-			Type: "blob",
-		}
-
-		t1.Fields = append(t1.Fields, &field1)
-		t1.Fields = append(t1.Fields, &field2)
-		t1.Fields = append(t1.Fields, &field3)
-		t1.Fields = append(t1.Fields, &field4)
-		t1.Fields = append(t1.Fields, &field5)
-	}
-
-	m.TableDefs = append(m.TableDefs, &t1)
-
-	return &m
-}
-
-func TestSnapShot(t *testing.T) {
-
-	d := &deployment{
-		sets: map[int]*set{},
-	}
-
-	set1 := &set{
-		id:     1,
-		nodes:  map[int]*kvnode{},
-		stores: map[int]*store{},
-	}
-
-	set1.nodes[1] = &kvnode{
-		id:          1,
-		host:        "192.168.0.1",
-		servicePort: 8110,
-		raftPort:    8111,
-		set:         set1,
-	}
-
-	set1.nodes[2] = &kvnode{
-		id:          2,
-		host:        "192.168.0.2",
-		servicePort: 8110,
-		raftPort:    8111,
-		set:         set1,
-	}
-
-	set1.nodes[3] = &kvnode{
-		id:          3,
-		host:        "192.168.0.3",
-		servicePort: 8110,
-		raftPort:    8111,
-		set:         set1,
-	}
-
-	slot1 := bitmap.New(30)
-	for i := 0; i < 9; i++ {
-		slot1.Set(i)
-	}
-
-	set1.stores[1] = &store{
-		id:    1,
-		slots: slot1,
-		set:   set1,
-	}
-
-	slot2 := bitmap.New(30)
-	for i := 10; i < 19; i++ {
-		slot2.Set(i)
-	}
-
-	set1.stores[2] = &store{
-		id:    2,
-		slots: slot2,
-		set:   set1,
-	}
-
-	slot3 := bitmap.New(30)
-	for i := 20; i < 29; i++ {
-		slot3.Set(i)
-	}
-
-	set1.stores[3] = &store{
-		id:    3,
-		slots: slot3,
-		set:   set1,
-	}
-
-	d.sets[1] = set1
-
-	p1 := &pd{
-		pState: persistenceState{
-			deployment:   d,
-			SlotTransfer: map[int]*TransSlotTransfer{},
-		},
-		markClearSet: map[int]*set{},
-	}
-
-	p1.pState.SlotTransfer[2] = &TransSlotTransfer{
-		Slot:             2,
-		SetOut:           1,
-		StoreTransferOut: 1,
-		SetIn:            2,
-		StoreTransferIn:  3,
-	}
-
-	{
-		m := genMeta()
-		p1.pState.Meta = m
-		p1.pState.MetaBytes, _ = m.ToJson()
-	}
-
-	bytes, err := p1.getSnapshot()
-
-	fmt.Println(len(bytes))
-
-	assert.Nil(t, err)
-
-	p2 := &pd{
-		pState: persistenceState{
-			deployment:   &deployment{},
-			SlotTransfer: map[int]*TransSlotTransfer{},
-		},
-		markClearSet: map[int]*set{},
-	}
-
-	err = p2.recoverFromSnapshot(bytes)
-
-	assert.Nil(t, err)
-
-	assert.Equal(t, p2.pState.deployment.sets[1].nodes[2].host, "192.168.0.2")
-
-	fmt.Println(p2.pState.deployment.sets[1])
-
-	assert.Equal(t, true, p2.pState.deployment.sets[1].stores[2].slots.Test(11))
-
-	assert.Equal(t, false, p2.pState.deployment.sets[1].stores[2].slots.Test(0))
-
-	assert.Equal(t, 2, p2.pState.SlotTransfer[2].Slot)
-
-	assert.Equal(t, p2.pState.Meta.Version, int64(0))
-
-	assert.Equal(t, len(p2.pState.MetaBytes), len(p1.pState.MetaBytes))
-
-}*/
-
 func TestPd(t *testing.T) {
 
 	sslot.SlotCount = 128
@@ -316,6 +140,7 @@ func TestPd(t *testing.T) {
 
 }
 
+/*
 func testInstallDeployment(t *testing.T, p *pd) {
 
 	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
@@ -363,6 +188,7 @@ func testInstallDeployment(t *testing.T, p *pd) {
 	conn.Close()
 
 }
+*/
 
 func testAddTable(t *testing.T, p *pd) {
 

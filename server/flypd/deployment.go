@@ -498,38 +498,3 @@ func (p *pd) makeReplyFunc(from *net.UDPAddr, m *snet.Message, resp proto.Messag
 		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp.(proto.Message)))
 	}
 }
-
-/*
-func (p *pd) onInstallDeployment(from *net.UDPAddr, m *snet.Message) {
-
-	msg := m.Msg.(*sproto.InstallDeployment)
-	resp := &sproto.InstallDeploymentResp{}
-	var d *deployment
-
-	err := func() error {
-		if nil != p.pState.deployment {
-			return errors.New("already install")
-		}
-
-		d = &deployment{}
-		if err := d.loadFromPB(msg.Sets); nil != err {
-			return err
-		}
-
-		return nil
-	}()
-
-	if nil != err {
-		resp.Ok = false
-		resp.Reason = err.Error()
-		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
-	} else {
-		p.issueProposal(&ProposalInstallDeployment{
-			D: d.toDeploymentJson(),
-			proposalBase: proposalBase{
-				reply: p.makeReplyFunc(from, m, resp),
-			},
-		})
-	}
-}
-*/

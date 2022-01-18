@@ -18,8 +18,6 @@ enum ServerCmdType {
 
 
   //console <-> pd
-  InstallDeployment             = 101;
-  InstallDeploymentResp         = 102;
   AddNode                       = 103;
   AddNodeResp                   = 104;
   AddLearnerStoreToNode         = 105;
@@ -125,16 +123,6 @@ message deploymentKvnode  {
 message deploymentSet  {
   optional int32  setID           = 1;
   repeated deploymentKvnode nodes = 2;
-}
-
-
-message installDeployment  {
-  repeated deploymentSet sets     = 1;
-}
-
-message installDeploymentResp  {
-  optional bool ok            = 1;
-  optional string reason      = 2;
 }
 
 message addNode {

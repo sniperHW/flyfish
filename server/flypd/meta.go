@@ -26,17 +26,10 @@ func (p *pd) checkMeta(meta []byte) (*db.DbDef, error) {
 }
 
 func (p *pd) onGetMeta(from *net.UDPAddr, m *snet.Message) {
-	version := int64(-1)
-	var metaBytes []byte
-	if nil != p.pState.Meta {
-		metaBytes = p.pState.MetaBytes
-		version = p.pState.Meta.Version
-	}
-
 	p.udp.SendTo(from, snet.MakeMessage(m.Context,
 		&sproto.GetMetaResp{
-			Version: version,
-			Meta:    metaBytes,
+			Version: p.pState.Meta.Version,
+			Meta:    p.pState.MetaBytes,
 		}))
 }
 
@@ -116,7 +109,7 @@ func (p *ProposalInitMeta) OnError(err error) {
 }
 
 func (p *ProposalInitMeta) doapply(pd *pd) {
-	pd.pState.Meta = p.MetaDef
+	pd.pState.Meta = *p.MetaDef
 	pd.pState.MetaBytes, _ = p.MetaDef.ToJson()
 	GetSugar().Infof("ProposalInitMeta apply version:%d", pd.pState.Meta.Version)
 }
@@ -148,13 +141,7 @@ func (p *ProposalUpdateMeta) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalUpdateMeta) doApply(pd *pd) {
-	var def *db.DbDef
-	if nil == pd.pState.Meta {
-		def = &db.DbDef{}
-	} else {
-		def = pd.pState.Meta
-	}
-
+	def := &pd.pState.Meta
 	i := 0
 	for ; i < len(def.TableDefs); i++ {
 		if def.TableDefs[i].Name == p.TabDef.Name {
@@ -172,8 +159,6 @@ func (p *ProposalUpdateMeta) doApply(pd *pd) {
 		def.TableDefs[i] = p.TabDef
 		GetSugar().Infof("ProposalUpdateMeta add fields def.version:%d tab.version:%d", def.Version, p.TabDef.Version)
 	}
-
-	pd.pState.Meta = def
 	pd.pState.MetaBytes, _ = def.ToJson()
 }
 
@@ -216,14 +201,10 @@ func (p *pd) onProposalUpdateMetaReply() {
 
 func (p *pd) onMetaAddTable(from *net.UDPAddr, m *snet.Message) bool {
 	msg := m.Msg.(*sproto.MetaAddTable)
-	var def *db.DbDef
 	var tab *db.TableDef
 	var err error
-	if nil == p.pState.Meta {
-		def = &db.DbDef{}
-	} else {
-		def = p.pState.Meta.Clone()
-	}
+
+	def := p.pState.Meta.Clone()
 
 	err = func() error {
 
@@ -300,15 +281,9 @@ func (p *pd) onMetaAddTable(from *net.UDPAddr, m *snet.Message) bool {
 //向table添加fields
 func (p *pd) onMetaAddFields(from *net.UDPAddr, m *snet.Message) bool {
 	msg := m.Msg.(*sproto.MetaAddFields)
-	var def *db.DbDef
 	var tab *db.TableDef
 	var err error
-	if nil == p.pState.Meta {
-		def = &db.DbDef{}
-	} else {
-		def = p.pState.Meta.Clone()
-	}
-
+	def := p.pState.Meta.Clone()
 	err = func() error {
 		if msg.Version != def.Version {
 			return errors.New("version mismatch")

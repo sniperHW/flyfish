@@ -98,7 +98,7 @@ func (f *flygateMgr) onHeartBeat(gateService string, msgPerSecond int) {
 type persistenceState struct {
 	Deployment   DeploymentJson
 	SlotTransfer map[int]*TransSlotTransfer
-	Meta         *db.DbDef
+	Meta         db.DbDef
 	MetaBytes    []byte
 	deployment   deployment
 }
@@ -484,7 +484,7 @@ func (p *pd) onBecomeLeader() {
 		}
 	}
 
-	if nil == p.pState.Meta {
+	if p.pState.Meta.Version == 0 {
 		p.loadInitMeta()
 	}
 }
