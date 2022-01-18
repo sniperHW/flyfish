@@ -27,8 +27,22 @@ func trimVersion(name string) (string, int64, error) {
 	last := strings.LastIndex(name, "_")
 
 	return name[:last], i, nil
-
 }
+
+var tableMetaStr = `
+SELECT
+    COLUMN_NAME,
+    DATA_TYPE,
+    COLUMN_DEFAULT,
+    CHARACTER_MAXIMUM_LENGTH
+FROM
+    information_schema.COLUMNS
+WHERE
+    TABLE_NAME = '%s'
+ORDER BY
+    TABLE_NAME,
+    ORDINAL_POSITION;
+`
 
 /////pgsql
 
@@ -42,12 +56,14 @@ CREATE TABLE "%s_%d" (
 );
 `
 
+/*
 var tableMetaStrPgSql = `
-SELECT column_name,data_type ,column_default,character_maximum_length 
+SELECT column_name,data_type ,column_default,character_maximum_length
 FROM information_schema.columns
 WHERE (table_schema, table_name) = ('public', '%s')
 ORDER BY ordinal_position;
 `
+*/
 
 func appendFieldPgSql(buff []byte, field *db.FieldDef) ([]byte, error) {
 	offset := len(buff)
@@ -59,11 +75,7 @@ func appendFieldPgSql(buff []byte, field *db.FieldDef) ([]byte, error) {
 	case "float":
 		return buffer.AppendString(buff, fmt.Sprintf("float8 NOT NULL DEFAULT %s", field.DefautValue)), nil
 	case "string":
-		cap := field.StrCap
-		if 0 >= cap {
-			cap = 65535
-		}
-		return buffer.AppendString(buff, fmt.Sprintf("varchar(%d) NOT NULL DEFAULT '%s'", cap, field.DefautValue)), nil
+		return buffer.AppendString(buff, fmt.Sprintf("varchar(%d) NOT NULL DEFAULT '%s'", field.StrCap, field.DefautValue)), nil
 	case "blob":
 		return buffer.AppendString(buff, "bytea NULL"), nil
 	default:
@@ -125,7 +137,7 @@ func getTableSchemePgSql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
 	}
 
 	var tab *db.TableDef
-	rows, err := dbc.Query(fmt.Sprintf(tableMetaStrPgSql, table))
+	rows, err := dbc.Query(fmt.Sprintf(tableMetaStr, table))
 	if nil != err {
 		return nil, err
 	}
@@ -190,6 +202,7 @@ func getTableSchemePgSql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
 
 		if column_name == "__key__" {
 			if data_type != "character varying" {
+				fmt.Println("data_type", data_type)
 				return nil, errors.New("__key__ field is not varchar")
 			} else {
 				keyFieldOk = true
@@ -262,21 +275,6 @@ var createSqlStrMySql = strings.Join(
 		"DEFAULT CHARSET=gb2312",
 		"COLLATE=gb2312_chinese_ci;",
 	}, "\n")
-
-var tableMetaStrMySql = `
-SELECT
-    COLUMN_NAME,
-    DATA_TYPE,
-    COLUMN_DEFAULT,
-    CHARACTER_MAXIMUM_LENGTH
-FROM
-    information_schema.COLUMNS
-WHERE
-    TABLE_NAME = '%s'
-ORDER BY
-    TABLE_NAME,
-    ORDINAL_POSITION;
-`
 
 func appendFieldMySql(buff []byte, field *db.FieldDef) ([]byte, error) {
 	offset := len(buff)
@@ -355,7 +353,7 @@ func getTableSchemeMySql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
 	}
 
 	var tab *db.TableDef
-	rows, err := dbc.Query(fmt.Sprintf(tableMetaStrMySql, table))
+	rows, err := dbc.Query(fmt.Sprintf(tableMetaStr, table))
 	if nil != err {
 		return nil, err
 	}
@@ -489,9 +487,9 @@ func DropTablePgSql(dbc *sqlx.DB, sqlType string, tabDef *db.TableDef) error {
 	}
 }
 
-func GetTableSchemeMySql(dbc *sqlx.DB, sqlType string, table_real_name string) (*db.TableDef, error) {
+func GetTableScheme(dbc *sqlx.DB, sqlType string, table_real_name string) (*db.TableDef, error) {
 	if sqlType == "pgsql" {
-		return getTableSchemeMySql(dbc, table_real_name)
+		return getTableSchemePgSql(dbc, table_real_name)
 	} else {
 		return getTableSchemeMySql(dbc, table_real_name)
 	}

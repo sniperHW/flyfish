@@ -224,11 +224,8 @@ func TestPd(t *testing.T) {
 	RaftLogDir       = "raftLog"
 	RaftLogPrefix    = "pd"
 	DBType           = "pgsql"
+	InitMetaPath = "./initmeta.json"
 
-
-	[InitMeta]
-		Path = "./initmeta.json"
-		CreateDB = true
 
 	[DBConfig]
 		Host          = "localhost"

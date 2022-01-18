@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/sniperHW/flyfish/proto"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -40,6 +41,53 @@ type TableDef struct {
 	Version   int64
 	Name      string      `json:"Name,omitempty"`
 	Fields    []*FieldDef `json:"Fields,omitempty"`
+}
+
+func (t TableDef) Equal(o TableDef) bool {
+	if t.DbVersion != o.DbVersion {
+		return false
+	}
+
+	if t.Name != o.Name {
+		return false
+	}
+
+	if len(t.Fields) != len(o.Fields) {
+		return false
+	}
+
+	sort.Slice(t.Fields, func(i int, j int) bool {
+		return t.Fields[i].Name < t.Fields[j].Name
+	})
+
+	sort.Slice(o.Fields, func(i int, j int) bool {
+		return o.Fields[i].Name < o.Fields[j].Name
+	})
+
+	for i := 0; i < len(t.Fields); i++ {
+		if t.Fields[i].Name != o.Fields[i].Name {
+			return false
+		}
+
+		if t.Fields[i].TabVersion != o.Fields[i].TabVersion {
+			return false
+		}
+
+		if t.Fields[i].Type != o.Fields[i].Type {
+			return false
+		}
+
+		if t.Fields[i].StrCap != o.Fields[i].StrCap {
+			return false
+		}
+
+		if t.Fields[i].DefautValue != o.Fields[i].DefautValue {
+			return false
+		}
+	}
+
+	return true
+
 }
 
 func (t *TableDef) GetField(n string) *FieldDef {
@@ -137,6 +185,10 @@ func (t *TableDef) check() error {
 
 		if tt == proto.ValueType_invaild {
 			return errors.New(fmt.Sprintf("invaild filed.Type:%s", v.Type))
+		}
+
+		if tt == proto.ValueType_string && v.StrCap < 1 {
+			return errors.New("StrCap of string must be at least 1")
 		}
 
 		if nil == GetDefaultValue(tt, v.DefautValue) {

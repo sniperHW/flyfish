@@ -2,7 +2,7 @@ package flypd
 
 import (
 	//"errors"
-	//"fmt"
+	"fmt"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/db/sql"
 	snet "github.com/sniperHW/flyfish/server/net"
@@ -36,8 +36,8 @@ func (p *pd) onGetMeta(from *net.UDPAddr, m *snet.Message) {
 }
 
 func (p *pd) loadInitMeta() {
-	if "" != p.config.InitMeta.Path {
-		f, err := os.Open(p.config.InitMeta.Path)
+	if "" != p.config.InitMetaPath {
+		f, err := os.Open(p.config.InitMetaPath)
 		if nil == err {
 			var b []byte
 			for {
@@ -54,22 +54,33 @@ func (p *pd) loadInitMeta() {
 
 			def, err := p.checkMeta(b)
 			if nil != err {
-				return
+				GetSugar().Panic(err)
 			}
 
-			if p.config.InitMeta.CreateDB {
-				dbc, err := sql.SqlOpen(p.config.DBType, p.config.DBConfig.Host, p.config.DBConfig.Port, p.config.DBConfig.DB, p.config.DBConfig.User, p.config.DBConfig.Password)
+			dbc, err := sql.SqlOpen(p.config.DBType, p.config.DBConfig.Host, p.config.DBConfig.Port, p.config.DBConfig.DB, p.config.DBConfig.User, p.config.DBConfig.Password)
+			defer dbc.Close()
+
+			if nil != err {
+				GetSugar().Panic(err)
+			}
+
+			for _, v := range def.TableDefs {
+				tb, err := sql.GetTableScheme(dbc, p.config.DBType, fmt.Sprintf("%s_%d", v.Name, v.DbVersion))
 				if nil != err {
 					GetSugar().Panic(err)
+				} else if nil == tb {
+					//表不存在
+					err = sql.CreateTables(dbc, p.config.DBType, v)
+					if nil != err {
+						GetSugar().Panic(err)
+					} else {
+						GetSugar().Infof("create table:%s_%d ok", v.Name, v.DbVersion)
+					}
+				} else if !v.Equal(*tb) {
+					GetSugar().Panic(fmt.Sprintf("table:%s already in db but not match with meta", v.Name))
+				} else {
+					GetSugar().Infof("table:%s_%d is ok skip create", v.Name, v.DbVersion)
 				}
-
-				err = sql.CreateTables(dbc, p.config.DBType, def.TableDefs...)
-
-				if nil != err {
-					GetSugar().Panic(err)
-				}
-
-				dbc.Close()
 			}
 
 			p.issueProposal(&ProposalInitMeta{
