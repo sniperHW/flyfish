@@ -29,7 +29,7 @@ func (p *pd) onKvnodeBoot(from *net.UDPAddr, m *snet.Message) {
 		GetSugar().Infof("Meta not set")
 		//meta尚未初始化
 		return
-	} else if nil != p.pState.deployment {
+	} else {
 		msg := m.Msg.(*sproto.KvnodeBoot)
 		node := p.getNode(msg.NodeID)
 		if nil == node {
@@ -70,17 +70,13 @@ func (p *pd) onKvnodeBoot(from *net.UDPAddr, m *snet.Message) {
 		}
 
 		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
-	} else {
-		GetSugar().Errorf("onKvnodeBoot but deployment == nil")
 	}
 }
 
 func (p *pd) onQueryRouteInfo(from *net.UDPAddr, m *snet.Message) {
 	msg := m.Msg.(*sproto.QueryRouteInfo)
-	if nil != p.pState.deployment {
-		resp := p.pState.deployment.queryRouteInfo(msg)
-		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
-	}
+	resp := p.pState.deployment.queryRouteInfo(msg)
+	p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 }
 
 func (p *pd) onGetFlyGateList(from *net.UDPAddr, m *snet.Message) {
@@ -139,43 +135,41 @@ func (p *pd) changeFlyGate(from *net.UDPAddr, m *snet.Message) {
 }
 
 func (p *pd) onGetSetStatus(from *net.UDPAddr, m *snet.Message) {
-	if nil != p.pState.deployment {
-		resp := &sproto.GetSetStatusResp{}
-		for _, v := range p.pState.deployment.sets {
-			s := &sproto.SetStatus{
-				SetID:     int32(v.id),
-				MarkClear: v.markClear,
+	resp := &sproto.GetSetStatusResp{}
+	for _, v := range p.pState.deployment.sets {
+		s := &sproto.SetStatus{
+			SetID:     int32(v.id),
+			MarkClear: v.markClear,
+		}
+
+		for _, vv := range v.nodes {
+			n := &sproto.KvnodeStatus{
+				NodeID: int32(vv.id),
 			}
 
-			for _, vv := range v.nodes {
-				n := &sproto.KvnodeStatus{
-					NodeID: int32(vv.id),
-				}
-
-				for k, vvv := range vv.store {
-					n.Stores = append(n.Stores, &sproto.KvnodeStoreStatus{
-						StoreID:  int32(k),
-						Type:     int32(vvv.Type),
-						Value:    int32(vvv.Value),
-						IsLeader: vvv.isLeader(),
-					})
-				}
-
-				s.Nodes = append(s.Nodes, n)
-			}
-
-			for _, vv := range v.stores {
-				s.Stores = append(s.Stores, &sproto.StoreStatus{
-					StoreID: int32(vv.id),
-					Slots:   vv.slots.ToJson(),
+			for k, vvv := range vv.store {
+				n.Stores = append(n.Stores, &sproto.KvnodeStoreStatus{
+					StoreID:  int32(k),
+					Type:     int32(vvv.Type),
+					Value:    int32(vvv.Value),
+					IsLeader: vvv.isLeader(),
 				})
 			}
 
-			resp.Sets = append(resp.Sets, s)
+			s.Nodes = append(s.Nodes, n)
 		}
 
-		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
+		for _, vv := range v.stores {
+			s.Stores = append(s.Stores, &sproto.StoreStatus{
+				StoreID: int32(vv.id),
+				Slots:   vv.slots.ToJson(),
+			})
+		}
+
+		resp.Sets = append(resp.Sets, s)
 	}
+
+	p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 }
 
 func (p *pd) onStoreReportStatus(from *net.UDPAddr, m *snet.Message) {
@@ -212,7 +206,7 @@ func (p *pd) onStoreReportStatus(from *net.UDPAddr, m *snet.Message) {
 }
 
 func (p *pd) initMsgHandler() {
-	p.registerMsgHandler(&sproto.InstallDeployment{}, p.onInstallDeployment)
+	//p.registerMsgHandler(&sproto.InstallDeployment{}, p.onInstallDeployment)
 	p.registerMsgHandler(&sproto.AddSet{}, p.onAddSet)
 	p.registerMsgHandler(&sproto.RemSet{}, p.onRemSet)
 	p.registerMsgHandler(&sproto.SetMarkClear{}, p.onSetMarkClear)
@@ -230,7 +224,8 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.FlyGateHeartBeat{}, p.onFlyGateHeartBeat)
 	p.registerMsgHandler(&sproto.ChangeFlyGate{}, p.changeFlyGate)
 	p.registerMsgHandler(&sproto.GetMeta{}, p.onGetMeta)
-	//p.registerMsgHandler(&sproto.UpdateMeta{}, p.onUpdateMeta)
 	p.registerMsgHandler(&sproto.GetSetStatus{}, p.onGetSetStatus)
 	p.registerMsgHandler(&sproto.StoreReportStatus{}, p.onStoreReportStatus)
+	p.registerMsgHandler(&sproto.MetaAddTable{}, p.onUpdateMetaReq)
+	p.registerMsgHandler(&sproto.MetaAddFields{}, p.onUpdateMetaReq)
 }

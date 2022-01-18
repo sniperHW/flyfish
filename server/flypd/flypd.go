@@ -1,6 +1,7 @@
 package flypd
 
 import (
+	"container/list"
 	"encoding/json"
 	"errors"
 	"github.com/sniperHW/flyfish/db"
@@ -99,7 +100,7 @@ type persistenceState struct {
 	SlotTransfer map[int]*TransSlotTransfer
 	Meta         *db.DbDef
 	MetaBytes    []byte
-	deployment   *deployment
+	deployment   deployment
 }
 
 func (p *persistenceState) toJson() ([]byte, error) {
@@ -146,6 +147,7 @@ type pd struct {
 	pState          persistenceState
 	storeTask       map[uint64]*storeTask
 	markClearSet    map[int]*set
+	metaUpdateQueue *list.List
 }
 
 func NewPd(id uint16, join bool, config *Config, udpService string, clusterStr string) (*pd, error) {
@@ -167,7 +169,11 @@ func NewPd(id uint16, join bool, config *Config, udpService string, clusterStr s
 		markClearSet: map[int]*set{},
 		pState: persistenceState{
 			SlotTransfer: map[int]*TransSlotTransfer{},
+			deployment: deployment{
+				sets: map[int]*set{},
+			},
 		},
+		metaUpdateQueue: list.New(),
 	}
 
 	p.initMsgHandler()
@@ -237,11 +243,9 @@ func (p *pd) storeBalance() {
 }
 
 func (p *pd) getNode(nodeID int32) *kvnode {
-	if nil != p.pState.deployment {
-		for _, v := range p.pState.deployment.sets {
-			if n, ok := v.nodes[int(nodeID)]; ok {
-				return n
-			}
+	for _, v := range p.pState.deployment.sets {
+		if n, ok := v.nodes[int(nodeID)]; ok {
+			return n
 		}
 	}
 	return nil
@@ -450,7 +454,7 @@ func (p *pd) loadInitDeployment() {
 
 func (p *pd) onBecomeLeader() {
 
-	if nil == p.pState.deployment {
+	if len(p.pState.deployment.sets) == 0 {
 		p.loadInitDeployment()
 	} else {
 		//重置slotBalance相关的临时数据
@@ -497,6 +501,26 @@ func (p *pd) onLeaderDownToFollower() {
 	}
 
 	p.storeTask = map[uint64]*storeTask{}
+
+	for p.metaUpdateQueue.Len() > 0 {
+		op := p.metaUpdateQueue.Remove(p.metaUpdateQueue.Front()).(*metaOpration)
+		if nil != op.m.Msg {
+			switch op.m.Msg.(type) {
+			case *sproto.MetaAddTable:
+				p.udp.SendTo(op.from, snet.MakeMessage(op.m.Context,
+					&sproto.MetaAddTableResp{
+						Ok:     false,
+						Reason: "down to follower",
+					}))
+			case *sproto.MetaAddFields:
+				p.udp.SendTo(op.from, snet.MakeMessage(op.m.Context,
+					&sproto.MetaAddFieldsResp{
+						Ok:     false,
+						Reason: "down to follower",
+					}))
+			}
+		}
+	}
 }
 
 func (p *pd) Stop() {

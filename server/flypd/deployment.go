@@ -466,12 +466,6 @@ func (d *deployment) loadFromPB(sets []*sproto.DeploymentSet) error {
 		d.sets[int(v.SetID)] = s
 	}
 
-	/*for _, v := range d.sets {
-		for _, vv := range v.stores {
-			GetSugar().Infof("onInstallDeployment set:%d store:%d,slots:%v", v.id, vv.id, vv.slots.GetOpenBits())
-		}
-	}*/
-
 	return nil
 }
 
@@ -485,23 +479,7 @@ func (p *ProposalInstallDeployment) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalInstallDeployment) apply(pd *pd) {
-	err := func() error {
-		if nil != pd.pState.deployment {
-			return errors.New("already install")
-		}
-		return nil
-	}()
-
-	if nil == err {
-		pd.pState.deployment = &deployment{}
-		pd.pState.deployment.loadFromDeploymentJson(&p.D)
-		//j, _ := pd.pState.deployment.toJson()
-		//GetSugar().Infof("%v", string(j))
-	}
-
-	if nil != p.reply {
-		p.reply(err)
-	}
+	pd.pState.deployment.loadFromDeploymentJson(&p.D)
 }
 
 func (p *ProposalInstallDeployment) replay(pd *pd) {
@@ -521,6 +499,7 @@ func (p *pd) makeReplyFunc(from *net.UDPAddr, m *snet.Message, resp proto.Messag
 	}
 }
 
+/*
 func (p *pd) onInstallDeployment(from *net.UDPAddr, m *snet.Message) {
 
 	msg := m.Msg.(*sproto.InstallDeployment)
@@ -553,3 +532,4 @@ func (p *pd) onInstallDeployment(from *net.UDPAddr, m *snet.Message) {
 		})
 	}
 }
+*/

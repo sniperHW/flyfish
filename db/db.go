@@ -123,6 +123,7 @@ func (t *TableDef) Clone() *TableDef {
 	return &ret
 }
 
+/*
 func (t *TableDef) AddField(f *FieldDef) error {
 	if f.Name == "" {
 		return errors.New("empty filed.Name")
@@ -165,8 +166,9 @@ func (t *TableDef) RemoveField(name string) error {
 	}
 	return errors.New(fmt.Sprintf("%s not found", name))
 }
+*/
 
-func (t *TableDef) check() error {
+func (t *TableDef) Check() error {
 	names := map[string]bool{}
 	for _, v := range t.Fields {
 		if v.Name == "" {
@@ -213,7 +215,7 @@ func (d *DbDef) Check() error {
 			return errors.New(fmt.Sprintf("duplicate table %s", v.Name))
 		}
 
-		if err := v.check(); nil != err {
+		if err := v.Check(); nil != err {
 			return err
 		}
 
@@ -260,14 +262,14 @@ func (d *DbDef) ToPrettyJson() ([]byte, error) {
 	}
 }
 
-func (d *DbDef) AddTable(tt *TableDef) error {
+/*func (d *DbDef) AddTable(tt *TableDef) error {
 	for _, v := range d.TableDefs {
 		if v.Name == tt.Name {
 			return errors.New(fmt.Sprintf("duplicate table %s", v.Name))
 		}
 	}
 
-	if err := tt.check(); nil != err {
+	if err := tt.Check(); nil != err {
 		return err
 	}
 
@@ -276,7 +278,7 @@ func (d *DbDef) AddTable(tt *TableDef) error {
 	d.TableDefs = append(d.TableDefs, tt)
 
 	return nil
-}
+}*/
 
 func (d *DbDef) RemoveTable(name string) error {
 	for k, v := range d.TableDefs {

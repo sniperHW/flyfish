@@ -1,9 +1,7 @@
 package flypd
 
 import (
-	//"encoding/json"
 	"errors"
-	//"github.com/sniperHW/flyfish/pkg/buffer"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"net"
@@ -122,10 +120,6 @@ func (p *pd) onAddNode(from *net.UDPAddr, m *snet.Message) {
 	resp := &sproto.AddNodeResp{}
 
 	err := func() error {
-		if nil == p.pState.deployment {
-			return errors.New("must init deployment first")
-		}
-
 		_, ok := p.pState.deployment.sets[int(msg.SetID)]
 		if !ok {
 			return errors.New("set not found")
@@ -170,10 +164,6 @@ func (p *pd) onRemNode(from *net.UDPAddr, m *snet.Message) {
 	resp := &sproto.RemNodeResp{}
 
 	err := func() error {
-		if nil == p.pState.deployment {
-			return errors.New("no deployment")
-		}
-
 		s, ok := p.pState.deployment.sets[int(msg.SetID)]
 		if !ok {
 			return errors.New("set not found")

@@ -199,10 +199,6 @@ func (p *pd) onRemSet(from *net.UDPAddr, m *snet.Message) {
 	resp := &sproto.RemSetResp{}
 
 	err := func() error {
-		if nil == p.pState.deployment {
-			return errors.New("no deployment")
-		}
-
 		s, ok := p.pState.deployment.sets[int(msg.SetID)]
 		if !ok {
 			return errors.New("set not exists")
@@ -245,10 +241,6 @@ func (p *pd) onSetMarkClear(from *net.UDPAddr, m *snet.Message) {
 	resp := &sproto.SetMarkClearResp{}
 
 	err := func() error {
-		if nil == p.pState.deployment {
-			return errors.New("no deployment")
-		}
-
 		s, ok := p.pState.deployment.sets[int(msg.SetID)]
 		if !ok {
 			return errors.New("set not exists")
@@ -280,10 +272,6 @@ func (p *pd) onAddSet(from *net.UDPAddr, m *snet.Message) {
 	resp := &sproto.AddSetResp{}
 
 	err := func() error {
-		if nil == p.pState.deployment {
-			return errors.New("no deployment")
-		}
-
 		if _, ok := p.pState.deployment.sets[int(msg.Set.SetID)]; ok {
 			return errors.New("set already exists")
 		}

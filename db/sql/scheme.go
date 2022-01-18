@@ -479,7 +479,7 @@ func AlterTable(dbc *sqlx.DB, sqlType string, tabDef *db.TableDef) error {
 	}
 }
 
-func DropTablePgSql(dbc *sqlx.DB, sqlType string, tabDef *db.TableDef) error {
+func DropTable(dbc *sqlx.DB, sqlType string, tabDef *db.TableDef) error {
 	if sqlType == "pgsql" {
 		return dropTablePgSql(dbc, tabDef)
 	} else {

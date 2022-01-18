@@ -9,7 +9,7 @@ import (
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/logger"
-	"github.com/sniperHW/flyfish/pkg/bitmap"
+	//"github.com/sniperHW/flyfish/pkg/bitmap"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
@@ -37,6 +37,7 @@ func waitCondition(fn func() bool) {
 	wg.Wait()
 }
 
+/*
 func genMeta() *db.DbDef {
 	m := db.DbDef{}
 
@@ -210,7 +211,7 @@ func TestSnapShot(t *testing.T) {
 
 	assert.Equal(t, len(p2.pState.MetaBytes), len(p1.pState.MetaBytes))
 
-}
+}*/
 
 func TestPd(t *testing.T) {
 
@@ -257,9 +258,14 @@ func TestPd(t *testing.T) {
 
 	fmt.Println(err)
 
-	sql.DropTablePgSql(dbc, conf.DBType, &db.TableDef{
+	sql.DropTable(dbc, conf.DBType, &db.TableDef{
 		Name:      "table1",
 		DbVersion: 0,
+	})
+
+	sql.DropTable(dbc, conf.DBType, &db.TableDef{
+		Name:      "table2",
+		DbVersion: 1,
 	})
 
 	dbc.Close()
@@ -273,6 +279,10 @@ func TestPd(t *testing.T) {
 			time.Sleep(time.Second)
 		}
 	}
+
+	testAddTable(t, p)
+
+	testAddFields(t, p)
 
 	//testSetMeta(t, p)
 
@@ -349,6 +359,94 @@ func testInstallDeployment(t *testing.T, p *pd) {
 
 	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.KvnodeBootResp).Ok, true)
 	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.KvnodeBootResp).ServiceHost, "localhost")
+
+	conn.Close()
+
+}
+
+func testAddTable(t *testing.T, p *pd) {
+
+	{
+		req := &sproto.MetaAddTable{
+			Name:    "table2",
+			Version: 1,
+		}
+
+		req.Fields = append(req.Fields, &sproto.MetaFiled{
+			Name:    "field1",
+			Type:    "string",
+			Default: "hello",
+			Strcap:  4096,
+		})
+
+		conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
+		assert.Nil(t, err)
+
+		addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
+
+		conn.SendTo(addr, snet.MakeMessage(0, req))
+
+		recvbuff := make([]byte, 256)
+		_, r, err := conn.ReadFrom(recvbuff)
+
+		assert.Equal(t, r.(*snet.Message).Msg.(*sproto.MetaAddTableResp).Ok, true)
+		conn.Close()
+	}
+
+	{
+		req := &sproto.MetaAddTable{
+			Name:    "table3",
+			Version: 2,
+		}
+
+		req.Fields = append(req.Fields, &sproto.MetaFiled{
+			Name:    "field1",
+			Type:    "string",
+			Default: "hello",
+			Strcap:  4096,
+		})
+
+		conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
+		assert.Nil(t, err)
+
+		addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
+
+		conn.SendTo(addr, snet.MakeMessage(0, req))
+
+		recvbuff := make([]byte, 256)
+		_, r, err := conn.ReadFrom(recvbuff)
+
+		assert.Equal(t, r.(*snet.Message).Msg.(*sproto.MetaAddTableResp).Ok, true)
+		conn.Close()
+	}
+
+}
+
+func testAddFields(t *testing.T, p *pd) {
+
+	req := &sproto.MetaAddFields{
+		Table:   "table2",
+		Version: 3,
+	}
+
+	req.Fields = append(req.Fields, &sproto.MetaFiled{
+		Name:    "field2",
+		Type:    "string",
+		Default: "hello",
+		Strcap:  4096,
+	})
+
+	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
+	assert.Nil(t, err)
+
+	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
+
+	conn.SendTo(addr, snet.MakeMessage(0, req))
+
+	recvbuff := make([]byte, 256)
+	_, r, err := conn.ReadFrom(recvbuff)
+
+	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.MetaAddFieldsResp).Ok, true)
 
 	conn.Close()
 

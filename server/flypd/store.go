@@ -306,10 +306,6 @@ func (p *pd) onAddLearnerStoreToNode(from *net.UDPAddr, m *snet.Message) {
 			return errors.New(fmt.Sprintf("storeID must between(1,%d)", StorePerSet))
 		}
 
-		if nil == p.pState.deployment {
-			return errors.New("must init deployment first")
-		}
-
 		s, ok := p.pState.deployment.sets[int(msg.SetID)]
 		if !ok {
 			return errors.New("set not found")
@@ -376,10 +372,6 @@ func (p *pd) onPromoteLearnerStore(from *net.UDPAddr, m *snet.Message) {
 	err := func() error {
 		if !(msg.Store > 0 && msg.Store <= int32(StorePerSet)) {
 			return errors.New(fmt.Sprintf("storeID must between(1,%d)", StorePerSet))
-		}
-
-		if nil == p.pState.deployment {
-			return errors.New("must init deployment first")
 		}
 
 		s, ok := p.pState.deployment.sets[int(msg.SetID)]
