@@ -123,51 +123,6 @@ func (t *TableDef) Clone() *TableDef {
 	return &ret
 }
 
-/*
-func (t *TableDef) AddField(f *FieldDef) error {
-	if f.Name == "" {
-		return errors.New("empty filed.Name")
-	}
-
-	if strings.HasPrefix(f.Name, "__") {
-		return errors.New(fmt.Sprintf("invaild filed.Name:%s", f.Name))
-	}
-
-	for _, v := range t.Fields {
-		if v.Name == f.Name {
-			return errors.New(fmt.Sprintf("duplicate filed.Name:%s", f.Name))
-		}
-	}
-
-	tt := GetTypeByStr(f.Type)
-
-	if tt == proto.ValueType_invaild {
-		return errors.New(fmt.Sprintf("invaild filed.Type:%s", f.Type))
-	}
-
-	if nil == GetDefaultValue(tt, f.DefautValue) {
-		return errors.New(fmt.Sprintf("filed.Type:%s invaild DefautValue:%s", f.Type, f.DefautValue))
-	}
-
-	f.TabVersion = t.Version
-
-	t.Fields = append(t.Fields, f)
-
-	return nil
-}
-
-func (t *TableDef) RemoveField(name string) error {
-	for k, v := range t.Fields {
-		if v.Name == name {
-			t.Fields[k], t.Fields[len(t.Fields)-1] = t.Fields[len(t.Fields)-1], t.Fields[k]
-			t.Fields = t.Fields[:len(t.Fields)-1]
-			return nil
-		}
-	}
-	return errors.New(fmt.Sprintf("%s not found", name))
-}
-*/
-
 func (t *TableDef) Check() error {
 	names := map[string]bool{}
 	for _, v := range t.Fields {
@@ -260,35 +215,6 @@ func (d *DbDef) ToPrettyJson() ([]byte, error) {
 	} else {
 		return data, nil
 	}
-}
-
-/*func (d *DbDef) AddTable(tt *TableDef) error {
-	for _, v := range d.TableDefs {
-		if v.Name == tt.Name {
-			return errors.New(fmt.Sprintf("duplicate table %s", v.Name))
-		}
-	}
-
-	if err := tt.Check(); nil != err {
-		return err
-	}
-
-	tt.DbVersion = d.Version
-
-	d.TableDefs = append(d.TableDefs, tt)
-
-	return nil
-}*/
-
-func (d *DbDef) RemoveTable(name string) error {
-	for k, v := range d.TableDefs {
-		if v.Name == name {
-			d.TableDefs[k], d.TableDefs[len(d.TableDefs)-1] = d.TableDefs[len(d.TableDefs)-1], d.TableDefs[k]
-			d.TableDefs = d.TableDefs[:len(d.TableDefs)-1]
-			return nil
-		}
-	}
-	return errors.New(fmt.Sprintf("%s not found", name))
 }
 
 func MakeDbDefFromJsonString(s []byte) (*DbDef, error) {

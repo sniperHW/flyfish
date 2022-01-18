@@ -334,7 +334,7 @@ func (p *pd) onMetaAddFields(from *net.UDPAddr, m *snet.Message) bool {
 		} else if !tab.Equal(*dbtab) {
 			tmp := tab.Clone()
 			tmp.Fields = tmp.Fields[len(tmp.Fields)-len(msg.Fields):]
-			return sql.AlterTable(dbc, p.config.DBType, tmp)
+			return sql.AddFields(dbc, p.config.DBType, tmp)
 		} else {
 			return nil
 		}

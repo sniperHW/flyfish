@@ -104,7 +104,7 @@ func createTablesPgSql(dbc *sqlx.DB, tabDef ...*db.TableDef) error {
 	return err
 }
 
-func alterTablePgSql(dbc *sqlx.DB, tabDef *db.TableDef) error {
+func addFieldsPgSql(dbc *sqlx.DB, tabDef *db.TableDef) error {
 	var buff []byte
 	var err error
 	for _, v := range tabDef.Fields {
@@ -319,7 +319,7 @@ func createTablesMySql(dbc *sqlx.DB, tabDef ...*db.TableDef) error {
 }
 
 //alter table test_0 add column (`field5_0` BIGINT  NOT NULL DEFAULT '1', `field6_0` FLOAT NOT NULL DEFAULT '1.1');
-func alterTableMySql(dbc *sqlx.DB, tabDef *db.TableDef) error {
+func addFieldsMySql(dbc *sqlx.DB, tabDef *db.TableDef) error {
 	var buff []byte
 	var err error
 	buff = buffer.AppendString(buff, fmt.Sprintf("ALTER TABLE %s_%d ADD column(", tabDef.Name, tabDef.DbVersion))
@@ -471,11 +471,11 @@ func CreateTables(dbc *sqlx.DB, sqlType string, tabDef ...*db.TableDef) error {
 	}
 }
 
-func AlterTable(dbc *sqlx.DB, sqlType string, tabDef *db.TableDef) error {
+func AddFields(dbc *sqlx.DB, sqlType string, tabDef *db.TableDef) error {
 	if sqlType == "pgsql" {
-		return alterTablePgSql(dbc, tabDef)
+		return addFieldsPgSql(dbc, tabDef)
 	} else {
-		return alterTableMySql(dbc, tabDef)
+		return addFieldsMySql(dbc, tabDef)
 	}
 }
 

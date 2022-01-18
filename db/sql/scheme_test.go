@@ -112,7 +112,7 @@ func TestSchemePgSql(t *testing.T) {
 		DefautValue: "1.1",
 	})
 
-	err = alterTablePgSql(dbc, &t2)
+	err = addFieldsPgSql(dbc, &t2)
 
 	fmt.Println("alterTablePgSql", err)
 
@@ -214,7 +214,7 @@ func TestSchemeMySql(t *testing.T) {
 		DefautValue: "1.1",
 	})
 
-	err = alterTableMySql(dbc, &t2)
+	err = addFieldsMySql(dbc, &t2)
 
 	fmt.Println("alterTableMySql", err)
 
