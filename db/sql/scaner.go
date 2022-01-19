@@ -36,6 +36,8 @@ func NewScanner(tbmeta db.TableMeta, dbc *sqlx.DB, slot int, wantFields []string
 
 	sqlStr := fmt.Sprintf(selectTemplate, strings.Join(queryFields, ","), tbmeta.(*TableMeta).real_tableName, slot, strings.Join(exclude, "','"))
 
+	//fmt.Println(sqlStr)
+
 	rows, err := dbc.Query(sqlStr)
 
 	if nil != err {

@@ -106,7 +106,7 @@ func (this *kvnode) onScanner(conn net.Conn) {
 		store.mainQueue.q.Append(0, func() {
 			for _, v := range wantSlots.GetOpenBits() {
 				if store.slots.Test(v) {
-					scanner.makeCachekvs(v, store.tableKvMap[req.Table])
+					scanner.makeCachekvs(v, store.slotsKvMap[v])
 				}
 			}
 			close(ch)
@@ -242,6 +242,8 @@ func (sc *scanner) makeCachekvs(slotNo int, kvs map[string]*kv) {
 			}
 		}
 	}
+
+	//GetSugar().Infof("makeCachekvs:%d kv count:%d", slotNo, len(s.kv))
 
 	sc.slots = append(sc.slots, s)
 

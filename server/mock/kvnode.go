@@ -158,7 +158,7 @@ func (this *Node) Stop() {
 
 func (this *Node) Start(leader bool, service string, console string, def *db.DbDef) error {
 
-	m, _ := sql.CreateDbMeta(1, def)
+	m, _ := sql.CreateDbMeta(def)
 
 	this.metaMgr = m
 

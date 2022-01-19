@@ -71,9 +71,9 @@ type clientRequest struct {
 }
 
 type kvmgr struct {
-	kv               []map[string]*kv
-	slotsKvMap       map[int]map[string]*kv
-	tableKvMap       map[string]map[string]*kv
+	kv         []map[string]*kv
+	slotsKvMap map[int]map[string]*kv
+	//tableKvMap       map[string]map[string]*kv
 	slots            *bitmap.Bitmap
 	slotsTransferOut map[int]*SlotTransferProposal //正在迁出的slot
 	kvcount          int
@@ -148,13 +148,7 @@ func (s *kvstore) deleteKv(k *kv) {
 	delete(s.kv[k.groupID], k.uniKey)
 	s.lru.remove(&k.lru)
 
-	kvs := s.tableKvMap[k.table]
-	delete(kvs, k.uniKey)
-	if len(kvs) == 0 {
-		delete(s.tableKvMap, k.table)
-	}
-
-	kvs = s.slotsKvMap[k.slot]
+	kvs := s.slotsKvMap[k.slot]
 	delete(kvs, k.uniKey)
 	if len(kvs) == 0 {
 		delete(s.slotsKvMap, k.slot)
@@ -204,14 +198,6 @@ func (s *kvstore) newkv(slot int, groupID int, unikey string, key string, table 
 		kvs = map[string]*kv{}
 		kvs[unikey] = k
 		s.slotsKvMap[slot] = kvs
-	}
-
-	if kvs := s.tableKvMap[table]; nil != kvs {
-		kvs[unikey] = k
-	} else {
-		kvs = map[string]*kv{}
-		kvs[unikey] = k
-		s.tableKvMap[table] = kvs
 	}
 
 	return k, nil

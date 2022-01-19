@@ -71,7 +71,7 @@ ServiceHost             = "127.0.0.1"
 ServicePort             = %d
 RaftCluster             = "1@http://127.0.0.1:12377@"
 Stores                  = [1]
-Meta                    = ["users1@name:string:,age:int:,phone:string:"]
+MetaPath                = "./meta.json"
 
                   	
 [DBConfig]
@@ -128,6 +128,7 @@ func (d *mockBackEnd) stop() {
 var config *Config
 
 func init() {
+	sslot.SlotCount = 128
 
 	go func() {
 		http.ListenAndServe("localhost:6060", nil)
@@ -763,6 +764,7 @@ func TestMakeUnikeyPlacement(t *testing.T) {
 	fmt.Println(fn("users1:huangwei:247100"), sslot.Unikey2Slot("users1:huangwei:247100"))
 }
 
+/*
 func TestUpdateMeta(t *testing.T) {
 	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
 
@@ -810,12 +812,9 @@ func TestUpdateMeta(t *testing.T) {
 
 	node.Stop()
 
-}
+}*/
 
 func TestSlotTransferIn(t *testing.T) {
-	oldSlotCount := sslot.SlotCount
-	sslot.SlotCount = 16
-
 	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
 
 	//先删除所有kv文件
@@ -857,16 +856,11 @@ func TestSlotTransferIn(t *testing.T) {
 
 	conn.Close()
 
-	sslot.SlotCount = oldSlotCount
-
 	node.Stop()
 
 }
 
 func TestSlotTransferOut(t *testing.T) {
-	oldSlotCount := sslot.SlotCount
-	sslot.SlotCount = 16
-
 	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
 
 	//先删除所有kv文件
@@ -935,8 +929,6 @@ func TestSlotTransferOut(t *testing.T) {
 		}
 
 	}
-
-	sslot.SlotCount = oldSlotCount
 
 	node.Stop()
 

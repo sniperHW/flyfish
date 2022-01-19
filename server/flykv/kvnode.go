@@ -17,6 +17,7 @@ import (
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	sslot "github.com/sniperHW/flyfish/server/slot"
 	"net"
+	"os"
 	"runtime"
 	"strings"
 	"sync"
@@ -160,7 +161,6 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, peers map[uint16]raft.
 		kvmgr: kvmgr{
 			kv:               make([]map[string]*kv, groupSize),
 			slotsKvMap:       map[int]map[string]*kv{},
-			tableKvMap:       map[string]map[string]*kv{},
 			slots:            slots,
 			slotsTransferOut: map[int]*SlotTransferProposal{},
 		},
@@ -269,51 +269,6 @@ var outputBufLimit fnet.OutputBufLimit = fnet.OutputBufLimit{
 	OutPutLimitHard:        cs.MaxPacketSize * 10,
 }
 
-/*
- * 每个string为一个table
- * 表名@字段1:类型:默认值,字段2:类型:默认值,...
- */
-
-func CreateDbDefFromCsv(s []string) (*db.DbDef, error) {
-	dbDef := &db.DbDef{}
-	for _, l := range s {
-		t1 := strings.Split(l, "@")
-		if len(t1) != 2 {
-			return nil, fmt.Errorf("1 invaild table format(表名@字段1:类型:默认值,字段2:类型:默认值,...) %s", l)
-		}
-
-		tdef := &db.TableDef{
-			Name: t1[0],
-		}
-
-		fields := strings.Split(t1[1], ",")
-
-		if len(fields) == 0 {
-			return nil, fmt.Errorf("2 invaild table format(表名@字段1:类型:默认值,字段2:类型:默认值,...) %s", l)
-		}
-
-		//处理其它字段
-		for _, v := range fields {
-			if v != "" {
-				field := strings.Split(v, ":")
-				if len(field) != 3 {
-					return nil, fmt.Errorf("3 invaild table format(表名@字段1:类型:默认值,字段2:类型:默认值,...) %s", l)
-				}
-
-				tdef.Fields = append(tdef.Fields, &db.FieldDef{
-					Name:        field[0],
-					Type:        field[1],
-					DefautValue: field[2],
-				})
-			}
-		}
-
-		dbDef.TableDefs = append(dbDef.TableDefs, tdef)
-	}
-
-	return dbDef, nil
-}
-
 func (this *kvnode) start() error {
 	var meta db.DBMeta
 
@@ -331,6 +286,12 @@ func (this *kvnode) start() error {
 		return err
 	}
 
+	defer func() {
+		if nil != err {
+			this.dbc.Close()
+		}
+	}()
+
 	err = this.db.start(config, this.dbc)
 
 	if nil != err {
@@ -339,8 +300,46 @@ func (this *kvnode) start() error {
 
 	if config.Mode == "solo" {
 
-		if dbdef, err = CreateDbDefFromCsv(config.SoloConfig.Meta); nil != err {
+		f, err := os.Open(config.SoloConfig.MetaPath)
+		if nil != err {
 			return err
+		}
+
+		var b []byte
+		for {
+			data := make([]byte, 4096)
+			n, err := f.Read(data)
+			if n > 0 {
+				b = append(b, data[:n]...)
+			}
+
+			if nil != err {
+				break
+			}
+		}
+
+		dbdef, err := db.MakeDbDefFromJsonString(b)
+		if nil != err {
+			return err
+		}
+
+		for _, v := range dbdef.TableDefs {
+			tb, err := sql.GetTableScheme(this.dbc, config.DBType, fmt.Sprintf("%s_%d", v.Name, v.DbVersion))
+			if nil != err {
+				return err
+			} else if nil == tb {
+				//表不存在
+				err = sql.CreateTables(this.dbc, config.DBType, v)
+				if nil != err {
+					return err
+				} else {
+					GetSugar().Infof("create table:%s_%d ok", v.Name, v.DbVersion)
+				}
+			} else if !v.Equal(*tb) {
+				return errors.New(fmt.Sprintf("table:%s already in db but not match with meta", v.Name))
+			} else {
+				GetSugar().Infof("table:%s_%d is ok skip create", v.Name, v.DbVersion)
+			}
 		}
 
 		meta, err = sql.CreateDbMeta(dbdef)

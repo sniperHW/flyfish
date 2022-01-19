@@ -222,7 +222,11 @@ func MakeDbDefFromJsonString(s []byte) (*DbDef, error) {
 	if err := json.Unmarshal(s, &def); nil != err {
 		return nil, err
 	} else {
-		return &def, nil
+		if err = def.Check(); nil != err {
+			return nil, err
+		} else {
+			return &def, nil
+		}
 	}
 }
 

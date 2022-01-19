@@ -14,9 +14,11 @@ import (
 	"time"
 )
 
-func TestScaner(t *testing.T) {
+func init() {
 	sslot.SlotCount = 128
+}
 
+func TestScaner(t *testing.T) {
 	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
 
 	//先删除所有kv文件
@@ -81,7 +83,7 @@ func TestScaner(t *testing.T) {
 		}
 
 		if nil != row {
-			fmt.Println(row.Key)
+			//fmt.Println(row.Key)
 			count++
 		} else {
 			break
