@@ -185,13 +185,18 @@ message kick_resp {
   
 }
 
+message scan_fields {
+  optional string field    = 1;
+  optional int64  version  = 2;
+}
+
 message scanner_req {
-  optional string table    = 1;
-  optional bytes  slots    = 2;
-  optional int32  store    = 3;
-  repeated string fields   = 4;
-  optional bool   all      = 5;  //获取所有字段
-  optional int64  timeout  = 6;
+  optional string      table     = 1;
+  optional int64       version   = 2;
+  optional bytes       slots     = 3;
+  optional int32       store     = 4;
+  repeated scan_fields fields    = 5;
+  optional int64       timeout   = 6;
 }
 
 message scanner_resp {

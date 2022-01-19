@@ -292,8 +292,10 @@ type TableMeta interface {
 	CheckFields(fields ...*proto.Field) error
 	CheckFieldsName([]string) error
 	GetAllFieldsName() []string
+	CheckFieldWithVersion(string, int64) bool
 	TableName() string
 	FillDefaultValues(fields map[string]*proto.Field)
+	GetDef() *TableDef
 }
 
 type DBLoadTask interface {

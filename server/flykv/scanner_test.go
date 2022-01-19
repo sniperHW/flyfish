@@ -42,7 +42,11 @@ func TestScaner(t *testing.T) {
 
 	fmt.Println("set ok")
 
-	sc, _ := client.NewScanner(client.ClientConf{SoloService: "localhost:10018", Stores: []int{1}}, "users1", nil, true)
+	sc, _ := client.NewScanner(client.ClientConf{SoloService: "localhost:10018", Stores: []int{1}}, "users1", []string{
+		"name",
+		"age",
+		"phone",
+	})
 
 	count := 0
 
@@ -71,7 +75,11 @@ func TestScaner(t *testing.T) {
 
 	node = start1Node(newSqlDBBackEnd())
 
-	sc, _ = client.NewScanner(client.ClientConf{SoloService: "localhost:10018", Stores: []int{1}}, "users1", nil, true)
+	sc, _ = client.NewScanner(client.ClientConf{SoloService: "localhost:10018", Stores: []int{1}}, "users1", []string{
+		"name",
+		"age",
+		"phone",
+	})
 
 	count = 0
 

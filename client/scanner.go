@@ -43,13 +43,12 @@ type Scanner struct {
 	soloScanner    *soloScanner
 	clusterScanner *clusterScanner
 	table          string
-	fields         []string
-	allfields      bool
+	fields         []*flyproto.ScanFields
 	rows           []*Row
 	fetchRowCount  int
 }
 
-func NewScanner(conf ClientConf, Table string, fields []string, allfields ...bool) (*Scanner, error) {
+func NewScanner(conf ClientConf, Table string, fields []string) (*Scanner, error) {
 	if "" == conf.SoloService && len(conf.PD) == 0 {
 		return nil, errors.New("cluster mode,but pd empty")
 	}
@@ -85,9 +84,10 @@ func NewScanner(conf ClientConf, Table string, fields []string, allfields ...boo
 		}
 	}
 
-	sc.fields = fields
-	if len(allfields) > 0 {
-		sc.allfields = allfields[0]
+	for _, v := range fields {
+		sc.fields = append(sc.fields, &flyproto.ScanFields{
+			Field: v,
+		})
 	}
 
 	return sc, nil
@@ -141,7 +141,7 @@ func (sc *Scanner) connectServer(service string, slots []byte, storeID int, dead
 		return nil, fmt.Errorf("login failed")
 	}
 
-	err = scan.SendScannerReq(conn, sc.table, slots, storeID, sc.fields, sc.allfields, deadline)
+	err = scan.SendScannerReq(conn, sc.table, 0, slots, storeID, sc.fields, deadline)
 
 	if nil != err {
 		conn.Close()

@@ -112,7 +112,7 @@ func (this *DBMeta) MoveTo(other db.DBMeta) {
 func (this *DBMeta) CheckTableMeta(tab db.TableMeta) db.TableMeta {
 	this.RLock()
 	defer this.RUnlock()
-	if tab.(*TableMeta).def == this.def {
+	if tab.(*TableMeta).dbdef == this.def {
 		return tab
 	} else {
 		if v, ok := this.tables[tab.TableName()]; ok {
@@ -133,7 +133,12 @@ type TableMeta struct {
 	queryMeta      *QueryMeta
 	insertPrefix   string
 	selectPrefix   string
-	def            *db.DbDef
+	dbdef          *db.DbDef
+	tabdef         *db.TableDef
+}
+
+func (t *TableMeta) GetDef() *db.TableDef {
+	return t.tabdef
 }
 
 func (t *TableMeta) getRealFieldName(name string) string {
@@ -222,6 +227,15 @@ func (this *TableMeta) CheckFieldsName(fields []string) error {
 	return nil
 }
 
+func (this *TableMeta) CheckFieldWithVersion(field string, version int64) bool {
+	f, ok := this.fieldMetas[field]
+	if !ok {
+		return false
+	} else {
+		return f.tabVersion == version
+	}
+}
+
 func getReceiverType(tt proto.ValueType) reflect.Type {
 	if tt == proto.ValueType_int {
 		var v int64
@@ -286,7 +300,8 @@ func createTableMetas(def *db.DbDef) (map[string]*TableMeta, error) {
 					field_type:       []reflect.Type{},
 					field_convter:    []func(interface{}) interface{}{},
 				},
-				def: def,
+				dbdef:  def,
+				tabdef: v,
 			}
 
 			//插入三个默认字段

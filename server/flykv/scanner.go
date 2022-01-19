@@ -63,21 +63,23 @@ func (this *kvnode) onScanner(conn net.Conn) {
 			}
 
 			tbmeta = store.meta.GetTableMeta(req.Table)
-			if nil == tbmeta {
+
+			if nil == tbmeta || tbmeta.GetDef().DbVersion != req.Version {
+				//表不存在，或删除后又添加，已经不符合请求要求的版本
 				return scan.Err_invaild_table
+			}
+
+			for _, v := range req.Fields {
+				if tbmeta.CheckFieldWithVersion(v.Field, v.Version) {
+					fields = append(fields, v.Field)
+				} else {
+					//字段不存在，或删除后又添加，已经不符合请求要求的版本
+					return scan.Err_invaild_field
+				}
 			}
 
 			if wantSlots, err = bitmap.CreateFromJson(req.Slots); nil != err {
 				return scan.Err_unpack
-			}
-
-			if req.All {
-				fields = tbmeta.GetAllFieldsName()
-			} else {
-				fields = req.Fields
-				if err := tbmeta.CheckFieldsName(fields); nil != err {
-					return scan.Err_invaild_field
-				}
 			}
 
 			return scan.Err_ok
