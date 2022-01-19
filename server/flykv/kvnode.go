@@ -335,10 +335,30 @@ func (this *kvnode) start() error {
 				} else {
 					GetSugar().Infof("create table:%s_%d ok", v.Name, v.DbVersion)
 				}
-			} else if !v.Equal(*tb) {
-				return errors.New(fmt.Sprintf("table:%s already in db but not match with meta", v.Name))
 			} else {
-				GetSugar().Infof("table:%s_%d is ok skip create", v.Name, v.DbVersion)
+				//记录字段的最大版本
+				fields := map[string]*db.FieldDef{}
+				for _, vv := range tb.Fields {
+					f := fields[vv.Name]
+					if nil == f || f.TabVersion <= vv.TabVersion {
+						fields[vv.Name] = vv
+					}
+				}
+
+				for _, vv := range v.Fields {
+					f, ok := fields[vv.Name]
+					if !ok {
+						return fmt.Errorf("table:%s already in db but not match with meta,field:%s not found in db", v.Name, vv.Name)
+					}
+
+					if f.Type != vv.Type {
+						return fmt.Errorf("table:%s already in db but not match with meta,field:%s type mismatch with db", v.Name, vv.Name)
+					}
+
+					if f.StrCap < vv.StrCap {
+						return fmt.Errorf("table:%s already in db but not match with meta,field:%s StrCap large than db", v.Name, vv.Name)
+					}
+				}
 			}
 		}
 

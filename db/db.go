@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/sniperHW/flyfish/proto"
-	"sort"
 	"strconv"
 	"strings"
 )
@@ -43,7 +42,7 @@ type TableDef struct {
 	Fields    []*FieldDef `json:"Fields,omitempty"`
 }
 
-func (t TableDef) Equal(o TableDef) bool {
+/*func (t *TableDef) IsCompatible(o *TableDef) bool {
 	if t.DbVersion != o.DbVersion {
 		return false
 	}
@@ -52,43 +51,29 @@ func (t TableDef) Equal(o TableDef) bool {
 		return false
 	}
 
-	if len(t.Fields) != len(o.Fields) {
-		return false
+	//记录字段的最大版本
+	fields := map[string]*FieldDef{}
+	for _, v := range t.Fields {
+		f := fields[v.Name]
+		if nil == f || f.TabVersion <= v.TabVersion {
+			fields[v.Name] = v
+		}
 	}
 
-	sort.Slice(t.Fields, func(i int, j int) bool {
-		return t.Fields[i].Name < t.Fields[j].Name
-	})
-
-	sort.Slice(o.Fields, func(i int, j int) bool {
-		return o.Fields[i].Name < o.Fields[j].Name
-	})
-
-	for i := 0; i < len(t.Fields); i++ {
-		if t.Fields[i].Name != o.Fields[i].Name {
-			return false
-		}
-
-		if t.Fields[i].TabVersion != o.Fields[i].TabVersion {
-			return false
-		}
-
-		if t.Fields[i].Type != o.Fields[i].Type {
-			return false
-		}
-
-		if t.Fields[i].StrCap != o.Fields[i].StrCap {
-			return false
-		}
-
-		if t.Fields[i].DefautValue != o.Fields[i].DefautValue {
+	for _, v := range o.Fields {
+		f, ok := fields[v.Name]
+		if !ok || f.TabVersion != v.TabVersion || f.Type != v.Type || f.StrCap < v.StrCap {
+			if !ok {
+				fmt.Println(v.Name, ok)
+			} else {
+				fmt.Println(v.Name, ok, f.TabVersion, v.TabVersion, f.Type, v.Type, f.StrCap, v.StrCap)
+			}
 			return false
 		}
 	}
 
 	return true
-
-}
+}*/
 
 func (t *TableDef) GetField(n string) *FieldDef {
 	for i, v := range t.Fields {
@@ -156,6 +141,18 @@ func (t *TableDef) Check() error {
 	}
 
 	return nil
+}
+
+func (t *TableDef) RemoveField(name string) bool {
+	for k, v := range t.Fields {
+		if v.Name == name {
+			last := len(t.Fields) - 1
+			t.Fields[k], t.Fields[last] = t.Fields[last], t.Fields[k]
+			t.Fields = t.Fields[:last]
+			return true
+		}
+	}
+	return false
 }
 
 type DbDef struct {

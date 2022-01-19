@@ -227,6 +227,8 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.StoreReportStatus{}, p.onStoreReportStatus)
 	p.registerMsgHandler(&sproto.MetaAddTable{}, p.onUpdateMetaReq)
 	p.registerMsgHandler(&sproto.MetaAddFields{}, p.onUpdateMetaReq)
+	p.registerMsgHandler(&sproto.MetaRemoveTable{}, p.onUpdateMetaReq)
+	p.registerMsgHandler(&sproto.MetaRemoveFields{}, p.onUpdateMetaReq)
 	p.registerMsgHandler(&sproto.GetScanTableMeta{}, p.onGetScanTableMeta)
 
 }

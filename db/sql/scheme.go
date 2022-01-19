@@ -33,7 +33,6 @@ var tableMetaStr = `
 SELECT
     COLUMN_NAME,
     DATA_TYPE,
-    COLUMN_DEFAULT,
     CHARACTER_MAXIMUM_LENGTH
 FROM
     information_schema.COLUMNS
@@ -71,11 +70,11 @@ func appendFieldPgSql(buff []byte, field *db.FieldDef) ([]byte, error) {
 
 	switch field.Type {
 	case "int":
-		return buffer.AppendString(buff, fmt.Sprintf("int8 NOT NULL DEFAULT %s", field.DefautValue)), nil
+		return buffer.AppendString(buff, "int8 NULL"), nil
 	case "float":
-		return buffer.AppendString(buff, fmt.Sprintf("float8 NOT NULL DEFAULT %s", field.DefautValue)), nil
+		return buffer.AppendString(buff, "float8 NULL"), nil
 	case "string":
-		return buffer.AppendString(buff, fmt.Sprintf("varchar(%d) NOT NULL DEFAULT '%s'", field.StrCap, field.DefautValue)), nil
+		return buffer.AppendString(buff, fmt.Sprintf("varchar(%d) NULL", field.StrCap)), nil
 	case "blob":
 		return buffer.AppendString(buff, "bytea NULL"), nil
 	default:
@@ -144,7 +143,6 @@ func getTableSchemePgSql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
 
 	var column_name string
 	var data_type string
-	var column_default *string
 	var character_maximum_length *int
 
 	var keyFieldOk bool
@@ -166,27 +164,6 @@ func getTableSchemePgSql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
 		}
 	}
 
-	getDefaultValue := func(tt string, defaultV *string) *string {
-		if tt != "bytea" && nil == defaultV {
-			return nil
-		}
-
-		switch tt {
-		case "character varying":
-			v := (*defaultV)[strings.Index(*defaultV, "'")+1 : strings.LastIndex(*defaultV, "'")]
-			return &v
-		case "bigint":
-			return defaultV
-		case "bytea":
-			defaultV = new(string)
-			return defaultV
-		case "double precision":
-			return defaultV
-		default:
-			return nil
-		}
-	}
-
 	for rows.Next() {
 		if nil == tab {
 			tab = &db.TableDef{
@@ -195,7 +172,7 @@ func getTableSchemePgSql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
 			}
 		}
 
-		err = rows.Scan(&column_name, &data_type, &column_default, &character_maximum_length)
+		err = rows.Scan(&column_name, &data_type, &character_maximum_length)
 		if nil != err {
 			return nil, err
 		}
@@ -225,16 +202,10 @@ func getTableSchemePgSql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
 				return nil, err
 			}
 
-			defaultValue := getDefaultValue(data_type, column_default)
-			if nil == defaultValue {
-				return nil, errors.New(fmt.Sprintf("%s missing defaultValue", real_field_name))
-			}
-
 			field := &db.FieldDef{
-				TabVersion:  version,
-				Name:        real_field_name,
-				Type:        getDataType(data_type),
-				DefautValue: *defaultValue,
+				TabVersion: version,
+				Name:       real_field_name,
+				Type:       getDataType(data_type),
 			}
 
 			if nil != character_maximum_length {
@@ -282,15 +253,11 @@ func appendFieldMySql(buff []byte, field *db.FieldDef) ([]byte, error) {
 
 	switch field.Type {
 	case "int":
-		return buffer.AppendString(buff, fmt.Sprintf("BIGINT  NOT NULL DEFAULT '%s'", field.DefautValue)), nil
+		return buffer.AppendString(buff, "BIGINT NULL"), nil
 	case "float":
-		return buffer.AppendString(buff, fmt.Sprintf("FLOAT NOT NULL DEFAULT '%s'", field.DefautValue)), nil
+		return buffer.AppendString(buff, "FLOAT NULL"), nil
 	case "string":
-		cap := field.StrCap
-		if 0 >= cap {
-			cap = 65535
-		}
-		return buffer.AppendString(buff, fmt.Sprintf("varchar(%d) NOT NULL DEFAULT '%s'", cap, field.DefautValue)), nil
+		return buffer.AppendString(buff, fmt.Sprintf("varchar(%d) NULL", field.StrCap)), nil
 	case "blob":
 		return buffer.AppendString(buff, "BLOB NULL"), nil
 	default:
@@ -360,7 +327,6 @@ func getTableSchemeMySql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
 
 	var column_name string
 	var data_type string
-	var column_default *string
 	var character_maximum_length *int
 
 	var keyFieldOk bool
@@ -382,13 +348,6 @@ func getTableSchemeMySql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
 		}
 	}
 
-	getDefaultValue := func(tt string, defaultV *string) *string {
-		if tt == "blob" {
-			defaultV = new(string)
-		}
-		return defaultV
-	}
-
 	for rows.Next() {
 		if nil == tab {
 			tab = &db.TableDef{
@@ -397,7 +356,7 @@ func getTableSchemeMySql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
 			}
 		}
 
-		err = rows.Scan(&column_name, &data_type, &column_default, &character_maximum_length)
+		err = rows.Scan(&column_name, &data_type, &character_maximum_length)
 		if nil != err {
 			return nil, err
 		}
@@ -426,16 +385,10 @@ func getTableSchemeMySql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
 				return nil, err
 			}
 
-			defaultValue := getDefaultValue(data_type, column_default)
-			if nil == defaultValue {
-				return nil, errors.New(fmt.Sprintf("%s missing defaultValue", real_field_name))
-			}
-
 			field := &db.FieldDef{
-				TabVersion:  version,
-				Name:        real_field_name,
-				Type:        getDataType(data_type),
-				DefautValue: *defaultValue,
+				TabVersion: version,
+				Name:       real_field_name,
+				Type:       getDataType(data_type),
 			}
 
 			if nil != character_maximum_length {
@@ -487,10 +440,19 @@ func DropTable(dbc *sqlx.DB, sqlType string, tabDef *db.TableDef) error {
 	}
 }
 
-func GetTableScheme(dbc *sqlx.DB, sqlType string, table_real_name string) (*db.TableDef, error) {
+func GetTableScheme(dbc *sqlx.DB, sqlType string, table_real_name string) (tabdef *db.TableDef, err error) {
 	if sqlType == "pgsql" {
-		return getTableSchemePgSql(dbc, table_real_name)
+		tabdef, err = getTableSchemePgSql(dbc, table_real_name)
 	} else {
-		return getTableSchemeMySql(dbc, table_real_name)
+		tabdef, err = getTableSchemeMySql(dbc, table_real_name)
 	}
+
+	if nil != tabdef {
+		for _, v := range tabdef.Fields {
+			if v.TabVersion > tabdef.Version {
+				tabdef.Version = v.TabVersion
+			}
+		}
+	}
+	return
 }

@@ -41,8 +41,11 @@ enum ServerCmdType {
   MetaAddTable                  = 123;
   MetaAddTableResp              = 124;
   MetaAddFields                 = 125;
-  MetaAddFieldsResp             = 126;                
-
+  MetaAddFieldsResp             = 126;
+  MetaRemoveTable               = 127;                
+  MetaRemoveTableResp           = 128;
+  MetaRemoveFields              = 129;
+  MetaRemoveFieldsResp          = 130;
 
 
   //kvnode <-> pd
@@ -348,6 +351,28 @@ message metaAddFieldsResp {
   optional bool  ok       = 1;  
   optional string reason  = 2; 
 }
+
+
+message metaRemoveTable{
+  optional string   table   = 1;
+  optional int64    version = 2;
+} 
+
+message   metaRemoveTableResp{
+  optional bool  ok       = 1;  
+  optional string reason  = 2;
+}
+
+message   metaRemoveFields{
+  optional string table     = 1;
+  repeated string fields    = 2;
+  optional int64  version   = 3;  
+}       
+message   metaRemoveFieldsResp{
+  optional bool  ok       = 1;  
+  optional string reason  = 2;  
+}       
+
 
 message getMeta {
  

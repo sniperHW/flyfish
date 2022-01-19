@@ -17,6 +17,7 @@ type metaOpration struct {
 }
 
 func (p *pd) onGetMeta(from *net.UDPAddr, m *snet.Message) {
+	GetSugar().Infof("onGetMeta")
 	p.udp.SendTo(from, snet.MakeMessage(m.Context,
 		&sproto.GetMetaResp{
 			Version: p.pState.Meta.Version,
@@ -55,11 +56,11 @@ func (p *pd) loadInitMeta() {
 			}
 
 			for _, v := range def.TableDefs {
-				v.Version++
 				tb, err := sql.GetTableScheme(dbc, p.config.DBType, fmt.Sprintf("%s_%d", v.Name, v.DbVersion))
 				if nil != err {
 					GetSugar().Panic(err)
 				} else if nil == tb {
+					v.Version++
 					//表不存在
 					err = sql.CreateTables(dbc, p.config.DBType, v)
 					if nil != err {
@@ -67,10 +68,34 @@ func (p *pd) loadInitMeta() {
 					} else {
 						GetSugar().Infof("create table:%s_%d ok", v.Name, v.DbVersion)
 					}
-				} else if !v.Equal(*tb) {
-					GetSugar().Panic(fmt.Sprintf("table:%s already in db but not match with meta", v.Name))
 				} else {
-					GetSugar().Infof("table:%s_%d is ok skip create", v.Name, v.DbVersion)
+					//表在db中已经存在，用db中的信息修正meta
+					v.Version = tb.Version + 1
+					//记录字段的最大版本
+					fields := map[string]*db.FieldDef{}
+					for _, vv := range tb.Fields {
+						f := fields[vv.Name]
+						if nil == f || f.TabVersion <= vv.TabVersion {
+							fields[vv.Name] = vv
+						}
+					}
+
+					for _, vv := range v.Fields {
+						f, ok := fields[vv.Name]
+						if !ok {
+							GetSugar().Panic(fmt.Sprintf("table:%s already in db but not match with meta,field:%s not found in db", v.Name, vv.Name))
+						}
+
+						if f.Type != vv.Type {
+							GetSugar().Panic(fmt.Sprintf("table:%s already in db but not match with meta,field:%s type mismatch with db", v.Name, vv.Name))
+						}
+
+						if f.StrCap < vv.StrCap {
+							GetSugar().Panic(fmt.Sprintf("table:%s already in db but not match with meta,field:%s StrCap large than db", v.Name, vv.Name))
+						}
+
+						vv.TabVersion = f.TabVersion
+					}
 				}
 			}
 
@@ -104,6 +129,9 @@ func (p *ProposalInitMeta) doapply(pd *pd) {
 	pd.pState.Meta = *p.MetaDef
 	pd.pState.MetaBytes, _ = p.MetaDef.ToJson()
 	GetSugar().Infof("ProposalInitMeta apply version:%d", pd.pState.Meta.Version)
+	for _, v := range pd.pState.Meta.TableDefs {
+		GetSugar().Infof("ProposalInitMeta apply tab:%s version:%d", v.Name, v.Version)
+	}
 }
 
 func (p *ProposalInitMeta) apply(pd *pd) {
@@ -115,10 +143,20 @@ func (p *ProposalInitMeta) replay(pd *pd) {
 	p.doapply(pd)
 }
 
+type MetaUpdateType int
+
+const (
+	MetaAddTable     = MetaUpdateType(1)
+	MetaAddFields    = MetaUpdateType(2)
+	MetaRemoveTable  = MetaUpdateType(3)
+	MetaRemoveFields = MetaUpdateType(4)
+)
+
 type ProposalUpdateMeta struct {
 	proposalBase
-	pd     *pd
-	TabDef *db.TableDef
+	pd         *pd
+	TabDef     *db.TableDef
+	UpdateType MetaUpdateType
 }
 
 func (p *ProposalUpdateMeta) OnError(err error) {
@@ -133,24 +171,39 @@ func (p *ProposalUpdateMeta) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalUpdateMeta) doApply(pd *pd) {
+
 	def := &pd.pState.Meta
 	i := 0
-	for ; i < len(def.TableDefs); i++ {
-		if def.TableDefs[i].Name == p.TabDef.Name {
-			break
+
+	if p.UpdateType != MetaAddTable {
+		for ; i < len(def.TableDefs); i++ {
+			if def.TableDefs[i].Name == p.TabDef.Name {
+				break
+			}
 		}
 	}
 
 	def.Version++
-	p.TabDef.Version++
-
-	if i >= len(def.TableDefs) {
-		def.TableDefs = append(def.TableDefs, p.TabDef)
-		GetSugar().Infof("ProposalUpdateMeta add table def.version:%d tab.version:%d", def.Version, p.TabDef.Version)
+	if p.UpdateType == MetaRemoveTable {
+		last := len(def.TableDefs) - 1
+		def.TableDefs[i], def.TableDefs[last] = def.TableDefs[last], def.TableDefs[i]
+		def.TableDefs = def.TableDefs[:last]
+		GetSugar().Infof("ProposalUpdateMeta remove table def.version:%d", def.Version)
 	} else {
-		def.TableDefs[i] = p.TabDef
-		GetSugar().Infof("ProposalUpdateMeta add fields def.version:%d tab.version:%d", def.Version, p.TabDef.Version)
+		p.TabDef.Version++
+		if p.UpdateType == MetaAddTable {
+			def.TableDefs = append(def.TableDefs, p.TabDef)
+			GetSugar().Infof("ProposalUpdateMeta add table def.version:%d tab.version:%d", def.Version, p.TabDef.Version)
+		} else {
+			def.TableDefs[i] = p.TabDef
+			if p.UpdateType == MetaAddFields {
+				GetSugar().Infof("ProposalUpdateMeta add fields def.version:%d tab.version:%d", def.Version, p.TabDef.Version)
+			} else {
+				GetSugar().Infof("ProposalUpdateMeta remove fields def.version:%d tab.version:%d", def.Version, p.TabDef.Version)
+			}
+		}
 	}
+
 	pd.pState.MetaBytes, _ = def.ToJson()
 }
 
@@ -243,10 +296,8 @@ func (p *pd) onMetaAddTable(from *net.UDPAddr, m *snet.Message) bool {
 		} else if nil == dbtab {
 			//表不存在
 			return sql.CreateTables(dbc, p.config.DBType, tab)
-		} else if !tab.Equal(*dbtab) {
-			return errors.New(fmt.Sprintf("table:%s already in db but not match with meta", tab.Name))
 		} else {
-			return nil
+			return errors.New(fmt.Sprintf("table:%s_%d already in db but not match with meta", tab.Name, tab.DbVersion))
 		}
 	}()
 
@@ -262,12 +313,59 @@ func (p *pd) onMetaAddTable(from *net.UDPAddr, m *snet.Message) bool {
 			proposalBase: proposalBase{
 				reply: p.makeReplyFunc(from, m, &sproto.MetaAddTableResp{}),
 			},
-			TabDef: tab,
-			pd:     p,
+			TabDef:     tab,
+			pd:         p,
+			UpdateType: MetaAddTable,
 		})
 		return true
 	}
+}
 
+func (p *pd) onMetaRemoveTable(from *net.UDPAddr, m *snet.Message) bool {
+	msg := m.Msg.(*sproto.MetaRemoveTable)
+	var tab *db.TableDef
+	var err error
+
+	def := p.pState.Meta.Clone()
+
+	err = func() error {
+
+		if msg.Version != def.Version {
+			return errors.New("version mismatch")
+		}
+
+		for _, v := range def.TableDefs {
+			if v.Name == msg.Table {
+				tab = v
+				break
+			}
+		}
+
+		if nil == tab {
+			return errors.New("table not found")
+		} else {
+			return nil
+		}
+	}()
+
+	if nil != err {
+		p.udp.SendTo(from, snet.MakeMessage(m.Context,
+			&sproto.MetaRemoveTableResp{
+				Ok:     false,
+				Reason: err.Error(),
+			}))
+		return false
+	} else {
+		p.issueProposal(&ProposalUpdateMeta{
+			proposalBase: proposalBase{
+				reply: p.makeReplyFunc(from, m, &sproto.MetaRemoveTableResp{}),
+			},
+			TabDef:     tab,
+			pd:         p,
+			UpdateType: MetaRemoveTable,
+		})
+		return true
+	}
 }
 
 //向table添加fields
@@ -323,12 +421,12 @@ func (p *pd) onMetaAddFields(from *net.UDPAddr, m *snet.Message) bool {
 			GetSugar().Errorf("table:%s in meta but not in db", tab.Name)
 			//表不存在,不应该发生这种情况
 			return sql.CreateTables(dbc, p.config.DBType, tab)
-		} else if !tab.Equal(*dbtab) {
-			tmp := tab.Clone()
-			tmp.Fields = tmp.Fields[len(tmp.Fields)-len(msg.Fields):]
-			return sql.AddFields(dbc, p.config.DBType, tmp)
 		} else {
-			return nil
+			return sql.AddFields(dbc, p.config.DBType, &db.TableDef{
+				Name:      tab.Name,
+				DbVersion: tab.DbVersion,
+				Fields:    tab.Fields[len(tab.Fields)-len(msg.Fields):],
+			})
 		}
 	}()
 
@@ -344,8 +442,63 @@ func (p *pd) onMetaAddFields(from *net.UDPAddr, m *snet.Message) bool {
 			proposalBase: proposalBase{
 				reply: p.makeReplyFunc(from, m, &sproto.MetaAddFieldsResp{}),
 			},
-			TabDef: tab,
-			pd:     p,
+			TabDef:     tab,
+			pd:         p,
+			UpdateType: MetaAddFields,
+		})
+		return true
+	}
+}
+
+func (p *pd) onMetaRemoveFields(from *net.UDPAddr, m *snet.Message) bool {
+	msg := m.Msg.(*sproto.MetaRemoveFields)
+	var tab *db.TableDef
+	var err error
+
+	def := p.pState.Meta.Clone()
+
+	err = func() error {
+
+		if msg.Version != def.Version {
+			return errors.New("version mismatch")
+		}
+
+		for _, v := range def.TableDefs {
+			if v.Name == msg.Table {
+				tab = v.Clone()
+				break
+			}
+		}
+
+		if nil == tab {
+			return errors.New("table not found")
+		}
+
+		for _, v := range msg.Fields {
+			if !tab.RemoveField(v) {
+				return errors.New(fmt.Sprintf("field:%s not found", v))
+			}
+		}
+
+		return nil
+
+	}()
+
+	if nil != err {
+		p.udp.SendTo(from, snet.MakeMessage(m.Context,
+			&sproto.MetaRemoveFieldsResp{
+				Ok:     false,
+				Reason: err.Error(),
+			}))
+		return false
+	} else {
+		p.issueProposal(&ProposalUpdateMeta{
+			proposalBase: proposalBase{
+				reply: p.makeReplyFunc(from, m, &sproto.MetaRemoveFieldsResp{}),
+			},
+			TabDef:     tab,
+			pd:         p,
+			UpdateType: MetaRemoveFields,
 		})
 		return true
 	}
@@ -358,22 +511,26 @@ func (p *pd) processMetaUpdate() {
 	for p.metaUpdateQueue.Len() > 0 {
 		front := p.metaUpdateQueue.Front()
 		op := front.Value.(*metaOpration)
+		var fn func(from *net.UDPAddr, m *snet.Message) bool
+
 		switch op.m.Msg.(type) {
 		case *sproto.MetaAddTable:
-			if !p.onMetaAddTable(op.from, op.m) {
-				p.metaUpdateQueue.Remove(p.metaUpdateQueue.Front())
-			} else {
-				return
-			}
+			fn = p.onMetaAddTable
 		case *sproto.MetaAddFields:
-			if !p.onMetaAddFields(op.from, op.m) {
-				p.metaUpdateQueue.Remove(p.metaUpdateQueue.Front())
-			} else {
-				return
-			}
+			fn = p.onMetaAddFields
+		case *sproto.MetaRemoveTable:
+			fn = p.onMetaRemoveTable
+		case *sproto.MetaRemoveFields:
+			fn = p.onMetaRemoveFields
 		default:
+		}
+
+		if nil != fn && fn(op.from, op.m) {
+			return
+		} else {
 			p.metaUpdateQueue.Remove(p.metaUpdateQueue.Front())
 		}
+
 	}
 }
 

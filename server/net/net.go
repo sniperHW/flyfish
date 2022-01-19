@@ -303,6 +303,12 @@ func init() {
 	namespace.Register(&sproto.MetaAddFields{}, uint32(sproto.ServerCmdType_MetaAddFields))
 	namespace.Register(&sproto.MetaAddFieldsResp{}, uint32(sproto.ServerCmdType_MetaAddFieldsResp))
 
+	namespace.Register(&sproto.MetaRemoveTable{}, uint32(sproto.ServerCmdType_MetaRemoveTable))
+	namespace.Register(&sproto.MetaRemoveTableResp{}, uint32(sproto.ServerCmdType_MetaRemoveTableResp))
+
+	namespace.Register(&sproto.MetaRemoveFields{}, uint32(sproto.ServerCmdType_MetaRemoveFields))
+	namespace.Register(&sproto.MetaRemoveFieldsResp{}, uint32(sproto.ServerCmdType_MetaRemoveFieldsResp))
+
 	//flykv <-> pd
 	namespace.Register(&sproto.KvnodeBoot{}, uint32(sproto.ServerCmdType_KvnodeBoot))
 	namespace.Register(&sproto.KvnodeBootResp{}, uint32(sproto.ServerCmdType_KvnodeBootResp))

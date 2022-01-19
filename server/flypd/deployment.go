@@ -479,6 +479,7 @@ func (p *ProposalInstallDeployment) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalInstallDeployment) apply(pd *pd) {
+	GetSugar().Infof("ProposalInstallDeployment.apply")
 	pd.pState.deployment.loadFromDeploymentJson(&p.D)
 }
 

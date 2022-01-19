@@ -10,6 +10,7 @@ import (
 	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/logger"
 	//"github.com/sniperHW/flyfish/pkg/bitmap"
+	//"github.com/jmoiron/sqlx"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
@@ -37,7 +38,7 @@ func waitCondition(fn func() bool) {
 	wg.Wait()
 }
 
-func TestPd(t *testing.T) {
+func TestPd1(t *testing.T) {
 
 	sslot.SlotCount = 128
 
@@ -92,7 +93,10 @@ func TestPd(t *testing.T) {
 		DbVersion: 1,
 	})
 
-	dbc.Close()
+	sql.DropTable(dbc, conf.DBType, &db.TableDef{
+		Name:      "table2",
+		DbVersion: 3,
+	})
 
 	p, _ := NewPd(1, false, conf, "localhost:8110", "1@http://localhost:8110@")
 
@@ -104,21 +108,13 @@ func TestPd(t *testing.T) {
 		}
 	}
 
-	testAddTable(t, p)
+	testAddRemoveTable(t, p)
 
-	testAddFields(t, p)
-
-	//testSetMeta(t, p)
-
-	//testUpdateMeta1(t, p)
-
-	//testInstallDeployment(t, p)
+	testAddRemoveFields(t, p)
 
 	//testAddRemNode(t, p)
 
 	//testAddRemSet(t, p)
-
-	//testUpdateMeta2(t, p)
 
 	//testAddRemNode(t, p)
 
@@ -138,6 +134,72 @@ func TestPd(t *testing.T) {
 
 	p.Stop()
 
+}
+
+func TestPd2(t *testing.T) {
+
+	sslot.SlotCount = 128
+
+	os.RemoveAll("./raftLog")
+
+	var configStr string = `
+
+	MainQueueMaxSize = 1000
+	RaftLogDir       = "raftLog"
+	RaftLogPrefix    = "pd"
+	DBType           = "pgsql"
+	InitMetaPath = "./initmeta.json"
+
+
+	[DBConfig]
+		Host          = "localhost"
+		Port          = 5432
+		User	      = "sniper"
+		Password      = "123456"
+		DB            = "test"
+
+	[Log]
+		MaxLogfileSize  = 104857600 # 100mb
+		LogDir          = "log"
+		LogPrefix       = "pd"
+		LogLevel        = "info"
+		EnableLogStdout = false	
+		MaxAge          = 14
+		MaxBackups      = 10			
+
+`
+
+	l := logger.NewZapLogger("testPd.log", "./log", "Debug", 100, 14, 10, true)
+	InitLogger(l)
+
+	conf, _ := LoadConfigStr(configStr)
+
+	p, _ := NewPd(1, false, conf, "localhost:8110", "1@http://localhost:8110@")
+
+	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
+
+	for {
+		resp := snet.UdpCall([]*net.UDPAddr{addr},
+			snet.MakeMessage(0, &sproto.GetMeta{}),
+			time.Second,
+			func(respCh chan interface{}, r interface{}) {
+				if m, ok := r.(*snet.Message); ok {
+					if resp, ok := m.Msg.(*sproto.GetMetaResp); ok {
+						select {
+						case respCh <- resp:
+						default:
+						}
+					}
+				}
+			})
+
+		if resp != nil && resp.(*sproto.GetMetaResp).Version > 0 {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
+	p.Stop()
 }
 
 /*
@@ -190,8 +252,9 @@ func testInstallDeployment(t *testing.T, p *pd) {
 }
 */
 
-func testAddTable(t *testing.T, p *pd) {
+func testAddRemoveTable(t *testing.T, p *pd) {
 
+	//add table2
 	{
 		req := &sproto.MetaAddTable{
 			Name:    "table2",
@@ -219,10 +282,32 @@ func testAddTable(t *testing.T, p *pd) {
 		conn.Close()
 	}
 
+	//remove table2
+	{
+		req := &sproto.MetaRemoveTable{
+			Table:   "table2",
+			Version: 2,
+		}
+
+		conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
+		assert.Nil(t, err)
+
+		addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
+
+		conn.SendTo(addr, snet.MakeMessage(0, req))
+
+		recvbuff := make([]byte, 256)
+		_, r, err := conn.ReadFrom(recvbuff)
+
+		assert.Equal(t, r.(*snet.Message).Msg.(*sproto.MetaRemoveTableResp).Ok, true)
+		conn.Close()
+	}
+
+	//add table2 again
 	{
 		req := &sproto.MetaAddTable{
-			Name:    "table3",
-			Version: 2,
+			Name:    "table2",
+			Version: 3,
 		}
 
 		req.Fields = append(req.Fields, &sproto.MetaFiled{
@@ -245,34 +330,75 @@ func testAddTable(t *testing.T, p *pd) {
 		assert.Equal(t, r.(*snet.Message).Msg.(*sproto.MetaAddTableResp).Ok, true)
 		conn.Close()
 	}
-
 }
 
-func testAddFields(t *testing.T, p *pd) {
-
-	req := &sproto.MetaAddFields{
-		Table:   "table2",
-		Version: 3,
-	}
-
-	req.Fields = append(req.Fields, &sproto.MetaFiled{
-		Name:    "field2",
-		Type:    "string",
-		Default: "hello",
-		Strcap:  4096,
-	})
+func testAddRemoveFields(t *testing.T, p *pd) {
 
 	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
 	assert.Nil(t, err)
 
 	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
 
-	conn.SendTo(addr, snet.MakeMessage(0, req))
+	//add field
+	{
+		req := &sproto.MetaAddFields{
+			Table:   "table1",
+			Version: 4,
+		}
 
-	recvbuff := make([]byte, 256)
-	_, r, err := conn.ReadFrom(recvbuff)
+		req.Fields = append(req.Fields, &sproto.MetaFiled{
+			Name:    "field4",
+			Type:    "string",
+			Default: "hello",
+			Strcap:  4096,
+		})
 
-	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.MetaAddFieldsResp).Ok, true)
+		conn.SendTo(addr, snet.MakeMessage(0, req))
+
+		recvbuff := make([]byte, 256)
+		_, r, _ := conn.ReadFrom(recvbuff)
+
+		fmt.Println(r.(*snet.Message).Msg.(*sproto.MetaAddFieldsResp).Reason)
+
+		assert.Equal(t, r.(*snet.Message).Msg.(*sproto.MetaAddFieldsResp).Ok, true)
+	}
+
+	//remove field
+	{
+		req := &sproto.MetaRemoveFields{
+			Table:   "table1",
+			Version: 5,
+		}
+
+		req.Fields = append(req.Fields, "field4")
+
+		conn.SendTo(addr, snet.MakeMessage(0, req))
+
+		recvbuff := make([]byte, 256)
+		_, r, _ := conn.ReadFrom(recvbuff)
+
+		assert.Equal(t, r.(*snet.Message).Msg.(*sproto.MetaRemoveFieldsResp).Ok, true)
+	}
+
+	//add field again
+	{
+		req := &sproto.MetaAddFields{
+			Table:   "table1",
+			Version: 6,
+		}
+
+		req.Fields = append(req.Fields, &sproto.MetaFiled{
+			Name: "field4",
+			Type: "int",
+		})
+
+		conn.SendTo(addr, snet.MakeMessage(0, req))
+
+		recvbuff := make([]byte, 256)
+		_, r, _ := conn.ReadFrom(recvbuff)
+
+		assert.Equal(t, r.(*snet.Message).Msg.(*sproto.MetaAddFieldsResp).Ok, true)
+	}
 
 	conn.Close()
 
@@ -615,7 +741,7 @@ func (n *testKvnode) stop() {
 	n.udp.Close()
 }
 
-/*func testSlotTransfer(t *testing.T, p *pd) {
+func testSlotTransfer(t *testing.T, p *pd) {
 
 	fmt.Println("testSlotTransfer")
 
@@ -709,7 +835,7 @@ func (n *testKvnode) stop() {
 	node1.stop()
 	node2.stop()
 
-}*/
+}
 
 /*
 func makeInstallDeployment(setCount int) *sproto.InstallDeployment {
