@@ -5,12 +5,9 @@ package flypd
 
 import (
 	"fmt"
-	//"github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/logger"
-	//"github.com/sniperHW/flyfish/pkg/bitmap"
-	//"github.com/jmoiron/sqlx"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
@@ -22,6 +19,10 @@ import (
 	"testing"
 	"time"
 )
+
+func init() {
+	sslot.SlotCount = 128
+}
 
 func waitCondition(fn func() bool) {
 	wg := sync.WaitGroup{}
@@ -40,8 +41,6 @@ func waitCondition(fn func() bool) {
 
 func TestPd1(t *testing.T) {
 
-	sslot.SlotCount = 128
-
 	os.RemoveAll("./raftLog")
 
 	var configStr string = `
@@ -51,6 +50,7 @@ func TestPd1(t *testing.T) {
 	RaftLogPrefix    = "pd"
 	DBType           = "pgsql"
 	InitMetaPath = "./initmeta.json"
+	InitDepoymentPath="./deployment.json"
 
 
 	[DBConfig]
@@ -112,13 +112,13 @@ func TestPd1(t *testing.T) {
 
 	testAddRemoveFields(t, p)
 
-	//testAddRemNode(t, p)
+	testAddRemNode(t, p)
 
-	//testAddRemSet(t, p)
+	testAddRemSet(t, p)
 
-	//testAddRemNode(t, p)
+	testAddRemNode(t, p)
 
-	//testSlotTransfer(t, p)
+	testSlotTransfer(t, p)
 
 	p.Stop()
 
@@ -137,8 +137,6 @@ func TestPd1(t *testing.T) {
 }
 
 func TestPd2(t *testing.T) {
-
-	sslot.SlotCount = 128
 
 	os.RemoveAll("./raftLog")
 
@@ -201,56 +199,6 @@ func TestPd2(t *testing.T) {
 
 	p.Stop()
 }
-
-/*
-func testInstallDeployment(t *testing.T, p *pd) {
-
-	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
-	assert.Nil(t, err)
-
-	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
-
-	MinReplicaPerSet = 3
-
-	install := &sproto.InstallDeployment{}
-	set1 := &sproto.DeploymentSet{SetID: 1}
-	set1.Nodes = append(set1.Nodes, &sproto.DeploymentKvnode{
-		NodeID:      1,
-		Host:        "localhost",
-		ServicePort: 9110,
-		RaftPort:    9111,
-	})
-	install.Sets = append(install.Sets, set1)
-
-	conn.SendTo(addr, snet.MakeMessage(0, install))
-	recvbuff := make([]byte, 4096)
-	_, r, err := conn.ReadFrom(recvbuff)
-
-	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.InstallDeploymentResp).Ok, false)
-
-	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.InstallDeploymentResp).Reason, "node count of set should be 3")
-
-	MinReplicaPerSet = 1
-
-	conn.SendTo(addr, snet.MakeMessage(0, install))
-
-	_, r, err = conn.ReadFrom(recvbuff)
-
-	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.InstallDeploymentResp).Ok, true)
-
-	conn.SendTo(addr, snet.MakeMessage(0, &sproto.KvnodeBoot{
-		NodeID: 1,
-	}))
-
-	_, r, err = conn.ReadFrom(recvbuff)
-
-	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.KvnodeBootResp).Ok, true)
-	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.KvnodeBootResp).ServiceHost, "localhost")
-
-	conn.Close()
-
-}
-*/
 
 func testAddRemoveTable(t *testing.T, p *pd) {
 
@@ -404,102 +352,6 @@ func testAddRemoveFields(t *testing.T, p *pd) {
 
 }
 
-/*
-func testUpdateMeta1(t *testing.T, p *pd) {
-	fmt.Println("testUpdateMeta1")
-
-	t1 := sproto.MetaTable{
-		Name: "Table1",
-	}
-
-	t1.Fields = append(t1.Fields, &sproto.MetaFiled{
-		Name:    "field6",
-		Type:    "string",
-		Default: "hello",
-	})
-
-	t2 := sproto.MetaTable{
-		Name: "Table2",
-	}
-
-	t2.Fields = append(t2.Fields, &sproto.MetaFiled{
-		Name:    "field1",
-		Type:    "string",
-		Default: "hello",
-	})
-
-	u := &sproto.UpdateMeta{Updates: []*sproto.MetaTable{&t1, &t2}, Version: 0}
-
-	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
-	assert.Nil(t, err)
-
-	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
-
-	conn.SendTo(addr, snet.MakeMessage(0, u))
-	recvbuff := make([]byte, 256)
-	_, r, err := conn.ReadFrom(recvbuff)
-
-	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.UpdateMetaResp).Ok, true)
-
-	conn.Close()
-}
-
-func testUpdateMeta2(t *testing.T, p *pd) {
-	fmt.Println("testUpdateMeta2")
-
-	node1 := &testKvnode{
-		nodeId: 1,
-	}
-
-	node1.udp, _ = fnet.NewUdp("localhost:9110", snet.Pack, snet.Unpack)
-
-	go node1.run()
-
-	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
-	assert.Nil(t, err)
-
-	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
-
-	conn.SendTo(addr, snet.MakeMessage(0, &sproto.StoreReportStatus{
-		SetID:       int32(1),
-		NodeID:      int32(1),
-		StoreID:     int32(1),
-		Isleader:    true,
-		MetaVersion: 0,
-	}))
-
-	t1 := sproto.MetaTable{
-		Name: "Table1",
-	}
-
-	t1.Fields = append(t1.Fields, &sproto.MetaFiled{
-		Name:    "field7",
-		Type:    "string",
-		Default: "hello",
-	})
-
-	u := &sproto.UpdateMeta{Updates: []*sproto.MetaTable{&t1}, Version: 1}
-
-	conn.SendTo(addr, snet.MakeMessage(0, u))
-	recvbuff := make([]byte, 256)
-	_, r, err := conn.ReadFrom(recvbuff)
-
-	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.UpdateMetaResp).Ok, true)
-
-	for {
-		if node1.metaVersion == 2 {
-			break
-		} else {
-			time.Sleep(time.Second)
-		}
-	}
-
-	conn.Close()
-
-	node1.stop()
-
-}*/
-
 func testAddRemNode(t *testing.T, p *pd) {
 
 	GetSugar().Infof("testAddRemNode")
@@ -522,14 +374,6 @@ func testAddRemNode(t *testing.T, p *pd) {
 	_, r, err := conn.ReadFrom(recvbuff)
 
 	assert.Equal(t, true, r.(*snet.Message).Msg.(*sproto.AddNodeResp).Ok)
-
-	waitCondition(func() bool {
-		if len(p.pState.deployment.sets[1].nodes) == 2 {
-			return true
-		} else {
-			return false
-		}
-	})
 
 	node1 := &testKvnode{
 		nodeId: 1,
