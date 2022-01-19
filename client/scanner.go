@@ -43,7 +43,7 @@ type Scanner struct {
 	soloScanner    *soloScanner
 	clusterScanner *clusterScanner
 	table          string
-	fields         []*flyproto.ScanFields
+	fields         []*flyproto.ScanField
 	rows           []*Row
 	fetchRowCount  int
 }
@@ -85,7 +85,7 @@ func NewScanner(conf ClientConf, Table string, fields []string) (*Scanner, error
 	}
 
 	for _, v := range fields {
-		sc.fields = append(sc.fields, &flyproto.ScanFields{
+		sc.fields = append(sc.fields, &flyproto.ScanField{
 			Field: v,
 		})
 	}

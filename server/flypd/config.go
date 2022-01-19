@@ -25,28 +25,28 @@ func LoadConfig(path string) (*Config, error) {
 }
 
 type Config struct {
-	RaftLogDir        string //raft日志存放目录
-	RaftLogPrefix     string
-	InitDepoymentPath string
-	InitMetaPath      string
+	RaftLogDir        string `toml:"RaftLogDir"` //raft日志存放目录
+	RaftLogPrefix     string `toml:"RaftLogPrefix"`
+	InitDepoymentPath string `toml:"InitDepoymentPath"`
+	InitMetaPath      string `toml:"InitMetaPath"`
 
-	DBType string
+	DBType string `toml:"DBType"`
 
 	DBConfig struct {
-		Host     string
-		Port     int
-		User     string
-		Password string
-		DB       string
-	}
+		Host     string `toml:"Host"`
+		Port     int    `toml:"Port"`
+		User     string `toml:"User"`
+		Password string `toml:"Password"`
+		DB       string `toml:"DB"`
+	} `toml:"DBConfig"`
 
 	Log struct {
-		MaxLogfileSize int
-		LogDir         string
-		LogPrefix      string
-		LogLevel       string
-		EnableStdout   bool
-		MaxAge         int
-		MaxBackups     int
-	}
+		MaxLogfileSize int    `toml:"MaxLogfileSize"`
+		LogDir         string `toml:"LogDir"`
+		LogPrefix      string `toml:"LogPrefix"`
+		LogLevel       string `toml:"LogLevel"`
+		EnableStdout   bool   `toml:"EnableStdout"`
+		MaxAge         int    `toml:"MaxAge"`
+		MaxBackups     int    `toml:"MaxBackups"`
+	} `toml:"Log"`
 }

@@ -22,12 +22,13 @@ type storeScanner struct {
 }
 
 type scanner struct {
-	wantFields []string
-	all        bool
-	okSlots    *bitmap.Bitmap
-	stores     []*storeScanner
-	offset     int
-	table      string
+	wantFields   []*flyproto.ScanField
+	all          bool
+	okSlots      *bitmap.Bitmap
+	stores       []*storeScanner
+	offset       int
+	table        string
+	tableVersion int64
 }
 
 func (g *gate) onScanner(conn net.Conn) {
@@ -39,47 +40,106 @@ func (g *gate) onScanner(conn net.Conn) {
 			return
 		}
 
+		var sc *scanner
+
 		deadline := time.Now().Add(time.Duration(req.Timeout))
 
-		sc := &scanner{
-			wantFields: req.Fields,
-			all:        req.All,
-			okSlots:    bitmap.New(sslot.SlotCount),
-			table:      req.Table,
-		}
+		errCode := func() int {
+			if len(req.Fields) == 0 {
+				return scan.Err_empty_fields
+			}
 
-		ch := make(chan struct{})
+			var resp *sproto.GetScanTableMetaResp
 
-		g.mainQueue.Append(0, func() {
-			for _, v := range g.routeInfo.sets {
-				if !v.removed {
-					for _, vv := range v.stores {
-						st := &storeScanner{
-							id:       vv.id,
-							slots:    vv.slots.Clone(),
-							services: map[int]string{},
-						}
-						for _, vvv := range v.nodes {
-							if !vvv.removed {
-								st.services[vvv.id] = vvv.service
+			//向pd获取table meta
+			for nil == resp && !time.Now().After(deadline) {
+				context := snet.MakeUniqueContext()
+				if r := snet.UdpCall(g.pdAddr, snet.MakeMessage(context, &sproto.GetScanTableMeta{Table: req.Table}), time.Second, func(respCh chan interface{}, r interface{}) {
+					if m, ok := r.(*snet.Message); ok {
+						if resp, ok := m.Msg.(*sproto.GetScanTableMetaResp); ok && context == m.Context {
+							select {
+							case respCh <- resp:
+							default:
 							}
 						}
-						sc.stores = append(sc.stores, st)
 					}
+				}); nil != r {
+					resp = r.(*sproto.GetScanTableMetaResp)
 				}
 			}
-			close(ch)
-		})
 
-		<-ch
+			if nil == resp {
+				return scan.Err_timeout
+			} else if resp.TabVersion == -1 {
+				return scan.Err_invaild_table
+			}
+
+			sc = &scanner{
+				okSlots:      bitmap.New(sslot.SlotCount),
+				table:        req.Table,
+				tableVersion: resp.TabVersion,
+			}
+
+			for _, v := range req.Fields {
+				version := int64(-1)
+				for _, vv := range resp.Fields {
+					if v.Field == vv.Field {
+						version = vv.Version
+						break
+					}
+				}
+
+				if version >= 0 {
+					sc.wantFields = append(sc.wantFields, &flyproto.ScanField{
+						Field:   v.Field,
+						Version: version,
+					})
+				} else {
+					return scan.Err_invaild_field
+				}
+			}
+
+			ch := make(chan struct{})
+
+			g.mainQueue.Append(0, func() {
+				for _, v := range g.routeInfo.sets {
+					if !v.removed {
+						for _, vv := range v.stores {
+							st := &storeScanner{
+								id:       vv.id,
+								slots:    vv.slots.Clone(),
+								services: map[int]string{},
+							}
+							for _, vvv := range v.nodes {
+								if !vvv.removed {
+									st.services[vvv.id] = vvv.service
+								}
+							}
+							sc.stores = append(sc.stores, st)
+						}
+					}
+				}
+				close(ch)
+			})
+
+			<-ch
+
+			return scan.Err_ok
+
+		}()
 
 		if time.Now().After(deadline) {
 			conn.Close()
-		} else if err = scan.SendScannerResp(conn, scan.Err_ok, time.Now().Add(time.Second)); nil != err {
-			GetSugar().Infof("SendScannerResp error:%v", err)
-			conn.Close()
 		} else {
-			go sc.loop(g, conn)
+			err = scan.SendScannerResp(conn, errCode, time.Now().Add(time.Second))
+			if nil != err {
+				GetSugar().Infof("SendScannerResp error:%v", err)
+				conn.Close()
+			} else if errCode == scan.Err_ok {
+				go sc.loop(g, conn)
+			} else {
+				conn.Close()
+			}
 		}
 	}()
 }
@@ -129,7 +189,7 @@ func (st *storeScanner) next(sc *scanner, count int, deadline time.Time) (*flypr
 			return nil, fmt.Errorf("login failed")
 		}
 
-		err = scan.SendScannerReq(conn, sc.table, st.slots.ToJson(), st.id, sc.wantFields, sc.all, deadline)
+		err = scan.SendScannerReq(conn, sc.table, sc.tableVersion, st.slots.ToJson(), st.id, sc.wantFields, deadline)
 
 		if nil != err {
 			conn.Close()

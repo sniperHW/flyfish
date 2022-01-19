@@ -25,6 +25,7 @@ func (p *pd) onGetMeta(from *net.UDPAddr, m *snet.Message) {
 }
 
 func (p *pd) loadInitMeta() {
+	GetSugar().Infof("loadInitMeta:%s", p.config.InitMetaPath)
 	if "" != p.config.InitMetaPath {
 		f, err := os.Open(p.config.InitMetaPath)
 		if nil == err {
@@ -382,4 +383,32 @@ func (p *pd) onUpdateMetaReq(from *net.UDPAddr, m *snet.Message) {
 		m:    m,
 	})
 	p.processMetaUpdate()
+}
+
+func (p *pd) onGetScanTableMeta(from *net.UDPAddr, m *snet.Message) {
+	msg := m.Msg.(*sproto.GetScanTableMeta)
+	resp := &sproto.GetScanTableMetaResp{}
+
+	var tab *db.TableDef
+
+	for _, v := range p.pState.Meta.TableDefs {
+		if v.Name == msg.Table {
+			tab = v
+			break
+		}
+	}
+
+	if nil == tab {
+		resp.TabVersion = -1
+	} else {
+		resp.TabVersion = tab.DbVersion
+		for _, v := range tab.Fields {
+			resp.Fields = append(resp.Fields, &sproto.ScanField{
+				Field:   v.Name,
+				Version: v.TabVersion,
+			})
+
+		}
+	}
+	p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
 }

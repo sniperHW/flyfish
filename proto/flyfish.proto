@@ -185,7 +185,7 @@ message kick_resp {
   
 }
 
-message scan_fields {
+message scan_field {
   optional string field    = 1;
   optional int64  version  = 2;
 }
@@ -195,7 +195,7 @@ message scanner_req {
   optional int64       version   = 2;
   optional bytes       slots     = 3;
   optional int32       store     = 4;
-  repeated scan_fields fields    = 5;
+  repeated scan_field  fields    = 5;
   optional int64       timeout   = 6;
 }
 

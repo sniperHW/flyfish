@@ -65,6 +65,8 @@ enum ServerCmdType {
   QueryRouteInfo                = 310;
   QueryRouteInfoResp            = 311;
   FlyGateHeartBeat              = 312;
+  GetScanTableMeta              = 313;
+  GetScanTableMetaResp          = 314;
 
 
   //client <-> pd
@@ -415,3 +417,16 @@ message trasnferLeader {
 }
 
 
+message scanField {
+  optional string  field        = 1;
+  optional int64   version      = 2;
+}
+
+message getScanTableMeta {
+  optional string  table        = 1;
+}
+
+message getScanTableMetaResp {
+  optional int64     tabVersion = 1;
+  repeated scanField fields     = 2;
+}

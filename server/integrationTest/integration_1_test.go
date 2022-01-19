@@ -86,7 +86,14 @@ var pdConfigStr string = `
 	RaftLogDir              = "testRaftLog"
 	RaftLogPrefix           = "flypd"
 	InitDepoymentPath       = "./deployment.json"
-	InitMetaPath            = "./meta.json"	
+	InitMetaPath            = "./meta.json"
+	DBType                  = "pgsql"
+	[DBConfig]
+		Host          = "localhost"
+		Port          = 5432
+		User	      = "sniper"
+		Password      = "123456"
+		DB            = "test"	
 `
 
 var flyGateConfigStr string = `  
@@ -1276,7 +1283,7 @@ func TestScan(t *testing.T) {
 
 	fmt.Println("set ok")
 
-	sc, _ := client.NewScanner(client.ClientConf{PD: []string{"localhost:8110"}}, "users1", nil, true)
+	sc, _ := client.NewScanner(client.ClientConf{PD: []string{"localhost:8110"}}, "users1", []string{"name", "age", "phone"})
 
 	count := 0
 
@@ -1316,7 +1323,7 @@ func TestScan(t *testing.T) {
 
 	fmt.Println("again")
 
-	sc, _ = client.NewScanner(client.ClientConf{PD: []string{"localhost:8110"}}, "users1", nil, true)
+	sc, _ = client.NewScanner(client.ClientConf{PD: []string{"localhost:8110"}}, "users1", []string{"name", "age", "phone"})
 
 	count = 0
 

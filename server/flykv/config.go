@@ -25,70 +25,70 @@ func LoadConfig(path string) (*Config, error) {
 }
 
 type Config struct {
-	Mode string //"cluster"集群模式,"solo"独立模式
-
-	DBType string
+	Mode string `toml:"Mode"` //"cluster"集群模式,"solo"独立模式
 
 	SoloConfig struct {
-		ServiceHost string
-		ServicePort int
-		RaftUrl     string
-		RaftCluster string
-		Stores      []int
-		MetaPath    string
-	}
+		ServiceHost string `toml:"ServiceHost"`
+		ServicePort int    `toml:"ServicePort"`
+		RaftUrl     string `toml:"RaftUrl"`
+		RaftCluster string `toml:"RaftCluster"`
+		Stores      []int  `toml:"Stores"`
+		MetaPath    string `toml:"MetaPath"`
+	} `toml:"SoloConfig"`
 
 	ClusterConfig struct {
-		PD string //pd服务地址用;分隔
-	}
+		PD string `toml:"PD"` //pd服务地址用;分隔
+	} `toml:"ClusterConfig"`
 
-	RaftLogDir string //raft日志存放目录
+	RaftLogDir string `toml:"RaftLogDir"` //raft日志存放目录
 
-	RaftLogPrefix string
+	RaftLogPrefix string `toml:"RaftLogPrefix"`
 
-	SnapshotCurrentCount int //并行执行快照序列化数量，如果设置为0则取cpu数量
+	SnapshotCurrentCount int `toml:"SnapshotCurrentCount"` //并行执行快照序列化数量，如果设置为0则取cpu数量
 
-	LruCheckInterval int //ms
+	LruCheckInterval int `toml:"LruCheckInterval"` //ms
 
-	MaxCachePerStore int
+	MaxCachePerStore int `toml:"MaxCachePerStore"`
 
-	SqlLoaderCount int
+	SqlLoaderCount int `toml:"SqlLoaderCount"`
 
-	SqlUpdaterCount int
+	SqlUpdaterCount int `toml:"SqlUpdaterCount"`
 
-	ProposalFlushInterval int
+	ProposalFlushInterval int `toml:"ProposalFlushInterval"`
 
-	ReadFlushInterval int
+	ReadFlushInterval int `toml:"ReadFlushInterval"`
 
-	ProposalBatchCount int
+	ProposalBatchCount int `toml:"ProposalBatchCount"`
 
-	ReadBatchCount int
+	ReadBatchCount int `toml:"ReadBatchCount"`
 
-	MainQueueMaxSize int //store主处理队列容量上限,超过上限客户端的命令无法入列将返回retry
+	MainQueueMaxSize int `toml:"MainQueueMaxSize"` //store主处理队列容量上限,超过上限客户端的命令无法入列将返回retry
 
-	LinearizableRead bool
+	LinearizableRead bool `toml:"LinearizableRead"`
+
+	DBType string `toml:"DBType"`
 
 	DBConfig struct {
-		Host     string
-		Port     int
-		User     string
-		Password string
-		DB       string
-	}
+		Host     string `toml:"Host"`
+		Port     int    `toml:"Port"`
+		User     string `toml:"User"`
+		Password string `toml:"Password"`
+		DB       string `toml:"DB"`
+	} `toml:"DBConfig"`
 
 	StoreReqLimit struct {
-		SoftLimit        int
-		HardLimit        int
-		SoftLimitSeconds int
-	}
+		SoftLimit        int `toml:"SoftLimit"`
+		HardLimit        int `toml:"HardLimit"`
+		SoftLimitSeconds int `toml:"SoftLimitSeconds"`
+	} `toml:"StoreReqLimit"`
 
 	Log struct {
-		MaxLogfileSize int
-		LogDir         string
-		LogPrefix      string
-		LogLevel       string
-		EnableStdout   bool
-		MaxAge         int
-		MaxBackups     int
-	}
+		MaxLogfileSize int    `toml:"MaxLogfileSize"`
+		LogDir         string `toml:"LogDir"`
+		LogPrefix      string `toml:"LogPrefix"`
+		LogLevel       string `toml:"LogLevel"`
+		EnableStdout   bool   `toml:"EnableStdout"`
+		MaxAge         int    `toml:"MaxAge"`
+		MaxBackups     int    `toml:"MaxBackups"`
+	} `toml:"Log"`
 }

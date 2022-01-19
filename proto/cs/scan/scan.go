@@ -13,9 +13,11 @@ const (
 	Err_invaild_store
 	Err_invaild_table
 	Err_invaild_field
+	Err_empty_fields
 	Err_store_not_ready
 	Err_unpack
 	Err_db
+	Err_timeout
 	Err_end
 )
 
@@ -24,9 +26,11 @@ var err []error = []error{
 	errors.New("invaild store"),
 	errors.New("invaild table"),
 	errors.New("invaild field"),
+	errors.New("empty fields"),
 	errors.New("store not ready for scan"),
 	errors.New("error on unpack req"),
 	errors.New("db error"),
+	errors.New("timeout"),
 }
 
 const RecvScanNextReqTimeout time.Duration = time.Minute * 15
@@ -76,7 +80,7 @@ func GetDummyType(row *flyproto.Row) DummyType {
 	}
 }
 
-func SendScannerReq(conn net.Conn, table string, version int64, slots []byte, store int, fields []*flyproto.ScanFields, deadline time.Time) error {
+func SendScannerReq(conn net.Conn, table string, version int64, slots []byte, store int, fields []*flyproto.ScanField, deadline time.Time) error {
 	return cs.Send(conn, &flyproto.ScannerReq{
 		Table:   table,
 		Version: version,

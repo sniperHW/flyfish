@@ -25,8 +25,8 @@ func LoadConfig(path string) (*Config, error) {
 }
 
 type Config struct {
-	Mode    string //"cluster"集群模式,"solo"独立模式
-	Service string
-	PD      string //pd服务地址用;分隔
-	Stores  []int
+	Mode    string `toml:"Mode"` //"cluster"集群模式,"solo"独立模式
+	Service string `toml:"Service"`
+	PD      string `toml:"PD"` //pd服务地址用;分隔
+	Stores  []int  `toml:"Stores"`
 }
