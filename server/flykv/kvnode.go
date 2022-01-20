@@ -354,10 +354,6 @@ func (this *kvnode) start() error {
 					if f.Type != vv.Type {
 						return fmt.Errorf("table:%s already in db but not match with meta,field:%s type mismatch with db", v.Name, vv.Name)
 					}
-
-					if f.StrCap < vv.StrCap {
-						return fmt.Errorf("table:%s already in db but not match with meta,field:%s StrCap large than db", v.Name, vv.Name)
-					}
 				}
 			}
 		}

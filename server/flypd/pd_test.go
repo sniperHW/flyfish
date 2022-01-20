@@ -234,7 +234,6 @@ func testAddRemoveTable(t *testing.T, p *pd) {
 			Name:    "field1",
 			Type:    "string",
 			Default: "hello",
-			Strcap:  4096,
 		})
 
 		conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
@@ -283,7 +282,6 @@ func testAddRemoveTable(t *testing.T, p *pd) {
 			Name:    "field1",
 			Type:    "string",
 			Default: "hello",
-			Strcap:  4096,
 		})
 
 		conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
@@ -319,7 +317,6 @@ func testAddRemoveFields(t *testing.T, p *pd) {
 			Name:    "field4",
 			Type:    "string",
 			Default: "hello",
-			Strcap:  4096,
 		})
 
 		conn.SendTo(addr, snet.MakeMessage(0, req))

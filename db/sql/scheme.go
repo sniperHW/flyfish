@@ -32,8 +32,7 @@ func trimVersion(name string) (string, int64, error) {
 var tableMetaStr = `
 SELECT
     COLUMN_NAME,
-    DATA_TYPE,
-    CHARACTER_MAXIMUM_LENGTH
+    DATA_TYPE
 FROM
     information_schema.COLUMNS
 WHERE
@@ -57,7 +56,7 @@ CREATE TABLE "%s_%d" (
 
 /*
 var tableMetaStrPgSql = `
-SELECT column_name,data_type ,column_default,character_maximum_length
+SELECT column_name,data_type ,column_default
 FROM information_schema.columns
 WHERE (table_schema, table_name) = ('public', '%s')
 ORDER BY ordinal_position;
@@ -74,7 +73,7 @@ func appendFieldPgSql(buff []byte, field *db.FieldDef) ([]byte, error) {
 	case "float":
 		return buffer.AppendString(buff, "float8 NULL"), nil
 	case "string":
-		return buffer.AppendString(buff, fmt.Sprintf("varchar(%d) NULL", field.StrCap)), nil
+		return buffer.AppendString(buff, "varchar NULL"), nil
 	case "blob":
 		return buffer.AppendString(buff, "bytea NULL"), nil
 	default:
@@ -143,7 +142,6 @@ func getTableSchemePgSql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
 
 	var column_name string
 	var data_type string
-	var character_maximum_length *int
 
 	var keyFieldOk bool
 	var versionFieldOk bool
@@ -160,7 +158,7 @@ func getTableSchemePgSql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
 		case "double precision":
 			return "float"
 		default:
-			return "invaild"
+			return "unsupported_type"
 		}
 	}
 
@@ -172,31 +170,32 @@ func getTableSchemePgSql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
 			}
 		}
 
-		err = rows.Scan(&column_name, &data_type, &character_maximum_length)
+		err = rows.Scan(&column_name, &data_type)
 		if nil != err {
 			return nil, err
 		}
 
-		if column_name == "__key__" {
+		switch column_name {
+		case "__key__":
 			if data_type != "character varying" {
 				fmt.Println("data_type", data_type)
 				return nil, errors.New("__key__ field is not varchar")
 			} else {
 				keyFieldOk = true
 			}
-		} else if column_name == "__version__" {
+		case "__version__":
 			if data_type != "bigint" {
 				return nil, errors.New("__version__ field is not bigint")
 			} else {
 				versionFieldOk = true
 			}
-		} else if column_name == "__slot__" {
+		case "__slot__":
 			if data_type != "integer" {
 				return nil, errors.New("__slot__ field is not integer")
 			} else {
 				slotFieldOk = true
 			}
-		} else {
+		default:
 			real_field_name, version, err := trimVersion(column_name)
 			if nil != err {
 				return nil, err
@@ -206,10 +205,6 @@ func getTableSchemePgSql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
 				TabVersion: version,
 				Name:       real_field_name,
 				Type:       getDataType(data_type),
-			}
-
-			if nil != character_maximum_length {
-				field.StrCap = *character_maximum_length
 			}
 
 			tab.Fields = append(tab.Fields, field)
@@ -237,7 +232,7 @@ func getTableSchemePgSql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
 var createSqlStrMySql = strings.Join(
 	[]string{
 		"CREATE TABLE %s_%d (",
-		"`__key__` varchar(255) NOT NULL,",
+		"`__key__` VARCHAR(255) NOT NULL,",
 		"`__version__` BIGINT NOT NULL DEFAULT '0',",
 		"`__slot__` INT NOT NULL DEFAULT '0',",
 		"%s PRIMARY KEY ( `__key__` )",
@@ -257,7 +252,7 @@ func appendFieldMySql(buff []byte, field *db.FieldDef) ([]byte, error) {
 	case "float":
 		return buffer.AppendString(buff, "FLOAT NULL"), nil
 	case "string":
-		return buffer.AppendString(buff, fmt.Sprintf("varchar(%d) NULL", field.StrCap)), nil
+		return buffer.AppendString(buff, "TEXT NULL"), nil
 	case "blob":
 		return buffer.AppendString(buff, "BLOB NULL"), nil
 	default:
@@ -327,7 +322,6 @@ func getTableSchemeMySql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
 
 	var column_name string
 	var data_type string
-	var character_maximum_length *int
 
 	var keyFieldOk bool
 	var versionFieldOk bool
@@ -335,7 +329,7 @@ func getTableSchemeMySql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
 
 	getDataType := func(tt string) string {
 		switch tt {
-		case "varchar":
+		case "text":
 			return "string"
 		case "bigint":
 			return "int"
@@ -344,7 +338,7 @@ func getTableSchemeMySql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
 		case "float":
 			return "float"
 		default:
-			return "invaild"
+			return "unsupported_type"
 		}
 	}
 
@@ -356,30 +350,31 @@ func getTableSchemeMySql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
 			}
 		}
 
-		err = rows.Scan(&column_name, &data_type, &character_maximum_length)
+		err = rows.Scan(&column_name, &data_type)
 		if nil != err {
 			return nil, err
 		}
 
-		if column_name == "__key__" {
+		switch column_name {
+		case "__key__":
 			if data_type != "varchar" {
 				return nil, errors.New("__key__ field is not varchar")
 			} else {
 				keyFieldOk = true
 			}
-		} else if column_name == "__version__" {
+		case "__version__":
 			if data_type != "bigint" {
 				return nil, errors.New("__version__ field is not bigint")
 			} else {
 				versionFieldOk = true
 			}
-		} else if column_name == "__slot__" {
+		case "__slot__":
 			if data_type != "int" {
 				return nil, errors.New("__slot__ field is not int")
 			} else {
 				slotFieldOk = true
 			}
-		} else {
+		default:
 			real_field_name, version, err := trimVersion(column_name)
 			if nil != err {
 				return nil, err
@@ -389,10 +384,6 @@ func getTableSchemeMySql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
 				TabVersion: version,
 				Name:       real_field_name,
 				Type:       getDataType(data_type),
-			}
-
-			if nil != character_maximum_length {
-				field.StrCap = *character_maximum_length
 			}
 
 			tab.Fields = append(tab.Fields, field)

@@ -90,10 +90,6 @@ func (p *pd) loadInitMeta() {
 							GetSugar().Panicf("table:%s already in db but not match with meta,field:%s type mismatch with db", v.Name, vv.Name)
 						}
 
-						if f.StrCap < vv.StrCap {
-							GetSugar().Panicf("table:%s already in db but not match with meta,field:%s StrCap large than db", v.Name, vv.Name)
-						}
-
 						vv.TabVersion = f.TabVersion
 					}
 				}
@@ -272,7 +268,6 @@ func (p *pd) onMetaAddTable(replyer replyer, m *snet.Message) bool {
 			tab.Fields = append(tab.Fields, &db.FieldDef{
 				Name:        v.Name,
 				Type:        v.Type,
-				StrCap:      int(v.Strcap),
 				DefautValue: v.Default,
 				TabVersion:  tab.Version,
 			})
@@ -397,7 +392,6 @@ func (p *pd) onMetaAddFields(replyer replyer, m *snet.Message) bool {
 			tab.Fields = append(tab.Fields, &db.FieldDef{
 				Name:        v.Name,
 				Type:        v.Type,
-				StrCap:      int(v.Strcap),
 				DefautValue: v.Default,
 				TabVersion:  tab.Version,
 			})

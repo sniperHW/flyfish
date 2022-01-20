@@ -326,7 +326,6 @@ message metaFiled {
   optional string name    = 1;
   optional string type    = 2;
   optional string default = 3;
-  optional int32  strcap  = 4;
 }
 
 

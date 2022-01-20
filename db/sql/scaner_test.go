@@ -18,7 +18,6 @@ func TestScaner(t *testing.T) {
 	tdef.Fields = append(tdef.Fields, &db.FieldDef{
 		Name:        "name",
 		Type:        "string",
-		StrCap:      4096,
 		DefautValue: "",
 	})
 
@@ -31,7 +30,6 @@ func TestScaner(t *testing.T) {
 	tdef.Fields = append(tdef.Fields, &db.FieldDef{
 		Name:        "phone",
 		Type:        "string",
-		StrCap:      4096,
 		DefautValue: "",
 	})
 

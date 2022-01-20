@@ -54,7 +54,6 @@ func TestSchemePgSql(t *testing.T) {
 		TabVersion:  0,
 		Name:        "field3",
 		Type:        "string",
-		StrCap:      1024,
 		DefautValue: "hello",
 	})
 
@@ -158,7 +157,6 @@ func TestSchemeMySql(t *testing.T) {
 		TabVersion:  0,
 		Name:        "field3",
 		Type:        "string",
-		StrCap:      1024,
 		DefautValue: "hello",
 	})
 

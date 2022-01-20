@@ -27,7 +27,6 @@ type FieldDef struct {
 	TabVersion  int64  //TableDef.Version when field create
 	Name        string `json:"Name,omitempty"`
 	Type        string `json:"Type,omitempty"`
-	StrCap      int    `json:"StrCap,omitempty"`
 	DefautValue string `json:"DefautValue,omitempty"`
 }
 
@@ -67,7 +66,6 @@ func (t *TableDef) Clone() *TableDef {
 			TabVersion:  v.TabVersion,
 			Name:        v.Name,
 			Type:        v.Type,
-			StrCap:      v.StrCap,
 			DefautValue: v.DefautValue,
 		})
 	}
@@ -94,10 +92,6 @@ func (t *TableDef) Check() error {
 
 		if tt == proto.ValueType_invaild {
 			return fmt.Errorf("invaild filed.Type:%s", v.Type)
-		}
-
-		if tt == proto.ValueType_string && v.StrCap < 1 {
-			return errors.New("StrCap of string must be at least 1")
 		}
 
 		if nil == GetDefaultValue(tt, v.DefautValue) {
