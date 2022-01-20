@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"encoding/json"
 	"errors"
+	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
@@ -14,6 +15,7 @@ import (
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"github.com/sniperHW/flyfish/server/slot"
 	"net"
+	"net/http"
 	"os"
 	"reflect"
 	"sync"
@@ -143,19 +145,25 @@ func (p *persistenceState) loadFromJson(pd *pd, j []byte) error {
 	return nil
 }
 
+type msgHandler struct {
+	handles     map[reflect.Type]func(replyer, *snet.Message)
+	makeHttpReq map[string]func(*http.Request) (*snet.Message, error)
+}
+
 type pd struct {
 	leader          raft.RaftInstanceID
 	rn              *raft.RaftInstance
 	mutilRaft       *raft.MutilRaft
 	mainque         applicationQueue
 	udp             *flynet.Udp
-	msgHandler      map[reflect.Type]func(replyer, *snet.Message)
-	stoponce        int32
-	startonce       int32
+	httpListener    net.Listener
+	httpServer      *http.Server
+	msgHandler      msgHandler //map[reflect.Type]msgHandler
+	closed          int32
 	wait            sync.WaitGroup
 	flygateMgr      flygateMgr
 	config          *Config
-	udpService      string
+	service         string
 	onBalanceFinish func()
 	pState          persistenceState
 	storeTask       map[uint64]*storeTask
@@ -163,21 +171,24 @@ type pd struct {
 	metaUpdateQueue *list.List
 }
 
-func NewPd(id uint16, join bool, config *Config, udpService string, clusterStr string) (*pd, error) {
+func NewPd(id uint16, join bool, config *Config, service string, clusterStr string) (*pd, error) {
 
 	mainQueue := applicationQueue{
 		q: queue.NewPriorityQueue(2, 10000),
 	}
 
 	p := &pd{
-		mainque:    mainQueue,
-		msgHandler: map[reflect.Type]func(replyer, *snet.Message){},
+		mainque: mainQueue,
+		msgHandler: msgHandler{
+			handles:     map[reflect.Type]func(replyer, *snet.Message){},
+			makeHttpReq: map[string]func(*http.Request) (*snet.Message, error){},
+		},
 		flygateMgr: flygateMgr{
 			flygateMap: map[string]*flygate{},
 			mainque:    mainQueue,
 		},
 		config:       config,
-		udpService:   udpService,
+		service:      service,
 		storeTask:    map[uint64]*storeTask{},
 		markClearSet: map[int]*set{},
 		pState: persistenceState{
@@ -216,6 +227,11 @@ func NewPd(id uint16, join bool, config *Config, udpService string, clusterStr s
 		return nil, err
 	}
 
+	if err = p.startHttpService(); nil != err {
+		p.rn.Stop()
+		return nil, err
+	}
+
 	GetSugar().Infof("mutilRaft serve on:%s", self.URL)
 
 	go p.mutilRaft.Serve([]string{self.URL})
@@ -240,6 +256,19 @@ func (q applicationQueue) pop() (closed bool, v interface{}) {
 
 func (q applicationQueue) close() {
 	q.q.Close()
+}
+
+func (p *pd) makeReplyFunc(replyer replyer, m *snet.Message, resp proto.Message) func(error) {
+	return func(err error) {
+		v := reflect.ValueOf(resp).Elem()
+		if nil == err {
+			v.FieldByName("Ok").SetBool(true)
+		} else {
+			v.FieldByName("Ok").SetBool(false)
+			v.FieldByName("Reason").SetString(err.Error())
+		}
+		replyer.reply(snet.MakeMessage(m.Context, resp.(proto.Message)))
+	}
 }
 
 func (p *pd) storeBalance() {
@@ -383,38 +412,6 @@ func (p *pd) issueProposal(proposal raft.Proposal) {
 	p.rn.IssueProposal(proposal)
 }
 
-func (p *pd) startUdpService() error {
-	udp, err := flynet.NewUdp(p.udpService, snet.Pack, snet.Unpack)
-	if nil != err {
-		return err
-	}
-
-	GetSugar().Infof("flypd start udp at %s", p.udpService)
-
-	p.udp = udp
-
-	go func() {
-		recvbuff := make([]byte, 64*1024)
-		for {
-			from, msg, err := udp.ReadFrom(recvbuff)
-			if nil != err {
-				GetSugar().Errorf("read err:%v", err)
-				return
-			} else {
-				p.mainque.append(func() {
-					if p.isLeader() {
-						p.onMsg(udpReplyer{from: from, pd: p}, msg.(*snet.Message))
-					} else {
-						GetSugar().Debugf("drop msg")
-					}
-				})
-			}
-		}
-	}()
-
-	return nil
-}
-
 func (p *pd) loadInitDeployment() {
 	if "" != p.config.InitDepoymentPath {
 		f, err := os.Open(p.config.InitDepoymentPath)
@@ -537,9 +534,11 @@ func (p *pd) onLeaderDownToFollower() {
 }
 
 func (p *pd) Stop() {
-	if atomic.CompareAndSwapInt32(&p.stoponce, 0, 1) {
+	if atomic.CompareAndSwapInt32(&p.closed, 0, 1) {
 		p.rn.Stop()
 		p.wait.Wait()
+		p.httpListener.Close()
+		p.udp.Close()
 	}
 }
 

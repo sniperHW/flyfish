@@ -4,6 +4,8 @@ package flypd
 //go tool cover -html=coverage.out
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/db/sql"
@@ -13,7 +15,9 @@ import (
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	sslot "github.com/sniperHW/flyfish/server/slot"
 	"github.com/stretchr/testify/assert"
+	"io/ioutil"
 	"net"
+	"net/http"
 	"os"
 	"sync"
 	"testing"
@@ -98,7 +102,7 @@ func TestPd1(t *testing.T) {
 		DbVersion: 3,
 	})
 
-	p, _ := NewPd(1, false, conf, "localhost:8110", "1@http://localhost:8110@")
+	p, _ := NewPd(1, false, conf, "localhost:8110", "1@http://localhost:18110@")
 
 	for {
 		if p.isLeader() {
@@ -120,9 +124,11 @@ func TestPd1(t *testing.T) {
 
 	testSlotTransfer(t, p)
 
+	testHttp(t)
+
 	p.Stop()
 
-	p, _ = NewPd(1, false, conf, "localhost:8110", "1@http://localhost:8110@")
+	p, _ = NewPd(1, false, conf, "localhost:8110", "1@http://localhost:18110@")
 
 	for {
 		if p.isLeader() {
@@ -172,7 +178,7 @@ func TestPd2(t *testing.T) {
 
 	conf, _ := LoadConfigStr(configStr)
 
-	p, _ := NewPd(1, false, conf, "localhost:8110", "1@http://localhost:8110@")
+	p, _ := NewPd(1, false, conf, "localhost:8110", "1@http://localhost:18110@")
 
 	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
 
@@ -198,6 +204,22 @@ func TestPd2(t *testing.T) {
 	}
 
 	p.Stop()
+}
+
+func testHttp(t *testing.T) {
+	j, _ := json.Marshal(&sproto.GetMeta{})
+	body := bytes.NewBufferString(string(j))
+	req, err := http.NewRequest("Post", "http://localhost:8110/GetMeta", body)
+	req.Header.Set("Content-Type", "text/html; charset=utf-8")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer resp.Body.Close()
+	data, err := ioutil.ReadAll(resp.Body)
+	fmt.Println(string(data), err)
 }
 
 func testAddRemoveTable(t *testing.T, p *pd) {

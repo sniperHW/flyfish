@@ -4,14 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"github.com/sniperHW/flyfish/server/slot"
 	"net"
-	"reflect"
 	"sort"
 	"time"
 )
@@ -485,17 +483,4 @@ func (p *ProposalInstallDeployment) apply(pd *pd) {
 
 func (p *ProposalInstallDeployment) replay(pd *pd) {
 	p.apply(pd)
-}
-
-func (p *pd) makeReplyFunc(replyer replyer, m *snet.Message, resp proto.Message) func(error) {
-	return func(err error) {
-		v := reflect.ValueOf(resp).Elem()
-		if nil == err {
-			v.FieldByName("Ok").SetBool(true)
-		} else {
-			v.FieldByName("Ok").SetBool(false)
-			v.FieldByName("Reason").SetString(err.Error())
-		}
-		replyer.reply(snet.MakeMessage(m.Context, resp.(proto.Message)))
-	}
 }

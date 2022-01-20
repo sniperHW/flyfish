@@ -1,25 +1,44 @@
 package flypd
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/gogo/protobuf/proto"
+	flynet "github.com/sniperHW/flyfish/pkg/net"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
+	"io/ioutil"
 	"math"
 	"net"
+	"net/http"
 	"reflect"
 	"strings"
 	"time"
 )
 
-func (p *pd) registerMsgHandler(msg proto.Message, handler func(replyer, *snet.Message)) {
+func (p *pd) registerMsgHandler(msg proto.Message, httpCmd string, handler func(replyer, *snet.Message)) {
 	if nil != msg {
-		p.msgHandler[reflect.TypeOf(msg)] = handler
+		reflectType := reflect.TypeOf(msg)
+		p.msgHandler.handles[reflectType] = handler
+		if "" != httpCmd {
+			p.msgHandler.makeHttpReq[httpCmd] = func(r *http.Request) (*snet.Message, error) {
+				v, err := ioutil.ReadAll(r.Body)
+				if nil != err {
+					return nil, err
+				}
+				req := reflect.New(reflectType.Elem()).Interface().(proto.Message)
+				if err = json.Unmarshal(v, req); nil != err {
+					return nil, err
+				} else {
+					return snet.MakeMessage(0, req), nil
+				}
+			}
+		}
 	}
 }
 
 func (p *pd) onMsg(replyer replyer, msg *snet.Message) {
-	if h, ok := p.msgHandler[reflect.TypeOf(msg.Msg)]; ok {
+	if h, ok := p.msgHandler.handles[reflect.TypeOf(msg.Msg)]; ok {
 		h(replyer, msg)
 	}
 }
@@ -205,30 +224,64 @@ func (p *pd) onStoreReportStatus(_ replyer, m *snet.Message) {
 	}
 }
 
-func (p *pd) initMsgHandler() {
-	p.registerMsgHandler(&sproto.AddSet{}, p.onAddSet)
-	p.registerMsgHandler(&sproto.RemSet{}, p.onRemSet)
-	p.registerMsgHandler(&sproto.SetMarkClear{}, p.onSetMarkClear)
-	p.registerMsgHandler(&sproto.AddNode{}, p.onAddNode)
-	p.registerMsgHandler(&sproto.RemNode{}, p.onRemNode)
-	p.registerMsgHandler(&sproto.AddLearnerStoreToNode{}, p.onAddLearnerStoreToNode)
-	p.registerMsgHandler(&sproto.PromoteLearnerStore{}, p.onPromoteLearnerStore)
-	p.registerMsgHandler(&sproto.RemoveNodeStore{}, p.onRemoveNodeStore)
-	p.registerMsgHandler(&sproto.IsTransInReadyResp{}, p.onSlotTransInReady)
-	p.registerMsgHandler(&sproto.SlotTransOutOk{}, p.onSlotTransOutOk)
-	p.registerMsgHandler(&sproto.SlotTransInOk{}, p.onSlotTransInOk)
-	p.registerMsgHandler(&sproto.KvnodeBoot{}, p.onKvnodeBoot)
-	p.registerMsgHandler(&sproto.QueryRouteInfo{}, p.onQueryRouteInfo)
-	p.registerMsgHandler(&sproto.GetFlyGateList{}, p.onGetFlyGateList)
-	p.registerMsgHandler(&sproto.FlyGateHeartBeat{}, p.onFlyGateHeartBeat)
-	p.registerMsgHandler(&sproto.ChangeFlyGate{}, p.changeFlyGate)
-	p.registerMsgHandler(&sproto.GetMeta{}, p.onGetMeta)
-	p.registerMsgHandler(&sproto.GetSetStatus{}, p.onGetSetStatus)
-	p.registerMsgHandler(&sproto.StoreReportStatus{}, p.onStoreReportStatus)
-	p.registerMsgHandler(&sproto.MetaAddTable{}, p.onUpdateMetaReq)
-	p.registerMsgHandler(&sproto.MetaAddFields{}, p.onUpdateMetaReq)
-	p.registerMsgHandler(&sproto.MetaRemoveTable{}, p.onUpdateMetaReq)
-	p.registerMsgHandler(&sproto.MetaRemoveFields{}, p.onUpdateMetaReq)
-	p.registerMsgHandler(&sproto.GetScanTableMeta{}, p.onGetScanTableMeta)
+func (p *pd) startUdpService() error {
+	udp, err := flynet.NewUdp(p.service, snet.Pack, snet.Unpack)
+	if nil != err {
+		return err
+	}
 
+	GetSugar().Infof("flypd start udp at %s", p.service)
+
+	p.udp = udp
+
+	go func() {
+		recvbuff := make([]byte, 64*1024)
+		for {
+			from, msg, err := udp.ReadFrom(recvbuff)
+			if nil != err {
+				GetSugar().Errorf("read err:%v", err)
+				return
+			} else {
+				p.mainque.append(func() {
+					if p.isLeader() {
+						p.onMsg(udpReplyer{from: from, pd: p}, msg.(*snet.Message))
+					} else {
+						GetSugar().Debugf("drop msg")
+					}
+				})
+			}
+		}
+	}()
+
+	return nil
+}
+
+func (p *pd) initMsgHandler() {
+	//for console
+	p.registerMsgHandler(&sproto.AddSet{}, "AddSet", p.onAddSet)
+	p.registerMsgHandler(&sproto.RemSet{}, "RemSet", p.onRemSet)
+	p.registerMsgHandler(&sproto.SetMarkClear{}, "SetMarkClear", p.onSetMarkClear)
+	p.registerMsgHandler(&sproto.AddNode{}, "AddNode", p.onAddNode)
+	p.registerMsgHandler(&sproto.RemNode{}, "RemNode", p.onRemNode)
+	p.registerMsgHandler(&sproto.AddLearnerStoreToNode{}, "AddLearnerStoreToNode", p.onAddLearnerStoreToNode)
+	p.registerMsgHandler(&sproto.PromoteLearnerStore{}, "PromoteLearnerStore", p.onPromoteLearnerStore)
+	p.registerMsgHandler(&sproto.RemoveNodeStore{}, "RemoveNodeStore", p.onRemoveNodeStore)
+	p.registerMsgHandler(&sproto.GetMeta{}, "GetMeta", p.onGetMeta)
+	p.registerMsgHandler(&sproto.GetSetStatus{}, "GetSetStatus", p.onGetSetStatus)
+	p.registerMsgHandler(&sproto.MetaAddTable{}, "MetaAddTable", p.onUpdateMetaReq)
+	p.registerMsgHandler(&sproto.MetaAddFields{}, "MetaAddFields", p.onUpdateMetaReq)
+	p.registerMsgHandler(&sproto.MetaRemoveTable{}, "MetaRemoveTable", p.onUpdateMetaReq)
+	p.registerMsgHandler(&sproto.MetaRemoveFields{}, "MetaRemoveFields", p.onUpdateMetaReq)
+
+	//servers
+	p.registerMsgHandler(&sproto.IsTransInReadyResp{}, "", p.onSlotTransInReady)
+	p.registerMsgHandler(&sproto.SlotTransOutOk{}, "", p.onSlotTransOutOk)
+	p.registerMsgHandler(&sproto.SlotTransInOk{}, "", p.onSlotTransInOk)
+	p.registerMsgHandler(&sproto.KvnodeBoot{}, "", p.onKvnodeBoot)
+	p.registerMsgHandler(&sproto.QueryRouteInfo{}, "", p.onQueryRouteInfo)
+	p.registerMsgHandler(&sproto.GetFlyGateList{}, "", p.onGetFlyGateList)
+	p.registerMsgHandler(&sproto.FlyGateHeartBeat{}, "", p.onFlyGateHeartBeat)
+	p.registerMsgHandler(&sproto.ChangeFlyGate{}, "", p.changeFlyGate)
+	p.registerMsgHandler(&sproto.StoreReportStatus{}, "", p.onStoreReportStatus)
+	p.registerMsgHandler(&sproto.GetScanTableMeta{}, "", p.onGetScanTableMeta)
 }
