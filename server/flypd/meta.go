@@ -12,13 +12,13 @@ import (
 )
 
 type metaOpration struct {
-	from *net.UDPAddr
-	m    *snet.Message
+	replyer replyer
+	m       *snet.Message
 }
 
-func (p *pd) onGetMeta(from *net.UDPAddr, m *snet.Message) {
+func (p *pd) onGetMeta(replyer replyer, m *snet.Message) {
 	GetSugar().Infof("onGetMeta")
-	p.udp.SendTo(from, snet.MakeMessage(m.Context,
+	replyer.reply(snet.MakeMessage(m.Context,
 		&sproto.GetMetaResp{
 			Version: p.pState.Meta.Version,
 			Meta:    p.pState.MetaBytes,
@@ -244,7 +244,7 @@ func (p *pd) onProposalUpdateMetaReply() {
 	p.processMetaUpdate()
 }
 
-func (p *pd) onMetaAddTable(from *net.UDPAddr, m *snet.Message) bool {
+func (p *pd) onMetaAddTable(replyer replyer, m *snet.Message) bool {
 	msg := m.Msg.(*sproto.MetaAddTable)
 	var tab *db.TableDef
 	var err error
@@ -302,7 +302,7 @@ func (p *pd) onMetaAddTable(from *net.UDPAddr, m *snet.Message) bool {
 	}()
 
 	if nil != err {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
+		replyer.reply(snet.MakeMessage(m.Context,
 			&sproto.MetaAddTableResp{
 				Ok:     false,
 				Reason: err.Error(),
@@ -311,7 +311,7 @@ func (p *pd) onMetaAddTable(from *net.UDPAddr, m *snet.Message) bool {
 	} else {
 		p.issueProposal(&ProposalUpdateMeta{
 			proposalBase: proposalBase{
-				reply: p.makeReplyFunc(from, m, &sproto.MetaAddTableResp{}),
+				reply: p.makeReplyFunc(replyer, m, &sproto.MetaAddTableResp{}),
 			},
 			TabDef:     tab,
 			pd:         p,
@@ -321,7 +321,7 @@ func (p *pd) onMetaAddTable(from *net.UDPAddr, m *snet.Message) bool {
 	}
 }
 
-func (p *pd) onMetaRemoveTable(from *net.UDPAddr, m *snet.Message) bool {
+func (p *pd) onMetaRemoveTable(replyer replyer, m *snet.Message) bool {
 	msg := m.Msg.(*sproto.MetaRemoveTable)
 	var tab *db.TableDef
 	var err error
@@ -349,7 +349,7 @@ func (p *pd) onMetaRemoveTable(from *net.UDPAddr, m *snet.Message) bool {
 	}()
 
 	if nil != err {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
+		replyer.reply(snet.MakeMessage(m.Context,
 			&sproto.MetaRemoveTableResp{
 				Ok:     false,
 				Reason: err.Error(),
@@ -358,7 +358,7 @@ func (p *pd) onMetaRemoveTable(from *net.UDPAddr, m *snet.Message) bool {
 	} else {
 		p.issueProposal(&ProposalUpdateMeta{
 			proposalBase: proposalBase{
-				reply: p.makeReplyFunc(from, m, &sproto.MetaRemoveTableResp{}),
+				reply: p.makeReplyFunc(replyer, m, &sproto.MetaRemoveTableResp{}),
 			},
 			TabDef:     tab,
 			pd:         p,
@@ -369,7 +369,7 @@ func (p *pd) onMetaRemoveTable(from *net.UDPAddr, m *snet.Message) bool {
 }
 
 //向table添加fields
-func (p *pd) onMetaAddFields(from *net.UDPAddr, m *snet.Message) bool {
+func (p *pd) onMetaAddFields(replyer replyer, m *snet.Message) bool {
 	msg := m.Msg.(*sproto.MetaAddFields)
 	var tab *db.TableDef
 	var err error
@@ -431,7 +431,7 @@ func (p *pd) onMetaAddFields(from *net.UDPAddr, m *snet.Message) bool {
 	}()
 
 	if nil != err {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
+		replyer.reply(snet.MakeMessage(m.Context,
 			&sproto.MetaAddFieldsResp{
 				Ok:     false,
 				Reason: err.Error(),
@@ -440,7 +440,7 @@ func (p *pd) onMetaAddFields(from *net.UDPAddr, m *snet.Message) bool {
 	} else {
 		p.issueProposal(&ProposalUpdateMeta{
 			proposalBase: proposalBase{
-				reply: p.makeReplyFunc(from, m, &sproto.MetaAddFieldsResp{}),
+				reply: p.makeReplyFunc(replyer, m, &sproto.MetaAddFieldsResp{}),
 			},
 			TabDef:     tab,
 			pd:         p,
@@ -450,7 +450,7 @@ func (p *pd) onMetaAddFields(from *net.UDPAddr, m *snet.Message) bool {
 	}
 }
 
-func (p *pd) onMetaRemoveFields(from *net.UDPAddr, m *snet.Message) bool {
+func (p *pd) onMetaRemoveFields(replyer replyer, m *snet.Message) bool {
 	msg := m.Msg.(*sproto.MetaRemoveFields)
 	var tab *db.TableDef
 	var err error
@@ -485,7 +485,7 @@ func (p *pd) onMetaRemoveFields(from *net.UDPAddr, m *snet.Message) bool {
 	}()
 
 	if nil != err {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context,
+		replyer.reply(snet.MakeMessage(m.Context,
 			&sproto.MetaRemoveFieldsResp{
 				Ok:     false,
 				Reason: err.Error(),
@@ -494,7 +494,7 @@ func (p *pd) onMetaRemoveFields(from *net.UDPAddr, m *snet.Message) bool {
 	} else {
 		p.issueProposal(&ProposalUpdateMeta{
 			proposalBase: proposalBase{
-				reply: p.makeReplyFunc(from, m, &sproto.MetaRemoveFieldsResp{}),
+				reply: p.makeReplyFunc(replyer, m, &sproto.MetaRemoveFieldsResp{}),
 			},
 			TabDef:     tab,
 			pd:         p,
@@ -511,7 +511,7 @@ func (p *pd) processMetaUpdate() {
 	for p.metaUpdateQueue.Len() > 0 {
 		front := p.metaUpdateQueue.Front()
 		op := front.Value.(*metaOpration)
-		var fn func(from *net.UDPAddr, m *snet.Message) bool
+		var fn func(replyer replyer, m *snet.Message) bool
 
 		switch op.m.Msg.(type) {
 		case *sproto.MetaAddTable:
@@ -525,7 +525,7 @@ func (p *pd) processMetaUpdate() {
 		default:
 		}
 
-		if nil != fn && fn(op.from, op.m) {
+		if nil != fn && fn(op.replyer, op.m) {
 			return
 		} else {
 			p.metaUpdateQueue.Remove(p.metaUpdateQueue.Front())
@@ -534,15 +534,15 @@ func (p *pd) processMetaUpdate() {
 	}
 }
 
-func (p *pd) onUpdateMetaReq(from *net.UDPAddr, m *snet.Message) {
+func (p *pd) onUpdateMetaReq(replyer replyer, m *snet.Message) {
 	p.metaUpdateQueue.PushBack(&metaOpration{
-		from: from,
-		m:    m,
+		replyer: replyer,
+		m:       m,
 	})
 	p.processMetaUpdate()
 }
 
-func (p *pd) onGetScanTableMeta(from *net.UDPAddr, m *snet.Message) {
+func (p *pd) onGetScanTableMeta(replyer replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.GetScanTableMeta)
 	resp := &sproto.GetScanTableMetaResp{}
 
@@ -567,5 +567,5 @@ func (p *pd) onGetScanTableMeta(from *net.UDPAddr, m *snet.Message) {
 
 		}
 	}
-	p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
+	replyer.reply(snet.MakeMessage(m.Context, resp))
 }

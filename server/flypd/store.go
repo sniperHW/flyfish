@@ -6,7 +6,6 @@ import (
 	"github.com/sniperHW/flyfish/pkg/raft/membership"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
-	"net"
 	"time"
 )
 
@@ -298,7 +297,7 @@ func (p *ProposalRemoveNodeStore) replay(pd *pd) {
 /*
  * 向node添加一个store,新store将以learner身份加入raft集群
  */
-func (p *pd) onAddLearnerStoreToNode(from *net.UDPAddr, m *snet.Message) {
+func (p *pd) onAddLearnerStoreToNode(replyer replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.AddLearnerStoreToNode)
 	resp := &sproto.AddLearnerStoreToNodeResp{}
 	err := func() error {
@@ -354,18 +353,18 @@ func (p *pd) onAddLearnerStoreToNode(from *net.UDPAddr, m *snet.Message) {
 	if nil != err {
 		resp.Ok = false
 		resp.Reason = err.Error()
-		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
+		replyer.reply(snet.MakeMessage(m.Context, resp))
 	} else {
 		p.issueProposal(&ProposalAddLearnerStoreToNode{
 			proposalBase: proposalBase{
-				reply: p.makeReplyFunc(from, m, resp),
+				reply: p.makeReplyFunc(replyer, m, resp),
 			},
 			Msg: msg,
 		})
 	}
 }
 
-func (p *pd) onPromoteLearnerStore(from *net.UDPAddr, m *snet.Message) {
+func (p *pd) onPromoteLearnerStore(replyer replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.PromoteLearnerStore)
 	resp := &sproto.PromoteLearnerStoreResp{}
 
@@ -409,18 +408,18 @@ func (p *pd) onPromoteLearnerStore(from *net.UDPAddr, m *snet.Message) {
 	if nil != err {
 		resp.Ok = false
 		resp.Reason = err.Error()
-		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
+		replyer.reply(snet.MakeMessage(m.Context, resp))
 	} else {
 		p.issueProposal(&ProposalPromoteLearnerStore{
 			proposalBase: proposalBase{
-				reply: p.makeReplyFunc(from, m, resp),
+				reply: p.makeReplyFunc(replyer, m, resp),
 			},
 			Msg: msg,
 		})
 	}
 }
 
-func (p *pd) onRemoveNodeStore(from *net.UDPAddr, m *snet.Message) {
+func (p *pd) onRemoveNodeStore(replyer replyer, m *snet.Message) {
 
 	GetSugar().Debugf("onRemoveNodeStore")
 
@@ -446,11 +445,11 @@ func (p *pd) onRemoveNodeStore(from *net.UDPAddr, m *snet.Message) {
 	if nil != err {
 		resp.Ok = false
 		resp.Reason = err.Error()
-		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
+		replyer.reply(snet.MakeMessage(m.Context, resp))
 	} else {
 		p.issueProposal(&ProposalRemoveNodeStore{
 			proposalBase: proposalBase{
-				reply: p.makeReplyFunc(from, m, resp),
+				reply: p.makeReplyFunc(replyer, m, resp),
 			},
 			Msg: msg,
 		})

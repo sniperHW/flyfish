@@ -487,7 +487,7 @@ func (p *ProposalInstallDeployment) replay(pd *pd) {
 	p.apply(pd)
 }
 
-func (p *pd) makeReplyFunc(from *net.UDPAddr, m *snet.Message, resp proto.Message) func(error) {
+func (p *pd) makeReplyFunc(replyer replyer, m *snet.Message, resp proto.Message) func(error) {
 	return func(err error) {
 		v := reflect.ValueOf(resp).Elem()
 		if nil == err {
@@ -496,6 +496,6 @@ func (p *pd) makeReplyFunc(from *net.UDPAddr, m *snet.Message, resp proto.Messag
 			v.FieldByName("Ok").SetBool(false)
 			v.FieldByName("Reason").SetString(err.Error())
 		}
-		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp.(proto.Message)))
+		replyer.reply(snet.MakeMessage(m.Context, resp.(proto.Message)))
 	}
 }

@@ -12,19 +12,19 @@ import (
 	"time"
 )
 
-func (p *pd) registerMsgHandler(msg proto.Message, handler func(*net.UDPAddr, *snet.Message)) {
+func (p *pd) registerMsgHandler(msg proto.Message, handler func(replyer, *snet.Message)) {
 	if nil != msg {
 		p.msgHandler[reflect.TypeOf(msg)] = handler
 	}
 }
 
-func (p *pd) onMsg(from *net.UDPAddr, msg *snet.Message) {
+func (p *pd) onMsg(replyer replyer, msg *snet.Message) {
 	if h, ok := p.msgHandler[reflect.TypeOf(msg.Msg)]; ok {
-		h(from, msg)
+		h(replyer, msg)
 	}
 }
 
-func (p *pd) onKvnodeBoot(from *net.UDPAddr, m *snet.Message) {
+func (p *pd) onKvnodeBoot(replyer replyer, m *snet.Message) {
 	if 0 == p.pState.Meta.Version {
 		GetSugar().Infof("Meta not set")
 		//meta尚未初始化
@@ -33,7 +33,7 @@ func (p *pd) onKvnodeBoot(from *net.UDPAddr, m *snet.Message) {
 		msg := m.Msg.(*sproto.KvnodeBoot)
 		node := p.getNode(msg.NodeID)
 		if nil == node {
-			p.udp.SendTo(from, snet.MakeMessage(m.Context,
+			replyer.reply(snet.MakeMessage(m.Context,
 				&sproto.KvnodeBootResp{
 					Ok:     false,
 					Reason: fmt.Sprintf("node:%d not in deployment", msg.NodeID),
@@ -69,17 +69,17 @@ func (p *pd) onKvnodeBoot(from *net.UDPAddr, m *snet.Message) {
 			resp.Stores = append(resp.Stores, s)
 		}
 
-		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
+		replyer.reply(snet.MakeMessage(m.Context, resp))
 	}
 }
 
-func (p *pd) onQueryRouteInfo(from *net.UDPAddr, m *snet.Message) {
+func (p *pd) onQueryRouteInfo(replyer replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.QueryRouteInfo)
 	resp := p.pState.deployment.queryRouteInfo(msg)
-	p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
+	replyer.reply(snet.MakeMessage(m.Context, resp))
 }
 
-func (p *pd) onGetFlyGateList(from *net.UDPAddr, m *snet.Message) {
+func (p *pd) onGetFlyGateList(replyer replyer, m *snet.Message) {
 	resp := &sproto.GetFlyGateListResp{}
 	for _, v := range p.flygateMgr.flygateMap {
 		resp.List = append(resp.List, &sproto.Flygate{
@@ -87,15 +87,15 @@ func (p *pd) onGetFlyGateList(from *net.UDPAddr, m *snet.Message) {
 			MsgPerSecond: int32(v.msgPerSecond),
 		})
 	}
-	p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
+	replyer.reply(snet.MakeMessage(m.Context, resp))
 }
 
-func (p *pd) onFlyGateHeartBeat(from *net.UDPAddr, m *snet.Message) {
+func (p *pd) onFlyGateHeartBeat(replyer replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.FlyGateHeartBeat)
 	p.flygateMgr.onHeartBeat(msg.GateService, int(msg.MsgPerSecond))
 }
 
-func (p *pd) changeFlyGate(from *net.UDPAddr, m *snet.Message) {
+func (p *pd) changeFlyGate(replyer replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.ChangeFlyGate)
 	currentGate := p.flygateMgr.flygateMap[msg.CurrentGate]
 
@@ -128,13 +128,13 @@ func (p *pd) changeFlyGate(from *net.UDPAddr, m *snet.Message) {
 	if nil != target && target != currentGate {
 		target.msgPerSecond += msgSendPerSecond
 		currentGate.msgPerSecond -= msgSendPerSecond
-		p.udp.SendTo(from, snet.MakeMessage(m.Context, &sproto.ChangeFlyGateResp{Ok: true, Service: target.service}))
+		replyer.reply(snet.MakeMessage(m.Context, &sproto.ChangeFlyGateResp{Ok: true, Service: target.service}))
 	} else {
-		p.udp.SendTo(from, snet.MakeMessage(m.Context, &sproto.ChangeFlyGateResp{Ok: false}))
+		replyer.reply(snet.MakeMessage(m.Context, &sproto.ChangeFlyGateResp{Ok: false}))
 	}
 }
 
-func (p *pd) onGetSetStatus(from *net.UDPAddr, m *snet.Message) {
+func (p *pd) onGetSetStatus(replyer replyer, m *snet.Message) {
 	resp := &sproto.GetSetStatusResp{}
 	for _, v := range p.pState.deployment.sets {
 		s := &sproto.SetStatus{
@@ -169,10 +169,10 @@ func (p *pd) onGetSetStatus(from *net.UDPAddr, m *snet.Message) {
 		resp.Sets = append(resp.Sets, s)
 	}
 
-	p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
+	replyer.reply(snet.MakeMessage(m.Context, resp))
 }
 
-func (p *pd) onStoreReportStatus(from *net.UDPAddr, m *snet.Message) {
+func (p *pd) onStoreReportStatus(_ replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.StoreReportStatus)
 	set := p.pState.deployment.sets[int(msg.SetID)]
 	if nil == set {

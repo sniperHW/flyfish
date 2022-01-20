@@ -21,6 +21,19 @@ import (
 	"time"
 )
 
+type replyer interface {
+	reply(*snet.Message)
+}
+
+type udpReplyer struct {
+	from *net.UDPAddr
+	pd   *pd
+}
+
+func (ur udpReplyer) reply(resp *snet.Message) {
+	ur.pd.udp.SendTo(ur.from, resp)
+}
+
 type applicationQueue struct {
 	q *queue.PriorityQueue
 }
@@ -136,7 +149,7 @@ type pd struct {
 	mutilRaft       *raft.MutilRaft
 	mainque         applicationQueue
 	udp             *flynet.Udp
-	msgHandler      map[reflect.Type]func(*net.UDPAddr, *snet.Message)
+	msgHandler      map[reflect.Type]func(replyer, *snet.Message)
 	stoponce        int32
 	startonce       int32
 	wait            sync.WaitGroup
@@ -158,7 +171,7 @@ func NewPd(id uint16, join bool, config *Config, udpService string, clusterStr s
 
 	p := &pd{
 		mainque:    mainQueue,
-		msgHandler: map[reflect.Type]func(*net.UDPAddr, *snet.Message){},
+		msgHandler: map[reflect.Type]func(replyer, *snet.Message){},
 		flygateMgr: flygateMgr{
 			flygateMap: map[string]*flygate{},
 			mainque:    mainQueue,
@@ -390,7 +403,7 @@ func (p *pd) startUdpService() error {
 			} else {
 				p.mainque.append(func() {
 					if p.isLeader() {
-						p.onMsg(from, msg.(*snet.Message))
+						p.onMsg(udpReplyer{from: from, pd: p}, msg.(*snet.Message))
 					} else {
 						GetSugar().Debugf("drop msg")
 					}
@@ -507,13 +520,13 @@ func (p *pd) onLeaderDownToFollower() {
 		if nil != op.m.Msg {
 			switch op.m.Msg.(type) {
 			case *sproto.MetaAddTable:
-				p.udp.SendTo(op.from, snet.MakeMessage(op.m.Context,
+				op.replyer.reply(snet.MakeMessage(op.m.Context,
 					&sproto.MetaAddTableResp{
 						Ok:     false,
 						Reason: "down to follower",
 					}))
 			case *sproto.MetaAddFields:
-				p.udp.SendTo(op.from, snet.MakeMessage(op.m.Context,
+				op.replyer.reply(snet.MakeMessage(op.m.Context,
 					&sproto.MetaAddFieldsResp{
 						Ok:     false,
 						Reason: "down to follower",

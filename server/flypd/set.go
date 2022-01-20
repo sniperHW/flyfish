@@ -7,7 +7,6 @@ import (
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"github.com/sniperHW/flyfish/server/slot"
-	"net"
 )
 
 type ProposalAddSet struct {
@@ -193,7 +192,7 @@ func (p *ProposalSetMarkClear) replay(pd *pd) {
 	p.doApply(pd)
 }
 
-func (p *pd) onRemSet(from *net.UDPAddr, m *snet.Message) {
+func (p *pd) onRemSet(replyer replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.RemSet)
 
 	resp := &sproto.RemSetResp{}
@@ -224,18 +223,18 @@ func (p *pd) onRemSet(from *net.UDPAddr, m *snet.Message) {
 	if nil != err {
 		resp.Ok = false
 		resp.Reason = err.Error()
-		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
+		replyer.reply(snet.MakeMessage(m.Context, resp))
 	} else {
 		p.issueProposal(&ProposalRemSet{
 			SetID: int(msg.SetID),
 			proposalBase: proposalBase{
-				reply: p.makeReplyFunc(from, m, resp),
+				reply: p.makeReplyFunc(replyer, m, resp),
 			},
 		})
 	}
 }
 
-func (p *pd) onSetMarkClear(from *net.UDPAddr, m *snet.Message) {
+func (p *pd) onSetMarkClear(replyer replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.SetMarkClear)
 
 	resp := &sproto.SetMarkClearResp{}
@@ -257,17 +256,17 @@ func (p *pd) onSetMarkClear(from *net.UDPAddr, m *snet.Message) {
 		p.issueProposal(&ProposalSetMarkClear{
 			SetID: int(msg.SetID),
 			proposalBase: proposalBase{
-				reply: p.makeReplyFunc(from, m, resp),
+				reply: p.makeReplyFunc(replyer, m, resp),
 			},
 		})
 	} else {
 		resp.Ok = false
 		resp.Reason = err.Error()
-		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
+		replyer.reply(snet.MakeMessage(m.Context, resp))
 	}
 }
 
-func (p *pd) onAddSet(from *net.UDPAddr, m *snet.Message) {
+func (p *pd) onAddSet(replyer replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.AddSet)
 	resp := &sproto.AddSetResp{}
 
@@ -313,13 +312,13 @@ func (p *pd) onAddSet(from *net.UDPAddr, m *snet.Message) {
 	if nil != err {
 		resp.Ok = false
 		resp.Reason = err.Error()
-		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
+		replyer.reply(snet.MakeMessage(m.Context, resp))
 	} else {
 		GetSugar().Debugf("onAddSet %v", *msg)
 		p.issueProposal(&ProposalAddSet{
 			Msg: msg,
 			proposalBase: proposalBase{
-				reply: p.makeReplyFunc(from, m, resp),
+				reply: p.makeReplyFunc(replyer, m, resp),
 			},
 		})
 	}

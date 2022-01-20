@@ -174,7 +174,7 @@ func (p *pd) beginSlotTransfer(slot int, setOut int, storeOut int, setIn int, st
 	})
 }
 
-func (p *pd) onSlotTransInReady(from *net.UDPAddr, m *snet.Message) {
+func (p *pd) onSlotTransInReady(_ replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.IsTransInReadyResp)
 	if t, ok := p.pState.SlotTransfer[int(msg.Slot)]; ok && t.context == m.Context {
 		if msg.Ready && t.ready == false {
@@ -186,7 +186,7 @@ func (p *pd) onSlotTransInReady(from *net.UDPAddr, m *snet.Message) {
 	}
 }
 
-func (p *pd) onSlotTransOutOk(from *net.UDPAddr, m *snet.Message) {
+func (p *pd) onSlotTransOutOk(_ replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.SlotTransOutOk)
 	if t, ok := p.pState.SlotTransfer[int(msg.Slot)]; ok && t.context == m.Context {
 		if !t.StoreTransferOutOk {
@@ -198,7 +198,7 @@ func (p *pd) onSlotTransOutOk(from *net.UDPAddr, m *snet.Message) {
 	}
 }
 
-func (p *pd) onSlotTransInOk(from *net.UDPAddr, m *snet.Message) {
+func (p *pd) onSlotTransInOk(_ replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.SlotTransInOk)
 	if t, ok := p.pState.SlotTransfer[int(msg.Slot)]; ok && t.context == m.Context {
 		p.issueProposal(&ProposalSlotTransInOk{

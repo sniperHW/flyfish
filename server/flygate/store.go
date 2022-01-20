@@ -100,7 +100,7 @@ func (s *store) queryLeader() {
 					if leaderNode, ok := s.set.nodes[leader]; ok {
 						s.leaderVersion++
 						s.leader = leaderNode
-						GetSugar().Infof("store:%d got leader:%d", s.id, leader)
+						GetSugar().Infof("set:%d store:%d got leader nodeID:%d", s.set.setID, s.id, leader)
 						for v := s.waittingSend.Front(); nil != v; v = s.waittingSend.Front() {
 							msg := s.waittingSend.Remove(v).(*forwordMsg)
 							msg.leaderVersion = s.leaderVersion

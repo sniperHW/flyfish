@@ -4,7 +4,6 @@ import (
 	"errors"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
-	"net"
 )
 
 type ProposalAddNode struct {
@@ -115,7 +114,7 @@ func (p *ProposalRemNode) replay(pd *pd) {
 	p.apply(pd)
 }
 
-func (p *pd) onAddNode(from *net.UDPAddr, m *snet.Message) {
+func (p *pd) onAddNode(replyer replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.AddNode)
 	resp := &sproto.AddNodeResp{}
 
@@ -148,18 +147,18 @@ func (p *pd) onAddNode(from *net.UDPAddr, m *snet.Message) {
 	if nil != err {
 		resp.Ok = false
 		resp.Reason = err.Error()
-		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
+		replyer.reply(snet.MakeMessage(m.Context, resp))
 	} else {
 		p.issueProposal(&ProposalAddNode{
 			Msg: msg,
 			proposalBase: proposalBase{
-				reply: p.makeReplyFunc(from, m, resp),
+				reply: p.makeReplyFunc(replyer, m, resp),
 			},
 		})
 	}
 }
 
-func (p *pd) onRemNode(from *net.UDPAddr, m *snet.Message) {
+func (p *pd) onRemNode(replyer replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.RemNode)
 	resp := &sproto.RemNodeResp{}
 
@@ -184,13 +183,13 @@ func (p *pd) onRemNode(from *net.UDPAddr, m *snet.Message) {
 	if nil != err {
 		resp.Ok = false
 		resp.Reason = err.Error()
-		p.udp.SendTo(from, snet.MakeMessage(m.Context, resp))
+		replyer.reply(snet.MakeMessage(m.Context, resp))
 	} else {
 
 		p.issueProposal(&ProposalRemNode{
 			Msg: msg,
 			proposalBase: proposalBase{
-				reply: p.makeReplyFunc(from, m, resp),
+				reply: p.makeReplyFunc(replyer, m, resp),
 			},
 		})
 	}
