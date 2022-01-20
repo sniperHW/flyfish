@@ -36,44 +36,11 @@ func (f *FieldDef) GetRealName() string {
 }
 
 type TableDef struct {
-	DbVersion int64 //DbDef.Version when table create
-	Version   int64
+	DbVersion int64       `json:"DbVersion,omitempty"` //DbDef.Version when table create
+	Version   int64       `json:"Version,omitempty"`
 	Name      string      `json:"Name,omitempty"`
 	Fields    []*FieldDef `json:"Fields,omitempty"`
 }
-
-/*func (t *TableDef) IsCompatible(o *TableDef) bool {
-	if t.DbVersion != o.DbVersion {
-		return false
-	}
-
-	if t.Name != o.Name {
-		return false
-	}
-
-	//记录字段的最大版本
-	fields := map[string]*FieldDef{}
-	for _, v := range t.Fields {
-		f := fields[v.Name]
-		if nil == f || f.TabVersion <= v.TabVersion {
-			fields[v.Name] = v
-		}
-	}
-
-	for _, v := range o.Fields {
-		f, ok := fields[v.Name]
-		if !ok || f.TabVersion != v.TabVersion || f.Type != v.Type || f.StrCap < v.StrCap {
-			if !ok {
-				fmt.Println(v.Name, ok)
-			} else {
-				fmt.Println(v.Name, ok, f.TabVersion, v.TabVersion, f.Type, v.Type, f.StrCap, v.StrCap)
-			}
-			return false
-		}
-	}
-
-	return true
-}*/
 
 func (t *TableDef) GetField(n string) *FieldDef {
 	for i, v := range t.Fields {
@@ -112,21 +79,21 @@ func (t *TableDef) Check() error {
 	names := map[string]bool{}
 	for _, v := range t.Fields {
 		if v.Name == "" {
-			return errors.New(fmt.Sprintf("emtpy filed.Name"))
+			return errors.New("emtpy filed.Name")
 		}
 
 		if strings.HasPrefix(v.Name, "__") {
-			return errors.New(fmt.Sprintf("invaild filed.Name:%s", v.Name))
+			return fmt.Errorf("invaild filed.Name:%s", v.Name)
 		}
 
 		if names[v.Name] {
-			return errors.New(fmt.Sprintf("duplicate filed.Name:%s", v.Name))
+			return fmt.Errorf("duplicate filed.Name:%s", v.Name)
 		}
 
 		tt := GetTypeByStr(v.Type)
 
 		if tt == proto.ValueType_invaild {
-			return errors.New(fmt.Sprintf("invaild filed.Type:%s", v.Type))
+			return fmt.Errorf("invaild filed.Type:%s", v.Type)
 		}
 
 		if tt == proto.ValueType_string && v.StrCap < 1 {
@@ -134,7 +101,7 @@ func (t *TableDef) Check() error {
 		}
 
 		if nil == GetDefaultValue(tt, v.DefautValue) {
-			return errors.New(fmt.Sprintf("filed.Type:%s invaild DefautValue:%s", v.Type, v.DefautValue))
+			return fmt.Errorf("filed.Type:%s invaild DefautValue:%s", v.Type, v.DefautValue)
 		}
 
 		names[v.Name] = true
@@ -164,7 +131,7 @@ func (d *DbDef) Check() error {
 	tbs := map[string]bool{}
 	for _, v := range d.TableDefs {
 		if _, ok := tbs[v.Name]; ok {
-			return errors.New(fmt.Sprintf("duplicate table %s", v.Name))
+			return fmt.Errorf("duplicate table %s", v.Name)
 		}
 
 		if err := v.Check(); nil != err {

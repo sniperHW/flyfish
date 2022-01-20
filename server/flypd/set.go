@@ -107,7 +107,7 @@ func (p *ProposalRemSet) apply(pd *pd) {
 		//只有当s中所有的store都不存在slot时才能移除
 		for _, v := range s.stores {
 			if len(v.slots.GetOpenBits()) != 0 {
-				return errors.New(fmt.Sprintf("there are slots in store:%d", v.id))
+				return fmt.Errorf("there are slots in store:%d", v.id)
 			}
 		}
 
@@ -207,7 +207,7 @@ func (p *pd) onRemSet(from *net.UDPAddr, m *snet.Message) {
 		//只有当s中所有的store都不存在slot时才能移除
 		for _, v := range s.stores {
 			if len(v.slots.GetOpenBits()) != 0 {
-				return errors.New(fmt.Sprintf("there are slots in store:%d", v.id))
+				return fmt.Errorf("there are slots in store:%d", v.id)
 			}
 		}
 
@@ -291,15 +291,15 @@ func (p *pd) onAddSet(from *net.UDPAddr, m *snet.Message) {
 
 		for _, v := range msg.Set.Nodes {
 			if nodeIDS[int(v.NodeID)] {
-				return errors.New(fmt.Sprintf("duplicate node:%d", v.NodeID))
+				return fmt.Errorf("duplicate node:%d", v.NodeID)
 			}
 
 			if nodeServices[fmt.Sprintf("%s:%d", v.Host, v.ServicePort)] {
-				return errors.New(fmt.Sprintf("duplicate service:%s:%d", v.Host, v.ServicePort))
+				return fmt.Errorf("duplicate service:%s:%d", v.Host, v.ServicePort)
 			}
 
 			if nodeRafts[fmt.Sprintf("%s:%d", v.Host, v.RaftPort)] {
-				return errors.New(fmt.Sprintf("duplicate inter:%s:%d", v.Host, v.RaftPort))
+				return fmt.Errorf("duplicate inter:%s:%d", v.Host, v.RaftPort)
 			}
 
 			nodeIDS[int(v.NodeID)] = true

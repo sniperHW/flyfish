@@ -83,15 +83,15 @@ func (p *pd) loadInitMeta() {
 					for _, vv := range v.Fields {
 						f, ok := fields[vv.Name]
 						if !ok {
-							GetSugar().Panic(fmt.Sprintf("table:%s already in db but not match with meta,field:%s not found in db", v.Name, vv.Name))
+							GetSugar().Panicf("table:%s already in db but not match with meta,field:%s not found in db", v.Name, vv.Name)
 						}
 
 						if f.Type != vv.Type {
-							GetSugar().Panic(fmt.Sprintf("table:%s already in db but not match with meta,field:%s type mismatch with db", v.Name, vv.Name))
+							GetSugar().Panicf("table:%s already in db but not match with meta,field:%s type mismatch with db", v.Name, vv.Name)
 						}
 
 						if f.StrCap < vv.StrCap {
-							GetSugar().Panic(fmt.Sprintf("table:%s already in db but not match with meta,field:%s StrCap large than db", v.Name, vv.Name))
+							GetSugar().Panicf("table:%s already in db but not match with meta,field:%s StrCap large than db", v.Name, vv.Name)
 						}
 
 						vv.TabVersion = f.TabVersion
@@ -259,7 +259,7 @@ func (p *pd) onMetaAddTable(from *net.UDPAddr, m *snet.Message) bool {
 
 		for _, v := range def.TableDefs {
 			if v.Name == msg.Name {
-				return errors.New(fmt.Sprintf("table:%s already exists", v.Name))
+				return fmt.Errorf("table:%s already exists", v.Name)
 			}
 		}
 
@@ -297,7 +297,7 @@ func (p *pd) onMetaAddTable(from *net.UDPAddr, m *snet.Message) bool {
 			//表不存在
 			return sql.CreateTables(dbc, p.config.DBType, tab)
 		} else {
-			return errors.New(fmt.Sprintf("table:%s_%d already in db but not match with meta", tab.Name, tab.DbVersion))
+			return fmt.Errorf("table:%s_%d already in db but not match with meta", tab.Name, tab.DbVersion)
 		}
 	}()
 
@@ -476,7 +476,7 @@ func (p *pd) onMetaRemoveFields(from *net.UDPAddr, m *snet.Message) bool {
 
 		for _, v := range msg.Fields {
 			if !tab.RemoveField(v) {
-				return errors.New(fmt.Sprintf("field:%s not found", v))
+				return fmt.Errorf("field:%s not found", v)
 			}
 		}
 
