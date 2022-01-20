@@ -210,7 +210,6 @@ func testHttp(t *testing.T) {
 	j, _ := json.Marshal(&sproto.GetMeta{})
 	body := bytes.NewBufferString(string(j))
 	req, err := http.NewRequest("Post", "http://localhost:8110/GetMeta", body)
-	req.Header.Set("Content-Type", "text/html; charset=utf-8")
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {

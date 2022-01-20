@@ -19,7 +19,10 @@ import (
 func (p *pd) registerMsgHandler(msg proto.Message, httpCmd string, handler func(replyer, *snet.Message)) {
 	if nil != msg {
 		reflectType := reflect.TypeOf(msg)
-		p.msgHandler.handles[reflectType] = handler
+		p.msgHandler.handles[reflectType] = msgHandle{
+			h:            handler,
+			isConsoleMsg: "" != httpCmd, //只有控制台命令才注册了http接口
+		}
 		if "" != httpCmd {
 			p.msgHandler.makeHttpReq[httpCmd] = func(r *http.Request) (*snet.Message, error) {
 				v, err := ioutil.ReadAll(r.Body)
@@ -39,7 +42,13 @@ func (p *pd) registerMsgHandler(msg proto.Message, httpCmd string, handler func(
 
 func (p *pd) onMsg(replyer replyer, msg *snet.Message) {
 	if h, ok := p.msgHandler.handles[reflect.TypeOf(msg.Msg)]; ok {
-		h(replyer, msg)
+		if p.config.DisableUdpConsole && h.isConsoleMsg {
+			//禁止udp console接口，如果请求来自udp全部
+			if _, ok := replyer.(udpReplyer); ok {
+				return
+			}
+		}
+		h.h(replyer, msg)
 	}
 }
 
@@ -243,10 +252,12 @@ func (p *pd) startUdpService() error {
 				return
 			} else {
 				p.mainque.append(func() {
-					if p.isLeader() {
+					if _, ok := msg.(*snet.Message).Msg.(*sproto.QueryPdLeader); ok {
+						p.udp.SendTo(from, snet.MakeMessage(msg.(*snet.Message).Context, &sproto.QueryPdLeaderResp{
+							Yes: p.isLeader(),
+						}))
+					} else if p.isLeader() {
 						p.onMsg(udpReplyer{from: from, pd: p}, msg.(*snet.Message))
-					} else {
-						GetSugar().Debugf("drop msg")
 					}
 				})
 			}

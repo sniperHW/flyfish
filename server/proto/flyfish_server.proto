@@ -46,6 +46,8 @@ enum ServerCmdType {
   MetaRemoveTableResp           = 128;
   MetaRemoveFields              = 129;
   MetaRemoveFieldsResp          = 130;
+  QueryPdLeader                 = 131;
+  QueryPdLeaderResp             = 132; 
 
 
   //kvnode <-> pd
@@ -454,4 +456,13 @@ message getScanTableMeta {
 message getScanTableMetaResp {
   optional int64     tabVersion = 1;
   repeated scanField fields     = 2;
+}
+
+
+message queryPdLeader {
+
+}
+
+message queryPdLeaderResp {
+  optional bool yes = 1;
 }

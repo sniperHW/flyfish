@@ -29,6 +29,7 @@ type Config struct {
 	RaftLogPrefix     string `toml:"RaftLogPrefix"`
 	InitDepoymentPath string `toml:"InitDepoymentPath"`
 	InitMetaPath      string `toml:"InitMetaPath"`
+	DisableUdpConsole bool   `toml:"DisableUdpConsole"` //是否禁止udp控制台命令
 
 	DBType string `toml:"DBType"`
 

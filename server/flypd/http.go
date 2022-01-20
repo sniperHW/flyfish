@@ -3,10 +3,8 @@ package flypd
 import (
 	"encoding/json"
 	"fmt"
-	//"github.com/gogo/protobuf/proto"
 	snet "github.com/sniperHW/flyfish/server/net"
-	//sproto "github.com/sniperHW/flyfish/server/proto"
-	//"io/ioutil"
+	sproto "github.com/sniperHW/flyfish/server/proto"
 	"net"
 	"net/http"
 	"strings"
@@ -32,12 +30,26 @@ func (p *pd) fetchReq(cmd string, r *http.Request) (*snet.Message, error) {
 }
 
 func (p *pd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if !p.isLeader() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte("pd is not leader"))
+		return
+	}
+
 	if tmp := strings.Split(r.URL.Path, "/"); len(tmp) == 2 {
-		req, err := p.fetchReq(tmp[1], r)
-		if nil == err {
-			p.onMsg(&httpReplyer{w: w}, req)
+		if tmp[1] == "QueryPdLeader" {
+			if jsonByte, err := json.Marshal(&sproto.QueryPdLeaderResp{
+				Yes: p.isLeader(),
+			}); nil == err {
+				w.Write(jsonByte)
+			}
 		} else {
-			GetSugar().Errorf("ServeHTTP error:%v", err)
+			req, err := p.fetchReq(tmp[1], r)
+			if nil == err {
+				p.onMsg(&httpReplyer{w: w}, req)
+			} else {
+				GetSugar().Errorf("ServeHTTP error:%v", err)
+			}
 		}
 	}
 }

@@ -145,8 +145,13 @@ func (p *persistenceState) loadFromJson(pd *pd, j []byte) error {
 	return nil
 }
 
+type msgHandle struct {
+	isConsoleMsg bool
+	h            func(replyer, *snet.Message)
+}
+
 type msgHandler struct {
-	handles     map[reflect.Type]func(replyer, *snet.Message)
+	handles     map[reflect.Type]msgHandle
 	makeHttpReq map[string]func(*http.Request) (*snet.Message, error)
 }
 
@@ -158,7 +163,7 @@ type pd struct {
 	udp             *flynet.Udp
 	httpListener    net.Listener
 	httpServer      *http.Server
-	msgHandler      msgHandler //map[reflect.Type]msgHandler
+	msgHandler      msgHandler
 	closed          int32
 	wait            sync.WaitGroup
 	flygateMgr      flygateMgr
@@ -180,7 +185,7 @@ func NewPd(id uint16, join bool, config *Config, service string, clusterStr stri
 	p := &pd{
 		mainque: mainQueue,
 		msgHandler: msgHandler{
-			handles:     map[reflect.Type]func(replyer, *snet.Message){},
+			handles:     map[reflect.Type]msgHandle{},
 			makeHttpReq: map[string]func(*http.Request) (*snet.Message, error){},
 		},
 		flygateMgr: flygateMgr{

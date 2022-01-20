@@ -309,6 +309,9 @@ func init() {
 	namespace.Register(&sproto.MetaRemoveFields{}, uint32(sproto.ServerCmdType_MetaRemoveFields))
 	namespace.Register(&sproto.MetaRemoveFieldsResp{}, uint32(sproto.ServerCmdType_MetaRemoveFieldsResp))
 
+	namespace.Register(&sproto.QueryPdLeader{}, uint32(sproto.ServerCmdType_QueryPdLeader))
+	namespace.Register(&sproto.QueryPdLeaderResp{}, uint32(sproto.ServerCmdType_QueryPdLeaderResp))
+
 	//flykv <-> pd
 	namespace.Register(&sproto.KvnodeBoot{}, uint32(sproto.ServerCmdType_KvnodeBoot))
 	namespace.Register(&sproto.KvnodeBootResp{}, uint32(sproto.ServerCmdType_KvnodeBootResp))
