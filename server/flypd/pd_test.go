@@ -4,20 +4,17 @@ package flypd
 //go tool cover -html=coverage.out
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/logger"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
+	console "github.com/sniperHW/flyfish/server/flypd/console/http"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	sslot "github.com/sniperHW/flyfish/server/slot"
 	"github.com/stretchr/testify/assert"
-	"io/ioutil"
 	"net"
-	"net/http"
 	"os"
 	"sync"
 	"testing"
@@ -43,11 +40,7 @@ func waitCondition(fn func() bool) {
 	wg.Wait()
 }
 
-func TestPd1(t *testing.T) {
-
-	os.RemoveAll("./raftLog")
-
-	var configStr string = `
+var configStr string = `
 
 	MainQueueMaxSize = 1000
 	RaftLogDir       = "raftLog"
@@ -74,6 +67,10 @@ func TestPd1(t *testing.T) {
 		MaxBackups      = 10			
 
 `
+
+func TestPd1(t *testing.T) {
+
+	os.RemoveAll("./raftLog")
 
 	l := logger.NewZapLogger("testPd.log", "./log", "Debug", 100, 14, 10, true)
 	InitLogger(l)
@@ -124,8 +121,6 @@ func TestPd1(t *testing.T) {
 
 	testSlotTransfer(t, p)
 
-	testHttp(t)
-
 	p.Stop()
 
 	p, _ = NewPd(1, false, conf, "localhost:8110", "1@http://localhost:18110@")
@@ -145,33 +140,6 @@ func TestPd1(t *testing.T) {
 func TestPd2(t *testing.T) {
 
 	os.RemoveAll("./raftLog")
-
-	var configStr string = `
-
-	MainQueueMaxSize = 1000
-	RaftLogDir       = "raftLog"
-	RaftLogPrefix    = "pd"
-	DBType           = "pgsql"
-	InitMetaPath = "./initmeta.json"
-
-
-	[DBConfig]
-		Host          = "localhost"
-		Port          = 5432
-		User	      = "sniper"
-		Password      = "123456"
-		DB            = "test"
-
-	[Log]
-		MaxLogfileSize  = 104857600 # 100mb
-		LogDir          = "log"
-		LogPrefix       = "pd"
-		LogLevel        = "info"
-		EnableLogStdout = false	
-		MaxAge          = 14
-		MaxBackups      = 10			
-
-`
 
 	l := logger.NewZapLogger("testPd.log", "./log", "Debug", 100, 14, 10, true)
 	InitLogger(l)
@@ -206,19 +174,49 @@ func TestPd2(t *testing.T) {
 	p.Stop()
 }
 
-func testHttp(t *testing.T) {
-	j, _ := json.Marshal(&sproto.GetMeta{})
-	body := bytes.NewBufferString(string(j))
-	req, err := http.NewRequest("Post", "http://localhost:8110/GetMeta", body)
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatal(err)
+func TestHttp(t *testing.T) {
+
+	os.RemoveAll("./raftLog")
+
+	l := logger.NewZapLogger("testPd.log", "./log", "Debug", 100, 14, 10, true)
+	InitLogger(l)
+
+	conf, _ := LoadConfigStr(configStr)
+
+	p, _ := NewPd(1, false, conf, "localhost:8110", "1@http://localhost:18110@")
+
+	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
+
+	for {
+		resp := snet.UdpCall([]*net.UDPAddr{addr},
+			snet.MakeMessage(0, &sproto.GetMeta{}),
+			time.Second,
+			func(respCh chan interface{}, r interface{}) {
+				if m, ok := r.(*snet.Message); ok {
+					if resp, ok := m.Msg.(*sproto.GetMetaResp); ok {
+						select {
+						case respCh <- resp:
+						default:
+						}
+					}
+				}
+			})
+
+		if resp != nil && resp.(*sproto.GetMetaResp).Version > 0 {
+			break
+		}
+		time.Sleep(time.Second)
 	}
 
-	defer resp.Body.Close()
-	data, err := ioutil.ReadAll(resp.Body)
-	fmt.Println(string(data), err)
+	testHttp(t)
+
+	p.Stop()
+}
+
+func testHttp(t *testing.T) {
+	c := console.NewClient("localhost:8110")
+	resp, err := c.Call(&sproto.GetMeta{}, &sproto.GetMetaResp{})
+	fmt.Println(resp, err)
 }
 
 func testAddRemoveTable(t *testing.T, p *pd) {

@@ -31,6 +31,12 @@ type Config struct {
 	InitMetaPath      string `toml:"InitMetaPath"`
 	DisableUdpConsole bool   `toml:"DisableUdpConsole"` //是否禁止udp控制台命令
 
+	TLS struct {
+		EnableTLS bool   `toml:"EnableTLS"`
+		Key       string `toml:"Key"`
+		Crt       string `toml:"Crt"`
+	} `toml:"Tls"`
+
 	DBType string `toml:"DBType"`
 
 	DBConfig struct {

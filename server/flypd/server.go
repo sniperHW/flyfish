@@ -1,7 +1,6 @@
 package flypd
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/gogo/protobuf/proto"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
@@ -30,7 +29,7 @@ func (p *pd) registerMsgHandler(msg proto.Message, httpCmd string, handler func(
 					return nil, err
 				}
 				req := reflect.New(reflectType.Elem()).Interface().(proto.Message)
-				if err = json.Unmarshal(v, req); nil != err {
+				if err = proto.Unmarshal(v, req); nil != err {
 					return nil, err
 				} else {
 					return snet.MakeMessage(0, req), nil
