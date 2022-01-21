@@ -463,5 +463,6 @@ message queryPdLeader {
 }
 
 message queryPdLeaderResp {
-  optional bool yes = 1;
+  optional bool yes       = 1;
+  optional string service = 2;
 }

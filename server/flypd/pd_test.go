@@ -10,6 +10,7 @@ import (
 	"github.com/sniperHW/flyfish/logger"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
 	console "github.com/sniperHW/flyfish/server/flypd/console/http"
+	consoleUdp "github.com/sniperHW/flyfish/server/flypd/console/udp"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	sslot "github.com/sniperHW/flyfish/server/slot"
@@ -137,43 +138,6 @@ func TestPd1(t *testing.T) {
 
 }
 
-func TestPd2(t *testing.T) {
-
-	os.RemoveAll("./raftLog")
-
-	l := logger.NewZapLogger("testPd.log", "./log", "Debug", 100, 14, 10, true)
-	InitLogger(l)
-
-	conf, _ := LoadConfigStr(configStr)
-
-	p, _ := NewPd(1, false, conf, "localhost:8110", "1@http://localhost:18110@")
-
-	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
-
-	for {
-		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.GetMeta{}),
-			time.Second,
-			func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.GetMetaResp); ok {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			})
-
-		if resp != nil && resp.(*sproto.GetMetaResp).Version > 0 {
-			break
-		}
-		time.Sleep(time.Second)
-	}
-
-	p.Stop()
-}
-
 func TestHttp(t *testing.T) {
 
 	os.RemoveAll("./raftLog")
@@ -188,22 +152,10 @@ func TestHttp(t *testing.T) {
 	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
 
 	for {
-		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.GetMeta{}),
-			time.Second,
-			func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.GetMetaResp); ok {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			})
-
-		if resp != nil && resp.(*sproto.GetMetaResp).Version > 0 {
+		if resp, err := consoleUdp.Call([]*net.UDPAddr{addr}, &sproto.GetMeta{}, time.Second); nil != resp && resp.(*sproto.GetMetaResp).Version > 0 {
 			break
+		} else {
+			fmt.Println(resp, err)
 		}
 		time.Sleep(time.Second)
 	}

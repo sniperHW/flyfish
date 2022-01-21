@@ -253,7 +253,8 @@ func (p *pd) startUdpService() error {
 				p.mainque.append(func() {
 					if _, ok := msg.(*snet.Message).Msg.(*sproto.QueryPdLeader); ok {
 						p.udp.SendTo(from, snet.MakeMessage(msg.(*snet.Message).Context, &sproto.QueryPdLeaderResp{
-							Yes: p.isLeader(),
+							Yes:     p.isLeader(),
+							Service: p.service,
 						}))
 					} else if p.isLeader() {
 						p.onMsg(udpReplyer{from: from, pd: p}, msg.(*snet.Message))
