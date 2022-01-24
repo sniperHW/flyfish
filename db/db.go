@@ -23,6 +23,8 @@ const (
 	DBState_delete = DBState(3)
 )
 
+/*对于string类型如果长度可能超过16384则使用blob,否则在mysql下将会截断*/
+
 type FieldDef struct {
 	TabVersion   int64  //TableDef.Version when field create
 	Name         string `json:"Name,omitempty"`

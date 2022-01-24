@@ -281,7 +281,7 @@ func appendFieldMySql(buff []byte, field *db.FieldDef) ([]byte, error) {
 	case "float":
 		return buffer.AppendString(buff, fmt.Sprintf("FLOAT NOT NULL DEFAULT '%s'", field.DefaultValue)), nil
 	case "string":
-		return buffer.AppendString(buff, fmt.Sprintf("TEXT NOT NULL DEFAULT '%s'", field.DefaultValue)), nil
+		return buffer.AppendString(buff, fmt.Sprintf("VARCHAR(16384) NOT NULL DEFAULT '%s'", field.DefaultValue)), nil
 	case "blob":
 		return buffer.AppendString(buff, "BLOB NULL"), nil
 	default:
@@ -359,7 +359,7 @@ func getTableSchemeMySql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
 
 	getDataType := func(tt string) string {
 		switch tt {
-		case "text":
+		case "varchar":
 			return "string"
 		case "bigint":
 			return "int"

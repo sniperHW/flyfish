@@ -34,7 +34,7 @@ type updater struct {
 	waitGroup *sync.WaitGroup
 	stoped    int32
 	startOnce sync.Once
-	toSqlStr  sqlstring
+	sqlExec   sqlExec
 }
 
 func (this *updater) IssueUpdateTask(t db.DBUpdateTask) error {
@@ -80,7 +80,6 @@ func (this *updater) exec(v interface{}) {
 		if !task.CheckUpdateLease() {
 			task.ClearUpdateStateAndReleaseLock() //释放更新锁定
 		} else {
-
 			s := task.GetUpdateAndClearUpdateState()
 
 			b := buffer.Get()
@@ -89,11 +88,11 @@ func (this *updater) exec(v interface{}) {
 			//构造更新语句
 			switch s.State {
 			case db.DBState_insert:
-				this.toSqlStr.insertUpdateStatement(b, &s)
+				this.sqlExec.prepareInsertUpdate(b, &s)
 			case db.DBState_update:
-				this.toSqlStr.updateStatement(b, &s)
+				this.sqlExec.prepareUpdate(b, &s)
 			case db.DBState_delete:
-				this.toSqlStr.deleteStatement(b, &s)
+				this.sqlExec.prepareDelete(b, &s)
 			default:
 				GetSugar().Errorf("invaild dbstate %s %d", task.GetUniKey(), s.State)
 				if task.Dirty() {
@@ -108,12 +107,11 @@ func (this *updater) exec(v interface{}) {
 			var err error
 
 			for {
-				str := b.ToStrUnsafe()
-				_, err = this.dbc.Exec(str)
+				err = this.sqlExec.exec(this.dbc)
 				if nil == err {
 					break
 				} else {
-					GetSugar().Errorf("sqlUpdater exec %s %v", str, err)
+					GetSugar().Errorf("sqlUpdater exec %s %v", this.sqlExec.b.ToStrUnsafe(), err)
 					if !task.CheckUpdateLease() {
 						task.ClearUpdateStateAndReleaseLock()
 						return
@@ -139,22 +137,12 @@ func (this *updater) exec(v interface{}) {
 }
 
 func NewUpdater(dbc *sqlx.DB, sqlType string, waitGroup *sync.WaitGroup) *updater {
-	u := &updater{
+	return &updater{
 		que:       queue.NewArrayQueue(),
 		dbc:       dbc,
 		waitGroup: waitGroup,
+		sqlExec: sqlExec{
+			sqlType: sqlType,
+		},
 	}
-
-	if sqlType == "mysql" {
-		u.toSqlStr = sqlstring{
-			binarytostr: binaryTomySqlStr,
-		}
-		u.toSqlStr.buildInsertUpdateString = u.toSqlStr.insertUpdateStatementMySql
-	} else {
-		u.toSqlStr = sqlstring{
-			binarytostr: binaryTopgSqlStr,
-		}
-		u.toSqlStr.buildInsertUpdateString = u.toSqlStr.insertUpdateStatementPgSql
-	}
-	return u
 }
