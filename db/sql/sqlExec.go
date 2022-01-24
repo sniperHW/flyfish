@@ -16,7 +16,7 @@ type sqlExec struct {
 func (this *sqlExec) prepareDelete(b *buffer.Buffer, s *db.UpdateState) {
 	this.args = this.args[:0]
 	meta := s.Meta.(*TableMeta)
-	b.AppendString("delete from ").AppendString(meta.real_tableName).AppendString(" where __key__ = $1;")
+	b.AppendString(fmt.Sprintf("delete from %s where __key__ = $1;", meta.real_tableName))
 	this.args = append(this.args, s.Key)
 	this.b = b
 }
@@ -27,12 +27,12 @@ func (this *sqlExec) prepareUpdate(b *buffer.Buffer, s *db.UpdateState) {
 	this.args = append(this.args, s.Key)
 	this.args = append(this.args, s.Version)
 
-	b.AppendString("update ").AppendString(meta.real_tableName).AppendString(" set ")
+	b.AppendString(fmt.Sprintf("update %s set ", meta.real_tableName))
 
 	for k, v := range s.Fields {
 		if nil == meta.CheckFields(v) {
 			this.args = append(this.args, v.GetValue())
-			b.AppendString(meta.getRealFieldName(k)).AppendString(fmt.Sprintf("=$%d,", len(this.args)))
+			b.AppendString(fmt.Sprintf("%s=$%d,", meta.getRealFieldName(k), len(this.args)))
 		}
 	}
 
@@ -91,8 +91,7 @@ func (this *sqlExec) prepareInsertUpdate(b *buffer.Buffer, s *db.UpdateState) {
 	}
 
 	if this.sqlType == "pgsql" {
-		b.AppendString("__version__=$2 ")
-		b.AppendString(" where ").AppendString(s.Meta.(*TableMeta).real_tableName).AppendString(".__key__ = $1;")
+		b.AppendString(fmt.Sprintf("__version__=$2 where %s.__key__ = $1;", meta.real_tableName))
 	} else {
 		b.AppendString("__version__=$2;")
 	}

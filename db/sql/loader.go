@@ -11,12 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 )
-
-type ping int
-
-const sqlping ping = ping(1)
 
 /*
  *  从队列读取连续的请求,根据请求的table把请求分组成不同的select语句
@@ -134,13 +129,10 @@ func (this *loader) exec() {
 				buff.AppendString(",'").AppendString(kk).AppendString("'")
 			}
 		}
-
 		buff.AppendString(");")
-		b := buff.Bytes()
 
-		statement := *(*string)(unsafe.Pointer(&b))
 		beg := time.Now()
-		rows, err := this.dbc.Query(statement)
+		rows, err := this.dbc.Query(buff.ToStrUnsafe())
 		buff.Free()
 
 		elapse := time.Now().Sub(beg)
@@ -176,11 +168,6 @@ func (this *loader) exec() {
 						//填充返回值
 						version := field_convter[1](filed_receiver[1]).(int64)
 						fields := map[string]*proto.Field{}
-
-						//for i := 3; i < len(filed_receiver); i++ {
-						//	name := field_names[i]
-						//	fields[name] = proto.PackField(name, field_convter[i](filed_receiver[i]))
-						//}
 
 						for i := 0; i < len(field_names); i++ {
 							name := field_names[i]
