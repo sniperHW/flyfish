@@ -411,7 +411,7 @@ func testTimeout(t *testing.T, c *Client) {
 }
 
 var metaStr string = `
-{"TableDefs":[{"Name":"users1","Fields":[{"Name":"name","Type":"string"},{"Name":"age","Type":"int","DefautValue":"0"},{"Name":"phone","Type":"string"}]}]}
+{"TableDefs":[{"Name":"users1","Fields":[{"Name":"name","Type":"string"},{"Name":"age","Type":"int","DefaultValue":"0"},{"Name":"phone","Type":"string"}]}]}
 `
 
 func TestSolo(t *testing.T) {
@@ -651,7 +651,7 @@ func testDialFailed(t *testing.T) {
 }
 
 var metaStr string = `
-{"TableDefs":[{"Name":"users1","Fields":[{"Name":"name","Type":"string"},{"Name":"age","Type":"int","DefautValue":"0"},{"Name":"phone","Type":"string"}]}]}
+{"TableDefs":[{"Name":"users1","Fields":[{"Name":"name","Type":"string"},{"Name":"age","Type":"int","DefaultValue":"0"},{"Name":"phone","Type":"string"}]}]}
 `
 
 func TestClient(t *testing.T) {

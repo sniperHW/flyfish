@@ -348,11 +348,15 @@ func (this *kvnode) start() error {
 				for _, vv := range v.Fields {
 					f, ok := fields[vv.Name]
 					if !ok {
-						return fmt.Errorf("table:%s already in db but not match with meta,field:%s not found in db", v.Name, vv.Name)
+						return fmt.Errorf("table:%s already in db but not match with meta,field:%s not found in db", f.Name, vv.Name)
 					}
 
 					if f.Type != vv.Type {
-						return fmt.Errorf("table:%s already in db but not match with meta,field:%s type mismatch with db", v.Name, vv.Name)
+						return fmt.Errorf("table:%s already in db but not match with meta,field:%s type mismatch with db", f.Name, vv.Name)
+					}
+
+					if f.DefaultValue != vv.DefaultValue {
+						GetSugar().Panicf("table:%s already in db but not match with meta,field:%s DefaultValue mismatch with db", f.Name, vv.Name)
 					}
 				}
 			}

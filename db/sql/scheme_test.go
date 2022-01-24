@@ -37,31 +37,31 @@ func TestSchemePgSql(t *testing.T) {
 	}
 
 	t1.Fields = append(t1.Fields, &db.FieldDef{
-		TabVersion:  0,
-		Name:        "field1",
-		Type:        "int",
-		DefautValue: "1",
+		TabVersion:   0,
+		Name:         "field1",
+		Type:         "int",
+		DefaultValue: "1",
 	})
 
 	t1.Fields = append(t1.Fields, &db.FieldDef{
-		TabVersion:  0,
-		Name:        "field2",
-		Type:        "float",
-		DefautValue: "1.1",
+		TabVersion:   0,
+		Name:         "field2",
+		Type:         "float",
+		DefaultValue: "1.1",
 	})
 
 	t1.Fields = append(t1.Fields, &db.FieldDef{
-		TabVersion:  0,
-		Name:        "field3",
-		Type:        "string",
-		DefautValue: "hello",
+		TabVersion:   0,
+		Name:         "field3",
+		Type:         "string",
+		DefaultValue: "hello",
 	})
 
 	t1.Fields = append(t1.Fields, &db.FieldDef{
-		TabVersion:  0,
-		Name:        "field4",
-		Type:        "blob",
-		DefautValue: "",
+		TabVersion:   0,
+		Name:         "field4",
+		Type:         "blob",
+		DefaultValue: "",
 	})
 
 	err = createTablesPgSql(dbc, &t1)
@@ -98,17 +98,17 @@ func TestSchemePgSql(t *testing.T) {
 	}
 
 	t2.Fields = append(t2.Fields, &db.FieldDef{
-		TabVersion:  0,
-		Name:        "field5",
-		Type:        "int",
-		DefautValue: "1",
+		TabVersion:   0,
+		Name:         "field5",
+		Type:         "int",
+		DefaultValue: "1",
 	})
 
 	t2.Fields = append(t2.Fields, &db.FieldDef{
-		TabVersion:  0,
-		Name:        "field6",
-		Type:        "float",
-		DefautValue: "1.1",
+		TabVersion:   0,
+		Name:         "field6",
+		Type:         "float",
+		DefaultValue: "1.1",
 	})
 
 	err = addFieldsPgSql(dbc, &t2)
@@ -140,31 +140,31 @@ func TestSchemeMySql(t *testing.T) {
 	}
 
 	t1.Fields = append(t1.Fields, &db.FieldDef{
-		TabVersion:  0,
-		Name:        "field1",
-		Type:        "int",
-		DefautValue: "1",
+		TabVersion:   0,
+		Name:         "field1",
+		Type:         "int",
+		DefaultValue: "1",
 	})
 
 	t1.Fields = append(t1.Fields, &db.FieldDef{
-		TabVersion:  0,
-		Name:        "field2",
-		Type:        "float",
-		DefautValue: "1.1",
+		TabVersion:   0,
+		Name:         "field2",
+		Type:         "float",
+		DefaultValue: "1.1",
 	})
 
 	t1.Fields = append(t1.Fields, &db.FieldDef{
-		TabVersion:  0,
-		Name:        "field3",
-		Type:        "string",
-		DefautValue: "hello",
+		TabVersion:   0,
+		Name:         "field3",
+		Type:         "string",
+		DefaultValue: "hello",
 	})
 
 	t1.Fields = append(t1.Fields, &db.FieldDef{
-		TabVersion:  0,
-		Name:        "field4",
-		Type:        "blob",
-		DefautValue: "",
+		TabVersion:   0,
+		Name:         "field4",
+		Type:         "blob",
+		DefaultValue: "",
 	})
 
 	err = createTablesMySql(dbc, &t1)
@@ -199,17 +199,17 @@ func TestSchemeMySql(t *testing.T) {
 	}
 
 	t2.Fields = append(t2.Fields, &db.FieldDef{
-		TabVersion:  0,
-		Name:        "field5",
-		Type:        "int",
-		DefautValue: "1",
+		TabVersion:   0,
+		Name:         "field5",
+		Type:         "int",
+		DefaultValue: "1",
 	})
 
 	t2.Fields = append(t2.Fields, &db.FieldDef{
-		TabVersion:  0,
-		Name:        "field6",
-		Type:        "float",
-		DefautValue: "1.1",
+		TabVersion:   0,
+		Name:         "field6",
+		Type:         "float",
+		DefaultValue: "1.1",
 	})
 
 	err = addFieldsMySql(dbc, &t2)

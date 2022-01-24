@@ -24,10 +24,10 @@ const (
 )
 
 type FieldDef struct {
-	TabVersion  int64  //TableDef.Version when field create
-	Name        string `json:"Name,omitempty"`
-	Type        string `json:"Type,omitempty"`
-	DefautValue string `json:"DefautValue,omitempty"`
+	TabVersion   int64  //TableDef.Version when field create
+	Name         string `json:"Name,omitempty"`
+	Type         string `json:"Type,omitempty"`
+	DefaultValue string `json:"DefaultValue,omitempty"` //blob类型在mysql无法设置默认值，因此，blob类型统一忽略用户设定的默认值，使用空串作为默认值
 }
 
 func (f *FieldDef) GetRealName() string {
@@ -63,10 +63,10 @@ func (t *TableDef) Clone() *TableDef {
 
 	for _, v := range t.Fields {
 		ret.Fields = append(ret.Fields, &FieldDef{
-			TabVersion:  v.TabVersion,
-			Name:        v.Name,
-			Type:        v.Type,
-			DefautValue: v.DefautValue,
+			TabVersion:   v.TabVersion,
+			Name:         v.Name,
+			Type:         v.Type,
+			DefaultValue: v.DefaultValue,
 		})
 	}
 
@@ -94,8 +94,8 @@ func (t *TableDef) Check() error {
 			return fmt.Errorf("invaild filed.Type:%s", v.Type)
 		}
 
-		if nil == GetDefaultValue(tt, v.DefautValue) {
-			return fmt.Errorf("filed.Type:%s invaild DefautValue:%s", v.Type, v.DefautValue)
+		if nil == GetDefaultValue(tt, v.DefaultValue) {
+			return fmt.Errorf("filed.Type:%s invaild DefaultValue:%s", v.Type, v.DefaultValue)
 		}
 
 		names[v.Name] = true

@@ -83,11 +83,15 @@ func (p *pd) loadInitMeta() {
 					for _, vv := range v.Fields {
 						f, ok := fields[vv.Name]
 						if !ok {
-							GetSugar().Panicf("table:%s already in db but not match with meta,field:%s not found in db", v.Name, vv.Name)
+							GetSugar().Panicf("table:%s already in db but not match with meta,field:%s not found in db", f.Name, vv.Name)
 						}
 
 						if f.Type != vv.Type {
-							GetSugar().Panicf("table:%s already in db but not match with meta,field:%s type mismatch with db", v.Name, vv.Name)
+							GetSugar().Panicf("table:%s already in db but not match with meta,field:%s type mismatch with db", f.Name, vv.Name)
+						}
+
+						if f.DefaultValue != vv.DefaultValue {
+							GetSugar().Panicf("table:%s already in db but not match with meta,field:%s DefaultValue mismatch with db", f.Name, vv.Name)
 						}
 
 						vv.TabVersion = f.TabVersion
@@ -266,10 +270,10 @@ func (p *pd) onMetaAddTable(replyer replyer, m *snet.Message) bool {
 		tab = &db.TableDef{Name: msg.Name, DbVersion: def.Version}
 		for _, v := range msg.Fields {
 			tab.Fields = append(tab.Fields, &db.FieldDef{
-				Name:        v.Name,
-				Type:        v.Type,
-				DefautValue: v.Default,
-				TabVersion:  tab.Version,
+				Name:         v.Name,
+				Type:         v.Type,
+				DefaultValue: v.Default,
+				TabVersion:   tab.Version,
 			})
 		}
 
@@ -390,10 +394,10 @@ func (p *pd) onMetaAddFields(replyer replyer, m *snet.Message) bool {
 
 		for _, v := range msg.Fields {
 			tab.Fields = append(tab.Fields, &db.FieldDef{
-				Name:        v.Name,
-				Type:        v.Type,
-				DefautValue: v.Default,
-				TabVersion:  tab.Version,
+				Name:         v.Name,
+				Type:         v.Type,
+				DefaultValue: v.Default,
+				TabVersion:   tab.Version,
 			})
 		}
 

@@ -31,24 +31,24 @@ func TestDbmeta1(t *testing.T) {
 
 	{
 		field1 := db.FieldDef{
-			TabVersion:  4,
-			Name:        "field1",
-			Type:        "int",
-			DefautValue: "1",
+			TabVersion:   4,
+			Name:         "field1",
+			Type:         "int",
+			DefaultValue: "1",
 		}
 
 		field2 := db.FieldDef{
-			TabVersion:  4,
-			Name:        "field2",
-			Type:        "float",
-			DefautValue: "1.2",
+			TabVersion:   4,
+			Name:         "field2",
+			Type:         "float",
+			DefaultValue: "1.2",
 		}
 
 		field3 := db.FieldDef{
-			TabVersion:  3,
-			Name:        "field3",
-			Type:        "string",
-			DefautValue: "hello",
+			TabVersion:   3,
+			Name:         "field3",
+			Type:         "string",
+			DefaultValue: "hello",
 		}
 
 		field4 := db.FieldDef{

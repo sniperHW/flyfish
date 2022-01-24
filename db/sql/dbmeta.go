@@ -330,7 +330,7 @@ func createTableMetas(def *db.DbDef) (map[string]*TableMeta, error) {
 					return nil, errors.New("unsupport data type")
 				}
 
-				defaultValue := db.GetDefaultValue(ftype, vv.DefautValue)
+				defaultValue := db.GetDefaultValue(ftype, vv.DefaultValue)
 
 				if nil == defaultValue {
 					return nil, errors.New("no default value")

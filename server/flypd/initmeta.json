@@ -2,8 +2,8 @@
 	"TableDefs":[
 	{"Name":"table1",
 	 "Fields":[
-	 	{"Name":"field1","Type":"string","DefautValue":""},
-	 	{"Name":"field2","Type":"int","DefautValue":"1"},
-	 	{"Name":"field3","Type":"string","DefautValue":""}]
+	 	{"Name":"field1","Type":"string","DefaultValue":""},
+	 	{"Name":"field2","Type":"int","DefaultValue":"1"},
+	 	{"Name":"field3","Type":"string","DefaultValue":""}]
 	}]
 }

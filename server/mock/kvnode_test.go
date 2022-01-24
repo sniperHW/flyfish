@@ -310,7 +310,7 @@ func test(t *testing.T, c *client.Client) {
 }
 
 var metaStr string = `
-{"TableDefs":[{"Name":"users1","Fields":[{"Name":"name","Type":"string"},{"Name":"age","Type":"int","DefautValue":"0"},{"Name":"phone","Type":"string"}]}]}
+{"TableDefs":[{"Name":"users1","Fields":[{"Name":"name","Type":"string"},{"Name":"age","Type":"int","DefaultValue":"0"},{"Name":"phone","Type":"string"}]}]}
 `
 
 func TestMockKvNode(t *testing.T) {

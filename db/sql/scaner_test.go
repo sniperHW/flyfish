@@ -16,21 +16,21 @@ func TestScaner(t *testing.T) {
 	}
 
 	tdef.Fields = append(tdef.Fields, &db.FieldDef{
-		Name:        "name",
-		Type:        "string",
-		DefautValue: "",
+		Name:         "name",
+		Type:         "string",
+		DefaultValue: "",
 	})
 
 	tdef.Fields = append(tdef.Fields, &db.FieldDef{
-		Name:        "age",
-		Type:        "int",
-		DefautValue: "1",
+		Name:         "age",
+		Type:         "int",
+		DefaultValue: "1",
 	})
 
 	tdef.Fields = append(tdef.Fields, &db.FieldDef{
-		Name:        "phone",
-		Type:        "string",
-		DefautValue: "",
+		Name:         "phone",
+		Type:         "string",
+		DefaultValue: "",
 	})
 
 	dbdef.TableDefs = append(dbdef.TableDefs, tdef)
