@@ -7,15 +7,14 @@ import (
 
 var (
 	ReadTimeout                      = time.Second * 5
-	DefaultSnapshotCount      uint64 = 3000
+	SnapshotCount             uint64 = 3000
 	SnapshotCatchUpEntriesN   uint64 = 1000
 	MaxInFlightMsgSnap        int64  = 16
 	ReleaseDelayAfterSnapshot        = 30 * time.Second
 	ReadyPercent                     = 0.9
 	HealthInterval                   = 5 * time.Second
 	CheckQuorum               bool   = true
-	MaxPendingRead            int64  = 10000
-	MaxPendingProposal        int64  = 10000
+	MaxBatchCount             int    = 200
 )
 
 type ConfChange struct {

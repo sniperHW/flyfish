@@ -490,6 +490,18 @@ func (this *kvnode) start() error {
 
 func NewKvNode(id int, join bool, config *Config, db dbI) (*kvnode, error) {
 
+	if config.SnapshotCount > 0 {
+		raft.SnapshotCount = config.SnapshotCount
+	}
+
+	if config.SnapshotCatchUpEntriesN > 0 {
+		raft.SnapshotCatchUpEntriesN = config.SnapshotCatchUpEntriesN
+	}
+
+	if config.MaxBatchCount > 0 {
+		raft.MaxBatchCount = config.MaxBatchCount
+	}
+
 	if config.StoreReqLimit.SoftLimit <= 0 {
 		config.StoreReqLimit.SoftLimit = 20000
 	}

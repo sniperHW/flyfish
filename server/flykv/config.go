@@ -40,6 +40,10 @@ type Config struct {
 		PD string `toml:"PD"` //pd服务地址用;分隔
 	} `toml:"ClusterConfig"`
 
+	SnapshotCount           uint64 `toml:"SnapshotCount"`
+	SnapshotCatchUpEntriesN uint64 `toml:"SnapshotCatchUpEntriesN"`
+	MaxBatchCount           int    `toml:"MaxBatchCount"`
+
 	RaftLogDir string `toml:"RaftLogDir"` //raft日志存放目录
 
 	RaftLogPrefix string `toml:"RaftLogPrefix"`

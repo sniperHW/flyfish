@@ -889,7 +889,7 @@ func NewInstance(nodeID uint16, shard uint16, join bool, mutilRaft *MutilRaft, c
 		logdir:     logdir,
 		waldir:     fmt.Sprintf("%s/%s-%d-%d-wal", logdir, raftLogPrefix, nodeID, shard),
 		snapdir:    fmt.Sprintf("%s/%s-%d-%d-snap", logdir, raftLogPrefix, nodeID, shard),
-		snapCount:  DefaultSnapshotCount,
+		snapCount:  SnapshotCount,
 		stopc:      make(chan struct{}),
 		stopping:   make(chan struct{}),
 		snapshotCh: make(chan interface{}, 1),

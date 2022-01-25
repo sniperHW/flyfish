@@ -14,13 +14,11 @@ SqlLoaderCount          = 5                    #加载go程的数量
     
 SqlUpdaterCount         = 5                    #更新go程的数量
 
-ProposalFlushInterval   = 100                    
+SnapshotCount           = 3000
 
-ReadFlushInterval       = 10
+SnapshotCatchUpEntriesN = 1000
 
-ProposalBatchCount      = 200
-
-ReadBatchCount          = 100
+MaxBatchCount           = 200
 
 RaftLogDir              = "raftLog"
 

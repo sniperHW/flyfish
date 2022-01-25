@@ -166,7 +166,7 @@ func (rc *RaftInstance) runProposePipeline() {
 
 			for {
 
-				batch := make([]Proposal, 0, 200)
+				batch := make([]Proposal, 0, MaxBatchCount)
 				for k, vv := range localList {
 					batch = append(batch, vv.(Proposal))
 					localList[k] = nil
