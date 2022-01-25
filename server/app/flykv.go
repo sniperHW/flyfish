@@ -17,7 +17,7 @@ func main() {
 	id := flag.Int("id", 1, "node ID")
 	pprof := flag.String("pprof", "localhost:8899", "pprof")
 	config := flag.String("config", "flykv_config.toml", "config")
-	join := flag.String("join", false, "set true if the node is new join node")
+	join := flag.Bool("join", false, "set true if the node is new join node")
 
 	go func() {
 		http.ListenAndServe(*pprof, nil)

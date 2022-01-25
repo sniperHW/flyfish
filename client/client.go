@@ -120,7 +120,7 @@ func (this *serverConn) onConnected(session *flynet.Socket) {
 		this.onMessage(msg.(*cs.RespMessage))
 	})
 
-	GetSugar().Infof("connect to flygate ok")
+	//GetSugar().Infof("connect to flygate ok")
 
 	now := time.Now()
 	//发送被排队的请求

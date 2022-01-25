@@ -41,7 +41,7 @@ ServiceHost             = "127.0.0.1"
 ServicePort             = 8110
 RaftCluster             = "1@http://127.0.0.1:12377@voter"
 Stores                  = [1,2,3,4,5,6]
-Meta                    = ["users1@name:string:,age:int:,phone:string:"]
+MetaPath                = "test/meta.json"
 
 [ClusterConfig]
 PD                      = "ip:port;ip:port"

@@ -6,7 +6,7 @@ import (
 	"github.com/sniperHW/flyfish/client/test/config"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/logger"
-	"github.com/sniperHW/flyfish/server/flykv"
+	"github.com/sniperHW/flyfish/server/slot"
 	"math/rand"
 	"os"
 	"strconv"
@@ -81,7 +81,7 @@ func main() {
 
 	if cfg.Mode == "solo" {
 		clientCfg.SoloService = cfg.Service
-		clientCfg.UnikeyPlacement = flykv.MakeUnikeyPlacement(cfg.Stores)
+		clientCfg.UnikeyPlacement = slot.MakeUnikeyPlacement(cfg.Stores)
 	} else {
 		clientCfg.PD = strings.Split(cfg.PD, ";")
 	}

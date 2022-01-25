@@ -3,7 +3,7 @@
 	{"Name":"users1",
 	 "Fields":[
 	 	{"Name":"name","Type":"string","DefaultValue":""},
-	 	{"Name":"age","Type":"int","DefaultValue":"1"},
+	 	{"Name":"age","Type":"int","DefaultValue":"0"},
 	 	{"Name":"phone","Type":"string","DefaultValue":""}]
 	}]
 }
