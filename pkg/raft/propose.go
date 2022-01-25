@@ -139,10 +139,10 @@ func (rc *RaftInstance) propose(batchProposal []Proposal) {
 	rc.proposalMgr.addToDict(t)
 
 	if err := rc.node.Propose(context.TODO(), b); nil != err {
-		GetSugar().Errorf("proposalError %v", err)
-		rc.proposalMgr.remove(t)
-		for _, v := range batchProposal {
-			v.OnError(err)
+		if nil != rc.proposalMgr.getAndRemoveByID(t.id) {
+			for _, v := range batchProposal {
+				v.OnError(err)
+			}
 		}
 	}
 }

@@ -13,8 +13,8 @@ var (
 	ReleaseDelayAfterSnapshot        = 30 * time.Second
 	ReadyPercent                     = 0.9
 	HealthInterval                   = 5 * time.Second
-	CheckQuorum               bool   = true
 	MaxBatchCount             int    = 200
+	checkQuorum               bool   = true //不对外暴露，只供测试用
 )
 
 type ConfChange struct {

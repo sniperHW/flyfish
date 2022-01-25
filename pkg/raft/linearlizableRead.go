@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft"
+	"time"
 )
 
 //一致性读请求
@@ -30,22 +31,14 @@ func (rc *RaftInstance) processReadStates(readStates []raft.ReadState) {
 	for _, rs := range readStates {
 		index := binary.BigEndian.Uint64(rs.RequestCtx)
 		v, ok := rc.linearizableReadMgr.dict[index]
-		if ok {
-			if rc.isLeader() {
-				if rc.appliedIndex < v.ridx {
-					v.ridx = rs.Index
-					v.ptrridx = &v.ridx
-				} else {
-					rc.commitC.AppendHighestPriotiryItem(v.other.([]LinearizableRead))
-					delete(rc.linearizableReadMgr.dict, v.id)
-					rc.linearizableReadMgr.l.Remove(v.listE)
-				}
+		if ok && v.timer.Stop() {
+			if rc.appliedIndex < v.ridx {
+				v.ridx = rs.Index
+				v.ptrridx = &v.ridx
 			} else {
+				rc.commitC.AppendHighestPriotiryItem(v.other.([]LinearizableRead))
 				delete(rc.linearizableReadMgr.dict, v.id)
 				rc.linearizableReadMgr.l.Remove(v.listE)
-				for _, vv := range v.other.([]LinearizableRead) {
-					vv.OnError(ErrNotLeader)
-				}
 			}
 		}
 	}
@@ -61,12 +54,21 @@ func (rc *RaftInstance) linearizableRead(batchRead []LinearizableRead) {
 	ctxToSend := make([]byte, 8)
 	binary.BigEndian.PutUint64(ctxToSend, t.id)
 
+	t.timer = time.AfterFunc(ReadTimeout, func() {
+		if nil != rc.linearizableReadMgr.getAndRemoveByID(t.id) {
+			for _, v := range batchRead {
+				v.OnError(ErrTimeout)
+			}
+		}
+	})
+
 	rc.linearizableReadMgr.addToDictAndList(t)
 
 	if err := rc.node.ReadIndex(context.TODO(), ctxToSend); nil != err {
-		rc.linearizableReadMgr.remove(t)
-		for _, v := range batchRead {
-			v.OnError(err)
+		if nil != rc.linearizableReadMgr.getAndRemoveByID(t.id) && t.timer.Stop() {
+			for _, v := range batchRead {
+				v.OnError(err)
+			}
 		}
 	}
 }

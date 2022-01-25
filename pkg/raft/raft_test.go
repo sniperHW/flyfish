@@ -486,11 +486,7 @@ func TestSingleNode(t *testing.T) {
 	//先删除所有kv文件
 	os.RemoveAll("./log/raftLog")
 
-	//ProposalFlushInterval = 10
-	//ProposalBatchCount = 1
-	//ReadFlushInterval = 10
-	//ReadBatchCount = 1
-	DefaultSnapshotCount = 100
+	SnapshotCount = 100
 	SnapshotCatchUpEntriesN = 100
 
 	{
@@ -597,16 +593,12 @@ func TestCluster(t *testing.T) {
 	//os.RemoveAll("./log/raftLog")
 	os.RemoveAll("./log")
 
-	//ProposalFlushInterval = 10
-	//ProposalBatchCount = 1
-	//ReadFlushInterval = 10
-	//ReadBatchCount = 1
-	DefaultSnapshotCount = 100
+	SnapshotCount = 100
 	SnapshotCatchUpEntriesN = 100
 
-	cluster := "1@http://127.0.0.1:22378@,2@http://127.0.0.1:22379@,3@http://127.0.0.1:22380@"
+	cluster := "2@http://127.0.0.1:22378@,3@http://127.0.0.1:22379@,4@http://127.0.0.1:22380@"
 
-	node1 := newKvNode(1, 1, false, cluster)
+	node1 := newKvNode(2, 1, false, cluster)
 
 	becomeLeaderCh1 := make(chan *kvnode, 1)
 
@@ -614,7 +606,7 @@ func TestCluster(t *testing.T) {
 		becomeLeaderCh1 <- node1
 	}
 
-	node2 := newKvNode(2, 1, false, cluster)
+	node2 := newKvNode(3, 1, false, cluster)
 
 	becomeLeaderCh2 := make(chan *kvnode, 1)
 
@@ -622,7 +614,7 @@ func TestCluster(t *testing.T) {
 		becomeLeaderCh2 <- node2
 	}
 
-	node3 := newKvNode(3, 1, false, cluster)
+	node3 := newKvNode(4, 1, false, cluster)
 
 	becomeLeaderCh3 := make(chan *kvnode, 1)
 
@@ -652,7 +644,7 @@ func TestCluster(t *testing.T) {
 	assert.Equal(t, r, "sniperHW")
 
 	//加入新节点
-	newNodeID := uint64((4 << 16) + 1)
+	newNodeID := uint64((5 << 16) + 1)
 
 	var err error
 
@@ -667,9 +659,9 @@ func TestCluster(t *testing.T) {
 
 	fmt.Println("AddLearner ok")
 
-	cluster = "1@http://127.0.0.1:22378@,2@http://127.0.0.1:22379@,3@http://127.0.0.1:22380@,4@http://127.0.0.1:22381@learner"
+	cluster = "2@http://127.0.0.1:22378@,3@http://127.0.0.1:22379@,4@http://127.0.0.1:22380@,5@http://127.0.0.1:22381@learner"
 
-	node4 := newKvNode(4, 1, true, cluster)
+	node4 := newKvNode(5, 1, true, cluster)
 
 	startOkCh4 := make(chan struct{}, 1)
 
@@ -701,7 +693,7 @@ func TestCluster(t *testing.T) {
 	}
 
 	//test remove node
-	leader.store.RemoveMember(uint64((4 << 16) + 1))
+	leader.store.RemoveMember(uint64((5 << 16) + 1))
 
 	node4.stop()
 
@@ -719,16 +711,12 @@ func TestDownToFollower(t *testing.T) {
 	//先删除所有kv文件
 	os.RemoveAll("./log/raftLog")
 
-	//ProposalFlushInterval = 10
-	//ProposalBatchCount = 1
-	//ReadFlushInterval = 10
-	//ReadBatchCount = 1
-	DefaultSnapshotCount = 100
+	SnapshotCount = 100
 	SnapshotCatchUpEntriesN = 100
 
-	cluster := "1@http://127.0.0.1:22378@,2@http://127.0.0.1:22379@"
+	cluster := "6@http://127.0.0.1:22378@,7@http://127.0.0.1:22379@"
 
-	node1 := newKvNode(1, 1, false, cluster)
+	node1 := newKvNode(6, 1, false, cluster)
 
 	becomeLeaderCh1 := make(chan *kvnode, 1)
 
@@ -736,7 +724,7 @@ func TestDownToFollower(t *testing.T) {
 		becomeLeaderCh1 <- node1
 	}
 
-	node2 := newKvNode(2, 1, false, cluster)
+	node2 := newKvNode(7, 1, false, cluster)
 
 	becomeLeaderCh2 := make(chan *kvnode, 1)
 
@@ -787,17 +775,13 @@ func TestOneNodeDownAndRestart(t *testing.T) {
 	//先删除所有kv文件
 	os.RemoveAll("./log/raftLog")
 
-	//ProposalFlushInterval = 10
-	//ProposalBatchCount = 1
-	//ReadFlushInterval = 10
-	//ReadBatchCount = 1
-	DefaultSnapshotCount = 100
+	SnapshotCount = 100
 	SnapshotCatchUpEntriesN = 100
-	CheckQuorum = false
+	checkQuorum = false
 
-	cluster := "1@http://127.0.0.1:22378@,2@http://127.0.0.1:22379@"
+	cluster := "8@http://127.0.0.1:22378@,9@http://127.0.0.1:22379@"
 
-	node1 := newKvNode(1, 1, false, cluster)
+	node1 := newKvNode(8, 1, false, cluster)
 
 	becomeLeaderCh1 := make(chan *kvnode, 1)
 
@@ -805,7 +789,7 @@ func TestOneNodeDownAndRestart(t *testing.T) {
 		becomeLeaderCh1 <- node1
 	}
 
-	node2 := newKvNode(2, 1, false, cluster)
+	node2 := newKvNode(9, 1, false, cluster)
 
 	becomeLeaderCh2 := make(chan *kvnode, 1)
 
@@ -836,22 +820,26 @@ func TestOneNodeDownAndRestart(t *testing.T) {
 		node2 = nil
 	}
 
-	go func() {
-		time.Sleep(time.Second * 10)
-		if node1 == nil {
-			node1 = newKvNode(1, 1, false, cluster)
-		}
-
-		if node2 == nil {
-			node2 = newKvNode(2, 1, false, cluster)
-		}
-
-	}()
+	ch := make(chan struct{})
 
 	//在另一个节点重启完成后成功
-	begin := time.Now()
-	ret := leader.store.Set("sniperHW", "ok")
-	fmt.Println("set result", ret, "use", time.Now().Sub(begin))
+	go func() {
+		begin := time.Now()
+		ret := leader.store.Set("sniperHW", "ok")
+		fmt.Println("set result", ret, "use", time.Now().Sub(begin))
+		close(ch)
+	}()
+
+	time.Sleep(time.Second)
+	if node1 == nil {
+		node1 = newKvNode(8, 1, false, cluster)
+	}
+
+	if node2 == nil {
+		node2 = newKvNode(9, 1, false, cluster)
+	}
+
+	<-ch
 
 	if node1 != nil {
 		node1.stop()
@@ -861,7 +849,7 @@ func TestOneNodeDownAndRestart(t *testing.T) {
 		node2.stop()
 	}
 
-	CheckQuorum = true
+	checkQuorum = true
 
 }
 
@@ -869,16 +857,12 @@ func TestTransferLeader(t *testing.T) {
 	//先删除所有kv文件
 	os.RemoveAll("./log/raftLog")
 
-	//ProposalFlushInterval = 10
-	//ProposalBatchCount = 1
-	//ReadFlushInterval = 10
-	//ReadBatchCount = 1
-	DefaultSnapshotCount = 100
+	SnapshotCount = 100
 	SnapshotCatchUpEntriesN = 100
 
-	cluster := "1@http://127.0.0.1:22378@,2@http://127.0.0.1:22379@"
+	cluster := "10@http://127.0.0.1:22378@,11@http://127.0.0.1:22379@"
 
-	node1 := newKvNode(1, 1, false, cluster)
+	node1 := newKvNode(10, 1, false, cluster)
 
 	becomeLeaderCh1 := make(chan *kvnode, 1)
 
@@ -886,7 +870,7 @@ func TestTransferLeader(t *testing.T) {
 		becomeLeaderCh1 <- node1
 	}
 
-	node2 := newKvNode(2, 1, false, cluster)
+	node2 := newKvNode(11, 1, false, cluster)
 
 	becomeLeaderCh2 := make(chan *kvnode, 1)
 
@@ -925,4 +909,67 @@ func TestTransferLeader(t *testing.T) {
 
 	node1.stop()
 	node2.stop()
+}
+
+func TestFollower(t *testing.T) {
+	//先删除所有kv文件
+	os.RemoveAll("./log/raftLog")
+
+	SnapshotCount = 100
+	SnapshotCatchUpEntriesN = 100
+
+	cluster := "12@http://127.0.0.1:22378@,13@http://127.0.0.1:22379@"
+
+	node1 := newKvNode(12, 1, false, cluster)
+
+	becomeLeaderCh1 := make(chan *kvnode, 1)
+
+	node1.store.becomeLeader = func() {
+		becomeLeaderCh1 <- node1
+	}
+
+	node2 := newKvNode(13, 1, false, cluster)
+
+	becomeLeaderCh2 := make(chan *kvnode, 1)
+
+	node2.store.becomeLeader = func() {
+		becomeLeaderCh2 <- node2
+	}
+
+	getLeader := func() *kvnode {
+		select {
+		case n := <-becomeLeaderCh1:
+			fmt.Println("node1 becomeLeader")
+			return n
+		case n := <-becomeLeaderCh2:
+			fmt.Println("node2 becomeLeader")
+			return n
+		}
+	}
+
+	leader := getLeader()
+
+	var follower *kvnode
+	if leader == node1 {
+		follower = node2
+	} else {
+		follower = node1
+	}
+
+	for i := 0; i < 10; i++ {
+		fmt.Println(follower.store.Set(fmt.Sprintf("sniperHW:%d", i), fmt.Sprintf("sniperHW:%d", i)))
+	}
+
+	for i := 0; i < 10; i++ {
+		leader.store.Set(fmt.Sprintf("sniperHW:%d", i), fmt.Sprintf("sniperHW:%d", i))
+	}
+
+	leader.stop()
+	time.Sleep(time.Second)
+
+	for i := 0; i < 10; i++ {
+		fmt.Println(follower.store.Get(fmt.Sprintf("sniperHW:%d", i)))
+	}
+
+	follower.stop()
 }

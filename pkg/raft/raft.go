@@ -57,6 +57,7 @@ type raftTask struct {
 	//for LinearizableRead use only
 	ptrridx *uint64
 	ridx    uint64
+	timer   *time.Timer
 }
 
 type raftTaskMgr struct {
@@ -78,16 +79,6 @@ func (this *raftTaskMgr) addToDictAndList(t *raftTask) {
 	t.listE = this.l.PushBack(t)
 	this.dict[t.id] = t
 	GetSugar().Debugf("raftTaskMgr add %d", t.id)
-}
-
-func (this *raftTaskMgr) remove(t *raftTask) {
-	this.Lock()
-	defer this.Unlock()
-	if nil != t.listE {
-		this.l.Remove(t.listE)
-	}
-	delete(this.dict, t.id)
-	GetSugar().Debugf("raftTaskMgr remove %d", t.id)
 }
 
 func (this *raftTaskMgr) getAndRemoveByID(id uint64) *raftTask {
@@ -114,11 +105,6 @@ func (this *raftTaskMgr) onLeaderDownToFollower() {
 	this.Unlock()
 	for _, v := range dict {
 		switch v.other.(type) {
-		case []LinearizableRead:
-			for _, vv := range v.other.([]LinearizableRead) {
-				vv.OnError(ErrLeaderDownToFollower)
-			}
-
 		case []Proposal:
 			for _, vv := range v.other.([]Proposal) {
 				vv.OnError(ErrLeaderDownToFollower)
@@ -500,7 +486,6 @@ func (rc *RaftInstance) serveChannels() {
 						if rc.softState.RaftState != raft.StateLeader {
 							GetSugar().Infof("(%s) down to follower", rc.id.String())
 							rc.proposalMgr.onLeaderDownToFollower()
-							rc.linearizableReadMgr.onLeaderDownToFollower()
 						}
 					} else if rc.softState.RaftState == raft.StateLeader {
 						GetSugar().Infof("(%s) becomeLeader", rc.id.String())
@@ -946,7 +931,7 @@ func NewInstance(nodeID uint16, shard uint16, join bool, mutilRaft *MutilRaft, c
 		MaxUncommittedEntriesSize: 1 << 30,
 		Logger:                    rloger,
 		DisableProposalForwarding: true, //禁止非leader转发proposal
-		CheckQuorum:               CheckQuorum,
+		CheckQuorum:               checkQuorum,
 		PreVote:                   true,
 	}
 
