@@ -486,10 +486,10 @@ func TestSingleNode(t *testing.T) {
 	//先删除所有kv文件
 	os.RemoveAll("./log/raftLog")
 
-	ProposalFlushInterval = 10
-	ProposalBatchCount = 1
-	ReadFlushInterval = 10
-	ReadBatchCount = 1
+	//ProposalFlushInterval = 10
+	//ProposalBatchCount = 1
+	//ReadFlushInterval = 10
+	//ReadBatchCount = 1
 	DefaultSnapshotCount = 100
 	SnapshotCatchUpEntriesN = 100
 
@@ -597,10 +597,10 @@ func TestCluster(t *testing.T) {
 	//os.RemoveAll("./log/raftLog")
 	os.RemoveAll("./log")
 
-	ProposalFlushInterval = 10
-	ProposalBatchCount = 1
-	ReadFlushInterval = 10
-	ReadBatchCount = 1
+	//ProposalFlushInterval = 10
+	//ProposalBatchCount = 1
+	//ReadFlushInterval = 10
+	//ReadBatchCount = 1
 	DefaultSnapshotCount = 100
 	SnapshotCatchUpEntriesN = 100
 
@@ -719,10 +719,10 @@ func TestDownToFollower(t *testing.T) {
 	//先删除所有kv文件
 	os.RemoveAll("./log/raftLog")
 
-	ProposalFlushInterval = 10
-	ProposalBatchCount = 1
-	ReadFlushInterval = 10
-	ReadBatchCount = 1
+	//ProposalFlushInterval = 10
+	//ProposalBatchCount = 1
+	//ReadFlushInterval = 10
+	//ReadBatchCount = 1
 	DefaultSnapshotCount = 100
 	SnapshotCatchUpEntriesN = 100
 
@@ -787,10 +787,10 @@ func TestOneNodeDownAndRestart(t *testing.T) {
 	//先删除所有kv文件
 	os.RemoveAll("./log/raftLog")
 
-	ProposalFlushInterval = 10
-	ProposalBatchCount = 1
-	ReadFlushInterval = 10
-	ReadBatchCount = 1
+	//ProposalFlushInterval = 10
+	//ProposalBatchCount = 1
+	//ReadFlushInterval = 10
+	//ReadBatchCount = 1
 	DefaultSnapshotCount = 100
 	SnapshotCatchUpEntriesN = 100
 	CheckQuorum = false
@@ -869,10 +869,10 @@ func TestTransferLeader(t *testing.T) {
 	//先删除所有kv文件
 	os.RemoveAll("./log/raftLog")
 
-	ProposalFlushInterval = 10
-	ProposalBatchCount = 1
-	ReadFlushInterval = 10
-	ReadBatchCount = 1
+	//ProposalFlushInterval = 10
+	//ProposalBatchCount = 1
+	//ReadFlushInterval = 10
+	//ReadBatchCount = 1
 	DefaultSnapshotCount = 100
 	SnapshotCatchUpEntriesN = 100
 

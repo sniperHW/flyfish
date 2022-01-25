@@ -490,22 +490,6 @@ func (this *kvnode) start() error {
 
 func NewKvNode(id int, join bool, config *Config, db dbI) (*kvnode, error) {
 
-	if config.ProposalFlushInterval > 0 {
-		raft.ProposalFlushInterval = config.ProposalFlushInterval
-	}
-
-	if config.ReadFlushInterval > 0 {
-		raft.ReadFlushInterval = config.ReadFlushInterval
-	}
-
-	if config.ProposalBatchCount > 0 {
-		raft.ProposalBatchCount = config.ProposalBatchCount
-	}
-
-	if config.ReadBatchCount > 0 {
-		raft.ReadBatchCount = config.ReadBatchCount
-	}
-
 	if config.StoreReqLimit.SoftLimit <= 0 {
 		config.StoreReqLimit.SoftLimit = 20000
 	}

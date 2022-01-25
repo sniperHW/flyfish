@@ -36,10 +36,6 @@ type replayable interface {
 	replay(pd *pd)
 }
 
-func (p proposalBase) Isurgent() bool {
-	return true
-}
-
 func (p proposalBase) OnError(err error) {
 	if nil != p.reply {
 		p.reply(err)

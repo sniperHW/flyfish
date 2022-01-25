@@ -54,14 +54,6 @@ type Config struct {
 
 	SqlUpdaterCount int `toml:"SqlUpdaterCount"`
 
-	ProposalFlushInterval int `toml:"ProposalFlushInterval"`
-
-	ReadFlushInterval int `toml:"ReadFlushInterval"`
-
-	ProposalBatchCount int `toml:"ProposalBatchCount"`
-
-	ReadBatchCount int `toml:"ReadBatchCount"`
-
 	MainQueueMaxSize int `toml:"MainQueueMaxSize"` //store主处理队列容量上限,超过上限客户端的命令无法入列将返回retry
 
 	LinearizableRead bool `toml:"LinearizableRead"`

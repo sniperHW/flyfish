@@ -21,10 +21,6 @@ type leaseProposal struct {
 	store     *kvstore
 }
 
-func (this *leaseProposal) Isurgent() bool {
-	return true
-}
-
 func (this *leaseProposal) OnError(err error) {
 	GetSugar().Errorf("leaseProposal error:%v", err)
 	select {

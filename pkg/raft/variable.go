@@ -6,10 +6,6 @@ import (
 )
 
 var (
-	ProposalFlushInterval            = 100
-	ProposalBatchCount               = 200
-	ReadFlushInterval                = 50
-	ReadBatchCount                   = 100
 	ReadTimeout                      = time.Second * 5
 	DefaultSnapshotCount      uint64 = 3000
 	SnapshotCatchUpEntriesN   uint64 = 1000
@@ -18,6 +14,8 @@ var (
 	ReadyPercent                     = 0.9
 	HealthInterval                   = 5 * time.Second
 	CheckQuorum               bool   = true
+	MaxPendingRead            int64  = 10000
+	MaxPendingProposal        int64  = 10000
 )
 
 type ConfChange struct {

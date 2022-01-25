@@ -12,12 +12,6 @@ import (
 )
 
 type Proposal interface {
-	/*
-	 *  true: 立即触发propose
-	 *  false: 累积proposal,符合条件时触发一条合并的propose
-	 */
-	Isurgent() bool
-
 	OnError(error)
 
 	/*
@@ -170,14 +164,30 @@ func (rc *RaftInstance) runProposePipeline() {
 				return
 			}
 
-			batch := make([]Proposal, 0, len(localList))
+			for {
 
-			for k, vv := range localList {
-				batch = append(batch, vv.(Proposal))
-				localList[k] = nil
+				batch := make([]Proposal, 0, 200)
+				for k, vv := range localList {
+					batch = append(batch, vv.(Proposal))
+					localList[k] = nil
+					if len(batch) == cap(batch) {
+						rc.propose(batch)
+						if k != len(localList)-1 {
+							batch = make([]Proposal, 0, len(localList)-1-k)
+						} else {
+							batch = nil
+						}
+					}
+				}
+
+				if len(batch) > 0 {
+					rc.propose(batch)
+				}
+
+				if localList, closed = rc.proposePipeline.PopNoWait(localList); closed || len(localList) == 0 {
+					break
+				}
 			}
-
-			rc.propose(batch)
 		}
 	}()
 }

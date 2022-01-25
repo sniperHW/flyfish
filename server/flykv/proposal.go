@@ -278,10 +278,6 @@ type kvLinearizableRead struct {
 	cmds []cmdI
 }
 
-func (this *kvProposal) Isurgent() bool {
-	return false
-}
-
 func (this *kvProposal) OnError(err error) {
 
 	GetSugar().Infof("kvProposal OnError:%v", err)
@@ -421,10 +417,6 @@ type ProposalUpdateMeta struct {
 	store *kvstore
 }
 
-func (this *ProposalUpdateMeta) Isurgent() bool {
-	return true
-}
-
 func (this *ProposalUpdateMeta) OnError(err error) {
 	GetSugar().Errorf("ProposalUpdateMeta error:%v", err)
 }
@@ -441,10 +433,6 @@ func (this *ProposalUpdateMeta) apply() {
 type proposalNop struct {
 	proposalBase
 	store *kvstore
-}
-
-func (this *proposalNop) Isurgent() bool {
-	return true
 }
 
 func (this *proposalNop) OnError(err error) {
@@ -474,10 +462,6 @@ type SlotTransferProposal struct {
 	store        *kvstore
 	reply        func()
 	timer        *time.Timer
-}
-
-func (this *SlotTransferProposal) Isurgent() bool {
-	return true
 }
 
 func (this *SlotTransferProposal) OnError(err error) {
