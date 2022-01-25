@@ -50,6 +50,16 @@ func (self *ArrayQueue) ForceAppend(item interface{}) error {
 	return nil
 }
 
+func (self *ArrayQueue) PopNoWait(swaped []interface{}) (datas []interface{}, closed bool) {
+	swaped = swaped[0:0]
+	self.mtx.Lock()
+	datas = self.list
+	closed = self.closed
+	self.list = swaped
+	self.mtx.Unlock()
+	return
+}
+
 func (self *ArrayQueue) Pop(swaped []interface{}) (datas []interface{}, closed bool) {
 	swaped = swaped[0:0]
 	self.mtx.Lock()

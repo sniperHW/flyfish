@@ -142,19 +142,11 @@ func (rc *RaftInstance) propose(batchProposal []Proposal) {
 
 	releaseProposeBuff(buff)
 
-	var err error
+	rc.proposalMgr.addToDict(t)
 
-	if err = rc.proposalMgr.addToDict(t); nil == err {
-		if err = rc.node.Propose(context.TODO(), b); nil != err {
-			GetSugar().Errorf("proposalError %v", err)
-			rc.proposalMgr.remove(t)
-			if err == raft.ErrProposalDropped {
-				err = ErrProposalDropped
-			}
-		}
-	}
-
-	if nil != err {
+	if err := rc.node.Propose(context.TODO(), b); nil != err {
+		GetSugar().Errorf("proposalError %v", err)
+		rc.proposalMgr.remove(t)
 		for _, v := range batchProposal {
 			v.OnError(err)
 		}
@@ -167,59 +159,25 @@ func (rc *RaftInstance) propose(batchProposal []Proposal) {
 func (rc *RaftInstance) runProposePipeline() {
 	rc.waitStop.Add(1)
 
-	sleepTime := time.Duration(ProposalFlushInterval)
-
-	go func() {
-		for {
-			time.Sleep(time.Millisecond * sleepTime)
-			//发送信号，触发batch提交
-			if rc.proposePipeline.ForceAppend(struct{}{}) != nil {
-				return
-			}
-		}
-	}()
-
 	go func() {
 
 		defer rc.waitStop.Done()
-
 		localList := []interface{}{}
-		closed := false
-		batch := make([]Proposal, 0, ProposalBatchCount)
-
+		var closed bool
 		for {
 
-			localList, closed = rc.proposePipeline.Pop(localList)
-
-			if closed {
-				GetSugar().Info("runProposePipeline break")
-				break
+			if localList, closed = rc.proposePipeline.Pop(localList); closed {
+				return
 			}
 
+			batch := make([]Proposal, 0, len(localList))
+
 			for k, vv := range localList {
-				issuePropose := false
-
-				switch vv.(type) {
-				case struct{}:
-					//触发时间到达
-					if len(batch) > 0 {
-						issuePropose = true
-					}
-				case Proposal:
-					batch = append(batch, vv.(Proposal))
-					if vv.(Proposal).Isurgent() || len(batch) == cap(batch) {
-						issuePropose = true
-					}
-				}
-
-				if issuePropose {
-					rc.propose(batch)
-					batch = make([]Proposal, 0, ProposalBatchCount)
-				}
-
+				batch = append(batch, vv.(Proposal))
 				localList[k] = nil
 			}
 
+			rc.propose(batch)
 		}
 	}()
 }

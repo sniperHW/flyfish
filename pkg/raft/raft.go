@@ -65,29 +65,19 @@ type raftTaskMgr struct {
 	dict map[uint64]*raftTask
 }
 
-func (this *raftTaskMgr) addToDict(t *raftTask) error {
+func (this *raftTaskMgr) addToDict(t *raftTask) {
 	this.Lock()
 	defer this.Unlock()
-	if len(this.dict) > MaxRaftTaskCount {
-		return ErrTooManyRequests
-	} else {
-		this.dict[t.id] = t
-		GetSugar().Debugf("raftTaskMgr add %d", t.id)
-		return nil
-	}
+	this.dict[t.id] = t
+	GetSugar().Debugf("raftTaskMgr add %d", t.id)
 }
 
-func (this *raftTaskMgr) addToDictAndList(t *raftTask) error {
+func (this *raftTaskMgr) addToDictAndList(t *raftTask) {
 	this.Lock()
 	defer this.Unlock()
-	if len(this.dict) > MaxRaftTaskCount {
-		return ErrTooManyRequests
-	} else {
-		t.listE = this.l.PushBack(t)
-		this.dict[t.id] = t
-		GetSugar().Debugf("raftTaskMgr add %d", t.id)
-		return nil
-	}
+	t.listE = this.l.PushBack(t)
+	this.dict[t.id] = t
+	GetSugar().Debugf("raftTaskMgr add %d", t.id)
 }
 
 func (this *raftTaskMgr) remove(t *raftTask) {
@@ -128,6 +118,7 @@ func (this *raftTaskMgr) onLeaderDownToFollower() {
 			for _, vv := range v.other.([]LinearizableRead) {
 				vv.OnError(ErrLeaderDownToFollower)
 			}
+
 		case []Proposal:
 			for _, vv := range v.other.([]Proposal) {
 				vv.OnError(ErrLeaderDownToFollower)
@@ -551,14 +542,12 @@ func (rc *RaftInstance) serveChannels() {
 
 			rc.publishEntries(rc.entriesToApply(rd.CommittedEntries))
 
-			if islead {
-				rc.linearizableReadMgr.Lock()
-				if len(rd.ReadStates) != 0 {
-					rc.processReadStates(rd.ReadStates)
-				}
-				rc.checkLinearizableRead()
-				rc.linearizableReadMgr.Unlock()
+			rc.linearizableReadMgr.Lock()
+			if len(rd.ReadStates) != 0 {
+				rc.processReadStates(rd.ReadStates)
 			}
+			rc.checkLinearizableRead()
+			rc.linearizableReadMgr.Unlock()
 
 			rc.node.Advance()
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/binary"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft"
-	"time"
 )
 
 //一致性读请求
@@ -32,13 +31,21 @@ func (rc *RaftInstance) processReadStates(readStates []raft.ReadState) {
 		index := binary.BigEndian.Uint64(rs.RequestCtx)
 		v, ok := rc.linearizableReadMgr.dict[index]
 		if ok {
-			if rc.appliedIndex < v.ridx {
-				v.ridx = rs.Index
-				v.ptrridx = &v.ridx
+			if rc.isLeader() {
+				if rc.appliedIndex < v.ridx {
+					v.ridx = rs.Index
+					v.ptrridx = &v.ridx
+				} else {
+					rc.commitC.AppendHighestPriotiryItem(v.other.([]LinearizableRead))
+					delete(rc.linearizableReadMgr.dict, v.id)
+					rc.linearizableReadMgr.l.Remove(v.listE)
+				}
 			} else {
-				rc.commitC.AppendHighestPriotiryItem(v.other.([]LinearizableRead))
 				delete(rc.linearizableReadMgr.dict, v.id)
 				rc.linearizableReadMgr.l.Remove(v.listE)
+				for _, vv := range v.other.([]LinearizableRead) {
+					vv.OnError(ErrNotLeader)
+				}
 			}
 		}
 	}
@@ -54,15 +61,10 @@ func (rc *RaftInstance) linearizableRead(batchRead []LinearizableRead) {
 	ctxToSend := make([]byte, 8)
 	binary.BigEndian.PutUint64(ctxToSend, t.id)
 
-	var err error
+	rc.linearizableReadMgr.addToDictAndList(t)
 
-	if err = rc.linearizableReadMgr.addToDictAndList(t); nil == err {
-		if err = rc.node.ReadIndex(context.TODO(), ctxToSend); nil != err {
-			rc.linearizableReadMgr.remove(t)
-		}
-	}
-
-	if nil != err {
+	if err := rc.node.ReadIndex(context.TODO(), ctxToSend); nil != err {
+		rc.linearizableReadMgr.remove(t)
 		for _, v := range batchRead {
 			v.OnError(err)
 		}
@@ -71,58 +73,25 @@ func (rc *RaftInstance) linearizableRead(batchRead []LinearizableRead) {
 
 func (rc *RaftInstance) runReadPipeline() {
 	rc.waitStop.Add(1)
-
-	sleepTime := time.Duration(ProposalFlushInterval)
-
-	go func() {
-		for {
-			time.Sleep(time.Millisecond * sleepTime)
-			//发送信号，触发batch提交
-			if rc.readPipeline.ForceAppend(struct{}{}) != nil {
-				return
-			}
-		}
-	}()
-
 	go func() {
 
 		defer rc.waitStop.Done()
 
 		localList := []interface{}{}
 		closed := false
-		batch := make([]LinearizableRead, 0, ReadBatchCount)
-
 		for {
-
-			localList, closed = rc.readPipeline.Pop(localList)
-
-			if closed {
-				GetSugar().Info("runReadPipeline break")
-				break
+			if localList, closed = rc.readPipeline.Pop(localList); closed {
+				return
 			}
+
+			batch := make([]LinearizableRead, 0, len(localList))
 
 			for k, vv := range localList {
-				issueRead := false
-				switch vv.(type) {
-				case struct{}:
-					//触发时间到达
-					if len(batch) > 0 {
-						issueRead = true
-					}
-				case LinearizableRead:
-					batch = append(batch, vv.(LinearizableRead))
-					if len(batch) == cap(batch) {
-						issueRead = true
-					}
-				}
-
-				if issueRead {
-					rc.linearizableRead(batch)
-					batch = make([]LinearizableRead, 0, ReadBatchCount)
-				}
-
+				batch = append(batch, vv.(LinearizableRead))
 				localList[k] = nil
 			}
+
+			rc.linearizableRead(batch)
 		}
 	}()
 }
