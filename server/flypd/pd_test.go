@@ -138,6 +138,80 @@ func TestPd1(t *testing.T) {
 
 }
 
+func TestAddRemovePd(t *testing.T) {
+	os.RemoveAll("./raftLog")
+
+	l := logger.NewZapLogger("testPd.log", "./log", "Debug", 100, 14, 10, true)
+	InitLogger(l)
+
+	conf, _ := LoadConfigStr(configStr)
+
+	fmt.Println("conf.DBType", conf.DBType)
+
+	p1, _ := NewPd(1, false, conf, "localhost:8110", "1@http://localhost:18110@")
+
+	for {
+		if p1.isLeader() {
+			break
+		} else {
+			time.Sleep(time.Second)
+		}
+	}
+
+	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
+	assert.Nil(t, err)
+
+	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
+
+	p2, err := NewPd(2, true, conf, "localhost:8111", "1@http://localhost:18110@,2@http://localhost:18111@")
+
+	fmt.Println(err)
+
+	time.Sleep(time.Second)
+
+	for {
+		conn.SendTo(addr, snet.MakeMessage(0, &sproto.AddPdNode{
+			Id:  2,
+			Url: "http://localhost:18111",
+		}))
+
+		recvbuff := make([]byte, 256)
+		_, r, _ := conn.ReadFrom(recvbuff)
+
+		ret := r.(*snet.Message).Msg.(*sproto.AddPdNodeResp)
+
+		if ret.Reason == "membership: ID exists" {
+			break
+		}
+
+		time.Sleep(time.Second)
+	}
+
+	for {
+		conn.SendTo(addr, snet.MakeMessage(0, &sproto.RemovePdNode{
+			Id: 2,
+		}))
+
+		recvbuff := make([]byte, 256)
+		_, r, _ := conn.ReadFrom(recvbuff)
+
+		ret := r.(*snet.Message).Msg.(*sproto.RemovePdNodeResp)
+
+		if ret.Reason == "membership: ID not found" {
+			break
+		}
+
+		time.Sleep(time.Second)
+	}
+
+	time.Sleep(time.Second)
+
+	p1.Stop()
+
+	p2.Stop()
+
+}
+
 func TestHttp(t *testing.T) {
 
 	os.RemoveAll("./raftLog")

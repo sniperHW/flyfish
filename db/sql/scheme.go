@@ -70,11 +70,11 @@ func appendFieldPgSql(buff []byte, field *db.FieldDef) ([]byte, error) {
 
 	switch field.Type {
 	case "int":
-		return buffer.AppendString(buff, fmt.Sprintf("int8 NOT NULL DEFAULT %s", field.DefaultValue)), nil
+		return buffer.AppendString(buff, fmt.Sprintf("int8 NOT NULL DEFAULT %s", field.GetDefaultValueStr())), nil
 	case "float":
-		return buffer.AppendString(buff, fmt.Sprintf("float8 NOT NULL DEFAULT %s", field.DefaultValue)), nil
+		return buffer.AppendString(buff, fmt.Sprintf("float8 NOT NULL DEFAULT %s", field.GetDefaultValueStr())), nil
 	case "string":
-		return buffer.AppendString(buff, fmt.Sprintf("varchar NOT NULL DEFAULT '%s'", field.DefaultValue)), nil
+		return buffer.AppendString(buff, fmt.Sprintf("varchar NOT NULL DEFAULT '%s'", field.GetDefaultValueStr())), nil
 	case "blob":
 		return buffer.AppendString(buff, "bytea NULL"), nil
 	default:
@@ -277,11 +277,11 @@ func appendFieldMySql(buff []byte, field *db.FieldDef) ([]byte, error) {
 
 	switch field.Type {
 	case "int":
-		return buffer.AppendString(buff, fmt.Sprintf("BIGINT  NOT NULL DEFAULT '%s'", field.DefaultValue)), nil
+		return buffer.AppendString(buff, fmt.Sprintf("BIGINT  NOT NULL DEFAULT '%s'", field.GetDefaultValueStr())), nil
 	case "float":
-		return buffer.AppendString(buff, fmt.Sprintf("FLOAT NOT NULL DEFAULT '%s'", field.DefaultValue)), nil
+		return buffer.AppendString(buff, fmt.Sprintf("FLOAT NOT NULL DEFAULT '%s'", field.GetDefaultValueStr())), nil
 	case "string":
-		return buffer.AppendString(buff, fmt.Sprintf("VARCHAR(16384) NOT NULL DEFAULT '%s'", field.DefaultValue)), nil
+		return buffer.AppendString(buff, fmt.Sprintf("VARCHAR(16384) NOT NULL DEFAULT '%s'", field.GetDefaultValueStr())), nil
 	case "blob":
 		return buffer.AppendString(buff, "BLOB NULL"), nil
 	default:

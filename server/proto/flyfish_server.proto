@@ -47,7 +47,11 @@ enum ServerCmdType {
   MetaRemoveFields              = 129;
   MetaRemoveFieldsResp          = 130;
   QueryPdLeader                 = 131;
-  QueryPdLeaderResp             = 132; 
+  QueryPdLeaderResp             = 132;
+  AddPdNode                     = 133;
+  AddPdNodeResp                 = 134;
+  RemovePdNode                  = 135;
+  RemovePdNodeResp              = 136; 
 
 
   //kvnode <-> pd
@@ -465,4 +469,24 @@ message queryPdLeader {
 message queryPdLeaderResp {
   optional bool yes       = 1;
   optional string service = 2;
+}
+
+
+message addPdNode{
+  optional int32 id       = 1;
+  optional string url     = 2;
+}
+ 
+message addPdNodeResp{
+  optional bool  ok       = 1;  
+  optional string reason  = 2;   
+}
+
+message removePdNode{
+  optional int32  id = 1; 
+}
+
+message removePdNodeResp{
+  optional bool  ok       = 1;  
+  optional string reason  = 2;   
 }

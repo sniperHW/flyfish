@@ -3,7 +3,10 @@ package flypd
 import (
 	"fmt"
 	"github.com/gogo/protobuf/proto"
+	"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
+	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
+	"github.com/sniperHW/flyfish/pkg/raft"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"io/ioutil"
@@ -267,6 +270,92 @@ func (p *pd) startUdpService() error {
 	return nil
 }
 
+type ProposalConfChange struct {
+	confChangeType raftpb.ConfChangeType
+	url            string //for add
+	nodeID         uint64
+	reply          func(error)
+}
+
+func (this *ProposalConfChange) GetType() raftpb.ConfChangeType {
+	return this.confChangeType
+}
+
+func (this *ProposalConfChange) GetURL() string {
+	return this.url
+}
+
+func (this *ProposalConfChange) GetNodeID() uint64 {
+	return this.nodeID
+}
+
+func (this *ProposalConfChange) IsPromote() bool {
+	return false
+}
+
+func (this *ProposalConfChange) OnError(err error) {
+	this.reply(err)
+}
+
+func (p *pd) onAddPdNode(replyer replyer, m *snet.Message) {
+	msg := m.Msg.(*sproto.AddPdNode)
+
+	reply := func(err error) {
+
+		resp := &sproto.AddPdNodeResp{
+			Ok: nil == err,
+		}
+
+		if nil != err {
+			resp.Reason = err.Error()
+		}
+
+		replyer.reply(snet.MakeMessage(m.Context, resp))
+	}
+
+	id := raft.MakeInstanceID(uint16(msg.Id), uint16(0))
+
+	if err := p.rn.MayAddMember(types.ID(id)); nil == err {
+		p.rn.IssueConfChange(&ProposalConfChange{
+			confChangeType: raftpb.ConfChangeAddNode,
+			nodeID:         uint64(id),
+			url:            msg.Url,
+			reply:          reply,
+		})
+	} else {
+		reply(err)
+	}
+}
+
+func (p *pd) onRemovePdNode(replyer replyer, m *snet.Message) {
+	msg := m.Msg.(*sproto.RemovePdNode)
+
+	reply := func(err error) {
+
+		resp := &sproto.RemovePdNodeResp{
+			Ok: nil == err,
+		}
+
+		if nil != err {
+			resp.Reason = err.Error()
+		}
+
+		replyer.reply(snet.MakeMessage(m.Context, resp))
+	}
+
+	id := raft.MakeInstanceID(uint16(msg.Id), uint16(0))
+
+	if err := p.rn.MayRemoveMember(types.ID(id)); nil == err {
+		p.rn.IssueConfChange(&ProposalConfChange{
+			confChangeType: raftpb.ConfChangeRemoveNode,
+			nodeID:         uint64(id),
+			reply:          reply,
+		})
+	} else {
+		reply(err)
+	}
+}
+
 func (p *pd) initMsgHandler() {
 	//for console
 	p.registerMsgHandler(&sproto.AddSet{}, "AddSet", p.onAddSet)
@@ -283,6 +372,8 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.MetaAddFields{}, "MetaAddFields", p.onUpdateMetaReq)
 	p.registerMsgHandler(&sproto.MetaRemoveTable{}, "MetaRemoveTable", p.onUpdateMetaReq)
 	p.registerMsgHandler(&sproto.MetaRemoveFields{}, "MetaRemoveFields", p.onUpdateMetaReq)
+	p.registerMsgHandler(&sproto.AddPdNode{}, "AddPdNode", p.onAddPdNode)
+	p.registerMsgHandler(&sproto.RemovePdNode{}, "RemovePdNode", p.onRemovePdNode)
 
 	//servers
 	p.registerMsgHandler(&sproto.IsTransInReadyResp{}, "", p.onSlotTransInReady)
@@ -295,4 +386,5 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.ChangeFlyGate{}, "", p.changeFlyGate)
 	p.registerMsgHandler(&sproto.StoreReportStatus{}, "", p.onStoreReportStatus)
 	p.registerMsgHandler(&sproto.GetScanTableMeta{}, "", p.onGetScanTableMeta)
+
 }

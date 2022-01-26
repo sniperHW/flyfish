@@ -729,9 +729,12 @@ func (rc *RaftInstance) MayRemoveMember(id types.ID) error {
 
 	member := rc.mb.Member(id)
 
-	isLearner := (nil != member) && member.IsLearner //rc.mb.IsMemberExist(id) && rc.mb.Member(id).IsLearner
+	if member == nil {
+		return membership.ErrIDNotFound
+	}
+
 	// no need to check quorum when removing non-voting member
-	if isLearner {
+	if member.IsLearner {
 		return nil
 	}
 
@@ -741,14 +744,11 @@ func (rc *RaftInstance) MayRemoveMember(id types.ID) error {
 	}
 
 	// protect quorum if some members are down
-	m := rc.mb.VotingMembers()
-	active := numConnectedSince(rc.transport, time.Now().Add(-HealthInterval), types.ID(rc.ID()), m)
-	if (active - 1) < 1+((len(m)-1)/2) {
+	if !isConnectedToQuorumSince(rc.transport, time.Now().Add(-HealthInterval), types.ID(rc.ID()), rc.mb.VotingMembers()) {
 		GetSugar().Warn(
 			"rejecting member remove request; local member has not been connected to all peers, reconfigure breaks active quorum",
 			zap.String("local-member-id", rc.ID().String()),
 			zap.String("requested-member-remove", id.String()),
-			zap.Int("active-peers", active),
 			zap.Error(ErrUnhealthy),
 		)
 		return ErrUnhealthy
@@ -757,12 +757,16 @@ func (rc *RaftInstance) MayRemoveMember(id types.ID) error {
 	return nil
 }
 
-func (rc *RaftInstance) MayAddMember(memb membership.Member) error {
-	if /*!isConnectedFullySince*/ !isConnectedToQuorumSince(rc.transport, time.Now().Add(-HealthInterval), types.ID(rc.ID()), rc.mb.VotingMembers()) {
+func (rc *RaftInstance) MayAddMember(id types.ID) error {
+	if nil != rc.mb.Member(id) {
+		return membership.ErrIDExists
+	}
+
+	if !isConnectedFullySince(rc.transport, time.Now().Add(-HealthInterval), types.ID(rc.ID()), rc.mb.VotingMembers()) {
 		GetSugar().Warn(
 			"rejecting member add request; local member has not been connected to all peers, reconfigure breaks active quorum",
 			zap.String("local-member-id", rc.ID().String()),
-			zap.String("requested-member-add", fmt.Sprintf("%+v", memb)),
+			zap.String("requested-member-add", id.String()),
 			zap.Error(ErrUnhealthy),
 		)
 		return ErrUnhealthy

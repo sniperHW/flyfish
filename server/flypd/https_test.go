@@ -29,10 +29,10 @@ func client(t *testing.T) {
 		//TLSClientConfig: &tls.Config{RootCAs: pool},
 		//InsecureSkipVerify用来控制客户端是否证书和服务器主机名。如果设置为true,
 		//则不会校验证书以及证书中的主机名和服务器主机名是否一致。
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	client := &http.Client{Transport: tr}
-	resp, err := client.Get("https://localhost:8100")
+	resp, err := client.Get("https://127.0.0.1:8100")
 	if err != nil {
 		fmt.Println("Get error:", err)
 		return

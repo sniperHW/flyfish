@@ -324,16 +324,16 @@ func createTableMetas(def *db.DbDef) (map[string]*TableMeta, error) {
 					return nil, errors.New("has prefix _")
 				}
 
-				ftype := db.GetTypeByStr(vv.Type)
+				ftype := vv.GetProtoType()
 
 				if ftype == proto.ValueType_invaild {
 					return nil, errors.New("unsupport data type")
 				}
 
-				defaultValue := db.GetDefaultValue(ftype, vv.DefaultValue)
+				defaultValue := vv.GetDefaultValue()
 
 				if nil == defaultValue {
-					return nil, errors.New("no default value")
+					return nil, errors.New("invaild default value")
 				}
 
 				t_meta.fieldMetas[vv.Name] = &FieldMeta{

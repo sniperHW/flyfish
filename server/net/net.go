@@ -312,6 +312,12 @@ func init() {
 	namespace.Register(&sproto.QueryPdLeader{}, uint32(sproto.ServerCmdType_QueryPdLeader))
 	namespace.Register(&sproto.QueryPdLeaderResp{}, uint32(sproto.ServerCmdType_QueryPdLeaderResp))
 
+	namespace.Register(&sproto.AddPdNode{}, uint32(sproto.ServerCmdType_AddPdNode))
+	namespace.Register(&sproto.AddPdNodeResp{}, uint32(sproto.ServerCmdType_AddPdNodeResp))
+
+	namespace.Register(&sproto.RemovePdNode{}, uint32(sproto.ServerCmdType_RemovePdNode))
+	namespace.Register(&sproto.RemovePdNodeResp{}, uint32(sproto.ServerCmdType_RemovePdNodeResp))
+
 	//flykv <-> pd
 	namespace.Register(&sproto.KvnodeBoot{}, uint32(sproto.ServerCmdType_KvnodeBoot))
 	namespace.Register(&sproto.KvnodeBootResp{}, uint32(sproto.ServerCmdType_KvnodeBootResp))

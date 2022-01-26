@@ -36,6 +36,75 @@ func (f *FieldDef) GetRealName() string {
 	return fmt.Sprintf("%s_%d", f.Name, f.TabVersion)
 }
 
+func (f *FieldDef) GetProtoType() proto.ValueType {
+	switch f.Type {
+	case "int":
+		return proto.ValueType_int
+	case "float":
+		return proto.ValueType_float
+	case "string":
+		return proto.ValueType_string
+	case "blob":
+		return proto.ValueType_blob
+	default:
+		return proto.ValueType_invaild
+	}
+}
+
+func (f *FieldDef) GetDefaultValueStr() string {
+	if "" != f.DefaultValue {
+		return f.DefaultValue
+	} else {
+		switch f.Type {
+		case "int":
+			return "0"
+		case "float":
+			return "0.0"
+		case "string":
+			return ""
+		case "blob":
+			return ""
+		default:
+			return ""
+		}
+	}
+}
+
+func (f *FieldDef) GetDefaultValue() interface{} {
+	tt := f.GetProtoType()
+	v := f.GetDefaultValueStr()
+	switch tt {
+	case proto.ValueType_string:
+		return v
+	case proto.ValueType_int:
+		if v == "" {
+			return int64(0)
+		} else {
+			i, err := strconv.ParseInt(v, 10, 64)
+			if nil != err {
+				return nil
+			} else {
+				return i
+			}
+		}
+	case proto.ValueType_float:
+		if v == "" {
+			return float64(0)
+		} else {
+			f, err := strconv.ParseFloat(v, 64)
+			if nil != err {
+				return nil
+			} else {
+				return f
+			}
+		}
+	case proto.ValueType_blob:
+		return []byte{}
+	default:
+		return nil
+	}
+}
+
 type TableDef struct {
 	DbVersion int64       `json:"DbVersion,omitempty"` //DbDef.Version when table create
 	Version   int64       `json:"Version,omitempty"`
@@ -90,13 +159,11 @@ func (t *TableDef) Check() error {
 			return fmt.Errorf("duplicate filed.Name:%s", v.Name)
 		}
 
-		tt := GetTypeByStr(v.Type)
-
-		if tt == proto.ValueType_invaild {
+		if v.GetProtoType() == proto.ValueType_invaild {
 			return fmt.Errorf("invaild filed.Type:%s", v.Type)
 		}
 
-		if nil == GetDefaultValue(tt, v.DefaultValue) {
+		if nil == v.GetDefaultValue() {
 			return fmt.Errorf("filed.Type:%s invaild DefaultValue:%s", v.Type, v.DefaultValue)
 		}
 
@@ -187,53 +254,6 @@ func MakeDbDefFromJsonString(s []byte) (*DbDef, error) {
 		} else {
 			return &def, nil
 		}
-	}
-}
-
-func GetTypeByStr(s string) proto.ValueType {
-	switch s {
-	case "int":
-		return proto.ValueType_int
-	case "float":
-		return proto.ValueType_float
-	case "string":
-		return proto.ValueType_string
-	case "blob":
-		return proto.ValueType_blob
-	default:
-		return proto.ValueType_invaild
-	}
-}
-
-func GetDefaultValue(tt proto.ValueType, v string) interface{} {
-	if tt == proto.ValueType_string {
-		return v
-	} else if tt == proto.ValueType_int {
-		if v == "" {
-			return int64(0)
-		} else {
-			i, err := strconv.ParseInt(v, 10, 64)
-			if nil != err {
-				return nil
-			} else {
-				return i
-			}
-		}
-	} else if tt == proto.ValueType_float {
-		if v == "" {
-			return float64(0)
-		} else {
-			f, err := strconv.ParseFloat(v, 64)
-			if nil != err {
-				return nil
-			} else {
-				return f
-			}
-		}
-	} else if tt == proto.ValueType_blob {
-		return []byte{}
-	} else {
-		return nil
 	}
 }
 

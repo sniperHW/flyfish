@@ -219,10 +219,7 @@ func (s *kvstore) SetDirectly(key string, val string) error {
 
 func (s *kvstore) AddMember(id uint64, url string) error {
 
-	if err := s.rn.MayAddMember(membership.Member{
-		ID:       types.ID(id),
-		PeerURLs: []string{url},
-	}); nil != err {
+	if err := s.rn.MayAddMember(types.ID(id)); nil != err {
 		return err
 	}
 
@@ -239,11 +236,7 @@ func (s *kvstore) AddMember(id uint64, url string) error {
 
 func (s *kvstore) AddLearner(id uint64, url string) error {
 
-	if err := s.rn.MayAddMember(membership.Member{
-		ID:        types.ID(id),
-		PeerURLs:  []string{url},
-		IsLearner: true,
-	}); nil != err {
+	if err := s.rn.MayAddMember(types.ID(id)); nil != err {
 		return err
 	}
 

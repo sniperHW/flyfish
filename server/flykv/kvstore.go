@@ -402,8 +402,8 @@ func (s *kvstore) processLinearizableRead(r []raft.LinearizableRead) {
 	}
 }
 
-func (s *kvstore) processConfChange(p raft.ProposalConfChange) {
-	p.(*ProposalConfChange).reply(nil)
+func (s *kvstore) processConfChange(p *ProposalConfChange) {
+	p.reply(nil)
 }
 
 func (s *kvstore) stop() {
@@ -502,7 +502,7 @@ func (s *kvstore) serve() {
 			case []raft.LinearizableRead:
 				s.processLinearizableRead(v.([]raft.LinearizableRead))
 			case raft.ProposalConfChange:
-				s.processConfChange(v.(raft.ProposalConfChange))
+				s.processConfChange(v.(*ProposalConfChange))
 			case raft.ConfChange:
 				c := v.(raft.ConfChange)
 				if c.CCType == raftpb.ConfChangeRemoveNode {
