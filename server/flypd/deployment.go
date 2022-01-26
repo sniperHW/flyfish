@@ -32,6 +32,7 @@ const (
 type FlyKvStoreState struct {
 	Type       FlyKvStoreStateType
 	Value      FlyKvStoreStateValue
+	InstanceID uint32
 	isLead     bool
 	kvcount    int
 	lastReport time.Time
@@ -69,11 +70,12 @@ type StoreJson struct {
 }
 
 type SetJson struct {
-	Version   int64
-	SetID     int
-	KvNodes   []KvNodeJson
-	Stores    []StoreJson
-	MarkClear bool //需要将其上slot全部移走
+	Version         int64
+	SetID           int
+	KvNodes         []KvNodeJson
+	Stores          []StoreJson
+	MarkClear       bool //需要将其上slot全部移走
+	InstanceCounter uint32
 }
 
 type DeploymentJson struct {
@@ -119,6 +121,15 @@ func (n *kvnode) canTransferLeader(store int) bool {
 	return ok && s.Type == VoterStore && s.Value == FlyKvCommited
 }
 
+func (n *kvnode) getInstanceID(store int) uint32 {
+	s, ok := n.store[store]
+	if ok {
+		return s.InstanceID
+	} else {
+		return 0
+	}
+}
+
 type store struct {
 	id           int
 	slots        *bitmap.Bitmap
@@ -128,13 +139,14 @@ type store struct {
 }
 
 type set struct {
-	version      int64
-	id           int
-	markClear    bool
-	nodes        map[int]*kvnode
-	stores       map[int]*store
-	slotOutCount int //待迁出的slot数量
-	slotInCount  int //待迁入的slot数量
+	version         int64
+	id              int
+	markClear       bool
+	nodes           map[int]*kvnode
+	stores          map[int]*store
+	slotOutCount    int //待迁出的slot数量
+	slotInCount     int //待迁入的slot数量
+	instanceCounter uint32
 }
 
 func (s *set) getTotalSlotCount() int {
@@ -183,7 +195,7 @@ func (s *set) storeBalance(pd *pd) {
 				if addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", maxNode.host, maxNode.servicePort)); nil == err {
 					pd.udp.SendTo(addr, snet.MakeMessage(0, &sproto.TrasnferLeader{
 						StoreID:    int32(store),
-						Transferee: uint64(raft.MakeInstanceID(uint16(transferee.id), uint16(store))),
+						Transferee: uint64(raft.MakeInstanceID(uint16(transferee.id), uint16(store), transferee.getInstanceID(store))),
 					}))
 					return
 				}
@@ -275,9 +287,10 @@ func (d deployment) toDeploymentJson() DeploymentJson {
 	deploymentJson.Version = d.version
 	for _, v := range d.sets {
 		setJson := SetJson{
-			Version:   v.version,
-			SetID:     v.id,
-			MarkClear: v.markClear,
+			Version:         v.version,
+			SetID:           v.id,
+			MarkClear:       v.markClear,
+			InstanceCounter: v.instanceCounter,
 		}
 
 		for _, vv := range v.nodes {
@@ -316,11 +329,12 @@ func (d *deployment) loadFromDeploymentJson(deploymentJson *DeploymentJson) erro
 	d.version = deploymentJson.Version
 	for _, v := range deploymentJson.Sets {
 		s := &set{
-			version:   v.Version,
-			id:        v.SetID,
-			markClear: v.MarkClear,
-			nodes:     map[int]*kvnode{},
-			stores:    map[int]*store{},
+			version:         v.Version,
+			id:              v.SetID,
+			markClear:       v.MarkClear,
+			instanceCounter: v.InstanceCounter,
+			nodes:           map[int]*kvnode{},
+			stores:          map[int]*store{},
 		}
 
 		for _, vv := range v.KvNodes {
@@ -454,9 +468,11 @@ func (d *deployment) loadFromPB(sets []*sproto.DeploymentSet) error {
 
 		for _, vvv := range s.nodes {
 			for j := 0; j < StorePerSet; j++ {
+				s.instanceCounter++
 				vvv.store[j+1] = &FlyKvStoreState{
-					Type:  VoterStore,
-					Value: FlyKvCommited,
+					Type:       VoterStore,
+					Value:      FlyKvCommited,
+					InstanceID: s.instanceCounter,
 				}
 			}
 		}

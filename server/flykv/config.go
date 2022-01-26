@@ -31,7 +31,6 @@ type Config struct {
 		ServiceHost string `toml:"ServiceHost"`
 		ServicePort int    `toml:"ServicePort"`
 		RaftUrl     string `toml:"RaftUrl"`
-		RaftCluster string `toml:"RaftCluster"`
 		Stores      []int  `toml:"Stores"`
 		MetaPath    string `toml:"MetaPath"`
 	} `toml:"SoloConfig"`

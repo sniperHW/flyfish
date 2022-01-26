@@ -69,7 +69,6 @@ RaftLogPrefix           = "flykv"
 RaftUrl                 = "http://127.0.0.1:12377"
 ServiceHost             = "127.0.0.1"
 ServicePort             = %d
-RaftCluster             = "1@http://127.0.0.1:12377@"
 Stores                  = [1]
 MetaPath                = "./meta.json"
 
@@ -571,10 +570,7 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 
 	config.MaxCachePerStore = 10000
 
-	DefaultSnapshotCount := raft.DefaultSnapshotCount
-	SnapshotCatchUpEntriesN := raft.SnapshotCatchUpEntriesN
-
-	raft.DefaultSnapshotCount = 100
+	raft.SnapshotCount = 100
 	raft.SnapshotCatchUpEntriesN = 100
 
 	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
@@ -644,18 +640,13 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 
 	node.Stop()
 
-	raft.DefaultSnapshotCount = DefaultSnapshotCount
-	raft.SnapshotCatchUpEntriesN = SnapshotCatchUpEntriesN
-
 	config.MaxCachePerStore = oldV
 
 }
 
 func Test1Node1StoreSnapshot2(t *testing.T) {
-	DefaultSnapshotCount := raft.DefaultSnapshotCount
-	SnapshotCatchUpEntriesN := raft.SnapshotCatchUpEntriesN
 
-	raft.DefaultSnapshotCount = 100
+	raft.SnapshotCount = 100
 	raft.SnapshotCatchUpEntriesN = 100
 
 	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
@@ -702,9 +693,6 @@ func Test1Node1StoreSnapshot2(t *testing.T) {
 	time.Sleep(time.Second * 2)
 
 	node.Stop()
-
-	raft.DefaultSnapshotCount = DefaultSnapshotCount
-	raft.SnapshotCatchUpEntriesN = SnapshotCatchUpEntriesN
 
 }
 

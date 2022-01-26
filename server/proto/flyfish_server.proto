@@ -204,6 +204,7 @@ message storeInfo {
   optional int32  id          = 1;
   optional string raftCluster = 2;
   optional bytes  slots       = 3;
+  optional uint32 instanceID  = 4;
 }
 
 message kvnodeBootResp {
@@ -231,6 +232,7 @@ message notifyNodeStoreOp {
   optional string host        = 3;
   optional int32  raftPort    = 4;
   optional int32  store       = 5; 
+  optional uint32 instanceID  = 6;
 }
 
 message nodeStoreOpOk {
@@ -435,10 +437,11 @@ message storeReportStatus {
   optional int32  setID       = 1;
   optional int32  nodeID      = 2;
   optional int32  storeID     = 3;
-  optional bool   isleader    = 4;
-  optional int32  kvcount     = 5;
-  optional uint64 progress    = 6;
-  optional int64  metaVersion = 7;
+  optional uint32 instanceID  = 4;
+  optional bool   isleader    = 5;
+  optional int32  kvcount     = 6;
+  optional uint64 progress    = 7;
+  optional int64  metaVersion = 8;
 }
 
 message trasnferLeader {

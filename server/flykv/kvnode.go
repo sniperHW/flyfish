@@ -132,7 +132,7 @@ func waitCondition(fn func() bool) {
 	wg.Wait()
 }
 
-func (this *kvnode) addStore(meta db.DBMeta, storeID int, peers map[uint16]raft.Member, slots *bitmap.Bitmap) error {
+func (this *kvnode) addStore(meta db.DBMeta, storeID int, instanceID uint32, peers map[uint16]raft.Member, slots *bitmap.Bitmap) error {
 
 	this.muS.Lock()
 	defer this.muS.Unlock()
@@ -166,7 +166,7 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, peers map[uint16]raft.
 		},
 	}
 
-	rn, err := raft.NewInstance(uint16(this.id), uint16(storeID), this.join, this.mutilRaft, mainQueue, peers, this.config.RaftLogDir, this.config.RaftLogPrefix)
+	rn, err := raft.NewInstance(uint16(this.id), uint16(storeID), instanceID, this.join, this.mutilRaft, mainQueue, peers, this.config.RaftLogDir, this.config.RaftLogPrefix)
 
 	if nil != err {
 		return err
@@ -388,15 +388,10 @@ func (this *kvnode) start() error {
 
 		//添加store
 		if len(config.SoloConfig.Stores) > 0 {
-			peers, err := raft.SplitPeers(config.SoloConfig.RaftCluster)
-
-			if nil != err {
-				return err
-			}
-
 			storeBitmaps := sslot.MakeStoreBitmap(config.SoloConfig.Stores)
 			for i, v := range config.SoloConfig.Stores {
-				if err = this.addStore(meta, v, peers, storeBitmaps[i]); nil != err {
+				peers, err := raft.SplitPeers(fmt.Sprintf("%d@%d@%s@voter", 1, v, config.SoloConfig.RaftUrl))
+				if err = this.addStore(meta, v, uint32(v), peers, storeBitmaps[i]); nil != err {
 					return err
 				}
 			}
@@ -476,7 +471,7 @@ func (this *kvnode) start() error {
 				return err
 			}
 
-			if err = this.addStore(meta, int(v.Id), peers, slots); nil != err {
+			if err = this.addStore(meta, int(v.Id), v.InstanceID, peers, slots); nil != err {
 				GetSugar().Errorf("addStore err:%v", err)
 				return err
 			}

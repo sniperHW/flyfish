@@ -115,8 +115,6 @@ func (this *MutilRaft) addTransport(id types.ID, t *rafthttp.Transport) {
 	this.Lock()
 	defer this.Unlock()
 
-	GetSugar().Infof("addTransport %d", id)
-
 	handler := &raftHandler{
 		pipelineHandler: rafthttp.NewPipelineHandler(t, t.Raft, t.ClusterID),
 		streamHandler:   rafthttp.NewStreamHandler(t, t, t.Raft, t.ID, t.ClusterID),

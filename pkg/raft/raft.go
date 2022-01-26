@@ -120,6 +120,18 @@ func (r RaftInstanceID) String() string {
 }
 
 func MakeInstanceID(nodeID uint16, shard uint16, instance uint32) RaftInstanceID {
+	if nodeID == 0 {
+		panic("nodeID == 0")
+	}
+
+	if shard == 0 {
+		panic("shard == 0")
+	}
+
+	if instance == 0 {
+		panic("instance == 0")
+	}
+
 	return RaftInstanceID(uint64(nodeID)<<48 | uint64(shard)<<32 | uint64(instance))
 }
 
@@ -959,6 +971,9 @@ func NewInstance(nodeID uint16, shard uint16, instance uint32, join bool, mutilR
 		rc.node = raft.RestartNode(c)
 	} else {
 		rpeers := []raft.Peer{}
+
+		GetSugar().Infof("peersaa(%d,%d,%d) %v", nodeID, shard, instance, peers)
+
 		for _, v := range peers {
 			cc := membership.ConfChangeContext{
 				Url:    v.URL,

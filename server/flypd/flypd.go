@@ -176,7 +176,7 @@ type pd struct {
 	metaUpdateQueue *list.List
 }
 
-func NewPd(id uint16, join bool, config *Config, service string, clusterStr string) (*pd, error) {
+func NewPd(id uint16, cluster uint16, instance uint32, join bool, config *Config, service string, clusterStr string) (*pd, error) {
 
 	mainQueue := applicationQueue{
 		q: queue.NewPriorityQueue(2, 10000),
@@ -221,7 +221,7 @@ func NewPd(id uint16, join bool, config *Config, service string, clusterStr stri
 
 	p.mutilRaft = raft.NewMutilRaft()
 
-	p.rn, err = raft.NewInstance(id, 0, join, p.mutilRaft, p.mainque, peers, p.config.RaftLogDir, p.config.RaftLogPrefix)
+	p.rn, err = raft.NewInstance(id, cluster, instance, join, p.mutilRaft, p.mainque, peers, p.config.RaftLogDir, p.config.RaftLogPrefix)
 
 	if nil != err {
 		return nil, err
