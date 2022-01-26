@@ -113,48 +113,6 @@ func (this *raftTaskMgr) onLeaderDownToFollower() {
 	}
 }
 
-type RaftInstanceID uint64
-
-func (r RaftInstanceID) String() string {
-	return fmt.Sprintf("%d_%d_%d", r.GetNodeID(), r.GetShard(), r.GetInstance())
-}
-
-func MakeInstanceID(nodeID uint16, shard uint16, instance uint32) RaftInstanceID {
-	if nodeID == 0 {
-		panic("nodeID == 0")
-	}
-
-	if shard == 0 {
-		panic("shard == 0")
-	}
-
-	if instance == 0 {
-		panic("instance == 0")
-	}
-
-	return RaftInstanceID(uint64(nodeID)<<48 | uint64(shard)<<32 | uint64(instance))
-}
-
-func (r RaftInstanceID) GetNodeID() uint16 {
-	return uint16(uint64(r) >> 48)
-}
-
-func (r RaftInstanceID) GetShard() uint16 {
-	return uint16(uint64(r) & uint64(0x7FFF00000000) >> 32)
-}
-
-func (r RaftInstanceID) GetInstance() uint32 {
-	return uint32(r)
-}
-
-func (r RaftInstanceID) Uint64() uint64 {
-	return uint64(r)
-}
-
-func (r RaftInstanceID) TypesID() types.ID {
-	return types.ID(r)
-}
-
 type RaftInstance struct {
 	inflightSnapshots   int64
 	snapshotIndex       uint64
@@ -166,7 +124,7 @@ type RaftInstance struct {
 	readPipeline        *queue.ArrayQueue
 	commitC             ApplicationQueue
 	waitStop            sync.WaitGroup
-	id                  RaftInstanceID // raft instanceID
+	id                  uint64 // raft instanceID
 	lead                uint64
 	join                bool   // node is joining an existing cluster
 	waldir              string // path to WAL directory
@@ -240,7 +198,7 @@ func (rc *RaftInstance) GetApplyIndex() uint64 {
 	return atomic.LoadUint64(&rc.appliedIndex)
 }
 
-func (rc *RaftInstance) ID() RaftInstanceID {
+func (rc *RaftInstance) ID() uint64 {
 	return rc.id
 }
 
@@ -362,13 +320,14 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 						m := membership.Member{
 							ID:       types.ID(cc.NodeID),
 							PeerURLs: []string{pc.Url},
+							Name:     pc.Name,
 						}
 
 						if cc.Type == raftpb.ConfChangeAddNode {
-							GetSugar().Infof("%s ConfChangeAddNode %s %s", rc.id.String(), types.ID(cc.NodeID).String(), pc.Url)
+							GetSugar().Infof("%s ConfChangeAddNode %s %s", types.ID(rc.id).String(), types.ID(cc.NodeID).String(), pc.Url)
 						} else {
 							m.IsLearner = true
-							GetSugar().Infof("%s ConfChangeAddLearnerNode %s %s", rc.id.String(), types.ID(cc.NodeID).String(), pc.Url)
+							GetSugar().Infof("%s ConfChangeAddLearnerNode %s %s", types.ID(rc.id).String(), types.ID(cc.NodeID).String(), pc.Url)
 						}
 						rc.mb.AddMember(m.ID, m.IsLearner, &m)
 
@@ -377,12 +336,12 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 						}
 
 					} else {
-						GetSugar().Infof("%s PromoteRaftMember %s", rc.id.String(), types.ID(cc.NodeID).String())
+						GetSugar().Infof("%s PromoteRaftMember %s", types.ID(rc.id).String(), types.ID(cc.NodeID).String())
 						rc.mb.PromoteMember(types.ID(cc.NodeID))
 					}
 
 				case raftpb.ConfChangeRemoveNode:
-					GetSugar().Infof("%s ConfChangeRemoveNode %s", rc.id.String(), types.ID(cc.NodeID).String())
+					GetSugar().Infof("%s ConfChangeRemoveNode %s", types.ID(rc.id).String(), types.ID(cc.NodeID).String())
 					if types.ID(rc.id) != types.ID(cc.NodeID) {
 						rc.transport.RemovePeer(types.ID(cc.NodeID))
 					}
@@ -391,12 +350,12 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 
 				rc.commitC.AppendHighestPriotiryItem(ConfChange{
 					CCType:  cc.Type,
-					NodeID:  RaftInstanceID(cc.NodeID),
+					NodeID:  cc.NodeID,
 					RaftUrl: pc.Url,
 				})
 
 			} else {
-				GetSugar().Errorf("%s %s ValidateConfigurationChange IsPromote:%v %s err:%v", rc.id.String(), cc.Type.String(), pc.IsPromote, types.ID(cc.NodeID).String(), err)
+				GetSugar().Errorf("%s %s ValidateConfigurationChange IsPromote:%v %s err:%v", types.ID(rc.id).String(), cc.Type.String(), pc.IsPromote, types.ID(cc.NodeID).String(), err)
 				cc.NodeID = raft.None
 				rc.confState = *rc.node.ApplyConfChange(cc)
 			}
@@ -471,9 +430,9 @@ func (rc *RaftInstance) serveChannels() {
 	atomic.StoreUint64(&rc.appliedIndex, snap.Metadata.Index)
 
 	defer func() {
-		GetSugar().Infof("%s serveChannels break", rc.id.String())
+		GetSugar().Infof("%s serveChannels break", types.ID(rc.id).String())
 		rc.wal.Close()
-		GetSugar().Infof("%s send RaftStopOK", rc.id.String())
+		GetSugar().Infof("%s send RaftStopOK", types.ID(rc.id).String())
 		rc.commitC.AppendHighestPriotiryItem(RaftStopOK{})
 	}()
 
@@ -485,7 +444,7 @@ func (rc *RaftInstance) serveChannels() {
 
 	go func() {
 		rc.waitStop.Wait()
-		GetSugar().Infof("%s close stopc", rc.id.String())
+		GetSugar().Infof("%s close stopc", types.ID(rc.id).String())
 		close(rc.stopc)
 	}()
 
@@ -506,15 +465,15 @@ func (rc *RaftInstance) serveChannels() {
 					atomic.StoreUint64(&rc.lead, rc.softState.Lead)
 					if oldSoftState.RaftState == raft.StateLeader {
 						if rc.softState.RaftState != raft.StateLeader {
-							GetSugar().Infof("(%s) down to follower", rc.id.String())
+							GetSugar().Infof("(%s) down to follower", types.ID(rc.id).String())
 							rc.proposalMgr.onLeaderDownToFollower()
 						}
 					} else if rc.softState.RaftState == raft.StateLeader {
-						GetSugar().Infof("(%s) becomeLeader", rc.id.String())
+						GetSugar().Infof("(%s) becomeLeader", types.ID(rc.id).String())
 					}
 
 					if oldSoftState.Lead != rc.softState.Lead {
-						rc.commitC.AppendHighestPriotiryItem(LeaderChange{Leader: RaftInstanceID(rc.softState.Lead)})
+						rc.commitC.AppendHighestPriotiryItem(LeaderChange{Leader: rc.softState.Lead})
 					}
 
 					islead = rd.RaftState == raft.StateLeader
@@ -533,7 +492,7 @@ func (rc *RaftInstance) serveChannels() {
 			}
 
 			if err := rc.wal.Save(rd.HardState, rd.Entries); nil != err {
-				GetSugar().Fatalf("%s failed to sync Raft snapshot %v", rc.id.String(), err)
+				GetSugar().Fatalf("%s failed to sync Raft snapshot %v", types.ID(rc.id).String(), err)
 			}
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
@@ -652,7 +611,7 @@ func (rc *RaftInstance) openWAL(snapshot *raftpb.Snapshot) (*wal.WAL, error) {
 
 // replayWAL replays WAL entries into the raft instance.
 func (rc *RaftInstance) replayWAL(haveWAL bool) (*wal.WAL, error) {
-	GetSugar().Infof("replaying WAL of member %s", rc.id.String())
+	GetSugar().Infof("replaying WAL of member %s", types.ID(rc.id).String())
 	if snap, err := rc.loadSnapshot(haveWAL); nil != err {
 		return nil, err
 	} else {
@@ -746,23 +705,13 @@ func numConnectedSince(transport rafthttp.Transporter, since time.Time, self typ
 	return connectedNum
 }
 
-func (rc *RaftInstance) GetMaxMemberInstanceID() (max uint32) {
-	for _, v := range rc.mb.Members() {
-		if RaftInstanceID(v.ID).GetInstance() > max {
-			max = RaftInstanceID(v.ID).GetInstance()
-		}
-	}
-	return
-}
-
 func (rc *RaftInstance) GetRaftCluster() string {
 	var tmp []string
 	for _, v := range rc.mb.Members() {
-		raftInstanceID := RaftInstanceID(v.ID)
 		if v.IsLearner {
-			tmp = append(tmp, fmt.Sprintf("%d@%d@%s@learner", raftInstanceID.GetNodeID(), raftInstanceID.GetInstance(), v.PeerURLs[0]))
+			tmp = append(tmp, fmt.Sprintf("%s@%d@%s@learner", v.Name, uint64(v.ID), v.PeerURLs[0]))
 		} else {
-			tmp = append(tmp, fmt.Sprintf("%d@%d@%s@voter", raftInstanceID.GetNodeID(), raftInstanceID.GetInstance(), v.PeerURLs[0]))
+			tmp = append(tmp, fmt.Sprintf("%s@%d@%s@voter", v.Name, uint64(v.ID), v.PeerURLs[0]))
 		}
 	}
 
@@ -792,7 +741,7 @@ func (rc *RaftInstance) MayRemoveMember(id types.ID) error {
 	if !isConnectedToQuorumSince(rc.transport, time.Now().Add(-HealthInterval), types.ID(rc.ID()), rc.mb.VotingMembers()) {
 		GetSugar().Warn(
 			"rejecting member remove request; local member has not been connected to all peers, reconfigure breaks active quorum",
-			zap.String("local-member-id", rc.ID().String()),
+			zap.String("local-member-id", types.ID(rc.id).String()),
 			zap.String("requested-member-remove", id.String()),
 			zap.Error(ErrUnhealthy),
 		)
@@ -810,7 +759,7 @@ func (rc *RaftInstance) MayAddMember(id types.ID) error {
 	if !isConnectedFullySince(rc.transport, time.Now().Add(-HealthInterval), types.ID(rc.ID()), rc.mb.VotingMembers()) {
 		GetSugar().Warn(
 			"rejecting member add request; local member has not been connected to all peers, reconfigure breaks active quorum",
-			zap.String("local-member-id", rc.ID().String()),
+			zap.String("local-member-id", types.ID(rc.id).String()),
 			zap.String("requested-member-add", id.String()),
 			zap.Error(ErrUnhealthy),
 		)
@@ -884,15 +833,15 @@ func (rc *RaftInstance) GetMemberProgress(id uint64) (error, float64) {
 }
 
 type Member struct {
-	NodeID     uint16
-	InstanceID uint32
-	URL        string
-	IsLearner  bool
+	Name      string
+	ID        uint64
+	URL       string
+	IsLearner bool
 }
 
 //"NodeID1@InstanceID1@URL@learner,NodeID2@InstanceID2@URL@"
-func SplitPeers(s string) (map[uint16]Member, error) {
-	peers := map[uint16]Member{}
+func SplitPeers(s string) (map[uint64]Member, error) {
+	peers := map[uint64]Member{}
 	a := strings.Split(s, ",")
 	for _, v := range a {
 		fields := strings.Split(v, "@")
@@ -901,36 +850,30 @@ func SplitPeers(s string) (map[uint16]Member, error) {
 			return nil, errors.New("invaild format")
 		}
 
-		n, err := strconv.Atoi(fields[0])
+		i, err := strconv.ParseUint(fields[1], 10, 64)
 
 		if nil != err {
 			return nil, err
 		}
 
-		i, err := strconv.Atoi(fields[1])
-
-		if nil != err {
-			return nil, err
-		}
-
-		peers[uint16(n)] = Member{
-			NodeID:     uint16(n),
-			InstanceID: uint32(i),
-			URL:        fields[2],
-			IsLearner:  fields[3] == "learner",
+		peers[i] = Member{
+			Name:      fields[0],
+			ID:        i,
+			URL:       fields[2],
+			IsLearner: fields[3] == "learner",
 		}
 	}
 
 	return peers, nil
 }
 
-func NewInstance(nodeID uint16, shard uint16, instance uint32, join bool, mutilRaft *MutilRaft, commitC ApplicationQueue, peers map[uint16]Member, logdir string, raftLogPrefix string) (*RaftInstance, error) {
+func NewInstance(id uint64, cluster int, join bool, mutilRaft *MutilRaft, commitC ApplicationQueue, peers map[uint64]Member, logdir string, raftLogPrefix string) (*RaftInstance, error) {
 	rc := &RaftInstance{
 		commitC:    commitC,
-		id:         MakeInstanceID(nodeID, shard, instance),
+		id:         id,
 		logdir:     logdir,
-		waldir:     fmt.Sprintf("%s/%s-%d-%d-%d-wal", logdir, raftLogPrefix, nodeID, shard, instance),
-		snapdir:    fmt.Sprintf("%s/%s-%d-%d-%d-snap", logdir, raftLogPrefix, nodeID, shard, instance),
+		waldir:     fmt.Sprintf("%s/%s-%d-wal", logdir, raftLogPrefix, id),
+		snapdir:    fmt.Sprintf("%s/%s-%d-snap", logdir, raftLogPrefix, id),
 		snapCount:  SnapshotCount,
 		stopc:      make(chan struct{}),
 		stopping:   make(chan struct{}),
@@ -947,7 +890,7 @@ func NewInstance(nodeID uint16, shard uint16, instance uint32, join bool, mutilR
 		proposePipeline: queue.NewArrayQueue(10000),
 		readPipeline:    queue.NewArrayQueue(10000),
 		w:               wait.New(),
-		reqIDGen:        idutil.NewGenerator(nodeID, time.Now()),
+		reqIDGen:        idutil.NewGenerator(uint16(id), time.Now()),
 	}
 
 	rloger := raftLogger{
@@ -970,14 +913,14 @@ func NewInstance(nodeID uint16, shard uint16, instance uint32, join bool, mutilR
 
 	haveWAL := wal.Exist(rc.waldir)
 
-	rc.mb = membership.NewMemberShip(GetLogger(), types.ID(rc.id.GetShard()), types.ID(rc.id.GetNodeID()))
+	rc.mb = membership.NewMemberShip(GetLogger(), types.ID(id), types.ID(cluster))
 
 	if rc.wal, err = rc.replayWAL(haveWAL); err != nil {
 		return nil, fmt.Errorf("replayWAL : %v ", err)
 	}
 
 	c := &raft.Config{
-		ID:                        uint64(rc.id),
+		ID:                        id,
 		ElectionTick:              10,
 		HeartbeatTick:             1,
 		Storage:                   rc.raftStorage,
@@ -994,13 +937,11 @@ func NewInstance(nodeID uint16, shard uint16, instance uint32, join bool, mutilR
 		rc.node = raft.RestartNode(c)
 	} else {
 		rpeers := []raft.Peer{}
-
-		GetSugar().Infof("peersaa(%d,%d,%d) %v", nodeID, shard, instance, peers)
-
 		for _, v := range peers {
 			cc := membership.ConfChangeContext{
 				Url:    v.URL,
-				NodeID: uint64(MakeInstanceID(v.NodeID, shard, v.InstanceID)),
+				NodeID: v.ID,
+				Name:   v.Name,
 			}
 
 			if v.IsLearner {
@@ -1011,18 +952,18 @@ func NewInstance(nodeID uint16, shard uint16, instance uint32, join bool, mutilR
 
 			context, _ := json.Marshal(cc)
 
-			rpeers = append(rpeers, raft.Peer{ID: uint64(MakeInstanceID(v.NodeID, shard, v.InstanceID)), Context: context})
+			rpeers = append(rpeers, raft.Peer{ID: v.ID, Context: context})
 		}
 		rc.node = raft.StartNode(c, rpeers)
 	}
 
 	rc.transport = &rafthttp.Transport{
 		Logger:      GetLogger(),
-		ID:          types.ID(rc.id),
-		ClusterID:   types.ID(shard),
+		ID:          types.ID(id),
+		ClusterID:   types.ID(cluster),
 		Raft:        rc,
-		ServerStats: stats.NewServerStats(rc.id.String(), rc.id.String()),
-		LeaderStats: stats.NewLeaderStats(rc.id.String()),
+		ServerStats: stats.NewServerStats(types.ID(rc.id).String(), peers[id].Name),
+		LeaderStats: stats.NewLeaderStats(types.ID(rc.id).String()),
 		ErrorC:      make(chan error),
 		Snapshotter: rc.snapshotter,
 	}
@@ -1032,9 +973,8 @@ func NewInstance(nodeID uint16, shard uint16, instance uint32, join bool, mutilR
 	rc.transport.Start()
 
 	for _, v := range peers {
-		if MakeInstanceID(v.NodeID, shard, v.InstanceID) != rc.id {
-			GetSugar().Infof("AddPeer %v %v %v", MakeInstanceID(v.NodeID, shard, v.InstanceID).String(), types.ID(MakeInstanceID(v.NodeID, shard, v.InstanceID)).String(), v.URL)
-			rc.transport.AddPeer(types.ID(MakeInstanceID(v.NodeID, shard, v.InstanceID)), []string{v.URL})
+		if v.ID != rc.id {
+			rc.transport.AddPeer(types.ID(v.ID), []string{v.URL})
 		}
 	}
 

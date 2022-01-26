@@ -19,7 +19,7 @@ var (
 
 type ConfChange struct {
 	CCType  raftpb.ConfChangeType
-	NodeID  RaftInstanceID
+	NodeID  uint64
 	RaftUrl string
 }
 
@@ -28,7 +28,7 @@ type ReplayOK struct{}
 type RaftStopOK struct{}
 
 type LeaderChange struct {
-	Leader RaftInstanceID
+	Leader uint64
 }
 
 type TransportError error

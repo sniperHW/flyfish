@@ -193,7 +193,7 @@ func (rc *RaftInstance) publishSnapshot(snap raftpb.Snapshot) {
 	rc.recoverMemberShipFromSnapshot(&snap)
 
 	for _, v := range rc.mb.Members() {
-		if RaftInstanceID(v.ID) != rc.ID() {
+		if uint64(v.ID) != rc.id {
 			rc.transport.AddPeer(types.ID(v.ID), v.PeerURLs)
 		}
 	}

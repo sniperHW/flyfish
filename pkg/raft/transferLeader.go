@@ -23,7 +23,7 @@ func (rc *RaftInstance) MoveLeader(ctx context.Context, lead, transferee uint64)
 	lg := GetLogger()
 	lg.Info(
 		"leadership transfer starting",
-		zap.String("local-member-id", rc.id.String()),
+		zap.String("local-member-id", types.ID(rc.id).String()),
 		zap.String("current-leader-member-id", types.ID(lead).String()),
 		zap.String("transferee-member-id", types.ID(transferee).String()),
 	)
@@ -40,7 +40,7 @@ func (rc *RaftInstance) MoveLeader(ctx context.Context, lead, transferee uint64)
 	// TODO: drain all requests, or drop all messages to the old leader
 	lg.Info(
 		"leadership transfer finished",
-		zap.String("local-member-id", rc.id.String()),
+		zap.String("local-member-id", types.ID(rc.id).String()),
 		zap.String("old-leader-member-id", types.ID(lead).String()),
 		zap.String("new-leader-member-id", types.ID(transferee).String()),
 		zap.Duration("took", time.Since(now)),
@@ -54,8 +54,8 @@ func (rc *RaftInstance) TransferLeadership(transferee uint64) error {
 	if !rc.isLeader() {
 		lg.Info(
 			"skipped leadership transfer; local server is not leader",
-			zap.String("local-member-id", rc.id.String()),
-			zap.String("current-leader-member-id", RaftInstanceID(rc.Lead()).String()),
+			zap.String("local-member-id", types.ID(rc.id).String()),
+			zap.String("current-leader-member-id", types.ID(rc.Lead()).String()),
 		)
 		return nil
 	}
@@ -63,8 +63,8 @@ func (rc *RaftInstance) TransferLeadership(transferee uint64) error {
 	if !rc.hasMultipleVotingMembers() {
 		lg.Info(
 			"skipped leadership transfer for single voting member cluster",
-			zap.String("local-member-id", rc.id.String()),
-			zap.String("current-leader-member-id", RaftInstanceID(rc.Lead()).String()),
+			zap.String("local-member-id", types.ID(rc.id).String()),
+			zap.String("current-leader-member-id", types.ID(rc.Lead()).String()),
 		)
 		return nil
 	}

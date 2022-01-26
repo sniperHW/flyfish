@@ -17,6 +17,7 @@ type ConfChangeContext struct {
 	IsPromote      bool
 	Url            string //for add
 	NodeID         uint64
+	Name           string
 }
 
 type MemberShipJson struct {
