@@ -116,10 +116,6 @@ func (s *kvstore) isReady() bool {
 	return s.isLeader() && s.ready
 }
 
-func (s *kvstore) getLeaderNodeID() int {
-	return int(raft.RaftInstanceID(atomic.LoadUint64(&s.leader)).GetNodeID())
-}
-
 func (s *kvstore) loadSnapshot() (*raftpb.Snapshot, error) {
 	snapshot, err := s.snapshotter.Load()
 	if err == snap.ErrNoSnapshot {
