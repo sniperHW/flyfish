@@ -113,10 +113,34 @@ func (this *raftTaskMgr) onLeaderDownToFollower() {
 	}
 }
 
-type RaftInstanceID uint32
+type RaftInstanceID uint64
 
-func (i RaftInstanceID) String() string {
-	return strconv.FormatUint(uint64(i), 16)
+func (r RaftInstanceID) String() string {
+	return fmt.Sprintf("%d_%d_%d", r.GetNodeID(), r.GetShard(), r.GetInstance())
+}
+
+func MakeInstanceID(nodeID uint16, shard uint16, instance uint32) RaftInstanceID {
+	return RaftInstanceID(uint64(nodeID)<<48 | uint64(shard)<<32 | uint64(instance))
+}
+
+func (r RaftInstanceID) GetNodeID() uint16 {
+	return uint16(uint64(r) >> 48)
+}
+
+func (r RaftInstanceID) GetShard() uint16 {
+	return uint16(uint64(r) & uint64(0x7FFF00000000) >> 32)
+}
+
+func (r RaftInstanceID) GetInstance() uint32 {
+	return uint32(r)
+}
+
+func (r RaftInstanceID) Uint64() uint64 {
+	return uint64(r)
+}
+
+func (r RaftInstanceID) TypesID() types.ID {
+	return types.ID(r)
 }
 
 type RaftInstance struct {
@@ -132,8 +156,6 @@ type RaftInstance struct {
 	waitStop            sync.WaitGroup
 	id                  RaftInstanceID // raft instanceID
 	lead                uint64
-	nodeID              uint16
-	shard               uint16
 	join                bool   // node is joining an existing cluster
 	waldir              string // path to WAL directory
 	snapdir             string // path to snapshot directory
@@ -202,20 +224,8 @@ func searchIndex(names []string, index uint64) (int, bool) {
 	return -1, false
 }
 
-func MakeInstanceID(nodeID uint16, shard uint16) RaftInstanceID {
-	return RaftInstanceID(uint32(nodeID)<<16 + uint32(shard))
-}
-
 func (rc *RaftInstance) GetApplyIndex() uint64 {
 	return atomic.LoadUint64(&rc.appliedIndex)
-}
-
-func (r RaftInstanceID) GetNodeID() uint16 {
-	return uint16(uint32(r) >> 16)
-}
-
-func (r RaftInstanceID) GetShard() uint16 {
-	return uint16(uint32(r) & 0x0000FFFF)
 }
 
 func (rc *RaftInstance) ID() RaftInstanceID {
@@ -630,7 +640,7 @@ func (rc *RaftInstance) openWAL(snapshot *raftpb.Snapshot) (*wal.WAL, error) {
 
 // replayWAL replays WAL entries into the raft instance.
 func (rc *RaftInstance) replayWAL(haveWAL bool) (*wal.WAL, error) {
-	GetSugar().Infof("replaying WAL of member %d", rc.id)
+	GetSugar().Infof("replaying WAL of member %s", rc.id.String())
 	if snap, err := rc.loadSnapshot(haveWAL); nil != err {
 		return nil, err
 	} else {
@@ -839,45 +849,53 @@ func (rc *RaftInstance) GetMemberProgress(id uint64) (error, float64) {
 }
 
 type Member struct {
-	NodeID    uint16
-	URL       string
-	IsLearner bool
+	NodeID     uint16
+	InstanceID uint32
+	URL        string
+	IsLearner  bool
 }
 
-//"NodeID1@URL@learner,NodeID2@URL@"
+//"NodeID1@InstanceID1@URL@learner,NodeID2@InstanceID2@URL@"
 func SplitPeers(s string) (map[uint16]Member, error) {
 	peers := map[uint16]Member{}
 	a := strings.Split(s, ",")
 	for _, v := range a {
 		fields := strings.Split(v, "@")
 
-		if len(fields) != 3 {
+		if len(fields) != 4 {
 			return nil, errors.New("invaild format")
 		}
 
-		i, err := strconv.Atoi(fields[0])
+		n, err := strconv.Atoi(fields[0])
 
 		if nil != err {
 			return nil, err
 		}
 
-		peers[uint16(i)] = Member{
-			NodeID:    uint16(i),
-			URL:       fields[1],
-			IsLearner: fields[2] == "learner",
+		i, err := strconv.Atoi(fields[1])
+
+		if nil != err {
+			return nil, err
+		}
+
+		peers[uint16(n)] = Member{
+			NodeID:     uint16(n),
+			InstanceID: uint32(i),
+			URL:        fields[2],
+			IsLearner:  fields[3] == "learner",
 		}
 	}
 
 	return peers, nil
 }
 
-func NewInstance(nodeID uint16, shard uint16, join bool, mutilRaft *MutilRaft, commitC ApplicationQueue, peers map[uint16]Member, logdir string, raftLogPrefix string) (*RaftInstance, error) {
+func NewInstance(nodeID uint16, shard uint16, instance uint32, join bool, mutilRaft *MutilRaft, commitC ApplicationQueue, peers map[uint16]Member, logdir string, raftLogPrefix string) (*RaftInstance, error) {
 	rc := &RaftInstance{
 		commitC:    commitC,
-		id:         MakeInstanceID(nodeID, shard),
+		id:         MakeInstanceID(nodeID, shard, instance),
 		logdir:     logdir,
-		waldir:     fmt.Sprintf("%s/%s-%d-%d-wal", logdir, raftLogPrefix, nodeID, shard),
-		snapdir:    fmt.Sprintf("%s/%s-%d-%d-snap", logdir, raftLogPrefix, nodeID, shard),
+		waldir:     fmt.Sprintf("%s/%s-%d-%d-%d-wal", logdir, raftLogPrefix, nodeID, shard, instance),
+		snapdir:    fmt.Sprintf("%s/%s-%d-%d-%d-snap", logdir, raftLogPrefix, nodeID, shard, instance),
 		snapCount:  SnapshotCount,
 		stopc:      make(chan struct{}),
 		stopping:   make(chan struct{}),
@@ -891,8 +909,6 @@ func NewInstance(nodeID uint16, shard uint16, join bool, mutilRaft *MutilRaft, c
 			dict: map[uint64]*raftTask{},
 		},
 		mutilRaft:       mutilRaft,
-		nodeID:          nodeID,
-		shard:           shard,
 		proposePipeline: queue.NewArrayQueue(10000),
 		readPipeline:    queue.NewArrayQueue(10000),
 		w:               wait.New(),
@@ -943,10 +959,10 @@ func NewInstance(nodeID uint16, shard uint16, join bool, mutilRaft *MutilRaft, c
 		rc.node = raft.RestartNode(c)
 	} else {
 		rpeers := []raft.Peer{}
-		for k, v := range peers {
+		for _, v := range peers {
 			cc := membership.ConfChangeContext{
 				Url:    v.URL,
-				NodeID: uint64(uint64(MakeInstanceID(uint16(k), shard))),
+				NodeID: uint64(MakeInstanceID(v.NodeID, shard, v.InstanceID)),
 			}
 
 			if v.IsLearner {
@@ -957,7 +973,7 @@ func NewInstance(nodeID uint16, shard uint16, join bool, mutilRaft *MutilRaft, c
 
 			context, _ := json.Marshal(cc)
 
-			rpeers = append(rpeers, raft.Peer{ID: uint64(MakeInstanceID(uint16(k), shard)), Context: context})
+			rpeers = append(rpeers, raft.Peer{ID: uint64(MakeInstanceID(v.NodeID, shard, v.InstanceID)), Context: context})
 		}
 		rc.node = raft.StartNode(c, rpeers)
 	}
@@ -965,7 +981,7 @@ func NewInstance(nodeID uint16, shard uint16, join bool, mutilRaft *MutilRaft, c
 	rc.transport = &rafthttp.Transport{
 		Logger:      GetLogger(),
 		ID:          types.ID(rc.id),
-		ClusterID:   types.ID(rc.shard),
+		ClusterID:   types.ID(shard),
 		Raft:        rc,
 		ServerStats: stats.NewServerStats(rc.id.String(), rc.id.String()),
 		LeaderStats: stats.NewLeaderStats(rc.id.String()),
@@ -977,9 +993,9 @@ func NewInstance(nodeID uint16, shard uint16, join bool, mutilRaft *MutilRaft, c
 
 	rc.transport.Start()
 
-	for k, v := range peers {
-		if MakeInstanceID(uint16(k), shard) != rc.id {
-			rc.transport.AddPeer(types.ID(MakeInstanceID(uint16(k), shard)), []string{v.URL})
+	for _, v := range peers {
+		if MakeInstanceID(v.NodeID, shard, v.InstanceID) != rc.id {
+			rc.transport.AddPeer(types.ID(MakeInstanceID(v.NodeID, shard, v.InstanceID)), []string{v.URL})
 		}
 	}
 
