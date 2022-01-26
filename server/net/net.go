@@ -227,7 +227,7 @@ func UdpCall(remotes interface{}, req *Message, timeout time.Duration, onResp fu
 		go func(i int, addr *net.UDPAddr) {
 			u, err := flynet.NewUdp(fmt.Sprintf(":0"), Pack, Unpack)
 			if nil == err {
-				u.SendTo(v, req)
+				u.SendTo(addr, req)
 				uu[i] = u
 				_, r, err := u.ReadFrom(make([]byte, 65535))
 				if nil == err {

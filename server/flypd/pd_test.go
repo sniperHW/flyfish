@@ -134,11 +134,12 @@ func TestPd1(t *testing.T) {
 		}
 	}
 
+	fmt.Printf("instanceCounter:%d\n", p.pState.deployment.instanceCounter)
+
 	p.Stop()
 
 }
 
-/*
 func TestAddRemovePd(t *testing.T) {
 	os.RemoveAll("./raftLog")
 
@@ -149,7 +150,7 @@ func TestAddRemovePd(t *testing.T) {
 
 	fmt.Println("conf.DBType", conf.DBType)
 
-	p1, _ := NewPd(1, false, conf, "localhost:8110", "1@http://localhost:18110@")
+	p1, _ := NewPd(1, 1, 1, false, conf, "localhost:8110", "1@1@http://localhost:18110@")
 
 	for {
 		if p1.isLeader() {
@@ -164,13 +165,11 @@ func TestAddRemovePd(t *testing.T) {
 
 	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
 
-	p2, err := NewPd(2, true, conf, "localhost:8111", "1@http://localhost:18110@,2@http://localhost:18111@")
+	var instanceID uint32
+	var raftCluster string
+	var cluster uint16
 
-	fmt.Println(err)
-
-	time.Sleep(time.Second)
-
-	for {
+	{
 		conn.SendTo(addr, snet.MakeMessage(0, &sproto.AddPdNode{
 			Id:  2,
 			Url: "http://localhost:18111",
@@ -181,27 +180,26 @@ func TestAddRemovePd(t *testing.T) {
 
 		ret := r.(*snet.Message).Msg.(*sproto.AddPdNodeResp)
 
-		if ret.Reason == "membership: ID exists" {
-			break
-		}
-
-		time.Sleep(time.Second)
+		instanceID = ret.InstanceID
+		raftCluster = ret.RaftCluster
+		cluster = uint16(ret.Cluster)
 	}
 
+	fmt.Println(raftCluster)
+
+	p2, err := NewPd(2, cluster, instanceID, true, conf, "localhost:8111", raftCluster)
+
+	time.Sleep(time.Second)
+
 	for {
-		conn.SendTo(addr, snet.MakeMessage(0, &sproto.RemovePdNode{
-			Id: 2,
-		}))
-
-		recvbuff := make([]byte, 256)
-		_, r, _ := conn.ReadFrom(recvbuff)
-
-		ret := r.(*snet.Message).Msg.(*sproto.RemovePdNodeResp)
-
-		if ret.Reason == "membership: ID not found" {
+		if resp, err := consoleUdp.Call([]string{"localhost:8110", "localhost:8111"}, &sproto.RemovePdNode{
+			Id:         2,
+			InstanceID: instanceID,
+		}, time.Second); nil != resp && resp.(*sproto.RemovePdNodeResp).Reason == "membership: ID not found" {
 			break
+		} else {
+			fmt.Println(err)
 		}
-
 		time.Sleep(time.Second)
 	}
 
@@ -212,7 +210,6 @@ func TestAddRemovePd(t *testing.T) {
 	p2.Stop()
 
 }
-*/
 
 func TestHttp(t *testing.T) {
 

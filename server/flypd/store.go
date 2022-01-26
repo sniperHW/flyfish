@@ -176,8 +176,7 @@ func (p *ProposalAddLearnerStoreToNode) apply(pd *pd) {
 	}()
 
 	if nil == err {
-		s.instanceCounter++
-		instanceID := s.instanceCounter
+		instanceID := pd.pState.deployment.nextInstanceID()
 		n.store[int(p.Msg.Store)] = &FlyKvStoreState{
 			Type:       LearnerStore,
 			Value:      FlyKvUnCommit,

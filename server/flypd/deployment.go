@@ -56,6 +56,14 @@ func (f *FlyKvStoreState) isLeader() bool {
 	return f.isLead
 }
 
+func (f *FlyKvStoreState) isVoter() bool {
+	return f.Type == VoterStore
+}
+
+func (f *FlyKvStoreState) isLearner() bool {
+	return f.Type == LearnerStore
+}
+
 type KvNodeJson struct {
 	NodeID      int
 	Host        string
@@ -70,17 +78,17 @@ type StoreJson struct {
 }
 
 type SetJson struct {
-	Version         int64
-	SetID           int
-	KvNodes         []KvNodeJson
-	Stores          []StoreJson
-	MarkClear       bool //需要将其上slot全部移走
-	InstanceCounter uint32
+	Version   int64
+	SetID     int
+	KvNodes   []KvNodeJson
+	Stores    []StoreJson
+	MarkClear bool //需要将其上slot全部移走
 }
 
 type DeploymentJson struct {
-	Version int64
-	Sets    []SetJson
+	Version         int64
+	Sets            []SetJson
+	InstanceCounter uint32
 }
 
 type kvnode struct {
@@ -139,14 +147,13 @@ type store struct {
 }
 
 type set struct {
-	version         int64
-	id              int
-	markClear       bool
-	nodes           map[int]*kvnode
-	stores          map[int]*store
-	slotOutCount    int //待迁出的slot数量
-	slotInCount     int //待迁入的slot数量
-	instanceCounter uint32
+	version      int64
+	id           int
+	markClear    bool
+	nodes        map[int]*kvnode
+	stores       map[int]*store
+	slotOutCount int //待迁出的slot数量
+	slotInCount  int //待迁入的slot数量
 }
 
 func (s *set) getTotalSlotCount() int {
@@ -205,8 +212,14 @@ func (s *set) storeBalance(pd *pd) {
 }
 
 type deployment struct {
-	version int64
-	sets    map[int]*set
+	version         int64
+	sets            map[int]*set
+	instanceCounter uint32
+}
+
+func (d *deployment) nextInstanceID() uint32 {
+	d.instanceCounter++
+	return d.instanceCounter
 }
 
 func (d deployment) getStoreByID(id int) *store {
@@ -285,12 +298,12 @@ func (d deployment) queryRouteInfo(req *sproto.QueryRouteInfo) *sproto.QueryRout
 func (d deployment) toDeploymentJson() DeploymentJson {
 	var deploymentJson DeploymentJson
 	deploymentJson.Version = d.version
+	deploymentJson.InstanceCounter = d.instanceCounter
 	for _, v := range d.sets {
 		setJson := SetJson{
-			Version:         v.version,
-			SetID:           v.id,
-			MarkClear:       v.markClear,
-			InstanceCounter: v.instanceCounter,
+			Version:   v.version,
+			SetID:     v.id,
+			MarkClear: v.markClear,
 		}
 
 		for _, vv := range v.nodes {
@@ -329,12 +342,11 @@ func (d *deployment) loadFromDeploymentJson(deploymentJson *DeploymentJson) erro
 	d.version = deploymentJson.Version
 	for _, v := range deploymentJson.Sets {
 		s := &set{
-			version:         v.Version,
-			id:              v.SetID,
-			markClear:       v.MarkClear,
-			instanceCounter: v.InstanceCounter,
-			nodes:           map[int]*kvnode{},
-			stores:          map[int]*store{},
+			version:   v.Version,
+			id:        v.SetID,
+			markClear: v.MarkClear,
+			nodes:     map[int]*kvnode{},
+			stores:    map[int]*store{},
 		}
 
 		for _, vv := range v.KvNodes {
@@ -468,11 +480,10 @@ func (d *deployment) loadFromPB(sets []*sproto.DeploymentSet) error {
 
 		for _, vvv := range s.nodes {
 			for j := 0; j < StorePerSet; j++ {
-				s.instanceCounter++
 				vvv.store[j+1] = &FlyKvStoreState{
 					Type:       VoterStore,
 					Value:      FlyKvCommited,
-					InstanceID: s.instanceCounter,
+					InstanceID: d.nextInstanceID(),
 				}
 			}
 		}

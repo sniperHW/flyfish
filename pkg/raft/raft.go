@@ -718,7 +718,6 @@ func (rc *RaftInstance) replayWAL(haveWAL bool) (*wal.WAL, error) {
 // isConnectedToQuorumSince checks whether the local member is connected to the
 // quorum of the cluster since the given time.
 func isConnectedToQuorumSince(transport rafthttp.Transporter, since time.Time, self types.ID, members []*membership.Member) bool {
-	GetSugar().Infof("isConnectedToQuorumSince %v", members)
 	return numConnectedSince(transport, since, self, members) >= (len(members)/2)+1
 }
 
@@ -745,6 +744,30 @@ func numConnectedSince(transport rafthttp.Transporter, since time.Time, self typ
 		}
 	}
 	return connectedNum
+}
+
+func (rc *RaftInstance) GetMaxMemberInstanceID() (max uint32) {
+	for _, v := range rc.mb.Members() {
+		if RaftInstanceID(v.ID).GetInstance() > max {
+			max = RaftInstanceID(v.ID).GetInstance()
+		}
+	}
+	return
+}
+
+func (rc *RaftInstance) GetRaftCluster() string {
+	var tmp []string
+	for _, v := range rc.mb.Members() {
+		raftInstanceID := RaftInstanceID(v.ID)
+		if v.IsLearner {
+			tmp = append(tmp, fmt.Sprintf("%d@%d@%s@learner", raftInstanceID.GetNodeID(), raftInstanceID.GetInstance(), v.PeerURLs[0]))
+		} else {
+			tmp = append(tmp, fmt.Sprintf("%d@%d@%s@voter", raftInstanceID.GetNodeID(), raftInstanceID.GetInstance(), v.PeerURLs[0]))
+		}
+	}
+
+	return strings.Join(tmp, ",")
+
 }
 
 func (rc *RaftInstance) MayRemoveMember(id types.ID) error {
@@ -1010,6 +1033,7 @@ func NewInstance(nodeID uint16, shard uint16, instance uint32, join bool, mutilR
 
 	for _, v := range peers {
 		if MakeInstanceID(v.NodeID, shard, v.InstanceID) != rc.id {
+			GetSugar().Infof("AddPeer %v %v %v", MakeInstanceID(v.NodeID, shard, v.InstanceID).String(), types.ID(MakeInstanceID(v.NodeID, shard, v.InstanceID)).String(), v.URL)
 			rc.transport.AddPeer(types.ID(MakeInstanceID(v.NodeID, shard, v.InstanceID)), []string{v.URL})
 		}
 	}

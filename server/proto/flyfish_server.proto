@@ -481,12 +481,16 @@ message addPdNode{
 }
  
 message addPdNodeResp{
-  optional bool  ok       = 1;  
-  optional string reason  = 2;   
+  optional bool   ok          = 1;  
+  optional string reason      = 2;
+  optional uint32 cluster     = 3;
+  optional uint32 instanceID  = 4;
+  optional string raftCluster = 5;   
 }
 
 message removePdNode{
-  optional int32  id = 1; 
+  optional int32  id          = 1;
+  optional uint32 instanceID  = 2;    
 }
 
 message removePdNodeResp{

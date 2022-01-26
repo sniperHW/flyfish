@@ -52,8 +52,9 @@ func (p *ProposalAddSet) doApply(pd *pd) error {
 	for _, v := range s.nodes {
 		for _, vv := range s.stores {
 			v.store[vv.id] = &FlyKvStoreState{
-				Type:  VoterStore,
-				Value: FlyKvCommited,
+				Type:       VoterStore,
+				Value:      FlyKvCommited,
+				InstanceID: pd.pState.deployment.nextInstanceID(),
 			}
 		}
 	}

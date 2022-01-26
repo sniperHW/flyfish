@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"github.com/gogo/protobuf/proto"
 	//"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
+	"errors"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
-	//"github.com/sniperHW/flyfish/pkg/raft"
+	"github.com/sniperHW/flyfish/pkg/raft"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"io/ioutil"
@@ -82,18 +83,20 @@ func (p *pd) onKvnodeBoot(replyer replyer, m *snet.Message) {
 		}
 
 		for storeId, st := range node.store {
-			store := node.set.stores[storeId]
 			raftCluster := []string{}
 			for _, n := range node.set.nodes {
-				if n.isVoter(store.id) {
-					raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@voter", n.id, st.InstanceID, n.host, n.raftPort))
-				} else if n.isLearner(store.id) {
-					raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@learner", n.id, st.InstanceID, n.host, n.raftPort))
+				if v, ok := n.store[storeId]; ok {
+					if v.isVoter() {
+						raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@voter", n.id, v.InstanceID, n.host, n.raftPort))
+					} else if v.isLearner() {
+						raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@learner", n.id, v.InstanceID, n.host, n.raftPort))
+					}
 				}
 			}
+
 			s := &sproto.StoreInfo{
-				Id:          int32(store.id),
-				Slots:       store.slots.ToJson(),
+				Id:          int32(storeId),
+				Slots:       node.set.stores[storeId].slots.ToJson(),
 				RaftCluster: strings.Join(raftCluster, ","),
 				InstanceID:  st.InstanceID,
 			}
@@ -300,7 +303,9 @@ func (this *ProposalConfChange) OnError(err error) {
 }
 
 func (p *pd) onAddPdNode(replyer replyer, m *snet.Message) {
-	/*msg := m.Msg.(*sproto.AddPdNode)
+	msg := m.Msg.(*sproto.AddPdNode)
+
+	instanceID := p.rn.GetMaxMemberInstanceID() + 1
 
 	reply := func(err error) {
 
@@ -312,25 +317,31 @@ func (p *pd) onAddPdNode(replyer replyer, m *snet.Message) {
 			resp.Reason = err.Error()
 		}
 
+		if nil == err || err.Error() == "membership: ID exists" {
+			resp.InstanceID = instanceID
+			resp.Cluster = uint32(p.rn.ID().GetShard())
+			resp.RaftCluster = p.rn.GetRaftCluster()
+		}
+
 		replyer.reply(snet.MakeMessage(m.Context, resp))
 	}
 
-	id := raft.MakeInstanceID(uint16(msg.Id), uint16(0))
+	id := raft.MakeInstanceID(uint16(msg.Id), p.rn.ID().GetShard(), instanceID)
 
-	if err := p.rn.MayAddMember(types.ID(id)); nil == err {
+	if err := p.rn.MayAddMember(id.TypesID()); nil == err {
 		p.rn.IssueConfChange(&ProposalConfChange{
 			confChangeType: raftpb.ConfChangeAddNode,
-			nodeID:         uint64(id),
+			nodeID:         id.Uint64(),
 			url:            msg.Url,
 			reply:          reply,
 		})
 	} else {
 		reply(err)
-	}*/
+	}
 }
 
 func (p *pd) onRemovePdNode(replyer replyer, m *snet.Message) {
-	/*msg := m.Msg.(*sproto.RemovePdNode)
+	msg := m.Msg.(*sproto.RemovePdNode)
 
 	reply := func(err error) {
 
@@ -345,17 +356,20 @@ func (p *pd) onRemovePdNode(replyer replyer, m *snet.Message) {
 		replyer.reply(snet.MakeMessage(m.Context, resp))
 	}
 
-	id := raft.MakeInstanceID(uint16(msg.Id), uint16(0))
-
-	if err := p.rn.MayRemoveMember(types.ID(id)); nil == err {
-		p.rn.IssueConfChange(&ProposalConfChange{
-			confChangeType: raftpb.ConfChangeRemoveNode,
-			nodeID:         uint64(id),
-			reply:          reply,
-		})
+	if 0 == msg.InstanceID {
+		reply(errors.New("InstanceID == 0"))
 	} else {
-		reply(err)
-	}*/
+		id := raft.MakeInstanceID(uint16(msg.Id), p.rn.ID().GetShard(), msg.InstanceID)
+		if err := p.rn.MayRemoveMember(id.TypesID()); nil == err {
+			p.rn.IssueConfChange(&ProposalConfChange{
+				confChangeType: raftpb.ConfChangeRemoveNode,
+				nodeID:         id.Uint64(),
+				reply:          reply,
+			})
+		} else {
+			reply(err)
+		}
+	}
 }
 
 func (p *pd) initMsgHandler() {
