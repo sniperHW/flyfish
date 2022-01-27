@@ -160,8 +160,8 @@ func (this *proposalReader) read() (isOver bool, ptype proposalType, data interf
 			case proposal_none:
 				err = errors.New("bad data 2")
 			case proposal_lease:
-				var id int32
-				id, err = this.reader.CheckGetInt32()
+				var id uint64
+				id, err = this.reader.CheckGetUint64()
 				if nil != err {
 					err = fmt.Errorf("proposal_lease read id:%v", err)
 					return
@@ -187,7 +187,7 @@ func (this *proposalReader) read() (isOver bool, ptype proposalType, data interf
 				}
 
 				data = pplease{
-					nodeid:  int(id),
+					nodeid:  id,
 					begtime: t,
 				}
 				return
@@ -388,6 +388,7 @@ type ProposalConfChange struct {
 	isPromote      bool
 	url            string //for add
 	nodeID         uint64
+	processID      uint16
 	reply          func(error)
 }
 
@@ -409,6 +410,10 @@ func (this *ProposalConfChange) IsPromote() bool {
 
 func (this *ProposalConfChange) OnError(err error) {
 	this.reply(err)
+}
+
+func (this *ProposalConfChange) GetProcessID() uint16 {
+	return this.processID
 }
 
 type ProposalUpdateMeta struct {

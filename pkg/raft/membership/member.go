@@ -6,22 +6,22 @@ import (
 
 type Member struct {
 	ID        types.ID `json:"id"`
-	Name      string   `json:"Name"`
+	ProcessID uint16   `json:"ProcessID"`
 	PeerURLs  []string `json:"peerURLs"`
 	IsLearner bool     `json:"isLearner,omitempty"`
 }
 
-func NewMember(name string, id types.ID, peerURLs types.URLs) *Member {
-	return newMember(name, id, peerURLs, false)
+func NewMember(processID uint16, id types.ID, peerURLs types.URLs) *Member {
+	return newMember(processID, id, peerURLs, false)
 }
 
-func NewMemberAsLearner(name string, id types.ID, peerURLs types.URLs) *Member {
-	return newMember(name, id, peerURLs, true)
+func NewMemberAsLearner(processID uint16, id types.ID, peerURLs types.URLs) *Member {
+	return newMember(processID, id, peerURLs, true)
 }
 
-func newMember(name string, id types.ID, peerURLs types.URLs, isLearner bool) *Member {
+func newMember(processID uint16, id types.ID, peerURLs types.URLs, isLearner bool) *Member {
 	return &Member{
-		Name:      name,
+		ProcessID: processID,
 		ID:        id,
 		PeerURLs:  peerURLs.StringSlice(),
 		IsLearner: isLearner,
@@ -35,7 +35,7 @@ func (m *Member) Clone() *Member {
 	mm := &Member{
 		ID:        m.ID,
 		IsLearner: m.IsLearner,
-		Name:      m.Name,
+		ProcessID: m.ProcessID,
 	}
 	if m.PeerURLs != nil {
 		mm.PeerURLs = make([]string, len(m.PeerURLs))

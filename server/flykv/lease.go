@@ -2,7 +2,6 @@ package flykv
 
 import (
 	"errors"
-	"github.com/sniperHW/flyfish/pkg/raft"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,7 +30,7 @@ func (this *leaseProposal) OnError(err error) {
 
 func (this *leaseProposal) Serilize(b []byte) []byte {
 	this.beginTime = time.Now()
-	return serilizeLease(b, int(this.store.rn.ID()), this.beginTime)
+	return serilizeLease(b, this.store.rn.ID(), this.beginTime)
 }
 
 func (this *leaseProposal) apply() {
@@ -52,7 +51,7 @@ func (this *leaseProposal) apply() {
 type lease struct {
 	sync.RWMutex
 	store        *kvstore
-	owner        raft.RaftInstanceID
+	owner        uint64
 	beginTime    time.Time
 	nextRenew    time.Time
 	leaderWaitCh chan struct{}
@@ -123,7 +122,7 @@ func (l *lease) becomeLeader() {
 	}
 }
 
-func (l *lease) update(owner raft.RaftInstanceID, beginTime time.Time) {
+func (l *lease) update(owner uint64, beginTime time.Time) {
 	l.Lock()
 	defer l.Unlock()
 	l.beginTime = time.Time(beginTime)
@@ -144,7 +143,7 @@ func (l *lease) hasLease() bool {
 
 func (l *lease) snapshot(b []byte) []byte {
 	//lease.update在主线程执行，snapshot也在主线程执行，无需加锁
-	return serilizeLease(b, int(l.owner), l.beginTime)
+	return serilizeLease(b, l.owner, l.beginTime)
 }
 
 func (l *lease) stop() {

@@ -109,7 +109,7 @@ func (s *kvstore) hasLease() bool {
 }
 
 func (s *kvstore) isLeader() bool {
-	return raft.RaftInstanceID(atomic.LoadUint64(&s.leader)) == s.rn.ID()
+	return atomic.LoadUint64(&s.leader) == s.rn.ID()
 }
 
 func (s *kvstore) isReady() bool {
@@ -429,13 +429,13 @@ func (s *kvstore) reportStatus() {
 	s.mainQueue.q.Append(1, func() {
 		msg := &sproto.StoreReportStatus{
 			SetID:       int32(s.kvnode.setID),
-			NodeID:      int32(s.rn.ID().GetNodeID()),
-			StoreID:     int32(s.rn.ID().GetShard()),
+			NodeID:      int32(s.kvnode.id),
+			StoreID:     int32(s.shard),
 			Isleader:    s.isLeader(),
 			Kvcount:     int32(s.kvcount),
 			Progress:    s.rn.GetApplyIndex(),
 			MetaVersion: s.meta.GetVersion(),
-			InstanceID:  s.rn.ID().GetInstance(),
+			RaftID:      s.rn.ID(),
 		}
 
 		go func() {
@@ -503,7 +503,7 @@ func (s *kvstore) serve() {
 			case raft.ConfChange:
 				c := v.(raft.ConfChange)
 				if c.CCType == raftpb.ConfChangeRemoveNode {
-					if s.rn.ID() == raft.RaftInstanceID(c.NodeID) {
+					if s.rn.ID() == c.NodeID {
 						GetSugar().Infof("%x RemoveFromCluster", s.rn.ID())
 						s.stop()
 					}
@@ -534,11 +534,11 @@ func (s *kvstore) serve() {
 			case raft.LeaderChange:
 				oldLeader := s.leader
 				atomic.StoreUint64(&s.leader, uint64(v.(raft.LeaderChange).Leader))
-				if raft.RaftInstanceID(v.(raft.LeaderChange).Leader) == s.rn.ID() {
+				if v.(raft.LeaderChange).Leader == s.rn.ID() {
 					s.becomeLeader()
 				}
 
-				if raft.RaftInstanceID(oldLeader) == s.rn.ID() && !s.isLeader() {
+				if oldLeader == s.rn.ID() && !s.isLeader() {
 					s.onLeaderDownToFollower()
 				}
 
@@ -555,7 +555,7 @@ func (s *kvstore) serve() {
 
 func (s *kvstore) becomeLeader() {
 
-	GetSugar().Infof("becomeLeader %v", s.rn.ID().String())
+	GetSugar().Infof("becomeLeader %v", s.rn.ID())
 
 	s.rn.IssueProposal(&proposalNop{store: s})
 	s.needWriteBackAll = true
@@ -567,7 +567,7 @@ func (s *kvstore) onLeaderDownToFollower() {
 }
 
 //将nodeID作为learner加入当前store的raft配置
-func (s *kvstore) onAddLearnerNode(from *net.UDPAddr, nodeID int32, instanceID uint32, host string, raftPort int32, context int64) {
+func (s *kvstore) onAddLearnerNode(from *net.UDPAddr, processID uint16, raftID uint64, host string, raftPort int32, context int64) {
 	reply := func(err error) {
 		if nil == err || err == membership.ErrIDExists {
 			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context, &sproto.NodeStoreOpOk{}))
@@ -587,13 +587,14 @@ func (s *kvstore) onAddLearnerNode(from *net.UDPAddr, nodeID int32, instanceID u
 	s.rn.IssueConfChange(&ProposalConfChange{
 		confChangeType: raftpb.ConfChangeAddLearnerNode,
 		url:            fmt.Sprintf("http://%s:%d", host, raftPort),
-		nodeID:         uint64(raft.MakeInstanceID(uint16(nodeID), uint16(s.shard), instanceID)),
+		nodeID:         raftID,
+		processID:      processID,
 		reply:          reply,
 	})
 }
 
 //将nodeID提升为当前store的raft配置的voter
-func (s *kvstore) onPromoteLearnerNode(from *net.UDPAddr, nodeID int32, instanceID uint32, context int64) {
+func (s *kvstore) onPromoteLearnerNode(from *net.UDPAddr, _ uint16, raftID uint64, context int64) {
 	reply := func(err error) {
 		if nil == err || err == membership.ErrMemberNotLearner {
 			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context, &sproto.NodeStoreOpOk{}))
@@ -610,25 +611,25 @@ func (s *kvstore) onPromoteLearnerNode(from *net.UDPAddr, nodeID int32, instance
 
 	GetSugar().Infof("onPromoteLearnerNode")
 
-	if err := s.rn.IsLearnerReady(uint64(raft.MakeInstanceID(uint16(nodeID), uint16(s.shard), instanceID))); nil == err {
+	if err := s.rn.IsLearnerReady(raftID); nil == err {
 		s.rn.IssueConfChange(&ProposalConfChange{
 			confChangeType: raftpb.ConfChangeAddNode,
 			isPromote:      true,
-			nodeID:         uint64(raft.MakeInstanceID(uint16(nodeID), uint16(s.shard), instanceID)),
+			nodeID:         raftID,
 			reply:          reply,
 		})
 	} else if err == membership.ErrIDNotFound {
 		//pd做了控制，不应该出现这些错误
 		GetSugar().Errorf("NotifyPromoteLearner error node:%d store:%d err:%v", s.kvnode.id, s.shard, err)
 	} else if err == raft.ErrLearnerNotReady {
-		_, progress := s.rn.GetMemberProgress(uint64(raft.MakeInstanceID(uint16(nodeID), uint16(s.shard), instanceID)))
+		_, progress := s.rn.GetMemberProgress(raftID)
 		GetSugar().Errorf("learner not ready:progress %v", progress)
 	}
 
 }
 
 //将nodeID从当前store的raft配置中移除
-func (s *kvstore) onRemoveNode(from *net.UDPAddr, nodeID int32, instanceID uint32, context int64) {
+func (s *kvstore) onRemoveNode(from *net.UDPAddr, _ uint16, raftID uint64, context int64) {
 
 	reply := func(err error) {
 		if nil == err || err == membership.ErrIDNotFound {
@@ -636,10 +637,10 @@ func (s *kvstore) onRemoveNode(from *net.UDPAddr, nodeID int32, instanceID uint3
 		}
 	}
 
-	if nil == s.rn.MayRemoveMember(types.ID(raft.MakeInstanceID(uint16(nodeID), uint16(s.shard), instanceID))) {
+	if nil == s.rn.MayRemoveMember(types.ID(raftID)) {
 		s.rn.IssueConfChange(&ProposalConfChange{
 			confChangeType: raftpb.ConfChangeRemoveNode,
-			nodeID:         uint64(raft.MakeInstanceID(uint16(nodeID), uint16(s.shard), instanceID)),
+			nodeID:         raftID,
 			reply:          reply,
 		})
 	}
@@ -650,11 +651,11 @@ func (s *kvstore) onNotifyNodeStoreOp(from *net.UDPAddr, msg *sproto.NotifyNodeS
 	if s.isReady() {
 		switch msg.Op {
 		case int32(flypd.LearnerStore):
-			s.onAddLearnerNode(from, msg.NodeID, msg.InstanceID, msg.Host, msg.RaftPort, context)
+			s.onAddLearnerNode(from, uint16(msg.NodeID), msg.RaftID, msg.Host, msg.RaftPort, context)
 		case int32(flypd.VoterStore):
-			s.onPromoteLearnerNode(from, msg.NodeID, msg.InstanceID, context)
+			s.onPromoteLearnerNode(from, uint16(msg.NodeID), msg.RaftID, context)
 		case int32(flypd.RemoveStore):
-			s.onRemoveNode(from, msg.NodeID, msg.InstanceID, context)
+			s.onRemoveNode(from, uint16(msg.NodeID), msg.RaftID, context)
 		default:
 			GetSugar().Errorf("onNotifyNodeStoreOp invaild Op:%v", msg.Op)
 		}

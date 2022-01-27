@@ -11,7 +11,8 @@ import (
 
 type ProposalAddSet struct {
 	proposalBase
-	Msg *sproto.AddSet
+	SetID      int
+	Deployment DeploymentJson
 }
 
 func (p *ProposalAddSet) Serilize(b []byte) []byte {
@@ -19,54 +20,14 @@ func (p *ProposalAddSet) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalAddSet) doApply(pd *pd) error {
-	if _, ok := pd.pState.deployment.sets[int(p.Msg.Set.SetID)]; ok {
+	if _, ok := pd.pState.deployment.sets[p.SetID]; ok {
 		return errors.New("set already exists")
+	} else {
+		pd.pState.deployment.loadFromDeploymentJson(&p.Deployment)
+		pd.pState.deployment.version++
+		pd.pState.deployment.sets[p.SetID].version = pd.pState.deployment.version
+		return nil
 	}
-
-	s := &set{
-		id:     int(p.Msg.Set.SetID),
-		nodes:  map[int]*kvnode{},
-		stores: map[int]*store{},
-	}
-
-	for _, v := range p.Msg.Set.Nodes {
-		s.nodes[int(v.NodeID)] = &kvnode{
-			id:          int(v.NodeID),
-			host:        v.Host,
-			servicePort: int(v.ServicePort),
-			raftPort:    int(v.RaftPort),
-			set:         s,
-			store:       map[int]*FlyKvStoreState{},
-		}
-	}
-
-	for i := 0; i < StorePerSet; i++ {
-		st := &store{
-			id:    i + 1,
-			slots: bitmap.New(slot.SlotCount),
-			set:   s,
-		}
-		s.stores[st.id] = st
-	}
-
-	for _, v := range s.nodes {
-		for _, vv := range s.stores {
-			v.store[vv.id] = &FlyKvStoreState{
-				Type:       VoterStore,
-				Value:      FlyKvCommited,
-				InstanceID: pd.pState.deployment.nextInstanceID(),
-			}
-		}
-	}
-
-	pd.pState.deployment.version++
-	s.version = pd.pState.deployment.version
-	pd.pState.deployment.sets[s.id] = s
-
-	GetSugar().Debugf("ProposalAddSet apply %v", s)
-
-	return nil
-
 }
 
 func (p *ProposalAddSet) apply(pd *pd) {
@@ -271,43 +232,49 @@ func (p *pd) onAddSet(replyer replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.AddSet)
 	resp := &sproto.AddSetResp{}
 
+	var deploymentJson DeploymentJson
+
 	err := func() error {
 		if _, ok := p.pState.deployment.sets[int(msg.Set.SetID)]; ok {
 			return errors.New("set already exists")
 		}
 
-		//检查node是否有冲突
-		nodeIDS := map[int]bool{}
-		nodeServices := map[string]bool{}
-		nodeRafts := map[string]bool{}
+		deploymentJson = p.pState.deployment.toDeploymentJson()
 
-		for _, v := range p.pState.deployment.sets {
-			for _, vv := range v.nodes {
-				nodeIDS[vv.id] = true
-				nodeServices[fmt.Sprintf("%s:%d", vv.host, vv.servicePort)] = true
-				nodeRafts[fmt.Sprintf("%s:%d", vv.host, vv.raftPort)] = true
-			}
+		set := SetJson{
+			SetID: int(msg.Set.SetID),
 		}
 
 		for _, v := range msg.Set.Nodes {
-			if nodeIDS[int(v.NodeID)] {
-				return fmt.Errorf("duplicate node:%d", v.NodeID)
-			}
-
-			if nodeServices[fmt.Sprintf("%s:%d", v.Host, v.ServicePort)] {
-				return fmt.Errorf("duplicate service:%s:%d", v.Host, v.ServicePort)
-			}
-
-			if nodeRafts[fmt.Sprintf("%s:%d", v.Host, v.RaftPort)] {
-				return fmt.Errorf("duplicate inter:%s:%d", v.Host, v.RaftPort)
-			}
-
-			nodeIDS[int(v.NodeID)] = true
-			nodeServices[fmt.Sprintf("%s:%d", v.Host, v.ServicePort)] = true
-			nodeRafts[fmt.Sprintf("%s:%d", v.Host, v.RaftPort)] = true
+			set.KvNodes = append(set.KvNodes, KvNodeJson{
+				NodeID:      int(v.NodeID),
+				Host:        v.Host,
+				ServicePort: int(v.ServicePort),
+				RaftPort:    int(v.RaftPort),
+				Store:       map[int]*FlyKvStoreState{},
+			})
 		}
 
-		return nil
+		for i := 0; i < StorePerSet; i++ {
+			set.Stores = append(set.Stores, StoreJson{
+				StoreID: i + 1,
+				Slots:   bitmap.New(slot.SlotCount).ToJson(),
+			})
+		}
+
+		for i, _ := range set.KvNodes {
+			for _, vv := range set.Stores {
+				set.KvNodes[i].Store[vv.StoreID] = &FlyKvStoreState{
+					Type:   VoterStore,
+					Value:  FlyKvCommited,
+					RaftID: p.RaftIDGen.Next(),
+				}
+			}
+		}
+
+		deploymentJson.Sets = append(deploymentJson.Sets, set)
+
+		return deploymentJson.check()
 	}()
 
 	if nil != err {
@@ -317,7 +284,8 @@ func (p *pd) onAddSet(replyer replyer, m *snet.Message) {
 	} else {
 		GetSugar().Debugf("onAddSet %v", *msg)
 		p.issueProposal(&ProposalAddSet{
-			Msg: msg,
+			SetID:      int(msg.Set.SetID),
+			Deployment: deploymentJson,
 			proposalBase: proposalBase{
 				reply: p.makeReplyFunc(replyer, m, resp),
 			},

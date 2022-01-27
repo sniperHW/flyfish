@@ -6,7 +6,9 @@ import (
 	"errors"
 	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/db"
+	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/buffer"
+	"github.com/sniperHW/flyfish/pkg/etcd/pkg/idutil"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/queue"
@@ -156,8 +158,9 @@ type msgHandler struct {
 }
 
 type pd struct {
-	leader          raft.RaftInstanceID
+	leader          uint64
 	rn              *raft.RaftInstance
+	cluster         int
 	mutilRaft       *raft.MutilRaft
 	mainque         applicationQueue
 	udp             *flynet.Udp
@@ -174,9 +177,10 @@ type pd struct {
 	storeTask       map[uint64]*storeTask
 	markClearSet    map[int]*set
 	metaUpdateQueue *list.List
+	RaftIDGen       *idutil.Generator
 }
 
-func NewPd(id uint16, cluster uint16, instance uint32, join bool, config *Config, service string, clusterStr string) (*pd, error) {
+func NewPd(nodeID uint16, cluster int, join bool, config *Config, service string, clusterStr string) (*pd, error) {
 
 	mainQueue := applicationQueue{
 		q: queue.NewPriorityQueue(2, 10000),
@@ -194,6 +198,7 @@ func NewPd(id uint16, cluster uint16, instance uint32, join bool, config *Config
 		},
 		config:       config,
 		service:      service,
+		cluster:      cluster,
 		storeTask:    map[uint64]*storeTask{},
 		markClearSet: map[int]*set{},
 		pState: persistenceState{
@@ -203,6 +208,7 @@ func NewPd(id uint16, cluster uint16, instance uint32, join bool, config *Config
 			},
 		},
 		metaUpdateQueue: list.New(),
+		RaftIDGen:       idutil.NewGenerator(nodeID, time.Now()),
 	}
 
 	p.initMsgHandler()
@@ -213,7 +219,7 @@ func NewPd(id uint16, cluster uint16, instance uint32, join bool, config *Config
 		return nil, err
 	}
 
-	self, ok := peers[id]
+	self, ok := peers[nodeID]
 
 	if !ok {
 		return nil, errors.New("cluster not contain self")
@@ -221,7 +227,7 @@ func NewPd(id uint16, cluster uint16, instance uint32, join bool, config *Config
 
 	p.mutilRaft = raft.NewMutilRaft()
 
-	p.rn, err = raft.NewInstance(id, cluster, instance, join, p.mutilRaft, p.mainque, peers, p.config.RaftLogDir, p.config.RaftLogPrefix)
+	p.rn, err = raft.NewInstance(nodeID, cluster, join, p.mutilRaft, p.mainque, peers, p.config.RaftLogDir, p.config.RaftLogPrefix)
 
 	if nil != err {
 		return nil, err
@@ -417,6 +423,110 @@ func (p *pd) issueProposal(proposal raft.Proposal) {
 	p.rn.IssueProposal(proposal)
 }
 
+/*
+func (d *deployment) loadFromPB(sets []*sproto.DeploymentSet) error {
+	d.sets = map[int]*set{}
+	d.version = 1
+
+	nodes := map[int32]bool{}
+	services := map[string]bool{}
+	rafts := map[string]bool{}
+
+	if len(sets) == 0 {
+		return errors.New("empty sets")
+	}
+
+	storeCount := len(sets) * StorePerSet
+	var storeBitmaps []*bitmap.Bitmap
+
+	for i := 0; i < storeCount; i++ {
+		storeBitmaps = append(storeBitmaps, bitmap.New(slot.SlotCount))
+	}
+
+	jj := 0
+	for i := 0; i < slot.SlotCount; i++ {
+		storeBitmaps[jj].Set(i)
+		jj = (jj + 1) % storeCount
+	}
+
+	for _, j := range storeBitmaps {
+		GetSugar().Debugf("onInstallDeployment slots:%v", j.GetOpenBits())
+	}
+
+	for i, v := range sets {
+		if _, ok := d.sets[int(v.SetID)]; ok {
+			return fmt.Errorf("duplicate set:%d", v.SetID)
+		}
+
+		if len(v.Nodes) != MinReplicaPerSet {
+			return fmt.Errorf("node count of set should be %d", MinReplicaPerSet)
+		}
+
+		s := &set{
+			version: 1,
+			id:      int(v.SetID),
+			nodes:   map[int]*kvnode{},
+			stores:  map[int]*store{},
+		}
+
+		for _, vv := range v.Nodes {
+			if _, ok := nodes[vv.NodeID]; ok {
+				return fmt.Errorf("duplicate node:%d", vv.NodeID)
+			}
+
+			service := fmt.Sprintf("%s:%d", vv.Host, vv.ServicePort)
+
+			if _, ok := services[service]; ok {
+				return fmt.Errorf("duplicate service:%s", service)
+			}
+
+			raft := fmt.Sprintf("%s:%d", vv.Host, vv.RaftPort)
+
+			if _, ok := rafts[raft]; ok {
+				return fmt.Errorf("duplicate inter:%s", raft)
+			}
+
+			nodes[vv.NodeID] = true
+			services[service] = true
+			rafts[raft] = true
+
+			n := &kvnode{
+				id:          int(vv.NodeID),
+				host:        vv.Host,
+				servicePort: int(vv.ServicePort),
+				raftPort:    int(vv.RaftPort),
+				set:         s,
+				store:       map[int]*FlyKvStoreState{},
+			}
+			s.nodes[int(vv.NodeID)] = n
+		}
+
+		for j := 0; j < StorePerSet; j++ {
+			st := &store{
+				id:    j + 1,
+				slots: storeBitmaps[i*StorePerSet+j],
+				set:   s,
+			}
+
+			s.stores[st.id] = st
+		}
+
+		for _, vvv := range s.nodes {
+			for j := 0; j < StorePerSet; j++ {
+				vvv.store[j+1] = &FlyKvStoreState{
+					Type:   VoterStore,
+					Value:  FlyKvCommited,
+					RaftID: d.nextRaftID(),
+				}
+			}
+		}
+
+		d.sets[int(v.SetID)] = s
+	}
+
+	return nil
+}
+*/
 func (p *pd) loadInitDeployment() {
 	if "" != p.config.InitDepoymentPath {
 		f, err := os.Open(p.config.InitDepoymentPath)
@@ -441,26 +551,53 @@ func (p *pd) loadInitDeployment() {
 				return
 			}
 
-			var sets []*sproto.DeploymentSet
+			if deploymentJson.Version == 0 && len(deploymentJson.Sets) > 0 {
+				deploymentJson.Version = 1
 
-			for _, v := range deploymentJson.Sets {
-				s := &sproto.DeploymentSet{
-					SetID: int32(v.SetID),
+				storeCount := len(deploymentJson.Sets) * StorePerSet
+				var storeBitmaps []*bitmap.Bitmap
+
+				for i := 0; i < storeCount; i++ {
+					storeBitmaps = append(storeBitmaps, bitmap.New(slot.SlotCount))
 				}
-				for _, vv := range v.KvNodes {
-					s.Nodes = append(s.Nodes, &sproto.DeploymentKvnode{
-						NodeID:      int32(vv.NodeID),
-						Host:        vv.Host,
-						ServicePort: int32(vv.ServicePort),
-						RaftPort:    int32(vv.RaftPort),
-					})
+
+				jj := 0
+				for i := 0; i < slot.SlotCount; i++ {
+					storeBitmaps[jj].Set(i)
+					jj = (jj + 1) % storeCount
 				}
-				sets = append(sets, s)
-			}
-			var deployment deployment
-			if nil == deployment.loadFromPB(sets) {
+
+				for i, _ := range deploymentJson.Sets {
+
+					set := &deploymentJson.Sets[i]
+					set.Version = 1
+
+					for j := 0; j < StorePerSet; j++ {
+						set.Stores = append(set.Stores, StoreJson{
+							StoreID: j + 1,
+							Slots:   storeBitmaps[i*StorePerSet+j].ToJson(),
+						})
+					}
+
+					for k, _ := range set.KvNodes {
+						set.KvNodes[k].Store = map[int]*FlyKvStoreState{}
+						for j := 0; j < StorePerSet; j++ {
+							set.KvNodes[k].Store[j+1] = &FlyKvStoreState{
+								Type:   VoterStore,
+								Value:  FlyKvCommited,
+								RaftID: p.RaftIDGen.Next(),
+							}
+						}
+					}
+				}
+
+				if err = deploymentJson.check(); nil != err {
+					GetSugar().Errorf("loadInitDeployment err:%v", err)
+					return
+				}
+
 				p.issueProposal(&ProposalInstallDeployment{
-					D: deployment.toDeploymentJson(),
+					D: deploymentJson,
 				})
 			}
 		}
@@ -596,7 +733,7 @@ func (p *pd) serve() {
 			case raft.ConfChange:
 				c := v.(raft.ConfChange)
 				if c.CCType == raftpb.ConfChangeRemoveNode && c.NodeID == p.rn.ID() {
-					GetSugar().Infof("%s Remove from cluster", p.rn.ID().String())
+					GetSugar().Infof("%x Remove from cluster", p.rn.ID())
 					p.rn.Stop()
 				}
 			case raft.ReplayOK:

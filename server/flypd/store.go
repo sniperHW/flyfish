@@ -12,7 +12,7 @@ import (
 type storeTask struct {
 	node           *kvnode
 	store          int
-	instanceID     uint32
+	raftID         uint64
 	storeStateType FlyKvStoreStateType
 	timer          *time.Timer
 	pd             *pd
@@ -28,10 +28,10 @@ func (st *storeTask) notifyFlyKv() {
 	if ok && t == st {
 		if store, ok := st.node.store[st.store]; ok && store.Type == st.storeStateType && store.Value == FlyKvUnCommit {
 			msg := &sproto.NotifyNodeStoreOp{
-				NodeID:     int32(st.node.id),
-				Store:      int32(st.store),
-				Op:         int32(st.storeStateType),
-				InstanceID: st.instanceID,
+				NodeID: int32(st.node.id),
+				Store:  int32(st.store),
+				Op:     int32(st.storeStateType),
+				RaftID: st.raftID,
 			}
 
 			if st.storeStateType == LearnerStore {
@@ -79,7 +79,7 @@ func (st *storeTask) notifyFlyKv() {
 	}
 }
 
-func (p *pd) startStoreNotifyTask(node *kvnode, store int, instanceID uint32, storeStateType FlyKvStoreStateType) {
+func (p *pd) startStoreNotifyTask(node *kvnode, store int, raftID uint64, storeStateType FlyKvStoreStateType) {
 	taskID := uint64(node.id)<<32 + uint64(store)
 	t, ok := p.storeTask[taskID]
 	if !ok {
@@ -88,7 +88,7 @@ func (p *pd) startStoreNotifyTask(node *kvnode, store int, instanceID uint32, st
 			pd:             p,
 			store:          store,
 			storeStateType: storeStateType,
-			instanceID:     instanceID,
+			raftID:         raftID,
 		}
 		p.storeTask[taskID] = t
 		t.notifyFlyKv()
@@ -139,7 +139,8 @@ func (p *ProposalFlyKvCommited) replay(pd *pd) {
 
 type ProposalAddLearnerStoreToNode struct {
 	proposalBase
-	Msg *sproto.AddLearnerStoreToNode
+	Msg    *sproto.AddLearnerStoreToNode
+	RaftID uint64
 }
 
 func (p *ProposalAddLearnerStoreToNode) Serilize(b []byte) []byte {
@@ -176,14 +177,14 @@ func (p *ProposalAddLearnerStoreToNode) apply(pd *pd) {
 	}()
 
 	if nil == err {
-		instanceID := pd.pState.deployment.nextInstanceID()
 		n.store[int(p.Msg.Store)] = &FlyKvStoreState{
-			Type:       LearnerStore,
-			Value:      FlyKvUnCommit,
-			InstanceID: instanceID,
+			Type:   LearnerStore,
+			Value:  FlyKvUnCommit,
+			RaftID: p.RaftID,
 		}
+
 		//通告set中flykv添加learner
-		pd.startStoreNotifyTask(n, int(p.Msg.Store), instanceID, LearnerStore)
+		pd.startStoreNotifyTask(n, int(p.Msg.Store), p.RaftID, LearnerStore)
 	}
 
 	if nil != p.reply {
@@ -242,7 +243,7 @@ func (p *ProposalPromoteLearnerStore) apply(pd *pd) {
 		st.Type = VoterStore
 		st.Value = FlyKvUnCommit
 		//通告set中flykv promote
-		pd.startStoreNotifyTask(n, int(p.Msg.Store), st.InstanceID, VoterStore)
+		pd.startStoreNotifyTask(n, int(p.Msg.Store), st.RaftID, VoterStore)
 	}
 
 	if nil != p.reply {
@@ -286,7 +287,7 @@ func (p *ProposalRemoveNodeStore) apply(pd *pd) {
 	if nil == err {
 		store.Type = RemoveStore
 		store.Value = FlyKvUnCommit
-		pd.startStoreNotifyTask(n, int(p.Msg.Store), store.InstanceID, RemoveStore)
+		pd.startStoreNotifyTask(n, int(p.Msg.Store), store.RaftID, RemoveStore)
 	}
 
 	if nil != p.reply {
@@ -364,7 +365,8 @@ func (p *pd) onAddLearnerStoreToNode(replyer replyer, m *snet.Message) {
 			proposalBase: proposalBase{
 				reply: p.makeReplyFunc(replyer, m, resp),
 			},
-			Msg: msg,
+			Msg:    msg,
+			RaftID: p.RaftIDGen.Next(),
 		})
 	}
 }

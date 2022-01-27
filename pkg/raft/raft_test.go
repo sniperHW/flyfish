@@ -434,7 +434,7 @@ type kvnode struct {
 	store     *kvstore
 }
 
-func newKvNode(id uint64, cid int, join bool, cluster string) *kvnode {
+func newKvNode(nodeid uint16, cid int, join bool, cluster string) *kvnode {
 
 	peers, err := SplitPeers(cluster)
 
@@ -442,7 +442,7 @@ func newKvNode(id uint64, cid int, join bool, cluster string) *kvnode {
 		panic(err)
 	}
 
-	selfUrl := peers[id].URL
+	selfUrl := peers[nodeid].URL
 
 	mainQueue := applicationQueue{
 		q: queue.NewPriorityQueue(2),
@@ -450,7 +450,7 @@ func newKvNode(id uint64, cid int, join bool, cluster string) *kvnode {
 
 	mutilRaft := NewMutilRaft()
 
-	rn, err := NewInstance(id, cid, join, mutilRaft, mainQueue, peers, "./log/raftLog", "kv")
+	rn, err := NewInstance(nodeid, cid, join, mutilRaft, mainQueue, peers, "./log/raftLog", "kv")
 
 	if nil != err {
 		fmt.Println(err)
@@ -590,7 +590,7 @@ func TestCluster(t *testing.T) {
 
 	cluster := "1@2@http://127.0.0.1:22378@,2@3@http://127.0.0.1:22379@,3@4@http://127.0.0.1:22380@"
 
-	node1 := newKvNode(2, 1, false, cluster)
+	node1 := newKvNode(1, 1, false, cluster)
 
 	becomeLeaderCh1 := make(chan *kvnode, 1)
 
@@ -598,7 +598,7 @@ func TestCluster(t *testing.T) {
 		becomeLeaderCh1 <- node1
 	}
 
-	node2 := newKvNode(3, 1, false, cluster)
+	node2 := newKvNode(2, 1, false, cluster)
 
 	becomeLeaderCh2 := make(chan *kvnode, 1)
 
@@ -606,7 +606,7 @@ func TestCluster(t *testing.T) {
 		becomeLeaderCh2 <- node2
 	}
 
-	node3 := newKvNode(4, 1, false, cluster)
+	node3 := newKvNode(3, 1, false, cluster)
 
 	becomeLeaderCh3 := make(chan *kvnode, 1)
 
@@ -653,7 +653,7 @@ func TestCluster(t *testing.T) {
 
 	cluster = "1@2@http://127.0.0.1:22378@,2@3@http://127.0.0.1:22379@,3@4@http://127.0.0.1:22380@,4@5@http://127.0.0.1:22381@learner"
 
-	node4 := newKvNode(5, 1, true, cluster)
+	node4 := newKvNode(4, 1, true, cluster)
 
 	startOkCh4 := make(chan struct{}, 1)
 
@@ -708,7 +708,7 @@ func TestDownToFollower(t *testing.T) {
 
 	cluster := "1@6@http://127.0.0.1:22378@,2@7@http://127.0.0.1:22379@"
 
-	node1 := newKvNode(6, 1, false, cluster)
+	node1 := newKvNode(1, 1, false, cluster)
 
 	becomeLeaderCh1 := make(chan *kvnode, 1)
 
@@ -716,7 +716,7 @@ func TestDownToFollower(t *testing.T) {
 		becomeLeaderCh1 <- node1
 	}
 
-	node2 := newKvNode(7, 1, false, cluster)
+	node2 := newKvNode(2, 1, false, cluster)
 
 	becomeLeaderCh2 := make(chan *kvnode, 1)
 
@@ -773,7 +773,7 @@ func TestOneNodeDownAndRestart(t *testing.T) {
 
 	cluster := "1@8@http://127.0.0.1:22378@,2@9@http://127.0.0.1:22379@"
 
-	node1 := newKvNode(8, 1, false, cluster)
+	node1 := newKvNode(1, 1, false, cluster)
 
 	becomeLeaderCh1 := make(chan *kvnode, 1)
 
@@ -781,7 +781,7 @@ func TestOneNodeDownAndRestart(t *testing.T) {
 		becomeLeaderCh1 <- node1
 	}
 
-	node2 := newKvNode(9, 1, false, cluster)
+	node2 := newKvNode(2, 1, false, cluster)
 
 	becomeLeaderCh2 := make(chan *kvnode, 1)
 
@@ -824,11 +824,11 @@ func TestOneNodeDownAndRestart(t *testing.T) {
 
 	time.Sleep(time.Second)
 	if node1 == nil {
-		node1 = newKvNode(8, 1, false, cluster)
+		node1 = newKvNode(1, 1, false, cluster)
 	}
 
 	if node2 == nil {
-		node2 = newKvNode(9, 1, false, cluster)
+		node2 = newKvNode(2, 1, false, cluster)
 	}
 
 	<-ch
@@ -854,7 +854,7 @@ func TestTransferLeader(t *testing.T) {
 
 	cluster := "1@10@http://127.0.0.1:22378@,2@11@http://127.0.0.1:22379@"
 
-	node1 := newKvNode(10, 1, false, cluster)
+	node1 := newKvNode(1, 1, false, cluster)
 
 	becomeLeaderCh1 := make(chan *kvnode, 1)
 
@@ -862,7 +862,7 @@ func TestTransferLeader(t *testing.T) {
 		becomeLeaderCh1 <- node1
 	}
 
-	node2 := newKvNode(11, 1, false, cluster)
+	node2 := newKvNode(2, 1, false, cluster)
 
 	becomeLeaderCh2 := make(chan *kvnode, 1)
 
@@ -912,7 +912,7 @@ func TestFollower(t *testing.T) {
 
 	cluster := "1@12@http://127.0.0.1:22378@,2@13@http://127.0.0.1:22379@"
 
-	node1 := newKvNode(12, 1, false, cluster)
+	node1 := newKvNode(1, 1, false, cluster)
 
 	becomeLeaderCh1 := make(chan *kvnode, 1)
 
@@ -920,7 +920,7 @@ func TestFollower(t *testing.T) {
 		becomeLeaderCh1 <- node1
 	}
 
-	node2 := newKvNode(13, 1, false, cluster)
+	node2 := newKvNode(2, 1, false, cluster)
 
 	becomeLeaderCh2 := make(chan *kvnode, 1)
 

@@ -20,7 +20,7 @@ type ppkv struct {
 }
 
 type pplease struct {
-	nodeid  int
+	nodeid  uint64
 	begtime time.Time
 }
 
@@ -66,9 +66,9 @@ func serilizeMeta(meta db.DBMeta, b []byte) []byte {
 	return buffer.AppendBytes(b, metaB)
 }
 
-func serilizeLease(b []byte, nodeid int, begtime time.Time) []byte {
+func serilizeLease(b []byte, nodeid uint64, begtime time.Time) []byte {
 	b = buffer.AppendByte(b, byte(proposal_lease))
-	b = buffer.AppendInt32(b, int32(nodeid))
+	b = buffer.AppendUint64(b, nodeid)
 	bb, _ := begtime.MarshalBinary()
 	b = buffer.AppendInt32(b, int32(len(bb)))
 	return buffer.AppendBytes(b, bb)

@@ -100,7 +100,7 @@ func TestPd1(t *testing.T) {
 		DbVersion: 3,
 	})
 
-	p, _ := NewPd(1, 1, 1, false, conf, "localhost:8110", "1@1@http://localhost:18110@")
+	p, _ := NewPd(1, 1, false, conf, "localhost:8110", "1@1@http://localhost:18110@")
 
 	for {
 		if p.isLeader() {
@@ -124,7 +124,7 @@ func TestPd1(t *testing.T) {
 
 	p.Stop()
 
-	p, _ = NewPd(1, 1, 1, false, conf, "localhost:8110", "1@1@http://localhost:18110@")
+	p, _ = NewPd(1, 1, false, conf, "localhost:8110", "1@1@http://localhost:18110@")
 
 	for {
 		if p.isLeader() {
@@ -133,8 +133,6 @@ func TestPd1(t *testing.T) {
 			time.Sleep(time.Second)
 		}
 	}
-
-	fmt.Printf("instanceCounter:%d\n", p.pState.deployment.instanceCounter)
 
 	p.Stop()
 
@@ -150,7 +148,7 @@ func TestAddRemovePd(t *testing.T) {
 
 	fmt.Println("conf.DBType", conf.DBType)
 
-	p1, _ := NewPd(1, 1, 1, false, conf, "localhost:8110", "1@1@http://localhost:18110@")
+	p1, _ := NewPd(1, 1, false, conf, "localhost:8110", "1@1@http://localhost:18110@")
 
 	for {
 		if p1.isLeader() {
@@ -165,9 +163,9 @@ func TestAddRemovePd(t *testing.T) {
 
 	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
 
-	var instanceID uint32
+	var raftID uint64
 	var raftCluster string
-	var cluster uint16
+	var cluster int
 
 	{
 		conn.SendTo(addr, snet.MakeMessage(0, &sproto.AddPdNode{
@@ -180,21 +178,21 @@ func TestAddRemovePd(t *testing.T) {
 
 		ret := r.(*snet.Message).Msg.(*sproto.AddPdNodeResp)
 
-		instanceID = ret.InstanceID
+		raftID = ret.RaftID
 		raftCluster = ret.RaftCluster
-		cluster = uint16(ret.Cluster)
+		cluster = int(ret.Cluster)
 	}
 
 	fmt.Println(raftCluster)
 
-	p2, err := NewPd(2, cluster, instanceID, true, conf, "localhost:8111", raftCluster)
+	p2, err := NewPd(2, cluster, true, conf, "localhost:8111", raftCluster)
 
 	time.Sleep(time.Second)
 
 	for {
 		if resp, err := consoleUdp.Call([]string{"localhost:8110", "localhost:8111"}, &sproto.RemovePdNode{
-			Id:         2,
-			InstanceID: instanceID,
+			Id:     2,
+			RaftID: raftID,
 		}, time.Second); nil != resp && resp.(*sproto.RemovePdNodeResp).Reason == "membership: ID not found" {
 			break
 		} else {
@@ -220,7 +218,7 @@ func TestHttp(t *testing.T) {
 
 	conf, _ := LoadConfigStr(configStr)
 
-	p, _ := NewPd(1, 1, 1, false, conf, "localhost:8110", "1@1@http://localhost:18110@")
+	p, _ := NewPd(1, 1, false, conf, "localhost:8110", "1@1@http://localhost:18110@")
 
 	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
 

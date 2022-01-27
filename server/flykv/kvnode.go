@@ -47,7 +47,7 @@ type kvnode struct {
 	db        dbI
 	listener  *cs.Listener
 	setID     int
-	id        int
+	id        uint16
 	mutilRaft *raft.MutilRaft
 	closed    int32
 	udpConn   *fnet.Udp
@@ -132,7 +132,7 @@ func waitCondition(fn func() bool) {
 	wg.Wait()
 }
 
-func (this *kvnode) addStore(meta db.DBMeta, storeID int, instanceID uint32, peers map[uint16]raft.Member, slots *bitmap.Bitmap) error {
+func (this *kvnode) addStore(meta db.DBMeta, storeID int, peers map[uint16]raft.Member, slots *bitmap.Bitmap) error {
 
 	this.muS.Lock()
 	defer this.muS.Unlock()
@@ -166,7 +166,7 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, instanceID uint32, pee
 		},
 	}
 
-	rn, err := raft.NewInstance(uint16(this.id), uint16(storeID), instanceID, this.join, this.mutilRaft, mainQueue, peers, this.config.RaftLogDir, this.config.RaftLogPrefix)
+	rn, err := raft.NewInstance(this.id, storeID, this.join, this.mutilRaft, mainQueue, peers, this.config.RaftLogDir, this.config.RaftLogPrefix)
 
 	if nil != err {
 		return err
@@ -391,7 +391,7 @@ func (this *kvnode) start() error {
 			storeBitmaps := sslot.MakeStoreBitmap(config.SoloConfig.Stores)
 			for i, v := range config.SoloConfig.Stores {
 				peers, err := raft.SplitPeers(fmt.Sprintf("%d@%d@%s@voter", 1, v, config.SoloConfig.RaftUrl))
-				if err = this.addStore(meta, v, uint32(v), peers, storeBitmaps[i]); nil != err {
+				if err = this.addStore(meta, v, peers, storeBitmaps[i]); nil != err {
 					return err
 				}
 			}
@@ -471,7 +471,7 @@ func (this *kvnode) start() error {
 				return err
 			}
 
-			if err = this.addStore(meta, int(v.Id), v.InstanceID, peers, slots); nil != err {
+			if err = this.addStore(meta, int(v.Id), peers, slots); nil != err {
 				GetSugar().Errorf("addStore err:%v", err)
 				return err
 			}
@@ -483,7 +483,7 @@ func (this *kvnode) start() error {
 	return err
 }
 
-func NewKvNode(id int, join bool, config *Config, db dbI) (*kvnode, error) {
+func NewKvNode(id uint16, join bool, config *Config, db dbI) (*kvnode, error) {
 
 	if config.SnapshotCount > 0 {
 		raft.SnapshotCount = config.SnapshotCount

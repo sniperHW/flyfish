@@ -2,7 +2,6 @@ package flykv
 
 import (
 	fnet "github.com/sniperHW/flyfish/pkg/net"
-	"github.com/sniperHW/flyfish/pkg/raft"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"net"
@@ -24,7 +23,7 @@ func (this *kvnode) processUdpMsg(from *net.UDPAddr, m *snet.Message) {
 		var leader int32
 
 		if ok && store.isReady() {
-			leader = int32(store.rn.ID().GetNodeID())
+			leader = int32(this.id)
 		} else {
 			GetSugar().Debugf("store:%d not in %d", m.Msg.(*sproto.QueryLeader).Store, this.id)
 		}
@@ -36,7 +35,7 @@ func (this *kvnode) processUdpMsg(from *net.UDPAddr, m *snet.Message) {
 		store, ok := this.stores[int(m.Msg.(*sproto.TrasnferLeader).StoreID)]
 		this.muS.RUnlock()
 		if ok {
-			GetSugar().Infof("req TransferLeadership to %v", raft.RaftInstanceID(m.Msg.(*sproto.TrasnferLeader).Transferee).String())
+			GetSugar().Infof("req TransferLeadership to %v", m.Msg.(*sproto.TrasnferLeader).Transferee)
 			store.rn.TransferLeadership(m.Msg.(*sproto.TrasnferLeader).Transferee)
 		}
 	case *sproto.NotifySlotTransIn, *sproto.NotifySlotTransOut, *sproto.NotifyUpdateMeta, *sproto.NotifyNodeStoreOp, *sproto.IsTransInReady:

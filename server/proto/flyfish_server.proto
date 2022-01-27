@@ -204,7 +204,7 @@ message storeInfo {
   optional int32  id          = 1;
   optional string raftCluster = 2;
   optional bytes  slots       = 3;
-  optional uint32 instanceID  = 4;
+  optional uint64 raftID      = 4;
 }
 
 message kvnodeBootResp {
@@ -232,7 +232,7 @@ message notifyNodeStoreOp {
   optional string host        = 3;
   optional int32  raftPort    = 4;
   optional int32  store       = 5; 
-  optional uint32 instanceID  = 6;
+  optional uint64 raftID      = 6;
 }
 
 message nodeStoreOpOk {
@@ -437,7 +437,7 @@ message storeReportStatus {
   optional int32  setID       = 1;
   optional int32  nodeID      = 2;
   optional int32  storeID     = 3;
-  optional uint32 instanceID  = 4;
+  optional uint64 raftID      = 4;
   optional bool   isleader    = 5;
   optional int32  kvcount     = 6;
   optional uint64 progress    = 7;
@@ -484,13 +484,13 @@ message addPdNodeResp{
   optional bool   ok          = 1;  
   optional string reason      = 2;
   optional uint32 cluster     = 3;
-  optional uint32 instanceID  = 4;
+  optional uint64 raftID      = 4;
   optional string raftCluster = 5;   
 }
 
 message removePdNode{
   optional int32  id          = 1;
-  optional uint32 instanceID  = 2;    
+  optional uint64 raftID      = 2;    
 }
 
 message removePdNodeResp{

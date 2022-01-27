@@ -1,13 +1,13 @@
 package flypd
 
 import (
+	//"errors"
 	"fmt"
 	"github.com/gogo/protobuf/proto"
-	//"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
-	"errors"
+	"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
-	"github.com/sniperHW/flyfish/pkg/raft"
+	//"github.com/sniperHW/flyfish/pkg/raft"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"io/ioutil"
@@ -87,9 +87,9 @@ func (p *pd) onKvnodeBoot(replyer replyer, m *snet.Message) {
 			for _, n := range node.set.nodes {
 				if v, ok := n.store[storeId]; ok {
 					if v.isVoter() {
-						raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@voter", n.id, v.InstanceID, n.host, n.raftPort))
+						raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@voter", n.id, v.RaftID, n.host, n.raftPort))
 					} else if v.isLearner() {
-						raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@learner", n.id, v.InstanceID, n.host, n.raftPort))
+						raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@learner", n.id, v.RaftID, n.host, n.raftPort))
 					}
 				}
 			}
@@ -98,7 +98,7 @@ func (p *pd) onKvnodeBoot(replyer replyer, m *snet.Message) {
 				Id:          int32(storeId),
 				Slots:       node.set.stores[storeId].slots.ToJson(),
 				RaftCluster: strings.Join(raftCluster, ","),
-				InstanceID:  st.InstanceID,
+				RaftID:      st.RaftID,
 			}
 			GetSugar().Infof("onKvnodeBoot %d %s", msg.NodeID, strings.Join(raftCluster, ","))
 			resp.Stores = append(resp.Stores, s)
@@ -218,7 +218,7 @@ func (p *pd) onStoreReportStatus(_ replyer, m *snet.Message) {
 		return
 	}
 	store := node.store[int(msg.StoreID)]
-	if nil == store || store.InstanceID != msg.InstanceID {
+	if nil == store || store.RaftID != msg.RaftID {
 		return
 	}
 
@@ -279,6 +279,7 @@ type ProposalConfChange struct {
 	confChangeType raftpb.ConfChangeType
 	url            string //for add
 	nodeID         uint64
+	processID      uint16
 	reply          func(error)
 }
 
@@ -294,6 +295,10 @@ func (this *ProposalConfChange) GetNodeID() uint64 {
 	return this.nodeID
 }
 
+func (this *ProposalConfChange) GetProcessID() uint16 {
+	return this.processID
+}
+
 func (this *ProposalConfChange) IsPromote() bool {
 	return false
 }
@@ -305,7 +310,7 @@ func (this *ProposalConfChange) OnError(err error) {
 func (p *pd) onAddPdNode(replyer replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.AddPdNode)
 
-	instanceID := p.rn.GetMaxMemberInstanceID() + 1
+	raftID := p.rn.GetMaxMemberRaftID() + 1
 
 	reply := func(err error) {
 
@@ -318,20 +323,19 @@ func (p *pd) onAddPdNode(replyer replyer, m *snet.Message) {
 		}
 
 		if nil == err || err.Error() == "membership: ID exists" {
-			resp.InstanceID = instanceID
-			resp.Cluster = uint32(p.rn.ID().GetShard())
+			resp.RaftID = raftID
+			resp.Cluster = uint32(p.cluster)
 			resp.RaftCluster = p.rn.GetRaftCluster()
 		}
 
 		replyer.reply(snet.MakeMessage(m.Context, resp))
 	}
 
-	id := raft.MakeInstanceID(uint16(msg.Id), p.rn.ID().GetShard(), instanceID)
-
-	if err := p.rn.MayAddMember(id.TypesID()); nil == err {
+	if err := p.rn.MayAddMember(types.ID(raftID)); nil == err {
 		p.rn.IssueConfChange(&ProposalConfChange{
 			confChangeType: raftpb.ConfChangeAddNode,
-			nodeID:         id.Uint64(),
+			nodeID:         raftID,
+			processID:      uint16(msg.Id),
 			url:            msg.Url,
 			reply:          reply,
 		})
@@ -356,20 +360,16 @@ func (p *pd) onRemovePdNode(replyer replyer, m *snet.Message) {
 		replyer.reply(snet.MakeMessage(m.Context, resp))
 	}
 
-	if 0 == msg.InstanceID {
-		reply(errors.New("InstanceID == 0"))
+	if err := p.rn.MayRemoveMember(types.ID(msg.RaftID)); nil == err {
+		p.rn.IssueConfChange(&ProposalConfChange{
+			confChangeType: raftpb.ConfChangeRemoveNode,
+			nodeID:         msg.RaftID,
+			reply:          reply,
+		})
 	} else {
-		id := raft.MakeInstanceID(uint16(msg.Id), p.rn.ID().GetShard(), msg.InstanceID)
-		if err := p.rn.MayRemoveMember(id.TypesID()); nil == err {
-			p.rn.IssueConfChange(&ProposalConfChange{
-				confChangeType: raftpb.ConfChangeRemoveNode,
-				nodeID:         id.Uint64(),
-				reply:          reply,
-			})
-		} else {
-			reply(err)
-		}
+		reply(err)
 	}
+
 }
 
 func (p *pd) initMsgHandler() {

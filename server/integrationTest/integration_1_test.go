@@ -123,7 +123,7 @@ func newPD(t *testing.T, deploymentPath ...string) StopAble {
 		conf.InitDepoymentPath = deploymentPath[0]
 	}
 
-	pd, _ := flypd.NewPd(1, 1, 1, false, conf, "localhost:8110", "1@1@http://localhost:18110@voter")
+	pd, _ := flypd.NewPd(1, 1, false, conf, "localhost:8110", "1@1@http://localhost:18110@voter")
 	return pd
 }
 

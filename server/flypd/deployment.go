@@ -2,13 +2,12 @@ package flypd
 
 import (
 	"encoding/json"
-	"errors"
+	//"errors"
 	"fmt"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
-	"github.com/sniperHW/flyfish/pkg/raft"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
-	"github.com/sniperHW/flyfish/server/slot"
+	//"github.com/sniperHW/flyfish/server/slot"
 	"net"
 	"sort"
 	"time"
@@ -32,11 +31,32 @@ const (
 type FlyKvStoreState struct {
 	Type       FlyKvStoreStateType
 	Value      FlyKvStoreStateValue
-	InstanceID uint32
+	RaftID     uint64
 	isLead     bool
 	kvcount    int
 	lastReport time.Time
 	progress   uint64
+}
+
+func (f FlyKvStoreState) check() error {
+	switch f.Value {
+	case FlyKvCommited, FlyKvUnCommit:
+	default:
+		return fmt.Errorf("invaild Value:%d", f.Value)
+	}
+
+	switch f.Type {
+	case LearnerStore, VoterStore:
+	case RemoveStore:
+		if f.Value != FlyKvUnCommit {
+			return fmt.Errorf("when Type==RemoveStore,Value must be FlyKvCommited")
+		}
+	default:
+		return fmt.Errorf("invaild Type:%d", f.Type)
+	}
+
+	return nil
+
 }
 
 func (f *FlyKvStoreState) isActive() bool {
@@ -86,9 +106,82 @@ type SetJson struct {
 }
 
 type DeploymentJson struct {
-	Version         int64
-	Sets            []SetJson
-	InstanceCounter uint32
+	Version int64
+	Sets    []SetJson
+}
+
+func (d DeploymentJson) toJson() ([]byte, error) {
+	if data, err := json.Marshal(d); err != nil {
+		return nil, err
+	} else {
+		return data, nil
+	}
+}
+
+func (d DeploymentJson) toPrettyJson() ([]byte, error) {
+	if data, err := json.MarshalIndent(d, "", "    "); err != nil {
+		return nil, err
+	} else {
+		return data, nil
+	}
+}
+
+func (d DeploymentJson) check() error {
+	sets := map[int]bool{}
+	nodes := map[int]bool{}
+	raftIDs := map[uint64]bool{}
+	services := map[string]bool{}
+	raftServices := map[string]bool{}
+	for _, set := range d.Sets {
+		if sets[set.SetID] {
+			return fmt.Errorf("duplicate set %d", set.SetID)
+		}
+		sets[set.SetID] = true
+
+		if len(set.KvNodes) < MinReplicaPerSet {
+			return fmt.Errorf("node size perset must >= %d", MinReplicaPerSet)
+		}
+
+		stores := map[int]bool{}
+
+		for _, store := range set.Stores {
+			if stores[store.StoreID] {
+				return fmt.Errorf("duplicate store %d in set %d", store.StoreID, set.SetID)
+			}
+		}
+
+		for _, node := range set.KvNodes {
+			if nodes[node.NodeID] {
+				return fmt.Errorf("duplicate node %d", node.NodeID)
+			}
+			nodes[node.NodeID] = true
+
+			service := fmt.Sprintf("%s:%d", node.Host, node.ServicePort)
+			if services[service] {
+				return fmt.Errorf("duplicate service %s", service)
+			}
+			services[service] = true
+
+			raftService := fmt.Sprintf("%s:%d", node.Host, node.RaftPort)
+			if raftServices[raftService] {
+				return fmt.Errorf("duplicate raftService %s", raftService)
+			}
+			raftServices[raftService] = true
+
+			for _, store := range node.Store {
+				if err := store.check(); nil != err {
+					return err
+				}
+
+				if raftIDs[store.RaftID] {
+					return fmt.Errorf("duplicate RaftID %d", store.RaftID)
+				}
+
+				raftIDs[store.RaftID] = true
+			}
+		}
+	}
+	return nil
 }
 
 type kvnode struct {
@@ -129,10 +222,10 @@ func (n *kvnode) canTransferLeader(store int) bool {
 	return ok && s.Type == VoterStore && s.Value == FlyKvCommited
 }
 
-func (n *kvnode) getInstanceID(store int) uint32 {
+func (n *kvnode) getRaftID(store int) uint64 {
 	s, ok := n.store[store]
 	if ok {
-		return s.InstanceID
+		return s.RaftID
 	} else {
 		return 0
 	}
@@ -202,7 +295,7 @@ func (s *set) storeBalance(pd *pd) {
 				if addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", maxNode.host, maxNode.servicePort)); nil == err {
 					pd.udp.SendTo(addr, snet.MakeMessage(0, &sproto.TrasnferLeader{
 						StoreID:    int32(store),
-						Transferee: uint64(raft.MakeInstanceID(uint16(transferee.id), uint16(store), transferee.getInstanceID(store))),
+						Transferee: transferee.getRaftID(store),
 					}))
 					return
 				}
@@ -212,14 +305,8 @@ func (s *set) storeBalance(pd *pd) {
 }
 
 type deployment struct {
-	version         int64
-	sets            map[int]*set
-	instanceCounter uint32
-}
-
-func (d *deployment) nextInstanceID() uint32 {
-	d.instanceCounter++
-	return d.instanceCounter
+	version int64
+	sets    map[int]*set
 }
 
 func (d deployment) getStoreByID(id int) *store {
@@ -298,7 +385,6 @@ func (d deployment) queryRouteInfo(req *sproto.QueryRouteInfo) *sproto.QueryRout
 func (d deployment) toDeploymentJson() DeploymentJson {
 	var deploymentJson DeploymentJson
 	deploymentJson.Version = d.version
-	deploymentJson.InstanceCounter = d.instanceCounter
 	for _, v := range d.sets {
 		setJson := SetJson{
 			Version:   v.version,
@@ -332,8 +418,7 @@ func (d deployment) toDeploymentJson() DeploymentJson {
 }
 
 func (d deployment) toJson() ([]byte, error) {
-	deploymentJson := d.toDeploymentJson()
-	return json.Marshal(&deploymentJson)
+	return d.toDeploymentJson().toJson()
 }
 
 func (d *deployment) loadFromDeploymentJson(deploymentJson *DeploymentJson) error {
@@ -391,109 +476,6 @@ func (d *deployment) loadFromJson(jsonBytes []byte) error {
 	}
 }
 
-func (d *deployment) loadFromPB(sets []*sproto.DeploymentSet) error {
-	d.sets = map[int]*set{}
-	d.version = 1
-
-	nodes := map[int32]bool{}
-	services := map[string]bool{}
-	rafts := map[string]bool{}
-
-	if len(sets) == 0 {
-		return errors.New("empty sets")
-	}
-
-	storeCount := len(sets) * StorePerSet
-	var storeBitmaps []*bitmap.Bitmap
-
-	for i := 0; i < storeCount; i++ {
-		storeBitmaps = append(storeBitmaps, bitmap.New(slot.SlotCount))
-	}
-
-	jj := 0
-	for i := 0; i < slot.SlotCount; i++ {
-		storeBitmaps[jj].Set(i)
-		jj = (jj + 1) % storeCount
-	}
-
-	for _, j := range storeBitmaps {
-		GetSugar().Debugf("onInstallDeployment slots:%v", j.GetOpenBits())
-	}
-
-	for i, v := range sets {
-		if _, ok := d.sets[int(v.SetID)]; ok {
-			return fmt.Errorf("duplicate set:%d", v.SetID)
-		}
-
-		if len(v.Nodes) != MinReplicaPerSet {
-			return fmt.Errorf("node count of set should be %d", MinReplicaPerSet)
-		}
-
-		s := &set{
-			version: 1,
-			id:      int(v.SetID),
-			nodes:   map[int]*kvnode{},
-			stores:  map[int]*store{},
-		}
-
-		for _, vv := range v.Nodes {
-			if _, ok := nodes[vv.NodeID]; ok {
-				return fmt.Errorf("duplicate node:%d", vv.NodeID)
-			}
-
-			service := fmt.Sprintf("%s:%d", vv.Host, vv.ServicePort)
-
-			if _, ok := services[service]; ok {
-				return fmt.Errorf("duplicate service:%s", service)
-			}
-
-			raft := fmt.Sprintf("%s:%d", vv.Host, vv.RaftPort)
-
-			if _, ok := rafts[raft]; ok {
-				return fmt.Errorf("duplicate inter:%s", raft)
-			}
-
-			nodes[vv.NodeID] = true
-			services[service] = true
-			rafts[raft] = true
-
-			n := &kvnode{
-				id:          int(vv.NodeID),
-				host:        vv.Host,
-				servicePort: int(vv.ServicePort),
-				raftPort:    int(vv.RaftPort),
-				set:         s,
-				store:       map[int]*FlyKvStoreState{},
-			}
-			s.nodes[int(vv.NodeID)] = n
-		}
-
-		for j := 0; j < StorePerSet; j++ {
-			st := &store{
-				id:    j + 1,
-				slots: storeBitmaps[i*StorePerSet+j],
-				set:   s,
-			}
-
-			s.stores[st.id] = st
-		}
-
-		for _, vvv := range s.nodes {
-			for j := 0; j < StorePerSet; j++ {
-				vvv.store[j+1] = &FlyKvStoreState{
-					Type:       VoterStore,
-					Value:      FlyKvCommited,
-					InstanceID: d.nextInstanceID(),
-				}
-			}
-		}
-
-		d.sets[int(v.SetID)] = s
-	}
-
-	return nil
-}
-
 type ProposalInstallDeployment struct {
 	proposalBase
 	D DeploymentJson
@@ -504,7 +486,6 @@ func (p *ProposalInstallDeployment) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalInstallDeployment) apply(pd *pd) {
-	GetSugar().Infof("ProposalInstallDeployment.apply")
 	pd.pState.deployment.loadFromDeploymentJson(&p.D)
 }
 

@@ -33,6 +33,7 @@ type ProposalConfChange interface {
 	GetURL() string
 	GetNodeID() uint64
 	OnError(error)
+	GetProcessID() uint16
 }
 
 /*
@@ -55,6 +56,7 @@ func (rc *RaftInstance) proposeConfChange(proposal ProposalConfChange) {
 		IsPromote:      proposal.IsPromote(),
 		Url:            proposal.GetURL(),
 		NodeID:         proposal.GetNodeID(),
+		ProcessID:      proposal.GetProcessID(),
 	}
 
 	buff, _ := json.Marshal(&pc)
