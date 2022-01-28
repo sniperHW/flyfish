@@ -14,6 +14,7 @@ import (
 	flygate "github.com/sniperHW/flyfish/server/flygate"
 	flykv "github.com/sniperHW/flyfish/server/flykv"
 	flypd "github.com/sniperHW/flyfish/server/flypd"
+	console "github.com/sniperHW/flyfish/server/flypd/console/http"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	sslot "github.com/sniperHW/flyfish/server/slot"
@@ -534,6 +535,36 @@ func TestFlygate(t *testing.T) {
 	}
 
 	testkv(t, c)
+
+	consoleClient := console.NewClient("localhost:8110")
+
+	//添加一个kvnode
+	resp, err := consoleClient.Call(&sproto.AddNode{
+		SetID:       1,
+		NodeID:      3,
+		Host:        "localhost",
+		ServicePort: 9320,
+		RaftPort:    9321,
+	}, &sproto.AddNodeResp{})
+
+	fmt.Println(resp, err)
+
+	//获取路由信息
+	for {
+		time.Sleep(time.Second)
+		resp, err = consoleClient.Call(&sproto.QueryRouteInfo{}, &sproto.QueryRouteInfoResp{})
+		sets := resp.(*sproto.QueryRouteInfoResp).Sets
+		var set1 *sproto.RouteInfoSet
+		for _, v := range sets {
+			if v.SetID == 1 {
+				set1 = v
+			}
+		}
+
+		if nil != set1 && len(set1.Kvnodes) == 2 {
+			break
+		}
+	}
 
 	fmt.Println("Stop gate")
 

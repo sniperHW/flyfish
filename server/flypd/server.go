@@ -417,7 +417,7 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.SlotTransOutOk{}, "", p.onSlotTransOutOk)
 	p.registerMsgHandler(&sproto.SlotTransInOk{}, "", p.onSlotTransInOk)
 	p.registerMsgHandler(&sproto.KvnodeBoot{}, "", p.onKvnodeBoot)
-	p.registerMsgHandler(&sproto.QueryRouteInfo{}, "", p.onQueryRouteInfo)
+	p.registerMsgHandler(&sproto.QueryRouteInfo{}, "QueryRouteInfo", p.onQueryRouteInfo)
 	p.registerMsgHandler(&sproto.GetFlyGateList{}, "", p.onGetFlyGateList)
 	p.registerMsgHandler(&sproto.FlyGateHeartBeat{}, "", p.onFlyGateHeartBeat)
 	p.registerMsgHandler(&sproto.ChangeFlyGate{}, "", p.changeFlyGate)

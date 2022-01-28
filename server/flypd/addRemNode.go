@@ -144,8 +144,6 @@ func (p *pd) onAddNode(replyer replyer, m *snet.Message) {
 		return nil
 	}()
 
-	GetSugar().Infof("onAddNode %v", err)
-
 	if nil != err {
 		resp.Ok = false
 		resp.Reason = err.Error()

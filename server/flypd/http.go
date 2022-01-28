@@ -13,13 +13,15 @@ import (
 )
 
 type httpReplyer struct {
-	w http.ResponseWriter
+	waitCh chan struct{}
+	w      http.ResponseWriter
 }
 
 func (h *httpReplyer) reply(resp *snet.Message) {
 	if byte, err := proto.Marshal(resp.Msg); nil == err {
 		h.w.Write(byte)
 	}
+	close(h.waitCh)
 }
 
 func (p *pd) fetchReq(cmd string, r *http.Request) (*snet.Message, error) {
@@ -45,6 +47,8 @@ func (p *pd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if tmp := strings.Split(r.URL.Path, "/"); len(tmp) == 2 {
+		GetSugar().Infof("http request %v", tmp[1])
+
 		if tmp[1] == "QueryPdLeader" {
 			if byte, err := proto.Marshal(&sproto.QueryPdLeaderResp{
 				Yes: p.isLeader(),
@@ -54,7 +58,15 @@ func (p *pd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		} else {
 			req, err := p.fetchReq(tmp[1], r)
 			if nil == err {
-				p.onMsg(&httpReplyer{w: w}, req)
+				replyer := &httpReplyer{w: w, waitCh: make(chan struct{})}
+				p.onMsg(replyer, req)
+				ticker := time.NewTicker(time.Second * 5)
+				select {
+				case <-replyer.waitCh:
+				case <-ticker.C:
+					w.WriteHeader(http.StatusRequestTimeout)
+				}
+				ticker.Stop()
 			} else {
 				GetSugar().Errorf("ServeHTTP error:%v", err)
 				w.WriteHeader(http.StatusBadRequest)
