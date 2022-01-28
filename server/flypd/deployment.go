@@ -305,7 +305,7 @@ func (s *set) storeBalance(pd *pd) {
 }
 
 type deployment struct {
-	version int64
+	version int64 //deployment每次变更时递增
 	sets    map[int]*set
 }
 

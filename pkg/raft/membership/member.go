@@ -5,26 +5,28 @@ import (
 )
 
 type Member struct {
-	ID        types.ID `json:"id"`
-	ProcessID uint16   `json:"ProcessID"`
-	PeerURLs  []string `json:"peerURLs"`
-	IsLearner bool     `json:"isLearner,omitempty"`
+	ID         types.ID `json:"id"`
+	ProcessID  uint16   `json:"ProcessID"`
+	PeerURLs   []string `json:"peerURLs"`
+	ClientURLs []string `json:"clientURLs,omitempty"`
+	IsLearner  bool     `json:"isLearner,omitempty"`
 }
 
-func NewMember(processID uint16, id types.ID, peerURLs types.URLs) *Member {
-	return newMember(processID, id, peerURLs, false)
+func NewMember(processID uint16, id types.ID, peerURLs types.URLs, clientURLs types.URLs) *Member {
+	return newMember(processID, id, peerURLs, clientURLs, false)
 }
 
-func NewMemberAsLearner(processID uint16, id types.ID, peerURLs types.URLs) *Member {
-	return newMember(processID, id, peerURLs, true)
+func NewMemberAsLearner(processID uint16, id types.ID, peerURLs types.URLs, clientURLs types.URLs) *Member {
+	return newMember(processID, id, peerURLs, clientURLs, true)
 }
 
-func newMember(processID uint16, id types.ID, peerURLs types.URLs, isLearner bool) *Member {
+func newMember(processID uint16, id types.ID, peerURLs types.URLs, clientURLs types.URLs, isLearner bool) *Member {
 	return &Member{
-		ProcessID: processID,
-		ID:        id,
-		PeerURLs:  peerURLs.StringSlice(),
-		IsLearner: isLearner,
+		ProcessID:  processID,
+		ID:         id,
+		PeerURLs:   peerURLs.StringSlice(),
+		IsLearner:  isLearner,
+		ClientURLs: clientURLs.StringSlice(),
 	}
 }
 
@@ -41,6 +43,12 @@ func (m *Member) Clone() *Member {
 		mm.PeerURLs = make([]string, len(m.PeerURLs))
 		copy(mm.PeerURLs, m.PeerURLs)
 	}
+
+	if m.ClientURLs != nil {
+		mm.ClientURLs = make([]string, len(m.ClientURLs))
+		copy(mm.ClientURLs, m.ClientURLs)
+	}
+
 	return mm
 }
 

@@ -7,7 +7,7 @@ import (
 	"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
-	//"github.com/sniperHW/flyfish/pkg/raft"
+	"github.com/sniperHW/flyfish/pkg/raft/membership"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"io/ioutil"
@@ -310,7 +310,7 @@ func (this *ProposalConfChange) OnError(err error) {
 func (p *pd) onAddPdNode(replyer replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.AddPdNode)
 
-	raftID := p.rn.GetMaxMemberRaftID() + 1
+	raftID := p.RaftIDGen.Next()
 
 	reply := func(err error) {
 
@@ -322,7 +322,7 @@ func (p *pd) onAddPdNode(replyer replyer, m *snet.Message) {
 			resp.Reason = err.Error()
 		}
 
-		if nil == err || err.Error() == "membership: ID exists" {
+		if nil == err || err == membership.ErrProcessIDexists {
 			resp.RaftID = raftID
 			resp.Cluster = uint32(p.cluster)
 			resp.RaftCluster = p.rn.GetRaftCluster()

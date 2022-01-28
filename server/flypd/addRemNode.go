@@ -54,6 +54,7 @@ func (p *ProposalAddNode) apply(pd *pd) {
 		}
 		s.nodes[int(p.Msg.NodeID)] = n
 		pd.pState.deployment.version++
+		s.version = pd.pState.deployment.version
 	}
 
 	if nil != p.reply {
@@ -101,6 +102,7 @@ func (p *ProposalRemNode) apply(pd *pd) {
 		delete(s.nodes, int(p.Msg.NodeID))
 		GetSugar().Infof("ProposalRemNode.apply set:%d,remnode:%d nodecount:%d", p.Msg.SetID, p.Msg.NodeID, len(s.nodes))
 		pd.pState.deployment.version++
+		s.version = pd.pState.deployment.version
 	} else {
 		GetSugar().Infof("ProposalRemNode.apply error:%v", err)
 	}

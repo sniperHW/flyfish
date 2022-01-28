@@ -244,10 +244,16 @@ func (c *MemberShip) ValidateConfigurationChange(cc *ConfChangeContext) error {
 			}
 
 			urls := make(map[string]bool)
+			processIDs := make(map[uint16]bool)
 			for _, m := range members {
 				for _, u := range m.PeerURLs {
 					urls[u] = true
 				}
+				processIDs[m.ProcessID] = true
+			}
+
+			if processIDs[cc.ProcessID] {
+				return ErrProcessIDexists
 			}
 
 			if urls[cc.Url] {

@@ -123,8 +123,6 @@ func (p *ProposalFlyKvCommited) apply(pd *pd) {
 		delete(n.store, p.Store)
 	}
 
-	pd.pState.deployment.version++
-
 	taskID := uint64(p.Node)<<32 + uint64(p.Store)
 
 	_, ok := pd.storeTask[taskID]

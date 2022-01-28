@@ -24,8 +24,6 @@ func (p *ProposalAddSet) doApply(pd *pd) error {
 		return errors.New("set already exists")
 	} else {
 		pd.pState.deployment.loadFromDeploymentJson(&p.Deployment)
-		pd.pState.deployment.version++
-		pd.pState.deployment.sets[p.SetID].version = pd.pState.deployment.version
 		return nil
 	}
 }
@@ -240,9 +238,11 @@ func (p *pd) onAddSet(replyer replyer, m *snet.Message) {
 		}
 
 		deploymentJson = p.pState.deployment.toDeploymentJson()
+		deploymentJson.Version++
 
 		set := SetJson{
-			SetID: int(msg.Set.SetID),
+			SetID:   int(msg.Set.SetID),
+			Version: deploymentJson.Version,
 		}
 
 		for _, v := range msg.Set.Nodes {

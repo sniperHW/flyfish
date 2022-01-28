@@ -803,14 +803,14 @@ func (rc *RaftInstance) IsLearnerReady(id uint64) error {
 	}
 }
 
-func (rc *RaftInstance) GetMaxMemberRaftID() (max uint64) {
+/*func (rc *RaftInstance) GetMaxMemberRaftID() (max uint64) {
 	for _, v := range rc.mb.Members() {
 		if uint64(v.ID) > max {
 			max = uint64(v.ID)
 		}
 	}
 	return
-}
+}*/
 
 func (rc *RaftInstance) GetMemberProgress(id uint64) (error, float64) {
 	rs := rc.raftStatus()
