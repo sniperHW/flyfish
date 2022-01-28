@@ -52,6 +52,8 @@ enum ServerCmdType {
   AddPdNodeResp                 = 134;
   RemovePdNode                  = 135;
   RemovePdNodeResp              = 136; 
+  ListPdMembers                 = 137;
+  ListPdMembersResp             = 138;
 
 
   //kvnode <-> pd
@@ -231,8 +233,9 @@ message notifyNodeStoreOp {
   optional int32  nodeID      = 2;
   optional string host        = 3;
   optional int32  raftPort    = 4;
-  optional int32  store       = 5; 
-  optional uint64 raftID      = 6;
+  optional int32  port        = 5;
+  optional int32  store       = 6; 
+  optional uint64 raftID      = 7;
 }
 
 message nodeStoreOpOk {
@@ -476,8 +479,9 @@ message queryPdLeaderResp {
 
 
 message addPdNode{
-  optional int32 id       = 1;
-  optional string url     = 2;
+  optional int32 id         = 1;
+  optional string url       = 2;
+  optional string clientUrl = 3;
 }
  
 message addPdNodeResp{
@@ -497,3 +501,12 @@ message removePdNodeResp{
   optional bool  ok       = 1;  
   optional string reason  = 2;   
 }
+
+message  listPdMembers {
+  
+}
+
+message  listPdMembersResp {
+  repeated string members = 1;
+}
+

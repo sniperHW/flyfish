@@ -390,14 +390,14 @@ func (this *kvnode) start() error {
 		if len(config.SoloConfig.Stores) > 0 {
 			storeBitmaps := sslot.MakeStoreBitmap(config.SoloConfig.Stores)
 			for i, v := range config.SoloConfig.Stores {
-				peers, err := raft.SplitPeers(fmt.Sprintf("%d@%d@%s@voter", 1, v, config.SoloConfig.RaftUrl))
+				peers, err := raft.SplitPeers(fmt.Sprintf("%d@%d@%s@%s@voter", 1, v, config.SoloConfig.RaftUrl, service))
 				if err = this.addStore(meta, v, peers, storeBitmaps[i]); nil != err {
 					return err
 				}
 			}
 		}
 
-		GetSugar().Infof("flyfish start:%s:%d", config.SoloConfig.ServiceHost, config.SoloConfig.ServicePort)
+		GetSugar().Infof("flyfish start:%s", service)
 
 	} else {
 
@@ -477,7 +477,7 @@ func (this *kvnode) start() error {
 			}
 		}
 
-		GetSugar().Infof("flyfish start:%s:%d", resp.ServiceHost, resp.ServicePort)
+		GetSugar().Infof("flyfish start:%s", service)
 	}
 
 	return err

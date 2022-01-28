@@ -36,7 +36,7 @@ func (c MajorityConfig) String() string {
 		if i > 0 {
 			buf.WriteByte(' ')
 		}
-		fmt.Fprint(&buf, sl[i])
+		fmt.Fprintf(&buf, "%x", sl[i])
 	}
 	buf.WriteByte(')')
 	return buf.String()

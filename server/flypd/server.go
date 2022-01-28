@@ -87,9 +87,9 @@ func (p *pd) onKvnodeBoot(replyer replyer, m *snet.Message) {
 			for _, n := range node.set.nodes {
 				if v, ok := n.store[storeId]; ok {
 					if v.isVoter() {
-						raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@voter", n.id, v.RaftID, n.host, n.raftPort))
+						raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@voter", n.id, v.RaftID, n.host, n.raftPort, n.host, n.servicePort))
 					} else if v.isLearner() {
-						raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@learner", n.id, v.RaftID, n.host, n.raftPort))
+						raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@learner", n.id, v.RaftID, n.host, n.raftPort, n.host, n.servicePort))
 					}
 				}
 			}
@@ -278,6 +278,7 @@ func (p *pd) startUdpService() error {
 type ProposalConfChange struct {
 	confChangeType raftpb.ConfChangeType
 	url            string //for add
+	clientUrl      string
 	nodeID         uint64
 	processID      uint16
 	reply          func(error)
@@ -289,6 +290,10 @@ func (this *ProposalConfChange) GetType() raftpb.ConfChangeType {
 
 func (this *ProposalConfChange) GetURL() string {
 	return this.url
+}
+
+func (this *ProposalConfChange) GetClientURL() string {
+	return this.clientUrl
 }
 
 func (this *ProposalConfChange) GetNodeID() uint64 {
@@ -337,6 +342,7 @@ func (p *pd) onAddPdNode(replyer replyer, m *snet.Message) {
 			nodeID:         raftID,
 			processID:      uint16(msg.Id),
 			url:            msg.Url,
+			clientUrl:      msg.ClientUrl,
 			reply:          reply,
 		})
 	} else {
@@ -372,6 +378,20 @@ func (p *pd) onRemovePdNode(replyer replyer, m *snet.Message) {
 
 }
 
+func (p *pd) onListPdMembers(replyer replyer, m *snet.Message) {
+	resp := &sproto.ListPdMembersResp{}
+	for _, v := range p.rn.Members() {
+		str := fmt.Sprintf("nodeID:%d raftID:%x raftURL:%s,clientURL:%s", v.ProcessID, v.ID, v.URL, v.ClientURL)
+		if v.ID == p.rn.ID() {
+			str += " Leader"
+		} else {
+			str += " Voter"
+		}
+		resp.Members = append(resp.Members, str)
+	}
+	replyer.reply(snet.MakeMessage(m.Context, resp))
+}
+
 func (p *pd) initMsgHandler() {
 	//for console
 	p.registerMsgHandler(&sproto.AddSet{}, "AddSet", p.onAddSet)
@@ -390,6 +410,7 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.MetaRemoveFields{}, "MetaRemoveFields", p.onUpdateMetaReq)
 	p.registerMsgHandler(&sproto.AddPdNode{}, "AddPdNode", p.onAddPdNode)
 	p.registerMsgHandler(&sproto.RemovePdNode{}, "RemovePdNode", p.onRemovePdNode)
+	p.registerMsgHandler(&sproto.ListPdMembers{}, "ListPdMembers", p.onListPdMembers)
 
 	//servers
 	p.registerMsgHandler(&sproto.IsTransInReadyResp{}, "", p.onSlotTransInReady)

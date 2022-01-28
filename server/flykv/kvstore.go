@@ -567,7 +567,7 @@ func (s *kvstore) onLeaderDownToFollower() {
 }
 
 //将nodeID作为learner加入当前store的raft配置
-func (s *kvstore) onAddLearnerNode(from *net.UDPAddr, processID uint16, raftID uint64, host string, raftPort int32, context int64) {
+func (s *kvstore) onAddLearnerNode(from *net.UDPAddr, processID uint16, raftID uint64, host string, raftPort int32, port int32, context int64) {
 	reply := func(err error) {
 		if nil == err || err == membership.ErrIDExists {
 			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context, &sproto.NodeStoreOpOk{}))
@@ -587,6 +587,7 @@ func (s *kvstore) onAddLearnerNode(from *net.UDPAddr, processID uint16, raftID u
 	s.rn.IssueConfChange(&ProposalConfChange{
 		confChangeType: raftpb.ConfChangeAddLearnerNode,
 		url:            fmt.Sprintf("http://%s:%d", host, raftPort),
+		clientUrl:      fmt.Sprintf("http://%s:%d", host, port),
 		nodeID:         raftID,
 		processID:      processID,
 		reply:          reply,
@@ -594,7 +595,7 @@ func (s *kvstore) onAddLearnerNode(from *net.UDPAddr, processID uint16, raftID u
 }
 
 //将nodeID提升为当前store的raft配置的voter
-func (s *kvstore) onPromoteLearnerNode(from *net.UDPAddr, _ uint16, raftID uint64, context int64) {
+func (s *kvstore) onPromoteLearnerNode(from *net.UDPAddr, raftID uint64, context int64) {
 	reply := func(err error) {
 		if nil == err || err == membership.ErrMemberNotLearner {
 			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context, &sproto.NodeStoreOpOk{}))
@@ -629,7 +630,7 @@ func (s *kvstore) onPromoteLearnerNode(from *net.UDPAddr, _ uint16, raftID uint6
 }
 
 //将nodeID从当前store的raft配置中移除
-func (s *kvstore) onRemoveNode(from *net.UDPAddr, _ uint16, raftID uint64, context int64) {
+func (s *kvstore) onRemoveNode(from *net.UDPAddr, raftID uint64, context int64) {
 
 	reply := func(err error) {
 		if nil == err || err == membership.ErrIDNotFound {
@@ -651,11 +652,11 @@ func (s *kvstore) onNotifyNodeStoreOp(from *net.UDPAddr, msg *sproto.NotifyNodeS
 	if s.isReady() {
 		switch msg.Op {
 		case int32(flypd.LearnerStore):
-			s.onAddLearnerNode(from, uint16(msg.NodeID), msg.RaftID, msg.Host, msg.RaftPort, context)
+			s.onAddLearnerNode(from, uint16(msg.NodeID), msg.RaftID, msg.Host, msg.RaftPort, msg.Port, context)
 		case int32(flypd.VoterStore):
-			s.onPromoteLearnerNode(from, uint16(msg.NodeID), msg.RaftID, context)
+			s.onPromoteLearnerNode(from, msg.RaftID, context)
 		case int32(flypd.RemoveStore):
-			s.onRemoveNode(from, uint16(msg.NodeID), msg.RaftID, context)
+			s.onRemoveNode(from, msg.RaftID, context)
 		default:
 			GetSugar().Errorf("onNotifyNodeStoreOp invaild Op:%v", msg.Op)
 		}

@@ -31,6 +31,7 @@ type ProposalConfChange interface {
 	GetType() raftpb.ConfChangeType
 	IsPromote() bool
 	GetURL() string
+	GetClientURL() string
 	GetNodeID() uint64
 	OnError(error)
 	GetProcessID() uint16
@@ -55,6 +56,7 @@ func (rc *RaftInstance) proposeConfChange(proposal ProposalConfChange) {
 		ConfChangeType: proposal.GetType(),
 		IsPromote:      proposal.IsPromote(),
 		Url:            proposal.GetURL(),
+		ClientUrl:      proposal.GetClientURL(),
 		NodeID:         proposal.GetNodeID(),
 		ProcessID:      proposal.GetProcessID(),
 	}

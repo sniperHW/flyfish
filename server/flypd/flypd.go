@@ -180,7 +180,19 @@ type pd struct {
 	RaftIDGen       *idutil.Generator
 }
 
-func NewPd(nodeID uint16, cluster int, join bool, config *Config, service string, clusterStr string) (*pd, error) {
+func NewPd(nodeID uint16, cluster int, join bool, config *Config, clusterStr string) (*pd, error) {
+
+	peers, err := raft.SplitPeers(clusterStr)
+
+	if nil != err {
+		return nil, err
+	}
+
+	self, ok := peers[nodeID]
+
+	if !ok {
+		return nil, errors.New("cluster not contain self")
+	}
 
 	mainQueue := applicationQueue{
 		q: queue.NewPriorityQueue(2, 10000),
@@ -197,7 +209,7 @@ func NewPd(nodeID uint16, cluster int, join bool, config *Config, service string
 			mainque:    mainQueue,
 		},
 		config:       config,
-		service:      service,
+		service:      self.ClientURL,
 		cluster:      cluster,
 		storeTask:    map[uint64]*storeTask{},
 		markClearSet: map[int]*set{},
@@ -212,18 +224,6 @@ func NewPd(nodeID uint16, cluster int, join bool, config *Config, service string
 	}
 
 	p.initMsgHandler()
-
-	peers, err := raft.SplitPeers(clusterStr)
-
-	if nil != err {
-		return nil, err
-	}
-
-	self, ok := peers[nodeID]
-
-	if !ok {
-		return nil, errors.New("cluster not contain self")
-	}
 
 	p.mutilRaft = raft.NewMutilRaft()
 

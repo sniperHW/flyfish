@@ -387,6 +387,7 @@ type ProposalConfChange struct {
 	confChangeType raftpb.ConfChangeType
 	isPromote      bool
 	url            string //for add
+	clientUrl      string
 	nodeID         uint64
 	processID      uint16
 	reply          func(error)
@@ -394,6 +395,10 @@ type ProposalConfChange struct {
 
 func (this *ProposalConfChange) GetType() raftpb.ConfChangeType {
 	return this.confChangeType
+}
+
+func (this *ProposalConfChange) GetClientURL() string {
+	return this.clientUrl
 }
 
 func (this *ProposalConfChange) GetURL() string {

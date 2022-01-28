@@ -37,6 +37,7 @@ func (st *storeTask) notifyFlyKv() {
 			if st.storeStateType == LearnerStore {
 				msg.Host = st.node.host
 				msg.RaftPort = int32(st.node.raftPort)
+				msg.Port = int32(st.node.servicePort)
 			}
 
 			var remotes []string

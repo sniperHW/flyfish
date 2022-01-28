@@ -9,6 +9,7 @@ import (
 	"github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
+	"github.com/sniperHW/flyfish/pkg/etcd/pkg/idutil"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
 	flygate "github.com/sniperHW/flyfish/server/flygate"
 	flykv "github.com/sniperHW/flyfish/server/flykv"
@@ -123,7 +124,11 @@ func newPD(t *testing.T, deploymentPath ...string) StopAble {
 		conf.InitDepoymentPath = deploymentPath[0]
 	}
 
-	pd, _ := flypd.NewPd(1, 1, false, conf, "localhost:8110", "1@1@http://localhost:18110@voter")
+	raftID := idutil.NewGenerator(1, time.Now()).Next()
+
+	raftCluster := fmt.Sprintf("1@%d@http://localhost:18110@localhost:8110@voter", raftID)
+
+	pd, _ := flypd.NewPd(1, 1, false, conf, raftCluster)
 	return pd
 }
 

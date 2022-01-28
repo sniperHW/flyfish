@@ -318,16 +318,17 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 				case raftpb.ConfChangeAddNode, raftpb.ConfChangeAddLearnerNode:
 					if !pc.IsPromote {
 						m := membership.Member{
-							ID:        types.ID(cc.NodeID),
-							PeerURLs:  []string{pc.Url},
-							ProcessID: pc.ProcessID,
+							ID:         types.ID(cc.NodeID),
+							PeerURLs:   []string{pc.Url},
+							ClientURLs: []string{pc.ClientUrl},
+							ProcessID:  pc.ProcessID,
 						}
 
 						if cc.Type == raftpb.ConfChangeAddNode {
-							GetSugar().Infof("%s ConfChangeAddNode %s %s", types.ID(rc.id).String(), types.ID(cc.NodeID).String(), pc.Url)
+							GetSugar().Infof("%s ConfChangeAddNode %s %s %s", types.ID(rc.id).String(), types.ID(cc.NodeID).String(), pc.Url, pc.ClientUrl)
 						} else {
 							m.IsLearner = true
-							GetSugar().Infof("%s ConfChangeAddLearnerNode %s %s", types.ID(rc.id).String(), types.ID(cc.NodeID).String(), pc.Url)
+							GetSugar().Infof("%s ConfChangeAddLearnerNode %s %s %s", types.ID(rc.id).String(), types.ID(cc.NodeID).String(), pc.Url, pc.ClientUrl)
 						}
 						rc.mb.AddMember(m.ID, m.IsLearner, &m)
 
@@ -709,9 +710,9 @@ func (rc *RaftInstance) GetRaftCluster() string {
 	var tmp []string
 	for _, v := range rc.mb.Members() {
 		if v.IsLearner {
-			tmp = append(tmp, fmt.Sprintf("%d@%d@%s@learner", v.ProcessID, uint64(v.ID), v.PeerURLs[0]))
+			tmp = append(tmp, fmt.Sprintf("%d@%d@%s@%s@learner", v.ProcessID, uint64(v.ID), v.PeerURLs[0], v.ClientURLs[0]))
 		} else {
-			tmp = append(tmp, fmt.Sprintf("%d@%d@%s@voter", v.ProcessID, uint64(v.ID), v.PeerURLs[0]))
+			tmp = append(tmp, fmt.Sprintf("%d@%d@%s@%s@voter", v.ProcessID, uint64(v.ID), v.PeerURLs[0], v.ClientURLs[0]))
 		}
 	}
 
@@ -803,15 +804,6 @@ func (rc *RaftInstance) IsLearnerReady(id uint64) error {
 	}
 }
 
-/*func (rc *RaftInstance) GetMaxMemberRaftID() (max uint64) {
-	for _, v := range rc.mb.Members() {
-		if uint64(v.ID) > max {
-			max = uint64(v.ID)
-		}
-	}
-	return
-}*/
-
 func (rc *RaftInstance) GetMemberProgress(id uint64) (error, float64) {
 	rs := rc.raftStatus()
 
@@ -841,21 +833,35 @@ func (rc *RaftInstance) GetMemberProgress(id uint64) (error, float64) {
 
 }
 
+func (rc *RaftInstance) Members() (membs []Member) {
+	for _, v := range rc.mb.Members() {
+		membs = append(membs, Member{
+			ProcessID: v.ProcessID,
+			ID:        uint64(v.ID),
+			URL:       v.PeerURLs[0],
+			ClientURL: v.ClientURLs[0],
+			IsLearner: v.IsLearner,
+		})
+	}
+	return
+}
+
 type Member struct {
 	ProcessID uint16
 	ID        uint64
 	URL       string
+	ClientURL string
 	IsLearner bool
 }
 
-//"ProcessID1@InstanceID1@URL@learner,ProcessID2@InstanceID2@URL@"
+//"ProcessID1@InstanceID1@URL@ClientURL@learner,ProcessID2@InstanceID2@URL@ClientURL@"
 func SplitPeers(s string) (map[uint16]Member, error) {
 	peers := map[uint16]Member{}
 	a := strings.Split(s, ",")
 	for _, v := range a {
 		fields := strings.Split(v, "@")
 
-		if len(fields) != 4 {
+		if len(fields) != 5 {
 			return nil, errors.New("invaild format")
 		}
 
@@ -879,7 +885,8 @@ func SplitPeers(s string) (map[uint16]Member, error) {
 			ProcessID: uint16(processID),
 			ID:        i,
 			URL:       fields[2],
-			IsLearner: fields[3] == "learner",
+			ClientURL: fields[3],
+			IsLearner: fields[4] == "learner",
 		}
 	}
 
@@ -964,6 +971,7 @@ func NewInstance(processID uint16, cluster int, join bool, mutilRaft *MutilRaft,
 		for _, v := range peers {
 			cc := membership.ConfChangeContext{
 				Url:       v.URL,
+				ClientUrl: v.ClientURL,
 				NodeID:    v.ID,
 				ProcessID: v.ProcessID,
 			}

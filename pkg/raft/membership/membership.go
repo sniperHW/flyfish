@@ -16,6 +16,7 @@ type ConfChangeContext struct {
 	ConfChangeType raftpb.ConfChangeType
 	IsPromote      bool
 	Url            string //for add
+	ClientUrl      string
 	NodeID         uint64
 	ProcessID      uint16
 }

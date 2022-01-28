@@ -8,6 +8,7 @@ import (
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/logger"
+	"github.com/sniperHW/flyfish/pkg/etcd/pkg/idutil"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
 	console "github.com/sniperHW/flyfish/server/flypd/console/http"
 	consoleUdp "github.com/sniperHW/flyfish/server/flypd/console/udp"
@@ -21,6 +22,8 @@ import (
 	"testing"
 	"time"
 )
+
+var RaftIDGen *idutil.Generator = idutil.NewGenerator(1, time.Now())
 
 func init() {
 	sslot.SlotCount = 128
@@ -100,7 +103,9 @@ func TestPd1(t *testing.T) {
 		DbVersion: 3,
 	})
 
-	p, _ := NewPd(1, 1, false, conf, "localhost:8110", "1@1@http://localhost:18110@")
+	raftID := RaftIDGen.Next()
+
+	p, _ := NewPd(1, 1, false, conf, fmt.Sprintf("1@%d@http://localhost:18110@localhost:8110@", raftID))
 
 	for {
 		if p.isLeader() {
@@ -124,7 +129,7 @@ func TestPd1(t *testing.T) {
 
 	p.Stop()
 
-	p, _ = NewPd(1, 1, false, conf, "localhost:8110", "1@1@http://localhost:18110@")
+	p, _ = NewPd(1, 1, false, conf, fmt.Sprintf("1@%d@http://localhost:18110@localhost:8110@", raftID))
 
 	for {
 		if p.isLeader() {
@@ -148,7 +153,9 @@ func TestAddRemovePd(t *testing.T) {
 
 	fmt.Println("conf.DBType", conf.DBType)
 
-	p1, _ := NewPd(1, 1, false, conf, "localhost:8110", "1@1@http://localhost:18110@")
+	raftID := RaftIDGen.Next()
+
+	p1, _ := NewPd(1, 1, false, conf, fmt.Sprintf("1@%d@http://localhost:18110@localhost:8110@", raftID))
 
 	for {
 		if p1.isLeader() {
@@ -163,14 +170,14 @@ func TestAddRemovePd(t *testing.T) {
 
 	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
 
-	var raftID uint64
 	var raftCluster string
 	var cluster int
 
 	{
 		conn.SendTo(addr, snet.MakeMessage(0, &sproto.AddPdNode{
-			Id:  2,
-			Url: "http://localhost:18111",
+			Id:        2,
+			ClientUrl: "localhost:8111",
+			Url:       "http://localhost:18111",
 		}))
 
 		recvbuff := make([]byte, 256)
@@ -183,11 +190,19 @@ func TestAddRemovePd(t *testing.T) {
 		cluster = int(ret.Cluster)
 	}
 
-	fmt.Println(raftCluster)
-
-	p2, err := NewPd(2, cluster, true, conf, "localhost:8111", raftCluster)
+	p2, err := NewPd(2, cluster, true, conf, raftCluster)
 
 	time.Sleep(time.Second)
+
+	for {
+		if resp, err := consoleUdp.Call([]string{"localhost:8110", "localhost:8111"}, &sproto.ListPdMembers{}, time.Second); nil != resp {
+			GetSugar().Infof("%v", resp.(*sproto.ListPdMembersResp).Members)
+			break
+		} else {
+			GetSugar().Errorf("ListPdMembers err:%v %v", err, resp)
+		}
+		time.Sleep(time.Second)
+	}
 
 	for {
 		if resp, err := consoleUdp.Call([]string{"localhost:8110", "localhost:8111"}, &sproto.RemovePdNode{
@@ -196,7 +211,7 @@ func TestAddRemovePd(t *testing.T) {
 		}, time.Second); nil != resp && resp.(*sproto.RemovePdNodeResp).Reason == "membership: ID not found" {
 			break
 		} else {
-			fmt.Println(err)
+			GetSugar().Errorf("RemovePdNode err:%v %v", err, resp)
 		}
 		time.Sleep(time.Second)
 	}
@@ -218,7 +233,9 @@ func TestHttp(t *testing.T) {
 
 	conf, _ := LoadConfigStr(configStr)
 
-	p, _ := NewPd(1, 1, false, conf, "localhost:8110", "1@1@http://localhost:18110@")
+	raftID := RaftIDGen.Next()
+
+	p, _ := NewPd(1, 1, false, conf, fmt.Sprintf("1@%d@http://localhost:18110@localhost:8110@", raftID))
 
 	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
 
@@ -719,155 +736,3 @@ func testSlotTransfer(t *testing.T, p *pd) {
 	node2.stop()
 
 }
-
-/*
-func makeInstallDeployment(setCount int) *sproto.InstallDeployment {
-	nodeID := 1
-	servicePort := 1
-	raftPort := setCount*MinReplicaPerSet + 1
-
-	install := &sproto.InstallDeployment{}
-
-	for i := 0; i < setCount; i++ {
-		set := &sproto.DeploymentSet{SetID: int32(i + 1)}
-		for j := 0; j < MinReplicaPerSet; j++ {
-			set.Nodes = append(set.Nodes, &sproto.DeploymentKvnode{
-				NodeID:      int32(nodeID),
-				Host:        "localhost",
-				ServicePort: int32(servicePort),
-				RaftPort:    int32(raftPort),
-			})
-			nodeID++
-			servicePort++
-			raftPort++
-		}
-
-		install.Sets = append(install.Sets, set)
-	}
-
-	return install
-}
-
-func TestRouteInfo(t *testing.T) {
-	sslot.SlotCount = 16384
-	MinReplicaPerSet = 5
-	for i := 1; i <= 100; i++ {
-		install := makeInstallDeployment(i)
-
-		d := &deployment{}
-
-		if err := d.loadFromPB(install.Sets); nil != err {
-			t.Fatal(err)
-		}
-
-		r := d.queryRouteInfo(&sproto.QueryRouteInfo{Version: 0})
-
-		b, err := snet.Pack(snet.MakeMessage(0, r))
-
-		if nil != err {
-			t.Fatal(err)
-		}
-
-		fmt.Println(i, len(b))
-
-		_, err = snet.Unpack(b)
-
-		if nil != err {
-			t.Fatal(err)
-		}
-	}
-
-	{
-		install := makeInstallDeployment(1)
-
-		d := &deployment{}
-
-		if err := d.loadFromPB(install.Sets); nil != err {
-			t.Fatal(err)
-		}
-
-		//增加一个set
-		s := &set{
-			id:     2,
-			nodes:  map[int]*kvnode{},
-			stores: map[int]*store{},
-		}
-
-		s.nodes[100] = &kvnode{
-			id:          100,
-			host:        "localhost",
-			servicePort: 1000,
-			raftPort:    1001,
-			set:         s,
-		}
-
-		s.stores[100] = &store{
-			id:    100,
-			set:   s,
-			slots: bitmap.New(sslot.SlotCount),
-		}
-
-		d.sets[2] = s
-		d.version++
-		s.version = d.version
-
-		r := d.queryRouteInfo(&sproto.QueryRouteInfo{Version: 1})
-
-		assert.Equal(t, 1, len(r.Sets))
-
-		assert.Equal(t, 0, len(r.RemoveSets))
-
-		assert.Equal(t, int32(100), r.Sets[0].Kvnodes[0].NodeID)
-
-	}
-
-	{
-		install := makeInstallDeployment(5)
-
-		d := &deployment{}
-
-		if err := d.loadFromPB(install.Sets); nil != err {
-			t.Fatal(err)
-		}
-
-		//移除两个节点
-		delete(d.sets, 2)
-		delete(d.sets, 4)
-
-		//增加一个set
-		s := &set{
-			id:     6,
-			nodes:  map[int]*kvnode{},
-			stores: map[int]*store{},
-		}
-
-		s.nodes[100] = &kvnode{
-			id:          100,
-			host:        "localhost",
-			servicePort: 1000,
-			raftPort:    1001,
-			set:         s,
-		}
-
-		s.stores[100] = &store{
-			id:    100,
-			set:   s,
-			slots: bitmap.New(sslot.SlotCount),
-		}
-
-		d.sets[6] = s
-		d.version++
-		s.version = d.version
-
-		r := d.queryRouteInfo(&sproto.QueryRouteInfo{Version: 1, Sets: []int32{1, 2, 3, 4, 5}})
-
-		assert.Equal(t, 1, len(r.Sets))
-
-		fmt.Println(r.RemoveSets)
-
-		assert.Equal(t, 2, len(r.RemoveSets))
-
-		assert.Equal(t, int32(100), r.Sets[0].Kvnodes[0].NodeID)
-
-	}
-}*/

@@ -10,12 +10,12 @@ import (
 	"fmt"
 	"github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/pkg/buffer"
+	"github.com/sniperHW/flyfish/pkg/etcd/pkg/idutil"
 	"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft/membership"
 	"github.com/stretchr/testify/assert"
-	//"go.uber.org/zap"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 )
+
+var RaftIDGen *idutil.Generator = idutil.NewGenerator(1, time.Now())
 
 func init() {
 	pprof := flag.String("pprof", "localhost:8899", "pprof")
@@ -104,6 +106,7 @@ type TestConfChange struct {
 	url            string //for add
 	nodeID         uint64
 	ch             chan error
+	processID      uint16
 }
 
 func (this TestConfChange) IsPromote() bool {
@@ -118,12 +121,20 @@ func (this TestConfChange) GetURL() string {
 	return this.url
 }
 
+func (this TestConfChange) GetClientURL() string {
+	return this.url
+}
+
 func (this TestConfChange) GetNodeID() uint64 {
 	return this.nodeID
 }
 
 func (this TestConfChange) OnError(err error) {
 	this.ch <- err
+}
+
+func (this TestConfChange) GetProcessID() uint16 {
+	return this.processID
 }
 
 type kvstore struct {
@@ -217,7 +228,7 @@ func (s *kvstore) SetDirectly(key string, val string) error {
 
 }
 
-func (s *kvstore) AddMember(id uint64, url string) error {
+func (s *kvstore) AddMember(processID uint16, id uint64, url string) error {
 
 	if err := s.rn.MayAddMember(types.ID(id)); nil != err {
 		return err
@@ -227,6 +238,7 @@ func (s *kvstore) AddMember(id uint64, url string) error {
 		confChangeType: raftpb.ConfChangeAddNode,
 		url:            url,
 		nodeID:         id,
+		processID:      processID,
 		ch:             make(chan error, 1),
 	}
 
@@ -234,7 +246,7 @@ func (s *kvstore) AddMember(id uint64, url string) error {
 	return <-o.ch
 }
 
-func (s *kvstore) AddLearner(id uint64, url string) error {
+func (s *kvstore) AddLearner(processID uint16, id uint64, url string) error {
 
 	if err := s.rn.MayAddMember(types.ID(id)); nil != err {
 		return err
@@ -244,6 +256,7 @@ func (s *kvstore) AddLearner(id uint64, url string) error {
 		confChangeType: raftpb.ConfChangeAddLearnerNode,
 		url:            url,
 		nodeID:         id,
+		processID:      processID,
 		ch:             make(chan error, 1),
 	}
 
@@ -482,9 +495,12 @@ func TestSingleNode(t *testing.T) {
 	SnapshotCount = 100
 	SnapshotCatchUpEntriesN = 100
 
+	raftID := RaftIDGen.Next()
+	raftCluster := fmt.Sprintf("1@%d@http://127.0.0.1:12379@http://127.0.0.1:12379@", raftID)
+
 	{
 
-		node := newKvNode(1, 1, false, "1@1@http://127.0.0.1:12379@")
+		node := newKvNode(1, 1, false, raftCluster)
 
 		startOkCh := make(chan struct{})
 
@@ -523,7 +539,7 @@ func TestSingleNode(t *testing.T) {
 
 	{
 		//start again
-		node := newKvNode(1, 1, false, "1@1@http://127.0.0.1:12379@")
+		node := newKvNode(1, 1, false, raftCluster)
 
 		startOkCh := make(chan struct{})
 
@@ -541,10 +557,10 @@ func TestSingleNode(t *testing.T) {
 
 		<-becomeLeaderCh
 
-		err := node.store.AddLearner(2, "http://127.0.0.1:22381")
+		err := node.store.AddLearner(2, 2, "http://127.0.0.1:22381")
 		assert.Nil(t, err)
 
-		err = node.store.AddLearner(2, "http://127.0.0.1:22381")
+		err = node.store.AddLearner(2, 2, "http://127.0.0.1:22381")
 		assert.Equal(t, membership.ErrIDExists, err)
 
 		for i := 0; i < 500; i++ {
@@ -557,7 +573,7 @@ func TestSingleNode(t *testing.T) {
 	{
 
 		//start again
-		node := newKvNode(1, 1, false, "1@1@http://127.0.0.1:12379@")
+		node := newKvNode(1, 1, false, raftCluster)
 
 		startOkCh := make(chan struct{})
 
@@ -588,7 +604,13 @@ func TestCluster(t *testing.T) {
 	SnapshotCount = 100
 	SnapshotCatchUpEntriesN = 100
 
-	cluster := "1@2@http://127.0.0.1:22378@,2@3@http://127.0.0.1:22379@,3@4@http://127.0.0.1:22380@"
+	raftID1 := RaftIDGen.Next()
+	raftID2 := RaftIDGen.Next()
+	raftID3 := RaftIDGen.Next()
+	raftID4 := RaftIDGen.Next()
+
+	cluster := fmt.Sprintf("1@%d@http://127.0.0.1:22378@http://127.0.0.1:22378@,2@%d@http://127.0.0.1:22379@http://127.0.0.1:22379@,3@%d@http://127.0.0.1:22380@http://127.0.0.1:22380@",
+		raftID1, raftID2, raftID3)
 
 	node1 := newKvNode(1, 1, false, cluster)
 
@@ -641,7 +663,7 @@ func TestCluster(t *testing.T) {
 	var err error
 
 	for {
-		err = leader.store.AddLearner(5, "http://127.0.0.1:22381")
+		err = leader.store.AddLearner(4, raftID4, "http://127.0.0.1:22381")
 		if nil == err {
 			break
 		} else {
@@ -651,7 +673,7 @@ func TestCluster(t *testing.T) {
 
 	fmt.Println("AddLearner ok")
 
-	cluster = "1@2@http://127.0.0.1:22378@,2@3@http://127.0.0.1:22379@,3@4@http://127.0.0.1:22380@,4@5@http://127.0.0.1:22381@learner"
+	cluster = cluster + fmt.Sprintf(",4@%d@http://127.0.0.1:22381@http://127.0.0.1:22381@learner", raftID4)
 
 	node4 := newKvNode(4, 1, true, cluster)
 
@@ -668,12 +690,12 @@ func TestCluster(t *testing.T) {
 
 	GetSugar().Info("startOkCh4")
 
-	for nil != leader.rn.IsLearnerReady(5) {
+	for nil != leader.rn.IsLearnerReady(raftID4) {
 		fmt.Println("wait for learner ready")
 		time.Sleep(time.Second)
 	}
 
-	err = leader.store.PromoteLearner(5)
+	err = leader.store.PromoteLearner(raftID4)
 	assert.Nil(t, err)
 
 	for {
@@ -684,8 +706,12 @@ func TestCluster(t *testing.T) {
 		}
 	}
 
+	GetSugar().Infof("%v", leader.rn.Members())
+
 	//test remove node
-	leader.store.RemoveMember(5)
+	leader.store.RemoveMember(raftID4)
+
+	GetSugar().Infof("%v", leader.rn.Members())
 
 	node4.stop()
 
@@ -706,7 +732,11 @@ func TestDownToFollower(t *testing.T) {
 	SnapshotCount = 100
 	SnapshotCatchUpEntriesN = 100
 
-	cluster := "1@6@http://127.0.0.1:22378@,2@7@http://127.0.0.1:22379@"
+	raftID1 := RaftIDGen.Next()
+	raftID2 := RaftIDGen.Next()
+
+	cluster := fmt.Sprintf("1@%d@http://127.0.0.1:22378@http://127.0.0.1:22378@,2@%d@http://127.0.0.1:22379@http://127.0.0.1:22379@",
+		raftID1, raftID2)
 
 	node1 := newKvNode(1, 1, false, cluster)
 
@@ -771,7 +801,11 @@ func TestOneNodeDownAndRestart(t *testing.T) {
 	SnapshotCatchUpEntriesN = 100
 	checkQuorum = false
 
-	cluster := "1@8@http://127.0.0.1:22378@,2@9@http://127.0.0.1:22379@"
+	raftID1 := RaftIDGen.Next()
+	raftID2 := RaftIDGen.Next()
+
+	cluster := fmt.Sprintf("1@%d@http://127.0.0.1:22378@http://127.0.0.1:22378@,2@%d@http://127.0.0.1:22379@http://127.0.0.1:22379@",
+		raftID1, raftID2)
 
 	node1 := newKvNode(1, 1, false, cluster)
 
@@ -852,7 +886,11 @@ func TestTransferLeader(t *testing.T) {
 	SnapshotCount = 100
 	SnapshotCatchUpEntriesN = 100
 
-	cluster := "1@10@http://127.0.0.1:22378@,2@11@http://127.0.0.1:22379@"
+	raftID1 := RaftIDGen.Next()
+	raftID2 := RaftIDGen.Next()
+
+	cluster := fmt.Sprintf("1@%d@http://127.0.0.1:22378@http://127.0.0.1:22378@,2@%d@http://127.0.0.1:22379@http://127.0.0.1:22379@",
+		raftID1, raftID2)
 
 	node1 := newKvNode(1, 1, false, cluster)
 
@@ -910,7 +948,11 @@ func TestFollower(t *testing.T) {
 	SnapshotCount = 100
 	SnapshotCatchUpEntriesN = 100
 
-	cluster := "1@12@http://127.0.0.1:22378@,2@13@http://127.0.0.1:22379@"
+	raftID1 := RaftIDGen.Next()
+	raftID2 := RaftIDGen.Next()
+
+	cluster := fmt.Sprintf("1@%d@http://127.0.0.1:22378@http://127.0.0.1:22378@,2@%d@http://127.0.0.1:22379@http://127.0.0.1:22379@",
+		raftID1, raftID2)
 
 	node1 := newKvNode(1, 1, false, cluster)
 
