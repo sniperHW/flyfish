@@ -9,6 +9,7 @@ import (
 )
 
 func SendLoginReq(conn net.Conn, loginReq *protocol.LoginReq, deadline time.Time) error {
+	loginReq.Address = conn.LocalAddr().String()
 	return Send(conn, loginReq, deadline, true)
 }
 

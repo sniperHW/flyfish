@@ -76,6 +76,11 @@ func (this *Listener) Serve(onNewClient func(*flynet.Socket), onScanner ...func(
 							return
 						}
 
+						if loginReq.Address != conn.RemoteAddr().String() {
+							conn.Close()
+							return
+						}
+
 						loginResp := &protocol.LoginResp{}
 
 						if !this.verifyLogin(loginReq) {
