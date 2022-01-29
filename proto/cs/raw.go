@@ -38,35 +38,34 @@ func Recv(conn net.Conn, msg proto.Message, deadline time.Time, crypto ...bool) 
 	bLen := make([]byte, 4)
 	conn.SetReadDeadline(deadline)
 	defer conn.SetReadDeadline(time.Time{})
-	for {
-		_, err := io.ReadFull(conn, bLen)
-		if nil != err {
+
+	_, err := io.ReadFull(conn, bLen)
+	if nil != err {
+		return err
+	}
+
+	datasize := int(binary.BigEndian.Uint32(bLen))
+
+	if datasize > maxpacket_size {
+		return errors.New("packet too large")
+	}
+
+	b := make([]byte, datasize)
+
+	_, err = io.ReadFull(conn, b)
+	if nil != err {
+		return err
+	}
+
+	if len(crypto) > 0 && crypto[0] {
+		if b, err = Crypto.AESCBCDecrypter(key, b); nil != err {
 			return err
 		}
+	}
 
-		datasize := int(binary.BigEndian.Uint32(bLen))
-
-		if datasize > maxpacket_size {
-			return errors.New("packet too large")
-		}
-
-		b := make([]byte, datasize)
-
-		_, err = io.ReadFull(conn, b)
-		if nil != err {
-			return err
-		}
-
-		if len(crypto) > 0 && crypto[0] {
-			if b, err = Crypto.AESCBCDecrypter(key, b); nil != err {
-				return err
-			}
-		}
-
-		if err = proto.Unmarshal(b, msg); err == nil {
-			return nil
-		} else {
-			return err
-		}
+	if err = proto.Unmarshal(b, msg); err == nil {
+		return nil
+	} else {
+		return err
 	}
 }
