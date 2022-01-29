@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"github.com/gogo/protobuf/proto"
-	"github.com/sniperHW/flyfish/pkg/buffer"
+	//"github.com/sniperHW/flyfish/pkg/buffer"
 	Crypto "github.com/sniperHW/flyfish/pkg/crypto"
 	"io"
 	"net"
@@ -16,20 +16,17 @@ const maxpacket_size int = 1024 * 1024 * 100
 var key []byte = []byte("feiyu_tech_2022")
 
 func Send(conn net.Conn, msg proto.Message, deadline time.Time, crypto ...bool) (err error) {
-	b := buffer.Get()
-	defer b.Free()
 	data, _ := proto.Marshal(msg)
 	if len(crypto) > 0 && crypto[0] {
 		if data, err = Crypto.AESCBCEncrypt(key, data); nil != err {
 			return
 		}
 	}
-
-	b.AppendUint32(uint32(len(data)))
-	b.AppendBytes(data)
-
+	b := make([]byte, 4+len(data))
+	binary.BigEndian.PutUint32(b, uint32(len(data)))
+	copy(b[4:], data)
 	conn.SetWriteDeadline(deadline)
-	_, err = conn.Write(b.Bytes())
+	_, err = conn.Write(b)
 	conn.SetWriteDeadline(time.Time{})
 	return
 }

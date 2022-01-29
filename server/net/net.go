@@ -11,6 +11,7 @@ import (
 	"github.com/sniperHW/flyfish/pkg/net/pb"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"net"
+	"strings"
 	"sync"
 	"time"
 )
@@ -59,149 +60,122 @@ var compressSize = 4096
 
 var defaultKey []byte = []byte("feiyu_tech_2021")
 
-func unpack(key []byte, b []byte) (msg interface{}, err error) {
-	if len(b) < 1 {
+func unpack(from *net.UDPAddr, key []byte, b []byte) (msg interface{}, err error) {
+	if len(b) < 2 {
 		err = errors.New("invaild packet")
 		return
 	}
 
-	var encryptFlag byte
-	var cmd uint16
-	var context int64
-	var compressFlag byte
-	var protoBytes []byte
-	var l int32
-	encryptFlag = b[0]
+	var encryptFlag byte = b[0]
+	var compressFlag byte = b[1]
 
 	if encryptFlag == byte(1) && len(key) == 0 {
-		err = errors.New("invaild packet")
+		err = errors.New("invaild packet1")
 		return
 	}
 
-	var r buffer.BufferReader
-	if encryptFlag == byte(0) {
-		r = buffer.NewReader(b[1:])
-	} else {
-		var plainbyte []byte
-		if plainbyte, err = crypto.AESCBCDecrypter(key, b[1:]); nil != err {
+	var plainbyte []byte
+
+	if encryptFlag == byte(1) {
+		if plainbyte, err = crypto.AESCBCDecrypter(key, b[2:]); nil != err {
 			return
-		} else {
-			r = buffer.NewReader(plainbyte)
-		}
-	}
-
-	if cmd, err = r.CheckGetUint16(); nil != err {
-		return
-	}
-
-	if context, err = r.CheckGetInt64(); nil != err {
-		return
-	}
-
-	if compressFlag, err = r.CheckGetByte(); nil != err {
-		return
-	}
-
-	if l, err = r.CheckGetInt32(); nil != err {
-		return
-	}
-
-	if protoBytes, err = r.CheckGetBytes(int(l)); nil != err {
-		return
-	}
-
-	var data proto.Message
-
-	if compressFlag == byte(0) {
-		data, err = pb.GetNamespace("sproto").Unmarshal(uint32(cmd), protoBytes)
-		if nil == err {
-			msg = &Message{
-				Context: context,
-				Msg:     data,
-			}
 		}
 	} else {
+		plainbyte = b[2:]
+	}
+
+	if compressFlag == byte(1) {
 		de := getDecompressor()
 		defer putDecompressor(de)
-		var bb []byte
-		bb, err = de.Decompress(protoBytes)
+		plainbyte, err = de.Decompress(plainbyte)
 		if nil != err {
 			return
 		}
-		data, err = pb.GetNamespace("sproto").Unmarshal(uint32(cmd), bb)
-		if nil == err {
-			msg = &Message{
-				Context: context,
-				Msg:     data,
-			}
+	}
+
+	udpmsg := &sproto.UdpMsg{}
+	if err = proto.Unmarshal(plainbyte, udpmsg); nil != err {
+		return
+	}
+
+	//如果发送端没有指定ip地址，地址为[::]所以，不能与from直接比较，只能比较端口
+	lIdx1 := strings.LastIndex(udpmsg.Addr, ":")
+	fromAddr := from.String()
+	lIdx2 := strings.LastIndex(fromAddr, ":")
+
+	if udpmsg.Addr[lIdx1+1:] != fromAddr[lIdx2+1:] {
+		fmt.Println(udpmsg.Addr[lIdx1+1:], fromAddr[lIdx2+1:])
+		err = errors.New("invaild packet2")
+		return
+	}
+
+	var pbmsg proto.Message
+
+	if pbmsg, err = pb.GetNamespace("sproto").Unmarshal(uint32(udpmsg.Cmd), udpmsg.Data); nil == err {
+		msg = &Message{
+			Context: udpmsg.Context,
+			Msg:     pbmsg,
 		}
 	}
 	return
 }
 
-func Unpack(b []byte) (msg interface{}, err error) {
-	return unpack(defaultKey, b)
+func Unpack(from *net.UDPAddr, b []byte) (msg interface{}, err error) {
+	return unpack(from, defaultKey, b)
 }
 
-func pack(key []byte, m interface{}) ([]byte, error) {
-
-	msg, ok := m.(*Message)
-
-	if !ok {
+func pack(conn *net.UDPConn, key []byte, m interface{}) ([]byte, error) {
+	msg := &sproto.UdpMsg{}
+	if _, ok := m.(*Message); ok {
+		msg.Context = m.(*Message).Context
+		msg.Addr = conn.LocalAddr().String()
+	} else {
 		return nil, errors.New("invaild msg type")
 	}
 
 	var data []byte
 	var cmd uint32
 	var err error
-	if data, cmd, err = pb.GetNamespace("sproto").Marshal(msg.Msg); nil != err {
+	if data, cmd, err = pb.GetNamespace("sproto").Marshal(m.(*Message).Msg); nil != err {
 		return nil, err
 	} else {
-		var b []byte
+		msg.Data = data
+		msg.Cmd = int32(cmd)
+		bMsg, err := proto.Marshal(msg)
+		if nil != err {
+			return nil, err
+		}
+
 		var flagCompress byte
 		if len(data) >= compressSize {
+			flagCompress = byte(1)
 			c := getCompressor()
 			defer putCompressor(c)
-			data, err = c.Compress(data)
+			bMsg, err = c.Compress(bMsg)
 			if nil != err {
 				return nil, err
 			}
-			flagCompress = byte(1)
 		}
+
+		var encryptFlag byte
 
 		if len(key) > 0 {
-			bb := make([]byte, 0, 15+len(data))
-			bb = buffer.AppendUint16(bb, uint16(cmd))
-			bb = buffer.AppendInt64(bb, msg.Context)
-			bb = buffer.AppendByte(bb, flagCompress)
-			bb = buffer.AppendInt32(bb, int32(len(data)))
-			if len(data) > 0 {
-				bb = buffer.AppendBytes(bb, data)
-			}
-			if data, err = crypto.AESCBCEncrypt(key, bb); nil != err {
+			encryptFlag = byte(1)
+			if bMsg, err = crypto.AESCBCEncrypt(key, bMsg); nil != err {
 				return nil, err
 			}
-			b = make([]byte, 0, len(data)+1)
-			b = buffer.AppendByte(b, byte(1))
-		} else {
-			b = make([]byte, 0, 16+len(data))
-			b = buffer.AppendByte(b, byte(0))
-			b = buffer.AppendUint16(b, uint16(cmd))
-			b = buffer.AppendInt64(b, msg.Context)
-			b = buffer.AppendByte(b, flagCompress)
-			b = buffer.AppendInt32(b, int32(len(data)))
 		}
 
-		if len(data) > 0 {
-			b = buffer.AppendBytes(b, data)
-		}
-
+		b := make([]byte, 0, 2+len(bMsg))
+		b = buffer.AppendByte(b, encryptFlag)
+		b = buffer.AppendByte(b, flagCompress)
+		b = buffer.AppendBytes(b, bMsg)
 		return b, nil
 	}
 }
 
-func Pack(m interface{}) ([]byte, error) {
-	return pack(defaultKey, m)
+func Pack(conn *net.UDPConn, m interface{}) ([]byte, error) {
+	return pack(conn, defaultKey, m)
 }
 
 func UdpCall(remotes interface{}, req *Message, timeout time.Duration, onResp func(chan interface{}, interface{})) (ret interface{}) {

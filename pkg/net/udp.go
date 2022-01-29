@@ -8,11 +8,11 @@ type Udp struct {
 	address string
 	addr    *net.UDPAddr
 	conn    *net.UDPConn
-	unpack  func(b []byte) (msg interface{}, err error)
-	pack    func(msg interface{}) ([]byte, error)
+	unpack  func(from *net.UDPAddr, b []byte) (msg interface{}, err error)
+	pack    func(conn *net.UDPConn, msg interface{}) ([]byte, error)
 }
 
-func NewUdp(service string, pack func(interface{}) ([]byte, error), unpack func([]byte) (interface{}, error)) (*Udp, error) {
+func NewUdp(service string, pack func(*net.UDPConn, interface{}) ([]byte, error), unpack func(*net.UDPAddr, []byte) (interface{}, error)) (*Udp, error) {
 	addr, err := net.ResolveUDPAddr("udp", service)
 	if nil != err {
 		return nil, err
@@ -33,7 +33,7 @@ func NewUdp(service string, pack func(interface{}) ([]byte, error), unpack func(
 }
 
 func (u *Udp) SendTo(addr *net.UDPAddr, msg interface{}) error {
-	if b, err := u.pack(msg); nil != err {
+	if b, err := u.pack(u.conn, msg); nil != err {
 		return err
 	} else {
 		_, err := u.conn.WriteToUDP(b, addr)
@@ -47,7 +47,7 @@ func (u *Udp) ReadFrom(recvBuff []byte) (*net.UDPAddr, interface{}, error) {
 		return addr, nil, err
 	}
 
-	msg, err := u.unpack(recvBuff[:n])
+	msg, err := u.unpack(addr, recvBuff[:n])
 	return addr, msg, err
 }
 

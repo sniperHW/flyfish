@@ -603,6 +603,7 @@ func (n *testKvnode) run() {
 	for {
 		from, m, err := n.udp.ReadFrom(recvbuff)
 		if nil != err {
+			fmt.Println("ReadFrom", err)
 			return
 		} else {
 			msg := m.(*snet.Message).Msg

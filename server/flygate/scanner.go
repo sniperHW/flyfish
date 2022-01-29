@@ -178,9 +178,9 @@ func (st *storeScanner) next(sc *scanner, count int, deadline time.Time) (*flypr
 			return nil, err
 		}
 
-		if !cs.SendLoginReq(conn, &flyproto.LoginReq{Scanner: true}, deadline) {
+		if err = cs.SendLoginReq(conn, &flyproto.LoginReq{Scanner: true}, deadline); nil != err {
 			conn.Close()
-			return nil, fmt.Errorf("login failed")
+			return nil, err
 		}
 
 		loginResp, err := cs.RecvLoginResp(conn, deadline)
