@@ -42,7 +42,6 @@ func (n *kvnode) sendForwordMsg(msg *forwordMsg) {
 				if timeout > time.Millisecond {
 					binary.BigEndian.PutUint32(msg.bytes[18:], uint32(timeout/time.Millisecond))
 					if nil == n.session.Send(msg.bytes) {
-						msg.bytes = nil
 						n.waitResponse[msg.seqno] = msg
 						msg.waitResponse = &n.waitResponse
 						msg.deadlineTimer = time.AfterFunc(timeout, msg.onTimeout)
@@ -116,7 +115,6 @@ func (n *kvnode) dial() {
 						GetSugar().Debugf("send msg to kvnode:%d store:%d seqno:%d nodeSeqno:%d", n.id, msg.store.id, msg.oriSeqno, msg.seqno)
 						binary.BigEndian.PutUint32(msg.bytes[18:], uint32(timeout/time.Millisecond))
 						if nil == session.Send(msg.bytes) {
-							msg.bytes = nil
 							n.waitResponse[msg.seqno] = msg
 							msg.waitResponse = &n.waitResponse
 							msg.deadlineTimer = time.AfterFunc(timeout, msg.onTimeout)

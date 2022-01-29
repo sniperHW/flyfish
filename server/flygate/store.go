@@ -2,6 +2,7 @@ package flygate
 
 import (
 	"container/list"
+	"fmt"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/queue"
@@ -32,6 +33,10 @@ func (s *store) onCliMsg(msg *forwordMsg) {
 				msg.replyErr(errcode.New(errcode.Errcode_gate_busy, ""))
 			} else {
 				msg.l = s.waittingSend
+				if len(msg.bytes) < 8 {
+					GetSugar().Infof("PushBack1 %v", *msg)
+					panic(fmt.Sprintf("len(msg.bytes) %d", len(msg.bytes)))
+				}
 				msg.listElement = s.waittingSend.PushBack(msg)
 				s.queryLeader()
 			}

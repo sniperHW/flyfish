@@ -43,6 +43,9 @@ DBType                  = "%s"
 
 SnapshotCurrentCount    = 1
 
+SnapshotCount             = 100
+SnapshotCatchUpEntriesN   = 100
+
 MainQueueMaxSize        = 10000
 
 LruCheckInterval        = 1000              #每隔100ms执行一次lru剔除操作
@@ -137,6 +140,17 @@ func testkv(t *testing.T, c *client.Client) {
 	fields := map[string]interface{}{}
 	fields["age"] = 12
 	fields["name"] = "sniperHW"
+
+	for i := 0; i < 200; i++ {
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		name := fmt.Sprintf("sniperHW:%d", i)
+		fields["name"] = name
+		fields["phone"] = "123456789123456789123456789"
+
+		r := c.Set("users1", name, fields).Exec()
+		assert.Nil(t, r.ErrCode)
+	}
 
 	fmt.Println("-----------------------------1----------------------------------")
 
@@ -519,8 +533,6 @@ func TestFlygate(t *testing.T) {
 		name := fmt.Sprintf("sniperHW:%d", i)
 		fields["name"] = name
 		fields["phone"] = "123456789123456789123456789"
-
-		beg := time.Now()
 		for {
 			r := c.Set("users1", name, fields).Exec()
 			if nil == r.ErrCode {
@@ -529,9 +541,6 @@ func TestFlygate(t *testing.T) {
 				fmt.Println(name, r.ErrCode)
 			}
 		}
-
-		fmt.Printf("use %v\n", time.Now().Sub(beg))
-
 	}
 
 	testkv(t, c)
@@ -566,17 +575,46 @@ func TestFlygate(t *testing.T) {
 		}
 	}
 
-	fmt.Println("Stop gate")
+	node1.Stop()
 
-	gate1.Stop()
+	node2.Stop()
 
-	fmt.Println("Stop node1")
+	//start again
+	node1, err = flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	node2, err = flykv.NewKvNode(2, false, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	for i := 0; i < 100; i++ {
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		name := fmt.Sprintf("sniperHW:%d", i)
+		fields["name"] = name
+		fields["phone"] = "123456789123456789123456789"
+		for {
+			r := c.Set("users1", name, fields).Exec()
+			if nil == r.ErrCode {
+				break
+			} else {
+				fmt.Println(name, r.ErrCode)
+			}
+		}
+	}
 
 	node1.Stop()
 
-	fmt.Println("Stop node2")
-
 	node2.Stop()
+
+	fmt.Println("Stop gate")
+
+	gate1.Stop()
 
 	fmt.Println("Stop pd")
 	pd.Stop()
