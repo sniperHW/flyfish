@@ -9,19 +9,23 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
 type httpReplyer struct {
-	waitCh chan struct{}
-	w      http.ResponseWriter
+	replyed int32
+	waitCh  chan struct{}
+	w       http.ResponseWriter
 }
 
 func (h *httpReplyer) reply(resp *snet.Message) {
-	if byte, err := proto.Marshal(resp.Msg); nil == err {
-		h.w.Write(byte)
+	if atomic.CompareAndSwapInt32(&h.replyed, 0, 1) {
+		if byte, err := proto.Marshal(resp.Msg); nil == err {
+			h.w.Write(byte)
+		}
+		close(h.waitCh)
 	}
-	close(h.waitCh)
 }
 
 func (p *pd) fetchReq(cmd string, r *http.Request) (*snet.Message, error) {

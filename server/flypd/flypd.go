@@ -30,12 +30,15 @@ type replyer interface {
 }
 
 type udpReplyer struct {
-	from *net.UDPAddr
-	pd   *pd
+	replyed int32
+	from    *net.UDPAddr
+	pd      *pd
 }
 
-func (ur udpReplyer) reply(resp *snet.Message) {
-	ur.pd.udp.SendTo(ur.from, resp)
+func (ur *udpReplyer) reply(resp *snet.Message) {
+	if atomic.CompareAndSwapInt32(&ur.replyed, 0, 1) {
+		ur.pd.udp.SendTo(ur.from, resp)
+	}
 }
 
 type applicationQueue struct {

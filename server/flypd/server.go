@@ -47,7 +47,7 @@ func (p *pd) onMsg(replyer replyer, msg *snet.Message) {
 	if h, ok := p.msgHandler.handles[reflect.TypeOf(msg.Msg)]; ok {
 		if p.config.DisableUdpConsole && h.isConsoleMsg {
 			//禁止udp console接口，如果请求来自udp全部
-			if _, ok := replyer.(udpReplyer); ok {
+			if _, ok := replyer.(*udpReplyer); ok {
 				return
 			}
 		}
@@ -265,7 +265,7 @@ func (p *pd) startUdpService() error {
 							Service: p.service,
 						}))
 					} else if p.isLeader() {
-						p.onMsg(udpReplyer{from: from, pd: p}, msg.(*snet.Message))
+						p.onMsg(&udpReplyer{from: from, pd: p}, msg.(*snet.Message))
 					}
 				})
 			}
