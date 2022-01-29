@@ -5,59 +5,68 @@ import (
 	"errors"
 	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/pkg/buffer"
+	Crypto "github.com/sniperHW/flyfish/pkg/crypto"
+	"io"
 	"net"
 	"time"
 )
 
 const maxpacket_size int = 1024 * 1024 * 100
 
-func Send(conn net.Conn, msg proto.Message, deadline time.Time) error {
+var key []byte = []byte("feiyu_tech_2022")
+
+func Send(conn net.Conn, msg proto.Message, deadline time.Time, crypto ...bool) (err error) {
 	b := buffer.Get()
 	defer b.Free()
 	data, _ := proto.Marshal(msg)
+	if len(crypto) > 0 && crypto[0] {
+		if data, err = Crypto.AESCBCEncrypt(key, data); nil != err {
+			return
+		}
+	}
+
 	b.AppendUint32(uint32(len(data)))
 	b.AppendBytes(data)
 
 	conn.SetWriteDeadline(deadline)
-	_, err := conn.Write(b.Bytes())
+	_, err = conn.Write(b.Bytes())
 	conn.SetWriteDeadline(time.Time{})
-	return err
+	return
 }
 
-func Recv(conn net.Conn, msg proto.Message, deadline time.Time) error {
-	b := make([]byte, 64)
-	w := 0
-	pbsize := 0
+func Recv(conn net.Conn, msg proto.Message, deadline time.Time, crypto ...bool) error {
+	bLen := make([]byte, 4)
 	conn.SetReadDeadline(deadline)
 	defer conn.SetReadDeadline(time.Time{})
 	for {
-		n, err := conn.Read(b[w:])
+		_, err := io.ReadFull(conn, bLen)
 		if nil != err {
 			return err
 		}
 
-		w = w + n
+		datasize := int(binary.BigEndian.Uint32(bLen))
 
-		if w >= 4 {
-			pbsize = int(binary.BigEndian.Uint32(b[:4]))
-		}
-
-		if pbsize > maxpacket_size {
+		if datasize > maxpacket_size {
 			return errors.New("packet too large")
 		}
 
-		if pbsize+4 > len(b) {
-			bb := make([]byte, pbsize+4)
-			copy(bb, b[:n])
-			b = bb
+		b := make([]byte, datasize)
+
+		_, err = io.ReadFull(conn, b)
+		if nil != err {
+			return err
 		}
 
-		if w >= pbsize+4 {
-			if err = proto.Unmarshal(b[4:w], msg); err == nil {
-				return nil
-			} else {
+		if len(crypto) > 0 && crypto[0] {
+			if b, err = Crypto.AESCBCDecrypter(key, b); nil != err {
 				return err
 			}
+		}
+
+		if err = proto.Unmarshal(b, msg); err == nil {
+			return nil
+		} else {
+			return err
 		}
 	}
 }

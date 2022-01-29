@@ -8,13 +8,13 @@ import (
 	"time"
 )
 
-func SendLoginReq(conn net.Conn, loginReq *protocol.LoginReq, deadline time.Time) bool {
-	return Send(conn, loginReq, deadline) == nil
+func SendLoginReq(conn net.Conn, loginReq *protocol.LoginReq, deadline time.Time) error {
+	return Send(conn, loginReq, deadline, true)
 }
 
 func RecvLoginResp(conn net.Conn, deadline time.Time) (*protocol.LoginResp, error) {
 	loginResp := &protocol.LoginResp{}
-	err := Recv(conn, loginResp, deadline)
+	err := Recv(conn, loginResp, deadline, true)
 	return loginResp, err
 }
 
@@ -37,9 +37,9 @@ func (this *Connector) Dial(timeout time.Duration) (*flynet.Socket, error) {
 		return nil, err
 	}
 
-	if !SendLoginReq(conn, &protocol.LoginReq{}, deadline) {
+	if err = SendLoginReq(conn, &protocol.LoginReq{}, deadline); nil != err {
 		conn.Close()
-		return nil, fmt.Errorf("login failed")
+		return nil, err
 	}
 
 	loginResp, err := RecvLoginResp(conn, deadline)
