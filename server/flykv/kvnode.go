@@ -179,7 +179,6 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, peers map[uint16]raft.
 	}
 
 	store.lru.init()
-	store.lease = newLease(store)
 	this.stores[storeID] = store
 	store.serve()
 

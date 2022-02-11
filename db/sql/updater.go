@@ -107,15 +107,15 @@ func (this *updater) exec(v interface{}) {
 			var err error
 
 			for {
-				err = this.sqlExec.exec(this.dbc)
-				if nil == err {
-					break
+				if !task.CheckUpdateLease() {
+					task.ClearUpdateStateAndReleaseLock()
+					return
 				} else {
-					GetSugar().Errorf("sqlUpdater exec %s %v", this.sqlExec.b.ToStrUnsafe(), err)
-					if !task.CheckUpdateLease() {
-						task.ClearUpdateStateAndReleaseLock()
-						return
+					err = this.sqlExec.exec(this.dbc)
+					if nil == err {
+						break
 					} else {
+						GetSugar().Errorf("sqlUpdater exec %s %v", this.sqlExec.b.ToStrUnsafe(), err)
 						if isRetryError(err) {
 							//休眠一秒重试
 							time.Sleep(time.Second)

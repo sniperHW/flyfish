@@ -19,7 +19,7 @@ func (this *dbUpdateTask) isDoing() bool {
 }
 
 func (this *dbUpdateTask) CheckUpdateLease() bool {
-	return this.kv.store.lease.hasLease()
+	return this.kv.store.isLeader()
 }
 
 func (this *dbUpdateTask) ReleaseLock() {
@@ -102,10 +102,6 @@ func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields 
 
 	if dbstate == db.DBState_none {
 		return errors.New("updateState error 1")
-	}
-
-	if !this.kv.store.hasLease() {
-		return nil
 	}
 
 	this.Lock()

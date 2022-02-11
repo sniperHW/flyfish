@@ -101,10 +101,7 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 			return nil
 		}
 
-		if ptype == proposal_lease {
-			p := data.(pplease)
-			s.lease.update(p.nodeid, p.begtime)
-		} else if ptype == proposal_slot_transfer {
+		if ptype == proposal_slot_transfer {
 			p := data.(*SlotTransferProposal)
 			if p.transferType == slotTransferIn {
 				s.slots.Set(p.slot)
@@ -178,7 +175,6 @@ func (s *kvstore) makeSnapshot(notifyer *raft.SnapshotNotify) {
 		buff = buffer.AppendInt32(buff, 0) //占位符
 		buff = serilizeSlots(s.slots, buff)
 		buff = serilizeMeta(s.meta, buff)
-		buff = s.lease.snapshot(buff)
 		buff = append(buff, byte(0)) //写入无压缩标记
 		binary.BigEndian.PutUint32(buff[ll:ll+4], uint32(len(buff)-ll-4))
 	}

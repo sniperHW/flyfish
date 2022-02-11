@@ -20,11 +20,10 @@ const (
 	proposal_snapshot      = proposalType(1) //全量数据kv快照,
 	proposal_update        = proposalType(2) //fields变更
 	proposal_kick          = proposalType(3) //从缓存移除kv
-	proposal_lease         = proposalType(4) //数据库update权租约
-	proposal_slots         = proposalType(5)
-	proposal_slot_transfer = proposalType(6)
-	proposal_meta          = proposalType(7)
-	proposal_nop           = proposalType(8) //空proposal用于确保之前的proposal已经提交并apply
+	proposal_slots         = proposalType(4)
+	proposal_slot_transfer = proposalType(5)
+	proposal_meta          = proposalType(6)
+	proposal_nop           = proposalType(7) //空proposal用于确保之前的proposal已经提交并apply
 )
 
 func newProposalReader(b []byte) proposalReader {
@@ -159,38 +158,6 @@ func (this *proposalReader) read() (isOver bool, ptype proposalType, data interf
 
 			case proposal_none:
 				err = errors.New("bad data 2")
-			case proposal_lease:
-				var id uint64
-				id, err = this.reader.CheckGetUint64()
-				if nil != err {
-					err = fmt.Errorf("proposal_lease read id:%v", err)
-					return
-				}
-				var l int32
-				l, err = this.reader.CheckGetInt32()
-				if nil != err {
-					err = fmt.Errorf("proposal_lease read l:%v", err)
-					return
-				}
-				var bb []byte
-				bb, err = this.reader.CheckGetBytes(int(l))
-				if nil != err {
-					err = fmt.Errorf("proposal_lease CheckGetBytes:%v", err)
-					return
-				}
-
-				var t time.Time
-				err = t.UnmarshalBinary(bb)
-				if nil != err {
-					err = fmt.Errorf("proposal_lease UnmarshalBinary:%v", err)
-					return
-				}
-
-				data = pplease{
-					nodeid:  id,
-					begtime: t,
-				}
-				return
 			case proposal_snapshot, proposal_update, proposal_kick:
 				var l uint16
 				l, err = this.reader.CheckGetUint16()
@@ -456,6 +423,17 @@ func (this *proposalNop) Serilize(b []byte) []byte {
 
 func (this *proposalNop) apply() {
 	this.store.ready = true
+	GetSugar().Info("WriteBackAll")
+	for _, v := range this.store.kv {
+		for _, vv := range v {
+			if meta := this.store.meta.CheckTableMeta(vv.meta); meta != nil {
+				vv.meta = meta
+				vv.updateTask.issueFullDbWriteBack()
+			} else {
+				this.store.tryKick(vv)
+			}
+		}
+	}
 }
 
 type slotTransferType byte

@@ -111,9 +111,7 @@ func mergeAbleCmd(cmdType flyproto.CmdType) bool {
 }
 
 func (this *kv) kickable() bool {
-	if this.store.needWriteBackAll {
-		return false
-	} else if this.kicking {
+	if this.kicking {
 		return false
 	} else if !(this.state == kv_ok || this.state == kv_no_record) {
 		return false

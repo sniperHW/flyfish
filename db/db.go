@@ -287,12 +287,13 @@ type DBLoadTask interface {
 }
 
 type UpdateState struct {
-	Version int64
+	Version int64 //最新版本号
 	Key     string
 	Slot    int
 	Fields  map[string]*proto.Field
 	Meta    TableMeta
 	State   DBState
+	//LastUpdateVersion int64 //上次回写时的版本号
 }
 
 type DBLoader interface {
@@ -347,4 +348,6 @@ type DBUpdateTask interface {
 	GetUpdateAndClearUpdateState() UpdateState //获取脏状态同时将其清理
 	GetUniKey() string
 	GetTable() string
+	//UpdateLastUpdateVersion(int64)
+	//GetLastUpdateVersion() int64
 }

@@ -6,7 +6,6 @@ import (
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"math"
-	"time"
 )
 
 type proposalReader struct {
@@ -17,11 +16,6 @@ type ppkv struct {
 	unikey  string
 	version int64
 	fields  map[string]*flyproto.Field
-}
-
-type pplease struct {
-	nodeid  uint64
-	begtime time.Time
 }
 
 func appendField(b []byte, field *flyproto.Field) []byte {
@@ -64,14 +58,6 @@ func serilizeMeta(meta db.DBMeta, b []byte) []byte {
 	b = buffer.AppendByte(b, byte(proposal_meta))
 	b = buffer.AppendInt32(b, int32(len(metaB)))
 	return buffer.AppendBytes(b, metaB)
-}
-
-func serilizeLease(b []byte, nodeid uint64, begtime time.Time) []byte {
-	b = buffer.AppendByte(b, byte(proposal_lease))
-	b = buffer.AppendUint64(b, nodeid)
-	bb, _ := begtime.MarshalBinary()
-	b = buffer.AppendInt32(b, int32(len(bb)))
-	return buffer.AppendBytes(b, bb)
 }
 
 func serilizeKv(b []byte, ptype proposalType, unikey string, version int64, fields map[string]*flyproto.Field) []byte {

@@ -71,9 +71,8 @@ type clientRequest struct {
 }
 
 type kvmgr struct {
-	kv         []map[string]*kv
-	slotsKvMap map[int]map[string]*kv
-	//tableKvMap       map[string]map[string]*kv
+	kv               []map[string]*kv
+	slotsKvMap       map[int]map[string]*kv
 	slots            *bitmap.Bitmap
 	slotsTransferOut map[int]*SlotTransferProposal //正在迁出的slot
 	kvcount          int
@@ -88,24 +87,14 @@ type kvstore struct {
 	mainQueue            applicationQueue
 	db                   dbI
 	wait4ReplyCount      int32
-	lease                *lease
 	stoped               int32
 	ready                bool
 	kvnode               *kvnode
-	needWriteBackAll     bool
 	shard                int
 	meta                 db.DBMeta
 	dbWriteBackCount     int32
 	SoftLimitReachedTime int64
 	unixNow              int64
-}
-
-func (s *kvstore) hasLease() bool {
-	r := s.lease.hasLease()
-	if !r {
-		s.needWriteBackAll = true
-	}
-	return r
 }
 
 func (s *kvstore) isLeader() bool {
@@ -408,23 +397,6 @@ func (s *kvstore) stop() {
 	}
 }
 
-func (s *kvstore) gotLease() {
-	if s.needWriteBackAll {
-		GetSugar().Info("WriteBackAll")
-		s.needWriteBackAll = false
-		for _, v := range s.kv {
-			for _, vv := range v {
-				if meta := s.meta.CheckTableMeta(vv.meta); meta != nil {
-					vv.meta = meta
-					vv.updateTask.issueFullDbWriteBack()
-				} else {
-					s.tryKick(vv)
-				}
-			}
-		}
-	}
-}
-
 func (s *kvstore) reportStatus() {
 	s.mainQueue.q.Append(1, func() {
 		msg := &sproto.StoreReportStatus{
@@ -474,7 +446,6 @@ func (s *kvstore) serve() {
 
 	go func() {
 		defer func() {
-			s.lease.stop()
 			s.mainQueue.close()
 			s.kvnode.muS.Lock()
 			delete(s.kvnode.stores, s.shard)
@@ -554,12 +525,8 @@ func (s *kvstore) serve() {
 }
 
 func (s *kvstore) becomeLeader() {
-
 	GetSugar().Infof("becomeLeader %v", s.rn.ID())
-
 	s.rn.IssueProposal(&proposalNop{store: s})
-	s.needWriteBackAll = true
-	s.lease.becomeLeader()
 }
 
 func (s *kvstore) onLeaderDownToFollower() {
