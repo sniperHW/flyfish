@@ -82,7 +82,7 @@ func (this *cmdBase) reply(err errcode.Error, fields map[string]*flyproto.Field,
 				resp := this.fnMakeResponse(err, fields, version)
 				e := this.peer.Send(resp)
 				if nil != e {
-					GetSugar().Errorf("send resp error:%v", e)
+					GetSugar().Debugf("send resp error:%v", e)
 				}
 			}
 		}

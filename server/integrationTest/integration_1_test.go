@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -140,6 +141,22 @@ func testkv(t *testing.T, c *client.Client) {
 	fields := map[string]interface{}{}
 	fields["age"] = 12
 	fields["name"] = "sniperHW"
+
+	fmt.Println("-----------------------------0----------------------------------")
+
+	{
+
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		fields["name"] = strings.Repeat("a", 4096)
+
+		c.Set("users1", "sniperHWLargeName", fields).Exec()
+
+		r := c.GetAll("users1", "sniperHWLargeName").Exec()
+		assert.Nil(t, r.ErrCode)
+
+		assert.Equal(t, r.Fields["name"].GetString(), fields["name"])
+	}
 
 	fmt.Println("-----------------------------1----------------------------------")
 

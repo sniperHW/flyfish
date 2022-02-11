@@ -36,7 +36,7 @@ func main() {
 
 	flykv.InitLogger(logger.NewZapLogger(logname, conf.Log.LogDir, conf.Log.LogLevel, conf.Log.MaxLogfileSize, conf.Log.MaxAge, conf.Log.MaxBackups, conf.Log.EnableStdout))
 
-	node, err := flykv.NewKvNode(*id, *join, conf, flykv.NewSqlDB())
+	node, err := flykv.NewKvNode(uint16(*id), *join, conf, flykv.NewSqlDB())
 	if nil == err {
 		c := make(chan os.Signal)
 		signal.Notify(c, syscall.SIGINT) //监听指定信号

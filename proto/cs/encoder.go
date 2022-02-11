@@ -4,9 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"github.com/sniperHW/flyfish/pkg/buffer"
+	"github.com/sniperHW/flyfish/pkg/compress"
 	"github.com/sniperHW/flyfish/pkg/net/pb"
 	_ "github.com/sniperHW/flyfish/proto"
 	"reflect"
+	"sync"
 )
 
 const (
@@ -20,8 +22,26 @@ const (
 	SizeErrDescLen = 2
 	SizeUniKeyLen  = 2
 	MinSize        = SizeLen
+	SizeCompress   = 1
 	MaxPacketSize  = 8 * 1024 * 1024
 )
+
+var OpenCompress bool
+var CompressSize int = 1024
+
+var compressPool = &sync.Pool{
+	New: func() interface{} {
+		return &compress.ZipCompressor{}
+	},
+}
+
+func getCompressor() compress.CompressorI {
+	return compressPool.Get().(compress.CompressorI)
+}
+
+func putCompressor(c compress.CompressorI) {
+	compressPool.Put(c)
+}
 
 type ReqEncoder struct {
 	pbSpace *pb.Namespace
@@ -60,7 +80,19 @@ func (this *ReqEncoder) EnCode(o interface{}, buff *buffer.Buffer) error {
 		return nil
 	}
 
-	payloadLen := SizeSeqNo + SizeStore + SizeUniKeyLen + sizeOfUniKey + SizeTimeout + SizeCmd + SizePB + len(pbbytes)
+	var compressFlag byte
+
+	if OpenCompress && len(pbbytes) > CompressSize {
+		compressFlag = byte(1)
+		c := getCompressor()
+		defer putCompressor(c)
+		pbbytes, err = c.Compress(pbbytes)
+		if nil != err {
+			return err
+		}
+	}
+
+	payloadLen := SizeSeqNo + SizeStore + SizeUniKeyLen + sizeOfUniKey + SizeTimeout + SizeCmd + SizeCompress + SizePB + len(pbbytes)
 	totalLen := SizeLen + payloadLen
 	if uint64(totalLen) > MaxPacketSize {
 		return nil
@@ -80,6 +112,7 @@ func (this *ReqEncoder) EnCode(o interface{}, buff *buffer.Buffer) error {
 	buff.AppendInt16(int16(sizeOfUniKey))
 	buff.AppendString(m.UniKey)
 	//pb
+	buff.AppendByte(compressFlag)
 	buff.AppendInt32(int32(len(pbbytes)))
 	buff.AppendBytes(pbbytes)
 	return nil
@@ -115,6 +148,18 @@ func (this *RespEncoder) EnCode(o interface{}, buff *buffer.Buffer) error {
 		}
 	}
 
+	var compressFlag byte
+
+	if OpenCompress && len(pbbytes) > CompressSize {
+		compressFlag = byte(1)
+		c := getCompressor()
+		defer putCompressor(c)
+		pbbytes, err = c.Compress(pbbytes)
+		if nil != err {
+			return err
+		}
+	}
+
 	errCode := int16(0)
 
 	if nil != m.Err && m.Err.Code != 0 {
@@ -128,7 +173,7 @@ func (this *RespEncoder) EnCode(o interface{}, buff *buffer.Buffer) error {
 		}
 	}
 
-	payloadLen := SizeSeqNo + SizeCmd + SizeErrCode + sizeOfErrDesc + SizePB + len(pbbytes)
+	payloadLen := SizeSeqNo + SizeCmd + SizeErrCode + sizeOfErrDesc + SizeCompress + SizePB + len(pbbytes)
 	totalLen := SizeLen + payloadLen
 	if uint64(totalLen) > MaxPacketSize {
 		return nil
@@ -148,6 +193,8 @@ func (this *RespEncoder) EnCode(o interface{}, buff *buffer.Buffer) error {
 			buff.AppendString(m.Err.Desc)
 		}
 	}
+
+	buff.AppendByte(compressFlag)
 	buff.AppendInt32(int32(len(pbbytes)))
 	if len(pbbytes) > 0 {
 		//写数据

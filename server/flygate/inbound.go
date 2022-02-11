@@ -35,9 +35,6 @@ func clientReqUnpack(pbSpace *pb.Namespace, b []byte, r int, w int) (ret interfa
 			var m forwordMsg
 			m.bytes = make([]byte, totalSize)
 			copy(m.bytes, b[r:r+totalSize])
-			if len(m.bytes) < 8 {
-				panic("here")
-			}
 			m.oriSeqno = int64(binary.BigEndian.Uint64(b[rr:]))
 			rr += (8 + 4)
 			m.cmd = binary.BigEndian.Uint16(b[rr:])
