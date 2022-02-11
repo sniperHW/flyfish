@@ -81,6 +81,7 @@ type kvmgr struct {
 
 type kvstore struct {
 	kvmgr
+	lastLeader           uint64
 	leader               uint64
 	snapshotter          *snap.Snapshotter
 	rn                   *raft.RaftInstance
@@ -95,6 +96,16 @@ type kvstore struct {
 	dbWriteBackCount     int32
 	SoftLimitReachedTime int64
 	unixNow              int64
+	leaseTimer           *time.Timer
+	gotLease             int64
+}
+
+func (s *kvstore) hasLease() bool {
+	if !s.isLeader() {
+		return false
+	} else {
+		return atomic.LoadInt64(&s.gotLease) == 1
+	}
 }
 
 func (s *kvstore) isLeader() bool {
@@ -524,6 +535,53 @@ func (s *kvstore) serve() {
 	}()
 }
 
+func (s *kvstore) issueFullDbWriteBack() {
+	GetSugar().Info("WriteBackAll")
+	for _, v := range s.kv {
+		for _, vv := range v {
+			if meta := s.meta.CheckTableMeta(vv.meta); meta != nil {
+				vv.meta = meta
+				vv.updateTask.issueFullDbWriteBack()
+			} else {
+				s.tryKick(vv)
+			}
+		}
+	}
+}
+
+const defaultLeaseDelayTime time.Duration = time.Second * 60
+
+func (s *kvstore) applyNop() {
+	s.ready = true
+
+	var leaseDelayTime time.Duration
+
+	if !(s.lastLeader == 0 || s.lastLeader == s.rn.ID()) {
+		if s.kvnode.config.UpdateDelayTime > 0 {
+			leaseDelayTime = time.Second * time.Duration(s.kvnode.config.UpdateDelayTime)
+		} else {
+			leaseDelayTime = defaultLeaseDelayTime
+		}
+	}
+
+	s.lastLeader = s.rn.ID()
+
+	if leaseDelayTime > 0 {
+		s.leaseTimer = time.AfterFunc(leaseDelayTime, func() {
+			s.mainQueue.AppendHighestPriotiryItem(func() {
+				if s.isLeader() && s.leaseTimer != nil {
+					s.leaseTimer = nil
+					atomic.StoreInt64(&s.gotLease, 1)
+					s.issueFullDbWriteBack()
+				}
+			})
+		})
+	} else {
+		atomic.StoreInt64(&s.gotLease, 1)
+		s.issueFullDbWriteBack()
+	}
+}
+
 func (s *kvstore) becomeLeader() {
 	GetSugar().Infof("becomeLeader %v", s.rn.ID())
 	s.rn.IssueProposal(&proposalNop{store: s})
@@ -531,6 +589,8 @@ func (s *kvstore) becomeLeader() {
 
 func (s *kvstore) onLeaderDownToFollower() {
 	s.ready = false
+	atomic.StoreInt64(&s.gotLease, 0)
+	s.leaseTimer = nil
 }
 
 //将nodeID作为learner加入当前store的raft配置

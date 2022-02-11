@@ -93,7 +93,13 @@ func (this *proposalReader) read() (isOver bool, ptype proposalType, data interf
 			ptype = proposalType(b)
 			switch ptype {
 			case proposal_nop:
-				return
+				var l uint64
+				l, err = this.reader.CheckGetUint64()
+				if nil != err {
+					err = fmt.Errorf("proposal_nop CheckGetUint64:%v", err)
+					return
+				}
+				data = l
 			case proposal_meta:
 				var l int32
 				l, err = this.reader.CheckGetInt32()
@@ -154,8 +160,6 @@ func (this *proposalReader) read() (isOver bool, ptype proposalType, data interf
 					slot:         int(slot),
 					transferType: slotTransferType(tt),
 				}
-				return
-
 			case proposal_none:
 				err = errors.New("bad data 2")
 			case proposal_snapshot, proposal_update, proposal_kick:
@@ -417,23 +421,12 @@ func (this *proposalNop) OnError(err error) {
 }
 
 func (this *proposalNop) Serilize(b []byte) []byte {
-	return buffer.AppendByte(b, byte(proposal_nop))
-
+	b = buffer.AppendByte(b, byte(proposal_nop))
+	return buffer.AppendUint64(b, uint64(this.store.rn.ID()))
 }
 
 func (this *proposalNop) apply() {
-	this.store.ready = true
-	GetSugar().Info("WriteBackAll")
-	for _, v := range this.store.kv {
-		for _, vv := range v {
-			if meta := this.store.meta.CheckTableMeta(vv.meta); meta != nil {
-				vv.meta = meta
-				vv.updateTask.issueFullDbWriteBack()
-			} else {
-				this.store.tryKick(vv)
-			}
-		}
-	}
+	this.store.applyNop()
 }
 
 type slotTransferType byte

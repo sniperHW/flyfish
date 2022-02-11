@@ -113,7 +113,7 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 		} else if ptype == proposal_meta {
 			data.(db.DBMeta).MoveTo(s.meta)
 		} else if ptype == proposal_nop {
-
+			s.lastLeader = data.(uint64)
 		} else {
 			p := data.(ppkv)
 			groupID := sslot.StringHash(p.unikey) % len(s.kv)

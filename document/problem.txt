@@ -33,27 +33,16 @@ lease
 
 2022-2-11更新
 
-取消回写lease机制
+取消leader回写租约机制。
 
-所有回写操作需要比较__version__字段，只有匹配才能成功更新。
+改为leader在apply第一个proposal_nop之后启动延时定时器，定时器触发后将获得回写权。
 
-updatetask执行成功后记录下当前__version__,下一次执行时用于__version__比较。
-
-如果新leader先完成回写，则老leader的回写因为__version__不匹配导致更新失败。
-
-问题，新leader需要执行一次全量回写，此时updatetask记录的__version__可能跟数据库中的不匹配。
-
-这种情况下，可以将updatetask.__version__设为0，执行不比较版本号的更新。
-
-考虑以下情况
-
-leader1执行执行记录1的全量回写。之后leader1与其它成员隔离，选出leader2，leader2请求执行全量回写，在记录1执行回写前再次收到更新请求。
-因此在记录1执行回写时，将回写最新的变更。之后leader1才执行记录1的全量回写，因为无需对比__version__,记录1被leader1的旧记录覆盖。
+延时设定得稍微大一点，以保证失联leader最后的回写在新leader执行回写之前执行（flykv开启了CheckQuorum，失联leader最多一个ElectionTimeout就会发现自己
+失去leadership,一旦发现失去leadership也就丧失回写权，后续回写直接被丢弃。延时主要是让失联leader最后已经发出的sql操作有足够的时间完成，让新leader发出的sql操作必定在失联leader最后的操作执行完之后才允许发出，更大的延时设定能保证这一点，但将导致新leader在这段时间内无法执行sql回写，这主要将影响kick机制，因为没有完成回写的kv是不允许被kick的）。
 
 
-回写执行前的leader判断是否能避免此问题？
 
-flykv开启了check CheckQuorum,
+
 
 
 

@@ -197,8 +197,16 @@ func (this *kvnode) Stop() {
 			this.muS.RLock()
 			defer this.muS.RUnlock()
 			for _, v := range this.stores {
-				if atomic.LoadInt32(&v.wait4ReplyCount) != 0 || atomic.LoadInt32(&v.dbWriteBackCount) != 0 {
+				if atomic.LoadInt32(&v.wait4ReplyCount) != 0 {
 					return false
+				}
+
+				if v.isLeader() {
+					if !v.hasLease() {
+						return false
+					} else if atomic.LoadInt32(&v.dbWriteBackCount) != 0 {
+						return false
+					}
 				}
 			}
 			return true

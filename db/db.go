@@ -348,6 +348,4 @@ type DBUpdateTask interface {
 	GetUpdateAndClearUpdateState() UpdateState //获取脏状态同时将其清理
 	GetUniKey() string
 	GetTable() string
-	//UpdateLastUpdateVersion(int64)
-	//GetLastUpdateVersion() int64
 }
