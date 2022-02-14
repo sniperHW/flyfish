@@ -8,6 +8,10 @@ import (
 	"sync/atomic"
 )
 
+func (u *dbUpdateTask) SetLastWriteBackVersion(version int64) {
+	u.lastWriteBackVersion = version
+}
+
 func (this *dbUpdateTask) GetTable() string {
 	return this.kv.table
 }
@@ -19,7 +23,7 @@ func (this *dbUpdateTask) isDoing() bool {
 }
 
 func (this *dbUpdateTask) CheckUpdateLease() bool {
-	return this.kv.store.hasLease()
+	return this.kv.store.isLeader()
 }
 
 func (this *dbUpdateTask) ReleaseLock() {
@@ -54,6 +58,7 @@ func (this *dbUpdateTask) GetUpdateAndClearUpdateState() (updateState db.UpdateS
 	updateState.Meta = this.kv.meta
 	updateState.Key = this.kv.key
 	updateState.Slot = this.kv.slot
+	updateState.LastWriteBackVersion = this.lastWriteBackVersion
 	this.updateFields = map[string]*flyproto.Field{}
 	this.dbstate = db.DBState_none
 	return
@@ -102,10 +107,6 @@ func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields 
 
 	if dbstate == db.DBState_none {
 		return errors.New("updateState error 1")
-	}
-
-	if !this.kv.store.hasLease() {
-		return nil
 	}
 
 	this.Lock()

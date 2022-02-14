@@ -292,6 +292,10 @@ func (this *kvProposal) apply() {
 
 		oldState := this.kv.state
 
+		if this.kv.state == kv_loading {
+			this.kv.updateTask.lastWriteBackVersion = this.version
+		}
+
 		if this.version == 0 {
 			this.kv.state = kv_no_record
 			this.kv.fields = nil

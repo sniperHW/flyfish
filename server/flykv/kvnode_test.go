@@ -204,7 +204,8 @@ func test(t *testing.T, c *client.Client) {
 
 		wait.Wait()
 	}
-	fmt.Println("-----------------------------get----------------------------------")
+
+	/*fmt.Println("-----------------------------get----------------------------------")
 	{
 		r := c.GetAll("users1", "sniperHW").Exec()
 		assert.Nil(t, r.ErrCode)
@@ -283,7 +284,7 @@ func test(t *testing.T, c *client.Client) {
 		r1 = c.Set("users1", "sniperHW", fields).Exec()
 		assert.Nil(t, r1.ErrCode)
 
-	}
+	}*/
 
 	fmt.Println("-----------------------------setNx----------------------------------")
 
@@ -312,7 +313,7 @@ func test(t *testing.T, c *client.Client) {
 		r2 = c.Del("users1", "sniperHW").Exec()
 		assert.Nil(t, r2.ErrCode)
 
-		time.Sleep(time.Second)
+		/*time.Sleep(time.Second)
 
 		for {
 			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
@@ -322,11 +323,11 @@ func test(t *testing.T, c *client.Client) {
 		}
 
 		r1 = c.SetNx("users1", "sniperHW", fields).Exec()
-		assert.Nil(t, r1.ErrCode)
+		assert.Nil(t, r1.ErrCode)*/
 
 	}
 
-	fmt.Println("-----------------------------compareAndSet----------------------------------")
+	/*fmt.Println("-----------------------------compareAndSet----------------------------------")
 	{
 		r1 := c.Get("users1", "sniperHW", "age").Exec()
 		assert.Nil(t, r1.ErrCode)
@@ -581,7 +582,7 @@ func test(t *testing.T, c *client.Client) {
 			}
 			time.Sleep(time.Second)
 		}
-	}
+	}*/
 }
 
 func Test1Node1Store1(t *testing.T) {

@@ -42,7 +42,6 @@ type Config struct {
 	SnapshotCount           uint64 `toml:"SnapshotCount"`
 	SnapshotCatchUpEntriesN uint64 `toml:"SnapshotCatchUpEntriesN"`
 	MaxBatchCount           int    `toml:"MaxBatchCount"`
-	UpdateDelayTime         int    `toml:"UpdateDelayTime"` //单位秒
 
 	RaftLogDir string `toml:"RaftLogDir"` //raft日志存放目录
 
