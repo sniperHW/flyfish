@@ -51,9 +51,13 @@ func (this *updater) Stop() {
 
 func (this *updater) Start() {
 	this.startOnce.Do(func() {
-		this.waitGroup.Add(1)
+		if nil != this.waitGroup {
+			this.waitGroup.Add(1)
+		}
 		go func() {
-			defer this.waitGroup.Done()
+			if nil != this.waitGroup {
+				defer this.waitGroup.Done()
+			}
 			localList := make([]interface{}, 0, 200)
 			closed := false
 			for {
@@ -106,8 +110,6 @@ func (this *updater) exec(v interface{}) {
 					case db.DBState_update:
 						this.sqlExec.prepareUpdate(b, &s)
 					case db.DBState_delete:
-						this.sqlExec.prepareDelete(b, &s)
-					case db.DBState_mark_delete:
 						this.sqlExec.prepareMarkDelete(b, &s)
 					default:
 						GetSugar().Errorf("invaild dbstate %s %d", task.GetUniKey(), s.State)
@@ -157,9 +159,9 @@ func (this *updater) exec(v interface{}) {
 
 				rowsAffected, err := this.sqlExec.exec(this.dbc)
 				if nil == err {
-					if rowsAffected == 1 {
+					if rowsAffected > 0 {
 						//回写成功
-						task.SetLastWriteBackVersion(s.LastWriteBackVersion)
+						task.SetLastWriteBackVersion(s.Version)
 						break
 					} else {
 						//版本号不匹配，再次获取版本号

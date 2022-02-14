@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-const selectTemplate string = "select %s from %s where __slot__ = %d and __key__ not in ('%s');"
+const selectTemplate string = "select %s from %s where __slot__ = %d and __key__ not in ('%s') and __version__ != 0;"
 
 type ScannerRow struct {
 	Key     string

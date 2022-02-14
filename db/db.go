@@ -17,11 +17,10 @@ var (
 type DBState byte
 
 const (
-	DBState_none        = DBState(0)
-	DBState_insert      = DBState(1)
-	DBState_update      = DBState(2)
-	DBState_delete      = DBState(3)
-	DBState_mark_delete = DBState(4)
+	DBState_none   = DBState(0)
+	DBState_insert = DBState(1)
+	DBState_update = DBState(2)
+	DBState_delete = DBState(3)
 )
 
 /*对于string类型如果长度可能超过16384则使用blob,否则在mysql下将会截断*/

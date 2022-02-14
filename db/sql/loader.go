@@ -129,7 +129,7 @@ func (this *loader) exec() {
 				buff.AppendString(",'").AppendString(kk).AppendString("'")
 			}
 		}
-		buff.AppendString(");")
+		buff.AppendString(") and __version__ != 0;")
 
 		beg := time.Now()
 		rows, err := this.dbc.Query(buff.ToStrUnsafe())
