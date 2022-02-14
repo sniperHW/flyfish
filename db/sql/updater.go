@@ -2,6 +2,8 @@ package sql
 
 import (
 	"database/sql/driver"
+	"errors"
+	"fmt"
 	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/pkg/buffer"
@@ -85,48 +87,101 @@ func (this *updater) exec(v interface{}) {
 			b := buffer.Get()
 			defer b.Free()
 
-			//构造更新语句
-			switch s.State {
-			case db.DBState_insert:
-				this.sqlExec.prepareInsertUpdate(b, &s)
-			case db.DBState_update:
-				this.sqlExec.prepareUpdate(b, &s)
-			case db.DBState_delete:
-				this.sqlExec.prepareDelete(b, &s)
-			default:
-				GetSugar().Errorf("invaild dbstate %s %d", task.GetUniKey(), s.State)
-				if task.Dirty() {
-					//再次发生变更,插入队列继续执行
-					this.que.ForceAppend(task)
-				} else {
-					task.ReleaseLock()
-				}
-				return
-			}
-
-			var err error
+			needRebuildSql := true
 
 			for {
+
 				if !task.CheckUpdateLease() {
 					task.ClearUpdateStateAndReleaseLock()
 					return
-				} else {
-					err = this.sqlExec.exec(this.dbc)
-					if nil == err {
+				}
+
+				if needRebuildSql {
+					b.Reset()
+
+					//构造更新语句
+					switch s.State {
+					case db.DBState_insert:
+						this.sqlExec.prepareInsertUpdate(b, &s)
+					case db.DBState_update:
+						this.sqlExec.prepareUpdate(b, &s)
+					case db.DBState_delete:
+						this.sqlExec.prepareDelete(b, &s)
+					case db.DBState_mark_delete:
+						this.sqlExec.prepareMarkDelete(b, &s)
+					default:
+						GetSugar().Errorf("invaild dbstate %s %d", task.GetUniKey(), s.State)
+						if task.Dirty() && task.CheckUpdateLease() {
+							//再次发生变更,插入队列继续执行
+							this.que.ForceAppend(task)
+						} else {
+							task.ReleaseLock()
+						}
+						return
+					}
+				}
+
+				loadVersion := func() (int64, error) {
+					meta := s.Meta.(*TableMeta)
+					for {
+						if !task.CheckUpdateLease() {
+							return 0, errors.New("no lease")
+						}
+
+						rows, err := this.dbc.Query(fmt.Sprintf("select __version__ from %s where __key__ = '%s';", meta.real_tableName, s.Key))
+						if nil != err {
+							if isRetryError(err) {
+								//休眠一秒重试
+								time.Sleep(time.Second)
+							} else {
+								return 0, errors.New("drop writeback")
+							}
+						} else {
+							if rows.Next() {
+								var version int64
+								rows.Scan(&version)
+								if version >= s.Version {
+									//数据库已经有最新的回写
+									return 0, errors.New("drop writeback")
+								} else {
+									return version, nil
+								}
+							} else {
+								return 0, errors.New("drop writeback")
+							}
+						}
+					}
+
+					return 0, nil
+				}
+
+				rowsAffected, err := this.sqlExec.exec(this.dbc)
+				if nil == err {
+					if rowsAffected == 1 {
+						//回写成功
+						task.SetLastWriteBackVersion(s.LastWriteBackVersion)
 						break
 					} else {
-						GetSugar().Errorf("sqlUpdater exec %s %v", this.sqlExec.b.ToStrUnsafe(), err)
-						if isRetryError(err) {
-							//休眠一秒重试
-							time.Sleep(time.Second)
-						} else {
+						//版本号不匹配，再次获取版本号
+						if version, err := loadVersion(); nil != err {
 							break
+						} else {
+							s.LastWriteBackVersion = version
+							needRebuildSql = true
 						}
+					}
+				} else {
+					GetSugar().Errorf("sqlUpdater exec %s %v", this.sqlExec.b.ToStrUnsafe(), err)
+					if isRetryError(err) {
+						//休眠一秒重试
+						time.Sleep(time.Second)
+					} else {
+						break
 					}
 				}
 			}
 
-			if task.Dirty() {
+			if task.Dirty() && task.CheckUpdateLease() {
 				//再次发生变更,插入队列继续执行
 				this.que.ForceAppend(task)
 			} else {

@@ -14,10 +14,20 @@ type sqlExec struct {
 }
 
 func (this *sqlExec) prepareDelete(b *buffer.Buffer, s *db.UpdateState) {
-	this.args = this.args[:0]
 	meta := s.Meta.(*TableMeta)
-	b.AppendString(fmt.Sprintf("delete from %s where __key__ = $1;", meta.real_tableName))
+	this.args = this.args[:0]
 	this.args = append(this.args, s.Key)
+	this.args = append(this.args, s.LastWriteBackVersion)
+	b.AppendString(fmt.Sprintf("delete from %s where __key__ = $1 and __version__ = $2;", meta.real_tableName))
+	this.b = b
+}
+
+func (this *sqlExec) prepareMarkDelete(b *buffer.Buffer, s *db.UpdateState) {
+	meta := s.Meta.(*TableMeta)
+	this.args = this.args[:0]
+	this.args = append(this.args, s.Key)
+	this.args = append(this.args, s.LastWriteBackVersion)
+	b.AppendString(fmt.Sprintf("update %s set __version__ = 0 where __key__ = $1 and __version__ = $2;", meta.real_tableName))
 	this.b = b
 }
 
@@ -26,6 +36,7 @@ func (this *sqlExec) prepareUpdate(b *buffer.Buffer, s *db.UpdateState) {
 	this.args = this.args[:0]
 	this.args = append(this.args, s.Key)
 	this.args = append(this.args, s.Version)
+	this.args = append(this.args, s.LastWriteBackVersion)
 
 	b.AppendString(fmt.Sprintf("update %s set ", meta.real_tableName))
 
@@ -36,7 +47,7 @@ func (this *sqlExec) prepareUpdate(b *buffer.Buffer, s *db.UpdateState) {
 		}
 	}
 
-	b.AppendString("__version__=$2 where __key__ = $1;")
+	b.AppendString("__version__=$2 where __key__ = $1 and __version__ = $3;")
 	this.b = b
 }
 
@@ -78,28 +89,30 @@ func (this *sqlExec) prepareInsertUpdate(b *buffer.Buffer, s *db.UpdateState) {
 	this.args = append(this.args, s.Key)
 	this.args = append(this.args, s.Version)
 	this.args = append(this.args, s.Slot)
+	this.args = append(this.args, s.LastWriteBackVersion)
 
 	this.__prepareInsert(b, s)
 	if this.sqlType == "pgsql" {
 		b.AppendString(" ON conflict(__key__)  DO UPDATE SET ")
+		for i, name := range meta.queryMeta.real_field_names[4:] {
+			b.AppendString(fmt.Sprintf("%s=$%d,", name, i+5))
+		}
+		b.AppendString(fmt.Sprintf("__version__=$2 where %s.__key__ = $1 and %s.__version__ = $4;", meta.real_tableName, meta.real_tableName))
 	} else {
 		b.AppendString(" on duplicate key update ")
-	}
+		for i, name := range meta.queryMeta.real_field_names[4:] {
+			b.AppendString(fmt.Sprintf("%s=if(__version__ = $4,$%d,%s),", name, i+5, name))
+		}
 
-	for i, name := range meta.queryMeta.real_field_names[3:] {
-		b.AppendString(fmt.Sprintf("%s=$%d,", name, i+4))
+		b.AppendString("__version__=if(__version__ = $4,$2,__version__);")
 	}
-
-	if this.sqlType == "pgsql" {
-		b.AppendString(fmt.Sprintf("__version__=$2 where %s.__key__ = $1;", meta.real_tableName))
-	} else {
-		b.AppendString("__version__=$2;")
-	}
-
 	this.b = b
 }
 
-func (this *sqlExec) exec(dbc *sqlx.DB) (err error) {
-	_, err = dbc.Exec(this.b.ToStrUnsafe(), this.args...)
+func (this *sqlExec) exec(dbc *sqlx.DB) (rowsAffected int64, err error) {
+	r, err := dbc.Exec(this.b.ToStrUnsafe(), this.args...)
+	if nil == err {
+		rowsAffected, _ = r.RowsAffected()
+	}
 	return
 }
