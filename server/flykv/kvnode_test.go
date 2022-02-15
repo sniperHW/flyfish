@@ -54,7 +54,7 @@ SqlLoadPipeLineSize     = 200                  #sql加载管道线大小
 SqlLoadQueueSize        = 10000                #sql加载请求队列大小，此队列每CacheGroup一个
 
 SqlLoaderCount          = 5
-SqlUpdaterCount         = 1
+SqlUpdaterCount         = 5
 
 ProposalFlushInterval   = 100
 ReadFlushInterval       = 10 

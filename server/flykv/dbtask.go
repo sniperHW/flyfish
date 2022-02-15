@@ -208,6 +208,8 @@ func (this *dbLoadTask) OnResult(err error, version int64, fields map[string]*fl
 			fields:  fields,
 		}
 
+		this.kv.updateTask.lastWriteBackVersion = version
+
 		this.cmd.onLoadResult(err, proposal)
 
 		this.kv.store.rn.IssueProposal(proposal)

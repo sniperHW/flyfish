@@ -58,7 +58,7 @@ func TestScaner(t *testing.T) {
 		}
 
 		if nil != row {
-			fmt.Println(row.Key)
+			fmt.Println(row.Key, row.Version)
 			count++
 		} else {
 			break

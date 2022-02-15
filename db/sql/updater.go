@@ -139,6 +139,7 @@ func (this *updater) exec(v interface{}) {
 						}
 
 						rows, err := this.dbc.Query(fmt.Sprintf("select __version__ from %s where __key__ = '%s';", meta.real_tableName, s.Key))
+						defer rows.Close()
 						if nil != err {
 							if isRetryError(err) {
 								//休眠一秒重试
@@ -151,6 +152,7 @@ func (this *updater) exec(v interface{}) {
 								var version int64
 								rows.Scan(&version)
 								if abs(version) >= abs(s.Version) {
+									GetSugar().Infof("a new writeback success,drop old writeback")
 									//数据库已经有最新的回写
 									return 0, errors.New("drop writeback")
 								} else {
@@ -172,6 +174,7 @@ func (this *updater) exec(v interface{}) {
 						task.SetLastWriteBackVersion(s.Version)
 						break
 					} else {
+						GetSugar().Infof("version mismatch last:%d version:%d", s.LastWriteBackVersion, s.Version)
 						//版本号不匹配，再次获取版本号
 						if version, err := loadVersion(); nil != err {
 							break
