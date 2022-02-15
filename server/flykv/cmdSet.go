@@ -27,15 +27,14 @@ func (this *cmdSet) onLoadResult(err error, proposal *kvProposal) {
 	if nil == err && nil != this.version && *this.version != proposal.version {
 		this.reply(Err_version_mismatch, nil, 0)
 	} else {
-		if err == db.ERR_RecordNotExist {
-			//记录不存在，为记录生成版本号
-			proposal.version = genVersion()
+		if err == db.ERR_RecordNotExist || proposal.version <= 0 {
+			proposal.version = abs(proposal.version) + 1
 			//对于不在set中field,使用defalutValue填充
 			this.kv.meta.FillDefaultValues(this.fields)
 			proposal.fields = this.fields
 			proposal.dbstate = db.DBState_insert
 		} else {
-			proposal.version = incVersion(proposal.version)
+			proposal.version++
 			for k, v := range this.fields {
 				proposal.fields[k] = v
 			}
@@ -46,13 +45,13 @@ func (this *cmdSet) onLoadResult(err error, proposal *kvProposal) {
 
 func (this *cmdSet) do(proposal *kvProposal) {
 	if this.kv.state == kv_no_record {
-		proposal.version = genVersion()
+		proposal.version = abs(proposal.version) + 1
 		proposal.dbstate = db.DBState_insert
 		this.kv.meta.FillDefaultValues(this.fields)
 		proposal.fields = this.fields
 	} else {
 		proposal.ptype = proposal_update
-		proposal.version = incVersion(proposal.version)
+		proposal.version++
 		proposal.fields = this.fields
 		proposal.dbstate = db.DBState_update
 	}

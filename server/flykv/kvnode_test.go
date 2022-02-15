@@ -204,6 +204,7 @@ func test(t *testing.T, c *client.Client) {
 
 		wait.Wait()
 	}
+
 	fmt.Println("-----------------------------get----------------------------------")
 	{
 		r := c.GetAll("users1", "sniperHW").Exec()

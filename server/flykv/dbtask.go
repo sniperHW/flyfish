@@ -2,11 +2,16 @@ package flykv
 
 import (
 	"errors"
+	//"fmt"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"sync/atomic"
 )
+
+func (u *dbUpdateTask) SetLastWriteBackVersion(version int64) {
+	u.lastWriteBackVersion = version
+}
 
 func (this *dbUpdateTask) GetTable() string {
 	return this.kv.table
@@ -19,7 +24,7 @@ func (this *dbUpdateTask) isDoing() bool {
 }
 
 func (this *dbUpdateTask) CheckUpdateLease() bool {
-	return this.kv.store.hasLease()
+	return this.kv.store.isLeader()
 }
 
 func (this *dbUpdateTask) ReleaseLock() {
@@ -54,6 +59,7 @@ func (this *dbUpdateTask) GetUpdateAndClearUpdateState() (updateState db.UpdateS
 	updateState.Meta = this.kv.meta
 	updateState.Key = this.kv.key
 	updateState.Slot = this.kv.slot
+	updateState.LastWriteBackVersion = this.lastWriteBackVersion
 	this.updateFields = map[string]*flyproto.Field{}
 	this.dbstate = db.DBState_none
 	return
@@ -102,10 +108,6 @@ func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields 
 
 	if dbstate == db.DBState_none {
 		return errors.New("updateState error 1")
-	}
-
-	if !this.kv.store.hasLease() {
-		return nil
 	}
 
 	this.Lock()
@@ -191,19 +193,22 @@ func (this *dbLoadTask) OnResult(err error, version int64, fields map[string]*fl
 	if !this.kv.store.isLeader() {
 		this.onError(errcode.New(errcode.Errcode_not_leader))
 	} else if err == nil || err == db.ERR_RecordNotExist {
+
+		if version <= 0 {
+			err = db.ERR_RecordNotExist
+		}
 		/*
 		 * 根据this.cmd产生正确的proposal
 		 */
 		proposal := &kvProposal{
-			ptype: proposal_snapshot,
-			kv:    this.kv,
-			cmds:  []cmdI{this.cmd},
+			ptype:   proposal_snapshot,
+			kv:      this.kv,
+			cmds:    []cmdI{this.cmd},
+			version: version,
+			fields:  fields,
 		}
 
-		if nil == err {
-			proposal.fields = fields
-			proposal.version = version
-		}
+		this.kv.updateTask.lastWriteBackVersion = version
 
 		this.cmd.onLoadResult(err, proposal)
 

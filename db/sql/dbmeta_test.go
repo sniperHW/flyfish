@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/logger"
-	"github.com/sniperHW/flyfish/pkg/buffer"
-	"github.com/sniperHW/flyfish/proto"
+	//"github.com/sniperHW/flyfish/pkg/buffer"
+	//"github.com/sniperHW/flyfish/proto"
 	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
@@ -102,11 +102,6 @@ func TestDbmeta1(t *testing.T) {
 	assert.Equal(t, td.GetDefaultValue("field5"), []byte{})
 
 	{
-		assert.Equal(t, db.GetDefaultValue(proto.ValueType_int, ""), int64(0))
-		assert.Equal(t, db.GetDefaultValue(proto.ValueType_float, ""), float64(0))
-	}
-
-	{
 		s := "hello"
 		assert.Equal(t, td.GetQueryMeta().GetConvetorByName("field4")(&s), "hello")
 		i := int64(1)
@@ -121,10 +116,11 @@ func TestDbmeta1(t *testing.T) {
 	fmt.Println(td.GetInsertPrefix())
 	fmt.Println(td.GetSelectPrefix())
 
-	testSqlString(t, td)
+	//testSqlString(t, td)
 
 }
 
+/*
 func testSqlString(t *testing.T, meta db.TableMeta) {
 	us := &db.UpdateState{
 		Version: 1,
@@ -175,3 +171,4 @@ func testSqlString(t *testing.T, meta db.TableMeta) {
 	fmt.Println(string(b.Bytes()))
 
 }
+*/

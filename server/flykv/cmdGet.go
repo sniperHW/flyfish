@@ -19,8 +19,7 @@ func (this *cmdGet) makeResponse(err errcode.Error, fields map[string]*flyproto.
 	}
 
 	if err == nil {
-		record_not_exist := (version == 0)
-		if !record_not_exist {
+		if this.kv.state != kv_no_record {
 			if this.version != nil && *this.version == version {
 				err = Err_record_unchange
 			} else {
@@ -51,7 +50,6 @@ func (this *cmdGet) makeResponse(err errcode.Error, fields map[string]*flyproto.
 }
 
 func (this *cmdGet) onLoadResult(err error, proposal *kvProposal) {
-	return
 }
 
 func (s *kvstore) makeGet(kv *kv, processDeadline time.Time, respDeadline time.Time, c *net.Socket, seqno int64, req *flyproto.GetReq) (cmdI, errcode.Error) {

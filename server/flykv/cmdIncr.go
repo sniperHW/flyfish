@@ -34,9 +34,8 @@ func (this *cmdIncr) onLoadResult(err error, proposal *kvProposal) {
 	if nil == err && nil != this.version && *this.version != proposal.version {
 		this.reply(Err_version_mismatch, nil, 0)
 	} else {
-		if err == db.ERR_RecordNotExist {
-			//记录不存在，为记录生成版本号
-			proposal.version = genVersion()
+		if err == db.ERR_RecordNotExist || proposal.version <= 0 {
+			proposal.version = abs(proposal.version) + 1
 			//对于不在set中field,使用defalutValue填充
 			proposal.fields = map[string]*flyproto.Field{}
 			this.kv.meta.FillDefaultValues(proposal.fields)
@@ -52,7 +51,7 @@ func (this *cmdIncr) onLoadResult(err error, proposal *kvProposal) {
 		newV := flyproto.PackField(oldV.GetName(), oldV.GetInt()+this.v.GetInt())
 		proposal.fields[this.v.GetName()] = newV
 		if proposal.dbstate != db.DBState_insert {
-			proposal.version = incVersion(proposal.version)
+			proposal.version++
 			proposal.dbstate = db.DBState_update
 		}
 	}
@@ -60,8 +59,7 @@ func (this *cmdIncr) onLoadResult(err error, proposal *kvProposal) {
 
 func (this *cmdIncr) do(proposal *kvProposal) {
 	if this.kv.state == kv_no_record {
-		//记录不存在，为记录生成版本号
-		proposal.version = genVersion()
+		proposal.version = abs(proposal.version) + 1
 		//对于不在set中field,使用defalutValue填充
 		proposal.fields = map[string]*flyproto.Field{}
 		this.kv.meta.FillDefaultValues(proposal.fields)
@@ -78,7 +76,7 @@ func (this *cmdIncr) do(proposal *kvProposal) {
 
 	} else {
 
-		proposal.version = incVersion(proposal.version)
+		proposal.version++
 		proposal.dbstate = db.DBState_update
 
 		oldV := this.kv.fields[this.v.GetName()]

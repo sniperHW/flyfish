@@ -146,7 +146,7 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 			case proposal_snapshot:
 				kv.version = p.version
 				kv.fields = p.fields
-				if kv.version != 0 {
+				if kv.version > 0 {
 					kv.state = kv_ok
 				} else {
 					kv.state = kv_no_record

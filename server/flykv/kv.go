@@ -5,7 +5,6 @@ import (
 	"github.com/sniperHW/flyfish/errcode"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"sync"
-	"time"
 )
 
 type kvState byte
@@ -21,11 +20,12 @@ const (
 
 type dbUpdateTask struct {
 	sync.Mutex
-	doing        bool
-	updateFields map[string]*flyproto.Field
-	version      int64
-	dbstate      db.DBState
-	kv           *kv
+	doing                bool
+	updateFields         map[string]*flyproto.Field
+	version              int64
+	dbstate              db.DBState
+	kv                   *kv
+	lastWriteBackVersion int64
 }
 
 type dbLoadTask struct {
@@ -56,20 +56,12 @@ type kv struct {
 	groupID       int
 }
 
-/*
- * 0表示key不存在，因此inc时要越过0
- */
-func incVersion(version int64) int64 {
-	version += 1
-	if 0 == version {
-		return 1
+func abs(v int64) int64 {
+	if v > 0 {
+		return v
 	} else {
-		return version
+		return 0 - v
 	}
-}
-
-func genVersion() int64 {
-	return time.Now().UnixNano()
 }
 
 func (this *cmdQueue) empty() bool {
@@ -111,9 +103,7 @@ func mergeAbleCmd(cmdType flyproto.CmdType) bool {
 }
 
 func (this *kv) kickable() bool {
-	if !this.store.hasLease() {
-		return false
-	} else if this.kicking {
+	if this.kicking {
 		return false
 	} else if !(this.state == kv_ok || this.state == kv_no_record) {
 		return false

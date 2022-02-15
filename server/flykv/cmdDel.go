@@ -33,7 +33,7 @@ func (this *cmdDel) onLoadResult(err error, proposal *kvProposal) {
 func (this *cmdDel) do(proposal *kvProposal) {
 	if this.kv.state == kv_ok {
 		proposal.dbstate = db.DBState_delete
-		proposal.version = 0
+		proposal.version = -(abs(proposal.version) + 1)
 	} else {
 		proposal.ptype = proposal_none
 		this.reply(Err_record_notexist, nil, 0)

@@ -292,7 +292,7 @@ func (this *kvProposal) apply() {
 
 		oldState := this.kv.state
 
-		if this.version == 0 {
+		if this.version <= 0 {
 			this.kv.state = kv_no_record
 			this.kv.fields = nil
 		} else {

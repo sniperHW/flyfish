@@ -169,9 +169,11 @@ func (this *loader) exec() {
 						version := field_convter[1](filed_receiver[1]).(int64)
 						fields := map[string]*proto.Field{}
 
-						for i := 0; i < len(field_names); i++ {
-							name := field_names[i]
-							fields[name] = proto.PackField(name, field_convter[i+3](filed_receiver[i+3]))
+						if version > 0 {
+							for i := 0; i < len(field_names); i++ {
+								name := field_names[i]
+								fields[name] = proto.PackField(name, field_convter[i+3](filed_receiver[i+3]))
+							}
 						}
 
 						delete(v.tasks, key)
