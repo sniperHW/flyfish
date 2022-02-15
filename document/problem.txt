@@ -41,6 +41,19 @@ lease
 失去leadership,一旦发现失去leadership也就丧失回写权，后续回写直接被丢弃。延时主要是让失联leader最后已经发出的sql操作有足够的时间完成，让新leader发出的sql操作必定在失联leader最后的操作执行完之后才允许发出，更大的延时设定能保证这一点，但将导致新leader在这段时间内无法执行sql回写，这主要将影响kick机制，因为没有完成回写的kv是不允许被kick的）。
 
 
+2022-2-15更新
+
+回写使用__version__比对，完全避免旧的回写覆盖最新回写
+
+delete不直接删除db中的记录，使用mark delete。
+
+version的绝对值严格递增。
+
+记录的每次变更(update/delete)都递增abs(version)。
+
+被标记delete的记录verison < 0.
+
+
 
 
 
