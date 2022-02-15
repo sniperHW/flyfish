@@ -17,16 +17,16 @@ package rafthttp
 import (
 	"bytes"
 	"context"
-	"io"
-	"io/ioutil"
-	"net/http"
-	"time"
-
 	"github.com/sniperHW/flyfish/pkg/etcd/etcdserver/api/snap"
 	"github.com/sniperHW/flyfish/pkg/etcd/pkg/httputil"
 	pioutil "github.com/sniperHW/flyfish/pkg/etcd/pkg/ioutil"
 	"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft"
+	"github.com/sniperHW/flyfish/pkg/util"
+	"io"
+	"io/ioutil"
+	"net/http"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"go.uber.org/zap"
@@ -172,7 +172,7 @@ func (s *snapshotSender) post(req *http.Request) (err error) {
 		// close the response body when timeouts.
 		// prevents from reading the body forever when the other side dies right after
 		// successfully receives the request body.
-		time.AfterFunc(snapResponseReadTimeout, func() { httputil.GracefulClose(resp) })
+		util.OnceTimer(snapResponseReadTimeout, func() { httputil.GracefulClose(resp) })
 		body, err := ioutil.ReadAll(resp.Body)
 		result <- responseAndError{resp, body, err}
 	}()

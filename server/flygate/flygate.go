@@ -10,6 +10,7 @@ import (
 	"github.com/sniperHW/flyfish/pkg/movingAverage"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/queue"
+	"github.com/sniperHW/flyfish/pkg/util"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
 	snet "github.com/sniperHW/flyfish/server/net"
@@ -247,7 +248,6 @@ type gate struct {
 	msgPerSecond    *movingAverage.MovingAverage //每秒客户端转发请求量的移动平均值
 	msgRecv         int32
 	heartBeatUdp    *flynet.Udp
-	heartbeatTimer  *time.Timer
 }
 
 func doQueryRouteInfo(pdAddr []*net.UDPAddr, req *sproto.QueryRouteInfo) *sproto.QueryRouteInfoResp {
@@ -318,7 +318,7 @@ func (g *gate) refreshMsgPerSecond() {
 	if atomic.LoadInt32(&g.closed) == 0 {
 		g.msgPerSecond.Add(int(atomic.LoadInt32(&g.msgRecv)))
 		atomic.StoreInt32(&g.msgRecv, 0)
-		time.AfterFunc(time.Second, g.refreshMsgPerSecond)
+		util.OnceTimer(time.Second, g.refreshMsgPerSecond)
 	}
 }
 
@@ -504,7 +504,7 @@ func (g *gate) start() error {
 			}
 		}
 
-		g.heartbeatTimer = time.AfterFunc(time.Second, heartbeat)
+		util.OnceTimer(time.Second, heartbeat)
 	}
 
 	heartbeat()

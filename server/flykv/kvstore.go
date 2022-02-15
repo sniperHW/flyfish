@@ -13,6 +13,7 @@ import (
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	"github.com/sniperHW/flyfish/pkg/raft/membership"
+	"github.com/sniperHW/flyfish/pkg/util"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
 	"github.com/sniperHW/flyfish/server/flypd"
@@ -427,7 +428,7 @@ func (s *kvstore) reportStatus() {
 			}
 		}()
 
-		time.AfterFunc(time.Second, s.reportStatus)
+		util.OnceTimer(time.Second, s.reportStatus)
 	})
 }
 

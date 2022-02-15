@@ -7,6 +7,7 @@ import (
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/movingAverage"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
+	"github.com/sniperHW/flyfish/pkg/util"
 	"github.com/sniperHW/flyfish/proto/cs"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
@@ -509,7 +510,7 @@ func (this *Client) queryRouteInfo() {
 			timeout = time.Second * 5
 		}
 
-		time.AfterFunc(timeout, func() {
+		util.OnceTimer(timeout, func() {
 			this.queryRouteInfo()
 		})
 	}()
@@ -519,7 +520,7 @@ func (this *Client) refreshMsgPerSecond() {
 	if atomic.LoadInt32(&this.closed) == 0 {
 		this.msgPerSecond.Add(int(atomic.LoadInt32(&this.msgSend)))
 		atomic.StoreInt32(&this.msgSend, 0)
-		time.AfterFunc(time.Second, this.refreshMsgPerSecond)
+		util.OnceTimer(time.Second, this.refreshMsgPerSecond)
 	}
 }
 
