@@ -44,7 +44,11 @@ func (n *kvnode) sendForwordMsg(msg *forwordMsg) {
 					if nil == n.session.Send(msg.bytes) {
 						n.waitResponse[msg.seqno] = msg
 						msg.waitResponse = &n.waitResponse
-						msg.deadlineTimer = time.AfterFunc(timeout, msg.onTimeout)
+						msg.deadlineTimer = time.AfterFunc(timeout, func() {
+							n.gate.mainQueue.ForceAppend(1, func() {
+								msg.onTimeout()
+							})
+						})
 					} else {
 						msg.replyErr(errcode.New(errcode.Errcode_retry, ""))
 						return
@@ -117,7 +121,11 @@ func (n *kvnode) dial() {
 						if nil == session.Send(msg.bytes) {
 							n.waitResponse[msg.seqno] = msg
 							msg.waitResponse = &n.waitResponse
-							msg.deadlineTimer = time.AfterFunc(timeout, msg.onTimeout)
+							msg.deadlineTimer = time.AfterFunc(timeout, func() {
+								n.gate.mainQueue.ForceAppend(1, func() {
+									msg.onTimeout()
+								})
+							})
 						} else {
 							msg.replyErr(errcode.New(errcode.Errcode_retry, ""))
 						}
