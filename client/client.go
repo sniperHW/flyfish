@@ -509,9 +509,7 @@ func (this *Client) queryRouteInfo() {
 			timeout = time.Second * 5
 		}
 
-		time.AfterFunc(timeout, func() {
-			this.queryRouteInfo()
-		})
+		time.AfterFunc(timeout, this.queryRouteInfo)
 	}()
 }
 
