@@ -2,6 +2,7 @@ package flykv
 
 import (
 	"errors"
+	//"fmt"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
 	flyproto "github.com/sniperHW/flyfish/proto"
@@ -192,18 +193,19 @@ func (this *dbLoadTask) OnResult(err error, version int64, fields map[string]*fl
 	if !this.kv.store.isLeader() {
 		this.onError(errcode.New(errcode.Errcode_not_leader))
 	} else if err == nil || err == db.ERR_RecordNotExist {
+
+		if version <= 0 {
+			err = db.ERR_RecordNotExist
+		}
 		/*
 		 * 根据this.cmd产生正确的proposal
 		 */
 		proposal := &kvProposal{
-			ptype: proposal_snapshot,
-			kv:    this.kv,
-			cmds:  []cmdI{this.cmd},
-		}
-
-		if nil == err {
-			proposal.fields = fields
-			proposal.version = version
+			ptype:   proposal_snapshot,
+			kv:      this.kv,
+			cmds:    []cmdI{this.cmd},
+			version: version,
+			fields:  fields,
 		}
 
 		this.cmd.onLoadResult(err, proposal)

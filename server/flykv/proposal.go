@@ -296,7 +296,7 @@ func (this *kvProposal) apply() {
 			this.kv.updateTask.lastWriteBackVersion = this.version
 		}
 
-		if this.version == 0 {
+		if this.version <= 0 {
 			this.kv.state = kv_no_record
 			this.kv.fields = nil
 		} else {

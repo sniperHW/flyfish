@@ -52,7 +52,7 @@ func (this *cmdCompareAndSet) onLoadResult(err error, proposal *kvProposal) {
 					proposal.dbstate = db.DBState_update
 				}
 			} else {
-				proposal.version = incVersion(proposal.version)
+				proposal.version++
 				proposal.fields[this.old.GetName()] = this.new
 				proposal.dbstate = db.DBState_update
 			}
@@ -80,7 +80,7 @@ func (this *cmdCompareAndSet) do(proposal *kvProposal) {
 				proposal.ptype = proposal_none
 			}
 		} else {
-			proposal.version = incVersion(proposal.version)
+			proposal.version++ // = incVersion(proposal.version)
 			proposal.fields[this.old.GetName()] = this.new
 			proposal.dbstate = db.DBState_update
 		}

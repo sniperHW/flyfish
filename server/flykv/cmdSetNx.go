@@ -43,9 +43,8 @@ func (this *cmdSetNx) makeResponse(err errcode.Error, fields map[string]*flyprot
 }
 
 func (this *cmdSetNx) onLoadResult(err error, proposal *kvProposal) {
-	if err == db.ERR_RecordNotExist {
-		//记录不存在，为记录生成版本号
-		proposal.version = genVersion()
+	if err == db.ERR_RecordNotExist || proposal.version <= 0 {
+		proposal.version = abs(proposal.version) + 1
 		//对于不在set中field,使用defalutValue填充
 		this.kv.meta.FillDefaultValues(this.fields)
 		proposal.fields = this.fields
@@ -57,7 +56,7 @@ func (this *cmdSetNx) onLoadResult(err error, proposal *kvProposal) {
 
 func (this *cmdSetNx) do(proposal *kvProposal) {
 	if this.kv.state == kv_no_record {
-		proposal.version = genVersion()
+		proposal.version = abs(proposal.version) + 1
 		proposal.dbstate = db.DBState_insert
 		this.kv.meta.FillDefaultValues(this.fields)
 		proposal.fields = this.fields

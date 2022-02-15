@@ -5,7 +5,6 @@ import (
 	"github.com/sniperHW/flyfish/errcode"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"sync"
-	"time"
 )
 
 type kvState byte
@@ -57,20 +56,12 @@ type kv struct {
 	groupID       int
 }
 
-/*
- * 0表示key不存在，因此inc时要越过0
- */
-func incVersion(version int64) int64 {
-	version += 1
-	if 0 == version {
-		return 1
+func abs(v int64) int64 {
+	if v > 0 {
+		return v
 	} else {
-		return version
+		return 0 - v
 	}
-}
-
-func genVersion() int64 {
-	return time.Now().UnixNano()
 }
 
 func (this *cmdQueue) empty() bool {

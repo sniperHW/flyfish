@@ -77,6 +77,14 @@ func (this *updater) Start() {
 	})
 }
 
+func abs(v int64) int64 {
+	if v > 0 {
+		return v
+	} else {
+		return 0 - v
+	}
+}
+
 func (this *updater) exec(v interface{}) {
 
 	switch v.(type) {
@@ -142,7 +150,7 @@ func (this *updater) exec(v interface{}) {
 							if rows.Next() {
 								var version int64
 								rows.Scan(&version)
-								if version >= s.Version {
+								if abs(version) >= abs(s.Version) {
 									//数据库已经有最新的回写
 									return 0, errors.New("drop writeback")
 								} else {
