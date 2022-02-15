@@ -64,6 +64,7 @@ func (f *flygateMgr) getFlyGate() (ret []string) {
 }
 
 func (f *flygateMgr) onFlyGateTimeout(gateService string, t *time.Timer) {
+	GetSugar().Infof("%s HeartBeat timeout remove")
 	if v, ok := f.flygateMap[gateService]; ok && v.deadlineTimer == t {
 		delete(f.flygateMap, gateService)
 	}

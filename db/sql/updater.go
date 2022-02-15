@@ -85,6 +85,19 @@ func abs(v int64) int64 {
 	}
 }
 
+func getUpdateType(s db.DBState) string {
+	switch s {
+	case db.DBState_insert:
+		return "insert"
+	case db.DBState_update:
+		return "update"
+	case db.DBState_delete:
+		return "delete"
+	default:
+		return "unknown"
+	}
+}
+
 func (this *updater) exec(v interface{}) {
 
 	switch v.(type) {
@@ -152,7 +165,7 @@ func (this *updater) exec(v interface{}) {
 								var version int64
 								rows.Scan(&version)
 								if abs(version) >= abs(s.Version) {
-									GetSugar().Infof("a new writeback success,drop old writeback")
+									GetSugar().Infof("a newer writeback success,drop old writeback db.version:%d,task.version:%d", version, s.Version)
 									//数据库已经有最新的回写
 									return 0, errors.New("drop writeback")
 								} else {
@@ -174,7 +187,7 @@ func (this *updater) exec(v interface{}) {
 						task.SetLastWriteBackVersion(s.Version)
 						break
 					} else {
-						GetSugar().Infof("version mismatch last:%d version:%d", s.LastWriteBackVersion, s.Version)
+						GetSugar().Infof("%s version mismatch last:%d version:%d", getUpdateType(s.State), s.LastWriteBackVersion, s.Version)
 						//版本号不匹配，再次获取版本号
 						if version, err := loadVersion(); nil != err {
 							break

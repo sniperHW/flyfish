@@ -624,7 +624,7 @@ func TestFlygate(t *testing.T) {
 		fields["name"] = name
 		fields["phone"] = "123456789123456789123456789"
 		for {
-			r := c.Set("users1", name, fields).Exec()
+			r := c.Set("users10", name, fields).Exec()
 			if nil == r.ErrCode {
 				break
 			} else {

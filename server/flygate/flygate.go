@@ -247,6 +247,7 @@ type gate struct {
 	msgPerSecond    *movingAverage.MovingAverage //每秒客户端转发请求量的移动平均值
 	msgRecv         int32
 	heartBeatUdp    *flynet.Udp
+	heartbeatTimer  *time.Timer
 }
 
 func doQueryRouteInfo(pdAddr []*net.UDPAddr, req *sproto.QueryRouteInfo) *sproto.QueryRouteInfoResp {
@@ -503,7 +504,7 @@ func (g *gate) start() error {
 			}
 		}
 
-		time.AfterFunc(time.Second, heartbeat)
+		g.heartbeatTimer = time.AfterFunc(time.Second, heartbeat)
 	}
 
 	heartbeat()

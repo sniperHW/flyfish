@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/logger"
-	//"github.com/sniperHW/flyfish/pkg/buffer"
-	//"github.com/sniperHW/flyfish/proto"
 	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
@@ -72,9 +70,6 @@ func TestDbmeta1(t *testing.T) {
 
 	m.TableDefs = append(m.TableDefs, &t1)
 
-	//defStr, err := db.DbDefToJsonString(&m)
-	//assert.Nil(t, err)
-
 	prettyJSON, _ := json.MarshalIndent(&m, "", "    ")
 
 	fmt.Println(string(prettyJSON))
@@ -116,59 +111,4 @@ func TestDbmeta1(t *testing.T) {
 	fmt.Println(td.GetInsertPrefix())
 	fmt.Println(td.GetSelectPrefix())
 
-	//testSqlString(t, td)
-
 }
-
-/*
-func testSqlString(t *testing.T, meta db.TableMeta) {
-	us := &db.UpdateState{
-		Version: 1,
-		Key:     "hello",
-		Slot:    1,
-		Fields:  map[string]*proto.Field{},
-		Meta:    meta,
-	}
-
-	us.Fields["field1"] = proto.PackField("field1", 1)
-	us.Fields["field2"] = proto.PackField("field2", 1.2)
-
-	pg := &sqlstring{
-		binarytostr: binaryTopgSqlStr,
-	}
-
-	pg.buildInsertUpdateString = pg.insertUpdateStatementPgSql
-
-	b := buffer.New()
-	pg.insertStatement(b, us)
-
-	fmt.Println(string(b.Bytes()))
-
-	b = buffer.New()
-
-	pg.deleteStatement(b, us)
-	fmt.Println(string(b.Bytes()))
-
-	b = buffer.New()
-
-	pg.updateStatement(b, us)
-	fmt.Println(string(b.Bytes()))
-
-	b = buffer.New()
-
-	pg.insertUpdateStatement(b, us)
-	fmt.Println(string(b.Bytes()))
-
-	mysql := &sqlstring{
-		binarytostr: binaryTomySqlStr,
-	}
-
-	mysql.buildInsertUpdateString = mysql.insertUpdateStatementMySql
-
-	b = buffer.New()
-
-	mysql.insertUpdateStatement(b, us)
-	fmt.Println(string(b.Bytes()))
-
-}
-*/

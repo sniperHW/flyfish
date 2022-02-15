@@ -15,7 +15,7 @@ type sqlExec struct {
 
 func (this *sqlExec) prepareMarkDeletePgsql(b *buffer.Buffer, s *db.UpdateState) {
 	meta := s.Meta.(*TableMeta)
-	b.AppendString(fmt.Sprintf("update %s set __version__ = $3 where __key__ = $1 and __version__ = $2;", meta.real_tableName))
+	b.AppendString(fmt.Sprintf("update %s set __version__ = $1 where __key__ = $2 and __version__ = $3;", meta.real_tableName))
 	this.b = b
 }
 
@@ -27,9 +27,9 @@ func (this *sqlExec) prepareMarkDeleteMysql(b *buffer.Buffer, s *db.UpdateState)
 
 func (this *sqlExec) prepareMarkDelete(b *buffer.Buffer, s *db.UpdateState) {
 	this.args = this.args[:0]
+	this.args = append(this.args, s.Version)
 	this.args = append(this.args, s.Key)
 	this.args = append(this.args, s.LastWriteBackVersion)
-	this.args = append(this.args, s.Version)
 	if this.sqlType == "mysql" {
 		this.prepareMarkDeleteMysql(b, s)
 	} else {

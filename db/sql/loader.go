@@ -120,14 +120,12 @@ func (this *loader) exec() {
 
 	for _, v := range this.queryGroup {
 		buff := buffer.Get()
-		first := true
+		buff.AppendString(v.meta.GetSelectPrefix())
 		for kk, _ := range v.tasks {
-			if first {
-				first = false
-				buff.AppendString(v.meta.GetSelectPrefix()).AppendString("'").AppendString(kk).AppendString("'")
-			} else {
-				buff.AppendString(",'").AppendString(kk).AppendString("'")
+			if buff.Len() == 0 {
+				buff.AppendString(",")
 			}
+			buff.AppendString("'").AppendString(kk).AppendString("'")
 		}
 		buff.AppendString(");")
 
@@ -163,12 +161,12 @@ func (this *loader) exec() {
 				} else {
 
 					key := field_convter[0](filed_receiver[0]).(string)
-					tasks, ok := v.tasks[key]
-					if ok {
+					if tasks, ok := v.tasks[key]; ok {
 						//填充返回值
 						version := field_convter[1](filed_receiver[1]).(int64)
 						fields := map[string]*proto.Field{}
 
+						//版本号<=0表示记录不存在或标记删除，无需读取字段内容
 						if version > 0 {
 							for i := 0; i < len(field_names); i++ {
 								name := field_names[i]
@@ -179,8 +177,7 @@ func (this *loader) exec() {
 						delete(v.tasks, key)
 
 						for t := tasks.Front(); nil != t; t = tasks.Front() {
-							task := tasks.Remove(t).(db.DBLoadTask)
-							task.OnResult(nil, version, fields)
+							tasks.Remove(t).(db.DBLoadTask).OnResult(nil, version, fields)
 						}
 					}
 				}

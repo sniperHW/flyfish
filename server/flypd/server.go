@@ -122,6 +122,11 @@ func (p *pd) onGetFlyGateList(replyer replyer, m *snet.Message) {
 			MsgPerSecond: int32(v.msgPerSecond),
 		})
 	}
+
+	if len(resp.List) == 0 {
+		GetSugar().Infof("gate list is empty")
+	}
+
 	replyer.reply(snet.MakeMessage(m.Context, resp))
 }
 
