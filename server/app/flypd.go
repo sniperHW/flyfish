@@ -18,7 +18,7 @@ func main() {
 	cluster := flag.Int("cluster", 1, "cluster id")
 	pprof := flag.String("pprof", "localhost:9999", "pprof")
 	config := flag.String("config", "flypd_config.toml", "config")
-	raftcluster := flag.String("raftcluster", "1@http://localhost:8111@voter", "raftcluster")
+	raftcluster := flag.String("raftcluster", "1@1@http://localhost:18111@localhost:8111@voter", "raftcluster")
 	join := flag.Bool("join", false, "set true if the node is new join node")
 
 	go func() {

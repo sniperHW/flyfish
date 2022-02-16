@@ -39,7 +39,6 @@ LinearizableRead        = true
 RaftUrl                 = "http://127.0.0.1:12377"
 ServiceHost             = "127.0.0.1"
 ServicePort             = 8110
-RaftCluster             = "1@http://127.0.0.1:12377@voter"
 Stores                  = [1,2,3,4,5,6]
 MetaPath                = "test/meta.json"
 

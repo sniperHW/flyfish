@@ -144,7 +144,7 @@ func TestSendTimeout(t *testing.T) {
 		<-die
 		mu.Lock()
 		holdSession.Close(nil, 0)
-		mu.UnLock()
+		mu.Unlock()
 
 		listener.Close()
 	}

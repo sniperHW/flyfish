@@ -26,3 +26,11 @@ test_dbconf.toml
 flyfish.code-workspace
 raftLog/
 testRaftLog/
+server/app/test/startgate.sh
+server/app/test/startkv.sh
+server/app/test/startpd.sh
+test.go
+
+server/app/test/flygate_config.toml
+server/app/test/flykv_config.toml
+server/app/test/flypd_config.toml
