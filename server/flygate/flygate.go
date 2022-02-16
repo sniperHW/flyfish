@@ -511,15 +511,7 @@ func (g *gate) start() error {
 			case <-ticker.C:
 			}
 		}
-<<<<<<< HEAD
-
-		util.OnceTimer(time.Second, heartbeat)
-	}
-
-	heartbeat()
-=======
 	}()
->>>>>>> ccfb6f8a782d68f240b330b2a3ae9c02ba5403b6
 
 	go g.mainLoop()
 
