@@ -516,9 +516,9 @@ func TestSingleNode(t *testing.T) {
 
 		becomeLeaderCh := make(chan struct{})
 
-		node.store.startOK = func() {
+		node.setStartOK(func() {
 			startOkCh <- struct{}{}
-		}
+		})
 
 		node.store.becomeLeader = func() {
 			becomeLeaderCh <- struct{}{}
