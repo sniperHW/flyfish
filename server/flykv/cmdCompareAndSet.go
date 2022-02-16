@@ -41,7 +41,7 @@ func (this *cmdCompareAndSet) onLoadResult(err error, proposal *kvProposal) {
 			oldV := proposal.fields[this.old.GetName()]
 			hasChange := false
 			if nil == oldV {
-				oldV = flyproto.PackField(this.old.GetName(), this.kv.meta.GetDefaultValue(this.old.GetName()))
+				oldV = flyproto.PackField(this.old.GetName(), this.meta.GetDefaultValue(this.old.GetName()))
 				proposal.fields[this.old.GetName()] = oldV
 				hasChange = true
 			}
@@ -68,7 +68,7 @@ func (this *cmdCompareAndSet) do(proposal *kvProposal) {
 		oldV := this.kv.fields[this.old.GetName()]
 		hasChange := false
 		if nil == oldV {
-			oldV = flyproto.PackField(this.old.GetName(), this.kv.meta.GetDefaultValue(this.old.GetName()))
+			oldV = flyproto.PackField(this.old.GetName(), this.meta.GetDefaultValue(this.old.GetName()))
 			hasChange = true
 		}
 		if !this.old.IsEqual(oldV) {

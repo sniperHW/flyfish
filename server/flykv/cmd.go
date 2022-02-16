@@ -1,6 +1,7 @@
 package flykv
 
 import (
+	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/net"
 	flyproto "github.com/sniperHW/flyfish/proto"
@@ -35,6 +36,7 @@ type cmdBase struct {
 	fnMakeResponse  MakeResponse
 	ppnext          cmdI
 	kv              *kv
+	meta            db.TableMeta
 }
 
 func (this *cmdBase) init(kv *kv, cmd flyproto.CmdType, peer *net.Socket, seqno int64, version *int64, processDeadline time.Time, respDeadline time.Time, wait4ReplyCount *int32, makeResponse MakeResponse) {
@@ -48,6 +50,7 @@ func (this *cmdBase) init(kv *kv, cmd flyproto.CmdType, peer *net.Socket, seqno 
 	this.wait4ReplyCount = wait4ReplyCount
 	this.fnMakeResponse = makeResponse
 	this.kv = kv
+	this.meta = kv.meta
 }
 
 func (this *cmdBase) getNext() cmdI {

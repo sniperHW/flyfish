@@ -20,17 +20,18 @@ const (
 
 type dbUpdateTask struct {
 	sync.Mutex
-	doing                bool
-	updateFields         map[string]*flyproto.Field
-	version              int64
-	dbstate              db.DBState
-	kv                   *kv
-	lastWriteBackVersion int64
+	doing bool
+	kv    *kv
+	state db.UpdateState
 }
 
 type dbLoadTask struct {
-	kv  *kv
-	cmd cmdI
+	kv     *kv
+	cmd    cmdI
+	meta   db.TableMeta
+	table  string
+	uniKey string //"table:key"组成的唯一全局唯一键
+	key    string
 }
 
 type cmdQueue struct {
@@ -137,8 +138,12 @@ func (this *kv) processCmd(cmd cmdI) {
 		if this.state == kv_new {
 			//request load kv from database
 			l := &dbLoadTask{
-				cmd: cmd,
-				kv:  this,
+				cmd:    cmd,
+				kv:     this,
+				meta:   this.meta,
+				uniKey: this.uniKey,
+				table:  this.table,
+				key:    this.key,
 			}
 			if !this.store.db.issueLoad(l) {
 				cmd.reply(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"), nil, 0)

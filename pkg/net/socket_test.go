@@ -1,6 +1,6 @@
 package net
 
-//go test -covermode=count -v -coverprofile=coverage.out -run=.
+//go test -race -covermode=atomic -v -coverprofile=coverage.out -run=.
 //go tool cover -html=coverage.out
 import (
 	"errors"

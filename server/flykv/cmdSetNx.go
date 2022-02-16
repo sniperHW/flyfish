@@ -28,7 +28,7 @@ func (this *cmdSetNx) makeResponse(err errcode.Error, fields map[string]*flyprot
 				/*
 				 * 表格新增加了列，但未设置过，使用默认值
 				 */
-				vv := this.kv.meta.GetDefaultValue(field.GetName())
+				vv := this.meta.GetDefaultValue(field.GetName())
 				if nil != vv {
 					pbdata.Fields = append(pbdata.Fields, flyproto.PackField(field.GetName(), vv))
 				}
@@ -46,7 +46,7 @@ func (this *cmdSetNx) onLoadResult(err error, proposal *kvProposal) {
 	if err == db.ERR_RecordNotExist || proposal.version <= 0 {
 		proposal.version = abs(proposal.version) + 1
 		//对于不在set中field,使用defalutValue填充
-		this.kv.meta.FillDefaultValues(this.fields)
+		this.meta.FillDefaultValues(this.fields)
 		proposal.fields = this.fields
 		proposal.dbstate = db.DBState_insert
 	} else if nil == err {
@@ -58,7 +58,7 @@ func (this *cmdSetNx) do(proposal *kvProposal) {
 	if this.kv.state == kv_no_record {
 		proposal.version = abs(proposal.version) + 1
 		proposal.dbstate = db.DBState_insert
-		this.kv.meta.FillDefaultValues(this.fields)
+		this.meta.FillDefaultValues(this.fields)
 		proposal.fields = this.fields
 	} else {
 		proposal.ptype = proposal_none

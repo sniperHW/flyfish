@@ -1,6 +1,6 @@
 package flykv
 
-//go test -covermode=count -v -coverprofile=../coverage.out -run=.
+//go test -race -covermode=atomic -v -coverprofile=../coverage.out -run=.
 //go tool cover -html=../coverage.out
 
 import (
@@ -10,14 +10,10 @@ import (
 	"github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/logger"
-	fnet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	"github.com/sniperHW/flyfish/server/mock"
-	snet "github.com/sniperHW/flyfish/server/net"
-	sproto "github.com/sniperHW/flyfish/server/proto"
 	sslot "github.com/sniperHW/flyfish/server/slot"
 	"github.com/stretchr/testify/assert"
-	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -665,7 +661,7 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 
 	client.InitLogger(GetLogger())
 
-	node := start1Node(newMockDBBackEnd())
+	node := start1Node(newSqlDBBackEnd())
 
 	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
 
@@ -751,7 +747,7 @@ func Test1Node1StoreSnapshot2(t *testing.T) {
 
 	client.InitLogger(GetLogger())
 
-	node := start1Node(newMockDBBackEnd())
+	node := start1Node(newSqlDBBackEnd())
 
 	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
 
@@ -850,174 +846,4 @@ func TestKick(t *testing.T) {
 func TestMakeUnikeyPlacement(t *testing.T) {
 	fn := sslot.MakeUnikeyPlacement([]int{1, 2, 3, 4, 5})
 	fmt.Println(fn("users1:huangwei:247100"), sslot.Unikey2Slot("users1:huangwei:247100"))
-}
-
-/*
-func TestUpdateMeta(t *testing.T) {
-	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
-
-	//先删除所有kv文件
-	os.RemoveAll("./testRaftLog")
-
-	client.InitLogger(GetLogger())
-
-	node := start1Node(newMockDBBackEnd())
-
-	def, _ := db.CreateDbDefFromCsv([]string{"users1@name:string:,age:int:,phone:string:"})
-
-	defJson, _ := db.DbDefToJsonString(def)
-
-	update := &sproto.NotifyUpdateMeta{
-		Store:   1,
-		Version: 2,
-		Meta:    defJson,
-	}
-
-	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
-	assert.Nil(t, err)
-
-	addr, err := net.ResolveUDPAddr("udp", "127.0.0.1:10018")
-
-	conn.SendTo(addr, snet.MakeMessage(0, update))
-	recvbuff := make([]byte, 256)
-	_, r, err := conn.ReadFrom(recvbuff)
-
-	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.StoreUpdateMetaOk).Store, int32(1))
-
-	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.StoreUpdateMetaOk).Version, int64(2))
-
-	//again
-
-	conn.SendTo(addr, snet.MakeMessage(0, update))
-
-	_, r, err = conn.ReadFrom(recvbuff)
-
-	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.StoreUpdateMetaOk).Store, int32(1))
-
-	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.StoreUpdateMetaOk).Version, int64(2))
-
-	conn.Close()
-
-	node.Stop()
-
-}*/
-
-func TestSlotTransferIn(t *testing.T) {
-	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
-
-	//先删除所有kv文件
-	os.RemoveAll("./testRaftLog")
-
-	client.InitLogger(GetLogger())
-
-	node := start1Node(newMockDBBackEnd())
-
-	store1 := node.stores[1]
-	slots := store1.slots.GetOpenBits()
-	store1.slots.Clear(slots[0])
-
-	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
-	assert.Nil(t, err)
-
-	addr, err := net.ResolveUDPAddr("udp", "127.0.0.1:10018")
-
-	conn.SendTo(addr, snet.MakeMessage(0, &sproto.NotifySlotTransIn{
-		Store: int32(1),
-		Slot:  int32(slots[0]),
-	}))
-
-	recvbuff := make([]byte, 256)
-	_, r, err := conn.ReadFrom(recvbuff)
-
-	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.SlotTransInOk).Slot, int32(slots[0]))
-
-	//again
-
-	conn.SendTo(addr, snet.MakeMessage(0, &sproto.NotifySlotTransIn{
-		Store: int32(1),
-		Slot:  int32(slots[0]),
-	}))
-
-	_, r, err = conn.ReadFrom(recvbuff)
-
-	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.SlotTransInOk).Slot, int32(slots[0]))
-
-	conn.Close()
-
-	node.Stop()
-
-}
-
-func TestSlotTransferOut(t *testing.T) {
-	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
-
-	//先删除所有kv文件
-	os.RemoveAll("./testRaftLog")
-
-	client.InitLogger(GetLogger())
-
-	node := start1Node(newMockDBBackEnd())
-
-	store1 := node.stores[1]
-	slots := store1.slots.GetOpenBits()
-	outSlot := slots[0]
-
-	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
-
-	for j := 0; j < 10; j++ {
-		for i := 0; i < 10; i++ {
-			fields := map[string]interface{}{}
-			fields["age"] = 12
-			fields["name"] = "sniperHW"
-			c.Set("users1", fmt.Sprintf("sniperHW:%d", i), fields).Exec()
-		}
-	}
-
-	fmt.Println("NotifySlotTransOut")
-
-	for {
-		conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
-		assert.Nil(t, err)
-
-		addr, err := net.ResolveUDPAddr("udp", "127.0.0.1:10018")
-
-		conn.SendTo(addr, snet.MakeMessage(0, &sproto.NotifySlotTransOut{
-			Store: int32(1),
-			Slot:  int32(outSlot),
-		}))
-
-		respCh := make(chan *snet.Message)
-		var ret *snet.Message
-
-		go func() {
-			recvbuff := make([]byte, 256)
-			_, r, err := conn.ReadFrom(recvbuff)
-			if nil == err {
-				select {
-				case respCh <- r.(*snet.Message):
-				default:
-				}
-			}
-		}()
-
-		ticker := time.NewTicker(3 * time.Second)
-
-		select {
-		case ret = <-respCh:
-		case <-ticker.C:
-		}
-
-		ticker.Stop()
-
-		conn.Close()
-
-		if nil != ret {
-			assert.Equal(t, ret.Msg.(*sproto.SlotTransOutOk).Slot, int32(outSlot))
-			break
-		}
-
-	}
-
-	node.Stop()
-
 }

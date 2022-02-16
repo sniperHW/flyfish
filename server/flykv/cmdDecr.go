@@ -38,14 +38,14 @@ func (this *cmdDecr) onLoadResult(err error, proposal *kvProposal) {
 			proposal.version = abs(proposal.version) + 1
 			//对于不在set中field,使用defalutValue填充
 			proposal.fields = map[string]*flyproto.Field{}
-			this.kv.meta.FillDefaultValues(proposal.fields)
+			this.meta.FillDefaultValues(proposal.fields)
 			proposal.dbstate = db.DBState_insert
 		}
 
 		oldV := proposal.fields[this.v.GetName()]
 
 		if nil == oldV {
-			oldV = flyproto.PackField(this.v.GetName(), this.kv.meta.GetDefaultValue(this.v.GetName()))
+			oldV = flyproto.PackField(this.v.GetName(), this.meta.GetDefaultValue(this.v.GetName()))
 		}
 
 		newV := flyproto.PackField(oldV.GetName(), oldV.GetInt()-this.v.GetInt())
@@ -63,13 +63,13 @@ func (this *cmdDecr) do(proposal *kvProposal) {
 		//对于不在set中field,使用defalutValue填充
 		proposal.fields = map[string]*flyproto.Field{}
 
-		this.kv.meta.FillDefaultValues(proposal.fields)
+		this.meta.FillDefaultValues(proposal.fields)
 		proposal.dbstate = db.DBState_insert
 
 		oldV := proposal.fields[this.v.GetName()]
 
 		if nil == oldV {
-			oldV = flyproto.PackField(this.v.GetName(), this.kv.meta.GetDefaultValue(this.v.GetName()))
+			oldV = flyproto.PackField(this.v.GetName(), this.meta.GetDefaultValue(this.v.GetName()))
 		}
 
 		newV := flyproto.PackField(oldV.GetName(), oldV.GetInt()-this.v.GetInt())

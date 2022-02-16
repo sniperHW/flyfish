@@ -183,15 +183,17 @@ func (this *updater) exec(v interface{}) {
 				rowsAffected, err := this.sqlExec.exec(this.dbc)
 				if nil == err {
 					if rowsAffected > 0 {
+						GetSugar().Infof("%s ok last:%d version:%d unikey:%s:%s", getUpdateType(s.State), s.LastWriteBackVersion, s.Version, s.Meta.TableName(), s.Key)
 						//回写成功
 						task.SetLastWriteBackVersion(s.Version)
 						break
 					} else {
-						GetSugar().Infof("%s version mismatch last:%d version:%d", getUpdateType(s.State), s.LastWriteBackVersion, s.Version)
+						GetSugar().Infof("%s version mismatch last:%d version:%d unikey:%s:%s", getUpdateType(s.State), s.LastWriteBackVersion, s.Version, s.Meta.TableName(), s.Key)
 						//版本号不匹配，再次获取版本号
 						if version, err := loadVersion(); nil != err {
 							break
 						} else {
+							GetSugar().Infof("%s version mismatch last:%d version:%d,dbversion:%d", getUpdateType(s.State), s.LastWriteBackVersion, s.Version, version)
 							s.LastWriteBackVersion = version
 							needRebuildSql = true
 						}

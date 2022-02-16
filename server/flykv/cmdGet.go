@@ -31,7 +31,7 @@ func (this *cmdGet) makeResponse(err errcode.Error, fields map[string]*flyproto.
 						/*
 						 * 表格新增加了列，但未设置过，使用默认值
 						 */
-						vv := this.kv.meta.GetDefaultValue(name)
+						vv := this.meta.GetDefaultValue(name)
 						if nil != vv {
 							pbdata.Fields = append(pbdata.Fields, flyproto.PackField(name, vv))
 						}

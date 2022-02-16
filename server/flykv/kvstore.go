@@ -90,31 +90,21 @@ type kvstore struct {
 	db                   dbI
 	wait4ReplyCount      int32
 	stoped               int32
-	ready                bool
+	ready                int32
 	kvnode               *kvnode
 	shard                int
 	meta                 db.DBMeta
 	dbWriteBackCount     int32
 	SoftLimitReachedTime int64
 	unixNow              int64
-	//leaseTimer           *time.Timer
-	//gotLease             int64
 }
-
-//func (s *kvstore) hasLease() bool {
-//	if !s.isLeader() {
-//		return false
-//	} else {
-//		return atomic.LoadInt64(&s.gotLease) == 1
-//	}
-//}
 
 func (s *kvstore) isLeader() bool {
 	return atomic.LoadUint64(&s.leader) == s.rn.ID()
 }
 
 func (s *kvstore) isReady() bool {
-	return s.isLeader() && s.ready
+	return s.isLeader() && atomic.LoadInt32(&s.ready) == 1
 }
 
 func (s *kvstore) loadSnapshot() (*raftpb.Snapshot, error) {
@@ -180,9 +170,14 @@ func (s *kvstore) newkv(slot int, groupID int, unikey string, key string, table 
 	}
 
 	k.lru.keyvalue = k
+
 	k.updateTask = dbUpdateTask{
-		kv:           k,
-		updateFields: map[string]*flyproto.Field{},
+		kv: k,
+		state: db.UpdateState{
+			Key:    key,
+			Slot:   slot,
+			Fields: map[string]*flyproto.Field{},
+		},
 	}
 
 	s.kv[groupID][unikey] = k
@@ -328,7 +323,7 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 
 		if !s.isLeader() {
 			return errcode.New(errcode.Errcode_not_leader)
-		} else if !s.ready || s.meta == nil {
+		} else if atomic.LoadInt32(&s.ready) == 0 || s.meta == nil {
 			return errcode.New(errcode.Errcode_retry, "kvstore not start ok,please retry later")
 		} else {
 			groupID := sslot.StringHash(req.msg.UniKey) % len(s.kv)
@@ -553,7 +548,7 @@ func (s *kvstore) issueFullDbWriteBack() {
 }
 
 func (s *kvstore) applyNop() {
-	s.ready = true
+	atomic.StoreInt32(&s.ready, 1)
 	s.issueFullDbWriteBack()
 }
 
@@ -563,7 +558,7 @@ func (s *kvstore) becomeLeader() {
 }
 
 func (s *kvstore) onLeaderDownToFollower() {
-	s.ready = false
+	atomic.StoreInt32(&s.ready, 0)
 }
 
 //将nodeID作为learner加入当前store的raft配置

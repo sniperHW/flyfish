@@ -30,7 +30,7 @@ func (this *cmdSet) onLoadResult(err error, proposal *kvProposal) {
 		if err == db.ERR_RecordNotExist || proposal.version <= 0 {
 			proposal.version = abs(proposal.version) + 1
 			//对于不在set中field,使用defalutValue填充
-			this.kv.meta.FillDefaultValues(this.fields)
+			this.meta.FillDefaultValues(this.fields)
 			proposal.fields = this.fields
 			proposal.dbstate = db.DBState_insert
 		} else {
@@ -47,7 +47,7 @@ func (this *cmdSet) do(proposal *kvProposal) {
 	if this.kv.state == kv_no_record {
 		proposal.version = abs(proposal.version) + 1
 		proposal.dbstate = db.DBState_insert
-		this.kv.meta.FillDefaultValues(this.fields)
+		this.meta.FillDefaultValues(this.fields)
 		proposal.fields = this.fields
 	} else {
 		proposal.ptype = proposal_update

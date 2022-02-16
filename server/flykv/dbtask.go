@@ -9,8 +9,10 @@ import (
 	"sync/atomic"
 )
 
-func (u *dbUpdateTask) SetLastWriteBackVersion(version int64) {
-	u.lastWriteBackVersion = version
+func (this *dbUpdateTask) SetLastWriteBackVersion(version int64) {
+	this.Lock()
+	defer this.Unlock()
+	this.state.LastWriteBackVersion = version
 }
 
 func (this *dbUpdateTask) GetTable() string {
@@ -37,31 +39,25 @@ func (this *dbUpdateTask) ReleaseLock() {
 func (this *dbUpdateTask) Dirty() bool {
 	this.Lock()
 	defer this.Unlock()
-	return this.dbstate != db.DBState_none
+	return this.state.State != db.DBState_none
 }
 
 func (this *dbUpdateTask) ClearUpdateStateAndReleaseLock() {
 	GetSugar().Infof("ClearUpdateStateAndReleaseLock")
 	this.Lock()
 	defer this.Unlock()
-	this.updateFields = map[string]*flyproto.Field{}
 	this.doing = false
-	this.dbstate = db.DBState_none
+	this.state.Fields = map[string]*flyproto.Field{}
+	this.state.State = db.DBState_none
 	atomic.AddInt32(&this.kv.store.dbWriteBackCount, -1)
 }
 
 func (this *dbUpdateTask) GetUpdateAndClearUpdateState() (updateState db.UpdateState) {
 	this.Lock()
 	defer this.Unlock()
-	updateState.Version = this.version
-	updateState.Fields = this.updateFields
-	updateState.State = this.dbstate
-	updateState.Meta = this.kv.meta
-	updateState.Key = this.kv.key
-	updateState.Slot = this.kv.slot
-	updateState.LastWriteBackVersion = this.lastWriteBackVersion
-	this.updateFields = map[string]*flyproto.Field{}
-	this.dbstate = db.DBState_none
+	updateState = this.state
+	this.state.Fields = map[string]*flyproto.Field{}
+	this.state.State = db.DBState_none
 	return
 }
 
@@ -77,26 +73,28 @@ func (this *dbUpdateTask) issueFullDbWriteBack() error {
 		return errors.New("is doing")
 	}
 
+	this.state.Fields = map[string]*flyproto.Field{}
+
 	switch this.kv.state {
 	case kv_ok:
-		this.dbstate = db.DBState_insert
+		this.state.State = db.DBState_insert
 	case kv_no_record:
-		this.dbstate = db.DBState_delete
-		this.updateFields = map[string]*flyproto.Field{}
+		this.state.State = db.DBState_delete
 	case kv_new, kv_loading:
 		return nil
 	case kv_invaild:
 		return errors.New("kv in invaild state")
 	}
 
-	this.version = this.kv.version
+	this.state.Version = this.kv.version
 
-	if this.dbstate == db.DBState_insert {
+	if this.state.State == db.DBState_insert {
 		for k, v := range this.kv.fields {
-			this.updateFields[k] = v
+			this.state.Fields[k] = v
 		}
 	}
 
+	this.state.Meta = this.kv.meta
 	this.doing = true
 	atomic.AddInt32(&this.kv.store.dbWriteBackCount, 1)
 	this.kv.store.db.issueUpdate(this) //这里不会出错，db要到最后才会stop
@@ -113,31 +111,31 @@ func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields 
 	this.Lock()
 	defer this.Unlock()
 
-	GetSugar().Debugf("updateState %s %d %d", this.kv.uniKey, dbstate, this.dbstate)
+	GetSugar().Debugf("updateState %s %d %d version:%d", this.kv.uniKey, dbstate, this.state.State, version)
 
-	switch this.dbstate {
+	switch this.state.State {
 	case db.DBState_none:
-		this.dbstate = dbstate
+		this.state.State = dbstate
 	case db.DBState_insert:
 		if dbstate == db.DBState_update {
-			this.dbstate = db.DBState_insert
+			this.state.State = db.DBState_insert
 		} else if dbstate == db.DBState_delete {
-			this.dbstate = db.DBState_delete
-			this.updateFields = map[string]*flyproto.Field{}
+			this.state.State = db.DBState_delete
+			this.state.Fields = map[string]*flyproto.Field{}
 		} else {
 			return errors.New("updateState error 2")
 		}
 	case db.DBState_delete:
 		if dbstate == db.DBState_insert {
-			this.dbstate = db.DBState_insert
+			this.state.State = db.DBState_insert
 		} else {
 			return errors.New("updateState error 3")
 		}
 	case db.DBState_update:
 		if dbstate == db.DBState_update || dbstate == db.DBState_delete {
-			this.dbstate = dbstate
+			this.state.State = dbstate
 			if dbstate == db.DBState_delete {
-				this.updateFields = map[string]*flyproto.Field{}
+				this.state.Fields = map[string]*flyproto.Field{}
 			}
 		} else {
 			return errors.New("updateState error 4")
@@ -146,10 +144,11 @@ func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields 
 		return errors.New("updateState error 5")
 	}
 
-	this.version = version
+	this.state.Version = version
+	this.state.Meta = this.kv.meta
 
 	for k, v := range fields {
-		this.updateFields[k] = v
+		this.state.Fields[k] = v
 	}
 
 	if !this.doing {
@@ -162,19 +161,19 @@ func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields 
 }
 
 func (this *dbLoadTask) GetTable() string {
-	return this.kv.table
+	return this.table
 }
 
 func (this *dbLoadTask) GetKey() string {
-	return this.kv.key
+	return this.key
 }
 
 func (this *dbLoadTask) GetUniKey() string {
-	return this.kv.uniKey
+	return this.uniKey
 }
 
 func (this *dbLoadTask) GetTableMeta() db.TableMeta {
-	return this.kv.meta
+	return this.meta
 }
 
 func (this *dbLoadTask) onError(err errcode.Error) {
@@ -189,7 +188,6 @@ func (this *dbLoadTask) onError(err errcode.Error) {
 }
 
 func (this *dbLoadTask) OnResult(err error, version int64, fields map[string]*flyproto.Field) {
-
 	if !this.kv.store.isLeader() {
 		this.onError(errcode.New(errcode.Errcode_not_leader))
 	} else if err == nil || err == db.ERR_RecordNotExist {
@@ -208,7 +206,9 @@ func (this *dbLoadTask) OnResult(err error, version int64, fields map[string]*fl
 			fields:  fields,
 		}
 
-		this.kv.updateTask.lastWriteBackVersion = version
+		//GetSugar().Infof("load %s version:%d err:%v", this.kv.uniKey, version, err)
+
+		this.kv.updateTask.SetLastWriteBackVersion(version)
 
 		this.cmd.onLoadResult(err, proposal)
 
