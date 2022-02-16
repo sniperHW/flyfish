@@ -1,4 +1,4 @@
-//go test -coverpkg=github.com/sniperHW/flyfish/server/flygate,github.com/sniperHW/flyfish/server/flypd,github.com/sniperHW/flyfish/server/flykv -covermode=count -v -coverprofile=coverage.out -run=.
+//go test -race -coverpkg=github.com/sniperHW/flyfish/server/flygate,github.com/sniperHW/flyfish/server/flypd,github.com/sniperHW/flyfish/server/flykv -covermode=atomic -v -coverprofile=coverage.out -run=.
 //go tool cover -html=coverage.out
 
 package integrationTest
@@ -624,7 +624,7 @@ func TestFlygate(t *testing.T) {
 		fields["name"] = name
 		fields["phone"] = "123456789123456789123456789"
 		for {
-			r := c.Set("users10", name, fields).Exec()
+			r := c.Set("users1", name, fields).Exec()
 			if nil == r.ErrCode {
 				break
 			} else {
