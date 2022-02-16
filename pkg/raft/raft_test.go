@@ -788,18 +788,15 @@ func TestDownToFollower(t *testing.T) {
 
 	leader := getLeader()
 
-	go func() {
-		time.Sleep(time.Millisecond * 10)
-		if node1 != leader {
-			node1.stop()
-			node1 = nil
-		}
+	if node1 != leader {
+		node1.stop()
+		node1 = nil
+	}
 
-		if node2 != leader {
-			node2.stop()
-			node2 = nil
-		}
-	}()
+	if node2 != leader {
+		node2.stop()
+		node2 = nil
+	}
 
 	ret := leader.store.SetDirectly("sniperHW", "ok")
 
