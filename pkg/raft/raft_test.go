@@ -172,6 +172,12 @@ func (s *kvstore) setStartOK(fn func()) {
 	s.mu.Unlock()
 }
 
+func (s *kvstore) setBecomeLeader(fn func()) {
+	s.mu.Lock()
+	s.becomeLeader = fn
+	s.mu.Unlock()
+}
+
 func (s *kvstore) Get(key string) (string, error) {
 	o := &operationGet{
 		key: key,
@@ -433,8 +439,13 @@ func (s *kvstore) serve() {
 				}
 			case LeaderChange:
 				if v.(LeaderChange).Leader == s.rn.ID() {
-					if nil != s.becomeLeader {
-						s.becomeLeader()
+
+					var becomeLeader func()
+					s.mu.Lock()
+					becomeLeader = s.becomeLeader
+					s.mu.Unlock()
+					if nil != becomeLeader {
+						becomeLeader()
 					}
 				}
 			case RaftStopOK:
@@ -516,13 +527,13 @@ func TestSingleNode(t *testing.T) {
 
 		becomeLeaderCh := make(chan struct{})
 
-		node.setStartOK(func() {
+		node.store.setStartOK(func() {
 			startOkCh <- struct{}{}
 		})
 
-		node.store.becomeLeader = func() {
+		node.store.setBecomeLeader(func() {
 			becomeLeaderCh <- struct{}{}
-		}
+		})
 
 		<-startOkCh
 
@@ -555,13 +566,13 @@ func TestSingleNode(t *testing.T) {
 
 		becomeLeaderCh := make(chan struct{})
 
-		node.store.startOK = func() {
+		node.store.setStartOK(func() {
 			startOkCh <- struct{}{}
-		}
+		})
 
-		node.store.becomeLeader = func() {
+		node.store.setBecomeLeader(func() {
 			becomeLeaderCh <- struct{}{}
-		}
+		})
 
 		<-startOkCh
 
@@ -589,13 +600,13 @@ func TestSingleNode(t *testing.T) {
 
 		becomeLeaderCh := make(chan struct{})
 
-		node.store.startOK = func() {
+		node.store.setStartOK(func() {
 			startOkCh <- struct{}{}
-		}
+		})
 
-		node.store.becomeLeader = func() {
+		node.store.setBecomeLeader(func() {
 			becomeLeaderCh <- struct{}{}
-		}
+		})
 
 		<-startOkCh
 
@@ -626,25 +637,25 @@ func TestCluster(t *testing.T) {
 
 	becomeLeaderCh1 := make(chan *kvnode, 1)
 
-	node1.store.becomeLeader = func() {
+	node1.store.setBecomeLeader(func() {
 		becomeLeaderCh1 <- node1
-	}
+	})
 
 	node2 := newKvNode(2, 1, false, cluster)
 
 	becomeLeaderCh2 := make(chan *kvnode, 1)
 
-	node2.store.becomeLeader = func() {
+	node2.store.setBecomeLeader(func() {
 		becomeLeaderCh2 <- node2
-	}
+	})
 
 	node3 := newKvNode(3, 1, false, cluster)
 
 	becomeLeaderCh3 := make(chan *kvnode, 1)
 
-	node3.store.becomeLeader = func() {
+	node3.store.setBecomeLeader(func() {
 		becomeLeaderCh3 <- node3
-	}
+	})
 
 	getLeader := func() *kvnode {
 		select {
@@ -689,12 +700,12 @@ func TestCluster(t *testing.T) {
 
 	startOkCh4 := make(chan struct{}, 1)
 
-	node4.store.startOK = func() {
+	node4.store.setStartOK(func() {
 		select {
 		case startOkCh4 <- struct{}{}:
 		default:
 		}
-	}
+	})
 
 	<-startOkCh4
 
@@ -752,17 +763,17 @@ func TestDownToFollower(t *testing.T) {
 
 	becomeLeaderCh1 := make(chan *kvnode, 1)
 
-	node1.store.becomeLeader = func() {
+	node1.store.setBecomeLeader(func() {
 		becomeLeaderCh1 <- node1
-	}
+	})
 
 	node2 := newKvNode(2, 1, false, cluster)
 
 	becomeLeaderCh2 := make(chan *kvnode, 1)
 
-	node2.store.becomeLeader = func() {
+	node2.store.setBecomeLeader(func() {
 		becomeLeaderCh2 <- node2
-	}
+	})
 
 	getLeader := func() *kvnode {
 		select {
@@ -821,17 +832,17 @@ func TestOneNodeDownAndRestart(t *testing.T) {
 
 	becomeLeaderCh1 := make(chan *kvnode, 1)
 
-	node1.store.becomeLeader = func() {
+	node1.store.setBecomeLeader(func() {
 		becomeLeaderCh1 <- node1
-	}
+	})
 
 	node2 := newKvNode(2, 1, false, cluster)
 
 	becomeLeaderCh2 := make(chan *kvnode, 1)
 
-	node2.store.becomeLeader = func() {
+	node2.store.setBecomeLeader(func() {
 		becomeLeaderCh2 <- node2
-	}
+	})
 
 	getLeader := func() *kvnode {
 		select {
@@ -906,17 +917,17 @@ func TestTransferLeader(t *testing.T) {
 
 	becomeLeaderCh1 := make(chan *kvnode, 1)
 
-	node1.store.becomeLeader = func() {
+	node1.store.setBecomeLeader(func() {
 		becomeLeaderCh1 <- node1
-	}
+	})
 
 	node2 := newKvNode(2, 1, false, cluster)
 
 	becomeLeaderCh2 := make(chan *kvnode, 1)
 
-	node2.store.becomeLeader = func() {
+	node2.store.setBecomeLeader(func() {
 		becomeLeaderCh2 <- node2
-	}
+	})
 
 	getLeader := func() *kvnode {
 		select {
@@ -968,17 +979,17 @@ func TestFollower(t *testing.T) {
 
 	becomeLeaderCh1 := make(chan *kvnode, 1)
 
-	node1.store.becomeLeader = func() {
+	node1.store.setBecomeLeader(func() {
 		becomeLeaderCh1 <- node1
-	}
+	})
 
 	node2 := newKvNode(2, 1, false, cluster)
 
 	becomeLeaderCh2 := make(chan *kvnode, 1)
 
-	node2.store.becomeLeader = func() {
+	node2.store.setBecomeLeader(func() {
 		becomeLeaderCh2 <- node2
-	}
+	})
 
 	getLeader := func() *kvnode {
 		select {
