@@ -177,7 +177,6 @@ type pd struct {
 	flygateMgr      flygateMgr
 	config          *Config
 	service         string
-	onBalanceFinish func()
 	pState          persistenceState
 	storeTask       map[uint64]*storeTask
 	markClearSet    map[int]*set
@@ -414,14 +413,10 @@ func (p *pd) slotBalance() {
 		}
 	}
 
-	if len(p.pState.SlotTransfer) == 0 && nil != p.onBalanceFinish {
-		p.onBalanceFinish()
-	}
-
 }
 
 func (p *pd) isLeader() bool {
-	return p.leader == p.rn.ID()
+	return atomic.LoadUint64(&p.leader) == p.rn.ID()
 }
 
 func (p *pd) issueProposal(proposal raft.Proposal) {
@@ -649,16 +644,16 @@ func (p *pd) serve() {
 				}
 			case raft.LeaderChange:
 				oldLeader := p.leader
-				p.leader = v.(raft.LeaderChange).Leader
+				atomic.StoreUint64(&p.leader, v.(raft.LeaderChange).Leader)
 				if p.leader == p.rn.ID() {
 					p.onBecomeLeader()
 				}
 
-				if oldLeader == p.rn.ID() && !p.isLeader() {
+				if oldLeader == p.rn.ID() && p.leader != p.rn.ID() {
 					p.onLeaderDownToFollower()
 				}
 			case *TransSlotTransfer:
-				if p.isLeader() {
+				if p.leader == p.rn.ID() {
 					if _, ok := p.pState.SlotTransfer[v.(*TransSlotTransfer).Slot]; ok {
 						v.(*TransSlotTransfer).notify(p)
 					}

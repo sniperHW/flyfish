@@ -196,13 +196,18 @@ func UdpCall(remotes interface{}, req *Message, timeout time.Duration, onResp fu
 	}
 
 	respCh := make(chan interface{})
+
+	var mu sync.Mutex
 	uu := make([]*flynet.Udp, len(remoteAddrs))
+
 	for k, v := range remoteAddrs {
 		go func(i int, addr *net.UDPAddr) {
 			u, err := flynet.NewUdp(fmt.Sprintf(":0"), Pack, Unpack)
 			if nil == err {
 				u.SendTo(addr, req)
+				mu.Lock()
 				uu[i] = u
+				mu.Unlock()
 				_, r, err := u.ReadFrom(make([]byte, 65535))
 				if nil == err {
 					onResp(respCh, r)
@@ -219,11 +224,13 @@ func UdpCall(remotes interface{}, req *Message, timeout time.Duration, onResp fu
 	}
 	ticker.Stop()
 
+	mu.Lock()
 	for _, v := range uu {
 		if nil != v {
 			v.Close()
 		}
 	}
+	mu.Unlock()
 
 	return
 }

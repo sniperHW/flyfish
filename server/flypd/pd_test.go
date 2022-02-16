@@ -1,6 +1,6 @@
 package flypd
 
-//go test -covermode=count -v -coverprofile=coverage.out -run=.
+//go test -race -covermode=atomic -v -coverprofile=coverage.out -run=.
 //go tool cover -html=coverage.out
 
 import (
@@ -261,6 +261,8 @@ func testHttp(t *testing.T) {
 
 func testAddRemoveTable(t *testing.T, p *pd) {
 
+	GetSugar().Infof("testAddRemoveTable")
+
 	//add table2
 	{
 		req := &sproto.MetaAddTable{
@@ -338,6 +340,8 @@ func testAddRemoveTable(t *testing.T, p *pd) {
 }
 
 func testAddRemoveFields(t *testing.T, p *pd) {
+
+	GetSugar().Infof("testAddRemoveFields")
 
 	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
 	assert.Nil(t, err)
@@ -513,11 +517,15 @@ func testAddRemNode(t *testing.T, p *pd) {
 	}
 
 	waitCondition(func() bool {
-		if len(p.pState.deployment.sets[1].nodes) == 1 {
-			return true
-		} else {
-			return false
-		}
+		ret := make(chan bool, 1)
+		p.mainque.AppendHighestPriotiryItem(func() {
+			if len(p.pState.deployment.sets[1].nodes) == 1 {
+				ret <- true
+			} else {
+				ret <- false
+			}
+		})
+		return <-ret
 	})
 
 	node1.stop()
@@ -526,6 +534,9 @@ func testAddRemNode(t *testing.T, p *pd) {
 }
 
 func testAddRemSet(t *testing.T, p *pd) {
+
+	GetSugar().Infof("testAddRemSet")
+
 	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
 	assert.Nil(t, err)
 
@@ -554,11 +565,15 @@ func testAddRemSet(t *testing.T, p *pd) {
 	assert.Equal(t, true, r.(*snet.Message).Msg.(*sproto.AddSetResp).Ok)
 
 	waitCondition(func() bool {
-		if len(p.pState.deployment.sets) == 2 {
-			return true
-		} else {
-			return false
-		}
+		ret := make(chan bool, 1)
+		p.mainque.AppendHighestPriotiryItem(func() {
+			if len(p.pState.deployment.sets) == 2 {
+				ret <- true
+			} else {
+				ret <- false
+			}
+		})
+		return <-ret
 	})
 
 	assert.Equal(t, 3, int(p.pState.deployment.sets[2].nodes[3].id))
@@ -580,15 +595,18 @@ func testAddRemSet(t *testing.T, p *pd) {
 	assert.Equal(t, true, r.(*snet.Message).Msg.(*sproto.SetMarkClearResp).Ok)
 
 	waitCondition(func() bool {
-		if len(p.pState.deployment.sets) == 1 {
-			return true
-		} else {
-			conn.SendTo(addr, snet.MakeMessage(0, &sproto.RemSet{
-				SetID: 2,
-			}))
-			_, r, err = conn.ReadFrom(recvbuff)
-			return false
-		}
+		ret := make(chan bool, 1)
+		p.mainque.AppendHighestPriotiryItem(func() {
+			if len(p.pState.deployment.sets) == 1 {
+				ret <- true
+			} else {
+				conn.SendTo(addr, snet.MakeMessage(0, &sproto.RemSet{
+					SetID: 2,
+				}))
+				ret <- false
+			}
+		})
+		return <-ret
 	})
 }
 
@@ -627,8 +645,8 @@ func (n *testKvnode) run() {
 			case *sproto.NotifyUpdateMeta:
 				notify := msg.(*sproto.NotifyUpdateMeta)
 				n.metaVersion = notify.Version
-				fmt.Println("on NotifyUpdateMeta", notify.Version)
 			case *sproto.IsTransInReady:
+				fmt.Println("on IsTransInReady")
 				n.udp.SendTo(from, snet.MakeMessage(context, &sproto.IsTransInReadyResp{
 					Ready: true,
 					Slot:  msg.(*sproto.IsTransInReady).Slot,
@@ -644,19 +662,27 @@ func (n *testKvnode) stop() {
 
 func testSlotTransfer(t *testing.T, p *pd) {
 
-	fmt.Println("testSlotTransfer")
+	GetSugar().Infof("testSlotTransfer")
 
 	//先添加一个set
 
-	ch := make(chan struct{})
-
-	p.onBalanceFinish = func() {
-		for _, v := range p.pState.deployment.sets {
-			for _, vv := range v.stores {
-				fmt.Printf("store:%d slotCount:%d slots%v\n", vv.id, len(vv.slots.GetOpenBits()), vv.slots.GetOpenBits())
-			}
-		}
-		ch <- struct{}{}
+	waitBalanceFinish := func() {
+		waitCondition(func() bool {
+			ret := make(chan bool, 1)
+			p.mainque.AppendHighestPriotiryItem(func() {
+				if len(p.pState.SlotTransfer) == 0 {
+					for _, v := range p.pState.deployment.sets {
+						for _, vv := range v.stores {
+							fmt.Printf("store:%d slotCount:%d slots%v\n", vv.id, len(vv.slots.GetOpenBits()), vv.slots.GetOpenBits())
+						}
+					}
+					ret <- true
+				} else {
+					ret <- false
+				}
+			})
+			return <-ret
+		})
 	}
 
 	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
@@ -687,11 +713,15 @@ func testSlotTransfer(t *testing.T, p *pd) {
 	fmt.Println(r.(*snet.Message).Msg.(*sproto.AddSetResp).Reason)
 
 	waitCondition(func() bool {
-		if len(p.pState.deployment.sets) == 2 {
-			return true
-		} else {
-			return false
-		}
+		ret := make(chan bool, 1)
+		p.mainque.AppendHighestPriotiryItem(func() {
+			if len(p.pState.deployment.sets) == 2 {
+				ret <- true
+			} else {
+				ret <- false
+			}
+		})
+		return <-ret
 	})
 
 	//启动两个节点
@@ -711,7 +741,11 @@ func testSlotTransfer(t *testing.T, p *pd) {
 
 	go node2.run()
 
-	<-ch
+	fmt.Println("wait one")
+
+	waitBalanceFinish()
+
+	fmt.Println("mark")
 
 	//将set 2 标记clear
 	go func() {
@@ -731,7 +765,9 @@ func testSlotTransfer(t *testing.T, p *pd) {
 		assert.Equal(t, true, r.(*snet.Message).Msg.(*sproto.SetMarkClearResp).Ok)
 	}()
 
-	<-ch
+	fmt.Println("wait")
+
+	waitBalanceFinish()
 
 	node1.stop()
 	node2.stop()
