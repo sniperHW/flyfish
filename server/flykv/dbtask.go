@@ -73,8 +73,6 @@ func (this *dbUpdateTask) issueFullDbWriteBack() error {
 		return errors.New("is doing")
 	}
 
-	this.state.Fields = map[string]*flyproto.Field{}
-
 	switch this.kv.state {
 	case kv_ok:
 		this.state.State = db.DBState_insert
@@ -89,6 +87,7 @@ func (this *dbUpdateTask) issueFullDbWriteBack() error {
 	this.state.Version = this.kv.version
 
 	if this.state.State == db.DBState_insert {
+		this.state.Fields = map[string]*flyproto.Field{}
 		for k, v := range this.kv.fields {
 			this.state.Fields[k] = v
 		}
@@ -104,7 +103,7 @@ func (this *dbUpdateTask) issueFullDbWriteBack() error {
 
 func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields map[string]*flyproto.Field) error {
 
-	if dbstate == db.DBState_none {
+	if !(dbstate >= db.DBState_insert && dbstate <= db.DBState_delete) {
 		return errors.New("updateState error 1")
 	}
 
@@ -114,38 +113,37 @@ func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields 
 	GetSugar().Debugf("updateState %s %d %d version:%d", this.kv.uniKey, dbstate, this.state.State, version)
 
 	switch this.state.State {
-	case db.DBState_none:
-		this.state.State = dbstate
 	case db.DBState_insert:
+		//insert只接受到update,delete变更
 		if dbstate == db.DBState_update {
-			this.state.State = db.DBState_insert
+			//之前的insert尚未处理完毕，不能切换到update保留insert状态
+			dbstate = db.DBState_insert
 		} else if dbstate == db.DBState_delete {
-			this.state.State = db.DBState_delete
-			this.state.Fields = map[string]*flyproto.Field{}
+			this.state.Fields = nil
 		} else {
 			return errors.New("updateState error 2")
 		}
 	case db.DBState_delete:
-		if dbstate == db.DBState_insert {
-			this.state.State = db.DBState_insert
-		} else {
+		//delete只接受到insert变更
+		if dbstate != db.DBState_insert {
 			return errors.New("updateState error 3")
 		}
 	case db.DBState_update:
-		if dbstate == db.DBState_update || dbstate == db.DBState_delete {
-			this.state.State = dbstate
-			if dbstate == db.DBState_delete {
-				this.state.Fields = map[string]*flyproto.Field{}
-			}
-		} else {
+		//update只接受到update,delete变更
+		if dbstate == db.DBState_delete {
+			this.state.Fields = nil
+		} else if dbstate == db.DBState_insert {
 			return errors.New("updateState error 4")
 		}
-	default:
-		return errors.New("updateState error 5")
 	}
 
+	this.state.State = dbstate
 	this.state.Version = version
 	this.state.Meta = this.kv.meta
+
+	if this.state.State == db.DBState_insert && nil == this.state.Fields {
+		this.state.Fields = map[string]*flyproto.Field{}
+	}
 
 	for k, v := range fields {
 		this.state.Fields[k] = v

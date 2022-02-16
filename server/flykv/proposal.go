@@ -304,6 +304,7 @@ func (this *kvProposal) apply() {
 			if nil == this.kv.fields {
 				this.kv.fields = map[string]*flyproto.Field{}
 			}
+
 			for _, v := range this.fields {
 				this.kv.fields[v.GetName()] = v
 			}
