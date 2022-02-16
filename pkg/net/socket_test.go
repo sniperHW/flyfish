@@ -12,6 +12,7 @@ import (
 	"net"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -80,6 +81,8 @@ func TestSendTimeout(t *testing.T) {
 
 		listener, _ := net.ListenTCP("tcp", tcpAddr)
 
+		var mu sync.Mutex
+
 		var holdSession *Socket
 
 		go func() {
@@ -89,7 +92,9 @@ func TestSendTimeout(t *testing.T) {
 					return
 				} else {
 					conn.(*net.TCPConn).SetReadBuffer(0)
+					mu.Lock()
 					holdSession = NewSocket(conn, OutputBufLimit{})
+					mu.Unlock()
 					//不启动接收
 				}
 			}
@@ -137,8 +142,9 @@ func TestSendTimeout(t *testing.T) {
 			}
 		}()
 		<-die
-
+		mu.Lock()
 		holdSession.Close(nil, 0)
+		mu.UnLock()
 
 		listener.Close()
 	}
