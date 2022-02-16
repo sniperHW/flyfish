@@ -166,6 +166,12 @@ func newKVStore(mainQueue applicationQueue, rn *RaftInstance) *kvstore {
 	return s
 }
 
+func (s *kvstore) setStartOK(fn func()) {
+	s.mu.Lock()
+	s.startOK = fn
+	s.mu.Unlock()
+}
+
 func (s *kvstore) Get(key string) (string, error) {
 	o := &operationGet{
 		key: key,
@@ -412,8 +418,12 @@ func (s *kvstore) serve() {
 				s.processConfChange(v.(ProposalConfChange))
 			case ConfChange:
 			case ReplayOK:
-				if nil != s.startOK {
-					s.startOK()
+				var startOK func()
+				s.mu.Lock()
+				startOK = s.startOK
+				s.mu.Unlock()
+				if nil != startOK {
+					startOK()
 				}
 			case raftpb.Snapshot:
 				snapshot := v.(raftpb.Snapshot)
