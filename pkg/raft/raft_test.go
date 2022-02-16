@@ -1,6 +1,6 @@
 package raft
 
-//go test -covermode=count -v -coverprofile=../coverage.out -run=.
+//go test -race -covermode=atomic -v -coverprofile=../coverage.out -run=.
 //go tool cover -html=../coverage.out
 
 import (
@@ -424,6 +424,7 @@ func (s *kvstore) serve() {
 				s.processConfChange(v.(ProposalConfChange))
 			case ConfChange:
 			case ReplayOK:
+				GetSugar().Infof("replay ok")
 				var startOK func()
 				s.mu.Lock()
 				startOK = s.startOK
@@ -468,7 +469,7 @@ type kvnode struct {
 	store     *kvstore
 }
 
-func newKvNode(nodeid uint16, cid int, join bool, cluster string) *kvnode {
+func newKvNode(nodeid uint16, cid int, join bool, cluster string, startok func(), becomeLeader func()) *kvnode {
 
 	peers, err := SplitPeers(cluster)
 
@@ -491,6 +492,10 @@ func newKvNode(nodeid uint16, cid int, join bool, cluster string) *kvnode {
 	}
 
 	store := newKVStore(mainQueue, rn)
+
+	store.setStartOK(startok)
+
+	store.setBecomeLeader(becomeLeader)
 
 	go mutilRaft.Serve([]string{selfUrl})
 
@@ -521,17 +526,13 @@ func TestSingleNode(t *testing.T) {
 
 	{
 
-		node := newKvNode(1, 1, false, raftCluster)
-
 		startOkCh := make(chan struct{})
 
 		becomeLeaderCh := make(chan struct{})
 
-		node.store.setStartOK(func() {
+		node := newKvNode(1, 1, false, raftCluster, func() {
 			startOkCh <- struct{}{}
-		})
-
-		node.store.setBecomeLeader(func() {
+		}, func() {
 			becomeLeaderCh <- struct{}{}
 		})
 
@@ -559,18 +560,14 @@ func TestSingleNode(t *testing.T) {
 	fmt.Println("start again")
 
 	{
-		//start again
-		node := newKvNode(1, 1, false, raftCluster)
-
 		startOkCh := make(chan struct{})
 
 		becomeLeaderCh := make(chan struct{})
 
-		node.store.setStartOK(func() {
+		//start again
+		node := newKvNode(1, 1, false, raftCluster, func() {
 			startOkCh <- struct{}{}
-		})
-
-		node.store.setBecomeLeader(func() {
+		}, func() {
 			becomeLeaderCh <- struct{}{}
 		})
 
@@ -594,17 +591,13 @@ func TestSingleNode(t *testing.T) {
 	{
 
 		//start again
-		node := newKvNode(1, 1, false, raftCluster)
-
 		startOkCh := make(chan struct{})
 
 		becomeLeaderCh := make(chan struct{})
 
-		node.store.setStartOK(func() {
+		node := newKvNode(1, 1, false, raftCluster, func() {
 			startOkCh <- struct{}{}
-		})
-
-		node.store.setBecomeLeader(func() {
+		}, func() {
 			becomeLeaderCh <- struct{}{}
 		})
 
@@ -633,29 +626,39 @@ func TestCluster(t *testing.T) {
 	cluster := fmt.Sprintf("1@%d@http://127.0.0.1:22378@http://127.0.0.1:22378@,2@%d@http://127.0.0.1:22379@http://127.0.0.1:22379@,3@%d@http://127.0.0.1:22380@http://127.0.0.1:22380@",
 		raftID1, raftID2, raftID3)
 
-	node1 := newKvNode(1, 1, false, cluster)
-
 	becomeLeaderCh1 := make(chan *kvnode, 1)
 
-	node1.store.setBecomeLeader(func() {
+	var node1 *kvnode
+	var node2 *kvnode
+	var node3 *kvnode
+
+	var mu sync.Mutex
+
+	mu.Lock()
+
+	node1 = newKvNode(1, 1, false, cluster, nil, func() {
+		mu.Lock()
+		defer mu.Unlock()
 		becomeLeaderCh1 <- node1
 	})
 
-	node2 := newKvNode(2, 1, false, cluster)
-
 	becomeLeaderCh2 := make(chan *kvnode, 1)
 
-	node2.store.setBecomeLeader(func() {
+	node2 = newKvNode(2, 1, false, cluster, nil, func() {
+		mu.Lock()
+		defer mu.Unlock()
 		becomeLeaderCh2 <- node2
 	})
 
-	node3 := newKvNode(3, 1, false, cluster)
-
 	becomeLeaderCh3 := make(chan *kvnode, 1)
 
-	node3.store.setBecomeLeader(func() {
+	node3 = newKvNode(3, 1, false, cluster, nil, func() {
+		mu.Lock()
+		defer mu.Unlock()
 		becomeLeaderCh3 <- node3
 	})
+
+	mu.Unlock()
 
 	getLeader := func() *kvnode {
 		select {
@@ -696,16 +699,14 @@ func TestCluster(t *testing.T) {
 
 	cluster = cluster + fmt.Sprintf(",4@%d@http://127.0.0.1:22381@http://127.0.0.1:22381@learner", raftID4)
 
-	node4 := newKvNode(4, 1, true, cluster)
-
 	startOkCh4 := make(chan struct{}, 1)
 
-	node4.store.setStartOK(func() {
+	node4 := newKvNode(4, 1, true, cluster, func() {
 		select {
 		case startOkCh4 <- struct{}{}:
 		default:
 		}
-	})
+	}, nil)
 
 	<-startOkCh4
 
@@ -759,21 +760,30 @@ func TestDownToFollower(t *testing.T) {
 	cluster := fmt.Sprintf("1@%d@http://127.0.0.1:22378@http://127.0.0.1:22378@,2@%d@http://127.0.0.1:22379@http://127.0.0.1:22379@",
 		raftID1, raftID2)
 
-	node1 := newKvNode(1, 1, false, cluster)
+	var node1 *kvnode
+	var node2 *kvnode
+
+	var mu sync.Mutex
+
+	mu.Lock()
 
 	becomeLeaderCh1 := make(chan *kvnode, 1)
 
-	node1.store.setBecomeLeader(func() {
+	node1 = newKvNode(1, 1, false, cluster, nil, func() {
+		mu.Lock()
+		defer mu.Unlock()
 		becomeLeaderCh1 <- node1
 	})
 
-	node2 := newKvNode(2, 1, false, cluster)
-
 	becomeLeaderCh2 := make(chan *kvnode, 1)
 
-	node2.store.setBecomeLeader(func() {
+	node2 = newKvNode(2, 1, false, cluster, nil, func() {
+		mu.Lock()
+		defer mu.Unlock()
 		becomeLeaderCh2 <- node2
 	})
+
+	mu.Unlock()
 
 	getLeader := func() *kvnode {
 		select {
@@ -825,21 +835,30 @@ func TestOneNodeDownAndRestart(t *testing.T) {
 	cluster := fmt.Sprintf("1@%d@http://127.0.0.1:22378@http://127.0.0.1:22378@,2@%d@http://127.0.0.1:22379@http://127.0.0.1:22379@",
 		raftID1, raftID2)
 
-	node1 := newKvNode(1, 1, false, cluster)
+	var node1 *kvnode
+	var node2 *kvnode
+
+	var mu sync.Mutex
+
+	mu.Lock()
 
 	becomeLeaderCh1 := make(chan *kvnode, 1)
 
-	node1.store.setBecomeLeader(func() {
+	node1 = newKvNode(1, 1, false, cluster, nil, func() {
+		mu.Lock()
+		defer mu.Unlock()
 		becomeLeaderCh1 <- node1
 	})
 
-	node2 := newKvNode(2, 1, false, cluster)
-
 	becomeLeaderCh2 := make(chan *kvnode, 1)
 
-	node2.store.setBecomeLeader(func() {
+	node2 = newKvNode(2, 1, false, cluster, nil, func() {
+		mu.Lock()
+		defer mu.Unlock()
 		becomeLeaderCh2 <- node2
 	})
+
+	mu.Unlock()
 
 	getLeader := func() *kvnode {
 		select {
@@ -876,11 +895,11 @@ func TestOneNodeDownAndRestart(t *testing.T) {
 
 	time.Sleep(time.Second)
 	if node1 == nil {
-		node1 = newKvNode(1, 1, false, cluster)
+		node1 = newKvNode(1, 1, false, cluster, nil, nil)
 	}
 
 	if node2 == nil {
-		node2 = newKvNode(2, 1, false, cluster)
+		node2 = newKvNode(2, 1, false, cluster, nil, nil)
 	}
 
 	<-ch
@@ -910,21 +929,30 @@ func TestTransferLeader(t *testing.T) {
 	cluster := fmt.Sprintf("1@%d@http://127.0.0.1:22378@http://127.0.0.1:22378@,2@%d@http://127.0.0.1:22379@http://127.0.0.1:22379@",
 		raftID1, raftID2)
 
-	node1 := newKvNode(1, 1, false, cluster)
-
 	becomeLeaderCh1 := make(chan *kvnode, 1)
 
-	node1.store.setBecomeLeader(func() {
+	var mu sync.Mutex
+
+	var node1 *kvnode
+	var node2 *kvnode
+
+	mu.Lock()
+
+	node1 = newKvNode(1, 1, false, cluster, nil, func() {
+		mu.Lock()
+		defer mu.Unlock()
 		becomeLeaderCh1 <- node1
 	})
 
-	node2 := newKvNode(2, 1, false, cluster)
-
 	becomeLeaderCh2 := make(chan *kvnode, 1)
 
-	node2.store.setBecomeLeader(func() {
+	node2 = newKvNode(2, 1, false, cluster, nil, func() {
+		mu.Lock()
+		defer mu.Unlock()
 		becomeLeaderCh2 <- node2
 	})
+
+	mu.Unlock()
 
 	getLeader := func() *kvnode {
 		select {
@@ -972,21 +1000,30 @@ func TestFollower(t *testing.T) {
 	cluster := fmt.Sprintf("1@%d@http://127.0.0.1:22378@http://127.0.0.1:22378@,2@%d@http://127.0.0.1:22379@http://127.0.0.1:22379@",
 		raftID1, raftID2)
 
-	node1 := newKvNode(1, 1, false, cluster)
-
 	becomeLeaderCh1 := make(chan *kvnode, 1)
 
-	node1.store.setBecomeLeader(func() {
+	var node1 *kvnode
+	var node2 *kvnode
+
+	var mu sync.Mutex
+
+	mu.Lock()
+
+	node1 = newKvNode(1, 1, false, cluster, nil, func() {
+		mu.Lock()
+		defer mu.Unlock()
 		becomeLeaderCh1 <- node1
 	})
 
-	node2 := newKvNode(2, 1, false, cluster)
-
 	becomeLeaderCh2 := make(chan *kvnode, 1)
 
-	node2.store.setBecomeLeader(func() {
+	node2 = newKvNode(2, 1, false, cluster, nil, func() {
+		mu.Lock()
+		defer mu.Unlock()
 		becomeLeaderCh2 <- node2
 	})
+
+	mu.Unlock()
 
 	getLeader := func() *kvnode {
 		select {
