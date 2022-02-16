@@ -235,6 +235,7 @@ func (m *routeErrorAndSlotTransferingReqMgr) addSlotTransferingReq(msg *forwordM
 type gate struct {
 	config          *Config
 	closed          int32
+	closeCh         chan struct{}
 	listener        *cs.Listener
 	totalPendingMsg int64
 	clients         map[*flynet.Socket]*flynet.Socket
@@ -247,7 +248,6 @@ type gate struct {
 	reSendReqMgr    routeErrorAndSlotTransferingReqMgr
 	msgPerSecond    *movingAverage.MovingAverage //每秒客户端转发请求量的移动平均值
 	msgRecv         int32
-	heartBeatUdp    *flynet.Udp
 }
 
 func doQueryRouteInfo(pdAddr []*net.UDPAddr, req *sproto.QueryRouteInfo) *sproto.QueryRouteInfoResp {
@@ -291,6 +291,7 @@ func NewFlyGate(config *Config, service string) (*gate, error) {
 		},
 		serviceAddr:  service,
 		msgPerSecond: movingAverage.New(5),
+		closeCh:      make(chan struct{}),
 	}
 
 	pdService := strings.Split(config.PdService, ";")
@@ -304,8 +305,6 @@ func NewFlyGate(config *Config, service string) (*gate, error) {
 	if len(g.pdAddr) == 0 {
 		return nil, errors.New("pd is empty")
 	}
-
-	g.heartBeatUdp, _ = flynet.NewUdp(fmt.Sprintf(":0"), snet.Pack, snet.Unpack)
 
 	err := g.start()
 
@@ -482,32 +481,45 @@ func (g *gate) start() error {
 	}
 
 	for {
-
 		resp := doQueryRouteInfo(g.pdAddr, &sproto.QueryRouteInfo{})
-
 		if nil != resp {
 			g.routeInfo.onQueryRouteInfoResp(g, resp)
 			break
 		}
 	}
 
-	var heartbeat func()
-	heartbeat = func() {
-		msg := &sproto.FlyGateHeartBeat{
-			GateService:  g.serviceAddr,
-			MsgPerSecond: int32(g.msgPerSecond.GetAverage()),
-		}
+	go func() {
+		heartbeatConn, _ := flynet.NewUdp(fmt.Sprintf(":0"), snet.Pack, snet.Unpack)
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
 
-		for _, v := range g.pdAddr {
-			if nil != g.heartBeatUdp.SendTo(v, snet.MakeMessage(0, msg)) {
+		for {
+			msg := &sproto.FlyGateHeartBeat{
+				GateService:  g.serviceAddr,
+				MsgPerSecond: int32(g.msgPerSecond.GetAverage()),
+			}
+
+			for _, v := range g.pdAddr {
+				if err := heartbeatConn.SendTo(v, snet.MakeMessage(0, msg)); nil != err {
+					GetSugar().Errorf("send heartbeat to %v err:%v", v, err)
+				}
+			}
+
+			select {
+			case <-g.closeCh:
 				return
+			case <-ticker.C:
 			}
 		}
+<<<<<<< HEAD
 
 		util.OnceTimer(time.Second, heartbeat)
 	}
 
 	heartbeat()
+=======
+	}()
+>>>>>>> ccfb6f8a782d68f240b330b2a3ae9c02ba5403b6
 
 	go g.mainLoop()
 
@@ -545,7 +557,7 @@ func (g *gate) Stop() {
 		//首先关闭监听,不在接受新到达的连接
 		g.listener.Close()
 
-		g.heartBeatUdp.Close()
+		close(g.closeCh)
 
 		//等待所有消息处理完
 		g.waitCondition(func() bool {
