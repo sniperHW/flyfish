@@ -114,6 +114,13 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 			data.(db.DBMeta).MoveTo(s.meta)
 		} else if ptype == proposal_nop {
 			s.lastLeader = data.(uint64)
+		} else if ptype == proposal_last_writeback_version {
+			p := data.(ppkv)
+			groupID := sslot.StringHash(p.unikey) % len(s.kv)
+			kv, ok := s.kv[groupID][p.unikey]
+			if ok {
+				kv.lastWriteBackVersion = p.lastWriteBackVersion
+			}
 		} else {
 			p := data.(ppkv)
 			groupID := sslot.StringHash(p.unikey) % len(s.kv)
@@ -145,6 +152,7 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 				s.lru.update(&kv.lru)
 			case proposal_snapshot:
 				kv.version = p.version
+				kv.lastWriteBackVersion = p.lastWriteBackVersion
 				kv.fields = p.fields
 				if kv.version > 0 {
 					kv.state = kv_ok
@@ -222,7 +230,7 @@ func (s *kvstore) makeSnapshot(notifyer *raft.SnapshotNotify) {
 				 */
 
 				for _, vv := range snapkvs {
-					b = serilizeKv(b, proposal_snapshot, vv.uniKey, vv.version, vv.fields)
+					b = serilizeKv(b, proposal_snapshot, vv.uniKey, vv.version, vv.lastWriteBackVersion, vv.fields)
 					if len(b) >= maxBlockSize {
 						b = compressSnap(b)
 						mtx.Lock()

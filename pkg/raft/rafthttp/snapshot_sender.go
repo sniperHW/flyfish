@@ -22,7 +22,6 @@ import (
 	pioutil "github.com/sniperHW/flyfish/pkg/etcd/pkg/ioutil"
 	"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft"
-	"github.com/sniperHW/flyfish/pkg/util"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -172,7 +171,7 @@ func (s *snapshotSender) post(req *http.Request) (err error) {
 		// close the response body when timeouts.
 		// prevents from reading the body forever when the other side dies right after
 		// successfully receives the request body.
-		util.OnceTimer(snapResponseReadTimeout, func() { httputil.GracefulClose(resp) })
+		time.AfterFunc(snapResponseReadTimeout, func() { httputil.GracefulClose(resp) })
 		body, err := ioutil.ReadAll(resp.Body)
 		result <- responseAndError{resp, body, err}
 	}()

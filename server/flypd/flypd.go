@@ -13,7 +13,6 @@ import (
 	flynet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
-	"github.com/sniperHW/flyfish/pkg/util"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"github.com/sniperHW/flyfish/server/slot"
@@ -287,7 +286,7 @@ func (p *pd) makeReplyFunc(replyer replyer, m *snet.Message, resp proto.Message)
 }
 
 func (p *pd) storeBalance() {
-	util.OnceTimer(time.Second*3, func() {
+	time.AfterFunc(time.Second*3, func() {
 		p.mainque.AppendHighestPriotiryItem(func() {
 			if p.isLeader() {
 				for _, v := range p.pState.deployment.sets {

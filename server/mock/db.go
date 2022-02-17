@@ -4,6 +4,7 @@ import (
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	flyproto "github.com/sniperHW/flyfish/proto"
+	"sync"
 	"sync/atomic"
 )
 
@@ -14,6 +15,7 @@ type dbkv struct {
 }
 
 type DB struct {
+	sync.Mutex
 	store     map[string]*dbkv
 	que       *queue.ArrayQueue
 	stoponce  int32
@@ -21,6 +23,8 @@ type DB struct {
 }
 
 func (d *DB) do(v interface{}) {
+	d.Lock()
+	defer d.Unlock()
 	switch v.(type) {
 	case db.DBLoadTask:
 		t := v.(db.DBLoadTask)
@@ -75,6 +79,8 @@ func (d *DB) do(v interface{}) {
 				return
 			}
 
+			t.SetLastWriteBackVersion(s.Version)
+
 			if t.Dirty() {
 				//再次发生变更,插入队列继续执行
 				d.que.ForceAppend(t)
@@ -116,6 +122,22 @@ func (d *DB) Start() {
 
 func (d *DB) IssueTask(t interface{}) error {
 	return d.que.Append(t)
+}
+
+func (d *DB) Clone() *DB {
+	d.Lock()
+	defer d.Unlock()
+
+	c := &DB{
+		store: map[string]*dbkv{},
+		que:   queue.NewArrayQueue(1000),
+	}
+
+	for k, v := range d.store {
+		c.store[k] = v
+	}
+
+	return c
 }
 
 func NewDB() *DB {

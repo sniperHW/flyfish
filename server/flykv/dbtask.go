@@ -2,7 +2,6 @@ package flykv
 
 import (
 	"errors"
-	//"fmt"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
 	flyproto "github.com/sniperHW/flyfish/proto"
@@ -10,6 +9,14 @@ import (
 )
 
 func (this *dbUpdateTask) SetLastWriteBackVersion(version int64) {
+	this.setLastWriteBackVersion(version)
+	this.kv.store.rn.IssueProposal(&LastWriteBackVersionProposal{
+		version: version,
+		kv:      this.kv,
+	})
+}
+
+func (this *dbUpdateTask) setLastWriteBackVersion(version int64) {
 	this.Lock()
 	defer this.Unlock()
 	this.state.LastWriteBackVersion = version
@@ -85,6 +92,7 @@ func (this *dbUpdateTask) issueFullDbWriteBack() error {
 	}
 
 	this.state.Version = this.kv.version
+	this.state.LastWriteBackVersion = this.state.Version
 
 	if this.state.State == db.DBState_insert {
 		this.state.Fields = map[string]*flyproto.Field{}
@@ -197,16 +205,14 @@ func (this *dbLoadTask) OnResult(err error, version int64, fields map[string]*fl
 		 * 根据this.cmd产生正确的proposal
 		 */
 		proposal := &kvProposal{
-			ptype:   proposal_snapshot,
-			kv:      this.kv,
-			cmds:    []cmdI{this.cmd},
-			version: version,
-			fields:  fields,
+			ptype:       proposal_snapshot,
+			kv:          this.kv,
+			cmds:        []cmdI{this.cmd},
+			version:     version,
+			fields:      fields,
+			causeByLoad: true,
+			dbversion:   version,
 		}
-
-		//GetSugar().Infof("load %s version:%d err:%v", this.kv.uniKey, version, err)
-
-		this.kv.updateTask.SetLastWriteBackVersion(version)
 
 		this.cmd.onLoadResult(err, proposal)
 

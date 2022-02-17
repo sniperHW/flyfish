@@ -10,7 +10,6 @@ import (
 	"github.com/sniperHW/flyfish/pkg/movingAverage"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/queue"
-	"github.com/sniperHW/flyfish/pkg/util"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
 	snet "github.com/sniperHW/flyfish/server/net"
@@ -317,7 +316,7 @@ func (g *gate) refreshMsgPerSecond() {
 	if atomic.LoadInt32(&g.closed) == 0 {
 		g.msgPerSecond.Add(int(atomic.LoadInt32(&g.msgRecv)))
 		atomic.StoreInt32(&g.msgRecv, 0)
-		util.OnceTimer(time.Second, g.refreshMsgPerSecond)
+		time.AfterFunc(time.Second, g.refreshMsgPerSecond)
 	}
 }
 
@@ -452,7 +451,7 @@ func (g *gate) queryRouteInfo() {
 			nextTimeout := time.Millisecond * 100
 			if nil != resp {
 				g.onQueryRouteInfoResp(resp)
-				if !g.reSendReqMgr.empty() {
+				if g.reSendReqMgr.empty() {
 					nextTimeout = time.Second * 10
 				}
 			}
@@ -512,6 +511,32 @@ func (g *gate) start() error {
 			}
 		}
 	}()
+
+	/*
+		heartbeatConn, _ := flynet.NewUdp(fmt.Sprintf(":0"), snet.Pack, snet.Unpack)
+
+		var heartbeat func()
+
+		cc := 0
+
+		heartbeat = func() {
+			msg := &sproto.FlyGateHeartBeat{
+				GateService:  g.serviceAddr,
+				MsgPerSecond: int32(g.msgPerSecond.GetAverage()),
+			}
+
+			for _, v := range g.pdAddr {
+				heartbeatConn.SendTo(v, snet.MakeMessage(0, msg))
+			}
+
+			cc++
+			GetSugar().Infof("heartbeat %d", cc)
+
+			time.AfterFunc(time.Second, heartbeat)
+		}
+
+		heartbeat()
+	*/
 
 	go g.mainLoop()
 

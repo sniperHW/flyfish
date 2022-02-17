@@ -39,22 +39,30 @@ type cmdQueue struct {
 	tail cmdI
 }
 
+/*
+ *kv.lastWriteBackVersion: db回写完成后，用最后的version提交proposal_last_writeback_version
+ *apply的时候将 kv.lastWriteBackVersion设置为proposal_last_writeback_version.version
+ *kv.lastWriteBackVersion == kv.version表示db已经跟内存一致
+ *新leader当选后，对于所有kv.lastWriteBackVersion != kv.version的kv,都表示无法确定是否与DB一致，执行一次强制回写
+ */
+
 type kv struct {
-	slot          int
-	lru           lruElement
-	table         string
-	uniKey        string //"table:key"组成的唯一全局唯一键
-	key           string
-	version       int64
-	state         kvState
-	kicking       bool
-	fields        map[string]*flyproto.Field //字段
-	meta          db.TableMeta
-	updateTask    dbUpdateTask
-	pendingCmd    cmdQueue
-	store         *kvstore
-	asynTaskCount int
-	groupID       int
+	slot                 int
+	lru                  lruElement
+	table                string
+	uniKey               string //"table:key"组成的唯一全局唯一键
+	key                  string
+	version              int64
+	state                kvState
+	kicking              bool
+	fields               map[string]*flyproto.Field //字段
+	meta                 db.TableMeta
+	updateTask           dbUpdateTask
+	pendingCmd           cmdQueue
+	store                *kvstore
+	asynTaskCount        int
+	groupID              int
+	lastWriteBackVersion int64
 }
 
 func abs(v int64) int64 {
@@ -155,9 +163,9 @@ func (this *kv) processCmd(cmd cmdI) {
 			return
 		} else {
 			this.pendingCmd.add(cmd)
-			if this.state == kv_ok || this.state == kv_no_record {
-				this.store.lru.update(&this.lru)
-			}
+			//if this.state == kv_ok || this.state == kv_no_record {
+			//	this.store.lru.update(&this.lru)
+			//}
 		}
 	} else {
 		this.asynTaskCount--

@@ -2,6 +2,7 @@ package movingAverage
 
 import (
 	"sync"
+	"sync/atomic"
 )
 
 //移动平均
@@ -10,8 +11,8 @@ type MovingAverage struct {
 	head    int
 	window  []int
 	total   int
-	average int
 	wc      int
+	average int64
 }
 
 func New(window int) *MovingAverage {
@@ -34,11 +35,9 @@ func (ma *MovingAverage) Add(v int) {
 		ma.head = (ma.head + 1) % len(ma.window)
 	}
 	ma.total += v
-	ma.average = ma.total / ma.wc
+	atomic.StoreInt64(&ma.average, int64(ma.total/ma.wc))
 }
 
-func (ma MovingAverage) GetAverage() int {
-	ma.Lock()
-	defer ma.Unlock()
-	return ma.average
+func (ma *MovingAverage) GetAverage() int {
+	return int(atomic.LoadInt64(&ma.average))
 }

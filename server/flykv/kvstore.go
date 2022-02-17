@@ -13,7 +13,6 @@ import (
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	"github.com/sniperHW/flyfish/pkg/raft/membership"
-	"github.com/sniperHW/flyfish/pkg/util"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
 	"github.com/sniperHW/flyfish/server/flypd"
@@ -173,6 +172,7 @@ func (s *kvstore) newkv(slot int, groupID int, unikey string, key string, table 
 
 	k.updateTask = dbUpdateTask{
 		kv: k,
+		//store: s,
 		state: db.UpdateState{
 			Key:    key,
 			Slot:   slot,
@@ -423,7 +423,7 @@ func (s *kvstore) reportStatus() {
 			}
 		}()
 
-		util.OnceTimer(time.Second, s.reportStatus)
+		time.AfterFunc(time.Second, s.reportStatus)
 	})
 }
 
@@ -532,19 +532,21 @@ func (s *kvstore) serve() {
 }
 
 func (s *kvstore) issueFullDbWriteBack() {
-	GetSugar().Info("WriteBackAll")
+	writebackcount := 0
 	for _, v := range s.kv {
 		for _, vv := range v {
 			if meta := s.meta.CheckTableMeta(vv.meta); meta != nil {
 				vv.meta = meta
-				//用最新version作为lastWriteBackVersion
-				vv.updateTask.SetLastWriteBackVersion(vv.version)
-				vv.updateTask.issueFullDbWriteBack()
+				if vv.lastWriteBackVersion != vv.version {
+					writebackcount++
+					vv.updateTask.issueFullDbWriteBack()
+				}
 			} else {
 				s.tryKick(vv)
 			}
 		}
 	}
+	GetSugar().Infof("WriteBackAll kv:%d", writebackcount)
 }
 
 func (s *kvstore) applyNop() {

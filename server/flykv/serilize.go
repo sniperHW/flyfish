@@ -13,9 +13,10 @@ type proposalReader struct {
 }
 
 type ppkv struct {
-	unikey  string
-	version int64
-	fields  map[string]*flyproto.Field
+	unikey               string
+	version              int64
+	lastWriteBackVersion int64
+	fields               map[string]*flyproto.Field
 }
 
 func appendField(b []byte, field *flyproto.Field) []byte {
@@ -60,17 +61,19 @@ func serilizeMeta(meta db.DBMeta, b []byte) []byte {
 	return buffer.AppendBytes(b, metaB)
 }
 
-func serilizeKv(b []byte, ptype proposalType, unikey string, version int64, fields map[string]*flyproto.Field) []byte {
+func serilizeKv(b []byte, ptype proposalType, unikey string, version int64, lastWritebackVersion int64, fields map[string]*flyproto.Field) []byte {
 	//先写入类型
 	b = buffer.AppendByte(b, byte(ptype))
 	//len unikey
 	b = buffer.AppendUint16(b, uint16(len(unikey)))
 	//unikey
 	b = buffer.AppendString(b, unikey)
+	//version
+	b = buffer.AppendInt64(b, version)
+	//last_writeback_version
+	b = buffer.AppendInt64(b, lastWritebackVersion)
 
 	if ptype != proposal_kick {
-		//version
-		b = buffer.AppendInt64(b, version)
 		//fields
 		if nil != fields {
 			b = buffer.AppendInt32(b, int32(len(fields)))

@@ -94,10 +94,13 @@ type mockBackEnd struct {
 	d *mock.DB
 }
 
-func newMockDB() *mockBackEnd {
+func newMockDB(mockdb *mockBackEnd) *mockBackEnd {
+	d := &mockBackEnd{}
 
-	d := &mockBackEnd{
-		d: mock.NewDB(),
+	if nil == mockdb {
+		d.d = mock.NewDB()
+	} else {
+		d.d = mockdb.d.Clone()
 	}
 
 	return d
@@ -150,8 +153,8 @@ func newSqlDBBackEnd() dbI {
 	return NewSqlDB()
 }
 
-func newMockDBBackEnd() dbI {
-	return newMockDB()
+func newMockDBBackEnd(mockdb *mockBackEnd) dbI {
+	return newMockDB(mockdb)
 }
 
 func start1Node(b dbI) *kvnode {
@@ -800,7 +803,7 @@ func TestUseMockDB(t *testing.T) {
 
 	client.InitLogger(GetLogger())
 
-	node := start1Node(newMockDBBackEnd())
+	node := start1Node(newMockDBBackEnd(nil))
 
 	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
 
@@ -819,7 +822,9 @@ func TestKick(t *testing.T) {
 
 	client.InitLogger(GetLogger())
 
-	node := start1Node(newMockDBBackEnd())
+	db := newMockDBBackEnd(nil)
+
+	node := start1Node(db)
 
 	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
 
@@ -834,9 +839,9 @@ func TestKick(t *testing.T) {
 
 	node.Stop()
 
-	node = start1Node(newMockDBBackEnd())
+	node = start1Node(newMockDBBackEnd(db.(*mockBackEnd)))
 
-	time.Sleep(time.Second * 5)
+	time.Sleep(time.Second * 1)
 
 	node.Stop()
 

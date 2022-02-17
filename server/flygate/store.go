@@ -6,7 +6,6 @@ import (
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/queue"
-	"github.com/sniperHW/flyfish/pkg/util"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"sync/atomic"
@@ -115,7 +114,7 @@ func (s *store) queryLeader() {
 							leaderNode.sendForwordMsg(msg)
 						}
 					} else {
-						util.OnceTimer(time.Millisecond*100, func() {
+						time.AfterFunc(time.Millisecond*100, func() {
 							s.mainQueue.ForceAppend(1, s.queryLeader)
 						})
 					}
@@ -123,7 +122,7 @@ func (s *store) queryLeader() {
 
 			}()
 		} else {
-			util.OnceTimer(time.Second, func() {
+			time.AfterFunc(time.Second, func() {
 				s.mainQueue.ForceAppend(1, s.queryLeader)
 			})
 		}

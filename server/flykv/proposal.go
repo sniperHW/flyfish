@@ -16,14 +16,15 @@ import (
 )
 
 const (
-	proposal_none          = proposalType(0)
-	proposal_snapshot      = proposalType(1) //全量数据kv快照,
-	proposal_update        = proposalType(2) //fields变更
-	proposal_kick          = proposalType(3) //从缓存移除kv
-	proposal_slots         = proposalType(4)
-	proposal_slot_transfer = proposalType(5)
-	proposal_meta          = proposalType(6)
-	proposal_nop           = proposalType(7) //空proposal用于确保之前的proposal已经提交并apply
+	proposal_none                   = proposalType(0)
+	proposal_snapshot               = proposalType(1) //全量数据kv快照,
+	proposal_update                 = proposalType(2) //fields变更
+	proposal_kick                   = proposalType(3) //从缓存移除kv
+	proposal_slots                  = proposalType(4)
+	proposal_slot_transfer          = proposalType(5)
+	proposal_meta                   = proposalType(6)
+	proposal_nop                    = proposalType(7) //空proposal用于确保之前的proposal已经提交并apply
+	proposal_last_writeback_version = proposalType(8)
 )
 
 func newProposalReader(b []byte) proposalReader {
@@ -162,7 +163,7 @@ func (this *proposalReader) read() (isOver bool, ptype proposalType, data interf
 				}
 			case proposal_none:
 				err = errors.New("bad data 2")
-			case proposal_snapshot, proposal_update, proposal_kick:
+			case proposal_last_writeback_version:
 				var l uint16
 				l, err = this.reader.CheckGetUint16()
 				if nil != err {
@@ -174,12 +175,35 @@ func (this *proposalReader) read() (isOver bool, ptype proposalType, data interf
 					return
 				}
 
+				p.lastWriteBackVersion, err = this.reader.CheckGetInt64()
+				if nil != err {
+					return
+				}
+
+				data = p
+			case proposal_snapshot, proposal_update, proposal_kick:
+				var l uint16
+				l, err = this.reader.CheckGetUint16()
+				if nil != err {
+					return
+				}
+				p := ppkv{}
+				p.unikey, err = this.reader.CheckGetString(int(l))
+				if nil != err {
+					return
+				}
+				p.version, err = this.reader.CheckGetInt64()
+				if nil != err {
+					return
+				}
+
+				p.lastWriteBackVersion, err = this.reader.CheckGetInt64()
+				if nil != err {
+					return
+				}
+
 				if ptype != proposal_kick {
 
-					p.version, err = this.reader.CheckGetInt64()
-					if nil != err {
-						return
-					}
 					var fieldSize int32
 					fieldSize, err = this.reader.CheckGetInt32()
 					if nil != err {
@@ -236,12 +260,14 @@ func (this *proposalBase) OnMergeFinish(b []byte) (ret []byte) {
 
 type kvProposal struct {
 	proposalBase
-	dbstate db.DBState
-	ptype   proposalType
-	fields  map[string]*flyproto.Field
-	version int64
-	cmds    []cmdI
-	kv      *kv
+	dbstate     db.DBState
+	ptype       proposalType
+	fields      map[string]*flyproto.Field
+	version     int64
+	cmds        []cmdI
+	kv          *kv
+	dbversion   int64
+	causeByLoad bool
 }
 
 type kvLinearizableRead struct {
@@ -274,7 +300,7 @@ func (this *kvProposal) OnError(err error) {
 }
 
 func (this *kvProposal) Serilize(b []byte) []byte {
-	return serilizeKv(b, this.ptype, this.kv.uniKey, this.version, this.fields)
+	return serilizeKv(b, this.ptype, this.kv.uniKey, this.version, this.kv.lastWriteBackVersion, this.fields)
 }
 
 func (this *kvProposal) apply() {
@@ -290,8 +316,6 @@ func (this *kvProposal) apply() {
 		this.kv.store.deleteKv(this.kv)
 	} else {
 
-		oldState := this.kv.state
-
 		if this.version <= 0 {
 			this.kv.state = kv_no_record
 			this.kv.fields = nil
@@ -299,7 +323,13 @@ func (this *kvProposal) apply() {
 			this.kv.state = kv_ok
 		}
 
+		if this.causeByLoad {
+			this.kv.updateTask.setLastWriteBackVersion(this.dbversion)
+			this.kv.lastWriteBackVersion = this.dbversion
+		}
+
 		this.kv.version = this.version
+
 		if len(this.fields) > 0 {
 			if nil == this.kv.fields {
 				this.kv.fields = map[string]*flyproto.Field{}
@@ -309,6 +339,8 @@ func (this *kvProposal) apply() {
 				this.kv.fields[v.GetName()] = v
 			}
 		}
+
+		this.kv.store.lru.update(&this.kv.lru)
 
 		for _, v := range this.cmds {
 			v.reply(nil, this.kv.fields, this.version)
@@ -320,10 +352,6 @@ func (this *kvProposal) apply() {
 			if nil != err {
 				GetSugar().Errorf("%s updateState error:%v", this.kv.uniKey, err)
 			}
-		}
-
-		if oldState == kv_loading {
-			this.kv.store.lru.update(&this.kv.lru)
 		}
 
 		this.kv.processPendingCmd()
@@ -470,5 +498,30 @@ func (this *SlotTransferProposal) apply() {
 		} else {
 			this.store.processSlotTransferOut(this)
 		}
+	}
+}
+
+type LastWriteBackVersionProposal struct {
+	proposalBase
+	kv      *kv
+	version int64
+}
+
+func (this *LastWriteBackVersionProposal) OnError(err error) {
+
+}
+
+func (this *LastWriteBackVersionProposal) Serilize(b []byte) []byte {
+	b = buffer.AppendByte(b, byte(proposal_last_writeback_version))
+	//unikey
+	b = buffer.AppendUint16(b, uint16(len(this.kv.uniKey)))
+	b = buffer.AppendString(b, this.kv.uniKey)
+	return buffer.AppendInt64(b, this.version)
+}
+
+func (this *LastWriteBackVersionProposal) apply() {
+	GetSugar().Debugf("LastWriteBackVersionProposal apply %s version:%d", this.kv.uniKey, this.version)
+	if abs(this.version) > abs(this.kv.lastWriteBackVersion) {
+		this.kv.lastWriteBackVersion = this.version
 	}
 }
