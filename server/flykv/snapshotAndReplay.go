@@ -127,7 +127,8 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 			kv, ok := s.kv[groupID][p.unikey]
 			if !ok {
 				if ptype == proposal_kick {
-					return fmt.Errorf("bad data,%s with a bad proposal_type:%d", p.unikey, ptype)
+					continue
+					//return fmt.Errorf("bad data,%s with a bad proposal_type:%d", p.unikey, ptype)
 				} else if ptype == proposal_update {
 					return fmt.Errorf("bad data,%s with a bad proposal_type:%d", p.unikey, ptype)
 				} else {
@@ -193,9 +194,10 @@ func (s *kvstore) makeSnapshot(notifyer *raft.SnapshotNotify) {
 			var snapkv []*kv
 			for _, v := range m {
 				kv := &kv{
-					uniKey:  v.uniKey,
-					version: v.version,
-					fields:  map[string]*flyproto.Field{},
+					uniKey:               v.uniKey,
+					version:              v.version,
+					fields:               map[string]*flyproto.Field{},
+					lastWriteBackVersion: v.lastWriteBackVersion,
 				}
 
 				for kk, vv := range v.fields {
@@ -230,6 +232,7 @@ func (s *kvstore) makeSnapshot(notifyer *raft.SnapshotNotify) {
 				 */
 
 				for _, vv := range snapkvs {
+					//GetSugar().Infof("snapshot.serilizeKv %s %d %d", vv.uniKey, vv.version, vv.lastWriteBackVersion)
 					b = serilizeKv(b, proposal_snapshot, vv.uniKey, vv.version, vv.lastWriteBackVersion, vv.fields)
 					if len(b) >= maxBlockSize {
 						b = compressSnap(b)

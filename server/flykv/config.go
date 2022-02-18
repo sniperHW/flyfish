@@ -63,6 +63,8 @@ type Config struct {
 
 	DBType string `toml:"DBType"`
 
+	//WriteBackOnKick bool `toml:"WriteBackOnKick"` //只在kick的时候执行回写
+
 	DBConfig struct {
 		Host     string `toml:"Host"`
 		Port     int    `toml:"Port"`

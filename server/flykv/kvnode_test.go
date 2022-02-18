@@ -126,6 +126,7 @@ func (d *mockBackEnd) stop() {
 var config *Config
 
 func init() {
+
 	sslot.SlotCount = 128
 
 	go func() {
@@ -721,6 +722,8 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 	time.Sleep(time.Second * 2)
 
 	node.Stop()
+
+	GetSugar().Infof("start again")
 
 	node = start1Node(newSqlDBBackEnd())
 

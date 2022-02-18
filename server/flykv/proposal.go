@@ -284,9 +284,6 @@ func (this *kvProposal) OnError(err error) {
 	}
 
 	this.kv.store.mainQueue.AppendHighestPriotiryItem(func() {
-		if this.ptype == proposal_kick {
-			this.kv.kicking = false
-		}
 		if this.kv.state == kv_loading {
 			this.kv.store.deleteKv(this.kv)
 			for f := this.kv.pendingCmd.front(); nil != f; f = this.kv.pendingCmd.front() {
@@ -300,7 +297,8 @@ func (this *kvProposal) OnError(err error) {
 }
 
 func (this *kvProposal) Serilize(b []byte) []byte {
-	return serilizeKv(b, this.ptype, this.kv.uniKey, this.version, this.kv.lastWriteBackVersion, this.fields)
+	GetSugar().Debugf("kvProposal.serilizeKv %s %d %d", this.kv.uniKey, this.version, this.dbversion)
+	return serilizeKv(b, this.ptype, this.kv.uniKey, this.version, this.dbversion, this.fields)
 }
 
 func (this *kvProposal) apply() {
@@ -326,6 +324,7 @@ func (this *kvProposal) apply() {
 		if this.causeByLoad {
 			this.kv.updateTask.setLastWriteBackVersion(this.dbversion)
 			this.kv.lastWriteBackVersion = this.dbversion
+			GetSugar().Debugf("kvProposal.apply causeByLoad %s %d %d", this.kv.uniKey, this.version, this.dbversion)
 		}
 
 		this.kv.version = this.version

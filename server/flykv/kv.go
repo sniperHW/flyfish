@@ -47,14 +47,14 @@ type cmdQueue struct {
  */
 
 type kv struct {
-	slot                 int
-	lru                  lruElement
-	table                string
-	uniKey               string //"table:key"组成的唯一全局唯一键
-	key                  string
-	version              int64
-	state                kvState
-	kicking              bool
+	slot    int
+	lru     lruElement
+	table   string
+	uniKey  string //"table:key"组成的唯一全局唯一键
+	key     string
+	version int64
+	state   kvState
+	//kicking              bool
 	fields               map[string]*flyproto.Field //字段
 	meta                 db.TableMeta
 	updateTask           dbUpdateTask
@@ -112,13 +112,11 @@ func mergeAbleCmd(cmdType flyproto.CmdType) bool {
 }
 
 func (this *kv) kickable() bool {
-	if this.kicking {
+	if this.state < kv_ok {
 		return false
-	} else if !(this.state == kv_ok || this.state == kv_no_record) {
+	} else if this.asynTaskCount > 0 {
 		return false
-	} else if this.asynTaskCount > 0 || !this.pendingCmd.empty() {
-		return false
-	} else if this.updateTask.isDoing() {
+	} else if this.version != this.lastWriteBackVersion {
 		return false
 	} else {
 		return true
@@ -219,11 +217,12 @@ func (this *kv) processCmd(cmd cmdI) {
 			}
 		default:
 			proposal = &kvProposal{
-				ptype:   proposal_snapshot,
-				kv:      this,
-				cmds:    cmds,
-				version: this.version,
-				fields:  map[string]*flyproto.Field{},
+				ptype:     proposal_snapshot,
+				kv:        this,
+				cmds:      cmds,
+				version:   this.version,
+				fields:    map[string]*flyproto.Field{},
+				dbversion: this.lastWriteBackVersion,
 			}
 
 			for _, v := range cmds {
@@ -243,9 +242,6 @@ func (this *kv) processCmd(cmd cmdI) {
 			return
 		} else if nil != proposal {
 			this.store.rn.IssueProposal(proposal)
-			if proposal.ptype == proposal_kick {
-				this.kicking = true
-			}
 			this.asynTaskCount++
 			return
 		}

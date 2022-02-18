@@ -200,6 +200,12 @@ func (this *kvstore) tryKick(kv *kv) bool {
 	if !kv.kickable() {
 		return false
 	} else {
+		//排空后面的cmd
+		for c := kv.pendingCmd.front(); nil != c; c = kv.pendingCmd.front() {
+			kv.pendingCmd.popFront()
+			c.reply(errcode.New(errcode.Errcode_retry), nil, 0)
+		}
+		//插入kick
 		cmd, _ := this.makeKick(kv, time.Time{}, time.Time{}, nil, 0, nil)
 		kv.pushCmd(cmd)
 		return true
@@ -342,8 +348,6 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 						}
 					}
 				}
-			} else if kv.kicking {
-				return errcode.New(errcode.Errcode_retry, "please retry later")
 			} else {
 				tbmeta := s.meta.CheckTableMeta(kv.meta)
 				if nil == tbmeta {
