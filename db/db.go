@@ -146,25 +146,28 @@ func (t *TableDef) Clone() *TableDef {
 
 func (t *TableDef) Check() error {
 	names := map[string]bool{}
+	if t.Name == "" {
+		return errors.New("table name is empty")
+	}
 	for _, v := range t.Fields {
 		if v.Name == "" {
-			return errors.New("emtpy filed.Name")
+			return fmt.Errorf("%s has emtpy filed.Name", t.Name)
 		}
 
 		if strings.HasPrefix(v.Name, "__") {
-			return fmt.Errorf("invaild filed.Name:%s", v.Name)
+			return fmt.Errorf("%s has invaild filed.Name:%s", t.Name, v.Name)
 		}
 
 		if names[v.Name] {
-			return fmt.Errorf("duplicate filed.Name:%s", v.Name)
+			return fmt.Errorf("%s has duplicate filed.Name:%s", t.Name, v.Name)
 		}
 
 		if v.GetProtoType() == proto.ValueType_invaild {
-			return fmt.Errorf("invaild filed.Type:%s", v.Type)
+			return fmt.Errorf("%s has invaild filed.Type:%s", t.Name, v.Type)
 		}
 
 		if nil == v.GetDefaultValue() {
-			return fmt.Errorf("filed.Type:%s invaild DefaultValue:%s", v.Type, v.DefaultValue)
+			return fmt.Errorf("%s filed.Type:%s invaild DefaultValue:%s", t.Name, v.Type, v.DefaultValue)
 		}
 
 		names[v.Name] = true

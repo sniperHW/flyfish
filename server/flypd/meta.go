@@ -257,6 +257,10 @@ func (p *pd) onMetaAddTable(replyer replyer, m *snet.Message) bool {
 			return errors.New("version mismatch")
 		}
 
+		if msg.Name == "" {
+			return errors.New("table name is empty")
+		}
+
 		for _, v := range def.TableDefs {
 			if v.Name == msg.Name {
 				return fmt.Errorf("table:%s already exists", v.Name)

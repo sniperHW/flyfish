@@ -163,9 +163,6 @@ func (this *kv) processCmd(cmd cmdI) {
 			return
 		} else {
 			this.pendingCmd.add(cmd)
-			//if this.state == kv_ok || this.state == kv_no_record {
-			//	this.store.lru.update(&this.lru)
-			//}
 		}
 	} else {
 		this.asynTaskCount--
