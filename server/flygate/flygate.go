@@ -314,8 +314,9 @@ func NewFlyGate(config *Config, service string) (*gate, error) {
 
 func (g *gate) refreshMsgPerSecond() {
 	if atomic.LoadInt32(&g.closed) == 0 {
-		g.msgPerSecond.Add(int(atomic.LoadInt32(&g.msgRecv)))
-		atomic.StoreInt32(&g.msgRecv, 0)
+		msgRecv := atomic.LoadInt32(&g.msgRecv)
+		atomic.AddInt32(&g.msgRecv, -msgRecv)
+		g.msgPerSecond.Add(int(msgRecv))
 		time.AfterFunc(time.Second, g.refreshMsgPerSecond)
 	}
 }

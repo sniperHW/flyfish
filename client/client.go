@@ -515,8 +515,9 @@ func (this *Client) queryRouteInfo() {
 
 func (this *Client) refreshMsgPerSecond() {
 	if atomic.LoadInt32(&this.closed) == 0 {
-		this.msgPerSecond.Add(int(atomic.LoadInt32(&this.msgSend)))
-		atomic.StoreInt32(&this.msgSend, 0)
+		msgSend := atomic.LoadInt32(&this.msgSend)
+		atomic.AddInt32(&this.msgSend, -msgSend)
+		this.msgPerSecond.Add(int(msgSend))
 		time.AfterFunc(time.Second, this.refreshMsgPerSecond)
 	}
 }
