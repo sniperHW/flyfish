@@ -118,6 +118,10 @@ func (p *ProposalSetMarkClear) doApply(pd *pd) error {
 			return errors.New("already mark clear")
 		}
 
+		if len(pd.pState.deployment.sets) == 1 {
+			return errors.New("can't mark clear the only set")
+		}
+
 		return nil
 	}()
 
