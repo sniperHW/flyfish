@@ -83,15 +83,15 @@ func (p *pd) loadInitMeta() {
 					for _, vv := range v.Fields {
 						f, ok := fields[vv.Name]
 						if !ok {
-							GetSugar().Panicf("table:%s already in db but not match with meta,field:%s not found in db", f.Name, vv.Name)
+							GetSugar().Panicf("table:%s already in db but not match with meta,field:%s not found in db", v.Name, vv.Name)
 						}
 
 						if f.Type != vv.Type {
-							GetSugar().Panicf("table:%s already in db but not match with meta,field:%s type mismatch with db", f.Name, vv.Name)
+							GetSugar().Panicf("table:%s already in db but not match with meta,field:%s type mismatch with db", v.Name, vv.Name)
 						}
 
-						if f.DefaultValue != vv.DefaultValue {
-							GetSugar().Panicf("table:%s already in db but not match with meta,field:%s DefaultValue mismatch with db", f.Name, vv.Name)
+						if f.GetDefaultValue() != vv.GetDefaultValue() {
+							GetSugar().Panicf("table:%s already in db but not match with meta,field:%s DefaultValue mismatch with db", v.Name, vv.Name)
 						}
 
 						vv.TabVersion = f.TabVersion

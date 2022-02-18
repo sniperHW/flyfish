@@ -96,6 +96,7 @@ type kvstore struct {
 	dbWriteBackCount     int32
 	SoftLimitReachedTime int64
 	unixNow              int64
+	lruInterval          time.Duration
 }
 
 func (s *kvstore) isLeader() bool {
@@ -205,27 +206,27 @@ func (this *kvstore) tryKick(kv *kv) bool {
 	}
 }
 
-func (s *kvstore) checkLru(ch chan struct{}) {
-	defer func() {
-		select {
-		case ch <- struct{}{}:
-		default:
-		}
-	}()
-	if s.isReady() && atomic.LoadInt32(&s.stoped) == 0 {
-		if s.kvcount > s.kvnode.config.MaxCachePerStore && s.lru.head.nnext != &s.lru.tail {
-			k := 0
-			cur := s.lru.tail.pprev
-			for cur != &s.lru.head && s.kvcount-k > s.kvnode.config.MaxCachePerStore {
-				if !s.tryKick(cur.keyvalue) {
-					return
-				} else {
-					k++
+func (s *kvstore) checkLru() {
+	s.mainQueue.AppendHighestPriotiryItem(func() {
+		if s.isReady() && atomic.LoadInt32(&s.stoped) == 0 {
+			if s.kvcount > s.kvnode.config.MaxCachePerStore && s.lru.head.nnext != &s.lru.tail {
+				k := 0
+				cur := s.lru.tail.pprev
+				for cur != &s.lru.head && s.kvcount-k > s.kvnode.config.MaxCachePerStore {
+					if !s.tryKick(cur.keyvalue) {
+						return
+					} else {
+						k++
+					}
+					cur = cur.pprev
 				}
-				cur = cur.pprev
 			}
 		}
-	}
+
+		if atomic.LoadInt32(&s.stoped) == 0 {
+			time.AfterFunc(s.lruInterval, s.checkLru)
+		}
+	})
 }
 
 func getDeadline(timeout uint32) (time.Time, time.Time) {
@@ -405,7 +406,7 @@ func (s *kvstore) stop() {
 }
 
 func (s *kvstore) reportStatus() {
-	s.mainQueue.q.Append(1, func() {
+	s.mainQueue.AppendHighestPriotiryItem(func() {
 		msg := &sproto.StoreReportStatus{
 			SetID:       int32(s.kvnode.setID),
 			NodeID:      int32(s.kvnode.id),
@@ -430,26 +431,6 @@ func (s *kvstore) reportStatus() {
 func (s *kvstore) serve() {
 
 	s.reportStatus()
-
-	go func() {
-		ch := make(chan struct{}, 1)
-		interval := time.Duration(s.kvnode.config.LruCheckInterval)
-		if 0 == interval {
-			interval = 1000
-		}
-
-		for atomic.LoadInt32(&s.stoped) == 0 {
-			time.Sleep(time.Millisecond * interval)
-			err := s.mainQueue.q.Append(1, func() {
-				s.checkLru(ch)
-			})
-			if nil == err {
-				<-ch
-			} else if err == queue.ErrQueueClosed {
-				return
-			}
-		}
-	}()
 
 	go func() {
 		defer func() {
@@ -529,6 +510,13 @@ func (s *kvstore) serve() {
 			}
 		}
 	}()
+
+	s.lruInterval = time.Duration(s.kvnode.config.LruCheckInterval)
+	if 0 == s.lruInterval {
+		s.lruInterval = 1000
+	}
+
+	s.checkLru()
 }
 
 func (s *kvstore) issueFullDbWriteBack() {
