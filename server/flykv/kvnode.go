@@ -326,40 +326,40 @@ func (this *kvnode) start() error {
 			return err
 		}
 
-		for _, v := range dbdef.TableDefs {
-			tb, err := sql.GetTableScheme(this.dbc, config.DBType, fmt.Sprintf("%s_%d", v.Name, v.DbVersion))
+		for _, t := range dbdef.TableDefs {
+			tb, err := sql.GetTableScheme(this.dbc, config.DBType, fmt.Sprintf("%s_%d", t.Name, t.DbVersion))
 			if nil != err {
 				return err
 			} else if nil == tb {
 				//表不存在
-				err = sql.CreateTables(this.dbc, config.DBType, v)
+				err = sql.CreateTables(this.dbc, config.DBType, t)
 				if nil != err {
 					return err
 				} else {
-					GetSugar().Infof("create table:%s_%d ok", v.Name, v.DbVersion)
+					GetSugar().Infof("create table:%s_%d ok", t.Name, t.DbVersion)
 				}
 			} else {
 				//记录字段的最大版本
 				fields := map[string]*db.FieldDef{}
-				for _, vv := range tb.Fields {
-					f := fields[vv.Name]
-					if nil == f || f.TabVersion <= vv.TabVersion {
-						fields[vv.Name] = vv
+				for _, v := range tb.Fields {
+					f := fields[v.Name]
+					if nil == f || f.TabVersion <= v.TabVersion {
+						fields[v.Name] = v
 					}
 				}
 
-				for _, vv := range v.Fields {
-					f, ok := fields[vv.Name]
+				for _, v := range t.Fields {
+					f, ok := fields[v.Name]
 					if !ok {
-						return fmt.Errorf("table:%s already in db but not match with meta,field:%s not found in db", f.Name, vv.Name)
+						GetSugar().Panicf("table:%s already in db but not match with meta,field:%s not found in db", t.Name, v.Name)
 					}
 
-					if f.Type != vv.Type {
-						return fmt.Errorf("table:%s already in db but not match with meta,field:%s type mismatch with db", f.Name, vv.Name)
+					if f.Type != v.Type {
+						GetSugar().Panicf("table:%s already in db but not match with meta,field:%s type mismatch with db", t.Name, v.Name)
 					}
 
-					if f.DefaultValue != vv.DefaultValue {
-						GetSugar().Panicf("table:%s already in db but not match with meta,field:%s DefaultValue mismatch with db", f.Name, vv.Name)
+					if f.GetDefaultValueStr() != v.GetDefaultValueStr() {
+						GetSugar().Panicf("table:%s already in db but not match with meta,field:%s DefaultValue mismatch with db db.v:%v meta.v:%v", t.Name, v.Name, f.GetDefaultValueStr(), v.GetDefaultValueStr())
 					}
 				}
 			}
