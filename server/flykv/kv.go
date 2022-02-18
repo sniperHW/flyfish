@@ -47,14 +47,13 @@ type cmdQueue struct {
  */
 
 type kv struct {
-	slot    int
-	lru     lruElement
-	table   string
-	uniKey  string //"table:key"组成的唯一全局唯一键
-	key     string
-	version int64
-	state   kvState
-	//kicking              bool
+	slot                 int
+	lru                  lruElement
+	table                string
+	uniKey               string //"table:key"组成的唯一全局唯一键
+	key                  string
+	version              int64
+	state                kvState
 	fields               map[string]*flyproto.Field //字段
 	meta                 db.TableMeta
 	updateTask           dbUpdateTask
@@ -63,6 +62,7 @@ type kv struct {
 	asynTaskCount        int
 	groupID              int
 	lastWriteBackVersion int64
+	markKick             bool
 }
 
 func abs(v int64) int64 {
@@ -123,6 +123,16 @@ func (this *kv) kickable() bool {
 	}
 }
 
+func (this *kv) kick() {
+	this.asynTaskCount++
+	this.store.rn.IssueProposal(&kvProposal{
+		ptype:     proposal_kick,
+		kv:        this,
+		version:   this.version,
+		dbversion: this.lastWriteBackVersion,
+	})
+}
+
 func (this *kv) pushCmd(cmd cmdI) {
 	this.processCmd(cmd)
 }
@@ -134,6 +144,9 @@ func (this *kv) processPendingCmd() {
 			this.pendingCmd.popFront()
 			c.reply(errcode.New(errcode.Errcode_not_leader), nil, 0)
 		}
+	} else if this.markKick && this.lastWriteBackVersion == this.version {
+		this.asynTaskCount--
+		this.kick()
 	} else {
 		this.processCmd(nil)
 	}

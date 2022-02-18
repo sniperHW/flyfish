@@ -198,16 +198,13 @@ func (s *kvstore) newkv(slot int, groupID int, unikey string, key string, table 
 
 func (this *kvstore) tryKick(kv *kv) bool {
 	if !kv.kickable() {
+		kv.markKick = true
+		if this.kvnode.config.WriteBackOnKick {
+			kv.updateTask.issueKickDbWriteBack()
+		}
 		return false
 	} else {
-		//排空后面的cmd
-		for c := kv.pendingCmd.front(); nil != c; c = kv.pendingCmd.front() {
-			kv.pendingCmd.popFront()
-			c.reply(errcode.New(errcode.Errcode_retry), nil, 0)
-		}
-		//插入kick
-		cmd, _ := this.makeKick(kv, time.Time{}, time.Time{}, nil, 0, nil)
-		kv.pushCmd(cmd)
+		kv.kick()
 		return true
 	}
 }
@@ -348,6 +345,8 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 						}
 					}
 				}
+			} else if kv.markKick {
+				return errcode.New(errcode.Errcode_retry)
 			} else {
 				tbmeta := s.meta.CheckTableMeta(kv.meta)
 				if nil == tbmeta {
@@ -527,6 +526,7 @@ func (s *kvstore) issueFullDbWriteBack() {
 	writebackcount := 0
 	for _, v := range s.kv {
 		for _, vv := range v {
+			vv.markKick = false
 			if meta := s.meta.CheckTableMeta(vv.meta); meta != nil {
 				vv.meta = meta
 				if vv.lastWriteBackVersion != vv.version {

@@ -77,7 +77,7 @@ func (this *dbUpdateTask) issueFullDbWriteBack() error {
 	defer this.Unlock()
 
 	if this.doing {
-		return errors.New("is doing")
+		return nil
 	}
 
 	switch this.kv.state {
@@ -107,6 +107,16 @@ func (this *dbUpdateTask) issueFullDbWriteBack() error {
 	this.kv.store.db.issueUpdate(this) //这里不会出错，db要到最后才会stop
 
 	return nil
+}
+
+func (this *dbUpdateTask) issueKickDbWriteBack() {
+	this.Lock()
+	defer this.Unlock()
+	if !this.doing && this.state.State != db.DBState_none && this.kv.version != this.kv.lastWriteBackVersion {
+		this.doing = true
+		atomic.AddInt32(&this.kv.store.dbWriteBackCount, 1)
+		this.kv.store.db.issueUpdate(this)
+	}
 }
 
 func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields map[string]*flyproto.Field) error {
@@ -157,7 +167,7 @@ func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields 
 		this.state.Fields[k] = v
 	}
 
-	if !this.doing {
+	if !this.kv.store.kvnode.config.WriteBackOnKick && !this.doing {
 		this.doing = true
 		atomic.AddInt32(&this.kv.store.dbWriteBackCount, 1)
 		this.kv.store.db.issueUpdate(this)

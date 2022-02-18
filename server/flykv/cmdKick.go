@@ -30,6 +30,8 @@ func (this *cmdKick) do(proposal *kvProposal) {
 		proposal.ptype = proposal_none
 		GetSugar().Infof("reply retry")
 		this.reply(errcode.New(errcode.Errcode_retry, "please retry again"), nil, 0)
+		this.kv.markKick = true
+		this.kv.updateTask.issueKickDbWriteBack()
 	}
 }
 

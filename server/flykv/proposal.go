@@ -523,4 +523,8 @@ func (this *LastWriteBackVersionProposal) apply() {
 	if abs(this.version) > abs(this.kv.lastWriteBackVersion) {
 		this.kv.lastWriteBackVersion = this.version
 	}
+
+	if this.kv.version == this.kv.lastWriteBackVersion && this.kv.markKick {
+		this.kv.kick()
+	}
 }
