@@ -63,6 +63,7 @@ type kv struct {
 	groupID              int
 	lastWriteBackVersion int64
 	markKick             bool
+	waitWriteBackOkKick  cmdI
 }
 
 func abs(v int64) int64 {

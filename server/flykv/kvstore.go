@@ -149,6 +149,8 @@ func (s *kvstore) deleteKv(k *kv) {
 			}
 		}
 	}
+
+	GetSugar().Infof("deleteKv:%s", k.uniKey)
 }
 
 func (s *kvstore) newkv(slot int, groupID int, unikey string, key string, table string) (*kv, errcode.Error) {
@@ -197,6 +199,7 @@ func (s *kvstore) newkv(slot int, groupID int, unikey string, key string, table 
 }
 
 func (this *kvstore) tryKick(kv *kv) bool {
+	//GetSugar().Infof("%d %d", kv.version, kv.lastWriteBackVersion)
 	if !kv.kickable() {
 		kv.markKick = true
 		if this.kvnode.config.WriteBackOnKick {
@@ -213,14 +216,13 @@ func (s *kvstore) checkLru() {
 	s.mainQueue.AppendHighestPriotiryItem(func() {
 		if s.isReady() && atomic.LoadInt32(&s.stoped) == 0 {
 			if s.kvcount > s.kvnode.config.MaxCachePerStore && s.lru.head.nnext != &s.lru.tail {
+				//GetSugar().Infof("%v %v %v", s.kvcount, s.kvnode.config.MaxCachePerStore, s.lru.head.nnext != &s.lru.tail)
 				k := 0
 				cur := s.lru.tail.pprev
 				for cur != &s.lru.head && s.kvcount-k > s.kvnode.config.MaxCachePerStore {
-					if !s.tryKick(cur.keyvalue) {
-						return
-					} else {
-						k++
-					}
+					//GetSugar().Infof("tryKick %s", cur.keyvalue.uniKey)
+					s.tryKick(cur.keyvalue)
+					k++
 					cur = cur.pprev
 				}
 			}
@@ -351,7 +353,6 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 				tbmeta := s.meta.CheckTableMeta(kv.meta)
 				if nil == tbmeta {
 					//在最新的meta中kv.table已经被删除
-					s.tryKick(kv)
 					return errcode.New(errcode.Errcode_error, fmt.Sprintf("table:%s no define", kv.table))
 				} else {
 					kv.meta = tbmeta
@@ -514,9 +515,9 @@ func (s *kvstore) serve() {
 		}
 	}()
 
-	s.lruInterval = time.Duration(s.kvnode.config.LruCheckInterval)
+	s.lruInterval = time.Duration(s.kvnode.config.LruCheckInterval) * time.Millisecond
 	if 0 == s.lruInterval {
-		s.lruInterval = 1000
+		s.lruInterval = 1000 * time.Millisecond
 	}
 
 	s.checkLru()
@@ -524,21 +525,20 @@ func (s *kvstore) serve() {
 
 func (s *kvstore) issueFullDbWriteBack() {
 	writebackcount := 0
-	for _, v := range s.kv {
-		for _, vv := range v {
-			vv.markKick = false
-			if meta := s.meta.CheckTableMeta(vv.meta); meta != nil {
-				vv.meta = meta
+	if !s.kvnode.config.WriteBackOnKick {
+		for _, v := range s.kv {
+			for _, vv := range v {
+				if meta := s.meta.CheckTableMeta(vv.meta); meta != nil {
+					vv.meta = meta
+				}
 				if vv.lastWriteBackVersion != vv.version {
 					writebackcount++
 					vv.updateTask.issueFullDbWriteBack()
 				}
-			} else {
-				s.tryKick(vv)
 			}
 		}
 	}
-	GetSugar().Infof("WriteBackAll kv:%d", writebackcount)
+	GetSugar().Infof("WriteBackAll kv:%d kvcount:%d", writebackcount, s.kvcount)
 }
 
 func (s *kvstore) applyNop() {
@@ -553,6 +553,12 @@ func (s *kvstore) becomeLeader() {
 
 func (s *kvstore) onLeaderDownToFollower() {
 	atomic.StoreInt32(&s.ready, 0)
+	for _, v := range s.kv {
+		for _, vv := range v {
+			vv.markKick = false
+			vv.waitWriteBackOkKick = nil
+		}
+	}
 }
 
 //将nodeID作为learner加入当前store的raft配置

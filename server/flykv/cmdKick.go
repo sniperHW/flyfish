@@ -28,10 +28,15 @@ func (this *cmdKick) do(proposal *kvProposal) {
 		proposal.ptype = proposal_kick
 	} else {
 		proposal.ptype = proposal_none
-		GetSugar().Infof("reply retry")
-		this.reply(errcode.New(errcode.Errcode_retry, "please retry again"), nil, 0)
 		this.kv.markKick = true
 		this.kv.updateTask.issueKickDbWriteBack()
+		this.kv.waitWriteBackOkKick = this
+		this.processDeadline = time.Time{}
+		//清空后续消息
+		for f := this.kv.pendingCmd.front(); nil != f; f = this.kv.pendingCmd.front() {
+			f.reply(errcode.New(errcode.Errcode_retry, "please try again"), nil, 0)
+			this.kv.pendingCmd.popFront()
+		}
 	}
 }
 

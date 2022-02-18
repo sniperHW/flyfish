@@ -9,6 +9,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/db"
+	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	"github.com/sniperHW/flyfish/server/mock"
@@ -655,6 +656,8 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 
 	config.MaxCachePerStore = 10000
 
+	config.WriteBackOnKick = true
+
 	raft.SnapshotCount = 100
 	raft.SnapshotCatchUpEntriesN = 100
 
@@ -739,6 +742,8 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 
 	config.MaxCachePerStore = oldV
 
+	config.WriteBackOnKick = false
+
 }
 
 func Test1Node1StoreSnapshot2(t *testing.T) {
@@ -819,6 +824,9 @@ func TestUseMockDB(t *testing.T) {
 
 func TestKick(t *testing.T) {
 	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
+	GetSugar().Infof("MaxCachePerStore:%d", config.MaxCachePerStore)
+
+	config.WriteBackOnKick = true
 
 	//先删除所有kv文件
 	os.RemoveAll("./testRaftLog")
@@ -831,12 +839,18 @@ func TestKick(t *testing.T) {
 
 	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
 
-	for j := 0; j < 10; j++ {
-		for i := 0; i < 20; i++ {
-			fields := map[string]interface{}{}
-			fields["age"] = 12
-			fields["name"] = "sniperHW"
-			c.Set("users1", fmt.Sprintf("sniperHW:%d", i), fields).Exec()
+	for i := 0; i < 200; i++ {
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		fields["name"] = "sniperHW"
+		for {
+			r := c.Set("users1", fmt.Sprintf("sniperHW:%d", i), fields).Exec()
+			if errcode.GetCode(r.ErrCode) == errcode.Errcode_retry {
+				time.Sleep(time.Millisecond * 100)
+			} else {
+				GetSugar().Infof("%d", i)
+				break
+			}
 		}
 	}
 
@@ -844,9 +858,11 @@ func TestKick(t *testing.T) {
 
 	node = start1Node(newMockDBBackEnd(db.(*mockBackEnd)))
 
-	time.Sleep(time.Second * 1)
+	time.Sleep(time.Second * 5)
 
 	node.Stop()
+
+	config.WriteBackOnKick = false
 
 	fmt.Println("stop ok")
 }

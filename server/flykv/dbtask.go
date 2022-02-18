@@ -72,10 +72,7 @@ func (this *dbUpdateTask) GetUniKey() string {
 	return this.kv.uniKey
 }
 
-func (this *dbUpdateTask) issueFullDbWriteBack() error {
-	this.Lock()
-	defer this.Unlock()
-
+func (this *dbUpdateTask) _issueFullDbWriteBack() error {
 	if this.doing {
 		return nil
 	}
@@ -109,13 +106,23 @@ func (this *dbUpdateTask) issueFullDbWriteBack() error {
 	return nil
 }
 
+func (this *dbUpdateTask) issueFullDbWriteBack() error {
+	this.Lock()
+	defer this.Unlock()
+	return this._issueFullDbWriteBack()
+}
+
 func (this *dbUpdateTask) issueKickDbWriteBack() {
 	this.Lock()
 	defer this.Unlock()
-	if !this.doing && this.state.State != db.DBState_none && this.kv.version != this.kv.lastWriteBackVersion {
-		this.doing = true
-		atomic.AddInt32(&this.kv.store.dbWriteBackCount, 1)
-		this.kv.store.db.issueUpdate(this)
+	if !this.doing && this.kv.version != this.kv.lastWriteBackVersion {
+		if this.state.State == db.DBState_none {
+			this._issueFullDbWriteBack()
+		} else {
+			this.doing = true
+			atomic.AddInt32(&this.kv.store.dbWriteBackCount, 1)
+			this.kv.store.db.issueUpdate(this)
+		}
 	}
 }
 

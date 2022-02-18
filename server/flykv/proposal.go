@@ -303,6 +303,9 @@ func (this *kvProposal) Serilize(b []byte) []byte {
 
 func (this *kvProposal) apply() {
 	if this.ptype == proposal_kick {
+
+		GetSugar().Infof("apply kick:%v", this.kv.uniKey)
+
 		for _, v := range this.cmds {
 			v.reply(nil, nil, 0)
 		}
@@ -524,7 +527,13 @@ func (this *LastWriteBackVersionProposal) apply() {
 		this.kv.lastWriteBackVersion = this.version
 	}
 
-	if this.kv.version == this.kv.lastWriteBackVersion && this.kv.markKick {
-		this.kv.kick()
+	if this.kv.version == this.kv.lastWriteBackVersion {
+		if nil != this.kv.waitWriteBackOkKick {
+			cmd := this.kv.waitWriteBackOkKick
+			this.kv.waitWriteBackOkKick = nil
+			this.kv.pushCmd(cmd)
+		} else if this.kv.markKick {
+			this.kv.kick()
+		}
 	}
 }
