@@ -22,16 +22,6 @@ func (this *dbUpdateTask) setLastWriteBackVersion(version int64) {
 	this.state.LastWriteBackVersion = version
 }
 
-func (this *dbUpdateTask) GetTable() string {
-	return this.kv.table
-}
-
-func (this *dbUpdateTask) isDoing() bool {
-	this.Lock()
-	defer this.Unlock()
-	return this.doing
-}
-
 func (this *dbUpdateTask) CheckUpdateLease() bool {
 	return this.kv.store.isLeader()
 }
@@ -174,7 +164,7 @@ func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields 
 		this.state.Fields[k] = v
 	}
 
-	if !this.kv.store.kvnode.config.WriteBackOnKick && !this.doing {
+	if this.kv.store.kvnode.writeBackMode == write_through && !this.doing {
 		this.doing = true
 		atomic.AddInt32(&this.kv.store.dbWriteBackCount, 1)
 		this.kv.store.db.issueUpdate(this)
@@ -200,7 +190,6 @@ func (this *dbLoadTask) GetTableMeta() db.TableMeta {
 }
 
 func (this *dbLoadTask) onError(err errcode.Error) {
-	this.cmd.reply(err, nil, 0)
 	this.kv.store.mainQueue.AppendHighestPriotiryItem(func() {
 		this.kv.store.deleteKv(this.kv)
 		for f := this.kv.pendingCmd.front(); nil != f; f = this.kv.pendingCmd.front() {
@@ -214,24 +203,19 @@ func (this *dbLoadTask) OnResult(err error, version int64, fields map[string]*fl
 	if !this.kv.store.isLeader() {
 		this.onError(errcode.New(errcode.Errcode_not_leader))
 	} else if err == nil || err == db.ERR_RecordNotExist {
-
-		if version <= 0 {
-			err = db.ERR_RecordNotExist
-		}
 		/*
 		 * 根据this.cmd产生正确的proposal
 		 */
+
 		proposal := &kvProposal{
 			ptype:       proposal_snapshot,
 			kv:          this.kv,
-			cmds:        []cmdI{this.cmd},
 			version:     version,
 			fields:      fields,
 			causeByLoad: true,
 			dbversion:   version,
+			dbstate:     db.DBState_none,
 		}
-
-		this.cmd.onLoadResult(err, proposal)
 
 		this.kv.store.rn.IssueProposal(proposal)
 

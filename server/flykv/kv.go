@@ -1,6 +1,7 @@
 package flykv
 
 import (
+	"container/list"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
 	flyproto "github.com/sniperHW/flyfish/proto"
@@ -27,7 +28,6 @@ type dbUpdateTask struct {
 
 type dbLoadTask struct {
 	kv     *kv
-	cmd    cmdI
 	meta   db.TableMeta
 	table  string
 	uniKey string //"table:key"组成的唯一全局唯一键
@@ -48,7 +48,6 @@ type cmdQueue struct {
 
 type kv struct {
 	slot                 int
-	lru                  lruElement
 	table                string
 	uniKey               string //"table:key"组成的唯一全局唯一键
 	key                  string
@@ -59,11 +58,9 @@ type kv struct {
 	updateTask           dbUpdateTask
 	pendingCmd           cmdQueue
 	store                *kvstore
-	asynTaskCount        int
 	groupID              int
 	lastWriteBackVersion int64
-	markKick             bool
-	waitWriteBackOkKick  cmdI
+	listElement          *list.Element
 }
 
 func abs(v int64) int64 {
@@ -78,7 +75,7 @@ func (this *cmdQueue) empty() bool {
 	return this.head == nil
 }
 
-func (this *cmdQueue) add(c cmdI) {
+func (this *cmdQueue) pushback(c cmdI) {
 	if nil == this.tail {
 		this.head = c
 	} else {
@@ -103,161 +100,94 @@ func (this *cmdQueue) popFront() {
 	}
 }
 
-func mergeAbleCmd(cmdType flyproto.CmdType) bool {
-	switch cmdType {
-	case flyproto.CmdType_Get, flyproto.CmdType_Set, flyproto.CmdType_IncrBy, flyproto.CmdType_DecrBy:
-		return true
-	default:
-		return false
-	}
-}
-
-func (this *kv) kickable() bool {
-	if this.state < kv_ok {
-		return false
-	} else if this.asynTaskCount > 0 {
-		return false
-	} else if this.version != this.lastWriteBackVersion {
-		return false
-	} else {
-		return true
-	}
-}
-
-func (this *kv) kick() {
-	this.asynTaskCount++
-	this.store.rn.IssueProposal(&kvProposal{
-		ptype:     proposal_kick,
-		kv:        this,
-		version:   this.version,
-		dbversion: this.lastWriteBackVersion,
-	})
-}
-
 func (this *kv) pushCmd(cmd cmdI) {
-	this.processCmd(cmd)
-}
-
-func (this *kv) processPendingCmd() {
-	if !this.store.isLeader() {
-		this.asynTaskCount--
-		for c := this.pendingCmd.front(); nil != c; c = this.pendingCmd.front() {
-			this.pendingCmd.popFront()
-			c.reply(errcode.New(errcode.Errcode_not_leader), nil, 0)
-		}
-	} else if this.markKick && this.lastWriteBackVersion == this.version {
-		this.asynTaskCount--
-		this.kick()
-	} else {
-		this.processCmd(nil)
-	}
-}
-
-func (this *kv) processCmd(cmd cmdI) {
-	if nil != cmd {
+	if this.pendingCmd.empty() {
+		this.pendingCmd.pushback(cmd)
 		if this.state == kv_new {
-			//request load kv from database
-			l := &dbLoadTask{
-				cmd:    cmd,
+			if !this.store.db.issueLoad(&dbLoadTask{
 				kv:     this,
 				meta:   this.meta,
 				uniKey: this.uniKey,
 				table:  this.table,
 				key:    this.key,
-			}
-			if !this.store.db.issueLoad(l) {
+			}) {
 				cmd.reply(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"), nil, 0)
 				this.store.deleteKv(this)
 			} else {
-				this.asynTaskCount++
 				this.state = kv_loading
 			}
-			return
 		} else {
-			this.pendingCmd.add(cmd)
+			this.processCmd()
 		}
 	} else {
-		this.asynTaskCount--
+		if _, ok := this.pendingCmd.tail.(*cmdKick); ok {
+			cmd.reply(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"), nil, 0)
+		} else {
+			this.pendingCmd.pushback(cmd)
+		}
 	}
+}
 
-	if this.pendingCmd.empty() || this.asynTaskCount != 0 {
-		return
-	}
+func (this *kv) processCmd() {
+	defer func() {
+		if this.pendingCmd.empty() {
+			this.store.addKickable(this)
+		} else {
+			this.store.removeKickable(this)
+		}
+	}()
 
-	for {
-		cmds := []cmdI{}
+	for c := this.pendingCmd.front(); nil != c; c = this.pendingCmd.front() {
+		var err errcode.Error
+		if !this.store.isLeader() {
+			err = Err_not_leader
+		} else if c.isTimeout() {
+			err = Err_timeout
+		} else if !c.versionMatch(this) {
+			err = Err_version_mismatch
+		}
 
-		for c := this.pendingCmd.front(); nil != c; c = this.pendingCmd.front() {
-			if c.isTimeout() {
-				c.dropReply()
-			} else if !c.versionMatch(this) {
-				this.pendingCmd.popFront()
-				c.reply(Err_version_mismatch, nil, 0)
-			} else {
-				if 0 == len(cmds) {
-					cmds = append(cmds, c)
+		if nil != err {
+			c.reply(err, nil, 0)
+			this.pendingCmd.popFront()
+		} else {
+			if c.cmdType() == flyproto.CmdType_Get {
+				if !this.store.kvnode.config.LinearizableRead {
+					//没有开启一致性读，直接返回
+					c.reply(nil, this.fields, this.version)
 					this.pendingCmd.popFront()
 				} else {
-					f := cmds[0]
-					if !mergeAbleCmd(f.cmdType()) || f.cmdType() != c.cmdType() {
+					this.store.rn.IssueLinearizableRead(&kvLinearizableRead{
+						kv:  this,
+						cmd: c,
+					})
+					break
+				}
+			} else {
+				proposal := &kvProposal{
+					ptype:     proposal_snapshot,
+					kv:        this,
+					cmd:       c,
+					version:   this.version,
+					fields:    map[string]*flyproto.Field{},
+					dbversion: this.lastWriteBackVersion,
+				}
+
+				c.(interface {
+					do(*kvProposal)
+				}).do(proposal)
+
+				if proposal.ptype != proposal_none {
+					this.store.rn.IssueProposal(proposal)
+					break
+				} else {
+					if _, ok := proposal.cmd.(*cmdKick); ok {
 						break
 					} else {
-						cmds = append(cmds, c)
 						this.pendingCmd.popFront()
 					}
 				}
 			}
-		}
-
-		if len(cmds) == 0 {
-			return
-		}
-
-		var linearizableRead *kvLinearizableRead
-		var proposal *kvProposal
-
-		switch cmds[0].cmdType() {
-		case flyproto.CmdType_Get:
-			if !this.store.kvnode.config.LinearizableRead {
-				//没有开启一致性读，直接返回
-				for _, v := range cmds {
-					v.reply(nil, this.fields, this.version)
-				}
-			} else {
-				linearizableRead = &kvLinearizableRead{
-					kv:   this,
-					cmds: cmds,
-				}
-			}
-		default:
-			proposal = &kvProposal{
-				ptype:     proposal_snapshot,
-				kv:        this,
-				cmds:      cmds,
-				version:   this.version,
-				fields:    map[string]*flyproto.Field{},
-				dbversion: this.lastWriteBackVersion,
-			}
-
-			for _, v := range cmds {
-				v.(interface {
-					do(*kvProposal)
-				}).do(proposal)
-			}
-
-			if proposal.ptype == proposal_none {
-				proposal = nil
-			}
-		}
-
-		if nil != linearizableRead {
-			this.store.rn.IssueLinearizableRead(linearizableRead)
-			this.asynTaskCount++
-			return
-		} else if nil != proposal {
-			this.store.rn.IssueProposal(proposal)
-			this.asynTaskCount++
-			return
 		}
 	}
 }

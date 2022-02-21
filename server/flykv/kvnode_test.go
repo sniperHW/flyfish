@@ -654,12 +654,12 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 
 	oldV := config.MaxCachePerStore
 
-	config.MaxCachePerStore = 10000
-
-	config.WriteBackOnKick = true
+	config.WriteBackMode = "WriteBackOnSwap"
 
 	raft.SnapshotCount = 100
 	raft.SnapshotCatchUpEntriesN = 100
+
+	config.MaxCachePerStore = 10000
 
 	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
 
@@ -742,7 +742,7 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 
 	config.MaxCachePerStore = oldV
 
-	config.WriteBackOnKick = false
+	config.WriteBackMode = "WriteThrough"
 
 }
 
@@ -822,11 +822,11 @@ func TestUseMockDB(t *testing.T) {
 	fmt.Println("stop ok")
 }
 
-func TestKick(t *testing.T) {
+func TestKick1(t *testing.T) {
 	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
 	GetSugar().Infof("MaxCachePerStore:%d", config.MaxCachePerStore)
 
-	config.WriteBackOnKick = true
+	config.WriteBackMode = "WriteBackOnSwap"
 
 	//先删除所有kv文件
 	os.RemoveAll("./testRaftLog")
@@ -846,7 +846,7 @@ func TestKick(t *testing.T) {
 		for {
 			r := c.Set("users1", fmt.Sprintf("sniperHW:%d", i), fields).Exec()
 			if errcode.GetCode(r.ErrCode) == errcode.Errcode_retry {
-				time.Sleep(time.Millisecond * 100)
+				time.Sleep(time.Millisecond * 1)
 			} else {
 				GetSugar().Infof("%d", i)
 				break
@@ -858,13 +858,81 @@ func TestKick(t *testing.T) {
 
 	node = start1Node(newMockDBBackEnd(db.(*mockBackEnd)))
 
-	time.Sleep(time.Second * 5)
+	time.Sleep(time.Second * 1)
 
 	node.Stop()
 
-	config.WriteBackOnKick = false
+	config.WriteBackMode = "WriteThrough"
 
 	fmt.Println("stop ok")
+}
+
+func TestKick2(t *testing.T) {
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
+	GetSugar().Infof("MaxCachePerStore:%d", config.MaxCachePerStore)
+
+	config.WriteBackMode = "WriteThrough"
+
+	//先删除所有kv文件
+	os.RemoveAll("./testRaftLog")
+
+	client.InitLogger(GetLogger())
+
+	db := newMockDBBackEnd(nil)
+
+	node := start1Node(db)
+
+	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
+
+	for i := 0; i < 200; i++ {
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		fields["name"] = "sniperHW"
+		for {
+			r := c.Set("users1", fmt.Sprintf("sniperHW:%d", i), fields).Exec()
+			if errcode.GetCode(r.ErrCode) == errcode.Errcode_retry {
+				time.Sleep(time.Millisecond * 1)
+			} else {
+				GetSugar().Infof("%d", i)
+				break
+			}
+		}
+	}
+
+	node.Stop()
+
+	node = start1Node(newMockDBBackEnd(db.(*mockBackEnd)))
+
+	time.Sleep(time.Second * 1)
+
+	node.Stop()
+
+	fmt.Println("stop ok")
+}
+
+func TestLinearizableRead(t *testing.T) {
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
+	GetSugar().Infof("MaxCachePerStore:%d", config.MaxCachePerStore)
+
+	config.LinearizableRead = true
+
+	//先删除所有kv文件
+	os.RemoveAll("./testRaftLog")
+
+	client.InitLogger(GetLogger())
+
+	node := start1Node(newSqlDBBackEnd())
+
+	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
+
+	for i := 0; i < 100; i++ {
+		r := c.GetAll("users1", fmt.Sprintf("sniperHW:%d", i)).Exec()
+		assert.Nil(t, r.ErrCode)
+	}
+
+	node.Stop()
+
+	config.LinearizableRead = false
 }
 
 func TestMakeUnikeyPlacement(t *testing.T) {

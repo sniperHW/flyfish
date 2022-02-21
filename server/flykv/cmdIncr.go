@@ -30,33 +30,6 @@ func (this *cmdIncr) makeResponse(err errcode.Error, fields map[string]*flyproto
 		}}
 }
 
-func (this *cmdIncr) onLoadResult(err error, proposal *kvProposal) {
-	if nil == err && nil != this.version && *this.version != proposal.version {
-		this.reply(Err_version_mismatch, nil, 0)
-	} else {
-		if err == db.ERR_RecordNotExist || proposal.version <= 0 {
-			proposal.version = abs(proposal.version) + 1
-			//对于不在set中field,使用defalutValue填充
-			proposal.fields = map[string]*flyproto.Field{}
-			this.meta.FillDefaultValues(proposal.fields)
-			proposal.dbstate = db.DBState_insert
-		}
-
-		oldV := proposal.fields[this.v.GetName()]
-
-		if nil == oldV {
-			oldV = flyproto.PackField(this.v.GetName(), this.meta.GetDefaultValue(this.v.GetName()))
-		}
-
-		newV := flyproto.PackField(oldV.GetName(), oldV.GetInt()+this.v.GetInt())
-		proposal.fields[this.v.GetName()] = newV
-		if proposal.dbstate != db.DBState_insert {
-			proposal.version++
-			proposal.dbstate = db.DBState_update
-		}
-	}
-}
-
 func (this *cmdIncr) do(proposal *kvProposal) {
 	if this.kv.state == kv_no_record {
 		proposal.version = abs(proposal.version) + 1
@@ -90,7 +63,7 @@ func (this *cmdIncr) do(proposal *kvProposal) {
 	}
 }
 
-func (s *kvstore) makeIncr(kv *kv, processDeadline time.Time, respDeadline time.Time, c *net.Socket, seqno int64, req *flyproto.IncrByReq) (cmdI, errcode.Error) {
+func (s *kvstore) makeIncr(kv *kv, deadline time.Time, c *net.Socket, seqno int64, req *flyproto.IncrByReq) (cmdI, errcode.Error) {
 	if nil == req.Field {
 		return nil, errcode.New(errcode.Errcode_error, "field is nil")
 	}
@@ -107,7 +80,7 @@ func (s *kvstore) makeIncr(kv *kv, processDeadline time.Time, respDeadline time.
 		v: req.Field,
 	}
 
-	incr.cmdBase.init(kv, flyproto.CmdType_CompareAndSet, c, seqno, req.Version, processDeadline, respDeadline, &s.wait4ReplyCount, incr.makeResponse)
+	incr.cmdBase.init(kv, flyproto.CmdType_CompareAndSet, c, seqno, req.Version, deadline, &s.wait4ReplyCount, incr.makeResponse)
 
 	return incr, nil
 }

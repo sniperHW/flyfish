@@ -42,18 +42,6 @@ func (this *cmdSetNx) makeResponse(err errcode.Error, fields map[string]*flyprot
 		Data:  pbdata}
 }
 
-func (this *cmdSetNx) onLoadResult(err error, proposal *kvProposal) {
-	if err == db.ERR_RecordNotExist || proposal.version <= 0 {
-		proposal.version = abs(proposal.version) + 1
-		//对于不在set中field,使用defalutValue填充
-		this.meta.FillDefaultValues(this.fields)
-		proposal.fields = this.fields
-		proposal.dbstate = db.DBState_insert
-	} else if nil == err {
-		this.reply(Err_record_exist, proposal.fields, proposal.version)
-	}
-}
-
 func (this *cmdSetNx) do(proposal *kvProposal) {
 	if this.kv.state == kv_no_record {
 		proposal.version = abs(proposal.version) + 1
@@ -66,7 +54,7 @@ func (this *cmdSetNx) do(proposal *kvProposal) {
 	}
 }
 
-func (s *kvstore) makeSetNx(kv *kv, processDeadline time.Time, respDeadline time.Time, c *net.Socket, seqno int64, req *flyproto.SetNxReq) (cmdI, errcode.Error) {
+func (s *kvstore) makeSetNx(kv *kv, deadline time.Time, c *net.Socket, seqno int64, req *flyproto.SetNxReq) (cmdI, errcode.Error) {
 	if len(req.GetFields()) == 0 {
 		return nil, errcode.New(errcode.Errcode_error, "setNx fields is empty")
 	}
@@ -79,7 +67,7 @@ func (s *kvstore) makeSetNx(kv *kv, processDeadline time.Time, respDeadline time
 		fields: map[string]*flyproto.Field{},
 	}
 
-	setNx.cmdBase.init(kv, flyproto.CmdType_Set, c, seqno, req.Version, processDeadline, respDeadline, &s.wait4ReplyCount, setNx.makeResponse)
+	setNx.cmdBase.init(kv, flyproto.CmdType_Set, c, seqno, req.Version, deadline, &s.wait4ReplyCount, setNx.makeResponse)
 
 	for _, v := range req.GetFields() {
 		setNx.fields[v.GetName()] = v

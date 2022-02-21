@@ -1,6 +1,7 @@
 package flykv
 
 import (
+	"container/list"
 	"errors"
 	"fmt"
 	"github.com/jmoiron/sqlx"
@@ -29,6 +30,7 @@ import (
  *  这些预定义的Error类型，可以从其名字推出Desc,因此Desc全部设置为空字符串，以节省网络传输字节数
  */
 var (
+	Err_not_leader       errcode.Error = errcode.New(errcode.Errcode_not_leader, "Errcode_not_leader")
 	Err_version_mismatch errcode.Error = errcode.New(errcode.Errcode_version_mismatch, "Errcode_version_mismatch")
 	Err_record_exist     errcode.Error = errcode.New(errcode.Errcode_record_exist, "Errcode_record_exist")
 	Err_record_notexist  errcode.Error = errcode.New(errcode.Errcode_record_notexist, "Errcode_record_notexist")
@@ -37,22 +39,30 @@ var (
 	Err_timeout          errcode.Error = errcode.New(errcode.Errcode_timeout, "Errcode_timeout")
 )
 
+type writeBackMode byte
+
+const (
+	write_back_on_swap = writeBackMode(1)
+	write_through      = writeBackMode(2)
+)
+
 type kvnode struct {
-	muC       sync.Mutex
-	clients   map[*fnet.Socket]struct{}
-	muS       sync.RWMutex
-	stores    map[int]*kvstore
-	config    *Config
-	dbc       *sqlx.DB
-	db        dbI
-	listener  *cs.Listener
-	setID     int
-	id        uint16
-	mutilRaft *raft.MutilRaft
-	closed    int32
-	udpConn   *fnet.Udp
-	join      bool
-	pdAddr    []*net.UDPAddr
+	muC           sync.Mutex
+	clients       map[*fnet.Socket]struct{}
+	muS           sync.RWMutex
+	stores        map[int]*kvstore
+	config        *Config
+	dbc           *sqlx.DB
+	db            dbI
+	listener      *cs.Listener
+	setID         int
+	id            uint16
+	mutilRaft     *raft.MutilRaft
+	closed        int32
+	udpConn       *fnet.Udp
+	join          bool
+	pdAddr        []*net.UDPAddr
+	writeBackMode writeBackMode
 }
 
 func verifyLogin(loginReq *flyproto.LoginReq) bool {
@@ -163,6 +173,9 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, peers map[uint16]raft.
 			slotsKvMap:       map[int]map[string]*kv{},
 			slots:            slots,
 			slotsTransferOut: map[int]*SlotTransferProposal{},
+			pendingKv:        map[string]*kv{},
+			kickableList:     list.New(),
+			hardkvlimited:    (this.config.MaxCachePerStore * 3) / 2,
 		},
 	}
 
@@ -178,7 +191,7 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, peers map[uint16]raft.
 		store.kv[i] = map[string]*kv{}
 	}
 
-	store.lru.init()
+	//store.lru.init()
 	this.stores[storeID] = store
 	store.serve()
 
@@ -520,6 +533,12 @@ func NewKvNode(id uint16, join bool, config *Config, db dbI) (*kvnode, error) {
 		db:        db,
 		config:    config,
 		join:      join,
+	}
+
+	if config.WriteBackMode == "WriteThrough" {
+		node.writeBackMode = write_through
+	} else {
+		node.writeBackMode = write_back_on_swap
 	}
 
 	err := node.start()

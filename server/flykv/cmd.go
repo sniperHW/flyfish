@@ -14,9 +14,8 @@ type cmdI interface {
 	getSeqno() int64
 	reply(err errcode.Error, fields map[string]*flyproto.Field, version int64)
 	isTimeout() bool
-	dropReply()
+	//dropReply()
 	cmdType() flyproto.CmdType
-	onLoadResult(err error, proposal *kvProposal) //call when err==nil or err==ERR_RecordNotExist
 	versionMatch(*kv) bool
 	getNext() cmdI
 	setNext(cmdI)
@@ -29,8 +28,7 @@ type cmdBase struct {
 	seqno           int64
 	version         *int64
 	peer            *net.Socket
-	processDeadline time.Time
-	respDeadline    time.Time
+	deadline        time.Time
 	replied         int32
 	wait4ReplyCount *int32
 	fnMakeResponse  MakeResponse
@@ -39,11 +37,10 @@ type cmdBase struct {
 	meta            db.TableMeta
 }
 
-func (this *cmdBase) init(kv *kv, cmd flyproto.CmdType, peer *net.Socket, seqno int64, version *int64, processDeadline time.Time, respDeadline time.Time, wait4ReplyCount *int32, makeResponse MakeResponse) {
+func (this *cmdBase) init(kv *kv, cmd flyproto.CmdType, peer *net.Socket, seqno int64, version *int64, deadline time.Time, wait4ReplyCount *int32, makeResponse MakeResponse) {
 	atomic.AddInt32(wait4ReplyCount, 1)
 	this.peer = peer
-	this.respDeadline = respDeadline
-	this.processDeadline = processDeadline
+	this.deadline = deadline
 	this.version = version
 	this.seqno = seqno
 	this.cmd = cmd
@@ -70,10 +67,10 @@ func (this *cmdBase) getSeqno() int64 {
 }
 
 func (this *cmdBase) isTimeout() bool {
-	if this.processDeadline.IsZero() {
+	if this.deadline.IsZero() {
 		return false
 	} else {
-		return time.Now().After(this.processDeadline)
+		return time.Now().After(this.deadline)
 	}
 }
 
@@ -81,7 +78,7 @@ func (this *cmdBase) reply(err errcode.Error, fields map[string]*flyproto.Field,
 	if atomic.CompareAndSwapInt32(&this.replied, 0, 1) {
 		atomic.AddInt32(this.wait4ReplyCount, -1)
 		if nil != this.peer {
-			if !time.Now().After(this.respDeadline) {
+			if !time.Now().After(this.deadline) {
 				resp := this.fnMakeResponse(err, fields, version)
 				e := this.peer.Send(resp)
 				if nil != e {
@@ -89,12 +86,6 @@ func (this *cmdBase) reply(err errcode.Error, fields map[string]*flyproto.Field,
 				}
 			}
 		}
-	}
-}
-
-func (this *cmdBase) dropReply() {
-	if atomic.CompareAndSwapInt32(&this.replied, 0, 1) {
-		atomic.AddInt32(this.wait4ReplyCount, -1)
 	}
 }
 

@@ -22,14 +22,6 @@ func (this *cmdDel) makeResponse(err errcode.Error, fields map[string]*flyproto.
 		}}
 }
 
-func (this *cmdDel) onLoadResult(err error, proposal *kvProposal) {
-	if nil == err && nil != this.version && *this.version != proposal.version {
-		this.reply(Err_version_mismatch, nil, 0)
-	} else if err == db.ERR_RecordNotExist {
-		this.reply(Err_record_notexist, nil, 0)
-	}
-}
-
 func (this *cmdDel) do(proposal *kvProposal) {
 	if this.kv.state == kv_ok {
 		proposal.dbstate = db.DBState_delete
@@ -40,11 +32,11 @@ func (this *cmdDel) do(proposal *kvProposal) {
 	}
 }
 
-func (s *kvstore) makeDel(kv *kv, processDeadline time.Time, respDeadline time.Time, c *net.Socket, seqno int64, req *flyproto.DelReq) (cmdI, errcode.Error) {
+func (s *kvstore) makeDel(kv *kv, deadline time.Time, c *net.Socket, seqno int64, req *flyproto.DelReq) (cmdI, errcode.Error) {
 
 	del := &cmdDel{}
 
-	del.cmdBase.init(kv, flyproto.CmdType_Del, c, seqno, req.Version, processDeadline, respDeadline, &s.wait4ReplyCount, del.makeResponse)
+	del.cmdBase.init(kv, flyproto.CmdType_Del, c, seqno, req.Version, deadline, &s.wait4ReplyCount, del.makeResponse)
 
 	return del, nil
 }

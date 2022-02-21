@@ -135,7 +135,7 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 					var e errcode.Error
 					table, key := splitUniKey(p.unikey)
 					slot := sslot.Unikey2Slot(p.unikey)
-					kv, e = s.newkv(slot, groupID, p.unikey, key, table)
+					kv, e = s.newAppliedKv(slot, groupID, p.unikey, key, table)
 					if nil != e {
 						return fmt.Errorf("bad data,%s is no table define", p.unikey)
 					}
@@ -150,7 +150,7 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 				for k, v := range p.fields {
 					kv.fields[k] = v
 				}
-				s.lru.update(&kv.lru)
+				//s.lru.update(&kv.lru)
 			case proposal_snapshot:
 				kv.version = p.version
 				kv.lastWriteBackVersion = p.lastWriteBackVersion
@@ -161,7 +161,7 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 					kv.state = kv_no_record
 				}
 
-				s.lru.update(&kv.lru)
+				//s.lru.update(&kv.lru)
 
 			}
 			GetSugar().Debugf("%s ok", p.unikey)

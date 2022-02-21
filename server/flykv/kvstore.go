@@ -1,6 +1,7 @@
 package flykv
 
 import (
+	"container/list"
 	"fmt"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/db/sql"
@@ -76,7 +77,9 @@ type kvmgr struct {
 	slots            *bitmap.Bitmap
 	slotsTransferOut map[int]*SlotTransferProposal //正在迁出的slot
 	kvcount          int
-	lru              lruList
+	pendingKv        map[string]*kv //尚未创建apply的kv
+	kickableList     *list.List
+	hardkvlimited    int
 }
 
 type kvstore struct {
@@ -97,6 +100,19 @@ type kvstore struct {
 	SoftLimitReachedTime int64
 	unixNow              int64
 	lruInterval          time.Duration
+}
+
+func (s *kvstore) addKickable(k *kv) {
+	if nil != k.listElement {
+		s.kickableList.Remove(k.listElement)
+	}
+	k.listElement = s.kickableList.PushBack(k)
+}
+
+func (s *kvstore) removeKickable(k *kv) {
+	if nil != k.listElement {
+		s.kickableList.Remove(k.listElement)
+	}
 }
 
 func (s *kvstore) isLeader() bool {
@@ -128,32 +144,72 @@ func (s *kvstore) addCliMessage(req clientRequest) {
 	}
 }
 
-const kvCmdQueueSize = 32
-
 func (s *kvstore) deleteKv(k *kv) {
-	s.kvcount--
-	delete(s.kv[k.groupID], k.uniKey)
-	s.lru.remove(&k.lru)
+	if k.state == kv_new || k.state == kv_loading {
+		delete(s.pendingKv, k.uniKey)
+	} else {
+		s.kvcount--
+		delete(s.kv[k.groupID], k.uniKey)
 
-	kvs := s.slotsKvMap[k.slot]
-	delete(kvs, k.uniKey)
-	if len(kvs) == 0 {
-		delete(s.slotsKvMap, k.slot)
-		//当前slot的kv已经全部清除，如果当前slot正在迁出，结束迁出事务
-		p := s.slotsTransferOut[k.slot]
-		if nil != p {
-			delete(s.slotsTransferOut, k.slot)
-			s.slots.Set(k.slot)
-			if nil != p.reply {
-				p.reply()
+		kvs := s.slotsKvMap[k.slot]
+		delete(kvs, k.uniKey)
+		if len(kvs) == 0 {
+			delete(s.slotsKvMap, k.slot)
+			//当前slot的kv已经全部清除，如果当前slot正在迁出，结束迁出事务
+			p := s.slotsTransferOut[k.slot]
+			if nil != p {
+				delete(s.slotsTransferOut, k.slot)
+				s.slots.Set(k.slot)
+				if nil != p.reply {
+					p.reply()
+				}
 			}
 		}
 	}
-
-	GetSugar().Infof("deleteKv:%s", k.uniKey)
+	//GetSugar().Infof("deleteKv:%s", k.uniKey)
 }
 
-func (s *kvstore) newkv(slot int, groupID int, unikey string, key string, table string) (*kv, errcode.Error) {
+func (s *kvstore) onLoadKvApply(k *kv, removepending bool) {
+	if removepending {
+		delete(s.pendingKv, k.uniKey)
+	}
+
+	s.kv[k.groupID][k.uniKey] = k
+
+	s.kvcount++
+
+	if kvs := s.slotsKvMap[k.slot]; nil != kvs {
+		kvs[k.uniKey] = k
+	} else {
+		kvs = map[string]*kv{}
+		kvs[k.uniKey] = k
+		s.slotsKvMap[k.slot] = kvs
+	}
+}
+
+func (s *kvstore) newAppliedKv(slot int, groupID int, unikey string, key string, table string) (*kv, errcode.Error) {
+	k, err := newkv(s, slot, groupID, unikey, key, table)
+	if nil != err {
+		return nil, err
+	}
+
+	s.onLoadKvApply(k, false)
+
+	return k, nil
+}
+
+func (s *kvstore) getkv(groupID int, unikey string) *kv {
+	kv, ok := s.kv[groupID][unikey]
+	if ok {
+		return kv
+	}
+
+	kv, _ = s.pendingKv[unikey]
+
+	return kv
+}
+
+func newkv(s *kvstore, slot int, groupID int, unikey string, key string, table string) (*kv, errcode.Error) {
 	tbmeta := s.meta.GetTableMeta(table)
 
 	if nil == tbmeta {
@@ -171,11 +227,8 @@ func (s *kvstore) newkv(slot int, groupID int, unikey string, key string, table 
 		table:   table,
 	}
 
-	k.lru.keyvalue = k
-
 	k.updateTask = dbUpdateTask{
 		kv: k,
-		//store: s,
 		state: db.UpdateState{
 			Key:    key,
 			Slot:   slot,
@@ -183,88 +236,38 @@ func (s *kvstore) newkv(slot int, groupID int, unikey string, key string, table 
 		},
 	}
 
-	s.kv[groupID][unikey] = k
-
-	s.kvcount++
-
-	if kvs := s.slotsKvMap[slot]; nil != kvs {
-		kvs[unikey] = k
-	} else {
-		kvs = map[string]*kv{}
-		kvs[unikey] = k
-		s.slotsKvMap[slot] = kvs
-	}
-
 	return k, nil
 }
 
-func (this *kvstore) tryKick(kv *kv) bool {
-	//GetSugar().Infof("%d %d", kv.version, kv.lastWriteBackVersion)
-	if !kv.kickable() {
-		kv.markKick = true
-		if this.kvnode.config.WriteBackOnKick {
-			kv.updateTask.issueKickDbWriteBack()
-		}
-		return false
-	} else {
-		kv.kick()
-		return true
-	}
-}
-
-func (s *kvstore) checkLru() {
-	s.mainQueue.AppendHighestPriotiryItem(func() {
-		if s.isReady() && atomic.LoadInt32(&s.stoped) == 0 {
-			if s.kvcount > s.kvnode.config.MaxCachePerStore && s.lru.head.nnext != &s.lru.tail {
-				//GetSugar().Infof("%v %v %v", s.kvcount, s.kvnode.config.MaxCachePerStore, s.lru.head.nnext != &s.lru.tail)
-				k := 0
-				cur := s.lru.tail.pprev
-				for cur != &s.lru.head && s.kvcount-k > s.kvnode.config.MaxCachePerStore {
-					//GetSugar().Infof("tryKick %s", cur.keyvalue.uniKey)
-					s.tryKick(cur.keyvalue)
-					k++
-					cur = cur.pprev
-				}
-			}
-		}
-
-		if atomic.LoadInt32(&s.stoped) == 0 {
-			time.AfterFunc(s.lruInterval, s.checkLru)
-		}
-	})
-}
-
-func getDeadline(timeout uint32) (time.Time, time.Time) {
-	now := time.Now()
-	t := time.Duration(timeout) * time.Millisecond
-	processDeadline := now.Add(t / 2)
-	respDeadline := now.Add(t)
-	return processDeadline, respDeadline
+func (this *kvstore) kick(kv *kv) {
+	kick := &cmdKick{}
+	kick.cmdBase.init(kv, flyproto.CmdType_Kick, nil, 0, nil, time.Time{}, &this.wait4ReplyCount, kick.makeResponse)
+	kv.pushCmd(kick)
 }
 
 func (s *kvstore) makeCmd(keyvalue *kv, req clientRequest) (cmdI, errcode.Error) {
 	cmd := req.msg.Cmd
 	data := req.msg.Data
-	processDeadline, respDeadline := getDeadline(req.msg.Timeout)
+	deadline := time.Now().Add(time.Duration(req.msg.Timeout) * time.Millisecond)
 	switch cmd {
 	case flyproto.CmdType_Get:
-		return s.makeGet(keyvalue, processDeadline, respDeadline, req.from, req.msg.Seqno, data.(*flyproto.GetReq))
+		return s.makeGet(keyvalue, deadline, req.from, req.msg.Seqno, data.(*flyproto.GetReq))
 	case flyproto.CmdType_Set:
-		return s.makeSet(keyvalue, processDeadline, respDeadline, req.from, req.msg.Seqno, data.(*flyproto.SetReq))
+		return s.makeSet(keyvalue, deadline, req.from, req.msg.Seqno, data.(*flyproto.SetReq))
 	case flyproto.CmdType_SetNx:
-		return s.makeSetNx(keyvalue, processDeadline, respDeadline, req.from, req.msg.Seqno, data.(*flyproto.SetNxReq))
+		return s.makeSetNx(keyvalue, deadline, req.from, req.msg.Seqno, data.(*flyproto.SetNxReq))
 	case flyproto.CmdType_Del:
-		return s.makeDel(keyvalue, processDeadline, respDeadline, req.from, req.msg.Seqno, data.(*flyproto.DelReq))
+		return s.makeDel(keyvalue, deadline, req.from, req.msg.Seqno, data.(*flyproto.DelReq))
 	case flyproto.CmdType_CompareAndSet:
-		return s.makeCompareAndSet(keyvalue, processDeadline, respDeadline, req.from, req.msg.Seqno, data.(*flyproto.CompareAndSetReq))
+		return s.makeCompareAndSet(keyvalue, deadline, req.from, req.msg.Seqno, data.(*flyproto.CompareAndSetReq))
 	case flyproto.CmdType_CompareAndSetNx:
-		return s.makeCompareAndSetNx(keyvalue, processDeadline, respDeadline, req.from, req.msg.Seqno, data.(*flyproto.CompareAndSetNxReq))
+		return s.makeCompareAndSetNx(keyvalue, deadline, req.from, req.msg.Seqno, data.(*flyproto.CompareAndSetNxReq))
 	case flyproto.CmdType_IncrBy:
-		return s.makeIncr(keyvalue, processDeadline, respDeadline, req.from, req.msg.Seqno, data.(*flyproto.IncrByReq))
+		return s.makeIncr(keyvalue, deadline, req.from, req.msg.Seqno, data.(*flyproto.IncrByReq))
 	case flyproto.CmdType_DecrBy:
-		return s.makeDecr(keyvalue, processDeadline, respDeadline, req.from, req.msg.Seqno, data.(*flyproto.DecrByReq))
+		return s.makeDecr(keyvalue, deadline, req.from, req.msg.Seqno, data.(*flyproto.DecrByReq))
 	case flyproto.CmdType_Kick:
-		return s.makeKick(keyvalue, processDeadline, respDeadline, req.from, req.msg.Seqno, data.(*flyproto.KickReq))
+		return s.makeKick(keyvalue, deadline, req.from, req.msg.Seqno, data.(*flyproto.KickReq))
 	default:
 	}
 	return nil, errcode.New(errcode.Errcode_error, "invaild cmd type")
@@ -279,7 +282,6 @@ func (s *kvstore) checkReqLimit() bool {
 	}
 
 	if c > conf.SoftLimit {
-		//nowUnix := s.unixNow
 		nowUnix := time.Now().Unix()
 		if s.SoftLimitReachedTime == 0 {
 			s.SoftLimitReachedTime = nowUnix
@@ -306,8 +308,7 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 	var (
 		err errcode.Error
 		cmd cmdI
-		kv  *kv
-		ok  bool
+		k   *kv
 	)
 
 	err = func() errcode.Error {
@@ -333,39 +334,41 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 			return errcode.New(errcode.Errcode_retry, "kvstore not start ok,please retry later")
 		} else {
 			groupID := sslot.StringHash(req.msg.UniKey) % len(s.kv)
-			kv, ok = s.kv[groupID][req.msg.UniKey]
-			if !ok {
+			k = s.getkv(groupID, req.msg.UniKey)
+			if nil == k {
 				if req.msg.Cmd == flyproto.CmdType_Kick { //kv不在缓存中,kick操作直接返回ok
 					return errcode.New(errcode.Errcode_ok)
 				} else {
-					if s.kvcount > (s.kvnode.config.MaxCachePerStore*3)/2 {
+					totalCount := s.kvcount + len(s.pendingKv)
+					if totalCount > s.hardkvlimited {
 						return errcode.New(errcode.Errcode_retry, "kvstore busy,please retry later")
 					} else {
 						table, key := splitUniKey(req.msg.UniKey)
-						if kv, err = s.newkv(slot, groupID, req.msg.UniKey, key, table); nil != err {
+						if k, err = newkv(s, slot, groupID, req.msg.UniKey, key, table); nil != err {
 							return err
+						} else if totalCount >= s.kvnode.config.MaxCachePerStore && nil != s.kickableList.Front() {
+							s.kick(s.kickableList.Front().Value.(*kv))
 						}
+						s.pendingKv[req.msg.UniKey] = k
 					}
 				}
-			} else if kv.markKick {
-				return errcode.New(errcode.Errcode_retry)
 			} else {
-				tbmeta := s.meta.CheckTableMeta(kv.meta)
+				tbmeta := s.meta.CheckTableMeta(k.meta)
 				if nil == tbmeta {
 					//在最新的meta中kv.table已经被删除
-					return errcode.New(errcode.Errcode_error, fmt.Sprintf("table:%s no define", kv.table))
+					return errcode.New(errcode.Errcode_error, fmt.Sprintf("table:%s no define", k.table))
 				} else {
-					kv.meta = tbmeta
+					k.meta = tbmeta
 				}
 			}
 		}
 
-		cmd, err = s.makeCmd(kv, req)
+		cmd, err = s.makeCmd(k, req)
 		return err
 	}()
 
 	if nil == err {
-		kv.pushCmd(cmd)
+		k.pushCmd(cmd)
 	} else {
 		if errcode.GetCode(err) != errcode.Errcode_ok {
 			resp.Err = err
@@ -514,28 +517,20 @@ func (s *kvstore) serve() {
 			}
 		}
 	}()
-
-	s.lruInterval = time.Duration(s.kvnode.config.LruCheckInterval) * time.Millisecond
-	if 0 == s.lruInterval {
-		s.lruInterval = 1000 * time.Millisecond
-	}
-
-	s.checkLru()
 }
 
 func (s *kvstore) issueFullDbWriteBack() {
 	writebackcount := 0
-	if !s.kvnode.config.WriteBackOnKick {
-		for _, v := range s.kv {
-			for _, vv := range v {
-				if meta := s.meta.CheckTableMeta(vv.meta); meta != nil {
-					vv.meta = meta
-				}
-				if vv.lastWriteBackVersion != vv.version {
-					writebackcount++
-					vv.updateTask.issueFullDbWriteBack()
-				}
+	for _, v := range s.kv {
+		for _, vv := range v {
+			if meta := s.meta.CheckTableMeta(vv.meta); meta != nil {
+				vv.meta = meta
 			}
+			if s.kvnode.writeBackMode == write_through && vv.lastWriteBackVersion != vv.version {
+				writebackcount++
+				vv.updateTask.issueFullDbWriteBack()
+			}
+			s.addKickable(vv)
 		}
 	}
 	GetSugar().Infof("WriteBackAll kv:%d kvcount:%d", writebackcount, s.kvcount)
@@ -553,12 +548,16 @@ func (s *kvstore) becomeLeader() {
 
 func (s *kvstore) onLeaderDownToFollower() {
 	atomic.StoreInt32(&s.ready, 0)
-	for _, v := range s.kv {
-		for _, vv := range v {
-			vv.markKick = false
-			vv.waitWriteBackOkKick = nil
+
+	for _, v := range s.pendingKv {
+		for c := v.pendingCmd.front(); nil != c; c = v.pendingCmd.front() {
+			v.pendingCmd.popFront()
+			c.reply(errcode.New(errcode.Errcode_not_leader), nil, 0)
 		}
 	}
+
+	s.pendingKv = map[string]*kv{}
+
 }
 
 //将nodeID作为learner加入当前store的raft配置
@@ -692,7 +691,7 @@ func (s *kvstore) processSlotTransferOut(p *SlotTransferProposal) {
 	kvs := s.slotsKvMap[p.slot]
 	if nil != kvs {
 		for _, v := range kvs {
-			s.tryKick(v)
+			s.kick(v)
 		}
 
 		p.timer = time.AfterFunc(time.Millisecond*100, func() {

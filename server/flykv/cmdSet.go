@@ -23,26 +23,6 @@ func (this *cmdSet) makeResponse(err errcode.Error, fields map[string]*flyproto.
 		}}
 }
 
-func (this *cmdSet) onLoadResult(err error, proposal *kvProposal) {
-	if nil == err && nil != this.version && *this.version != proposal.version {
-		this.reply(Err_version_mismatch, nil, 0)
-	} else {
-		if err == db.ERR_RecordNotExist || proposal.version <= 0 {
-			proposal.version = abs(proposal.version) + 1
-			//对于不在set中field,使用defalutValue填充
-			this.meta.FillDefaultValues(this.fields)
-			proposal.fields = this.fields
-			proposal.dbstate = db.DBState_insert
-		} else {
-			proposal.version++
-			for k, v := range this.fields {
-				proposal.fields[k] = v
-			}
-			proposal.dbstate = db.DBState_update
-		}
-	}
-}
-
 func (this *cmdSet) do(proposal *kvProposal) {
 	if this.kv.state == kv_no_record {
 		proposal.version = abs(proposal.version) + 1
@@ -57,7 +37,7 @@ func (this *cmdSet) do(proposal *kvProposal) {
 	}
 }
 
-func (s *kvstore) makeSet(kv *kv, processDeadline time.Time, respDeadline time.Time, c *net.Socket, seqno int64, req *flyproto.SetReq) (cmdI, errcode.Error) {
+func (s *kvstore) makeSet(kv *kv, deadline time.Time, c *net.Socket, seqno int64, req *flyproto.SetReq) (cmdI, errcode.Error) {
 	if len(req.GetFields()) == 0 {
 		return nil, errcode.New(errcode.Errcode_error, "set fields is empty")
 	}
@@ -70,7 +50,7 @@ func (s *kvstore) makeSet(kv *kv, processDeadline time.Time, respDeadline time.T
 		fields: map[string]*flyproto.Field{},
 	}
 
-	set.cmdBase.init(kv, flyproto.CmdType_Set, c, seqno, req.Version, processDeadline, respDeadline, &s.wait4ReplyCount, set.makeResponse)
+	set.cmdBase.init(kv, flyproto.CmdType_Set, c, seqno, req.Version, deadline, &s.wait4ReplyCount, set.makeResponse)
 
 	for _, v := range req.GetFields() {
 		set.fields[v.GetName()] = v

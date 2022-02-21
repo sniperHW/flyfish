@@ -264,25 +264,19 @@ type kvProposal struct {
 	ptype       proposalType
 	fields      map[string]*flyproto.Field
 	version     int64
-	cmds        []cmdI
+	cmd         cmdI
 	kv          *kv
 	dbversion   int64
 	causeByLoad bool
 }
 
 type kvLinearizableRead struct {
-	kv   *kv
-	cmds []cmdI
+	kv  *kv
+	cmd cmdI
 }
 
 func (this *kvProposal) OnError(err error) {
-
 	GetSugar().Infof("kvProposal OnError:%v", err)
-
-	for _, v := range this.cmds {
-		v.reply(errcode.New(errcode.Errcode_error, err.Error()), nil, 0)
-	}
-
 	this.kv.store.mainQueue.AppendHighestPriotiryItem(func() {
 		if this.kv.state == kv_loading {
 			this.kv.store.deleteKv(this.kv)
@@ -291,7 +285,9 @@ func (this *kvProposal) OnError(err error) {
 				this.kv.pendingCmd.popFront()
 			}
 		} else {
-			this.kv.processPendingCmd()
+			this.cmd.reply(errcode.New(errcode.Errcode_error, err.Error()), nil, 0)
+			this.kv.pendingCmd.popFront()
+			this.kv.processCmd()
 		}
 	})
 }
@@ -304,17 +300,17 @@ func (this *kvProposal) Serilize(b []byte) []byte {
 func (this *kvProposal) apply() {
 	if this.ptype == proposal_kick {
 
-		GetSugar().Infof("apply kick:%v", this.kv.uniKey)
-
-		for _, v := range this.cmds {
-			v.reply(nil, nil, 0)
-		}
+		//GetSugar().Infof("apply kick:%v", this.kv.uniKey)
+		this.cmd.reply(nil, nil, 0)
+		this.kv.pendingCmd.popFront()
 
 		for f := this.kv.pendingCmd.front(); nil != f; f = this.kv.pendingCmd.front() {
-			f.reply(errcode.New(errcode.Errcode_retry, "please try again"), nil, 0)
 			this.kv.pendingCmd.popFront()
+			f.reply(errcode.New(errcode.Errcode_retry, "please try again"), nil, 0)
 		}
+
 		this.kv.store.deleteKv(this.kv)
+
 	} else {
 
 		if this.version <= 0 {
@@ -325,9 +321,9 @@ func (this *kvProposal) apply() {
 		}
 
 		if this.causeByLoad {
+			this.kv.store.onLoadKvApply(this.kv, true)
 			this.kv.updateTask.setLastWriteBackVersion(this.dbversion)
 			this.kv.lastWriteBackVersion = this.dbversion
-			GetSugar().Debugf("kvProposal.apply causeByLoad %s %d %d", this.kv.uniKey, this.version, this.dbversion)
 		}
 
 		this.kv.version = this.version
@@ -342,10 +338,9 @@ func (this *kvProposal) apply() {
 			}
 		}
 
-		this.kv.store.lru.update(&this.kv.lru)
-
-		for _, v := range this.cmds {
-			v.reply(nil, this.kv.fields, this.version)
+		if nil != this.cmd {
+			this.cmd.reply(nil, this.kv.fields, this.version)
+			this.kv.pendingCmd.popFront()
 		}
 
 		//update dbUpdateTask
@@ -356,8 +351,7 @@ func (this *kvProposal) apply() {
 			}
 		}
 
-		this.kv.processPendingCmd()
-
+		this.kv.processCmd()
 	}
 }
 
@@ -365,24 +359,20 @@ func (this *kvLinearizableRead) OnError(err error) {
 
 	GetSugar().Errorf("kvLinearizableRead OnError:%v", err)
 
-	for _, v := range this.cmds {
-		GetSugar().Infof("reply retry")
-		v.reply(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"), nil, 0)
-	}
-
 	this.kv.store.mainQueue.AppendHighestPriotiryItem(func() {
-		this.kv.processPendingCmd()
+		this.cmd.reply(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"), nil, 0)
+		this.kv.pendingCmd.popFront()
+		this.kv.processCmd()
 	})
 }
 
 func (this *kvLinearizableRead) ok() {
-	GetSugar().Debugf("kvLinearizableRead ok:%d version:%d", len(this.cmds), this.kv.version)
+	GetSugar().Debugf("kvLinearizableRead ok version:%d", this.kv.version)
 
-	for _, v := range this.cmds {
-		v.reply(nil, this.kv.fields, this.kv.version)
-	}
+	this.cmd.reply(nil, this.kv.fields, this.kv.version)
+	this.kv.pendingCmd.popFront()
 
-	this.kv.processPendingCmd()
+	this.kv.processCmd()
 }
 
 type ProposalConfChange struct {
@@ -522,18 +512,14 @@ func (this *LastWriteBackVersionProposal) Serilize(b []byte) []byte {
 }
 
 func (this *LastWriteBackVersionProposal) apply() {
-	GetSugar().Debugf("LastWriteBackVersionProposal apply %s version:%d", this.kv.uniKey, this.version)
+	//GetSugar().Infof("LastWriteBackVersionProposal apply %s version:%d %d", this.kv.uniKey, this.version, this.kv.version)
 	if abs(this.version) > abs(this.kv.lastWriteBackVersion) {
 		this.kv.lastWriteBackVersion = this.version
 	}
 
-	if this.kv.version == this.kv.lastWriteBackVersion {
-		if nil != this.kv.waitWriteBackOkKick {
-			cmd := this.kv.waitWriteBackOkKick
-			this.kv.waitWriteBackOkKick = nil
-			this.kv.pushCmd(cmd)
-		} else if this.kv.markKick {
-			this.kv.kick()
+	if f := this.kv.pendingCmd.front(); nil != f {
+		if cmdkick, ok := f.(*cmdKick); ok && cmdkick.waitVersion == this.version {
+			this.kv.processCmd()
 		}
 	}
 }
