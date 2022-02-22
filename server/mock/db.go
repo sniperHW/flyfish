@@ -1,6 +1,7 @@
 package mock
 
 import (
+	"fmt"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	flyproto "github.com/sniperHW/flyfish/proto"
@@ -69,12 +70,12 @@ func (d *DB) do(v interface{}) {
 						k.fields[n] = vv
 					}
 				} else {
-					panic("invaild State")
+					panic(fmt.Sprintf("invaild State:%s", t.GetUniKey()))
 				}
 			case db.DBState_delete:
 				delete(d.store, t.GetUniKey())
 			default:
-				panic("invaild State")
+				panic(fmt.Sprintf("invaild State:%s", t.GetUniKey()))
 				t.ReleaseLock()
 				return
 			}

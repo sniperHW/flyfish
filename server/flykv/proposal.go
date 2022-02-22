@@ -276,19 +276,20 @@ type kvLinearizableRead struct {
 	cmds []cmdI
 }
 
+func (this *kvProposal) reply(err errcode.Error, fields map[string]*flyproto.Field, version int64) {
+	for _, v := range this.cmds {
+		v.reply(err, fields, version)
+	}
+}
+
 func (this *kvProposal) OnError(err error) {
 	GetSugar().Infof("kvProposal OnError:%v", err)
 	this.kv.store.mainQueue.AppendHighestPriotiryItem(func() {
 		if this.kv.state == kv_loading {
+			this.kv.clearCmds(errcode.New(errcode.Errcode_error, err.Error()))
 			this.kv.store.deleteKv(this.kv)
-			for f := this.kv.pendingCmd.front(); nil != f; f = this.kv.pendingCmd.front() {
-				f.reply(errcode.New(errcode.Errcode_error, err.Error()), nil, 0)
-				this.kv.pendingCmd.popFront()
-			}
 		} else {
-			this.cmd.reply(errcode.New(errcode.Errcode_error, err.Error()), nil, 0)
-			this.kv.pendingCmd.popFront()
-			this.kv.processCmd()
+			this.reply(errcode.New(errcode.Errcode_error, err.Error()), nil, 0)
 		}
 	})
 }
@@ -300,25 +301,14 @@ func (this *kvProposal) Serilize(b []byte) []byte {
 
 func (this *kvProposal) apply() {
 	if this.ptype == proposal_kick {
-
-		//GetSugar().Infof("apply kick:%v", this.kv.uniKey)
-		this.cmd.reply(nil, nil, 0)
-		this.kv.pendingCmd.popFront()
-
-		for f := this.kv.pendingCmd.front(); nil != f; f = this.kv.pendingCmd.front() {
-			this.kv.pendingCmd.popFront()
-			f.reply(errcode.New(errcode.Errcode_retry, "please try again"), nil, 0)
-		}
-
 		this.kv.store.deleteKv(this.kv)
-
+		this.reply(nil, nil, 0)
+		this.kv.clearCmds(errcode.New(errcode.Errcode_retry, "please try again"))
 	} else {
 
-		if this.version <= 0 {
-			this.kv.state = kv_no_record
+		this.kv.state = this.kvState
+		if this.kv.state == kv_no_record {
 			this.kv.fields = nil
-		} else {
-			this.kv.state = kv_ok
 		}
 
 		if this.causeByLoad {
@@ -339,10 +329,7 @@ func (this *kvProposal) apply() {
 			}
 		}
 
-		if nil != this.cmd {
-			this.cmd.reply(nil, this.kv.fields, this.version)
-			this.kv.pendingCmd.popFront()
-		}
+		this.reply(nil, this.kv.fields, this.version)
 
 		//update dbUpdateTask
 		if this.dbstate != db.DBState_none {
@@ -356,23 +343,23 @@ func (this *kvProposal) apply() {
 	}
 }
 
+func (this *kvLinearizableRead) reply(err errcode.Error, fields map[string]*flyproto.Field, version int64) {
+	for _, v := range this.cmds {
+		v.reply(err, fields, version)
+	}
+}
+
 func (this *kvLinearizableRead) OnError(err error) {
-
 	GetSugar().Errorf("kvLinearizableRead OnError:%v", err)
-
+	this.reply(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"), nil, 0)
 	this.kv.store.mainQueue.AppendHighestPriotiryItem(func() {
-		this.cmd.reply(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"), nil, 0)
-		this.kv.pendingCmd.popFront()
 		this.kv.processCmd()
 	})
 }
 
 func (this *kvLinearizableRead) ok() {
 	GetSugar().Debugf("kvLinearizableRead ok version:%d", this.kv.version)
-
-	this.cmd.reply(nil, this.kv.fields, this.kv.version)
-	this.kv.pendingCmd.popFront()
-
+	this.reply(nil, this.kv.fields, this.kv.version)
 	this.kv.processCmd()
 }
 

@@ -38,8 +38,9 @@ func (this *cmdIncr) do(proposal *kvProposal) {
 		this.meta.FillDefaultValues(proposal.fields)
 		proposal.dbstate = db.DBState_insert
 		proposal.kvState = kv_ok
+		proposal.ptype = proposal_snapshot
 
-		oldV := proposal.fields[this.v.GetName()]
+		oldV := this.kv.fields[this.v.GetName()]
 
 		if nil == oldV {
 			oldV = flyproto.PackField(this.v.GetName(), this.meta.GetDefaultValue(this.v.GetName()))
@@ -49,26 +50,17 @@ func (this *cmdIncr) do(proposal *kvProposal) {
 		proposal.fields[this.v.GetName()] = newV
 
 	} else {
-
 		proposal.version++
-
-		if proposal.ptype != proposal_snapshot {
-			proposal.ptype = proposal_update
-		}
-
-		if proposal.dbstate != db.DBState_insert {
-			proposal.dbstate = db.DBState_update
-		}
-
-		oldV := this.fields[this.v.GetName()]
-
+		proposal.ptype = proposal_update
+		proposal.dbstate = db.DBState_update
+		oldV := this.kv.fields[this.v.GetName()]
 		if nil == oldV {
-			oldV = flyproto.PackField(this.v.GetName(), this.kv.meta.GetDefaultValue(this.v.GetName()))
+			oldV = flyproto.PackField(this.v.GetName(), this.meta.GetDefaultValue(this.v.GetName()))
 		}
-
 		newV := flyproto.PackField(oldV.GetName(), oldV.GetInt()+this.v.GetInt())
 		proposal.fields[this.v.GetName()] = newV
 	}
+	proposal.cmds = append(proposal.cmds, this)
 }
 
 func (s *kvstore) makeIncr(kv *kv, deadline time.Time, c *net.Socket, seqno int64, req *flyproto.IncrByReq) (cmdI, errcode.Error) {
@@ -88,7 +80,7 @@ func (s *kvstore) makeIncr(kv *kv, deadline time.Time, c *net.Socket, seqno int6
 		v: req.Field,
 	}
 
-	incr.cmdBase.init(kv.meta, flyproto.CmdType_CompareAndSet, c, seqno, req.Version, deadline, &s.wait4ReplyCount, incr.makeResponse)
+	incr.cmdBase.init(kv, flyproto.CmdType_CompareAndSet, c, seqno, req.Version, deadline, &s.wait4ReplyCount, incr.makeResponse)
 
 	return incr, nil
 }

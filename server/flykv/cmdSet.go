@@ -24,7 +24,10 @@ func (this *cmdSet) makeResponse(err errcode.Error, fields map[string]*flyproto.
 }
 
 func (this *cmdSet) do(proposal *kvProposal) {
-	if proposal.kvState == kv_no_record {
+	if nil != this.version && *this.version != proposal.version {
+		this.reply(Err_version_mismatch, nil, proposal.version)
+		return
+	} else if proposal.kvState == kv_no_record {
 		proposal.version = abs(proposal.version) + 1
 		proposal.dbstate = db.DBState_insert
 		proposal.kvState = kv_ok
@@ -46,6 +49,7 @@ func (this *cmdSet) do(proposal *kvProposal) {
 			proposal.fields[k] = v
 		}
 	}
+	proposal.cmds = append(proposal.cmds, this)
 }
 
 func (s *kvstore) makeSet(kv *kv, deadline time.Time, c *net.Socket, seqno int64, req *flyproto.SetReq) (cmdI, errcode.Error) {
@@ -61,7 +65,7 @@ func (s *kvstore) makeSet(kv *kv, deadline time.Time, c *net.Socket, seqno int64
 		fields: map[string]*flyproto.Field{},
 	}
 
-	set.cmdBase.init(kv.meta, flyproto.CmdType_Set, c, seqno, req.Version, deadline, &s.wait4ReplyCount, set.makeResponse)
+	set.cmdBase.init(kv, flyproto.CmdType_Set, c, seqno, req.Version, deadline, &s.wait4ReplyCount, set.makeResponse)
 
 	for _, v := range req.GetFields() {
 		set.fields[v.GetName()] = v

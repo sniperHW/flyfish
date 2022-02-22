@@ -50,7 +50,7 @@ func (this *cmdGet) makeResponse(err errcode.Error, fields map[string]*flyproto.
 }
 
 func (this *cmdGet) do(proposal *kvProposal) {
-
+	proposal.cmds = append(proposal.cmds, this)
 }
 
 func (s *kvstore) makeGet(kv *kv, deadline time.Time, c *net.Socket, seqno int64, req *flyproto.GetReq) (cmdI, errcode.Error) {
@@ -63,7 +63,7 @@ func (s *kvstore) makeGet(kv *kv, deadline time.Time, c *net.Socket, seqno int64
 
 	get := &cmdGet{}
 
-	get.cmdBase.init(kv.meta, flyproto.CmdType_Get, c, seqno, req.Version, deadline, &s.wait4ReplyCount, get.makeResponse)
+	get.cmdBase.init(kv, flyproto.CmdType_Get, c, seqno, req.Version, deadline, &s.wait4ReplyCount, get.makeResponse)
 
 	if req.GetAll() {
 		get.wants = kv.meta.GetAllFieldsName()

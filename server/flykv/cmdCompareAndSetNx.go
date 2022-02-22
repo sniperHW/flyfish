@@ -39,8 +39,9 @@ func (this *cmdCompareAndSetNx) do(proposal *kvProposal) {
 		proposal.dbstate = db.DBState_insert
 		proposal.kvState = kv_ok
 		proposal.ptype = proposal_snapshot
+		proposal.cmds = append(proposal.cmds, this)
 	} else {
-		oldV := proposal.fields[this.old.GetName()]
+		oldV := this.kv.fields[this.old.GetName()]
 		if nil == oldV {
 			oldV = flyproto.PackField(this.old.GetName(), this.meta.GetDefaultValue(this.old.GetName()))
 		}
@@ -49,14 +50,9 @@ func (this *cmdCompareAndSetNx) do(proposal *kvProposal) {
 		} else {
 			proposal.version++
 			proposal.fields[this.old.GetName()] = this.new
-
-			if proposal.ptype != proposal_snapshot {
-				proposal.ptype = proposal_update
-			}
-
-			if proposal.dbstate != db.DBState_insert {
-				proposal.dbstate = db.DBState_update
-			}
+			proposal.ptype = proposal_update
+			proposal.dbstate = db.DBState_update
+			proposal.cmds = append(proposal.cmds, this)
 		}
 	}
 }
@@ -83,7 +79,7 @@ func (s *kvstore) makeCompareAndSetNx(kv *kv, deadline time.Time, c *net.Socket,
 		old: req.Old,
 	}
 
-	compareAndSetNx.cmdBase.init(kv.meta, flyproto.CmdType_CompareAndSet, c, seqno, req.Version, deadline, &s.wait4ReplyCount, compareAndSetNx.makeResponse)
+	compareAndSetNx.cmdBase.init(kv, flyproto.CmdType_CompareAndSet, c, seqno, req.Version, deadline, &s.wait4ReplyCount, compareAndSetNx.makeResponse)
 
 	return compareAndSetNx, nil
 }

@@ -11,7 +11,6 @@ import (
 type cmdKick struct {
 	cmdBase
 	waitVersion int64
-	kv          *kv
 }
 
 func (this *cmdKick) makeResponse(err errcode.Error, fields map[string]*flyproto.Field, version int64) *cs.RespMessage {
@@ -27,16 +26,16 @@ func (this *cmdKick) do(proposal *kvProposal) {
 	} else {
 		this.waitVersion = this.kv.version
 		this.kv.updateTask.issueKickDbWriteBack()
+		this.kv.pendingCmd.pushfront(this)
 	}
+	proposal.cmds = append(proposal.cmds, this)
 }
 
 func (s *kvstore) makeKick(kv *kv, deadline time.Time, c *net.Socket, seqno int64, _ *flyproto.KickReq) (cmdI, errcode.Error) {
 
-	kick := &cmdKick{
-		kv: kv,
-	}
+	kick := &cmdKick{}
 
-	kick.cmdBase.init(kv.meta, flyproto.CmdType_Kick, c, seqno, nil, deadline, &s.wait4ReplyCount, kick.makeResponse)
+	kick.cmdBase.init(kv, flyproto.CmdType_Kick, c, seqno, nil, deadline, &s.wait4ReplyCount, kick.makeResponse)
 
 	return kick, nil
 }

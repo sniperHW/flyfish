@@ -160,8 +160,10 @@ func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields 
 		this.state.Fields = map[string]*flyproto.Field{}
 	}
 
-	for k, v := range fields {
-		this.state.Fields[k] = v
+	if this.state.State != db.DBState_delete {
+		for k, v := range fields {
+			this.state.Fields[k] = v
+		}
 	}
 
 	if this.kv.store.kvnode.writeBackMode == write_through && !this.doing {
@@ -191,11 +193,8 @@ func (this *dbLoadTask) GetTableMeta() db.TableMeta {
 
 func (this *dbLoadTask) onError(err errcode.Error) {
 	this.kv.store.mainQueue.AppendHighestPriotiryItem(func() {
+		this.kv.clearCmds(err)
 		this.kv.store.deleteKv(this.kv)
-		for f := this.kv.pendingCmd.front(); nil != f; f = this.kv.pendingCmd.front() {
-			f.reply(err, nil, 0)
-			this.kv.pendingCmd.popFront()
-		}
 	})
 }
 
@@ -203,10 +202,6 @@ func (this *dbLoadTask) OnResult(err error, version int64, fields map[string]*fl
 	if !this.kv.store.isLeader() {
 		this.onError(errcode.New(errcode.Errcode_not_leader))
 	} else if err == nil || err == db.ERR_RecordNotExist {
-		/*
-		 * 根据this.cmd产生正确的proposal
-		 */
-
 		proposal := &kvProposal{
 			ptype:       proposal_snapshot,
 			kv:          this.kv,
@@ -223,7 +218,7 @@ func (this *dbLoadTask) OnResult(err error, version int64, fields map[string]*fl
 			proposal.kvState = kv_ok
 		}
 
-		this.kv.processCmd(proposal)
+		this.kv.store.rn.IssueProposal(proposal)
 
 	} else {
 		this.onError(errcode.New(errcode.Errcode_error, err.Error()))

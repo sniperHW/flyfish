@@ -15,7 +15,7 @@ type cmdI interface {
 	reply(err errcode.Error, fields map[string]*flyproto.Field, version int64)
 	isTimeout() bool
 	cmdType() flyproto.CmdType
-	//versionMatch(*kv) bool
+	do(*kvProposal)
 	getNext() cmdI
 	setNext(cmdI)
 }
@@ -32,10 +32,11 @@ type cmdBase struct {
 	wait4ReplyCount *int32
 	fnMakeResponse  MakeResponse
 	ppnext          cmdI
+	kv              *kv
 	meta            db.TableMeta
 }
 
-func (this *cmdBase) init(meta db.TableMeta, cmd flyproto.CmdType, peer *net.Socket, seqno int64, version *int64, deadline time.Time, wait4ReplyCount *int32, makeResponse MakeResponse) {
+func (this *cmdBase) init(kv *kv, cmd flyproto.CmdType, peer *net.Socket, seqno int64, version *int64, deadline time.Time, wait4ReplyCount *int32, makeResponse MakeResponse) {
 	atomic.AddInt32(wait4ReplyCount, 1)
 	this.peer = peer
 	this.deadline = deadline
@@ -44,7 +45,8 @@ func (this *cmdBase) init(meta db.TableMeta, cmd flyproto.CmdType, peer *net.Soc
 	this.cmd = cmd
 	this.wait4ReplyCount = wait4ReplyCount
 	this.fnMakeResponse = makeResponse
-	this.meta = meta
+	this.kv = kv
+	this.meta = kv.meta
 }
 
 func (this *cmdBase) getNext() cmdI {
@@ -85,13 +87,3 @@ func (this *cmdBase) reply(err errcode.Error, fields map[string]*flyproto.Field,
 		}
 	}
 }
-
-//func (this *cmdBase) versionMatch(kv *kv) bool {
-//	if nil == this.version {
-//		return true
-//	} else if !(this.cmd == flyproto.CmdType_Get || this.cmd == flyproto.CmdType_Kick) && *this.version != kv.version {
-//		return false
-//	} else {
-//		return true
-//	}
-//}

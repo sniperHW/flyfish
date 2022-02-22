@@ -50,8 +50,9 @@ func (this *cmdSetNx) do(proposal *kvProposal) {
 		proposal.ptype = proposal_snapshot
 		this.meta.FillDefaultValues(this.fields)
 		proposal.fields = this.fields
+		proposal.cmds = append(proposal.cmds, this)
 	} else {
-		this.reply(Err_record_exist, this.kv.fields, this.kv.version)
+		this.reply(Err_record_exist, proposal.fields, proposal.version)
 	}
 }
 

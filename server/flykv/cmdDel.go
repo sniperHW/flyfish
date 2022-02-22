@@ -23,9 +23,12 @@ func (this *cmdDel) makeResponse(err errcode.Error, fields map[string]*flyproto.
 }
 
 func (this *cmdDel) do(proposal *kvProposal) {
-	if proposal.kvState == kv_no_rok {
+	if proposal.kvState == kv_ok {
+		proposal.ptype = proposal_snapshot
 		proposal.dbstate = db.DBState_delete
 		proposal.version = -(abs(proposal.version) + 1)
+		proposal.cmds = append(proposal.cmds, this)
+		proposal.kvState = kv_no_record
 	} else {
 		this.reply(Err_record_notexist, nil, 0)
 	}
@@ -35,7 +38,7 @@ func (s *kvstore) makeDel(kv *kv, deadline time.Time, c *net.Socket, seqno int64
 
 	del := &cmdDel{}
 
-	del.cmdBase.init(kv.meta, flyproto.CmdType_Del, c, seqno, req.Version, deadline, &s.wait4ReplyCount, del.makeResponse)
+	del.cmdBase.init(kv, flyproto.CmdType_Del, c, seqno, req.Version, deadline, &s.wait4ReplyCount, del.makeResponse)
 
 	return del, nil
 }

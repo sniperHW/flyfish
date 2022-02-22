@@ -128,7 +128,7 @@ func (this *kv) pushCmd(cmd cmdI) {
 				this.state = kv_loading
 			}
 		} else {
-			this.processCmd(nil)
+			this.processCmd()
 		}
 	} else {
 		if _, ok := this.pendingCmd.tail.(*cmdKick); ok {
@@ -136,6 +136,13 @@ func (this *kv) pushCmd(cmd cmdI) {
 		} else {
 			this.pendingCmd.pushback(cmd)
 		}
+	}
+}
+
+func (this *kv) clearCmds(err errcode.Error) {
+	for f := this.pendingCmd.front(); nil != f; f = this.pendingCmd.front() {
+		this.pendingCmd.popFront()
+		f.reply(err, nil, 0)
 	}
 }
 
@@ -157,130 +164,72 @@ func (this *kv) mergeCmd() (cmds []cmdI) {
 				last = cmds[len(cmds)-1]
 			}
 
-			/*
-				CmdType_Ping            CmdType = 1
-				CmdType_Set             CmdType = 2
-				CmdType_Get             CmdType = 3
-				CmdType_Del             CmdType = 4
-				CmdType_IncrBy          CmdType = 5
-				CmdType_DecrBy          CmdType = 6
-				CmdType_SetNx           CmdType = 7
-				CmdType_CompareAndSet   CmdType = 8
-				CmdType_CompareAndSetNx CmdType = 9
-				CmdType_Kick            CmdType = 10
-				CmdType_ScanNext        CmdType = 11
-			*/
-
 			if nil == last {
 				cmds = append(cmds, c)
 				this.pendingCmd.popFront()
-				if !(c.cmdType() == flyproto.CmdType_Get || c.cmdType() == flyproto.CmdType_Get) {
-
+				if !(c.cmdType() == flyproto.CmdType_Get || c.cmdType() == flyproto.CmdType_Set) {
+					//只有get和set能和后面的命令合并
+					return
 				}
 			} else {
-
+				if last.cmdType() == c.cmdType() && (c.cmdType() == flyproto.CmdType_Get || c.cmdType() == flyproto.CmdType_Set) {
+					cmds = append(cmds, c)
+					this.pendingCmd.popFront()
+				} else {
+					return
+				}
 			}
 		}
 	}
+	return
 }
 
-func (this *kv) processCmd(proposal *kvProposal) {
+func (this *kv) processCmd() {
 
-	for !this.pendingCmd.empty() {
+	for {
 
-		cmds := []cmdI{}
+		cmds := this.mergeCmd()
 
-		for c := this.pendingCmd.front(); nil != c; c = this.pendingCmd.front() {
-			var err errcode.Error
-			if !this.store.isLeader() {
-				err = Err_not_leader
-			} else if c.isTimeout() {
-				err = Err_timeout
-			}
+		if len(cmds) == 0 {
+			break
+		}
 
-			if nil != err {
-				c.reply(err, nil, 0)
-				this.pendingCmd.popFront()
-			} else {
-				var last cmdI
-				if len(cmds) > 0 {
-					last = cmds[len(cmds)-1]
-				}
-
-				//if 0 == len(cmds) {
-				//	cmds = append(cmds, c)
-				//	this.pendingCmd.popFront()
-				//	switch c.cmdType()
-				//}
-
-				//if canMerge(cmds, c) {
-
-				//}
-
-				/*if 0 == len(cmds) {
-					cmds = append(cmds, c)
-					switch c.cmdType() {
-					case flyproto.CmdType_Kick:
-						break
-					case flyproto.CmdType_Del:
-						this.pendingCmd.popFront()
-						break
-					default:
-						this.pendingCmd.popFront()
-					}
-				} else {
-					last := cmds[len(cmds)-1]
-					if last.cmdType() == flyproto.CmdType_Get && c.cmdType() != flyproto.CmdType_Get {
-						//get不能与其它设置类指令合并
-						break
-					} else {
-						cmds = append(cmds, c)
-						this.pendingCmd.popFront()
-					}
-				}*/
-			}
-
-			/*if len(cmds) == 0 {
-				break
-			}
-
-			if this.state != kv_loading && cmds[0].cmdType() == flyproto.CmdType_Get {
-				if !this.store.kvnode.config.LinearizableRead {
-					//没有开启一致性读，直接返回
+		if cmds[0].cmdType() == flyproto.CmdType_Get {
+			if !this.store.kvnode.config.LinearizableRead {
+				//没有开启一致性读，直接返回
+				for _, c := range cmds {
 					c.reply(nil, this.fields, this.version)
-				} else {
-					this.store.rn.IssueLinearizableRead(&kvLinearizableRead{
-						kv:  this,
-						cmd: c,
-					})
-					this.store.removeKickable(this)
-					return
 				}
 			} else {
-				if nil == proposal {
-					proposal = &kvProposal{
-						kv:        this,
-						cmds:      cmds,
-						version:   this.version,
-						fields:    this.fields,
-						dbversion: this.lastWriteBackVersion,
-						kvState:   this.state,
-					}
-				}
+				this.store.rn.IssueLinearizableRead(&kvLinearizableRead{
+					kv:   this,
+					cmds: cmds,
+				})
+				this.store.removeKickable(this)
+				return
+			}
+		} else {
 
-				c.(interface {
-					do(*kvProposal)
-				}).do(proposal)
+			proposal := &kvProposal{
+				kv:        this,
+				version:   this.version,
+				fields:    map[string]*flyproto.Field{},
+				dbversion: this.lastWriteBackVersion,
+				kvState:   this.state,
+			}
 
-				if proposal.ptype != proposal_none {
-					this.store.rn.IssueProposal(proposal)
-					this.store.removeKickable(this)
-					return
-				} else if cmds[0].cmdType() == flyproto.CmdType_Kick {
-					this.store.removeKickable(this)
-					return
-				}
-			}*/
+			for _, c := range cmds {
+				c.do(proposal)
+			}
+
+			if proposal.ptype != proposal_none {
+				this.store.rn.IssueProposal(proposal)
+				this.store.removeKickable(this)
+				return
+			} else if cmds[0].cmdType() == flyproto.CmdType_Kick {
+				this.store.removeKickable(this)
+				return
+			}
 		}
 	}
 
