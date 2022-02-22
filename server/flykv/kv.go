@@ -34,11 +34,6 @@ type dbLoadTask struct {
 	key    string
 }
 
-type cmdQueue struct {
-	head cmdI
-	tail cmdI
-}
-
 /*
  *kv.lastWriteBackVersion: db回写完成后，用最后的version提交proposal_last_writeback_version
  *apply的时候将 kv.lastWriteBackVersion设置为proposal_last_writeback_version.version
@@ -56,7 +51,7 @@ type kv struct {
 	fields               map[string]*flyproto.Field //字段
 	meta                 db.TableMeta
 	updateTask           dbUpdateTask
-	pendingCmd           cmdQueue
+	pendingCmd           *list.List
 	store                *kvstore
 	groupID              int
 	lastWriteBackVersion int64
@@ -71,49 +66,9 @@ func abs(v int64) int64 {
 	}
 }
 
-func (this *cmdQueue) empty() bool {
-	return this.head == nil
-}
-
-func (this *cmdQueue) pushback(c cmdI) {
-	if nil == this.tail {
-		this.head = c
-	} else {
-		this.tail.setNext(c)
-	}
-	this.tail = c
-	c.setNext(nil)
-}
-
-func (this *cmdQueue) pushfront(c cmdI) {
-	if nil == this.tail {
-		this.tail = c
-		c.setNext(nil)
-	} else {
-		c.setNext(this.head)
-	}
-
-	this.head = c
-}
-
-func (this *cmdQueue) front() cmdI {
-	return this.head
-}
-
-func (this *cmdQueue) popFront() {
-	if !this.empty() {
-		f := this.head
-		this.head = f.getNext()
-		if this.head == nil {
-			this.tail = nil
-		}
-		f.setNext(nil)
-	}
-}
-
 func (this *kv) pushCmd(cmd cmdI) {
-	if this.pendingCmd.empty() {
-		this.pendingCmd.pushback(cmd)
+	if this.pendingCmd.Len() == 0 {
+		this.pendingCmd.PushBack(cmd)
 		if this.state == kv_new {
 			if !this.store.db.issueLoad(&dbLoadTask{
 				kv:     this,
@@ -131,53 +86,70 @@ func (this *kv) pushCmd(cmd cmdI) {
 			this.processCmd()
 		}
 	} else {
-		if _, ok := this.pendingCmd.tail.(*cmdKick); ok {
+		if _, ok := this.pendingCmd.Back().Value.(*cmdKick); ok {
 			cmd.reply(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"), nil, 0)
 		} else {
-			this.pendingCmd.pushback(cmd)
+			this.pendingCmd.PushBack(cmd)
 		}
 	}
 }
 
 func (this *kv) clearCmds(err errcode.Error) {
-	for f := this.pendingCmd.front(); nil != f; f = this.pendingCmd.front() {
-		this.pendingCmd.popFront()
-		f.reply(err, nil, 0)
+	for f := this.pendingCmd.Front(); nil != f; f = this.pendingCmd.Front() {
+		this.pendingCmd.Remove(f).(cmdI).reply(err, nil, 0)
+	}
+}
+
+func canMerge(cmds []cmdI, cmd cmdI) bool {
+	if len(cmds) == 0 {
+		return true
+	} else {
+		last := cmds[len(cmds)-1]
+		if last.cmdType() != cmd.cmdType() {
+			//不同类型命令不允许合并
+			return false
+		} else if !(cmd.cmdType() == flyproto.CmdType_Get || cmd.cmdType() == flyproto.CmdType_Set) {
+			//只有连续的get和set可以合并
+			return false
+		} else if cmd.cmdType() == flyproto.CmdType_Set && nil != cmd.(*cmdSet).version {
+			//带版本号比对的set命令不可合并
+			return false
+		} else {
+			return true
+		}
 	}
 }
 
 func (this *kv) mergeCmd() (cmds []cmdI) {
-	for c := this.pendingCmd.front(); nil != c; c = this.pendingCmd.front() {
+	for c := this.pendingCmd.Front(); nil != c; c = this.pendingCmd.Front() {
+		cmd := c.Value.(cmdI)
+
 		var err errcode.Error
 		if !this.store.isLeader() {
 			err = Err_not_leader
-		} else if c.isTimeout() {
+		} else if cmd.isTimeout() {
 			err = Err_timeout
+		} else if cmd.cmdType() == flyproto.CmdType_Set && nil != cmd.(*cmdSet).version && *cmd.(*cmdSet).version != this.version {
+			err = Err_version_mismatch
 		}
 
 		if nil != err {
-			c.reply(err, nil, 0)
-			this.pendingCmd.popFront()
+			this.pendingCmd.Remove(c).(cmdI).reply(err, nil, 0)
 		} else {
-			var last cmdI
-			if len(cmds) > 0 {
-				last = cmds[len(cmds)-1]
-			}
-
-			if nil == last {
-				cmds = append(cmds, c)
-				this.pendingCmd.popFront()
-				if !(c.cmdType() == flyproto.CmdType_Get || c.cmdType() == flyproto.CmdType_Set) {
-					//只有get和set能和后面的命令合并
+			if canMerge(cmds, cmd) {
+				cmds = append(cmds, cmd)
+				this.pendingCmd.Remove(c)
+				switch cmd.cmdType() {
+				case flyproto.CmdType_Get:
+				case flyproto.CmdType_Set:
+					if nil != cmd.(*cmdSet).version {
+						return
+					}
+				default:
 					return
 				}
 			} else {
-				if last.cmdType() == c.cmdType() && (c.cmdType() == flyproto.CmdType_Get || c.cmdType() == flyproto.CmdType_Set) {
-					cmds = append(cmds, c)
-					this.pendingCmd.popFront()
-				} else {
-					return
-				}
+				return
 			}
 		}
 	}
@@ -186,14 +158,7 @@ func (this *kv) mergeCmd() (cmds []cmdI) {
 
 func (this *kv) processCmd() {
 
-	for {
-
-		cmds := this.mergeCmd()
-
-		if len(cmds) == 0 {
-			break
-		}
-
+	for cmds := this.mergeCmd(); len(cmds) > 0; cmds = this.mergeCmd() {
 		if cmds[0].cmdType() == flyproto.CmdType_Get {
 			if !this.store.kvnode.config.LinearizableRead {
 				//没有开启一致性读，直接返回

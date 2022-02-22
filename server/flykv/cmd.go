@@ -16,14 +16,11 @@ type cmdI interface {
 	isTimeout() bool
 	cmdType() flyproto.CmdType
 	do(*kvProposal)
-	getNext() cmdI
-	setNext(cmdI)
 }
 
 type MakeResponse func(errcode.Error, map[string]*flyproto.Field, int64) *cs.RespMessage
 
 type cmdBase struct {
-	cmd             flyproto.CmdType
 	seqno           int64
 	version         *int64
 	peer            *net.Socket
@@ -31,34 +28,20 @@ type cmdBase struct {
 	replied         int32
 	wait4ReplyCount *int32
 	fnMakeResponse  MakeResponse
-	ppnext          cmdI
 	kv              *kv
 	meta            db.TableMeta
 }
 
-func (this *cmdBase) init(kv *kv, cmd flyproto.CmdType, peer *net.Socket, seqno int64, version *int64, deadline time.Time, wait4ReplyCount *int32, makeResponse MakeResponse) {
+func (this *cmdBase) init(kv *kv, peer *net.Socket, seqno int64, version *int64, deadline time.Time, wait4ReplyCount *int32, makeResponse MakeResponse) {
 	atomic.AddInt32(wait4ReplyCount, 1)
 	this.peer = peer
 	this.deadline = deadline
 	this.version = version
 	this.seqno = seqno
-	this.cmd = cmd
 	this.wait4ReplyCount = wait4ReplyCount
 	this.fnMakeResponse = makeResponse
 	this.kv = kv
 	this.meta = kv.meta
-}
-
-func (this *cmdBase) getNext() cmdI {
-	return this.ppnext
-}
-
-func (this *cmdBase) setNext(n cmdI) {
-	this.ppnext = n
-}
-
-func (this *cmdBase) cmdType() flyproto.CmdType {
-	return this.cmd
 }
 
 func (this *cmdBase) getSeqno() int64 {

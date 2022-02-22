@@ -49,8 +49,6 @@ type Config struct {
 
 	SnapshotCurrentCount int `toml:"SnapshotCurrentCount"` //并行执行快照序列化数量，如果设置为0则取cpu数量
 
-	LruCheckInterval int `toml:"LruCheckInterval"` //ms
-
 	MaxCachePerStore int `toml:"MaxCachePerStore"`
 
 	SqlLoaderCount int `toml:"SqlLoaderCount"`

@@ -68,6 +68,10 @@ func (this *cmdDecr) do(proposal *kvProposal) {
 	proposal.cmds = append(proposal.cmds, this)
 }
 
+func (this *cmdDecr) cmdType() flyproto.CmdType {
+	return flyproto.CmdType_DecrBy
+}
+
 func (s *kvstore) makeDecr(kv *kv, deadline time.Time, c *net.Socket, seqno int64, req *flyproto.DecrByReq) (cmdI, errcode.Error) {
 	if nil == req.Field {
 		return nil, errcode.New(errcode.Errcode_error, "field is nil")
@@ -85,7 +89,7 @@ func (s *kvstore) makeDecr(kv *kv, deadline time.Time, c *net.Socket, seqno int6
 		v: req.Field,
 	}
 
-	decr.cmdBase.init(kv, flyproto.CmdType_CompareAndSet, c, seqno, req.Version, deadline, &s.wait4ReplyCount, decr.makeResponse)
+	decr.cmdBase.init(kv, c, seqno, req.Version, deadline, &s.wait4ReplyCount, decr.makeResponse)
 
 	return decr, nil
 }

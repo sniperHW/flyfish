@@ -51,6 +51,10 @@ func (this *cmdCompareAndSet) do(proposal *kvProposal) {
 	}
 }
 
+func (this *cmdCompareAndSet) cmdType() flyproto.CmdType {
+	return flyproto.CmdType_CompareAndSet
+}
+
 func (s *kvstore) makeCompareAndSet(kv *kv, deadline time.Time, c *net.Socket, seqno int64, req *flyproto.CompareAndSetReq) (cmdI, errcode.Error) {
 	if req.New == nil {
 		return nil, errcode.New(errcode.Errcode_error, "new is nil")
@@ -73,7 +77,7 @@ func (s *kvstore) makeCompareAndSet(kv *kv, deadline time.Time, c *net.Socket, s
 		old: req.Old,
 	}
 
-	compareAndSet.cmdBase.init(kv, flyproto.CmdType_CompareAndSet, c, seqno, req.Version, deadline, &s.wait4ReplyCount, compareAndSet.makeResponse)
+	compareAndSet.cmdBase.init(kv, c, seqno, req.Version, deadline, &s.wait4ReplyCount, compareAndSet.makeResponse)
 
 	return compareAndSet, nil
 }

@@ -217,14 +217,15 @@ func newkv(s *kvstore, slot int, groupID int, unikey string, key string, table s
 	}
 
 	k := &kv{
-		uniKey:  unikey,
-		key:     key,
-		state:   kv_new,
-		meta:    tbmeta,
-		store:   s,
-		groupID: groupID,
-		slot:    slot,
-		table:   table,
+		uniKey:     unikey,
+		key:        key,
+		state:      kv_new,
+		meta:       tbmeta,
+		store:      s,
+		groupID:    groupID,
+		slot:       slot,
+		table:      table,
+		pendingCmd: list.New(),
 	}
 
 	k.updateTask = dbUpdateTask{
@@ -241,7 +242,7 @@ func newkv(s *kvstore, slot int, groupID int, unikey string, key string, table s
 
 func (this *kvstore) kick(kv *kv) {
 	kick := &cmdKick{}
-	kick.cmdBase.init(kv, flyproto.CmdType_Kick, nil, 0, nil, time.Time{}, &this.wait4ReplyCount, kick.makeResponse)
+	kick.cmdBase.init(kv, nil, 0, nil, time.Time{}, &this.wait4ReplyCount, kick.makeResponse)
 	kv.pushCmd(kick)
 }
 
@@ -548,16 +549,10 @@ func (s *kvstore) becomeLeader() {
 
 func (s *kvstore) onLeaderDownToFollower() {
 	atomic.StoreInt32(&s.ready, 0)
-
 	for _, v := range s.pendingKv {
-		for c := v.pendingCmd.front(); nil != c; c = v.pendingCmd.front() {
-			v.pendingCmd.popFront()
-			c.reply(errcode.New(errcode.Errcode_not_leader), nil, 0)
-		}
+		v.clearCmds(errcode.New(errcode.Errcode_not_leader))
 	}
-
 	s.pendingKv = map[string]*kv{}
-
 }
 
 //将nodeID作为learner加入当前store的raft配置

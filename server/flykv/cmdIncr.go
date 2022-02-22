@@ -63,6 +63,10 @@ func (this *cmdIncr) do(proposal *kvProposal) {
 	proposal.cmds = append(proposal.cmds, this)
 }
 
+func (this *cmdIncr) cmdType() flyproto.CmdType {
+	return flyproto.CmdType_IncrBy
+}
+
 func (s *kvstore) makeIncr(kv *kv, deadline time.Time, c *net.Socket, seqno int64, req *flyproto.IncrByReq) (cmdI, errcode.Error) {
 	if nil == req.Field {
 		return nil, errcode.New(errcode.Errcode_error, "field is nil")
@@ -80,7 +84,7 @@ func (s *kvstore) makeIncr(kv *kv, deadline time.Time, c *net.Socket, seqno int6
 		v: req.Field,
 	}
 
-	incr.cmdBase.init(kv, flyproto.CmdType_CompareAndSet, c, seqno, req.Version, deadline, &s.wait4ReplyCount, incr.makeResponse)
+	incr.cmdBase.init(kv, c, seqno, req.Version, deadline, &s.wait4ReplyCount, incr.makeResponse)
 
 	return incr, nil
 }

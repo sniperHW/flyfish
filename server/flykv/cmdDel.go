@@ -34,11 +34,15 @@ func (this *cmdDel) do(proposal *kvProposal) {
 	}
 }
 
+func (this *cmdDel) cmdType() flyproto.CmdType {
+	return flyproto.CmdType_Del
+}
+
 func (s *kvstore) makeDel(kv *kv, deadline time.Time, c *net.Socket, seqno int64, req *flyproto.DelReq) (cmdI, errcode.Error) {
 
 	del := &cmdDel{}
 
-	del.cmdBase.init(kv, flyproto.CmdType_Del, c, seqno, req.Version, deadline, &s.wait4ReplyCount, del.makeResponse)
+	del.cmdBase.init(kv, c, seqno, req.Version, deadline, &s.wait4ReplyCount, del.makeResponse)
 
 	return del, nil
 }

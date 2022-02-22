@@ -505,8 +505,8 @@ func (this *LastWriteBackVersionProposal) apply() {
 		this.kv.lastWriteBackVersion = this.version
 	}
 
-	if f := this.kv.pendingCmd.front(); nil != f {
-		if cmdkick, ok := f.(*cmdKick); ok && cmdkick.waitVersion == this.version {
+	if f := this.kv.pendingCmd.Front(); nil != f {
+		if cmdkick, ok := f.Value.(*cmdKick); ok && cmdkick.waitVersion == this.version {
 			this.kv.processCmd()
 		}
 	}

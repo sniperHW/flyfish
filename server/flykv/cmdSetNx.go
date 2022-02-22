@@ -56,6 +56,10 @@ func (this *cmdSetNx) do(proposal *kvProposal) {
 	}
 }
 
+func (this *cmdSetNx) cmdType() flyproto.CmdType {
+	return flyproto.CmdType_SetNx
+}
+
 func (s *kvstore) makeSetNx(kv *kv, deadline time.Time, c *net.Socket, seqno int64, req *flyproto.SetNxReq) (cmdI, errcode.Error) {
 	if len(req.GetFields()) == 0 {
 		return nil, errcode.New(errcode.Errcode_error, "setNx fields is empty")
@@ -69,7 +73,7 @@ func (s *kvstore) makeSetNx(kv *kv, deadline time.Time, c *net.Socket, seqno int
 		fields: map[string]*flyproto.Field{},
 	}
 
-	setNx.cmdBase.init(kv, flyproto.CmdType_Set, c, seqno, req.Version, deadline, &s.wait4ReplyCount, setNx.makeResponse)
+	setNx.cmdBase.init(kv, c, seqno, req.Version, deadline, &s.wait4ReplyCount, setNx.makeResponse)
 
 	for _, v := range req.GetFields() {
 		setNx.fields[v.GetName()] = v
