@@ -217,7 +217,13 @@ func (this *dbLoadTask) OnResult(err error, version int64, fields map[string]*fl
 			dbstate:     db.DBState_none,
 		}
 
-		this.kv.store.rn.IssueProposal(proposal)
+		if version <= 0 {
+			proposal.kvState = kv_no_record
+		} else {
+			proposal.kvState = kv_ok
+		}
+
+		this.kv.processCmd(proposal)
 
 	} else {
 		this.onError(errcode.New(errcode.Errcode_error, err.Error()))

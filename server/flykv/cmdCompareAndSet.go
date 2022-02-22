@@ -32,21 +32,26 @@ func (this *cmdCompareAndSet) makeResponse(err errcode.Error, fields map[string]
 }
 
 func (this *cmdCompareAndSet) do(proposal *kvProposal) {
-	if this.kv.state == kv_no_record {
+	if proposal.kvState == kv_no_record {
 		this.reply(Err_record_notexist, nil, 0)
-		proposal.ptype = proposal_none
 	} else {
-		oldV := this.kv.fields[this.old.GetName()]
+		oldV := fields.fields[this.old.GetName()]
 		if nil == oldV {
 			oldV = flyproto.PackField(this.old.GetName(), this.meta.GetDefaultValue(this.old.GetName()))
 		}
 		if !this.old.IsEqual(oldV) {
-			this.reply(Err_cas_not_equal, proposal.fields, proposal.version)
-			proposal.ptype = proposal_none
+			this.reply(Err_cas_not_equal, proposal.fields, 0)
 		} else {
 			proposal.version++
 			proposal.fields[this.old.GetName()] = this.new
-			proposal.dbstate = db.DBState_update
+
+			if proposal.ptype != proposal_snapshot {
+				proposal.ptype = proposal_update
+			}
+
+			if proposal.dbstate != db.DBState_insert {
+				proposal.dbstate = db.DBState_update
+			}
 		}
 	}
 }
@@ -73,7 +78,7 @@ func (s *kvstore) makeCompareAndSet(kv *kv, deadline time.Time, c *net.Socket, s
 		old: req.Old,
 	}
 
-	compareAndSet.cmdBase.init(kv, flyproto.CmdType_CompareAndSet, c, seqno, req.Version, deadline, &s.wait4ReplyCount, compareAndSet.makeResponse)
+	compareAndSet.cmdBase.init(kv.meta, flyproto.CmdType_CompareAndSet, c, seqno, req.Version, deadline, &s.wait4ReplyCount, compareAndSet.makeResponse)
 
 	return compareAndSet, nil
 }

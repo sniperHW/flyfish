@@ -261,18 +261,19 @@ func (this *proposalBase) OnMergeFinish(b []byte) (ret []byte) {
 type kvProposal struct {
 	proposalBase
 	dbstate     db.DBState
+	kvState     kvState
 	ptype       proposalType
 	fields      map[string]*flyproto.Field
 	version     int64
-	cmd         cmdI
+	cmds        []cmdI
 	kv          *kv
 	dbversion   int64
 	causeByLoad bool
 }
 
 type kvLinearizableRead struct {
-	kv  *kv
-	cmd cmdI
+	kv   *kv
+	cmds []cmdI
 }
 
 func (this *kvProposal) OnError(err error) {

@@ -43,13 +43,14 @@ func (this *cmdSetNx) makeResponse(err errcode.Error, fields map[string]*flyprot
 }
 
 func (this *cmdSetNx) do(proposal *kvProposal) {
-	if this.kv.state == kv_no_record {
+	if proposal.kvState == kv_no_record {
 		proposal.version = abs(proposal.version) + 1
 		proposal.dbstate = db.DBState_insert
+		proposal.kvState = kv_ok
+		proposal.ptype = proposal_snapshot
 		this.meta.FillDefaultValues(this.fields)
 		proposal.fields = this.fields
 	} else {
-		proposal.ptype = proposal_none
 		this.reply(Err_record_exist, this.kv.fields, this.kv.version)
 	}
 }

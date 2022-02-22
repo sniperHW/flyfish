@@ -270,7 +270,7 @@ func (this *Client) SetNx(table, key string, fields map[string]interface{}) *Sli
 }
 
 //当记录的field == old时，将其设置为new,并返回field的实际值(如果filed != old,将返回filed的原值)
-func (this *Client) CompareAndSet(table, key, field string, oldV, newV interface{}, version ...int64) *SliceCmd {
+func (this *Client) CompareAndSet(table, key, field string, oldV, newV interface{}) *SliceCmd {
 
 	if oldV == nil || newV == nil {
 		return nil
@@ -279,10 +279,6 @@ func (this *Client) CompareAndSet(table, key, field string, oldV, newV interface
 	pbdata := &protocol.CompareAndSetReq{
 		New: protocol.PackField(field, newV),
 		Old: protocol.PackField(field, oldV),
-	}
-
-	if len(version) > 0 && version[0] > 0 {
-		pbdata.Version = proto.Int64(version[0])
 	}
 
 	req := &cs.ReqMessage{
@@ -297,7 +293,7 @@ func (this *Client) CompareAndSet(table, key, field string, oldV, newV interface
 }
 
 //当记录不存在或记录的field == old时，将其设置为new.并返回field的实际值(如果记录存在且filed != old,将返回filed的原值)
-func (this *Client) CompareAndSetNx(table, key, field string, oldV, newV interface{}, version ...int64) *SliceCmd {
+func (this *Client) CompareAndSetNx(table, key, field string, oldV, newV interface{}) *SliceCmd {
 	if oldV == nil || newV == nil {
 		return nil
 	}
@@ -305,10 +301,6 @@ func (this *Client) CompareAndSetNx(table, key, field string, oldV, newV interfa
 	pbdata := &protocol.CompareAndSetNxReq{
 		New: protocol.PackField(field, newV),
 		Old: protocol.PackField(field, oldV),
-	}
-
-	if len(version) > 0 && version[0] > 0 {
-		pbdata.Version = proto.Int64(version[0])
 	}
 
 	req := &cs.ReqMessage{
@@ -322,13 +314,9 @@ func (this *Client) CompareAndSetNx(table, key, field string, oldV, newV interfa
 	}
 }
 
-func (this *Client) Del(table, key string, version ...int64) *StatusCmd {
+func (this *Client) Del(table, key string) *StatusCmd {
 
 	pbdata := &protocol.DelReq{}
-
-	if len(version) > 0 && version[0] > 0 {
-		pbdata.Version = proto.Int64(version[0])
-	}
 
 	req := &cs.ReqMessage{
 		Seqno:  atomic.AddInt64(&seqno, 1),
@@ -342,13 +330,9 @@ func (this *Client) Del(table, key string, version ...int64) *StatusCmd {
 
 }
 
-func (this *Client) IncrBy(table, key, field string, value int64, version ...int64) *SliceCmd {
+func (this *Client) IncrBy(table, key, field string, value int64) *SliceCmd {
 	pbdata := &protocol.IncrByReq{
 		Field: protocol.PackField(field, value),
-	}
-
-	if len(version) > 0 && version[0] > 0 {
-		pbdata.Version = proto.Int64(version[0])
 	}
 
 	req := &cs.ReqMessage{
@@ -362,13 +346,9 @@ func (this *Client) IncrBy(table, key, field string, value int64, version ...int
 	}
 }
 
-func (this *Client) DecrBy(table, key, field string, value int64, version ...int64) *SliceCmd {
+func (this *Client) DecrBy(table, key, field string, value int64) *SliceCmd {
 	pbdata := &protocol.DecrByReq{
 		Field: protocol.PackField(field, value),
-	}
-
-	if len(version) > 0 && version[0] > 0 {
-		pbdata.Version = proto.Int64(version[0])
 	}
 
 	req := &cs.ReqMessage{
