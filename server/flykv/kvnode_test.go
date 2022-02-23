@@ -9,7 +9,6 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/db"
-	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	"github.com/sniperHW/flyfish/server/mock"
@@ -220,12 +219,7 @@ func test(t *testing.T, c *client.Client) {
 		r = c.GetAll("users1", "sniperHW").Exec()
 		assert.Equal(t, r.ErrCode, Err_record_notexist)
 
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Millisecond * 10)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r3 := c.Del("users1", "sniperHW").Exec()
 		assert.Equal(t, r3.ErrCode, Err_record_notexist)
@@ -241,24 +235,14 @@ func test(t *testing.T, c *client.Client) {
 		r1 := c.Set("users1", "sniperHW", fields).Exec()
 		assert.Nil(t, r1.ErrCode)
 
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Millisecond * 10)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r1 = c.Set("users1", "sniperHW", fields).Exec()
 		assert.Nil(t, r1.ErrCode)
 
 		time.Sleep(time.Second)
 
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Millisecond * 10)
-		}
+		c.Kick("users1", "sniperHW").Exec()
 
 		r1 = c.Set("users1", "sniperHW", fields, 1).Exec()
 		assert.Equal(t, r1.ErrCode, Err_version_mismatch)
@@ -266,12 +250,7 @@ func test(t *testing.T, c *client.Client) {
 		r2 := c.Del("users1", "sniperHW").Exec()
 		assert.Nil(t, r2.ErrCode)
 
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Millisecond * 10)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r1 = c.Set("users1", "sniperHW", fields).Exec()
 		assert.Nil(t, r1.ErrCode)
@@ -290,12 +269,7 @@ func test(t *testing.T, c *client.Client) {
 		r1 = c.SetNx("users1", "sniperHW", fields).Exec()
 		assert.Nil(t, r1.ErrCode)
 
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Millisecond * 10)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r1 = c.SetNx("users1", "sniperHW", fields).Exec()
 		assert.Equal(t, r1.ErrCode, Err_record_exist)
@@ -332,22 +306,12 @@ func test(t *testing.T, c *client.Client) {
 		r2 = c.CompareAndSet("users1", "sniperHW", "age", 11, 10).Exec()
 		assert.Equal(t, r2.ErrCode, Err_record_notexist)
 
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Millisecond * 10)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r2 = c.CompareAndSet("users1", "sniperHW", "age", 11, 10).Exec()
 		assert.Equal(t, r2.ErrCode, Err_record_notexist)
 
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Millisecond * 10)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r2 = c.CompareAndSet("users1", "sniperHW", "age", 10, 11).Exec()
 		assert.Equal(t, r2.ErrCode, Err_record_notexist)
@@ -355,22 +319,12 @@ func test(t *testing.T, c *client.Client) {
 		r4 := c.Set("users1", "sniperHW", fields).Exec()
 		assert.Nil(t, r4.ErrCode)
 
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Millisecond * 10)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r2 = c.CompareAndSet("users1", "sniperHW", "age", 12, 11).Exec()
 		assert.Nil(t, r2.ErrCode)
 
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Millisecond * 10)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 	}
 
@@ -389,32 +343,17 @@ func test(t *testing.T, c *client.Client) {
 		r2 = c.CompareAndSetNx("users1", "sniperHW", "age", 11, 12).Exec()
 		assert.Nil(t, r2.ErrCode)
 
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Millisecond * 10)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r3 = c.Del("users1", "sniperHW").Exec()
 		assert.Nil(t, r3.ErrCode)
 
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Millisecond * 10)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r2 = c.CompareAndSetNx("users1", "sniperHW", "age", 11, 12).Exec()
 		assert.Nil(t, r2.ErrCode)
 
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Millisecond * 10)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r2 = c.CompareAndSetNx("users1", "sniperHW", "age", 12, 11).Exec()
 		assert.Nil(t, r2.ErrCode)
@@ -436,33 +375,18 @@ func test(t *testing.T, c *client.Client) {
 		assert.Nil(t, r1.ErrCode)
 		assert.Equal(t, r1.Fields["age"].GetInt(), int64(2))
 
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Millisecond * 10)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r2 = c.Del("users1", "sniperHW").Exec()
 		assert.Nil(t, r2.ErrCode)
 
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Millisecond * 10)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r1 = c.IncrBy("users1", "sniperHW", "age", 2).Exec()
 		assert.Nil(t, r1.ErrCode)
 		assert.Equal(t, r1.Fields["age"].GetInt(), int64(2))
 
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Millisecond * 10)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r1 = c.IncrBy("users1", "sniperHW", "age", 2).Exec()
 		assert.Nil(t, r1.ErrCode)
@@ -488,53 +412,28 @@ func test(t *testing.T, c *client.Client) {
 		assert.Nil(t, r1.ErrCode)
 		assert.Equal(t, r1.Fields["age"].GetInt(), int64(-2))
 
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Millisecond * 10)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r2 = c.Del("users1", "sniperHW").Exec()
 		assert.Nil(t, r2.ErrCode)
 
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Millisecond * 10)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r1 = c.DecrBy("users1", "sniperHW", "age", 2).Exec()
 		assert.Nil(t, r1.ErrCode)
 		assert.Equal(t, r1.Fields["age"].GetInt(), int64(-2))
 
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Millisecond * 10)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r1 = c.DecrBy("users1", "sniperHW", "age", 2).Exec()
 		assert.Nil(t, r1.ErrCode)
 		assert.Equal(t, r1.Fields["age"].GetInt(), int64(-4))
 
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Millisecond * 10)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		fmt.Println("---------------------------------")
 
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Millisecond * 10)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 	}
 }
 
@@ -635,12 +534,7 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 		assert.Nil(t, r.ErrCode)
 	}
 
-	for {
-		if nil == c.Kick("users1", "sniperHW:99").Exec().ErrCode {
-			break
-		}
-		time.Sleep(time.Millisecond * 10)
-	}
+	assert.Nil(t, c.Kick("users1", "sniperHW:99").Exec().ErrCode)
 
 	for i := 100; i < 200; i++ {
 		fields := map[string]interface{}{}
@@ -656,12 +550,7 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 	//重新加载
 	c.GetAll("users1", "sniperHW:99").Exec()
 
-	for {
-		if nil == c.Kick("users1", "sniperHW:199").Exec().ErrCode {
-			break
-		}
-		time.Sleep(time.Millisecond * 10)
-	}
+	assert.Nil(t, c.Kick("users1", "sniperHW:199").Exec().ErrCode)
 
 	for i := 200; i < 300; i++ {
 		fields := map[string]interface{}{}
@@ -724,13 +613,8 @@ func Test1Node1StoreSnapshot2(t *testing.T) {
 		r := c.Set("users1", name, fields).Exec()
 		assert.Nil(t, r.ErrCode)
 	}
-	time.Sleep(time.Second * 1)
-	for {
-		if nil == c.Kick("users1", "sniperHW:49").Exec().ErrCode {
-			break
-		}
-		time.Sleep(time.Millisecond * 10)
-	}
+
+	assert.Nil(t, c.Kick("users1", "sniperHW:49").Exec().ErrCode)
 
 	for i := 50; i < 100; i++ {
 		fields := map[string]interface{}{}
@@ -795,15 +679,7 @@ func TestKick1(t *testing.T) {
 		fields := map[string]interface{}{}
 		fields["age"] = 12
 		fields["name"] = "sniperHW"
-		for {
-			r := c.Set("users1", fmt.Sprintf("sniperHW:%d", i), fields).Exec()
-			if errcode.GetCode(r.ErrCode) == errcode.Errcode_retry {
-				time.Sleep(time.Millisecond * 1)
-			} else {
-				GetSugar().Infof("%d", i)
-				break
-			}
-		}
+		assert.Nil(t, c.Set("users1", fmt.Sprintf("sniperHW:%d", i), fields).Exec().ErrCode)
 	}
 
 	node.Stop()
@@ -840,15 +716,7 @@ func TestKick2(t *testing.T) {
 		fields := map[string]interface{}{}
 		fields["age"] = 12
 		fields["name"] = "sniperHW"
-		for {
-			r := c.Set("users1", fmt.Sprintf("sniperHW:%d", i), fields).Exec()
-			if errcode.GetCode(r.ErrCode) == errcode.Errcode_retry {
-				time.Sleep(time.Millisecond * 1)
-			} else {
-				GetSugar().Infof("%d", i)
-				break
-			}
-		}
+		assert.Nil(t, c.Set("users1", fmt.Sprintf("sniperHW:%d", i), fields).Exec().ErrCode)
 	}
 
 	node.Stop()

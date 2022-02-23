@@ -185,23 +185,13 @@ func testkv(t *testing.T, c *client.Client) {
 		r = c.GetAllWithVersion("users1", "sniperHW", r.Version).Exec()
 		assert.Equal(t, r.ErrCode, flykv.Err_record_unchange)
 
-		r1 := c.Del("users1", "sniperHW", 1).Exec()
-		assert.Equal(t, r1.ErrCode, flykv.Err_version_mismatch)
-
-		r1 = c.Del("users1", "sniperHW", r.Version).Exec()
+		r1 := c.Del("users1", "sniperHW").Exec()
 		assert.Nil(t, r1.ErrCode)
 
 		r = c.GetAll("users1", "sniperHW").Exec()
 		assert.Equal(t, r.ErrCode, flykv.Err_record_notexist)
 
-		time.Sleep(time.Second)
-
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Second)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r3 := c.Del("users1", "sniperHW").Exec()
 		assert.Equal(t, r3.ErrCode, flykv.Err_record_notexist)
@@ -217,26 +207,12 @@ func testkv(t *testing.T, c *client.Client) {
 		r1 := c.Set("users1", "sniperHW", fields).Exec()
 		assert.Nil(t, r1.ErrCode)
 
-		time.Sleep(time.Second)
-
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Second)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r1 = c.Set("users1", "sniperHW", fields).Exec()
 		assert.Nil(t, r1.ErrCode)
 
-		time.Sleep(time.Second)
-
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Second)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r1 = c.Set("users1", "sniperHW", fields, 1).Exec()
 		assert.Equal(t, r1.ErrCode, flykv.Err_version_mismatch)
@@ -244,14 +220,7 @@ func testkv(t *testing.T, c *client.Client) {
 		r2 := c.Del("users1", "sniperHW").Exec()
 		assert.Nil(t, r2.ErrCode)
 
-		time.Sleep(time.Second)
-
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Second)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r1 = c.Set("users1", "sniperHW", fields).Exec()
 		assert.Nil(t, r1.ErrCode)
@@ -270,14 +239,7 @@ func testkv(t *testing.T, c *client.Client) {
 		r1 = c.SetNx("users1", "sniperHW", fields).Exec()
 		assert.Nil(t, r1.ErrCode)
 
-		time.Sleep(time.Second)
-
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Second)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r1 = c.SetNx("users1", "sniperHW", fields).Exec()
 		assert.Equal(t, r1.ErrCode, flykv.Err_record_exist)
@@ -285,14 +247,7 @@ func testkv(t *testing.T, c *client.Client) {
 		r2 = c.Del("users1", "sniperHW").Exec()
 		assert.Nil(t, r2.ErrCode)
 
-		time.Sleep(time.Second)
-
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Second)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r1 = c.SetNx("users1", "sniperHW", fields).Exec()
 		assert.Nil(t, r1.ErrCode)
@@ -316,26 +271,12 @@ func testkv(t *testing.T, c *client.Client) {
 		r2 = c.CompareAndSet("users1", "sniperHW", "age", 11, 10).Exec()
 		assert.Equal(t, r2.ErrCode, flykv.Err_record_notexist)
 
-		time.Sleep(time.Second)
-
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Second)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r2 = c.CompareAndSet("users1", "sniperHW", "age", 11, 10).Exec()
 		assert.Equal(t, r2.ErrCode, flykv.Err_record_notexist)
 
-		time.Sleep(time.Second)
-
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Second)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r2 = c.CompareAndSet("users1", "sniperHW", "age", 10, 11).Exec()
 		assert.Equal(t, r2.ErrCode, flykv.Err_record_notexist)
@@ -343,29 +284,12 @@ func testkv(t *testing.T, c *client.Client) {
 		r4 := c.Set("users1", "sniperHW", fields).Exec()
 		assert.Nil(t, r4.ErrCode)
 
-		time.Sleep(time.Second)
-
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Second)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r2 = c.CompareAndSet("users1", "sniperHW", "age", 12, 11).Exec()
 		assert.Nil(t, r2.ErrCode)
 
-		time.Sleep(time.Second)
-
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Second)
-		}
-
-		r2 = c.CompareAndSet("users1", "sniperHW", "age", 12, 11, 1).Exec()
-		assert.Equal(t, r2.ErrCode, flykv.Err_version_mismatch)
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 	}
 
@@ -384,41 +308,17 @@ func testkv(t *testing.T, c *client.Client) {
 		r2 = c.CompareAndSetNx("users1", "sniperHW", "age", 11, 12).Exec()
 		assert.Nil(t, r2.ErrCode)
 
-		time.Sleep(time.Second)
-
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Second)
-		}
-
-		r2 = c.CompareAndSetNx("users1", "sniperHW", "age", 11, 12, 1).Exec()
-		assert.Equal(t, r2.ErrCode, flykv.Err_version_mismatch)
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r3 = c.Del("users1", "sniperHW").Exec()
 		assert.Nil(t, r3.ErrCode)
 
-		time.Sleep(time.Second)
-
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Second)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r2 = c.CompareAndSetNx("users1", "sniperHW", "age", 11, 12).Exec()
 		assert.Nil(t, r2.ErrCode)
 
-		time.Sleep(time.Second)
-
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Second)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r2 = c.CompareAndSetNx("users1", "sniperHW", "age", 12, 11).Exec()
 		assert.Nil(t, r2.ErrCode)
@@ -439,40 +339,18 @@ func testkv(t *testing.T, c *client.Client) {
 		assert.Nil(t, r1.ErrCode)
 		assert.Equal(t, r1.Fields["age"].GetInt(), int64(2))
 
-		time.Sleep(time.Second)
-
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Second)
-		}
-
-		r1 = c.IncrBy("users1", "sniperHW", "age", 2, 1).Exec()
-		assert.Equal(t, r1.ErrCode, flykv.Err_version_mismatch)
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r2 = c.Del("users1", "sniperHW").Exec()
 		assert.Nil(t, r2.ErrCode)
 
-		time.Sleep(time.Second)
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Second)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r1 = c.IncrBy("users1", "sniperHW", "age", 2).Exec()
 		assert.Nil(t, r1.ErrCode)
 		assert.Equal(t, r1.Fields["age"].GetInt(), int64(2))
 
-		time.Sleep(time.Second)
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Second)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r1 = c.IncrBy("users1", "sniperHW", "age", 2).Exec()
 		assert.Nil(t, r1.ErrCode)
@@ -498,62 +376,28 @@ func testkv(t *testing.T, c *client.Client) {
 		assert.Nil(t, r1.ErrCode)
 		assert.Equal(t, r1.Fields["age"].GetInt(), int64(-2))
 
-		time.Sleep(time.Second)
-
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Second)
-		}
-
-		r1 = c.DecrBy("users1", "sniperHW", "age", 2, 1).Exec()
-		assert.Equal(t, r1.ErrCode, flykv.Err_version_mismatch)
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r2 = c.Del("users1", "sniperHW").Exec()
 		assert.Nil(t, r2.ErrCode)
 
-		time.Sleep(time.Second)
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Second)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r1 = c.DecrBy("users1", "sniperHW", "age", 2).Exec()
 		assert.Nil(t, r1.ErrCode)
 		assert.Equal(t, r1.Fields["age"].GetInt(), int64(-2))
 
-		time.Sleep(time.Second)
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Second)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r1 = c.DecrBy("users1", "sniperHW", "age", 2).Exec()
 		assert.Nil(t, r1.ErrCode)
 		assert.Equal(t, r1.Fields["age"].GetInt(), int64(-4))
 
-		time.Sleep(time.Second)
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Second)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		fmt.Println("---------------------------------")
 
-		time.Sleep(time.Second)
-		for {
-			if nil == c.Kick("users1", "sniperHW").Exec().ErrCode {
-				break
-			}
-			time.Sleep(time.Second)
-		}
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 	}
 }
 
@@ -623,14 +467,7 @@ func TestFlygate(t *testing.T) {
 		name := fmt.Sprintf("sniperHW:%d", i)
 		fields["name"] = name
 		fields["phone"] = "123456789123456789123456789"
-		for {
-			r := c.Set("users1", name, fields).Exec()
-			if nil == r.ErrCode {
-				break
-			} else {
-				fmt.Println(name, r.ErrCode)
-			}
-		}
+		assert.Nil(t, c.Set("users1", name, fields).Exec().ErrCode)
 	}
 
 	testkv(t, c)
@@ -688,14 +525,7 @@ func TestFlygate(t *testing.T) {
 		name := fmt.Sprintf("sniperHW:%d", i)
 		fields["name"] = name
 		fields["phone"] = "123456789123456789123456789"
-		for {
-			r := c.Set("users1", name, fields).Exec()
-			if nil == r.ErrCode {
-				break
-			} else {
-				fmt.Println(name, r.ErrCode)
-			}
-		}
+		assert.Nil(t, c.Set("users1", name, fields).Exec().ErrCode)
 	}
 
 	node1.Stop()

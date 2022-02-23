@@ -341,14 +341,16 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 					return errcode.New(errcode.Errcode_ok)
 				} else {
 					totalCount := s.kvcount + len(s.pendingKv)
+					if totalCount > s.kvnode.config.MaxCachePerStore && nil != s.kickableList.Front() {
+						s.kick(s.kickableList.Front().Value.(*kv))
+					}
+
 					if totalCount > s.hardkvlimited {
 						return errcode.New(errcode.Errcode_retry, "kvstore busy,please retry later")
 					} else {
 						table, key := splitUniKey(req.msg.UniKey)
 						if k, err = newkv(s, slot, groupID, req.msg.UniKey, key, table); nil != err {
 							return err
-						} else if totalCount >= s.kvnode.config.MaxCachePerStore && nil != s.kickableList.Front() {
-							s.kick(s.kickableList.Front().Value.(*kv))
 						}
 						s.pendingKv[req.msg.UniKey] = k
 					}

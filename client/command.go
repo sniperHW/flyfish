@@ -118,6 +118,7 @@ func (this *StatusCmd) asyncExec(syncFlag bool, cb func(*StatusResult)) {
 	context.unikey = this.req.UniKey
 	context.req = this.req
 	context.mu = &this.client.mu
+	context.deadline = time.Time{}
 	this.client.exec(context)
 }
 
@@ -148,6 +149,7 @@ func (this *SliceCmd) asyncExec(syncFlag bool, cb func(*SliceResult)) {
 	context.unikey = this.req.UniKey
 	context.req = this.req
 	context.mu = &this.client.mu
+	context.deadline = time.Time{}
 	this.client.exec(context)
 }
 
@@ -507,10 +509,12 @@ func (this *serverConn) onKickResp(c *cmdContext, errCode errcode.Error, resp *p
 func (this *serverConn) onMessage(msg *cs.RespMessage) {
 	cmd := protocol.CmdType(msg.Cmd)
 	if cmd != protocol.CmdType_Ping {
+		var timerStopOK bool
+
 		this.mu.Lock()
 		ctx, ok := (*this.waitResp)[msg.Seqno]
 		if ok {
-			ctx.deadlineTimer.Stop()
+			timerStopOK = ctx.deadlineTimer.Stop()
 			ctx.deadlineTimer = nil
 			delete(*this.waitResp, msg.Seqno)
 			if this.removed && 0 == len(*this.waitResp) {
@@ -518,8 +522,19 @@ func (this *serverConn) onMessage(msg *cs.RespMessage) {
 			}
 		}
 		this.mu.Unlock()
-
 		if ok {
+			if timerStopOK && errcode.GetCode(msg.Err) == errcode.Errcode_retry {
+				//重试错误且尚未超时
+				remain := ctx.deadline.Sub(time.Now())
+				if remain > 100*time.Millisecond {
+					//50ms后重发
+					time.AfterFunc(time.Millisecond*50, func() {
+						GetSugar().Infof("resend %v", ctx.unikey)
+						this.c.exec(ctx)
+					})
+					return
+				}
+			}
 			switch cmd {
 			case protocol.CmdType_Get:
 				this.onGetResp(ctx, msg.Err, msg.Data.(*protocol.GetResp))
