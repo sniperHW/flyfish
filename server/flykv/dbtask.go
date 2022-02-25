@@ -131,16 +131,12 @@ func (this *dbUpdateTask) issueKickDbWriteBack() {
 
 func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields map[string]*flyproto.Field) error {
 
-	if !(dbstate >= db.DBState_insert && dbstate <= db.DBState_delete) {
-		return errors.New("updateState error 1")
-	}
-
 	this.Lock()
 	defer this.Unlock()
 
 	GetSugar().Debugf("updateState %s %d %d version:%d", this.kv.uniKey, dbstate, this.state.State, version)
 
-	switch this.state.State {
+	/*switch this.state.State {
 	case db.DBState_insert:
 		if dbstate == db.DBState_update {
 			//之前的insert尚未处理完毕，不能切换到update保留insert状态
@@ -164,6 +160,8 @@ func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields 
 		} else if dbstate == db.DBState_insert {
 			return errors.New("updateState error 4")
 		}
+	default:
+		return errors.New("invaild dbstate")
 	}
 
 	this.state.State = dbstate
@@ -178,7 +176,7 @@ func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields 
 		for k, v := range fields {
 			this.state.Fields[k] = v
 		}
-	}
+	}*/
 
 	if this.kv.store.kvnode.writeBackMode == write_through && !this.doing {
 		this.doing = true
@@ -223,7 +221,7 @@ func (this *dbLoadTask) OnResult(err error, version int64, fields map[string]*fl
 			fields:      fields,
 			causeByLoad: true,
 			dbversion:   version,
-			dbstate:     db.DBState_none,
+			//dbstate:     db.DBState_none,
 		}
 
 		if version <= 0 {

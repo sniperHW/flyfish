@@ -178,7 +178,6 @@ func (this *kv) processCmd() {
 			proposal := &kvProposal{
 				kv:        this,
 				version:   this.version,
-				fields:    map[string]*flyproto.Field{},
 				dbversion: this.lastWriteBackVersion,
 				kvState:   this.state,
 			}

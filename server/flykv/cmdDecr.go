@@ -1,7 +1,7 @@
 package flykv
 
 import (
-	"github.com/sniperHW/flyfish/db"
+	//"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/net"
 	flyproto "github.com/sniperHW/flyfish/proto"
@@ -37,7 +37,6 @@ func (this *cmdDecr) do(proposal *kvProposal) {
 		proposal.fields = map[string]*flyproto.Field{}
 
 		this.meta.FillDefaultValues(proposal.fields)
-		proposal.dbstate = db.DBState_insert
 		proposal.kvState = kv_ok
 		proposal.ptype = proposal_snapshot
 
@@ -54,7 +53,6 @@ func (this *cmdDecr) do(proposal *kvProposal) {
 
 		proposal.version++
 		proposal.ptype = proposal_update
-		proposal.dbstate = db.DBState_update
 
 		oldV := this.kv.fields[this.v.GetName()]
 
@@ -63,6 +61,7 @@ func (this *cmdDecr) do(proposal *kvProposal) {
 		}
 
 		newV := flyproto.PackField(oldV.GetName(), oldV.GetInt()-this.v.GetInt())
+		proposal.fields = map[string]*flyproto.Field{}
 		proposal.fields[this.v.GetName()] = newV
 	}
 	proposal.cmds = append(proposal.cmds, this)

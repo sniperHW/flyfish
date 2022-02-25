@@ -260,7 +260,7 @@ func (this *proposalBase) OnMergeFinish(b []byte) (ret []byte) {
 
 type kvProposal struct {
 	proposalBase
-	dbstate     db.DBState
+	//dbstate     db.DBState
 	kvState     kvState
 	ptype       proposalType
 	fields      map[string]*flyproto.Field
@@ -332,9 +332,27 @@ func (this *kvProposal) apply() {
 		this.reply(nil, this.kv.fields, this.version)
 
 		//update dbUpdateTask
-		if this.dbstate != db.DBState_none {
-			err := this.kv.updateTask.updateState(this.dbstate, this.version, this.fields)
-			if nil != err {
+		if !this.causeByLoad {
+			var dbstate db.DBState
+			if this.ptype == proposal_snapshot {
+				if this.kv.state == kv_ok {
+					dbstate = db.DBState_insert
+				} else {
+					if this.kv.lastWriteBackVersion == 0 {
+						dbstate = db.DBState_insert
+					} else {
+						dbstate = db.DBState_delete
+					}
+				}
+			} else {
+				if this.kv.lastWriteBackVersion == 0 {
+					dbstate = db.DBState_insert
+				} else {
+					dbstate = db.DBState_update
+				}
+			}
+
+			if err := this.kv.updateTask.updateState(dbstate, this.version, this.fields); nil != err {
 				GetSugar().Errorf("%s updateState error:%v", this.kv.uniKey, err)
 			}
 		}

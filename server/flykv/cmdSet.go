@@ -1,7 +1,7 @@
 package flykv
 
 import (
-	"github.com/sniperHW/flyfish/db"
+	//"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/net"
 	flyproto "github.com/sniperHW/flyfish/proto"
@@ -26,26 +26,21 @@ func (this *cmdSet) makeResponse(err errcode.Error, fields map[string]*flyproto.
 func (this *cmdSet) do(proposal *kvProposal) {
 	if proposal.kvState == kv_no_record {
 		proposal.version = abs(proposal.version) + 1
-		proposal.dbstate = db.DBState_insert
 		proposal.kvState = kv_ok
 		proposal.ptype = proposal_snapshot
+		proposal.fields = map[string]*flyproto.Field{}
 		this.meta.FillDefaultValues(this.fields)
-		proposal.fields = this.fields
 	} else {
 		proposal.version++
-
 		if proposal.ptype != proposal_snapshot {
 			proposal.ptype = proposal_update
 		}
-
-		if proposal.dbstate != db.DBState_insert {
-			proposal.dbstate = db.DBState_update
-		}
-
-		for k, v := range this.fields {
-			proposal.fields[k] = v
-		}
 	}
+
+	for k, v := range this.fields {
+		proposal.fields[k] = v
+	}
+
 	proposal.cmds = append(proposal.cmds, this)
 }
 

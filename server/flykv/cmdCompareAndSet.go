@@ -1,7 +1,7 @@
 package flykv
 
 import (
-	"github.com/sniperHW/flyfish/db"
+	//"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/net"
 	flyproto "github.com/sniperHW/flyfish/proto"
@@ -40,12 +40,12 @@ func (this *cmdCompareAndSet) do(proposal *kvProposal) {
 			oldV = flyproto.PackField(this.old.GetName(), this.meta.GetDefaultValue(this.old.GetName()))
 		}
 		if !this.old.IsEqual(oldV) {
-			this.reply(Err_cas_not_equal, proposal.fields, 0)
+			this.reply(Err_cas_not_equal, this.kv.fields, 0)
 		} else {
 			proposal.version++
+			proposal.fields = map[string]*flyproto.Field{}
 			proposal.fields[this.old.GetName()] = this.new
 			proposal.ptype = proposal_update
-			proposal.dbstate = db.DBState_update
 			proposal.cmds = append(proposal.cmds, this)
 		}
 	}

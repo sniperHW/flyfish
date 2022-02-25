@@ -1,7 +1,7 @@
 package flykv
 
 import (
-	"github.com/sniperHW/flyfish/db"
+	//"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/net"
 	flyproto "github.com/sniperHW/flyfish/proto"
@@ -25,7 +25,6 @@ func (this *cmdDel) makeResponse(err errcode.Error, fields map[string]*flyproto.
 func (this *cmdDel) do(proposal *kvProposal) {
 	if proposal.kvState == kv_ok {
 		proposal.ptype = proposal_snapshot
-		proposal.dbstate = db.DBState_delete
 		proposal.version = -(abs(proposal.version) + 1)
 		proposal.cmds = append(proposal.cmds, this)
 		proposal.kvState = kv_no_record
