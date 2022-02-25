@@ -150,7 +150,6 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 				for k, v := range p.fields {
 					kv.fields[k] = v
 				}
-				//s.lru.update(&kv.lru)
 			case proposal_snapshot:
 				kv.version = p.version
 				kv.lastWriteBackVersion = p.lastWriteBackVersion
@@ -160,9 +159,6 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 				} else {
 					kv.state = kv_no_record
 				}
-
-				//s.lru.update(&kv.lru)
-
 			}
 			GetSugar().Debugf("%s ok", p.unikey)
 		}

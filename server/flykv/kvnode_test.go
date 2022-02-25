@@ -429,12 +429,14 @@ func test(t *testing.T, c *client.Client) {
 		assert.Nil(t, r1.ErrCode)
 		assert.Equal(t, r1.Fields["age"].GetInt(), int64(-4))
 
-		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
-
 		fmt.Println("---------------------------------")
 
 		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 	}
+
+	c.Set("users1", "sniperHW", fields).Exec()
+
+	assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 }
 
 func Test1Node1Store1(t *testing.T) {

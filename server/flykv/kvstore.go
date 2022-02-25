@@ -529,6 +529,7 @@ func (s *kvstore) issueFullDbWriteBack() {
 			if meta := s.meta.CheckTableMeta(vv.meta); meta != nil {
 				vv.meta = meta
 			}
+			vv.updateTask.setLastWriteBackVersion(vv.lastWriteBackVersion)
 			if s.kvnode.writeBackMode == write_through && vv.lastWriteBackVersion != vv.version {
 				writebackcount++
 				vv.updateTask.issueFullDbWriteBack()
@@ -554,6 +555,13 @@ func (s *kvstore) onLeaderDownToFollower() {
 	for _, v := range s.pendingKv {
 		v.clearCmds(errcode.New(errcode.Errcode_not_leader))
 	}
+
+	for _, v := range s.kv {
+		for _, vv := range v {
+			vv.clearCmds(errcode.New(errcode.Errcode_not_leader))
+		}
+	}
+
 	s.pendingKv = map[string]*kv{}
 }
 

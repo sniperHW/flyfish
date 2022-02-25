@@ -68,10 +68,10 @@ func (this *dbUpdateTask) _issueFullDbWriteBack() error {
 	}
 
 	switch this.kv.state {
-	case kv_ok:
+	case kv_ok, kv_no_record:
 		this.state.State = db.DBState_insert
-	case kv_no_record:
-		this.state.State = db.DBState_delete
+	//case kv_no_record:
+	//	this.state.State = db.DBState_delete
 	case kv_new, kv_loading:
 		return nil
 	case kv_invaild:
@@ -81,12 +81,14 @@ func (this *dbUpdateTask) _issueFullDbWriteBack() error {
 	this.state.Version = this.kv.version
 	this.state.LastWriteBackVersion = this.state.Version
 
-	if this.state.State == db.DBState_insert {
-		this.state.Fields = map[string]*flyproto.Field{}
+	//if this.state.State == db.DBState_insert {
+	this.state.Fields = map[string]*flyproto.Field{}
+	if nil != this.kv.fields {
 		for k, v := range this.kv.fields {
 			this.state.Fields[k] = v
 		}
 	}
+	//}
 
 	this.state.Meta = this.kv.meta
 	this.doing = true
@@ -129,14 +131,15 @@ func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields 
 
 	switch this.state.State {
 	case db.DBState_insert:
-		//insert只接受到update,delete变更
 		if dbstate == db.DBState_update {
 			//之前的insert尚未处理完毕，不能切换到update保留insert状态
 			dbstate = db.DBState_insert
 		} else if dbstate == db.DBState_delete {
+			if this.kv.lastWriteBackVersion == 0 {
+				//之前的insert尚未处理完毕，不能切换到delete保留insert状态
+				dbstate = db.DBState_insert
+			}
 			this.state.Fields = nil
-		} else {
-			return errors.New("updateState error 2")
 		}
 	case db.DBState_delete:
 		//delete只接受到insert变更
@@ -160,7 +163,7 @@ func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields 
 		this.state.Fields = map[string]*flyproto.Field{}
 	}
 
-	if this.state.State != db.DBState_delete {
+	if nil != fields {
 		for k, v := range fields {
 			this.state.Fields[k] = v
 		}
