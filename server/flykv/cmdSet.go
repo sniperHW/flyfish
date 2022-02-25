@@ -24,11 +24,11 @@ func (this *cmdSet) makeResponse(err errcode.Error, fields map[string]*flyproto.
 }
 
 func (this *cmdSet) do(proposal *kvProposal) {
+	proposal.fields = map[string]*flyproto.Field{}
 	if proposal.kvState == kv_no_record {
 		proposal.version = abs(proposal.version) + 1
 		proposal.kvState = kv_ok
 		proposal.ptype = proposal_snapshot
-		proposal.fields = map[string]*flyproto.Field{}
 		this.meta.FillDefaultValues(this.fields)
 	} else {
 		proposal.version++

@@ -44,7 +44,6 @@ func (this *dbUpdateTask) ClearUpdateStateAndReleaseLock() {
 	this.Lock()
 	defer this.Unlock()
 	this.doing = false
-	this.state.Fields = map[string]*flyproto.Field{}
 	this.state.State = db.DBState_none
 	atomic.AddInt32(&this.kv.store.dbWriteBackCount, -1)
 }
@@ -53,13 +52,20 @@ func (this *dbUpdateTask) GetUpdateAndClearUpdateState() (updateState db.UpdateS
 	this.Lock()
 	defer this.Unlock()
 	updateState = this.state
-	this.state.Fields = map[string]*flyproto.Field{}
 	this.state.State = db.DBState_none
 	return
 }
 
 func (this *dbUpdateTask) GetUniKey() string {
 	return this.kv.uniKey
+}
+
+func (this *dbUpdateTask) issueUpdate() {
+	if !this.doing {
+		this.doing = true
+		atomic.AddInt32(&this.kv.store.dbWriteBackCount, 1)
+		this.kv.store.db.issueUpdate(this) //这里不会出错，db要到最后才会stop
+	}
 }
 
 func (this *dbUpdateTask) _issueFullDbWriteBack() error {
@@ -102,10 +108,7 @@ func (this *dbUpdateTask) _issueFullDbWriteBack() error {
 	}
 
 	this.state.Meta = this.kv.meta
-	this.doing = true
-	atomic.AddInt32(&this.kv.store.dbWriteBackCount, 1)
-	this.kv.store.db.issueUpdate(this) //这里不会出错，db要到最后才会stop
-
+	this.issueUpdate()
 	return nil
 }
 
@@ -118,13 +121,11 @@ func (this *dbUpdateTask) issueFullDbWriteBack() error {
 func (this *dbUpdateTask) issueKickDbWriteBack() {
 	this.Lock()
 	defer this.Unlock()
-	if !this.doing && this.kv.version != this.kv.lastWriteBackVersion {
+	if this.kv.version != this.kv.lastWriteBackVersion {
 		if this.state.State == db.DBState_none {
 			this._issueFullDbWriteBack()
 		} else {
-			this.doing = true
-			atomic.AddInt32(&this.kv.store.dbWriteBackCount, 1)
-			this.kv.store.db.issueUpdate(this)
+			this.issueUpdate()
 		}
 	}
 }
@@ -136,52 +137,21 @@ func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields 
 
 	GetSugar().Debugf("updateState %s %d %d version:%d", this.kv.uniKey, dbstate, this.state.State, version)
 
-	/*switch this.state.State {
-	case db.DBState_insert:
-		if dbstate == db.DBState_update {
-			//之前的insert尚未处理完毕，不能切换到update保留insert状态
-			dbstate = db.DBState_insert
-		} else if dbstate == db.DBState_delete {
-			if this.kv.lastWriteBackVersion == 0 {
-				//之前的insert尚未处理完毕，不能切换到delete保留insert状态
-				dbstate = db.DBState_insert
-			}
-			this.state.Fields = nil
-		}
-	case db.DBState_delete:
-		//delete只接受到insert变更
-		if dbstate != db.DBState_insert {
-			return errors.New("updateState error 3")
-		}
-	case db.DBState_update:
-		//update只接受到update,delete变更
-		if dbstate == db.DBState_delete {
-			this.state.Fields = nil
-		} else if dbstate == db.DBState_insert {
-			return errors.New("updateState error 4")
-		}
-	default:
-		return errors.New("invaild dbstate")
-	}
-
 	this.state.State = dbstate
 	this.state.Version = version
 	this.state.Meta = this.kv.meta
 
-	if this.state.State == db.DBState_insert && nil == this.state.Fields {
-		this.state.Fields = map[string]*flyproto.Field{}
-	}
-
 	if nil != fields {
+		if nil == this.state.Fields {
+			this.state.Fields = map[string]*flyproto.Field{}
+		}
 		for k, v := range fields {
 			this.state.Fields[k] = v
 		}
-	}*/
+	}
 
-	if this.kv.store.kvnode.writeBackMode == write_through && !this.doing {
-		this.doing = true
-		atomic.AddInt32(&this.kv.store.dbWriteBackCount, 1)
-		this.kv.store.db.issueUpdate(this)
+	if this.kv.store.kvnode.writeBackMode == write_through {
+		this.issueUpdate()
 	}
 
 	return nil
@@ -221,7 +191,6 @@ func (this *dbLoadTask) OnResult(err error, version int64, fields map[string]*fl
 			fields:      fields,
 			causeByLoad: true,
 			dbversion:   version,
-			//dbstate:     db.DBState_none,
 		}
 
 		if version <= 0 {

@@ -9,6 +9,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/db"
+	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	"github.com/sniperHW/flyfish/server/mock"
@@ -181,6 +182,48 @@ func start1Node(b dbI) *kvnode {
 }
 
 func test(t *testing.T, c *client.Client) {
+	{
+
+		dbConf := &dbconf{}
+		if _, err := toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
+			panic(err)
+		}
+
+		dbc, _ := sql.SqlOpen("pgsql", "localhost", 5432, dbConf.PgDB, dbConf.PgUser, dbConf.PgPwd)
+
+		dbc.Exec("delete from users1_0 where __key__ = 'sniperHW';")
+
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		fields["name"] = "sniperHW"
+
+		c.Set("users1", "sniperHW", fields).Exec()
+
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
+
+		r2 := c.Del("users1", "sniperHW").Exec()
+		assert.Nil(t, r2.ErrCode)
+
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
+
+		delete(fields, "age")
+
+		c.Set("users1", "sniperHW", fields).Exec()
+
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
+
+		r := c.GetAll("users1", "sniperHW").Exec()
+		assert.Nil(t, r.ErrCode)
+
+		assert.Equal(t, r.Fields["age"].GetInt(), int64(0))
+
+		r2 = c.Del("users1", "sniperHW").Exec()
+		assert.Nil(t, r2.ErrCode)
+
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
+
+	}
+
 	fields := map[string]interface{}{}
 	fields["age"] = 12
 	fields["name"] = "sniperHW"
@@ -434,29 +477,6 @@ func test(t *testing.T, c *client.Client) {
 		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 	}
 
-	{
-
-		c.Set("users1", "sniperHW", fields).Exec()
-
-		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
-
-		r2 := c.Del("users1", "sniperHW").Exec()
-		assert.Nil(t, r2.ErrCode)
-
-		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
-
-		delete(fields, "age")
-
-		c.Set("users1", "sniperHW", fields).Exec()
-
-		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
-
-		r := c.GetAll("users1", "sniperHW").Exec()
-		assert.Nil(t, r.ErrCode)
-
-		assert.Equal(t, r.Fields["age"].GetInt(), int64(0))
-
-	}
 }
 
 func Test1Node1Store1(t *testing.T) {

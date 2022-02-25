@@ -66,6 +66,16 @@ func abs(v int64) int64 {
 	}
 }
 
+func (this *kv) getField(key string) (v *flyproto.Field) {
+	if this.state == kv_ok {
+		v = this.fields[key]
+		if nil == v {
+			v = flyproto.PackField(key, this.meta.GetDefaultValue(key))
+		}
+	}
+	return
+}
+
 func (this *kv) pushCmd(cmd cmdI) {
 	if this.pendingCmd.Len() == 0 {
 		this.pendingCmd.PushBack(cmd)

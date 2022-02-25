@@ -35,10 +35,7 @@ func (this *cmdCompareAndSet) do(proposal *kvProposal) {
 	if proposal.kvState == kv_no_record {
 		this.reply(Err_record_notexist, nil, 0)
 	} else {
-		oldV := this.kv.fields[this.old.GetName()]
-		if nil == oldV {
-			oldV = flyproto.PackField(this.old.GetName(), this.meta.GetDefaultValue(this.old.GetName()))
-		}
+		oldV := this.kv.getField(this.old.GetName())
 		if !this.old.IsEqual(oldV) {
 			this.reply(Err_cas_not_equal, this.kv.fields, 0)
 		} else {
