@@ -434,9 +434,29 @@ func test(t *testing.T, c *client.Client) {
 		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 	}
 
-	c.Set("users1", "sniperHW", fields).Exec()
+	{
 
-	assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
+		c.Set("users1", "sniperHW", fields).Exec()
+
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
+
+		r2 := c.Del("users1", "sniperHW").Exec()
+		assert.Nil(t, r2.ErrCode)
+
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
+
+		delete(fields, "age")
+
+		c.Set("users1", "sniperHW", fields).Exec()
+
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
+
+		r := c.GetAll("users1", "sniperHW").Exec()
+		assert.Nil(t, r.ErrCode)
+
+		assert.Equal(t, r.Fields["age"].GetInt(), int64(0))
+
+	}
 }
 
 func Test1Node1Store1(t *testing.T) {

@@ -69,26 +69,37 @@ func (this *dbUpdateTask) _issueFullDbWriteBack() error {
 
 	switch this.kv.state {
 	case kv_ok, kv_no_record:
-		this.state.State = db.DBState_insert
-	//case kv_no_record:
-	//	this.state.State = db.DBState_delete
 	case kv_new, kv_loading:
 		return nil
 	case kv_invaild:
 		return errors.New("kv in invaild state")
 	}
 
+	if this.kv.state == kv_ok {
+		if this.kv.lastWriteBackVersion == 0 {
+			this.state.State = db.DBState_insert
+		} else {
+			this.state.State = db.DBState_update
+		}
+	} else {
+		if this.kv.lastWriteBackVersion == 0 {
+			this.state.State = db.DBState_insert
+		} else {
+			this.state.State = db.DBState_delete
+		}
+	}
+
 	this.state.Version = this.kv.version
 	this.state.LastWriteBackVersion = this.state.Version
 
-	//if this.state.State == db.DBState_insert {
-	this.state.Fields = map[string]*flyproto.Field{}
-	if nil != this.kv.fields {
-		for k, v := range this.kv.fields {
-			this.state.Fields[k] = v
+	if this.state.State != db.DBState_delete {
+		this.state.Fields = map[string]*flyproto.Field{}
+		if nil != this.kv.fields {
+			for k, v := range this.kv.fields {
+				this.state.Fields[k] = v
+			}
 		}
 	}
-	//}
 
 	this.state.Meta = this.kv.meta
 	this.doing = true
