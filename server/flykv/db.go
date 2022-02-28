@@ -34,7 +34,7 @@ func (d *sqlDB) start(config *Config, dbc *sqlx.DB) error {
 	}
 
 	for i := 0; i < config.SqlUpdaterCount; i++ {
-		w := sql.NewUpdater(dbc, config.DBType, &d.wait)
+		w := sql.NewUpdater(dbc, config.DBConfig.DBType, &d.wait)
 		d.updaters = append(d.updaters, w)
 		w.Start()
 	}

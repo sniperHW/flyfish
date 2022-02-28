@@ -48,7 +48,7 @@ func (p *pd) loadInitMeta() {
 				GetSugar().Panic(err)
 			}
 
-			dbc, err := sql.SqlOpen(p.config.DBType, p.config.DBConfig.Host, p.config.DBConfig.Port, p.config.DBConfig.DB, p.config.DBConfig.User, p.config.DBConfig.Password)
+			dbc, err := sql.SqlOpen(p.config.DBConfig.DBType, p.config.DBConfig.Host, p.config.DBConfig.Port, p.config.DBConfig.DB, p.config.DBConfig.User, p.config.DBConfig.Password)
 			defer dbc.Close()
 
 			if nil != err {
@@ -56,13 +56,13 @@ func (p *pd) loadInitMeta() {
 			}
 
 			for _, t := range def.TableDefs {
-				tb, err := sql.GetTableScheme(dbc, p.config.DBType, fmt.Sprintf("%s_%d", t.Name, t.DbVersion))
+				tb, err := sql.GetTableScheme(dbc, p.config.DBConfig.DBType, fmt.Sprintf("%s_%d", t.Name, t.DbVersion))
 				if nil != err {
 					GetSugar().Panic(err)
 				} else if nil == tb {
 					t.Version++
 					//表不存在
-					err = sql.CreateTables(dbc, p.config.DBType, t)
+					err = sql.CreateTables(dbc, p.config.DBConfig.DBType, t)
 					if nil != err {
 						GetSugar().Panic(err)
 					} else {
@@ -286,19 +286,19 @@ func (p *pd) onMetaAddTable(replyer replyer, m *snet.Message) bool {
 			return err
 		}
 
-		dbc, err := sql.SqlOpen(p.config.DBType, p.config.DBConfig.Host, p.config.DBConfig.Port, p.config.DBConfig.DB, p.config.DBConfig.User, p.config.DBConfig.Password)
+		dbc, err := sql.SqlOpen(p.config.DBConfig.DBType, p.config.DBConfig.Host, p.config.DBConfig.Port, p.config.DBConfig.DB, p.config.DBConfig.User, p.config.DBConfig.Password)
 		defer dbc.Close()
 
 		if nil != err {
 			return err
 		}
 
-		dbtab, err := sql.GetTableScheme(dbc, p.config.DBType, fmt.Sprintf("%s_%d", tab.Name, tab.DbVersion))
+		dbtab, err := sql.GetTableScheme(dbc, p.config.DBConfig.DBType, fmt.Sprintf("%s_%d", tab.Name, tab.DbVersion))
 		if nil != err {
 			return err
 		} else if nil == dbtab {
 			//表不存在
-			return sql.CreateTables(dbc, p.config.DBType, tab)
+			return sql.CreateTables(dbc, p.config.DBConfig.DBType, tab)
 		} else {
 			return fmt.Errorf("table:%s_%d already in db but not match with meta", tab.Name, tab.DbVersion)
 		}
@@ -409,22 +409,22 @@ func (p *pd) onMetaAddFields(replyer replyer, m *snet.Message) bool {
 			return err
 		}
 
-		dbc, err := sql.SqlOpen(p.config.DBType, p.config.DBConfig.Host, p.config.DBConfig.Port, p.config.DBConfig.DB, p.config.DBConfig.User, p.config.DBConfig.Password)
+		dbc, err := sql.SqlOpen(p.config.DBConfig.DBType, p.config.DBConfig.Host, p.config.DBConfig.Port, p.config.DBConfig.DB, p.config.DBConfig.User, p.config.DBConfig.Password)
 		defer dbc.Close()
 
 		if nil != err {
 			return err
 		}
 
-		dbtab, err := sql.GetTableScheme(dbc, p.config.DBType, fmt.Sprintf("%s_%d", tab.Name, tab.DbVersion))
+		dbtab, err := sql.GetTableScheme(dbc, p.config.DBConfig.DBType, fmt.Sprintf("%s_%d", tab.Name, tab.DbVersion))
 		if nil != err {
 			return err
 		} else if nil == dbtab {
 			GetSugar().Errorf("table:%s in meta but not in db", tab.Name)
 			//表不存在,不应该发生这种情况
-			return sql.CreateTables(dbc, p.config.DBType, tab)
+			return sql.CreateTables(dbc, p.config.DBConfig.DBType, tab)
 		} else {
-			return sql.AddFields(dbc, p.config.DBType, &db.TableDef{
+			return sql.AddFields(dbc, p.config.DBConfig.DBType, &db.TableDef{
 				Name:      tab.Name,
 				DbVersion: tab.DbVersion,
 				Fields:    tab.Fields[len(tab.Fields)-len(msg.Fields):],

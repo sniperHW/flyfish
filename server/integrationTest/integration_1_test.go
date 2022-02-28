@@ -40,8 +40,6 @@ var flyKvConfigStr string = `
 
 Mode = "cluster"
 
-DBType                  = "%s"
-
 SnapshotCurrentCount    = 1
 
 SnapshotCount             = 100
@@ -74,6 +72,7 @@ LinearizableRead        = true
 PD                      = "localhost:8110"
 
 [DBConfig]
+DBType        = "%s"
 Host          = "%s"
 Port          = %d
 User	      = "%s"
@@ -93,8 +92,8 @@ var pdConfigStr string = `
 	RaftLogPrefix           = "flypd"
 	InitDepoymentPath       = "./deployment.json"
 	InitMetaPath            = "./meta.json"
-	DBType                  = "pgsql"
 	[DBConfig]
+		DBType        = "pgsql"
 		Host          = "localhost"
 		Port          = 5432
 		User	      = "sniper"

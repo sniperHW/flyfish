@@ -37,9 +37,8 @@ type Config struct {
 		Crt       string `toml:"Crt"`
 	} `toml:"Tls"`
 
-	DBType string `toml:"DBType"`
-
 	DBConfig struct {
+		DBType   string `toml:"DBType"`
 		Host     string `toml:"Host"`
 		Port     int    `toml:"Port"`
 		User     string `toml:"User"`

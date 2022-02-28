@@ -14,9 +14,8 @@ EnableStdout = false
 MaxAge          = 14   #最大保留14天的日志
 MaxBackups      = 10   #最多保留10个滚动日志	 
 
-DBType                  = "pgsql"
-
 [DBConfig]
+DBType                  = "pgsql"
 Host                    = "localhost"
 Port                    = 5432
 User		            = "sniper"

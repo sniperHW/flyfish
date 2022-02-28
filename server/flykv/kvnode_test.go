@@ -24,25 +24,21 @@ import (
 )
 
 type dbconf struct {
-	MysqlUser string
-	MysqlPwd  string
-	MysqlDb   string
-	PgUser    string
-	PgPwd     string
-	PgDB      string
+	DBType string
+	User   string
+	Pwd    string
+	DB     string
+	Host   string
+	Port   int
 }
 
 var configStr string = `
 
 Mode = "solo"
 
-DBType                  = "pgsql"
-
 SnapshotCurrentCount    = 1
 
 MainQueueMaxSize        = 10000
-
-LruCheckInterval        = 1000              #每隔100ms执行一次lru剔除操作
 
 MaxCachePerStore        = 100               #每组最大key数量，超过数量将会触发key剔除
 
@@ -60,18 +56,19 @@ RaftLogDir              = "testRaftLog"
 
 RaftLogPrefix           = "flykv"
 
+WriteBackMode           ="WriteThrough"
+
+
 
 [SoloConfig]
-
 RaftUrl                 = "http://127.0.0.1:12377"
 ServiceHost             = "127.0.0.1"
 ServicePort             = %d
 Stores                  = [1]
 MetaPath                = "./meta.json"
-
                   	
 [DBConfig]
-
+DBType        = "%s"
 Host          = "%s"
 Port          = %d
 User	      = "%s"
@@ -141,7 +138,8 @@ func init() {
 		panic(err)
 	}
 
-	config, err = LoadConfigStr(fmt.Sprintf(configStr, 10018, "localhost", 5432, dbConf.PgUser, dbConf.PgPwd, dbConf.PgDB))
+	config, err = LoadConfigStr(fmt.Sprintf(configStr, 10018, dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.User, dbConf.Pwd, dbConf.DB))
+
 	if nil != err {
 		panic(err)
 	}
@@ -189,7 +187,7 @@ func test(t *testing.T, c *client.Client) {
 			panic(err)
 		}
 
-		dbc, _ := sql.SqlOpen("pgsql", "localhost", 5432, dbConf.PgDB, dbConf.PgUser, dbConf.PgPwd)
+		dbc, _ := sql.SqlOpen(dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.DB, dbConf.User, dbConf.Pwd)
 
 		dbc.Exec("delete from users1_0 where __key__ = 'sniperHW';")
 

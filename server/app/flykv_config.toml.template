@@ -1,7 +1,5 @@
 Mode = "solo"                                  #solo单机模式,cluster集群模式
 
-DBType                  = "pgsql"
-
 SnapshotCurrentCount    = 0                       #并行执行快照序列化数量，如果设置为0则取cpu数量
 
 MainQueueMaxSize        = 10000                #store消息队列大小
@@ -47,6 +45,7 @@ PD                      = "ip:port;ip:port"
 
 	
 [DBConfig]
+DBType                  = "pgsql"
 Host                    = "localhost"
 Port                    = 5432
 User		            = "sniper"

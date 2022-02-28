@@ -296,7 +296,7 @@ func (this *kvnode) start() error {
 
 	dbConfig := config.DBConfig
 
-	this.dbc, err = sql.SqlOpen(config.DBType, dbConfig.Host, dbConfig.Port, dbConfig.DB, dbConfig.User, dbConfig.Password)
+	this.dbc, err = sql.SqlOpen(dbConfig.DBType, dbConfig.Host, dbConfig.Port, dbConfig.DB, dbConfig.User, dbConfig.Password)
 
 	if nil != err {
 		return err
@@ -340,12 +340,12 @@ func (this *kvnode) start() error {
 		}
 
 		for _, t := range dbdef.TableDefs {
-			tb, err := sql.GetTableScheme(this.dbc, config.DBType, fmt.Sprintf("%s_%d", t.Name, t.DbVersion))
+			tb, err := sql.GetTableScheme(this.dbc, dbConfig.DBType, fmt.Sprintf("%s_%d", t.Name, t.DbVersion))
 			if nil != err {
 				return err
 			} else if nil == tb {
 				//表不存在
-				err = sql.CreateTables(this.dbc, config.DBType, t)
+				err = sql.CreateTables(this.dbc, dbConfig.DBType, t)
 				if nil != err {
 					return err
 				} else {

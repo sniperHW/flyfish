@@ -49,12 +49,12 @@ var configStr string = `
 	MainQueueMaxSize = 1000
 	RaftLogDir       = "raftLog"
 	RaftLogPrefix    = "pd"
-	DBType           = "pgsql"
 	InitMetaPath = "./initmeta.json"
 	InitDepoymentPath="./deployment.json"
 
 
 	[DBConfig]
+		DBType        = "pgsql"
 		Host          = "localhost"
 		Port          = 5432
 		User	      = "sniper"
@@ -81,24 +81,22 @@ func TestPd1(t *testing.T) {
 
 	conf, _ := LoadConfigStr(configStr)
 
-	fmt.Println("conf.DBType", conf.DBType)
-
 	//先删除table1
-	dbc, err := sql.SqlOpen(conf.DBType, conf.DBConfig.Host, conf.DBConfig.Port, conf.DBConfig.DB, conf.DBConfig.User, conf.DBConfig.Password)
+	dbc, err := sql.SqlOpen(conf.DBConfig.DBType, conf.DBConfig.Host, conf.DBConfig.Port, conf.DBConfig.DB, conf.DBConfig.User, conf.DBConfig.Password)
 
 	fmt.Println(err)
 
-	sql.DropTable(dbc, conf.DBType, &db.TableDef{
+	sql.DropTable(dbc, conf.DBConfig.DBType, &db.TableDef{
 		Name:      "table1",
 		DbVersion: 0,
 	})
 
-	sql.DropTable(dbc, conf.DBType, &db.TableDef{
+	sql.DropTable(dbc, conf.DBConfig.DBType, &db.TableDef{
 		Name:      "table2",
 		DbVersion: 1,
 	})
 
-	sql.DropTable(dbc, conf.DBType, &db.TableDef{
+	sql.DropTable(dbc, conf.DBConfig.DBType, &db.TableDef{
 		Name:      "table2",
 		DbVersion: 3,
 	})
@@ -150,8 +148,6 @@ func TestAddRemovePd(t *testing.T) {
 	InitLogger(l)
 
 	conf, _ := LoadConfigStr(configStr)
-
-	fmt.Println("conf.DBType", conf.DBType)
 
 	raftID := RaftIDGen.Next()
 
