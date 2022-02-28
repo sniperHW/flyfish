@@ -524,7 +524,7 @@ func (this *LastWriteBackVersionProposal) apply() {
 	}
 
 	if f := this.kv.pendingCmd.Front(); nil != f {
-		if cmdkick, ok := f.Value.(*cmdKick); ok && cmdkick.waitVersion == this.version {
+		if cmdkick, ok := f.Value.(*cmdKick); ok && this.version >= cmdkick.waitVersion {
 			this.kv.processCmd()
 		}
 	}

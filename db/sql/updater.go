@@ -158,7 +158,7 @@ func (this *updater) exec(v interface{}) {
 								//休眠一秒重试
 								time.Sleep(time.Second)
 							} else {
-								return 0, errors.New("drop writeback")
+								return 0, err
 							}
 						} else {
 							if rows.Next() {
@@ -167,12 +167,12 @@ func (this *updater) exec(v interface{}) {
 								if abs(version) >= abs(s.Version) {
 									GetSugar().Infof("a newer writeback success,drop old writeback db.version:%d,task.version:%d", version, s.Version)
 									//数据库已经有最新的回写
-									return 0, errors.New("drop writeback")
+									return 0, errors.New("a newer writeback success")
 								} else {
 									return version, nil
 								}
 							} else {
-								return 0, errors.New("drop writeback")
+								return 0, errors.New("record not exist")
 							}
 						}
 					}
@@ -191,6 +191,7 @@ func (this *updater) exec(v interface{}) {
 						GetSugar().Debugf("%s version mismatch last:%d version:%d unikey:%s:%s", getUpdateType(s.State), s.LastWriteBackVersion, s.Version, s.Meta.TableName(), s.Key)
 						//版本号不匹配，再次获取版本号
 						if version, err := loadVersion(); nil != err {
+							task.OnError(err, s.LastWriteBackVersion)
 							break
 						} else {
 							GetSugar().Debugf("%s version mismatch last:%d version:%d,dbversion:%d", getUpdateType(s.State), s.LastWriteBackVersion, s.Version, version)
@@ -204,6 +205,7 @@ func (this *updater) exec(v interface{}) {
 						//休眠一秒重试
 						time.Sleep(time.Second)
 					} else {
+						task.OnError(err, s.LastWriteBackVersion)
 						break
 					}
 				}

@@ -87,7 +87,7 @@ func (this *kv) pushCmd(cmd cmdI) {
 				table:  this.table,
 				key:    this.key,
 			}) {
-				cmd.reply(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"), nil, 0)
+				cmd.reply(errcode.New(errcode.Errcode_retry, "loader is busy, please try later!"), nil, 0)
 				this.store.deleteKv(this)
 			} else {
 				this.state = kv_loading
@@ -97,7 +97,7 @@ func (this *kv) pushCmd(cmd cmdI) {
 		}
 	} else {
 		if _, ok := this.pendingCmd.Back().Value.(*cmdKick); ok {
-			cmd.reply(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"), nil, 0)
+			cmd.reply(errcode.New(errcode.Errcode_retry, "kv is kicking not, please try later!"), nil, 0)
 		} else {
 			this.pendingCmd.PushBack(cmd)
 		}
@@ -167,6 +167,9 @@ func (this *kv) mergeCmd() (cmds []cmdI) {
 }
 
 func (this *kv) processCmd() {
+	if !this.store.isLeader() {
+		return
+	}
 
 	for cmds := this.mergeCmd(); len(cmds) > 0; cmds = this.mergeCmd() {
 		if cmds[0].cmdType() == flyproto.CmdType_Get {

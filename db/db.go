@@ -351,4 +351,5 @@ type DBUpdateTask interface {
 	GetUpdateAndClearUpdateState() UpdateState //获取脏状态同时将其清理
 	GetUniKey() string
 	SetLastWriteBackVersion(int64)
+	OnError(error, int64)
 }

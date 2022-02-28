@@ -48,6 +48,10 @@ func (u *updateTask) ClearUpdateStateAndReleaseLock() {
 	close(u.ch)
 }
 
+func (u *updateTask) OnError(err error, writeBackVersion int64) {
+	fmt.Println("update error:%v version:%d", err, writeBackVersion)
+}
+
 var metaJson string = `
 {
 	"TableDefs":[

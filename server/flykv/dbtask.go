@@ -157,6 +157,19 @@ func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields 
 	return nil
 }
 
+func (this *dbUpdateTask) OnError(err error, writeBackVersion int64) {
+	this.kv.store.mainQueue.AppendHighestPriotiryItem(func() {
+		if f := this.kv.pendingCmd.Front(); nil != f {
+			if cmdkick, ok := f.Value.(*cmdKick); ok && writeBackVersion >= cmdkick.waitVersion {
+				//如果有等待回写后执行的kick，需要清理一下
+				cmdkick.reply(errcode.New(errcode.Errcode_retry, "retry"), nil, 0)
+				this.kv.pendingCmd.Remove(f)
+				this.kv.processCmd()
+			}
+		}
+	})
+}
+
 func (this *dbLoadTask) GetTable() string {
 	return this.table
 }

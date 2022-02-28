@@ -112,6 +112,7 @@ func (s *kvstore) addKickable(k *kv) {
 func (s *kvstore) removeKickable(k *kv) {
 	if nil != k.listElement {
 		s.kickableList.Remove(k.listElement)
+		k.listElement = nil
 	}
 }
 
