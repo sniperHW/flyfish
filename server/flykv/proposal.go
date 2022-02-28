@@ -296,12 +296,12 @@ func (this *kvProposal) OnError(err error) {
 }
 
 func (this *kvProposal) Serilize(b []byte) []byte {
-	GetSugar().Debugf("kvProposal.serilizeKv %s %d %d", this.kv.uniKey, this.version, this.dbversion)
 	return serilizeKv(b, this.ptype, this.kv.uniKey, this.version, this.dbversion, this.fields)
 }
 
 func (this *kvProposal) apply() {
 	if this.ptype == proposal_kick {
+		//GetSugar().Infof("kick %s apply", this.kv.uniKey)
 		this.kv.store.deleteKv(this.kv)
 		this.reply(nil, nil, 0)
 		this.kv.clearCmds(errcode.New(errcode.Errcode_retry, "please try again"))
@@ -437,6 +437,7 @@ func (this *ProposalUpdateMeta) Serilize(b []byte) []byte {
 
 func (this *ProposalUpdateMeta) apply() {
 	this.meta.MoveTo(this.store.meta)
+	GetSugar().Errorf("ProposalUpdateMeta apply:%v", this.store.meta.GetVersion())
 }
 
 type proposalNop struct {
@@ -474,9 +475,7 @@ type SlotTransferProposal struct {
 }
 
 func (this *SlotTransferProposal) OnError(err error) {
-	this.store.mainQueue.AppendHighestPriotiryItem(func() {
-		delete(this.store.slotsTransferOut, this.slot)
-	})
+
 }
 
 func (this *SlotTransferProposal) Serilize(b []byte) []byte {
@@ -487,15 +486,26 @@ func (this *SlotTransferProposal) Serilize(b []byte) []byte {
 
 func (this *SlotTransferProposal) apply() {
 	if this.transferType == slotTransferIn {
-		this.store.slots.Set(this.slot)
-		this.reply()
-	} else if this.transferType == slotTransferOut {
-		if nil == this.store.slotsKvMap[this.slot] {
-			delete(this.store.slotsTransferOut, this.slot)
+		if nil == this.store.slotsTransferOut[this.slot] {
 			this.store.slots.Set(this.slot)
 			this.reply()
 		} else {
-			this.store.processSlotTransferOut(this)
+			//迁出尚未执行完毕，又接收到迁入请求，忽略请求
+			GetSugar().Errorf("slot:%d is transfering out,receive a trans in req", this.slot)
+		}
+	} else if this.transferType == slotTransferOut {
+		if nil == this.store.slotsKvMap[this.slot] {
+			this.store.slots.Clear(this.slot)
+			this.reply()
+		} else {
+			p := this.store.slotsTransferOut[this.slot]
+			if nil == p {
+				p = this
+			} else {
+				p.reply = this.reply
+			}
+			this.store.slotsTransferOut[this.slot] = p
+			this.store.processSlotTransferOut(p)
 		}
 	}
 }

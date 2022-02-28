@@ -86,7 +86,7 @@ func main() {
 		clientCfg.PD = strings.Split(cfg.PD, ";")
 	}
 
-	for j := 0; j < 50; j++ {
+	for j := 0; j < 100; j++ {
 		c, _ := kclient.OpenClient(clientCfg)
 		for i := 0; i < 50; i++ {
 			Set(c)

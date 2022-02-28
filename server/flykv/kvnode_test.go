@@ -11,14 +11,19 @@ import (
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/logger"
+	fnet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	"github.com/sniperHW/flyfish/server/mock"
+	snet "github.com/sniperHW/flyfish/server/net"
+	sproto "github.com/sniperHW/flyfish/server/proto"
 	sslot "github.com/sniperHW/flyfish/server/slot"
 	"github.com/stretchr/testify/assert"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -127,6 +132,9 @@ var dbConf *dbconf
 func init() {
 
 	sslot.SlotCount = 128
+
+	raft.SnapshotCount = 100
+	raft.SnapshotCatchUpEntriesN = 100
 
 	go func() {
 		http.ListenAndServe("localhost:6060", nil)
@@ -542,9 +550,6 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 
 	config.WriteBackMode = "WriteBackOnSwap"
 
-	raft.SnapshotCount = 100
-	raft.SnapshotCatchUpEntriesN = 100
-
 	config.MaxCachePerStore = 10000
 
 	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
@@ -623,9 +628,6 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 }
 
 func Test1Node1StoreSnapshot2(t *testing.T) {
-
-	raft.SnapshotCount = 100
-	raft.SnapshotCatchUpEntriesN = 100
 
 	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
 
@@ -788,4 +790,221 @@ func TestLinearizableRead(t *testing.T) {
 	node.Stop()
 
 	config.LinearizableRead = false
+}
+
+func TestUpdateMeta(t *testing.T) {
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
+	//先删除所有kv文件
+	os.RemoveAll("./testRaftLog")
+	client.InitLogger(GetLogger())
+	node := start1Node(newMockDBBackEnd(nil))
+
+	metajson := `
+{
+	"Version":2,
+	"TableDefs":[
+	{"Name":"users1",
+	 "Fields":[
+	 	{"Name":"name","Type":"string","DefaultValue":""},
+	 	{"Name":"age","Type":"int","DefaultValue":"0"},
+	 	{"Name":"phone","Type":"string","DefaultValue":""}]
+	}]
+}
+
+`
+
+	update := &sproto.NotifyUpdateMeta{
+		Store:   1,
+		Version: 2,
+		Meta:    []byte(metajson),
+	}
+
+	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
+	assert.Nil(t, err)
+	addr, err := net.ResolveUDPAddr("udp", "127.0.0.1:10018")
+	conn.SendTo(addr, snet.MakeMessage(0, update))
+
+	version := int64(0)
+
+	for atomic.LoadInt64(&version) != int64(2) {
+		time.Sleep(time.Second)
+		conn.SendTo(addr, snet.MakeMessage(0, update))
+		node.stores[1].mainQueue.AppendHighestPriotiryItem(func() {
+			atomic.StoreInt64(&version, node.stores[1].meta.GetVersion())
+		})
+	}
+
+	conn.Close()
+	node.Stop()
+}
+
+func TestSlotTransferIn(t *testing.T) {
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
+
+	//先删除所有kv文件
+	os.RemoveAll("./testRaftLog")
+
+	client.InitLogger(GetLogger())
+
+	node := start1Node(newMockDBBackEnd(nil))
+
+	store1 := node.stores[1]
+
+	ch := make(chan int)
+
+	store1.mainQueue.AppendHighestPriotiryItem(func() {
+		slots := store1.slots.GetOpenBits()
+		store1.slots.Clear(slots[0])
+		ch <- slots[0]
+	})
+
+	inslot := <-ch
+
+	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
+	assert.Nil(t, err)
+
+	addr, err := net.ResolveUDPAddr("udp", "127.0.0.1:10018")
+
+	for {
+
+		conn.SendTo(addr, snet.MakeMessage(0, &sproto.IsTransInReady{
+			Store: int32(1),
+			Slot:  int32(inslot),
+		}))
+
+		recvbuff := make([]byte, 256)
+		_, r, _ := conn.ReadFrom(recvbuff)
+
+		if r.(*snet.Message).Msg.(*sproto.IsTransInReadyResp).Ready {
+			break
+		} else {
+			time.Sleep(time.Second)
+		}
+	}
+
+	conn.SendTo(addr, snet.MakeMessage(0, &sproto.NotifySlotTransIn{
+		Store: int32(1),
+		Slot:  int32(inslot),
+	}))
+
+	recvbuff := make([]byte, 256)
+	_, r, err := conn.ReadFrom(recvbuff)
+
+	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.SlotTransInOk).Slot, int32(inslot))
+
+	//again
+
+	conn.SendTo(addr, snet.MakeMessage(0, &sproto.NotifySlotTransIn{
+		Store: int32(1),
+		Slot:  int32(inslot),
+	}))
+
+	_, r, err = conn.ReadFrom(recvbuff)
+
+	assert.Equal(t, r.(*snet.Message).Msg.(*sproto.SlotTransInOk).Slot, int32(inslot))
+
+	conn.Close()
+
+	var ok int32
+
+	for atomic.LoadInt32(&ok) == 0 {
+		time.Sleep(time.Second)
+		node.stores[1].mainQueue.AppendHighestPriotiryItem(func() {
+			if node.stores[1].slots.Test(inslot) {
+				atomic.StoreInt32(&ok, 1)
+			}
+		})
+	}
+
+	node.Stop()
+
+}
+
+func TestSlotTransferOut(t *testing.T) {
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
+
+	//先删除所有kv文件
+	os.RemoveAll("./testRaftLog")
+
+	client.InitLogger(GetLogger())
+
+	node := start1Node(newMockDBBackEnd(nil))
+
+	store1 := node.stores[1]
+	ch := make(chan int)
+
+	store1.mainQueue.AppendHighestPriotiryItem(func() {
+		slots := store1.slots.GetOpenBits()
+		ch <- slots[0]
+	})
+
+	outslot := <-ch
+
+	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
+
+	for i := 0; i < 256; i++ {
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		fields["name"] = "sniperHW"
+		c.Set("users1", fmt.Sprintf("sniperHW:%d", i), fields).Exec()
+	}
+
+	fmt.Println("NotifySlotTransOut")
+
+	for {
+		conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
+		assert.Nil(t, err)
+
+		addr, err := net.ResolveUDPAddr("udp", "127.0.0.1:10018")
+
+		conn.SendTo(addr, snet.MakeMessage(0, &sproto.NotifySlotTransOut{
+			Store: int32(1),
+			Slot:  int32(outslot),
+		}))
+
+		respCh := make(chan *snet.Message)
+		var ret *snet.Message
+
+		go func() {
+			recvbuff := make([]byte, 256)
+			_, r, err := conn.ReadFrom(recvbuff)
+			if nil == err {
+				select {
+				case respCh <- r.(*snet.Message):
+				default:
+				}
+			}
+		}()
+
+		ticker := time.NewTicker(3 * time.Second)
+
+		select {
+		case ret = <-respCh:
+		case <-ticker.C:
+		}
+
+		ticker.Stop()
+
+		conn.Close()
+
+		if nil != ret {
+			assert.Equal(t, ret.Msg.(*sproto.SlotTransOutOk).Slot, int32(outslot))
+			break
+		}
+
+	}
+
+	var ok int32
+
+	for atomic.LoadInt32(&ok) == 0 {
+		time.Sleep(time.Second)
+		node.stores[1].mainQueue.AppendHighestPriotiryItem(func() {
+			if !node.stores[1].slots.Test(outslot) {
+				atomic.StoreInt32(&ok, 1)
+			}
+		})
+	}
+
+	node.Stop()
+
 }

@@ -104,9 +104,15 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 		if ptype == proposal_slot_transfer {
 			p := data.(*SlotTransferProposal)
 			if p.transferType == slotTransferIn {
-				s.slots.Set(p.slot)
+				if nil == s.slotsTransferOut[p.slot] {
+					s.slots.Set(p.slot)
+				}
 			} else if p.transferType == slotTransferOut {
-				s.slotsTransferOut[p.slot] = p
+				if nil == s.slotsKvMap[p.slot] {
+					s.slots.Clear(p.slot)
+				} else {
+					s.slotsTransferOut[p.slot] = p
+				}
 			}
 		} else if ptype == proposal_slots {
 			s.slots = data.(*bitmap.Bitmap)
@@ -127,10 +133,9 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 			kv, ok := s.kv[groupID][p.unikey]
 			if !ok {
 				if ptype == proposal_kick {
-					continue
-					//return fmt.Errorf("bad data,%s with a bad proposal_type:%d", p.unikey, ptype)
+					return fmt.Errorf("bad data,%s with a bad proposal_type:kick", p.unikey)
 				} else if ptype == proposal_update {
-					return fmt.Errorf("bad data,%s with a bad proposal_type:%d", p.unikey, ptype)
+					return fmt.Errorf("bad data,%s with a bad proposal_type:update", p.unikey)
 				} else {
 					var e errcode.Error
 					table, key := splitUniKey(p.unikey)
