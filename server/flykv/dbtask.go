@@ -45,6 +45,7 @@ func (this *dbUpdateTask) ClearUpdateStateAndReleaseLock() {
 	defer this.Unlock()
 	this.doing = false
 	this.state.State = db.DBState_none
+	this.state.Fields = nil
 	atomic.AddInt32(&this.kv.store.dbWriteBackCount, -1)
 }
 
@@ -52,6 +53,7 @@ func (this *dbUpdateTask) GetUpdateAndClearUpdateState() (updateState db.UpdateS
 	this.Lock()
 	defer this.Unlock()
 	updateState = this.state
+	this.state.Fields = nil
 	this.state.State = db.DBState_none
 	return
 }

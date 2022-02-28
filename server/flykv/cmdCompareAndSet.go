@@ -37,7 +37,7 @@ func (this *cmdCompareAndSet) do(proposal *kvProposal) {
 	} else {
 		oldV := this.kv.getField(this.old.GetName())
 		if !this.old.IsEqual(oldV) {
-			this.reply(Err_cas_not_equal, this.kv.fields, 0)
+			this.reply(Err_cas_not_equal, this.kv.fields, this.kv.version)
 		} else {
 			proposal.version++
 			proposal.fields = map[string]*flyproto.Field{}

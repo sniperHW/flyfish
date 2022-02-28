@@ -65,7 +65,7 @@ RaftUrl                 = "http://127.0.0.1:12377"
 ServiceHost             = "127.0.0.1"
 ServicePort             = %d
 Stores                  = [1]
-MetaPath                = "./meta.json"
+MetaPath                = "test/meta.json"
                   	
 [DBConfig]
 DBType        = "%s"
@@ -122,6 +122,7 @@ func (d *mockBackEnd) stop() {
 }
 
 var config *Config
+var dbConf *dbconf
 
 func init() {
 
@@ -133,8 +134,8 @@ func init() {
 
 	var err error
 
-	dbConf := &dbconf{}
-	if _, err = toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
+	dbConf = &dbconf{}
+	if _, err = toml.DecodeFile("test/test_dbconf.toml", dbConf); nil != err {
 		panic(err)
 	}
 
@@ -181,12 +182,6 @@ func start1Node(b dbI) *kvnode {
 
 func test(t *testing.T, c *client.Client) {
 	{
-
-		dbConf := &dbconf{}
-		if _, err := toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
-			panic(err)
-		}
-
 		dbc, _ := sql.SqlOpen(dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.DB, dbConf.User, dbConf.Pwd)
 
 		dbc.Exec("delete from users1_0 where __key__ = 'sniperHW';")
@@ -793,9 +788,4 @@ func TestLinearizableRead(t *testing.T) {
 	node.Stop()
 
 	config.LinearizableRead = false
-}
-
-func TestMakeUnikeyPlacement(t *testing.T) {
-	fn := sslot.MakeUnikeyPlacement([]int{1, 2, 3, 4, 5})
-	fmt.Println(fn("users1:huangwei:247100"), sslot.Unikey2Slot("users1:huangwei:247100"))
 }

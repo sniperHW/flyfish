@@ -290,6 +290,7 @@ func (this *kvProposal) OnError(err error) {
 			this.kv.store.deleteKv(this.kv)
 		} else {
 			this.reply(errcode.New(errcode.Errcode_error, err.Error()), nil, 0)
+			this.kv.processCmd()
 		}
 	})
 }

@@ -423,7 +423,7 @@ func (s *kvstore) reportStatus() {
 			NodeID:      int32(s.kvnode.id),
 			StoreID:     int32(s.shard),
 			Isleader:    s.isLeader(),
-			Kvcount:     int32(s.kvcount),
+			Kvcount:     int32(s.kvcount + len(s.pendingKv)),
 			Progress:    s.rn.GetApplyIndex(),
 			MetaVersion: s.meta.GetVersion(),
 			RaftID:      s.rn.ID(),

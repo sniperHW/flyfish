@@ -24,17 +24,13 @@ func (this *cmdGet) makeResponse(err errcode.Error, fields map[string]*flyproto.
 				err = Err_record_unchange
 			} else {
 				for _, name := range this.wants {
-					v := fields[name]
-					if nil != v {
+					if v := fields[name]; nil != v {
 						pbdata.Fields = append(pbdata.Fields, v)
 					} else {
 						/*
 						 * 表格新增加了列，但未设置过，使用默认值
 						 */
-						vv := this.meta.GetDefaultValue(name)
-						if nil != vv {
-							pbdata.Fields = append(pbdata.Fields, flyproto.PackField(name, vv))
-						}
+						pbdata.Fields = append(pbdata.Fields, flyproto.PackField(name, this.meta.GetDefaultValue(name)))
 					}
 				}
 			}
@@ -47,10 +43,6 @@ func (this *cmdGet) makeResponse(err errcode.Error, fields map[string]*flyproto.
 		Seqno: this.seqno,
 		Err:   err,
 		Data:  pbdata}
-}
-
-func (this *cmdGet) do(proposal *kvProposal) {
-	proposal.cmds = append(proposal.cmds, this)
 }
 
 func (this *cmdGet) cmdType() flyproto.CmdType {

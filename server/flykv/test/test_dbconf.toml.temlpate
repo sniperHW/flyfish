@@ -1,0 +1,6 @@
+DBType  ="pgsql"
+User    ="sniper"
+Pwd     ="123456"
+DB      ="test"
+Host    ="localhost"
+Port    =5432

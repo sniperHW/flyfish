@@ -20,18 +20,14 @@ func (this *cmdSetNx) makeResponse(err errcode.Error, fields map[string]*flyprot
 	}
 
 	if nil != err && err == Err_record_exist {
-		for _, field := range this.fields {
-			v := fields[field.GetName()]
-			if nil != v {
+		for name, field := range this.fields {
+			if v := fields[name]; nil != v {
 				pbdata.Fields = append(pbdata.Fields, v)
 			} else {
 				/*
 				 * 表格新增加了列，但未设置过，使用默认值
 				 */
-				vv := this.meta.GetDefaultValue(field.GetName())
-				if nil != vv {
-					pbdata.Fields = append(pbdata.Fields, flyproto.PackField(field.GetName(), vv))
-				}
+				pbdata.Fields = append(pbdata.Fields, flyproto.PackField(name, this.meta.GetDefaultValue(field.GetName())))
 			}
 		}
 	}
@@ -54,7 +50,7 @@ func (this *cmdSetNx) do(proposal *kvProposal) {
 		}
 		proposal.cmds = append(proposal.cmds, this)
 	} else {
-		this.reply(Err_record_exist, proposal.fields, proposal.version)
+		this.reply(Err_record_exist, this.kv.fields, this.kv.version)
 	}
 }
 

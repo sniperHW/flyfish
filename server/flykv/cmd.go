@@ -11,11 +11,9 @@ import (
 )
 
 type cmdI interface {
-	getSeqno() int64
 	reply(err errcode.Error, fields map[string]*flyproto.Field, version int64)
 	isTimeout() bool
 	cmdType() flyproto.CmdType
-	do(*kvProposal)
 }
 
 type MakeResponse func(errcode.Error, map[string]*flyproto.Field, int64) *cs.RespMessage
@@ -42,10 +40,6 @@ func (this *cmdBase) init(kv *kv, peer *net.Socket, seqno int64, version *int64,
 	this.fnMakeResponse = makeResponse
 	this.kv = kv
 	this.meta = kv.meta
-}
-
-func (this *cmdBase) getSeqno() int64 {
-	return this.seqno
 }
 
 func (this *cmdBase) isTimeout() bool {
