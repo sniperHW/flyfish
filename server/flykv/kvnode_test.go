@@ -13,6 +13,7 @@ import (
 	"github.com/sniperHW/flyfish/logger"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/raft"
+	"github.com/sniperHW/flyfish/server/flypd"
 	"github.com/sniperHW/flyfish/server/mock"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
@@ -66,7 +67,7 @@ WriteBackMode           ="WriteThrough"
 
 
 [SoloConfig]
-RaftUrl                 = "http://127.0.0.1:12377"
+RaftUrl                 = "%s"
 ServiceHost             = "127.0.0.1"
 ServicePort             = %d
 Stores                  = [1]
@@ -147,7 +148,9 @@ func init() {
 		panic(err)
 	}
 
-	config, err = LoadConfigStr(fmt.Sprintf(configStr, 10018, dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.User, dbConf.Pwd, dbConf.DB))
+	//"1@0@http://127.0.0.1:12377@localhost:10018@voter"
+
+	config, err = LoadConfigStr(fmt.Sprintf(configStr, "http://127.0.0.1:12377", 10018, dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.User, dbConf.Pwd, dbConf.DB))
 
 	if nil != err {
 		panic(err)
@@ -166,9 +169,9 @@ func newMockDBBackEnd(mockdb *mockBackEnd) dbI {
 	return newMockDB(mockdb)
 }
 
-func start1Node(b dbI) *kvnode {
+func start1Node(id int, b dbI, join bool, cfg *Config) *kvnode {
 
-	node, err := NewKvNode(1, false, config, b)
+	node, err := NewKvNode(uint16(id), false, cfg, b)
 
 	if nil != err {
 		panic(err)
@@ -489,7 +492,7 @@ func Test1Node1Store1(t *testing.T) {
 
 	client.InitLogger(GetLogger())
 
-	node := start1Node(newSqlDBBackEnd())
+	node := start1Node(1, newSqlDBBackEnd(), false, config)
 
 	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
 
@@ -514,7 +517,7 @@ func Test1Node1Store1(t *testing.T) {
 	fmt.Println("stop ok")
 
 	//start again
-	node = start1Node(newSqlDBBackEnd())
+	node = start1Node(1, newSqlDBBackEnd(), false, config)
 
 	time.Sleep(time.Second * 2)
 
@@ -532,7 +535,7 @@ func Test1Node1Store2(t *testing.T) {
 
 	client.InitLogger(GetLogger())
 
-	node := start1Node(newSqlDBBackEnd())
+	node := start1Node(1, newSqlDBBackEnd(), false, config)
 
 	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
 
@@ -559,7 +562,7 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 
 	client.InitLogger(GetLogger())
 
-	node := start1Node(newSqlDBBackEnd())
+	node := start1Node(1, newSqlDBBackEnd(), false, config)
 
 	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
 
@@ -609,7 +612,7 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 
 	GetSugar().Infof("start again")
 
-	node = start1Node(newSqlDBBackEnd())
+	node = start1Node(1, newSqlDBBackEnd(), false, config)
 
 	time.Sleep(time.Second * 2)
 
@@ -636,7 +639,7 @@ func Test1Node1StoreSnapshot2(t *testing.T) {
 
 	client.InitLogger(GetLogger())
 
-	node := start1Node(newSqlDBBackEnd())
+	node := start1Node(1, newSqlDBBackEnd(), false, config)
 
 	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
 
@@ -668,7 +671,7 @@ func Test1Node1StoreSnapshot2(t *testing.T) {
 
 	node.Stop()
 
-	node = start1Node(newSqlDBBackEnd())
+	node = start1Node(1, newSqlDBBackEnd(), false, config)
 
 	time.Sleep(time.Second * 2)
 
@@ -684,7 +687,7 @@ func TestUseMockDB(t *testing.T) {
 
 	client.InitLogger(GetLogger())
 
-	node := start1Node(newMockDBBackEnd(nil))
+	node := start1Node(1, newMockDBBackEnd(nil), false, config)
 
 	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
 
@@ -708,7 +711,7 @@ func TestKick1(t *testing.T) {
 
 	db := newMockDBBackEnd(nil)
 
-	node := start1Node(db)
+	node := start1Node(1, db, false, config)
 
 	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
 
@@ -721,7 +724,7 @@ func TestKick1(t *testing.T) {
 
 	node.Stop()
 
-	node = start1Node(newMockDBBackEnd(db.(*mockBackEnd)))
+	node = start1Node(1, newMockDBBackEnd(db.(*mockBackEnd)), false, config)
 
 	time.Sleep(time.Second * 1)
 
@@ -745,7 +748,7 @@ func TestKick2(t *testing.T) {
 
 	db := newMockDBBackEnd(nil)
 
-	node := start1Node(db)
+	node := start1Node(1, db, false, config)
 
 	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
 
@@ -758,7 +761,7 @@ func TestKick2(t *testing.T) {
 
 	node.Stop()
 
-	node = start1Node(newMockDBBackEnd(db.(*mockBackEnd)))
+	node = start1Node(1, newMockDBBackEnd(db.(*mockBackEnd)), false, config)
 
 	time.Sleep(time.Second * 1)
 
@@ -778,7 +781,7 @@ func TestLinearizableRead(t *testing.T) {
 
 	client.InitLogger(GetLogger())
 
-	node := start1Node(newSqlDBBackEnd())
+	node := start1Node(1, newSqlDBBackEnd(), false, config)
 
 	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
 
@@ -797,7 +800,7 @@ func TestUpdateMeta(t *testing.T) {
 	//先删除所有kv文件
 	os.RemoveAll("./testRaftLog")
 	client.InitLogger(GetLogger())
-	node := start1Node(newMockDBBackEnd(nil))
+	node := start1Node(1, newMockDBBackEnd(nil), false, config)
 
 	metajson := `
 {
@@ -846,7 +849,7 @@ func TestSlotTransferIn(t *testing.T) {
 
 	client.InitLogger(GetLogger())
 
-	node := start1Node(newMockDBBackEnd(nil))
+	node := start1Node(1, newMockDBBackEnd(nil), false, config)
 
 	store1 := node.stores[1]
 
@@ -928,7 +931,7 @@ func TestSlotTransferOut(t *testing.T) {
 
 	client.InitLogger(GetLogger())
 
-	node := start1Node(newMockDBBackEnd(nil))
+	node := start1Node(1, newMockDBBackEnd(nil), false, config)
 
 	store1 := node.stores[1]
 	ch := make(chan int)
@@ -951,58 +954,134 @@ func TestSlotTransferOut(t *testing.T) {
 
 	fmt.Println("NotifySlotTransOut")
 
+	addr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:10018")
+
 	for {
-		conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
-		assert.Nil(t, err)
-
-		addr, err := net.ResolveUDPAddr("udp", "127.0.0.1:10018")
-
-		conn.SendTo(addr, snet.MakeMessage(0, &sproto.NotifySlotTransOut{
-			Store: int32(1),
-			Slot:  int32(outslot),
-		}))
-
-		respCh := make(chan *snet.Message)
-		var ret *snet.Message
-
-		go func() {
-			recvbuff := make([]byte, 256)
-			_, r, err := conn.ReadFrom(recvbuff)
-			if nil == err {
-				select {
-				case respCh <- r.(*snet.Message):
-				default:
+		resp := snet.UdpCall([]*net.UDPAddr{addr},
+			snet.MakeMessage(0, &sproto.NotifySlotTransOut{
+				Store: int32(1),
+				Slot:  int32(outslot),
+			}),
+			time.Millisecond*50,
+			func(respCh chan interface{}, r interface{}) {
+				if m, ok := r.(*snet.Message); ok {
+					if resp, ok := m.Msg.(*sproto.SlotTransOutOk); ok {
+						select {
+						case respCh <- resp:
+						default:
+						}
+					}
 				}
-			}
-		}()
+			})
 
-		ticker := time.NewTicker(3 * time.Second)
-
-		select {
-		case ret = <-respCh:
-		case <-ticker.C:
-		}
-
-		ticker.Stop()
-
-		conn.Close()
-
-		if nil != ret {
-			assert.Equal(t, ret.Msg.(*sproto.SlotTransOutOk).Slot, int32(outslot))
+		if resp != nil {
+			assert.Equal(t, resp.(*sproto.SlotTransOutOk).Slot, int32(outslot))
 			break
 		}
-
 	}
 
 	var ok int32
-
 	for atomic.LoadInt32(&ok) == 0 {
-		time.Sleep(time.Second)
+		time.Sleep(time.Millisecond * 100)
 		node.stores[1].mainQueue.AppendHighestPriotiryItem(func() {
 			if !node.stores[1].slots.Test(outslot) {
 				atomic.StoreInt32(&ok, 1)
 			}
 		})
+	}
+
+	node.Stop()
+
+}
+
+func TestAddRemoveNode(t *testing.T) {
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
+
+	//先删除所有kv文件
+	os.RemoveAll("./testRaftLog")
+
+	client.InitLogger(GetLogger())
+
+	node := start1Node(1, newMockDBBackEnd(nil), false, config)
+
+	addr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:10018")
+
+	for {
+		resp := snet.UdpCall([]*net.UDPAddr{addr},
+			snet.MakeMessage(0, &sproto.QueryLeader{
+				Store: int32(1),
+			}),
+			time.Second,
+			func(respCh chan interface{}, r interface{}) {
+				if m, ok := r.(*snet.Message); ok {
+					if resp, ok := m.Msg.(*sproto.QueryLeaderResp); ok {
+						select {
+						case respCh <- resp:
+						default:
+						}
+					}
+				}
+			})
+
+		if resp != nil {
+			assert.Equal(t, resp.(*sproto.QueryLeaderResp).Leader, int32(node.id))
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
+	for {
+		resp := snet.UdpCall([]*net.UDPAddr{addr},
+			snet.MakeMessage(0, &sproto.NotifyNodeStoreOp{
+				Op:       int32(flypd.LearnerStore),
+				NodeID:   int32(2),
+				Host:     "localhost",
+				RaftPort: int32(12378),
+				Port:     int32(10019),
+				Store:    int32(1),
+				RaftID:   uint64(2),
+			}),
+			time.Second,
+			func(respCh chan interface{}, r interface{}) {
+				if m, ok := r.(*snet.Message); ok {
+					if resp, ok := m.Msg.(*sproto.NodeStoreOpOk); ok {
+						select {
+						case respCh <- resp:
+						default:
+						}
+					}
+				}
+			})
+
+		if resp != nil {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
+	for {
+		resp := snet.UdpCall([]*net.UDPAddr{addr},
+			snet.MakeMessage(0, &sproto.NotifyNodeStoreOp{
+				Op:     int32(flypd.RemoveStore),
+				Store:  int32(1),
+				RaftID: uint64(2),
+			}),
+			time.Second,
+			func(respCh chan interface{}, r interface{}) {
+				if m, ok := r.(*snet.Message); ok {
+					if resp, ok := m.Msg.(*sproto.NodeStoreOpOk); ok {
+						select {
+						case respCh <- resp:
+						default:
+						}
+					}
+				}
+			})
+
+		if resp != nil {
+			break
+		}
+		time.Sleep(time.Second)
 	}
 
 	node.Stop()

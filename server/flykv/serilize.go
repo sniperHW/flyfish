@@ -12,13 +12,6 @@ type proposalReader struct {
 	reader buffer.BufferReader
 }
 
-type ppkv struct {
-	unikey               string
-	version              int64
-	lastWriteBackVersion int64
-	fields               map[string]*flyproto.Field
-}
-
 func appendField(b []byte, field *flyproto.Field) []byte {
 	//name len
 	b = buffer.AppendUint16(b, uint16(len(field.GetName())))

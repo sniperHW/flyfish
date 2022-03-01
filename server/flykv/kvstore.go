@@ -72,14 +72,15 @@ type clientRequest struct {
 }
 
 type kvmgr struct {
-	kv               []map[string]*kv
-	slotsKvMap       map[int]map[string]*kv
-	slots            *bitmap.Bitmap
-	slotsTransferOut map[int]*SlotTransferProposal //正在迁出的slot
-	kvcount          int
-	pendingKv        map[string]*kv //尚未创建apply的kv
-	kickableList     *list.List
-	hardkvlimited    int
+	kv                    []map[string]*kv
+	slotsKvMap            map[int]map[string]*kv
+	slots                 *bitmap.Bitmap
+	kvcount               int
+	hardkvlimited         int
+	pendingKv             map[string]*kv //尚未创建apply的kv
+	kickableList          *list.List
+	slotsTransferOut      map[int]bool //标记迁出的slot
+	slotsTransferOutTimer *time.Timer
 }
 
 type kvstore struct {
@@ -151,19 +152,11 @@ func (s *kvstore) deleteKv(k *kv) {
 	} else {
 		s.kvcount--
 		delete(s.kv[k.groupID], k.uniKey)
-	}
 
-	kvs := s.slotsKvMap[k.slot]
-	delete(kvs, k.uniKey)
-	if len(kvs) == 0 {
-		delete(s.slotsKvMap, k.slot)
-		//当前slot的kv已经全部清除，如果当前slot正在迁出，结束迁出事务
-		if p := s.slotsTransferOut[k.slot]; nil != p {
-			delete(s.slotsTransferOut, k.slot)
-			s.slots.Clear(k.slot)
-			if nil != p.reply {
-				p.reply()
-			}
+		kvs := s.slotsKvMap[k.slot]
+		delete(kvs, k.uniKey)
+		if len(kvs) == 0 {
+			delete(s.slotsKvMap, k.slot)
 		}
 	}
 }
@@ -174,6 +167,14 @@ func (s *kvstore) onLoadKvApply(k *kv, removepending bool) {
 	}
 
 	s.kv[k.groupID][k.uniKey] = k
+
+	if kvs := s.slotsKvMap[k.slot]; nil != kvs {
+		kvs[k.uniKey] = k
+	} else {
+		kvs = map[string]*kv{}
+		kvs[k.uniKey] = k
+		s.slotsKvMap[k.slot] = kvs
+	}
 
 	s.kvcount++
 }
@@ -226,22 +227,6 @@ func newkv(s *kvstore, slot int, groupID int, unikey string, key string, table s
 			Slot:   slot,
 			Fields: map[string]*flyproto.Field{},
 		},
-	}
-
-	/*
-	 *  如果不加到slotsKvMap中考虑以下情况
-	 *  提交transfer out proposal slot=1
-	 *  提交snapshot proposal slot=1
-	 *  transfer out proposal.apply此时slot为空，clear slot=1。
-	 *  snapshot apply,此时slot=1已经被clear
-	 */
-
-	if kvs := s.slotsKvMap[k.slot]; nil != kvs {
-		kvs[k.uniKey] = k
-	} else {
-		kvs = map[string]*kv{}
-		kvs[k.uniKey] = k
-		s.slotsKvMap[k.slot] = kvs
 	}
 
 	return k, nil
@@ -331,7 +316,7 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 			return errcode.New(errcode.Errcode_route_info_stale)
 		}
 
-		if s.slotsTransferOut[slot] != nil {
+		if s.slotsTransferOut[slot] {
 			//正在迁出
 			return errcode.New(errcode.Errcode_slot_transfering)
 		}
@@ -390,7 +375,6 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 func (s *kvstore) processCommited(commited *raft.Committed) {
 	if len(commited.Proposals) > 0 {
 		for _, v := range commited.Proposals {
-			//GetSugar().Infof("apply type:%s %v", reflect.TypeOf(v), v)
 			v.(applyable).apply()
 		}
 	} else {
@@ -518,11 +502,6 @@ func (s *kvstore) serve() {
 				if oldLeader == s.rn.ID() && !s.isLeader() {
 					s.onLeaderDownToFollower()
 				}
-
-			case *SlotTransferProposal:
-				if s.isReady() {
-					s.processSlotTransferOut(v.(*SlotTransferProposal))
-				}
 			default:
 				GetSugar().Infof("here %v %s", v, reflect.TypeOf(v).String())
 			}
@@ -551,9 +530,6 @@ func (s *kvstore) issueFullDbWriteBack() {
 func (s *kvstore) applyNop() {
 	atomic.StoreInt32(&s.ready, 1)
 	s.issueFullDbWriteBack()
-	for _, v := range s.slotsTransferOut {
-		s.processSlotTransferOut(v)
-	}
 }
 
 func (s *kvstore) becomeLeader() {
@@ -563,32 +539,21 @@ func (s *kvstore) becomeLeader() {
 
 func (s *kvstore) onLeaderDownToFollower() {
 	atomic.StoreInt32(&s.ready, 0)
+
+	//清理临时状态
 	for _, v := range s.pendingKv {
 		v.clearCmds(errcode.New(errcode.Errcode_not_leader))
+		s.deleteKv(v)
 	}
 
 	for _, v := range s.kv {
 		for _, vv := range v {
 			vv.clearCmds(errcode.New(errcode.Errcode_not_leader))
+			s.removeKickable(vv)
 		}
 	}
 
-	for _, v := range s.slotsTransferOut {
-		if nil != v.timer {
-			v.timer.Stop()
-		}
-	}
-
-	//清理pendingKv
-	for uniKey, v := range s.pendingKv {
-		delete(s.pendingKv, uniKey)
-		kvs := s.slotsKvMap[v.slot]
-		delete(kvs, uniKey)
-		if len(kvs) == 0 {
-			delete(s.slotsKvMap, v.slot)
-		}
-	}
-
+	s.slotsTransferOut = map[int]bool{}
 	s.pendingKv = map[string]*kv{}
 }
 
@@ -690,17 +655,18 @@ func (s *kvstore) onNotifyNodeStoreOp(from *net.UDPAddr, msg *sproto.NotifyNodeS
 }
 
 func (s *kvstore) onIsTransInReady(from *net.UDPAddr, msg *sproto.IsTransInReady, context int64) {
-	ready := s.slotsTransferOut[int(msg.Slot)] == nil //如果当前slot正在迁出,ready=false
 	s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
 		&sproto.IsTransInReadyResp{
-			Ready: ready,
+			Ready: !s.slotsTransferOut[int(msg.Slot)],
 			Slot:  msg.Slot,
 		}))
 }
 
 func (s *kvstore) onNotifySlotTransIn(from *net.UDPAddr, msg *sproto.NotifySlotTransIn, context int64) {
 	slot := int(msg.Slot)
-	if s.slots.Test(slot) {
+	if s.slotsTransferOut[slot] {
+		return
+	} else if s.slots.Test(slot) {
 		s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
 			&sproto.SlotTransInOk{
 				Slot: msg.Slot,
@@ -720,20 +686,28 @@ func (s *kvstore) onNotifySlotTransIn(from *net.UDPAddr, msg *sproto.NotifySlotT
 	}
 }
 
-func (s *kvstore) processSlotTransferOut(p *SlotTransferProposal) {
-	kvs := s.slotsKvMap[p.slot]
-	if nil != kvs {
-		for _, v := range kvs {
-			if nil != v.listElement {
-				//只对处于kickable list的kv执行kick
-				s.kick(v)
+func (s *kvstore) kickSlot() {
+	s.slotsTransferOutTimer = nil
+	if s.isReady() && len(s.slotsTransferOut) > 0 {
+		active := 0
+		for slot, _ := range s.slotsTransferOut {
+			if kvs := s.slotsKvMap[slot]; nil != kvs {
+				active++
+				for _, v := range kvs {
+					if nil != v.listElement {
+						//只对处于kickable list的kv执行kick
+						s.kick(v)
+					}
+				}
+				GetSugar().Infof("processSlotTransferOut slot:%d kick kvcount:%d", slot, len(kvs))
 			}
 		}
-		GetSugar().Infof("processSlotTransferOut slot:%d kick kvcount:%d", p.slot, len(kvs))
 
-		p.timer = time.AfterFunc(time.Millisecond*100, func() {
-			s.mainQueue.AppendHighestPriotiryItem(p)
-		})
+		if active > 0 {
+			s.slotsTransferOutTimer = time.AfterFunc(time.Millisecond*100, func() {
+				s.mainQueue.AppendHighestPriotiryItem(s.kickSlot)
+			})
+		}
 	}
 }
 
@@ -745,17 +719,23 @@ func (s *kvstore) onNotifySlotTransOut(from *net.UDPAddr, msg *sproto.NotifySlot
 				Slot: msg.Slot,
 			}))
 	} else {
-		s.rn.IssueProposal(&SlotTransferProposal{
-			slot:         slot,
-			transferType: slotTransferOut,
-			store:        s,
-			reply: func() {
-				s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
-					&sproto.SlotTransOutOk{
-						Slot: msg.Slot,
-					}))
-			},
-		})
+		s.slotsTransferOut[slot] = true
+		kvs := s.slotsKvMap[slot]
+		if nil == kvs {
+			s.rn.IssueProposal(&SlotTransferProposal{
+				slot:         slot,
+				transferType: slotTransferOut,
+				store:        s,
+				reply: func() {
+					s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
+						&sproto.SlotTransOutOk{
+							Slot: msg.Slot,
+						}))
+				},
+			})
+		} else if nil == s.slotsTransferOutTimer {
+			s.kickSlot()
+		}
 	}
 }
 

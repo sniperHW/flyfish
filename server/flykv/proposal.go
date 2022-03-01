@@ -11,7 +11,6 @@ import (
 	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"math"
-	"time"
 	"unsafe"
 )
 
@@ -169,35 +168,35 @@ func (this *proposalReader) read() (isOver bool, ptype proposalType, data interf
 				if nil != err {
 					return
 				}
-				p := ppkv{}
-				p.unikey, err = this.reader.CheckGetString(int(l))
+				kv := &kv{}
+				kv.uniKey, err = this.reader.CheckGetString(int(l))
 				if nil != err {
 					return
 				}
 
-				p.lastWriteBackVersion, err = this.reader.CheckGetInt64()
+				kv.lastWriteBackVersion, err = this.reader.CheckGetInt64()
 				if nil != err {
 					return
 				}
 
-				data = p
+				data = kv
 			case proposal_snapshot, proposal_update, proposal_kick:
 				var l uint16
 				l, err = this.reader.CheckGetUint16()
 				if nil != err {
 					return
 				}
-				p := ppkv{}
-				p.unikey, err = this.reader.CheckGetString(int(l))
+				kv := &kv{}
+				kv.uniKey, err = this.reader.CheckGetString(int(l))
 				if nil != err {
 					return
 				}
-				p.version, err = this.reader.CheckGetInt64()
+				kv.version, err = this.reader.CheckGetInt64()
 				if nil != err {
 					return
 				}
 
-				p.lastWriteBackVersion, err = this.reader.CheckGetInt64()
+				kv.lastWriteBackVersion, err = this.reader.CheckGetInt64()
 				if nil != err {
 					return
 				}
@@ -225,10 +224,10 @@ func (this *proposalReader) read() (isOver bool, ptype proposalType, data interf
 						}
 					}
 
-					p.fields = fields
+					kv.fields = fields
 				}
 
-				data = p
+				data = kv
 			default:
 				err = errors.New("bad data 3")
 			}
@@ -260,7 +259,6 @@ func (this *proposalBase) OnMergeFinish(b []byte) (ret []byte) {
 
 type kvProposal struct {
 	proposalBase
-	//dbstate     db.DBState
 	kvState     kvState
 	ptype       proposalType
 	fields      map[string]*flyproto.Field
@@ -283,14 +281,12 @@ func (this *kvProposal) reply(err errcode.Error, fields map[string]*flyproto.Fie
 }
 
 func (this *kvProposal) OnError(err error) {
-	GetSugar().Infof("kvProposal OnError:%v", err)
+	GetSugar().Errorf("kvProposal OnError:%v", err)
+	this.reply(errcode.New(errcode.Errcode_error, err.Error()), nil, 0)
 	this.kv.store.mainQueue.AppendHighestPriotiryItem(func() {
+		this.kv.clearCmds(errcode.New(errcode.Errcode_error, err.Error()))
 		if this.kv.state == kv_loading {
-			this.kv.clearCmds(errcode.New(errcode.Errcode_error, err.Error()))
 			this.kv.store.deleteKv(this.kv)
-		} else {
-			this.reply(errcode.New(errcode.Errcode_error, err.Error()), nil, 0)
-			this.kv.processCmd()
 		}
 	})
 }
@@ -301,7 +297,6 @@ func (this *kvProposal) Serilize(b []byte) []byte {
 
 func (this *kvProposal) apply() {
 	if this.ptype == proposal_kick {
-		//GetSugar().Infof("kick %s apply", this.kv.uniKey)
 		this.kv.store.deleteKv(this.kv)
 		this.reply(nil, nil, 0)
 		this.kv.clearCmds(errcode.New(errcode.Errcode_retry, "please try again"))
@@ -370,9 +365,9 @@ func (this *kvLinearizableRead) reply(err errcode.Error, fields map[string]*flyp
 
 func (this *kvLinearizableRead) OnError(err error) {
 	GetSugar().Errorf("kvLinearizableRead OnError:%v", err)
-	this.reply(errcode.New(errcode.Errcode_retry, "server is busy, please try again!"), nil, 0)
+	this.reply(errcode.New(errcode.Errcode_error, err.Error()), nil, 0)
 	this.kv.store.mainQueue.AppendHighestPriotiryItem(func() {
-		this.kv.processCmd()
+		this.kv.clearCmds(errcode.New(errcode.Errcode_error, err.Error()))
 	})
 }
 
@@ -471,7 +466,6 @@ type SlotTransferProposal struct {
 	transferType slotTransferType
 	store        *kvstore
 	reply        func()
-	timer        *time.Timer
 }
 
 func (this *SlotTransferProposal) OnError(err error) {
@@ -486,28 +480,12 @@ func (this *SlotTransferProposal) Serilize(b []byte) []byte {
 
 func (this *SlotTransferProposal) apply() {
 	if this.transferType == slotTransferIn {
-		if nil == this.store.slotsTransferOut[this.slot] {
-			this.store.slots.Set(this.slot)
-			this.reply()
-		} else {
-			//迁出尚未执行完毕，又接收到迁入请求，忽略请求
-			GetSugar().Errorf("slot:%d is transfering out,receive a trans in req", this.slot)
-		}
-	} else if this.transferType == slotTransferOut {
-		if nil == this.store.slotsKvMap[this.slot] {
-			this.store.slots.Clear(this.slot)
-			this.reply()
-		} else {
-			p := this.store.slotsTransferOut[this.slot]
-			if nil == p {
-				p = this
-			} else {
-				p.reply = this.reply
-			}
-			this.store.slotsTransferOut[this.slot] = p
-			this.store.processSlotTransferOut(p)
-		}
+		this.store.slots.Set(this.slot)
+	} else {
+		delete(this.store.slotsTransferOut, this.slot)
+		this.store.slots.Clear(this.slot)
 	}
+	this.reply()
 }
 
 type LastWriteBackVersionProposal struct {

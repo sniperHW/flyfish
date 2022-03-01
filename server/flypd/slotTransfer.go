@@ -60,7 +60,7 @@ func (tst *TransSlotTransfer) notify(pd *pd) {
 		}
 	}
 
-	tst.timer = time.AfterFunc(time.Second, func() {
+	tst.timer = time.AfterFunc(time.Millisecond*50, func() {
 		pd.mainque.AppendHighestPriotiryItem(tst)
 	})
 }

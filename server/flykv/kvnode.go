@@ -172,7 +172,7 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, peers map[uint16]raft.
 			kv:               make([]map[string]*kv, groupSize),
 			slotsKvMap:       map[int]map[string]*kv{},
 			slots:            slots,
-			slotsTransferOut: map[int]*SlotTransferProposal{},
+			slotsTransferOut: map[int]bool{},
 			pendingKv:        map[string]*kv{},
 			kickableList:     list.New(),
 			hardkvlimited:    (this.config.MaxCachePerStore * 3) / 2,
@@ -406,7 +406,7 @@ func (this *kvnode) start() error {
 		if len(config.SoloConfig.Stores) > 0 {
 			storeBitmaps := sslot.MakeStoreBitmap(config.SoloConfig.Stores)
 			for i, v := range config.SoloConfig.Stores {
-				peers, err := raft.SplitPeers(fmt.Sprintf("%d@%d@%s@%s@voter", 1, v, config.SoloConfig.RaftUrl, service))
+				peers, err := raft.SplitPeers(fmt.Sprintf("%d@%d@%s@%s@voter", this.id, v, config.SoloConfig.RaftUrl, service))
 				if err = this.addStore(meta, v, peers, storeBitmaps[i]); nil != err {
 					return err
 				}

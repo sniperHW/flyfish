@@ -104,15 +104,9 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 		if ptype == proposal_slot_transfer {
 			p := data.(*SlotTransferProposal)
 			if p.transferType == slotTransferIn {
-				if nil == s.slotsTransferOut[p.slot] {
-					s.slots.Set(p.slot)
-				}
+				s.slots.Set(p.slot)
 			} else if p.transferType == slotTransferOut {
-				if nil == s.slotsKvMap[p.slot] {
-					s.slots.Clear(p.slot)
-				} else {
-					s.slotsTransferOut[p.slot] = p
-				}
+				s.slots.Clear(p.slot)
 			}
 		} else if ptype == proposal_slots {
 			s.slots = data.(*bitmap.Bitmap)
@@ -121,28 +115,28 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 		} else if ptype == proposal_nop {
 			s.lastLeader = data.(uint64)
 		} else if ptype == proposal_last_writeback_version {
-			p := data.(ppkv)
-			groupID := sslot.StringHash(p.unikey) % len(s.kv)
-			kv, ok := s.kv[groupID][p.unikey]
+			p := data.(*kv)
+			groupID := sslot.StringHash(p.uniKey) % len(s.kv)
+			kv, ok := s.kv[groupID][p.uniKey]
 			if ok {
 				kv.lastWriteBackVersion = p.lastWriteBackVersion
 			}
 		} else {
-			p := data.(ppkv)
-			groupID := sslot.StringHash(p.unikey) % len(s.kv)
-			kv, ok := s.kv[groupID][p.unikey]
+			p := data.(*kv)
+			groupID := sslot.StringHash(p.uniKey) % len(s.kv)
+			kv, ok := s.kv[groupID][p.uniKey]
 			if !ok {
 				if ptype == proposal_kick {
-					return fmt.Errorf("bad data,%s with a bad proposal_type:kick", p.unikey)
+					return fmt.Errorf("bad data,%s with a bad proposal_type:kick", p.uniKey)
 				} else if ptype == proposal_update {
-					return fmt.Errorf("bad data,%s with a bad proposal_type:update", p.unikey)
+					return fmt.Errorf("bad data,%s with a bad proposal_type:update", p.uniKey)
 				} else {
 					var e errcode.Error
-					table, key := splitUniKey(p.unikey)
-					slot := sslot.Unikey2Slot(p.unikey)
-					kv, e = s.newAppliedKv(slot, groupID, p.unikey, key, table)
+					slot := sslot.Unikey2Slot(p.uniKey)
+					table, key := splitUniKey(p.uniKey)
+					kv, e = s.newAppliedKv(slot, groupID, p.uniKey, key, table)
 					if nil != e {
-						return fmt.Errorf("bad data,%s is no table define", p.unikey)
+						return fmt.Errorf("bad data,%s is no table define", p.uniKey)
 					}
 				}
 			}
@@ -165,7 +159,7 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 					kv.state = kv_no_record
 				}
 			}
-			GetSugar().Debugf("%s ok", p.unikey)
+			GetSugar().Debugf("%s ok", p.uniKey)
 		}
 	}
 }
