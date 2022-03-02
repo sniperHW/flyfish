@@ -56,7 +56,9 @@ enum ServerCmdType {
   ListPdMembersResp             = 138;
   ClearDBData                   = 139;
   ClearDBDataResp               = 140;
-
+  DrainKv                       = 141;                   //排空所有缓存的kv
+  DrainKvResp                   = 142;                   
+  
   //kvnode <-> pd
   KvnodeBoot                    = 210;                   //kvnode冷启登录  
   KvnodeBootResp                = 211;
@@ -528,4 +530,10 @@ message clearDBDataResp {
   optional string reason  = 2; 
 }
 
+message drainKv {
+  
+}
 
+message drainKvResp {
+  
+}

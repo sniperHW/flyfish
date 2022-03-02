@@ -210,8 +210,8 @@ func (p *pd) onGetSetStatus(replyer replyer, m *snet.Message) {
 				Slots:   vv.slots.ToJson(),
 				Kvcount: int32(kvcount[vv.id]),
 			})
+			s.Kvcount += int32(kvcount[vv.id])
 		}
-
 		resp.Sets = append(resp.Sets, s)
 	}
 
@@ -233,7 +233,7 @@ func (p *pd) onStoreReportStatus(_ replyer, m *snet.Message) {
 		return
 	}
 
-	GetSugar().Debugf("onStoreReportStatus node:%d store:%d isLeader:%v", msg.NodeID, msg.StoreID, msg.Isleader)
+	GetSugar().Debugf("onStoreReportStatus node:%d store:%d isLeader:%v kvcount:%d", msg.NodeID, msg.StoreID, msg.Isleader, msg.Kvcount)
 
 	store.lastReport = time.Now()
 	store.isLead = msg.Isleader
@@ -404,7 +404,7 @@ func (p *pd) onListPdMembers(replyer replyer, m *snet.Message) {
 }
 
 func (p *pd) onClearDBData(replyer replyer, m *snet.Message) {
-	resp := &sproto.ClearDBDataResp{}
+	resp := &sproto.ClearDBDataResp{Ok: true}
 	meta, err := sql.CreateDbMeta(&p.pState.Meta)
 	if nil == err {
 		dbc, err := sql.SqlOpen(p.config.DBConfig.DBType, p.config.DBConfig.Host, p.config.DBConfig.Port, p.config.DBConfig.DB, p.config.DBConfig.User, p.config.DBConfig.Password)
@@ -432,6 +432,24 @@ func (p *pd) onClearDBData(replyer replyer, m *snet.Message) {
 
 }
 
+func (p *pd) onDrainKv(replyer replyer, m *snet.Message) {
+	for _, set := range p.pState.deployment.sets {
+		for _, node := range set.nodes {
+			for id, store := range node.store {
+				if store.isLeader() {
+					addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.host, node.servicePort))
+					p.udp.SendTo(addr, snet.MakeMessage(0, &sproto.DrainStore{
+						Store: int32(id),
+					}))
+				}
+			}
+		}
+	}
+
+	replyer.reply(snet.MakeMessage(m.Context, &sproto.DrainKvResp{}))
+
+}
+
 func (p *pd) initMsgHandler() {
 	//for console
 	p.registerMsgHandler(&sproto.AddSet{}, "AddSet", p.onAddSet)
@@ -452,6 +470,7 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.RemovePdNode{}, "RemovePdNode", p.onRemovePdNode)
 	p.registerMsgHandler(&sproto.ListPdMembers{}, "ListPdMembers", p.onListPdMembers)
 	p.registerMsgHandler(&sproto.ClearDBData{}, "ClearDBData", p.onClearDBData)
+	p.registerMsgHandler(&sproto.DrainKv{}, "DrainKv", p.onDrainKv)
 
 	//servers
 	p.registerMsgHandler(&sproto.IsTransInReadyResp{}, "", p.onSlotTransInReady)

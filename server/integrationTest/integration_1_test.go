@@ -501,6 +501,19 @@ func TestFlygate(t *testing.T) {
 		}
 	}
 
+	resp, err = consoleClient.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+	if nil == err {
+		kvcount := 0
+		for _, set := range resp.(*sproto.GetSetStatusResp).Sets {
+			kvcount += int(set.Kvcount)
+		}
+
+		assert.Equal(t, true, kvcount > 0)
+
+	} else {
+		fmt.Println(err)
+	}
+
 	node1.Stop()
 
 	node2.Stop()
@@ -526,6 +539,31 @@ func TestFlygate(t *testing.T) {
 		fields["phone"] = "123456789123456789123456789"
 		assert.Nil(t, c.Set("users1", name, fields).Exec().ErrCode)
 	}
+
+	for {
+		//排空所有kv
+		consoleClient.Call(&sproto.DrainKv{}, &sproto.DrainKvResp{})
+
+		resp, err = consoleClient.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+		if nil == err {
+			kvcount := 0
+			for _, set := range resp.(*sproto.GetSetStatusResp).Sets {
+				kvcount += int(set.Kvcount)
+			}
+			if kvcount == 0 {
+				break
+			} else {
+				fmt.Printf("total kvcount:%d\n", kvcount)
+			}
+		} else {
+			fmt.Println(err)
+		}
+		time.Sleep(time.Second)
+	}
+
+	//清空所有db数据
+	resp, err = consoleClient.Call(&sproto.ClearDBData{}, &sproto.ClearDBDataResp{})
+	assert.Equal(t, resp.(*sproto.ClearDBDataResp).Ok, true)
 
 	node1.Stop()
 

@@ -582,9 +582,11 @@ func (g *gate) Stop() {
 			return g.totalPendingMsg == 0
 		})
 
-		for _, v := range g.clients {
-			v.Close(nil, time.Second*5)
-		}
+		g.mainQueue.ForceAppend(1, func() {
+			for _, v := range g.clients {
+				v.Close(nil, time.Second*5)
+			}
+		})
 
 		g.waitCondition(func() bool {
 			return len(g.clients) == 0

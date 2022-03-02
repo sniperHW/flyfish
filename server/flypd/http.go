@@ -63,7 +63,15 @@ func (p *pd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			req, err := p.fetchReq(tmp[1], r)
 			if nil == err {
 				replyer := &httpReplyer{w: w, waitCh: make(chan struct{})}
-				p.onMsg(replyer, req)
+				p.mainque.append(func() {
+					if p.isLeader() {
+						p.onMsg(replyer, req)
+					} else {
+						w.WriteHeader(http.StatusServiceUnavailable)
+						close(replyer.waitCh)
+					}
+				})
+
 				ticker := time.NewTicker(time.Second * 5)
 				select {
 				case <-replyer.waitCh:

@@ -305,6 +305,9 @@ func init() {
 	namespace.Register(&sproto.ClearDBData{}, uint32(sproto.ServerCmdType_ClearDBData))
 	namespace.Register(&sproto.ClearDBDataResp{}, uint32(sproto.ServerCmdType_ClearDBDataResp))
 
+	namespace.Register(&sproto.DrainKv{}, uint32(sproto.ServerCmdType_DrainKv))
+	namespace.Register(&sproto.DrainKvResp{}, uint32(sproto.ServerCmdType_DrainKvResp))
+
 	//flykv <-> pd
 	namespace.Register(&sproto.KvnodeBoot{}, uint32(sproto.ServerCmdType_KvnodeBoot))
 	namespace.Register(&sproto.KvnodeBootResp{}, uint32(sproto.ServerCmdType_KvnodeBootResp))
