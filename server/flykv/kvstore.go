@@ -761,6 +761,12 @@ func (s *kvstore) onNotifyUpdateMeta(from *net.UDPAddr, msg *sproto.NotifyUpdate
 	}
 }
 
+func (s *kvstore) drain() {
+	for v := s.kickableList.Front(); nil != v; v = s.kickableList.Front() {
+		s.kick(v.Value.(*kv))
+	}
+}
+
 func (s *kvstore) onUdpMsg(from *net.UDPAddr, m *snet.Message) {
 	if s.isReady() && atomic.LoadInt32(&s.stoped) == 0 {
 		switch m.Msg.(type) {
@@ -774,6 +780,11 @@ func (s *kvstore) onUdpMsg(from *net.UDPAddr, m *snet.Message) {
 			s.onNotifyUpdateMeta(from, m.Msg.(*sproto.NotifyUpdateMeta), m.Context)
 		case *sproto.IsTransInReady:
 			s.onIsTransInReady(from, m.Msg.(*sproto.IsTransInReady), m.Context)
+		case *sproto.DrainStore:
+			s.drain()
+		case *sproto.TrasnferLeader:
+			GetSugar().Infof("req TransferLeadership to %v", m.Msg.(*sproto.TrasnferLeader).Transferee)
+			s.rn.TransferLeadership(m.Msg.(*sproto.TrasnferLeader).Transferee)
 		}
 	}
 }

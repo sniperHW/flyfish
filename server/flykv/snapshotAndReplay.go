@@ -125,6 +125,7 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 			p := data.(*kv)
 			groupID := sslot.StringHash(p.uniKey) % len(s.kv)
 			kv, ok := s.kv[groupID][p.uniKey]
+
 			if !ok {
 				if ptype == proposal_kick {
 					return fmt.Errorf("bad data,%s with a bad proposal_type:kick", p.uniKey)

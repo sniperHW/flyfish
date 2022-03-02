@@ -54,7 +54,8 @@ enum ServerCmdType {
   RemovePdNodeResp              = 136; 
   ListPdMembers                 = 137;
   ListPdMembersResp             = 138;
-
+  ClearDBData                   = 139;
+  ClearDBDataResp               = 140;
 
   //kvnode <-> pd
   KvnodeBoot                    = 210;                   //kvnode冷启登录  
@@ -70,6 +71,7 @@ enum ServerCmdType {
   NotifyUpdateMeta              = 222;
   StoreReportStatus             = 223;
   TrasnferLeader                = 224;
+  DrainStore                    = 225;
 
 
   //flygate <-> pd
@@ -408,16 +410,18 @@ message getSetStatus {
 }
 
 message storeStatus {
-  optional int32 storeID = 1;
-  optional bytes slots   = 2;
+  optional int32 storeID  = 1;
+  optional bytes slots    = 2;
+  optional int32  kvcount = 3;  
 }
 
 
 message kvnodeStoreStatus {
-  optional int32 storeID  = 1;
-  optional int32 type     = 2;
-  optional int32 value    = 3;
-  optional bool  isLeader = 4;
+  optional int32  storeID  = 1;
+  optional int32  type     = 2;
+  optional int32  value    = 3;
+  optional bool   isLeader = 4;
+  optional uint64 progress = 5;  
 }
 
 message kvnodeStatus {
@@ -426,10 +430,11 @@ message kvnodeStatus {
 }
 
 message setStatus {
-  optional int32 setID = 1;
-  optional bool  markClear = 2;
-  repeated storeStatus stores = 3;
-  repeated kvnodeStatus nodes = 4;
+  optional int32 setID        = 1;
+  optional bool  markClear    = 2;
+  optional int32 kvcount      = 3;
+  repeated storeStatus stores = 4;
+  repeated kvnodeStatus nodes = 5;
 }
 
 message getSetStatusResp {
@@ -509,4 +514,18 @@ message  listPdMembers {
 message  listPdMembersResp {
   repeated string members = 1;
 }
+
+message drainStore {
+  optional int32  store   = 1; 
+}
+
+message clearDBData {
+  repeated string tables  = 1;
+}
+
+message clearDBDataResp {
+  optional bool  ok       = 1;  
+  optional string reason  = 2; 
+}
+
 

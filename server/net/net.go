@@ -302,6 +302,9 @@ func init() {
 	namespace.Register(&sproto.ListPdMembers{}, uint32(sproto.ServerCmdType_ListPdMembers))
 	namespace.Register(&sproto.ListPdMembersResp{}, uint32(sproto.ServerCmdType_ListPdMembersResp))
 
+	namespace.Register(&sproto.ClearDBData{}, uint32(sproto.ServerCmdType_ClearDBData))
+	namespace.Register(&sproto.ClearDBDataResp{}, uint32(sproto.ServerCmdType_ClearDBDataResp))
+
 	//flykv <-> pd
 	namespace.Register(&sproto.KvnodeBoot{}, uint32(sproto.ServerCmdType_KvnodeBoot))
 	namespace.Register(&sproto.KvnodeBootResp{}, uint32(sproto.ServerCmdType_KvnodeBootResp))
@@ -323,6 +326,8 @@ func init() {
 	namespace.Register(&sproto.StoreReportStatus{}, uint32(sproto.ServerCmdType_StoreReportStatus))
 
 	namespace.Register(&sproto.TrasnferLeader{}, uint32(sproto.ServerCmdType_TrasnferLeader))
+
+	namespace.Register(&sproto.DrainStore{}, uint32(sproto.ServerCmdType_DrainStore))
 
 	//flygate <->pd
 	namespace.Register(&sproto.QueryRouteInfo{}, uint32(sproto.ServerCmdType_QueryRouteInfo))

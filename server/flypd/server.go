@@ -1,9 +1,9 @@
 package flypd
 
 import (
-	//"errors"
 	"fmt"
 	"github.com/gogo/protobuf/proto"
+	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
@@ -178,6 +178,7 @@ func (p *pd) onGetSetStatus(replyer replyer, m *snet.Message) {
 			MarkClear: v.markClear,
 		}
 
+		kvcount := map[int]int{}
 		for _, vv := range v.nodes {
 			n := &sproto.KvnodeStatus{
 				NodeID: int32(vv.id),
@@ -189,7 +190,15 @@ func (p *pd) onGetSetStatus(replyer replyer, m *snet.Message) {
 					Type:     int32(vvv.Type),
 					Value:    int32(vvv.Value),
 					IsLeader: vvv.isLeader(),
+					Progress: vvv.progress,
 				})
+
+				c, ok := kvcount[k]
+				if !ok {
+					kvcount[k] = vvv.kvcount
+				} else if vvv.kvcount > c {
+					kvcount[k] = c
+				}
 			}
 
 			s.Nodes = append(s.Nodes, n)
@@ -199,6 +208,7 @@ func (p *pd) onGetSetStatus(replyer replyer, m *snet.Message) {
 			s.Stores = append(s.Stores, &sproto.StoreStatus{
 				StoreID: int32(vv.id),
 				Slots:   vv.slots.ToJson(),
+				Kvcount: int32(kvcount[vv.id]),
 			})
 		}
 
@@ -393,6 +403,35 @@ func (p *pd) onListPdMembers(replyer replyer, m *snet.Message) {
 	replyer.reply(snet.MakeMessage(m.Context, resp))
 }
 
+func (p *pd) onClearDBData(replyer replyer, m *snet.Message) {
+	resp := &sproto.ClearDBDataResp{}
+	meta, err := sql.CreateDbMeta(&p.pState.Meta)
+	if nil == err {
+		dbc, err := sql.SqlOpen(p.config.DBConfig.DBType, p.config.DBConfig.Host, p.config.DBConfig.Port, p.config.DBConfig.DB, p.config.DBConfig.User, p.config.DBConfig.Password)
+		if nil == err {
+			defer dbc.Close()
+			msg := m.Msg.(*sproto.ClearDBData)
+			if len(msg.Tables) == 0 {
+				err = sql.ClearAllTableData(dbc, meta)
+			} else {
+				for _, v := range msg.Tables {
+					if err = sql.ClearTableData(dbc, meta, v); nil != err {
+						break
+					}
+				}
+			}
+		}
+	}
+
+	if nil != err {
+		resp.Ok = false
+		resp.Reason = err.Error()
+	}
+
+	replyer.reply(snet.MakeMessage(m.Context, resp))
+
+}
+
 func (p *pd) initMsgHandler() {
 	//for console
 	p.registerMsgHandler(&sproto.AddSet{}, "AddSet", p.onAddSet)
@@ -412,6 +451,7 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.AddPdNode{}, "AddPdNode", p.onAddPdNode)
 	p.registerMsgHandler(&sproto.RemovePdNode{}, "RemovePdNode", p.onRemovePdNode)
 	p.registerMsgHandler(&sproto.ListPdMembers{}, "ListPdMembers", p.onListPdMembers)
+	p.registerMsgHandler(&sproto.ClearDBData{}, "ClearDBData", p.onClearDBData)
 
 	//servers
 	p.registerMsgHandler(&sproto.IsTransInReadyResp{}, "", p.onSlotTransInReady)

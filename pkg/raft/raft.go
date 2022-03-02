@@ -657,7 +657,16 @@ func (rc *RaftInstance) replayWAL(haveWAL bool) (*wal.WAL, error) {
 		rc.raftStorage.SetHardState(st)
 
 		if snap != nil {
+
+			//rc.transport.RemoveAllPeers()
+
 			rc.recoverMemberShipFromSnapshot(snap)
+
+			//for _, v := range rc.mb.Members() {
+			//	if uint64(v.ID) != rc.id {
+			//		rc.transport.AddPeer(types.ID(v.ID), v.PeerURLs)
+			//	}
+			//}
 
 			rc.commitC.AppendHighestPriotiryItem(*snap)
 		}
@@ -1004,9 +1013,19 @@ func NewInstance(processID uint16, cluster int, join bool, mutilRaft *MutilRaft,
 
 	rc.transport.Start()
 
-	for _, v := range peers {
-		if v.ID != rc.id {
-			rc.transport.AddPeer(types.ID(v.ID), []string{v.URL})
+	mb := rc.mb.Members()
+
+	if len(mb) == 0 {
+		for _, v := range peers {
+			if v.ID != rc.id {
+				rc.transport.AddPeer(types.ID(v.ID), []string{v.URL})
+			}
+		}
+	} else {
+		for _, v := range mb {
+			if uint64(v.ID) != rc.id {
+				rc.transport.AddPeer(types.ID(v.ID), v.PeerURLs)
+			}
 		}
 	}
 

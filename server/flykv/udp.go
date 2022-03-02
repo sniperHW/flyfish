@@ -12,6 +12,19 @@ type udpMsg struct {
 	m    *snet.Message
 }
 
+func (this *kvnode) isVaildPdAddress(addr *net.UDPAddr) bool {
+	if this.config.Mode == "solo" {
+		return true
+	} else {
+		for _, v := range this.pdAddr {
+			if addr.IP.Equal(v.IP) {
+				return true
+			}
+		}
+		return false
+	}
+}
+
 func (this *kvnode) processUdpMsg(from *net.UDPAddr, m *snet.Message) {
 	GetSugar().Debugf("processUdpMsg %v", m.Msg)
 	switch m.Msg.(type) {
@@ -29,38 +42,39 @@ func (this *kvnode) processUdpMsg(from *net.UDPAddr, m *snet.Message) {
 		}
 		GetSugar().Debugf("store:%d on QueryLeader leader:%d", m.Msg.(*sproto.QueryLeader).Store, leader)
 		this.udpConn.SendTo(from, snet.MakeMessage(m.Context, &sproto.QueryLeaderResp{Leader: leader}))
+	default:
+		if this.isVaildPdAddress(from) {
+			var store int
+			switch m.Msg.(type) {
+			case *sproto.NotifySlotTransIn:
+				store = int(m.Msg.(*sproto.NotifySlotTransIn).Store)
+			case *sproto.NotifySlotTransOut:
+				store = int(m.Msg.(*sproto.NotifySlotTransOut).Store)
+			case *sproto.NotifyUpdateMeta:
+				store = int(m.Msg.(*sproto.NotifyUpdateMeta).Store)
+			case *sproto.NotifyNodeStoreOp:
+				store = int(m.Msg.(*sproto.NotifyNodeStoreOp).Store)
+			case *sproto.IsTransInReady:
+				store = int(m.Msg.(*sproto.IsTransInReady).Store)
+			case *sproto.DrainStore:
+				store = int(m.Msg.(*sproto.DrainStore).Store)
+			case *sproto.TrasnferLeader:
+				store = int(m.Msg.(*sproto.TrasnferLeader).StoreID)
+			default:
+				return
+			}
 
-	case *sproto.TrasnferLeader:
-		this.muS.RLock()
-		store, ok := this.stores[int(m.Msg.(*sproto.TrasnferLeader).StoreID)]
-		this.muS.RUnlock()
-		if ok {
-			GetSugar().Infof("req TransferLeadership to %v", m.Msg.(*sproto.TrasnferLeader).Transferee)
-			store.rn.TransferLeadership(m.Msg.(*sproto.TrasnferLeader).Transferee)
+			this.muS.RLock()
+			if s, ok := this.stores[int(store)]; ok {
+				s.mainQueue.AppendHighestPriotiryItem(&udpMsg{
+					from: from,
+					m:    m,
+				})
+			}
+			this.muS.RUnlock()
+		} else {
+			GetSugar().Errorf("invaild udp message from:%s", from.String())
 		}
-	case *sproto.NotifySlotTransIn, *sproto.NotifySlotTransOut, *sproto.NotifyUpdateMeta, *sproto.NotifyNodeStoreOp, *sproto.IsTransInReady:
-		var store int
-		switch m.Msg.(type) {
-		case *sproto.NotifySlotTransIn:
-			store = int(m.Msg.(*sproto.NotifySlotTransIn).Store)
-		case *sproto.NotifySlotTransOut:
-			store = int(m.Msg.(*sproto.NotifySlotTransOut).Store)
-		case *sproto.NotifyUpdateMeta:
-			store = int(m.Msg.(*sproto.NotifyUpdateMeta).Store)
-		case *sproto.NotifyNodeStoreOp:
-			store = int(m.Msg.(*sproto.NotifyNodeStoreOp).Store)
-		case *sproto.IsTransInReady:
-			store = int(m.Msg.(*sproto.IsTransInReady).Store)
-		}
-
-		this.muS.RLock()
-		if s, ok := this.stores[int(store)]; ok {
-			s.mainQueue.AppendHighestPriotiryItem(&udpMsg{
-				from: from,
-				m:    m,
-			})
-		}
-		this.muS.RUnlock()
 	}
 }
 

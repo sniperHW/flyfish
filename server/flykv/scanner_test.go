@@ -26,7 +26,7 @@ func TestScaner(t *testing.T) {
 
 	client.InitLogger(GetLogger())
 
-	node := start1Node(1, newSqlDBBackEnd(), false, config)
+	node := start1Node(1, newSqlDBBackEnd(), false, config, true)
 
 	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
 
@@ -73,7 +73,7 @@ func TestScaner(t *testing.T) {
 
 	os.RemoveAll("./testRaftLog")
 
-	node = start1Node(1, newSqlDBBackEnd(), false, config)
+	node = start1Node(1, newSqlDBBackEnd(), false, config, true)
 
 	sc, _ = client.NewScanner(client.ClientConf{SoloService: "localhost:10018", Stores: []int{1}}, "users1", []string{
 		"name",

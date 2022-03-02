@@ -490,3 +490,25 @@ func GetTableScheme(dbc *sqlx.DB, sqlType string, table_real_name string) (tabde
 	}
 	return
 }
+
+func ClearTableData(dbc *sqlx.DB, meta db.DBMeta, name string) error {
+	if tmeta := meta.GetTableMeta(name); nil == tmeta {
+		return fmt.Errorf("table %s not found", name)
+	} else {
+		return clearTableData(dbc, tmeta.(*TableMeta).real_tableName)
+	}
+}
+
+func ClearAllTableData(dbc *sqlx.DB, meta db.DBMeta) error {
+	for _, v := range meta.(*DBMeta).tables {
+		if err := clearTableData(dbc, v.real_tableName); nil != err {
+			return err
+		}
+	}
+	return nil
+}
+
+func clearTableData(dbc *sqlx.DB, table_real_name string) error {
+	_, err := dbc.Exec(fmt.Sprintf("delete from %s;", table_real_name))
+	return err
+}

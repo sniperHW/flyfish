@@ -191,11 +191,8 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, peers map[uint16]raft.
 		store.kv[i] = map[string]*kv{}
 	}
 
-	//store.lru.init()
 	this.stores[storeID] = store
 	store.serve()
-
-	//GetSugar().Infof("AddStore %v slots:%v", rn.ID().String(), slots.GetOpenBits())
 
 	return nil
 }
@@ -384,7 +381,19 @@ func (this *kvnode) start() error {
 			return err
 		}
 
-		service := fmt.Sprintf("%s:%d", config.SoloConfig.ServiceHost, config.SoloConfig.ServicePort)
+		peers, err := raft.SplitPeers(config.SoloConfig.RaftUrl)
+
+		if nil != err {
+			return err
+		}
+
+		self, ok := peers[this.id]
+
+		if !ok {
+			return errors.New("rafturl not contain self")
+		}
+
+		service := self.ClientURL
 
 		err = this.initUdp(service)
 
@@ -398,7 +407,7 @@ func (this *kvnode) start() error {
 			return err
 		}
 
-		go this.mutilRaft.Serve([]string{config.SoloConfig.RaftUrl})
+		go this.mutilRaft.Serve([]string{self.URL})
 
 		this.startListener()
 
@@ -406,7 +415,10 @@ func (this *kvnode) start() error {
 		if len(config.SoloConfig.Stores) > 0 {
 			storeBitmaps := sslot.MakeStoreBitmap(config.SoloConfig.Stores)
 			for i, v := range config.SoloConfig.Stores {
-				peers, err := raft.SplitPeers(fmt.Sprintf("%d@%d@%s@%s@voter", this.id, v, config.SoloConfig.RaftUrl, service))
+				for k, vv := range peers {
+					vv.ID = uint64(vv.ProcessID)<<32 + uint64(v)
+					peers[k] = vv
+				}
 				if err = this.addStore(meta, v, peers, storeBitmaps[i]); nil != err {
 					return err
 				}
