@@ -17,6 +17,7 @@ import (
 	"net"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -237,6 +238,7 @@ type gate struct {
 	closeCh         chan struct{}
 	listener        *cs.Listener
 	totalPendingMsg int64
+	muC             sync.Mutex
 	clients         map[*flynet.Socket]*flynet.Socket
 	routeInfo       routeInfo
 	queryTimer      *time.Timer
@@ -323,28 +325,28 @@ func (g *gate) refreshMsgPerSecond() {
 
 func (g *gate) startListener() {
 	g.listener.Serve(func(session *flynet.Socket) {
-		g.mainQueue.ForceAppend(1, func() {
-			g.clients[session] = session
-			session.SetEncoder(&encoder{})
-			session.SetInBoundProcessor(NewCliReqInboundProcessor())
-			session.SetRecvTimeout(flyproto.PingTime * 10)
+		g.muC.Lock()
+		g.clients[session] = session
+		g.muC.Unlock()
+		session.SetEncoder(&encoder{})
+		session.SetInBoundProcessor(NewCliReqInboundProcessor())
+		session.SetRecvTimeout(flyproto.PingTime * 10)
 
-			session.SetCloseCallBack(func(session *flynet.Socket, reason error) {
-				g.mainQueue.ForceAppend(1, func() {
-					delete(g.clients, session)
-				})
-			})
+		session.SetCloseCallBack(func(session *flynet.Socket, reason error) {
+			g.muC.Lock()
+			delete(g.clients, session)
+			g.muC.Unlock()
+		})
 
-			session.BeginRecv(func(session *flynet.Socket, v interface{}) {
-				if atomic.LoadInt32(&g.closed) == 1 {
-					//服务关闭不再接受新新的请求
-					return
-				}
-				atomic.AddInt32(&g.msgRecv, 1)
-				msg := v.(*forwordMsg)
-				msg.cli = session
-				g.mainQueue.ForceAppend(0, msg)
-			})
+		session.BeginRecv(func(session *flynet.Socket, v interface{}) {
+			if atomic.LoadInt32(&g.closed) == 1 {
+				//服务关闭不再接受新新的请求
+				return
+			}
+			atomic.AddInt32(&g.msgRecv, 1)
+			msg := v.(*forwordMsg)
+			msg.cli = session
+			g.mainQueue.ForceAppend(0, msg)
 		})
 	}, g.onScanner)
 	GetSugar().Infof("flygate start on %s", g.serviceAddr)
@@ -513,32 +515,6 @@ func (g *gate) start() error {
 		}
 	}()
 
-	/*
-		heartbeatConn, _ := flynet.NewUdp(fmt.Sprintf(":0"), snet.Pack, snet.Unpack)
-
-		var heartbeat func()
-
-		cc := 0
-
-		heartbeat = func() {
-			msg := &sproto.FlyGateHeartBeat{
-				GateService:  g.serviceAddr,
-				MsgPerSecond: int32(g.msgPerSecond.GetAverage()),
-			}
-
-			for _, v := range g.pdAddr {
-				heartbeatConn.SendTo(v, snet.MakeMessage(0, msg))
-			}
-
-			cc++
-			GetSugar().Infof("heartbeat %d", cc)
-
-			time.AfterFunc(time.Second, heartbeat)
-		}
-
-		heartbeat()
-	*/
-
 	go g.mainLoop()
 
 	g.startListener()
@@ -582,13 +558,15 @@ func (g *gate) Stop() {
 			return g.totalPendingMsg == 0
 		})
 
-		g.mainQueue.ForceAppend(1, func() {
-			for _, v := range g.clients {
-				v.Close(nil, time.Second*5)
-			}
-		})
+		g.muC.Lock()
+		for _, v := range g.clients {
+			go v.Close(nil, time.Second*5)
+		}
+		g.muC.Unlock()
 
 		g.waitCondition(func() bool {
+			g.muC.Lock()
+			defer g.muC.Unlock()
 			return len(g.clients) == 0
 		})
 
