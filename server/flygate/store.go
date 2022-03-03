@@ -70,12 +70,28 @@ func (s *store) onErrNotLeader(msg *forwordMsg) bool {
 	}
 }
 
+func (s *store) clearTimeoutWaittingSend() {
+	now := time.Now()
+	for cur := s.waittingSend.Front(); nil != cur; {
+		if now.After(cur.Value.(*forwordMsg).deadline) {
+			next := cur.Next()
+			s.waittingSend.Remove(cur).(*forwordMsg).dropReply()
+			cur = next
+		} else {
+			cur = cur.Next()
+		}
+	}
+}
+
 func (s *store) queryLeader() {
+	if !s.queryingLeader {
+		s._queryLeader()
+	}
+}
+
+func (s *store) _queryLeader() {
 	if s.set.removed {
-		//当前set已经被移除
-		return
-	} else if s.queryingLeader {
-		return
+		s.queryingLeader = false
 	} else {
 		s.queryingLeader = true
 		nodes := []string{}
@@ -116,16 +132,18 @@ func (s *store) queryLeader() {
 							leaderNode.sendForwordMsg(msg)
 						}
 					} else {
+						s.clearTimeoutWaittingSend()
 						time.AfterFunc(time.Millisecond*100, func() {
-							s.mainQueue.ForceAppend(1, s.queryLeader)
+							s.mainQueue.ForceAppend(1, s._queryLeader)
 						})
 					}
 				})
 
 			}()
 		} else {
+			s.clearTimeoutWaittingSend()
 			time.AfterFunc(time.Second, func() {
-				s.mainQueue.ForceAppend(1, s.queryLeader)
+				s.mainQueue.ForceAppend(1, s._queryLeader)
 			})
 		}
 	}
