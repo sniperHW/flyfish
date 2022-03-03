@@ -161,7 +161,7 @@ func (p *ProposalSlotTransInOk) replay(pd *pd) {
 
 func (p *pd) beginSlotTransfer(slot int, setOut int, storeOut int, setIn int, storeIn int) {
 
-	GetSugar().Infof("beginSlotTransfer slot:%d setOut:%d setIn:%d storeOut:%d storeIn:%d", slot, setOut, setIn, storeOut, storeIn)
+	GetSugar().Debugf("beginSlotTransfer slot:%d setOut:%d setIn:%d storeOut:%d storeIn:%d", slot, setOut, setIn, storeOut, storeIn)
 
 	p.issueProposal(&ProposalBeginSlotTransfer{
 		Trans: &TransSlotTransfer{

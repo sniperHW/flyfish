@@ -11,7 +11,6 @@ const (
 	Errcode_retry
 	Errcode_error
 	Errcode_not_leader
-	Errcode_gate_busy
 	Errcode_slot_transfering
 	Errcode_route_info_stale
 	Errcode_end
@@ -28,7 +27,6 @@ var errDesc []string = []string{
 	"please retry later",
 	"other error",
 	"not leader",
-	"gate busy",
 	"slot is transfering",
 	"route info stale",
 }

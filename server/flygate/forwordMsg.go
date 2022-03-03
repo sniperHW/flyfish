@@ -40,11 +40,14 @@ func (r *forwordMsg) onTimeout() {
 			r.listElement = nil
 		}
 		r.dropReply()
+	} else {
+		GetSugar().Infof("forwordMsg onTimeout but r.deadlineTimer == nil oriSeqno:%d", r.oriSeqno)
 	}
 }
 
 func (r *forwordMsg) reply(b []byte) {
 	if atomic.CompareAndSwapInt32(&r.replyed, 0, 1) {
+		//GetSugar().Infof("reply oriSeqno:%d", r.oriSeqno)
 		atomic.AddInt64(r.totalPendingMsg, -1)
 		r.cli.Send(b)
 	}
@@ -52,6 +55,7 @@ func (r *forwordMsg) reply(b []byte) {
 
 func (r *forwordMsg) replyErr(err errcode.Error) {
 	if atomic.CompareAndSwapInt32(&r.replyed, 0, 1) {
+		//GetSugar().Infof("replyErr oriSeqno:%d", r.oriSeqno)
 		atomic.AddInt64(r.totalPendingMsg, -1)
 		replyCliError(r.cli, r.oriSeqno, r.cmd, err)
 	}
@@ -59,6 +63,7 @@ func (r *forwordMsg) replyErr(err errcode.Error) {
 
 func (r *forwordMsg) dropReply() {
 	if atomic.CompareAndSwapInt32(&r.replyed, 0, 1) {
+		//GetSugar().Infof("replyErr dropReply:%d", r.oriSeqno)
 		atomic.AddInt64(r.totalPendingMsg, -1)
 	}
 }

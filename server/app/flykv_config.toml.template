@@ -4,8 +4,6 @@ SnapshotCurrentCount    = 0                       #并行执行快照序列化�
 
 MainQueueMaxSize        = 10000                #store消息队列大小
 
-LruCheckInterval        = 100                  #每隔100ms执行一次lru剔除操作
-
 MaxCachePerStore        = 500000               #每组最大key数量，超过数量将会触发key剔除
 
 SqlLoaderCount          = 5                    #加载go程的数量

@@ -26,8 +26,9 @@ type kvnode struct {
 }
 
 func (n *kvnode) sendForwordMsg(msg *forwordMsg) {
-	now := time.Now()
-	if msg.deadline.After(now) {
+	timeout := msg.deadline.Sub(time.Now())
+
+	if timeout > time.Millisecond {
 		//改写seqno
 		binary.BigEndian.PutUint64(msg.bytes[4:], uint64(msg.seqno))
 		//填充storeID
@@ -35,29 +36,24 @@ func (n *kvnode) sendForwordMsg(msg *forwordMsg) {
 
 		if nil != n.session {
 			if len(n.waitResponse) >= n.config.MaxNodePendingMsg {
-				msg.replyErr(errcode.New(errcode.Errcode_gate_busy, ""))
+				msg.replyErr(errcode.New(errcode.Errcode_retry, "gate busy,please retry later"))
 			} else {
 				GetSugar().Debugf("send msg to kvnode:%d store:%d seqno:%d nodeSeqno:%d", n.id, msg.store.id, msg.oriSeqno, msg.seqno)
-				timeout := msg.deadline.Sub(now)
-				if timeout > time.Millisecond {
-					binary.BigEndian.PutUint32(msg.bytes[18:], uint32(timeout/time.Millisecond))
-					if nil == n.session.Send(msg.bytes) {
-						n.waitResponse[msg.seqno] = msg
-						msg.waitResponse = &n.waitResponse
-						msg.deadlineTimer = time.AfterFunc(timeout, func() {
-							n.gate.mainQueue.ForceAppend(1, msg.onTimeout)
-						})
-					} else {
-						msg.replyErr(errcode.New(errcode.Errcode_retry, ""))
-						return
-					}
+				binary.BigEndian.PutUint32(msg.bytes[18:], uint32(timeout/time.Millisecond))
+				if nil == n.session.Send(msg.bytes) {
+					n.waitResponse[msg.seqno] = msg
+					msg.waitResponse = &n.waitResponse
+					msg.deadlineTimer = time.AfterFunc(timeout, func() {
+						n.gate.mainQueue.ForceAppend(1, msg.onTimeout)
+					})
 				} else {
-					msg.dropReply()
+					msg.replyErr(errcode.New(errcode.Errcode_retry, "gate busy,please retry later"))
+					return
 				}
 			}
 		} else {
 			if n.waittingSend.Len() >= n.config.MaxNodePendingMsg {
-				msg.replyErr(errcode.New(errcode.Errcode_gate_busy, ""))
+				msg.replyErr(errcode.New(errcode.Errcode_retry, "gate busy,please retry later"))
 				return
 			} else {
 				msg.l = n.waittingSend
@@ -150,16 +146,15 @@ func (n *kvnode) onNodeResp(b []byte) {
 	if ok {
 		delete(n.waitResponse, seqno)
 		msg.waitResponse = nil
+		msg.deadlineTimer.Stop()
+		msg.deadlineTimer = nil
 		switch errCode {
 		case errcode.Errcode_not_leader:
 			msg.store.onErrNotLeader(msg)
 		case errcode.Errcode_route_info_stale, errcode.Errcode_slot_transfering:
-			n.mainQueue.ForceAppend(1, func() {
-				n.gate.onForwordError(errCode, msg)
-			})
+			GetSugar().Infof("onForwordError %d oriSeqno:%d slot:%d", errCode, msg.oriSeqno, msg.slot)
+			msg.replyErr(errcode.New(errcode.Errcode_retry, "please retry later"))
 		default:
-			msg.deadlineTimer.Stop()
-			msg.deadlineTimer = nil
 			//恢复客户端的seqno
 			binary.BigEndian.PutUint64(b[4:], uint64(msg.oriSeqno))
 			msg.reply(b)

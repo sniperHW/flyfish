@@ -54,7 +54,7 @@ type routeInfo struct {
 
 func (r *routeInfo) onQueryRouteInfoResp(gate *gate, resp *sproto.QueryRouteInfoResp) (oldSlotToStore map[int]*store) {
 
-	//GetSugar().Infof("onQueryRouteInfoResp %v", resp)
+	GetSugar().Debugf("onQueryRouteInfoResp version:%d", resp.Version)
 
 	change := r.version != resp.Version
 	r.version = resp.Version
@@ -201,37 +201,6 @@ func (r *routeInfo) onQueryRouteInfoResp(gate *gate, resp *sproto.QueryRouteInfo
 	return
 }
 
-type routeErrorAndSlotTransferingReqMgr struct {
-	routeErrorReqList  *list.List //路由信息stale导致错误转发的请求，待路由信息更新后重发
-	slotTransferingReq map[int]*list.List
-}
-
-func (m *routeErrorAndSlotTransferingReqMgr) empty() bool {
-	if m.routeErrorReqList.Len() > 0 {
-		return false
-	} else if len(m.slotTransferingReq) > 0 {
-		return false
-	} else {
-		return true
-	}
-}
-
-func (m *routeErrorAndSlotTransferingReqMgr) addRouteErrorReq(msg *forwordMsg) {
-	msg.l = m.routeErrorReqList
-	msg.listElement = m.routeErrorReqList.PushBack(msg)
-}
-
-func (m *routeErrorAndSlotTransferingReqMgr) addSlotTransferingReq(msg *forwordMsg) {
-	l := m.slotTransferingReq[msg.slot]
-	if nil == l {
-		l = list.New()
-		m.slotTransferingReq[msg.slot] = l
-	}
-
-	msg.l = l
-	msg.listElement = l.PushBack(msg)
-}
-
 type gate struct {
 	config          *Config
 	closed          int32
@@ -246,7 +215,6 @@ type gate struct {
 	serviceAddr     string
 	seqCounter      int64
 	pdAddr          []*net.UDPAddr
-	reSendReqMgr    routeErrorAndSlotTransferingReqMgr
 	msgPerSecond    *movingAverage.MovingAverage //每秒客户端转发请求量的移动平均值
 	msgRecv         int32
 }
@@ -285,10 +253,6 @@ func NewFlyGate(config *Config, service string) (*gate, error) {
 			sets:        map[int]*set{},
 			slotToStore: map[int]*store{},
 			mainQueue:   mainQueue,
-		},
-		reSendReqMgr: routeErrorAndSlotTransferingReqMgr{
-			routeErrorReqList:  list.New(),
-			slotTransferingReq: map[int]*list.List{},
 		},
 		serviceAddr:  service,
 		msgPerSecond: movingAverage.New(5),
@@ -364,8 +328,7 @@ func (g *gate) mainLoop() {
 			msg := v.(*forwordMsg)
 			s, ok := g.routeInfo.slotToStore[msg.slot]
 			if !ok {
-				GetSugar().Infof("store not found slot:%d seqno:%d", msg.slot, msg.oriSeqno)
-				replyCliError(msg.cli, msg.oriSeqno, msg.cmd, errcode.New(errcode.Errcode_error, "can't find store"))
+				replyCliError(msg.cli, msg.oriSeqno, msg.cmd, errcode.New(errcode.Errcode_retry, "can't find store,please retry later"))
 			} else {
 				g.seqCounter++
 				msg.seqno = g.seqCounter
@@ -380,64 +343,10 @@ func (g *gate) mainLoop() {
 }
 
 func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
-	oldSlotToStore := g.routeInfo.onQueryRouteInfoResp(g, resp)
-
-	for v := g.reSendReqMgr.routeErrorReqList.Front(); nil != v; v = g.reSendReqMgr.routeErrorReqList.Front() {
-		req := g.reSendReqMgr.routeErrorReqList.Remove(v).(*forwordMsg)
-		req.l = nil
-		req.listElement = nil
-		s, ok := g.routeInfo.slotToStore[req.slot]
-		if !ok {
-			req.deadlineTimer.Stop()
-			req.deadlineTimer = nil
-			replyCliError(req.cli, req.oriSeqno, req.cmd, errcode.New(errcode.Errcode_error, "can't find store"))
-		} else {
-			req.store = s
-			s.onCliMsg(req)
-		}
-	}
-
-	if nil != oldSlotToStore && len(oldSlotToStore) > 0 {
-		for k, v := range g.reSendReqMgr.slotTransferingReq {
-			oldStore := oldSlotToStore[k]
-			newStore := g.routeInfo.slotToStore[k]
-			if oldStore.id != newStore.id {
-				//store发生了变更，说明slotTransfering已经完成，重发请求
-				for vv := v.Front(); nil != vv; vv = v.Front() {
-					req := v.Remove(vv).(*forwordMsg)
-					req.l = nil
-					req.listElement = nil
-					s, ok := g.routeInfo.slotToStore[req.slot]
-					if !ok {
-						req.deadlineTimer.Stop()
-						req.deadlineTimer = nil
-						replyCliError(req.cli, req.oriSeqno, req.cmd, errcode.New(errcode.Errcode_error, "can't find store"))
-					} else {
-						req.store = s
-						s.onCliMsg(req)
-					}
-				}
-				delete(g.reSendReqMgr.slotTransferingReq, k)
-			}
-		}
-	}
+	g.routeInfo.onQueryRouteInfoResp(g, resp)
 }
 
-func (g *gate) onForwordError(errCode int16, msg *forwordMsg) {
-	if !time.Now().After(msg.deadline) {
-		empty := g.reSendReqMgr.empty()
-		if errCode == errcode.Errcode_route_info_stale {
-			g.reSendReqMgr.addRouteErrorReq(msg)
-		} else {
-			g.reSendReqMgr.addSlotTransferingReq(msg)
-		}
-		if empty && g.queryTimer.Stop() {
-			g.startQueryTimer(time.Nanosecond)
-		}
-	} else {
-		msg.dropReply()
-	}
-}
+const queryRouteInfoDuration = time.Millisecond * 200
 
 func (g *gate) queryRouteInfo() {
 	req := &sproto.QueryRouteInfo{
@@ -450,21 +359,16 @@ func (g *gate) queryRouteInfo() {
 
 	go func() {
 		resp := doQueryRouteInfo(g.pdAddr, req)
+
 		g.mainQueue.ForceAppend(1, func() {
-			nextTimeout := time.Millisecond * 100
-			if nil != resp {
-				g.onQueryRouteInfoResp(resp)
-				if g.reSendReqMgr.empty() {
-					nextTimeout = time.Second * 10
-				}
-			}
-			g.startQueryTimer(nextTimeout)
+			g.onQueryRouteInfoResp(resp)
+			g.startQueryTimer()
 		})
 	}()
 }
 
-func (g *gate) startQueryTimer(timeout time.Duration) {
-	g.queryTimer = time.AfterFunc(timeout, func() {
+func (g *gate) startQueryTimer() {
+	g.queryTimer = time.AfterFunc(queryRouteInfoDuration, func() {
 		g.queryRouteInfo()
 	})
 }
@@ -519,7 +423,7 @@ func (g *gate) start() error {
 
 	g.startListener()
 
-	g.startQueryTimer(time.Second * 10)
+	g.startQueryTimer()
 
 	return nil
 }

@@ -26,11 +26,11 @@ type store struct {
 
 func (s *store) onCliMsg(msg *forwordMsg) {
 	if atomic.AddInt64(msg.totalPendingMsg, 1) > int64(s.config.MaxPendingMsg) {
-		msg.replyErr(errcode.New(errcode.Errcode_gate_busy, ""))
+		msg.replyErr(errcode.New(errcode.Errcode_retry, "gate busy,please retry later"))
 	} else {
 		if nil == s.leader {
 			if s.waittingSend.Len() >= s.config.MaxStorePendingMsg {
-				msg.replyErr(errcode.New(errcode.Errcode_gate_busy, ""))
+				msg.replyErr(errcode.New(errcode.Errcode_retry, "gate busy,please retry later"))
 			} else {
 				msg.l = s.waittingSend
 				if len(msg.bytes) < 8 {

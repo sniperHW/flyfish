@@ -506,6 +506,8 @@ func (this *serverConn) onKickResp(c *cmdContext, errCode errcode.Error, resp *p
 
 }
 
+const resendDelay time.Duration = time.Millisecond * 100
+
 func (this *serverConn) onMessage(msg *cs.RespMessage) {
 	cmd := protocol.CmdType(msg.Cmd)
 	if cmd != protocol.CmdType_Ping {
@@ -526,9 +528,9 @@ func (this *serverConn) onMessage(msg *cs.RespMessage) {
 			if timerStopOK && errcode.GetCode(msg.Err) == errcode.Errcode_retry {
 				//重试错误且尚未超时
 				remain := ctx.deadline.Sub(time.Now())
-				if remain > 100*time.Millisecond {
+				if remain > resendDelay+(5*time.Millisecond) {
 					//50ms后重发
-					time.AfterFunc(time.Millisecond*50, func() {
+					time.AfterFunc(resendDelay, func() {
 						GetSugar().Infof("resend %v", ctx.unikey)
 						this.c.exec(ctx)
 					})

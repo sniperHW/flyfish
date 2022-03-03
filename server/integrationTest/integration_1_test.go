@@ -23,6 +23,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -47,8 +48,6 @@ SnapshotCatchUpEntriesN   = 100
 
 MainQueueMaxSize        = 10000
 
-LruCheckInterval        = 1000              #每隔100ms执行一次lru剔除操作
-
 MaxCachePerStore        = 100               #每组最大key数量，超过数量将会触发key剔除
 
 SqlLoadPipeLineSize     = 200                  #sql加载管道线大小
@@ -67,6 +66,7 @@ RaftLogPrefix           = "flykv"
 
 LinearizableRead        = true
 
+#WriteBackMode           = "WriteThrough"
 
 [ClusterConfig]
 PD                      = "localhost:8110"
@@ -978,6 +978,240 @@ func TestAddSet(t *testing.T) {
 	node2.Stop()
 	node3.Stop()
 
+}
+
+func TestAddSet2(t *testing.T) {
+	sslot.SlotCount = 128
+	flypd.MinReplicaPerSet = 1
+	flypd.StorePerSet = 1
+	os.RemoveAll("./log")
+	os.RemoveAll("./testRaftLog")
+
+	var err error
+
+	dbConf := &dbconf{}
+	if _, err = toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
+		panic(err)
+	}
+
+	kvConf, err := flykv.LoadConfigStr(fmt.Sprintf(flyKvConfigStr, dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.Usr, dbConf.Pwd, dbConf.Db))
+
+	if nil != err {
+		panic(err)
+	}
+
+	pd := newPD(t, "./deployment2.json")
+
+	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
+
+	for {
+		resp := snet.UdpCall([]*net.UDPAddr{addr},
+			snet.MakeMessage(0, &sproto.AddSet{
+				&sproto.DeploymentSet{
+					SetID: 2,
+					Nodes: []*sproto.DeploymentKvnode{
+						&sproto.DeploymentKvnode{
+							NodeID:      2,
+							Host:        "localhost",
+							ServicePort: 9211,
+							RaftPort:    9221,
+						},
+					},
+				},
+			}),
+			time.Second,
+			func(respCh chan interface{}, r interface{}) {
+				if m, ok := r.(*snet.Message); ok {
+					if resp, ok := m.Msg.(*sproto.AddSetResp); ok {
+						select {
+						case respCh <- resp:
+						default:
+						}
+					}
+				}
+			})
+
+		if resp != nil && resp.(*sproto.AddSetResp).Reason == "set already exists" {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
+	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	//启动flygate
+	gateConf, _ := flygate.LoadConfigStr(flyGateConfigStr)
+
+	gate1, err := flygate.NewFlyGate(gateConf, "localhost:10110")
+
+	if nil != err {
+		panic(err)
+	}
+
+	for {
+
+		addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
+
+		gate := client.QueryGate([]*net.UDPAddr{addr}, time.Second)
+		if len(gate) > 0 {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
+	fmt.Println("run client")
+
+	c, _ := client.OpenClient(client.ClientConf{PD: []string{"localhost:8110"}})
+
+	stopCh := make(chan struct{})
+
+	var storeBalanced int32
+
+	go func() {
+		defer close(stopCh)
+		for atomic.LoadInt32(&storeBalanced) == 0 {
+			for i := 0; i < 100 && atomic.LoadInt32(&storeBalanced) == 0; i++ {
+				fields := map[string]interface{}{}
+				fields["age"] = 12
+				name := fmt.Sprintf("sniperHW:%d", i)
+				fields["name"] = name
+				fields["phone"] = "123456789123456789123456789"
+				e := c.Set("users1", name, fields).Exec().ErrCode
+				if nil != e {
+					fmt.Println(e)
+				}
+			}
+		}
+		fmt.Println("client break here")
+	}()
+
+	node2, err := flykv.NewKvNode(2, false, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	//等待slot平衡
+	for {
+		resp := snet.UdpCall([]*net.UDPAddr{addr},
+			snet.MakeMessage(0, &sproto.GetSetStatus{}),
+			time.Second,
+			func(respCh chan interface{}, r interface{}) {
+				if m, ok := r.(*snet.Message); ok {
+					if resp, ok := m.Msg.(*sproto.GetSetStatusResp); ok {
+						select {
+						case respCh <- resp:
+						default:
+						}
+					}
+				}
+			})
+
+		if resp != nil {
+			slotPerStore := sslot.SlotCount / 2
+
+			ok := true
+			for _, v := range resp.(*sproto.GetSetStatusResp).Sets {
+				for _, vv := range v.Stores {
+					slots, _ := bitmap.CreateFromJson(vv.Slots)
+					if len(slots.GetOpenBits()) > slotPerStore+1 {
+						ok = false
+					}
+				}
+			}
+
+			if ok {
+				fmt.Println("balance ok")
+				atomic.StoreInt32(&storeBalanced, 1)
+				break
+			}
+		}
+		time.Sleep(time.Second)
+	}
+
+	<-stopCh
+
+	stopCh = make(chan struct{})
+
+	atomic.StoreInt32(&storeBalanced, 0)
+
+	go func() {
+		defer close(stopCh)
+		for atomic.LoadInt32(&storeBalanced) == 0 {
+			for i := 0; i < 100 && atomic.LoadInt32(&storeBalanced) == 0; i++ {
+				fields := map[string]interface{}{}
+				fields["age"] = 12
+				name := fmt.Sprintf("sniperHW:%d", i)
+				fields["name"] = name
+				fields["phone"] = "123456789123456789123456789"
+				e := c.Set("users1", name, fields).Exec().ErrCode
+				if nil != e {
+					fmt.Println(e)
+				}
+			}
+		}
+		fmt.Println("client break here")
+	}()
+
+	for {
+		resp := snet.UdpCall([]*net.UDPAddr{addr},
+			snet.MakeMessage(0, &sproto.SetMarkClear{
+				SetID: 2,
+			}),
+			time.Second,
+			func(respCh chan interface{}, r interface{}) {
+				if m, ok := r.(*snet.Message); ok {
+					if resp, ok := m.Msg.(*sproto.SetMarkClearResp); ok {
+						select {
+						case respCh <- resp:
+						default:
+						}
+					}
+				}
+			})
+
+		if resp != nil && resp.(*sproto.SetMarkClearResp).Reason == "already mark clear" {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
+	fmt.Println("-------------rem set---------------------------")
+
+	for {
+		resp := snet.UdpCall([]*net.UDPAddr{addr},
+			snet.MakeMessage(0, &sproto.RemSet{
+				SetID: 2,
+			}),
+			time.Second,
+			func(respCh chan interface{}, r interface{}) {
+				if m, ok := r.(*snet.Message); ok {
+					if resp, ok := m.Msg.(*sproto.RemSetResp); ok {
+						select {
+						case respCh <- resp:
+						default:
+						}
+					}
+				}
+			})
+
+		if resp != nil && resp.(*sproto.RemSetResp).Reason == "set not exists" {
+			atomic.StoreInt32(&storeBalanced, 1)
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
+	<-stopCh
+
+	gate1.Stop()
+	pd.Stop()
+	node1.Stop()
+	node2.Stop()
 }
 
 func TestStoreBalance(t *testing.T) {

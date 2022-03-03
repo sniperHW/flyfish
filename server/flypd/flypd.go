@@ -367,7 +367,7 @@ func (p *pd) slotBalance() {
 		storeAverageSlotCount = (slot.SlotCount / ((lSets - lMCSets) * StorePerSet)) + 1
 	}
 
-	GetSugar().Infof("setAverageSlotCount:%d storeAverageSlotCount:%d", setAverageSlotCount, storeAverageSlotCount)
+	GetSugar().Debugf("setAverageSlotCount:%d storeAverageSlotCount:%d", setAverageSlotCount, storeAverageSlotCount)
 
 	if nil == outStore {
 		for _, v := range p.pState.deployment.sets {
@@ -495,6 +495,8 @@ func (p *pd) loadInitDeployment() {
 					D: deploymentJson,
 				})
 			}
+		} else {
+			GetSugar().Errorf("loadInitDeployment err:%v", err)
 		}
 	}
 }
