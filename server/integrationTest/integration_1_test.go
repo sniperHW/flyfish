@@ -531,6 +531,14 @@ func TestFlygate(t *testing.T) {
 		panic(err)
 	}
 
+	//删除一个kvnode
+	resp, err = consoleClient.Call(&sproto.RemNode{
+		SetID:  1,
+		NodeID: 3,
+	}, &sproto.RemNodeResp{})
+
+	fmt.Println(resp, err)
+
 	for i := 0; i < 100; i++ {
 		fields := map[string]interface{}{}
 		fields["age"] = 12

@@ -52,11 +52,13 @@ type routeInfo struct {
 	mainQueue   *queue.PriorityQueue
 }
 
-func (r *routeInfo) onQueryRouteInfoResp(gate *gate, resp *sproto.QueryRouteInfoResp) (oldSlotToStore map[int]*store) {
+func (r *routeInfo) onQueryRouteInfoResp(gate *gate, resp *sproto.QueryRouteInfoResp) {
 
 	GetSugar().Debugf("onQueryRouteInfoResp version:%d", resp.Version)
+	if r.version == resp.Version {
+		return
+	}
 
-	change := r.version != resp.Version
 	r.version = resp.Version
 
 	for _, v := range resp.Sets {
@@ -185,20 +187,15 @@ func (r *routeInfo) onQueryRouteInfoResp(gate *gate, resp *sproto.QueryRouteInfo
 		}
 	}
 
-	if change {
-		oldSlotToStore = r.slotToStore
-		r.slotToStore = map[int]*store{}
-		for _, v := range r.sets {
-			for _, vv := range v.stores {
-				slots := vv.slots.GetOpenBits()
-				for _, vvv := range slots {
-					r.slotToStore[vvv] = vv
-				}
+	r.slotToStore = map[int]*store{}
+	for _, v := range r.sets {
+		for _, vv := range v.stores {
+			slots := vv.slots.GetOpenBits()
+			for _, vvv := range slots {
+				r.slotToStore[vvv] = vv
 			}
 		}
 	}
-
-	return
 }
 
 type gate struct {
