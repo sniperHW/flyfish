@@ -47,24 +47,26 @@ func (s *store) onCliMsg(msg *forwordMsg) {
 	}
 }
 
-func (s *store) onErrNotLeader(msg *forwordMsg) {
+func (s *store) onErrNotLeader(msg *forwordMsg) bool {
 	if s.set.removed {
-		return
-	}
+		return false
+	} else {
 
-	if nil != s.leader && s.leaderVersion != msg.leaderVersion {
-		//向新的leader发送
-		msg.leaderVersion = s.leaderVersion
-		s.leader.sendForwordMsg(msg)
-	} else if nil != s.leader && s.leaderVersion == msg.leaderVersion {
-		s.leader = nil
-		s.queryLeader()
-	}
+		if nil != s.leader && s.leaderVersion != msg.leaderVersion {
+			//向新的leader发送
+			msg.leaderVersion = s.leaderVersion
+			s.leader.sendForwordMsg(msg)
+		} else if nil != s.leader && s.leaderVersion == msg.leaderVersion {
+			s.leader = nil
+			s.queryLeader()
+		}
 
-	if nil == s.leader {
-		//还没有leader,重新投入到待发送队列
-		msg.l = s.waittingSend
-		msg.listElement = s.waittingSend.PushBack(msg)
+		if nil == s.leader {
+			//还没有leader,重新投入到待发送队列
+			msg.l = s.waittingSend
+			msg.listElement = s.waittingSend.PushBack(msg)
+		}
+		return true
 	}
 }
 

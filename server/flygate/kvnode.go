@@ -150,7 +150,9 @@ func (n *kvnode) onNodeResp(b []byte) {
 		msg.deadlineTimer = nil
 		switch errCode {
 		case errcode.Errcode_not_leader:
-			msg.store.onErrNotLeader(msg)
+			if !msg.store.onErrNotLeader(msg) {
+				msg.replyErr(errcode.New(errcode.Errcode_retry, "please retry later"))
+			}
 		case errcode.Errcode_route_info_stale, errcode.Errcode_slot_transfering:
 			GetSugar().Infof("onForwordError %d oriSeqno:%d slot:%d", errCode, msg.oriSeqno, msg.slot)
 			msg.replyErr(errcode.New(errcode.Errcode_retry, "please retry later"))
