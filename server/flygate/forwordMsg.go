@@ -10,60 +10,93 @@ import (
 	"time"
 )
 
+type pending struct {
+	msgMap      *map[int64]*forwordMsg
+	listElement *list.Element
+	l           *list.List
+}
+
 type forwordMsg struct {
+	pending
 	seqno           int64
 	leaderVersion   int64
 	slot            int
 	oriSeqno        int64
 	cmd             uint16
-	deadline        time.Time
 	bytes           []byte
+	deadline        time.Time
 	deadlineTimer   *time.Timer
 	cli             *flynet.Socket
-	replyed         int32
-	listElement     *list.Element
-	l               *list.List
+	replied         bool
 	totalPendingMsg *int64
-	waitResponse    *map[int64]*forwordMsg
 	store           *store
 }
 
-func (r *forwordMsg) onTimeout() {
-	if nil != r.deadlineTimer {
-		if nil != r.waitResponse {
-			delete(*r.waitResponse, r.seqno)
-		}
+func (r *forwordMsg) remove() {
+	r.removeList()
+	r.removeMap()
+}
 
-		if nil != r.l && nil != r.listElement {
-			r.l.Remove(r.listElement)
-			r.l = nil
-			r.listElement = nil
-		}
-		r.dropReply()
+func (r *forwordMsg) removeList() {
+	if nil != r.l && nil != r.listElement {
+		r.l.Remove(r.listElement)
+		r.l = nil
+		r.listElement = nil
+	}
+}
+
+func (r *forwordMsg) removeMap() {
+	if nil != r.msgMap {
+		delete(*r.msgMap, r.seqno)
+		r.msgMap = nil
+	}
+}
+
+func (r *forwordMsg) add(msgMap *map[int64]*forwordMsg, l *list.List) {
+	if nil != msgMap {
+		r.removeMap()
+		(*msgMap)[r.seqno] = r
+	}
+
+	if nil != l {
+		r.removeList()
+		r.l = l
+		r.listElement = l.PushBack(r)
+	}
+
+}
+
+func (r *forwordMsg) setReplied() bool {
+	if !r.replied {
+		return false
 	} else {
-		GetSugar().Infof("forwordMsg onTimeout but r.deadlineTimer == nil oriSeqno:%d", r.oriSeqno)
+		r.replied = true
+		return true
 	}
 }
 
 func (r *forwordMsg) reply(b []byte) {
-	if atomic.CompareAndSwapInt32(&r.replyed, 0, 1) {
-		//GetSugar().Infof("reply oriSeqno:%d", r.oriSeqno)
+	if r.setReplied() {
 		atomic.AddInt64(r.totalPendingMsg, -1)
+		r.deadlineTimer.Stop()
+		r.remove()
 		r.cli.Send(b)
 	}
 }
 
 func (r *forwordMsg) replyErr(err errcode.Error) {
-	if atomic.CompareAndSwapInt32(&r.replyed, 0, 1) {
-		//GetSugar().Infof("replyErr oriSeqno:%d", r.oriSeqno)
+	if r.setReplied() {
 		atomic.AddInt64(r.totalPendingMsg, -1)
+		r.deadlineTimer.Stop()
+		r.remove()
 		replyCliError(r.cli, r.oriSeqno, r.cmd, err)
 	}
 }
 
 func (r *forwordMsg) dropReply() {
-	if atomic.CompareAndSwapInt32(&r.replyed, 0, 1) {
-		//GetSugar().Infof("replyErr dropReply:%d", r.oriSeqno)
+	if r.setReplied() {
+		r.deadlineTimer.Stop()
+		r.remove()
 		atomic.AddInt64(r.totalPendingMsg, -1)
 	}
 }

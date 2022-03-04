@@ -22,54 +22,62 @@ type store struct {
 	set            *set
 	config         *Config
 	mainQueue      *queue.PriorityQueue
+	gate           *gate
 }
 
-func (s *store) onCliMsg(msg *forwordMsg) {
+func (s *store) onCliMsg(msg *forwordMsg) bool {
 	if atomic.AddInt64(msg.totalPendingMsg, 1) > int64(s.config.MaxPendingMsg) {
-		msg.replyErr(errcode.New(errcode.Errcode_retry, "gate busy,please retry later"))
+		return false
 	} else {
 		if nil == s.leader {
 			if s.waittingSend.Len() >= s.config.MaxStorePendingMsg {
-				msg.replyErr(errcode.New(errcode.Errcode_retry, "gate busy,please retry later"))
+				return false
 			} else {
-				msg.l = s.waittingSend
-				if len(msg.bytes) < 8 {
-					GetSugar().Infof("PushBack1 %v", *msg)
-					panic(fmt.Sprintf("len(msg.bytes) %d", len(msg.bytes)))
+				msg.add(nil, this.waittingSend)
+				if len(s.waittingSend) == 1 {
+					s.queryLeader()
 				}
-				msg.listElement = s.waittingSend.PushBack(msg)
-				s.queryLeader()
+				return true
 			}
 		} else {
 			msg.leaderVersion = s.leaderVersion
-			s.leader.sendForwordMsg(msg)
+			return s.leader.sendForwordMsg(msg)
 		}
 	}
 }
 
-func (s *store) onErrNotLeader(msg *forwordMsg) bool {
-	if s.set.removed {
-		return false
-	} else {
+func (s *store) paybackWaittingSendToGate() {
+	for v := s.waittingSend.Front(); nil != v; v = s.waittingSend.Front() {
+		msg := v.Value.(*forwordMsg)
+		msg.removeList()
+		msg.add(nil, s.gate.pendingMsg)
+	}
+}
 
+func (s *store) onErrNotLeader(msg *forwordMsg) {
+	if s.set.removed {
+		msg.add(nil, s.gate.pendingMsg)
+	} else {
 		if nil != s.leader && s.leaderVersion != msg.leaderVersion {
-			//向新的leader发送
+			//leader已经变更，向新的leader发送
 			msg.leaderVersion = s.leaderVersion
 			s.leader.sendForwordMsg(msg)
 		} else if nil != s.leader && s.leaderVersion == msg.leaderVersion {
 			s.leader = nil
-			s.queryLeader()
 		}
 
 		if nil == s.leader {
 			//还没有leader,重新投入到待发送队列
-			msg.l = s.waittingSend
-			msg.listElement = s.waittingSend.PushBack(msg)
+			msg.add(nil, s.waittingSend)
+			if len(s.waittingSend) == 1 {
+				s.queryLeader()
+			}
 		}
-		return true
+		return
 	}
 }
 
+/*
 func (s *store) clearTimeoutWaittingSend() {
 	now := time.Now()
 	for cur := s.waittingSend.Front(); nil != cur; {
@@ -88,12 +96,13 @@ func (s *store) queryLeader() {
 		s._queryLeader()
 	}
 }
+*/
 
-func (s *store) _queryLeader() {
+func (s *store) queryLeader() {
 	if s.set.removed {
-		s.queryingLeader = false
+		s.paybackWaittingSendToGate()
 	} else {
-		s.queryingLeader = true
+
 		nodes := []string{}
 		for _, v := range s.set.nodes {
 			if !v.removed {
@@ -119,31 +128,29 @@ func (s *store) _queryLeader() {
 				}
 
 				s.mainQueue.ForceAppend(1, func() {
-					s.queryingLeader = false
-					if leaderNode, ok := s.set.nodes[leader]; ok {
+					if s.set.removed {
+						s.paybackWaittingSendToGate()
+					} else if leaderNode, ok := s.set.nodes[leader]; ok {
 						s.leaderVersion++
 						s.leader = leaderNode
 						GetSugar().Infof("set:%d store:%d got leader nodeID:%d", s.set.setID, s.id, leader)
 						for v := s.waittingSend.Front(); nil != v; v = s.waittingSend.Front() {
-							msg := s.waittingSend.Remove(v).(*forwordMsg)
+							msg := v.(Value).(*forwordMsg)
 							msg.leaderVersion = s.leaderVersion
-							msg.l = nil
-							msg.listElement = nil
+							msg.removeList()
 							leaderNode.sendForwordMsg(msg)
 						}
 					} else {
-						s.clearTimeoutWaittingSend()
 						time.AfterFunc(time.Millisecond*100, func() {
-							s.mainQueue.ForceAppend(1, s._queryLeader)
+							s.mainQueue.ForceAppend(1, s.queryLeader)
 						})
 					}
 				})
 
 			}()
 		} else {
-			s.clearTimeoutWaittingSend()
 			time.AfterFunc(time.Second, func() {
-				s.mainQueue.ForceAppend(1, s._queryLeader)
+				s.mainQueue.ForceAppend(1, s.queryLeader)
 			})
 		}
 	}

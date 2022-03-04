@@ -13,7 +13,6 @@ import (
 
 type kvnode struct {
 	id           int
-	dialing      bool
 	service      string
 	session      *flynet.Socket
 	waittingSend *list.List //dailing时暂存请求
@@ -25,51 +24,43 @@ type kvnode struct {
 	gate         *gate
 }
 
-func (n *kvnode) sendForwordMsg(msg *forwordMsg) {
-	timeout := msg.deadline.Sub(time.Now())
+func (n *kvnode) sendForwordMsg(msg *forwordMsg) bool {
+	//改写seqno
+	binary.BigEndian.PutUint64(msg.bytes[4:], uint64(msg.seqno))
+	//填充storeID
+	binary.BigEndian.PutUint32(msg.bytes[4+8:], uint32(msg.store.id))
 
-	if timeout > time.Millisecond {
-		//改写seqno
-		binary.BigEndian.PutUint64(msg.bytes[4:], uint64(msg.seqno))
-		//填充storeID
-		binary.BigEndian.PutUint32(msg.bytes[4+8:], uint32(msg.store.id))
-
-		if nil != n.session {
-			if len(n.waitResponse) >= n.config.MaxNodePendingMsg {
-				msg.replyErr(errcode.New(errcode.Errcode_retry, "gate busy,please retry later"))
-			} else {
-				GetSugar().Debugf("send msg to kvnode:%d store:%d seqno:%d nodeSeqno:%d", n.id, msg.store.id, msg.oriSeqno, msg.seqno)
-				binary.BigEndian.PutUint32(msg.bytes[18:], uint32(timeout/time.Millisecond))
-				if nil == n.session.Send(msg.bytes) {
-					n.waitResponse[msg.seqno] = msg
-					msg.waitResponse = &n.waitResponse
-					msg.deadlineTimer = time.AfterFunc(timeout, func() {
-						n.gate.mainQueue.ForceAppend(1, msg.onTimeout)
-					})
-				} else {
-					msg.replyErr(errcode.New(errcode.Errcode_retry, "gate busy,please retry later"))
-					return
-				}
-			}
+	if nil != n.session {
+		if len(n.waitResponse) >= n.config.MaxNodePendingMsg {
+			return false
 		} else {
-			if n.waittingSend.Len() >= n.config.MaxNodePendingMsg {
-				msg.replyErr(errcode.New(errcode.Errcode_retry, "gate busy,please retry later"))
-				return
-			} else {
-				msg.l = n.waittingSend
-				msg.listElement = n.waittingSend.PushBack(msg)
-				if !n.dialing {
-					n.dial()
-				}
-			}
+			GetSugar().Debugf("send msg to kvnode:%d store:%d seqno:%d nodeSeqno:%d", n.id, msg.store.id, msg.oriSeqno, msg.seqno)
+			binary.BigEndian.PutUint32(msg.bytes[18:], uint32(timeout/time.Millisecond))
+			msg.add(&n.waitResponse, nil)
+			session.Send(msg.bytes)
+			return true
 		}
 	} else {
-		msg.dropReply()
+		if n.waittingSend.Len() >= n.config.MaxNodePendingMsg {
+			return false
+		} else {
+			msg.add(nil, n.waittingSend)
+			if len(n.waittingSend) == 1 {
+				n.dial()
+			}
+		}
+	}
+}
+
+func (n *kvnode) paybackWaittingSendToGate() {
+	for v := n.waittingSend.Front(); nil != v; v = n.waittingSend.Front() {
+		msg := v.Value.(*forwordMsg)
+		msg.removeList()
+		msg.add(nil, n.gate.pendingMsg)
 	}
 }
 
 func (n *kvnode) dial() {
-	n.dialing = true
 	go func() {
 		c := cs.NewConnector("tcp", n.service, flynet.OutputBufLimit{
 			OutPutLimitSoft:        1024 * 1024 * 10,
@@ -79,9 +70,9 @@ func (n *kvnode) dial() {
 		session, err := c.Dial(time.Second * 5)
 		n.mainQueue.ForceAppend(1, func() {
 			if n.set.removed || n.removed {
+				n.paybackWaittingSendToGate()
 				return
 			}
-			n.dialing = false
 			n.session = session
 			if nil == err {
 				session.SetEncoder(&encoder{})
@@ -90,49 +81,28 @@ func (n *kvnode) dial() {
 				session.SetCloseCallBack(func(sess *flynet.Socket, reason error) {
 					n.mainQueue.ForceAppend(1, func() {
 						n.session = nil
-						for _, v := range n.waitResponse {
-							v.deadlineTimer.Stop()
-							v.deadlineTimer = nil
-							v.dropReply()
+						if n.set.removed || n.removed {
+							n.paybackWaittingSendToGate()
+						} else if len(n.waittingSend) > 0 {
+							n.dial()
 						}
-						n.waitResponse = map[int64]*forwordMsg{}
-
 					})
 				}).BeginRecv(func(s *flynet.Socket, msg interface{}) {
 					n.mainQueue.ForceAppend(0, func() {
 						n.onNodeResp(msg.([]byte))
 					})
 				})
-
 				for v := n.waittingSend.Front(); nil != v; v = n.waittingSend.Front() {
-					msg := n.waittingSend.Remove(v).(*forwordMsg)
-					msg.l = nil
-					msg.listElement = nil
-					timeout := msg.deadline.Sub(time.Now())
-					if timeout > time.Millisecond {
-						GetSugar().Debugf("send msg to kvnode:%d store:%d seqno:%d nodeSeqno:%d", n.id, msg.store.id, msg.oriSeqno, msg.seqno)
-						binary.BigEndian.PutUint32(msg.bytes[18:], uint32(timeout/time.Millisecond))
-						if nil == session.Send(msg.bytes) {
-							n.waitResponse[msg.seqno] = msg
-							msg.waitResponse = &n.waitResponse
-							msg.deadlineTimer = time.AfterFunc(timeout, func() {
-								n.gate.mainQueue.ForceAppend(1, msg.onTimeout)
-							})
-						} else {
-							msg.replyErr(errcode.New(errcode.Errcode_retry, ""))
-						}
-					} else {
-						msg.dropReply()
-					}
+					msg := v.Value.(*forwordMsg)
+					msg.removeList()
+					GetSugar().Debugf("send msg to kvnode:%d store:%d seqno:%d nodeSeqno:%d", n.id, msg.store.id, msg.oriSeqno, msg.seqno)
+					binary.BigEndian.PutUint32(msg.bytes[18:], uint32(timeout/time.Millisecond))
+					msg.add(&n.waitResponse, nil)
+					session.Send(msg.bytes)
 				}
 			} else {
-				waittingSend := n.waittingSend
-				n.waittingSend = list.New()
-				for v := waittingSend.Front(); nil != v; v = waittingSend.Front() {
-					msg := waittingSend.Remove(v).(*forwordMsg)
-					msg.l = nil
-					msg.listElement = nil
-					msg.replyErr(errcode.New(errcode.Errcode_retry, ""))
+				if len(n.waittingSend) > 0 {
+					n.dial()
 				}
 			}
 		})
@@ -144,15 +114,10 @@ func (n *kvnode) onNodeResp(b []byte) {
 	errCode := int16(binary.BigEndian.Uint16(b[cs.SizeLen+8+2:]))
 	msg, ok := n.waitResponse[seqno]
 	if ok {
-		delete(n.waitResponse, seqno)
-		msg.waitResponse = nil
-		msg.deadlineTimer.Stop()
-		msg.deadlineTimer = nil
+		msg.removeMap()
 		switch errCode {
 		case errcode.Errcode_not_leader:
-			if !msg.store.onErrNotLeader(msg) {
-				msg.replyErr(errcode.New(errcode.Errcode_retry, "please retry later"))
-			}
+			msg.store.onErrNotLeader(msg)
 		case errcode.Errcode_route_info_stale, errcode.Errcode_slot_transfering:
 			GetSugar().Infof("onForwordError %d oriSeqno:%d slot:%d", errCode, msg.oriSeqno, msg.slot)
 			msg.replyErr(errcode.New(errcode.Errcode_retry, "please retry later"))

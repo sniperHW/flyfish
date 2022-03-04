@@ -14,6 +14,7 @@ import (
 	"github.com/sniperHW/flyfish/proto/cs"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
+	"github.com/sniperHW/flyfish/server/slot"
 	"net"
 	"sort"
 	"strings"
@@ -166,6 +167,7 @@ func (r *routeInfo) onQueryRouteInfoResp(gate *gate, resp *sproto.QueryRouteInfo
 					set:          s,
 					config:       r.config,
 					mainQueue:    r.mainQueue,
+					gate:         gate,
 				}
 				st.slots, _ = bitmap.CreateFromJson(v.Slots[k])
 				s.stores[st.id] = st
@@ -204,6 +206,7 @@ type gate struct {
 	closeCh         chan struct{}
 	listener        *cs.Listener
 	totalPendingMsg int64
+	pendingMsg      *list.List //尚未找到store的msg
 	muC             sync.Mutex
 	clients         map[*flynet.Socket]*flynet.Socket
 	routeInfo       routeInfo
@@ -250,6 +253,7 @@ func NewFlyGate(config *Config, service string) (*gate, error) {
 			sets:        map[int]*set{},
 			slotToStore: map[int]*store{},
 			mainQueue:   mainQueue,
+			pendingMsg:  list.New(),
 		},
 		serviceAddr:  service,
 		msgPerSecond: movingAverage.New(5),
@@ -323,15 +327,27 @@ func (g *gate) mainLoop() {
 		switch v.(type) {
 		case *forwordMsg:
 			msg := v.(*forwordMsg)
-			s, ok := g.routeInfo.slotToStore[msg.slot]
-			if !ok {
-				replyCliError(msg.cli, msg.oriSeqno, msg.cmd, errcode.New(errcode.Errcode_retry, "can't find store,please retry later"))
-			} else {
-				g.seqCounter++
-				msg.seqno = g.seqCounter
-				msg.totalPendingMsg = &g.totalPendingMsg
-				msg.store = s
-				s.onCliMsg(msg)
+			if msg.slot >= 0 && msg.slot < slot.SlotCount {
+				msg.deadlineTimer = time.AfterFunc(msg.deadline.Sub(time.Now()), func() {
+					g.mainQueue.ForceAppend(0, msg.dropReply)
+				})
+
+				if atomic.AddInt64(msg.totalPendingMsg, 1) > int64(s.config.MaxPendingMsg) {
+					msg.replyErr(errcode.New(errcode.Errcode_retry, "gate busy,please retry later"))
+				} else {
+					s, ok := g.routeInfo.slotToStore[msg.slot]
+					if !ok {
+						msg.add(g.pendingMsg, nil)
+					} else {
+						g.seqCounter++
+						msg.seqno = g.seqCounter
+						msg.totalPendingMsg = &g.totalPendingMsg
+						msg.store = s
+						if !s.onCliMsg(msg) {
+							msg.replyErr(errcode.New(errcode.Errcode_retry, "gate busy,please retry later"))
+						}
+					}
+				}
 			}
 		case func():
 			v.(func())()
