@@ -77,39 +77,35 @@ type serverConn struct {
 	removed         bool
 }
 
-func (this *serverConn) onDisconnected(sess *flynet.Socket) {
+func (this *serverConn) onDisconnected() {
 	timeouts := []*cmdContext{}
 	resends := []*cmdContext{}
 	now := time.Now()
 	this.c.mu.Lock()
-	if this.session != sess {
-		this.c.mu.Unlock()
-	} else {
-		this.session = nil
-		for _, v := range this.waitResp {
-			delete(this.waitResp, seqno)
-			v.waitResp = nil
-			if now.After(v.deadline) {
-				timeouts = append(timeouts, v)
+	this.session = nil
+	for _, v := range this.waitResp {
+		delete(this.waitResp, seqno)
+		v.waitResp = nil
+		if now.After(v.deadline) {
+			timeouts = append(timeouts, v)
+		} else {
+			if this.removed {
+				resends = append(resends, v)
 			} else {
-				if this.removed {
-					resends = append(resends, v)
-				} else {
-					//重新返回，带连接再次建立之后发送
-					v.l = this.pendingSend
-					v.listElement = this.pendingSend.PushBack(v)
-				}
+				//重新返回，带连接再次建立之后发送
+				v.l = this.pendingSend
+				v.listElement = this.pendingSend.PushBack(v)
 			}
 		}
-		this.c.mu.Unlock()
+	}
+	this.c.mu.Unlock()
 
-		for _, v := range timeouts {
-			v.onTimeout()
-		}
+	for _, v := range timeouts {
+		v.onTimeout()
+	}
 
-		for _, v := range resends {
-			this.c.exec(v)
-		}
+	for _, v := range resends {
+		this.c.exec(v)
 	}
 }
 
@@ -122,7 +118,7 @@ func (this *serverConn) onConnected(session *flynet.Socket) {
 	this.session.SetEncoder(&cs.ReqEncoder{})
 	this.session.SetCloseCallBack(func(sess *flynet.Socket, reason error) {
 		GetSugar().Infof("socket close %v", reason)
-		go this.onDisconnected(sess)
+		go this.onDisconnected()
 	}).BeginRecv(func(s *flynet.Socket, msg interface{}) {
 		this.onMessage(msg.(*cs.RespMessage))
 	})
