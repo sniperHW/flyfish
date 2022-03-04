@@ -7,7 +7,7 @@ import (
 	"github.com/sniperHW/flyfish/errcode"
 	protocol "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
-	"sync"
+	//"sync"
 	"sync/atomic"
 	"time"
 )
@@ -50,57 +50,22 @@ func UnmarshalJsonField(field *Field, obj interface{}) error {
 	}
 }
 
-var cmdContextPool = sync.Pool{
-	New: func() interface{} {
-		return &cmdContext{}
-	},
-}
-
-func getCmdContext() *cmdContext {
-	return cmdContextPool.Get().(*cmdContext)
-}
-
-func releaseCmdContext(c *cmdContext) {
-	cmdContextPool.Put(c)
-}
-
 type cmdContext struct {
-	mu            *sync.Mutex
 	unikey        string
 	deadline      time.Time
 	deadlineTimer *time.Timer
 	cb            callback
 	req           *cs.ReqMessage
-	serverConn    *serverConn
+	cli           *Client
 	listElement   *list.Element
 	l             *list.List
 	waitResp      *map[int64]*cmdContext
-	doCallBack    func(unikey string, cb callback, a interface{})
+	doCallBack    func(*cmdContext, interface{})
+	serverConn    *serverConn
 }
 
 func (this *cmdContext) onTimeout() {
-	this.mu.Lock()
-	if nil == this.deadlineTimer {
-		this.mu.Unlock()
-		return
-	}
-
-	if nil != this.serverConn && this.waitResp == this.serverConn.waitResp {
-		delete(*this.serverConn.waitResp, this.req.Seqno)
-	}
-
-	if nil != this.listElement {
-		this.l.Remove(this.listElement)
-	}
-
-	if nil != this.serverConn && this.serverConn.removed && 0 == len(*this.serverConn.waitResp) {
-		this.serverConn.session.Close(nil, 0)
-	}
-
-	this.mu.Unlock()
-
-	this.doCallBack(this.unikey, this.cb, errcode.New(errcode.Errcode_timeout, "timeout"))
-	releaseCmdContext(this)
+	this.doCallBack(this, errcode.New(errcode.Errcode_timeout, "timeout"))
 }
 
 type StatusCmd struct {
@@ -109,17 +74,16 @@ type StatusCmd struct {
 }
 
 func (this *StatusCmd) asyncExec(syncFlag bool, cb func(*StatusResult)) {
-	context := getCmdContext()
-	context.cb = callback{
-		tt:   cb_status,
-		cb:   cb,
-		sync: syncFlag,
-	}
-	context.unikey = this.req.UniKey
-	context.req = this.req
-	context.mu = &this.client.mu
-	context.deadline = time.Time{}
-	this.client.exec(context)
+	this.client.exec(&cmdContext{
+		cb: callback{
+			tt:   cb_status,
+			cb:   cb,
+			sync: syncFlag,
+		},
+		unikey: this.req.UniKey,
+		req:    this.req,
+		cli:    this.client,
+	})
 }
 
 func (this *StatusCmd) AsyncExec(cb func(*StatusResult)) {
@@ -140,17 +104,16 @@ type SliceCmd struct {
 }
 
 func (this *SliceCmd) asyncExec(syncFlag bool, cb func(*SliceResult)) {
-	context := getCmdContext()
-	context.cb = callback{
-		tt:   cb_slice,
-		cb:   cb,
-		sync: syncFlag,
-	}
-	context.unikey = this.req.UniKey
-	context.req = this.req
-	context.mu = &this.client.mu
-	context.deadline = time.Time{}
-	this.client.exec(context)
+	this.client.exec(&cmdContext{
+		cb: callback{
+			tt:   cb_slice,
+			cb:   cb,
+			sync: syncFlag,
+		},
+		unikey: this.req.UniKey,
+		req:    this.req,
+		cli:    this.client,
+	})
 }
 
 func (this *SliceCmd) AsyncExec(cb func(*SliceResult)) {
@@ -378,9 +341,9 @@ func (this *Client) Kick(table, key string) *StatusCmd {
 	}
 }
 
-func (this *serverConn) onGetResp(c *cmdContext, errCode errcode.Error, resp *protocol.GetResp) {
+func (this *serverConn) onGetResp(c *cmdContext, errCode errcode.Error, resp *protocol.GetResp) interface{} {
 
-	ret := SliceResult{
+	ret := &SliceResult{
 		ErrCode: errCode,
 		Version: resp.GetVersion(),
 	}
@@ -392,21 +355,19 @@ func (this *serverConn) onGetResp(c *cmdContext, errCode errcode.Error, resp *pr
 		}
 	}
 
-	c.doCallBack(c.unikey, c.cb, &ret)
-
+	return ret
 }
 
-func (this *serverConn) onSetResp(c *cmdContext, errCode errcode.Error, resp *protocol.SetResp) {
-	ret := StatusResult{
+func (this *serverConn) onSetResp(c *cmdContext, errCode errcode.Error, resp *protocol.SetResp) interface{} {
+	return &StatusResult{
 		ErrCode: errCode,
 		Version: resp.GetVersion(),
 	}
-	c.doCallBack(c.unikey, c.cb, &ret)
 }
 
-func (this *serverConn) onSetNxResp(c *cmdContext, errCode errcode.Error, resp *protocol.SetNxResp) {
+func (this *serverConn) onSetNxResp(c *cmdContext, errCode errcode.Error, resp *protocol.SetNxResp) interface{} {
 
-	ret := SliceResult{
+	ret := &SliceResult{
 		ErrCode: errCode,
 		Version: resp.GetVersion(),
 	}
@@ -418,13 +379,12 @@ func (this *serverConn) onSetNxResp(c *cmdContext, errCode errcode.Error, resp *
 		}
 	}
 
-	c.doCallBack(c.unikey, c.cb, &ret)
-
+	return ret
 }
 
-func (this *serverConn) onCompareAndSetResp(c *cmdContext, errCode errcode.Error, resp *protocol.CompareAndSetResp) {
+func (this *serverConn) onCompareAndSetResp(c *cmdContext, errCode errcode.Error, resp *protocol.CompareAndSetResp) interface{} {
 
-	ret := SliceResult{
+	ret := &SliceResult{
 		ErrCode: errCode,
 		Version: resp.GetVersion(),
 	}
@@ -434,13 +394,13 @@ func (this *serverConn) onCompareAndSetResp(c *cmdContext, errCode errcode.Error
 		ret.Fields[resp.GetValue().GetName()] = (*Field)(resp.GetValue())
 	}
 
-	c.doCallBack(c.unikey, c.cb, &ret)
+	return ret
 
 }
 
-func (this *serverConn) onCompareAndSetNxResp(c *cmdContext, errCode errcode.Error, resp *protocol.CompareAndSetNxResp) {
+func (this *serverConn) onCompareAndSetNxResp(c *cmdContext, errCode errcode.Error, resp *protocol.CompareAndSetNxResp) interface{} {
 
-	ret := SliceResult{
+	ret := &SliceResult{
 		ErrCode: errCode,
 		Version: resp.GetVersion(),
 	}
@@ -450,24 +410,20 @@ func (this *serverConn) onCompareAndSetNxResp(c *cmdContext, errCode errcode.Err
 		ret.Fields[resp.GetValue().GetName()] = (*Field)(resp.GetValue())
 	}
 
-	c.doCallBack(c.unikey, c.cb, &ret)
+	return ret
 
 }
 
-func (this *serverConn) onDelResp(c *cmdContext, errCode errcode.Error, resp *protocol.DelResp) {
-
-	ret := StatusResult{
+func (this *serverConn) onDelResp(c *cmdContext, errCode errcode.Error, resp *protocol.DelResp) interface{} {
+	return &StatusResult{
 		ErrCode: errCode,
 		Version: resp.GetVersion(),
 	}
-
-	c.doCallBack(c.unikey, c.cb, &ret)
-
 }
 
-func (this *serverConn) onIncrByResp(c *cmdContext, errCode errcode.Error, resp *protocol.IncrByResp) {
+func (this *serverConn) onIncrByResp(c *cmdContext, errCode errcode.Error, resp *protocol.IncrByResp) interface{} {
 
-	ret := SliceResult{
+	ret := &SliceResult{
 		ErrCode: errCode,
 		Version: resp.GetVersion(),
 	}
@@ -477,12 +433,12 @@ func (this *serverConn) onIncrByResp(c *cmdContext, errCode errcode.Error, resp 
 		ret.Fields[resp.GetField().GetName()] = (*Field)(resp.GetField())
 	}
 
-	c.doCallBack(c.unikey, c.cb, &ret)
+	return ret
 }
 
-func (this *serverConn) onDecrByResp(c *cmdContext, errCode errcode.Error, resp *protocol.DecrByResp) {
+func (this *serverConn) onDecrByResp(c *cmdContext, errCode errcode.Error, resp *protocol.DecrByResp) interface{} {
 
-	ret := SliceResult{
+	ret := &SliceResult{
 		ErrCode: errCode,
 		Version: resp.GetVersion(),
 	}
@@ -492,18 +448,14 @@ func (this *serverConn) onDecrByResp(c *cmdContext, errCode errcode.Error, resp 
 		ret.Fields[resp.GetField().GetName()] = (*Field)(resp.GetField())
 	}
 
-	c.doCallBack(c.unikey, c.cb, &ret)
+	return ret
 
 }
 
-func (this *serverConn) onKickResp(c *cmdContext, errCode errcode.Error, resp *protocol.KickResp) {
-
-	ret := StatusResult{
+func (this *serverConn) onKickResp(c *cmdContext, errCode errcode.Error, resp *protocol.KickResp) interface{} {
+	return &StatusResult{
 		ErrCode: errCode,
 	}
-
-	c.doCallBack(c.unikey, c.cb, &ret)
-
 }
 
 const resendDelay time.Duration = time.Millisecond * 100
@@ -512,18 +464,18 @@ func (this *serverConn) onMessage(msg *cs.RespMessage) {
 	cmd := protocol.CmdType(msg.Cmd)
 	if cmd != protocol.CmdType_Ping {
 		var timerStopOK bool
-
-		this.mu.Lock()
-		ctx, ok := (*this.waitResp)[msg.Seqno]
+		this.c.mu.Lock()
+		ctx, ok := this.waitResp[msg.Seqno]
 		if ok {
 			timerStopOK = ctx.deadlineTimer.Stop()
 			ctx.deadlineTimer = nil
-			delete(*this.waitResp, msg.Seqno)
-			if this.removed && 0 == len(*this.waitResp) {
+			delete(this.waitResp, msg.Seqno)
+			ctx.waitResp = nil
+			if this.removed && 0 == len(this.waitResp) {
 				this.session.Close(nil, 0)
 			}
 		}
-		this.mu.Unlock()
+		this.c.mu.Unlock()
 		if ok {
 			if timerStopOK && errcode.GetCode(msg.Err) == errcode.Errcode_retry {
 				//重试错误且尚未超时
@@ -531,34 +483,39 @@ func (this *serverConn) onMessage(msg *cs.RespMessage) {
 				if remain > resendDelay+(5*time.Millisecond) {
 					//50ms后重发
 					time.AfterFunc(resendDelay, func() {
-						GetSugar().Infof("resend %v", ctx.unikey)
+						//GetSugar().Infof("resend %v", ctx.unikey)
 						this.c.exec(ctx)
 					})
 					return
 				}
 			}
+
+			var ret interface{}
+
 			switch cmd {
 			case protocol.CmdType_Get:
-				this.onGetResp(ctx, msg.Err, msg.Data.(*protocol.GetResp))
+				ret = this.onGetResp(ctx, msg.Err, msg.Data.(*protocol.GetResp))
 			case protocol.CmdType_Set:
-				this.onSetResp(ctx, msg.Err, msg.Data.(*protocol.SetResp))
+				ret = this.onSetResp(ctx, msg.Err, msg.Data.(*protocol.SetResp))
 			case protocol.CmdType_SetNx:
-				this.onSetNxResp(ctx, msg.Err, msg.Data.(*protocol.SetNxResp))
+				ret = this.onSetNxResp(ctx, msg.Err, msg.Data.(*protocol.SetNxResp))
 			case protocol.CmdType_CompareAndSet:
-				this.onCompareAndSetResp(ctx, msg.Err, msg.Data.(*protocol.CompareAndSetResp))
+				ret = this.onCompareAndSetResp(ctx, msg.Err, msg.Data.(*protocol.CompareAndSetResp))
 			case protocol.CmdType_CompareAndSetNx:
-				this.onCompareAndSetNxResp(ctx, msg.Err, msg.Data.(*protocol.CompareAndSetNxResp))
+				ret = this.onCompareAndSetNxResp(ctx, msg.Err, msg.Data.(*protocol.CompareAndSetNxResp))
 			case protocol.CmdType_Del:
-				this.onDelResp(ctx, msg.Err, msg.Data.(*protocol.DelResp))
+				ret = this.onDelResp(ctx, msg.Err, msg.Data.(*protocol.DelResp))
 			case protocol.CmdType_IncrBy:
-				this.onIncrByResp(ctx, msg.Err, msg.Data.(*protocol.IncrByResp))
+				ret = this.onIncrByResp(ctx, msg.Err, msg.Data.(*protocol.IncrByResp))
 			case protocol.CmdType_DecrBy:
-				this.onDecrByResp(ctx, msg.Err, msg.Data.(*protocol.DecrByResp))
+				ret = this.onDecrByResp(ctx, msg.Err, msg.Data.(*protocol.DecrByResp))
 			case protocol.CmdType_Kick:
-				this.onKickResp(ctx, msg.Err, msg.Data.(*protocol.KickResp))
+				ret = this.onKickResp(ctx, msg.Err, msg.Data.(*protocol.KickResp))
 			default:
+				ret = errcode.New(errcode.Errcode_error, "invaild response")
 			}
-			releaseCmdContext(ctx)
+
+			ctx.doCallBack(ctx, ret)
 		}
 	}
 }

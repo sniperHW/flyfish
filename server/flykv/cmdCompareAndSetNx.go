@@ -23,7 +23,7 @@ func (this *cmdCompareAndSetNx) makeResponse(err errcode.Error, fields map[strin
 	return &cs.RespMessage{
 		Seqno: this.seqno,
 		Err:   err,
-		Data: &flyproto.CompareAndSetResp{
+		Data: &flyproto.CompareAndSetNxResp{
 			Version: version,
 			Value:   v,
 		}}

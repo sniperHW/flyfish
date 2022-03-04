@@ -2,7 +2,6 @@ package client
 
 import (
 	"github.com/sniperHW/flyfish/errcode"
-	"sync/atomic"
 )
 
 type StatusResult struct {
@@ -53,47 +52,39 @@ func splitUniKey(unikey string) (table string, key string) {
 }
 
 func (this *callback) onError(unikey string, errCode errcode.Error) {
-	if atomic.CompareAndSwapInt32(&this.emmited, 0, 1) {
-		if this.tt == cb_status {
-			table, key := splitUniKey(unikey)
-			this.cb.(func(*StatusResult))(&StatusResult{
-				Key:     key,
-				Table:   table,
-				unikey:  unikey,
-				ErrCode: errCode,
-			})
-		} else if this.tt == cb_slice {
-			table, key := splitUniKey(unikey)
-			this.cb.(func(*SliceResult))(&SliceResult{
-				Key:     key,
-				Table:   table,
-				unikey:  unikey,
-				ErrCode: errCode,
-			})
-		}
-	} else {
-		GetSugar().Errorf("callback.onError() should not go here")
+	if this.tt == cb_status {
+		table, key := splitUniKey(unikey)
+		this.cb.(func(*StatusResult))(&StatusResult{
+			Key:     key,
+			Table:   table,
+			unikey:  unikey,
+			ErrCode: errCode,
+		})
+	} else if this.tt == cb_slice {
+		table, key := splitUniKey(unikey)
+		this.cb.(func(*SliceResult))(&SliceResult{
+			Key:     key,
+			Table:   table,
+			unikey:  unikey,
+			ErrCode: errCode,
+		})
 	}
 }
 
 func (this *callback) onResult(unikey string, r interface{}) {
-	if atomic.CompareAndSwapInt32(&this.emmited, 0, 1) {
-		if this.tt == cb_status {
-			table, key := splitUniKey(unikey)
-			ret := r.(*StatusResult)
-			ret.Key = key
-			ret.Table = table
-			ret.unikey = unikey
-			this.cb.(func(*StatusResult))(ret)
-		} else if this.tt == cb_slice {
-			table, key := splitUniKey(unikey)
-			ret := r.(*SliceResult)
-			ret.Key = key
-			ret.Table = table
-			ret.unikey = unikey
-			this.cb.(func(*SliceResult))(ret)
-		}
-	} else {
-		GetSugar().Errorf("callback.onResult() should not go here")
+	if this.tt == cb_status {
+		table, key := splitUniKey(unikey)
+		ret := r.(*StatusResult)
+		ret.Key = key
+		ret.Table = table
+		ret.unikey = unikey
+		this.cb.(func(*StatusResult))(ret)
+	} else if this.tt == cb_slice {
+		table, key := splitUniKey(unikey)
+		ret := r.(*SliceResult)
+		ret.Key = key
+		ret.Table = table
+		ret.unikey = unikey
+		this.cb.(func(*SliceResult))(ret)
 	}
 }

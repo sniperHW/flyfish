@@ -1,4 +1,4 @@
-//go test -race -coverpkg=github.com/sniperHW/flyfish/server/flygate,github.com/sniperHW/flyfish/server/flypd,github.com/sniperHW/flyfish/server/flykv -covermode=atomic -v -coverprofile=coverage.out -run=.
+//go test -race -coverpkg=github.com/sniperHW/flyfish/server/flygate,github.com/sniperHW/flyfish/server/flypd,github.com/sniperHW/flyfish/server/flykv,github.com/sniperHW/flyfish/client -covermode=atomic -v -coverprofile=coverage.out -run=.
 //go tool cover -html=coverage.out
 
 package integrationTest
@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/sniperHW/flyfish/client"
+	//"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/etcd/pkg/idutil"
@@ -398,7 +399,18 @@ func testkv(t *testing.T, c *client.Client) {
 
 		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 	}
+
+	fmt.Println("-----------------------------mget----------------------------------")
+
+	{
+		r := client.MGet(c.GetAll("users1", "sniperHW"), c.GetAll("users1", "sniperHW21"), c.GetAll("users1", "sniperHW2")).Exec()
+		assert.Equal(t, 3, len(r))
+	}
 }
+
+//func AsyncSet(c *client.Client, table string, key string, fields map[string]interface{}, cb func(client *StatusResult)) {
+//	c.Set(table, key, fields).AsyncExec(cb)
+//}
 
 func TestFlygate(t *testing.T) {
 	sslot.SlotCount = 128
@@ -548,6 +560,74 @@ func TestFlygate(t *testing.T) {
 		assert.Nil(t, c.Set("users1", name, fields).Exec().ErrCode)
 	}
 
+	gate1.Stop()
+
+	gateConf.MaxPendingMsg = 50
+
+	gate1, err = flygate.NewFlyGate(gateConf, "localhost:10110")
+
+	if nil != err {
+		panic(err)
+	}
+
+	stopClient := int32(0)
+	pendingCount := int32(0)
+
+	clientArray := []*client.Client{}
+
+	for j := 0; j < 4; j++ {
+		cc, _ := client.OpenClient(client.ClientConf{PD: []string{"localhost:8110"}})
+		clientArray = append(clientArray, cc)
+
+		for i := 0; i < 200; i++ {
+			fields := map[string]interface{}{}
+			fields["age"] = 12
+			name := fmt.Sprintf("sniperHW:%d", i)
+			fields["name"] = name
+			fields["phone"] = "123456789123456789123456789"
+
+			var cb func(r *client.StatusResult)
+			cb = func(r *client.StatusResult) {
+				atomic.AddInt32(&pendingCount, -1)
+				if atomic.LoadInt32(&stopClient) == 0 {
+					atomic.AddInt32(&pendingCount, 1)
+					cc.Set("users1", name, fields).AsyncExec(cb)
+				}
+			}
+			atomic.AddInt32(&pendingCount, 1)
+			cc.Set("users1", name, fields).AsyncExec(cb)
+		}
+
+	}
+
+	time.Sleep(time.Second * 5)
+
+	gate2, err := flygate.NewFlyGate(gateConf, "localhost:10111")
+
+	if nil != err {
+		panic(err)
+	}
+
+	time.Sleep(time.Second * 5)
+
+	gate1.Stop()
+
+	time.Sleep(time.Second * 5)
+
+	gate2.Stop()
+
+	time.Sleep(time.Second * 5)
+
+	atomic.StoreInt32(&stopClient, 1)
+
+	for atomic.LoadInt32(&pendingCount) > 0 {
+
+	}
+
+	for _, v := range clientArray {
+		v.Close()
+	}
+
 	for {
 		//排空所有kv
 		consoleClient.Call(&sproto.DrainKv{}, &sproto.DrainKvResp{})
@@ -578,8 +658,6 @@ func TestFlygate(t *testing.T) {
 	node2.Stop()
 
 	fmt.Println("Stop gate")
-
-	gate1.Stop()
 
 	fmt.Println("Stop pd")
 	pd.Stop()

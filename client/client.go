@@ -65,17 +65,11 @@ type ClientConf struct {
 	FetchRowCount   int //scanner一次从服务器获取的最大行数量，如果行数据比较大应将此值设小一点，避免数据包超过大小限制
 }
 
-func makeWaitResp() *map[int64]*cmdContext {
-	waitResp := map[int64]*cmdContext{}
-	return &waitResp
-}
-
 type serverConn struct {
-	mu              *sync.Mutex
 	service         string
 	session         *flynet.Socket
-	pendingSend     *list.List             //因为连接尚未建立被排队等待发送的请求
-	waitResp        *map[int64]*cmdContext //已经发送等待对端应答的请求
+	pendingSend     *list.List            //因为连接尚未建立被排队等待发送的请求
+	waitResp        map[int64]*cmdContext //已经发送等待对端应答的请求
 	connecting      int32
 	closed          *int32
 	UnikeyPlacement func(string) int
@@ -83,52 +77,67 @@ type serverConn struct {
 	removed         bool
 }
 
-func (this *serverConn) onDisconnected() {
-	this.mu.Lock()
-	this.session = nil
-	waitResp := *this.waitResp
-	this.waitResp = makeWaitResp()
-
-	for _, v := range waitResp {
-		if nil != v.deadlineTimer {
-			v.deadlineTimer.Stop()
-			v.deadlineTimer = nil
+func (this *serverConn) onDisconnected(sess *flynet.Socket) {
+	timeouts := []*cmdContext{}
+	resends := []*cmdContext{}
+	now := time.Now()
+	this.c.mu.Lock()
+	if this.session != sess {
+		this.c.mu.Unlock()
+	} else {
+		this.session = nil
+		for _, v := range this.waitResp {
+			delete(this.waitResp, seqno)
+			v.waitResp = nil
+			if now.After(v.deadline) {
+				timeouts = append(timeouts, v)
+			} else {
+				if this.removed {
+					resends = append(resends, v)
+				} else {
+					//重新返回，带连接再次建立之后发送
+					v.l = this.pendingSend
+					v.listElement = this.pendingSend.PushBack(v)
+				}
+			}
 		}
-	}
+		this.c.mu.Unlock()
 
-	this.mu.Unlock()
+		for _, v := range timeouts {
+			v.onTimeout()
+		}
 
-	for _, v := range waitResp {
-		v.doCallBack(v.unikey, v.cb, errcode.New(errcode.Errcode_error, "lose connection"))
-		releaseCmdContext(v)
+		for _, v := range resends {
+			this.c.exec(v)
+		}
 	}
 }
 
 func (this *serverConn) onConnected(session *flynet.Socket) {
-
-	this.mu.Lock()
-	defer this.mu.Unlock()
-
+	this.c.mu.Lock()
+	defer this.c.mu.Unlock()
 	atomic.StoreInt32(&this.connecting, 0)
 	this.session = session
 	this.session.SetInBoundProcessor(cs.NewRespInboundProcessor())
 	this.session.SetEncoder(&cs.ReqEncoder{})
 	this.session.SetCloseCallBack(func(sess *flynet.Socket, reason error) {
 		GetSugar().Infof("socket close %v", reason)
-		go this.onDisconnected()
+		go this.onDisconnected(sess)
 	}).BeginRecv(func(s *flynet.Socket, msg interface{}) {
 		this.onMessage(msg.(*cs.RespMessage))
 	})
 
-	//GetSugar().Infof("connect to flygate ok")
-
-	now := time.Now()
-	//发送被排队的请求
-	for v := this.pendingSend.Front(); v != nil; v = this.pendingSend.Front() {
-		e := this.pendingSend.Remove(v).(*cmdContext)
-		e.listElement = nil
-		e.l = nil
-		this.sendReq(e, now)
+	if this.removed {
+		session.Close(nil, 0)
+	} else {
+		now := time.Now()
+		//发送被排队的请求
+		for v := this.pendingSend.Front(); v != nil; v = this.pendingSend.Front() {
+			e := this.pendingSend.Remove(v).(*cmdContext)
+			e.listElement = nil
+			e.l = nil
+			this.sendReq(e, now)
+		}
 	}
 }
 
@@ -138,18 +147,15 @@ func (this *serverConn) sendReq(c *cmdContext, now time.Time) {
 			//如果提供了定位器，使用定位器直接计算出Store
 			c.req.Store = this.UnikeyPlacement(c.req.UniKey)
 		}
-		(*this.waitResp)[c.req.Seqno] = c
-		c.waitResp = this.waitResp
+		this.waitResp[c.req.Seqno] = c
+		c.waitResp = &this.waitResp
 		this.session.Send(c.req)
 	}
 }
 
 func (this *serverConn) exec(c *cmdContext) errcode.Error {
-
 	var errCode errcode.Error
-
 	c.serverConn = this
-
 	if nil != this.session {
 		this.sendReq(c, time.Now())
 	} else {
@@ -161,7 +167,6 @@ func (this *serverConn) exec(c *cmdContext) errcode.Error {
 			errCode = errcode.New(errcode.Errcode_retry, "busy please retry later")
 		}
 	}
-
 	return errCode
 }
 
@@ -184,13 +189,13 @@ func (this *serverConn) connect() {
 					 */
 					if this.c.conf.SoloService != "" || !this.c.onConnectFailed(this) {
 						time.Sleep(100 * time.Millisecond)
-						this.mu.Lock()
+						this.c.mu.Lock()
 						if atomic.LoadInt32(this.closed) == 1 || this.pendingSend.Len() == 0 {
 							atomic.StoreInt32(&this.connecting, 0)
-							this.mu.Unlock()
+							this.c.mu.Unlock()
 							return
 						} else {
-							this.mu.Unlock()
+							this.c.mu.Unlock()
 						}
 					} else {
 						atomic.StoreInt32(&this.connecting, 0)
@@ -215,24 +220,45 @@ type Client struct {
 	gates         []*sproto.Flygate
 }
 
-func (this *Client) callcb(unikey string, cb callback, a interface{}) {
-	switch a.(type) {
-	case errcode.Error:
-		cb.onError(unikey, a.(errcode.Error))
-	default:
-		cb.onResult(unikey, a)
+func (this *Client) callcb(ctx *cmdContext, a interface{}) {
+	if atomic.CompareAndSwapInt32(&ctx.cb.emmited, 0, 1) {
+		this.mu.Lock()
+		if nil != ctx.deadlineTimer {
+			ctx.deadlineTimer.Stop()
+		}
+
+		if nil != ctx.waitResp {
+			delete(*ctx.waitResp, ctx.req.Seqno)
+		}
+
+		if nil != ctx.listElement {
+			ctx.l.Remove(ctx.listElement)
+		}
+
+		if nil != ctx.serverConn && ctx.serverConn.removed && 0 == len(ctx.serverConn.waitResp) {
+			ctx.serverConn.session.Close(nil, 0)
+		}
+
+		this.mu.Unlock()
+
+		switch a.(type) {
+		case errcode.Error:
+			ctx.cb.onError(ctx.unikey, a.(errcode.Error))
+		default:
+			ctx.cb.onResult(ctx.unikey, a)
+		}
 	}
 }
 
-func (this *Client) doCallBack(unikey string, cb callback, a interface{}) {
+func (this *Client) doCallBack(ctx *cmdContext, a interface{}) {
 	cbqueue := this.conf.CallbackQueue
 	priority := this.conf.CBEventPriority
 
-	if nil != cbqueue && cb.sync == false {
-		cbqueue.Post(priority, this.callcb, unikey, cb, a)
+	if nil != cbqueue && ctx.cb.sync == false {
+		cbqueue.Post(priority, this.callcb, ctx, a)
 	} else {
 		defer Recover()
-		this.callcb(unikey, cb, a)
+		this.callcb(ctx, a)
 	}
 }
 
@@ -276,9 +302,7 @@ func (this *Client) onConnectFailed(conn *serverConn) bool {
 			e := conn.pendingSend.Remove(v).(*cmdContext)
 			e.listElement = nil
 			e.l = nil
-
 			e.serverConn = this.usedConn
-
 			if nil != this.usedConn.session {
 				this.usedConn.sendReq(e, time.Now())
 			} else {
@@ -305,11 +329,13 @@ func (this *Client) exec(c *cmdContext) {
 		if nil == this.usedConn && this.pendingSend.Len() >= maxPendingSize {
 			errCode = errcode.New(errcode.Errcode_retry, "busy please retry later")
 		} else {
-			if c.deadline.IsZero() {
-				c.deadline = time.Now().Add(time.Duration(ClientTimeout) * time.Millisecond)
-				c.deadlineTimer = time.AfterFunc(time.Duration(ClientTimeout)*time.Millisecond, c.onTimeout)
-			} else {
-				c.deadlineTimer = time.AfterFunc(c.deadline.Sub(time.Now()), c.onTimeout)
+			if c.deadlineTimer == nil {
+				if c.deadline.IsZero() {
+					c.deadline = time.Now().Add(time.Duration(ClientTimeout) * time.Millisecond)
+					c.deadlineTimer = time.AfterFunc(time.Duration(ClientTimeout)*time.Millisecond, c.onTimeout)
+				} else {
+					c.deadlineTimer = time.AfterFunc(c.deadline.Sub(time.Now()), c.onTimeout)
+				}
 			}
 			if nil != this.usedConn {
 				errCode = this.usedConn.exec(c)
@@ -323,8 +349,7 @@ func (this *Client) exec(c *cmdContext) {
 	this.mu.Unlock()
 
 	if errCode != nil {
-		this.doCallBack(c.unikey, c.cb, errCode)
-		releaseCmdContext(c)
+		this.doCallBack(c, errCode)
 	} else {
 		atomic.AddInt32(&this.msgSend, 1)
 	}
@@ -341,7 +366,9 @@ func (this *Client) Close() {
 		} else {
 			this.usedConn = nil
 			for _, v := range this.serverConnMap {
-				v.session.Close(nil, 0)
+				if nil != v.session {
+					v.session.Close(nil, 0)
+				}
 			}
 		}
 	}
@@ -394,10 +421,9 @@ func (this *Client) onGates(gates []*sproto.Flygate) {
 
 	for _, v := range add {
 		conn := &serverConn{
-			mu:          &this.mu,
 			service:     v.Service,
 			pendingSend: list.New(),
-			waitResp:    makeWaitResp(),
+			waitResp:    map[int64]*cmdContext{},
 			closed:      &this.closed,
 			c:           this,
 		}
@@ -413,7 +439,7 @@ func (this *Client) onGates(gates []*sproto.Flygate) {
 			this.usedConn = nil
 		}
 
-		if len(*conn.waitResp) == 0 {
+		if len(conn.waitResp) == 0 {
 			if nil != conn.session {
 				conn.session.Close(nil, 0)
 			}
@@ -538,10 +564,9 @@ func OpenClient(conf ClientConf) (*Client, error) {
 
 		if "" != conf.SoloService {
 			c.usedConn = &serverConn{
-				mu:              &c.mu,
 				service:         conf.SoloService,
 				pendingSend:     list.New(),
-				waitResp:        makeWaitResp(),
+				waitResp:        map[int64]*cmdContext{},
 				UnikeyPlacement: conf.UnikeyPlacement,
 				closed:          &c.closed,
 				c:               c,
