@@ -81,7 +81,7 @@ type cmdContext struct {
 func (this *cmdContext) onTimeout() {
 	this.mu.Lock()
 	if nil == this.deadlineTimer {
-		this.mu.Lock()
+		this.mu.Unlock()
 		return
 	}
 

@@ -34,10 +34,15 @@ func (n *kvnode) sendForwordMsg(msg *forwordMsg) bool {
 		if len(n.waitResponse) >= n.config.MaxNodePendingMsg {
 			return false
 		} else {
-			GetSugar().Debugf("send msg to kvnode:%d store:%d seqno:%d nodeSeqno:%d", n.id, msg.store.id, msg.oriSeqno, msg.seqno)
-			binary.BigEndian.PutUint32(msg.bytes[18:], uint32(timeout/time.Millisecond))
-			msg.add(&n.waitResponse, nil)
-			session.Send(msg.bytes)
+			now := time.Now()
+			if msg.deadline.After(now) {
+				GetSugar().Debugf("send msg to kvnode:%d store:%d seqno:%d nodeSeqno:%d", n.id, msg.store.id, msg.oriSeqno, msg.seqno)
+				binary.BigEndian.PutUint32(msg.bytes[18:], uint32(msg.deadline.Sub(now)/time.Millisecond))
+				msg.add(&n.waitResponse, nil)
+				n.session.Send(msg.bytes)
+			} else {
+				msg.dropReply()
+			}
 			return true
 		}
 	} else {
@@ -45,9 +50,10 @@ func (n *kvnode) sendForwordMsg(msg *forwordMsg) bool {
 			return false
 		} else {
 			msg.add(nil, n.waittingSend)
-			if len(n.waittingSend) == 1 {
+			if n.waittingSend.Len() == 1 {
 				n.dial()
 			}
+			return true
 		}
 	}
 }
@@ -83,7 +89,7 @@ func (n *kvnode) dial() {
 						n.session = nil
 						if n.set.removed || n.removed {
 							n.paybackWaittingSendToGate()
-						} else if len(n.waittingSend) > 0 {
+						} else if n.waittingSend.Len() > 0 {
 							n.dial()
 						}
 					})
@@ -92,16 +98,22 @@ func (n *kvnode) dial() {
 						n.onNodeResp(msg.([]byte))
 					})
 				})
+
+				now := time.Now()
 				for v := n.waittingSend.Front(); nil != v; v = n.waittingSend.Front() {
 					msg := v.Value.(*forwordMsg)
 					msg.removeList()
-					GetSugar().Debugf("send msg to kvnode:%d store:%d seqno:%d nodeSeqno:%d", n.id, msg.store.id, msg.oriSeqno, msg.seqno)
-					binary.BigEndian.PutUint32(msg.bytes[18:], uint32(timeout/time.Millisecond))
-					msg.add(&n.waitResponse, nil)
-					session.Send(msg.bytes)
+					if msg.deadline.After(now) {
+						GetSugar().Debugf("send msg to kvnode:%d store:%d seqno:%d nodeSeqno:%d", n.id, msg.store.id, msg.oriSeqno, msg.seqno)
+						binary.BigEndian.PutUint32(msg.bytes[18:], uint32(msg.deadline.Sub(now)/time.Millisecond))
+						msg.add(&n.waitResponse, nil)
+						session.Send(msg.bytes)
+					} else {
+						msg.dropReply()
+					}
 				}
 			} else {
-				if len(n.waittingSend) > 0 {
+				if n.waittingSend.Len() > 0 {
 					n.dial()
 				}
 			}
@@ -112,6 +124,7 @@ func (n *kvnode) dial() {
 func (n *kvnode) onNodeResp(b []byte) {
 	seqno := int64(binary.BigEndian.Uint64(b[cs.SizeLen:]))
 	errCode := int16(binary.BigEndian.Uint16(b[cs.SizeLen+8+2:]))
+	GetSugar().Debugf("onNodeResp %d %d", seqno, errCode)
 	msg, ok := n.waitResponse[seqno]
 	if ok {
 		msg.removeMap()
@@ -120,7 +133,7 @@ func (n *kvnode) onNodeResp(b []byte) {
 			msg.store.onErrNotLeader(msg)
 		case errcode.Errcode_route_info_stale, errcode.Errcode_slot_transfering:
 			GetSugar().Infof("onForwordError %d oriSeqno:%d slot:%d", errCode, msg.oriSeqno, msg.slot)
-			msg.replyErr(errcode.New(errcode.Errcode_retry, "please retry later"))
+			msg.add(nil, n.gate.pendingMsg)
 		default:
 			//恢复客户端的seqno
 			binary.BigEndian.PutUint64(b[4:], uint64(msg.oriSeqno))

@@ -56,6 +56,7 @@ func (r *forwordMsg) add(msgMap *map[int64]*forwordMsg, l *list.List) {
 	if nil != msgMap {
 		r.removeMap()
 		(*msgMap)[r.seqno] = r
+		r.msgMap = msgMap
 	}
 
 	if nil != l {
@@ -67,7 +68,7 @@ func (r *forwordMsg) add(msgMap *map[int64]*forwordMsg, l *list.List) {
 }
 
 func (r *forwordMsg) setReplied() bool {
-	if !r.replied {
+	if r.replied {
 		return false
 	} else {
 		r.replied = true

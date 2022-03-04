@@ -992,6 +992,7 @@ func TestAddSet2(t *testing.T) {
 	sslot.SlotCount = 128
 	flypd.MinReplicaPerSet = 1
 	flypd.StorePerSet = 1
+	flygate.QueryRouteInfoDuration = time.Millisecond * 3 * 1000
 	os.RemoveAll("./log")
 	os.RemoveAll("./testRaftLog")
 
@@ -1226,6 +1227,7 @@ func TestStoreBalance(t *testing.T) {
 	sslot.SlotCount = 128
 	flypd.MinReplicaPerSet = 1
 	flypd.StorePerSet = 3
+	flygate.QueryRouteInfoDuration = time.Millisecond * 3 * 1000
 	os.RemoveAll("./log")
 	os.RemoveAll("./testRaftLog")
 
@@ -1249,6 +1251,47 @@ func TestStoreBalance(t *testing.T) {
 	if nil != err {
 		panic(err)
 	}
+
+	//启动flygate
+	gateConf, _ := flygate.LoadConfigStr(flyGateConfigStr)
+
+	gate1, err := flygate.NewFlyGate(gateConf, "localhost:10110")
+
+	if nil != err {
+		panic(err)
+	}
+
+	for {
+
+		addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
+
+		gate := client.QueryGate([]*net.UDPAddr{addr}, time.Second)
+		if len(gate) > 0 {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
+	stoped := int32(0)
+
+	c, _ := client.OpenClient(client.ClientConf{PD: []string{"localhost:8110"}})
+
+	go func() {
+		for atomic.LoadInt32(&stoped) == 0 {
+			for i := 0; i < 100 && atomic.LoadInt32(&stoped) == 0; i++ {
+				fields := map[string]interface{}{}
+				fields["age"] = 12
+				name := fmt.Sprintf("sniperHW:%d", i)
+				fields["name"] = name
+				fields["phone"] = "123456789123456789123456789"
+				e := c.Set("users1", name, fields).Exec().ErrCode
+				if nil != e {
+					fmt.Println("set--------------- error:", e)
+				}
+			}
+		}
+		fmt.Println("client break here")
+	}()
 
 	//增加node2
 
@@ -1481,6 +1524,9 @@ func TestStoreBalance(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 
+	atomic.StoreInt32(&stoped, 1)
+
+	gate1.Stop()
 	node1.Stop()
 	node2.Stop()
 	node3.Stop()

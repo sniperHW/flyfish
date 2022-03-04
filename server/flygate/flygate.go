@@ -53,151 +53,153 @@ type routeInfo struct {
 	mainQueue   *queue.PriorityQueue
 }
 
-func (r *routeInfo) onQueryRouteInfoResp(gate *gate, resp *sproto.QueryRouteInfoResp) {
+func (r *routeInfo) onQueryRouteInfoResp(gate *gate, resp *sproto.QueryRouteInfoResp) (change bool) {
 
 	GetSugar().Debugf("onQueryRouteInfoResp version:%d", resp.Version)
-	if r.version == resp.Version {
-		return
-	}
+	change = r.version != resp.Version
 
-	r.version = resp.Version
+	if change {
 
-	for _, v := range resp.Sets {
-		s, ok := r.sets[int(v.SetID)]
-		if ok {
-			for k, _ := range v.Stores {
-				ss := s.stores[int(v.Stores[k])]
-				ss.slots, _ = bitmap.CreateFromJson(v.Slots[k])
-			}
+		r.version = resp.Version
 
-			localKvnodes := []int32{}
-			for _, vv := range s.nodes {
-				localKvnodes = append(localKvnodes, int32(vv.id))
-			}
-
-			respKvnodes := [][]int32{}
-			for k, vv := range v.Kvnodes {
-				respKvnodes = append(respKvnodes, []int32{vv.NodeID, int32(k)})
-			}
-
-			sort.Slice(localKvnodes, func(i, j int) bool {
-				return localKvnodes[i] < localKvnodes[j]
-			})
-
-			sort.Slice(respKvnodes, func(i, j int) bool {
-				return respKvnodes[i][0] < respKvnodes[j][0]
-			})
-
-			add := [][]int32{}
-			remove := []int32{}
-
-			i := 0
-			j := 0
-
-			for i < len(respKvnodes) && j < len(localKvnodes) {
-				if respKvnodes[i][0] == localKvnodes[j] {
-					i++
-					j++
-				} else if respKvnodes[i][0] > localKvnodes[j] {
-					remove = append(remove, localKvnodes[j])
-					j++
-				} else {
-					add = append(add, respKvnodes[i])
-					i++
+		for _, v := range resp.Sets {
+			s, ok := r.sets[int(v.SetID)]
+			if ok {
+				for k, _ := range v.Stores {
+					ss := s.stores[int(v.Stores[k])]
+					ss.slots, _ = bitmap.CreateFromJson(v.Slots[k])
 				}
-			}
 
-			if len(respKvnodes[i:]) > 0 {
-				add = append(add, respKvnodes[i:]...)
-			}
-
-			if len(localKvnodes[j:]) > 0 {
-				remove = append(remove, localKvnodes[j:]...)
-			}
-
-			for _, vv := range add {
-				n := &kvnode{
-					id:           int(vv[0]),
-					service:      fmt.Sprintf("%s:%d", v.Kvnodes[vv[1]].Host, v.Kvnodes[vv[1]].ServicePort),
-					waittingSend: list.New(),
-					waitResponse: map[int64]*forwordMsg{},
-					set:          s,
-					config:       r.config,
-					mainQueue:    r.mainQueue,
-					gate:         gate,
+				localKvnodes := []int32{}
+				for _, vv := range s.nodes {
+					localKvnodes = append(localKvnodes, int32(vv.id))
 				}
-				s.nodes[n.id] = n
-			}
 
-			for _, vv := range remove {
-				n := s.nodes[int(vv)]
-				delete(s.nodes, int(vv))
-				n.removed = true
-				if nil != n.session {
-					n.session.Close(nil, 0)
+				respKvnodes := [][]int32{}
+				for k, vv := range v.Kvnodes {
+					respKvnodes = append(respKvnodes, []int32{vv.NodeID, int32(k)})
 				}
-			}
 
-		} else {
-			s := &set{
-				setID:     int(v.SetID),
-				nodes:     map[int]*kvnode{},
-				stores:    map[int]*store{},
-				routeInfo: r,
-			}
+				sort.Slice(localKvnodes, func(i, j int) bool {
+					return localKvnodes[i] < localKvnodes[j]
+				})
 
-			for _, vv := range v.Kvnodes {
-				n := &kvnode{
-					id:           int(vv.NodeID),
-					service:      fmt.Sprintf("%s:%d", vv.Host, vv.ServicePort),
-					waittingSend: list.New(),
-					waitResponse: map[int64]*forwordMsg{},
-					set:          s,
-					config:       r.config,
-					mainQueue:    r.mainQueue,
-					gate:         gate,
+				sort.Slice(respKvnodes, func(i, j int) bool {
+					return respKvnodes[i][0] < respKvnodes[j][0]
+				})
+
+				add := [][]int32{}
+				remove := []int32{}
+
+				i := 0
+				j := 0
+
+				for i < len(respKvnodes) && j < len(localKvnodes) {
+					if respKvnodes[i][0] == localKvnodes[j] {
+						i++
+						j++
+					} else if respKvnodes[i][0] > localKvnodes[j] {
+						remove = append(remove, localKvnodes[j])
+						j++
+					} else {
+						add = append(add, respKvnodes[i])
+						i++
+					}
 				}
-				s.nodes[n.id] = n
-			}
 
-			for k, vv := range v.Stores {
-				st := &store{
-					id:           int(vv),
-					waittingSend: list.New(),
-					set:          s,
-					config:       r.config,
-					mainQueue:    r.mainQueue,
-					gate:         gate,
+				if len(respKvnodes[i:]) > 0 {
+					add = append(add, respKvnodes[i:]...)
 				}
-				st.slots, _ = bitmap.CreateFromJson(v.Slots[k])
-				s.stores[st.id] = st
-			}
 
-			r.sets[s.setID] = s
-		}
-	}
-
-	for _, v := range resp.RemoveSets {
-		if s, ok := r.sets[int(v)]; ok {
-			s.removed = true
-			delete(r.sets, int(v))
-			for _, vv := range s.nodes {
-				if nil != vv.session {
-					vv.session.Close(nil, 0)
+				if len(localKvnodes[j:]) > 0 {
+					remove = append(remove, localKvnodes[j:]...)
 				}
+
+				for _, vv := range add {
+					n := &kvnode{
+						id:           int(vv[0]),
+						service:      fmt.Sprintf("%s:%d", v.Kvnodes[vv[1]].Host, v.Kvnodes[vv[1]].ServicePort),
+						waittingSend: list.New(),
+						waitResponse: map[int64]*forwordMsg{},
+						set:          s,
+						config:       r.config,
+						mainQueue:    r.mainQueue,
+						gate:         gate,
+					}
+					s.nodes[n.id] = n
+				}
+
+				for _, vv := range remove {
+					n := s.nodes[int(vv)]
+					delete(s.nodes, int(vv))
+					n.removed = true
+					if nil != n.session {
+						n.session.Close(nil, 0)
+					}
+				}
+
+			} else {
+				s := &set{
+					setID:     int(v.SetID),
+					nodes:     map[int]*kvnode{},
+					stores:    map[int]*store{},
+					routeInfo: r,
+				}
+
+				for _, vv := range v.Kvnodes {
+					n := &kvnode{
+						id:           int(vv.NodeID),
+						service:      fmt.Sprintf("%s:%d", vv.Host, vv.ServicePort),
+						waittingSend: list.New(),
+						waitResponse: map[int64]*forwordMsg{},
+						set:          s,
+						config:       r.config,
+						mainQueue:    r.mainQueue,
+						gate:         gate,
+					}
+					s.nodes[n.id] = n
+				}
+
+				for k, vv := range v.Stores {
+					st := &store{
+						id:           int(vv),
+						waittingSend: list.New(),
+						set:          s,
+						config:       r.config,
+						mainQueue:    r.mainQueue,
+						gate:         gate,
+					}
+					st.slots, _ = bitmap.CreateFromJson(v.Slots[k])
+					s.stores[st.id] = st
+				}
+
+				r.sets[s.setID] = s
 			}
 		}
-	}
 
-	r.slotToStore = map[int]*store{}
-	for _, v := range r.sets {
-		for _, vv := range v.stores {
-			slots := vv.slots.GetOpenBits()
-			for _, vvv := range slots {
-				r.slotToStore[vvv] = vv
+		for _, v := range resp.RemoveSets {
+			if s, ok := r.sets[int(v)]; ok {
+				s.removed = true
+				delete(r.sets, int(v))
+				for _, vv := range s.nodes {
+					if nil != vv.session {
+						vv.session.Close(nil, 0)
+					}
+				}
+			}
+		}
+
+		r.slotToStore = map[int]*store{}
+		for _, v := range r.sets {
+			for _, vv := range v.stores {
+				slots := vv.slots.GetOpenBits()
+				for _, vvv := range slots {
+					r.slotToStore[vvv] = vv
+				}
 			}
 		}
 	}
+	return
 }
 
 type gate struct {
@@ -206,7 +208,7 @@ type gate struct {
 	closeCh         chan struct{}
 	listener        *cs.Listener
 	totalPendingMsg int64
-	pendingMsg      *list.List //尚未找到store的msg
+	pendingMsg      *list.List //尚无正确路由信息的请求
 	muC             sync.Mutex
 	clients         map[*flynet.Socket]*flynet.Socket
 	routeInfo       routeInfo
@@ -253,8 +255,8 @@ func NewFlyGate(config *Config, service string) (*gate, error) {
 			sets:        map[int]*set{},
 			slotToStore: map[int]*store{},
 			mainQueue:   mainQueue,
-			pendingMsg:  list.New(),
 		},
+		pendingMsg:   list.New(),
 		serviceAddr:  service,
 		msgPerSecond: movingAverage.New(5),
 		closeCh:      make(chan struct{}),
@@ -331,18 +333,17 @@ func (g *gate) mainLoop() {
 				msg.deadlineTimer = time.AfterFunc(msg.deadline.Sub(time.Now()), func() {
 					g.mainQueue.ForceAppend(0, msg.dropReply)
 				})
-
-				if atomic.AddInt64(msg.totalPendingMsg, 1) > int64(s.config.MaxPendingMsg) {
+				g.seqCounter++
+				msg.seqno = g.seqCounter
+				msg.totalPendingMsg = &g.totalPendingMsg
+				if atomic.AddInt64(msg.totalPendingMsg, 1) > int64(g.config.MaxPendingMsg) {
 					msg.replyErr(errcode.New(errcode.Errcode_retry, "gate busy,please retry later"))
 				} else {
 					s, ok := g.routeInfo.slotToStore[msg.slot]
 					if !ok {
-						msg.add(g.pendingMsg, nil)
+						GetSugar().Infof("slot%d has no route info", msg.slot)
+						msg.add(nil, g.pendingMsg)
 					} else {
-						g.seqCounter++
-						msg.seqno = g.seqCounter
-						msg.totalPendingMsg = &g.totalPendingMsg
-						msg.store = s
 						if !s.onCliMsg(msg) {
 							msg.replyErr(errcode.New(errcode.Errcode_retry, "gate busy,please retry later"))
 						}
@@ -356,10 +357,33 @@ func (g *gate) mainLoop() {
 }
 
 func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
-	g.routeInfo.onQueryRouteInfoResp(g, resp)
+	if g.routeInfo.onQueryRouteInfoResp(g, resp) {
+		GetSugar().Infof("Update QueryRouteInfo")
+		//路由更新，尝试处理没有正确路由信息的请求
+		size := g.pendingMsg.Len()
+		v := g.pendingMsg.Front()
+		now := time.Now()
+		for i := 0; i < size; i++ {
+			msg := v.Value.(*forwordMsg)
+			v = v.Next()
+			msg.removeList()
+			if msg.deadline.After(now) {
+				s, ok := g.routeInfo.slotToStore[msg.slot]
+				if !ok {
+					msg.add(nil, g.pendingMsg)
+				} else {
+					if !s.onCliMsg(msg) {
+						msg.replyErr(errcode.New(errcode.Errcode_retry, "gate busy,please retry later"))
+					}
+				}
+			} else {
+				msg.dropReply()
+			}
+		}
+	}
 }
 
-const queryRouteInfoDuration = time.Millisecond * 200
+var QueryRouteInfoDuration time.Duration = time.Millisecond * 200
 
 func (g *gate) queryRouteInfo() {
 	req := &sproto.QueryRouteInfo{
@@ -372,16 +396,19 @@ func (g *gate) queryRouteInfo() {
 
 	go func() {
 		resp := doQueryRouteInfo(g.pdAddr, req)
-
 		g.mainQueue.ForceAppend(1, func() {
 			g.onQueryRouteInfoResp(resp)
-			g.startQueryTimer()
+			delay := QueryRouteInfoDuration
+			if g.pendingMsg.Len() > 0 {
+				delay = time.Millisecond * 50
+			}
+			g.startQueryTimer(delay)
 		})
 	}()
 }
 
-func (g *gate) startQueryTimer() {
-	g.queryTimer = time.AfterFunc(queryRouteInfoDuration, func() {
+func (g *gate) startQueryTimer(delay time.Duration) {
+	g.queryTimer = time.AfterFunc(delay, func() {
 		g.queryRouteInfo()
 	})
 }
@@ -436,7 +463,7 @@ func (g *gate) start() error {
 
 	g.startListener()
 
-	g.startQueryTimer()
+	g.startQueryTimer(QueryRouteInfoDuration)
 
 	return nil
 }

@@ -2,13 +2,11 @@ package flygate
 
 import (
 	"container/list"
-	"fmt"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
-	"sync/atomic"
 	"time"
 )
 
@@ -26,23 +24,20 @@ type store struct {
 }
 
 func (s *store) onCliMsg(msg *forwordMsg) bool {
-	if atomic.AddInt64(msg.totalPendingMsg, 1) > int64(s.config.MaxPendingMsg) {
-		return false
-	} else {
-		if nil == s.leader {
-			if s.waittingSend.Len() >= s.config.MaxStorePendingMsg {
-				return false
-			} else {
-				msg.add(nil, this.waittingSend)
-				if len(s.waittingSend) == 1 {
-					s.queryLeader()
-				}
-				return true
-			}
+	msg.store = s
+	if nil == s.leader {
+		if s.waittingSend.Len() >= s.config.MaxStorePendingMsg {
+			return false
 		} else {
-			msg.leaderVersion = s.leaderVersion
-			return s.leader.sendForwordMsg(msg)
+			msg.add(nil, s.waittingSend)
+			if s.waittingSend.Len() == 1 {
+				s.queryLeader()
+			}
+			return true
 		}
+	} else {
+		msg.leaderVersion = s.leaderVersion
+		return s.leader.sendForwordMsg(msg)
 	}
 }
 
@@ -55,13 +50,16 @@ func (s *store) paybackWaittingSendToGate() {
 }
 
 func (s *store) onErrNotLeader(msg *forwordMsg) {
+	GetSugar().Infof("onErrNotLeader")
 	if s.set.removed {
 		msg.add(nil, s.gate.pendingMsg)
 	} else {
 		if nil != s.leader && s.leaderVersion != msg.leaderVersion {
 			//leader已经变更，向新的leader发送
 			msg.leaderVersion = s.leaderVersion
-			s.leader.sendForwordMsg(msg)
+			if !s.leader.sendForwordMsg(msg) {
+				msg.replyErr(errcode.New(errcode.Errcode_retry, "gate busy,please retry later"))
+			}
 		} else if nil != s.leader && s.leaderVersion == msg.leaderVersion {
 			s.leader = nil
 		}
@@ -69,34 +67,13 @@ func (s *store) onErrNotLeader(msg *forwordMsg) {
 		if nil == s.leader {
 			//还没有leader,重新投入到待发送队列
 			msg.add(nil, s.waittingSend)
-			if len(s.waittingSend) == 1 {
+			if s.waittingSend.Len() == 1 {
 				s.queryLeader()
 			}
 		}
 		return
 	}
 }
-
-/*
-func (s *store) clearTimeoutWaittingSend() {
-	now := time.Now()
-	for cur := s.waittingSend.Front(); nil != cur; {
-		if now.After(cur.Value.(*forwordMsg).deadline) {
-			next := cur.Next()
-			s.waittingSend.Remove(cur).(*forwordMsg).dropReply()
-			cur = next
-		} else {
-			cur = cur.Next()
-		}
-	}
-}
-
-func (s *store) queryLeader() {
-	if !s.queryingLeader {
-		s._queryLeader()
-	}
-}
-*/
 
 func (s *store) queryLeader() {
 	if s.set.removed {
@@ -135,10 +112,12 @@ func (s *store) queryLeader() {
 						s.leader = leaderNode
 						GetSugar().Infof("set:%d store:%d got leader nodeID:%d", s.set.setID, s.id, leader)
 						for v := s.waittingSend.Front(); nil != v; v = s.waittingSend.Front() {
-							msg := v.(Value).(*forwordMsg)
+							msg := v.Value.(*forwordMsg)
 							msg.leaderVersion = s.leaderVersion
 							msg.removeList()
-							leaderNode.sendForwordMsg(msg)
+							if !leaderNode.sendForwordMsg(msg) {
+								msg.replyErr(errcode.New(errcode.Errcode_retry, "gate busy,please retry later"))
+							}
 						}
 					} else {
 						time.AfterFunc(time.Millisecond*100, func() {
