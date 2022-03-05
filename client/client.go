@@ -325,13 +325,11 @@ func (this *Client) exec(c *cmdContext) {
 		if nil == this.usedConn && this.pendingSend.Len() >= maxPendingSize {
 			errCode = errcode.New(errcode.Errcode_retry, "busy please retry later")
 		} else {
-			if c.deadlineTimer == nil {
-				if c.deadline.IsZero() {
-					c.deadline = time.Now().Add(time.Duration(ClientTimeout) * time.Millisecond)
-					c.deadlineTimer = time.AfterFunc(time.Duration(ClientTimeout)*time.Millisecond, c.onTimeout)
-				} else {
-					c.deadlineTimer = time.AfterFunc(c.deadline.Sub(time.Now()), c.onTimeout)
-				}
+			if c.deadline.IsZero() {
+				c.deadline = time.Now().Add(time.Duration(ClientTimeout) * time.Millisecond)
+				c.deadlineTimer = time.AfterFunc(time.Duration(ClientTimeout)*time.Millisecond, c.onTimeout)
+			} else {
+				c.deadlineTimer = time.AfterFunc(c.deadline.Sub(time.Now()), c.onTimeout)
 			}
 			if nil != this.usedConn {
 				errCode = this.usedConn.exec(c)

@@ -479,8 +479,7 @@ func (this *serverConn) onMessage(msg *cs.RespMessage) {
 		if ok {
 			if timerStopOK && errcode.GetCode(msg.Err) == errcode.Errcode_retry {
 				//重试错误且尚未超时
-				remain := ctx.deadline.Sub(time.Now())
-				if remain > resendDelay+(5*time.Millisecond) {
+				if ctx.deadline.Sub(time.Now()) >= 2*resendDelay {
 					//50ms后重发
 					time.AfterFunc(resendDelay, func() {
 						//GetSugar().Infof("resend %v", ctx.unikey)
