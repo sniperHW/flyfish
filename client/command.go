@@ -60,12 +60,10 @@ type cmdContext struct {
 	listElement   *list.Element
 	l             *list.List
 	waitResp      *map[int64]*cmdContext
-	doCallBack    func(*cmdContext, interface{})
-	serverConn    *serverConn
 }
 
 func (this *cmdContext) onTimeout() {
-	this.doCallBack(this, errcode.New(errcode.Errcode_timeout, "timeout"))
+	this.cli.doCallBack(this, errcode.New(errcode.Errcode_timeout, "timeout"))
 }
 
 type StatusCmd struct {
@@ -463,58 +461,51 @@ const resendDelay time.Duration = time.Millisecond * 100
 func (this *serverConn) onMessage(msg *cs.RespMessage) {
 	cmd := protocol.CmdType(msg.Cmd)
 	if cmd != protocol.CmdType_Ping {
-		var timerStopOK bool
+		var resend bool
 		this.c.mu.Lock()
 		ctx, ok := this.waitResp[msg.Seqno]
 		if ok {
-			timerStopOK = ctx.deadlineTimer.Stop()
-			ctx.deadlineTimer = nil
 			delete(this.waitResp, msg.Seqno)
 			ctx.waitResp = nil
-			if this.removed && 0 == len(this.waitResp) {
-				this.session.Close(nil, 0)
+			if errcode.GetCode(msg.Err) == errcode.Errcode_retry && ctx.deadline.Sub(time.Now()) >= resendDelay+resendDelay/2 {
+				resend = true
+			} else {
+				ctx.deadlineTimer.Stop()
+				ctx.deadlineTimer = nil
 			}
 		}
 		this.c.mu.Unlock()
 		if ok {
-			if timerStopOK && errcode.GetCode(msg.Err) == errcode.Errcode_retry {
-				//重试错误且尚未超时
-				if ctx.deadline.Sub(time.Now()) >= 2*resendDelay {
-					//50ms后重发
-					time.AfterFunc(resendDelay, func() {
-						//GetSugar().Infof("resend %v", ctx.unikey)
-						this.c.exec(ctx)
-					})
-					return
+			if resend {
+				time.AfterFunc(resendDelay, func() {
+					this.c.exec(ctx)
+				})
+			} else {
+				var ret interface{}
+				switch cmd {
+				case protocol.CmdType_Get:
+					ret = this.onGetResp(ctx, msg.Err, msg.Data.(*protocol.GetResp))
+				case protocol.CmdType_Set:
+					ret = this.onSetResp(ctx, msg.Err, msg.Data.(*protocol.SetResp))
+				case protocol.CmdType_SetNx:
+					ret = this.onSetNxResp(ctx, msg.Err, msg.Data.(*protocol.SetNxResp))
+				case protocol.CmdType_CompareAndSet:
+					ret = this.onCompareAndSetResp(ctx, msg.Err, msg.Data.(*protocol.CompareAndSetResp))
+				case protocol.CmdType_CompareAndSetNx:
+					ret = this.onCompareAndSetNxResp(ctx, msg.Err, msg.Data.(*protocol.CompareAndSetNxResp))
+				case protocol.CmdType_Del:
+					ret = this.onDelResp(ctx, msg.Err, msg.Data.(*protocol.DelResp))
+				case protocol.CmdType_IncrBy:
+					ret = this.onIncrByResp(ctx, msg.Err, msg.Data.(*protocol.IncrByResp))
+				case protocol.CmdType_DecrBy:
+					ret = this.onDecrByResp(ctx, msg.Err, msg.Data.(*protocol.DecrByResp))
+				case protocol.CmdType_Kick:
+					ret = this.onKickResp(ctx, msg.Err, msg.Data.(*protocol.KickResp))
+				default:
+					ret = errcode.New(errcode.Errcode_error, "invaild response")
 				}
+				ctx.cli.doCallBack(ctx, ret)
 			}
-
-			var ret interface{}
-
-			switch cmd {
-			case protocol.CmdType_Get:
-				ret = this.onGetResp(ctx, msg.Err, msg.Data.(*protocol.GetResp))
-			case protocol.CmdType_Set:
-				ret = this.onSetResp(ctx, msg.Err, msg.Data.(*protocol.SetResp))
-			case protocol.CmdType_SetNx:
-				ret = this.onSetNxResp(ctx, msg.Err, msg.Data.(*protocol.SetNxResp))
-			case protocol.CmdType_CompareAndSet:
-				ret = this.onCompareAndSetResp(ctx, msg.Err, msg.Data.(*protocol.CompareAndSetResp))
-			case protocol.CmdType_CompareAndSetNx:
-				ret = this.onCompareAndSetNxResp(ctx, msg.Err, msg.Data.(*protocol.CompareAndSetNxResp))
-			case protocol.CmdType_Del:
-				ret = this.onDelResp(ctx, msg.Err, msg.Data.(*protocol.DelResp))
-			case protocol.CmdType_IncrBy:
-				ret = this.onIncrByResp(ctx, msg.Err, msg.Data.(*protocol.IncrByResp))
-			case protocol.CmdType_DecrBy:
-				ret = this.onDecrByResp(ctx, msg.Err, msg.Data.(*protocol.DecrByResp))
-			case protocol.CmdType_Kick:
-				ret = this.onKickResp(ctx, msg.Err, msg.Data.(*protocol.KickResp))
-			default:
-				ret = errcode.New(errcode.Errcode_error, "invaild response")
-			}
-
-			ctx.doCallBack(ctx, ret)
 		}
 	}
 }

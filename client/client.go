@@ -151,7 +151,6 @@ func (this *serverConn) sendReq(c *cmdContext, now time.Time) {
 
 func (this *serverConn) exec(c *cmdContext) errcode.Error {
 	var errCode errcode.Error
-	c.serverConn = this
 	if nil != this.session {
 		this.sendReq(c, time.Now())
 	} else {
@@ -217,44 +216,43 @@ type Client struct {
 }
 
 func (this *Client) callcb(ctx *cmdContext, a interface{}) {
-	if atomic.CompareAndSwapInt32(&ctx.cb.emmited, 0, 1) {
-		this.mu.Lock()
-		if nil != ctx.deadlineTimer {
-			ctx.deadlineTimer.Stop()
-		}
-
-		if nil != ctx.waitResp {
-			delete(*ctx.waitResp, ctx.req.Seqno)
-		}
-
-		if nil != ctx.listElement {
-			ctx.l.Remove(ctx.listElement)
-		}
-
-		if nil != ctx.serverConn && ctx.serverConn.removed && 0 == len(ctx.serverConn.waitResp) {
-			ctx.serverConn.session.Close(nil, 0)
-		}
-
-		this.mu.Unlock()
-
-		switch a.(type) {
-		case errcode.Error:
-			ctx.cb.onError(ctx.unikey, a.(errcode.Error))
-		default:
-			ctx.cb.onResult(ctx.unikey, a)
-		}
+	switch a.(type) {
+	case errcode.Error:
+		ctx.cb.onError(ctx.unikey, a.(errcode.Error))
+	default:
+		ctx.cb.onResult(ctx.unikey, a)
 	}
 }
 
 func (this *Client) doCallBack(ctx *cmdContext, a interface{}) {
-	cbqueue := this.conf.CallbackQueue
-	priority := this.conf.CBEventPriority
+	if atomic.CompareAndSwapInt32(&ctx.cb.emmited, 0, 1) {
+		//如果a.(type) == result说明是通过serverConn.onMessage进来的，无需再执行清理
+		if _, ok := a.(errcode.Error); ok {
+			this.mu.Lock()
+			if nil != ctx.deadlineTimer {
+				ctx.deadlineTimer.Stop()
+			}
 
-	if nil != cbqueue && ctx.cb.sync == false {
-		cbqueue.Post(priority, this.callcb, ctx, a)
-	} else {
-		defer Recover()
-		this.callcb(ctx, a)
+			if nil != ctx.waitResp {
+				delete(*ctx.waitResp, ctx.req.Seqno)
+			}
+
+			if nil != ctx.listElement {
+				ctx.l.Remove(ctx.listElement)
+			}
+
+			this.mu.Unlock()
+		}
+
+		cbqueue := this.conf.CallbackQueue
+		priority := this.conf.CBEventPriority
+
+		if nil != cbqueue && ctx.cb.sync == false {
+			cbqueue.Post(priority, this.callcb, ctx, a)
+		} else {
+			defer Recover()
+			this.callcb(ctx, a)
+		}
 	}
 }
 
@@ -298,7 +296,6 @@ func (this *Client) onConnectFailed(conn *serverConn) bool {
 			e := conn.pendingSend.Remove(v).(*cmdContext)
 			e.listElement = nil
 			e.l = nil
-			e.serverConn = this.usedConn
 			if nil != this.usedConn.session {
 				this.usedConn.sendReq(e, time.Now())
 			} else {
@@ -314,23 +311,19 @@ func (this *Client) onConnectFailed(conn *serverConn) bool {
 
 func (this *Client) exec(c *cmdContext) {
 	var errCode errcode.Error
-
-	c.doCallBack = this.doCallBack
-
 	this.mu.Lock()
-
 	if atomic.LoadInt32(&this.closed) == 1 {
 		errCode = errcode.New(errcode.Errcode_error, "client closed")
 	} else {
 		if nil == this.usedConn && this.pendingSend.Len() >= maxPendingSize {
 			errCode = errcode.New(errcode.Errcode_retry, "busy please retry later")
 		} else {
-			if c.deadline.IsZero() {
+
+			if nil == c.deadlineTimer {
 				c.deadline = time.Now().Add(time.Duration(ClientTimeout) * time.Millisecond)
 				c.deadlineTimer = time.AfterFunc(time.Duration(ClientTimeout)*time.Millisecond, c.onTimeout)
-			} else {
-				c.deadlineTimer = time.AfterFunc(c.deadline.Sub(time.Now()), c.onTimeout)
 			}
+
 			if nil != this.usedConn {
 				errCode = this.usedConn.exec(c)
 			} else {
