@@ -25,36 +25,29 @@ type kvnode struct {
 }
 
 func (n *kvnode) sendForwordMsg(msg *forwordMsg) bool {
-	//改写seqno
-	binary.BigEndian.PutUint64(msg.bytes[4:], uint64(msg.seqno))
-	//填充storeID
-	binary.BigEndian.PutUint32(msg.bytes[4+8:], uint32(msg.store.id))
 
-	if nil != n.session {
-		if len(n.waitResponse) >= n.config.MaxNodePendingMsg {
-			return false
-		} else {
+	if len(n.waitResponse)+n.waittingSend.Len() >= n.config.MaxNodePendingMsg {
+		return false
+	} else {
+		if nil != n.session {
 			now := time.Now()
 			if msg.deadline.After(now) {
 				GetSugar().Debugf("send msg to kvnode:%d store:%d seqno:%d nodeSeqno:%d", n.id, msg.store.id, msg.oriSeqno, msg.seqno)
+				binary.BigEndian.PutUint64(msg.bytes[4:], uint64(msg.seqno))
+				binary.BigEndian.PutUint32(msg.bytes[4+8:], uint32(msg.store.id))
 				binary.BigEndian.PutUint32(msg.bytes[18:], uint32(msg.deadline.Sub(now)/time.Millisecond))
 				msg.add(&n.waitResponse, nil)
 				n.session.Send(msg.bytes)
 			} else {
 				msg.dropReply()
 			}
-			return true
-		}
-	} else {
-		if n.waittingSend.Len() >= n.config.MaxNodePendingMsg {
-			return false
 		} else {
 			msg.add(nil, n.waittingSend)
 			if n.waittingSend.Len() == 1 {
 				n.dial()
 			}
-			return true
 		}
+		return true
 	}
 }
 
@@ -105,6 +98,8 @@ func (n *kvnode) dial() {
 					msg.removeList()
 					if msg.deadline.After(now) {
 						GetSugar().Debugf("send msg to kvnode:%d store:%d seqno:%d nodeSeqno:%d", n.id, msg.store.id, msg.oriSeqno, msg.seqno)
+						binary.BigEndian.PutUint64(msg.bytes[4:], uint64(msg.seqno))
+						binary.BigEndian.PutUint32(msg.bytes[4+8:], uint32(msg.store.id))
 						binary.BigEndian.PutUint32(msg.bytes[18:], uint32(msg.deadline.Sub(now)/time.Millisecond))
 						msg.add(&n.waitResponse, nil)
 						session.Send(msg.bytes)
