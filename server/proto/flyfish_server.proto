@@ -71,9 +71,10 @@ enum ServerCmdType {
   NotifySlotTransIn             = 220;
   SlotTransInOk                 = 221;    
   NotifyUpdateMeta              = 222;
-  StoreReportStatus             = 223;
+  KvnodeReportStatus            = 223;
   TrasnferLeader                = 224;
   DrainStore                    = 225;
+  NotifyMissingStores           = 226;
 
 
   //flygate <-> pd
@@ -221,8 +222,7 @@ message kvnodeBootResp {
   optional int32  servicePort  = 5;
   optional int32  raftPort     = 6;   
   repeated storeInfo stores    = 7;
-  optional int64  metaVersion  = 8;
-  optional bytes  meta         = 9;
+  optional bytes  meta         = 8;
 }
 
 
@@ -429,6 +429,7 @@ message kvnodeStoreStatus {
 message kvnodeStatus {
   optional int32 nodeID  = 1;
   repeated kvnodeStoreStatus stores  = 2;
+  optional int64 lastReportTime = 3; 
 }
 
 message setStatus {
@@ -440,18 +441,28 @@ message setStatus {
 }
 
 message getSetStatusResp {
-  repeated setStatus sets = 1;
+  optional int64     now  = 1;
+  repeated setStatus sets = 2;
 }
 
 message storeReportStatus {
-  optional int32  setID       = 1;
-  optional int32  nodeID      = 2;
-  optional int32  storeID     = 3;
-  optional uint64 raftID      = 4;
-  optional bool   isleader    = 5;
-  optional int32  kvcount     = 6;
-  optional uint64 progress    = 7;
-  optional int64  metaVersion = 8;
+  optional int32  storeID     = 1;
+  optional uint64 raftID      = 2;
+  optional bool   isleader    = 3;
+  optional int32  kvcount     = 4;
+  optional uint64 progress    = 5;
+  optional int64  metaVersion = 6;
+}
+
+message kvnodeReportStatus {
+  optional int32  setID             = 1;
+  optional int32  nodeID            = 2;
+  repeated storeReportStatus stores = 3;
+}
+
+message notifyMissingStores { 
+  repeated storeInfo stores    = 1;
+  optional bytes  meta         = 2;
 }
 
 message trasnferLeader {

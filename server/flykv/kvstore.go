@@ -407,7 +407,7 @@ func (s *kvstore) stop() {
 	}
 }
 
-func (s *kvstore) reportStatus() {
+/*func (s *kvstore) reportStatus() {
 	s.mainQueue.AppendHighestPriotiryItem(func() {
 		msg := &sproto.StoreReportStatus{
 			SetID:       int32(s.kvnode.setID),
@@ -428,11 +428,11 @@ func (s *kvstore) reportStatus() {
 
 		time.AfterFunc(time.Second, s.reportStatus)
 	})
-}
+}*/
 
 func (s *kvstore) serve() {
 
-	s.reportStatus()
+	//s.reportStatus()
 
 	go func() {
 		defer func() {
@@ -573,7 +573,7 @@ func (s *kvstore) onAddLearnerNode(from *net.UDPAddr, processID uint16, raftID u
 		}
 	}
 
-	GetSugar().Infof("onAddLearnerNode")
+	GetSugar().Infof("onAddLearnerNode set:%d kvnode:%d store:%d", s.kvnode.setID, processID, s.shard)
 
 	s.rn.IssueConfChange(&ProposalConfChange{
 		confChangeType: raftpb.ConfChangeAddLearnerNode,

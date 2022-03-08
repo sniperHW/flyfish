@@ -408,10 +408,6 @@ func testkv(t *testing.T, c *client.Client) {
 	}
 }
 
-//func AsyncSet(c *client.Client, table string, key string, fields map[string]interface{}, cb func(client *StatusResult)) {
-//	c.Set(table, key, fields).AsyncExec(cb)
-//}
-
 func TestFlygate(t *testing.T) {
 	sslot.SlotCount = 128
 	flypd.MinReplicaPerSet = 1
@@ -496,6 +492,12 @@ func TestFlygate(t *testing.T) {
 
 	fmt.Println(resp, err)
 
+	node3, err := flykv.NewKvNode(3, true, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
 	//获取路由信息
 	for {
 		time.Sleep(time.Second)
@@ -526,6 +528,48 @@ func TestFlygate(t *testing.T) {
 		fmt.Println(err)
 	}
 
+	//向node3添加store1
+
+	resp, err = consoleClient.Call(&sproto.AddLearnerStoreToNode{
+		SetID:  1,
+		NodeID: 3,
+		Store:  1,
+	}, &sproto.AddLearnerStoreToNodeResp{})
+
+	//等待node3,store1启动成功
+	for {
+		resp, err = consoleClient.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+		var n3 *sproto.KvnodeStatus
+		if nil == err {
+			for _, set := range resp.(*sproto.GetSetStatusResp).Sets {
+				if set.SetID == int32(1) {
+					for _, n := range set.Nodes {
+						if n.NodeID == int32(3) {
+							n3 = n
+							break
+						}
+					}
+				}
+				if nil != n3 {
+					break
+				}
+			}
+
+			if len(n3.Stores) > 0 && n3.Stores[0].Progress > 0 {
+				break
+			}
+		}
+	}
+
+	for i := 0; i < 100; i++ {
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		name := fmt.Sprintf("sniperHW:%d", i)
+		fields["name"] = name
+		fields["phone"] = "123456789123456789123456789"
+		assert.Nil(t, c.Set("users1", name, fields).Exec().ErrCode)
+	}
+
 	node1.Stop()
 
 	node2.Stop()
@@ -543,6 +587,37 @@ func TestFlygate(t *testing.T) {
 		panic(err)
 	}
 
+	resp, err = consoleClient.Call(&sproto.RemoveNodeStore{
+		SetID:  1,
+		NodeID: 3,
+		Store:  1,
+	}, &sproto.RemoveNodeStoreResp{})
+
+	//等待node3,store1被移除
+	for {
+		resp, err = consoleClient.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+		var n3 *sproto.KvnodeStatus
+		if nil == err {
+			for _, set := range resp.(*sproto.GetSetStatusResp).Sets {
+				if set.SetID == int32(1) {
+					for _, n := range set.Nodes {
+						if n.NodeID == int32(3) {
+							n3 = n
+							break
+						}
+					}
+				}
+				if nil != n3 {
+					break
+				}
+			}
+
+			if len(n3.Stores) == 0 {
+				break
+			}
+		}
+	}
+
 	//删除一个kvnode
 	resp, err = consoleClient.Call(&sproto.RemNode{
 		SetID:  1,
@@ -550,6 +625,8 @@ func TestFlygate(t *testing.T) {
 	}, &sproto.RemNodeResp{})
 
 	fmt.Println(resp, err)
+
+	node3.Stop()
 
 	for i := 0; i < 100; i++ {
 		fields := map[string]interface{}{}

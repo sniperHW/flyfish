@@ -183,12 +183,13 @@ func (d DeploymentJson) check() error {
 }
 
 type kvnode struct {
-	id          int
-	host        string
-	servicePort int
-	raftPort    int
-	set         *set
-	store       map[int]*FlyKvStoreState
+	id             int
+	host           string
+	servicePort    int
+	raftPort       int
+	set            *set
+	store          map[int]*FlyKvStoreState
+	lastReportTime int64
 }
 
 func (n *kvnode) isVoter(store int) bool {

@@ -483,6 +483,10 @@ func (this *kvnode) start() error {
 
 		this.startListener()
 
+		if len(resp.Stores) == 0 {
+			GetSugar().Infof("node:%d start with no store", this.id)
+		}
+
 		//cluster模式下membership由pd负责管理,节点每次启动从pd获取
 		for _, v := range resp.Stores {
 			slots, err := bitmap.CreateFromJson(v.Slots)
@@ -506,9 +510,58 @@ func (this *kvnode) start() error {
 		}
 
 		GetSugar().Infof("flyfish start:%s", service)
+
+		go this.reportStatus()
 	}
 
 	return err
+}
+
+func (this *kvnode) reportStatus() {
+	if atomic.LoadInt32(&this.closed) == 1 {
+		return
+	}
+
+	report := &sproto.KvnodeReportStatus{
+		SetID:  int32(this.setID),
+		NodeID: int32(this.id),
+	}
+
+	wait := sync.WaitGroup{}
+
+	this.muS.RLock()
+	if len(this.stores) > 0 {
+		mu := sync.Mutex{}
+		wait.Add(len(this.stores))
+		for _, v := range this.stores {
+			store := v
+			store.mainQueue.AppendHighestPriotiryItem(func() {
+				mu.Lock()
+				report.Stores = append(report.Stores, &sproto.StoreReportStatus{
+					StoreID:     int32(store.shard),
+					Isleader:    store.isLeader(),
+					Kvcount:     int32(store.kvcount + len(store.pendingKv)),
+					Progress:    store.rn.GetApplyIndex(),
+					MetaVersion: store.meta.GetVersion(),
+					RaftID:      store.rn.ID(),
+				})
+				mu.Unlock()
+				wait.Done()
+			})
+		}
+	}
+	this.muS.RUnlock()
+
+	wait.Wait()
+
+	GetSugar().Debugf("node:%d reportStatus store count:%d", this.id, len(report.Stores))
+
+	for _, v := range this.pdAddr {
+		this.udpConn.SendTo(v, snet.MakeMessage(0, report))
+	}
+
+	time.AfterFunc(time.Second, this.reportStatus)
+
 }
 
 func NewKvNode(id uint16, join bool, config *Config, db dbI) (*kvnode, error) {

@@ -366,7 +366,7 @@ func (g *gate) mainLoop() {
 }
 
 func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
-	if g.routeInfo.onQueryRouteInfoResp(g, resp) {
+	if nil != resp && g.routeInfo.onQueryRouteInfoResp(g, resp) {
 		GetSugar().Infof("Update QueryRouteInfo")
 		//路由更新，尝试处理没有正确路由信息的请求
 		size := g.pendingMsg.Len()

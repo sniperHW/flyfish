@@ -110,7 +110,7 @@ func (p *ProposalFlyKvCommited) Serilize(b []byte) []byte {
 
 func (p *ProposalFlyKvCommited) apply(pd *pd) {
 
-	GetSugar().Infof("ProposalFlyKvCommited apply %v", p.Type)
+	GetSugar().Infof("ProposalFlyKvCommited apply %v set:%d store:%d", p.Type, p.Set, p.Store)
 
 	s := pd.pState.deployment.sets[p.Set]
 	n := s.nodes[p.Node]
@@ -148,6 +148,8 @@ func (p *ProposalAddLearnerStoreToNode) Serilize(b []byte) []byte {
 
 func (p *ProposalAddLearnerStoreToNode) apply(pd *pd) {
 
+	GetSugar().Infof("ProposalAddLearnerStoreToNode apply set:%d node:%d store:%d", p.Msg.SetID, p.Msg.NodeID, p.Msg.Store)
+
 	s := pd.pState.deployment.sets[int(p.Msg.SetID)]
 
 	n := s.nodes[int(p.Msg.NodeID)]
@@ -181,6 +183,8 @@ func (p *ProposalAddLearnerStoreToNode) apply(pd *pd) {
 			Value:  FlyKvUnCommit,
 			RaftID: p.RaftID,
 		}
+
+		GetSugar().Infof("set:%d node:%d storecount:%d", p.Msg.SetID, p.Msg.NodeID, len(n.store))
 
 		//通告set中flykv添加learner
 		pd.startStoreNotifyTask(n, int(p.Msg.Store), p.RaftID, LearnerStore)
@@ -354,6 +358,8 @@ func (p *pd) onAddLearnerStoreToNode(replyer replyer, m *snet.Message) {
 
 		return nil
 	}()
+
+	GetSugar().Infof("onAddLearnerStoreToNode %v", err)
 
 	if nil != err {
 		resp.Ok = false

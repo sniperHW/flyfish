@@ -78,7 +78,6 @@ func (p *pd) onKvnodeBoot(replyer replyer, m *snet.Message) {
 			SetID:       int32(node.set.id),
 			ServicePort: int32(node.servicePort),
 			RaftPort:    int32(node.raftPort),
-			MetaVersion: p.pState.Meta.Version,
 			Meta:        p.pState.MetaBytes,
 		}
 
@@ -171,7 +170,9 @@ func (p *pd) changeFlyGate(replyer replyer, m *snet.Message) {
 }
 
 func (p *pd) onGetSetStatus(replyer replyer, m *snet.Message) {
-	resp := &sproto.GetSetStatusResp{}
+	resp := &sproto.GetSetStatusResp{
+		Now: time.Now().Unix(),
+	}
 	for _, v := range p.pState.deployment.sets {
 		s := &sproto.SetStatus{
 			SetID:     int32(v.id),
@@ -181,7 +182,8 @@ func (p *pd) onGetSetStatus(replyer replyer, m *snet.Message) {
 		kvcount := map[int]int{}
 		for _, vv := range v.nodes {
 			n := &sproto.KvnodeStatus{
-				NodeID: int32(vv.id),
+				NodeID:         int32(vv.id),
+				LastReportTime: vv.lastReportTime,
 			}
 
 			for k, vvv := range vv.store {
@@ -218,8 +220,8 @@ func (p *pd) onGetSetStatus(replyer replyer, m *snet.Message) {
 	replyer.reply(snet.MakeMessage(m.Context, resp))
 }
 
-func (p *pd) onStoreReportStatus(_ replyer, m *snet.Message) {
-	msg := m.Msg.(*sproto.StoreReportStatus)
+func (p *pd) onKvnodeReportStatus(replyer replyer, m *snet.Message) {
+	msg := m.Msg.(*sproto.KvnodeReportStatus)
 	set := p.pState.deployment.sets[int(msg.SetID)]
 	if nil == set {
 		return
@@ -228,26 +230,81 @@ func (p *pd) onStoreReportStatus(_ replyer, m *snet.Message) {
 	if nil == node {
 		return
 	}
-	store := node.store[int(msg.StoreID)]
-	if nil == store || store.RaftID != msg.RaftID {
+
+	now := time.Now()
+
+	node.lastReportTime = now.Unix()
+
+	for _, v := range msg.Stores {
+		store := node.store[int(v.StoreID)]
+		if nil == store || store.RaftID != v.RaftID {
+			return
+		}
+		GetSugar().Debugf("onKvnodeReportStatus set:%d node:%d store:%d isLeader:%v kvcount:%d", msg.SetID, msg.NodeID, v.StoreID, v.Isleader, v.Kvcount)
+		store.lastReport = now
+		store.isLead = v.Isleader
+		store.kvcount = int(v.Kvcount)
+		store.progress = v.Progress
+
+		if v.Isleader && v.MetaVersion != p.pState.Meta.Version {
+			addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.host, node.servicePort))
+			p.udp.SendTo(addr, snet.MakeMessage(0,
+				&sproto.NotifyUpdateMeta{
+					Store:   int32(v.StoreID),
+					Version: p.pState.Meta.Version,
+					Meta:    p.pState.MetaBytes,
+				}))
+		}
+	}
+
+	isMissing := func(storeID int) (missing bool) {
+		missing = true
+		for _, v := range msg.Stores {
+			if int(v.StoreID) == storeID {
+				missing = false
+				return
+			}
+		}
 		return
 	}
 
-	GetSugar().Debugf("onStoreReportStatus node:%d store:%d isLeader:%v kvcount:%d", msg.NodeID, msg.StoreID, msg.Isleader, msg.Kvcount)
+	//检查是否有遗漏的store,有的通知kvnode加载
+	var notify *sproto.NotifyMissingStores
+	for storeId, st := range node.store {
+		if isMissing(storeId) {
 
-	store.lastReport = time.Now()
-	store.isLead = msg.Isleader
-	store.kvcount = int(msg.Kvcount)
-	store.progress = msg.Progress
+			GetSugar().Infof("node:%d missing:%d", msg.NodeID, storeId)
 
-	if msg.Isleader && msg.MetaVersion != p.pState.Meta.Version {
+			if nil == notify {
+				notify = &sproto.NotifyMissingStores{
+					Meta: p.pState.MetaBytes,
+				}
+			}
+
+			raftCluster := []string{}
+			for _, n := range node.set.nodes {
+				if v, ok := n.store[storeId]; ok {
+					if v.isVoter() {
+						raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@voter", n.id, v.RaftID, n.host, n.raftPort, n.host, n.servicePort))
+					} else if v.isLearner() {
+						raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@learner", n.id, v.RaftID, n.host, n.raftPort, n.host, n.servicePort))
+					}
+				}
+			}
+
+			s := &sproto.StoreInfo{
+				Id:          int32(storeId),
+				Slots:       node.set.stores[storeId].slots.ToJson(),
+				RaftCluster: strings.Join(raftCluster, ","),
+				RaftID:      st.RaftID,
+			}
+			notify.Stores = append(notify.Stores, s)
+		}
+	}
+
+	if nil != notify {
 		addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.host, node.servicePort))
-		p.udp.SendTo(addr, snet.MakeMessage(0,
-			&sproto.NotifyUpdateMeta{
-				Store:   int32(msg.StoreID),
-				Version: p.pState.Meta.Version,
-				Meta:    p.pState.MetaBytes,
-			}))
+		p.udp.SendTo(addr, snet.MakeMessage(0, notify))
 	}
 }
 
@@ -481,7 +538,7 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.GetFlyGateList{}, "", p.onGetFlyGateList)
 	p.registerMsgHandler(&sproto.FlyGateHeartBeat{}, "", p.onFlyGateHeartBeat)
 	p.registerMsgHandler(&sproto.ChangeFlyGate{}, "", p.changeFlyGate)
-	p.registerMsgHandler(&sproto.StoreReportStatus{}, "", p.onStoreReportStatus)
+	p.registerMsgHandler(&sproto.KvnodeReportStatus{}, "", p.onKvnodeReportStatus)
 	p.registerMsgHandler(&sproto.GetScanTableMeta{}, "", p.onGetScanTableMeta)
 
 }

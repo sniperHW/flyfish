@@ -51,7 +51,7 @@ func (p *pd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if tmp := strings.Split(r.URL.Path, "/"); len(tmp) == 2 {
-		GetSugar().Infof("http request %v", tmp[1])
+		GetSugar().Debugf("http request %v", tmp[1])
 
 		if tmp[1] == "QueryPdLeader" {
 			if byte, err := proto.Marshal(&sproto.QueryPdLeaderResp{

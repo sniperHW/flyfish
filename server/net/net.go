@@ -326,7 +326,9 @@ func init() {
 
 	namespace.Register(&sproto.NotifyUpdateMeta{}, uint32(sproto.ServerCmdType_NotifyUpdateMeta))
 
-	namespace.Register(&sproto.StoreReportStatus{}, uint32(sproto.ServerCmdType_StoreReportStatus))
+	namespace.Register(&sproto.KvnodeReportStatus{}, uint32(sproto.ServerCmdType_KvnodeReportStatus))
+
+	namespace.Register(&sproto.NotifyMissingStores{}, uint32(sproto.ServerCmdType_NotifyMissingStores))
 
 	namespace.Register(&sproto.TrasnferLeader{}, uint32(sproto.ServerCmdType_TrasnferLeader))
 
