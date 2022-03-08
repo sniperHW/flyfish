@@ -121,10 +121,9 @@ func (r *routeInfo) onQueryRouteInfoResp(gate *gate, resp *sproto.QueryRouteInfo
 						service:      fmt.Sprintf("%s:%d", v.Kvnodes[vv[1]].Host, v.Kvnodes[vv[1]].ServicePort),
 						waittingSend: list.New(),
 						waitResponse: map[int64]*forwordMsg{},
-						set:          s,
-						config:       r.config,
-						mainQueue:    r.mainQueue,
-						gate:         gate,
+						//set:          s,
+						config: r.config,
+						gate:   gate,
 					}
 					s.nodes[n.id] = n
 				}
@@ -152,10 +151,9 @@ func (r *routeInfo) onQueryRouteInfoResp(gate *gate, resp *sproto.QueryRouteInfo
 						service:      fmt.Sprintf("%s:%d", vv.Host, vv.ServicePort),
 						waittingSend: list.New(),
 						waitResponse: map[int64]*forwordMsg{},
-						set:          s,
-						config:       r.config,
-						mainQueue:    r.mainQueue,
-						gate:         gate,
+						//set:          s,
+						config: r.config,
+						gate:   gate,
 					}
 					s.nodes[n.id] = n
 				}
@@ -166,7 +164,6 @@ func (r *routeInfo) onQueryRouteInfoResp(gate *gate, resp *sproto.QueryRouteInfo
 						waittingSend: list.New(),
 						set:          s,
 						config:       r.config,
-						mainQueue:    r.mainQueue,
 						gate:         gate,
 					}
 					st.slots, _ = bitmap.CreateFromJson(v.Slots[k])
@@ -182,9 +179,13 @@ func (r *routeInfo) onQueryRouteInfoResp(gate *gate, resp *sproto.QueryRouteInfo
 				s.removed = true
 				delete(r.sets, int(v))
 				for _, vv := range s.nodes {
+					vv.removed = true
 					if nil != vv.session {
 						vv.session.Close(nil, 0)
 					}
+				}
+				for _, vv := range s.stores {
+					vv.removed = true
 				}
 			}
 		}
@@ -281,6 +282,16 @@ func NewFlyGate(config *Config, service string) (*gate, error) {
 	return g, err
 }
 
+func (g *gate) callInQueue(priority int, fn func()) {
+	g.mainQueue.ForceAppend(priority, fn)
+}
+
+func (g *gate) afterFunc(delay time.Duration, fn func()) *time.Timer {
+	return time.AfterFunc(delay, func() {
+		g.callInQueue(1, fn)
+	})
+}
+
 func (g *gate) refreshMsgPerSecond() {
 	if atomic.LoadInt32(&g.closed) == 0 {
 		msgRecv := atomic.LoadInt32(&g.msgRecv)
@@ -330,9 +341,7 @@ func (g *gate) mainLoop() {
 		case *forwordMsg:
 			msg := v.(*forwordMsg)
 			if msg.slot >= 0 && msg.slot < slot.SlotCount {
-				msg.deadlineTimer = time.AfterFunc(msg.deadline.Sub(time.Now()), func() {
-					g.mainQueue.ForceAppend(0, msg.dropReply)
-				})
+				msg.deadlineTimer = g.afterFunc(msg.deadline.Sub(time.Now()), msg.dropReply)
 				g.seqCounter++
 				msg.seqno = g.seqCounter
 				msg.totalPendingMsg = &g.totalPendingMsg
@@ -396,7 +405,7 @@ func (g *gate) queryRouteInfo() {
 
 	go func() {
 		resp := doQueryRouteInfo(g.pdAddr, req)
-		g.mainQueue.ForceAppend(1, func() {
+		g.callInQueue(1, func() {
 			g.onQueryRouteInfoResp(resp)
 			delay := QueryRouteInfoDuration
 			if g.pendingMsg.Len() > 0 {
@@ -469,7 +478,7 @@ func (g *gate) start() error {
 }
 
 func (g *gate) checkCondition(notiyCh chan struct{}, fn func() bool) {
-	g.mainQueue.ForceAppend(1, func() {
+	g.callInQueue(1, func() {
 		if fn() {
 			select {
 			case notiyCh <- struct{}{}:

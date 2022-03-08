@@ -44,7 +44,7 @@ func client(t *testing.T) {
 }
 
 func TestHttps(t *testing.T) {
-	cert, _ := tls.LoadX509KeyPair("server.crt", "server.key")
+	cert, _ := tls.LoadX509KeyPair("test/server.crt", "test/server.key")
 
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{cert},

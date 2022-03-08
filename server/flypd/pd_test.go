@@ -49,8 +49,8 @@ var configStr string = `
 	MainQueueMaxSize = 1000
 	RaftLogDir       = "raftLog"
 	RaftLogPrefix    = "pd"
-	InitMetaPath = "./initmeta.json"
-	InitDepoymentPath="./deployment.json"
+	InitMetaPath = "./test/initmeta.json"
+	InitDepoymentPath="./test/deployment.json"
 
 
 	[DBConfig]

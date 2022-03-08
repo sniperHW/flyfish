@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"github.com/sniperHW/flyfish/errcode"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
-	"github.com/sniperHW/flyfish/pkg/queue"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
 	"time"
@@ -17,8 +16,6 @@ type kvnode struct {
 	session      *flynet.Socket
 	waittingSend *list.List //dailing时暂存请求
 	waitResponse map[int64]*forwordMsg
-	set          *set
-	mainQueue    *queue.PriorityQueue
 	config       *Config
 	removed      bool
 	gate         *gate
@@ -32,12 +29,7 @@ func (n *kvnode) sendForwordMsg(msg *forwordMsg) bool {
 		if nil != n.session {
 			now := time.Now()
 			if msg.deadline.After(now) {
-				GetSugar().Debugf("send msg to kvnode:%d store:%d seqno:%d nodeSeqno:%d", n.id, msg.store.id, msg.oriSeqno, msg.seqno)
-				binary.BigEndian.PutUint64(msg.bytes[4:], uint64(msg.seqno))
-				binary.BigEndian.PutUint32(msg.bytes[4+8:], uint32(msg.store.id))
-				binary.BigEndian.PutUint32(msg.bytes[18:], uint32(msg.deadline.Sub(now)/time.Millisecond))
-				msg.add(&n.waitResponse, nil)
-				n.session.Send(msg.bytes)
+				n.send(now, msg)
 			} else {
 				msg.dropReply()
 			}
@@ -49,6 +41,15 @@ func (n *kvnode) sendForwordMsg(msg *forwordMsg) bool {
 		}
 		return true
 	}
+}
+
+func (n *kvnode) send(now time.Time, msg *forwordMsg) {
+	GetSugar().Debugf("send msg to set:%d kvnode:%d store:%d seqno:%d nodeSeqno:%d", msg.store.set.setID, n.id, msg.store.id, msg.oriSeqno, msg.seqno)
+	binary.BigEndian.PutUint64(msg.bytes[4:], uint64(msg.seqno))
+	binary.BigEndian.PutUint32(msg.bytes[4+8:], uint32(msg.store.id))
+	binary.BigEndian.PutUint32(msg.bytes[18:], uint32(msg.deadline.Sub(now)/time.Millisecond))
+	msg.add(&n.waitResponse, nil)
+	n.session.Send(msg.bytes)
 }
 
 func (n *kvnode) paybackWaittingSendToGate() {
@@ -67,8 +68,8 @@ func (n *kvnode) dial() {
 			OutPutLimitHard:        1024 * 1024 * 50,
 		})
 		session, err := c.Dial(time.Second * 5)
-		n.mainQueue.ForceAppend(1, func() {
-			if n.set.removed || n.removed {
+		n.gate.callInQueue(1, func() {
+			if n.removed {
 				n.paybackWaittingSendToGate()
 				return
 			}
@@ -78,16 +79,16 @@ func (n *kvnode) dial() {
 				session.SetRecvTimeout(flyproto.PingTime * 10)
 				session.SetInBoundProcessor(NewKvnodeRespInboundProcessor())
 				session.SetCloseCallBack(func(sess *flynet.Socket, reason error) {
-					n.mainQueue.ForceAppend(1, func() {
+					n.gate.callInQueue(1, func() {
 						n.session = nil
-						if n.set.removed || n.removed {
+						if n.removed {
 							n.paybackWaittingSendToGate()
 						} else if n.waittingSend.Len() > 0 {
 							n.dial()
 						}
 					})
 				}).BeginRecv(func(s *flynet.Socket, msg interface{}) {
-					n.mainQueue.ForceAppend(0, func() {
+					n.gate.callInQueue(1, func() {
 						n.onNodeResp(msg.([]byte))
 					})
 				})
@@ -97,12 +98,7 @@ func (n *kvnode) dial() {
 					msg := v.Value.(*forwordMsg)
 					msg.removeList()
 					if msg.deadline.After(now) {
-						GetSugar().Debugf("send msg to kvnode:%d store:%d seqno:%d nodeSeqno:%d", n.id, msg.store.id, msg.oriSeqno, msg.seqno)
-						binary.BigEndian.PutUint64(msg.bytes[4:], uint64(msg.seqno))
-						binary.BigEndian.PutUint32(msg.bytes[4+8:], uint32(msg.store.id))
-						binary.BigEndian.PutUint32(msg.bytes[18:], uint32(msg.deadline.Sub(now)/time.Millisecond))
-						msg.add(&n.waitResponse, nil)
-						session.Send(msg.bytes)
+						n.send(now, msg)
 					} else {
 						msg.dropReply()
 					}

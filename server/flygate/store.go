@@ -4,7 +4,6 @@ import (
 	"container/list"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
-	"github.com/sniperHW/flyfish/pkg/queue"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"time"
@@ -18,8 +17,8 @@ type store struct {
 	waittingSend   *list.List //查询leader时的暂存队列
 	slots          *bitmap.Bitmap
 	set            *set
+	removed        bool
 	config         *Config
-	mainQueue      *queue.PriorityQueue
 	gate           *gate
 }
 
@@ -51,7 +50,7 @@ func (s *store) paybackWaittingSendToGate() {
 
 func (s *store) onErrNotLeader(msg *forwordMsg) {
 	GetSugar().Infof("onErrNotLeader")
-	if s.set.removed {
+	if s.removed {
 		msg.add(nil, s.gate.pendingMsg)
 	} else {
 		if nil != s.leader && s.leaderVersion != msg.leaderVersion {
@@ -76,7 +75,7 @@ func (s *store) onErrNotLeader(msg *forwordMsg) {
 }
 
 func (s *store) queryLeader() {
-	if s.set.removed {
+	if s.removed {
 		s.paybackWaittingSendToGate()
 	} else {
 
@@ -104,8 +103,8 @@ func (s *store) queryLeader() {
 					leader = resp.(int)
 				}
 
-				s.mainQueue.ForceAppend(1, func() {
-					if s.set.removed {
+				s.gate.callInQueue(1, func() {
+					if s.removed {
 						s.paybackWaittingSendToGate()
 					} else if leaderNode, ok := s.set.nodes[leader]; ok {
 						s.leaderVersion++
@@ -120,17 +119,13 @@ func (s *store) queryLeader() {
 							}
 						}
 					} else {
-						time.AfterFunc(time.Millisecond*100, func() {
-							s.mainQueue.ForceAppend(1, s.queryLeader)
-						})
+						s.gate.afterFunc(time.Millisecond*100, s.queryLeader)
 					}
 				})
 
 			}()
 		} else {
-			time.AfterFunc(time.Second, func() {
-				s.mainQueue.ForceAppend(1, s.queryLeader)
-			})
+			s.gate.afterFunc(time.Second, s.queryLeader)
 		}
 	}
 }

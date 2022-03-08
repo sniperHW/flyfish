@@ -2,12 +2,10 @@ package flypd
 
 import (
 	"encoding/json"
-	//"errors"
 	"fmt"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
-	//"github.com/sniperHW/flyfish/server/slot"
 	"net"
 	"sort"
 	"time"
