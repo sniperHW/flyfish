@@ -46,44 +46,100 @@ const (
 	write_through      = writeBackMode(2)
 )
 
+type replyer struct {
+	session         *fnet.Socket
+	totalPendingReq *int64
+}
+
+func (r *replyer) reply(resp *cs.RespMessage) {
+	atomic.AddInt64(r.totalPendingReq, -1)
+	r.session.Send(resp)
+}
+
+func (r *replyer) dropReply() {
+	atomic.AddInt64(r.totalPendingReq, -1)
+}
+
 type kvnode struct {
-	muC           sync.Mutex
-	clients       map[*fnet.Socket]struct{}
-	muS           sync.RWMutex
-	stores        map[int]*kvstore
-	config        *Config
-	dbc           *sqlx.DB
-	db            dbI
-	listener      *cs.Listener
-	setID         int
-	id            uint16
-	mutilRaft     *raft.MutilRaft
-	closed        int32
-	udpConn       *fnet.Udp
-	join          bool
-	pdAddr        []*net.UDPAddr
-	writeBackMode writeBackMode
+	//muC sync.Mutex
+	//clients       map[*fnet.Socket]struct{}
+	muS                  sync.RWMutex
+	stores               map[int]*kvstore
+	config               *Config
+	dbc                  *sqlx.DB
+	db                   dbI
+	listener             *cs.Listener
+	setID                int
+	id                   uint16
+	mutilRaft            *raft.MutilRaft
+	closed               int32
+	udpConn              *fnet.Udp
+	join                 bool
+	pdAddr               []*net.UDPAddr
+	writeBackMode        writeBackMode
+	totalPendingReq      int64
+	SoftLimitReachedTime int64
 }
 
 func verifyLogin(loginReq *flyproto.LoginReq) bool {
 	return true
 }
 
+func (this *kvnode) makeReplyer(session *fnet.Socket, req *cs.ReqMessage) *replyer {
+	if this.checkReqLimit(int(atomic.AddInt64(&this.totalPendingReq, 1))) {
+		return &replyer{
+			session:         session,
+			totalPendingReq: &this.totalPendingReq,
+		}
+	} else {
+		atomic.AddInt64(&this.totalPendingReq, -1)
+		session.Send(&cs.RespMessage{
+			Cmd:   req.Cmd,
+			Seqno: req.Seqno,
+			Err:   errcode.New(errcode.Errcode_retry, "flykv busy,please retry later"),
+		})
+		return nil
+	}
+}
+
+func (this *kvnode) checkReqLimit(c int) bool {
+	conf := this.config.ReqLimit
+
+	if c > conf.HardLimit {
+		return false
+	}
+
+	if c > conf.SoftLimit {
+		nowUnix := time.Now().Unix()
+		if !atomic.CompareAndSwapInt64(&this.SoftLimitReachedTime, 0, nowUnix) {
+			SoftLimitReachedTime := atomic.LoadInt64(&this.SoftLimitReachedTime)
+			if SoftLimitReachedTime > 0 && int(nowUnix-SoftLimitReachedTime) >= conf.SoftLimitSeconds {
+				return false
+			}
+		}
+	} else if SoftLimitReachedTime := atomic.LoadInt64(&this.SoftLimitReachedTime); SoftLimitReachedTime > 0 {
+		atomic.CompareAndSwapInt64(&this.SoftLimitReachedTime, SoftLimitReachedTime, 0)
+	}
+
+	return true
+}
+
 func (this *kvnode) onClient(session *fnet.Socket) {
 	go func() {
-		this.muC.Lock()
-		this.clients[session] = struct{}{}
-		this.muC.Unlock()
+		//this.muC.Lock()
+		//this.clients[session] = struct{}{}
+		//this.muC.Unlock()
 
 		session.SetRecvTimeout(flyproto.PingTime * 10)
 		//只有配置了压缩开启同时客户端支持压缩才开启通信压缩
 		session.SetInBoundProcessor(cs.NewReqInboundProcessor())
 		session.SetEncoder(&cs.RespEncoder{})
-		session.SetCloseCallBack(func(session *fnet.Socket, reason error) {
-			this.muC.Lock()
-			delete(this.clients, session)
-			this.muC.Unlock()
-		})
+
+		//session.SetCloseCallBack(func(session *fnet.Socket, reason error) {
+		//	this.muC.Lock()
+		//	delete(this.clients, session)
+		//	this.muC.Unlock()
+		//})
 
 		session.BeginRecv(func(session *fnet.Socket, v interface{}) {
 
@@ -103,19 +159,26 @@ func (this *kvnode) onClient(session *fnet.Socket) {
 					},
 				})
 			default:
+
+				replyer := this.makeReplyer(session, msg)
+
+				if nil == replyer {
+					return
+				}
+
 				this.muS.RLock()
 				store, ok := this.stores[msg.Store]
 				this.muS.RUnlock()
 				if !ok {
-					session.Send(&cs.RespMessage{
+					replyer.reply(&cs.RespMessage{
 						Seqno: msg.Seqno,
 						Cmd:   msg.Cmd,
 						Err:   errcode.New(errcode.Errcode_error, fmt.Sprintf("%s not in current server", msg.UniKey)),
 					})
 				} else {
 					store.addCliMessage(clientRequest{
-						from: session,
-						msg:  msg,
+						replyer: replyer,
+						msg:     msg,
 					})
 				}
 			}
@@ -202,15 +265,13 @@ func (this *kvnode) Stop() {
 		//首先关闭监听,不在接受新到达的连接
 		this.listener.Close()
 
-		//等待所有store响应处理请求以及回写完毕
+		waitCondition(func() bool { return atomic.LoadInt64(&this.totalPendingReq) == 0 })
+
+		//等待所有store回写完毕
 		waitCondition(func() bool {
 			this.muS.RLock()
 			defer this.muS.RUnlock()
 			for _, v := range this.stores {
-				if atomic.LoadInt32(&v.wait4ReplyCount) != 0 {
-					return false
-				}
-
 				if v.isLeader() && atomic.LoadInt32(&v.dbWriteBackCount) != 0 {
 					return false
 				}
@@ -219,7 +280,7 @@ func (this *kvnode) Stop() {
 		})
 
 		//关闭现有连接
-		this.muC.Lock()
+		/*this.muC.Lock()
 		for c, _ := range this.clients {
 			go c.Close(nil, time.Second*5)
 		}
@@ -229,7 +290,7 @@ func (this *kvnode) Stop() {
 			this.muC.Lock()
 			defer this.muC.Unlock()
 			return len(this.clients) == 0
-		})
+		})*/
 
 		this.muS.RLock()
 		for _, v := range this.stores {
@@ -578,26 +639,26 @@ func NewKvNode(id uint16, join bool, config *Config, db dbI) (*kvnode, error) {
 		raft.MaxBatchCount = config.MaxBatchCount
 	}
 
-	if config.StoreReqLimit.SoftLimit <= 0 {
-		config.StoreReqLimit.SoftLimit = 20000
+	if config.ReqLimit.SoftLimit <= 0 {
+		config.ReqLimit.SoftLimit = 100000
 	}
 
-	if config.StoreReqLimit.HardLimit <= 0 {
-		config.StoreReqLimit.HardLimit = 50000
+	if config.ReqLimit.HardLimit <= 0 {
+		config.ReqLimit.HardLimit = 150000
 	}
 
-	if config.StoreReqLimit.SoftLimitSeconds <= 0 {
-		config.StoreReqLimit.SoftLimitSeconds = 10
+	if config.ReqLimit.SoftLimitSeconds <= 0 {
+		config.ReqLimit.SoftLimitSeconds = 10
 	}
 
 	node := &kvnode{
 		id:        id,
 		mutilRaft: raft.NewMutilRaft(),
-		clients:   map[*fnet.Socket]struct{}{},
-		stores:    map[int]*kvstore{},
-		db:        db,
-		config:    config,
-		join:      join,
+		//clients:   map[*fnet.Socket]struct{}{},
+		stores: map[int]*kvstore{},
+		db:     db,
+		config: config,
+		join:   join,
 	}
 
 	if config.WriteBackMode == "WriteThrough" {

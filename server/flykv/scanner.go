@@ -8,6 +8,7 @@ import (
 	"github.com/sniperHW/flyfish/proto/cs"
 	"github.com/sniperHW/flyfish/proto/cs/scan"
 	"net"
+	"sync/atomic"
 	"time"
 )
 
@@ -35,7 +36,19 @@ type scanner struct {
 }
 
 func (this *kvnode) onScanner(conn net.Conn) {
+	if this.checkReqLimit(int(atomic.AddInt64(&this.totalPendingReq, 1))) {
+		conn.Close()
+		return
+	}
+
 	go func() {
+		startScan := false
+		defer func() {
+			if !startScan {
+				atomic.AddInt64(&this.totalPendingReq, -1)
+			}
+		}()
+
 		req, err := scan.RecvScannerReq(conn, time.Now().Add(time.Second*5))
 		if nil != err {
 			conn.Close()
@@ -119,6 +132,7 @@ func (this *kvnode) onScanner(conn net.Conn) {
 		if err = scan.SendScannerResp(conn, scan.Err_ok, time.Now().Add(time.Second)); nil != err {
 			conn.Close()
 		} else {
+			startScan = true
 			go scanner.loop(this, conn)
 		}
 	}()
@@ -130,6 +144,7 @@ func (sc *scanner) loop(kvnode *kvnode, conn net.Conn) {
 		if nil != sc.scanner {
 			sc.scanner.Close()
 		}
+		atomic.AddInt64(&kvnode.totalPendingReq, -1)
 	}()
 	for {
 		req, err := scan.RecvScanNextReq(conn, time.Now().Add(scan.RecvScanNextReqTimeout))

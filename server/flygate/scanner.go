@@ -11,6 +11,7 @@ import (
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	sslot "github.com/sniperHW/flyfish/server/slot"
 	"net"
+	"sync/atomic"
 	"time"
 )
 
@@ -32,7 +33,19 @@ type scanner struct {
 }
 
 func (g *gate) onScanner(conn net.Conn) {
+	if g.checkReqLimit(int(atomic.AddInt64(&g.totalPendingReq, 1))) {
+		conn.Close()
+		return
+	}
+
 	go func() {
+		startScan := false
+		defer func() {
+			if !startScan {
+				atomic.AddInt64(&g.totalPendingReq, -1)
+			}
+		}()
+
 		req, err := scan.RecvScannerReq(conn, time.Now().Add(time.Second*5))
 		if nil != err {
 			GetSugar().Infof("RecvScannerReq error:%v", err)
@@ -136,6 +149,7 @@ func (g *gate) onScanner(conn net.Conn) {
 				GetSugar().Infof("SendScannerResp error:%v", err)
 				conn.Close()
 			} else if errCode == scan.Err_ok {
+				startScan = true
 				go sc.loop(g, conn)
 			} else {
 				conn.Close()
@@ -225,6 +239,7 @@ func (st *storeScanner) next(sc *scanner, count int, deadline time.Time) (*flypr
 func (sc *scanner) loop(g *gate, conn net.Conn) {
 	defer func() {
 		conn.Close()
+		atomic.AddInt64(&g.totalPendingReq, -1)
 	}()
 
 	for {

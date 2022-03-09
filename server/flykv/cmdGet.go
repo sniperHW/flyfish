@@ -2,7 +2,6 @@ package flykv
 
 import (
 	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/pkg/net"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
 	"time"
@@ -49,7 +48,7 @@ func (this *cmdGet) cmdType() flyproto.CmdType {
 	return flyproto.CmdType_Get
 }
 
-func (s *kvstore) makeGet(kv *kv, deadline time.Time, c *net.Socket, seqno int64, req *flyproto.GetReq) (cmdI, errcode.Error) {
+func (s *kvstore) makeGet(kv *kv, deadline time.Time, replyer *replyer, seqno int64, req *flyproto.GetReq) (cmdI, errcode.Error) {
 
 	if !req.GetAll() {
 		if err := kv.meta.CheckFieldsName(req.GetFields()); nil != err {
@@ -59,7 +58,7 @@ func (s *kvstore) makeGet(kv *kv, deadline time.Time, c *net.Socket, seqno int64
 
 	get := &cmdGet{}
 
-	get.cmdBase.init(kv, c, seqno, req.Version, deadline, &s.wait4ReplyCount, get.makeResponse)
+	get.cmdBase.init(kv, replyer, seqno, req.Version, deadline, &s.kvnode.totalPendingReq, get.makeResponse)
 
 	if req.GetAll() {
 		get.wants = kv.meta.GetAllFieldsName()

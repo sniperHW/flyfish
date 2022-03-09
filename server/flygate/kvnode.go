@@ -21,25 +21,19 @@ type kvnode struct {
 	gate         *gate
 }
 
-func (n *kvnode) sendForwordMsg(msg *forwordMsg) bool {
-
-	if len(n.waitResponse)+n.waittingSend.Len() >= n.config.MaxNodePendingMsg {
-		return false
-	} else {
-		if nil != n.session {
-			now := time.Now()
-			if msg.deadline.After(now) {
-				n.send(now, msg)
-			} else {
-				msg.dropReply()
-			}
+func (n *kvnode) sendForwordMsg(msg *forwordMsg) {
+	if nil != n.session {
+		now := time.Now()
+		if msg.deadline.After(now) {
+			n.send(now, msg)
 		} else {
-			msg.add(nil, n.waittingSend)
-			if n.waittingSend.Len() == 1 {
-				n.dial()
-			}
+			msg.dropReply()
 		}
-		return true
+	} else {
+		msg.add(nil, n.waittingSend)
+		if n.waittingSend.Len() == 1 {
+			n.dial()
+		}
 	}
 }
 

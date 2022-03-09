@@ -24,11 +24,12 @@ RaftLogDir              = "raftLog"
 
 RaftLogPrefix           = "flykv"
 
-[StoreReqLimit]
+LinearizableRead        = true
+
+[ReqLimit]
 SoftLimit               = 50000
 HardLimit               = 100000
 SoftLimitSeconds        = 10
-LinearizableRead        = true
 
 
 [SoloConfig]

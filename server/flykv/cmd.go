@@ -3,7 +3,6 @@ package flykv
 import (
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/pkg/net"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
 	"sync/atomic"
@@ -21,22 +20,22 @@ type MakeResponse func(errcode.Error, map[string]*flyproto.Field, int64) *cs.Res
 type cmdBase struct {
 	seqno           int64
 	version         *int64
-	peer            *net.Socket
+	replyer         *replyer
 	deadline        time.Time
 	replied         int32
-	wait4ReplyCount *int32
+	totalPendingReq *int64
 	fnMakeResponse  MakeResponse
 	kv              *kv
 	meta            db.TableMeta
 }
 
-func (this *cmdBase) init(kv *kv, peer *net.Socket, seqno int64, version *int64, deadline time.Time, wait4ReplyCount *int32, makeResponse MakeResponse) {
-	atomic.AddInt32(wait4ReplyCount, 1)
-	this.peer = peer
+func (this *cmdBase) init(kv *kv, replyer *replyer, seqno int64, version *int64, deadline time.Time, totalPendingReq *int64, makeResponse MakeResponse) {
+	atomic.AddInt64(totalPendingReq, 1)
+	this.replyer = replyer
 	this.deadline = deadline
 	this.version = version
 	this.seqno = seqno
-	this.wait4ReplyCount = wait4ReplyCount
+	this.totalPendingReq = totalPendingReq
 	this.fnMakeResponse = makeResponse
 	this.kv = kv
 	this.meta = kv.meta
@@ -52,14 +51,11 @@ func (this *cmdBase) isTimeout() bool {
 
 func (this *cmdBase) reply(err errcode.Error, fields map[string]*flyproto.Field, version int64) {
 	if atomic.CompareAndSwapInt32(&this.replied, 0, 1) {
-		atomic.AddInt32(this.wait4ReplyCount, -1)
-		if nil != this.peer {
+		if nil != this.replyer {
 			if !time.Now().After(this.deadline) {
-				resp := this.fnMakeResponse(err, fields, version)
-				e := this.peer.Send(resp)
-				if nil != e {
-					GetSugar().Debugf("send resp error:%v", e)
-				}
+				this.replyer.reply(this.fnMakeResponse(err, fields, version))
+			} else {
+				this.replyer.dropReply()
 			}
 		}
 	}

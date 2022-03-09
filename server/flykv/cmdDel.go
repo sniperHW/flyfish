@@ -1,9 +1,7 @@
 package flykv
 
 import (
-	//"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/pkg/net"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
 	"time"
@@ -37,11 +35,11 @@ func (this *cmdDel) cmdType() flyproto.CmdType {
 	return flyproto.CmdType_Del
 }
 
-func (s *kvstore) makeDel(kv *kv, deadline time.Time, c *net.Socket, seqno int64, req *flyproto.DelReq) (cmdI, errcode.Error) {
+func (s *kvstore) makeDel(kv *kv, deadline time.Time, replyer *replyer, seqno int64, req *flyproto.DelReq) (cmdI, errcode.Error) {
 
 	del := &cmdDel{}
 
-	del.cmdBase.init(kv, c, seqno, req.Version, deadline, &s.wait4ReplyCount, del.makeResponse)
+	del.cmdBase.init(kv, replyer, seqno, req.Version, deadline, &s.kvnode.totalPendingReq, del.makeResponse)
 
 	return del, nil
 }

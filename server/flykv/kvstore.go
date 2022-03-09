@@ -10,7 +10,7 @@ import (
 	"github.com/sniperHW/flyfish/pkg/etcd/etcdserver/api/snap"
 	"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
-	fnet "github.com/sniperHW/flyfish/pkg/net"
+	//fnet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	"github.com/sniperHW/flyfish/pkg/raft/membership"
@@ -66,9 +66,9 @@ func (q applicationQueue) close() {
 }
 
 type clientRequest struct {
-	from *fnet.Socket
-	msg  *cs.ReqMessage
-	slot int
+	replyer *replyer
+	msg     *cs.ReqMessage
+	slot    int
 }
 
 type kvmgr struct {
@@ -85,22 +85,18 @@ type kvmgr struct {
 
 type kvstore struct {
 	kvmgr
-	lastLeader           uint64
-	leader               uint64
-	snapshotter          *snap.Snapshotter
-	rn                   *raft.RaftInstance
-	mainQueue            applicationQueue
-	db                   dbI
-	wait4ReplyCount      int32
-	stoped               int32
-	ready                int32
-	kvnode               *kvnode
-	shard                int
-	meta                 db.DBMeta
-	dbWriteBackCount     int32
-	SoftLimitReachedTime int64
-	unixNow              int64
-	lruInterval          time.Duration
+	lastLeader       uint64
+	leader           uint64
+	snapshotter      *snap.Snapshotter
+	rn               *raft.RaftInstance
+	mainQueue        applicationQueue
+	db               dbI
+	stoped           int32
+	ready            int32
+	kvnode           *kvnode
+	shard            int
+	meta             db.DBMeta
+	dbWriteBackCount int32
 }
 
 func (s *kvstore) addKickable(k *kv) {
@@ -138,7 +134,7 @@ func (s *kvstore) loadSnapshot() (*raftpb.Snapshot, error) {
 
 func (s *kvstore) addCliMessage(req clientRequest) {
 	if nil != s.mainQueue.q.Append(0, req) {
-		req.from.Send(&cs.RespMessage{
+		req.replyer.reply(&cs.RespMessage{
 			Cmd:   req.msg.Cmd,
 			Seqno: req.msg.Seqno,
 			Err:   errcode.New(errcode.Errcode_retry, "kvstore busy,please retry later"),
@@ -232,9 +228,9 @@ func newkv(s *kvstore, slot int, groupID int, unikey string, key string, table s
 	return k, nil
 }
 
-func (this *kvstore) kick(kv *kv) {
+func (s *kvstore) kick(kv *kv) {
 	kick := &cmdKick{}
-	kick.cmdBase.init(kv, nil, 0, nil, time.Time{}, &this.wait4ReplyCount, kick.makeResponse)
+	kick.cmdBase.init(kv, nil, 0, nil, time.Time{}, &s.kvnode.totalPendingReq, kick.makeResponse)
 	kv.pushCmd(kick)
 }
 
@@ -244,51 +240,26 @@ func (s *kvstore) makeCmd(keyvalue *kv, req clientRequest) (cmdI, errcode.Error)
 	deadline := time.Now().Add(time.Duration(req.msg.Timeout) * time.Millisecond)
 	switch cmd {
 	case flyproto.CmdType_Get:
-		return s.makeGet(keyvalue, deadline, req.from, req.msg.Seqno, data.(*flyproto.GetReq))
+		return s.makeGet(keyvalue, deadline, req.replyer, req.msg.Seqno, data.(*flyproto.GetReq))
 	case flyproto.CmdType_Set:
-		return s.makeSet(keyvalue, deadline, req.from, req.msg.Seqno, data.(*flyproto.SetReq))
+		return s.makeSet(keyvalue, deadline, req.replyer, req.msg.Seqno, data.(*flyproto.SetReq))
 	case flyproto.CmdType_SetNx:
-		return s.makeSetNx(keyvalue, deadline, req.from, req.msg.Seqno, data.(*flyproto.SetNxReq))
+		return s.makeSetNx(keyvalue, deadline, req.replyer, req.msg.Seqno, data.(*flyproto.SetNxReq))
 	case flyproto.CmdType_Del:
-		return s.makeDel(keyvalue, deadline, req.from, req.msg.Seqno, data.(*flyproto.DelReq))
+		return s.makeDel(keyvalue, deadline, req.replyer, req.msg.Seqno, data.(*flyproto.DelReq))
 	case flyproto.CmdType_CompareAndSet:
-		return s.makeCompareAndSet(keyvalue, deadline, req.from, req.msg.Seqno, data.(*flyproto.CompareAndSetReq))
+		return s.makeCompareAndSet(keyvalue, deadline, req.replyer, req.msg.Seqno, data.(*flyproto.CompareAndSetReq))
 	case flyproto.CmdType_CompareAndSetNx:
-		return s.makeCompareAndSetNx(keyvalue, deadline, req.from, req.msg.Seqno, data.(*flyproto.CompareAndSetNxReq))
+		return s.makeCompareAndSetNx(keyvalue, deadline, req.replyer, req.msg.Seqno, data.(*flyproto.CompareAndSetNxReq))
 	case flyproto.CmdType_IncrBy:
-		return s.makeIncr(keyvalue, deadline, req.from, req.msg.Seqno, data.(*flyproto.IncrByReq))
+		return s.makeIncr(keyvalue, deadline, req.replyer, req.msg.Seqno, data.(*flyproto.IncrByReq))
 	case flyproto.CmdType_DecrBy:
-		return s.makeDecr(keyvalue, deadline, req.from, req.msg.Seqno, data.(*flyproto.DecrByReq))
+		return s.makeDecr(keyvalue, deadline, req.replyer, req.msg.Seqno, data.(*flyproto.DecrByReq))
 	case flyproto.CmdType_Kick:
-		return s.makeKick(keyvalue, deadline, req.from, req.msg.Seqno, data.(*flyproto.KickReq))
+		return s.makeKick(keyvalue, deadline, req.replyer, req.msg.Seqno, data.(*flyproto.KickReq))
 	default:
 	}
 	return nil, errcode.New(errcode.Errcode_error, "invaild cmd type")
-}
-
-func (s *kvstore) checkReqLimit() bool {
-	c := int(atomic.LoadInt32(&s.wait4ReplyCount))
-	conf := s.kvnode.config.StoreReqLimit
-
-	if c > conf.HardLimit {
-		return false
-	}
-
-	if c > conf.SoftLimit {
-		nowUnix := time.Now().Unix()
-		if s.SoftLimitReachedTime == 0 {
-			s.SoftLimitReachedTime = nowUnix
-		} else {
-			elapse := nowUnix - s.SoftLimitReachedTime
-			if int(elapse) >= conf.SoftLimitSeconds {
-				return false
-			}
-		}
-	} else {
-		s.SoftLimitReachedTime = 0
-	}
-
-	return true
 }
 
 func (s *kvstore) processClientMessage(req clientRequest) {
@@ -305,10 +276,6 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 	)
 
 	err = func() errcode.Error {
-		if !s.checkReqLimit() {
-			return errcode.New(errcode.Errcode_retry, "kvstore busy,please retry later")
-		}
-
 		slot := sslot.Unikey2Slot(req.msg.UniKey)
 
 		if !s.slots.Test(slot) {
@@ -368,7 +335,7 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 		if errcode.GetCode(err) != errcode.Errcode_ok {
 			resp.Err = err
 		}
-		req.from.Send(resp)
+		req.replyer.reply(resp)
 	}
 }
 

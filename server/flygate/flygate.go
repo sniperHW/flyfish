@@ -18,7 +18,7 @@ import (
 	"net"
 	"sort"
 	"strings"
-	"sync"
+	//"sync"
 	"sync/atomic"
 	"time"
 )
@@ -204,22 +204,23 @@ func (r *routeInfo) onQueryRouteInfoResp(gate *gate, resp *sproto.QueryRouteInfo
 }
 
 type gate struct {
-	config          *Config
-	closed          int32
-	closeCh         chan struct{}
-	listener        *cs.Listener
-	totalPendingMsg int64
-	pendingMsg      *list.List //尚无正确路由信息的请求
-	muC             sync.Mutex
-	clients         map[*flynet.Socket]*flynet.Socket
-	routeInfo       routeInfo
-	queryTimer      *time.Timer
-	mainQueue       *queue.PriorityQueue
-	serviceAddr     string
-	seqCounter      int64
-	pdAddr          []*net.UDPAddr
-	msgPerSecond    *movingAverage.MovingAverage //每秒客户端转发请求量的移动平均值
-	msgRecv         int32
+	config     *Config
+	closed     int32
+	closeCh    chan struct{}
+	listener   *cs.Listener
+	pendingMsg *list.List //尚无正确路由信息的请求
+	//muC             sync.Mutex
+	//clients         map[*flynet.Socket]*flynet.Socket
+	routeInfo            routeInfo
+	queryTimer           *time.Timer
+	mainQueue            *queue.PriorityQueue
+	serviceAddr          string
+	seqCounter           int64
+	pdAddr               []*net.UDPAddr
+	msgPerSecond         *movingAverage.MovingAverage //每秒客户端转发请求量的移动平均值
+	msgRecv              int32
+	totalPendingReq      int64
+	SoftLimitReachedTime int64
 }
 
 func doQueryRouteInfo(pdAddr []*net.UDPAddr, req *sproto.QueryRouteInfo) *sproto.QueryRouteInfoResp {
@@ -247,9 +248,22 @@ func doQueryRouteInfo(pdAddr []*net.UDPAddr, req *sproto.QueryRouteInfo) *sproto
 
 func NewFlyGate(config *Config, service string) (*gate, error) {
 	mainQueue := queue.NewPriorityQueue(2)
+
+	if config.ReqLimit.SoftLimit <= 0 {
+		config.ReqLimit.SoftLimit = 100000
+	}
+
+	if config.ReqLimit.HardLimit <= 0 {
+		config.ReqLimit.HardLimit = 150000
+	}
+
+	if config.ReqLimit.SoftLimitSeconds <= 0 {
+		config.ReqLimit.SoftLimitSeconds = 10
+	}
+
 	g := &gate{
-		config:    config,
-		clients:   map[*flynet.Socket]*flynet.Socket{},
+		config: config,
+		//clients:   map[*flynet.Socket]*flynet.Socket{},
 		mainQueue: mainQueue,
 		routeInfo: routeInfo{
 			config:      config,
@@ -282,6 +296,28 @@ func NewFlyGate(config *Config, service string) (*gate, error) {
 	return g, err
 }
 
+func (g *gate) checkReqLimit(c int) bool {
+	conf := g.config.ReqLimit
+
+	if c > conf.HardLimit {
+		return false
+	}
+
+	if c > conf.SoftLimit {
+		nowUnix := time.Now().Unix()
+		if !atomic.CompareAndSwapInt64(&g.SoftLimitReachedTime, 0, nowUnix) {
+			SoftLimitReachedTime := atomic.LoadInt64(&g.SoftLimitReachedTime)
+			if SoftLimitReachedTime > 0 && int(nowUnix-SoftLimitReachedTime) >= conf.SoftLimitSeconds {
+				return false
+			}
+		}
+	} else if SoftLimitReachedTime := atomic.LoadInt64(&g.SoftLimitReachedTime); SoftLimitReachedTime > 0 {
+		atomic.CompareAndSwapInt64(&g.SoftLimitReachedTime, SoftLimitReachedTime, 0)
+	}
+
+	return true
+}
+
 func (g *gate) callInQueue(priority int, fn func()) {
 	g.mainQueue.ForceAppend(priority, fn)
 }
@@ -301,30 +337,61 @@ func (g *gate) refreshMsgPerSecond() {
 	}
 }
 
+type replyer struct {
+	session         *flynet.Socket
+	totalPendingReq *int64
+}
+
+func (r *replyer) reply(resp []byte) {
+	atomic.AddInt64(r.totalPendingReq, -1)
+	r.session.Send(resp)
+}
+
+func (r *replyer) dropReply() {
+	atomic.AddInt64(r.totalPendingReq, -1)
+}
+
+func (g *gate) makeReplyer(session *flynet.Socket, req *forwordMsg) *replyer {
+	replyer := &replyer{
+		session:         session,
+		totalPendingReq: &g.totalPendingReq,
+	}
+
+	if g.checkReqLimit(int(atomic.AddInt64(&g.totalPendingReq, 1))) {
+		return replyer
+	} else {
+		replyCliError(replyer, req.oriSeqno, req.cmd, errcode.New(errcode.Errcode_retry, "flykv busy,please retry later"))
+		return nil
+	}
+}
+
 func (g *gate) startListener() {
 	g.listener.Serve(func(session *flynet.Socket) {
-		g.muC.Lock()
-		g.clients[session] = session
-		g.muC.Unlock()
+		//g.muC.Lock()
+		//g.clients[session] = session
+		//g.muC.Unlock()
 		session.SetEncoder(&encoder{})
 		session.SetInBoundProcessor(NewCliReqInboundProcessor())
 		session.SetRecvTimeout(flyproto.PingTime * 10)
 
-		session.SetCloseCallBack(func(session *flynet.Socket, reason error) {
-			g.muC.Lock()
-			delete(g.clients, session)
-			g.muC.Unlock()
-		})
+		//session.SetCloseCallBack(func(session *flynet.Socket, reason error) {
+		//	g.muC.Lock()
+		//	delete(g.clients, session)
+		//	g.muC.Unlock()
+		//})
 
 		session.BeginRecv(func(session *flynet.Socket, v interface{}) {
 			if atomic.LoadInt32(&g.closed) == 1 {
 				//服务关闭不再接受新新的请求
 				return
 			}
+
 			atomic.AddInt32(&g.msgRecv, 1)
 			msg := v.(*forwordMsg)
-			msg.cli = session
-			g.mainQueue.ForceAppend(0, msg)
+			if replyer := g.makeReplyer(session, msg); nil != replyer {
+				msg.replyer = replyer
+				g.mainQueue.ForceAppend(0, msg)
+			}
 		})
 	}, g.onScanner)
 	GetSugar().Infof("flygate start on %s", g.serviceAddr)
@@ -344,19 +411,12 @@ func (g *gate) mainLoop() {
 				msg.deadlineTimer = g.afterFunc(msg.deadline.Sub(time.Now()), msg.dropReply)
 				g.seqCounter++
 				msg.seqno = g.seqCounter
-				msg.totalPendingMsg = &g.totalPendingMsg
-				if atomic.AddInt64(msg.totalPendingMsg, 1) > int64(g.config.MaxPendingMsg) {
-					msg.replyErr(errcode.New(errcode.Errcode_retry, "gate busy,please retry later"))
+				s, ok := g.routeInfo.slotToStore[msg.slot]
+				if !ok {
+					GetSugar().Infof("slot%d has no route info", msg.slot)
+					msg.add(nil, g.pendingMsg)
 				} else {
-					s, ok := g.routeInfo.slotToStore[msg.slot]
-					if !ok {
-						GetSugar().Infof("slot%d has no route info", msg.slot)
-						msg.add(nil, g.pendingMsg)
-					} else {
-						if !s.onCliMsg(msg) {
-							msg.replyErr(errcode.New(errcode.Errcode_retry, "gate busy,please retry later"))
-						}
-					}
+					s.onCliMsg(msg)
 				}
 			}
 		case func():
@@ -381,9 +441,7 @@ func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
 				if !ok {
 					msg.add(nil, g.pendingMsg)
 				} else {
-					if !s.onCliMsg(msg) {
-						msg.replyErr(errcode.New(errcode.Errcode_retry, "gate busy,please retry later"))
-					}
+					s.onCliMsg(msg)
 				}
 			} else {
 				msg.dropReply()
@@ -508,10 +566,10 @@ func (g *gate) Stop() {
 
 		//等待所有消息处理完
 		g.waitCondition(func() bool {
-			return g.totalPendingMsg == 0
+			return g.totalPendingReq == 0
 		})
 
-		g.muC.Lock()
+		/*g.muC.Lock()
 		for _, v := range g.clients {
 			go v.Close(nil, time.Second*5)
 		}
@@ -521,7 +579,7 @@ func (g *gate) Stop() {
 			g.muC.Lock()
 			defer g.muC.Unlock()
 			return len(g.clients) == 0
-		})
+		})*/
 
 		g.mainQueue.Close()
 

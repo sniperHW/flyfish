@@ -1,9 +1,7 @@
 package flykv
 
 import (
-	//"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/pkg/net"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
 	"time"
@@ -58,7 +56,7 @@ func (this *cmdSetNx) cmdType() flyproto.CmdType {
 	return flyproto.CmdType_SetNx
 }
 
-func (s *kvstore) makeSetNx(kv *kv, deadline time.Time, c *net.Socket, seqno int64, req *flyproto.SetNxReq) (cmdI, errcode.Error) {
+func (s *kvstore) makeSetNx(kv *kv, deadline time.Time, replyer *replyer, seqno int64, req *flyproto.SetNxReq) (cmdI, errcode.Error) {
 	if len(req.GetFields()) == 0 {
 		return nil, errcode.New(errcode.Errcode_error, "setNx fields is empty")
 	}
@@ -71,7 +69,7 @@ func (s *kvstore) makeSetNx(kv *kv, deadline time.Time, c *net.Socket, seqno int
 		fields: map[string]*flyproto.Field{},
 	}
 
-	setNx.cmdBase.init(kv, c, seqno, req.Version, deadline, &s.wait4ReplyCount, setNx.makeResponse)
+	setNx.cmdBase.init(kv, replyer, seqno, req.Version, deadline, &s.kvnode.totalPendingReq, setNx.makeResponse)
 
 	for _, v := range req.GetFields() {
 		setNx.fields[v.GetName()] = v

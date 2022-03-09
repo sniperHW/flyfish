@@ -1,9 +1,7 @@
 package flykv
 
 import (
-	//"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/pkg/net"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
 	"time"
@@ -48,7 +46,7 @@ func (this *cmdSet) cmdType() flyproto.CmdType {
 	return flyproto.CmdType_Set
 }
 
-func (s *kvstore) makeSet(kv *kv, deadline time.Time, c *net.Socket, seqno int64, req *flyproto.SetReq) (cmdI, errcode.Error) {
+func (s *kvstore) makeSet(kv *kv, deadline time.Time, replyer *replyer, seqno int64, req *flyproto.SetReq) (cmdI, errcode.Error) {
 	if len(req.GetFields()) == 0 {
 		return nil, errcode.New(errcode.Errcode_error, "set fields is empty")
 	}
@@ -61,7 +59,7 @@ func (s *kvstore) makeSet(kv *kv, deadline time.Time, c *net.Socket, seqno int64
 		fields: map[string]*flyproto.Field{},
 	}
 
-	set.cmdBase.init(kv, c, seqno, req.Version, deadline, &s.wait4ReplyCount, set.makeResponse)
+	set.cmdBase.init(kv, replyer, seqno, req.Version, deadline, &s.kvnode.totalPendingReq, set.makeResponse)
 
 	for _, v := range req.GetFields() {
 		set.fields[v.GetName()] = v

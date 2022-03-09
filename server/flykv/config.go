@@ -69,11 +69,11 @@ type Config struct {
 		DB       string `toml:"DB"`
 	} `toml:"DBConfig"`
 
-	StoreReqLimit struct {
+	ReqLimit struct {
 		SoftLimit        int `toml:"SoftLimit"`
 		HardLimit        int `toml:"HardLimit"`
 		SoftLimitSeconds int `toml:"SoftLimitSeconds"`
-	} `toml:"StoreReqLimit"`
+	} `toml:"ReqLimit"`
 
 	Log struct {
 		MaxLogfileSize int    `toml:"MaxLogfileSize"`

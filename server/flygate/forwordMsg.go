@@ -4,9 +4,9 @@ import (
 	"container/list"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/buffer"
-	flynet "github.com/sniperHW/flyfish/pkg/net"
+	//flynet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/proto/cs"
-	"sync/atomic"
+	//"sync/atomic"
 	"time"
 )
 
@@ -26,9 +26,9 @@ type forwordMsg struct {
 	bytes           []byte
 	deadline        time.Time
 	deadlineTimer   *time.Timer
-	cli             *flynet.Socket
+	replyer         *replyer
 	replied         bool
-	totalPendingMsg *int64
+	totalPendingReq *int64
 	store           *store
 }
 
@@ -78,19 +78,17 @@ func (r *forwordMsg) setReplied() bool {
 
 func (r *forwordMsg) reply(b []byte) {
 	if r.setReplied() {
-		atomic.AddInt64(r.totalPendingMsg, -1)
 		r.deadlineTimer.Stop()
 		r.remove()
-		r.cli.Send(b)
+		r.replyer.reply(b)
 	}
 }
 
 func (r *forwordMsg) replyErr(err errcode.Error) {
 	if r.setReplied() {
-		atomic.AddInt64(r.totalPendingMsg, -1)
 		r.deadlineTimer.Stop()
 		r.remove()
-		replyCliError(r.cli, r.oriSeqno, r.cmd, err)
+		replyCliError(r.replyer, r.oriSeqno, r.cmd, err)
 	}
 }
 
@@ -98,11 +96,11 @@ func (r *forwordMsg) dropReply() {
 	if r.setReplied() {
 		r.deadlineTimer.Stop()
 		r.remove()
-		atomic.AddInt64(r.totalPendingMsg, -1)
+		r.replyer.dropReply()
 	}
 }
 
-func replyCliError(cli *flynet.Socket, seqno int64, cmd uint16, err errcode.Error) {
+func replyCliError(replyer *replyer, seqno int64, cmd uint16, err errcode.Error) {
 
 	var sizeOfErrDesc int
 
@@ -142,5 +140,5 @@ func replyCliError(cli *flynet.Socket, seqno int64, cmd uint16, err errcode.Erro
 
 	b = buffer.AppendInt32(b, 0)
 
-	cli.Send(b)
+	replyer.reply(b)
 }

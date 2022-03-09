@@ -2,7 +2,6 @@ package flygate
 
 import (
 	"container/list"
-	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
@@ -22,21 +21,16 @@ type store struct {
 	gate           *gate
 }
 
-func (s *store) onCliMsg(msg *forwordMsg) bool {
+func (s *store) onCliMsg(msg *forwordMsg) {
 	msg.store = s
 	if nil == s.leader {
-		if s.waittingSend.Len() >= s.config.MaxStorePendingMsg {
-			return false
-		} else {
-			msg.add(nil, s.waittingSend)
-			if s.waittingSend.Len() == 1 {
-				s.queryLeader()
-			}
-			return true
+		msg.add(nil, s.waittingSend)
+		if s.waittingSend.Len() == 1 {
+			s.queryLeader()
 		}
 	} else {
 		msg.leaderVersion = s.leaderVersion
-		return s.leader.sendForwordMsg(msg)
+		s.leader.sendForwordMsg(msg)
 	}
 }
 
@@ -56,9 +50,7 @@ func (s *store) onErrNotLeader(msg *forwordMsg) {
 		if nil != s.leader && s.leaderVersion != msg.leaderVersion {
 			//leader已经变更，向新的leader发送
 			msg.leaderVersion = s.leaderVersion
-			if !s.leader.sendForwordMsg(msg) {
-				msg.replyErr(errcode.New(errcode.Errcode_retry, "gate busy,please retry later"))
-			}
+			s.leader.sendForwordMsg(msg)
 		} else if nil != s.leader && s.leaderVersion == msg.leaderVersion {
 			s.leader = nil
 		}
@@ -114,9 +106,7 @@ func (s *store) queryLeader() {
 							msg := v.Value.(*forwordMsg)
 							msg.leaderVersion = s.leaderVersion
 							msg.removeList()
-							if !leaderNode.sendForwordMsg(msg) {
-								msg.replyErr(errcode.New(errcode.Errcode_retry, "gate busy,please retry later"))
-							}
+							leaderNode.sendForwordMsg(msg)
 						}
 					} else {
 						s.gate.afterFunc(time.Millisecond*100, s.queryLeader)
