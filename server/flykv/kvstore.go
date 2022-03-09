@@ -230,7 +230,7 @@ func newkv(s *kvstore, slot int, groupID int, unikey string, key string, table s
 
 func (s *kvstore) kick(kv *kv) {
 	kick := &cmdKick{}
-	kick.cmdBase.init(kv, nil, 0, nil, time.Time{}, &s.kvnode.totalPendingReq, kick.makeResponse)
+	kick.cmdBase.init(kv, nil, 0, nil, time.Time{}, nil)
 	kv.pushCmd(kick)
 }
 

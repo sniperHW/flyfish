@@ -1,12 +1,12 @@
 package flypd
 
 import (
-	"crypto/tls"
+	//"crypto/tls"
 	"fmt"
 	"github.com/gogo/protobuf/proto"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
-	"net"
+	//"net"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -37,7 +37,6 @@ func (p *pd) fetchReq(cmd string, r *http.Request) (*snet.Message, error) {
 }
 
 func (p *pd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-
 	if p.config.TLS.EnableTLS {
 		if r.Header.Get("token") != "feiyu_tech_2021" {
 			w.WriteHeader(http.StatusBadRequest)
@@ -45,14 +44,12 @@ func (p *pd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if !p.isLeader() {
+	if atomic.LoadInt32(&p.closed) == 1 || !p.isLeader() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
 
 	if tmp := strings.Split(r.URL.Path, "/"); len(tmp) == 2 {
-		GetSugar().Debugf("http request %v", tmp[1])
-
 		if tmp[1] == "QueryPdLeader" {
 			if byte, err := proto.Marshal(&sproto.QueryPdLeaderResp{
 				Yes: p.isLeader(),
@@ -63,7 +60,7 @@ func (p *pd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			req, err := p.fetchReq(tmp[1], r)
 			if nil == err {
 				replyer := &httpReplyer{w: w, waitCh: make(chan struct{})}
-				p.mainque.append(func() {
+				err = p.mainque.append(func() {
 					if p.isLeader() {
 						p.onMsg(replyer, req)
 					} else {
@@ -72,13 +69,17 @@ func (p *pd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					}
 				})
 
-				ticker := time.NewTicker(time.Second * 5)
-				select {
-				case <-replyer.waitCh:
-				case <-ticker.C:
-					w.WriteHeader(http.StatusRequestTimeout)
+				if nil == err {
+					ticker := time.NewTicker(time.Second * 5)
+					select {
+					case <-replyer.waitCh:
+					case <-ticker.C:
+						w.WriteHeader(http.StatusRequestTimeout)
+					}
+					ticker.Stop()
+				} else {
+					w.WriteHeader(http.StatusServiceUnavailable)
 				}
-				ticker.Stop()
 			} else {
 				GetSugar().Errorf("ServeHTTP error:%v", err)
 				w.WriteHeader(http.StatusBadRequest)
@@ -87,42 +88,26 @@ func (p *pd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *pd) startHttpService() error {
+func (p *pd) startHttpService() {
 	p.httpServer = &http.Server{
+		Addr:           p.service,
 		Handler:        p,
 		ReadTimeout:    10 * time.Second,
 		WriteTimeout:   10 * time.Second,
 		MaxHeaderBytes: 1 << 20,
 	}
-
-	var err error
-
 	if p.config.TLS.EnableTLS {
-
-		cert, err := tls.LoadX509KeyPair(p.config.TLS.Crt, p.config.TLS.Key)
-
-		if err != nil {
-			return err
-		}
-
-		tlsConfig := &tls.Config{
-			Certificates: []tls.Certificate{cert},
-		}
-
-		p.httpListener, err = tls.Listen("tcp", p.service, tlsConfig)
-		if err != nil {
-			return err
-		}
+		go func() {
+			if err := p.httpServer.ListenAndServeTLS(p.config.TLS.Crt, p.config.TLS.Key); nil != err && err != http.ErrServerClosed {
+				GetSugar().Errorf("ListenAndServeTLS at %s err:%v", p.service, err)
+			}
+		}()
 
 	} else {
-
-		p.httpListener, err = net.Listen("tcp", p.service)
-		if err != nil {
-			return err
-		}
+		go func() {
+			if err := p.httpServer.ListenAndServe(); nil != err && err != http.ErrServerClosed {
+				GetSugar().Errorf("ListenAndServe at %s err:%v", p.service, err)
+			}
+		}()
 	}
-
-	go p.httpServer.Serve(p.httpListener)
-
-	return nil
 }

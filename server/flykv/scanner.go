@@ -36,7 +36,7 @@ type scanner struct {
 }
 
 func (this *kvnode) onScanner(conn net.Conn) {
-	if this.checkReqLimit(int(atomic.AddInt64(&this.totalPendingReq, 1))) {
+	if !this.checkReqLimit(int(atomic.AddInt64(&this.totalPendingReq, 1))) {
 		conn.Close()
 		return
 	}

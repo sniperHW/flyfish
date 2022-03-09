@@ -72,7 +72,7 @@ func (s *kvstore) makeCompareAndSet(kv *kv, deadline time.Time, replyer *replyer
 		old: req.Old,
 	}
 
-	compareAndSet.cmdBase.init(kv, replyer, seqno, req.Version, deadline, &s.kvnode.totalPendingReq, compareAndSet.makeResponse)
+	compareAndSet.cmdBase.init(kv, replyer, seqno, req.Version, deadline, compareAndSet.makeResponse)
 
 	return compareAndSet, nil
 }

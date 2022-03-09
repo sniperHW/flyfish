@@ -168,7 +168,6 @@ type pd struct {
 	mutilRaft       *raft.MutilRaft
 	mainque         applicationQueue
 	udp             *flynet.Udp
-	httpListener    net.Listener
 	httpServer      *http.Server
 	msgHandler      msgHandler
 	closed          int32
@@ -241,10 +240,7 @@ func NewPd(nodeID uint16, cluster int, join bool, config *Config, clusterStr str
 		return nil, err
 	}
 
-	if err = p.startHttpService(); nil != err {
-		p.rn.Stop()
-		return nil, err
-	}
+	p.startHttpService()
 
 	GetSugar().Infof("mutilRaft serve on:%s", self.URL)
 
@@ -576,7 +572,7 @@ func (p *pd) Stop() {
 	if atomic.CompareAndSwapInt32(&p.closed, 0, 1) {
 		p.rn.Stop()
 		p.wait.Wait()
-		p.httpListener.Close()
+		p.httpServer.Close()
 		p.udp.Close()
 	}
 }
@@ -614,6 +610,7 @@ func (p *pd) serve() {
 			p.mutilRaft.Stop()
 			p.mainque.close()
 			p.wait.Done()
+			GetSugar().Infof("pd serve break")
 		}()
 		for {
 			_, v := p.mainque.pop()
@@ -668,7 +665,6 @@ func (p *pd) serve() {
 }
 
 func (p *pd) getSnapshot() ([]byte, error) {
-
 	persistenceState, err := p.pState.toJson()
 	if nil != err {
 		return nil, err

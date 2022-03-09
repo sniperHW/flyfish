@@ -76,7 +76,7 @@ func (s *kvstore) makeCompareAndSetNx(kv *kv, deadline time.Time, replyer *reply
 		old: req.Old,
 	}
 
-	compareAndSetNx.cmdBase.init(kv, replyer, seqno, req.Version, deadline, &s.kvnode.totalPendingReq, compareAndSetNx.makeResponse)
+	compareAndSetNx.cmdBase.init(kv, replyer, seqno, req.Version, deadline, compareAndSetNx.makeResponse)
 
 	return compareAndSetNx, nil
 }

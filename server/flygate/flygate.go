@@ -18,7 +18,7 @@ import (
 	"net"
 	"sort"
 	"strings"
-	//"sync"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -204,13 +204,13 @@ func (r *routeInfo) onQueryRouteInfoResp(gate *gate, resp *sproto.QueryRouteInfo
 }
 
 type gate struct {
-	config     *Config
-	closed     int32
-	closeCh    chan struct{}
-	listener   *cs.Listener
-	pendingMsg *list.List //尚无正确路由信息的请求
-	//muC             sync.Mutex
-	//clients         map[*flynet.Socket]*flynet.Socket
+	config               *Config
+	closed               int32
+	closeCh              chan struct{}
+	listener             *cs.Listener
+	pendingMsg           *list.List //尚无正确路由信息的请求
+	muC                  sync.Mutex
+	clients              map[*flynet.Socket]*flynet.Socket
 	routeInfo            routeInfo
 	queryTimer           *time.Timer
 	mainQueue            *queue.PriorityQueue
@@ -262,8 +262,8 @@ func NewFlyGate(config *Config, service string) (*gate, error) {
 	}
 
 	g := &gate{
-		config: config,
-		//clients:   map[*flynet.Socket]*flynet.Socket{},
+		config:    config,
+		clients:   map[*flynet.Socket]*flynet.Socket{},
 		mainQueue: mainQueue,
 		routeInfo: routeInfo{
 			config:      config,
@@ -347,6 +347,49 @@ func (r *replyer) reply(resp []byte) {
 	r.session.Send(resp)
 }
 
+func (r *replyer) replyErr(seqno int64, cmd uint16, err errcode.Error) {
+	var sizeOfErrDesc int
+
+	if nil != err && err.Code != 0 {
+		sizeOfErrDesc = len(err.Desc)
+		if sizeOfErrDesc > 0xFF {
+			//描述超长，直接丢弃
+			sizeOfErrDesc = cs.SizeErrDescLen
+		} else {
+			sizeOfErrDesc += cs.SizeErrDescLen
+		}
+	}
+
+	payloadLen := cs.SizeSeqNo + cs.SizeCmd + cs.SizeErrCode + sizeOfErrDesc + cs.SizePB
+	totalLen := cs.SizeLen + payloadLen
+	if uint64(totalLen) > cs.MaxPacketSize {
+		return
+	}
+
+	b := make([]byte, 0, totalLen)
+
+	//写payload大小
+	b = buffer.AppendUint32(b, uint32(payloadLen))
+	//seqno
+	b = buffer.AppendInt64(b, seqno)
+	//cmd
+	b = buffer.AppendUint16(b, cmd)
+	//err
+	b = buffer.AppendInt16(b, errcode.GetCode(err))
+
+	if sizeOfErrDesc > 0 {
+		b = buffer.AppendUint16(b, uint16(sizeOfErrDesc-cs.SizeErrDescLen))
+		if sizeOfErrDesc > cs.SizeErrDescLen {
+			b = buffer.AppendString(b, err.Desc)
+		}
+	}
+
+	b = buffer.AppendInt32(b, 0)
+
+	r.reply(b)
+
+}
+
 func (r *replyer) dropReply() {
 	atomic.AddInt64(r.totalPendingReq, -1)
 }
@@ -360,25 +403,25 @@ func (g *gate) makeReplyer(session *flynet.Socket, req *forwordMsg) *replyer {
 	if g.checkReqLimit(int(atomic.AddInt64(&g.totalPendingReq, 1))) {
 		return replyer
 	} else {
-		replyCliError(replyer, req.oriSeqno, req.cmd, errcode.New(errcode.Errcode_retry, "flykv busy,please retry later"))
+		replyer.replyErr(req.oriSeqno, req.cmd, errcode.New(errcode.Errcode_retry, "flykv busy,please retry later"))
 		return nil
 	}
 }
 
 func (g *gate) startListener() {
 	g.listener.Serve(func(session *flynet.Socket) {
-		//g.muC.Lock()
-		//g.clients[session] = session
-		//g.muC.Unlock()
+		g.muC.Lock()
+		g.clients[session] = session
+		g.muC.Unlock()
 		session.SetEncoder(&encoder{})
 		session.SetInBoundProcessor(NewCliReqInboundProcessor())
 		session.SetRecvTimeout(flyproto.PingTime * 10)
 
-		//session.SetCloseCallBack(func(session *flynet.Socket, reason error) {
-		//	g.muC.Lock()
-		//	delete(g.clients, session)
-		//	g.muC.Unlock()
-		//})
+		session.SetCloseCallBack(func(session *flynet.Socket, reason error) {
+			g.muC.Lock()
+			delete(g.clients, session)
+			g.muC.Unlock()
+		})
 
 		session.BeginRecv(func(session *flynet.Socket, v interface{}) {
 			if atomic.LoadInt32(&g.closed) == 1 {
@@ -569,7 +612,7 @@ func (g *gate) Stop() {
 			return g.totalPendingReq == 0
 		})
 
-		/*g.muC.Lock()
+		g.muC.Lock()
 		for _, v := range g.clients {
 			go v.Close(nil, time.Second*5)
 		}
@@ -579,7 +622,7 @@ func (g *gate) Stop() {
 			g.muC.Lock()
 			defer g.muC.Unlock()
 			return len(g.clients) == 0
-		})*/
+		})
 
 		g.mainQueue.Close()
 

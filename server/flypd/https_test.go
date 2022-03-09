@@ -44,25 +44,26 @@ func client(t *testing.T) {
 }
 
 func TestHttps(t *testing.T) {
-	cert, _ := tls.LoadX509KeyPair("test/server.crt", "test/server.key")
+	//cert, _ := tls.LoadX509KeyPair("test/server.crt", "test/server.key")
 
-	tlsConfig := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-	}
+	//tlsConfig := &tls.Config{
+	//	Certificates: []tls.Certificate{cert},
+	//}
 
-	httpListener, err := tls.Listen("tcp", ":8100", tlsConfig)
-	if err != nil {
-		panic(err)
-	}
+	//httpListener, err := tls.Listen("tcp", ":8100", tlsConfig)
+	//if err != nil {
+	//	panic(err)
+	//}
 
 	httpServer := &http.Server{
+		Addr:           ":8100",
 		Handler:        handler{},
 		ReadTimeout:    10 * time.Second,
 		WriteTimeout:   10 * time.Second,
 		MaxHeaderBytes: 1 << 20,
 	}
 
-	go httpServer.Serve(httpListener)
+	go httpServer.ListenAndServeTLS("test/server.crt", "test/server.key")
 
 	client(t)
 

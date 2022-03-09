@@ -33,7 +33,7 @@ type scanner struct {
 }
 
 func (g *gate) onScanner(conn net.Conn) {
-	if g.checkReqLimit(int(atomic.AddInt64(&g.totalPendingReq, 1))) {
+	if !g.checkReqLimit(int(atomic.AddInt64(&g.totalPendingReq, 1))) {
 		conn.Close()
 		return
 	}

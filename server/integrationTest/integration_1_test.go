@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/sniperHW/flyfish/client"
-	//"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/etcd/pkg/idutil"
@@ -122,19 +121,22 @@ type StopAble interface {
 	Stop()
 }
 
-func newPD(t *testing.T, deploymentPath ...string) StopAble {
+func newPD(t *testing.T, raftID uint64, deploymentPath ...string) (StopAble, uint64) {
 	conf, _ := flypd.LoadConfigStr(pdConfigStr)
 
 	if len(deploymentPath) != 0 {
 		conf.InitDepoymentPath = deploymentPath[0]
 	}
 
-	raftID := idutil.NewGenerator(1, time.Now()).Next()
+	if 0 == raftID {
+		raftID = idutil.NewGenerator(1, time.Now()).Next()
+	}
 
 	raftCluster := fmt.Sprintf("1@%d@http://localhost:18110@localhost:8110@voter", raftID)
 
 	pd, _ := flypd.NewPd(1, 1, false, conf, raftCluster)
-	return pd
+
+	return pd, raftID
 }
 
 func testkv(t *testing.T, c *client.Client) {
@@ -415,7 +417,7 @@ func TestFlygate(t *testing.T) {
 
 	os.RemoveAll("./testRaftLog")
 
-	pd := newPD(t)
+	pd, pdRaftID := newPD(t, 0)
 
 	//启动kvnode
 	var err error
@@ -639,8 +641,6 @@ func TestFlygate(t *testing.T) {
 
 	gate1.Stop()
 
-	fmt.Println("------------------------------------------------------------------------------")
-
 	gateConf.ReqLimit.HardLimit = 50
 
 	gate1, err = flygate.NewFlyGate(gateConf, "localhost:10110")
@@ -741,6 +741,12 @@ func TestFlygate(t *testing.T) {
 	fmt.Println("Stop pd")
 	pd.Stop()
 
+	pd, _ = newPD(t, pdRaftID)
+
+	time.Sleep(time.Second * 2)
+
+	pd.Stop()
+
 }
 
 func TestAddRemoveNode(t *testing.T) {
@@ -762,7 +768,7 @@ func TestAddRemoveNode(t *testing.T) {
 		panic(err)
 	}
 
-	pd := newPD(t)
+	pd, pdRaftID := newPD(t, 0)
 
 	logger.GetSugar().Infof("testAddRemNode")
 
@@ -929,6 +935,12 @@ func TestAddRemoveNode(t *testing.T) {
 
 	pd.Stop()
 
+	pd, _ = newPD(t, pdRaftID)
+
+	time.Sleep(time.Second * 2)
+
+	pd.Stop()
+
 	conn.Close()
 }
 
@@ -936,7 +948,6 @@ func TestAddSet(t *testing.T) {
 	sslot.SlotCount = 128
 	flypd.MinReplicaPerSet = 1
 	flypd.StorePerSet = 1
-	os.RemoveAll("./log")
 	os.RemoveAll("./testRaftLog")
 
 	var err error
@@ -952,7 +963,7 @@ func TestAddSet(t *testing.T) {
 		panic(err)
 	}
 
-	pd := newPD(t)
+	pd, pdRaftID := newPD(t, 0)
 
 	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
 
@@ -1143,14 +1154,34 @@ func TestAddSet(t *testing.T) {
 	node2.Stop()
 	node3.Stop()
 
+	pd, _ = newPD(t, pdRaftID)
+
+	consoleClient := console.NewClient("localhost:8110")
+	for {
+		resp, err := consoleClient.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+		nodes := []int32{}
+		if nil == err {
+			for _, set := range resp.(*sproto.GetSetStatusResp).Sets {
+				for _, n := range set.Nodes {
+					nodes = append(nodes, n.NodeID)
+				}
+			}
+
+			if len(nodes) == 2 {
+				break
+			}
+		}
+	}
+
+	pd.Stop()
+
 }
 
-func TestAddSet2(t *testing.T) {
+func TestAddxSet2(t *testing.T) {
 	sslot.SlotCount = 128
 	flypd.MinReplicaPerSet = 1
 	flypd.StorePerSet = 1
 	flygate.QueryRouteInfoDuration = time.Millisecond * 3 * 1000
-	os.RemoveAll("./log")
 	os.RemoveAll("./testRaftLog")
 
 	var err error
@@ -1166,7 +1197,7 @@ func TestAddSet2(t *testing.T) {
 		panic(err)
 	}
 
-	pd := newPD(t, "./deployment2.json")
+	pd, pdRaftID := newPD(t, 0, "./deployment2.json")
 
 	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
 
@@ -1200,7 +1231,7 @@ func TestAddSet2(t *testing.T) {
 		if resp != nil && resp.(*sproto.AddSetResp).Reason == "set already exists" {
 			break
 		}
-		time.Sleep(time.Second)
+		time.Sleep(time.Second * 2)
 	}
 
 	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
@@ -1343,7 +1374,7 @@ func TestAddSet2(t *testing.T) {
 		if resp != nil && resp.(*sproto.SetMarkClearResp).Reason == "already mark clear" {
 			break
 		}
-		time.Sleep(time.Second)
+		time.Sleep(time.Second * 2)
 	}
 
 	fmt.Println("-------------rem set---------------------------")
@@ -1369,7 +1400,7 @@ func TestAddSet2(t *testing.T) {
 			atomic.StoreInt32(&storeBalanced, 1)
 			break
 		}
-		time.Sleep(time.Second)
+		time.Sleep(time.Second * 2)
 	}
 
 	<-stopCh
@@ -1378,6 +1409,11 @@ func TestAddSet2(t *testing.T) {
 	pd.Stop()
 	node1.Stop()
 	node2.Stop()
+
+	pd, _ = newPD(t, pdRaftID, "./deployment2.json")
+
+	time.Sleep(time.Second * 2)
+	pd.Stop()
 }
 
 func TestStoreBalance(t *testing.T) {
@@ -1401,7 +1437,7 @@ func TestStoreBalance(t *testing.T) {
 		panic(err)
 	}
 
-	pd := newPD(t, "./deployment2.json")
+	pd, _ := newPD(t, 0, "./deployment2.json")
 
 	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
 
@@ -1710,7 +1746,9 @@ func TestScan(t *testing.T) {
 		panic(err)
 	}
 
-	pd := newPD(t)
+	kvConf.WriteBackMode = "WriteThrough"
+
+	pd, _ := newPD(t, 0)
 
 	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
 

@@ -38,7 +38,7 @@ func (s *kvstore) makeKick(kv *kv, deadline time.Time, replyer *replyer, seqno i
 
 	kick := &cmdKick{}
 
-	kick.cmdBase.init(kv, replyer, seqno, nil, deadline, &s.kvnode.totalPendingReq, kick.makeResponse)
+	kick.cmdBase.init(kv, replyer, seqno, nil, deadline, kick.makeResponse)
 
 	return kick, nil
 }

@@ -71,7 +71,7 @@ func (s *kvstore) makeDecr(kv *kv, deadline time.Time, replyer *replyer, seqno i
 		v: req.Field,
 	}
 
-	decr.cmdBase.init(kv, replyer, seqno, req.Version, deadline, &s.kvnode.totalPendingReq, decr.makeResponse)
+	decr.cmdBase.init(kv, replyer, seqno, req.Version, deadline, decr.makeResponse)
 
 	return decr, nil
 }

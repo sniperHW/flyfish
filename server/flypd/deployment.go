@@ -486,7 +486,13 @@ func (p *ProposalInstallDeployment) Serilize(b []byte) []byte {
 
 func (p *ProposalInstallDeployment) apply(pd *pd) {
 	pd.pState.deployment.loadFromDeploymentJson(&p.D)
-	GetSugar().Infof("ProposalInstallDeployment.apply set count:%d", len(pd.pState.deployment.sets))
+	var nodes []int
+	for _, v := range pd.pState.deployment.sets {
+		for _, vv := range v.nodes {
+			nodes = append(nodes, vv.id)
+		}
+	}
+	GetSugar().Infof("ProposalInstallDeployment.apply set count:%d nodes:%v", len(pd.pState.deployment.sets), nodes)
 }
 
 func (p *ProposalInstallDeployment) replay(pd *pd) {

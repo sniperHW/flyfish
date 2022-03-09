@@ -11,8 +11,7 @@ import (
 
 type ProposalAddSet struct {
 	proposalBase
-	SetID      int
-	Deployment DeploymentJson
+	Set SetJson
 }
 
 func (p *ProposalAddSet) Serilize(b []byte) []byte {
@@ -20,10 +19,15 @@ func (p *ProposalAddSet) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalAddSet) doApply(pd *pd) error {
-	if _, ok := pd.pState.deployment.sets[p.SetID]; ok {
-		return errors.New("set already exists")
+	GetSugar().Infof("ProposalAddSet.doApply")
+	deploymentJson := pd.pState.deployment.toDeploymentJson()
+	deploymentJson.Version++
+	p.Set.Version = deploymentJson.Version
+	deploymentJson.Sets = append(deploymentJson.Sets, p.Set)
+	if err := deploymentJson.check(); nil != err {
+		return err
 	} else {
-		pd.pState.deployment.loadFromDeploymentJson(&p.Deployment)
+		pd.pState.deployment.loadFromDeploymentJson(&deploymentJson)
 		return nil
 	}
 }
@@ -56,6 +60,8 @@ func (p *ProposalRemSet) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalRemSet) apply(pd *pd) {
+
+	GetSugar().Infof("ProposalRemSet.apply")
 
 	err := func() error {
 		s, ok := pd.pState.deployment.sets[int(p.SetID)]
@@ -106,6 +112,9 @@ func (p *ProposalSetMarkClear) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalSetMarkClear) doApply(pd *pd) error {
+
+	GetSugar().Infof("ProposalSetMarkClear.apply")
+
 	var ok bool
 	var s *set
 	err := func() error {
@@ -234,20 +243,16 @@ func (p *pd) onAddSet(replyer replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.AddSet)
 	resp := &sproto.AddSetResp{}
 
-	var deploymentJson DeploymentJson
+	set := SetJson{
+		SetID: int(msg.Set.SetID),
+	}
 
 	err := func() error {
 		if _, ok := p.pState.deployment.sets[int(msg.Set.SetID)]; ok {
 			return errors.New("set already exists")
 		}
 
-		deploymentJson = p.pState.deployment.toDeploymentJson()
-		deploymentJson.Version++
-
-		set := SetJson{
-			SetID:   int(msg.Set.SetID),
-			Version: deploymentJson.Version,
-		}
+		deploymentJson := p.pState.deployment.toDeploymentJson()
 
 		for _, v := range msg.Set.Nodes {
 			set.KvNodes = append(set.KvNodes, KvNodeJson{
@@ -288,8 +293,7 @@ func (p *pd) onAddSet(replyer replyer, m *snet.Message) {
 	} else {
 		GetSugar().Debugf("onAddSet %v", *msg)
 		p.issueProposal(&ProposalAddSet{
-			SetID:      int(msg.Set.SetID),
-			Deployment: deploymentJson,
+			Set: set,
 			proposalBase: proposalBase{
 				reply: p.makeReplyFunc(replyer, m, resp),
 			},

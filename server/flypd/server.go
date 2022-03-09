@@ -173,6 +173,7 @@ func (p *pd) onGetSetStatus(replyer replyer, m *snet.Message) {
 	resp := &sproto.GetSetStatusResp{
 		Now: time.Now().Unix(),
 	}
+
 	for _, v := range p.pState.deployment.sets {
 		s := &sproto.SetStatus{
 			SetID:     int32(v.id),

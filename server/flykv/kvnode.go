@@ -53,7 +53,9 @@ type replyer struct {
 
 func (r *replyer) reply(resp *cs.RespMessage) {
 	atomic.AddInt64(r.totalPendingReq, -1)
-	r.session.Send(resp)
+	if nil != r.session {
+		r.session.Send(resp)
+	}
 }
 
 func (r *replyer) dropReply() {
@@ -61,8 +63,8 @@ func (r *replyer) dropReply() {
 }
 
 type kvnode struct {
-	//muC sync.Mutex
-	//clients       map[*fnet.Socket]struct{}
+	muC                  sync.Mutex
+	clients              map[*fnet.Socket]struct{}
 	muS                  sync.RWMutex
 	stores               map[int]*kvstore
 	config               *Config
@@ -85,15 +87,16 @@ func verifyLogin(loginReq *flyproto.LoginReq) bool {
 	return true
 }
 
-func (this *kvnode) makeReplyer(session *fnet.Socket, req *cs.ReqMessage) *replyer {
-	if this.checkReqLimit(int(atomic.AddInt64(&this.totalPendingReq, 1))) {
-		return &replyer{
-			session:         session,
-			totalPendingReq: &this.totalPendingReq,
-		}
+func (this *kvnode) makeReplyer(session *fnet.Socket, req *cs.ReqMessage, checklimit bool) *replyer {
+	c := atomic.AddInt64(&this.totalPendingReq, 1)
+	replyer := &replyer{
+		session:         session,
+		totalPendingReq: &this.totalPendingReq,
+	}
+	if !checklimit || this.checkReqLimit(int(c)) {
+		return replyer
 	} else {
-		atomic.AddInt64(&this.totalPendingReq, -1)
-		session.Send(&cs.RespMessage{
+		replyer.reply(&cs.RespMessage{
 			Cmd:   req.Cmd,
 			Seqno: req.Seqno,
 			Err:   errcode.New(errcode.Errcode_retry, "flykv busy,please retry later"),
@@ -126,24 +129,27 @@ func (this *kvnode) checkReqLimit(c int) bool {
 
 func (this *kvnode) onClient(session *fnet.Socket) {
 	go func() {
-		//this.muC.Lock()
-		//this.clients[session] = struct{}{}
-		//this.muC.Unlock()
+		this.muC.Lock()
+		this.clients[session] = struct{}{}
+		this.muC.Unlock()
 
 		session.SetRecvTimeout(flyproto.PingTime * 10)
 		//只有配置了压缩开启同时客户端支持压缩才开启通信压缩
 		session.SetInBoundProcessor(cs.NewReqInboundProcessor())
 		session.SetEncoder(&cs.RespEncoder{})
 
-		//session.SetCloseCallBack(func(session *fnet.Socket, reason error) {
-		//	this.muC.Lock()
-		//	delete(this.clients, session)
-		//	this.muC.Unlock()
-		//})
+		session.SetCloseCallBack(func(session *fnet.Socket, reason error) {
+			this.muC.Lock()
+			delete(this.clients, session)
+			this.muC.Unlock()
+		})
 
 		session.BeginRecv(func(session *fnet.Socket, v interface{}) {
 
+			//GetSugar().Infof("recv msg node:%d %v", this.id, v.(*cs.ReqMessage).Cmd)
+
 			if atomic.LoadInt32(&this.closed) == 1 {
+				GetSugar().Infof("kvnode closed")
 				return
 			}
 
@@ -160,7 +166,7 @@ func (this *kvnode) onClient(session *fnet.Socket) {
 				})
 			default:
 
-				replyer := this.makeReplyer(session, msg)
+				replyer := this.makeReplyer(session, msg, true)
 
 				if nil == replyer {
 					return
@@ -280,7 +286,7 @@ func (this *kvnode) Stop() {
 		})
 
 		//关闭现有连接
-		/*this.muC.Lock()
+		this.muC.Lock()
 		for c, _ := range this.clients {
 			go c.Close(nil, time.Second*5)
 		}
@@ -290,7 +296,7 @@ func (this *kvnode) Stop() {
 			this.muC.Lock()
 			defer this.muC.Unlock()
 			return len(this.clients) == 0
-		})*/
+		})
 
 		this.muS.RLock()
 		for _, v := range this.stores {
@@ -654,11 +660,11 @@ func NewKvNode(id uint16, join bool, config *Config, db dbI) (*kvnode, error) {
 	node := &kvnode{
 		id:        id,
 		mutilRaft: raft.NewMutilRaft(),
-		//clients:   map[*fnet.Socket]struct{}{},
-		stores: map[int]*kvstore{},
-		db:     db,
-		config: config,
-		join:   join,
+		clients:   map[*fnet.Socket]struct{}{},
+		stores:    map[int]*kvstore{},
+		db:        db,
+		config:    config,
+		join:      join,
 	}
 
 	if config.WriteBackMode == "WriteThrough" {

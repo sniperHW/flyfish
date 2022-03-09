@@ -18,24 +18,21 @@ type cmdI interface {
 type MakeResponse func(errcode.Error, map[string]*flyproto.Field, int64) *cs.RespMessage
 
 type cmdBase struct {
-	seqno           int64
-	version         *int64
-	replyer         *replyer
-	deadline        time.Time
-	replied         int32
-	totalPendingReq *int64
-	fnMakeResponse  MakeResponse
-	kv              *kv
-	meta            db.TableMeta
+	seqno          int64
+	version        *int64
+	replyer        *replyer
+	deadline       time.Time
+	replied        int32
+	fnMakeResponse MakeResponse
+	kv             *kv
+	meta           db.TableMeta
 }
 
-func (this *cmdBase) init(kv *kv, replyer *replyer, seqno int64, version *int64, deadline time.Time, totalPendingReq *int64, makeResponse MakeResponse) {
-	atomic.AddInt64(totalPendingReq, 1)
+func (this *cmdBase) init(kv *kv, replyer *replyer, seqno int64, version *int64, deadline time.Time, makeResponse MakeResponse) {
 	this.replyer = replyer
 	this.deadline = deadline
 	this.version = version
 	this.seqno = seqno
-	this.totalPendingReq = totalPendingReq
 	this.fnMakeResponse = makeResponse
 	this.kv = kv
 	this.meta = kv.meta

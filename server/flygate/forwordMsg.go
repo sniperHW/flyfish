@@ -3,10 +3,6 @@ package flygate
 import (
 	"container/list"
 	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/pkg/buffer"
-	//flynet "github.com/sniperHW/flyfish/pkg/net"
-	"github.com/sniperHW/flyfish/proto/cs"
-	//"sync/atomic"
 	"time"
 )
 
@@ -88,7 +84,7 @@ func (r *forwordMsg) replyErr(err errcode.Error) {
 	if r.setReplied() {
 		r.deadlineTimer.Stop()
 		r.remove()
-		replyCliError(r.replyer, r.oriSeqno, r.cmd, err)
+		r.replyer.replyErr(r.oriSeqno, r.cmd, err)
 	}
 }
 
@@ -98,47 +94,4 @@ func (r *forwordMsg) dropReply() {
 		r.remove()
 		r.replyer.dropReply()
 	}
-}
-
-func replyCliError(replyer *replyer, seqno int64, cmd uint16, err errcode.Error) {
-
-	var sizeOfErrDesc int
-
-	if nil != err && err.Code != 0 {
-		sizeOfErrDesc = len(err.Desc)
-		if sizeOfErrDesc > 0xFF {
-			//描述超长，直接丢弃
-			sizeOfErrDesc = cs.SizeErrDescLen
-		} else {
-			sizeOfErrDesc += cs.SizeErrDescLen
-		}
-	}
-
-	payloadLen := cs.SizeSeqNo + cs.SizeCmd + cs.SizeErrCode + sizeOfErrDesc + cs.SizePB
-	totalLen := cs.SizeLen + payloadLen
-	if uint64(totalLen) > cs.MaxPacketSize {
-		return
-	}
-
-	b := make([]byte, 0, totalLen)
-
-	//写payload大小
-	b = buffer.AppendUint32(b, uint32(payloadLen))
-	//seqno
-	b = buffer.AppendInt64(b, seqno)
-	//cmd
-	b = buffer.AppendUint16(b, cmd)
-	//err
-	b = buffer.AppendInt16(b, errcode.GetCode(err))
-
-	if sizeOfErrDesc > 0 {
-		b = buffer.AppendUint16(b, uint16(sizeOfErrDesc-cs.SizeErrDescLen))
-		if sizeOfErrDesc > cs.SizeErrDescLen {
-			b = buffer.AppendString(b, err.Desc)
-		}
-	}
-
-	b = buffer.AppendInt32(b, 0)
-
-	replyer.reply(b)
 }
