@@ -639,7 +639,9 @@ func TestFlygate(t *testing.T) {
 
 	gate1.Stop()
 
-	gateConf.MaxPendingMsg = 50
+	fmt.Println("------------------------------------------------------------------------------")
+
+	gateConf.ReqLimit.HardLimit = 50
 
 	gate1, err = flygate.NewFlyGate(gateConf, "localhost:10110")
 
