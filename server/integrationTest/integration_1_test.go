@@ -129,7 +129,7 @@ func newPD(t *testing.T, raftID uint64, deploymentPath ...string) (StopAble, uin
 	}
 
 	if 0 == raftID {
-		raftID = idutil.NewGenerator(1, time.Now()).Next()
+		raftID = idutil.NewGenerator(0, time.Now()).Next()
 	}
 
 	raftCluster := fmt.Sprintf("1@%d@http://localhost:18110@localhost:8110@voter", raftID)
@@ -1822,9 +1822,10 @@ func TestSuspendResume(t *testing.T) {
 
 	//suspend store1
 	consoleClient := console.NewClient("localhost:8110")
-	consoleClient.Call(&sproto.CpSuspendStore{SetID: 1, Store: 1}, &sproto.CpSuspendStoreResp{})
+	fmt.Println("--------------------wait suspend------------------------------")
 
 	for {
+		consoleClient.Call(&sproto.CpSuspendStore{SetID: 1, Store: 1}, &sproto.CpSuspendStoreResp{})
 		resp, err := consoleClient.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
 		if nil == err {
 			haltStoreCount := 0
@@ -1862,9 +1863,10 @@ func TestSuspendResume(t *testing.T) {
 	}
 
 	//resume stroe1
-	consoleClient.Call(&sproto.CpResumeStore{SetID: 1, Store: 1}, &sproto.CpResumeStoreResp{})
+	fmt.Println("--------------------wait resume------------------------------")
 
 	for {
+		consoleClient.Call(&sproto.CpResumeStore{SetID: 1, Store: 1}, &sproto.CpResumeStoreResp{})
 		resp, err := consoleClient.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
 		if nil == err {
 			haltStoreCount := 0

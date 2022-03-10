@@ -42,9 +42,9 @@ func appendField(b []byte, field *flyproto.Field) []byte {
 
 func serilizeHalt(halt bool, b []byte) []byte {
 	if halt {
-		return buffer.AppendByte(b, byte(proposal_resume))
-	} else {
 		return buffer.AppendByte(b, byte(proposal_suspend))
+	} else {
+		return buffer.AppendByte(b, byte(proposal_resume))
 	}
 }
 
