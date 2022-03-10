@@ -101,6 +101,10 @@ func (this *kvnode) processUdpMsg(from *net.UDPAddr, m *snet.Message) {
 				store = int(m.Msg.(*sproto.DrainStore).Store)
 			case *sproto.TrasnferLeader:
 				store = int(m.Msg.(*sproto.TrasnferLeader).StoreID)
+			case *sproto.SuspendStore:
+				store = int(m.Msg.(*sproto.SuspendStore).Store)
+			case *sproto.ResumeStore:
+				store = int(m.Msg.(*sproto.ResumeStore).Store)
 			default:
 				return
 			}

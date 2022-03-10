@@ -40,6 +40,14 @@ func appendField(b []byte, field *flyproto.Field) []byte {
 	return b
 }
 
+func serilizeHalt(halt bool, b []byte) []byte {
+	if halt {
+		return buffer.AppendByte(b, byte(proposal_resume))
+	} else {
+		return buffer.AppendByte(b, byte(proposal_suspend))
+	}
+}
+
 func serilizeSlots(slots *bitmap.Bitmap, b []byte) []byte {
 	slotB := slots.ToJson()
 	b = buffer.AppendByte(b, byte(proposal_slots))

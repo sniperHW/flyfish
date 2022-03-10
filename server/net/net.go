@@ -308,6 +308,12 @@ func init() {
 	namespace.Register(&sproto.DrainKv{}, uint32(sproto.ServerCmdType_DrainKv))
 	namespace.Register(&sproto.DrainKvResp{}, uint32(sproto.ServerCmdType_DrainKvResp))
 
+	namespace.Register(&sproto.CpSuspendStore{}, uint32(sproto.ServerCmdType_CpSuspendStore))
+	namespace.Register(&sproto.CpSuspendStoreResp{}, uint32(sproto.ServerCmdType_CpSuspendStoreResp))
+
+	namespace.Register(&sproto.CpResumeStore{}, uint32(sproto.ServerCmdType_CpResumeStore))
+	namespace.Register(&sproto.CpResumeStoreResp{}, uint32(sproto.ServerCmdType_CpResumeStoreResp))
+
 	//flykv <-> pd
 	namespace.Register(&sproto.KvnodeBoot{}, uint32(sproto.ServerCmdType_KvnodeBoot))
 	namespace.Register(&sproto.KvnodeBootResp{}, uint32(sproto.ServerCmdType_KvnodeBootResp))
@@ -333,6 +339,10 @@ func init() {
 	namespace.Register(&sproto.TrasnferLeader{}, uint32(sproto.ServerCmdType_TrasnferLeader))
 
 	namespace.Register(&sproto.DrainStore{}, uint32(sproto.ServerCmdType_DrainStore))
+
+	namespace.Register(&sproto.SuspendStore{}, uint32(sproto.ServerCmdType_SuspendStore))
+
+	namespace.Register(&sproto.ResumeStore{}, uint32(sproto.ServerCmdType_ResumeStore))
 
 	//flygate <->pd
 	namespace.Register(&sproto.QueryRouteInfo{}, uint32(sproto.ServerCmdType_QueryRouteInfo))

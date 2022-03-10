@@ -34,6 +34,7 @@ type FlyKvStoreState struct {
 	kvcount    int
 	lastReport time.Time
 	progress   uint64
+	halt       bool
 }
 
 func (f FlyKvStoreState) check() error {

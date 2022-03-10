@@ -24,6 +24,8 @@ const (
 	proposal_meta                   = proposalType(6)
 	proposal_nop                    = proposalType(7) //空proposal用于确保之前的proposal已经提交并apply
 	proposal_last_writeback_version = proposalType(8)
+	proposal_suspend                = proposalType(9)
+	proposal_resume                 = proposalType(10)
 )
 
 func newProposalReader(b []byte) proposalReader {
@@ -92,6 +94,10 @@ func (this *proposalReader) read() (isOver bool, ptype proposalType, data interf
 		if nil == err {
 			ptype = proposalType(b)
 			switch ptype {
+			case proposal_suspend:
+				data = struct{}{}
+			case proposal_resume:
+				data = struct{}{}
 			case proposal_nop:
 				var l uint64
 				l, err = this.reader.CheckGetUint64()
@@ -517,4 +523,38 @@ func (this *LastWriteBackVersionProposal) apply() {
 			this.kv.processCmd()
 		}
 	}
+}
+
+type SuspendProposal struct {
+	proposalBase
+	store *kvstore
+}
+
+func (this *SuspendProposal) OnError(err error) {
+
+}
+
+func (this *SuspendProposal) Serilize(b []byte) []byte {
+	return buffer.AppendByte(b, byte(proposal_suspend))
+}
+
+func (this *SuspendProposal) apply() {
+	this.store.halt = true
+}
+
+type ResumeProposal struct {
+	proposalBase
+	store *kvstore
+}
+
+func (this *ResumeProposal) OnError(err error) {
+
+}
+
+func (this *ResumeProposal) Serilize(b []byte) []byte {
+	return buffer.AppendByte(b, byte(proposal_resume))
+}
+
+func (this *ResumeProposal) apply() {
+	this.store.halt = false
 }

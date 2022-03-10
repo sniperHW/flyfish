@@ -108,6 +108,10 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 			} else if p.transferType == slotTransferOut {
 				s.slots.Clear(p.slot)
 			}
+		} else if ptype == proposal_suspend {
+			s.halt = true
+		} else if ptype == proposal_resume {
+			s.halt = false
 		} else if ptype == proposal_slots {
 			s.slots = data.(*bitmap.Bitmap)
 		} else if ptype == proposal_meta {
@@ -178,6 +182,7 @@ func (s *kvstore) makeSnapshot(notifyer *raft.SnapshotNotify) {
 	{
 		ll := len(buff)
 		buff = buffer.AppendInt32(buff, 0) //占位符
+		buff = serilizeHalt(s.halt, buff)
 		buff = serilizeSlots(s.slots, buff)
 		buff = serilizeMeta(s.meta, buff)
 		buff = append(buff, byte(0)) //写入无压缩标记

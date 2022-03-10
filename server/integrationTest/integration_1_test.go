@@ -1177,7 +1177,7 @@ func TestAddSet(t *testing.T) {
 
 }
 
-func TestAddxSet2(t *testing.T) {
+func TestAddSet2(t *testing.T) {
 	sslot.SlotCount = 128
 	flypd.MinReplicaPerSet = 1
 	flypd.StorePerSet = 1
@@ -1725,6 +1725,170 @@ func TestStoreBalance(t *testing.T) {
 	node3.Stop()
 	pd.Stop()
 
+}
+
+func TestSuspendResume(t *testing.T) {
+	sslot.SlotCount = 128
+	flypd.MinReplicaPerSet = 1
+	flypd.StorePerSet = 1
+	os.RemoveAll("./testRaftLog")
+
+	var err error
+
+	dbConf := &dbconf{}
+	if _, err = toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
+		panic(err)
+	}
+
+	kvConf, err := flykv.LoadConfigStr(fmt.Sprintf(flyKvConfigStr, dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.Usr, dbConf.Pwd, dbConf.Db))
+
+	if nil != err {
+		panic(err)
+	}
+
+	pd, _ := newPD(t, 0, "./deployment2.json")
+
+	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	//增加node2
+
+	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
+
+	for {
+		resp := snet.UdpCall([]*net.UDPAddr{addr},
+			snet.MakeMessage(0, &sproto.AddNode{
+				SetID:       1,
+				NodeID:      2,
+				Host:        "localhost",
+				ServicePort: 9220,
+				RaftPort:    9221,
+			}),
+			time.Second,
+			func(respCh chan interface{}, r interface{}) {
+				if m, ok := r.(*snet.Message); ok {
+					if resp, ok := m.Msg.(*sproto.AddNodeResp); ok {
+						select {
+						case respCh <- resp:
+						default:
+						}
+					}
+				}
+			})
+
+		if resp != nil && resp.(*sproto.AddNodeResp).Reason == "duplicate node id" {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
+	//add learnstore
+
+	for {
+		resp := snet.UdpCall([]*net.UDPAddr{addr},
+			snet.MakeMessage(0, &sproto.AddLearnerStoreToNode{
+				SetID:  1,
+				NodeID: 2,
+				Store:  1,
+			}),
+			time.Second,
+			func(respCh chan interface{}, r interface{}) {
+				if m, ok := r.(*snet.Message); ok {
+					if resp, ok := m.Msg.(*sproto.AddLearnerStoreToNodeResp); ok {
+						select {
+						case respCh <- resp:
+						default:
+						}
+					}
+				}
+			})
+
+		if resp != nil && resp.(*sproto.AddLearnerStoreToNodeResp).Reason == "learner store already exists" {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
+	logger.GetSugar().Infof("--------------------add learner 2:2 OK------------------------")
+
+	node2, err := flykv.NewKvNode(2, true, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	//suspend store1
+	consoleClient := console.NewClient("localhost:8110")
+	consoleClient.Call(&sproto.CpSuspendStore{SetID: 1, Store: 1}, &sproto.CpSuspendStoreResp{})
+
+	for {
+		resp, err := consoleClient.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+		if nil == err {
+			haltStoreCount := 0
+			for _, set := range resp.(*sproto.GetSetStatusResp).Sets {
+				for _, n := range set.Nodes {
+					for _, s := range n.Stores {
+						if s.Halt {
+							haltStoreCount++
+						}
+					}
+				}
+			}
+
+			if haltStoreCount == 2 {
+				break
+			} else {
+				time.Sleep(time.Second)
+			}
+		}
+	}
+
+	node1.Stop()
+	node2.Stop()
+
+	node1, err = flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	node2, err = flykv.NewKvNode(2, false, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	//resume stroe1
+	consoleClient.Call(&sproto.CpResumeStore{SetID: 1, Store: 1}, &sproto.CpResumeStoreResp{})
+
+	for {
+		resp, err := consoleClient.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+		if nil == err {
+			haltStoreCount := 0
+			for _, set := range resp.(*sproto.GetSetStatusResp).Sets {
+				for _, n := range set.Nodes {
+					for _, s := range n.Stores {
+						if s.Halt {
+							haltStoreCount++
+						}
+					}
+				}
+			}
+
+			if haltStoreCount == 0 {
+				break
+			} else {
+				time.Sleep(time.Second)
+			}
+		}
+	}
+
+	node1.Stop()
+	node2.Stop()
+	pd.Stop()
 }
 
 func TestScan(t *testing.T) {

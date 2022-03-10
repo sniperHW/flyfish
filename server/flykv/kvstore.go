@@ -10,7 +10,6 @@ import (
 	"github.com/sniperHW/flyfish/pkg/etcd/etcdserver/api/snap"
 	"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
-	//fnet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	"github.com/sniperHW/flyfish/pkg/raft/membership"
@@ -97,6 +96,7 @@ type kvstore struct {
 	shard            int
 	meta             db.DBMeta
 	dbWriteBackCount int32
+	halt             bool //停机状态，不处理任何客户端消息
 }
 
 func (s *kvstore) addKickable(k *kv) {
@@ -264,6 +264,11 @@ func (s *kvstore) makeCmd(keyvalue *kv, req clientRequest) (cmdI, errcode.Error)
 
 func (s *kvstore) processClientMessage(req clientRequest) {
 
+	if s.halt {
+		req.replyer.dropReply()
+		return
+	}
+
 	resp := &cs.RespMessage{
 		Cmd:   req.msg.Cmd,
 		Seqno: req.msg.Seqno,
@@ -374,32 +379,7 @@ func (s *kvstore) stop() {
 	}
 }
 
-/*func (s *kvstore) reportStatus() {
-	s.mainQueue.AppendHighestPriotiryItem(func() {
-		msg := &sproto.StoreReportStatus{
-			SetID:       int32(s.kvnode.setID),
-			NodeID:      int32(s.kvnode.id),
-			StoreID:     int32(s.shard),
-			Isleader:    s.isLeader(),
-			Kvcount:     int32(s.kvcount + len(s.pendingKv)),
-			Progress:    s.rn.GetApplyIndex(),
-			MetaVersion: s.meta.GetVersion(),
-			RaftID:      s.rn.ID(),
-		}
-
-		go func() {
-			for _, v := range s.kvnode.pdAddr {
-				s.kvnode.udpConn.SendTo(v, snet.MakeMessage(0, msg))
-			}
-		}()
-
-		time.AfterFunc(time.Second, s.reportStatus)
-	})
-}*/
-
 func (s *kvstore) serve() {
-
-	//s.reportStatus()
 
 	go func() {
 		defer func() {
@@ -749,6 +729,18 @@ func (s *kvstore) onUdpMsg(from *net.UDPAddr, m *snet.Message) {
 			s.onIsTransInReady(from, m.Msg.(*sproto.IsTransInReady), m.Context)
 		case *sproto.DrainStore:
 			s.drain()
+		case *sproto.SuspendStore:
+			if !s.halt {
+				s.rn.IssueProposal(&SuspendProposal{
+					store: s,
+				})
+			}
+		case *sproto.ResumeStore:
+			if s.halt {
+				s.rn.IssueProposal(&ResumeProposal{
+					store: s,
+				})
+			}
 		case *sproto.TrasnferLeader:
 			GetSugar().Infof("req TransferLeadership to %v", m.Msg.(*sproto.TrasnferLeader).Transferee)
 			s.rn.TransferLeadership(m.Msg.(*sproto.TrasnferLeader).Transferee)

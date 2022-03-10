@@ -57,7 +57,13 @@ enum ServerCmdType {
   ClearDBData                   = 139;
   ClearDBDataResp               = 140;
   DrainKv                       = 141;                   //排空所有缓存的kv
-  DrainKvResp                   = 142;                   
+  DrainKvResp                   = 142;  
+  CpSuspendStore                = 143;
+  CpSuspendStoreResp            = 144;
+  CpResumeStore                 = 145;
+  CpResumeStoreResp             = 146;
+
+
   
   //kvnode <-> pd
   KvnodeBoot                    = 210;                   //kvnode冷启登录  
@@ -75,6 +81,8 @@ enum ServerCmdType {
   TrasnferLeader                = 224;
   DrainStore                    = 225;
   NotifyMissingStores           = 226;
+  SuspendStore                  = 227;
+  ResumeStore                   = 228;
 
 
   //flygate <-> pd
@@ -423,7 +431,8 @@ message kvnodeStoreStatus {
   optional int32  type     = 2;
   optional int32  value    = 3;
   optional bool   isLeader = 4;
-  optional uint64 progress = 5;  
+  optional uint64 progress = 5;
+  optional bool   halt     = 6;  
 }
 
 message kvnodeStatus {
@@ -452,6 +461,7 @@ message storeReportStatus {
   optional int32  kvcount     = 4;
   optional uint64 progress    = 5;
   optional int64  metaVersion = 6;
+  optional bool   halt        = 7;
 }
 
 message kvnodeReportStatus {
@@ -547,4 +557,33 @@ message drainKv {
 
 message drainKvResp {
   
+}
+
+message cpSuspendStore {
+  optional int32  setID = 1;
+  optional int32  store = 2;  
+}
+
+
+message cpSuspendStoreResp {
+  optional bool  ok       = 1;  
+  optional string reason  = 2;   
+}
+
+message cpResumeStore {
+  optional int32  setID = 1;
+  optional int32  store = 2;    
+}
+
+message cpResumeStoreResp {
+  optional bool  ok       = 1;  
+  optional string reason  = 2;   
+}
+
+message suspendStore {
+  optional int32  store = 1;  
+}
+
+message resumeStore {
+  optional int32  store = 1;  
 }

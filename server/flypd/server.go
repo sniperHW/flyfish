@@ -194,6 +194,7 @@ func (p *pd) onGetSetStatus(replyer replyer, m *snet.Message) {
 					Value:    int32(vvv.Value),
 					IsLeader: vvv.isLeader(),
 					Progress: vvv.progress,
+					Halt:     vvv.halt,
 				})
 
 				c, ok := kvcount[k]
@@ -246,6 +247,7 @@ func (p *pd) onKvnodeReportStatus(replyer replyer, m *snet.Message) {
 		store.isLead = v.Isleader
 		store.kvcount = int(v.Kvcount)
 		store.progress = v.Progress
+		store.halt = v.Halt
 
 		if v.Isleader && v.MetaVersion != p.pState.Meta.Version {
 			addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.host, node.servicePort))
@@ -508,6 +510,61 @@ func (p *pd) onDrainKv(replyer replyer, m *snet.Message) {
 
 }
 
+func (p *pd) onSuspendStore(replyer replyer, m *snet.Message) {
+	msg := m.Msg.(*sproto.CpSuspendStore)
+	set := p.pState.deployment.sets[int(msg.SetID)]
+	if nil == set {
+		replyer.reply(snet.MakeMessage(m.Context, &sproto.CpSuspendStoreResp{
+			Ok:     false,
+			Reason: fmt.Sprintf("set:%d not found", msg.SetID),
+		}))
+		return
+	}
+
+	for _, node := range set.nodes {
+		for storeId, store := range node.store {
+			if storeId == int(msg.Store) && store.isLeader() && !store.halt {
+				addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.host, node.servicePort))
+				p.udp.SendTo(addr, snet.MakeMessage(0, &sproto.SuspendStore{
+					Store: int32(storeId),
+				}))
+			}
+		}
+	}
+
+	replyer.reply(snet.MakeMessage(m.Context, &sproto.CpSuspendStoreResp{
+		Ok: true,
+	}))
+
+}
+
+func (p *pd) onResumeStore(replyer replyer, m *snet.Message) {
+	msg := m.Msg.(*sproto.CpResumeStore)
+	set := p.pState.deployment.sets[int(msg.SetID)]
+	if nil == set {
+		replyer.reply(snet.MakeMessage(m.Context, &sproto.CpResumeStoreResp{
+			Ok:     false,
+			Reason: fmt.Sprintf("set:%d not found", msg.SetID),
+		}))
+		return
+	}
+
+	for _, node := range set.nodes {
+		for storeId, store := range node.store {
+			if storeId == int(msg.Store) && store.isLeader() && store.halt {
+				addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.host, node.servicePort))
+				p.udp.SendTo(addr, snet.MakeMessage(0, &sproto.ResumeStore{
+					Store: int32(storeId),
+				}))
+			}
+		}
+	}
+
+	replyer.reply(snet.MakeMessage(m.Context, &sproto.CpResumeStoreResp{
+		Ok: true,
+	}))
+}
+
 func (p *pd) initMsgHandler() {
 	//for console
 	p.registerMsgHandler(&sproto.AddSet{}, "AddSet", p.onAddSet)
@@ -529,6 +586,8 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.ListPdMembers{}, "ListPdMembers", p.onListPdMembers)
 	p.registerMsgHandler(&sproto.ClearDBData{}, "ClearDBData", p.onClearDBData)
 	p.registerMsgHandler(&sproto.DrainKv{}, "DrainKv", p.onDrainKv)
+	p.registerMsgHandler(&sproto.CpSuspendStore{}, "CpSuspendStore", p.onSuspendStore)
+	p.registerMsgHandler(&sproto.CpResumeStore{}, "CpResumeStore", p.onResumeStore)
 
 	//servers
 	p.registerMsgHandler(&sproto.IsTransInReadyResp{}, "", p.onSlotTransInReady)

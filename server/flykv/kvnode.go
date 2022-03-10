@@ -611,6 +611,7 @@ func (this *kvnode) reportStatus() {
 					Progress:    store.rn.GetApplyIndex(),
 					MetaVersion: store.meta.GetVersion(),
 					RaftID:      store.rn.ID(),
+					Halt:        store.halt,
 				})
 				mu.Unlock()
 				wait.Done()
