@@ -420,19 +420,21 @@ message getSetStatus {
 }
 
 message storeStatus {
-  optional int32 storeID  = 1;
-  optional bytes slots    = 2;
-  optional int32  kvcount = 3;  
+  optional int32 storeID      = 1;
+  optional bytes slots        = 2;
+  optional int32 kvcount      = 3;  
+  optional int64 metaVersion  = 4;  
 }
 
 
 message kvnodeStoreStatus {
-  optional int32  storeID  = 1;
-  optional int32  type     = 2;
-  optional int32  value    = 3;
-  optional bool   isLeader = 4;
-  optional uint64 progress = 5;
-  optional bool   halt     = 6;  
+  optional int32  storeID     = 1;
+  optional int32  type        = 2;
+  optional int32  value       = 3;
+  optional bool   isLeader    = 4;
+  optional uint64 progress    = 5;
+  optional bool   halt        = 6;
+  optional int64  metaVersion = 7;  
 }
 
 message kvnodeStatus {

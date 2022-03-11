@@ -419,6 +419,7 @@ func (p *pd) issueProposal(proposal raft.Proposal) {
 }
 
 func (p *pd) loadInitDeployment() {
+	GetSugar().Infof("loadInitDeployment")
 	if "" != p.config.InitDepoymentPath {
 		f, err := os.Open(p.config.InitDepoymentPath)
 		if nil == err {
@@ -498,40 +499,7 @@ func (p *pd) loadInitDeployment() {
 }
 
 func (p *pd) onBecomeLeader() {
-
-	if len(p.pState.deployment.sets) == 0 {
-		p.loadInitDeployment()
-	} else {
-		//重置slotBalance相关的临时数据
-		for _, v := range p.pState.deployment.sets {
-			p.storeTask = map[uint64]*storeTask{}
-			for _, node := range v.nodes {
-				for store, state := range node.store {
-					if state.Value == FlyKvUnCommit {
-						taskID := uint64(node.id)<<32 + uint64(store)
-						t := &storeTask{
-							node:           node,
-							pd:             p,
-							store:          store,
-							storeStateType: state.Type,
-						}
-						p.storeTask[taskID] = t
-						t.notifyFlyKv()
-					}
-				}
-			}
-		}
-
-		p.slotBalance()
-
-		for _, v := range p.pState.SlotTransfer {
-			v.notify(p)
-		}
-	}
-
-	if p.pState.Meta.Version == 0 {
-		p.loadInitMeta()
-	}
+	p.issueProposal(&ProposalNop{})
 }
 
 func (p *pd) onLeaderDownToFollower() {

@@ -122,11 +122,11 @@ func addFieldsPgSql(dbc *sqlx.DB, tabDef *db.TableDef) error {
 	return err
 }
 
-func dropTablePgSql(dbc *sqlx.DB, tabDef *db.TableDef) error {
-	str := fmt.Sprintf("DROP TABLE %s_%d;", tabDef.Name, tabDef.DbVersion)
-	_, err := dbc.Exec(str)
-	return err
-}
+//func dropTablePgSql(dbc *sqlx.DB, tabDef *db.TableDef) error {
+//	str := fmt.Sprintf("DROP TABLE %s_%d;", tabDef.Name, tabDef.DbVersion)
+//	_, err := dbc.Exec(str)
+//	return err
+//}
 
 func getTableSchemePgSql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
 	realTabname, version, err := trimVersion(table)
@@ -330,11 +330,11 @@ func addFieldsMySql(dbc *sqlx.DB, tabDef *db.TableDef) error {
 	return err
 }
 
-func dropTableMySql(dbc *sqlx.DB, tabDef *db.TableDef) error {
-	str := fmt.Sprintf("DROP TABLE %s_%d;", tabDef.Name, tabDef.DbVersion)
-	_, err := dbc.Exec(str)
-	return err
-}
+//func dropTableMySql(dbc *sqlx.DB, tabDef *db.TableDef) error {
+//	str := fmt.Sprintf("DROP TABLE %s_%d;", tabDef.Name, tabDef.DbVersion)
+//	_, err := dbc.Exec(str)
+//	return err
+//}
 
 func getTableSchemeMySql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
 	realTabname, version, err := trimVersion(table)
@@ -466,12 +466,10 @@ func AddFields(dbc *sqlx.DB, sqlType string, tabDef *db.TableDef) error {
 	}
 }
 
-func DropTable(dbc *sqlx.DB, sqlType string, tabDef *db.TableDef) error {
-	if sqlType == "pgsql" {
-		return dropTablePgSql(dbc, tabDef)
-	} else {
-		return dropTableMySql(dbc, tabDef)
-	}
+func DropTable(dbc *sqlx.DB, tabDef *db.TableDef) error {
+	str := fmt.Sprintf("DROP TABLE %s_%d;", tabDef.Name, tabDef.DbVersion)
+	_, err := dbc.Exec(str)
+	return err
 }
 
 func GetTableScheme(dbc *sqlx.DB, sqlType string, table_real_name string) (tabdef *db.TableDef, err error) {

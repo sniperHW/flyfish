@@ -86,17 +86,17 @@ func TestPd1(t *testing.T) {
 
 	fmt.Println(err)
 
-	sql.DropTable(dbc, conf.DBConfig.DBType, &db.TableDef{
+	sql.DropTable(dbc, &db.TableDef{
 		Name:      "table1",
 		DbVersion: 0,
 	})
 
-	sql.DropTable(dbc, conf.DBConfig.DBType, &db.TableDef{
+	sql.DropTable(dbc, &db.TableDef{
 		Name:      "table2",
 		DbVersion: 1,
 	})
 
-	sql.DropTable(dbc, conf.DBConfig.DBType, &db.TableDef{
+	sql.DropTable(dbc, &db.TableDef{
 		Name:      "table2",
 		DbVersion: 3,
 	})

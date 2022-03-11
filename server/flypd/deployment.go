@@ -27,14 +27,15 @@ const (
 )
 
 type FlyKvStoreState struct {
-	Type       FlyKvStoreStateType
-	Value      FlyKvStoreStateValue
-	RaftID     uint64
-	isLead     bool
-	kvcount    int
-	lastReport time.Time
-	progress   uint64
-	halt       bool
+	Type        FlyKvStoreStateType
+	Value       FlyKvStoreStateValue
+	RaftID      uint64
+	isLead      bool
+	kvcount     int
+	lastReport  time.Time
+	progress    uint64
+	halt        bool
+	metaVersion int64
 }
 
 func (f FlyKvStoreState) check() error {

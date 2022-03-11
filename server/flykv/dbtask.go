@@ -83,18 +83,12 @@ func (this *dbUpdateTask) _issueFullDbWriteBack() error {
 		return errors.New("kv in invaild state")
 	}
 
-	if this.kv.state == kv_ok {
-		if this.kv.lastWriteBackVersion == 0 {
-			this.state.State = db.DBState_insert
-		} else {
-			this.state.State = db.DBState_update
-		}
+	if this.kv.lastWriteBackVersion == 0 {
+		this.state.State = db.DBState_insert
+	} else if this.kv.state == kv_ok {
+		this.state.State = db.DBState_update
 	} else {
-		if this.kv.lastWriteBackVersion == 0 {
-			this.state.State = db.DBState_insert
-		} else {
-			this.state.State = db.DBState_delete
-		}
+		this.state.State = db.DBState_delete
 	}
 
 	this.state.Version = this.kv.version

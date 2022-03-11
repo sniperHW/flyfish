@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/sniperHW/flyfish/client"
+	"github.com/sniperHW/flyfish/db"
+	"github.com/sniperHW/flyfish/db/sql"
+	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/etcd/pkg/idutil"
@@ -2028,5 +2031,359 @@ func TestScan(t *testing.T) {
 	node2.Stop()
 	gate1.Stop()
 	pd.Stop()
+
+}
+
+func TestSolo(t *testing.T) {
+	sslot.SlotCount = 128
+	flypd.MinReplicaPerSet = 1
+	flypd.StorePerSet = 1
+	os.RemoveAll("./testRaftLog")
+
+	var err error
+
+	dbConf := &dbconf{}
+	if _, err = toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
+		panic(err)
+	}
+
+	kvConf, err := flykv.LoadConfigStr(fmt.Sprintf(flyKvConfigStr, dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.Usr, dbConf.Pwd, dbConf.Db))
+
+	if nil != err {
+		panic(err)
+	}
+
+	kvConf.Mode = "solo"
+	kvConf.SoloConfig.RaftUrl = "1@1@http://127.0.0.1:12377@localhost:8110@voter"
+	kvConf.SoloConfig.Stores = []int{1}
+	kvConf.SoloConfig.MetaPath = "meta.json"
+
+	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:8110", UnikeyPlacement: sslot.MakeUnikeyPlacement([]int{1})})
+
+	for {
+		r := c.Get("users1", "ak", "name").Exec()
+		if errcode.GetCode(r.ErrCode) == errcode.Errcode_record_notexist {
+			break
+		}
+	}
+
+	for i := 0; i < 100; i++ {
+		fields := map[string]interface{}{}
+		fields["age"] = i
+		name := fmt.Sprintf("sniperHW:%d", i)
+		fields["name"] = name
+		fields["phone"] = "123456789123456789123456789"
+		r := c.Set("users1", name, fields).Exec()
+		assert.Nil(t, r.ErrCode)
+	}
+
+	sc, _ := client.NewScanner(client.ClientConf{Stores: []int{1}, SoloService: "localhost:8110", UnikeyPlacement: sslot.MakeUnikeyPlacement([]int{1})}, "users1", []string{"name", "age", "phone"})
+
+	count := 0
+
+	for {
+		row, err := sc.Next(time.Now().Add(time.Second * 10))
+
+		if nil != err {
+			panic(err)
+		}
+
+		if nil != row {
+			fmt.Println(row.Key)
+			count++
+		} else {
+			break
+		}
+	}
+
+	fmt.Println("count", count)
+
+	node1.Stop()
+
+}
+
+/*
+
+func testAddRemoveFields(t *testing.T, p *pd) {
+
+	GetSugar().Infof("testAddRemoveFields")
+
+	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
+	assert.Nil(t, err)
+
+	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
+
+	//add field
+	{
+		req := &sproto.MetaAddFields{
+			Table:   "table1",
+			Version: 4,
+		}
+
+		req.Fields = append(req.Fields, &sproto.MetaFiled{
+			Name:    "field4",
+			Type:    "string",
+			Default: "hello",
+		})
+
+		conn.SendTo(addr, snet.MakeMessage(0, req))
+
+		recvbuff := make([]byte, 256)
+		_, r, _ := conn.ReadFrom(recvbuff)
+
+		fmt.Println(r.(*snet.Message).Msg.(*sproto.MetaAddFieldsResp).Reason)
+
+		assert.Equal(t, r.(*snet.Message).Msg.(*sproto.MetaAddFieldsResp).Ok, true)
+	}
+
+	//remove field
+	{
+		req := &sproto.MetaRemoveFields{
+			Table:   "table1",
+			Version: 5,
+		}
+
+		req.Fields = append(req.Fields, "field4")
+
+		conn.SendTo(addr, snet.MakeMessage(0, req))
+
+		recvbuff := make([]byte, 256)
+		_, r, _ := conn.ReadFrom(recvbuff)
+
+		assert.Equal(t, r.(*snet.Message).Msg.(*sproto.MetaRemoveFieldsResp).Ok, true)
+	}
+
+	//add field again
+	{
+		req := &sproto.MetaAddFields{
+			Table:   "table1",
+			Version: 6,
+		}
+
+		req.Fields = append(req.Fields, &sproto.MetaFiled{
+			Name: "field4",
+			Type: "int",
+		})
+
+		conn.SendTo(addr, snet.MakeMessage(0, req))
+
+		recvbuff := make([]byte, 256)
+		_, r, _ := conn.ReadFrom(recvbuff)
+
+		assert.Equal(t, r.(*snet.Message).Msg.(*sproto.MetaAddFieldsResp).Ok, true)
+	}
+
+	conn.Close()
+
+}
+
+*/
+
+func TestMeta(t *testing.T) {
+	sslot.SlotCount = 128
+	flypd.MinReplicaPerSet = 1
+	flypd.StorePerSet = 2
+
+	os.RemoveAll("./testRaftLog")
+
+	var err error
+
+	dbConf := &dbconf{}
+	if _, err = toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
+		panic(err)
+	}
+
+	//移除table
+	//先删除table1
+	dbc, err := sql.SqlOpen(dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.Db, dbConf.Usr, dbConf.Pwd)
+
+	fmt.Println(err)
+
+	sql.DropTable(dbc, &db.TableDef{
+		Name:      "table2",
+		DbVersion: 1,
+	})
+
+	sql.DropTable(dbc, &db.TableDef{
+		Name:      "table2",
+		DbVersion: 3,
+	})
+
+	pd, pdRaftID := newPD(t, 0, "./deployment2.json")
+
+	kvConf, err := flykv.LoadConfigStr(fmt.Sprintf(flyKvConfigStr, dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.Usr, dbConf.Pwd, dbConf.Db))
+
+	if nil != err {
+		panic(err)
+	}
+
+	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	consoleClient := console.NewClient("localhost:8110")
+
+	//add table
+	{
+		req := &sproto.MetaAddTable{
+			Name:    "table2",
+			Version: 1,
+		}
+
+		req.Fields = append(req.Fields, &sproto.MetaFiled{
+			Name:    "field1",
+			Type:    "string",
+			Default: "hello",
+		})
+
+		resp, err := consoleClient.Call(req, &sproto.MetaAddTableResp{})
+		fmt.Println(resp, err)
+	}
+
+	//remove table
+	{
+		req := &sproto.MetaRemoveTable{
+			Table:   "table2",
+			Version: 2,
+		}
+
+		resp, err := consoleClient.Call(req, &sproto.MetaRemoveTableResp{})
+		fmt.Println(resp, err)
+
+	}
+
+	//add table2 again
+	{
+		req := &sproto.MetaAddTable{
+			Name:    "table2",
+			Version: 3,
+		}
+
+		req.Fields = append(req.Fields, &sproto.MetaFiled{
+			Name:    "field1",
+			Type:    "string",
+			Default: "hello",
+		})
+
+		resp, err := consoleClient.Call(req, &sproto.MetaAddTableResp{})
+		fmt.Println(resp, err)
+	}
+
+	//add fields
+	{
+		req := &sproto.MetaAddFields{
+			Table:   "table2",
+			Version: 4,
+		}
+
+		req.Fields = append(req.Fields, &sproto.MetaFiled{
+			Name:    "field2",
+			Type:    "string",
+			Default: "hello",
+		})
+
+		resp, err := consoleClient.Call(req, &sproto.MetaAddFieldsResp{})
+		fmt.Println(resp, err)
+	}
+
+	//remove field
+	{
+		req := &sproto.MetaRemoveFields{
+			Table:   "table2",
+			Version: 5,
+		}
+
+		req.Fields = append(req.Fields, "field2")
+		resp, err := consoleClient.Call(req, &sproto.MetaRemoveFieldsResp{})
+		fmt.Println(resp, err)
+	}
+
+	//add field again
+	{
+		req := &sproto.MetaAddFields{
+			Table:   "table2",
+			Version: 6,
+		}
+
+		req.Fields = append(req.Fields, &sproto.MetaFiled{
+			Name: "field2",
+			Type: "int",
+		})
+		resp, err := consoleClient.Call(req, &sproto.MetaAddFieldsResp{})
+		fmt.Println(resp, err)
+	}
+
+	metaVersion := int64(0)
+
+	//get meta
+	for {
+		resp, _ := consoleClient.Call(&sproto.GetMeta{}, &sproto.GetMetaResp{})
+		if nil != resp && resp.(*sproto.GetMetaResp).Version > 0 {
+			metaVersion = resp.(*sproto.GetMetaResp).Version
+			break
+		}
+	}
+
+	assert.Equal(t, metaVersion, int64(7))
+
+	pd.Stop()
+
+	node1.Stop()
+
+	pd, _ = newPD(t, pdRaftID)
+
+	node1, err = flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	metaVersion = int64(0)
+
+	//get meta
+	for {
+		resp, _ := consoleClient.Call(&sproto.GetMeta{}, &sproto.GetMetaResp{})
+		if nil != resp && resp.(*sproto.GetMetaResp).Version > 0 {
+			metaVersion = resp.(*sproto.GetMetaResp).Version
+			break
+		}
+	}
+
+	assert.Equal(t, metaVersion, int64(7))
+
+	//检查flykv meta版本号一致
+
+	for {
+		resp, _ := consoleClient.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+		ok := true
+
+		for _, set := range resp.(*sproto.GetSetStatusResp).Sets {
+			for _, v := range set.Stores {
+				fmt.Println(v.StoreID, v.MetaVersion)
+
+				if v.MetaVersion != metaVersion {
+					ok = false
+					break
+				}
+			}
+		}
+		if ok {
+			break
+		} else {
+			time.Sleep(time.Second)
+		}
+	}
+
+	pd.Stop()
+
+	node1.Stop()
 
 }

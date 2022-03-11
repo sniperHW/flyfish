@@ -191,9 +191,8 @@ func (this *updater) exec(v interface{}) {
 						GetSugar().Debugf("%s version mismatch last:%d version:%d unikey:%s:%s", getUpdateType(s.State), s.LastWriteBackVersion, s.Version, s.Meta.TableName(), s.Key)
 						//版本号不匹配，再次获取版本号
 						if version, err := loadVersion(); nil != err {
-							task.ClearUpdateStateAndReleaseLock()
 							task.OnError(err, s.LastWriteBackVersion)
-							return
+							break
 						} else {
 							GetSugar().Debugf("%s version mismatch last:%d version:%d,dbversion:%d", getUpdateType(s.State), s.LastWriteBackVersion, s.Version, version)
 							s.LastWriteBackVersion = version
@@ -206,9 +205,8 @@ func (this *updater) exec(v interface{}) {
 						//休眠一秒重试
 						time.Sleep(time.Second)
 					} else {
-						task.ClearUpdateStateAndReleaseLock()
 						task.OnError(err, s.LastWriteBackVersion)
-						return
+						break
 					}
 				}
 			}

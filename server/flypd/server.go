@@ -180,7 +180,8 @@ func (p *pd) onGetSetStatus(replyer replyer, m *snet.Message) {
 			MarkClear: v.markClear,
 		}
 
-		kvcount := map[int]int{}
+		var kvcount int
+		var metaVersion int64
 		for _, vv := range v.nodes {
 			n := &sproto.KvnodeStatus{
 				NodeID:         int32(vv.id),
@@ -189,19 +190,18 @@ func (p *pd) onGetSetStatus(replyer replyer, m *snet.Message) {
 
 			for k, vvv := range vv.store {
 				n.Stores = append(n.Stores, &sproto.KvnodeStoreStatus{
-					StoreID:  int32(k),
-					Type:     int32(vvv.Type),
-					Value:    int32(vvv.Value),
-					IsLeader: vvv.isLeader(),
-					Progress: vvv.progress,
-					Halt:     vvv.halt,
+					StoreID:     int32(k),
+					Type:        int32(vvv.Type),
+					Value:       int32(vvv.Value),
+					IsLeader:    vvv.isLeader(),
+					Progress:    vvv.progress,
+					Halt:        vvv.halt,
+					MetaVersion: vvv.metaVersion,
 				})
 
-				c, ok := kvcount[k]
-				if !ok {
-					kvcount[k] = vvv.kvcount
-				} else if vvv.kvcount > c {
-					kvcount[k] = c
+				if vvv.isLeader() {
+					kvcount = vvv.kvcount
+					metaVersion = vvv.metaVersion
 				}
 			}
 
@@ -210,11 +210,12 @@ func (p *pd) onGetSetStatus(replyer replyer, m *snet.Message) {
 
 		for _, vv := range v.stores {
 			s.Stores = append(s.Stores, &sproto.StoreStatus{
-				StoreID: int32(vv.id),
-				Slots:   vv.slots.ToJson(),
-				Kvcount: int32(kvcount[vv.id]),
+				StoreID:     int32(vv.id),
+				Slots:       vv.slots.ToJson(),
+				Kvcount:     int32(kvcount),
+				MetaVersion: metaVersion,
 			})
-			s.Kvcount += int32(kvcount[vv.id])
+			s.Kvcount += int32(kvcount)
 		}
 		resp.Sets = append(resp.Sets, s)
 	}
@@ -248,6 +249,7 @@ func (p *pd) onKvnodeReportStatus(replyer replyer, m *snet.Message) {
 		store.kvcount = int(v.Kvcount)
 		store.progress = v.Progress
 		store.halt = v.Halt
+		store.metaVersion = v.MetaVersion
 
 		if v.Isleader && v.MetaVersion != p.pState.Meta.Version {
 			addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.host, node.servicePort))
