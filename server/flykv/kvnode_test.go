@@ -510,6 +510,57 @@ func Test1Node1Store1(t *testing.T) {
 	assert.Nil(t, r1.ErrCode)
 	fmt.Println("version-----------", r1.Version)
 
+	{
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		fields["name"] = "sniperHW"
+		fmt.Println(c.Set("users1", "sniperHW:1", fields).Exec().ErrCode)
+	}
+
+	{
+		fmt.Println(c.CompareAndSetNx("users1", "sniperHW:1", "age", 12, 11).Exec().ErrCode)
+	}
+
+	{
+		fmt.Println(c.CompareAndSetNx("users1", "sniperHW:1", "age", 11, 12).Exec().ErrCode)
+	}
+
+	addr1, _ := net.ResolveUDPAddr("udp", "127.0.0.1:10018")
+
+	//清空所有kv
+	conn, _ := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
+	for {
+		conn.SendTo(addr1, snet.MakeMessage(0, &sproto.DrainStore{
+			Store: int32(1),
+		}))
+
+		ch := make(chan int)
+
+		node.stores[1].mainQueue.AppendHighestPriotiryItem(func() {
+			GetSugar().Infof("%v %v", node.stores[1].kvcount, len(node.stores[1].pendingKv))
+			ch <- node.stores[1].kvcount + len(node.stores[1].pendingKv)
+		})
+
+		<-ch
+
+		break
+
+		/*c := <-ch
+
+		if 0 == c {
+			break
+		} else {
+			GetSugar().Infof("kvcount:%d", c)
+			time.Sleep(time.Second)
+
+		}*/
+	}
+	conn.Close()
+
+	{
+		fmt.Println(c.CompareAndSetNx("users1", "sniperHW:1", "age", 11, 12).Exec().ErrCode)
+	}
+
 	node.Stop()
 
 	fmt.Println("stop ok")
@@ -1167,8 +1218,18 @@ func TestAddRemoveNode(t *testing.T) {
 
 	GetSugar().Infof("---------------set ok--------------")
 
-	//清空所有kv
+	{
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		fields["name"] = "sniperHW"
+		fmt.Println(c.Set("users1", "sniperHW:1", fields).Exec().ErrCode)
+	}
 
+	{
+		fmt.Println(c.CompareAndSetNx("users1", "sniperHW:1", "age", 12, 11).Exec().ErrCode)
+	}
+
+	//清空所有kv
 	conn, _ := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
 	for {
 		conn.SendTo(addr2, snet.MakeMessage(0, &sproto.DrainStore{
@@ -1192,6 +1253,10 @@ func TestAddRemoveNode(t *testing.T) {
 		}
 	}
 	conn.Close()
+
+	{
+		fmt.Println(c.CompareAndSetNx("users1", "sniperHW:1", "age", 11, 12).Exec().ErrCode)
+	}
 
 	node2.Stop()
 

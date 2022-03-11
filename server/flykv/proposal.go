@@ -305,7 +305,7 @@ func (this *kvProposal) apply() {
 	if this.ptype == proposal_kick {
 		this.kv.store.deleteKv(this.kv)
 		this.reply(nil, nil, 0)
-		this.kv.clearCmds(errcode.New(errcode.Errcode_retry, "please try again"))
+		//this.kv.clearCmds(errcode.New(errcode.Errcode_retry, "please try again"))
 	} else {
 
 		this.kv.state = this.kvState
@@ -513,13 +513,14 @@ func (this *LastWriteBackVersionProposal) Serilize(b []byte) []byte {
 }
 
 func (this *LastWriteBackVersionProposal) apply() {
-	//GetSugar().Infof("LastWriteBackVersionProposal apply %s version:%d %d", this.kv.uniKey, this.version, this.kv.version)
+	GetSugar().Infof("LastWriteBackVersionProposal apply %s version:%d %d", this.kv.uniKey, this.version, this.kv.version)
 	if abs(this.version) > abs(this.kv.lastWriteBackVersion) {
 		this.kv.lastWriteBackVersion = this.version
 	}
 
 	if f := this.kv.pendingCmd.Front(); nil != f {
 		if cmdkick, ok := f.Value.(*cmdKick); ok && this.version >= cmdkick.waitVersion {
+			GetSugar().Infof("LastWriteBackVersionProposal apply %s process pending kick", this.kv.uniKey)
 			this.kv.processCmd()
 		}
 	}

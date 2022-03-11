@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-var StorePerSet int = 6          //每个set含有多少个store
+var StorePerSet int = 1          //每个set含有多少个store
 var MinReplicaPerSet int = 1     //最少副本数
 var CurrentTransferCount int = 6 //最大并发transfer的slot数量
 

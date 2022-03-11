@@ -5,6 +5,7 @@ import (
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
 	flyproto "github.com/sniperHW/flyfish/proto"
+	"reflect"
 	"sync"
 )
 
@@ -190,6 +191,7 @@ func (this *kv) processCmd() {
 				}
 
 				for _, c := range cmds {
+					GetSugar().Infof("%s do %s", this.uniKey, reflect.TypeOf(c).String())
 					c.(interface{ do(*kvProposal) }).do(proposal)
 				}
 

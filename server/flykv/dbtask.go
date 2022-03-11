@@ -64,6 +64,7 @@ func (this *dbUpdateTask) GetUniKey() string {
 
 func (this *dbUpdateTask) issueUpdate() {
 	if !this.doing {
+		GetSugar().Infof("%s issueUpdate", this.kv.uniKey)
 		this.doing = true
 		atomic.AddInt32(&this.kv.store.dbWriteBackCount, 1)
 		this.kv.store.db.issueUpdate(this) //这里不会出错，db要到最后才会stop
