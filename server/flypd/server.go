@@ -179,9 +179,8 @@ func (p *pd) onGetSetStatus(replyer replyer, m *snet.Message) {
 			SetID:     int32(v.id),
 			MarkClear: v.markClear,
 		}
-
-		var kvcount int
-		var metaVersion int64
+		kvcount := map[int]int{}
+		metaVersion := map[int]int64{}
 		for _, vv := range v.nodes {
 			n := &sproto.KvnodeStatus{
 				NodeID:         int32(vv.id),
@@ -200,8 +199,8 @@ func (p *pd) onGetSetStatus(replyer replyer, m *snet.Message) {
 				})
 
 				if vvv.isLeader() {
-					kvcount = vvv.kvcount
-					metaVersion = vvv.metaVersion
+					kvcount[k] = vvv.kvcount
+					metaVersion[k] = vvv.metaVersion
 				}
 			}
 
@@ -209,14 +208,16 @@ func (p *pd) onGetSetStatus(replyer replyer, m *snet.Message) {
 		}
 
 		for _, vv := range v.stores {
-			s.Stores = append(s.Stores, &sproto.StoreStatus{
+			st := &sproto.StoreStatus{
 				StoreID:     int32(vv.id),
 				Slots:       vv.slots.ToJson(),
-				Kvcount:     int32(kvcount),
-				MetaVersion: metaVersion,
-			})
-			s.Kvcount += int32(kvcount)
+				Kvcount:     int32(kvcount[vv.id]),
+				MetaVersion: metaVersion[vv.id],
+			}
+			s.Stores = append(s.Stores, st)
+			s.Kvcount += st.Kvcount
 		}
+		resp.Kvcount += s.Kvcount
 		resp.Sets = append(resp.Sets, s)
 	}
 

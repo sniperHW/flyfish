@@ -17,7 +17,6 @@ type metaOpration struct {
 }
 
 func (p *pd) onGetMeta(replyer replyer, m *snet.Message) {
-	GetSugar().Infof("onGetMeta")
 	replyer.reply(snet.MakeMessage(m.Context,
 		&sproto.GetMetaResp{
 			Version: p.pState.Meta.Version,

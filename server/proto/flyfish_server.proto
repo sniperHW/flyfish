@@ -452,8 +452,9 @@ message setStatus {
 }
 
 message getSetStatusResp {
-  optional int64     now  = 1;
-  repeated setStatus sets = 2;
+  optional int64     now     = 1;
+  optional int32     kvcount = 2;
+  repeated setStatus sets    = 3;
 }
 
 message storeReportStatus {

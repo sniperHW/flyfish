@@ -522,13 +522,7 @@ func TestFlygate(t *testing.T) {
 
 	resp, err = consoleClient.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
 	if nil == err {
-		kvcount := 0
-		for _, set := range resp.(*sproto.GetSetStatusResp).Sets {
-			kvcount += int(set.Kvcount)
-		}
-
-		assert.Equal(t, true, kvcount > 0)
-
+		assert.Equal(t, true, resp.(*sproto.GetSetStatusResp).Kvcount > 0)
 	} else {
 		fmt.Println(err)
 	}
@@ -716,14 +710,10 @@ func TestFlygate(t *testing.T) {
 
 		resp, err = consoleClient.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
 		if nil == err {
-			kvcount := 0
-			for _, set := range resp.(*sproto.GetSetStatusResp).Sets {
-				kvcount += int(set.Kvcount)
-			}
-			if kvcount == 0 {
+			if resp.(*sproto.GetSetStatusResp).Kvcount == 0 {
 				break
 			} else {
-				fmt.Printf("total kvcount:%d\n", kvcount)
+				fmt.Printf("total kvcount:%d\n", resp.(*sproto.GetSetStatusResp).Kvcount)
 			}
 		} else {
 			fmt.Println(err)
@@ -2107,83 +2097,6 @@ func TestSolo(t *testing.T) {
 	node1.Stop()
 
 }
-
-/*
-
-func testAddRemoveFields(t *testing.T, p *pd) {
-
-	GetSugar().Infof("testAddRemoveFields")
-
-	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
-	assert.Nil(t, err)
-
-	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
-
-	//add field
-	{
-		req := &sproto.MetaAddFields{
-			Table:   "table1",
-			Version: 4,
-		}
-
-		req.Fields = append(req.Fields, &sproto.MetaFiled{
-			Name:    "field4",
-			Type:    "string",
-			Default: "hello",
-		})
-
-		conn.SendTo(addr, snet.MakeMessage(0, req))
-
-		recvbuff := make([]byte, 256)
-		_, r, _ := conn.ReadFrom(recvbuff)
-
-		fmt.Println(r.(*snet.Message).Msg.(*sproto.MetaAddFieldsResp).Reason)
-
-		assert.Equal(t, r.(*snet.Message).Msg.(*sproto.MetaAddFieldsResp).Ok, true)
-	}
-
-	//remove field
-	{
-		req := &sproto.MetaRemoveFields{
-			Table:   "table1",
-			Version: 5,
-		}
-
-		req.Fields = append(req.Fields, "field4")
-
-		conn.SendTo(addr, snet.MakeMessage(0, req))
-
-		recvbuff := make([]byte, 256)
-		_, r, _ := conn.ReadFrom(recvbuff)
-
-		assert.Equal(t, r.(*snet.Message).Msg.(*sproto.MetaRemoveFieldsResp).Ok, true)
-	}
-
-	//add field again
-	{
-		req := &sproto.MetaAddFields{
-			Table:   "table1",
-			Version: 6,
-		}
-
-		req.Fields = append(req.Fields, &sproto.MetaFiled{
-			Name: "field4",
-			Type: "int",
-		})
-
-		conn.SendTo(addr, snet.MakeMessage(0, req))
-
-		recvbuff := make([]byte, 256)
-		_, r, _ := conn.ReadFrom(recvbuff)
-
-		assert.Equal(t, r.(*snet.Message).Msg.(*sproto.MetaAddFieldsResp).Ok, true)
-	}
-
-	conn.Close()
-
-}
-
-*/
 
 func TestMeta(t *testing.T) {
 	sslot.SlotCount = 128

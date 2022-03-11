@@ -520,7 +520,7 @@ func (this *LastWriteBackVersionProposal) apply() {
 
 	if f := this.kv.pendingCmd.Front(); nil != f {
 		if cmdkick, ok := f.Value.(*cmdKick); ok && this.version >= cmdkick.waitVersion {
-			GetSugar().Infof("LastWriteBackVersionProposal apply %s process pending kick", this.kv.uniKey)
+			GetSugar().Debugf("LastWriteBackVersionProposal apply %s process pending kick", this.kv.uniKey)
 			this.kv.processCmd()
 		}
 	}

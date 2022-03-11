@@ -359,7 +359,7 @@ func (p *pd) onAddLearnerStoreToNode(replyer replyer, m *snet.Message) {
 		return nil
 	}()
 
-	GetSugar().Infof("onAddLearnerStoreToNode %v", err)
+	GetSugar().Debugf("onAddLearnerStoreToNode %v", err)
 
 	if nil != err {
 		resp.Ok = false
