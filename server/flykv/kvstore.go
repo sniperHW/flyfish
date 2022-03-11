@@ -156,7 +156,7 @@ func (s *kvstore) deleteKv(k *kv) {
 		}
 	}
 
-	GetSugar().Infof("delete kv:%s %d %d", k.uniKey, s.kvcount, len(s.pendingKv))
+	GetSugar().Debugf("delete kv:%s %d %d", k.uniKey, s.kvcount, len(s.pendingKv))
 }
 
 func (s *kvstore) onLoadKvApply(k *kv, removepending bool) {
@@ -206,7 +206,7 @@ func newkv(s *kvstore, slot int, groupID int, unikey string, key string, table s
 		return nil, errcode.New(errcode.Errcode_error, fmt.Sprintf("table:%s no define", table))
 	}
 
-	GetSugar().Infof("newkv:%s", unikey)
+	GetSugar().Debugf("newkv:%s", unikey)
 
 	k := &kv{
 		uniKey:     unikey,

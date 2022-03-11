@@ -513,7 +513,7 @@ func (this *LastWriteBackVersionProposal) Serilize(b []byte) []byte {
 }
 
 func (this *LastWriteBackVersionProposal) apply() {
-	GetSugar().Infof("LastWriteBackVersionProposal apply %s version:%d %d", this.kv.uniKey, this.version, this.kv.version)
+	GetSugar().Debugf("LastWriteBackVersionProposal apply %s version:%d %d", this.kv.uniKey, this.version, this.kv.version)
 	if abs(this.version) > abs(this.kv.lastWriteBackVersion) {
 		this.kv.lastWriteBackVersion = this.version
 	}

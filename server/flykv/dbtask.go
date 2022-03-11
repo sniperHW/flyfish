@@ -40,7 +40,6 @@ func (this *dbUpdateTask) Dirty() bool {
 }
 
 func (this *dbUpdateTask) ClearUpdateStateAndReleaseLock() {
-	GetSugar().Infof("ClearUpdateStateAndReleaseLock")
 	this.Lock()
 	defer this.Unlock()
 	this.doing = false
@@ -64,7 +63,7 @@ func (this *dbUpdateTask) GetUniKey() string {
 
 func (this *dbUpdateTask) issueUpdate() {
 	if !this.doing {
-		GetSugar().Infof("%s issueUpdate", this.kv.uniKey)
+		GetSugar().Debugf("%s issueUpdate", this.kv.uniKey)
 		this.doing = true
 		atomic.AddInt32(&this.kv.store.dbWriteBackCount, 1)
 		this.kv.store.db.issueUpdate(this) //这里不会出错，db要到最后才会stop
@@ -161,6 +160,7 @@ func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields 
 }
 
 func (this *dbUpdateTask) OnError(err error, writeBackVersion int64) {
+	GetSugar().Errorf("dbUpdateTask OnError uniKey:%s err:%v", this.kv.uniKey, err)
 	this.kv.store.mainQueue.AppendHighestPriotiryItem(func() {
 		if f := this.kv.pendingCmd.Front(); nil != f {
 			if cmdkick, ok := f.Value.(*cmdKick); ok && writeBackVersion >= cmdkick.waitVersion {
