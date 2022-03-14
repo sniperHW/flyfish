@@ -71,7 +71,7 @@ func (this *dbUpdateTask) issueUpdate() {
 }
 
 func (this *dbUpdateTask) _issueFullDbWriteBack() error {
-	if this.doing {
+	if this.kv.version == this.kv.lastWriteBackVersion || this.doing {
 		return nil
 	}
 

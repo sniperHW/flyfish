@@ -299,7 +299,6 @@ func (this *kvProposal) apply() {
 	if this.ptype == proposal_kick {
 		this.kv.store.deleteKv(this.kv)
 		this.reply(nil, nil, 0)
-		//this.kv.clearCmds(errcode.New(errcode.Errcode_retry, "please try again"))
 	} else {
 
 		this.kv.state = this.kvState
