@@ -99,13 +99,7 @@ func (this *proposalReader) read() (isOver bool, ptype proposalType, data interf
 			case proposal_resume:
 				data = struct{}{}
 			case proposal_nop:
-				var l uint64
-				l, err = this.reader.CheckGetUint64()
-				if nil != err {
-					err = fmt.Errorf("proposal_nop CheckGetUint64:%v", err)
-					return
-				}
-				data = l
+				data = struct{}{}
 			case proposal_meta:
 				var l int32
 				l, err = this.reader.CheckGetInt32()
@@ -451,8 +445,7 @@ func (this *proposalNop) OnError(err error) {
 }
 
 func (this *proposalNop) Serilize(b []byte) []byte {
-	b = buffer.AppendByte(b, byte(proposal_nop))
-	return buffer.AppendUint64(b, uint64(this.store.rn.ID()))
+	return buffer.AppendByte(b, byte(proposal_nop))
 }
 
 func (this *proposalNop) apply() {

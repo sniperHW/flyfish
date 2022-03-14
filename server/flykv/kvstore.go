@@ -84,7 +84,6 @@ type kvmgr struct {
 
 type kvstore struct {
 	kvmgr
-	lastLeader       uint64
 	leader           uint64
 	snapshotter      *snap.Snapshotter
 	rn               *raft.RaftInstance

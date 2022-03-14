@@ -101,46 +101,42 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 			return nil
 		}
 
-		if ptype == proposal_slot_transfer {
+		switch ptype {
+		case proposal_slot_transfer:
 			p := data.(*SlotTransferProposal)
 			if p.transferType == slotTransferIn {
 				s.slots.Set(p.slot)
 			} else if p.transferType == slotTransferOut {
 				s.slots.Clear(p.slot)
 			}
-		} else if ptype == proposal_suspend {
+		case proposal_suspend:
 			s.halt = true
-		} else if ptype == proposal_resume {
+		case proposal_resume:
 			s.halt = false
-		} else if ptype == proposal_slots {
+		case proposal_slots:
 			s.slots = data.(*bitmap.Bitmap)
-		} else if ptype == proposal_meta {
+		case proposal_meta:
 			data.(db.DBMeta).MoveTo(s.meta)
-		} else if ptype == proposal_nop {
-			s.lastLeader = data.(uint64)
-		} else if ptype == proposal_last_writeback_version {
+		case proposal_nop:
+		case proposal_last_writeback_version:
 			p := data.(*kv)
 			groupID := sslot.StringHash(p.uniKey) % len(s.kv)
-			kv, ok := s.kv[groupID][p.uniKey]
-			if ok {
+			if kv, ok := s.kv[groupID][p.uniKey]; ok {
 				kv.lastWriteBackVersion = p.lastWriteBackVersion
 			}
-		} else {
+		case proposal_snapshot, proposal_kick, proposal_update:
 			p := data.(*kv)
 			groupID := sslot.StringHash(p.uniKey) % len(s.kv)
 			kv, ok := s.kv[groupID][p.uniKey]
 
 			if !ok {
-				if ptype == proposal_kick {
-					return fmt.Errorf("bad data,%s with a bad proposal_type:kick", p.uniKey)
-				} else if ptype == proposal_update {
-					return fmt.Errorf("bad data,%s with a bad proposal_type:update", p.uniKey)
+				if ptype != proposal_snapshot {
+					return fmt.Errorf("bad data,%s with a bad proposal_type:%v", p.uniKey, ptype)
 				} else {
-					var e errcode.Error
+					var err errcode.Error
 					slot := sslot.Unikey2Slot(p.uniKey)
 					table, key := splitUniKey(p.uniKey)
-					kv, e = s.newAppliedKv(slot, groupID, p.uniKey, key, table)
-					if nil != e {
+					if kv, err = s.newAppliedKv(slot, groupID, p.uniKey, key, table); nil != err {
 						return fmt.Errorf("bad data,%s is no table define", p.uniKey)
 					}
 				}
