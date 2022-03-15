@@ -33,6 +33,7 @@ type dbLoadTask struct {
 	table  string
 	uniKey string //"table:key"组成的唯一全局唯一键
 	key    string
+	term   int64
 }
 
 /*
@@ -86,6 +87,7 @@ func (this *kv) pushCmd(cmd cmdI) {
 				uniKey: this.uniKey,
 				table:  this.table,
 				key:    this.key,
+				term:   this.store.getTerm(),
 			}) {
 				cmd.reply(errcode.New(errcode.Errcode_retry, "loader is busy, please try later!"), nil, 0)
 				this.store.deleteKv(this)

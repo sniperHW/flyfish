@@ -242,9 +242,9 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, peers map[uint16]raft.
 			slotsKvMap:       map[int]map[string]*kv{},
 			slots:            slots,
 			slotsTransferOut: map[int]bool{},
-			pendingKv:        map[string]*kv{},
-			kickableList:     list.New(),
-			hardkvlimited:    (this.config.MaxCachePerStore * 3) / 2,
+			//pendingKv:        map[string]*kv{},
+			kickableList:  list.New(),
+			hardkvlimited: (this.config.MaxCachePerStore * 3) / 2,
 		},
 	}
 
@@ -607,7 +607,7 @@ func (this *kvnode) reportStatus() {
 				report.Stores = append(report.Stores, &sproto.StoreReportStatus{
 					StoreID:     int32(store.shard),
 					Isleader:    store.isLeader(),
-					Kvcount:     int32(store.kvcount + len(store.pendingKv)),
+					Kvcount:     int32(store.kvcount),
 					Progress:    store.rn.GetApplyIndex(),
 					MetaVersion: store.meta.GetVersion(),
 					RaftID:      store.rn.ID(),

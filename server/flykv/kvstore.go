@@ -76,7 +76,6 @@ type kvmgr struct {
 	slots                 *bitmap.Bitmap
 	kvcount               int
 	hardkvlimited         int
-	pendingKv             map[string]*kv //尚未创建apply的kv
 	kickableList          *list.List
 	slotsTransferOut      map[int]bool //标记迁出的slot
 	slotsTransferOutTimer *time.Timer
@@ -96,6 +95,7 @@ type kvstore struct {
 	meta             db.DBMeta
 	dbWriteBackCount int32
 	halt             bool //停机状态，不处理任何客户端消息
+	term             int64
 }
 
 func (s *kvstore) addKickable(k *kv) {
@@ -142,63 +142,21 @@ func (s *kvstore) addCliMessage(req clientRequest) {
 }
 
 func (s *kvstore) deleteKv(k *kv) {
-	if k.state == kv_new || k.state == kv_loading {
-		delete(s.pendingKv, k.uniKey)
-	} else {
-		s.kvcount--
-		delete(s.kv[k.groupID], k.uniKey)
-
-		kvs := s.slotsKvMap[k.slot]
-		delete(kvs, k.uniKey)
-		if len(kvs) == 0 {
-			delete(s.slotsKvMap, k.slot)
-		}
+	s.kvcount--
+	delete(s.kv[k.groupID], k.uniKey)
+	kvs := s.slotsKvMap[k.slot]
+	delete(kvs, k.uniKey)
+	if len(kvs) == 0 {
+		delete(s.slotsKvMap, k.slot)
 	}
-
-	GetSugar().Debugf("delete kv:%s %d %d", k.uniKey, s.kvcount, len(s.pendingKv))
-}
-
-func (s *kvstore) onLoadKvApply(k *kv, removepending bool) {
-	if removepending {
-		delete(s.pendingKv, k.uniKey)
-	}
-
-	s.kv[k.groupID][k.uniKey] = k
-
-	if kvs := s.slotsKvMap[k.slot]; nil != kvs {
-		kvs[k.uniKey] = k
-	} else {
-		kvs = map[string]*kv{}
-		kvs[k.uniKey] = k
-		s.slotsKvMap[k.slot] = kvs
-	}
-
-	s.kvcount++
-}
-
-func (s *kvstore) newAppliedKv(slot int, groupID int, unikey string, key string, table string) (*kv, errcode.Error) {
-	k, err := newkv(s, slot, groupID, unikey, key, table)
-	if nil != err {
-		return nil, err
-	}
-
-	s.onLoadKvApply(k, false)
-
-	return k, nil
+	GetSugar().Debugf("delete kv:%s %d", k.uniKey, s.kvcount)
 }
 
 func (s *kvstore) getkv(groupID int, unikey string) *kv {
-	kv, ok := s.kv[groupID][unikey]
-	if ok {
-		return kv
-	}
-
-	kv, _ = s.pendingKv[unikey]
-
-	return kv
+	return s.kv[groupID][unikey]
 }
 
-func newkv(s *kvstore, slot int, groupID int, unikey string, key string, table string) (*kv, errcode.Error) {
+func (s *kvstore) newkv(slot int, groupID int, unikey string, key string, table string) (*kv, errcode.Error) {
 	tbmeta := s.meta.GetTableMeta(table)
 
 	if nil == tbmeta {
@@ -227,6 +185,18 @@ func newkv(s *kvstore, slot int, groupID int, unikey string, key string, table s
 			Fields: map[string]*flyproto.Field{},
 		},
 	}
+
+	s.kv[k.groupID][k.uniKey] = k
+
+	if kvs := s.slotsKvMap[k.slot]; nil != kvs {
+		kvs[k.uniKey] = k
+	} else {
+		kvs = map[string]*kv{}
+		kvs[k.uniKey] = k
+		s.slotsKvMap[k.slot] = kvs
+	}
+
+	s.kvcount++
 
 	return k, nil
 }
@@ -307,19 +277,17 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 				if req.msg.Cmd == flyproto.CmdType_Kick { //kv不在缓存中,kick操作直接返回ok
 					return errcode.New(errcode.Errcode_ok)
 				} else {
-					totalCount := s.kvcount + len(s.pendingKv)
-					if totalCount > s.kvnode.config.MaxCachePerStore && nil != s.kickableList.Front() {
+					if s.kvcount > s.kvnode.config.MaxCachePerStore && nil != s.kickableList.Front() {
 						s.kick(s.kickableList.Front().Value.(*kv))
 					}
 
-					if totalCount > s.hardkvlimited {
+					if s.kvcount > s.hardkvlimited {
 						return errcode.New(errcode.Errcode_retry, "kvstore busy,please retry later")
 					} else {
 						table, key := splitUniKey(req.msg.UniKey)
-						if k, err = newkv(s, slot, groupID, req.msg.UniKey, key, table); nil != err {
+						if k, err = s.newkv(slot, groupID, req.msg.UniKey, key, table); nil != err {
 							return err
 						}
-						s.pendingKv[req.msg.UniKey] = k
 					}
 				}
 			} else {
@@ -380,6 +348,10 @@ func (s *kvstore) stop() {
 	if atomic.CompareAndSwapInt32(&s.stoped, 0, 1) {
 		s.rn.Stop()
 	}
+}
+
+func (s *kvstore) getTerm() int64 {
+	return atomic.LoadInt64(&s.term)
 }
 
 func (s *kvstore) serve() {
@@ -443,6 +415,7 @@ func (s *kvstore) serve() {
 					}
 				}
 			case raft.LeaderChange:
+				atomic.AddInt64(&s.term, 1)
 				oldLeader := s.leader
 				atomic.StoreUint64(&s.leader, uint64(v.(raft.LeaderChange).Leader))
 				if v.(raft.LeaderChange).Leader == s.rn.ID() {
@@ -489,22 +462,17 @@ func (s *kvstore) becomeLeader() {
 
 func (s *kvstore) onLeaderDownToFollower() {
 	atomic.StoreInt32(&s.ready, 0)
-
-	//清理临时状态
-	for _, v := range s.pendingKv {
-		v.clearCmds(errcode.New(errcode.Errcode_not_leader))
-		s.deleteKv(v)
-	}
-
 	for _, v := range s.kv {
 		for _, vv := range v {
 			vv.clearCmds(errcode.New(errcode.Errcode_not_leader))
-			s.removeKickable(vv)
+			if vv.state < kv_ok {
+				s.deleteKv(vv)
+			} else {
+				s.removeKickable(vv)
+			}
 		}
 	}
-
 	s.slotsTransferOut = map[int]bool{}
-	s.pendingKv = map[string]*kv{}
 }
 
 //将nodeID作为learner加入当前store的raft配置

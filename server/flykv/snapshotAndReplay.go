@@ -136,7 +136,7 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 					var err errcode.Error
 					slot := sslot.Unikey2Slot(p.uniKey)
 					table, key := splitUniKey(p.uniKey)
-					if kv, err = s.newAppliedKv(slot, groupID, p.uniKey, key, table); nil != err {
+					if kv, err = s.newkv(slot, groupID, p.uniKey, key, table); nil != err {
 						return fmt.Errorf("bad data,%s is no table define", p.uniKey)
 					}
 				}

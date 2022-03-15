@@ -537,8 +537,8 @@ func Test1Node1Store1(t *testing.T) {
 		ch := make(chan int)
 
 		node.stores[1].mainQueue.AppendHighestPriotiryItem(func() {
-			GetSugar().Infof("%v %v", node.stores[1].kvcount, len(node.stores[1].pendingKv))
-			ch <- node.stores[1].kvcount + len(node.stores[1].pendingKv)
+			GetSugar().Infof("%v", node.stores[1].kvcount)
+			ch <- node.stores[1].kvcount
 		})
 
 		<-ch
@@ -1239,7 +1239,7 @@ func TestAddRemoveNode(t *testing.T) {
 		ch := make(chan int)
 
 		node2.stores[1].mainQueue.AppendHighestPriotiryItem(func() {
-			ch <- node2.stores[1].kvcount + len(node2.stores[1].pendingKv)
+			ch <- node2.stores[1].kvcount
 		})
 
 		c := <-ch

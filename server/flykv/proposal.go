@@ -307,7 +307,6 @@ func (this *kvProposal) apply() {
 		}
 
 		if this.causeByLoad {
-			this.kv.store.onLoadKvApply(this.kv, true)
 			this.kv.updateTask.setLastWriteBackVersion(this.dbversion)
 			this.kv.lastWriteBackVersion = this.dbversion
 		}

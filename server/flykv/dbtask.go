@@ -193,6 +193,12 @@ func (this *dbLoadTask) onError(err errcode.Error) {
 func (this *dbLoadTask) OnResult(err error, version int64, fields map[string]*flyproto.Field) {
 	if !this.kv.store.isLeader() {
 		this.onError(errcode.New(errcode.Errcode_not_leader))
+	} else if this.kv.store.getTerm() != this.term {
+		/* 考虑如下情况
+		 * store发起load,之后降级为follower,执行清理，然后再次成为leader，之后load返回
+		 * 此时的leader已经不是之前发起load时的leader,因此不应继续执行下去
+		 */
+		return
 	} else if err == nil || err == db.ERR_RecordNotExist {
 		proposal := &kvProposal{
 			ptype:       proposal_snapshot,
