@@ -3,20 +3,52 @@
 当一个kv被访问，且kv不在flykv缓存中的时候，flykv向db请求加载kv,如果kv在数据库中不存在，则kv在flykv中的状态为no_record。
 只要kv不被替换，那么这个在db中不存在的kv，在下次被访问时，都会被flykv拦截到，无需再次向db查询是否存在。
 
+flyfish作为一个为网络游戏设计的缓存系统，需要结合游戏的数据访问特点设计bloomfilter。
 
-但是，对于热数据集比较大，导致kv频繁替换以及flykv处于未预热的状态下，将会有大量的请求穿透到db。
+网游的主要数据是与用户关联的，数据的新增跟用户新增成正比，数据的插入主要集中在用户创建阶段，之后的操作都是数据变更，删除操作很少，有需要删除的地方基本都通过标记删除处理。
 
-例如,刚开服的时候,flykv没有缓存任何数据，大量玩家请求创角，此时，大量请求将穿透到db查询记录是否存在。
+在开服阶段，大量新用户进入游戏，此时数据库中不存在用户数据，使用bloomfilter拦截请求，可以有效降低开服阶段数据库的压力。
 
-对于这种情况，非常适合bloomfilter拦截查询请求，只要bloomfilter确认kv不存在，则无需将请求发往DB。
+bloomfilter的安全性需求：数据库中不存在的记录，bloomfilter不能返回存在。数据库中存在的记录，允许bloomfilter返回不存在。
+
+bloomfilter的清理与重建：
+
+1）游戏开发阶段，经常需要清库，清库之后需要清理bloomfilter.
+
+2) 游戏有回档的需求，回档后，有的记录就不存在了，因此，需要清理bloomfilter并使用回档后的数据重建bloomfilter.
 
 
-每个kv被映射到唯一的slot,因此每个slot单独分配一个bloomfilter,bloomfilter的变更通过slot所在的store,写入raft log。
+bloomfilter作为独立服务
+
+将bitmap分成数量为N的块，每个块在数据库中用一条记录存储。
+
+单master,多slave结构
+
+master可读可写，将脏块回写数据库，master将变更异步同步给所有的slave。slave只读。
+
+由bloomfilter的安全性需求,在slave未同步到最新数据的时候，只会将数据库中存在的记录误判为不存在，因此不会影响系统的正确性。
+
+容灾
+
+master发生故障，从slave中选择数据最新者成为新的master。
+
+新节点的加入
+
+请求leader将所有的块发送过来，完毕后加入集群成为slave。
 
 
-slot迁移：slot的kv被排空后，将bloomfilter写入db。db写入完成之后迁出事务才标记完成。
 
-迁入的store从db载入bloomfilter,将bloomfilter携带到proposal上，同步到所有副本，成功后迁入事务完成。
+
+
+
+
+
+
+
+
+
+
+
 
 
 
