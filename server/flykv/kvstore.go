@@ -71,8 +71,7 @@ type clientRequest struct {
 }
 
 type kvmgr struct {
-	kv                    []map[string]*kv
-	slotsKvMap            map[int]map[string]*kv
+	slotsKvMap            []map[string]*kv
 	slots                 *bitmap.Bitmap
 	kvcount               int
 	hardkvlimited         int
@@ -143,20 +142,23 @@ func (s *kvstore) addCliMessage(req clientRequest) {
 
 func (s *kvstore) deleteKv(k *kv) {
 	s.kvcount--
-	delete(s.kv[k.groupID], k.uniKey)
 	kvs := s.slotsKvMap[k.slot]
 	delete(kvs, k.uniKey)
 	if len(kvs) == 0 {
-		delete(s.slotsKvMap, k.slot)
+		s.slotsKvMap[k.slot] = nil
 	}
 	GetSugar().Debugf("delete kv:%s %d", k.uniKey, s.kvcount)
 }
 
-func (s *kvstore) getkv(groupID int, unikey string) *kv {
-	return s.kv[groupID][unikey]
+func (s *kvstore) getkv(slot int, unikey string) *kv {
+	if nil != s.slotsKvMap[slot] {
+		return s.slotsKvMap[slot][unikey]
+	} else {
+		return nil
+	}
 }
 
-func (s *kvstore) newkv(slot int, groupID int, unikey string, key string, table string) (*kv, errcode.Error) {
+func (s *kvstore) newkv(slot int, unikey string, key string, table string) (*kv, errcode.Error) {
 	tbmeta := s.meta.GetTableMeta(table)
 
 	if nil == tbmeta {
@@ -166,12 +168,12 @@ func (s *kvstore) newkv(slot int, groupID int, unikey string, key string, table 
 	GetSugar().Debugf("newkv:%s", unikey)
 
 	k := &kv{
-		uniKey:     unikey,
-		key:        key,
-		state:      kv_new,
-		meta:       tbmeta,
-		store:      s,
-		groupID:    groupID,
+		uniKey: unikey,
+		key:    key,
+		state:  kv_new,
+		meta:   tbmeta,
+		store:  s,
+		//groupID:    groupID,
 		slot:       slot,
 		table:      table,
 		pendingCmd: list.New(),
@@ -186,14 +188,11 @@ func (s *kvstore) newkv(slot int, groupID int, unikey string, key string, table 
 		},
 	}
 
-	s.kv[k.groupID][k.uniKey] = k
-
-	if kvs := s.slotsKvMap[k.slot]; nil != kvs {
-		kvs[k.uniKey] = k
+	if nil != s.slotsKvMap[k.slot] {
+		s.slotsKvMap[k.slot][k.uniKey] = k
 	} else {
-		kvs = map[string]*kv{}
-		kvs[k.uniKey] = k
-		s.slotsKvMap[k.slot] = kvs
+		s.slotsKvMap[k.slot] = map[string]*kv{}
+		s.slotsKvMap[k.slot][k.uniKey] = k
 	}
 
 	s.kvcount++
@@ -271,8 +270,7 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 		} else if atomic.LoadInt32(&s.ready) == 0 || s.meta == nil {
 			return errcode.New(errcode.Errcode_retry, "kvstore not start ok,please retry later")
 		} else {
-			groupID := sslot.StringHash(req.msg.UniKey) % len(s.kv)
-			k = s.getkv(groupID, req.msg.UniKey)
+			k = s.getkv(slot, req.msg.UniKey)
 			if nil == k {
 				if req.msg.Cmd == flyproto.CmdType_Kick { //kv不在缓存中,kick操作直接返回ok
 					return errcode.New(errcode.Errcode_ok)
@@ -285,7 +283,7 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 						return errcode.New(errcode.Errcode_retry, "kvstore busy,please retry later")
 					} else {
 						table, key := splitUniKey(req.msg.UniKey)
-						if k, err = s.newkv(slot, groupID, req.msg.UniKey, key, table); nil != err {
+						if k, err = s.newkv(slot, req.msg.UniKey, key, table); nil != err {
 							return err
 						}
 					}
@@ -434,17 +432,19 @@ func (s *kvstore) serve() {
 
 func (s *kvstore) issueFullDbWriteBack() {
 	writebackcount := 0
-	for _, v := range s.kv {
-		for _, vv := range v {
-			if meta := s.meta.CheckTableMeta(vv.meta); meta != nil {
-				vv.meta = meta
+	for _, v := range s.slotsKvMap {
+		if nil != v {
+			for _, vv := range v {
+				if meta := s.meta.CheckTableMeta(vv.meta); meta != nil {
+					vv.meta = meta
+				}
+				vv.updateTask.setLastWriteBackVersion(vv.lastWriteBackVersion)
+				if s.kvnode.writeBackMode == write_through && vv.lastWriteBackVersion != vv.version {
+					writebackcount++
+					vv.updateTask.issueFullDbWriteBack()
+				}
+				s.addKickable(vv)
 			}
-			vv.updateTask.setLastWriteBackVersion(vv.lastWriteBackVersion)
-			if s.kvnode.writeBackMode == write_through && vv.lastWriteBackVersion != vv.version {
-				writebackcount++
-				vv.updateTask.issueFullDbWriteBack()
-			}
-			s.addKickable(vv)
 		}
 	}
 	GetSugar().Infof("WriteBackAll kv:%d kvcount:%d", writebackcount, s.kvcount)
@@ -462,13 +462,15 @@ func (s *kvstore) becomeLeader() {
 
 func (s *kvstore) onLeaderDownToFollower() {
 	atomic.StoreInt32(&s.ready, 0)
-	for _, v := range s.kv {
-		for _, vv := range v {
-			vv.clearCmds(errcode.New(errcode.Errcode_not_leader))
-			if vv.state < kv_ok {
-				s.deleteKv(vv)
-			} else {
-				s.removeKickable(vv)
+	for _, v := range s.slotsKvMap {
+		if nil != v {
+			for _, vv := range v {
+				vv.clearCmds(errcode.New(errcode.Errcode_not_leader))
+				if vv.state < kv_ok {
+					s.deleteKv(vv)
+				} else {
+					s.removeKickable(vv)
+				}
 			}
 		}
 	}

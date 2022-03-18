@@ -12,17 +12,17 @@ import (
 
 const (
 	maxElements = 100000000
-	probCollide = 0.00001
+	probCollide = 0.001
 )
 
 func test1(t *testing.T) {
 
-	bf, err := bloomfilter.NewOptimal(maxElements, probCollide)
+	bf, err := bloomfilter.NewOptimal(100000, probCollide)
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Println(bf.M(), bf.M()/8/1000/1000, bf.K())
+	fmt.Println(bf.M(), bf.M()/8/1000, bf.K())
 
 	buff, err := bf.MarshalBinary()
 

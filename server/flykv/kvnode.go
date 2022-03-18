@@ -19,7 +19,6 @@ import (
 	sslot "github.com/sniperHW/flyfish/server/slot"
 	"net"
 	"os"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -225,12 +224,6 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, peers map[uint16]raft.
 		q: queue.NewPriorityQueue(2, this.config.MainQueueMaxSize),
 	}
 
-	var groupSize int = this.config.SnapshotCurrentCount
-
-	if 0 == groupSize {
-		groupSize = runtime.NumCPU()
-	}
-
 	store := &kvstore{
 		db:        this.db,
 		mainQueue: mainQueue,
@@ -238,13 +231,11 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, peers map[uint16]raft.
 		shard:     storeID,
 		meta:      meta,
 		kvmgr: kvmgr{
-			kv:               make([]map[string]*kv, groupSize),
-			slotsKvMap:       map[int]map[string]*kv{},
+			slotsKvMap:       make([]map[string]*kv, sslot.SlotCount),
 			slots:            slots,
 			slotsTransferOut: map[int]bool{},
-			//pendingKv:        map[string]*kv{},
-			kickableList:  list.New(),
-			hardkvlimited: (this.config.MaxCachePerStore * 3) / 2,
+			kickableList:     list.New(),
+			hardkvlimited:    (this.config.MaxCachePerStore * 3) / 2,
 		},
 	}
 
@@ -255,10 +246,6 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, peers map[uint16]raft.
 	}
 
 	store.rn = rn
-
-	for i := 0; i < len(store.kv); i++ {
-		store.kv[i] = map[string]*kv{}
-	}
 
 	this.stores[storeID] = store
 	store.serve()

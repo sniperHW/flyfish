@@ -11,6 +11,7 @@ import (
 	"github.com/sniperHW/flyfish/pkg/raft"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	sslot "github.com/sniperHW/flyfish/server/slot"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -120,23 +121,22 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 		case proposal_nop:
 		case proposal_last_writeback_version:
 			p := data.(*kv)
-			groupID := sslot.StringHash(p.uniKey) % len(s.kv)
-			if kv, ok := s.kv[groupID][p.uniKey]; ok {
+			if kv := s.getkv(sslot.Unikey2Slot(p.uniKey), p.uniKey); nil != kv {
 				kv.lastWriteBackVersion = p.lastWriteBackVersion
 			}
 		case proposal_snapshot, proposal_kick, proposal_update:
 			p := data.(*kv)
-			groupID := sslot.StringHash(p.uniKey) % len(s.kv)
-			kv, ok := s.kv[groupID][p.uniKey]
 
-			if !ok {
+			slot := sslot.Unikey2Slot(p.uniKey)
+			kv := s.getkv(slot, p.uniKey)
+
+			if nil == kv {
 				if ptype != proposal_snapshot {
 					return fmt.Errorf("bad data,%s with a bad proposal_type:%v", p.uniKey, ptype)
 				} else {
 					var err errcode.Error
-					slot := sslot.Unikey2Slot(p.uniKey)
 					table, key := splitUniKey(p.uniKey)
-					if kv, err = s.newkv(slot, groupID, p.uniKey, key, table); nil != err {
+					if kv, err = s.newkv(slot, p.uniKey, key, table); nil != err {
 						return fmt.Errorf("bad data,%s is no table define", p.uniKey)
 					}
 				}
@@ -166,12 +166,17 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 }
 
 func (s *kvstore) makeSnapshot(notifyer *raft.SnapshotNotify) {
+	var groupSize int = s.kvnode.config.SnapshotCurrentCount
+	if 0 == groupSize {
+		groupSize = runtime.NumCPU()
+	}
+
 	beg := time.Now()
 
 	var waitGroup sync.WaitGroup
-	waitGroup.Add(len(s.kv))
+	waitGroup.Add(groupSize)
 
-	snaps := make([][]*kv, len(s.kv))
+	snaps := make([][]*kv, groupSize)
 
 	buff := make([]byte, 0, buffsize)
 
@@ -186,28 +191,30 @@ func (s *kvstore) makeSnapshot(notifyer *raft.SnapshotNotify) {
 	}
 
 	//多线程序列化和压缩
-	for i, v := range s.kv {
-		go func(i int, m map[string]*kv) {
+	for i := 0; i < groupSize; i++ {
+		go func(i int) {
 			var snapkv []*kv
-			for _, v := range m {
-				kv := &kv{
-					uniKey:               v.uniKey,
-					version:              v.version,
-					fields:               map[string]*flyproto.Field{},
-					lastWriteBackVersion: v.lastWriteBackVersion,
-				}
+			for j := i; j < len(s.slotsKvMap); j += groupSize {
+				if nil != s.slotsKvMap[j] {
+					for _, v := range s.slotsKvMap[j] {
+						kv := &kv{
+							uniKey:               v.uniKey,
+							version:              v.version,
+							fields:               map[string]*flyproto.Field{},
+							lastWriteBackVersion: v.lastWriteBackVersion,
+						}
 
-				for kk, vv := range v.fields {
-					kv.fields[kk] = vv
-				}
+						for kk, vv := range v.fields {
+							kv.fields[kk] = vv
+						}
 
-				snapkv = append(snapkv, kv)
+						snapkv = append(snapkv, kv)
+					}
+				}
 			}
 			snaps[i] = snapkv
-
 			waitGroup.Done()
-
-		}(i, v)
+		}(i)
 	}
 
 	waitGroup.Wait()

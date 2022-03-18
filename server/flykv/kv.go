@@ -55,7 +55,6 @@ type kv struct {
 	updateTask           dbUpdateTask
 	pendingCmd           *list.List
 	store                *kvstore
-	groupID              int
 	lastWriteBackVersion int64
 	listElement          *list.Element
 }
