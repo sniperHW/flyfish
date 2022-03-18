@@ -360,7 +360,7 @@ func (r *replyer) replyErr(seqno int64, cmd uint16, err errcode.Error) {
 		}
 	}
 
-	payloadLen := cs.SizeSeqNo + cs.SizeCmd + cs.SizeErrCode + sizeOfErrDesc + cs.SizePB
+	payloadLen := cs.SizeSeqNo + cs.SizeCmd + cs.SizeErrCode + sizeOfErrDesc + cs.SizeCompress
 	totalLen := cs.SizeLen + payloadLen
 	if uint64(totalLen) > cs.MaxPacketSize {
 		return
@@ -384,7 +384,7 @@ func (r *replyer) replyErr(seqno int64, cmd uint16, err errcode.Error) {
 		}
 	}
 
-	b = buffer.AppendInt32(b, 0)
+	b = buffer.AppendByte(b, byte(0))
 
 	r.reply(b)
 

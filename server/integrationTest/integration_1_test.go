@@ -155,8 +155,9 @@ func testkv(t *testing.T, c *client.Client) {
 		fields["age"] = 12
 		fields["name"] = strings.Repeat("a", 4096)
 
-		c.Set("users1", "sniperHWLargeName", fields).Exec()
+		assert.Nil(t, c.Set("users1", "sniperHWLargeName", fields).Exec().ErrCode)
 
+		fmt.Println("Get sniperHWLargeName")
 		r := c.GetAll("users1", "sniperHWLargeName").Exec()
 		assert.Nil(t, r.ErrCode)
 
