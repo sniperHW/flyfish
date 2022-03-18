@@ -43,8 +43,9 @@ func clientReqUnpack(pbSpace *pb.Namespace, b []byte, r int, w int) (ret interfa
 			rr += 4
 			uniKeyLen := int(binary.BigEndian.Uint16(b[rr:]))
 			rr += 2
+
 			if uniKeyLen > 0 {
-				if uniKeyLen > payload-(rr-r) {
+				if uniKeyLen+rr > r+totalSize {
 					err = fmt.Errorf("invaild uniKeyLen")
 					return
 				}
