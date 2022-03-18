@@ -11,6 +11,7 @@ import (
 	"github.com/sniperHW/flyfish/pkg/net/pb"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"net"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -240,6 +241,97 @@ func MakeUniqueContext() int64 {
 	return time.Now().UnixNano()
 }
 
+const (
+	SizeCTX       = 8
+	SizeLen       = 4
+	SizeCmd       = 2
+	MinSize       = SizeLen
+	MaxPacketSize = 8 * 1024 * 1024
+)
+
+type Encoder struct {
+}
+
+func (this *Encoder) EnCode(o interface{}, buff *buffer.Buffer) error {
+
+	m, ok := o.(*Message)
+
+	if !ok {
+		if nil == o {
+			panic("o is nil")
+		}
+		return fmt.Errorf("invaild object to encode:%s", reflect.TypeOf(o).String())
+	}
+
+	if nil == m.Msg {
+		return errors.New("Msg is nil")
+	}
+
+	if pbbytes, cmd, err := pb.GetNamespace("sproto").Marshal(m.Msg); err != nil {
+		return err
+	} else {
+
+		payloadLen := SizeCTX + SizeCmd + len(pbbytes)
+		totalLen := SizeLen + payloadLen
+		if uint64(totalLen) > MaxPacketSize {
+			return fmt.Errorf("packet too large")
+		}
+
+		//写payload大小
+		buff.AppendUint32(uint32(payloadLen))
+		//cmd
+		buff.AppendUint16(uint16(cmd))
+		//seqno
+		buff.AppendInt64(m.Context)
+		buff.AppendBytes(pbbytes)
+
+		return nil
+	}
+}
+
+func inbouncUnpack(pbSpace *pb.Namespace, b []byte, r int, w int) (ret interface{}, packetSize int, err error) {
+	unpackSize := w - r
+	if unpackSize >= MinSize {
+		var msg proto.Message
+
+		reader := buffer.NewReader(b[r : r+unpackSize])
+		payload := int(reader.GetUint32())
+
+		if payload == 0 {
+			err = fmt.Errorf("zero payload")
+			return
+		}
+
+		if payload+SizeLen > MaxPacketSize {
+			err = fmt.Errorf("large packet %d", payload+SizeLen)
+			return
+		}
+
+		totalSize := payload + SizeLen
+
+		packetSize = totalSize
+
+		if totalSize <= unpackSize {
+			m := &Message{}
+			m.Context = reader.GetInt64()
+			cmd := reader.GetUint16()
+			pbsize := payload - SizeCTX - SizeCmd
+			buff := reader.GetBytes(pbsize)
+			if msg, err = pbSpace.Unmarshal(uint32(cmd), buff); err != nil {
+				return
+			} else {
+				m.Msg = msg
+				ret = m
+			}
+		}
+	}
+	return
+}
+
+func NewReqInboundProcessor() *flynet.InboundProcessor {
+	return flynet.NewInboundProcessor(inbouncUnpack, pb.GetNamespace("sproto"))
+}
+
 func init() {
 	namespace := pb.GetNamespace("sproto")
 
@@ -357,6 +449,11 @@ func init() {
 
 	namespace.Register(&sproto.ChangeFlyGate{}, uint32(sproto.ServerCmdType_ChangeFlyGate))
 	namespace.Register(&sproto.ChangeFlyGateResp{}, uint32(sproto.ServerCmdType_ChangeFlyGateResp))
+
+	//flybloom
+	namespace.Register(&sproto.BloomAddKey{}, uint32(sproto.ServerCmdType_BloomAddKey))
+	namespace.Register(&sproto.BloomContainKeyReq{}, uint32(sproto.ServerCmdType_BloomContainKeyReq))
+	namespace.Register(&sproto.BloomContainKeyResp{}, uint32(sproto.ServerCmdType_BloomContainKeyResp))
 
 	//for test
 	namespace.Register(&sproto.PacketTest{}, uint32(sproto.ServerCmdType_PacketTest))

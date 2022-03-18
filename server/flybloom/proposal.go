@@ -56,10 +56,10 @@ func (this *ProposalNop) Serilize(b []byte) []byte {
 
 func (this *ProposalNop) apply(fb *flybloom) {
 	GetSugar().Infof("ProposalNop.apply")
+	fb.ready = true
 }
 
 func (this *ProposalNop) replay(fb *flybloom) {
-
 }
 
 type ProposalAdd struct {

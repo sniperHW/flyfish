@@ -12,11 +12,11 @@ import (
 )
 
 const (
-	SizeSeqNo      = 8
-	SizeStore      = 4
-	SizeLen        = 4
-	SizeCmd        = 2
-	SizePB         = 4
+	SizeSeqNo = 8
+	SizeStore = 4
+	SizeLen   = 4
+	SizeCmd   = 2
+	//SizePB         = 4
 	SizeErrCode    = 2
 	SizeTimeout    = 4
 	SizeErrDescLen = 2
@@ -77,7 +77,7 @@ func (this *ReqEncoder) EnCode(o interface{}, buff *buffer.Buffer) error {
 	}
 
 	if pbbytes, cmd, err = this.pbSpace.Marshal(m.Data); err != nil {
-		return nil
+		return err
 	}
 
 	var compressFlag byte
@@ -92,10 +92,10 @@ func (this *ReqEncoder) EnCode(o interface{}, buff *buffer.Buffer) error {
 		}
 	}
 
-	payloadLen := SizeSeqNo + SizeStore + SizeUniKeyLen + sizeOfUniKey + SizeTimeout + SizeCmd + SizeCompress + SizePB + len(pbbytes)
+	payloadLen := SizeSeqNo + SizeStore + SizeUniKeyLen + sizeOfUniKey + SizeTimeout + SizeCmd + SizeCompress + /*SizePB +*/ len(pbbytes)
 	totalLen := SizeLen + payloadLen
 	if uint64(totalLen) > MaxPacketSize {
-		return nil
+		return fmt.Errorf("packet too large")
 	}
 
 	//写payload大小
@@ -113,7 +113,7 @@ func (this *ReqEncoder) EnCode(o interface{}, buff *buffer.Buffer) error {
 	buff.AppendString(m.UniKey)
 	//pb
 	buff.AppendByte(compressFlag)
-	buff.AppendInt32(int32(len(pbbytes)))
+	//buff.AppendInt32(int32(len(pbbytes)))
 	buff.AppendBytes(pbbytes)
 	return nil
 }
@@ -173,10 +173,10 @@ func (this *RespEncoder) EnCode(o interface{}, buff *buffer.Buffer) error {
 		}
 	}
 
-	payloadLen := SizeSeqNo + SizeCmd + SizeErrCode + sizeOfErrDesc + SizeCompress + SizePB + len(pbbytes)
+	payloadLen := SizeSeqNo + SizeCmd + SizeErrCode + sizeOfErrDesc + SizeCompress /*+ SizePB*/ + len(pbbytes)
 	totalLen := SizeLen + payloadLen
 	if uint64(totalLen) > MaxPacketSize {
-		return nil
+		return fmt.Errorf("packet too large")
 	}
 
 	//写payload大小
@@ -195,7 +195,7 @@ func (this *RespEncoder) EnCode(o interface{}, buff *buffer.Buffer) error {
 	}
 
 	buff.AppendByte(compressFlag)
-	buff.AppendInt32(int32(len(pbbytes)))
+	//buff.AppendInt32(int32(len(pbbytes)))
 	if len(pbbytes) > 0 {
 		//写数据
 		buff.AppendBytes(pbbytes)

@@ -82,7 +82,7 @@ enum ServerCmdType {
   DrainStore                    = 225;
   NotifyMissingStores           = 226;
   SuspendStore                  = 227;
-  ResumeStore                   = 228;
+  ResumeStore                   = 228;   
 
 
   //flygate <-> pd
@@ -98,6 +98,13 @@ enum ServerCmdType {
   GetFlyGateListResp            = 411;
   ChangeFlyGate                 = 412;
   ChangeFlyGateResp             = 413;
+
+
+  // <-> flybloom
+  BloomAddKey                   = 510;
+  BloomContainKeyReq            = 511;
+  BloomContainKeyResp           = 512;        
+
 
   //for test
   PacketTest                    = 1000;
@@ -590,3 +597,17 @@ message suspendStore {
 message resumeStore {
   optional int32  store = 1;  
 }
+
+
+message bloomAddKey {
+  optional string key = 1;  
+}
+
+message bloomContainKeyReq {
+  optional string key = 1; 
+}
+
+message bloomContainKeyResp {
+  optional string err     = 1;
+  optional bool   contain = 2; 
+}   

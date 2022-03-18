@@ -58,7 +58,9 @@ func reqUnpack(pbSpace *pb.Namespace, b []byte, r int, w int) (ret interface{}, 
 			m.UniKey = reader.GetString(sizeOfUniKey)
 
 			compressFlag := reader.GetByte()
-			pbsize := int(reader.GetInt32())
+
+			pbsize := payload - (SizeSeqNo + SizeStore + SizeTimeout + SizeCmd + SizeUniKeyLen + sizeOfUniKey + SizeCompress) //int(reader.GetInt32())
+
 			buff := reader.GetBytes(pbsize)
 
 			if compressFlag == byte(1) {
@@ -109,19 +111,22 @@ func respUnpack(pbSpace *pb.Namespace, b []byte, r int, w int) (ret interface{},
 			m.Cmd = flyproto.CmdType(reader.GetUint16())
 			errCode := reader.GetInt16()
 
+			pbsize := payload - (SizeSeqNo + SizeCmd + SizeErrCode + SizeCompress)
+
 			if errCode == 0 {
 				m.Err = nil
 			} else {
 				errDesc := ""
 				sizeOfErrDesc := int(reader.GetUint16())
+				pbsize -= SizeErrDescLen
 				if sizeOfErrDesc > 0 {
+					pbsize -= sizeOfErrDesc
 					errDesc = reader.GetString(sizeOfErrDesc)
 				}
 				m.Err = errcode.New(errCode, errDesc)
 			}
 
 			compressFlag := reader.GetByte()
-			pbsize := int(reader.GetInt32())
 			buff := reader.GetBytes(pbsize)
 
 			if compressFlag == byte(1) {

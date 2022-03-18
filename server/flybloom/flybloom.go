@@ -11,10 +11,10 @@ import (
 	flynet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
+	"github.com/sniperHW/flyfish/proto/cs"
 	"github.com/sniperHW/flyfish/server/flybloom/bloomfilter"
 	snet "github.com/sniperHW/flyfish/server/net"
-	//sproto "github.com/sniperHW/flyfish/server/proto"
-	"github.com/sniperHW/flyfish/proto/cs"
+	sproto "github.com/sniperHW/flyfish/server/proto"
 	"net"
 	"reflect"
 	"strings"
@@ -55,21 +55,21 @@ type applicationQueue struct {
 }
 
 type flybloom struct {
-	leader     uint64
-	rn         *raft.RaftInstance
-	cluster    int
-	mutilRaft  *raft.MutilRaft
-	mainque    applicationQueue
-	msgHandler map[reflect.Type]func(replyer, *snet.Message)
-	closed     int32
-	wait       sync.WaitGroup
-	config     *Config
-	service    string
-	RaftIDGen  *idutil.Generator
-	udp        *flynet.Udp
-	filter     *bloomfilter.Filter
-	pdAddr     []*net.UDPAddr
-	listener   *net.TCPListener
+	leader    uint64
+	ready     bool
+	rn        *raft.RaftInstance
+	cluster   int
+	mutilRaft *raft.MutilRaft
+	mainque   applicationQueue
+	closed    int32
+	wait      sync.WaitGroup
+	config    *Config
+	service   string
+	RaftIDGen *idutil.Generator
+	udp       *flynet.Udp
+	filter    *bloomfilter.Filter
+	pdAddr    []*net.UDPAddr
+	listener  *net.TCPListener
 }
 
 var outputBufLimit flynet.OutputBufLimit = flynet.OutputBufLimit{
@@ -121,8 +121,6 @@ func NewFlyBloom(nodeID uint16, cluster int, join bool, config *Config, clusterS
 			fb.pdAddr = append(fb.pdAddr, addr)
 		}
 	}
-
-	fb.initMsgHandler()
 
 	fb.mutilRaft = raft.NewMutilRaft()
 
@@ -196,55 +194,40 @@ func (q applicationQueue) close() {
 func (fb *flybloom) onClient(session *flynet.Socket) {
 	session.SetRecvTimeout(time.Second * 10)
 	//只有配置了压缩开启同时客户端支持压缩才开启通信压缩
-	session.SetInBoundProcessor(cs.NewReqInboundProcessor())
-	//session.SetEncoder(&cs.RespEncoder{})
+	session.SetInBoundProcessor(snet.NewReqInboundProcessor())
+	session.SetEncoder(&snet.Encoder{})
 	session.BeginRecv(func(session *flynet.Socket, v interface{}) {
 		if atomic.LoadInt32(&fb.closed) == 1 {
 			return
 		}
-		/*msg := v.(*cs.ReqMessage)
-		switch msg.Cmd {
-		case flyproto.CmdType_Ping:
-			session.Send(&cs.RespMessage{
-				Cmd:   msg.Cmd,
-				Seqno: msg.Seqno,
-				Data: &flyproto.PingResp{
-					Timestamp: time.Now().UnixNano(),
-				},
-			})
-		default:
-
-			replyer := this.makeReplyer(session, msg, true)
-
-			if nil == replyer {
-				return
-			}
-
-			this.muS.RLock()
-			store, ok := this.stores[msg.Store]
-			this.muS.RUnlock()
-			if !ok {
-				replyer.reply(&cs.RespMessage{
-					Seqno: msg.Seqno,
-					Cmd:   msg.Cmd,
-					Err:   errcode.New(errcode.Errcode_error, fmt.Sprintf("%s not in current server", msg.UniKey)),
-				})
-			} else {
-				store.addCliMessage(clientRequest{
-					replyer: replyer,
-					msg:     msg,
-				})
-			}
-		}*/
+		fb.onMsg(&tcpReplyer{
+			from: session,
+		}, v.(*snet.Message))
 	})
 }
 
-func (fb *flybloom) initMsgHandler() {
-
-}
-
 func (fb *flybloom) onMsg(replyer replyer, msg *snet.Message) {
-
+	switch msg.Msg.(type) {
+	case *sproto.BloomContainKeyReq:
+		hash := fb.filter.HashString(msg.Msg.(*sproto.BloomContainKeyReq).Key)
+		fb.mainque.append(func() {
+			replyer.reply(&snet.Message{
+				Context: msg.Context,
+				Msg: &sproto.BloomContainKeyResp{
+					Contain: fb.filter.ContainsWithHashs(hash),
+				},
+			})
+		})
+	case *sproto.BloomAddKey:
+		hash := fb.filter.HashString(msg.Msg.(*sproto.BloomContainKeyReq).Key)
+		fb.mainque.append(func() {
+			if fb.ready && !fb.filter.ContainsWithHashs(hash) {
+				fb.rn.IssueProposal(&ProposalAdd{
+					Hash: hash,
+				})
+			}
+		})
+	}
 }
 
 func (fb *flybloom) startUdpService() error {
@@ -321,7 +304,7 @@ func (fb *flybloom) serve() {
 			case func():
 				v.(func())()
 			case raft.Committed:
-				//p.processCommited(v.(raft.Committed))
+				fb.processCommited(v.(raft.Committed))
 			case []raft.LinearizableRead:
 			case raft.ProposalConfChange:
 				//v.(*ProposalConfChange).reply(nil)
