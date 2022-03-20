@@ -94,7 +94,7 @@ type Socket struct {
 	sendingSize              int
 	outputLimit              OutputBufLimit
 	obufSoftLimitReachedTime int64
-	ioLock                   int64
+	rwCounter                int64
 	p                        *sendp
 }
 
@@ -186,15 +186,15 @@ func (s *Socket) getSendTimeout() time.Duration {
 func (this *Socket) ShutdownWrite() {
 	if atomic.CompareAndSwapInt32(&this.closeOnce, 0, 1) {
 		this.setFlag(fwclosed)
-		if this.wLockCount() == 0 {
+		if this.writeCount() == 0 {
 			this.sendCh.close()
 			this.conn.(interface{ CloseWrite() error }).CloseWrite()
 		}
 	}
 }
 
-func (this *Socket) doclose(v int64) {
-	if v == 0 && this.IsClosed() && atomic.CompareAndSwapInt32(&this.doCloseOnce, 0, 1) {
+func (this *Socket) doclose() {
+	if this.IsClosed() && atomic.CompareAndSwapInt32(&this.doCloseOnce, 0, 1) {
 		this.sendCh.close()
 		if nil != this.b {
 			this.b.Free()
@@ -205,56 +205,63 @@ func (this *Socket) doclose(v int64) {
 	}
 }
 
-func (this *Socket) rLock() {
+func (this *Socket) incRead() {
 	for {
-		old := atomic.LoadInt64(&this.ioLock)
+		old := atomic.LoadInt64(&this.rwCounter)
 		new := (((old >> 32) + 1) << 32) | (old & 0x00000000FFFFFFFF)
-		if atomic.CompareAndSwapInt64(&this.ioLock, old, new) {
+		if atomic.CompareAndSwapInt64(&this.rwCounter, old, new) {
 			break
 		}
 	}
 }
 
-func (this *Socket) rUnlock() {
+func (this *Socket) decRead() {
 	var newV int64
+
 	for {
-		old := atomic.LoadInt64(&this.ioLock)
+		old := atomic.LoadInt64(&this.rwCounter)
 		newV = (((old >> 32) - 1) << 32) | (old & 0x00000000FFFFFFFF)
-		if atomic.CompareAndSwapInt64(&this.ioLock, old, newV) {
+		if atomic.CompareAndSwapInt64(&this.rwCounter, old, newV) {
 			break
 		}
 	}
-	this.doclose(newV)
+
+	if 0 == newV {
+		this.doclose()
+	}
 }
 
-func (this *Socket) wLock() {
+func (this *Socket) incWrite() {
 	for {
-		old := uint64(atomic.LoadInt64(&this.ioLock))
+		old := uint64(atomic.LoadInt64(&this.rwCounter))
 		new := ((old & 0x00000000FFFFFFFF) + 1) | (old & 0xFFFFFFFF00000000)
-		if atomic.CompareAndSwapInt64(&this.ioLock, int64(old), int64(new)) {
+		if atomic.CompareAndSwapInt64(&this.rwCounter, int64(old), int64(new)) {
 			break
 		}
 	}
 }
 
-func (this *Socket) wUnlock() {
+func (this *Socket) decWrite() {
 	var newV uint64
 	for {
-		old := uint64(atomic.LoadInt64(&this.ioLock))
+		old := uint64(atomic.LoadInt64(&this.rwCounter))
 		newV = ((old & 0x00000000FFFFFFFF) - 1) | (old & 0xFFFFFFFF00000000)
-		if atomic.CompareAndSwapInt64(&this.ioLock, int64(old), int64(newV)) {
+		if atomic.CompareAndSwapInt64(&this.rwCounter, int64(old), int64(newV)) {
 			break
 		}
 	}
-	this.doclose(int64(newV))
+
+	if 0 == newV {
+		this.doclose()
+	}
 }
 
-func (this *Socket) wLockCount() int {
-	return int(atomic.LoadInt64(&this.ioLock) & 0x00000000FFFFFFFF)
+func (this *Socket) writeCount() int {
+	return int(atomic.LoadInt64(&this.rwCounter) & 0x00000000FFFFFFFF)
 }
 
 func (this *Socket) recvThreadFunc() {
-	defer this.rUnlock()
+	defer this.decRead()
 
 	oldTimeout := this.getRecvTimeout()
 	timeout := oldTimeout
@@ -339,11 +346,11 @@ func (this *Socket) Send(o interface{}) error {
 		return ErrSocketClose
 	}
 
-	this.wLock()
+	this.incWrite()
 
 	this.p.runTask(func() {
 		this.muW.Lock()
-		defer this.wUnlock()
+		defer this.decWrite()
 
 		if nil == this.b {
 			this.b = buffer.Get()
@@ -383,14 +390,14 @@ func (this *Socket) Send(o interface{}) error {
 		b := this.b
 		this.b = nil
 		this.muW.Unlock()
-		this.wLock()
+		this.incWrite()
 		if nil == this.sendCh.push(b) {
 			if atomic.CompareAndSwapInt32(&this.sendOnce, 0, 1) {
 				go this.sendThreadFunc()
 			}
 		} else {
 			b.Free()
-			this.wUnlock()
+			this.decWrite()
 		}
 	})
 
@@ -398,12 +405,12 @@ func (this *Socket) Send(o interface{}) error {
 }
 
 func (this *Socket) onSendFinish() {
-	wUnlock := true
+	decWrite := true
 	this.muW.Lock()
 	defer func() {
 		this.muW.Unlock()
-		if wUnlock {
-			this.wUnlock()
+		if decWrite {
+			this.decWrite()
 		}
 	}()
 
@@ -416,7 +423,7 @@ func (this *Socket) onSendFinish() {
 		this.sendingSize = this.b.Len()
 		if nil == this.sendCh.push(this.b) {
 			this.b = nil
-			wUnlock = false
+			decWrite = false
 		}
 	}
 }
@@ -482,12 +489,12 @@ func (this *Socket) sendThreadFunc() {
 
 					if this.testFlag(fclosed) {
 						b.Free()
-						this.wUnlock()
+						this.decWrite()
 						return
 					}
 				} else {
 					b.Free()
-					this.wUnlock()
+					this.decWrite()
 					return
 				}
 			}
@@ -517,7 +524,7 @@ func (this *Socket) BeginRecv(cb func(*Socket, interface{})) (err error) {
 			err = ErrSocketClose
 		} else {
 			this.inboundCallBack = cb
-			this.rLock()
+			this.incRead()
 			go this.recvThreadFunc()
 		}
 	}
@@ -555,7 +562,7 @@ func (this *Socket) Close(reason error, delay time.Duration) {
 		this.closeReason = reason
 
 		if delay > 0 {
-			if this.wLockCount() > 0 {
+			if this.writeCount() > 0 {
 				ticker := time.NewTicker(delay)
 				go func() {
 					/*
@@ -576,7 +583,9 @@ func (this *Socket) Close(reason error, delay time.Duration) {
 
 		this.conn.Close()
 		this.sendCh.close()
-		this.doclose(atomic.LoadInt64(&this.ioLock))
+		if atomic.LoadInt64(&this.rwCounter) == 0 {
+			this.doclose()
+		}
 	}
 }
 
