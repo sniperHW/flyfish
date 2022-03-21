@@ -253,91 +253,91 @@ func (s *kvstore) makeSnapshot(notifyer *raft.SnapshotNotify) {
 
 	GetSugar().Infof("traval all kv pairs and filters take: %v", time.Now().Sub(beg))
 
-	//go func() {
+	go func() {
 
-	beg = time.Now()
+		beg = time.Now()
 
-	buff := make([]byte, 0, buffsize)
-	ll := len(buff)
-	buff = buffer.AppendInt32(buff, 0) //占位符
-	buff = serilizeHalt(s.halt, buff)
-	buff = serilizeMeta(s.meta, buff)
-	buff = buffer.AppendByte(buff, byte(proposal_filters))
-	c := 0
-	for i := 0; i < len(s.slots); i++ {
-		if nil != s.slots {
-			c++
+		buff := make([]byte, 0, buffsize)
+		ll := len(buff)
+		buff = buffer.AppendInt32(buff, 0) //占位符
+		buff = serilizeHalt(s.halt, buff)
+		buff = serilizeMeta(s.meta, buff)
+		buff = buffer.AppendByte(buff, byte(proposal_filters))
+		c := 0
+		for i := 0; i < len(s.slots); i++ {
+			if nil != s.slots {
+				c++
+			}
 		}
-	}
 
-	buff = buffer.AppendInt32(buff, int32(c))
-	var mtx sync.Mutex
+		buff = buffer.AppendInt32(buff, int32(c))
+		var mtx sync.Mutex
 
-	{
-		var waitGroup sync.WaitGroup
-		waitGroup.Add(groupSize)
-		//多线程序列化和压缩
-		for i := 0; i < groupSize; i++ {
-			go func(i int) {
-				for j := i; j < len(filters); j += groupSize {
-					if nil != filters[j] {
-						mtx.Lock()
-						filter, _ := filters[j].MarshalBinaryZip()
-						buff = buffer.AppendInt32(buff, int32(j))
-						buff = buffer.AppendInt32(buff, int32(len(filter)))
-						buff = buffer.AppendBytes(buff, filter)
-						mtx.Unlock()
+		{
+			var waitGroup sync.WaitGroup
+			waitGroup.Add(groupSize)
+			//多线程序列化和压缩
+			for i := 0; i < groupSize; i++ {
+				go func(i int) {
+					for j := i; j < len(filters); j += groupSize {
+						if nil != filters[j] {
+							mtx.Lock()
+							filter, _ := filters[j].MarshalBinaryZip()
+							buff = buffer.AppendInt32(buff, int32(j))
+							buff = buffer.AppendInt32(buff, int32(len(filter)))
+							buff = buffer.AppendBytes(buff, filter)
+							mtx.Unlock()
+						}
 					}
-				}
-				waitGroup.Done()
-			}(i)
+					waitGroup.Done()
+				}(i)
+			}
+			waitGroup.Wait()
+			buff = append(buff, byte(0)) //写入无压缩标记
+			binary.BigEndian.PutUint32(buff[ll:ll+4], uint32(len(buff)-ll-4))
 		}
-		waitGroup.Wait()
-		buff = append(buff, byte(0)) //写入无压缩标记
-		binary.BigEndian.PutUint32(buff[ll:ll+4], uint32(len(buff)-ll-4))
-	}
 
-	{
-		var waitGroup sync.WaitGroup
-		waitGroup.Add(len(snaps))
-		for _, snapkvs := range snaps {
-			go func(snapkvs []*kv) {
-				b := make([]byte, 0, maxBlockSize*2)
-				b = buffer.AppendInt32(b, 0) //占位符
+		{
+			var waitGroup sync.WaitGroup
+			waitGroup.Add(len(snaps))
+			for _, snapkvs := range snaps {
+				go func(snapkvs []*kv) {
+					b := make([]byte, 0, maxBlockSize*2)
+					b = buffer.AppendInt32(b, 0) //占位符
 
-				/*
-				 *  每当块大小超过maxBlockSize就执行一次压缩
-				 *  避免内存扩张过大
-				 */
+					/*
+					 *  每当块大小超过maxBlockSize就执行一次压缩
+					 *  避免内存扩张过大
+					 */
 
-				for _, vv := range snapkvs {
-					b = serilizeKv(b, proposal_snapshot, vv.uniKey, vv.version, vv.lastWriteBackVersion, vv.fields)
-					if len(b) >= maxBlockSize {
+					for _, vv := range snapkvs {
+						b = serilizeKv(b, proposal_snapshot, vv.uniKey, vv.version, vv.lastWriteBackVersion, vv.fields)
+						if len(b) >= maxBlockSize {
+							b = compressSnap(b)
+							mtx.Lock()
+							buff = append(buff, b...)
+							mtx.Unlock()
+							b = b[0:0]
+							b = buffer.AppendInt32(b, 0) //占位符
+						}
+					}
+
+					if len(b) > 4 {
 						b = compressSnap(b)
 						mtx.Lock()
 						buff = append(buff, b...)
 						mtx.Unlock()
-						b = b[0:0]
-						b = buffer.AppendInt32(b, 0) //占位符
 					}
-				}
 
-				if len(b) > 4 {
-					b = compressSnap(b)
-					mtx.Lock()
-					buff = append(buff, b...)
-					mtx.Unlock()
-				}
+					waitGroup.Done()
 
-				waitGroup.Done()
-
-			}(snapkvs)
+				}(snapkvs)
+			}
+			waitGroup.Wait()
 		}
-		waitGroup.Wait()
-	}
 
-	GetSugar().Infof("Snapshot len:%d serilize use:%v", len(buff), time.Now().Sub(beg))
+		GetSugar().Infof("Snapshot len:%d serilize use:%v", len(buff), time.Now().Sub(beg))
 
-	notifyer.Notify(buff)
-	//}()
+		notifyer.Notify(buff)
+	}()
 }
