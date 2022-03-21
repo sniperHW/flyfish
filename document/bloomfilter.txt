@@ -13,12 +13,44 @@ bloomfilter的安全性需求：如果bloomfilter返回不存在，则数据库�
 
 为了保证安全性，flyfish在向db插入kv前，必选先往bloomfilter添加kv。只有待bloomfilter确认添加成功才能向db插入kv。
 
+bloomfilter的故障不应该影响到flykv的正常运转：flykv向bloomfilter查询设定一个短的超时时间，当定时器触发，则认为kv在数据库中存在，直接向数据库查询。
 
-bloomfilter的清理与重建：
+bloomfilter的丢包不应该影响到flykv的正常运转：处理方法同上。
 
-1）游戏开发阶段，经常需要清库，清库之后需要清理bloomfilter.
+bloomfilter机制可以动态关闭：当游戏运营到一个稳定状态后，新增用户变得很少，floomfilter作为应对由创建新用户导致的缓存穿透保护机制将不再需要。
 
-2) 游戏有回档的需求，回档后，有的记录就不存在了，因此，需要清理bloomfilter并使用回档后的数据重建bloomfilter.
+
+独立的bloomfilter服务
+
+服务高可用，服务的动态伸缩。
+
+由上面bloomfilter故障的处理方式可以看到，当bloomfilter发生故障，虽然不会影响系统的正确性，但确实会给未命中的请求带来一定的延迟。因此，bloomfilter应该能够快速从
+故障中恢复继续提供服务。因此服务需要一定的高可用。
+
+为了提高可用性，需要增加副本，并且让filter在副本之间保持一致，同时，为了满足安全性，只有leader副本能提供服务。（考虑如下情形：向leader发出add kv请求，
+quorum响应，add返回，数据成功插入DB。 之后一个check kv的请求发往尚未同步到这个add的follower,follower返回kv不存在，这样违背了bloomfilter的安全性需求）。
+
+如果预计到单一bloomfilter无法满足访问需求，需要对bloomfilter做分片处理，使得服务可以动态伸缩。
+
+
+优势：
+
+bloomfilter单独开发，维护。
+
+劣势：
+
+flykv处理流程复杂化
+
+缓存未命中情况：flykv首先向bloomfilter查询，之后根据结果判断是否需要到数据库加载。
+
+回写：对于会产生db insert的回写，需要先执行bloomfilter add,等到add成功之后才能执行db回写。
+
+
+嵌入flykv的bloomfilter
+
+
+bloomfilter按slot为单位，嵌入到kvstore中。
+
 
 
 
