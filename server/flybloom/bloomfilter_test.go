@@ -75,7 +75,7 @@ func test3(t *testing.T) {
 }
 
 func TestBloomFilter(t *testing.T) {
-	test1(t)
-	test2(t)
+	//test1(t)
+	//test2(t)
 	test3(t)
 }

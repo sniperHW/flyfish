@@ -14,6 +14,7 @@ import (
 	"github.com/sniperHW/flyfish/pkg/raft"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
+	"github.com/sniperHW/flyfish/server/flybloom/bloomfilter"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	sslot "github.com/sniperHW/flyfish/server/slot"
@@ -230,13 +231,20 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, peers map[uint16]raft.
 		kvnode:    this,
 		shard:     storeID,
 		meta:      meta,
-		kvmgr: kvmgr{
-			slotsKvMap:       make([]map[string]*kv, sslot.SlotCount),
-			slots:            slots,
+		slotMgr: slotMgr{
+			slots:            make([]*slot, sslot.SlotCount),
 			slotsTransferOut: map[int]bool{},
 			kickableList:     list.New(),
 			hardkvlimited:    (this.config.MaxCachePerStore * 3) / 2,
 		},
+	}
+
+	for _, v := range slots.GetOpenBits() {
+		filter, _ := bloomfilter.NewOptimal(this.config.BloomFilter.MaxElements, this.config.BloomFilter.ProbCollide)
+		store.slots[v] = &slot{
+			kvMap:  map[string]*kv{},
+			filter: filter,
+		}
 	}
 
 	rn, err := raft.NewInstance(this.id, storeID, this.join, this.mutilRaft, mainQueue, peers, this.config.RaftLogDir, this.config.RaftLogPrefix)
@@ -366,6 +374,12 @@ func (this *kvnode) start() error {
 	}
 
 	if config.Mode == "solo" {
+
+		err = sql.CreateBloomFilter(dbConfig.DBType, this.dbc)
+
+		if nil != err {
+			return err
+		}
 
 		f, err := os.Open(config.SoloConfig.MetaPath)
 		if nil != err {
@@ -643,6 +657,14 @@ func NewKvNode(id uint16, join bool, config *Config, db dbI) (*kvnode, error) {
 
 	if config.ReqLimit.SoftLimitSeconds <= 0 {
 		config.ReqLimit.SoftLimitSeconds = 10
+	}
+
+	if config.BloomFilter.MaxElements == 0 {
+		config.BloomFilter.MaxElements = 1000
+	}
+
+	if config.BloomFilter.ProbCollide == 0.0 {
+		config.BloomFilter.ProbCollide = 0.001
 	}
 
 	node := &kvnode{

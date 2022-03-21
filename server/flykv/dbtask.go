@@ -9,17 +9,20 @@ import (
 )
 
 func (this *dbUpdateTask) SetLastWriteBackVersion(version int64) {
-	this.setLastWriteBackVersion(version)
+	old := this.setLastWriteBackVersion(version)
 	this.kv.store.rn.IssueProposal(&LastWriteBackVersionProposal{
 		version: version,
+		old:     old,
 		kv:      this.kv,
 	})
 }
 
-func (this *dbUpdateTask) setLastWriteBackVersion(version int64) {
+func (this *dbUpdateTask) setLastWriteBackVersion(version int64) (old int64) {
 	this.Lock()
 	defer this.Unlock()
+	old = this.state.LastWriteBackVersion
 	this.state.LastWriteBackVersion = version
+	return
 }
 
 func (this *dbUpdateTask) CheckUpdateLease() bool {

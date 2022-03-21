@@ -120,10 +120,13 @@ func (f *Filter) marshalZip() (buf *bytes.Buffer,
 		return nil, hash, err
 	}
 
-	tmp := (*reflect.SliceHeader)(unsafe.Pointer(&f.bits))
-	tmp.Len = tmp.Len * 8
-	tmp.Cap = tmp.Len * 7
-	buff := *(*[]byte)(unsafe.Pointer(tmp))
+	tmp := reflect.SliceHeader{
+		Len:  len(f.bits) * 8,
+		Cap:  cap(f.bits) * 8,
+		Data: (*reflect.SliceHeader)(unsafe.Pointer(&f.bits)).Data,
+	}
+
+	buff := *(*[]byte)(unsafe.Pointer(&tmp))
 
 	zipCompressor := &compress.ZipCompressor{}
 

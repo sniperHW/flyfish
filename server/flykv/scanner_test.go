@@ -24,6 +24,8 @@ func TestScaner(t *testing.T) {
 	//先删除所有kv文件
 	os.RemoveAll("./testRaftLog")
 
+	clearUsers1()
+
 	client.InitLogger(GetLogger())
 
 	node := start1Node(1, newSqlDBBackEnd(), false, config, true)

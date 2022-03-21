@@ -2,7 +2,7 @@ package flykv
 
 import (
 	"github.com/sniperHW/flyfish/db"
-	"github.com/sniperHW/flyfish/pkg/bitmap"
+	//"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"math"
@@ -48,12 +48,12 @@ func serilizeHalt(halt bool, b []byte) []byte {
 	}
 }
 
-func serilizeSlots(slots *bitmap.Bitmap, b []byte) []byte {
-	slotB := slots.ToJson()
-	b = buffer.AppendByte(b, byte(proposal_slots))
-	b = buffer.AppendInt32(b, int32(len(slotB)))
-	return buffer.AppendBytes(b, slotB)
-}
+//func serilizeSlots(slots *bitmap.Bitmap, b []byte) []byte {
+//	slotB := slots.ToJson()
+//	b = buffer.AppendByte(b, byte(proposal_slots))
+//	b = buffer.AppendInt32(b, int32(len(slotB)))
+//	return buffer.AppendBytes(b, slotB)
+//}
 
 func serilizeMeta(meta db.DBMeta, b []byte) []byte {
 	metaB, _ := meta.ToJson()

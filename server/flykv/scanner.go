@@ -18,7 +18,7 @@ type cacheKv struct {
 	fields  []*flyproto.Field //字段
 }
 
-type slot struct {
+type wantSlot struct {
 	slot    int
 	kv      []*cacheKv
 	offset  int
@@ -29,7 +29,7 @@ type scanner struct {
 	wantFields []string
 	tbmeta     db.TableMeta
 	table      string
-	slots      []*slot
+	slots      []*wantSlot
 	offset     int
 	scanner    *sql.Scanner
 	conn       net.Conn
@@ -120,8 +120,8 @@ func (this *kvnode) onScanner(conn net.Conn) {
 
 		store.mainQueue.q.Append(0, func() {
 			for _, v := range wantSlots.GetOpenBits() {
-				if store.slots.Test(v) {
-					scanner.makeCachekvs(v, store.slotsKvMap[v])
+				if store.slots[v] != nil {
+					scanner.makeCachekvs(v, store.slots[v].kvMap)
 				}
 			}
 			close(ch)
@@ -236,7 +236,7 @@ func (sc *scanner) next(kvnode *kvnode, conn net.Conn, count int, deadline time.
 
 func (sc *scanner) makeCachekvs(slotNo int, kvs map[string]*kv) {
 
-	s := &slot{
+	s := &wantSlot{
 		slot: slotNo,
 	}
 

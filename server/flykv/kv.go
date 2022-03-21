@@ -44,6 +44,7 @@ type dbLoadTask struct {
  */
 
 type kv struct {
+	hash                 []uint64
 	slot                 int
 	table                string
 	uniKey               string //"table:key"组成的唯一全局唯一键
@@ -80,18 +81,30 @@ func (this *kv) pushCmd(cmd cmdI) {
 	if this.pendingCmd.Len() == 0 {
 		this.pendingCmd.PushBack(cmd)
 		if this.state == kv_new {
-			if !this.store.db.issueLoad(&dbLoadTask{
-				kv:     this,
-				meta:   this.meta,
-				uniKey: this.uniKey,
-				table:  this.table,
-				key:    this.key,
-				term:   this.store.getTerm(),
-			}) {
-				cmd.reply(errcode.New(errcode.Errcode_retry, "loader is busy, please try later!"), nil, 0)
-				this.store.deleteKv(this)
-			} else {
+			if !this.store.slots[this.slot].filter.ContainsWithHashs(this.hash) {
+				//bloomfilter中不存在，不需要到数据库中load
+				proposal := &kvProposal{
+					ptype:       proposal_snapshot,
+					kv:          this,
+					causeByLoad: true,
+					kvState:     kv_no_record,
+				}
 				this.state = kv_loading
+				this.store.rn.IssueProposal(proposal)
+			} else {
+				if !this.store.db.issueLoad(&dbLoadTask{
+					kv:     this,
+					meta:   this.meta,
+					uniKey: this.uniKey,
+					table:  this.table,
+					key:    this.key,
+					term:   this.store.getTerm(),
+				}) {
+					cmd.reply(errcode.New(errcode.Errcode_retry, "loader is busy, please try later!"), nil, 0)
+					this.store.deleteKv(this)
+				} else {
+					this.state = kv_loading
+				}
 			}
 		} else {
 			this.processCmd()

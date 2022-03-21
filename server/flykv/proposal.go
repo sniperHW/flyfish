@@ -6,10 +6,11 @@ import (
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
 	flyproto "github.com/sniperHW/flyfish/proto"
+	"github.com/sniperHW/flyfish/server/flybloom/bloomfilter"
+	sslot "github.com/sniperHW/flyfish/server/slot"
 	"math"
 	"unsafe"
 )
@@ -19,7 +20,7 @@ const (
 	proposal_snapshot               = proposalType(1) //全量数据kv快照,
 	proposal_update                 = proposalType(2) //fields变更
 	proposal_kick                   = proposalType(3) //从缓存移除kv
-	proposal_slots                  = proposalType(4)
+	proposal_filters                = proposalType(4)
 	proposal_slot_transfer          = proposalType(5)
 	proposal_meta                   = proposalType(6)
 	proposal_nop                    = proposalType(7) //空proposal用于确保之前的proposal已经提交并apply
@@ -123,26 +124,37 @@ func (this *proposalReader) read() (isOver bool, ptype proposalType, data interf
 
 				data = meta
 
-			case proposal_slots:
-				var l int32
-				l, err = this.reader.CheckGetInt32()
+			case proposal_filters:
+				filters := make([]*[]byte, sslot.SlotCount)
+				var c int32
+				c, err = this.reader.CheckGetInt32()
 				if nil != err {
-					err = fmt.Errorf("proposal_slots CheckGetInt32:%v", err)
+					err = fmt.Errorf("proposal_filters CheckGetInt32:%v", err)
 					return
 				}
-				var bb []byte
-				bb, err = this.reader.CheckGetBytes(int(l))
-				if nil != err {
-					err = fmt.Errorf("proposal_slots CheckGetBytes:%v", err)
-					return
+
+				for i := 0; i < int(c); i++ {
+					var slot int32
+					var l int32
+					slot, err = this.reader.CheckGetInt32()
+					if nil != err {
+						err = fmt.Errorf("proposal_slots CheckGetInt32:%v", err)
+						return
+					}
+					l, err = this.reader.CheckGetInt32()
+					if nil != err {
+						err = fmt.Errorf("proposal_slots CheckGetInt32:%v", err)
+						return
+					}
+					var bb []byte
+					bb, err = this.reader.CheckGetBytes(int(l))
+					if nil != err {
+						err = fmt.Errorf("proposal_slots CheckGetBytes:%v", err)
+						return
+					}
+					filters[int(slot)] = &bb
 				}
-				var slots *bitmap.Bitmap
-				slots, err = bitmap.CreateFromJson(bb)
-				if nil != err {
-					err = fmt.Errorf("proposal_slots CreateFromJson:%v", err)
-				} else {
-					data = slots
-				}
+				data = filters
 			case proposal_slot_transfer:
 				var tt byte
 				tt, err = this.reader.CheckGetByte()
@@ -156,9 +168,24 @@ func (this *proposalReader) read() (isOver bool, ptype proposalType, data interf
 					return
 				}
 
+				var l int32
+				l, err = this.reader.CheckGetInt32()
+				if nil != err {
+					return
+				}
+
+				var filter []byte
+				if l > 0 {
+					filter, err = this.reader.CheckGetBytes(int(l))
+					if nil != err {
+						return
+					}
+				}
+
 				data = &SlotTransferProposal{
 					slot:         int(slot),
 					transferType: slotTransferType(tt),
+					filter:       filter,
 				}
 			case proposal_none:
 				err = errors.New("bad data 2")
@@ -168,18 +195,34 @@ func (this *proposalReader) read() (isOver bool, ptype proposalType, data interf
 				if nil != err {
 					return
 				}
-				kv := &kv{}
-				kv.uniKey, err = this.reader.CheckGetString(int(l))
+
+				var uniKey string
+				var version int64
+				var old int64
+
+				uniKey, err = this.reader.CheckGetString(int(l))
 				if nil != err {
 					return
 				}
 
-				kv.lastWriteBackVersion, err = this.reader.CheckGetInt64()
+				old, err = this.reader.CheckGetInt64()
 				if nil != err {
 					return
 				}
 
-				data = kv
+				version, err = this.reader.CheckGetInt64()
+				if nil != err {
+					return
+				}
+
+				data = &LastWriteBackVersionProposal{
+					kv: &kv{
+						uniKey: uniKey,
+					},
+					version: version,
+					old:     old,
+				}
+
 			case proposal_snapshot, proposal_update, proposal_kick:
 				var l uint16
 				l, err = this.reader.CheckGetUint16()
@@ -460,6 +503,7 @@ const (
 type SlotTransferProposal struct {
 	proposalBase
 	slot         int
+	filter       []byte
 	transferType slotTransferType
 	store        *kvstore
 	reply        func()
@@ -472,15 +516,27 @@ func (this *SlotTransferProposal) OnError(err error) {
 func (this *SlotTransferProposal) Serilize(b []byte) []byte {
 	b = buffer.AppendByte(b, byte(proposal_slot_transfer))
 	b = buffer.AppendByte(b, byte(this.transferType))
-	return buffer.AppendInt32(b, int32(this.slot))
+	b = buffer.AppendInt32(b, int32(this.slot))
+	if this.transferType == slotTransferIn {
+		b = buffer.AppendInt32(b, int32(len(this.filter)))
+		b = buffer.AppendBytes(b, this.filter)
+		GetSugar().Infof("SlotTransferProposal %d", len(this.filter))
+	} else {
+		b = buffer.AppendInt32(b, int32(0))
+	}
+	return b
 }
 
 func (this *SlotTransferProposal) apply() {
 	if this.transferType == slotTransferIn {
-		this.store.slots.Set(this.slot)
+		filter, _ := bloomfilter.NewOptimal(this.store.kvnode.config.BloomFilter.MaxElements, this.store.kvnode.config.BloomFilter.ProbCollide)
+		this.store.slots[this.slot] = &slot{
+			kvMap:  map[string]*kv{},
+			filter: filter,
+		}
 	} else {
 		delete(this.store.slotsTransferOut, this.slot)
-		this.store.slots.Clear(this.slot)
+		this.store.slots[this.slot] = nil
 	}
 	this.reply()
 }
@@ -489,6 +545,7 @@ type LastWriteBackVersionProposal struct {
 	proposalBase
 	kv      *kv
 	version int64
+	old     int64
 }
 
 func (this *LastWriteBackVersionProposal) OnError(err error) {
@@ -500,11 +557,16 @@ func (this *LastWriteBackVersionProposal) Serilize(b []byte) []byte {
 	//unikey
 	b = buffer.AppendUint16(b, uint16(len(this.kv.uniKey)))
 	b = buffer.AppendString(b, this.kv.uniKey)
+	b = buffer.AppendInt64(b, this.old)
 	return buffer.AppendInt64(b, this.version)
 }
 
 func (this *LastWriteBackVersionProposal) apply() {
 	GetSugar().Debugf("LastWriteBackVersionProposal apply %s version:%d %d", this.kv.uniKey, this.version, this.kv.version)
+	if this.old == 0 && !this.kv.store.slots[this.kv.slot].filter.ContainsWithHashs(this.kv.hash) {
+		this.kv.store.slots[this.kv.slot].filter.AddWithHashs(this.kv.hash)
+	}
+
 	if abs(this.version) > abs(this.kv.lastWriteBackVersion) {
 		this.kv.lastWriteBackVersion = this.version
 	}

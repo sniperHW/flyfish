@@ -66,21 +66,28 @@ func unmarshalBinaryBitsZip(r io.Reader, m uint64) (bits []uint64, err error) {
 		return
 	}
 
-	tmp := make([]byte, l)
-	err = binary.Read(r, binary.LittleEndian, tmp)
+	tmp1 := make([]byte, l)
+	err = binary.Read(r, binary.LittleEndian, tmp1)
 	if nil != err {
 		return
 	}
 
 	zipDecompressor := &compress.ZipDecompressor{}
-	unzipOut, err := zipDecompressor.Decompress(tmp)
+	unzipOut, err := zipDecompressor.Decompress(tmp1)
 	if nil != err {
 		return
 	}
-	header := (*reflect.SliceHeader)(unsafe.Pointer(&unzipOut))
-	header.Len = header.Len / 8
-	header.Cap = header.Cap / 8
-	bits = *(*[]uint64)(unsafe.Pointer(header))
+
+	tmp2 := reflect.SliceHeader{
+		Len:  len(unzipOut) / 8,
+		Cap:  cap(unzipOut) / 8,
+		Data: (*reflect.SliceHeader)(unsafe.Pointer(&unzipOut)).Data,
+	}
+
+	bits = make([]uint64, tmp2.Len)
+	for k, v := range *(*[]uint64)(unsafe.Pointer(&tmp2)) {
+		bits[k] = v
+	}
 	return
 }
 

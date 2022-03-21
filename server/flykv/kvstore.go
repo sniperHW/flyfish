@@ -6,7 +6,6 @@ import (
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/etcd/etcdserver/api/snap"
 	"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
@@ -15,6 +14,7 @@ import (
 	"github.com/sniperHW/flyfish/pkg/raft/membership"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
+	"github.com/sniperHW/flyfish/server/flybloom/bloomfilter"
 	"github.com/sniperHW/flyfish/server/flypd"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
@@ -70,9 +70,13 @@ type clientRequest struct {
 	slot    int
 }
 
-type kvmgr struct {
-	slotsKvMap            []map[string]*kv
-	slots                 *bitmap.Bitmap
+type slot struct {
+	kvMap  map[string]*kv
+	filter *bloomfilter.Filter
+}
+
+type slotMgr struct {
+	slots                 []*slot
 	kvcount               int
 	hardkvlimited         int
 	kickableList          *list.List
@@ -81,7 +85,7 @@ type kvmgr struct {
 }
 
 type kvstore struct {
-	kvmgr
+	slotMgr
 	leader           uint64
 	snapshotter      *snap.Snapshotter
 	rn               *raft.RaftInstance
@@ -142,20 +146,11 @@ func (s *kvstore) addCliMessage(req clientRequest) {
 
 func (s *kvstore) deleteKv(k *kv) {
 	s.kvcount--
-	kvs := s.slotsKvMap[k.slot]
-	delete(kvs, k.uniKey)
-	if len(kvs) == 0 {
-		s.slotsKvMap[k.slot] = nil
-	}
-	GetSugar().Debugf("delete kv:%s %d", k.uniKey, s.kvcount)
+	delete(s.slots[k.slot].kvMap, k.uniKey)
 }
 
 func (s *kvstore) getkv(slot int, unikey string) *kv {
-	if nil != s.slotsKvMap[slot] {
-		return s.slotsKvMap[slot][unikey]
-	} else {
-		return nil
-	}
+	return s.slots[slot].kvMap[unikey]
 }
 
 func (s *kvstore) newkv(slot int, unikey string, key string, table string) (*kv, errcode.Error) {
@@ -168,15 +163,15 @@ func (s *kvstore) newkv(slot int, unikey string, key string, table string) (*kv,
 	GetSugar().Debugf("newkv:%s", unikey)
 
 	k := &kv{
-		uniKey: unikey,
-		key:    key,
-		state:  kv_new,
-		meta:   tbmeta,
-		store:  s,
-		//groupID:    groupID,
+		uniKey:     unikey,
+		key:        key,
+		state:      kv_new,
+		meta:       tbmeta,
+		store:      s,
 		slot:       slot,
 		table:      table,
 		pendingCmd: list.New(),
+		hash:       s.slots[slot].filter.HashString(unikey),
 	}
 
 	k.updateTask = dbUpdateTask{
@@ -188,13 +183,7 @@ func (s *kvstore) newkv(slot int, unikey string, key string, table string) (*kv,
 		},
 	}
 
-	if nil != s.slotsKvMap[k.slot] {
-		s.slotsKvMap[k.slot][k.uniKey] = k
-	} else {
-		s.slotsKvMap[k.slot] = map[string]*kv{}
-		s.slotsKvMap[k.slot][k.uniKey] = k
-	}
-
+	s.slots[slot].kvMap[k.uniKey] = k
 	s.kvcount++
 
 	return k, nil
@@ -255,7 +244,7 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 	err = func() errcode.Error {
 		slot := sslot.Unikey2Slot(req.msg.UniKey)
 
-		if !s.slots.Test(slot) {
+		if nil == s.slots[slot] {
 			//unikey不归当前store管理,路由信息已经stale
 			return errcode.New(errcode.Errcode_route_info_stale)
 		}
@@ -432,9 +421,9 @@ func (s *kvstore) serve() {
 
 func (s *kvstore) issueFullDbWriteBack() {
 	writebackcount := 0
-	for _, v := range s.slotsKvMap {
+	for _, v := range s.slots {
 		if nil != v {
-			for _, vv := range v {
+			for _, vv := range v.kvMap {
 				if meta := s.meta.CheckTableMeta(vv.meta); meta != nil {
 					vv.meta = meta
 				}
@@ -462,9 +451,9 @@ func (s *kvstore) becomeLeader() {
 
 func (s *kvstore) onLeaderDownToFollower() {
 	atomic.StoreInt32(&s.ready, 0)
-	for _, v := range s.slotsKvMap {
+	for _, v := range s.slots {
 		if nil != v {
-			for _, vv := range v {
+			for _, vv := range v.kvMap {
 				vv.clearCmds(errcode.New(errcode.Errcode_not_leader))
 				if vv.state < kv_ok {
 					s.deleteKv(vv)
@@ -586,16 +575,29 @@ func (s *kvstore) onNotifySlotTransIn(from *net.UDPAddr, msg *sproto.NotifySlotT
 	slot := int(msg.Slot)
 	if s.slotsTransferOut[slot] {
 		return
-	} else if s.slots.Test(slot) {
+	} else if nil != s.slots[slot] {
 		s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
 			&sproto.SlotTransInOk{
 				Slot: msg.Slot,
 			}))
 	} else {
+		//加载filter
+		filter, err := sql.GetBloomFilter(s.kvnode.dbc, int(msg.Slot))
+		if nil != err {
+			GetSugar().Errorf("error on load filter slot:%d err:%v", msg.Slot, err)
+			return
+		}
+
+		if len(filter) == 0 {
+			GetSugar().Errorf("error on load filter slot:%d filter is empty", msg.Slot)
+			return
+		}
+
 		s.rn.IssueProposal(&SlotTransferProposal{
 			slot:         slot,
 			transferType: slotTransferIn,
 			store:        s,
+			filter:       filter,
 			reply: func() {
 				s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
 					&sproto.SlotTransInOk{
@@ -611,7 +613,7 @@ func (s *kvstore) kickSlot() {
 	if s.isReady() && len(s.slotsTransferOut) > 0 {
 		active := 0
 		for slot, _ := range s.slotsTransferOut {
-			if kvs := s.slotsKvMap[slot]; nil != kvs {
+			if kvs := s.slots[slot].kvMap; len(kvs) > 0 {
 				active++
 				for _, v := range kvs {
 					if nil != v.listElement {
@@ -633,15 +635,22 @@ func (s *kvstore) kickSlot() {
 
 func (s *kvstore) onNotifySlotTransOut(from *net.UDPAddr, msg *sproto.NotifySlotTransOut, context int64) {
 	slot := int(msg.Slot)
-	if !s.slots.Test(slot) {
+	if nil == s.slots[slot] {
 		s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
 			&sproto.SlotTransOutOk{
 				Slot: msg.Slot,
 			}))
 	} else {
 		s.slotsTransferOut[slot] = true
-		kvs := s.slotsKvMap[slot]
-		if nil == kvs {
+		kvs := s.slots[slot].kvMap
+		if 0 == len(kvs) {
+			//回写filter
+			filter, _ := s.slots[int(msg.Slot)].filter.MarshalBinaryZip()
+			err := sql.SetBloomFilter(s.kvnode.config.DBConfig.DBType, s.kvnode.dbc, int(msg.Slot), filter)
+			if nil != err {
+				GetSugar().Errorf("error on set filter slot:%d filter err:%v", err)
+				return
+			}
 			s.rn.IssueProposal(&SlotTransferProposal{
 				slot:         slot,
 				transferType: slotTransferOut,
