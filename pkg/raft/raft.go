@@ -136,7 +136,7 @@ type RaftInstance struct {
 	wal                 *wal.WAL
 	snapshotter         *snap.Snapshotter
 	snapshotCh          chan interface{}
-	snapshotting        bool //当前是否正在做快照
+	snapshotting        int32 //当前是否正在做快照
 	transport           *rafthttp.Transport
 	stopc               chan struct{} // signals proposal channel closed
 	stopping            chan struct{}
@@ -192,6 +192,10 @@ func searchIndex(names []string, index uint64) (int, bool) {
 		}
 	}
 	return -1, false
+}
+
+func (rc *RaftInstance) Snapshotting() bool {
+	return atomic.LoadInt32(&rc.snapshotting) == 1
 }
 
 func (rc *RaftInstance) GetApplyIndex() uint64 {
@@ -405,7 +409,7 @@ func (rc *RaftInstance) processMessages(ms []raftpb.Message) []raftpb.Message {
 		}
 
 		if ms[i].Type == raftpb.MsgSnap {
-			if !rc.snapshotting {
+			if atomic.LoadInt32(&rc.snapshotting) > 0 {
 				if atomic.AddInt64(&rc.inflightSnapshots, 1) > MaxInFlightMsgSnap {
 					// drop msgSnap if the inflight chan if full.
 					atomic.AddInt64(&rc.inflightSnapshots, -1)

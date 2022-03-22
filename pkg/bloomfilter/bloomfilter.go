@@ -61,14 +61,8 @@ func (f *Filter) Clone() *Filter {
 		n:    f.n,
 	}
 
-	for k, v := range f.bits {
-		ff.bits[k] = v
-	}
-
-	for k, v := range f.keys {
-		ff.keys[k] = v
-	}
-
+	copy(ff.keys, f.keys)
+	copy(ff.bits, f.bits)
 	return ff
 }
 

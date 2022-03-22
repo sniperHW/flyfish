@@ -11,9 +11,8 @@
 package bloomfilter
 
 import (
+	"github.com/sniperHW/flyfish/pkg/hamming"
 	"math"
-
-	"github.com/sniperHW/flyfish/server/flybloom/hamming"
 )
 
 // PreciseFilledRatio is an exhaustive count # of 1's

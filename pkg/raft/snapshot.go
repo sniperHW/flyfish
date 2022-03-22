@@ -38,7 +38,7 @@ func (this *SnapshotNotify) Notify(snapshot []byte) {
 }
 
 func (rc *RaftInstance) maybeTriggerSnapshot(index uint64) bool {
-	if rc.snapshotting {
+	if atomic.LoadInt32(&rc.snapshotting) > 0 {
 		return false
 	}
 
@@ -48,7 +48,7 @@ func (rc *RaftInstance) maybeTriggerSnapshot(index uint64) bool {
 
 	GetSugar().Debugf("maybeTriggerSnapshot %d %d", index, rc.snapshotIndex)
 
-	rc.snapshotting = true
+	atomic.StoreInt32(&rc.snapshotting, 1)
 
 	return true
 }
@@ -64,7 +64,7 @@ func (rc *RaftInstance) onTriggerSnapshotOK(snap raftpb.Snapshot) {
 
 	rc.snapshotIndex = snap.Metadata.Index
 
-	rc.snapshotting = false
+	atomic.StoreInt32(&rc.snapshotting, 0)
 
 	// When sending a snapshot, etcd will pause compaction.
 	// After receives a snapshot, the slow follower needs to get all the entries right after

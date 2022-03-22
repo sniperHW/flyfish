@@ -6,6 +6,7 @@ import (
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/pkg/bloomfilter"
 	"github.com/sniperHW/flyfish/pkg/etcd/etcdserver/api/snap"
 	"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
@@ -14,7 +15,6 @@ import (
 	"github.com/sniperHW/flyfish/pkg/raft/membership"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
-	"github.com/sniperHW/flyfish/server/flybloom/bloomfilter"
 	"github.com/sniperHW/flyfish/server/flypd"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
@@ -333,7 +333,16 @@ func (s *kvstore) processConfChange(p *ProposalConfChange) {
 
 func (s *kvstore) stop() {
 	if atomic.CompareAndSwapInt32(&s.stoped, 0, 1) {
-		s.rn.Stop()
+		go func() {
+			for {
+				if s.rn.Snapshotting() {
+					time.Sleep(time.Second)
+				} else {
+					break
+				}
+			}
+			s.rn.Stop()
+		}()
 	}
 }
 

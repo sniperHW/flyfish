@@ -15,7 +15,7 @@ import (
 )
 
 func init() {
-	sslot.SlotCount = 128
+	sslot.SlotCount = 16384
 }
 
 func TestScaner(t *testing.T) {

@@ -9,12 +9,12 @@ import (
 	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
+	"github.com/sniperHW/flyfish/pkg/bloomfilter"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
-	"github.com/sniperHW/flyfish/server/flybloom/bloomfilter"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	sslot "github.com/sniperHW/flyfish/server/slot"
@@ -660,11 +660,11 @@ func NewKvNode(id uint16, join bool, config *Config, db dbI) (*kvnode, error) {
 	}
 
 	if config.BloomFilter.MaxElements == 0 {
-		config.BloomFilter.MaxElements = 1000
+		config.BloomFilter.MaxElements = 10000
 	}
 
 	if config.BloomFilter.ProbCollide == 0.0 {
-		config.BloomFilter.ProbCollide = 0.001
+		config.BloomFilter.ProbCollide = 0.01
 	}
 
 	node := &kvnode{

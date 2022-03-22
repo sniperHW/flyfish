@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/pkg/bloomfilter"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/pkg/compress"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	flyproto "github.com/sniperHW/flyfish/proto"
-	"github.com/sniperHW/flyfish/server/flybloom/bloomfilter"
 	sslot "github.com/sniperHW/flyfish/server/slot"
 	"runtime"
 	"sync"
@@ -281,8 +281,8 @@ func (s *kvstore) makeSnapshot(notifyer *raft.SnapshotNotify) {
 				go func(i int) {
 					for j := i; j < len(filters); j += groupSize {
 						if nil != filters[j] {
-							mtx.Lock()
 							filter, _ := filters[j].MarshalBinaryZip()
+							mtx.Lock()
 							buff = buffer.AppendInt32(buff, int32(j))
 							buff = buffer.AppendInt32(buff, int32(len(filter)))
 							buff = buffer.AppendBytes(buff, filter)

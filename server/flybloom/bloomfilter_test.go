@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
+	"time"
 	"unsafe"
 )
 
@@ -24,7 +25,7 @@ func test1(t *testing.T) {
 
 	fmt.Println(bf.M(), bf.M()/8/1000, bf.K())
 
-	buff, err := bf.MarshalBinary()
+	buff := bf.MarshalBinary()
 
 	zipCompressor := &compress.ZipCompressor{}
 
@@ -50,7 +51,7 @@ func test2(t *testing.T) {
 }
 
 func test3(t *testing.T) {
-	bf, err := bloomfilter.NewOptimal(1000, probCollide)
+	bf, err := bloomfilter.NewOptimal(100000000, probCollide)
 	if err != nil {
 		panic(err)
 	}
@@ -61,7 +62,11 @@ func test3(t *testing.T) {
 
 	assert.Equal(t, bf.ContainsWithHashs(hashString), true)
 
+	beg := time.Now()
+
 	bin, err := bf.MarshalBinaryZip()
+
+	fmt.Println("use", time.Now().Sub(beg))
 
 	var bf2 *bloomfilter.Filter = &bloomfilter.Filter{}
 
@@ -72,10 +77,45 @@ func test3(t *testing.T) {
 	assert.Equal(t, bf.M(), bf2.M())
 
 	assert.Equal(t, bf.K(), bf2.K())
+
+	fmt.Println(bf.M() / 8 / 1024 / 1024)
 }
 
 func TestBloomFilter(t *testing.T) {
 	//test1(t)
 	//test2(t)
 	test3(t)
+}
+
+func BenchmarkTest1(b *testing.B) {
+	bf, err := bloomfilter.NewOptimal(10000, probCollide)
+	if err != nil {
+		panic(err)
+	}
+
+	for i := 0; i < b.N; i++ {
+		_, _ = bf.MarshalBinaryZip()
+	}
+}
+
+func BenchmarkTest2(b *testing.B) {
+	bf, err := bloomfilter.NewOptimal(10000, probCollide)
+	if err != nil {
+		panic(err)
+	}
+
+	for i := 0; i < b.N; i++ {
+		_ = bf.MarshalBinary()
+	}
+}
+
+func BenchmarkTest3(b *testing.B) {
+	bf, err := bloomfilter.NewOptimal(10000, probCollide)
+	if err != nil {
+		panic(err)
+	}
+
+	for i := 0; i < b.N; i++ {
+		_ = bf.Clone()
+	}
 }
