@@ -38,7 +38,7 @@ func (this *SnapshotNotify) Notify(snapshot []byte) {
 }
 
 func (rc *RaftInstance) maybeTriggerSnapshot(index uint64) bool {
-	if atomic.LoadInt32(&rc.snapshotting) > 0 {
+	if rc.Snapshotting() {
 		return false
 	}
 

@@ -409,7 +409,7 @@ func (rc *RaftInstance) processMessages(ms []raftpb.Message) []raftpb.Message {
 		}
 
 		if ms[i].Type == raftpb.MsgSnap {
-			if atomic.LoadInt32(&rc.snapshotting) > 0 {
+			if !rc.Snapshotting() {
 				if atomic.AddInt64(&rc.inflightSnapshots, 1) > MaxInFlightMsgSnap {
 					// drop msgSnap if the inflight chan if full.
 					atomic.AddInt64(&rc.inflightSnapshots, -1)
