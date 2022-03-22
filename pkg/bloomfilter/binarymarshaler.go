@@ -67,7 +67,7 @@ func (f *Filter) MarshalBinary() (buf []byte) {
 }
 
 // MarshalBinary converts a Filter into []bytes
-func (f *Filter) MarshalBinaryZip() (buf []byte, err error) {
+func (f *Filter) MarshalBinaryZip(compressor compress.CompressorI) (buf []byte, err error) {
 	buf = make([]byte, (9+len(f.keys)+len(f.bits))*8)
 	offset := 0
 	binary.LittleEndian.PutUint64(buf[offset:], f.K())
@@ -85,11 +85,11 @@ func (f *Filter) MarshalBinaryZip() (buf []byte, err error) {
 	copy(buf[offset:], keys)
 
 	offset += len(keys)
-	zipCompressor := &compress.ZipCompressor{}
+	//zipCompressor := &compress.ZipCompressor{}
 
 	var zipOut []byte
 
-	zipOut, err = zipCompressor.Compress(*(*[]byte)(unsafe.Pointer(&reflect.SliceHeader{
+	zipOut, err = compressor.Compress(*(*[]byte)(unsafe.Pointer(&reflect.SliceHeader{
 		Len:  len(f.bits) * 8,
 		Cap:  cap(f.bits) * 8,
 		Data: (*reflect.SliceHeader)(unsafe.Pointer(&f.bits)).Data,

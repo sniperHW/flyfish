@@ -654,7 +654,9 @@ func (s *kvstore) onNotifySlotTransOut(from *net.UDPAddr, msg *sproto.NotifySlot
 		kvs := s.slots[slot].kvMap
 		if 0 == len(kvs) {
 			//回写filter
-			filter, _ := s.slots[int(msg.Slot)].filter.MarshalBinaryZip()
+			compressor := getCompressor()
+			filter, _ := s.slots[int(msg.Slot)].filter.MarshalBinaryZip(compressor)
+			releaseCompressor(compressor)
 			err := sql.SetBloomFilter(s.kvnode.config.DBConfig.DBType, s.kvnode.dbc, int(msg.Slot), filter)
 			if nil != err {
 				GetSugar().Errorf("error on set filter slot:%d filter err:%v", err)

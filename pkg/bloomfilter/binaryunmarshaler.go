@@ -123,7 +123,7 @@ func (f *Filter) UnmarshalBinary(data []byte) (err error) {
 	return checkBinaryHash(data, &offset)
 }
 
-func (f *Filter) UnmarshalBinaryZip(data []byte) (err error) {
+func (f *Filter) UnmarshalBinaryZip(decompressor compress.DecompressorI, data []byte) (err error) {
 
 	var offset int
 	var k uint64
@@ -149,8 +149,7 @@ func (f *Filter) UnmarshalBinaryZip(data []byte) (err error) {
 		return errors.New("not enough data")
 	}
 
-	zipDecompressor := &compress.ZipDecompressor{}
-	unzipOut, err := zipDecompressor.Decompress(data[offset : offset+lenZip])
+	unzipOut, err := decompressor.Decompress(data[offset : offset+lenZip])
 	if nil != err {
 		return err
 	}

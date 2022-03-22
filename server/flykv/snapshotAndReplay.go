@@ -69,7 +69,8 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 
 	var err error
 
-	bb := b[len(b)-1]
+	compressed := b[len(b)-1]
+
 	b = b[:len(b)-1]
 
 	var dc compress.DecompressorI
@@ -80,7 +81,7 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 		}
 	}()
 
-	if bb == byte(1) {
+	if compressed == byte(1) {
 		dc = getDecompressor()
 		b, err = dc.Decompress(b)
 		if nil != err {
@@ -107,7 +108,12 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 			p := data.(*SlotTransferProposal)
 			if p.transferType == slotTransferIn {
 				filter := &bloomfilter.Filter{}
-				if err := filter.UnmarshalBinaryZip(p.filter); nil != err {
+				if nil == dc {
+					dc = getDecompressor()
+				}
+
+				err := filter.UnmarshalBinaryZip(dc, p.filter)
+				if nil != err {
 					return err
 				}
 
@@ -129,9 +135,17 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 						kvMap:  map[string]*kv{},
 						filter: &bloomfilter.Filter{},
 					}
-					if err := slot.filter.UnmarshalBinaryZip(*v); nil != err {
+
+					if nil == dc {
+						dc = getDecompressor()
+					}
+
+					err := slot.filter.UnmarshalBinaryZip(dc, *v)
+
+					if nil != err {
 						return err
 					}
+
 					s.slots[k] = slot
 				}
 			}
@@ -208,7 +222,7 @@ func (s *kvstore) makeSnapshot(notifyer *raft.SnapshotNotify) {
 			go func(i int) {
 				for j := i; j < len(s.slots); j += groupSize {
 					if nil != s.slots[j] {
-						filters[j] = s.slots[j].filter.Clone()
+						filters[j], _ = s.slots[j].filter.Copy()
 					}
 				}
 				waitGroup.Done()
@@ -277,9 +291,10 @@ func (s *kvstore) makeSnapshot(notifyer *raft.SnapshotNotify) {
 			//多线程序列化和压缩
 			for i := 0; i < groupSize; i++ {
 				go func(i int) {
+					compressor := getCompressor()
 					for j := i; j < len(filters); j += groupSize {
 						if nil != filters[j] {
-							filter, _ := filters[j].MarshalBinaryZip()
+							filter, _ := filters[j].MarshalBinaryZip(compressor)
 							mtx.Lock()
 							buff = buffer.AppendInt32(buff, int32(j))
 							buff = buffer.AppendInt32(buff, int32(len(filter)))
@@ -287,6 +302,7 @@ func (s *kvstore) makeSnapshot(notifyer *raft.SnapshotNotify) {
 							mtx.Unlock()
 						}
 					}
+					releaseCompressor(compressor)
 					waitGroup.Done()
 				}(i)
 			}

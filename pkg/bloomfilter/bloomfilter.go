@@ -53,19 +53,6 @@ func (h hashableString) Sum64() uint64 {
 	return hh.Sum64()
 }
 
-func (f *Filter) Clone() *Filter {
-	ff := &Filter{
-		bits: make([]uint64, len(f.bits)),
-		keys: make([]uint64, len(f.keys)),
-		m:    f.m,
-		n:    f.n,
-	}
-
-	copy(ff.keys, f.keys)
-	copy(ff.bits, f.bits)
-	return ff
-}
-
 func (f *Filter) HashString(str string) []uint64 {
 	return f.Hash(hashableString(str))
 }

@@ -7,7 +7,7 @@ import (
 
 var compressorPool sync.Pool = sync.Pool{
 	New: func() interface{} {
-		return &compress.ZipCompressor{}
+		return &compress.GZipCompressor{}
 	},
 }
 
@@ -21,7 +21,7 @@ func releaseCompressor(c compress.CompressorI) {
 
 var decompressorPool sync.Pool = sync.Pool{
 	New: func() interface{} {
-		return &compress.ZipDecompressor{}
+		return &compress.GZipDecompressor{}
 	},
 }
 
