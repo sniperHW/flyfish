@@ -198,14 +198,8 @@ func (this *proposalReader) read() (isOver bool, ptype proposalType, data interf
 
 				var uniKey string
 				var version int64
-				var old int64
 
 				uniKey, err = this.reader.CheckGetString(int(l))
-				if nil != err {
-					return
-				}
-
-				old, err = this.reader.CheckGetInt64()
 				if nil != err {
 					return
 				}
@@ -220,7 +214,6 @@ func (this *proposalReader) read() (isOver bool, ptype proposalType, data interf
 						uniKey: uniKey,
 					},
 					version: version,
-					old:     old,
 				}
 
 			case proposal_snapshot, proposal_update, proposal_kick:
@@ -389,6 +382,10 @@ func (this *kvProposal) apply() {
 				}
 			}
 
+			if this.ptype == proposal_snapshot && this.kv.lastWriteBackVersion == 0 && !this.kv.store.slots[this.kv.slot].filter.ContainsWithHashs(this.kv.hash) {
+				this.kv.store.slots[this.kv.slot].filter.AddWithHashs(this.kv.hash)
+			}
+
 			if err := this.kv.updateTask.updateState(dbstate, this.version, this.fields); nil != err {
 				GetSugar().Errorf("%s updateState error:%v", this.kv.uniKey, err)
 			}
@@ -545,7 +542,6 @@ type LastWriteBackVersionProposal struct {
 	proposalBase
 	kv      *kv
 	version int64
-	old     int64
 }
 
 func (this *LastWriteBackVersionProposal) OnError(err error) {
@@ -557,16 +553,11 @@ func (this *LastWriteBackVersionProposal) Serilize(b []byte) []byte {
 	//unikey
 	b = buffer.AppendUint16(b, uint16(len(this.kv.uniKey)))
 	b = buffer.AppendString(b, this.kv.uniKey)
-	b = buffer.AppendInt64(b, this.old)
 	return buffer.AppendInt64(b, this.version)
 }
 
 func (this *LastWriteBackVersionProposal) apply() {
 	GetSugar().Debugf("LastWriteBackVersionProposal apply %s version:%d %d", this.kv.uniKey, this.version, this.kv.version)
-	if this.old == 0 && !this.kv.store.slots[this.kv.slot].filter.ContainsWithHashs(this.kv.hash) {
-		this.kv.store.slots[this.kv.slot].filter.AddWithHashs(this.kv.hash)
-	}
-
 	if abs(this.version) > abs(this.kv.lastWriteBackVersion) {
 		this.kv.lastWriteBackVersion = this.version
 	}

@@ -142,11 +142,6 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 			p := data.(*LastWriteBackVersionProposal)
 			if kv := s.getkv(sslot.Unikey2Slot(p.kv.uniKey), p.kv.uniKey); nil != kv {
 				kv.lastWriteBackVersion = p.version
-				if p.old == 0 {
-					if !s.slots[kv.slot].filter.ContainsWithHashs(kv.hash) {
-						s.slots[kv.slot].filter.AddWithHashs(kv.hash)
-					}
-				}
 			}
 		case proposal_snapshot, proposal_kick, proposal_update:
 			p := data.(*kv)
@@ -183,6 +178,11 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 				} else {
 					kv.state = kv_no_record
 				}
+
+				if kv.lastWriteBackVersion == 0 && !s.slots[kv.slot].filter.ContainsWithHashs(kv.hash) {
+					s.slots[kv.slot].filter.AddWithHashs(kv.hash)
+				}
+
 			}
 			GetSugar().Debugf("%s ok", p.uniKey)
 		}

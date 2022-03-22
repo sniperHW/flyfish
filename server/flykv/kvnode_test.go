@@ -42,7 +42,7 @@ var configStr string = `
 
 Mode = "solo"
 
-SnapshotCurrentCount    = 0
+SnapshotCurrentCount    = 4
 
 MainQueueMaxSize        = 10000
 
@@ -132,7 +132,7 @@ var clearUsers1 func()
 
 func init() {
 
-	sslot.SlotCount = 16384
+	sslot.SlotCount = 128
 
 	raft.SnapshotCount = 100
 	raft.SnapshotCatchUpEntriesN = 100

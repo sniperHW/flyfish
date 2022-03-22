@@ -134,6 +134,136 @@ func TestMarshal(t *testing.T) {
 	fmt.Println(bf.M() / 8 / 1024 / 1024)
 }
 
+func ffastCopy(dst []uint64, src []uint64) {
+	for i := 0; i < len(src)>>2; i++ {
+		j := i << 2
+		dst[j] = src[j]
+		dst[j+1] = src[j+1]
+		dst[j+2] = src[j+2]
+		dst[j+3] = src[j+3]
+	}
+
+	//if t := (len(src) >> 2) << 2; t != len(src) {
+	//	copy(dst[t:], src[t:])
+	//}
+}
+
+func TestCopy(t *testing.T) {
+
+	/*{
+		src := []uint64{1}
+		dst := make([]uint64, len(src))
+		ffastCopy(dst, src)
+		fmt.Println(dst, src)
+
+	}
+
+	{
+		src := []uint64{1, 2}
+		dst := make([]uint64, len(src))
+		ffastCopy(dst, src)
+		fmt.Println(dst, src)
+
+	}
+
+	{
+		src := []uint64{1, 2, 3}
+		dst := make([]uint64, len(src))
+		ffastCopy(dst, src)
+		fmt.Println(dst, src)
+
+	}
+
+	{
+		src := []uint64{1, 2, 3, 4}
+		dst := make([]uint64, len(src))
+		ffastCopy(dst, src)
+		fmt.Println(dst, src)
+
+	}
+
+	{
+		src := []uint64{1, 2, 3, 4, 5}
+		dst := make([]uint64, len(src))
+		ffastCopy(dst, src)
+		fmt.Println(dst, src)
+
+	}
+
+	{
+		src := []uint64{1, 2, 3, 4, 5, 6}
+		dst := make([]uint64, len(src))
+		ffastCopy(dst, src)
+		fmt.Println(dst, src)
+
+	}
+
+	{
+		src := []uint64{1, 2, 3, 4, 5, 6, 7}
+		dst := make([]uint64, len(src))
+		ffastCopy(dst, src)
+		fmt.Println(dst, src)
+
+	}*/
+
+	{
+		src := []uint64{1, 2, 3, 4, 5, 6, 7, 8, 9}
+		dst := make([]uint64, len(src))
+		ffastCopy(dst, src)
+		fmt.Println(dst, src)
+
+	}
+
+	/*{
+		src := []uint64{1, 2, 3, 4, 5, 6, 7, 8, 9}
+		dst := make([]uint64, len(src))
+		ffastCopy(dst, src)
+		fmt.Println(dst, src)
+	}
+
+	{
+		src := []uint64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+		dst := make([]uint64, len(src))
+		ffastCopy(dst, src)
+		fmt.Println(dst, src)
+	}*/
+
+}
+
+func BenchmarkCopy1(b *testing.B) {
+	src := make([]uint64, 1000)
+	for i, _ := range src {
+		src[i] = uint64(i + 1)
+	}
+
+	dst := make([]uint64, 1000)
+
+	for i := 0; i < b.N; i++ {
+		copy(dst, src)
+	}
+}
+
+func BenchmarkCopy2(b *testing.B) {
+	src := make([]uint64, 1024)
+	for i, _ := range src {
+		src[i] = uint64(i + 1)
+	}
+
+	dst := make([]uint64, 1024)
+
+	for k := 0; k < b.N; k++ {
+		for i := 0; i < len(src)>>2; i++ {
+			j := i << 2
+			dst[j] = src[j]
+			dst[j+1] = src[j+1]
+			dst[j+2] = src[j+2]
+			dst[j+3] = src[j+3]
+		}
+
+		//ffastCopy(dst, src)
+	}
+}
+
 /*
 // a read-only type that conforms to hash.Hash64, but only Sum64() works.
 // It is set by writing the underlying value.

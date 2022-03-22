@@ -664,7 +664,7 @@ func NewKvNode(id uint16, join bool, config *Config, db dbI) (*kvnode, error) {
 	}
 
 	if config.BloomFilter.ProbCollide == 0.0 {
-		config.BloomFilter.ProbCollide = 0.01
+		config.BloomFilter.ProbCollide = 0.001
 	}
 
 	node := &kvnode{

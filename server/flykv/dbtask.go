@@ -9,10 +9,8 @@ import (
 )
 
 func (this *dbUpdateTask) SetLastWriteBackVersion(version int64) {
-	old := this.setLastWriteBackVersion(version)
 	this.kv.store.rn.IssueProposal(&LastWriteBackVersionProposal{
 		version: version,
-		old:     old,
 		kv:      this.kv,
 	})
 }
