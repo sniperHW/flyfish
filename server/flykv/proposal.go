@@ -138,22 +138,23 @@ func (this *proposalReader) read() (isOver bool, ptype proposalType, data interf
 					var l int32
 					slot, err = this.reader.CheckGetInt32()
 					if nil != err {
-						err = fmt.Errorf("proposal_slots CheckGetInt32:%v", err)
+						err = fmt.Errorf("proposal_filters CheckGetInt32 %d 1:%v", i, err)
 						return
 					}
 					l, err = this.reader.CheckGetInt32()
 					if nil != err {
-						err = fmt.Errorf("proposal_slots CheckGetInt32:%v", err)
+						err = fmt.Errorf("proposal_filters CheckGetInt32 %d 2:%v", i, err)
 						return
 					}
 					var bb []byte
 					bb, err = this.reader.CheckGetBytes(int(l))
 					if nil != err {
-						err = fmt.Errorf("proposal_slots CheckGetBytes:%v", err)
+						err = fmt.Errorf("proposal_filters CheckGetBytes:%v", err)
 						return
 					}
 					filters[int(slot)] = &bb
 				}
+
 				data = filters
 			case proposal_slot_transfer:
 				var tt byte

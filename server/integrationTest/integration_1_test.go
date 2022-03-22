@@ -44,7 +44,7 @@ var flyKvConfigStr string = `
 
 Mode = "cluster"
 
-SnapshotCurrentCount    = 1
+SnapshotCurrentCount    = 0
 
 SnapshotCount             = 100
 SnapshotCatchUpEntriesN   = 100
@@ -414,12 +414,31 @@ func testkv(t *testing.T, c *client.Client) {
 	}
 }
 
+func clearUsers1() {
+	dbConf := &dbconf{}
+	if _, err := toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
+		panic(err)
+	}
+
+	//清理bloomfilter
+	dbc, err := sql.SqlOpen(dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.Db, dbConf.Usr, dbConf.Pwd)
+	if nil != err {
+		panic(err)
+	}
+
+	dbc.Exec("delete from users1_0;")
+
+	dbc.Close()
+}
+
 func TestFlygate(t *testing.T) {
 	sslot.SlotCount = 128
 	flypd.MinReplicaPerSet = 1
 	flypd.StorePerSet = 2
 
 	os.RemoveAll("./testRaftLog")
+
+	clearUsers1()
 
 	pd, pdRaftID := newPD(t, 0)
 
@@ -749,6 +768,8 @@ func TestAddRemoveNode(t *testing.T) {
 	flypd.StorePerSet = 1
 	os.RemoveAll("./testRaftLog")
 
+	clearUsers1()
+
 	var err error
 
 	dbConf := &dbconf{}
@@ -943,6 +964,7 @@ func TestAddSet(t *testing.T) {
 	flypd.MinReplicaPerSet = 1
 	flypd.StorePerSet = 1
 	os.RemoveAll("./testRaftLog")
+	clearUsers1()
 
 	var err error
 
@@ -1177,7 +1199,7 @@ func TestAddSet2(t *testing.T) {
 	flypd.StorePerSet = 1
 	flygate.QueryRouteInfoDuration = time.Millisecond * 3 * 1000
 	os.RemoveAll("./testRaftLog")
-
+	clearUsers1()
 	var err error
 
 	dbConf := &dbconf{}
@@ -1417,6 +1439,7 @@ func TestStoreBalance(t *testing.T) {
 	flygate.QueryRouteInfoDuration = time.Millisecond * 3 * 1000
 	os.RemoveAll("./log")
 	os.RemoveAll("./testRaftLog")
+	clearUsers1()
 
 	var err error
 
@@ -1726,7 +1749,7 @@ func TestSuspendResume(t *testing.T) {
 	flypd.MinReplicaPerSet = 1
 	flypd.StorePerSet = 1
 	os.RemoveAll("./testRaftLog")
-
+	clearUsers1()
 	var err error
 
 	dbConf := &dbconf{}
@@ -1892,7 +1915,7 @@ func TestScan(t *testing.T) {
 	flypd.MinReplicaPerSet = 1
 	flypd.StorePerSet = 1
 	os.RemoveAll("./testRaftLog")
-
+	clearUsers1()
 	var err error
 
 	dbConf := &dbconf{}
@@ -2030,7 +2053,7 @@ func TestSolo(t *testing.T) {
 	flypd.MinReplicaPerSet = 1
 	flypd.StorePerSet = 1
 	os.RemoveAll("./testRaftLog")
-
+	clearUsers1()
 	var err error
 
 	dbConf := &dbconf{}
@@ -2105,7 +2128,7 @@ func TestMeta(t *testing.T) {
 	flypd.StorePerSet = 2
 
 	os.RemoveAll("./testRaftLog")
-
+	clearUsers1()
 	var err error
 
 	dbConf := &dbconf{}

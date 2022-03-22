@@ -22,8 +22,6 @@ bloomfilter机制可以动态关闭：当游戏运营到一个稳定状态后，
 
 独立的bloomfilter服务
 
-服务高可用，服务的动态伸缩。
-
 由上面bloomfilter故障的处理方式可以看到，当bloomfilter发生故障，虽然不会影响系统的正确性，但确实会给未命中的请求带来一定的延迟。因此，bloomfilter应该能够快速从
 故障中恢复继续提供服务。因此服务需要一定的高可用。
 
@@ -31,7 +29,6 @@ bloomfilter机制可以动态关闭：当游戏运营到一个稳定状态后，
 quorum响应，add返回，数据成功插入DB。 之后一个check kv的请求发往尚未同步到这个add的follower,follower返回kv不存在，这样违背了bloomfilter的安全性需求）。
 
 如果预计到单一bloomfilter无法满足访问需求，需要对bloomfilter做分片处理，使得服务可以动态伸缩。
-
 
 优势：
 
@@ -41,15 +38,40 @@ bloomfilter单独开发，维护。
 
 flykv处理流程复杂化
 
-缓存未命中情况：flykv首先向bloomfilter查询，之后根据结果判断是否需要到数据库加载。
+需要支持副本以及分片的处理，使得bloomfilter的开发复杂化。
 
-回写：对于会产生db insert的回写，需要先执行bloomfilter add,等到add成功之后才能执行db回写。
+
 
 
 嵌入flykv的bloomfilter
 
-
 bloomfilter按slot为单位，嵌入到kvstore中。
+
+优势：
+
+bloomfilter嵌入到kvstore,接口访问就是本地函数调用。
+
+劣势：
+
+过大的filter将加大kvstore snapshot的开销。
+
+filter的清理与重建变得困难。
+
+由以上原因，增加filter的容量变得困难。
+
+
+结合对实际项目的分析，单个filter容量10000，冲突率为0.001，则16384个slot总的容量为1.6亿。在此容量下,对kvstore snapshot增加的开销在可以接受的范围内。
+
+因此，选择开发更简单的嵌入方案。
+
+
+
+
+
+
+
+
+
 
 
 

@@ -204,7 +204,6 @@ func (s *kvstore) makeSnapshot(notifyer *raft.SnapshotNotify) {
 	{
 		var waitGroup sync.WaitGroup
 		waitGroup.Add(groupSize)
-		//多线程序列化和压缩
 		for i := 0; i < groupSize; i++ {
 			go func(i int) {
 				for j := i; j < len(s.slots); j += groupSize {
@@ -265,14 +264,13 @@ func (s *kvstore) makeSnapshot(notifyer *raft.SnapshotNotify) {
 		buff = buffer.AppendByte(buff, byte(proposal_filters))
 		c := 0
 		for i := 0; i < len(s.slots); i++ {
-			if nil != s.slots {
+			if nil != s.slots[i] {
 				c++
 			}
 		}
 
 		buff = buffer.AppendInt32(buff, int32(c))
 		var mtx sync.Mutex
-
 		{
 			var waitGroup sync.WaitGroup
 			waitGroup.Add(groupSize)
