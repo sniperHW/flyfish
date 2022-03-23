@@ -28,6 +28,7 @@ type Config struct {
 	Mode                    string `toml:"Mode"` //"cluster"集群模式,"solo"独立模式
 	SnapshotCount           uint64 `toml:"SnapshotCount"`
 	SnapshotCatchUpEntriesN uint64 `toml:"SnapshotCatchUpEntriesN"`
+	SnapshotBytes           uint64 `toml:"SnapshotBytes"`
 	MaxBatchCount           int    `toml:"MaxBatchCount"`
 
 	RaftLogDir string `toml:"RaftLogDir"` //raft日志存放目录

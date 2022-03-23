@@ -69,7 +69,7 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 
 	var err error
 
-	compressed := b[len(b)-1]
+	compressed := b[len(b)-1] == byte(1)
 
 	b = b[:len(b)-1]
 
@@ -81,7 +81,7 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 		}
 	}()
 
-	if compressed == byte(1) {
+	if compressed {
 		dc = getDecompressor()
 		b, err = dc.Decompress(b)
 		if nil != err {
@@ -151,7 +151,6 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 			}
 		case proposal_meta:
 			data.(db.DBMeta).MoveTo(s.meta)
-		case proposal_nop:
 		case proposal_last_writeback_version:
 			p := data.(*LastWriteBackVersionProposal)
 			if kv := s.getkv(sslot.Unikey2Slot(p.kv.uniKey), p.kv.uniKey); nil != kv {

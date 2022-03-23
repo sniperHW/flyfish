@@ -643,6 +643,10 @@ func NewKvNode(id uint16, join bool, config *Config, db dbI) (*kvnode, error) {
 		raft.SnapshotCatchUpEntriesN = config.SnapshotCatchUpEntriesN
 	}
 
+	if config.SnapshotBytes > 0 {
+		raft.SnapshotBytes = config.SnapshotBytes
+	}
+
 	if config.MaxBatchCount > 0 {
 		raft.MaxBatchCount = config.MaxBatchCount
 	}

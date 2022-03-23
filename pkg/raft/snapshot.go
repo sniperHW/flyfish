@@ -42,11 +42,11 @@ func (rc *RaftInstance) maybeTriggerSnapshot(index uint64) bool {
 		return false
 	}
 
-	if index-rc.snapshotIndex <= rc.snapCount {
+	if !(rc.proposalSize > SnapshotBytes || index-rc.snapshotIndex > SnapshotCount) {
 		return false
 	}
 
-	GetSugar().Debugf("maybeTriggerSnapshot %d %d", index, rc.snapshotIndex)
+	GetSugar().Infof("maybeTriggerSnapshot index:%d snapshotIndex:%d proposalSize:%dkb", index, rc.snapshotIndex, rc.proposalSize/1024)
 
 	atomic.StoreInt32(&rc.snapshotting, 1)
 
@@ -58,16 +58,18 @@ func (rc *RaftInstance) onTriggerSnapshotOK(snap raftpb.Snapshot) {
 	GetSugar().Debugf("onTriggerSnapshotOK")
 
 	compactIndex := uint64(1)
+
 	if snap.Metadata.Index > SnapshotCatchUpEntriesN {
 		compactIndex = snap.Metadata.Index - SnapshotCatchUpEntriesN
 	}
 
 	rc.snapshotIndex = snap.Metadata.Index
+	rc.proposalSize = 0
 
 	atomic.StoreInt32(&rc.snapshotting, 0)
 
 	// When sending a snapshot, etcd will pause compaction.
-	// After receives a snapshot, the slow follower needs to get all the entries right after
+	// After receives a snapshot, the slow follower needs to ~get all the entries right after
 	// the snapshot sent to catch up. If we do not pause compaction, the log entries right after
 	// the snapshot sent might already be compacted. It happens when the snapshot takes long time
 	// to send and save. Pausing compaction avoids triggering a snapshot sending cycle.
@@ -75,7 +77,11 @@ func (rc *RaftInstance) onTriggerSnapshotOK(snap raftpb.Snapshot) {
 		return
 	}
 
-	if err := rc.raftStorage.Compact(compactIndex); err != nil {
+	err := rc.raftStorage.Compact(compactIndex)
+
+	if err == nil || err == raft.ErrCompacted {
+		return
+	} else {
 		GetLogger().Panic("raftStorage.Compact", zap.Error(err))
 	}
 
