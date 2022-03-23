@@ -644,7 +644,7 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 		fields["age"] = 12
 		name := fmt.Sprintf("sniperHW:%d", i)
 		fields["name"] = name
-		fields["phone"] = "123456789123456789123456789"
+		fields["phone"] = []byte("123456789123456789123456789")
 
 		r := c.Set("users1", name, fields).Exec()
 		assert.Nil(t, r.ErrCode)
@@ -657,7 +657,7 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 		fields["age"] = 12
 		name := fmt.Sprintf("sniperHW:%d", i)
 		fields["name"] = name
-		fields["phone"] = "123456789123456789123456789"
+		fields["phone"] = []byte("123456789123456789123456789")
 
 		r := c.Set("users1", name, fields).Exec()
 		assert.Nil(t, r.ErrCode)
@@ -673,7 +673,7 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 		fields["age"] = 12
 		name := fmt.Sprintf("sniperHW:%d", i)
 		fields["name"] = name
-		fields["phone"] = "123456789123456789123456789"
+		fields["phone"] = []byte("123456789123456789123456789")
 
 		r := c.Set("users1", name, fields).Exec()
 		assert.Nil(t, r.ErrCode)
@@ -723,7 +723,7 @@ func Test1Node1StoreSnapshot2(t *testing.T) {
 		fields["age"] = 12
 		name := fmt.Sprintf("sniperHW:%d", i)
 		fields["name"] = name
-		fields["phone"] = "123456789123456789123456789"
+		fields["phone"] = []byte("123456789123456789123456789")
 
 		r := c.Set("users1", name, fields).Exec()
 		assert.Nil(t, r.ErrCode)
@@ -736,7 +736,7 @@ func Test1Node1StoreSnapshot2(t *testing.T) {
 		fields["age"] = 12
 		name := fmt.Sprintf("sniperHW:%d", i)
 		fields["name"] = name
-		fields["phone"] = "123456789123456789123456789"
+		fields["phone"] = []byte("123456789123456789123456789")
 
 		r := c.Set("users1", name, fields).Exec()
 		assert.Nil(t, r.ErrCode)
@@ -894,7 +894,7 @@ func TestUpdateMeta(t *testing.T) {
 	 "Fields":[
 	 	{"Name":"name","Type":"string","DefaultValue":""},
 	 	{"Name":"age","Type":"int","DefaultValue":"0"},
-	 	{"Name":"phone","Type":"string","DefaultValue":""}]
+	 	{"Name":"phone","Type":"blob","DefaultValue":""}]
 	}]
 }
 

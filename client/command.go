@@ -181,6 +181,8 @@ func (this *Client) GetAllWithVersion(table, key string, version int64) *SliceCm
 	return this.getAll(table, key, &version)
 }
 
+var compressFlag []byte = []byte{byte(2), byte(0), byte(2), byte(2)}
+
 //对大小>=1k的[]byte字段，执行压缩
 func packField(key string, v interface{}) *protocol.Field {
 	switch v.(type) {
@@ -188,16 +190,16 @@ func packField(key string, v interface{}) *protocol.Field {
 		b := v.([]byte)
 		var bb []byte
 		if len(b) >= 1024 {
-			bb = make([]byte, 0, len(b)+1)
-			bb = append(bb, byte(0))
-			bb = append(bb, b...)
-		} else {
 			c := getCompressor()
 			p, _ := c.Compress(b)
-			bb = make([]byte, 0, len(p)+1)
-			bb = append(bb, byte(1))
+			bb = make([]byte, 0, len(p)+len(compressFlag))
+			bb = append(bb, compressFlag...)
 			bb = append(bb, p...)
 			releaseCompressor(c)
+		} else {
+			bb = make([]byte, 0, len(b)+len(compressFlag))
+			bb = append(bb, byte(0), byte(0), byte(0), byte(0))
+			bb = append(bb, b...)
 		}
 		return protocol.PackField(key, bb)
 	default:
@@ -211,14 +213,13 @@ func unpackField(f *protocol.Field) *Field {
 		switch v.(type) {
 		case []byte:
 			b := f.GetBlob()
-			if len(b) > 0 {
-				compressed := b[0] == byte(1)
-				if compressed {
+			if len(b) > 4 {
+				if b[0] == compressFlag[0] && b[1] == compressFlag[1] && b[2] == compressFlag[2] && b[3] == compressFlag[3] {
 					d := getDecompressor()
-					b, _ = d.Decompress(b[1:])
+					b, _ = d.Decompress(b[4:])
 					return (*Field)(protocol.PackField(f.Name, b))
 				} else {
-					return (*Field)(protocol.PackField(f.Name, b[1:]))
+					return (*Field)(protocol.PackField(f.Name, b[4:]))
 				}
 			}
 		}

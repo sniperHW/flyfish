@@ -498,7 +498,7 @@ func TestFlygate(t *testing.T) {
 		fields["age"] = 12
 		name := fmt.Sprintf("sniperHW:%d", i)
 		fields["name"] = name
-		fields["phone"] = "123456789123456789123456789"
+		fields["phone"] = []byte("123456789123456789123456789")
 		assert.Nil(t, c.Set("users1", name, fields).Exec().ErrCode)
 	}
 
@@ -585,7 +585,7 @@ func TestFlygate(t *testing.T) {
 		fields["age"] = 12
 		name := fmt.Sprintf("sniperHW:%d", i)
 		fields["name"] = name
-		fields["phone"] = "123456789123456789123456789"
+		fields["phone"] = []byte("123456789123456789123456789")
 		assert.Nil(t, c.Set("users1", name, fields).Exec().ErrCode)
 	}
 
@@ -652,7 +652,7 @@ func TestFlygate(t *testing.T) {
 		fields["age"] = 12
 		name := fmt.Sprintf("sniperHW:%d", i)
 		fields["name"] = name
-		fields["phone"] = "123456789123456789123456789"
+		fields["phone"] = []byte("123456789123456789123456789")
 		assert.Nil(t, c.Set("users1", name, fields).Exec().ErrCode)
 	}
 
@@ -680,7 +680,7 @@ func TestFlygate(t *testing.T) {
 			fields["age"] = 12
 			name := fmt.Sprintf("sniperHW:%d", i)
 			fields["name"] = name
-			fields["phone"] = "123456789123456789123456789"
+			fields["phone"] = []byte("123456789123456789123456789")
 
 			var cb func(r *client.StatusResult)
 			cb = func(r *client.StatusResult) {
@@ -1292,7 +1292,7 @@ func TestAddSet2(t *testing.T) {
 				fields["age"] = 12
 				name := fmt.Sprintf("sniperHW:%d", i)
 				fields["name"] = name
-				fields["phone"] = "123456789123456789123456789"
+				fields["phone"] = []byte("123456789123456789123456789")
 				e := c.Set("users1", name, fields).Exec().ErrCode
 				if nil != e {
 					fmt.Println(e)
@@ -1360,7 +1360,7 @@ func TestAddSet2(t *testing.T) {
 				fields["age"] = 12
 				name := fmt.Sprintf("sniperHW:%d", i)
 				fields["name"] = name
-				fields["phone"] = "123456789123456789123456789"
+				fields["phone"] = []byte("123456789123456789123456789")
 				e := c.Set("users1", name, fields).Exec().ErrCode
 				if nil != e {
 					fmt.Println(e)
@@ -1493,7 +1493,7 @@ func TestStoreBalance(t *testing.T) {
 				fields["age"] = 12
 				name := fmt.Sprintf("sniperHW:%d", i)
 				fields["name"] = name
-				fields["phone"] = "123456789123456789123456789"
+				fields["phone"] = []byte("123456789123456789123456789")
 				e := c.Set("users1", name, fields).Exec().ErrCode
 				if nil != e {
 					fmt.Println("set--------------- error:", e)
@@ -1973,7 +1973,7 @@ func TestScan(t *testing.T) {
 		fields["age"] = i
 		name := fmt.Sprintf("sniperHW:%d", i)
 		fields["name"] = name
-		fields["phone"] = "123456789123456789123456789"
+		fields["phone"] = []byte("123456789123456789123456789")
 		r := c.Set("users1", name, fields).Exec()
 		assert.Nil(t, r.ErrCode)
 	}
@@ -2092,7 +2092,7 @@ func TestSolo(t *testing.T) {
 		fields["age"] = i
 		name := fmt.Sprintf("sniperHW:%d", i)
 		fields["name"] = name
-		fields["phone"] = "123456789123456789123456789"
+		fields["phone"] = []byte("123456789123456789123456789")
 		r := c.Set("users1", name, fields).Exec()
 		assert.Nil(t, r.ErrCode)
 	}
