@@ -218,7 +218,7 @@ func (st *storeScanner) fetchRows(scanner *Scanner, service string, deadline tim
 				}
 
 				for _, vv := range v.Fields {
-					r.Fields[vv.Name] = (*Field)(vv)
+					r.Fields[vv.Name] = unpackField(vv) //(*Field)(vv)
 				}
 
 				rows = append(rows, r)
@@ -288,7 +288,7 @@ func (sc *clusterScanner) fetchRows(scanner *Scanner, deadline time.Time) (err e
 					Fields:  map[string]*Field{},
 				}
 				for _, vv := range v.Fields {
-					r.Fields[vv.Name] = (*Field)(vv)
+					r.Fields[vv.Name] = unpackField(vv) //(*Field)(vv)
 				}
 				scanner.rows = append(scanner.rows, r)
 			} else {

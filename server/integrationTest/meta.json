@@ -4,6 +4,6 @@
 	 "Fields":[
 	 	{"Name":"name","Type":"string","DefaultValue":""},
 	 	{"Name":"age","Type":"int","DefaultValue":"0"},
-	 	{"Name":"phone","Type":"string","DefaultValue":""}]
+	 	{"Name":"phone","Type":"blob","DefaultValue":""}]
 	}]
 }

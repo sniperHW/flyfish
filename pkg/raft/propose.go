@@ -136,7 +136,6 @@ func (rc *RaftInstance) propose(batchProposal []Proposal) {
 
 	b := make([]byte, 0, len(buff)+8)
 	b = buffer.AppendUint64(b, t.id)
-	//b = buffer.AppendUint32(b, uint32(len(batchProposal)))
 	b = buffer.AppendBytes(b, buff)
 
 	releaseProposeBuff(buff)

@@ -23,6 +23,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -210,8 +211,13 @@ func test(t *testing.T, c *client.Client) {
 		fields := map[string]interface{}{}
 		fields["age"] = 12
 		fields["name"] = "sniperHW"
+		fields["phone"] = []byte(strings.Repeat("a", 4096))
 
 		c.Set("users1", "sniperHW", fields).Exec()
+
+		r := c.GetAll("users1", "sniperHW").Exec()
+
+		assert.Equal(t, string(r.Fields["phone"].GetBlob()), strings.Repeat("a", 4096))
 
 		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
@@ -226,7 +232,7 @@ func test(t *testing.T, c *client.Client) {
 
 		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
-		r := c.GetAll("users1", "sniperHW").Exec()
+		r = c.GetAll("users1", "sniperHW").Exec()
 		assert.Nil(t, r.ErrCode)
 
 		assert.Equal(t, r.Fields["age"].GetInt(), int64(0))
