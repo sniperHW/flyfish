@@ -346,11 +346,11 @@ func (this *Socket) Send(o interface{}) error {
 		return ErrSocketClose
 	}
 
-	this.incWrite()
+	this.incWrite() //1
 
 	this.p.runTask(func() {
 		this.muW.Lock()
-		defer this.decWrite()
+		defer this.decWrite() //对应1
 
 		if nil == this.b {
 			this.b = buffer.Get()
@@ -390,41 +390,46 @@ func (this *Socket) Send(o interface{}) error {
 		b := this.b
 		this.b = nil
 		this.muW.Unlock()
-		this.incWrite()
 		if nil == this.sendCh.push(b) {
+			this.incWrite()
 			if atomic.CompareAndSwapInt32(&this.sendOnce, 0, 1) {
 				go this.sendThreadFunc()
 			}
 		} else {
 			b.Free()
-			this.decWrite()
 		}
 	})
 
 	return nil
 }
 
-func (this *Socket) onSendFinish() {
-	decWrite := true
-	this.muW.Lock()
-	defer func() {
+func (this *Socket) onSendFinish(err error) bool {
+	if nil != err {
+		this.decWrite()
+		return false
+	} else {
+		decWrite := true
+		this.muW.Lock()
+		if nil == this.b && this.sendingSize == 0 {
+			if this.testFlag(fwclosed) {
+				this.sendCh.close()
+				this.conn.(interface{ CloseWrite() error }).CloseWrite()
+			}
+		} else if nil != this.b && this.sendingSize == 0 {
+			this.sendingSize = this.b.Len()
+			if nil == this.sendCh.push(this.b) {
+				this.b = nil
+				decWrite = false
+			}
+		}
+
 		this.muW.Unlock()
+
 		if decWrite {
 			this.decWrite()
 		}
-	}()
 
-	if nil == this.b && this.sendingSize == 0 {
-		if this.testFlag(fwclosed) {
-			this.sendCh.close()
-			this.conn.(interface{ CloseWrite() error }).CloseWrite()
-		}
-	} else if nil != this.b && this.sendingSize == 0 {
-		this.sendingSize = this.b.Len()
-		if nil == this.sendCh.push(this.b) {
-			this.b = nil
-			decWrite = false
-		}
+		return true
 	}
 }
 
@@ -488,22 +493,19 @@ func (this *Socket) sendThreadFunc() {
 					}
 
 					if this.testFlag(fclosed) {
-						b.Free()
-						this.decWrite()
-						return
+						break
 					}
 				} else {
-					b.Free()
-					this.decWrite()
-					return
+					break
 				}
 			}
 		}
 
 		//通告发送完毕
 		b.Free()
-		this.onSendFinish()
-
+		if !this.onSendFinish(err) {
+			return
+		}
 	}
 }
 

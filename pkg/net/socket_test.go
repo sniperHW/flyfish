@@ -561,3 +561,34 @@ func TestShutDownWrite(t *testing.T) {
 	listener.Close()
 
 }
+
+func TestUdp(t *testing.T) {
+
+	server, _ := NewUdp("localhost:8110", func(_ *net.UDPConn, v interface{}) ([]byte, error) {
+		return []byte(v.(string)), nil
+	}, func(_ *net.UDPAddr, v []byte) (interface{}, error) {
+		return string(v), nil
+	})
+
+	client, _ := NewUdp("localhost:8111", func(_ *net.UDPConn, v interface{}) ([]byte, error) {
+		return []byte(v.(string)), nil
+	}, func(_ *net.UDPAddr, v []byte) (interface{}, error) {
+		return string(v), nil
+	})
+
+	go func() {
+		from, msg, _ := server.ReadFrom(make([]byte, 4096))
+		server.SendTo(from, msg)
+	}()
+
+	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
+
+	client.SendTo(addr, "hello")
+	_, msg, _ := client.ReadFrom(make([]byte, 4096))
+
+	assert.Equal(t, msg.(string), "hello")
+
+	client.Close()
+	server.Close()
+
+}
