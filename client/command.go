@@ -2,6 +2,7 @@ package client
 
 import (
 	"container/list"
+	"encoding/binary"
 	"encoding/json"
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/flyfish/errcode"
@@ -10,6 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 )
+
+const CompressSize = 1024
 
 type Field protocol.Field
 
@@ -181,25 +184,21 @@ func (this *Client) GetAllWithVersion(table, key string, version int64) *SliceCm
 	return this.getAll(table, key, &version)
 }
 
-var compressFlag []byte = []byte{byte(2), byte(0), byte(2), byte(2)}
-
 //对大小>=1k的[]byte字段，执行压缩
 func packField(key string, v interface{}) *protocol.Field {
 	switch v.(type) {
 	case []byte:
 		b := v.([]byte)
 		var bb []byte
-		if len(b) >= 1024 {
+		if len(b) >= CompressSize {
 			c := getCompressor()
-			p, _ := c.Compress(b)
-			bb = make([]byte, 0, len(p)+len(compressFlag))
-			bb = append(bb, compressFlag...)
-			bb = append(bb, p...)
+			bb, _ = c.Compress(b)
+			size := make([]byte, 4)
+			binary.BigEndian.PutUint32(size, uint32(len(bb)+4))
+			bb = append(bb, size...)
 			releaseCompressor(c)
 		} else {
-			bb = make([]byte, 0, len(b)+len(compressFlag))
-			bb = append(bb, byte(0), byte(0), byte(0), byte(0))
-			bb = append(bb, b...)
+			bb = b
 		}
 		return protocol.PackField(key, bb)
 	default:
@@ -213,13 +212,12 @@ func unpackField(f *protocol.Field) *Field {
 		switch v.(type) {
 		case []byte:
 			b := f.GetBlob()
-			if len(b) > 4 {
-				if b[0] == compressFlag[0] && b[1] == compressFlag[1] && b[2] == compressFlag[2] && b[3] == compressFlag[3] {
+			if ok, size := checkHeader(b); ok && len(b) >= size+4 {
+				if size = int(binary.BigEndian.Uint32(b[len(b)-4:])); size == len(b) {
 					d := getDecompressor()
-					b, _ = d.Decompress(b[4:])
+					b, _ = d.Decompress(b[:len(b)-4])
+					releaseDecompressor(d)
 					return (*Field)(protocol.PackField(f.Name, b))
-				} else {
-					return (*Field)(protocol.PackField(f.Name, b[4:]))
 				}
 			}
 		}
@@ -240,7 +238,7 @@ func (this *Client) Set(table, key string, fields map[string]interface{}, versio
 	}
 
 	for k, v := range fields {
-		pbdata.Fields = append(pbdata.Fields, packField(k, v)) //protocol.PackField(k, v))
+		pbdata.Fields = append(pbdata.Fields, packField(k, v))
 	}
 
 	req := &cs.ReqMessage{
@@ -263,7 +261,7 @@ func (this *Client) SetNx(table, key string, fields map[string]interface{}) *Sli
 	pbdata := &protocol.SetNxReq{}
 
 	for k, v := range fields {
-		pbdata.Fields = append(pbdata.Fields, packField(k, v)) //protocol.PackField(k, v))
+		pbdata.Fields = append(pbdata.Fields, packField(k, v))
 	}
 
 	req := &cs.ReqMessage{
@@ -285,8 +283,8 @@ func (this *Client) CompareAndSet(table, key, field string, oldV, newV interface
 	}
 
 	pbdata := &protocol.CompareAndSetReq{
-		New: packField(field, newV), //protocol.PackField(field, newV),
-		Old: packField(field, oldV), //protocol.PackField(field, oldV),
+		New: packField(field, newV),
+		Old: packField(field, oldV),
 	}
 
 	req := &cs.ReqMessage{
@@ -307,8 +305,8 @@ func (this *Client) CompareAndSetNx(table, key, field string, oldV, newV interfa
 	}
 
 	pbdata := &protocol.CompareAndSetNxReq{
-		New: packField(field, newV), //protocol.PackField(field, newV),
-		Old: packField(field, oldV), //protocol.PackField(field, oldV),
+		New: packField(field, newV),
+		Old: packField(field, oldV),
 	}
 
 	req := &cs.ReqMessage{
@@ -394,7 +392,7 @@ func (this *serverConn) onGetResp(c *cmdContext, errCode errcode.Error, resp *pr
 	if ret.ErrCode == nil {
 		ret.Fields = map[string]*Field{}
 		for _, v := range resp.Fields {
-			ret.Fields[v.GetName()] = unpackField(v) //(*Field)(v)
+			ret.Fields[v.GetName()] = unpackField(v)
 		}
 	}
 
@@ -418,7 +416,7 @@ func (this *serverConn) onSetNxResp(c *cmdContext, errCode errcode.Error, resp *
 	if nil != ret.ErrCode && ret.ErrCode.Code == errcode.Errcode_record_exist {
 		ret.Fields = map[string]*Field{}
 		for _, v := range resp.Fields {
-			ret.Fields[v.GetName()] = unpackField(v) //(*Field)(v)
+			ret.Fields[v.GetName()] = unpackField(v)
 		}
 	}
 
@@ -434,7 +432,7 @@ func (this *serverConn) onCompareAndSetResp(c *cmdContext, errCode errcode.Error
 
 	if ret.ErrCode == nil || ret.ErrCode.Code == errcode.Errcode_cas_not_equal {
 		ret.Fields = map[string]*Field{}
-		ret.Fields[resp.GetValue().GetName()] = unpackField(resp.GetValue()) //(*Field)(resp.GetValue())
+		ret.Fields[resp.GetValue().GetName()] = unpackField(resp.GetValue())
 	}
 
 	return ret
@@ -450,7 +448,7 @@ func (this *serverConn) onCompareAndSetNxResp(c *cmdContext, errCode errcode.Err
 
 	if ret.ErrCode == nil || ret.ErrCode.Code == errcode.Errcode_cas_not_equal {
 		ret.Fields = map[string]*Field{}
-		ret.Fields[resp.GetValue().GetName()] = unpackField(resp.GetValue()) //(*Field)(resp.GetValue())
+		ret.Fields[resp.GetValue().GetName()] = unpackField(resp.GetValue())
 	}
 
 	return ret

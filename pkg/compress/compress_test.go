@@ -25,6 +25,10 @@ func TestCompress(t *testing.T) {
 
 		zipDecompressor := &ZipDecompressor{}
 
+		if !zipDecompressor.CheckHeader(zipOut) {
+			t.Fatal("CheckHeader")
+		}
+
 		unzipOut, err := zipDecompressor.Decompress(zipOut)
 
 		if nil != err {
@@ -32,7 +36,7 @@ func TestCompress(t *testing.T) {
 		}
 
 		if string(unzipOut) != s {
-			t.Fatal(unzipOut)
+			t.Fatal(len(unzipOut))
 		}
 
 		unzipOut, err = zipDecompressor.Decompress(zipOut)
@@ -69,6 +73,10 @@ func TestCompress(t *testing.T) {
 		fmt.Println("gzip len", len(zipOut))
 
 		gzipDecompressor := &GZipDecompressor{}
+
+		if !gzipDecompressor.CheckHeader(zipOut) {
+			t.Fatal("CheckHeader")
+		}
 
 		unzipOut, err := gzipDecompressor.Decompress(zipOut)
 

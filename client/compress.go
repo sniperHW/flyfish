@@ -5,9 +5,17 @@ import (
 	"sync"
 )
 
+func makeCompressor() compress.CompressorI {
+	return &compress.ZipCompressor{}
+}
+
+func makeDecompressor() compress.DecompressorI {
+	return &compress.ZipDecompressor{}
+}
+
 var compressorPool sync.Pool = sync.Pool{
 	New: func() interface{} {
-		return &compress.GZipCompressor{}
+		return makeCompressor()
 	},
 }
 
@@ -21,7 +29,7 @@ func releaseCompressor(c compress.CompressorI) {
 
 var decompressorPool sync.Pool = sync.Pool{
 	New: func() interface{} {
-		return &compress.GZipDecompressor{}
+		return makeDecompressor()
 	},
 }
 
@@ -31,4 +39,8 @@ func getDecompressor() compress.DecompressorI {
 
 func releaseDecompressor(c compress.DecompressorI) {
 	decompressorPool.Put(c)
+}
+
+func checkHeader(in []byte) (bool, int) {
+	return makeDecompressor().CheckHeader(in)
 }
