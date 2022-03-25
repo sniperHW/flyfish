@@ -45,9 +45,9 @@ func (s *sendQueue) push(b *buffer.Buffer) error {
 	}
 }
 
-func (s *sendQueue) pop() (*buffer.Buffer, bool) {
-	b, ok := <-s.ch
-	return b, ok
+func (s *sendQueue) pop() *buffer.Buffer {
+	b, _ := <-s.ch
+	return b
 }
 
 func (s *sendQueue) close() int {
@@ -91,7 +91,8 @@ type Socket struct {
 	muW                      sync.Mutex
 	sendCh                   *sendQueue
 	b                        *buffer.Buffer
-	sendingSize              int
+	sending                  bool
+	sendingSize              int32
 	outputLimit              OutputBufLimit
 	obufSoftLimitReachedTime int64
 	rwCounter                int64
@@ -196,8 +197,12 @@ func (this *Socket) ShutdownWrite() {
 func (this *Socket) doclose() {
 	if this.IsClosed() && atomic.CompareAndSwapInt32(&this.doCloseOnce, 0, 1) {
 		this.sendCh.close()
-		if nil != this.b {
-			this.b.Free()
+		this.muW.Lock()
+		b := this.b
+		this.b = nil
+		this.muW.Unlock()
+		if nil != b {
+			b.Free()
 		}
 		if nil != this.closeCallBack {
 			this.closeCallBack(this, this.closeReason)
@@ -337,6 +342,54 @@ func (this *Socket) recvThreadFunc() {
 	}
 }
 
+func (this *Socket) prepareBuffer(o interface{}) *buffer.Buffer {
+	this.muW.Lock()
+	defer this.muW.Unlock()
+
+	var bLen int
+	if nil != this.b {
+		bLen = this.b.Len()
+	}
+
+	if !this.checkOutputLimit(int(atomic.LoadInt32(&this.sendingSize)) + bLen) {
+		//超过输出限制，丢包
+		return nil
+	}
+
+	if bLen == 0 {
+		this.b = buffer.Get()
+	}
+
+	switch o.(type) {
+	case []byte:
+		this.b.AppendBytes(o.([]byte))
+	default:
+		l := this.b.Len()
+		if err := this.encoder.EnCode(o, this.b); nil != err {
+			GetSugar().Infof("EnCode error:%v", err)
+			this.b.SetLen(l)
+		}
+	}
+
+	if this.b.Len() == 0 {
+		this.b.Free()
+		this.b = nil
+		return nil
+	}
+
+	if this.sending {
+		//当前有一个尚未结束的发送过程，等这个过程完成后再继续处理排队的数据
+		return nil
+	}
+
+	this.sending = true
+	atomic.StoreInt32(&this.sendingSize, int32(this.b.Len()))
+	b := this.b
+	this.b = nil
+
+	return b
+}
+
 func (this *Socket) Send(o interface{}) error {
 	if nil == o {
 		return errors.New("o == nil")
@@ -347,110 +400,66 @@ func (this *Socket) Send(o interface{}) error {
 	}
 
 	this.incWrite() //1
-
 	this.p.runTask(func() {
-		this.muW.Lock()
-		defer this.decWrite() //对应1
-
-		if nil == this.b {
-			this.b = buffer.Get()
-		}
-
-		if !this.checkOutputLimit(this.sendingSize + this.b.Len()) {
-			//超过输出限制，丢包
-			//GetSugar().Infof("Drop output msg %d %d %p", this.sendingSize, this.b.Len(), this)
-			this.muW.Unlock()
-			return
-		}
-
-		switch o.(type) {
-		case []byte:
-			this.b.AppendBytes(o.([]byte))
-		default:
-			l := this.b.Len()
-			if err := this.encoder.EnCode(o, this.b); nil != err {
-				GetSugar().Infof("EnCode error:%v", err)
-				this.b.SetLen(l)
-			}
-		}
-
-		if this.b.Len() == 0 {
-			this.b.Free()
-			this.b = nil
-			this.muW.Unlock()
-			return
-		}
-
-		if this.sendingSize != 0 {
-			this.muW.Unlock()
-			return
-		}
-
-		this.sendingSize = this.b.Len()
-		b := this.b
-		this.b = nil
-		this.muW.Unlock()
-		if nil == this.sendCh.push(b) {
+		if b := this.prepareBuffer(o); nil != b {
 			this.incWrite()
-			if atomic.CompareAndSwapInt32(&this.sendOnce, 0, 1) {
-				go this.sendThreadFunc()
+			if nil == this.sendCh.push(b) {
+				if atomic.CompareAndSwapInt32(&this.sendOnce, 0, 1) {
+					go this.sendThreadFunc()
+				}
+			} else {
+				b.Free()
+				this.decWrite()
 			}
-		} else {
-			b.Free()
 		}
+		this.decWrite() //对应1
 	})
 
 	return nil
 }
 
-func (this *Socket) onSendFinish(err error) bool {
+func (this *Socket) onSendFinish(err error) *buffer.Buffer {
 	if nil != err {
 		this.decWrite()
-		return false
+		return nil
 	} else {
-		decWrite := true
 		this.muW.Lock()
-		if nil == this.b && this.sendingSize == 0 {
-			if this.testFlag(fwclosed) {
-				this.sendCh.close()
-				this.conn.(interface{ CloseWrite() error }).CloseWrite()
-			}
-		} else if nil != this.b && this.sendingSize == 0 {
-			this.sendingSize = this.b.Len()
-			if nil == this.sendCh.push(this.b) {
-				this.b = nil
-				decWrite = false
-			}
-		}
-
-		this.muW.Unlock()
-
-		if decWrite {
+		if nil == this.b && this.testFlag(fwclosed) {
+			this.muW.Unlock()
+			this.sendCh.close()
+			this.conn.(interface{ CloseWrite() error }).CloseWrite()
 			this.decWrite()
+			return nil
+		} else if nil != this.b {
+			//有排队待发送的数据，继续发送流程
+			atomic.StoreInt32(&this.sendingSize, int32(this.b.Len()))
+			b := this.b
+			this.b = nil
+			this.muW.Unlock()
+			return b
+		} else {
+			this.sending = false
+			this.muW.Unlock()
+			this.decWrite()
+			return nil
 		}
-
-		return true
 	}
 }
 
 func (this *Socket) sendThreadFunc() {
-
-	const sendSize int = 65535
-
 	defer close(this.sendCloseChan)
 
-	var err error
-	var n int
+	var (
+		err error
+		n   int
+	)
+
 	oldTimeout := this.getSendTimeout()
 	timeout := oldTimeout
 
-	for {
-		b, ok := this.sendCh.pop()
-		if !ok {
-			break
-		}
+	b := this.sendCh.pop()
 
-		var buff []byte
+	for nil != b {
 		bb := b.Bytes()
 		i := 0
 		for i < len(bb) {
@@ -461,12 +470,7 @@ func (this *Socket) sendThreadFunc() {
 				this.conn.SetWriteDeadline(time.Time{})
 			}
 
-			if i+sendSize > len(bb) {
-				buff = bb[i:]
-			} else {
-				buff = bb[i : i+sendSize]
-			}
-
+			buff := bb[i:]
 			if timeout > 0 {
 				this.conn.SetWriteDeadline(time.Now().Add(timeout))
 				n, err = this.conn.Write(buff)
@@ -476,9 +480,7 @@ func (this *Socket) sendThreadFunc() {
 
 			i += n
 
-			this.muW.Lock()
-			this.sendingSize -= n
-			this.muW.Unlock()
+			atomic.AddInt32(&this.sendingSize, -int32(n))
 
 			if nil != err {
 				if !this.testFlag(fclosed) {
@@ -501,10 +503,10 @@ func (this *Socket) sendThreadFunc() {
 			}
 		}
 
-		//通告发送完毕
 		b.Free()
-		if !this.onSendFinish(err) {
-			return
+
+		if b = this.onSendFinish(err); nil == b {
+			b = this.sendCh.pop()
 		}
 	}
 }

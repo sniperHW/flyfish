@@ -86,6 +86,19 @@ func (this *StatusCmd) asyncExec(syncFlag bool, cb func(*StatusResult)) {
 	})
 }
 
+/*
+ * AsyncExec可能在调用函数的上下文中回调cb(排队的请求超限，直接用retry回调cb),
+ * 以下情况可能发生死锁
+ *
+ * Lock()
+ * AsyncExec(func(){
+ *	 Lock()
+ *   Unlock()
+ * })
+ * Unlock()
+ *
+ */
+
 func (this *StatusCmd) AsyncExec(cb func(*StatusResult)) {
 	this.asyncExec(false, cb)
 }
