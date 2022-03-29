@@ -246,7 +246,7 @@ func (this *Client) Set(table, key string, fields map[string]interface{}, versio
 
 	pbdata := &protocol.SetReq{}
 
-	if len(version) > 0 && version[0] > 0 {
+	if len(version) > 0 {
 		pbdata.Version = proto.Int64(version[0])
 	}
 

@@ -31,7 +31,7 @@ func (this *cmdCompareAndSet) makeResponse(err errcode.Error, fields map[string]
 
 func (this *cmdCompareAndSet) do(proposal *kvProposal) {
 	if proposal.kvState == kv_no_record {
-		this.reply(Err_record_notexist, nil, 0)
+		this.reply(Err_record_notexist, nil, this.kv.version)
 	} else {
 		oldV := this.kv.getField(this.old.GetName())
 		if !this.old.IsEqual(oldV) {

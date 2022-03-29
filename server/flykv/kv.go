@@ -120,7 +120,7 @@ func (this *kv) pushCmd(cmd cmdI) {
 
 func (this *kv) clearCmds(err errcode.Error) {
 	for f := this.pendingCmd.Front(); nil != f; f = this.pendingCmd.Front() {
-		this.pendingCmd.Remove(f).(cmdI).reply(err, nil, 0)
+		this.pendingCmd.Remove(f).(cmdI).reply(err, nil, this.version)
 	}
 }
 
@@ -156,7 +156,7 @@ func (this *kv) mergeCmd() (cmds []cmdI) {
 		}
 
 		if nil != err {
-			this.pendingCmd.Remove(c).(cmdI).reply(err, nil, 0)
+			this.pendingCmd.Remove(c).(cmdI).reply(err, nil, this.version)
 		} else {
 			if canMerge(cmds, cmd) {
 				cmds = append(cmds, cmd)

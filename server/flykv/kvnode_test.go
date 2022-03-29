@@ -213,7 +213,16 @@ func test(t *testing.T, c *client.Client) {
 		fields["name"] = "sniperHW"
 		fields["phone"] = []byte(strings.Repeat("a", 4096))
 
-		c.Set("users1", "sniperHW", fields).Exec()
+		rr := c.Set("users1", "sniperHW", fields, 0).Exec()
+		assert.Nil(t, rr.ErrCode)
+
+		assert.Equal(t, int64(1), rr.Version)
+
+		rr = c.Set("users1", "sniperHW", fields, 0).Exec()
+
+		assert.Equal(t, Err_version_mismatch, rr.ErrCode)
+
+		assert.Equal(t, int64(1), rr.Version)
 
 		r := c.GetAll("users1", "sniperHW").Exec()
 

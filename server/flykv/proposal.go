@@ -335,7 +335,7 @@ func (this *kvProposal) Serilize(b []byte) []byte {
 func (this *kvProposal) apply() {
 	if this.ptype == proposal_kick {
 		this.kv.store.deleteKv(this.kv)
-		this.reply(nil, nil, 0)
+		this.reply(nil, nil, this.version)
 	} else {
 
 		this.kv.state = this.kvState
@@ -404,7 +404,7 @@ func (this *kvLinearizableRead) reply(err errcode.Error, fields map[string]*flyp
 
 func (this *kvLinearizableRead) OnError(err error) {
 	GetSugar().Errorf("kvLinearizableRead OnError:%v", err)
-	this.reply(errcode.New(errcode.Errcode_error, err.Error()), nil, 0)
+	this.reply(errcode.New(errcode.Errcode_error, err.Error()), nil, this.kv.version)
 	this.kv.store.mainQueue.AppendHighestPriotiryItem(func() {
 		this.kv.clearCmds(errcode.New(errcode.Errcode_error, err.Error()))
 	})

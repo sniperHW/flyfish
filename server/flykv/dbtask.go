@@ -160,7 +160,7 @@ func (this *dbUpdateTask) OnError(err error, writeBackVersion int64) {
 		if f := this.kv.pendingCmd.Front(); nil != f {
 			if cmdkick, ok := f.Value.(*cmdKick); ok && writeBackVersion >= cmdkick.waitVersion {
 				//如果有等待回写后执行的kick，需要清理一下
-				cmdkick.reply(errcode.New(errcode.Errcode_retry, "retry"), nil, 0)
+				cmdkick.reply(errcode.New(errcode.Errcode_retry, "retry"), nil, this.kv.version)
 				this.kv.pendingCmd.Remove(f)
 				this.kv.processCmd()
 			}

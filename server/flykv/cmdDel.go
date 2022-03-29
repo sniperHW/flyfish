@@ -27,7 +27,7 @@ func (this *cmdDel) do(proposal *kvProposal) {
 		proposal.cmds = append(proposal.cmds, this)
 		proposal.kvState = kv_no_record
 	} else {
-		this.reply(Err_record_notexist, nil, 0)
+		this.reply(Err_record_notexist, nil, this.kv.version)
 	}
 }
 
