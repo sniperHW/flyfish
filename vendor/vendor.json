@@ -95,6 +95,12 @@
 			"revisionTime": "2019-04-26T15:48:59Z"
 		},
 		{
+			"checksumSHA1": "t5i8PNelaK4c/t4M+CSa92z5//o=",
+			"path": "github.com/klauspost/compress/flate",
+			"revision": "0309165d87c793703d3d52807ca4325d7ebbb526",
+			"revisionTime": "2022-03-24T13:48:59Z"
+		},
+		{
 			"checksumSHA1": "t4WAZHGDvZU/LxbDlRBrtCauMS8=",
 			"path": "github.com/klauspost/compress/gzip",
 			"revision": "0309165d87c793703d3d52807ca4325d7ebbb526",

@@ -25,7 +25,7 @@ func TestCompress(t *testing.T) {
 
 		zipDecompressor := &ZipDecompressor{}
 
-		if !zipDecompressor.CheckHeader(zipOut) {
+		if ok, _ := zipDecompressor.CheckHeader(zipOut); !ok {
 			t.Fatal("CheckHeader")
 		}
 
@@ -74,7 +74,7 @@ func TestCompress(t *testing.T) {
 
 		gzipDecompressor := &GZipDecompressor{}
 
-		if !gzipDecompressor.CheckHeader(zipOut) {
+		if ok, _ := gzipDecompressor.CheckHeader(zipOut); !ok {
 			t.Fatal("CheckHeader")
 		}
 
