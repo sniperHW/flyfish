@@ -7,22 +7,19 @@ import (
 	"fmt"
 	"github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/logger"
-	sslot "github.com/sniperHW/flyfish/server/slot"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
 	"time"
 )
 
-func init() {
-	sslot.SlotCount = 128
-}
-
 func TestScaner(t *testing.T) {
 	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
 
 	//先删除所有kv文件
 	os.RemoveAll("./testRaftLog")
+
+	clearUsers1()
 
 	client.InitLogger(GetLogger())
 
@@ -35,7 +32,7 @@ func TestScaner(t *testing.T) {
 		fields["age"] = i
 		name := fmt.Sprintf("sniperHW:%d", i)
 		fields["name"] = name
-		fields["phone"] = "123456789123456789123456789"
+		fields["phone"] = []byte("123456789123456789123456789")
 		r := c.Set("users1", name, fields).Exec()
 		assert.Nil(t, r.ErrCode)
 	}

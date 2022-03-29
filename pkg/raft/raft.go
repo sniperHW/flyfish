@@ -3,10 +3,11 @@ package raft
 import (
 	"container/list"
 	"context"
-	"encoding/binary"
+	//"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/pkg/etcd/etcdserver/api/snap"
 	stats "github.com/sniperHW/flyfish/pkg/etcd/etcdserver/api/v2stats"
 	"github.com/sniperHW/flyfish/pkg/etcd/pkg/fileutil"
@@ -118,7 +119,6 @@ type RaftInstance struct {
 	snapshotIndex       uint64
 	appliedIndex        uint64
 	lastIndex           uint64 // index of log at start
-	snapCount           uint64
 	stoponce            int32
 	proposePipeline     *queue.ArrayQueue
 	readPipeline        *queue.ArrayQueue
@@ -136,7 +136,7 @@ type RaftInstance struct {
 	wal                 *wal.WAL
 	snapshotter         *snap.Snapshotter
 	snapshotCh          chan interface{}
-	snapshotting        bool //当前是否正在做快照
+	snapshotting        int32 //当前是否正在做快照
 	transport           *rafthttp.Transport
 	stopc               chan struct{} // signals proposal channel closed
 	stopping            chan struct{}
@@ -147,6 +147,7 @@ type RaftInstance struct {
 	mb                  *membership.MemberShip
 	w                   wait.Wait
 	reqIDGen            *idutil.Generator
+	proposalSize        uint64 //自上次快照以来,proposal总的字节大小
 }
 
 func readWALNames(dirpath string) []string {
@@ -192,6 +193,10 @@ func searchIndex(names []string, index uint64) (int, bool) {
 		}
 	}
 	return -1, false
+}
+
+func (rc *RaftInstance) Snapshotting() bool {
+	return atomic.LoadInt32(&rc.snapshotting) == 1
 }
 
 func (rc *RaftInstance) GetApplyIndex() uint64 {
@@ -282,13 +287,16 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 				break
 			}
 
-			index := binary.BigEndian.Uint64(e.Data[0:8])
+			reader := buffer.NewReader(e.Data)
+			index := reader.GetUint64()
 
 			GetSugar().Debugf("entrie %d", index)
 
 			committed = &Committed{
 				Data: e.Data[8:],
 			}
+
+			rc.proposalSize += uint64(len(committed.Data))
 
 			if rc.isLeader() {
 				if t := rc.proposalMgr.getAndRemoveByID(index); nil != t {
@@ -405,7 +413,7 @@ func (rc *RaftInstance) processMessages(ms []raftpb.Message) []raftpb.Message {
 		}
 
 		if ms[i].Type == raftpb.MsgSnap {
-			if !rc.snapshotting {
+			if !rc.Snapshotting() {
 				if atomic.AddInt64(&rc.inflightSnapshots, 1) > MaxInFlightMsgSnap {
 					// drop msgSnap if the inflight chan if full.
 					atomic.AddInt64(&rc.inflightSnapshots, -1)
@@ -909,12 +917,12 @@ func NewInstance(processID uint16, cluster int, join bool, mutilRaft *MutilRaft,
 	}
 
 	rc := &RaftInstance{
-		commitC:    commitC,
-		id:         mbSelf.ID,
-		logdir:     logdir,
-		waldir:     fmt.Sprintf("%s/%s-%d-%d-%x-wal", logdir, raftLogPrefix, processID, cluster, mbSelf.ID),
-		snapdir:    fmt.Sprintf("%s/%s-%d-%d-%x-snap", logdir, raftLogPrefix, processID, cluster, mbSelf.ID),
-		snapCount:  SnapshotCount,
+		commitC: commitC,
+		id:      mbSelf.ID,
+		logdir:  logdir,
+		waldir:  fmt.Sprintf("%s/%s-%d-%d-%x-wal", logdir, raftLogPrefix, processID, cluster, mbSelf.ID),
+		snapdir: fmt.Sprintf("%s/%s-%d-%d-%x-snap", logdir, raftLogPrefix, processID, cluster, mbSelf.ID),
+		//snapCount:  SnapshotCount,
 		stopc:      make(chan struct{}),
 		stopping:   make(chan struct{}),
 		snapshotCh: make(chan interface{}, 1),

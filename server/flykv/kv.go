@@ -44,6 +44,7 @@ type dbLoadTask struct {
  */
 
 type kv struct {
+	hash                 []uint64
 	slot                 int
 	table                string
 	uniKey               string //"table:key"组成的唯一全局唯一键
@@ -57,7 +58,6 @@ type kv struct {
 	store                *kvstore
 	lastWriteBackVersion int64
 	listElement          *list.Element
-	doingCmd             bool
 }
 
 func abs(v int64) int64 {
@@ -77,10 +77,25 @@ func (this *kv) getField(key string) (v *flyproto.Field) {
 	return
 }
 
+func (this *kv) kickable() bool {
+	return this.listElement != nil
+}
+
 func (this *kv) pushCmd(cmd cmdI) {
-	if !this.doingCmd { //this.pendingCmd.Len() == 0 {
-		this.pendingCmd.PushBack(cmd)
-		if this.state == kv_new {
+	last := this.pendingCmd.Back()
+	this.pendingCmd.PushBack(cmd)
+	if this.state == kv_new {
+		if !this.store.slots[this.slot].filter.ContainsWithHashs(this.hash) {
+			//bloomfilter中不存在，不需要到数据库中load
+			proposal := &kvProposal{
+				ptype:       proposal_snapshot,
+				kv:          this,
+				causeByLoad: true,
+				kvState:     kv_no_record,
+			}
+			this.state = kv_loading
+			this.store.rn.IssueProposal(proposal)
+		} else {
 			if !this.store.db.issueLoad(&dbLoadTask{
 				kv:     this,
 				meta:   this.meta,
@@ -92,24 +107,22 @@ func (this *kv) pushCmd(cmd cmdI) {
 				cmd.reply(errcode.New(errcode.Errcode_retry, "loader is busy, please try later!"), nil, 0)
 				this.store.deleteKv(this)
 			} else {
-				this.doingCmd = true
 				this.state = kv_loading
 			}
-		} else {
-			this.processCmd()
 		}
-	} else {
-		if _, ok := this.pendingCmd.Back().Value.(*cmdKick); ok {
+	} else if this.kickable() {
+		this.processCmd()
+	} else if nil != last {
+		if _, ok := last.Value.(*cmdKick); ok {
+			this.pendingCmd.Remove(this.pendingCmd.Back())
 			cmd.reply(errcode.New(errcode.Errcode_retry, "kv is kicking not, please try later!"), nil, 0)
-		} else {
-			this.pendingCmd.PushBack(cmd)
 		}
 	}
 }
 
 func (this *kv) clearCmds(err errcode.Error) {
 	for f := this.pendingCmd.Front(); nil != f; f = this.pendingCmd.Front() {
-		this.pendingCmd.Remove(f).(cmdI).reply(err, nil, 0)
+		this.pendingCmd.Remove(f).(cmdI).reply(err, nil, this.version)
 	}
 }
 
@@ -145,7 +158,7 @@ func (this *kv) mergeCmd() (cmds []cmdI) {
 		}
 
 		if nil != err {
-			this.pendingCmd.Remove(c).(cmdI).reply(err, nil, 0)
+			this.pendingCmd.Remove(c).(cmdI).reply(err, nil, this.version)
 		} else {
 			if canMerge(cmds, cmd) {
 				cmds = append(cmds, cmd)
@@ -168,7 +181,6 @@ func (this *kv) mergeCmd() (cmds []cmdI) {
 }
 
 func (this *kv) processCmd() {
-	this.doingCmd = false
 	if this.store.isLeader() {
 		for cmds := this.mergeCmd(); len(cmds) > 0; cmds = this.mergeCmd() {
 			if cmds[0].cmdType() == flyproto.CmdType_Get {
@@ -178,7 +190,6 @@ func (this *kv) processCmd() {
 						c.reply(nil, this.fields, this.version)
 					}
 				} else {
-					this.doingCmd = true
 					this.store.rn.IssueLinearizableRead(&kvLinearizableRead{
 						kv:   this,
 						cmds: cmds,
@@ -201,7 +212,6 @@ func (this *kv) processCmd() {
 				}
 
 				if proposal.ptype != proposal_none {
-					this.doingCmd = true
 					this.store.rn.IssueProposal(proposal)
 					this.store.removeKickable(this)
 					return

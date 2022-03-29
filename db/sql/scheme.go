@@ -510,3 +510,77 @@ func clearTableData(dbc *sqlx.DB, table_real_name string) error {
 	_, err := dbc.Exec(fmt.Sprintf("delete from %s;", table_real_name))
 	return err
 }
+
+func createBloomFilterMysql(dbc *sqlx.DB) error {
+	str := "CREATE TABLE __bloomfilter__ (`slot` INT NOT NULL,`filter` BLOB,PRIMARY KEY (`slot`))\nENGINE=InnoDB\nDEFAULT CHARSET=gb2312\nCOLLATE=gb2312_chinese_ci;"
+	_, err := dbc.Exec(str)
+	return err
+}
+
+func createBloomFilterPgsql(dbc *sqlx.DB) error {
+	str := `CREATE TABLE "__bloomfilter__" ("slot" int4 NOT NULL,"filter" bytea,PRIMARY KEY ("slot"));`
+	_, err := dbc.Exec(str)
+	return err
+}
+
+func CreateBloomFilter(sqlType string, dbc *sqlx.DB) error {
+	var err error
+	if sqlType == "mysql" {
+		err = createBloomFilterMysql(dbc)
+	} else {
+		err = createBloomFilterPgsql(dbc)
+	}
+
+	if nil == err {
+		return nil
+	}
+
+	if strings.Contains(err.Error(), "already exists") {
+		return nil
+	} else {
+		return err
+	}
+}
+
+func GetBloomFilter(dbc *sqlx.DB, slot int) ([]byte, error) {
+	str := fmt.Sprintf(`select filter from __bloomfilter__ where slot=%d;`, slot)
+	rows, err := dbc.Query(str)
+	if nil != err {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	filter := []byte{}
+	if rows.Next() {
+		err = rows.Scan(&filter)
+		return filter, err
+	} else {
+		return nil, nil
+	}
+}
+
+func setBloomFilterPgsql(dbc *sqlx.DB, slot int, filter []byte) error {
+	str := `INSERT INTO __bloomfilter__(slot, filter) VALUES($1, $2) ON conflict(slot) DO UPDATE SET filter = $2 where __bloomfilter__.slot=$1;`
+	_, err := dbc.Exec(str, slot, filter)
+	return err
+}
+
+func setBloomFilterMysql(dbc *sqlx.DB, slot int, filter []byte) error {
+	str := `INSERT INTO __bloomfilter__(slot, filter) VALUES(?, ?) on duplicate key update filter=?;`
+	_, err := dbc.Exec(str, slot, filter, filter)
+	return err
+}
+
+func SetBloomFilter(sqlType string, dbc *sqlx.DB, slot int, filter []byte) error {
+	if sqlType == "mysql" {
+		return setBloomFilterMysql(dbc, slot, filter)
+	} else {
+		return setBloomFilterPgsql(dbc, slot, filter)
+	}
+}
+
+func ClearBloomFilter(dbc *sqlx.DB) error {
+	_, err := dbc.Exec("delete from __bloomfilter__;")
+	return err
+}

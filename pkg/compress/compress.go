@@ -8,6 +8,13 @@ import (
 	"io/ioutil"
 )
 
+const (
+	gzipID1     = 0x1f
+	gzipID2     = 0x8b
+	gzipDeflate = 8
+	zlibDeflate = 8
+)
+
 type CompressorI interface {
 	Compress(in []byte) ([]byte, error)
 	Clone() CompressorI
@@ -15,6 +22,7 @@ type CompressorI interface {
 
 type DecompressorI interface {
 	Decompress(in []byte) ([]byte, error)
+	CheckHeader(in []byte) (bool, int)
 	Clone() DecompressorI
 }
 
@@ -57,6 +65,19 @@ type ZipDecompressor struct {
 	zipReader io.ReadCloser
 }
 
+func (this *ZipDecompressor) CheckHeader(in []byte) (bool, int) {
+	if len(in) < 2 {
+		return false, 0
+	} else {
+		h := uint(in[0])<<8 | uint(in[1])
+		if (in[0]&0x0f != zlibDeflate) || (h%31 != 0) {
+			return false, 0
+		} else {
+			return true, 2
+		}
+	}
+}
+
 func (this *ZipDecompressor) Clone() DecompressorI {
 	return &ZipDecompressor{}
 }
@@ -74,22 +95,23 @@ func (this *ZipDecompressor) Decompress(in []byte) ([]byte, error) {
 
 	if nil == this.zipReader {
 		this.zipReader, err = zlib.NewReader(&this.zipBuff)
-		if err != nil {
-			return nil, err
-		}
 	} else {
-		this.zipReader.(zlib.Resetter).Reset(&this.zipBuff, nil)
+		err = this.zipReader.(zlib.Resetter).Reset(&this.zipBuff, nil)
+
+	}
+
+	if err != nil {
+		return nil, err
 	}
 
 	out, err := ioutil.ReadAll(this.zipReader)
 	this.zipReader.Close()
-	if err != nil {
-		if err != io.ErrUnexpectedEOF && err != io.EOF {
-			return nil, err
-		}
-	}
 
-	return out, nil
+	if err == io.EOF || err == io.ErrUnexpectedEOF {
+		return out, nil
+	} else {
+		return nil, err
+	}
 }
 
 type GZipCompressor struct {
@@ -133,6 +155,18 @@ type GZipDecompressor struct {
 	zipReader *gzip.Reader
 }
 
+func (this *GZipDecompressor) CheckHeader(in []byte) (bool, int) {
+	if len(in) < 10 {
+		return false, 0
+	} else {
+		if in[0] != gzipID1 || in[1] != gzipID2 || in[2] != gzipDeflate {
+			return false, 0
+		} else {
+			return true, 10
+		}
+	}
+}
+
 func (this *GZipDecompressor) Clone() DecompressorI {
 	return &GZipDecompressor{}
 }
@@ -147,24 +181,21 @@ func (this *GZipDecompressor) Decompress(in []byte) ([]byte, error) {
 	}
 
 	if nil == this.zipReader {
-		var err error
 		this.zipReader, err = gzip.NewReader(&this.zipBuff)
-		if nil != err {
-			panic(err.Error())
-			return nil, err
-		}
 	} else {
-		this.zipReader.Reset(&this.zipBuff)
+		err = this.zipReader.Reset(&this.zipBuff)
+	}
+
+	if nil != err {
+		return nil, err
 	}
 
 	out, err := ioutil.ReadAll(this.zipReader)
 	this.zipReader.Close()
 
-	if err != nil {
-		if err != io.ErrUnexpectedEOF && err != io.EOF {
-			return nil, err
-		}
+	if err == io.EOF || err == io.ErrUnexpectedEOF {
+		return out, nil
+	} else {
+		return nil, err
 	}
-
-	return out, nil
 }

@@ -336,7 +336,7 @@ func (this *Client) exec(c *cmdContext) {
 	this.mu.Unlock()
 
 	if errCode != nil {
-		this.doCallBack(c, errCode)
+		go this.doCallBack(c, errCode)
 	} else {
 		atomic.AddInt32(&this.msgSend, 1)
 	}

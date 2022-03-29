@@ -26,6 +26,18 @@ func (p *pd) onGetMeta(replyer replyer, m *snet.Message) {
 
 func (p *pd) loadInitMeta() {
 	GetSugar().Infof("loadInitMeta:%s", p.config.InitMetaPath)
+	dbc, err := sql.SqlOpen(p.config.DBConfig.DBType, p.config.DBConfig.Host, p.config.DBConfig.Port, p.config.DBConfig.DB, p.config.DBConfig.User, p.config.DBConfig.Password)
+	defer dbc.Close()
+	if nil != err {
+		GetSugar().Panic(err)
+	}
+
+	err = sql.CreateBloomFilter(p.config.DBConfig.DBType, dbc)
+
+	if nil != err {
+		GetSugar().Panic(err)
+	}
+
 	if "" != p.config.InitMetaPath {
 		f, err := os.Open(p.config.InitMetaPath)
 		if nil == err {
@@ -43,13 +55,6 @@ func (p *pd) loadInitMeta() {
 			}
 
 			def, err := db.MakeDbDefFromJsonString(b)
-			if nil != err {
-				GetSugar().Panic(err)
-			}
-
-			dbc, err := sql.SqlOpen(p.config.DBConfig.DBType, p.config.DBConfig.Host, p.config.DBConfig.Port, p.config.DBConfig.DB, p.config.DBConfig.User, p.config.DBConfig.Password)
-			defer dbc.Close()
-
 			if nil != err {
 				GetSugar().Panic(err)
 			}

@@ -9,17 +9,18 @@ import (
 )
 
 func (this *dbUpdateTask) SetLastWriteBackVersion(version int64) {
-	this.setLastWriteBackVersion(version)
 	this.kv.store.rn.IssueProposal(&LastWriteBackVersionProposal{
 		version: version,
 		kv:      this.kv,
 	})
 }
 
-func (this *dbUpdateTask) setLastWriteBackVersion(version int64) {
+func (this *dbUpdateTask) setLastWriteBackVersion(version int64) (old int64) {
 	this.Lock()
 	defer this.Unlock()
+	old = this.state.LastWriteBackVersion
 	this.state.LastWriteBackVersion = version
+	return
 }
 
 func (this *dbUpdateTask) CheckUpdateLease() bool {
@@ -159,7 +160,7 @@ func (this *dbUpdateTask) OnError(err error, writeBackVersion int64) {
 		if f := this.kv.pendingCmd.Front(); nil != f {
 			if cmdkick, ok := f.Value.(*cmdKick); ok && writeBackVersion >= cmdkick.waitVersion {
 				//如果有等待回写后执行的kick，需要清理一下
-				cmdkick.reply(errcode.New(errcode.Errcode_retry, "retry"), nil, 0)
+				cmdkick.reply(errcode.New(errcode.Errcode_retry, "retry"), nil, this.kv.version)
 				this.kv.pendingCmd.Remove(f)
 				this.kv.processCmd()
 			}

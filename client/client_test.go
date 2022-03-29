@@ -4,20 +4,71 @@ package client
 //go tool cover -html=coverage.out
 
 import (
-	"fmt"
-	"github.com/sniperHW/flyfish/backend/db"
-	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/logger"
-	"github.com/sniperHW/flyfish/server/clusterconf"
-	Dir "github.com/sniperHW/flyfish/server/dir"
-	Gate "github.com/sniperHW/flyfish/server/gate"
-	"github.com/sniperHW/flyfish/server/mock/kvnode"
-	sslot "github.com/sniperHW/flyfish/server/slot"
+	//"fmt"
+	//"github.com/sniperHW/flyfish/backend/db"
+	//"github.com/sniperHW/flyfish/errcode"
+	//"github.com/sniperHW/flyfish/logger"
+	//"github.com/sniperHW/flyfish/server/clusterconf"
+	//Dir "github.com/sniperHW/flyfish/server/dir"
+	//Gate "github.com/sniperHW/flyfish/server/gate"
+	//"github.com/sniperHW/flyfish/server/mock/kvnode"
+	//sslot "github.com/sniperHW/flyfish/server/slot"
 	"github.com/stretchr/testify/assert"
+	"strings"
 	"testing"
-	"time"
+	//"time"
 )
 
+func TestPackFiled(t *testing.T) {
+	{
+
+		f := packField("hw", []byte(strings.Repeat("a", 2048)))
+		ok, _ := checkHeader(f.GetBlob())
+		assert.Equal(t, true, ok)
+
+		ff := unpackField(f)
+		assert.Equal(t, string(ff.GetBlob()), strings.Repeat("a", 2048))
+
+		f = packField("hw", []byte(strings.Repeat("a", 1023)))
+		ok, _ = checkHeader(f.GetBlob())
+		assert.Equal(t, false, ok)
+
+		ff = unpackField(f)
+		assert.Equal(t, string(ff.GetBlob()), strings.Repeat("a", 1023))
+
+	}
+
+	{
+
+		f := packField("hw", strings.Repeat("a", 2048))
+		//ok, _ := checkHeader([]byte(f.GetString()))
+		//assert.Equal(t, true, ok)
+
+		ff := unpackField(f)
+		assert.Equal(t, ff.GetString(), strings.Repeat("a", 2048))
+
+		f = packField("hw", "hello")
+		//ok, _ = checkHeader([]byte(f.GetString()))
+		//assert.Equal(t, false, ok)
+
+		ff = unpackField(f)
+		assert.Equal(t, ff.GetString(), "hello")
+
+	}
+
+	{
+		f := packField("hw", 1)
+		assert.Equal(t, int64(1), f.GetInt())
+	}
+
+	{
+		f := packField("hw", 1.2)
+		assert.Equal(t, float64(1.2), f.GetFloat())
+	}
+
+}
+
+/*
 var (
 	Err_version_mismatch errcode.Error = errcode.New(errcode.Errcode_version_mismatch, "")
 	Err_record_exist     errcode.Error = errcode.New(errcode.Errcode_record_exist, "")
@@ -455,7 +506,7 @@ var gateConfigStr string = `
 		LogDir          = "log"
 		LogPrefix       = "gate"
 		LogLevel        = "info"
-		EnableLogStdout = false		
+		EnableLogStdout = false
 
 `
 
@@ -476,7 +527,7 @@ var configDirStr string = `
 		LogDir          = "log"
 		LogPrefix       = "gate"
 		LogLevel        = "info"
-		EnableLogStdout = false		
+		EnableLogStdout = false
 
 `
 
@@ -567,7 +618,7 @@ func TestCluster(t *testing.T) {
 	n3.Stop()
 }
 
-/*func testConnDisconnect(t *testing.T) {
+func testConnDisconnect(t *testing.T) {
 	c := OpenClient("localhost:8110")
 
 	ClientTimeout = 5000

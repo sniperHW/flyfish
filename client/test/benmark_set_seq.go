@@ -23,7 +23,7 @@ var (
 	keyrange     int64
 )
 
-var phone string = strings.Repeat("a", 4096)
+var phone []byte = []byte(strings.Repeat("a", 16*1024))
 
 func Set(c *kclient.Client) {
 	fields := map[string]interface{}{}

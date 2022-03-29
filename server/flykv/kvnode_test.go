@@ -23,6 +23,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -42,7 +43,7 @@ var configStr string = `
 
 Mode = "solo"
 
-SnapshotCurrentCount    = 1
+SnapshotCurrentCount    = 0
 
 MainQueueMaxSize        = 10000
 
@@ -128,9 +129,11 @@ func (d *mockBackEnd) stop() {
 var config *Config
 var dbConf *dbconf
 
+var clearUsers1 func()
+
 func init() {
 
-	sslot.SlotCount = 128
+	sslot.SlotCount = 1820
 
 	raft.SnapshotCount = 100
 	raft.SnapshotCatchUpEntriesN = 100
@@ -150,6 +153,16 @@ func init() {
 
 	if nil != err {
 		panic(err)
+	}
+
+	//清理bloomfilter
+	dbc, err := sql.SqlOpen(dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.DB, dbConf.User, dbConf.Pwd)
+	if nil != err {
+		panic(err)
+	}
+
+	clearUsers1 = func() {
+		dbc.Exec("delete from users1_0;")
 	}
 }
 
@@ -198,8 +211,18 @@ func test(t *testing.T, c *client.Client) {
 		fields := map[string]interface{}{}
 		fields["age"] = 12
 		fields["name"] = "sniperHW"
+		fields["phone"] = []byte(strings.Repeat("a", 4096))
 
-		c.Set("users1", "sniperHW", fields).Exec()
+		rr := c.Set("users1", "sniperHW", fields).Exec()
+		assert.Nil(t, rr.ErrCode)
+
+		rr = c.Set("users1", "sniperHW", fields, 0).Exec()
+
+		assert.Equal(t, Err_version_mismatch, rr.ErrCode)
+
+		r := c.GetAll("users1", "sniperHW").Exec()
+
+		assert.Equal(t, string(r.Fields["phone"].GetBlob()), strings.Repeat("a", 4096))
 
 		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
@@ -214,7 +237,7 @@ func test(t *testing.T, c *client.Client) {
 
 		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
-		r := c.GetAll("users1", "sniperHW").Exec()
+		r = c.GetAll("users1", "sniperHW").Exec()
 		assert.Nil(t, r.ErrCode)
 
 		assert.Equal(t, r.Fields["age"].GetInt(), int64(0))
@@ -488,6 +511,8 @@ func Test1Node1Store1(t *testing.T) {
 	//先删除所有kv文件
 	os.RemoveAll("./testRaftLog")
 
+	clearUsers1()
+
 	client.InitLogger(GetLogger())
 
 	node := start1Node(1, newSqlDBBackEnd(), false, config, true)
@@ -558,7 +583,7 @@ func Test1Node1Store1(t *testing.T) {
 	conn.Close()
 
 	{
-		fmt.Println(c.CompareAndSetNx("users1", "sniperHW:1", "age", 11, 12).Exec().ErrCode)
+		assert.Equal(t, c.CompareAndSetNx("users1", "sniperHW:1", "age", 11, 12).Exec().ErrCode, Err_cas_not_equal)
 	}
 
 	node.Stop()
@@ -581,6 +606,8 @@ func Test1Node1Store2(t *testing.T) {
 
 	//先删除所有kv文件
 	os.RemoveAll("./testRaftLog")
+
+	clearUsers1()
 
 	client.InitLogger(GetLogger())
 
@@ -609,6 +636,8 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 	//先删除所有kv文件
 	os.RemoveAll("./testRaftLog")
 
+	clearUsers1()
+
 	client.InitLogger(GetLogger())
 
 	node := start1Node(1, newSqlDBBackEnd(), false, config, true)
@@ -620,7 +649,7 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 		fields["age"] = 12
 		name := fmt.Sprintf("sniperHW:%d", i)
 		fields["name"] = name
-		fields["phone"] = "123456789123456789123456789"
+		fields["phone"] = []byte("123456789123456789123456789")
 
 		r := c.Set("users1", name, fields).Exec()
 		assert.Nil(t, r.ErrCode)
@@ -633,7 +662,7 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 		fields["age"] = 12
 		name := fmt.Sprintf("sniperHW:%d", i)
 		fields["name"] = name
-		fields["phone"] = "123456789123456789123456789"
+		fields["phone"] = []byte("123456789123456789123456789")
 
 		r := c.Set("users1", name, fields).Exec()
 		assert.Nil(t, r.ErrCode)
@@ -649,7 +678,7 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 		fields["age"] = 12
 		name := fmt.Sprintf("sniperHW:%d", i)
 		fields["name"] = name
-		fields["phone"] = "123456789123456789123456789"
+		fields["phone"] = []byte("123456789123456789123456789")
 
 		r := c.Set("users1", name, fields).Exec()
 		assert.Nil(t, r.ErrCode)
@@ -665,11 +694,11 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 
 	time.Sleep(time.Second * 2)
 
-	assert.Equal(t, 299, len(node.stores[1].kv[0]))
+	assert.Equal(t, 299, node.stores[1].kvcount)
 
-	assert.Nil(t, node.stores[1].kv[0]["users1:sniperHW:199"])
+	//assert.Nil(t, node.stores[1].kv[0]["users1:sniperHW:199"])
 
-	assert.NotNil(t, node.stores[1].kv[0]["users1:sniperHW:99"])
+	//assert.NotNil(t, node.stores[1].kv[0]["users1:sniperHW:99"])
 
 	node.Stop()
 
@@ -686,6 +715,8 @@ func Test1Node1StoreSnapshot2(t *testing.T) {
 	//先删除所有kv文件
 	os.RemoveAll("./testRaftLog")
 
+	clearUsers1()
+
 	client.InitLogger(GetLogger())
 
 	node := start1Node(1, newSqlDBBackEnd(), false, config, true)
@@ -697,7 +728,7 @@ func Test1Node1StoreSnapshot2(t *testing.T) {
 		fields["age"] = 12
 		name := fmt.Sprintf("sniperHW:%d", i)
 		fields["name"] = name
-		fields["phone"] = "123456789123456789123456789"
+		fields["phone"] = []byte("123456789123456789123456789")
 
 		r := c.Set("users1", name, fields).Exec()
 		assert.Nil(t, r.ErrCode)
@@ -710,7 +741,7 @@ func Test1Node1StoreSnapshot2(t *testing.T) {
 		fields["age"] = 12
 		name := fmt.Sprintf("sniperHW:%d", i)
 		fields["name"] = name
-		fields["phone"] = "123456789123456789123456789"
+		fields["phone"] = []byte("123456789123456789123456789")
 
 		r := c.Set("users1", name, fields).Exec()
 		assert.Nil(t, r.ErrCode)
@@ -823,6 +854,8 @@ func TestLinearizableRead(t *testing.T) {
 	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
 	GetSugar().Infof("MaxCachePerStore:%d", config.MaxCachePerStore)
 
+	clearUsers1()
+
 	config.LinearizableRead = true
 
 	//先删除所有kv文件
@@ -833,6 +866,13 @@ func TestLinearizableRead(t *testing.T) {
 	node := start1Node(1, newSqlDBBackEnd(), false, config, true)
 
 	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
+
+	for i := 0; i < 100; i++ {
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		fields["name"] = "sniperHW"
+		assert.Nil(t, c.Set("users1", fmt.Sprintf("sniperHW:%d", i), fields).Exec().ErrCode)
+	}
 
 	for i := 0; i < 100; i++ {
 		r := c.GetAll("users1", fmt.Sprintf("sniperHW:%d", i)).Exec()
@@ -859,7 +899,7 @@ func TestUpdateMeta(t *testing.T) {
 	 "Fields":[
 	 	{"Name":"name","Type":"string","DefaultValue":""},
 	 	{"Name":"age","Type":"int","DefaultValue":"0"},
-	 	{"Name":"phone","Type":"string","DefaultValue":""}]
+	 	{"Name":"phone","Type":"blob","DefaultValue":""}]
 	}]
 }
 
@@ -890,6 +930,86 @@ func TestUpdateMeta(t *testing.T) {
 	node.Stop()
 }
 
+func TestSlotTransferOut(t *testing.T) {
+	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
+
+	//先删除所有kv文件
+	os.RemoveAll("./testRaftLog")
+
+	client.InitLogger(GetLogger())
+
+	node := start1Node(1, newMockDBBackEnd(nil), false, config, true)
+
+	store1 := node.stores[1]
+	ch := make(chan int)
+
+	store1.mainQueue.AppendHighestPriotiryItem(func() {
+		slots := []int{}
+		for k, v := range store1.slots {
+			if nil != v {
+				slots = append(slots, k)
+			}
+		}
+		ch <- slots[0]
+	})
+
+	outslot := <-ch
+
+	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
+
+	for i := 0; i < 256; i++ {
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		fields["name"] = "sniperHW"
+		c.Set("users1", fmt.Sprintf("sniperHW:%d", i), fields).Exec()
+	}
+
+	fmt.Println("NotifySlotTransOut")
+
+	addr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:10018")
+
+	for {
+		resp := snet.UdpCall([]*net.UDPAddr{addr},
+			snet.MakeMessage(0, &sproto.NotifySlotTransOut{
+				Store: int32(1),
+				Slot:  int32(outslot),
+			}),
+			time.Millisecond*50,
+			func(respCh chan interface{}, r interface{}) {
+				if m, ok := r.(*snet.Message); ok {
+					if resp, ok := m.Msg.(*sproto.SlotTransOutOk); ok {
+						select {
+						case respCh <- resp:
+						default:
+						}
+					}
+				}
+			})
+
+		if resp != nil {
+			assert.Equal(t, resp.(*sproto.SlotTransOutOk).Slot, int32(outslot))
+			break
+		}
+	}
+
+	var ok int32
+	for atomic.LoadInt32(&ok) == 0 {
+		time.Sleep(time.Millisecond * 100)
+		node.stores[1].mainQueue.AppendHighestPriotiryItem(func() {
+			if nil == node.stores[1].slots[outslot] {
+				atomic.StoreInt32(&ok, 1)
+			}
+		})
+	}
+
+	node.Stop()
+
+	node = start1Node(1, newMockDBBackEnd(nil), false, config, true)
+
+	node.Stop()
+
+}
+
 func TestSlotTransferIn(t *testing.T) {
 	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
 
@@ -905,8 +1025,14 @@ func TestSlotTransferIn(t *testing.T) {
 	ch := make(chan int)
 
 	store1.mainQueue.AppendHighestPriotiryItem(func() {
-		slots := store1.slots.GetOpenBits()
-		store1.slots.Clear(slots[0])
+		slots := []int{}
+		for k, v := range store1.slots {
+			if nil != v {
+				slots = append(slots, k)
+			}
+		}
+
+		store1.slots[slots[0]] = nil
 		ch <- slots[0]
 	})
 
@@ -962,82 +1088,7 @@ func TestSlotTransferIn(t *testing.T) {
 	for atomic.LoadInt32(&ok) == 0 {
 		time.Sleep(time.Second)
 		node.stores[1].mainQueue.AppendHighestPriotiryItem(func() {
-			if node.stores[1].slots.Test(inslot) {
-				atomic.StoreInt32(&ok, 1)
-			}
-		})
-	}
-
-	node.Stop()
-
-	node = start1Node(1, newMockDBBackEnd(nil), false, config, true)
-
-	node.Stop()
-
-}
-
-func TestSlotTransferOut(t *testing.T) {
-	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
-
-	//先删除所有kv文件
-	os.RemoveAll("./testRaftLog")
-
-	client.InitLogger(GetLogger())
-
-	node := start1Node(1, newMockDBBackEnd(nil), false, config, true)
-
-	store1 := node.stores[1]
-	ch := make(chan int)
-
-	store1.mainQueue.AppendHighestPriotiryItem(func() {
-		slots := store1.slots.GetOpenBits()
-		ch <- slots[0]
-	})
-
-	outslot := <-ch
-
-	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
-
-	for i := 0; i < 256; i++ {
-		fields := map[string]interface{}{}
-		fields["age"] = 12
-		fields["name"] = "sniperHW"
-		c.Set("users1", fmt.Sprintf("sniperHW:%d", i), fields).Exec()
-	}
-
-	fmt.Println("NotifySlotTransOut")
-
-	addr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:10018")
-
-	for {
-		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.NotifySlotTransOut{
-				Store: int32(1),
-				Slot:  int32(outslot),
-			}),
-			time.Millisecond*50,
-			func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.SlotTransOutOk); ok {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			})
-
-		if resp != nil {
-			assert.Equal(t, resp.(*sproto.SlotTransOutOk).Slot, int32(outslot))
-			break
-		}
-	}
-
-	var ok int32
-	for atomic.LoadInt32(&ok) == 0 {
-		time.Sleep(time.Millisecond * 100)
-		node.stores[1].mainQueue.AppendHighestPriotiryItem(func() {
-			if !node.stores[1].slots.Test(outslot) {
+			if node.stores[1].slots[inslot] != nil {
 				atomic.StoreInt32(&ok, 1)
 			}
 		})
