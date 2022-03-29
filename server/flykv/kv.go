@@ -77,43 +77,45 @@ func (this *kv) getField(key string) (v *flyproto.Field) {
 	return
 }
 
+func (this *kv) kickable() bool {
+	return this.listElement != nil
+}
+
 func (this *kv) pushCmd(cmd cmdI) {
-	if this.pendingCmd.Len() == 0 {
-		this.pendingCmd.PushBack(cmd)
-		if this.state == kv_new {
-			if !this.store.slots[this.slot].filter.ContainsWithHashs(this.hash) {
-				//bloomfilter中不存在，不需要到数据库中load
-				proposal := &kvProposal{
-					ptype:       proposal_snapshot,
-					kv:          this,
-					causeByLoad: true,
-					kvState:     kv_no_record,
-				}
-				this.state = kv_loading
-				this.store.rn.IssueProposal(proposal)
-			} else {
-				if !this.store.db.issueLoad(&dbLoadTask{
-					kv:     this,
-					meta:   this.meta,
-					uniKey: this.uniKey,
-					table:  this.table,
-					key:    this.key,
-					term:   this.store.getTerm(),
-				}) {
-					cmd.reply(errcode.New(errcode.Errcode_retry, "loader is busy, please try later!"), nil, 0)
-					this.store.deleteKv(this)
-				} else {
-					this.state = kv_loading
-				}
+	last := this.pendingCmd.Back()
+	this.pendingCmd.PushBack(cmd)
+	if this.state == kv_new {
+		if !this.store.slots[this.slot].filter.ContainsWithHashs(this.hash) {
+			//bloomfilter中不存在，不需要到数据库中load
+			proposal := &kvProposal{
+				ptype:       proposal_snapshot,
+				kv:          this,
+				causeByLoad: true,
+				kvState:     kv_no_record,
 			}
+			this.state = kv_loading
+			this.store.rn.IssueProposal(proposal)
 		} else {
-			this.processCmd()
+			if !this.store.db.issueLoad(&dbLoadTask{
+				kv:     this,
+				meta:   this.meta,
+				uniKey: this.uniKey,
+				table:  this.table,
+				key:    this.key,
+				term:   this.store.getTerm(),
+			}) {
+				cmd.reply(errcode.New(errcode.Errcode_retry, "loader is busy, please try later!"), nil, 0)
+				this.store.deleteKv(this)
+			} else {
+				this.state = kv_loading
+			}
 		}
-	} else {
-		if _, ok := this.pendingCmd.Back().Value.(*cmdKick); ok {
+	} else if this.kickable() {
+		this.processCmd()
+	} else if nil != last {
+		if _, ok := last.Value.(*cmdKick); ok {
+			this.pendingCmd.Remove(this.pendingCmd.Back())
 			cmd.reply(errcode.New(errcode.Errcode_retry, "kv is kicking not, please try later!"), nil, 0)
-		} else {
-			this.pendingCmd.PushBack(cmd)
 		}
 	}
 }

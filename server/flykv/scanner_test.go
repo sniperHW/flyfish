@@ -32,7 +32,7 @@ func TestScaner(t *testing.T) {
 		fields["age"] = i
 		name := fmt.Sprintf("sniperHW:%d", i)
 		fields["name"] = name
-		fields["phone"] = "123456789123456789123456789"
+		fields["phone"] = []byte("123456789123456789123456789")
 		r := c.Set("users1", name, fields).Exec()
 		assert.Nil(t, r.ErrCode)
 	}

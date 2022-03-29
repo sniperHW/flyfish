@@ -324,6 +324,8 @@ func (this *kvProposal) OnError(err error) {
 		this.kv.clearCmds(errcode.New(errcode.Errcode_error, err.Error()))
 		if this.kv.state == kv_loading {
 			this.kv.store.deleteKv(this.kv)
+		} else {
+			this.kv.processCmd()
 		}
 	})
 }
@@ -407,6 +409,7 @@ func (this *kvLinearizableRead) OnError(err error) {
 	this.reply(errcode.New(errcode.Errcode_error, err.Error()), nil, this.kv.version)
 	this.kv.store.mainQueue.AppendHighestPriotiryItem(func() {
 		this.kv.clearCmds(errcode.New(errcode.Errcode_error, err.Error()))
+		this.kv.processCmd()
 	})
 }
 

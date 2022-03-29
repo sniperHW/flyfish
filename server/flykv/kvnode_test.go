@@ -213,16 +213,12 @@ func test(t *testing.T, c *client.Client) {
 		fields["name"] = "sniperHW"
 		fields["phone"] = []byte(strings.Repeat("a", 4096))
 
-		rr := c.Set("users1", "sniperHW", fields, 0).Exec()
+		rr := c.Set("users1", "sniperHW", fields).Exec()
 		assert.Nil(t, rr.ErrCode)
-
-		assert.Equal(t, int64(1), rr.Version)
 
 		rr = c.Set("users1", "sniperHW", fields, 0).Exec()
 
 		assert.Equal(t, Err_version_mismatch, rr.ErrCode)
-
-		assert.Equal(t, int64(1), rr.Version)
 
 		r := c.GetAll("users1", "sniperHW").Exec()
 
@@ -587,7 +583,7 @@ func Test1Node1Store1(t *testing.T) {
 	conn.Close()
 
 	{
-		fmt.Println(c.CompareAndSetNx("users1", "sniperHW:1", "age", 11, 12).Exec().ErrCode)
+		assert.Equal(t, c.CompareAndSetNx("users1", "sniperHW:1", "age", 11, 12).Exec().ErrCode, Err_cas_not_equal)
 	}
 
 	node.Stop()
