@@ -2,8 +2,8 @@ package compress
 
 import (
 	"bytes"
-	"compress/gzip"
-	"compress/zlib"
+	"github.com/klauspost/compress/gzip"
+	"github.com/klauspost/compress/zlib"
 	"io"
 	"io/ioutil"
 )

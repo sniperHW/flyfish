@@ -95,6 +95,18 @@
 			"revisionTime": "2019-04-26T15:48:59Z"
 		},
 		{
+			"checksumSHA1": "t4WAZHGDvZU/LxbDlRBrtCauMS8=",
+			"path": "github.com/klauspost/compress/gzip",
+			"revision": "0309165d87c793703d3d52807ca4325d7ebbb526",
+			"revisionTime": "2022-03-24T13:48:59Z"
+		},
+		{
+			"checksumSHA1": "7MvgMDUYuSJAEXjCkM9K9YW0OpU=",
+			"path": "github.com/klauspost/compress/zlib",
+			"revision": "0309165d87c793703d3d52807ca4325d7ebbb526",
+			"revisionTime": "2022-03-24T13:48:59Z"
+		},
+		{
 			"checksumSHA1": "GKTFbGomCP1fhH7mFecvwKvh7bc=",
 			"path": "github.com/lib/pq",
 			"revision": "78223426e7c66d631117c0a9da1b7f3fde4d23a5",
