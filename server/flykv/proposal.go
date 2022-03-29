@@ -287,6 +287,8 @@ func (this *kvProposal) OnError(err error) {
 		this.kv.clearCmds(errcode.New(errcode.Errcode_error, err.Error()))
 		if this.kv.state == kv_loading {
 			this.kv.store.deleteKv(this.kv)
+		} else {
+			this.kv.processCmd()
 		}
 	})
 }

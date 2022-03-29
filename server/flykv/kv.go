@@ -57,6 +57,7 @@ type kv struct {
 	store                *kvstore
 	lastWriteBackVersion int64
 	listElement          *list.Element
+	doingCmd             bool
 }
 
 func abs(v int64) int64 {
@@ -77,7 +78,7 @@ func (this *kv) getField(key string) (v *flyproto.Field) {
 }
 
 func (this *kv) pushCmd(cmd cmdI) {
-	if this.pendingCmd.Len() == 0 {
+	if !this.doingCmd { //this.pendingCmd.Len() == 0 {
 		this.pendingCmd.PushBack(cmd)
 		if this.state == kv_new {
 			if !this.store.db.issueLoad(&dbLoadTask{
@@ -91,6 +92,7 @@ func (this *kv) pushCmd(cmd cmdI) {
 				cmd.reply(errcode.New(errcode.Errcode_retry, "loader is busy, please try later!"), nil, 0)
 				this.store.deleteKv(this)
 			} else {
+				this.doingCmd = true
 				this.state = kv_loading
 			}
 		} else {
@@ -166,6 +168,7 @@ func (this *kv) mergeCmd() (cmds []cmdI) {
 }
 
 func (this *kv) processCmd() {
+	this.doingCmd = false
 	if this.store.isLeader() {
 		for cmds := this.mergeCmd(); len(cmds) > 0; cmds = this.mergeCmd() {
 			if cmds[0].cmdType() == flyproto.CmdType_Get {
@@ -175,6 +178,7 @@ func (this *kv) processCmd() {
 						c.reply(nil, this.fields, this.version)
 					}
 				} else {
+					this.doingCmd = true
 					this.store.rn.IssueLinearizableRead(&kvLinearizableRead{
 						kv:   this,
 						cmds: cmds,
@@ -197,6 +201,7 @@ func (this *kv) processCmd() {
 				}
 
 				if proposal.ptype != proposal_none {
+					this.doingCmd = true
 					this.store.rn.IssueProposal(proposal)
 					this.store.removeKickable(this)
 					return
