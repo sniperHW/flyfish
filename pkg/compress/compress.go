@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"github.com/klauspost/compress/gzip"
 	"github.com/klauspost/compress/zlib"
+	//"github.com/klauspost/compress/zstd"
+	//"compress/gzip"
+	//"compress/zlib"
 	"io"
 	"io/ioutil"
 )
@@ -15,6 +18,10 @@ const (
 	zlibDeflate = 8
 )
 
+/*
+ * Compress/Decompress返回内部buff,第二次调用将导致buff被覆写，如果buff不被立即消费掉，应该将内容copy出去
+ */
+
 type CompressorI interface {
 	Compress(in []byte) ([]byte, error)
 	Clone() CompressorI
@@ -25,6 +32,13 @@ type DecompressorI interface {
 	CheckHeader(in []byte) (bool, int)
 	Clone() DecompressorI
 }
+
+/*var ZstdWriter func(w io.Writer) (io.WriteCloser, error) = zstd.ZipCompressor()
+var ZstdReader func(r io.Reader) io.ReadCloser
+
+type ZstdCompressor struct {
+	zipBuff bytes.Buffer
+}*/
 
 type ZipCompressor struct {
 	zipBuff   bytes.Buffer
@@ -51,6 +65,11 @@ func (this *ZipCompressor) Compress(in []byte) ([]byte, error) {
 	}
 
 	err = this.zipWriter.Flush()
+	if nil != err {
+		return nil, err
+	}
+
+	err = this.zipWriter.Close()
 	if nil != err {
 		return nil, err
 	}
@@ -107,7 +126,7 @@ func (this *ZipDecompressor) Decompress(in []byte) ([]byte, error) {
 	out, err := ioutil.ReadAll(this.zipReader)
 	this.zipReader.Close()
 
-	if err == io.EOF || err == io.ErrUnexpectedEOF {
+	if nil == err || err == io.EOF || err == io.ErrUnexpectedEOF {
 		return out, nil
 	} else {
 		return nil, err
@@ -140,6 +159,12 @@ func (this *GZipCompressor) Compress(in []byte) ([]byte, error) {
 	}
 
 	err = this.zipWriter.Flush()
+
+	if nil != err {
+		return nil, err
+	}
+
+	err = this.zipWriter.Close()
 
 	if nil != err {
 		return nil, err
@@ -193,7 +218,7 @@ func (this *GZipDecompressor) Decompress(in []byte) ([]byte, error) {
 	out, err := ioutil.ReadAll(this.zipReader)
 	this.zipReader.Close()
 
-	if err == io.EOF || err == io.ErrUnexpectedEOF {
+	if nil == err || err == io.EOF || err == io.ErrUnexpectedEOF {
 		return out, nil
 	} else {
 		return nil, err
