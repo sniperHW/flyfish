@@ -217,8 +217,12 @@ func (st *storeScanner) fetchRows(scanner *Scanner, service string, deadline tim
 					Fields:  map[string]*Field{},
 				}
 
+				var err error
 				for _, vv := range v.Fields {
-					r.Fields[vv.Name] = unpackField(vv) //(*Field)(vv)
+					r.Fields[vv.Name], err = unpackField(vv) //(*Field)(vv)
+					if nil != err {
+						GetSugar().Infof("scan %s filed:%s unpackField error:%v", v.Key, vv.Name, err)
+					}
 				}
 
 				rows = append(rows, r)
@@ -287,8 +291,12 @@ func (sc *clusterScanner) fetchRows(scanner *Scanner, deadline time.Time) (err e
 					Version: v.Version,
 					Fields:  map[string]*Field{},
 				}
+				var err error
 				for _, vv := range v.Fields {
-					r.Fields[vv.Name] = unpackField(vv) //(*Field)(vv)
+					r.Fields[vv.Name], err = unpackField(vv) //(*Field)(vv)
+					if nil != err {
+						GetSugar().Infof("scan %s filed:%s unpackField error:%v", v.Key, vv.Name, err)
+					}
 				}
 				scanner.rows = append(scanner.rows, r)
 			} else {

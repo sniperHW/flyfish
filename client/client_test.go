@@ -13,14 +13,80 @@ import (
 	//Gate "github.com/sniperHW/flyfish/server/gate"
 	//"github.com/sniperHW/flyfish/server/mock/kvnode"
 	//sslot "github.com/sniperHW/flyfish/server/slot"
-	"github.com/stretchr/testify/assert"
-	"strings"
+	"encoding/json"
+	//"github.com/stretchr/testify/assert"
+	"math/rand"
+	//"strings"
+	"fmt"
 	"testing"
-	//"time"
+	"time"
 )
 
+type Equip struct {
+	InsID            uint32  `json:"ins_id"`
+	ConfigID         int32   `json:"cfg_id"`
+	Level            int32   `json:"level"`
+	Exp              int32   `json:"exp"`              // 当前经验
+	RandomAttribId   int32   `json:"random_attrib_id"` // 随机的技能ID，位置1
+	Refine           []int32 `json:"refine"`           // 长度为2，第一个是配置表的固定技能ID，第二个是随机ID
+	EquipCharacterId int32   `json:"e_c_id"`           //装备后的角色ID
+	IsLock           bool    `json:"is_lock"`
+	GetTime          int64   `json:"get_time"` // 获取时间
+}
+
 func TestPackFiled(t *testing.T) {
-	{
+
+	for k := 0; k < 10000; k++ {
+		fmt.Println(k)
+		Equips := []Equip{}
+		for i := 0; i < 10; i++ {
+			e := Equip{
+				InsID:            uint32(i + 1),
+				ConfigID:         int32(rand.Int31()),
+				Level:            int32(rand.Int31()),
+				Exp:              int32(rand.Int31()),
+				RandomAttribId:   int32(rand.Int31()),
+				EquipCharacterId: int32(rand.Int31()),
+				IsLock:           false,
+				GetTime:          int64(time.Now().Unix()),
+			}
+
+			for j := 0; j < 10; j++ {
+				e.Refine = append(e.Refine, int32(rand.Int31()))
+			}
+
+			Equips = append(Equips, e)
+		}
+
+		b, _ := json.Marshal(Equips)
+
+		//fmt.Println(string(b))
+
+		//fmt.Println(len(b))
+
+		f := packField("hw", b)
+
+		//ok, _ := checkHeader(f.GetBlob())
+		//assert.Equal(t, true, ok)
+
+		//fmt.Println(len(f.GetBlob()))
+
+		ff := unpackField(f)
+
+		Equips = []Equip{}
+
+		err := UnmarshalJsonField(ff, &Equips)
+
+		if nil != err {
+			panic(err)
+		}
+
+		//assert.Nil(t, err)
+
+		//fmt.Println(Equips)
+
+	}
+	/*{
 
 		f := packField("hw", []byte(strings.Repeat("a", 2048)))
 		ok, _ := checkHeader(f.GetBlob())
@@ -64,7 +130,7 @@ func TestPackFiled(t *testing.T) {
 	{
 		f := packField("hw", 1.2)
 		assert.Equal(t, float64(1.2), f.GetFloat())
-	}
+	}*/
 
 }
 

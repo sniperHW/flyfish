@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/flyfish/errcode"
 	protocol "github.com/sniperHW/flyfish/proto"
@@ -44,9 +45,17 @@ func UnmarshalJsonField(field *Field, obj interface{}) error {
 	if field == nil {
 		return nil
 	} else if (*protocol.Field)(field).IsBlob() {
-		return json.Unmarshal(field.GetBlob(), obj)
+		if len(field.GetBlob()) == 0 {
+			return nil
+		} else {
+			return json.Unmarshal(field.GetBlob(), obj)
+		}
 	} else if (*protocol.Field)(field).IsString() {
-		return json.Unmarshal([]byte(field.GetString()), obj)
+		if len(field.GetString()) == 0 {
+			return nil
+		} else {
+			return json.Unmarshal([]byte(field.GetString()), obj)
+		}
 	} else {
 		return nil
 	}
@@ -209,7 +218,6 @@ func packField(key string, v interface{}) *protocol.Field {
 			size := make([]byte, 4)
 			binary.BigEndian.PutUint32(size, uint32(len(bb)+4))
 			bb = append(bb, size...)
-			releaseCompressor(c)
 		} else {
 			bb = b
 		}
@@ -219,7 +227,8 @@ func packField(key string, v interface{}) *protocol.Field {
 	}
 }
 
-func unpackField(f *protocol.Field) *Field {
+func unpackField(f *protocol.Field) (*Field, error) {
+	var err error
 	if nil != f {
 		v := f.GetValue()
 		switch v.(type) {
@@ -228,14 +237,18 @@ func unpackField(f *protocol.Field) *Field {
 			if ok, size := checkHeader(b); ok && len(b) >= size+4 {
 				if size = int(binary.BigEndian.Uint32(b[len(b)-4:])); size == len(b) {
 					d := getDecompressor()
-					b, _ = d.Decompress(b[:len(b)-4])
-					releaseDecompressor(d)
-					return (*Field)(protocol.PackField(f.Name, b))
+					if b, err = d.Decompress(b[:len(b)-4]); nil == err {
+						return (*Field)(protocol.PackField(f.Name, b)), err
+					}
+				} else {
+					err = errors.New("invaild filed1")
 				}
+			} else {
+				err = errors.New("invaild filed2")
 			}
 		}
 	}
-	return (*Field)(f)
+	return (*Field)(f), err
 }
 
 func (this *Client) Set(table, key string, fields map[string]interface{}, version ...int64) *StatusCmd {
@@ -402,10 +415,15 @@ func (this *serverConn) onGetResp(c *cmdContext, errCode errcode.Error, resp *pr
 		Version: resp.GetVersion(),
 	}
 
+	var err error
+
 	if ret.ErrCode == nil {
 		ret.Fields = map[string]*Field{}
 		for _, v := range resp.Fields {
-			ret.Fields[v.GetName()] = unpackField(v)
+			ret.Fields[v.GetName()], err = unpackField(v)
+			if nil != err {
+				GetSugar().Infof("onGetResp %s filed:%s unpackField error:%v", c.unikey, v.GetName(), err)
+			}
 		}
 	}
 
@@ -426,10 +444,15 @@ func (this *serverConn) onSetNxResp(c *cmdContext, errCode errcode.Error, resp *
 		Version: resp.GetVersion(),
 	}
 
+	var err error
+
 	if nil != ret.ErrCode && ret.ErrCode.Code == errcode.Errcode_record_exist {
 		ret.Fields = map[string]*Field{}
 		for _, v := range resp.Fields {
-			ret.Fields[v.GetName()] = unpackField(v)
+			ret.Fields[v.GetName()], err = unpackField(v)
+			if nil != err {
+				GetSugar().Infof("onSetNxResp %s filed:%s unpackField error:%v", c.unikey, v.GetName(), err)
+			}
 		}
 	}
 
@@ -443,9 +466,13 @@ func (this *serverConn) onCompareAndSetResp(c *cmdContext, errCode errcode.Error
 		Version: resp.GetVersion(),
 	}
 
+	var err error
 	if ret.ErrCode == nil || ret.ErrCode.Code == errcode.Errcode_cas_not_equal {
 		ret.Fields = map[string]*Field{}
-		ret.Fields[resp.GetValue().GetName()] = unpackField(resp.GetValue())
+		ret.Fields[resp.GetValue().GetName()], err = unpackField(resp.GetValue())
+		if nil != err {
+			GetSugar().Infof("onCompareAndSetResp %s filed:%s unpackField error:%v", c.unikey, resp.GetValue().GetName(), err)
+		}
 	}
 
 	return ret
@@ -459,9 +486,14 @@ func (this *serverConn) onCompareAndSetNxResp(c *cmdContext, errCode errcode.Err
 		Version: resp.GetVersion(),
 	}
 
+	var err error
 	if ret.ErrCode == nil || ret.ErrCode.Code == errcode.Errcode_cas_not_equal {
 		ret.Fields = map[string]*Field{}
-		ret.Fields[resp.GetValue().GetName()] = unpackField(resp.GetValue())
+		ret.Fields[resp.GetValue().GetName()], err = unpackField(resp.GetValue())
+		if nil != err {
+			GetSugar().Infof("onCompareAndSetNxResp %s filed:%s unpackField error:%v", c.unikey, resp.GetValue().GetName(), err)
+		}
+
 	}
 
 	return ret
