@@ -17,34 +17,6 @@ import (
 	"time"
 )
 
-var compressPool = &sync.Pool{
-	New: func() interface{} {
-		return &compress.ZipCompressor{}
-	},
-}
-
-func getCompressor() compress.CompressorI {
-	return compressPool.Get().(compress.CompressorI)
-}
-
-func putCompressor(c compress.CompressorI) {
-	compressPool.Put(c)
-}
-
-var decompressPool = &sync.Pool{
-	New: func() interface{} {
-		return &compress.ZipDecompressor{}
-	},
-}
-
-func getDecompressor() compress.DecompressorI {
-	return decompressPool.Get().(compress.DecompressorI)
-}
-
-func putDecompressor(c compress.DecompressorI) {
-	decompressPool.Put(c)
-}
-
 type Message struct {
 	Context int64
 	Msg     proto.Message
@@ -86,8 +58,8 @@ func unpack(from *net.UDPAddr, key []byte, b []byte) (msg interface{}, err error
 	}
 
 	if compressFlag == byte(1) {
-		de := getDecompressor()
-		defer putDecompressor(de)
+		de := compress.GetGZipDecompressor()
+		defer compress.PutGZipDecompressor(de)
 		plainbyte, err = de.Decompress(plainbyte)
 		if nil != err {
 			return
@@ -150,8 +122,8 @@ func pack(conn *net.UDPConn, key []byte, m interface{}) ([]byte, error) {
 		var flagCompress byte
 		if len(data) >= compressSize {
 			flagCompress = byte(1)
-			c := getCompressor()
-			defer putCompressor(c)
+			c := compress.GetGZipCompressor()
+			defer compress.PutGZipCompressor(c)
 			bMsg, err = c.Compress(bMsg)
 			if nil != err {
 				return nil, err

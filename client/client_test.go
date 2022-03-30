@@ -36,57 +36,45 @@ type Equip struct {
 
 func TestPackFiled(t *testing.T) {
 
-	for k := 0; k < 10000; k++ {
-		fmt.Println(k)
-		Equips := []Equip{}
-		for i := 0; i < 10; i++ {
-			e := Equip{
-				InsID:            uint32(i + 1),
-				ConfigID:         int32(rand.Int31()),
-				Level:            int32(rand.Int31()),
-				Exp:              int32(rand.Int31()),
-				RandomAttribId:   int32(rand.Int31()),
-				EquipCharacterId: int32(rand.Int31()),
-				IsLock:           false,
-				GetTime:          int64(time.Now().Unix()),
-			}
-
-			for j := 0; j < 10; j++ {
-				e.Refine = append(e.Refine, int32(rand.Int31()))
-			}
-
-			Equips = append(Equips, e)
+	Equips := []Equip{}
+	for i := 0; i < 10; i++ {
+		e := Equip{
+			InsID:            uint32(i + 1),
+			ConfigID:         int32(rand.Int31()),
+			Level:            int32(rand.Int31()),
+			Exp:              int32(rand.Int31()),
+			RandomAttribId:   int32(rand.Int31()),
+			EquipCharacterId: int32(rand.Int31()),
+			IsLock:           false,
+			GetTime:          int64(time.Now().Unix()),
 		}
 
-		b, _ := json.Marshal(Equips)
-
-		//fmt.Println(string(b))
-
-		//fmt.Println(len(b))
-
-		f := packField("hw", b)
-
-		//ok, _ := checkHeader(f.GetBlob())
-		//assert.Equal(t, true, ok)
-
-		//fmt.Println(len(f.GetBlob()))
-
-		ff := unpackField(f)
-
-		Equips = []Equip{}
-
-		err := UnmarshalJsonField(ff, &Equips)
-
-		if nil != err {
-			panic(err)
+		for j := 0; j < 10; j++ {
+			e.Refine = append(e.Refine, int32(rand.Int31()))
 		}
 
-		//assert.Nil(t, err)
-
-		//fmt.Println(Equips)
-
+		Equips = append(Equips, e)
 	}
-	/*{
+
+	b, _ := json.Marshal(Equips)
+
+	f := packField("hw", b)
+
+	ff := unpackField(f)
+
+	Equips = []Equip{}
+
+	err := UnmarshalJsonField(ff, &Equips)
+
+	if nil != err {
+		panic(err)
+	}
+
+	//assert.Nil(t, err)
+
+	//fmt.Println(Equips)
+
+	{
 
 		f := packField("hw", []byte(strings.Repeat("a", 2048)))
 		ok, _ := checkHeader(f.GetBlob())
@@ -130,7 +118,7 @@ func TestPackFiled(t *testing.T) {
 	{
 		f := packField("hw", 1.2)
 		assert.Equal(t, float64(1.2), f.GetFloat())
-	}*/
+	}
 
 }
 

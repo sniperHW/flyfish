@@ -9,22 +9,7 @@ import (
 	flynet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/net/pb"
 	flyproto "github.com/sniperHW/flyfish/proto"
-	"sync"
 )
-
-var decompressPool = &sync.Pool{
-	New: func() interface{} {
-		return &compress.ZipDecompressor{}
-	},
-}
-
-func getDecompressor() compress.DecompressorI {
-	return decompressPool.Get().(compress.DecompressorI)
-}
-
-func putDecompressor(c compress.DecompressorI) {
-	decompressPool.Put(c)
-}
 
 func reqUnpack(pbSpace *pb.Namespace, b []byte, r int, w int) (ret interface{}, packetSize int, err error) {
 	unpackSize := w - r
@@ -64,8 +49,8 @@ func reqUnpack(pbSpace *pb.Namespace, b []byte, r int, w int) (ret interface{}, 
 			buff := reader.GetBytes(pbsize)
 
 			if compressFlag == byte(1) {
-				de := getDecompressor()
-				defer putDecompressor(de)
+				de := compress.GetGZipDecompressor()
+				defer compress.PutGZipDecompressor(de)
 				buff, err = de.Decompress(buff)
 				if nil != err {
 					return
@@ -130,8 +115,8 @@ func respUnpack(pbSpace *pb.Namespace, b []byte, r int, w int) (ret interface{},
 			buff := reader.GetBytes(pbsize)
 
 			if compressFlag == byte(1) {
-				de := getDecompressor()
-				defer putDecompressor(de)
+				de := compress.GetGZipDecompressor()
+				defer compress.PutGZipDecompressor(de)
 				buff, err = de.Decompress(buff)
 				if nil != err {
 					return

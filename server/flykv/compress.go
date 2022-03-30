@@ -2,33 +2,20 @@ package flykv
 
 import (
 	"github.com/sniperHW/flyfish/pkg/compress"
-	"sync"
 )
 
-var compressorPool sync.Pool = sync.Pool{
-	New: func() interface{} {
-		return &compress.GZipCompressor{}
-	},
-}
-
 func getCompressor() compress.CompressorI {
-	return compressorPool.Get().(compress.CompressorI)
+	return compress.GetGZipCompressor()
 }
 
 func releaseCompressor(c compress.CompressorI) {
-	compressorPool.Put(c)
-}
-
-var decompressorPool sync.Pool = sync.Pool{
-	New: func() interface{} {
-		return &compress.GZipDecompressor{}
-	},
+	compress.PutGZipCompressor(c)
 }
 
 func getDecompressor() compress.DecompressorI {
-	return decompressorPool.Get().(compress.DecompressorI)
+	return compress.GetGZipDecompressor()
 }
 
 func releaseDecompressor(c compress.DecompressorI) {
-	decompressorPool.Put(c)
+	compress.PutGZipDecompressor(c)
 }

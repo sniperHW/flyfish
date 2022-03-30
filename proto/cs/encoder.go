@@ -8,7 +8,6 @@ import (
 	"github.com/sniperHW/flyfish/pkg/net/pb"
 	_ "github.com/sniperHW/flyfish/proto"
 	"reflect"
-	"sync"
 )
 
 const (
@@ -27,20 +26,6 @@ const (
 
 var OpenCompress bool
 var CompressSize int = 1024
-
-var compressPool = &sync.Pool{
-	New: func() interface{} {
-		return &compress.ZipCompressor{}
-	},
-}
-
-func getCompressor() compress.CompressorI {
-	return compressPool.Get().(compress.CompressorI)
-}
-
-func putCompressor(c compress.CompressorI) {
-	compressPool.Put(c)
-}
 
 type ReqEncoder struct {
 	pbSpace *pb.Namespace
@@ -83,8 +68,8 @@ func (this *ReqEncoder) EnCode(o interface{}, buff *buffer.Buffer) error {
 
 	if OpenCompress && len(pbbytes) > CompressSize {
 		compressFlag = byte(1)
-		c := getCompressor()
-		defer putCompressor(c)
+		c := compress.GetGZipCompressor()
+		defer compress.PutGZipCompressor(c)
 		pbbytes, err = c.Compress(pbbytes)
 		if nil != err {
 			return err
@@ -153,8 +138,8 @@ func (this *RespEncoder) EnCode(o interface{}, buff *buffer.Buffer) error {
 
 	if OpenCompress && len(pbbytes) > CompressSize {
 		compressFlag = byte(1)
-		c := getCompressor()
-		defer putCompressor(c)
+		c := compress.GetGZipCompressor()
+		defer compress.PutGZipCompressor(c)
 		pbbytes, err = c.Compress(pbbytes)
 		if nil != err {
 			return err
