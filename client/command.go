@@ -9,11 +9,12 @@ import (
 	"github.com/sniperHW/flyfish/errcode"
 	protocol "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
+	"runtime"
 	"sync/atomic"
 	"time"
 )
 
-const CompressSize = 1024
+const CompressSize = 4096
 
 type Field protocol.Field
 
@@ -61,158 +62,13 @@ func UnmarshalJsonField(field *Field, obj interface{}) error {
 	}
 }
 
-type cmdContext struct {
-	unikey        string
-	deadline      time.Time
-	deadlineTimer *time.Timer
-	cb            callback
-	req           *cs.ReqMessage
-	cli           *Client
-	listElement   *list.Element
-	l             *list.List
-	waitResp      *map[int64]*cmdContext
-}
-
-func (this *cmdContext) onTimeout() {
-	this.cli.doCallBack(this, errcode.New(errcode.Errcode_timeout, "timeout"))
-}
-
-type StatusCmd struct {
-	client *Client
-	req    *cs.ReqMessage
-}
-
-func (this *StatusCmd) asyncExec(syncFlag bool, cb func(*StatusResult)) {
-	this.client.exec(&cmdContext{
-		cb: callback{
-			tt:   cb_status,
-			cb:   cb,
-			sync: syncFlag,
-		},
-		unikey: this.req.UniKey,
-		req:    this.req,
-		cli:    this.client,
-	})
-}
-
-/*
- * AsyncExec可能在调用函数的上下文中回调cb(排队的请求超限，直接用retry回调cb),
- * 以下情况可能发生死锁
- *
- * Lock()
- * AsyncExec(func(){
- *	 Lock()
- *   Unlock()
- * })
- * Unlock()
- *
- */
-
-func (this *StatusCmd) AsyncExec(cb func(*StatusResult)) {
-	this.asyncExec(false, cb)
-}
-
-func (this *StatusCmd) Exec() *StatusResult {
-	respChan := make(chan *StatusResult)
-	this.asyncExec(true, func(r *StatusResult) {
-		respChan <- r
-	})
-	return <-respChan
-}
-
-type SliceCmd struct {
-	client *Client
-	req    *cs.ReqMessage
-}
-
-func (this *SliceCmd) asyncExec(syncFlag bool, cb func(*SliceResult)) {
-	this.client.exec(&cmdContext{
-		cb: callback{
-			tt:   cb_slice,
-			cb:   cb,
-			sync: syncFlag,
-		},
-		unikey: this.req.UniKey,
-		req:    this.req,
-		cli:    this.client,
-	})
-}
-
-func (this *SliceCmd) AsyncExec(cb func(*SliceResult)) {
-	this.asyncExec(false, cb)
-}
-
-func (this *SliceCmd) Exec() *SliceResult {
-	respChan := make(chan *SliceResult)
-	this.asyncExec(true, func(r *SliceResult) {
-		respChan <- r
-	})
-	return <-respChan
-}
-
-func (this *Client) get(table, key string, version *int64, fields ...string) *SliceCmd {
-
-	if len(fields) == 0 {
-		return nil
-	}
-
-	req := &cs.ReqMessage{
-		Seqno:  atomic.AddInt64(&seqno, 1),
-		UniKey: table + ":" + key,
-		Data: &protocol.GetReq{
-			Version: version,
-			Fields:  fields,
-			All:     false,
-		},
-	}
-
-	return &SliceCmd{
-		client: this,
-		req:    req,
-	}
-}
-
-func (this *Client) getAll(table, key string, version *int64) *SliceCmd {
-
-	req := &cs.ReqMessage{
-		Seqno:  atomic.AddInt64(&seqno, 1),
-		UniKey: table + ":" + key,
-		Data: &protocol.GetReq{
-			Version: version,
-			All:     true,
-		},
-	}
-
-	return &SliceCmd{
-		client: this,
-		req:    req,
-	}
-
-}
-
-func (this *Client) Get(table, key string, fields ...string) *SliceCmd {
-	return this.get(table, key, nil, fields...)
-}
-
-func (this *Client) GetAll(table, key string) *SliceCmd {
-	return this.getAll(table, key, nil)
-}
-
-func (this *Client) GetWithVersion(table, key string, version int64, fields ...string) *SliceCmd {
-	return this.get(table, key, &version, fields...)
-}
-
-func (this *Client) GetAllWithVersion(table, key string, version int64) *SliceCmd {
-	return this.getAll(table, key, &version)
-}
-
 //对大小>=1k的[]byte字段，执行压缩
 func packField(key string, v interface{}) *protocol.Field {
 	switch v.(type) {
 	case []byte:
 		b := v.([]byte)
 		var bb []byte
-		if len(b) >= CompressSize {
+		if len(b) > CompressSize {
 			c := getCompressor()
 			bb, _ = c.Compress(b)
 			size := make([]byte, 4)
@@ -259,30 +115,220 @@ func unpackField(f *protocol.Field) (*Field, error) {
 	return (*Field)(f), err
 }
 
+type cmdContext struct {
+	unikey        string
+	deadline      time.Time
+	deadlineTimer *time.Timer
+	cb            callback
+	req           *cs.ReqMessage
+	cli           *Client
+	listElement   *list.Element
+	l             *list.List
+	waitResp      *map[int64]*cmdContext
+}
+
+/*
+ *  对于len > CompressSize的blob字段，compress将消耗大量cpu,为了避免asyncexec大量占用调用
+ *  者的cpu,将asynexec交给单独的线程池执行
+ */
+
+type asynExecMgr struct {
+	queue chan func()
+}
+
+func (m *asynExecMgr) exec(fn func()) {
+	m.queue <- fn
+}
+
+func newAsynExecMgr() *asynExecMgr {
+	m := &asynExecMgr{
+		queue: make(chan func(), 65535),
+	}
+
+	for i := 0; i < runtime.NumCPU(); i++ {
+		go func() {
+			for v := range m.queue {
+				v()
+			}
+		}()
+	}
+
+	return m
+}
+
+var asynExec *asynExecMgr = newAsynExecMgr()
+
+func (this *cmdContext) onTimeout() {
+	this.cli.doCallBack(this, errcode.New(errcode.Errcode_timeout, "timeout"))
+}
+
+type StatusCmd struct {
+	client  *Client
+	unikey  string
+	makeReq func() *cs.ReqMessage
+}
+
+func (this *StatusCmd) asyncExec(syncFlag bool, cb func(*StatusResult)) {
+	asynExec.exec(func() {
+		this.client.exec(&cmdContext{
+			cb: callback{
+				tt:   cb_status,
+				cb:   cb,
+				sync: syncFlag,
+			},
+			unikey: this.unikey,
+			req:    this.makeReq(),
+			cli:    this.client,
+		})
+	})
+}
+
+/*
+ * AsyncExec可能在调用函数的上下文中回调cb(排队的请求超限，直接用retry回调cb),
+ * 以下情况可能发生死锁
+ *
+ * Lock()
+ * AsyncExec(func(){
+ *	 Lock()
+ *   Unlock()
+ * })
+ * Unlock()
+ *
+ */
+
+func (this *StatusCmd) AsyncExec(cb func(*StatusResult)) {
+	this.asyncExec(false, cb)
+}
+
+func (this *StatusCmd) Exec() *StatusResult {
+	respChan := make(chan *StatusResult)
+	this.asyncExec(true, func(r *StatusResult) {
+		respChan <- r
+	})
+	return <-respChan
+}
+
+type SliceCmd struct {
+	client  *Client
+	unikey  string
+	makeReq func() *cs.ReqMessage
+}
+
+func (this *SliceCmd) asyncExec(syncFlag bool, cb func(*SliceResult)) {
+	asynExec.exec(func() {
+		this.client.exec(&cmdContext{
+			cb: callback{
+				tt:   cb_slice,
+				cb:   cb,
+				sync: syncFlag,
+			},
+			unikey: this.unikey,
+			req:    this.makeReq(),
+			cli:    this.client,
+		})
+	})
+}
+
+func (this *SliceCmd) AsyncExec(cb func(*SliceResult)) {
+	this.asyncExec(false, cb)
+}
+
+func (this *SliceCmd) Exec() *SliceResult {
+	respChan := make(chan *SliceResult)
+	this.asyncExec(true, func(r *SliceResult) {
+		respChan <- r
+	})
+	return <-respChan
+}
+
+func (this *Client) get(table, key string, version *int64, fields ...string) *SliceCmd {
+
+	if len(fields) == 0 {
+		return nil
+	}
+
+	unikey := table + ":" + key
+
+	return &SliceCmd{
+		client: this,
+		unikey: unikey,
+		makeReq: func() *cs.ReqMessage {
+			return &cs.ReqMessage{
+				Seqno:  atomic.AddInt64(&seqno, 1),
+				UniKey: unikey,
+				Data: &protocol.GetReq{
+					Version: version,
+					Fields:  fields,
+					All:     false,
+				},
+			}
+		},
+	}
+}
+
+func (this *Client) getAll(table, key string, version *int64) *SliceCmd {
+	unikey := table + ":" + key
+
+	return &SliceCmd{
+		client: this,
+		unikey: unikey,
+		makeReq: func() *cs.ReqMessage {
+			return &cs.ReqMessage{
+				Seqno:  atomic.AddInt64(&seqno, 1),
+				UniKey: unikey,
+				Data: &protocol.GetReq{
+					Version: version,
+					All:     true,
+				},
+			}
+		},
+	}
+
+}
+
+func (this *Client) Get(table, key string, fields ...string) *SliceCmd {
+	return this.get(table, key, nil, fields...)
+}
+
+func (this *Client) GetAll(table, key string) *SliceCmd {
+	return this.getAll(table, key, nil)
+}
+
+func (this *Client) GetWithVersion(table, key string, version int64, fields ...string) *SliceCmd {
+	return this.get(table, key, &version, fields...)
+}
+
+func (this *Client) GetAllWithVersion(table, key string, version int64) *SliceCmd {
+	return this.getAll(table, key, &version)
+}
+
 func (this *Client) Set(table, key string, fields map[string]interface{}, version ...int64) *StatusCmd {
 
 	if len(fields) == 0 {
 		return nil
 	}
 
-	pbdata := &protocol.SetReq{}
-
-	if len(version) > 0 {
-		pbdata.Version = proto.Int64(version[0])
-	}
-
-	for k, v := range fields {
-		pbdata.Fields = append(pbdata.Fields, packField(k, v))
-	}
-
-	req := &cs.ReqMessage{
-		Seqno:  atomic.AddInt64(&seqno, 1),
-		UniKey: table + ":" + key,
-		Data:   pbdata}
+	unikey := table + ":" + key
 
 	return &StatusCmd{
 		client: this,
-		req:    req,
+		unikey: unikey,
+		makeReq: func() *cs.ReqMessage {
+			pbdata := &protocol.SetReq{}
+
+			if len(version) > 0 {
+				pbdata.Version = proto.Int64(version[0])
+			}
+
+			for k, v := range fields {
+				pbdata.Fields = append(pbdata.Fields, packField(k, v))
+			}
+
+			return &cs.ReqMessage{
+				Seqno:  atomic.AddInt64(&seqno, 1),
+				UniKey: unikey,
+				Data:   pbdata}
+		},
 	}
 }
 
@@ -292,20 +338,23 @@ func (this *Client) SetNx(table, key string, fields map[string]interface{}) *Sli
 		return nil
 	}
 
-	pbdata := &protocol.SetNxReq{}
-
-	for k, v := range fields {
-		pbdata.Fields = append(pbdata.Fields, packField(k, v))
-	}
-
-	req := &cs.ReqMessage{
-		Seqno:  atomic.AddInt64(&seqno, 1),
-		UniKey: table + ":" + key,
-		Data:   pbdata}
+	unikey := table + ":" + key
 
 	return &SliceCmd{
 		client: this,
-		req:    req,
+		unikey: unikey,
+		makeReq: func() *cs.ReqMessage {
+			pbdata := &protocol.SetNxReq{}
+
+			for k, v := range fields {
+				pbdata.Fields = append(pbdata.Fields, packField(k, v))
+			}
+
+			return &cs.ReqMessage{
+				Seqno:  atomic.AddInt64(&seqno, 1),
+				UniKey: unikey,
+				Data:   pbdata}
+		},
 	}
 }
 
@@ -316,19 +365,20 @@ func (this *Client) CompareAndSet(table, key, field string, oldV, newV interface
 		return nil
 	}
 
-	pbdata := &protocol.CompareAndSetReq{
-		New: packField(field, newV),
-		Old: packField(field, oldV),
-	}
-
-	req := &cs.ReqMessage{
-		Seqno:  atomic.AddInt64(&seqno, 1),
-		UniKey: table + ":" + key,
-		Data:   pbdata}
+	unikey := table + ":" + key
 
 	return &SliceCmd{
 		client: this,
-		req:    req,
+		unikey: unikey,
+		makeReq: func() *cs.ReqMessage {
+			return &cs.ReqMessage{
+				Seqno:  atomic.AddInt64(&seqno, 1),
+				UniKey: unikey,
+				Data: &protocol.CompareAndSetReq{
+					New: packField(field, newV),
+					Old: packField(field, oldV),
+				}}
+		},
 	}
 }
 
@@ -338,81 +388,80 @@ func (this *Client) CompareAndSetNx(table, key, field string, oldV, newV interfa
 		return nil
 	}
 
-	pbdata := &protocol.CompareAndSetNxReq{
-		New: packField(field, newV),
-		Old: packField(field, oldV),
-	}
-
-	req := &cs.ReqMessage{
-		Seqno:  atomic.AddInt64(&seqno, 1),
-		UniKey: table + ":" + key,
-		Data:   pbdata}
+	unikey := table + ":" + key
 
 	return &SliceCmd{
 		client: this,
-		req:    req,
+		unikey: unikey,
+		makeReq: func() *cs.ReqMessage {
+			return &cs.ReqMessage{
+				Seqno:  atomic.AddInt64(&seqno, 1),
+				UniKey: unikey,
+				Data: &protocol.CompareAndSetNxReq{
+					New: packField(field, newV),
+					Old: packField(field, oldV),
+				}}
+		},
 	}
 }
 
 func (this *Client) Del(table, key string) *StatusCmd {
-
-	pbdata := &protocol.DelReq{}
-
-	req := &cs.ReqMessage{
-		Seqno:  atomic.AddInt64(&seqno, 1),
-		UniKey: table + ":" + key,
-		Data:   pbdata}
-
+	unikey := table + ":" + key
 	return &StatusCmd{
 		client: this,
-		req:    req,
+		unikey: unikey,
+		makeReq: func() *cs.ReqMessage {
+			return &cs.ReqMessage{
+				Seqno:  atomic.AddInt64(&seqno, 1),
+				UniKey: unikey,
+				Data:   &protocol.DelReq{}}
+		},
 	}
-
 }
 
 func (this *Client) IncrBy(table, key, field string, value int64) *SliceCmd {
-	pbdata := &protocol.IncrByReq{
-		Field: protocol.PackField(field, value),
-	}
-
-	req := &cs.ReqMessage{
-		Seqno:  atomic.AddInt64(&seqno, 1),
-		UniKey: table + ":" + key,
-		Data:   pbdata}
-
+	unikey := table + ":" + key
 	return &SliceCmd{
 		client: this,
-		req:    req,
+		unikey: unikey,
+		makeReq: func() *cs.ReqMessage {
+			return &cs.ReqMessage{
+				Seqno:  atomic.AddInt64(&seqno, 1),
+				UniKey: unikey,
+				Data: &protocol.IncrByReq{
+					Field: protocol.PackField(field, value),
+				}}
+		},
 	}
 }
 
 func (this *Client) DecrBy(table, key, field string, value int64) *SliceCmd {
-	pbdata := &protocol.DecrByReq{
-		Field: protocol.PackField(field, value),
-	}
-
-	req := &cs.ReqMessage{
-		Seqno:  atomic.AddInt64(&seqno, 1),
-		UniKey: table + ":" + key,
-		Data:   pbdata}
-
+	unikey := table + ":" + key
 	return &SliceCmd{
 		client: this,
-		req:    req,
+		unikey: unikey,
+		makeReq: func() *cs.ReqMessage {
+			return &cs.ReqMessage{
+				Seqno:  atomic.AddInt64(&seqno, 1),
+				UniKey: unikey,
+				Data: &protocol.DecrByReq{
+					Field: protocol.PackField(field, value),
+				}}
+		},
 	}
 }
 
 func (this *Client) Kick(table, key string) *StatusCmd {
-	pbdata := &protocol.KickReq{}
-
-	req := &cs.ReqMessage{
-		Seqno:  atomic.AddInt64(&seqno, 1),
-		UniKey: table + ":" + key,
-		Data:   pbdata}
-
+	unikey := table + ":" + key
 	return &StatusCmd{
 		client: this,
-		req:    req,
+		unikey: unikey,
+		makeReq: func() *cs.ReqMessage {
+			return &cs.ReqMessage{
+				Seqno:  atomic.AddInt64(&seqno, 1),
+				UniKey: unikey,
+				Data:   &protocol.KickReq{}}
+		},
 	}
 }
 

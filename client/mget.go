@@ -54,7 +54,7 @@ func (this *MGetCmd) asyncExec(sync bool, cb func([]*SliceResult)) {
 			case <-die:
 			case retChan <- func() bool {
 				for k, v := range this.cmds {
-					if v.req.UniKey == ret.unikey {
+					if v.unikey == ret.unikey {
 						results[k] = ret
 						respCount++
 					}

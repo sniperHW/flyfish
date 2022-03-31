@@ -14,15 +14,16 @@ import (
 	//"github.com/sniperHW/flyfish/server/mock/kvnode"
 	//sslot "github.com/sniperHW/flyfish/server/slot"
 	"encoding/json"
-	//"github.com/stretchr/testify/assert"
-	"math/rand"
-	//"strings"
 	"fmt"
+	"github.com/gogo/protobuf/proto"
+	"github.com/stretchr/testify/assert"
+	"math/rand"
+	"strings"
 	"testing"
 	"time"
 )
 
-type Equip struct {
+type equip struct {
 	InsID            uint32  `json:"ins_id"`
 	ConfigID         int32   `json:"cfg_id"`
 	Level            int32   `json:"level"`
@@ -36,38 +37,86 @@ type Equip struct {
 
 func TestPackFiled(t *testing.T) {
 
-	Equips := []Equip{}
-	for i := 0; i < 10; i++ {
-		e := Equip{
-			InsID:            uint32(i + 1),
-			ConfigID:         int32(rand.Int31()),
-			Level:            int32(rand.Int31()),
-			Exp:              int32(rand.Int31()),
-			RandomAttribId:   int32(rand.Int31()),
-			EquipCharacterId: int32(rand.Int31()),
-			IsLock:           false,
-			GetTime:          int64(time.Now().Unix()),
+	{
+
+		beg := time.Now()
+		var equips Equips
+		for i := 0; i < 1000; i++ {
+			e := &Equip{
+				InsID:            proto.Uint32(uint32(i + 1)),
+				ConfigID:         proto.Int32(rand.Int31()),
+				Level:            proto.Int32(rand.Int31()),
+				Exp:              proto.Int32(rand.Int31()),
+				RandomAttribId:   proto.Int32(rand.Int31()),
+				EquipCharacterId: proto.Int32(rand.Int31()),
+				IsLock:           proto.Bool(false),
+				GetTime:          proto.Int64(time.Now().Unix()),
+			}
+
+			for j := 0; j < 10; j++ {
+				e.Refine = append(e.Refine, int32(rand.Int31()))
+			}
+
+			equips.Equips = append(equips.Equips, e)
 		}
 
-		for j := 0; j < 10; j++ {
-			e.Refine = append(e.Refine, int32(rand.Int31()))
-		}
+		b, _ := proto.Marshal(&equips)
 
-		Equips = append(Equips, e)
+		/*f := packField("hw", b)
+
+		fmt.Println(len(b), len(f.GetBlob()))
+
+		ff, _ := unpackField(f)
+
+		equips = Equips{}
+
+		err := proto.Unmarshal(ff.GetBlob(), &equips)
+
+		if nil != err {
+			panic(err)
+		}*/
+
+		fmt.Println("use", len(b), time.Now().Sub(beg))
 	}
 
-	b, _ := json.Marshal(Equips)
+	{
+		beg := time.Now()
+		equips := []equip{}
+		for i := 0; i < 1000; i++ {
+			e := equip{
+				InsID:            uint32(i + 1),
+				ConfigID:         int32(rand.Int31()),
+				Level:            int32(rand.Int31()),
+				Exp:              int32(rand.Int31()),
+				RandomAttribId:   int32(rand.Int31()),
+				EquipCharacterId: int32(rand.Int31()),
+				IsLock:           false,
+				GetTime:          int64(time.Now().Unix()),
+			}
 
-	f := packField("hw", b)
+			for j := 0; j < 10; j++ {
+				e.Refine = append(e.Refine, int32(rand.Int31()))
+			}
 
-	ff := unpackField(f)
+			equips = append(equips, e)
+		}
 
-	Equips = []Equip{}
+		b, _ := json.Marshal(equips)
 
-	err := UnmarshalJsonField(ff, &Equips)
+		/*f := packField("hw", b)
 
-	if nil != err {
-		panic(err)
+		fmt.Println(len(b), len(f.GetBlob()))
+
+		ff, _ := unpackField(f)
+
+		equips = []equip{}
+
+		err := UnmarshalJsonField(ff, &equips)
+
+		if nil != err {
+			panic(err)
+		}*/
+		fmt.Println("use", len(b), time.Now().Sub(beg))
 	}
 
 	//assert.Nil(t, err)
@@ -80,14 +129,14 @@ func TestPackFiled(t *testing.T) {
 		ok, _ := checkHeader(f.GetBlob())
 		assert.Equal(t, true, ok)
 
-		ff := unpackField(f)
+		ff, _ := unpackField(f)
 		assert.Equal(t, string(ff.GetBlob()), strings.Repeat("a", 2048))
 
 		f = packField("hw", []byte(strings.Repeat("a", 1023)))
 		ok, _ = checkHeader(f.GetBlob())
 		assert.Equal(t, false, ok)
 
-		ff = unpackField(f)
+		ff, _ = unpackField(f)
 		assert.Equal(t, string(ff.GetBlob()), strings.Repeat("a", 1023))
 
 	}
@@ -98,14 +147,14 @@ func TestPackFiled(t *testing.T) {
 		//ok, _ := checkHeader([]byte(f.GetString()))
 		//assert.Equal(t, true, ok)
 
-		ff := unpackField(f)
+		ff, _ := unpackField(f)
 		assert.Equal(t, ff.GetString(), strings.Repeat("a", 2048))
 
 		f = packField("hw", "hello")
 		//ok, _ = checkHeader([]byte(f.GetString()))
 		//assert.Equal(t, false, ok)
 
-		ff = unpackField(f)
+		ff, _ = unpackField(f)
 		assert.Equal(t, ff.GetString(), "hello")
 
 	}

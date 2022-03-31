@@ -89,7 +89,7 @@ func main() {
 
 	for j := 0; j < 100; j++ {
 		c, _ := kclient.OpenClient(clientCfg)
-		for i := 0; i < 50; i++ {
+		for i := 0; i < 10; i++ {
 			Set(c)
 		}
 	}

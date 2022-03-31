@@ -26,7 +26,7 @@ var (
 func Set(c *kclient.Client) {
 	fields := map[string]interface{}{}
 	fields["age"] = 37
-	fields["phone"] = strings.Repeat("a", 1024)
+	fields["phone"] = []byte(strings.Repeat("a", 4096))
 	fields["name"] = "sniperHW"
 	key := fmt.Sprintf("%s:%d", "huangwei", rand.Int63()%keyrange)
 	set := c.Set("users1", key, fields)
@@ -88,7 +88,7 @@ func main() {
 
 	for j := 0; j < 100; j++ {
 		c, _ := kclient.OpenClient(clientCfg)
-		for i := 0; i < 50; i++ {
+		for i := 0; i < 10; i++ {
 			Set(c)
 		}
 	}
