@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-const CompressSize = 4096
+const CompressSize = 16 * 1024 //对超过这个大小的blob字段执行压缩
 
 type Field protocol.Field
 
