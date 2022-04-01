@@ -9,9 +9,11 @@ import (
 	"github.com/sniperHW/flyfish/errcode"
 	protocol "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
+	"reflect"
 	"runtime"
 	"sync/atomic"
 	"time"
+	"unsafe"
 )
 
 const CompressSize = 16 * 1024 //对超过这个大小的blob字段执行压缩
@@ -45,20 +47,31 @@ func (this *Field) GetValue() interface{} {
 func UnmarshalJsonField(field *Field, obj interface{}) error {
 	if field == nil {
 		return nil
-	} else if (*protocol.Field)(field).IsBlob() {
-		if len(field.GetBlob()) == 0 {
-			return nil
-		} else {
-			return json.Unmarshal(field.GetBlob(), obj)
-		}
-	} else if (*protocol.Field)(field).IsString() {
-		if len(field.GetString()) == 0 {
-			return nil
-		} else {
-			return json.Unmarshal([]byte(field.GetString()), obj)
-		}
 	} else {
-		return nil
+		v := field.GetValue()
+		switch v.(type) {
+		case string, []byte:
+			var b []byte
+			switch v.(type) {
+			case []byte:
+				b = v.([]byte)
+			case string:
+				s := v.(string)
+				b = *(*[]byte)(unsafe.Pointer(&reflect.SliceHeader{
+					Len:  int(len(s)),
+					Cap:  int(len(s)),
+					Data: (*reflect.StringHeader)(unsafe.Pointer(&s)).Data,
+				}))
+			}
+
+			if len(b) == 0 {
+				return nil
+			} else {
+				return json.Unmarshal(b, obj)
+			}
+		default:
+			return nil
+		}
 	}
 }
 
@@ -69,8 +82,7 @@ func packField(key string, v interface{}) *protocol.Field {
 		b := v.([]byte)
 		var bb []byte
 		if len(b) > CompressSize {
-			c := getCompressor()
-			bb, _ = c.Compress(b)
+			bb, _ = getCompressor().Compress(b)
 			size := make([]byte, 4)
 			binary.BigEndian.PutUint32(size, uint32(len(bb)+4))
 			bb = append(bb, size...)
@@ -86,29 +98,25 @@ func packField(key string, v interface{}) *protocol.Field {
 func unpackField(f *protocol.Field) (*Field, error) {
 	var err error
 	if nil != f {
-		v := f.GetValue()
-		switch v.(type) {
+		switch f.GetValue().(type) {
 		case []byte:
 			b := f.GetBlob()
-			ok, size := checkHeader(b)
-			if ok {
+			if ok, size := checkHeader(b); ok {
 				if len(b) >= size+4 {
 					if size = int(binary.BigEndian.Uint32(b[len(b)-4:])); size == len(b) {
-						d := getDecompressor()
-						if b, err = d.Decompress(b[:len(b)-4]); nil == err {
+						if b, err = getDecompressor().Decompress(b[:len(b)-4]); nil == err {
 							return (*Field)(protocol.PackField(f.Name, b)), err
 						}
 					} else {
-						err = errors.New("invaild filed1")
+						err = errors.New("flyfish client unpackField:invaild filed1")
 					}
 				} else {
-					err = errors.New("invaild filed2")
+					err = errors.New("flyfish client unpackField:invaild filed2")
 				}
 
 				if nil != err {
 					return (*Field)(protocol.PackField(f.Name, []byte{})), err
 				}
-
 			}
 		}
 	}

@@ -38,6 +38,52 @@ type equip struct {
 func TestPackFiled(t *testing.T) {
 
 	{
+		e := &Equip{
+			InsID:            proto.Uint32(uint32(rand.Int31())),
+			ConfigID:         proto.Int32(rand.Int31()),
+			Level:            proto.Int32(rand.Int31()),
+			Exp:              proto.Int32(rand.Int31()),
+			RandomAttribId:   proto.Int32(rand.Int31()),
+			EquipCharacterId: proto.Int32(rand.Int31()),
+			IsLock:           proto.Bool(false),
+			GetTime:          proto.Int64(time.Now().Unix()),
+		}
+
+		b, _ := json.Marshal(e)
+
+		{
+
+			f := (*Field)(packField("test", string(b)))
+
+			assert.NotEqual(t, len(f.GetString()), 0)
+
+			var e2 Equip
+
+			err := UnmarshalJsonField(f, &e2)
+
+			assert.Nil(t, err)
+
+			assert.Equal(t, e.InsID, e2.InsID)
+
+		}
+
+		{
+			f := (*Field)(packField("test", b))
+
+			assert.NotEqual(t, len(f.GetBlob()), 0)
+
+			var e2 Equip
+
+			err := UnmarshalJsonField(f, &e2)
+
+			assert.Nil(t, err)
+
+			assert.Equal(t, e.InsID, e2.InsID)
+		}
+
+	}
+
+	{
 
 		beg := time.Now()
 		var equips Equips
@@ -125,12 +171,12 @@ func TestPackFiled(t *testing.T) {
 
 	{
 
-		f := packField("hw", []byte(strings.Repeat("a", 2048)))
+		f := packField("hw", []byte(strings.Repeat("a", 1024*17)))
 		ok, _ := checkHeader(f.GetBlob())
 		assert.Equal(t, true, ok)
 
 		ff, _ := unpackField(f)
-		assert.Equal(t, string(ff.GetBlob()), strings.Repeat("a", 2048))
+		assert.Equal(t, string(ff.GetBlob()), strings.Repeat("a", 1024*17))
 
 		f = packField("hw", []byte(strings.Repeat("a", 1023)))
 		ok, _ = checkHeader(f.GetBlob())
