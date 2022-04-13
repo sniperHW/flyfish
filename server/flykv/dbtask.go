@@ -156,11 +156,12 @@ func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields 
 
 func (this *dbUpdateTask) OnError(err error, writeBackVersion int64) {
 	GetSugar().Errorf("dbUpdateTask OnError uniKey:%s err:%v", this.kv.uniKey, err)
+	panic("xxxxxx")
 	this.kv.store.mainQueue.AppendHighestPriotiryItem(func() {
 		if f := this.kv.pendingCmd.Front(); nil != f {
-			if cmdkick, ok := f.Value.(*cmdKick); ok && writeBackVersion >= cmdkick.waitVersion {
+			if cmdkick, ok := f.Value.(*cmdKick); ok {
 				//如果有等待回写后执行的kick，需要清理一下
-				cmdkick.reply(errcode.New(errcode.Errcode_retry, "retry"), nil, this.kv.version)
+				cmdkick.reply(errcode.New(errcode.Errcode_error, err.Error()), nil, this.kv.version)
 				this.kv.pendingCmd.Remove(f)
 				this.kv.processCmd()
 			}
@@ -209,6 +210,8 @@ func (this *dbLoadTask) OnResult(err error, version int64, fields map[string]*fl
 			causeByLoad: true,
 			dbversion:   version,
 		}
+
+		GetSugar().Debugf("dbLoadTask.OnResult %s %d", this.kv.uniKey, version)
 
 		if version <= 0 {
 			proposal.kvState = kv_no_record

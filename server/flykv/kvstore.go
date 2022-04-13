@@ -145,6 +145,7 @@ func (s *kvstore) addCliMessage(req clientRequest) {
 }
 
 func (s *kvstore) deleteKv(k *kv) {
+	k.clearCmds(errcode.New(errcode.Errcode_retry, "please try again"))
 	s.kvcount--
 	delete(s.slots[k.slot].kvMap, k.uniKey)
 }

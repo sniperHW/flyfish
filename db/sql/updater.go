@@ -151,7 +151,7 @@ func (this *updater) exec(v interface{}) {
 							return 0, errors.New("no lease")
 						}
 
-						rows, err := this.dbc.Query(fmt.Sprintf("select __version__ from %s where __key__ = '%s';", meta.real_tableName, s.Key))
+						rows, err := this.dbc.Query(fmt.Sprintf("select __version__ from %s where __key__ = '%s' for update;", meta.real_tableName, s.Key))
 						defer rows.Close()
 						if nil != err {
 							if isRetryError(err) {
@@ -179,6 +179,8 @@ func (this *updater) exec(v interface{}) {
 
 					return 0, nil
 				}
+
+				//GetSugar().Infof("do update %s LastWriteBackVersion:%d task.version:%d", s.Key, s.LastWriteBackVersion, s.Version)
 
 				rowsAffected, err := this.sqlExec.exec(this.dbc)
 				if nil == err {

@@ -58,6 +58,7 @@ type kv struct {
 	store                *kvstore
 	lastWriteBackVersion int64
 	listElement          *list.Element
+	kicking              bool
 }
 
 func abs(v int64) int64 {
@@ -111,12 +112,10 @@ func (this *kv) pushCmd(cmd cmdI) {
 			}
 		}
 	} else if this.kickable() {
-		this.processCmd()
-	} else if nil != last {
-		if _, ok := last.Value.(*cmdKick); ok {
-			this.pendingCmd.Remove(this.pendingCmd.Back())
-			cmd.reply(errcode.New(errcode.Errcode_retry, "kv is kicking not, please try later!"), nil, 0)
+		if nil != last {
+			GetSugar().Errorf("should not go here")
 		}
+		this.processCmd()
 	}
 }
 

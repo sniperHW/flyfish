@@ -48,6 +48,7 @@ const (
 
 type replyer struct {
 	session         *fnet.Socket
+	seqno           int64
 	totalPendingReq *int64
 }
 
@@ -92,6 +93,7 @@ func (this *kvnode) makeReplyer(session *fnet.Socket, req *cs.ReqMessage, checkl
 	replyer := &replyer{
 		session:         session,
 		totalPendingReq: &this.totalPendingReq,
+		seqno:           req.Seqno,
 	}
 	if !checklimit || this.checkReqLimit(int(c)) {
 		return replyer
@@ -266,7 +268,10 @@ func (this *kvnode) Stop() {
 		//首先关闭监听,不在接受新到达的连接
 		this.listener.Close()
 
-		waitCondition(func() bool { return atomic.LoadInt64(&this.totalPendingReq) == 0 })
+		waitCondition(func() bool {
+			GetSugar().Infof("%d", atomic.LoadInt64(&this.totalPendingReq))
+			return atomic.LoadInt64(&this.totalPendingReq) == 0
+		})
 
 		//等待所有store回写完毕
 		waitCondition(func() bool {
@@ -274,6 +279,7 @@ func (this *kvnode) Stop() {
 			defer this.muS.RUnlock()
 			for _, v := range this.stores {
 				if v.isLeader() && atomic.LoadInt32(&v.dbWriteBackCount) != 0 {
+					GetSugar().Infof("%d", atomic.LoadInt32(&v.dbWriteBackCount))
 					return false
 				}
 			}
