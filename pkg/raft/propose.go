@@ -170,7 +170,13 @@ func (rc *RaftInstance) runProposePipeline() {
 
 			for {
 
-				batch := make([]Proposal, 0, MaxBatchCount)
+				var batch []Proposal
+				if len(localList) <= MaxBatchCount {
+					batch = make([]Proposal, 0, len(localList))
+				} else {
+					batch = make([]Proposal, 0, MaxBatchCount)
+				}
+
 				for k, vv := range localList {
 					batch = append(batch, vv.(Proposal))
 					localList[k] = nil
@@ -178,14 +184,8 @@ func (rc *RaftInstance) runProposePipeline() {
 						rc.propose(batch)
 						if k != len(localList)-1 {
 							batch = make([]Proposal, 0, len(localList)-1-k)
-						} else {
-							batch = nil
 						}
 					}
-				}
-
-				if len(batch) > 0 {
-					rc.propose(batch)
 				}
 
 				if localList, closed = rc.proposePipeline.PopNoWait(localList); closed || len(localList) == 0 {
