@@ -1,7 +1,7 @@
 package flykv
 
 import (
-	"container/list"
+	//"container/list"
 	"fmt"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/db/sql"
@@ -10,6 +10,7 @@ import (
 	"github.com/sniperHW/flyfish/pkg/etcd/etcdserver/api/snap"
 	"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
+	"github.com/sniperHW/flyfish/pkg/list"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	"github.com/sniperHW/flyfish/pkg/raft/membership"
@@ -102,16 +103,14 @@ type kvstore struct {
 }
 
 func (s *kvstore) addKickable(k *kv) {
-	if nil != k.listElement {
-		s.kickableList.Remove(k.listElement)
+	if !k.kickable() {
+		s.kickableList.PushBack(&k.listElement)
 	}
-	k.listElement = s.kickableList.PushBack(k)
 }
 
 func (s *kvstore) removeKickable(k *kv) {
-	if nil != k.listElement {
-		s.kickableList.Remove(k.listElement)
-		k.listElement = nil
+	if k.kickable() {
+		s.kickableList.Remove(&k.listElement)
 	}
 }
 
@@ -174,7 +173,7 @@ func (s *kvstore) newkv(slot int, unikey string, key string, table string) (*kv,
 		pendingCmd: list.New(),
 		hash:       s.slots[slot].filter.HashString(unikey),
 	}
-
+	k.listElement.Value = k
 	k.updateTask = dbUpdateTask{
 		kv: k,
 		state: db.UpdateState{
@@ -192,7 +191,7 @@ func (s *kvstore) newkv(slot int, unikey string, key string, table string) (*kv,
 
 func (s *kvstore) kick(kv *kv) {
 	kick := &cmdKick{}
-	kick.cmdBase.init(kv, nil, 0, nil, time.Time{}, nil)
+	kick.cmdBase.init(kick, kv, nil, 0, nil, time.Time{}, nil)
 	kv.pushCmd(kick)
 }
 
@@ -626,7 +625,7 @@ func (s *kvstore) kickSlot() {
 			if kvs := s.slots[slot].kvMap; len(kvs) > 0 {
 				active++
 				for _, v := range kvs {
-					if nil != v.listElement {
+					if v.kickable() {
 						//只对处于kickable list的kv执行kick
 						s.kick(v)
 					}

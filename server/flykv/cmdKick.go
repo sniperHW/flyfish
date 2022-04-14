@@ -25,7 +25,7 @@ func (this *cmdKick) do(proposal *kvProposal) {
 	} else {
 		this.waitVersion = this.kv.version
 		this.kv.updateTask.issueKickDbWriteBack()
-		this.kv.pendingCmd.PushFront(this)
+		this.kv.pendingCmd.PushFront(this.getListElement())
 	}
 	proposal.cmds = append(proposal.cmds, this)
 }
@@ -38,7 +38,7 @@ func (s *kvstore) makeKick(kv *kv, deadline time.Time, replyer *replyer, seqno i
 
 	kick := &cmdKick{}
 
-	kick.cmdBase.init(kv, replyer, seqno, nil, deadline, kick.makeResponse)
+	kick.cmdBase.init(kick, kv, replyer, seqno, nil, deadline, kick.makeResponse)
 
 	return kick, nil
 }

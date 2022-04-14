@@ -69,7 +69,7 @@ func (s *kvstore) makeSetNx(kv *kv, deadline time.Time, replyer *replyer, seqno 
 		fields: map[string]*flyproto.Field{},
 	}
 
-	setNx.cmdBase.init(kv, replyer, seqno, req.Version, deadline, setNx.makeResponse)
+	setNx.cmdBase.init(setNx, kv, replyer, seqno, req.Version, deadline, setNx.makeResponse)
 
 	for _, v := range req.GetFields() {
 		setNx.fields[v.GetName()] = v

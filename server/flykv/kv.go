@@ -1,9 +1,10 @@
 package flykv
 
 import (
-	"container/list"
+	//"container/list"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/pkg/list"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"reflect"
 	"sync"
@@ -44,6 +45,7 @@ type dbLoadTask struct {
  */
 
 type kv struct {
+	listElement          list.Element
 	hash                 []uint64
 	slot                 int
 	table                string
@@ -57,8 +59,6 @@ type kv struct {
 	pendingCmd           *list.List
 	store                *kvstore
 	lastWriteBackVersion int64
-	listElement          *list.Element
-	kicking              bool
 }
 
 func abs(v int64) int64 {
@@ -79,12 +79,12 @@ func (this *kv) getField(key string) (v *flyproto.Field) {
 }
 
 func (this *kv) kickable() bool {
-	return this.listElement != nil
+	return this.listElement.List() != nil
 }
 
 func (this *kv) pushCmd(cmd cmdI) {
 	last := this.pendingCmd.Back()
-	this.pendingCmd.PushBack(cmd)
+	this.pendingCmd.PushBack(cmd.getListElement())
 	if this.state == kv_new {
 		if !this.store.slots[this.slot].filter.ContainsWithHashs(this.hash) {
 			//bloomfilter中不存在，不需要到数据库中load
@@ -121,7 +121,8 @@ func (this *kv) pushCmd(cmd cmdI) {
 
 func (this *kv) clearCmds(err errcode.Error) {
 	for f := this.pendingCmd.Front(); nil != f; f = this.pendingCmd.Front() {
-		this.pendingCmd.Remove(f).(cmdI).reply(err, nil, this.version)
+		this.pendingCmd.Remove(f)
+		f.Value.(cmdI).reply(err, nil, this.version)
 	}
 }
 
@@ -157,7 +158,8 @@ func (this *kv) mergeCmd() (cmds []cmdI) {
 		}
 
 		if nil != err {
-			this.pendingCmd.Remove(c).(cmdI).reply(err, nil, this.version)
+			this.pendingCmd.Remove(c)
+			cmd.reply(err, nil, this.version)
 		} else {
 			if canMerge(cmds, cmd) {
 				cmds = append(cmds, cmd)

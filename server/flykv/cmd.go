@@ -3,6 +3,7 @@ package flykv
 import (
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/errcode"
+	"github.com/sniperHW/flyfish/pkg/list"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
 	"sync/atomic"
@@ -13,11 +14,13 @@ type cmdI interface {
 	reply(err errcode.Error, fields map[string]*flyproto.Field, version int64)
 	isTimeout() bool
 	cmdType() flyproto.CmdType
+	getListElement() *list.Element
 }
 
 type MakeResponse func(errcode.Error, map[string]*flyproto.Field, int64) *cs.RespMessage
 
 type cmdBase struct {
+	listElement    list.Element
 	seqno          int64
 	version        *int64
 	replyer        *replyer
@@ -28,7 +31,7 @@ type cmdBase struct {
 	meta           db.TableMeta
 }
 
-func (this *cmdBase) init(kv *kv, replyer *replyer, seqno int64, version *int64, deadline time.Time, makeResponse MakeResponse) {
+func (this *cmdBase) init(cmd interface{}, kv *kv, replyer *replyer, seqno int64, version *int64, deadline time.Time, makeResponse MakeResponse) {
 	this.replyer = replyer
 	this.deadline = deadline
 	this.version = version
@@ -36,6 +39,11 @@ func (this *cmdBase) init(kv *kv, replyer *replyer, seqno int64, version *int64,
 	this.fnMakeResponse = makeResponse
 	this.kv = kv
 	this.meta = kv.meta
+	this.listElement.Value = cmd
+}
+
+func (this *cmdBase) getListElement() *list.Element {
+	return &this.listElement
 }
 
 func (this *cmdBase) isTimeout() bool {

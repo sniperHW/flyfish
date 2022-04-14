@@ -70,7 +70,7 @@ func (s *kvstore) makeIncr(kv *kv, deadline time.Time, replyer *replyer, seqno i
 		v: req.Field,
 	}
 
-	incr.cmdBase.init(kv, replyer, seqno, req.Version, deadline, incr.makeResponse)
+	incr.cmdBase.init(incr, kv, replyer, seqno, req.Version, deadline, incr.makeResponse)
 
 	return incr, nil
 }

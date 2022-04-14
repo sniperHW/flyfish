@@ -39,7 +39,7 @@ func (s *kvstore) makeDel(kv *kv, deadline time.Time, replyer *replyer, seqno in
 
 	del := &cmdDel{}
 
-	del.cmdBase.init(kv, replyer, seqno, req.Version, deadline, del.makeResponse)
+	del.cmdBase.init(del, kv, replyer, seqno, req.Version, deadline, del.makeResponse)
 
 	return del, nil
 }

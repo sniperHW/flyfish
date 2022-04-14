@@ -59,7 +59,7 @@ func (s *kvstore) makeSet(kv *kv, deadline time.Time, replyer *replyer, seqno in
 		fields: map[string]*flyproto.Field{},
 	}
 
-	set.cmdBase.init(kv, replyer, seqno, req.Version, deadline, set.makeResponse)
+	set.cmdBase.init(set, kv, replyer, seqno, req.Version, deadline, set.makeResponse)
 
 	for _, v := range req.GetFields() {
 		set.fields[v.GetName()] = v

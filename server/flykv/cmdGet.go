@@ -58,7 +58,7 @@ func (s *kvstore) makeGet(kv *kv, deadline time.Time, replyer *replyer, seqno in
 
 	get := &cmdGet{}
 
-	get.cmdBase.init(kv, replyer, seqno, req.Version, deadline, get.makeResponse)
+	get.cmdBase.init(get, kv, replyer, seqno, req.Version, deadline, get.makeResponse)
 
 	if req.GetAll() {
 		get.wants = kv.meta.GetAllFieldsName()

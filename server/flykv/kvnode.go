@@ -1,7 +1,6 @@
 package flykv
 
 import (
-	"container/list"
 	"errors"
 	"fmt"
 	"github.com/jmoiron/sqlx"
@@ -10,6 +9,7 @@ import (
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/bloomfilter"
+	"github.com/sniperHW/flyfish/pkg/list"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
