@@ -81,7 +81,7 @@ func packField(key string, v interface{}) *protocol.Field {
 	case []byte:
 		b := v.([]byte)
 		var bb []byte
-		if len(b) > CompressSize {
+		if len(b) >= CompressSize {
 			bb, _ = getCompressor().Compress(b)
 			size := make([]byte, 4)
 			binary.BigEndian.PutUint32(size, uint32(len(bb)+4))

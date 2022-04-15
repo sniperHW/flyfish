@@ -87,65 +87,86 @@ func randomPhone() []byte {
 	return phones[int(rand.Int31())%len(phones)]
 }
 
-var cmds []func(*kclient.Client, string) = []func(*kclient.Client, string){
-	func(c *kclient.Client, unikey string) {
-		//set
-		fields := map[string]interface{}{}
-		fields["age"] = rand.Int31() % 100
-		fields["phone"] = randomPhone()
-		fields["name"] = unikey
-		beg := time.Now()
-		r := c.Set("users1", unikey, fields).Exec()
-		st.add("set", time.Now().Sub(beg), r.ErrCode)
-	},
-	/*func(c *kclient.Client, unikey string) {
-		//kick
-		beg := time.Now()
-		r := c.Kick("users1", unikey).Exec()
-		st.add("kick", time.Now().Sub(beg), r.ErrCode)
-	},*/
-	func(c *kclient.Client, unikey string) {
-		//inc
-		beg := time.Now()
-		r := c.IncrBy("users1", unikey, "age", int64(rand.Int31()%100)).Exec()
-		st.add("inc", time.Now().Sub(beg), r.ErrCode)
-	},
-	func(c *kclient.Client, unikey string) {
-		//dec
-		beg := time.Now()
-		r := c.DecrBy("users1", unikey, "age", int64(rand.Int31()%100)).Exec()
-		st.add("dec", time.Now().Sub(beg), r.ErrCode)
-	},
-	func(c *kclient.Client, unikey string) {
-		//del
-		beg := time.Now()
-		r := c.Del("users1", unikey).Exec()
-		st.add("del", time.Now().Sub(beg), r.ErrCode)
-	},
-	func(c *kclient.Client, unikey string) {
-		//cmpset
-		beg := time.Now()
-		r := c.Get("users1", unikey, "age").Exec()
-		if nil == r.ErrCode {
-			st.add("get", time.Now().Sub(beg), nil)
-			beg = time.Now()
-			r := c.CompareAndSet("users1", unikey, "age", r.Fields["age"].GetInt(), r.Fields["age"].GetInt()+1).Exec()
-			st.add("cmpset", time.Now().Sub(beg), r.ErrCode)
-		} else if errcode.GetCode(r.ErrCode) == errcode.Errcode_record_notexist {
-			st.add("get", time.Now().Sub(beg), nil)
-			beg = time.Now()
-			r := c.CompareAndSetNx("users1", unikey, "age", 10, 20).Exec()
-			st.add("cmpset", time.Now().Sub(beg), r.ErrCode)
-		} else {
-			st.add("get", time.Now().Sub(beg), r.ErrCode)
+func init() {
+	v := [][]interface{}{
+		[]interface{}{
+			func(c *kclient.Client, unikey string) {
+				//set
+				fields := map[string]interface{}{}
+				fields["age"] = rand.Int31() % 100
+				fields["phone"] = randomPhone()
+				fields["name"] = unikey
+				beg := time.Now()
+				r := c.Set("users1", unikey, fields).Exec()
+				st.add("set", time.Now().Sub(beg), r.ErrCode)
+			}, 100},
+		[]interface{}{
+			func(c *kclient.Client, unikey string) {
+				//kick
+				beg := time.Now()
+				r := c.Kick("users1", unikey).Exec()
+				st.add("kick", time.Now().Sub(beg), r.ErrCode)
+			}, 1},
+		[]interface{}{
+			func(c *kclient.Client, unikey string) {
+				//inc
+				beg := time.Now()
+				r := c.IncrBy("users1", unikey, "age", int64(rand.Int31()%100)).Exec()
+				st.add("inc", time.Now().Sub(beg), r.ErrCode)
+			}, 100},
+		[]interface{}{
+			func(c *kclient.Client, unikey string) {
+				//dec
+				beg := time.Now()
+				r := c.DecrBy("users1", unikey, "age", int64(rand.Int31()%100)).Exec()
+				st.add("dec", time.Now().Sub(beg), r.ErrCode)
+			}, 100},
+		[]interface{}{
+			func(c *kclient.Client, unikey string) {
+				//del
+				beg := time.Now()
+				r := c.Del("users1", unikey).Exec()
+				st.add("del", time.Now().Sub(beg), r.ErrCode)
+			}, 50},
+		[]interface{}{
+			func(c *kclient.Client, unikey string) {
+				//cmpset
+				beg := time.Now()
+				r := c.Get("users1", unikey, "age").Exec()
+				if nil == r.ErrCode {
+					st.add("get", time.Now().Sub(beg), nil)
+					beg = time.Now()
+					r := c.CompareAndSet("users1", unikey, "age", r.Fields["age"].GetInt(), r.Fields["age"].GetInt()+1).Exec()
+					st.add("cmpset", time.Now().Sub(beg), r.ErrCode)
+				} else if errcode.GetCode(r.ErrCode) == errcode.Errcode_record_notexist {
+					st.add("get", time.Now().Sub(beg), nil)
+					beg = time.Now()
+					r := c.CompareAndSetNx("users1", unikey, "age", 10, 20).Exec()
+					st.add("cmpset", time.Now().Sub(beg), r.ErrCode)
+				} else {
+					st.add("get", time.Now().Sub(beg), r.ErrCode)
+				}
+			}, 100},
+		[]interface{}{
+			func(c *kclient.Client, unikey string) {
+				//get
+				beg := time.Now()
+				r := c.GetAll("users1", unikey).Exec()
+				st.add("get", time.Now().Sub(beg), r.ErrCode)
+			}, 100},
+	}
+
+	for _, vv := range v {
+		for i := 0; i < vv[1].(int); i++ {
+			cmds = append(cmds, vv[0].(func(*kclient.Client, string)))
 		}
-	},
-	func(c *kclient.Client, unikey string) {
-		//get
-		beg := time.Now()
-		r := c.GetAll("users1", unikey).Exec()
-		st.add("get", time.Now().Sub(beg), r.ErrCode)
-	},
+	}
+}
+
+var cmds []func(*kclient.Client, string)
+
+func getCmd() func(*kclient.Client, string) {
+	return cmds[int(rand.Int31())%len(cmds)]
 }
 
 func main() {
@@ -182,7 +203,7 @@ func main() {
 			go func() {
 				for {
 					unikey := fmt.Sprintf("sniperHW:%d", int(rand.Int31())%int(keyrange))
-					cmd := cmds[int(rand.Int31())%len(cmds)]
+					cmd := getCmd()
 					cmd(c, unikey)
 				}
 			}()

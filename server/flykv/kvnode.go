@@ -269,7 +269,6 @@ func (this *kvnode) Stop() {
 		this.listener.Close()
 
 		waitCondition(func() bool {
-			GetSugar().Infof("%d", atomic.LoadInt64(&this.totalPendingReq))
 			return atomic.LoadInt64(&this.totalPendingReq) == 0
 		})
 
@@ -279,7 +278,6 @@ func (this *kvnode) Stop() {
 			defer this.muS.RUnlock()
 			for _, v := range this.stores {
 				if v.isLeader() && atomic.LoadInt32(&v.dbWriteBackCount) != 0 {
-					GetSugar().Infof("%d", atomic.LoadInt32(&v.dbWriteBackCount))
 					return false
 				}
 			}
