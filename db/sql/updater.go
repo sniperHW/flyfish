@@ -180,8 +180,6 @@ func (this *updater) exec(v interface{}) {
 					return 0, nil
 				}
 
-				//GetSugar().Infof("do update %s LastWriteBackVersion:%d task.version:%d", s.Key, s.LastWriteBackVersion, s.Version)
-
 				rowsAffected, err := this.sqlExec.exec(this.dbc)
 				if nil == err {
 					if rowsAffected > 0 {

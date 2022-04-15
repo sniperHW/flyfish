@@ -1,7 +1,7 @@
 package sql
 
 import (
-	//"container/list"
+	"container/list"
 	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/pkg/buffer"
@@ -10,107 +10,13 @@ import (
 	"reflect"
 	"sync"
 	"sync/atomic"
-	//"time"
+	"time"
 )
-
-type loader struct {
-	dbc       *sqlx.DB
-	que       *queue.ArrayQueue
-	stoponce  int32
-	startOnce sync.Once
-}
-
-func (this *loader) IssueLoadTask(t db.DBLoadTask) error {
-	return this.que.Append(t)
-}
-
-func (this *loader) Stop() {
-	if atomic.CompareAndSwapInt32(&this.stoponce, 0, 1) {
-		this.que.Close()
-	}
-}
-
-func (this *loader) Start() {
-	this.startOnce.Do(func() {
-		go func() {
-			localList := make([]interface{}, 0, 200)
-			closed := false
-			for {
-
-				localList, closed = this.que.Pop(localList)
-				size := len(localList)
-				if closed && size == 0 {
-					break
-				}
-
-				for i, v := range localList {
-					this.exec(v)
-					localList[i] = nil
-				}
-			}
-		}()
-	})
-}
-
-func (this *loader) exec(v interface{}) {
-	switch v.(type) {
-	case db.DBLoadTask:
-		task := v.(db.DBLoadTask)
-		key := task.GetKey()
-
-		buff := buffer.Get()
-		buff.AppendString(task.GetTableMeta().(*TableMeta).GetSelectPrefix())
-		buff.AppendString("'").AppendString(key).AppendString("' for share;")
-
-		rows, err := this.dbc.Query(buff.ToStrUnsafe())
-		buff.Free()
-
-		if nil != err {
-			GetSugar().Errorf("sqlQueryer exec error:%v %s", err, reflect.TypeOf(err).String())
-			task.OnResult(db.ERR_DbError, 0, nil)
-		} else {
-			queryMeta := task.GetTableMeta().(*TableMeta).GetQueryMeta()
-			filed_receiver := queryMeta.GetReceiver()
-			field_convter := queryMeta.GetFieldConvter()
-			field_names := queryMeta.GetFieldNames()
-			if rows.Next() {
-				err := rows.Scan(filed_receiver...)
-				if err != nil {
-					GetSugar().Errorf("rows.Scan err:%v", err)
-					task.OnResult(db.ERR_DbError, 0, nil)
-				} else {
-					//填充返回值
-					version := field_convter[1](filed_receiver[1]).(int64)
-					fields := map[string]*proto.Field{}
-					//版本号<=0表示记录不存在或标记删除，无需读取字段内容
-					if version > 0 {
-						for i := 0; i < len(field_names); i++ {
-							name := field_names[i]
-							fields[name] = proto.PackField(name, field_convter[i+3](filed_receiver[i+3]))
-						}
-					}
-					task.OnResult(nil, version, fields)
-				}
-			} else {
-				task.OnResult(db.ERR_RecordNotExist, 0, nil)
-			}
-			rows.Close()
-		}
-	}
-}
-
-func NewLoader(dbc *sqlx.DB, maxbatchSize int, quesize int) *loader {
-	return &loader{
-		que: queue.NewArrayQueue(quesize),
-		dbc: dbc,
-	}
-}
 
 /*
  *  从队列读取连续的请求,根据请求的table把请求分组成不同的select语句
  */
 
-/*
 //一个查询组产生select * from table where key in ()语句
 type query struct {
 	table string
@@ -215,14 +121,15 @@ func (this *loader) exec() {
 	for _, v := range this.queryGroup {
 		buff := buffer.Get()
 		buff.AppendString(v.meta.GetSelectPrefix())
+		c := 0
 		for kk, _ := range v.tasks {
-			if buff.Len() == 0 {
+			if c > 0 {
 				buff.AppendString(",")
 			}
+			c++
 			buff.AppendString("'").AppendString(kk).AppendString("'")
 		}
 		buff.AppendString(");")
-
 		beg := time.Now()
 		rows, err := this.dbc.Query(buff.ToStrUnsafe())
 		buff.Free()
@@ -292,4 +199,3 @@ func NewLoader(dbc *sqlx.DB, maxbatchSize int, quesize int) *loader {
 		dbc:        dbc,
 	}
 }
-*/

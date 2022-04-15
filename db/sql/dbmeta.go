@@ -354,9 +354,9 @@ func createTableMetas(def *db.DbDef) (map[string]*TableMeta, error) {
 
 			table_metas[v.Name] = t_meta
 
-			//t_meta.selectPrefix = fmt.Sprintf("SELECT %s FROM %s where __key__ in(", strings.Join(t_meta.queryMeta.real_field_names, ","), t_meta.real_tableName)
+			t_meta.selectPrefix = fmt.Sprintf("SELECT %s FROM %s where __key__ in(", strings.Join(t_meta.queryMeta.real_field_names, ","), t_meta.real_tableName)
 
-			t_meta.selectPrefix = fmt.Sprintf("SELECT %s FROM %s where __key__ =", strings.Join(t_meta.queryMeta.real_field_names, ","), t_meta.real_tableName)
+			//t_meta.selectPrefix = fmt.Sprintf("SELECT %s FROM %s where __key__ =", strings.Join(t_meta.queryMeta.real_field_names, ","), t_meta.real_tableName)
 
 			t_meta.insertPrefix = fmt.Sprintf("INSERT INTO %s(%s) VALUES (", t_meta.real_tableName, strings.Join(t_meta.queryMeta.real_field_names, ","))
 
