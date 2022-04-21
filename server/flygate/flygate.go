@@ -212,7 +212,6 @@ type gate struct {
 	muC                  sync.Mutex
 	clients              map[*flynet.Socket]*flynet.Socket
 	routeInfo            routeInfo
-	queryTimer           *time.Timer
 	mainQueue            *queue.PriorityQueue
 	serviceAddr          string
 	seqCounter           int64
@@ -518,7 +517,7 @@ func (g *gate) queryRouteInfo() {
 }
 
 func (g *gate) startQueryTimer(delay time.Duration) {
-	g.queryTimer = time.AfterFunc(delay, func() {
+	time.AfterFunc(delay, func() {
 		g.queryRouteInfo()
 	})
 }
