@@ -6,11 +6,9 @@ import (
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/pkg/bloomfilter"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
 	flyproto "github.com/sniperHW/flyfish/proto"
-	sslot "github.com/sniperHW/flyfish/server/slot"
 	"math"
 	"unsafe"
 )
@@ -20,13 +18,12 @@ const (
 	proposal_snapshot               = proposalType(1) //全量数据kv快照,
 	proposal_update                 = proposalType(2) //fields变更
 	proposal_kick                   = proposalType(3) //从缓存移除kv
-	proposal_filters                = proposalType(4)
-	proposal_slot_transfer          = proposalType(5)
-	proposal_meta                   = proposalType(6)
-	proposal_nop                    = proposalType(7) //空proposal用于确保之前的proposal已经提交并apply
-	proposal_last_writeback_version = proposalType(8)
-	proposal_suspend                = proposalType(9)
-	proposal_resume                 = proposalType(10)
+	proposal_slot_transfer          = proposalType(4)
+	proposal_meta                   = proposalType(5)
+	proposal_nop                    = proposalType(6) //空proposal用于确保之前的proposal已经提交并apply
+	proposal_last_writeback_version = proposalType(7)
+	proposal_suspend                = proposalType(8)
+	proposal_resume                 = proposalType(9)
 )
 
 func newProposalReader(b []byte) proposalReader {
@@ -123,39 +120,6 @@ func (this *proposalReader) read() (isOver bool, ptype proposalType, data interf
 				}
 
 				data = meta
-
-			case proposal_filters:
-				filters := make([]*[]byte, sslot.SlotCount)
-				var c int32
-				c, err = this.reader.CheckGetInt32()
-				if nil != err {
-					err = fmt.Errorf("proposal_filters CheckGetInt32:%v", err)
-					return
-				}
-
-				for i := 0; i < int(c); i++ {
-					var slot int32
-					var l int32
-					slot, err = this.reader.CheckGetInt32()
-					if nil != err {
-						err = fmt.Errorf("proposal_filters CheckGetInt32 %d 1:%v", i, err)
-						return
-					}
-					l, err = this.reader.CheckGetInt32()
-					if nil != err {
-						err = fmt.Errorf("proposal_filters CheckGetInt32 %d 2:%v", i, err)
-						return
-					}
-					var bb []byte
-					bb, err = this.reader.CheckGetBytes(int(l))
-					if nil != err {
-						err = fmt.Errorf("proposal_filters CheckGetBytes:%v", err)
-						return
-					}
-					filters[int(slot)] = &bb
-				}
-
-				data = filters
 			case proposal_slot_transfer:
 				var tt byte
 				tt, err = this.reader.CheckGetByte()
@@ -169,24 +133,9 @@ func (this *proposalReader) read() (isOver bool, ptype proposalType, data interf
 					return
 				}
 
-				var l int32
-				l, err = this.reader.CheckGetInt32()
-				if nil != err {
-					return
-				}
-
-				var filter []byte
-				if l > 0 {
-					filter, err = this.reader.CheckGetBytes(int(l))
-					if nil != err {
-						return
-					}
-				}
-
 				data = &SlotTransferProposal{
 					slot:         int(slot),
 					transferType: slotTransferType(tt),
-					filter:       filter,
 				}
 			case proposal_none:
 				err = errors.New("bad data 2")
@@ -385,10 +334,6 @@ func (this *kvProposal) apply() {
 				}
 			}
 
-			if this.ptype == proposal_snapshot && this.kv.lastWriteBackVersion == 0 && !this.kv.store.slots[this.kv.slot].filter.ContainsWithHashs(this.kv.hash) {
-				this.kv.store.slots[this.kv.slot].filter.AddWithHashs(this.kv.hash)
-			}
-
 			if err := this.kv.updateTask.updateState(dbstate, this.version, this.fields); nil != err {
 				GetSugar().Errorf("%s updateState error:%v", this.kv.uniKey, err)
 			}
@@ -504,7 +449,6 @@ const (
 type SlotTransferProposal struct {
 	proposalBase
 	slot         int
-	filter       []byte
 	transferType slotTransferType
 	store        *kvstore
 	reply        func()
@@ -518,22 +462,13 @@ func (this *SlotTransferProposal) Serilize(b []byte) []byte {
 	b = buffer.AppendByte(b, byte(proposal_slot_transfer))
 	b = buffer.AppendByte(b, byte(this.transferType))
 	b = buffer.AppendInt32(b, int32(this.slot))
-	if this.transferType == slotTransferIn {
-		b = buffer.AppendInt32(b, int32(len(this.filter)))
-		b = buffer.AppendBytes(b, this.filter)
-		GetSugar().Infof("SlotTransferProposal %d", len(this.filter))
-	} else {
-		b = buffer.AppendInt32(b, int32(0))
-	}
 	return b
 }
 
 func (this *SlotTransferProposal) apply() {
 	if this.transferType == slotTransferIn {
-		filter, _ := bloomfilter.NewOptimal(this.store.kvnode.config.BloomFilter.MaxElements, this.store.kvnode.config.BloomFilter.ProbCollide)
 		this.store.slots[this.slot] = &slot{
-			kvMap:  map[string]*kv{},
-			filter: filter,
+			kvMap: map[string]*kv{},
 		}
 	} else {
 		delete(this.store.slotsTransferOut, this.slot)

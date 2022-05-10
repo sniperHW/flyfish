@@ -1,12 +1,10 @@
 package flykv
 
 import (
-	//"container/list"
 	"fmt"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/errcode"
-	"github.com/sniperHW/flyfish/pkg/bloomfilter"
 	"github.com/sniperHW/flyfish/pkg/etcd/etcdserver/api/snap"
 	"github.com/sniperHW/flyfish/pkg/etcd/pkg/types"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
@@ -72,8 +70,7 @@ type clientRequest struct {
 }
 
 type slot struct {
-	kvMap  map[string]*kv
-	filter *bloomfilter.Filter
+	kvMap map[string]*kv
 }
 
 type slotMgr struct {
@@ -171,7 +168,6 @@ func (s *kvstore) newkv(slot int, unikey string, key string, table string) (*kv,
 		slot:       slot,
 		table:      table,
 		pendingCmd: list.New(),
-		hash:       s.slots[slot].filter.HashString(unikey),
 	}
 	k.listElement.Value = k
 	k.updateTask = dbUpdateTask{
@@ -590,23 +586,10 @@ func (s *kvstore) onNotifySlotTransIn(from *net.UDPAddr, msg *sproto.NotifySlotT
 				Slot: msg.Slot,
 			}))
 	} else {
-		//加载filter
-		filter, err := sql.GetBloomFilter(s.kvnode.dbc, int(msg.Slot))
-		if nil != err {
-			GetSugar().Errorf("error on load filter slot:%d err:%v", msg.Slot, err)
-			return
-		}
-
-		if len(filter) == 0 {
-			GetSugar().Errorf("error on load filter slot:%d filter is empty", msg.Slot)
-			return
-		}
-
 		s.rn.IssueProposal(&SlotTransferProposal{
 			slot:         slot,
 			transferType: slotTransferIn,
 			store:        s,
-			filter:       filter,
 			reply: func() {
 				s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context,
 					&sproto.SlotTransInOk{
@@ -653,15 +636,6 @@ func (s *kvstore) onNotifySlotTransOut(from *net.UDPAddr, msg *sproto.NotifySlot
 		s.slotsTransferOut[slot] = true
 		kvs := s.slots[slot].kvMap
 		if 0 == len(kvs) {
-			//回写filter
-			compressor := getCompressor()
-			filter, _ := s.slots[int(msg.Slot)].filter.MarshalBinaryZip(compressor)
-			releaseCompressor(compressor)
-			err := sql.SetBloomFilter(s.kvnode.config.DBConfig.DBType, s.kvnode.dbc, int(msg.Slot), filter)
-			if nil != err {
-				GetSugar().Errorf("error on set filter slot:%d filter err:%v", err)
-				return
-			}
 			s.rn.IssueProposal(&SlotTransferProposal{
 				slot:         slot,
 				transferType: slotTransferOut,

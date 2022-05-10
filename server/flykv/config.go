@@ -49,11 +49,6 @@ type Config struct {
 
 	WriteBackMode string `toml:"WriteBackMode"`
 
-	BloomFilter struct {
-		MaxElements uint64  `toml:"MaxElements"` //10000
-		ProbCollide float64 `toml:"ProbCollide"` //0.001
-	} `toml:"BloomFilter"`
-
 	SoloConfig struct {
 		ServiceHost string `toml:"ServiceHost"`
 		ServicePort int    `toml:"ServicePort"`

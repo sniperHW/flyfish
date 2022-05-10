@@ -8,7 +8,6 @@ import (
 	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
-	"github.com/sniperHW/flyfish/pkg/bloomfilter"
 	"github.com/sniperHW/flyfish/pkg/list"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/queue"
@@ -242,10 +241,8 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, peers map[uint16]raft.
 	}
 
 	for _, v := range slots.GetOpenBits() {
-		filter, _ := bloomfilter.NewOptimal(this.config.BloomFilter.MaxElements, this.config.BloomFilter.ProbCollide)
 		store.slots[v] = &slot{
-			kvMap:  map[string]*kv{},
-			filter: filter,
+			kvMap: map[string]*kv{},
 		}
 	}
 
@@ -665,14 +662,6 @@ func NewKvNode(id uint16, join bool, config *Config, db dbI) (*kvnode, error) {
 
 	if config.ReqLimit.SoftLimitSeconds <= 0 {
 		config.ReqLimit.SoftLimitSeconds = 10
-	}
-
-	if config.BloomFilter.MaxElements == 0 {
-		config.BloomFilter.MaxElements = 10000
-	}
-
-	if config.BloomFilter.ProbCollide == 0.0 {
-		config.BloomFilter.ProbCollide = 0.001
 	}
 
 	node := &kvnode{

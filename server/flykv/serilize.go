@@ -2,7 +2,6 @@ package flykv
 
 import (
 	"github.com/sniperHW/flyfish/db"
-	//"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"math"
