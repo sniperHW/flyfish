@@ -11,9 +11,8 @@ import (
 	"time"
 )
 
-var StorePerSet int = 3          //每个set含有多少个store
-var MinReplicaPerSet int = 1     //最少副本数
-var CurrentTransferCount int = 6 //最大并发transfer的slot数量
+var StorePerSet int = 3      //每个set含有多少个store
+var MinReplicaPerSet int = 1 //最少副本数
 
 type FlyKvStoreStateType uint16
 type FlyKvStoreStateValue uint16

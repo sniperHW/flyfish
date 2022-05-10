@@ -2,7 +2,7 @@ package flypd
 
 import (
 	"errors"
-	"fmt"
+	//"fmt"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
@@ -63,33 +63,40 @@ func (p *ProposalRemSet) apply(pd *pd) {
 
 	GetSugar().Infof("ProposalRemSet.apply")
 
+	s, ok := pd.pState.deployment.sets[int(p.SetID)]
+
 	err := func() error {
-		s, ok := pd.pState.deployment.sets[int(p.SetID)]
 		if !ok {
 			return errors.New("set not exists")
 		}
-
-		//只有当s中所有的store都不存在slot时才能移除
-		for _, v := range s.stores {
-			if len(v.slots.GetOpenBits()) != 0 {
-				return fmt.Errorf("there are slots in store:%d", v.id)
-			}
-		}
-
-		//如果有slot要向set迁移，不允许删除
-		for _, v := range pd.pState.SlotTransfer {
-			if v.SetIn == s.id {
-				return errors.New("there are slots trans in")
-			}
-		}
-
 		return nil
 	}()
 
 	if nil == err {
+		//将所有slot添加到FreeSlots中
+		for _, st := range s.stores {
+			for _, b := range st.slots.GetOpenBits() {
+				if t := pd.pState.SlotTransfer[b]; nil == t {
+					pd.pState.FreeSlots[b] = true
+				}
+			}
+		}
+
+		for _, v := range pd.pState.SlotTransfer {
+			if v.SetIn == p.SetID {
+				if v.SetOut < 0 {
+					pd.pState.FreeSlots[v.Slot] = true
+				}
+				delete(pd.pState.SlotTransfer, v.Slot)
+			} else if v.SetOut == p.SetID {
+				v.StoreTransferOutOk = true
+			}
+		}
+
 		delete(pd.pState.deployment.sets, p.SetID)
 		delete(pd.markClearSet, p.SetID)
 		pd.pState.deployment.version++
+		pd.slotBalance()
 	}
 
 	if nil != p.reply {
@@ -171,25 +178,10 @@ func (p *pd) onRemSet(replyer replyer, m *snet.Message) {
 	resp := &sproto.RemSetResp{}
 
 	err := func() error {
-		s, ok := p.pState.deployment.sets[int(msg.SetID)]
+		_, ok := p.pState.deployment.sets[int(msg.SetID)]
 		if !ok {
 			return errors.New("set not exists")
 		}
-
-		//只有当s中所有的store都不存在slot时才能移除
-		for _, v := range s.stores {
-			if len(v.slots.GetOpenBits()) != 0 {
-				return fmt.Errorf("there are slots in store:%d", v.id)
-			}
-		}
-
-		//如果有slot要向set迁移，不允许删除
-		for _, v := range p.pState.SlotTransfer {
-			if v.SetIn == s.id {
-				return errors.New("there are slots trans in")
-			}
-		}
-
 		return nil
 	}()
 

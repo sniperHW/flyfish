@@ -121,6 +121,7 @@ type persistenceState struct {
 	SlotTransfer map[int]*TransSlotTransfer
 	Meta         db.DbDef
 	MetaBytes    []byte
+	FreeSlots    map[int]bool
 	deployment   deployment
 }
 
@@ -217,6 +218,7 @@ func NewPd(nodeID uint16, cluster int, join bool, config *Config, clusterStr str
 		markClearSet: map[int]*set{},
 		pState: persistenceState{
 			SlotTransfer: map[int]*TransSlotTransfer{},
+			FreeSlots:    map[int]bool{},
 			deployment: deployment{
 				sets: map[int]*set{},
 			},
@@ -305,10 +307,6 @@ func (p *pd) getNode(nodeID int32) *kvnode {
 
 func (p *pd) slotBalance() {
 
-	if len(p.pState.SlotTransfer) >= CurrentTransferCount {
-		return
-	}
-
 	for _, v := range p.pState.deployment.sets {
 		v.slotOutCount = 0
 		v.slotInCount = 0
@@ -365,49 +363,74 @@ func (p *pd) slotBalance() {
 
 	GetSugar().Debugf("setAverageSlotCount:%d storeAverageSlotCount:%d", setAverageSlotCount, storeAverageSlotCount)
 
-	if nil == outStore {
-		for _, v := range p.pState.deployment.sets {
-			if !v.markClear && v.getTotalSlotCount()-v.slotOutCount > setAverageSlotCount {
-				for _, vv := range v.stores {
-					if len(vv.slots.GetOpenBits())-vv.slotOutCount > storeAverageSlotCount {
-						outStore = vv
-						break
+	if len(p.pState.FreeSlots) > 0 {
+		for k, _ := range p.pState.FreeSlots {
+			var inStore *store
+
+			for _, v := range p.pState.deployment.sets {
+				if !v.markClear && v.getTotalSlotCount()-v.slotInCount < setAverageSlotCount {
+					for _, vv := range v.stores {
+						if len(vv.slots.GetOpenBits())-vv.slotInCount < storeAverageSlotCount {
+							inStore = vv
+							break
+						}
+					}
+				}
+
+				if nil != inStore {
+					break
+				}
+			}
+
+			delete(p.pState.FreeSlots, k)
+			p.beginSlotTransfer(k, -1, -1, inStore.set.id, inStore.id)
+			break
+		}
+	} else {
+
+		if nil == outStore {
+			for _, v := range p.pState.deployment.sets {
+				if !v.markClear && v.getTotalSlotCount()-v.slotOutCount > setAverageSlotCount {
+					for _, vv := range v.stores {
+						if len(vv.slots.GetOpenBits())-vv.slotOutCount > storeAverageSlotCount {
+							outStore = vv
+							break
+						}
+					}
+				}
+				if nil != outStore {
+					break
+				}
+			}
+		}
+
+		if nil != outStore {
+			var inStore *store
+			for _, v := range p.pState.deployment.sets {
+				if !v.markClear && v.getTotalSlotCount()-v.slotInCount < setAverageSlotCount {
+					for _, vv := range v.stores {
+						if len(vv.slots.GetOpenBits())-vv.slotInCount < storeAverageSlotCount {
+							inStore = vv
+							break
+						}
+					}
+				}
+				if nil != inStore {
+					break
+				}
+			}
+
+			if nil != inStore && nil != outStore {
+				//从outStore选出一个slot
+				for _, v := range outStore.slots.GetOpenBits() {
+					if _, ok := p.pState.SlotTransfer[v]; !ok {
+						p.beginSlotTransfer(v, outStore.set.id, outStore.id, inStore.set.id, inStore.id)
+						return
 					}
 				}
 			}
-			if nil != outStore {
-				break
-			}
 		}
 	}
-
-	if nil != outStore {
-		var inStore *store
-		for _, v := range p.pState.deployment.sets {
-			if !v.markClear && v.getTotalSlotCount()-v.slotInCount < setAverageSlotCount {
-				for _, vv := range v.stores {
-					if len(vv.slots.GetOpenBits())-vv.slotInCount < storeAverageSlotCount {
-						inStore = vv
-						break
-					}
-				}
-			}
-			if nil != inStore {
-				break
-			}
-		}
-
-		if nil != inStore && nil != outStore {
-			//从outStore选出一个slot
-			for _, v := range outStore.slots.GetOpenBits() {
-				if _, ok := p.pState.SlotTransfer[v]; !ok {
-					p.beginSlotTransfer(v, outStore.set.id, outStore.id, inStore.set.id, inStore.id)
-					return
-				}
-			}
-		}
-	}
-
 }
 
 func (p *pd) isLeader() bool {

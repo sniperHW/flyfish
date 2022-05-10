@@ -21,34 +21,12 @@ type TransSlotTransfer struct {
 }
 
 func (tst *TransSlotTransfer) notify(pd *pd) {
+	if tst != pd.pState.SlotTransfer[tst.Slot] {
+		return
+	}
+
 	tst.context = snet.MakeUniqueContext() //更新context,后续只接受相应context的应答
-	if !tst.StoreTransferOutOk {
-		if !tst.ready {
-			/*
-			 *  如果迁入store尚未启动或没有leader，则不应该启动迁出，否则迁移slot将没有store装载，导致无法服务
-			 *  因此，启动迁出之前应该先询问待迁入store是否已经准备好迁入。
-			 */
-			setIn := pd.pState.deployment.sets[tst.SetIn]
-			for _, v := range setIn.nodes {
-				addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.host, v.servicePort))
-				pd.udp.SendTo(addr, snet.MakeMessage(tst.context,
-					&sproto.IsTransInReady{
-						Store: int32(tst.StoreTransferIn),
-						Slot:  int32(tst.Slot),
-					}))
-			}
-		} else {
-			setOut := pd.pState.deployment.sets[tst.SetOut]
-			for _, v := range setOut.nodes {
-				addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.host, v.servicePort))
-				pd.udp.SendTo(addr, snet.MakeMessage(tst.context,
-					&sproto.NotifySlotTransOut{
-						Slot:  int32(tst.Slot),
-						Store: int32(tst.StoreTransferOut),
-					}))
-			}
-		}
-	} else {
+	if tst.SetOut < 0 || tst.StoreTransferOutOk {
 		setIn := pd.pState.deployment.sets[tst.SetIn]
 		for _, v := range setIn.nodes {
 			addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.host, v.servicePort))
@@ -56,6 +34,26 @@ func (tst *TransSlotTransfer) notify(pd *pd) {
 				&sproto.NotifySlotTransIn{
 					Slot:  int32(tst.Slot),
 					Store: int32(tst.StoreTransferIn),
+				}))
+		}
+	} else if !tst.ready {
+		setIn := pd.pState.deployment.sets[tst.SetIn]
+		for _, v := range setIn.nodes {
+			addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.host, v.servicePort))
+			pd.udp.SendTo(addr, snet.MakeMessage(tst.context,
+				&sproto.IsTransInReady{
+					Store: int32(tst.StoreTransferIn),
+					Slot:  int32(tst.Slot),
+				}))
+		}
+	} else {
+		setOut := pd.pState.deployment.sets[tst.SetOut]
+		for _, v := range setOut.nodes {
+			addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.host, v.servicePort))
+			pd.udp.SendTo(addr, snet.MakeMessage(tst.context,
+				&sproto.NotifySlotTransOut{
+					Slot:  int32(tst.Slot),
+					Store: int32(tst.StoreTransferOut),
 				}))
 		}
 	}
