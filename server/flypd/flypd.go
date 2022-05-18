@@ -117,12 +117,11 @@ func (f *flygateMgr) onHeartBeat(gateService string, msgPerSecond int) {
 }
 
 type persistenceState struct {
-	Deployment   DeploymentJson
-	SlotTransfer map[int]*TransSlotTransfer
-	Meta         db.DbDef
-	MetaBytes    []byte
-	FreeSlots    map[int]bool
-	deployment   deployment
+	Deployment      DeploymentJson
+	SlotTransferMgr SlotTransferMgr
+	Meta            db.DbDef
+	MetaBytes       []byte
+	deployment      deployment
 }
 
 func (p *persistenceState) toJson() ([]byte, error) {
@@ -141,12 +140,6 @@ func (p *persistenceState) loadFromJson(pd *pd, j []byte) error {
 
 	if nil != err {
 		return err
-	}
-
-	for _, v := range p.deployment.sets {
-		if v.markClear {
-			pd.markClearSet[v.id] = v
-		}
 	}
 
 	return nil
@@ -178,7 +171,6 @@ type pd struct {
 	service         string
 	pState          persistenceState
 	storeTask       map[uint64]*storeTask
-	markClearSet    map[int]*set
 	metaUpdateQueue *list.List
 	RaftIDGen       *idutil.Generator
 }
@@ -211,14 +203,16 @@ func NewPd(nodeID uint16, cluster int, join bool, config *Config, clusterStr str
 			flygateMap: map[string]*flygate{},
 			mainque:    mainQueue,
 		},
-		config:       config,
-		service:      self.ClientURL,
-		cluster:      cluster,
-		storeTask:    map[uint64]*storeTask{},
-		markClearSet: map[int]*set{},
+		config:    config,
+		service:   self.ClientURL,
+		cluster:   cluster,
+		storeTask: map[uint64]*storeTask{},
 		pState: persistenceState{
-			SlotTransfer: map[int]*TransSlotTransfer{},
-			FreeSlots:    map[int]bool{},
+			SlotTransferMgr: SlotTransferMgr{
+				Transactions: map[int]*TransSlotTransfer{},
+				Plan:         map[int]*SlotTransferPlan{},
+				FreeSlots:    map[int]bool{},
+			},
 			deployment: deployment{
 				sets: map[int]*set{},
 			},
@@ -231,7 +225,10 @@ func NewPd(nodeID uint16, cluster int, join bool, config *Config, clusterStr str
 
 	p.mutilRaft = raft.NewMutilRaft()
 
-	p.rn, err = raft.NewInstance(nodeID, cluster, join, p.mutilRaft, p.mainque, peers, p.config.RaftLogDir, p.config.RaftLogPrefix)
+	p.rn, err = raft.NewInstance(nodeID, cluster, join, p.mutilRaft, p.mainque, peers, raft.RaftInstanceOption{
+		Logdir:        p.config.RaftLogDir,
+		RaftLogPrefix: p.config.RaftLogPrefix,
+	})
 
 	if nil != err {
 		return nil, err
@@ -303,134 +300,6 @@ func (p *pd) getNode(nodeID int32) *kvnode {
 		}
 	}
 	return nil
-}
-
-func (p *pd) slotBalance() {
-
-	for _, v := range p.pState.deployment.sets {
-		v.slotOutCount = 0
-		v.slotInCount = 0
-		for _, vv := range v.stores {
-			vv.slotOutCount = 0
-			vv.slotInCount = 0
-			for _, vvv := range vv.slots.GetOpenBits() {
-				if t, ok := p.pState.SlotTransfer[vvv]; ok {
-					if vvv == t.StoreTransferIn {
-						vv.slotInCount++
-						v.slotInCount++
-					} else if vvv == t.StoreTransferOut {
-						vv.slotOutCount++
-						v.slotOutCount++
-					}
-				}
-			}
-		}
-	}
-
-	var outStore *store
-
-	if len(p.markClearSet) > 0 {
-		for _, v := range p.markClearSet {
-			if v.getTotalSlotCount()-v.slotOutCount > 0 {
-				for _, vv := range v.stores {
-					if len(vv.slots.GetOpenBits())-vv.slotOutCount > 0 {
-						outStore = vv
-						break
-					}
-				}
-			}
-			if nil != outStore {
-				break
-			}
-		}
-	}
-
-	lSets, lMCSets := len(p.pState.deployment.sets), len(p.markClearSet)
-
-	var setAverageSlotCount, storeAverageSlotCount int
-
-	if slot.SlotCount%(lSets-lMCSets) == 0 {
-		setAverageSlotCount = slot.SlotCount / (lSets - lMCSets)
-	} else {
-		setAverageSlotCount = (slot.SlotCount / (lSets - lMCSets)) + 1
-	}
-
-	if slot.SlotCount%((lSets-lMCSets)*StorePerSet) == 0 {
-		storeAverageSlotCount = slot.SlotCount / ((lSets - lMCSets) * StorePerSet)
-	} else {
-		storeAverageSlotCount = (slot.SlotCount / ((lSets - lMCSets) * StorePerSet)) + 1
-	}
-
-	GetSugar().Debugf("setAverageSlotCount:%d storeAverageSlotCount:%d", setAverageSlotCount, storeAverageSlotCount)
-
-	if len(p.pState.FreeSlots) > 0 {
-		for k, _ := range p.pState.FreeSlots {
-			var inStore *store
-
-			for _, v := range p.pState.deployment.sets {
-				if !v.markClear && v.getTotalSlotCount()-v.slotInCount < setAverageSlotCount {
-					for _, vv := range v.stores {
-						if len(vv.slots.GetOpenBits())-vv.slotInCount < storeAverageSlotCount {
-							inStore = vv
-							break
-						}
-					}
-				}
-
-				if nil != inStore {
-					break
-				}
-			}
-
-			delete(p.pState.FreeSlots, k)
-			p.beginSlotTransfer(k, -1, -1, inStore.set.id, inStore.id)
-			break
-		}
-	} else {
-
-		if nil == outStore {
-			for _, v := range p.pState.deployment.sets {
-				if !v.markClear && v.getTotalSlotCount()-v.slotOutCount > setAverageSlotCount {
-					for _, vv := range v.stores {
-						if len(vv.slots.GetOpenBits())-vv.slotOutCount > storeAverageSlotCount {
-							outStore = vv
-							break
-						}
-					}
-				}
-				if nil != outStore {
-					break
-				}
-			}
-		}
-
-		if nil != outStore {
-			var inStore *store
-			for _, v := range p.pState.deployment.sets {
-				if !v.markClear && v.getTotalSlotCount()-v.slotInCount < setAverageSlotCount {
-					for _, vv := range v.stores {
-						if len(vv.slots.GetOpenBits())-vv.slotInCount < storeAverageSlotCount {
-							inStore = vv
-							break
-						}
-					}
-				}
-				if nil != inStore {
-					break
-				}
-			}
-
-			if nil != inStore && nil != outStore {
-				//从outStore选出一个slot
-				for _, v := range outStore.slots.GetOpenBits() {
-					if _, ok := p.pState.SlotTransfer[v]; !ok {
-						p.beginSlotTransfer(v, outStore.set.id, outStore.id, inStore.set.id, inStore.id)
-						return
-					}
-				}
-			}
-		}
-	}
 }
 
 func (p *pd) isLeader() bool {
@@ -526,14 +395,20 @@ func (p *pd) onBecomeLeader() {
 }
 
 func (p *pd) onLeaderDownToFollower() {
-	for _, v := range p.pState.SlotTransfer {
-		v.timer.Stop()
-		v.timer = nil
+	for _, v := range p.pState.SlotTransferMgr.Transactions {
+		if nil != v.timer {
+			v.timer.Stop()
+			v.timer = nil
+		}
 	}
 
 	for _, v := range p.storeTask {
-		v.timer.Stop()
-		v.timer = nil
+		v.mtx.Lock()
+		if nil != v.timer {
+			v.timer.Stop()
+			v.timer = nil
+		}
+		v.mtx.Unlock()
 	}
 
 	p.storeTask = map[uint64]*storeTask{}
@@ -574,9 +449,75 @@ func (p *pd) processCommited(commited raft.Committed) {
 			v.(applyable).apply(p)
 		}
 	} else {
-		err := p.replayProposal(commited.Data)
-		if nil != err {
-			GetSugar().Panic(err)
+		reader := buffer.NewReader(commited.Data)
+		var r applyable
+		for !reader.IsOver() {
+
+			proposalType, j, err := func() (proposalType byte, j []byte, err error) {
+				var l int32
+				if proposalType, err = reader.CheckGetByte(); nil != err {
+					return
+				}
+
+				if l, err = reader.CheckGetInt32(); nil != err {
+					return
+				}
+
+				j, err = reader.CheckGetBytes(int(l))
+
+				return
+			}()
+
+			if nil == err {
+				unmarshal := func(rr interface{}) (err error) {
+					if err = json.Unmarshal(j, rr); nil == err {
+						r = rr.(applyable)
+					}
+					return
+				}
+
+				switch int(proposalType) {
+				case proposalInstallDeployment:
+					err = unmarshal(&ProposalInstallDeployment{})
+				case proposalAddNode:
+					err = unmarshal(&ProposalAddNode{})
+				case proposalRemNode:
+					err = unmarshal(&ProposalRemNode{})
+				case proposalSlotTransOutOk:
+					err = unmarshal(&ProposalSlotTransOutOk{})
+				case proposalSlotTransInOk:
+					err = unmarshal(&ProposalSlotTransInOk{})
+				case proposalAddSet:
+					err = unmarshal(&ProposalAddSet{})
+				case proposalRemSet:
+					err = unmarshal(&ProposalRemSet{})
+				case proposalSetMarkClear:
+					err = unmarshal(&ProposalSetMarkClear{})
+				case proposalInitMeta:
+					err = unmarshal(&ProposalInitMeta{})
+				case proposalUpdateMeta:
+					err = unmarshal(&ProposalUpdateMeta{})
+				case proposalFlyKvCommited:
+					err = unmarshal(&ProposalFlyKvCommited{})
+				case proposalAddLearnerStoreToNode:
+					err = unmarshal(&ProposalAddLearnerStoreToNode{})
+				case proposalPromoteLearnerStore:
+					err = unmarshal(&ProposalPromoteLearnerStore{})
+				case proposalRemoveNodeStore:
+					err = unmarshal(&ProposalRemoveNodeStore{})
+				case proposalNop:
+					err = unmarshal(&ProposalNop{})
+				default:
+					err = errors.New("invaild proposal type")
+				}
+			}
+
+			if nil == err {
+				r.apply(p)
+			} else {
+				GetSugar().Panic(err)
+			}
+
 		}
 	}
 
@@ -643,7 +584,7 @@ func (p *pd) serve() {
 				}
 			case *TransSlotTransfer:
 				if p.leader == p.rn.ID() {
-					if _, ok := p.pState.SlotTransfer[v.(*TransSlotTransfer).Slot]; ok {
+					if _, ok := p.pState.SlotTransferMgr.Transactions[v.(*TransSlotTransfer).Slot]; ok {
 						v.(*TransSlotTransfer).notify(p)
 					}
 				}

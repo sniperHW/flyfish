@@ -5,17 +5,16 @@ import (
 	"time"
 )
 
+const (
+	ReadTimeout                     = time.Second * 5
+	MaxInFlightMsgSnap        int64 = 16
+	ReleaseDelayAfterSnapshot       = 30 * time.Second
+	ReadyPercent                    = 0.95
+	HealthInterval                  = 5 * time.Second
+)
+
 var (
-	ReadTimeout                      = time.Second * 5
-	SnapshotCount             uint64 = 10000
-	SnapshotCatchUpEntriesN   uint64 = 5000
-	SnapshotBytes             uint64 = 128 * 1024 * 1024
-	MaxInFlightMsgSnap        int64  = 16
-	ReleaseDelayAfterSnapshot        = 30 * time.Second
-	ReadyPercent                     = 0.95
-	HealthInterval                   = 5 * time.Second
-	MaxBatchCount             int    = 200
-	checkQuorum               bool   = true //不对外暴露，只供测试用
+	checkQuorum bool = true //不对外暴露，只供测试用
 )
 
 type ConfChange struct {

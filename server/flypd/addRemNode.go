@@ -62,10 +62,6 @@ func (p *ProposalAddNode) apply(pd *pd) {
 	}
 }
 
-func (p *ProposalAddNode) replay(pd *pd) {
-	p.apply(pd)
-}
-
 type ProposalRemNode struct {
 	proposalBase
 	Msg *sproto.RemNode
@@ -110,10 +106,6 @@ func (p *ProposalRemNode) apply(pd *pd) {
 	if nil != p.reply {
 		p.reply(err)
 	}
-}
-
-func (p *ProposalRemNode) replay(pd *pd) {
-	p.apply(pd)
 }
 
 func (p *pd) onAddNode(replyer replyer, m *snet.Message) {

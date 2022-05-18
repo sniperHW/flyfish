@@ -171,10 +171,10 @@ func (rc *RaftInstance) runProposePipeline() {
 			for {
 
 				var batch []Proposal
-				if len(localList) <= MaxBatchCount {
+				if len(localList) <= rc.option.MaxBatchCount {
 					batch = make([]Proposal, 0, len(localList))
 				} else {
-					batch = make([]Proposal, 0, MaxBatchCount)
+					batch = make([]Proposal, 0, rc.option.MaxBatchCount)
 				}
 
 				for k, vv := range localList {

@@ -246,7 +246,14 @@ func (this *kvnode) addStore(meta db.DBMeta, storeID int, peers map[uint16]raft.
 		}
 	}
 
-	rn, err := raft.NewInstance(this.id, storeID, this.join, this.mutilRaft, mainQueue, peers, this.config.RaftLogDir, this.config.RaftLogPrefix)
+	rn, err := raft.NewInstance(this.id, storeID, this.join, this.mutilRaft, mainQueue, peers, raft.RaftInstanceOption{
+		SnapshotCount:           this.config.SnapshotCount,
+		SnapshotCatchUpEntriesN: this.config.SnapshotCatchUpEntriesN,
+		SnapshotBytes:           this.config.SnapshotBytes,
+		MaxBatchCount:           this.config.MaxBatchCount,
+		Logdir:                  this.config.RaftLogDir,
+		RaftLogPrefix:           this.config.RaftLogPrefix,
+	})
 
 	if nil != err {
 		return err
@@ -511,11 +518,20 @@ func (this *kvnode) start() error {
 			}
 		}
 
-		resp := this.getKvnodeBootInfo(this.pdAddr)
+		var resp *sproto.KvnodeBootResp
 
-		if !resp.Ok {
-			GetSugar().Errorf("getKvnodeBootInfo err:%v", resp.Reason)
-			return errors.New(resp.Reason)
+		for {
+			resp = this.getKvnodeBootInfo(this.pdAddr)
+			if !resp.Ok {
+				GetSugar().Errorf("getKvnodeBootInfo err:%v", resp.Reason)
+				return errors.New(resp.Reason)
+			}
+
+			if len(resp.Stores) > 0 {
+				break
+			} else {
+				time.Sleep(time.Second)
+			}
 		}
 
 		this.setID = int(resp.SetID)
@@ -551,10 +567,6 @@ func (this *kvnode) start() error {
 		go this.mutilRaft.Serve([]string{fmt.Sprintf("http://%s:%d", resp.ServiceHost, resp.RaftPort)})
 
 		this.startListener()
-
-		if len(resp.Stores) == 0 {
-			GetSugar().Infof("node:%d start with no store", this.id)
-		}
 
 		//cluster模式下membership由pd负责管理,节点每次启动从pd获取
 		for _, v := range resp.Stores {
@@ -635,23 +647,6 @@ func (this *kvnode) reportStatus() {
 }
 
 func NewKvNode(id uint16, join bool, config *Config, db dbI) (*kvnode, error) {
-
-	if config.SnapshotCount > 0 {
-		raft.SnapshotCount = config.SnapshotCount
-	}
-
-	if config.SnapshotCatchUpEntriesN > 0 {
-		raft.SnapshotCatchUpEntriesN = config.SnapshotCatchUpEntriesN
-	}
-
-	if config.SnapshotBytes > 0 {
-		raft.SnapshotBytes = config.SnapshotBytes
-	}
-
-	if config.MaxBatchCount > 0 {
-		raft.MaxBatchCount = config.MaxBatchCount
-	}
-
 	if config.ReqLimit.SoftLimit <= 0 {
 		config.ReqLimit.SoftLimit = 100000
 	}

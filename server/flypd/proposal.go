@@ -2,15 +2,15 @@ package flypd
 
 import (
 	"encoding/json"
-	"errors"
+	//"errors"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 )
 
 const (
-	proposalInstallDeployment     = 1
-	proposalAddNode               = 2
-	proposalRemNode               = 4
-	proposalBeginSlotTransfer     = 6
+	proposalInstallDeployment = 1
+	proposalAddNode           = 2
+	proposalRemNode           = 4
+	//proposalBeginSlotTransfer     = 6
 	proposalSlotTransOutOk        = 7
 	proposalSlotTransInOk         = 8
 	proposalAddSet                = 9
@@ -33,10 +33,6 @@ type applyable interface {
 	apply(pd *pd)
 }
 
-type replayable interface {
-	replay(pd *pd)
-}
-
 func (p proposalBase) OnError(err error) {
 	if nil != p.reply {
 		p.reply(err)
@@ -53,6 +49,7 @@ func serilizeProposal(b []byte, tt int, p interface{}) []byte {
 	if nil != err {
 		panic(err)
 	}
+	b = buffer.AppendInt32(b, int32(len(bb)))
 	return buffer.AppendBytes(b, bb)
 }
 
@@ -71,101 +68,33 @@ func (this *ProposalNop) Serilize(b []byte) []byte {
 func (this *ProposalNop) apply(pd *pd) {
 	GetSugar().Infof("ProposalNop.apply")
 
-	if len(pd.pState.deployment.sets) == 0 {
-		pd.loadInitDeployment()
-	} else {
-		//重置slotBalance相关的临时数据
-		for _, v := range pd.pState.deployment.sets {
-			pd.storeTask = map[uint64]*storeTask{}
-			for _, node := range v.nodes {
-				for store, state := range node.store {
-					if state.Value == FlyKvUnCommit {
-						taskID := uint64(node.id)<<32 + uint64(store)
-						t := &storeTask{
-							node:           node,
-							pd:             pd,
-							store:          store,
-							storeStateType: state.Type,
+	if pd.isLeader() {
+		if pd.pState.Meta.Version == 0 {
+			pd.loadInitMeta()
+		}
+
+		if len(pd.pState.deployment.sets) == 0 {
+			pd.loadInitDeployment()
+		} else {
+			//重置slotBalance相关的临时数据
+			for _, v := range pd.pState.deployment.sets {
+				for _, node := range v.nodes {
+					for store, state := range node.store {
+						if state.Value == FlyKvUnCommit {
+							taskID := uint64(node.id)<<32 + uint64(store)
+							t := &storeTask{
+								node:           node,
+								pd:             pd,
+								store:          store,
+								storeStateType: state.Type,
+							}
+							pd.storeTask[taskID] = t
+							t.notifyFlyKv()
 						}
-						pd.storeTask[taskID] = t
-						t.notifyFlyKv()
 					}
 				}
 			}
-		}
-
-		pd.slotBalance()
-
-		for _, v := range pd.pState.SlotTransfer {
-			v.notify(pd)
+			pd.slotBalance()
 		}
 	}
-
-	if pd.pState.Meta.Version == 0 {
-		pd.loadInitMeta()
-	}
-}
-
-func (this *ProposalNop) replay(pd *pd) {
-
-}
-
-func (p *pd) replayProposal(proposal []byte) error {
-	reader := buffer.NewReader(proposal)
-	proposalType, err := reader.CheckGetByte()
-	if nil != err {
-		return err
-	}
-
-	var r replayable
-
-	unmarshal := func(rr interface{}) (err error) {
-		if err = json.Unmarshal(reader.GetAll(), rr); nil == err {
-			r = rr.(replayable)
-		}
-		return
-	}
-
-	switch int(proposalType) {
-	case proposalInstallDeployment:
-		err = unmarshal(&ProposalInstallDeployment{})
-	case proposalAddNode:
-		err = unmarshal(&ProposalAddNode{})
-	case proposalRemNode:
-		err = unmarshal(&ProposalRemNode{})
-	case proposalBeginSlotTransfer:
-		err = unmarshal(&ProposalBeginSlotTransfer{})
-	case proposalSlotTransOutOk:
-		err = unmarshal(&ProposalSlotTransOutOk{})
-	case proposalSlotTransInOk:
-		err = unmarshal(&ProposalSlotTransInOk{})
-	case proposalAddSet:
-		err = unmarshal(&ProposalAddSet{})
-	case proposalRemSet:
-		err = unmarshal(&ProposalRemSet{})
-	case proposalSetMarkClear:
-		err = unmarshal(&ProposalSetMarkClear{})
-	case proposalInitMeta:
-		err = unmarshal(&ProposalInitMeta{})
-	case proposalUpdateMeta:
-		err = unmarshal(&ProposalUpdateMeta{})
-	case proposalFlyKvCommited:
-		err = unmarshal(&ProposalFlyKvCommited{})
-	case proposalAddLearnerStoreToNode:
-		err = unmarshal(&ProposalAddLearnerStoreToNode{})
-	case proposalPromoteLearnerStore:
-		err = unmarshal(&ProposalPromoteLearnerStore{})
-	case proposalRemoveNodeStore:
-		err = unmarshal(&ProposalRemoveNodeStore{})
-	case proposalNop:
-		err = unmarshal(&ProposalNop{})
-	default:
-		return errors.New("invaild proposal type")
-	}
-
-	if nil == err {
-		r.replay(p)
-	}
-
-	return err
 }

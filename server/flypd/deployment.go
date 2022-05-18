@@ -232,21 +232,17 @@ func (n *kvnode) getRaftID(store int) uint64 {
 }
 
 type store struct {
-	id           int
-	slots        *bitmap.Bitmap
-	set          *set
-	slotOutCount int //待迁出的slot数量
-	slotInCount  int //待迁入的slot数量
+	id    int
+	slots *bitmap.Bitmap
+	set   *set
 }
 
 type set struct {
-	version      int64
-	id           int
-	markClear    bool
-	nodes        map[int]*kvnode
-	stores       map[int]*store
-	slotOutCount int //待迁出的slot数量
-	slotInCount  int //待迁入的slot数量
+	version   int64
+	id        int
+	markClear bool
+	nodes     map[int]*kvnode
+	stores    map[int]*store
 }
 
 func (s *set) getTotalSlotCount() int {
@@ -494,8 +490,4 @@ func (p *ProposalInstallDeployment) apply(pd *pd) {
 		}
 	}
 	GetSugar().Infof("ProposalInstallDeployment.apply set count:%d nodes:%v", len(pd.pState.deployment.sets), nodes)
-}
-
-func (p *ProposalInstallDeployment) replay(pd *pd) {
-	p.apply(pd)
 }

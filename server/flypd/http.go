@@ -37,6 +37,7 @@ func (p *pd) fetchReq(cmd string, r *http.Request) (*snet.Message, error) {
 }
 
 func (p *pd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+
 	if p.config.TLS.EnableTLS {
 		if r.Header.Get("token") != "feiyu_tech_2021" {
 			w.WriteHeader(http.StatusBadRequest)
@@ -96,6 +97,9 @@ func (p *pd) startHttpService() {
 		WriteTimeout:   10 * time.Second,
 		MaxHeaderBytes: 1 << 20,
 	}
+
+	GetSugar().Infof("pd start http on:%v", p.service)
+
 	if p.config.TLS.EnableTLS {
 		go func() {
 			if err := p.httpServer.ListenAndServeTLS(p.config.TLS.Crt, p.config.TLS.Key); nil != err && err != http.ErrServerClosed {

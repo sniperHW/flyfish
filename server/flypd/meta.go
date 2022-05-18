@@ -129,22 +129,19 @@ func (p *ProposalInitMeta) OnError(err error) {
 	p.pd.mainque.AppendHighestPriotiryItem(p.pd.onProposalUpdateMetaReply)
 }
 
-func (p *ProposalInitMeta) doapply(pd *pd) {
+func (p *ProposalInitMeta) apply(pd *pd) {
 	pd.pState.Meta = *p.MetaDef
 	pd.pState.MetaBytes, _ = p.MetaDef.ToJson()
 	GetSugar().Infof("ProposalInitMeta apply version:%d", pd.pState.Meta.Version)
-	for _, v := range pd.pState.Meta.TableDefs {
-		GetSugar().Infof("ProposalInitMeta apply tab:%s version:%d", v.Name, v.Version)
+
+	//for _, v := range pd.pState.Meta.TableDefs {
+	//	GetSugar().Infof("ProposalInitMeta apply tab:%s version:%d", v.Name, v.Version)
+	//}
+
+	if pd.isLeader() {
+		pd.onProposalUpdateMetaReply()
 	}
-}
 
-func (p *ProposalInitMeta) apply(pd *pd) {
-	p.doapply(pd)
-	pd.onProposalUpdateMetaReply()
-}
-
-func (p *ProposalInitMeta) replay(pd *pd) {
-	p.doapply(pd)
 }
 
 type MetaUpdateType int
@@ -174,8 +171,7 @@ func (p *ProposalUpdateMeta) Serilize(b []byte) []byte {
 	return serilizeProposal(b, proposalUpdateMeta, p)
 }
 
-func (p *ProposalUpdateMeta) doApply(pd *pd) {
-
+func (p *ProposalUpdateMeta) apply(pd *pd) {
 	def := &pd.pState.Meta
 	i := 0
 
@@ -209,36 +205,32 @@ func (p *ProposalUpdateMeta) doApply(pd *pd) {
 	}
 
 	pd.pState.MetaBytes, _ = def.ToJson()
-}
 
-func (p *ProposalUpdateMeta) apply(pd *pd) {
-	p.doApply(pd)
-	if nil != p.reply {
-		p.reply(nil)
-	}
-	p.pd.onProposalUpdateMetaReply()
+	if pd.isLeader() {
 
-	//notify all store leader
-	for _, set := range pd.pState.deployment.sets {
-		for _, node := range set.nodes {
-			for storeID, store := range node.store {
-				if store.isLead {
-					addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.host, node.servicePort))
-					pd.udp.SendTo(addr, snet.MakeMessage(0,
-						&sproto.NotifyUpdateMeta{
-							Store:   int32(storeID),
-							Version: pd.pState.Meta.Version,
-							Meta:    pd.pState.MetaBytes,
-						}))
+		if nil != p.reply {
+			p.reply(nil)
+		}
+
+		p.pd.onProposalUpdateMetaReply()
+
+		//notify all store leader
+		for _, set := range pd.pState.deployment.sets {
+			for _, node := range set.nodes {
+				for storeID, store := range node.store {
+					if store.isLead {
+						addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.host, node.servicePort))
+						pd.udp.SendTo(addr, snet.MakeMessage(0,
+							&sproto.NotifyUpdateMeta{
+								Store:   int32(storeID),
+								Version: pd.pState.Meta.Version,
+								Meta:    pd.pState.MetaBytes,
+							}))
+					}
 				}
 			}
 		}
 	}
-
-}
-
-func (p *ProposalUpdateMeta) replay(pd *pd) {
-	p.doApply(pd)
 }
 
 func (p *pd) onProposalUpdateMetaReply() {

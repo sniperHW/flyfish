@@ -42,7 +42,7 @@ func (rc *RaftInstance) maybeTriggerSnapshot(index uint64) bool {
 		return false
 	}
 
-	if !(rc.proposalSize > SnapshotBytes || index-rc.snapshotIndex > SnapshotCount) {
+	if !(rc.proposalSize > rc.option.SnapshotBytes || index-rc.snapshotIndex > rc.option.SnapshotCount) {
 		return false
 	}
 
@@ -59,8 +59,8 @@ func (rc *RaftInstance) onTriggerSnapshotOK(snap raftpb.Snapshot) {
 
 	compactIndex := uint64(1)
 
-	if snap.Metadata.Index > SnapshotCatchUpEntriesN {
-		compactIndex = snap.Metadata.Index - SnapshotCatchUpEntriesN
+	if snap.Metadata.Index > rc.option.SnapshotCatchUpEntriesN {
+		compactIndex = snap.Metadata.Index - rc.option.SnapshotCatchUpEntriesN
 	}
 
 	rc.snapshotIndex = snap.Metadata.Index
@@ -111,7 +111,7 @@ func (rc *RaftInstance) triggerSnapshot(st snapshotNotifyst) {
 		}
 
 		//删除旧快照
-		rc.removeOldSnapAndWal(snap.Metadata.Term, snap.Metadata.Index-SnapshotCatchUpEntriesN)
+		rc.removeOldSnapAndWal(snap.Metadata.Term, snap.Metadata.Index-rc.option.SnapshotCatchUpEntriesN)
 
 		select {
 		case rc.snapshotCh <- snap:

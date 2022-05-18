@@ -262,7 +262,7 @@ func (this *Client) get(table, key string, version *int64, fields ...string) *Sl
 		unikey: unikey,
 		makeReq: func() *cs.ReqMessage {
 			return &cs.ReqMessage{
-				Seqno:  atomic.AddInt64(&seqno, 1),
+				Seqno:  atomic.AddInt64(&this.seqno, 1),
 				UniKey: unikey,
 				Data: &protocol.GetReq{
 					Version: version,
@@ -282,7 +282,7 @@ func (this *Client) getAll(table, key string, version *int64) *SliceCmd {
 		unikey: unikey,
 		makeReq: func() *cs.ReqMessage {
 			return &cs.ReqMessage{
-				Seqno:  atomic.AddInt64(&seqno, 1),
+				Seqno:  atomic.AddInt64(&this.seqno, 1),
 				UniKey: unikey,
 				Data: &protocol.GetReq{
 					Version: version,
@@ -333,7 +333,7 @@ func (this *Client) Set(table, key string, fields map[string]interface{}, versio
 			}
 
 			return &cs.ReqMessage{
-				Seqno:  atomic.AddInt64(&seqno, 1),
+				Seqno:  atomic.AddInt64(&this.seqno, 1),
 				UniKey: unikey,
 				Data:   pbdata}
 		},
@@ -359,7 +359,7 @@ func (this *Client) SetNx(table, key string, fields map[string]interface{}) *Sli
 			}
 
 			return &cs.ReqMessage{
-				Seqno:  atomic.AddInt64(&seqno, 1),
+				Seqno:  atomic.AddInt64(&this.seqno, 1),
 				UniKey: unikey,
 				Data:   pbdata}
 		},
@@ -380,7 +380,7 @@ func (this *Client) CompareAndSet(table, key, field string, oldV, newV interface
 		unikey: unikey,
 		makeReq: func() *cs.ReqMessage {
 			return &cs.ReqMessage{
-				Seqno:  atomic.AddInt64(&seqno, 1),
+				Seqno:  atomic.AddInt64(&this.seqno, 1),
 				UniKey: unikey,
 				Data: &protocol.CompareAndSetReq{
 					New: packField(field, newV),
@@ -403,7 +403,7 @@ func (this *Client) CompareAndSetNx(table, key, field string, oldV, newV interfa
 		unikey: unikey,
 		makeReq: func() *cs.ReqMessage {
 			return &cs.ReqMessage{
-				Seqno:  atomic.AddInt64(&seqno, 1),
+				Seqno:  atomic.AddInt64(&this.seqno, 1),
 				UniKey: unikey,
 				Data: &protocol.CompareAndSetNxReq{
 					New: packField(field, newV),
@@ -420,7 +420,7 @@ func (this *Client) Del(table, key string) *StatusCmd {
 		unikey: unikey,
 		makeReq: func() *cs.ReqMessage {
 			return &cs.ReqMessage{
-				Seqno:  atomic.AddInt64(&seqno, 1),
+				Seqno:  atomic.AddInt64(&this.seqno, 1),
 				UniKey: unikey,
 				Data:   &protocol.DelReq{}}
 		},
@@ -434,7 +434,7 @@ func (this *Client) IncrBy(table, key, field string, value int64) *SliceCmd {
 		unikey: unikey,
 		makeReq: func() *cs.ReqMessage {
 			return &cs.ReqMessage{
-				Seqno:  atomic.AddInt64(&seqno, 1),
+				Seqno:  atomic.AddInt64(&this.seqno, 1),
 				UniKey: unikey,
 				Data: &protocol.IncrByReq{
 					Field: protocol.PackField(field, value),
@@ -450,7 +450,7 @@ func (this *Client) DecrBy(table, key, field string, value int64) *SliceCmd {
 		unikey: unikey,
 		makeReq: func() *cs.ReqMessage {
 			return &cs.ReqMessage{
-				Seqno:  atomic.AddInt64(&seqno, 1),
+				Seqno:  atomic.AddInt64(&this.seqno, 1),
 				UniKey: unikey,
 				Data: &protocol.DecrByReq{
 					Field: protocol.PackField(field, value),
@@ -466,7 +466,7 @@ func (this *Client) Kick(table, key string) *StatusCmd {
 		unikey: unikey,
 		makeReq: func() *cs.ReqMessage {
 			return &cs.ReqMessage{
-				Seqno:  atomic.AddInt64(&seqno, 1),
+				Seqno:  atomic.AddInt64(&this.seqno, 1),
 				UniKey: unikey,
 				Data:   &protocol.KickReq{}}
 		},

@@ -2,7 +2,6 @@ package flypd
 
 import (
 	"errors"
-	//"fmt"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
@@ -18,36 +17,24 @@ func (p *ProposalAddSet) Serilize(b []byte) []byte {
 	return serilizeProposal(b, proposalAddSet, p)
 }
 
-func (p *ProposalAddSet) doApply(pd *pd) error {
-	GetSugar().Infof("ProposalAddSet.doApply")
-	deploymentJson := pd.pState.deployment.toDeploymentJson()
-	deploymentJson.Version++
-	p.Set.Version = deploymentJson.Version
-	deploymentJson.Sets = append(deploymentJson.Sets, p.Set)
-	if err := deploymentJson.check(); nil != err {
-		return err
-	} else {
-		pd.pState.deployment.loadFromDeploymentJson(&deploymentJson)
-		return nil
-	}
-}
-
 func (p *ProposalAddSet) apply(pd *pd) {
-	err := p.doApply(pd)
-
-	if nil == err {
-		//添加新set的操作通过，开始执行slot平衡
-		pd.slotBalance()
-	}
+	err := func() error {
+		deploymentJson := pd.pState.deployment.toDeploymentJson()
+		deploymentJson.Version++
+		p.Set.Version = deploymentJson.Version
+		deploymentJson.Sets = append(deploymentJson.Sets, p.Set)
+		if err := deploymentJson.check(); nil != err {
+			return err
+		} else {
+			pd.pState.deployment.loadFromDeploymentJson(&deploymentJson)
+			pd.slotBalance()
+			return nil
+		}
+	}()
 
 	if nil != p.reply {
 		p.reply(err)
 	}
-
-}
-
-func (p *ProposalAddSet) replay(pd *pd) {
-	p.doApply(pd)
 }
 
 type ProposalRemSet struct {
@@ -61,52 +48,19 @@ func (p *ProposalRemSet) Serilize(b []byte) []byte {
 
 func (p *ProposalRemSet) apply(pd *pd) {
 
-	GetSugar().Infof("ProposalRemSet.apply")
-
+	var err error
 	s, ok := pd.pState.deployment.sets[int(p.SetID)]
-
-	err := func() error {
-		if !ok {
-			return errors.New("set not exists")
-		}
-		return nil
-	}()
-
-	if nil == err {
-		//将所有slot添加到FreeSlots中
-		for _, st := range s.stores {
-			for _, b := range st.slots.GetOpenBits() {
-				if t := pd.pState.SlotTransfer[b]; nil == t {
-					pd.pState.FreeSlots[b] = true
-				}
-			}
-		}
-
-		for _, v := range pd.pState.SlotTransfer {
-			if v.SetIn == p.SetID {
-				if v.SetOut < 0 {
-					pd.pState.FreeSlots[v.Slot] = true
-				}
-				delete(pd.pState.SlotTransfer, v.Slot)
-			} else if v.SetOut == p.SetID {
-				v.StoreTransferOutOk = true
-			}
-		}
-
+	if !ok {
+		err = errors.New("set not exists")
+	} else {
 		delete(pd.pState.deployment.sets, p.SetID)
-		delete(pd.markClearSet, p.SetID)
 		pd.pState.deployment.version++
-		pd.slotBalance()
+		pd.pState.SlotTransferMgr.onSetRemove(pd, s)
 	}
 
 	if nil != p.reply {
 		p.reply(err)
 	}
-
-}
-
-func (p *ProposalRemSet) replay(pd *pd) {
-	p.apply(pd)
 }
 
 type ProposalSetMarkClear struct {
@@ -118,9 +72,7 @@ func (p *ProposalSetMarkClear) Serilize(b []byte) []byte {
 	return serilizeProposal(b, proposalSetMarkClear, p)
 }
 
-func (p *ProposalSetMarkClear) doApply(pd *pd) error {
-
-	GetSugar().Infof("ProposalSetMarkClear.apply")
+func (p *ProposalSetMarkClear) apply(pd *pd) {
 
 	var ok bool
 	var s *set
@@ -143,33 +95,12 @@ func (p *ProposalSetMarkClear) doApply(pd *pd) error {
 
 	if nil == err {
 		s.markClear = true
-		pd.markClearSet[p.SetID] = s
-		//检查是否有待迁入但!ready的TransSlotTransfer,有的话将其删除
-		for k, v := range pd.pState.SlotTransfer {
-			if v.SetIn == s.id && !v.ready {
-				delete(pd.pState.SlotTransfer, k)
-			}
-		}
-	}
-
-	return err
-
-}
-
-func (p *ProposalSetMarkClear) apply(pd *pd) {
-	err := p.doApply(pd)
-	if nil == err {
 		pd.slotBalance()
 	}
 
 	if nil != p.reply {
 		p.reply(err)
 	}
-
-}
-
-func (p *ProposalSetMarkClear) replay(pd *pd) {
-	p.doApply(pd)
 }
 
 func (p *pd) onRemSet(replyer replyer, m *snet.Message) {

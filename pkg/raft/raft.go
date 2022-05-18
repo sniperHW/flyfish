@@ -114,6 +114,22 @@ func (this *raftTaskMgr) onLeaderDownToFollower() {
 	}
 }
 
+const (
+	defaultSnapshotCount           uint64 = 10000
+	defaultSnapshotCatchUpEntriesN uint64 = 5000
+	defaultSnapshotBytes           uint64 = 128 * 1024 * 1024
+	defaultMaxBatchCount           int    = 200
+)
+
+type RaftInstanceOption struct {
+	SnapshotCount           uint64
+	SnapshotCatchUpEntriesN uint64
+	SnapshotBytes           uint64
+	MaxBatchCount           int
+	Logdir                  string
+	RaftLogPrefix           string
+}
+
 type RaftInstance struct {
 	inflightSnapshots   int64
 	snapshotIndex       uint64
@@ -129,7 +145,6 @@ type RaftInstance struct {
 	join                bool   // node is joining an existing cluster
 	waldir              string // path to WAL directory
 	snapdir             string // path to snapshot directory
-	logdir              string
 	confState           raftpb.ConfState
 	node                raft.Node
 	raftStorage         *raft.MemoryStorage
@@ -148,6 +163,7 @@ type RaftInstance struct {
 	w                   wait.Wait
 	reqIDGen            *idutil.Generator
 	proposalSize        uint64 //自上次快照以来,proposal总的字节大小
+	option              RaftInstanceOption
 }
 
 func readWALNames(dirpath string) []string {
@@ -910,19 +926,34 @@ func SplitPeers(s string) (map[uint16]Member, error) {
 	return peers, nil
 }
 
-func NewInstance(processID uint16, cluster int, join bool, mutilRaft *MutilRaft, commitC ApplicationQueue, peers map[uint16]Member, logdir string, raftLogPrefix string) (*RaftInstance, error) {
+func NewInstance(processID uint16, cluster int, join bool, mutilRaft *MutilRaft, commitC ApplicationQueue, peers map[uint16]Member, option RaftInstanceOption) (*RaftInstance, error) {
 	mbSelf, ok := peers[processID]
 	if !ok {
 		return nil, fmt.Errorf("peers not contain self")
 	}
 
+	if option.SnapshotCount == 0 {
+		option.SnapshotCount = defaultSnapshotCount
+	}
+
+	if option.SnapshotCatchUpEntriesN == 0 {
+		option.SnapshotCatchUpEntriesN = defaultSnapshotCatchUpEntriesN
+	}
+
+	if option.SnapshotBytes == 0 {
+		option.SnapshotBytes = defaultSnapshotBytes
+	}
+
+	if option.MaxBatchCount == 0 {
+		option.MaxBatchCount = defaultMaxBatchCount
+	}
+
 	rc := &RaftInstance{
-		commitC: commitC,
-		id:      mbSelf.ID,
-		logdir:  logdir,
-		waldir:  fmt.Sprintf("%s/%s-%d-%d-%x-wal", logdir, raftLogPrefix, processID, cluster, mbSelf.ID),
-		snapdir: fmt.Sprintf("%s/%s-%d-%d-%x-snap", logdir, raftLogPrefix, processID, cluster, mbSelf.ID),
-		//snapCount:  SnapshotCount,
+		commitC:    commitC,
+		id:         mbSelf.ID,
+		option:     option,
+		waldir:     fmt.Sprintf("%s/%s-%d-%d-%x-wal", option.Logdir, option.RaftLogPrefix, processID, cluster, mbSelf.ID),
+		snapdir:    fmt.Sprintf("%s/%s-%d-%d-%x-snap", option.Logdir, option.RaftLogPrefix, processID, cluster, mbSelf.ID),
 		stopc:      make(chan struct{}),
 		stopping:   make(chan struct{}),
 		snapshotCh: make(chan interface{}, 1),
@@ -953,7 +984,7 @@ func NewInstance(processID uint16, cluster int, join bool, mutilRaft *MutilRaft,
 		return nil, fmt.Errorf("cannot access snapdir: %v ", err)
 	}
 
-	if err = fileutil.TouchDirAll(rc.logdir); err != nil {
+	if err = fileutil.TouchDirAll(option.Logdir); err != nil {
 		return nil, fmt.Errorf("cannot access logdir: %v ", err)
 	}
 

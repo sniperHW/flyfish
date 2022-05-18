@@ -469,6 +469,11 @@ type kvnode struct {
 	store     *kvstore
 }
 
+var (
+	SnapshotCount           uint64
+	SnapshotCatchUpEntriesN uint64
+)
+
 func newKvNode(nodeid uint16, cid int, join bool, cluster string, startok func(), becomeLeader func()) *kvnode {
 
 	peers, err := SplitPeers(cluster)
@@ -485,7 +490,12 @@ func newKvNode(nodeid uint16, cid int, join bool, cluster string, startok func()
 
 	mutilRaft := NewMutilRaft()
 
-	rn, err := NewInstance(nodeid, cid, join, mutilRaft, mainQueue, peers, "./log/raftLog", "kv")
+	rn, err := NewInstance(nodeid, cid, join, mutilRaft, mainQueue, peers, RaftInstanceOption{
+		Logdir:                  "./log/raftLog",
+		RaftLogPrefix:           "kv",
+		SnapshotCount:           SnapshotCount,
+		SnapshotCatchUpEntriesN: SnapshotCatchUpEntriesN,
+	})
 
 	if nil != err {
 		fmt.Println(err)

@@ -6,10 +6,12 @@ import (
 	"github.com/sniperHW/flyfish/pkg/raft/membership"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
+	"sync"
 	"time"
 )
 
 type storeTask struct {
+	mtx            sync.Mutex //protect timer
 	node           *kvnode
 	store          int
 	raftID         uint64
@@ -71,9 +73,11 @@ func (st *storeTask) notifyFlyKv() {
 						Type:  st.storeStateType,
 					})
 				} else {
+					st.mtx.Lock()
 					st.timer = time.AfterFunc(time.Second*3, func() {
 						st.pd.mainque.AppendHighestPriotiryItem(st.notifyFlyKv)
 					})
+					st.mtx.Unlock()
 				}
 			}()
 		}
@@ -130,10 +134,6 @@ func (p *ProposalFlyKvCommited) apply(pd *pd) {
 	if ok {
 		delete(pd.storeTask, taskID)
 	}
-}
-
-func (p *ProposalFlyKvCommited) replay(pd *pd) {
-	p.apply(pd)
 }
 
 type ProposalAddLearnerStoreToNode struct {
@@ -195,10 +195,6 @@ func (p *ProposalAddLearnerStoreToNode) apply(pd *pd) {
 	}
 }
 
-func (p *ProposalAddLearnerStoreToNode) replay(pd *pd) {
-	p.apply(pd)
-}
-
 type ProposalPromoteLearnerStore struct {
 	proposalBase
 	Msg *sproto.PromoteLearnerStore
@@ -254,10 +250,6 @@ func (p *ProposalPromoteLearnerStore) apply(pd *pd) {
 	}
 }
 
-func (p *ProposalPromoteLearnerStore) replay(pd *pd) {
-	p.apply(pd)
-}
-
 type ProposalRemoveNodeStore struct {
 	proposalBase
 	Msg *sproto.RemoveNodeStore
@@ -297,10 +289,6 @@ func (p *ProposalRemoveNodeStore) apply(pd *pd) {
 		p.reply(err)
 	}
 
-}
-
-func (p *ProposalRemoveNodeStore) replay(pd *pd) {
-	p.apply(pd)
 }
 
 /*

@@ -23,7 +23,7 @@ import (
 var ClientTimeout uint32 = 6000 //6sec
 var maxPendingSize int = 10000
 
-var seqno int64
+//var seqno int64
 
 var outputBufLimit flynet.OutputBufLimit = flynet.OutputBufLimit{
 	OutPutLimitSoft:        cs.MaxPacketSize,
@@ -84,7 +84,7 @@ func (this *serverConn) onDisconnected() {
 	this.c.mu.Lock()
 	this.session = nil
 	for _, v := range this.waitResp {
-		delete(this.waitResp, seqno)
+		delete(this.waitResp, v.req.Seqno)
 		v.waitResp = nil
 		if now.After(v.deadline) {
 			timeouts = append(timeouts, v)
@@ -213,6 +213,7 @@ type Client struct {
 	msgPerSecond  *movingAverage.MovingAverage
 	msgSend       int32
 	gates         []*sproto.Flygate
+	seqno         int64
 }
 
 func (this *Client) callcb(ctx *cmdContext, a interface{}) {

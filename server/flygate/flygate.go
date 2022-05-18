@@ -608,7 +608,7 @@ func (g *gate) Stop() {
 
 		//等待所有消息处理完
 		g.waitCondition(func() bool {
-			return g.totalPendingReq == 0
+			return atomic.LoadInt64(&g.totalPendingReq) == 0
 		})
 
 		g.muC.Lock()
