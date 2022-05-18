@@ -11,18 +11,18 @@ const (
 	proposalAddNode           = 2
 	proposalRemNode           = 4
 	//proposalBeginSlotTransfer     = 6
-	proposalSlotTransOutOk        = 7
-	proposalSlotTransInOk         = 8
-	proposalAddSet                = 9
-	proposalRemSet                = 10
-	proposalSetMarkClear          = 11
-	proposalInitMeta              = 12
-	proposalAddLearnerStoreToNode = 13
-	proposalFlyKvCommited         = 14
-	proposalPromoteLearnerStore   = 15
-	proposalRemoveNodeStore       = 16
-	proposalUpdateMeta            = 17
-	proposalNop                   = 18
+	proposalSlotTransOutOk = 7
+	proposalSlotTransInOk  = 8
+	proposalAddSet         = 9
+	proposalRemSet         = 10
+	proposalSetMarkClear   = 11
+	proposalInitMeta       = 12
+	//proposalAddLearnerStoreToNode = 13
+	proposalFlyKvCommited = 14
+	//proposalPromoteLearnerStore   = 15
+	//proposalRemoveNodeStore       = 16
+	proposalUpdateMeta = 17
+	proposalNop        = 18
 )
 
 type proposalBase struct {
@@ -79,11 +79,19 @@ func (this *ProposalNop) apply(pd *pd) {
 			//重置slotBalance相关的临时数据
 			for _, v := range pd.pState.deployment.sets {
 				for _, node := range v.nodes {
-					for store, state := range node.store {
+					if node.removing || !node.storeIsOk() {
+						pd.pendingNodes[node.id] = node
+					}
+				}
+			}
+
+			for _, v := range pd.pendingNodes {
+				for store, state := range v.store {
+					if state.Type != VoterStore && state.Value == FlyKvUnCommit {
 						if state.Value == FlyKvUnCommit {
-							taskID := uint64(node.id)<<32 + uint64(store)
+							taskID := uint64(v.id)<<32 + uint64(store)
 							t := &storeTask{
-								node:           node,
+								node:           v,
 								pd:             pd,
 								store:          store,
 								storeStateType: state.Type,
@@ -94,6 +102,7 @@ func (this *ProposalNop) apply(pd *pd) {
 					}
 				}
 			}
+
 			pd.slotBalance()
 		}
 	}

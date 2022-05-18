@@ -75,12 +75,12 @@ func (f *FlyKvStoreState) isLeader() bool {
 	return f.isLead
 }
 
-func (f *FlyKvStoreState) isVoter() bool {
-	return f.Type == VoterStore
-}
-
 func (f *FlyKvStoreState) isLearner() bool {
-	return f.Type == LearnerStore
+	if f.Type == LearnerStore || (f.Type == VoterStore && f.Value == FlyKvUnCommit) {
+		return true
+	} else {
+		return false
+	}
 }
 
 type KvNodeJson struct {
@@ -89,6 +89,7 @@ type KvNodeJson struct {
 	ServicePort int
 	RaftPort    int
 	Store       map[int]*FlyKvStoreState
+	Removing    bool
 }
 
 type StoreJson struct {
@@ -191,6 +192,24 @@ type kvnode struct {
 	set            *set
 	store          map[int]*FlyKvStoreState
 	lastReportTime int64
+	removing       bool
+}
+
+func (n *kvnode) storeIsOk() bool {
+	if len(n.store) != StorePerSet {
+		return false
+	}
+
+	for _, v := range n.store {
+		if v.Type != VoterStore {
+			return false
+		}
+
+		if v.Value != FlyKvCommited {
+			return false
+		}
+	}
+	return true
 }
 
 func (n *kvnode) isVoter(store int) bool {
@@ -395,6 +414,7 @@ func (d deployment) toDeploymentJson() DeploymentJson {
 				ServicePort: vv.servicePort,
 				RaftPort:    vv.raftPort,
 				Store:       vv.store,
+				Removing:    vv.removing,
 			}
 
 			setJson.KvNodes = append(setJson.KvNodes, nj)
@@ -438,6 +458,7 @@ func (d *deployment) loadFromDeploymentJson(deploymentJson *DeploymentJson) erro
 				raftPort:    vv.RaftPort,
 				set:         s,
 				store:       vv.Store,
+				removing:    vv.Removing,
 			}
 
 			s.nodes[vv.NodeID] = n

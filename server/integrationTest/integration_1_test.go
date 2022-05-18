@@ -18,6 +18,7 @@ import (
 	flykv "github.com/sniperHW/flyfish/server/flykv"
 	flypd "github.com/sniperHW/flyfish/server/flypd"
 	console "github.com/sniperHW/flyfish/server/flypd/console/http"
+	//consoleHttp "github.com/sniperHW/flyfish/server/flypd/console/http"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	sslot "github.com/sniperHW/flyfish/server/slot"
@@ -813,7 +814,7 @@ func TestAddRemoveNode(t *testing.T) {
 				}
 			})
 
-		if resp != nil && resp.(*sproto.AddNodeResp).Reason == "duplicate node id" {
+		if resp != nil && resp.(*sproto.AddNodeResp).Ok {
 			break
 		}
 		time.Sleep(time.Second)
@@ -825,100 +826,44 @@ func TestAddRemoveNode(t *testing.T) {
 		panic(err)
 	}
 
-	logger.GetSugar().Infof("add node")
-
-	//add learnstore
-
-	for {
-		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.AddLearnerStoreToNode{
-				SetID:  1,
-				NodeID: 3,
-				Store:  1,
-			}),
-			time.Second,
-			func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.AddLearnerStoreToNodeResp); ok {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			})
-
-		if resp != nil && resp.(*sproto.AddLearnerStoreToNodeResp).Reason == "learner store already exists" {
-			break
-		}
-		time.Sleep(time.Second)
-	}
-
-	logger.GetSugar().Infof("--------------------add learner 3:1 OK------------------------")
-
 	node3, err := flykv.NewKvNode(3, true, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
 	}
 
-	//promote to voter
-	for {
-		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.PromoteLearnerStore{
-				SetID:  1,
-				NodeID: 3,
-				Store:  1,
-			}),
-			time.Second,
-			func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.PromoteLearnerStoreResp); ok {
-						select {
-						case respCh <- resp:
-						default:
+	//等待node3成为voter
+	/*for {
+		c := consoleHttp.NewClient("localhost:8110")
+		resp, err := c.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+		if nil != err {
+			logger.GetSugar().Errorf("%v", err)
+		} else {
+			ok := func() bool {
+				s := resp.(*sproto.GetSetStatusResp).Sets[0]
+				for _, v := range s.Nodes {
+					if int(v.NodeID) == 3 {
+						for _, vv := range v.Stores {
+							if vv.Type != int32(flypd.VoterStore) || vv.Value != int32(flypd.FlyKvCommited) {
+								return false
+							}
 						}
+						return len(v.Stores) == flypd.StorePerSet
 					}
 				}
-			})
+				return false
+			}()
 
-		if resp != nil && resp.(*sproto.PromoteLearnerStoreResp).Reason == "store is already a voter" {
-			break
+			if ok {
+				break
+			} else {
+				time.Sleep(time.Second)
+			}
 		}
-		time.Sleep(time.Second)
-
-	}
-
-	//remove store
-	fmt.Println("remove store")
-
-	for {
-		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.RemoveNodeStore{
-				SetID:  1,
-				NodeID: 3,
-				Store:  1,
-			}),
-			time.Second,
-			func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.RemoveNodeStoreResp); ok {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			})
-
-		if resp != nil && resp.(*sproto.RemoveNodeStoreResp).Reason == "store not exists" {
-			break
-		}
-		time.Sleep(time.Second)
-	}
+	}*/
 
 	//remove node
-	fmt.Println("remove node")
+	logger.GetSugar().Infof("remove node")
 
 	for {
 		resp := snet.UdpCall([]*net.UDPAddr{addr},
@@ -938,8 +883,13 @@ func TestAddRemoveNode(t *testing.T) {
 				}
 			})
 
-		if resp != nil && resp.(*sproto.RemNodeResp).Reason == "node not found" {
-			break
+		if resp != nil {
+			if resp.(*sproto.RemNodeResp).Reason == "node not found" {
+				break
+			} else {
+				logger.GetSugar().Infof("%v", resp.(*sproto.RemNodeResp).Reason)
+			}
+
 		}
 		time.Sleep(time.Second)
 	}

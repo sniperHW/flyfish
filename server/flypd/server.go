@@ -82,25 +82,42 @@ func (p *pd) onKvnodeBoot(replyer replyer, m *snet.Message) {
 		}
 
 		for storeId, st := range node.store {
+			if st.Type == LearnerStore && st.Value == FlyKvUnCommit {
+				continue
+			}
+
 			raftCluster := []string{}
+
 			for _, n := range node.set.nodes {
 				if v, ok := n.store[storeId]; ok {
-					if v.isVoter() {
-						raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@voter", n.id, v.RaftID, n.host, n.raftPort, n.host, n.servicePort))
-					} else if v.isLearner() {
+					if v.Type == LearnerStore && v.Value == FlyKvCommited {
+						raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@learner", n.id, v.RaftID, n.host, n.raftPort, n.host, n.servicePort))
+					} else if v.Type == VoterStore {
+						if v.Value == FlyKvCommited {
+							raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@voter", n.id, v.RaftID, n.host, n.raftPort, n.host, n.servicePort))
+						} else {
+							raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@learner", n.id, v.RaftID, n.host, n.raftPort, n.host, n.servicePort))
+						}
+					} else {
 						raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@learner", n.id, v.RaftID, n.host, n.raftPort, n.host, n.servicePort))
 					}
 				}
 			}
 
-			s := &sproto.StoreInfo{
-				Id:          int32(storeId),
-				Slots:       node.set.stores[storeId].slots.ToJson(),
-				RaftCluster: strings.Join(raftCluster, ","),
-				RaftID:      st.RaftID,
+			if len(raftCluster) > 0 {
+				s := &sproto.StoreInfo{
+					Id:          int32(storeId),
+					Slots:       node.set.stores[storeId].slots.ToJson(),
+					RaftCluster: strings.Join(raftCluster, ","),
+					RaftID:      st.RaftID,
+				}
+				//GetSugar().Infof("onKvnodeBoot %d %s", msg.NodeID, strings.Join(raftCluster, ","))
+				resp.Stores = append(resp.Stores, s)
 			}
-			GetSugar().Infof("onKvnodeBoot %d %s", msg.NodeID, strings.Join(raftCluster, ","))
-			resp.Stores = append(resp.Stores, s)
+		}
+
+		if !node.removing && len(resp.Stores) != StorePerSet {
+			resp.Stores = []*sproto.StoreInfo{}
 		}
 
 		replyer.reply(snet.MakeMessage(m.Context, resp))
@@ -261,56 +278,6 @@ func (p *pd) onKvnodeReportStatus(replyer replyer, m *snet.Message) {
 					Meta:    p.pState.MetaBytes,
 				}))
 		}
-	}
-
-	isMissing := func(storeID int) (missing bool) {
-		missing = true
-		for _, v := range msg.Stores {
-			if int(v.StoreID) == storeID {
-				missing = false
-				return
-			}
-		}
-		return
-	}
-
-	//检查是否有遗漏的store,有的通知kvnode加载
-	var notify *sproto.NotifyMissingStores
-	for storeId, st := range node.store {
-		if isMissing(storeId) {
-
-			GetSugar().Infof("node:%d missing:%d", msg.NodeID, storeId)
-
-			if nil == notify {
-				notify = &sproto.NotifyMissingStores{
-					Meta: p.pState.MetaBytes,
-				}
-			}
-
-			raftCluster := []string{}
-			for _, n := range node.set.nodes {
-				if v, ok := n.store[storeId]; ok {
-					if v.isVoter() {
-						raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@voter", n.id, v.RaftID, n.host, n.raftPort, n.host, n.servicePort))
-					} else if v.isLearner() {
-						raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@learner", n.id, v.RaftID, n.host, n.raftPort, n.host, n.servicePort))
-					}
-				}
-			}
-
-			s := &sproto.StoreInfo{
-				Id:          int32(storeId),
-				Slots:       node.set.stores[storeId].slots.ToJson(),
-				RaftCluster: strings.Join(raftCluster, ","),
-				RaftID:      st.RaftID,
-			}
-			notify.Stores = append(notify.Stores, s)
-		}
-	}
-
-	if nil != notify {
-		addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.host, node.servicePort))
-		p.udp.SendTo(addr, snet.MakeMessage(0, notify))
 	}
 }
 
@@ -575,9 +542,9 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.SetMarkClear{}, "SetMarkClear", p.onSetMarkClear)
 	p.registerMsgHandler(&sproto.AddNode{}, "AddNode", p.onAddNode)
 	p.registerMsgHandler(&sproto.RemNode{}, "RemNode", p.onRemNode)
-	p.registerMsgHandler(&sproto.AddLearnerStoreToNode{}, "AddLearnerStoreToNode", p.onAddLearnerStoreToNode)
-	p.registerMsgHandler(&sproto.PromoteLearnerStore{}, "PromoteLearnerStore", p.onPromoteLearnerStore)
-	p.registerMsgHandler(&sproto.RemoveNodeStore{}, "RemoveNodeStore", p.onRemoveNodeStore)
+	//p.registerMsgHandler(&sproto.AddLearnerStoreToNode{}, "AddLearnerStoreToNode", p.onAddLearnerStoreToNode)
+	//p.registerMsgHandler(&sproto.PromoteLearnerStore{}, "PromoteLearnerStore", p.onPromoteLearnerStore)
+	//p.registerMsgHandler(&sproto.RemoveNodeStore{}, "RemoveNodeStore", p.onRemoveNodeStore)
 	p.registerMsgHandler(&sproto.GetMeta{}, "GetMeta", p.onGetMeta)
 	p.registerMsgHandler(&sproto.GetSetStatus{}, "GetSetStatus", p.onGetSetStatus)
 	p.registerMsgHandler(&sproto.MetaAddTable{}, "MetaAddTable", p.onUpdateMetaReq)

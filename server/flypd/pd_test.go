@@ -67,7 +67,7 @@ func (n *testKvnode) run() {
 			context := m.(*snet.Message).Context
 			switch msg.(type) {
 			case *sproto.NotifyNodeStoreOp:
-				//fmt.Println("on NotifyNodeStoreOp")
+				GetSugar().Infof("on NotifyNodeStoreOp")
 				n.udp.SendTo(from, snet.MakeMessage(context, &sproto.NodeStoreOpOk{}))
 			case *sproto.NotifySlotTransIn:
 				notify := msg.(*sproto.NotifySlotTransIn)
@@ -427,6 +427,8 @@ func TestAddRemNode(t *testing.T) {
 		if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, time.Second); nil != resp {
 			if resp.(*sproto.AddNodeResp).Ok {
 				break
+			} else {
+				GetSugar().Infof("%s", resp.(*sproto.AddNodeResp).Reason)
 			}
 		}
 		time.Sleep(time.Second)
@@ -440,42 +442,6 @@ func TestAddRemNode(t *testing.T) {
 
 	go node1.run()
 
-	for {
-
-		req := &sproto.AddLearnerStoreToNode{
-			SetID:  1,
-			NodeID: 2,
-			Store:  1,
-		}
-
-		if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, time.Second); nil != resp {
-			if resp.(*sproto.AddLearnerStoreToNodeResp).Ok {
-				break
-			} else if resp.(*sproto.AddLearnerStoreToNodeResp).Reason == "store already exists" {
-				break
-			}
-		}
-		time.Sleep(time.Second)
-	}
-
-	for {
-
-		req := &sproto.PromoteLearnerStore{
-			SetID:  1,
-			NodeID: 2,
-			Store:  1,
-		}
-
-		if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, time.Second); nil != resp {
-			if resp.(*sproto.PromoteLearnerStoreResp).Ok {
-				break
-			} else if resp.(*sproto.PromoteLearnerStoreResp).Reason == "store is already a voter" {
-				break
-			}
-		}
-		time.Sleep(time.Second)
-	}
-
 	node2 := &testKvnode{
 		nodeId: 2,
 	}
@@ -484,23 +450,39 @@ func TestAddRemNode(t *testing.T) {
 
 	go node2.run()
 
+	//等待所有store成为voter
+
 	for {
+		c := consoleHttp.NewClient("localhost:8110")
+		resp, err := c.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+		if nil != err {
+			GetSugar().Errorf("%v", err)
+		} else {
+			ok := func() bool {
+				s := resp.(*sproto.GetSetStatusResp).Sets[0]
+				for _, v := range s.Nodes {
+					if int(v.NodeID) == 2 {
+						for _, vv := range v.Stores {
 
-		req := &sproto.RemoveNodeStore{
-			SetID:  1,
-			NodeID: 2,
-			Store:  1,
-		}
+							if vv.Type != int32(VoterStore) || vv.Value != int32(FlyKvCommited) {
+								return false
+							}
+						}
+						return len(v.Stores) == StorePerSet
+					}
+				}
+				return false
+			}()
 
-		if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, time.Second); nil != resp {
-			if resp.(*sproto.RemoveNodeStoreResp).Ok {
+			if ok {
 				break
-			} else if resp.(*sproto.RemoveNodeStoreResp).Reason == "store not exists" {
-				break
+			} else {
+				time.Sleep(time.Second)
 			}
 		}
-		time.Sleep(time.Second)
 	}
+
+	GetSugar().Infof("here")
 
 	for {
 
@@ -517,6 +499,32 @@ func TestAddRemNode(t *testing.T) {
 			}
 		}
 		time.Sleep(time.Second)
+	}
+
+	//等待node被成功移除
+
+	for {
+		c := consoleHttp.NewClient("localhost:8110")
+		resp, err := c.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+		if nil != err {
+			GetSugar().Errorf("%v", err)
+		} else {
+			ok := func() bool {
+				s := resp.(*sproto.GetSetStatusResp).Sets[0]
+				for _, v := range s.Nodes {
+					if int(v.NodeID) == 2 {
+						return false
+					}
+				}
+				return true
+			}()
+
+			if ok {
+				break
+			} else {
+				time.Sleep(time.Second)
+			}
+		}
 	}
 
 	node2.stop()

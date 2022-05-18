@@ -173,6 +173,7 @@ type pd struct {
 	storeTask       map[uint64]*storeTask
 	metaUpdateQueue *list.List
 	RaftIDGen       *idutil.Generator
+	pendingNodes    map[int]*kvnode
 }
 
 func NewPd(nodeID uint16, cluster int, join bool, config *Config, clusterStr string) (*pd, error) {
@@ -219,6 +220,7 @@ func NewPd(nodeID uint16, cluster int, join bool, config *Config, clusterStr str
 		},
 		metaUpdateQueue: list.New(),
 		RaftIDGen:       idutil.NewGenerator(nodeID, time.Now()),
+		pendingNodes:    map[int]*kvnode{},
 	}
 
 	p.initMsgHandler()
@@ -413,6 +415,8 @@ func (p *pd) onLeaderDownToFollower() {
 
 	p.storeTask = map[uint64]*storeTask{}
 
+	p.pendingNodes = map[int]*kvnode{}
+
 	for p.metaUpdateQueue.Len() > 0 {
 		op := p.metaUpdateQueue.Remove(p.metaUpdateQueue.Front()).(*metaOpration)
 		if nil != op.m.Msg {
@@ -499,12 +503,13 @@ func (p *pd) processCommited(commited raft.Committed) {
 					err = unmarshal(&ProposalUpdateMeta{})
 				case proposalFlyKvCommited:
 					err = unmarshal(&ProposalFlyKvCommited{})
-				case proposalAddLearnerStoreToNode:
+				/*case proposalAddLearnerStoreToNode:
 					err = unmarshal(&ProposalAddLearnerStoreToNode{})
 				case proposalPromoteLearnerStore:
 					err = unmarshal(&ProposalPromoteLearnerStore{})
 				case proposalRemoveNodeStore:
 					err = unmarshal(&ProposalRemoveNodeStore{})
+				*/
 				case proposalNop:
 					err = unmarshal(&ProposalNop{})
 				default:
@@ -532,6 +537,29 @@ func (p *pd) processCommited(commited raft.Committed) {
 	}
 }
 
+func (p *pd) processPendingNodes() {
+	if p.isLeader() {
+		if len(p.pendingNodes) > 0 {
+			dict := map[uint64]bool{}
+			for _, v := range p.storeTask {
+				dict[uint64(v.node.id)<<32+uint64(v.store)] = true
+			}
+
+			for _, v := range p.pendingNodes {
+				for k, vv := range v.store {
+					if vv.Type == VoterStore && vv.Value == FlyKvUnCommit && !dict[uint64(v.id)<<32+uint64(k)] {
+						p.startStoreNotifyTask(v, k, vv.RaftID, VoterStore)
+					}
+				}
+			}
+		}
+	}
+
+	time.AfterFunc(time.Second, func() {
+		p.mainque.AppendHighestPriotiryItem(p.processPendingNodes)
+	})
+}
+
 func (p *pd) serve() {
 
 	p.storeBalance()
@@ -544,6 +572,11 @@ func (p *pd) serve() {
 			p.wait.Done()
 			GetSugar().Infof("pd serve break")
 		}()
+
+		time.AfterFunc(time.Second, func() {
+			p.mainque.AppendHighestPriotiryItem(p.processPendingNodes)
+		})
+
 		for {
 			_, v := p.mainque.pop()
 			switch v.(type) {
