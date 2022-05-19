@@ -18,7 +18,7 @@ import (
 	flykv "github.com/sniperHW/flyfish/server/flykv"
 	flypd "github.com/sniperHW/flyfish/server/flypd"
 	console "github.com/sniperHW/flyfish/server/flypd/console/http"
-	//consoleHttp "github.com/sniperHW/flyfish/server/flypd/console/http"
+	consoleHttp "github.com/sniperHW/flyfish/server/flypd/console/http"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	sslot "github.com/sniperHW/flyfish/server/slot"
@@ -435,7 +435,7 @@ func clearUsers1() {
 func TestFlygate(t *testing.T) {
 	sslot.SlotCount = 128
 	flypd.MinReplicaPerSet = 1
-	flypd.StorePerSet = 2
+	flypd.StorePerSet = 6
 
 	os.RemoveAll("./testRaftLog")
 
@@ -507,7 +507,7 @@ func TestFlygate(t *testing.T) {
 
 	consoleClient := console.NewClient("localhost:8110")
 
-	//添加一个kvnode
+	//添加kvnode3
 	resp, err := consoleClient.Call(&sproto.AddNode{
 		SetID:       1,
 		NodeID:      3,
@@ -515,8 +515,6 @@ func TestFlygate(t *testing.T) {
 		ServicePort: 9320,
 		RaftPort:    9321,
 	}, &sproto.AddNodeResp{})
-
-	fmt.Println(resp, err)
 
 	node3, err := flykv.NewKvNode(3, true, kvConf, flykv.NewSqlDB())
 
@@ -548,36 +546,31 @@ func TestFlygate(t *testing.T) {
 		fmt.Println(err)
 	}
 
-	//向node3添加store1
-
-	resp, err = consoleClient.Call(&sproto.AddLearnerStoreToNode{
-		SetID:  1,
-		NodeID: 3,
-		Store:  1,
-	}, &sproto.AddLearnerStoreToNodeResp{})
-
-	//等待node3,store1启动成功
+	//等待node3至少有一个leader
 	for {
 		resp, err = consoleClient.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
-		var n3 *sproto.KvnodeStatus
-		if nil == err {
-			for _, set := range resp.(*sproto.GetSetStatusResp).Sets {
-				if set.SetID == int32(1) {
-					for _, n := range set.Nodes {
-						if n.NodeID == int32(3) {
-							n3 = n
-							break
+		if ok := func() bool {
+			leaderCount := 0
+			if nil == err {
+				for _, set := range resp.(*sproto.GetSetStatusResp).Sets {
+					if set.SetID == int32(1) {
+						for _, n := range set.Nodes {
+							if n.NodeID == int32(3) {
+								for _, s := range n.Stores {
+									if s.IsLeader {
+										leaderCount++
+									}
+								}
+							}
 						}
 					}
 				}
-				if nil != n3 {
-					break
-				}
 			}
-
-			if len(n3.Stores) > 0 && n3.Stores[0].Progress > 0 {
-				break
-			}
+			return leaderCount == 3
+		}(); ok {
+			break
+		} else {
+			time.Sleep(time.Second)
 		}
 	}
 
@@ -607,44 +600,33 @@ func TestFlygate(t *testing.T) {
 		panic(err)
 	}
 
-	resp, err = consoleClient.Call(&sproto.RemoveNodeStore{
-		SetID:  1,
-		NodeID: 3,
-		Store:  1,
-	}, &sproto.RemoveNodeStoreResp{})
-
-	//等待node3,store1被移除
-	for {
-		resp, err = consoleClient.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
-		var n3 *sproto.KvnodeStatus
-		if nil == err {
-			for _, set := range resp.(*sproto.GetSetStatusResp).Sets {
-				if set.SetID == int32(1) {
-					for _, n := range set.Nodes {
-						if n.NodeID == int32(3) {
-							n3 = n
-							break
-						}
-					}
-				}
-				if nil != n3 {
-					break
-				}
-			}
-
-			if len(n3.Stores) == 0 {
-				break
-			}
-		}
-	}
-
-	//删除一个kvnode
+	//删除kvnode3
 	resp, err = consoleClient.Call(&sproto.RemNode{
 		SetID:  1,
 		NodeID: 3,
 	}, &sproto.RemNodeResp{})
 
-	fmt.Println(resp, err)
+	//等待node3被移除
+	for {
+		resp, err = consoleClient.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+		if nil == err {
+			find := false
+			for _, set := range resp.(*sproto.GetSetStatusResp).Sets {
+				if set.SetID == int32(1) {
+					for _, n := range set.Nodes {
+						if n.NodeID == int32(3) {
+							find = true
+							break
+						}
+					}
+				}
+			}
+
+			if !find {
+				break
+			}
+		}
+	}
 
 	node3.Stop()
 
@@ -763,10 +745,10 @@ func TestFlygate(t *testing.T) {
 
 }
 
-func TestAddRemoveNode(t *testing.T) {
+func TestAddRemoveNode1(t *testing.T) {
 	sslot.SlotCount = 128
 	flypd.MinReplicaPerSet = 1
-	flypd.StorePerSet = 1
+	flypd.StorePerSet = 3
 	os.RemoveAll("./testRaftLog")
 
 	clearUsers1()
@@ -820,11 +802,15 @@ func TestAddRemoveNode(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 
+	logger.GetSugar().Infof("start node1")
+
 	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
 	}
+
+	logger.GetSugar().Infof("start node2")
 
 	node3, err := flykv.NewKvNode(3, true, kvConf, flykv.NewSqlDB())
 
@@ -832,8 +818,128 @@ func TestAddRemoveNode(t *testing.T) {
 		panic(err)
 	}
 
-	//等待node3成为voter
-	/*for {
+	//remove node
+	logger.GetSugar().Infof("remove node")
+
+	for {
+		resp := snet.UdpCall([]*net.UDPAddr{addr},
+			snet.MakeMessage(0, &sproto.RemNode{
+				SetID:  1,
+				NodeID: 3,
+			}),
+			time.Second,
+			func(respCh chan interface{}, r interface{}) {
+				if m, ok := r.(*snet.Message); ok {
+					if resp, ok := m.Msg.(*sproto.RemNodeResp); ok {
+						select {
+						case respCh <- resp:
+						default:
+						}
+					}
+				}
+			})
+
+		if resp != nil {
+			if resp.(*sproto.RemNodeResp).Reason == "node not found" {
+				break
+			} else {
+				logger.GetSugar().Infof("%v", resp.(*sproto.RemNodeResp).Reason)
+			}
+
+		}
+		time.Sleep(time.Second)
+	}
+
+	node3.Stop()
+
+	node1.Stop()
+
+	pd.Stop()
+
+	pd, _ = newPD(t, pdRaftID)
+
+	time.Sleep(time.Second * 2)
+
+	pd.Stop()
+
+	conn.Close()
+}
+
+func TestAddRemoveNode2(t *testing.T) {
+	sslot.SlotCount = 128
+	flypd.MinReplicaPerSet = 1
+	flypd.StorePerSet = 3
+	os.RemoveAll("./testRaftLog")
+
+	clearUsers1()
+
+	var err error
+
+	dbConf := &dbconf{}
+	if _, err = toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
+		panic(err)
+	}
+
+	kvConf, err := flykv.LoadConfigStr(fmt.Sprintf(flyKvConfigStr, dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.Usr, dbConf.Pwd, dbConf.Db))
+
+	if nil != err {
+		panic(err)
+	}
+
+	pd, pdRaftID := newPD(t, 0)
+
+	logger.GetSugar().Infof("testAddRemNode")
+
+	conn, err := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
+	assert.Nil(t, err)
+
+	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
+
+	for {
+		resp := snet.UdpCall([]*net.UDPAddr{addr},
+			snet.MakeMessage(0, &sproto.AddNode{
+				SetID:       1,
+				NodeID:      3,
+				Host:        "localhost",
+				ServicePort: 9320,
+				RaftPort:    9321,
+			}),
+			time.Second,
+			func(respCh chan interface{}, r interface{}) {
+				if m, ok := r.(*snet.Message); ok {
+					if resp, ok := m.Msg.(*sproto.AddNodeResp); ok {
+						select {
+						case respCh <- resp:
+						default:
+						}
+					}
+				}
+			})
+
+		if resp != nil && resp.(*sproto.AddNodeResp).Ok {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
+	logger.GetSugar().Infof("start node1")
+
+	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	logger.GetSugar().Infof("start node2")
+
+	node3, err := flykv.NewKvNode(3, true, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	//等待node3所有store成为voter
+	for {
 		c := consoleHttp.NewClient("localhost:8110")
 		resp, err := c.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
 		if nil != err {
@@ -860,7 +966,7 @@ func TestAddRemoveNode(t *testing.T) {
 				time.Sleep(time.Second)
 			}
 		}
-	}*/
+	}
 
 	//remove node
 	logger.GetSugar().Infof("remove node")
@@ -1454,7 +1560,6 @@ func TestStoreBalance(t *testing.T) {
 	}()
 
 	//增加node2
-
 	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
 
 	for {
@@ -1478,71 +1583,16 @@ func TestStoreBalance(t *testing.T) {
 				}
 			})
 
-		if resp != nil && resp.(*sproto.AddNodeResp).Reason == "duplicate node id" {
+		if resp != nil && resp.(*sproto.AddNodeResp).Ok {
 			break
 		}
 		time.Sleep(time.Second)
 	}
-
-	//add learnstore
-
-	for {
-		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.AddLearnerStoreToNode{
-				SetID:  1,
-				NodeID: 2,
-				Store:  2,
-			}),
-			time.Second,
-			func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.AddLearnerStoreToNodeResp); ok {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			})
-
-		if resp != nil && resp.(*sproto.AddLearnerStoreToNodeResp).Reason == "learner store already exists" {
-			break
-		}
-		time.Sleep(time.Second)
-	}
-
-	logger.GetSugar().Infof("--------------------add learner 2:2 OK------------------------")
 
 	node2, err := flykv.NewKvNode(2, true, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
-	}
-
-	//promote to voter
-	for {
-		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.PromoteLearnerStore{
-				SetID:  1,
-				NodeID: 2,
-				Store:  2,
-			}),
-			time.Second,
-			func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.PromoteLearnerStoreResp); ok {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			})
-
-		if resp != nil && resp.(*sproto.PromoteLearnerStoreResp).Reason == "store is already a voter" {
-			break
-		}
-		time.Sleep(time.Second)
 	}
 
 	//增加node3
@@ -1567,40 +1617,11 @@ func TestStoreBalance(t *testing.T) {
 				}
 			})
 
-		if resp != nil && resp.(*sproto.AddNodeResp).Reason == "duplicate node id" {
+		if resp != nil && resp.(*sproto.AddNodeResp).Ok {
 			break
 		}
 		time.Sleep(time.Second)
 	}
-
-	//add learnstore
-
-	for {
-		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.AddLearnerStoreToNode{
-				SetID:  1,
-				NodeID: 3,
-				Store:  3,
-			}),
-			time.Second,
-			func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.AddLearnerStoreToNodeResp); ok {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			})
-
-		if resp != nil && resp.(*sproto.AddLearnerStoreToNodeResp).Reason == "learner store already exists" {
-			break
-		}
-		time.Sleep(time.Second)
-	}
-
-	logger.GetSugar().Infof("--------------------add learner 3:3 OK------------------------")
 
 	node3, err := flykv.NewKvNode(3, true, kvConf, flykv.NewSqlDB())
 
@@ -1608,80 +1629,45 @@ func TestStoreBalance(t *testing.T) {
 		panic(err)
 	}
 
-	//promote to voter
-	for {
-		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.PromoteLearnerStore{
-				SetID:  1,
-				NodeID: 3,
-				Store:  3,
-			}),
-			time.Second,
-			func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.PromoteLearnerStoreResp); ok {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			})
-
-		if resp != nil && resp.(*sproto.PromoteLearnerStoreResp).Reason == "store is already a voter" {
-			break
-		}
-		time.Sleep(time.Second)
-	}
-
 	/////////////////
 
 	for {
-		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.GetSetStatus{}),
-			time.Second,
-			func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.GetSetStatusResp); ok {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			})
-
-		if nil != resp {
-			ret := resp.(*sproto.GetSetStatusResp)
-			if len(ret.Sets) > 0 {
-				set1 := ret.Sets[0]
-				nodeLeaderCount := make([]int, 3)
-				totalLeaderCount := 0
-				for k, v := range set1.Nodes {
-					for _, vv := range v.Stores {
-						if vv.IsLeader {
-							nodeLeaderCount[k]++
-							totalLeaderCount++
+		c := consoleHttp.NewClient("localhost:8110")
+		resp, err := c.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+		if nil != err {
+			logger.GetSugar().Errorf("%v", err)
+		} else {
+			ok := func() bool {
+				leaderCount := []int{0, 0, 0, 0}
+				for _, v := range resp.(*sproto.GetSetStatusResp).Sets {
+					if v.SetID == int32(1) {
+						for _, vv := range v.Nodes {
+							for _, vvv := range vv.Stores {
+								if vvv.IsLeader {
+									leaderCount[int(vv.NodeID)]++
+								}
+							}
 						}
 					}
 				}
 
-				if totalLeaderCount == 3 {
-					ok := true
-					for _, v := range nodeLeaderCount {
-						if v > 1 {
-							ok = false
-							break
-						}
-					}
+				logger.GetSugar().Infof("leaderCount %v", leaderCount)
 
-					if ok {
-						break
+				for i := 1; i < len(leaderCount); i++ {
+					if leaderCount[i] != 1 {
+						return false
 					}
 				}
+				return true
+
+			}()
+
+			if ok {
+				break
+			} else {
+				time.Sleep(time.Second)
 			}
 		}
-		time.Sleep(time.Second)
 	}
 
 	atomic.StoreInt32(&stoped, 1)
@@ -1746,40 +1732,11 @@ func TestSuspendResume(t *testing.T) {
 				}
 			})
 
-		if resp != nil && resp.(*sproto.AddNodeResp).Reason == "duplicate node id" {
+		if resp != nil && resp.(*sproto.AddNodeResp).Ok {
 			break
 		}
 		time.Sleep(time.Second)
 	}
-
-	//add learnstore
-
-	for {
-		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.AddLearnerStoreToNode{
-				SetID:  1,
-				NodeID: 2,
-				Store:  1,
-			}),
-			time.Second,
-			func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.AddLearnerStoreToNodeResp); ok {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			})
-
-		if resp != nil && resp.(*sproto.AddLearnerStoreToNodeResp).Reason == "learner store already exists" {
-			break
-		}
-		time.Sleep(time.Second)
-	}
-
-	logger.GetSugar().Infof("--------------------add learner 2:2 OK------------------------")
 
 	node2, err := flykv.NewKvNode(2, true, kvConf, flykv.NewSqlDB())
 
@@ -1787,8 +1744,40 @@ func TestSuspendResume(t *testing.T) {
 		panic(err)
 	}
 
+	//等待node2所有store成为voter
+
+	for {
+		c := consoleHttp.NewClient("localhost:8110")
+		resp, err := c.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+		if nil != err {
+			logger.GetSugar().Errorf("%v", err)
+		} else {
+			ok := func() bool {
+				s := resp.(*sproto.GetSetStatusResp).Sets[0]
+				for _, v := range s.Nodes {
+					if int(v.NodeID) == 2 {
+						for _, vv := range v.Stores {
+							if vv.Type != int32(flypd.VoterStore) || vv.Value != int32(flypd.FlyKvCommited) {
+								return false
+							}
+						}
+						return len(v.Stores) == flypd.StorePerSet
+					}
+				}
+				return false
+			}()
+
+			if ok {
+				break
+			} else {
+				time.Sleep(time.Second)
+			}
+		}
+	}
+
 	//suspend store1
 	consoleClient := console.NewClient("localhost:8110")
+
 	fmt.Println("--------------------wait suspend------------------------------")
 
 	for {

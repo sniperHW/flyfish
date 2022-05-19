@@ -283,7 +283,7 @@ func (p *pd) makeReplyFunc(replyer replyer, m *snet.Message, resp proto.Message)
 }
 
 func (p *pd) storeBalance() {
-	time.AfterFunc(time.Second*3, func() {
+	time.AfterFunc(time.Second*1, func() {
 		p.mainque.AppendHighestPriotiryItem(func() {
 			if p.isLeader() {
 				for _, v := range p.pState.deployment.sets {

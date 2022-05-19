@@ -1,7 +1,11 @@
 package flykv
 
 import (
+	"github.com/sniperHW/flyfish/db"
+	"github.com/sniperHW/flyfish/db/sql"
+	"github.com/sniperHW/flyfish/pkg/bitmap"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
+	"github.com/sniperHW/flyfish/pkg/raft"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"net"
@@ -28,6 +32,45 @@ func (this *kvnode) isVaildPdAddress(addr *net.UDPAddr) bool {
 func (this *kvnode) processUdpMsg(from *net.UDPAddr, m *snet.Message) {
 	GetSugar().Debugf("processUdpMsg %v", m.Msg)
 	switch m.Msg.(type) {
+	case *sproto.NotifyMissingStores:
+
+		GetSugar().Errorf("NotifyMissingStores")
+
+		msg := m.Msg.(*sproto.NotifyMissingStores)
+
+		dbdef, err := db.MakeDbDefFromJsonString(msg.Meta)
+
+		if nil != err {
+			GetSugar().Errorf("NotifyMissingStores CreateDbDefFromJsonString err:%v", err)
+			return
+		}
+
+		meta, err := sql.CreateDbMeta(dbdef)
+
+		if nil != err {
+			GetSugar().Errorf("NotifyMissingStores CreateDbMeta err:%v", err)
+			return
+		}
+
+		for _, v := range msg.Stores {
+			slots, err := bitmap.CreateFromJson(v.Slots)
+			if nil != err {
+				GetSugar().Errorf("NotifyMissingStores CreateFromJson store:%d err:%v", v.Id, err)
+				return
+			}
+
+			peers, err := raft.SplitPeers(v.RaftCluster)
+
+			if nil != err {
+				GetSugar().Errorf("NotifyMissingStores SplitPeers store:%d err:%v,origin:%v", v.Id, err, v.RaftCluster)
+				return
+			}
+
+			if err = this.addStore(meta, int(v.Id), peers, slots); nil != err {
+				GetSugar().Errorf("NotifyMissingStores addStore store:%d err:%v", v.Id, err)
+				return
+			}
+		}
 	case *sproto.QueryLeader:
 		this.muS.RLock()
 		store, ok := this.stores[int(m.Msg.(*sproto.QueryLeader).Store)]

@@ -290,6 +290,8 @@ func (s *set) storeBalance(pd *pd) {
 		}
 	}
 
+	//GetSugar().Infof("storeBalance set:%d leaderPerSet:%d max:%d StorePerSet:%d len(s.nodes):%d", s.id, leaderPerSet, max, StorePerSet, len(s.nodes))
+
 	if max > leaderPerSet {
 		for store, state := range maxNode.store {
 			if !state.isLeader() {

@@ -55,6 +55,28 @@ func (p *pd) onMsg(replyer replyer, msg *snet.Message) {
 	}
 }
 
+func buildRaftClusterStr(node *kvnode, storeId int) (raftCluster []string) {
+	for _, n := range node.set.nodes {
+		if v, ok := n.store[storeId]; ok {
+			if v.Type == LearnerStore {
+				if v.Value == FlyKvCommited {
+					raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@learner", n.id, v.RaftID, n.host, n.raftPort, n.host, n.servicePort))
+				}
+			} else if v.Type == VoterStore {
+				if v.Value == FlyKvCommited {
+					raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@voter", n.id, v.RaftID, n.host, n.raftPort, n.host, n.servicePort))
+				} else {
+					raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@learner", n.id, v.RaftID, n.host, n.raftPort, n.host, n.servicePort))
+				}
+			} else {
+				//remove uncommited
+				raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@learner", n.id, v.RaftID, n.host, n.raftPort, n.host, n.servicePort))
+			}
+		}
+	}
+	return
+}
+
 func (p *pd) onKvnodeBoot(replyer replyer, m *snet.Message) {
 	if 0 == p.pState.Meta.Version {
 		GetSugar().Infof("Meta not set")
@@ -86,38 +108,16 @@ func (p *pd) onKvnodeBoot(replyer replyer, m *snet.Message) {
 				continue
 			}
 
-			raftCluster := []string{}
-
-			for _, n := range node.set.nodes {
-				if v, ok := n.store[storeId]; ok {
-					if v.Type == LearnerStore && v.Value == FlyKvCommited {
-						raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@learner", n.id, v.RaftID, n.host, n.raftPort, n.host, n.servicePort))
-					} else if v.Type == VoterStore {
-						if v.Value == FlyKvCommited {
-							raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@voter", n.id, v.RaftID, n.host, n.raftPort, n.host, n.servicePort))
-						} else {
-							raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@learner", n.id, v.RaftID, n.host, n.raftPort, n.host, n.servicePort))
-						}
-					} else {
-						raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@learner", n.id, v.RaftID, n.host, n.raftPort, n.host, n.servicePort))
-					}
-				}
-			}
-
-			if len(raftCluster) > 0 {
+			if raftCluster := buildRaftClusterStr(node, storeId); len(raftCluster) > 0 {
+				GetSugar().Infof("%v", raftCluster)
 				s := &sproto.StoreInfo{
 					Id:          int32(storeId),
 					Slots:       node.set.stores[storeId].slots.ToJson(),
 					RaftCluster: strings.Join(raftCluster, ","),
 					RaftID:      st.RaftID,
 				}
-				//GetSugar().Infof("onKvnodeBoot %d %s", msg.NodeID, strings.Join(raftCluster, ","))
 				resp.Stores = append(resp.Stores, s)
 			}
-		}
-
-		if !node.removing && len(resp.Stores) != StorePerSet {
-			resp.Stores = []*sproto.StoreInfo{}
 		}
 
 		replyer.reply(snet.MakeMessage(m.Context, resp))
@@ -279,6 +279,52 @@ func (p *pd) onKvnodeReportStatus(replyer replyer, m *snet.Message) {
 				}))
 		}
 	}
+
+	isMissing := func(storeID int) (missing bool) {
+		missing = true
+		for _, v := range msg.Stores {
+			if int(v.StoreID) == storeID {
+				missing = false
+				return
+			}
+		}
+		return
+	}
+
+	//检查是否有遗漏的store,有的通知kvnode加载
+	var notify *sproto.NotifyMissingStores
+	for storeId, st := range node.store {
+		if st.Type == LearnerStore && st.Value == FlyKvUnCommit {
+			continue
+		}
+
+		if isMissing(storeId) {
+
+			GetSugar().Infof("node:%d missing:%d", msg.NodeID, storeId)
+
+			if nil == notify {
+				notify = &sproto.NotifyMissingStores{
+					Meta: p.pState.MetaBytes,
+				}
+			}
+
+			if raftCluster := buildRaftClusterStr(node, storeId); len(raftCluster) > 0 {
+				s := &sproto.StoreInfo{
+					Id:          int32(storeId),
+					Slots:       node.set.stores[storeId].slots.ToJson(),
+					RaftCluster: strings.Join(raftCluster, ","),
+					RaftID:      st.RaftID,
+				}
+				notify.Stores = append(notify.Stores, s)
+			}
+		}
+	}
+
+	if nil != notify {
+		addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.host, node.servicePort))
+		p.udp.SendTo(addr, snet.MakeMessage(0, notify))
+	}
+
 }
 
 func (p *pd) startUdpService() error {

@@ -45,15 +45,14 @@ func (st *storeTask) notifyFlyKv() {
 			var remotes []string
 
 			for _, v := range st.node.set.nodes {
-				if v != st.node {
-					if _, ok := v.store[st.store]; ok {
-						remotes = append(remotes, fmt.Sprintf("%s:%d", v.host, v.servicePort))
-					}
+				if _, ok := v.store[st.store]; ok {
+					remotes = append(remotes, fmt.Sprintf("%s:%d", v.host, v.servicePort))
 				}
 			}
 
 			go func() {
 				context := snet.MakeUniqueContext()
+
 				resp := snet.UdpCall(remotes, snet.MakeMessage(context, msg), time.Second*3, func(respCh chan interface{}, r interface{}) {
 					if m, ok := r.(*snet.Message); ok && context == m.Context {
 						if resp, ok := m.Msg.(*sproto.NodeStoreOpOk); ok {
@@ -86,7 +85,7 @@ func (st *storeTask) notifyFlyKv() {
 
 func (p *pd) startStoreNotifyTask(node *kvnode, store int, raftID uint64, storeStateType FlyKvStoreStateType) {
 
-	GetSugar().Infof("startStoreNotifyTask %d %d %d", node.id, store, raftID)
+	//GetSugar().Infof("startStoreNotifyTask %d %d %d", node.id, store, raftID)
 
 	taskID := uint64(node.id)<<32 + uint64(store)
 	t, ok := p.storeTask[taskID]
@@ -117,7 +116,7 @@ func (p *ProposalFlyKvCommited) Serilize(b []byte) []byte {
 
 func (p *ProposalFlyKvCommited) apply(pd *pd) {
 
-	GetSugar().Infof("ProposalFlyKvCommited apply type:%v set:%d node:%d store:%d", p.Type, p.Set, p.Node, p.Store)
+	//GetSugar().Infof("ProposalFlyKvCommited apply type:%v set:%d node:%d store:%d", p.Type, p.Set, p.Node, p.Store)
 
 	s := pd.pState.deployment.sets[p.Set]
 	n := s.nodes[p.Node]
@@ -143,7 +142,7 @@ func (p *ProposalFlyKvCommited) apply(pd *pd) {
 	}
 
 	if n.removing && len(n.store) == 0 {
-		GetSugar().Infof("ProposalFlyKvCommited apply remove set:%d node:%d", p.Set, p.Node)
+		//GetSugar().Infof("ProposalFlyKvCommited apply remove set:%d node:%d", p.Set, p.Node)
 		delete(pd.pendingNodes, n.id)
 		delete(s.nodes, n.id)
 		pd.pState.deployment.version++
@@ -168,7 +167,7 @@ func (p *ProposalAddNode) apply(pd *pd) {
 	var s *set
 	var ok bool
 
-	GetSugar().Infof("onAddNode.apply")
+	//GetSugar().Infof("onAddNode.apply")
 
 	err := func() error {
 		s, ok = pd.pState.deployment.sets[int(p.Msg.SetID)]
@@ -256,7 +255,7 @@ func (p *ProposalAddNode) apply(pd *pd) {
 
 func (p *pd) onAddNode(replyer replyer, m *snet.Message) {
 
-	GetSugar().Infof("onAddNode")
+	//GetSugar().Infof("onAddNode")
 
 	msg := m.Msg.(*sproto.AddNode)
 	resp := &sproto.AddNodeResp{}
@@ -362,13 +361,11 @@ func (p *ProposalRemNode) apply(pd *pd) {
 		if v, ok := pd.pendingNodes[int(p.Msg.NodeID)]; ok {
 			if v.removing {
 				return errors.New("node is removing")
-			} else {
-				return errors.New("node is adding")
 			}
 		}
 
-		if len(s.nodes) == 1 {
-			return errors.New("can't remove the last node")
+		if len(s.nodes)-1 < MinReplicaPerSet {
+			return errors.New("can't remove node")
 		}
 
 		return nil
@@ -377,6 +374,12 @@ func (p *ProposalRemNode) apply(pd *pd) {
 	if nil == err {
 		n.removing = true
 		if pd.isLeader() {
+			//清理已经存在的storeTask
+			for k, v := range pd.storeTask {
+				if v.node == n {
+					delete(pd.storeTask, k)
+				}
+			}
 			for k, v := range n.store {
 				v.Type = RemoveStore
 				v.Value = FlyKvUnCommit
@@ -411,13 +414,11 @@ func (p *pd) onRemNode(replyer replyer, m *snet.Message) {
 		if v, ok := p.pendingNodes[int(msg.NodeID)]; ok {
 			if v.removing {
 				return errors.New("node is removing")
-			} else {
-				return errors.New("node is adding")
 			}
 		}
 
-		if len(s.nodes) == 1 {
-			return errors.New("can't remove the last node")
+		if len(s.nodes)-1 < MinReplicaPerSet {
+			return errors.New("can't remove node")
 		}
 
 		return nil

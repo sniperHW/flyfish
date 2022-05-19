@@ -227,7 +227,7 @@ func (p *pd) slotBalance() {
 		} else if len(stores) > 1 {
 			storeAverageSlotCount := slot.SlotCount / len(stores)
 
-			GetSugar().Infof("storeAverageSlotCount:%d", storeAverageSlotCount)
+			//GetSugar().Infof("storeAverageSlotCount:%d", storeAverageSlotCount)
 
 			for {
 				sortStores()
@@ -303,7 +303,7 @@ func (p *pd) slotBalance() {
 		}
 	}
 
-	if len(p.pState.SlotTransferMgr.Plan)+len(p.pState.SlotTransferMgr.Transactions)+len(p.pState.SlotTransferMgr.FreeSlots) == 0 {
+	/*if len(p.pState.SlotTransferMgr.Plan)+len(p.pState.SlotTransferMgr.Transactions)+len(p.pState.SlotTransferMgr.FreeSlots) == 0 {
 		s := [][]int{}
 		for _, v := range p.pState.deployment.sets {
 			for _, vv := range v.stores {
@@ -311,7 +311,7 @@ func (p *pd) slotBalance() {
 			}
 		}
 		GetSugar().Infof("slotBalance finish %v", s)
-	}
+	}*/
 }
 
 type ProposalSlotTransOutOk struct {

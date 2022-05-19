@@ -321,15 +321,6 @@ func init() {
 	namespace.Register(&sproto.AddNode{}, uint32(sproto.ServerCmdType_AddNode))
 	namespace.Register(&sproto.AddNodeResp{}, uint32(sproto.ServerCmdType_AddNodeResp))
 
-	namespace.Register(&sproto.AddLearnerStoreToNode{}, uint32(sproto.ServerCmdType_AddLearnerStoreToNode))
-	namespace.Register(&sproto.AddLearnerStoreToNodeResp{}, uint32(sproto.ServerCmdType_AddLearnerStoreToNodeResp))
-
-	namespace.Register(&sproto.PromoteLearnerStore{}, uint32(sproto.ServerCmdType_PromoteLearnerStore))
-	namespace.Register(&sproto.PromoteLearnerStoreResp{}, uint32(sproto.ServerCmdType_PromoteLearnerStoreResp))
-
-	namespace.Register(&sproto.RemoveNodeStore{}, uint32(sproto.ServerCmdType_RemoveNodeStore))
-	namespace.Register(&sproto.RemoveNodeStoreResp{}, uint32(sproto.ServerCmdType_RemoveNodeStoreResp))
-
 	namespace.Register(&sproto.RemNode{}, uint32(sproto.ServerCmdType_RemNode))
 	namespace.Register(&sproto.RemNodeResp{}, uint32(sproto.ServerCmdType_RemNodeResp))
 

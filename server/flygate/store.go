@@ -43,7 +43,7 @@ func (s *store) paybackWaittingSendToGate() {
 }
 
 func (s *store) onErrNotLeader(msg *forwordMsg) {
-	GetSugar().Infof("onErrNotLeader")
+	//GetSugar().Infof("onErrNotLeader")
 	if s.removed {
 		msg.add(nil, s.gate.pendingMsg)
 	} else {
@@ -101,7 +101,7 @@ func (s *store) queryLeader() {
 					} else if leaderNode, ok := s.set.nodes[leader]; ok {
 						s.leaderVersion++
 						s.leader = leaderNode
-						GetSugar().Infof("set:%d store:%d got leader nodeID:%d", s.set.setID, s.id, leader)
+						//GetSugar().Infof("set:%d store:%d got leader nodeID:%d", s.set.setID, s.id, leader)
 						for v := s.waittingSend.Front(); nil != v; v = s.waittingSend.Front() {
 							msg := v.Value.(*forwordMsg)
 							msg.leaderVersion = s.leaderVersion

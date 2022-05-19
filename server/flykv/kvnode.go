@@ -382,13 +382,6 @@ func (this *kvnode) start() error {
 	}
 
 	if config.Mode == "solo" {
-
-		err = sql.CreateBloomFilter(dbConfig.DBType, this.dbc)
-
-		if nil != err {
-			return err
-		}
-
 		f, err := os.Open(config.SoloConfig.MetaPath)
 		if nil != err {
 			return err
@@ -525,13 +518,10 @@ func (this *kvnode) start() error {
 			if !resp.Ok {
 				GetSugar().Errorf("getKvnodeBootInfo err:%v", resp.Reason)
 				return errors.New(resp.Reason)
-			}
-
-			if len(resp.Stores) > 0 {
-				break
 			} else {
-				time.Sleep(time.Second)
+				break
 			}
+			time.Sleep(time.Second)
 		}
 
 		this.setID = int(resp.SetID)

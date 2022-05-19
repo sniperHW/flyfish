@@ -20,12 +20,6 @@ enum ServerCmdType {
   //console <-> pd
   AddNode                       = 103;
   AddNodeResp                   = 104;
-  AddLearnerStoreToNode         = 105;
-  AddLearnerStoreToNodeResp     = 106;
-  PromoteLearnerStore           = 107;
-  PromoteLearnerStoreResp       = 108;
-  RemoveNodeStore               = 109;
-  RemoveNodeStoreResp           = 110;
   RemNode                       = 111;
   RemNodeResp                   = 112;
   AddSet                        = 113;
@@ -171,40 +165,6 @@ message addNodeResp  {
   optional bool ok            = 1;
   optional string reason      = 2;
 }
-
-message addLearnerStoreToNode {
-  optional int32  setID       = 1;
-  optional int32  nodeID      = 2;
-  optional int32  store       = 3;  
-}
-  
-message addLearnerStoreToNodeResp {
-  optional bool ok            = 1;
-  optional string reason      = 2;  
-}
-  
-message promoteLearnerStore {
-  optional int32  setID       = 1;
-  optional int32  nodeID      = 2;
-  optional int32  store       = 3;  
-}
-
-message promoteLearnerStoreResp {
-  optional bool ok            = 1;
-  optional string reason      = 2; 
-}
-
-message removeNodeStore {
-  optional int32  setID       = 1;
-  optional int32  nodeID      = 2;
-  optional int32  store       = 3;  
-}
-
-message removeNodeStoreResp {
-  optional bool ok            = 1;
-  optional string reason      = 2; 
-}
-
 
 message remNode {
   optional int32  setID       = 1;

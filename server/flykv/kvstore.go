@@ -536,21 +536,21 @@ func (s *kvstore) onPromoteLearnerNode(from *net.UDPAddr, raftID uint64, context
 
 //将nodeID从当前store的raft配置中移除
 func (s *kvstore) onRemoveNode(from *net.UDPAddr, raftID uint64, context int64) {
-
 	reply := func(err error) {
 		if nil == err || err == membership.ErrIDNotFound {
 			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context, &sproto.NodeStoreOpOk{}))
 		}
 	}
 
-	if nil == s.rn.MayRemoveMember(types.ID(raftID)) {
+	if err := s.rn.MayRemoveMember(types.ID(raftID)); nil == err {
 		s.rn.IssueConfChange(&ProposalConfChange{
 			confChangeType: raftpb.ConfChangeRemoveNode,
 			nodeID:         raftID,
 			reply:          reply,
 		})
+	} else {
+		reply(err)
 	}
-
 }
 
 func (s *kvstore) onNotifyNodeStoreOp(from *net.UDPAddr, msg *sproto.NotifyNodeStoreOp, context int64) {
@@ -709,7 +709,6 @@ func (s *kvstore) onUdpMsg(from *net.UDPAddr, m *snet.Message) {
 				})
 			}
 		case *sproto.TrasnferLeader:
-			GetSugar().Infof("req TransferLeadership to %v", m.Msg.(*sproto.TrasnferLeader).Transferee)
 			s.rn.TransferLeadership(m.Msg.(*sproto.TrasnferLeader).Transferee)
 		}
 	}

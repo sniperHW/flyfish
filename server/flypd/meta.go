@@ -32,12 +32,6 @@ func (p *pd) loadInitMeta() {
 		GetSugar().Panic(err)
 	}
 
-	err = sql.CreateBloomFilter(p.config.DBConfig.DBType, dbc)
-
-	if nil != err {
-		GetSugar().Panic(err)
-	}
-
 	if "" != p.config.InitMetaPath {
 		f, err := os.Open(p.config.InitMetaPath)
 		if nil == err {

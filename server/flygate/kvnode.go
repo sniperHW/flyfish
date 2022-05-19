@@ -75,10 +75,21 @@ func (n *kvnode) dial() {
 				session.SetCloseCallBack(func(sess *flynet.Socket, reason error) {
 					n.gate.callInQueue(1, func() {
 						n.session = nil
-						if n.removed {
-							n.paybackWaittingSendToGate()
-						} else if n.waittingSend.Len() > 0 {
-							n.dial()
+						for _, v := range n.gate.routeInfo.sets {
+							for _, vv := range v.stores {
+								if vv.leader == n {
+									c := vv.waittingSend.Len()
+									vv.leader = nil
+									for m := n.waittingSend.Front(); nil != m; m = n.waittingSend.Front() {
+										msg := m.Value.(*forwordMsg)
+										msg.removeList()
+										msg.add(nil, vv.waittingSend)
+									}
+									if c == 0 {
+										vv.queryLeader()
+									}
+								}
+							}
 						}
 					})
 				}).BeginRecv(func(s *flynet.Socket, msg interface{}) {
@@ -109,7 +120,7 @@ func (n *kvnode) dial() {
 func (n *kvnode) onNodeResp(b []byte) {
 	seqno := int64(binary.BigEndian.Uint64(b[cs.SizeLen:]))
 	errCode := int16(binary.BigEndian.Uint16(b[cs.SizeLen+8+2:]))
-	GetSugar().Debugf("onNodeResp %d %d", seqno, errCode)
+	//GetSugar().Infof("onNodeResp %d %d", seqno, errCode)
 	msg, ok := n.waitResponse[seqno]
 	if ok {
 		msg.removeMap()
@@ -124,5 +135,7 @@ func (n *kvnode) onNodeResp(b []byte) {
 			binary.BigEndian.PutUint64(b[4:], uint64(msg.oriSeqno))
 			msg.reply(b)
 		}
-	}
+	} // else {
+	//	GetSugar().Infof("onNodeResp but no context %d %d", seqno, errCode)
+	//}
 }
