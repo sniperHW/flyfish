@@ -1,7 +1,6 @@
 package flygate
 
 import (
-	"container/list"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
@@ -9,23 +8,19 @@ import (
 )
 
 type store struct {
-	id             int
-	queryingLeader bool
-	leaderVersion  int64
-	leader         *kvnode
-	waittingSend   *list.List //查询leader时的暂存队列
-	slots          *bitmap.Bitmap
-	set            *set
-	removed        bool
-	config         *Config
-	gate           *gate
+	leaderVersion int64
+	id            int
+	leader        *kvnode
+	slots         *bitmap.Bitmap
+	setID         int
+	cache         cache
+	gate          *gate
 }
 
 func (s *store) onCliMsg(msg *forwordMsg) {
-	msg.store = s
+	msg.store = uint64(s.setID)<<32 + uint64(s.id)
 	if nil == s.leader {
-		msg.add(nil, s.waittingSend)
-		if s.waittingSend.Len() == 1 {
+		if s.cache.add(msg) == 1 {
 			s.queryLeader()
 		}
 	} else {
@@ -35,47 +30,39 @@ func (s *store) onCliMsg(msg *forwordMsg) {
 }
 
 func (s *store) paybackWaittingSendToGate() {
-	for v := s.waittingSend.Front(); nil != v; v = s.waittingSend.Front() {
+	for v := s.cache.l.Front(); nil != v; v = s.cache.l.Front() {
 		msg := v.Value.(*forwordMsg)
-		msg.removeList()
-		msg.add(nil, s.gate.pendingMsg)
+		s.cache.remove(msg)
+		s.gate.paybackMsg(msg)
 	}
 }
 
 func (s *store) onErrNotLeader(msg *forwordMsg) {
-	//GetSugar().Infof("onErrNotLeader")
-	if s.removed {
-		msg.add(nil, s.gate.pendingMsg)
-	} else {
-		if nil != s.leader && s.leaderVersion != msg.leaderVersion {
-			//leader已经变更，向新的leader发送
-			msg.leaderVersion = s.leaderVersion
-			s.leader.sendForwordMsg(msg)
-		} else if nil != s.leader && s.leaderVersion == msg.leaderVersion {
-			s.leader = nil
-		}
+	if nil != s.leader && s.leaderVersion != msg.leaderVersion {
+		//leader已经变更，向新的leader发送
+		msg.leaderVersion = s.leaderVersion
+		s.leader.sendForwordMsg(msg)
+	} else if nil != s.leader && s.leaderVersion == msg.leaderVersion {
+		s.leader = nil
+	}
 
-		if nil == s.leader {
-			//还没有leader,重新投入到待发送队列
-			msg.add(nil, s.waittingSend)
-			if s.waittingSend.Len() == 1 {
-				s.queryLeader()
-			}
+	if nil == s.leader {
+		//还没有leader,重新投入到待发送队列
+		if s.cache.add(msg) == 1 {
+			s.queryLeader()
 		}
-		return
 	}
 }
 
 func (s *store) queryLeader() {
-	if s.removed {
+	if !s.gate.checkStore(s) {
 		s.paybackWaittingSendToGate()
 	} else {
 
+		set := s.gate.sets[s.setID]
 		nodes := []string{}
-		for _, v := range s.set.nodes {
-			if !v.removed {
-				nodes = append(nodes, v.service)
-			}
+		for _, v := range set.nodes {
+			nodes = append(nodes, v.service)
 		}
 
 		if len(nodes) > 0 {
@@ -94,25 +81,25 @@ func (s *store) queryLeader() {
 				}); nil != resp {
 					leader = resp.(int)
 				}
-
 				s.gate.callInQueue(1, func() {
-					if s.removed {
+					if !s.gate.checkStore(s) {
 						s.paybackWaittingSendToGate()
-					} else if leaderNode, ok := s.set.nodes[leader]; ok {
-						s.leaderVersion++
-						s.leader = leaderNode
-						//GetSugar().Infof("set:%d store:%d got leader nodeID:%d", s.set.setID, s.id, leader)
-						for v := s.waittingSend.Front(); nil != v; v = s.waittingSend.Front() {
-							msg := v.Value.(*forwordMsg)
-							msg.leaderVersion = s.leaderVersion
-							msg.removeList()
-							leaderNode.sendForwordMsg(msg)
-						}
 					} else {
-						s.gate.afterFunc(time.Millisecond*100, s.queryLeader)
+						set := s.gate.sets[s.setID]
+						if leaderNode := set.nodes[leader]; nil != leaderNode {
+							s.leaderVersion++
+							s.leader = leaderNode
+							for v := s.cache.l.Front(); nil != v; v = s.cache.l.Front() {
+								msg := v.Value.(*forwordMsg)
+								msg.leaderVersion = s.leaderVersion
+								s.cache.remove(msg)
+								leaderNode.sendForwordMsg(msg)
+							}
+						} else {
+							s.gate.afterFunc(time.Millisecond*100, s.queryLeader)
+						}
 					}
 				})
-
 			}()
 		} else {
 			s.gate.afterFunc(time.Second, s.queryLeader)

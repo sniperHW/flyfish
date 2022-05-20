@@ -115,21 +115,17 @@ func (g *gate) onScanner(conn net.Conn) {
 			ch := make(chan struct{})
 
 			g.mainQueue.Append(0, func() {
-				for _, v := range g.routeInfo.sets {
-					if !v.removed {
-						for _, vv := range v.stores {
-							st := &storeScanner{
-								id:       vv.id,
-								slots:    vv.slots.Clone(),
-								services: map[int]string{},
-							}
-							for _, vvv := range v.nodes {
-								if !vvv.removed {
-									st.services[vvv.id] = vvv.service
-								}
-							}
-							sc.stores = append(sc.stores, st)
+				for _, v := range g.sets {
+					for _, vv := range v.stores {
+						st := &storeScanner{
+							id:       vv.id,
+							slots:    vv.slots.Clone(),
+							services: map[int]string{},
 						}
+						for _, vvv := range v.nodes {
+							st.services[vvv.id] = vvv.service
+						}
+						sc.stores = append(sc.stores, st)
 					}
 				}
 				close(ch)
@@ -287,20 +283,19 @@ func (sc *scanner) loop(g *gate, conn net.Conn) {
 						g.mainQueue.Append(0, func() {
 							stores := map[int]*store{}
 							for _, v := range slots {
-								if s, ok := g.routeInfo.slotToStore[v]; ok {
+								if s, ok := g.slotToStore[v]; ok {
 									stores[v] = s
 								}
 							}
 							for _, vv := range stores {
+								set := g.sets[vv.setID]
 								st := &storeScanner{
 									id:       vv.id,
 									slots:    vv.slots.Clone(),
 									services: map[int]string{},
 								}
-								for _, vvv := range vv.set.nodes {
-									if !vvv.removed {
-										st.services[vvv.id] = vvv.service
-									}
+								for _, vvv := range set.nodes {
+									st.services[vvv.id] = vvv.service
 								}
 								sc.stores = append(sc.stores, st)
 							}

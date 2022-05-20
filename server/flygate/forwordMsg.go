@@ -3,95 +3,119 @@ package flygate
 import (
 	"container/list"
 	"github.com/sniperHW/flyfish/errcode"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
-type pending struct {
-	msgMap      *map[int64]*forwordMsg
-	listElement *list.Element
-	l           *list.List
+type cacheI interface {
+	remove(e *forwordMsg)
+}
+
+type cache struct {
+	l *list.List
+}
+
+func (c *cache) remove(m *forwordMsg) {
+	if nil != m.listElement {
+		c.l.Remove(m.listElement)
+	}
+	m.listElement = nil
+	m.setCache(emtpyCache{})
+}
+
+func (c *cache) add(m *forwordMsg) int {
+	m.listElement = c.l.PushBack(m)
+	m.setCache(c)
+	return c.l.Len()
+}
+
+func (c *cache) len() int {
+	return c.l.Len()
+}
+
+type emtpyCache struct {
+}
+
+func (ec emtpyCache) remove(m *forwordMsg) {
+
+}
+
+type deadlineTimer struct {
+	sync.Mutex
+	timer *time.Timer
+}
+
+func (dt *deadlineTimer) set(timer *time.Timer) {
+	dt.Lock()
+	if nil != dt.timer {
+		dt.timer.Stop()
+	}
+	dt.timer = timer
+	dt.Unlock()
+}
+
+func (dt *deadlineTimer) stop() {
+	dt.Lock()
+	if nil != dt.timer {
+		dt.timer.Stop()
+	}
+	dt.timer = nil
+	dt.Unlock()
 }
 
 type forwordMsg struct {
-	pending
-	seqno           int64
 	leaderVersion   int64
+	dict            *map[int64]*forwordMsg
+	listElement     *list.Element
+	cache           atomic.Value
+	seqno           int64
 	slot            int
-	oriSeqno        int64
+	oriSeqno        int64 //来自客户端的seqno
 	cmd             uint16
 	bytes           []byte
 	deadline        time.Time
-	deadlineTimer   *time.Timer
+	deadlineTimer   deadlineTimer
 	replyer         *replyer
-	replied         bool
+	replied         int32
 	totalPendingReq *int64
-	store           *store
+	store           uint64 //high32:setid,low32:storeid
 }
 
-func (r *forwordMsg) remove() {
-	r.removeList()
-	r.removeMap()
+type dummyCache struct {
+	c cacheI
 }
 
-func (r *forwordMsg) removeList() {
-	if nil != r.l && nil != r.listElement {
-		r.l.Remove(r.listElement)
-		r.l = nil
-		r.listElement = nil
-	}
+func (r *forwordMsg) setCache(c cacheI) {
+	r.cache.Store(dummyCache{c: c})
 }
 
-func (r *forwordMsg) removeMap() {
-	if nil != r.msgMap {
-		delete(*r.msgMap, r.seqno)
-		r.msgMap = nil
-	}
-}
-
-func (r *forwordMsg) add(msgMap *map[int64]*forwordMsg, l *list.List) {
-	if nil != msgMap {
-		r.removeMap()
-		(*msgMap)[r.seqno] = r
-		r.msgMap = msgMap
-	}
-
-	if nil != l {
-		r.removeList()
-		r.l = l
-		r.listElement = l.PushBack(r)
-	}
-
-}
-
-func (r *forwordMsg) setReplied() bool {
-	if r.replied {
-		return false
-	} else {
-		r.replied = true
-		return true
+func (r *forwordMsg) removeCache() {
+	if v := r.cache.Load(); nil != v {
+		v.(dummyCache).c.remove(r)
 	}
 }
 
 func (r *forwordMsg) reply(b []byte) {
-	if r.setReplied() {
-		r.deadlineTimer.Stop()
-		r.remove()
+	if atomic.CompareAndSwapInt32(&r.replied, 0, 1) {
+		r.deadlineTimer.stop()
+		r.removeCache()
 		r.replyer.reply(b)
 	}
 }
 
 func (r *forwordMsg) replyErr(err errcode.Error) {
-	if r.setReplied() {
-		r.deadlineTimer.Stop()
-		r.remove()
+	if atomic.CompareAndSwapInt32(&r.replied, 0, 1) {
+		r.deadlineTimer.stop()
+		r.removeCache()
 		r.replyer.replyErr(r.oriSeqno, r.cmd, err)
 	}
 }
 
 func (r *forwordMsg) dropReply() {
-	if r.setReplied() {
-		r.deadlineTimer.Stop()
-		r.remove()
+	if atomic.CompareAndSwapInt32(&r.replied, 0, 1) {
+		r.deadlineTimer.stop()
+		r.removeCache()
 		r.replyer.dropReply()
 	}
 }

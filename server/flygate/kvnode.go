@@ -7,50 +7,142 @@ import (
 	flynet "github.com/sniperHW/flyfish/pkg/net"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
+	"sync"
 	"time"
 )
 
-type kvnode struct {
-	id           int
-	service      string
-	session      *flynet.Socket
+type cacheKvnode struct {
+	sync.Mutex
 	waittingSend *list.List //dailing时暂存请求
 	waitResponse map[int64]*forwordMsg
-	config       *Config
-	removed      bool
-	gate         *gate
+}
+
+func (ck *cacheKvnode) remove(m *forwordMsg) {
+	ck.Lock()
+	if nil != m.listElement {
+		ck.waittingSend.Remove(m.listElement)
+	}
+	m.listElement = nil
+
+	if &ck.waitResponse == m.dict {
+		delete(ck.waitResponse, m.seqno)
+		m.dict = nil
+	}
+
+	m.setCache(emtpyCache{})
+	ck.Unlock()
+}
+
+func (ck *cacheKvnode) add2Send(m *forwordMsg) int {
+	ck.Lock()
+	m.listElement = ck.waittingSend.PushBack(m)
+	m.setCache(ck)
+	l := ck.waittingSend.Len()
+	ck.Unlock()
+	return l
+}
+
+func (ck *cacheKvnode) add2WaitResp(m *forwordMsg) {
+	ck.Lock()
+	ck.waitResponse[m.seqno] = m
+	m.dict = &ck.waitResponse
+	m.setCache(ck)
+	ck.Unlock()
+}
+
+func (ck *cacheKvnode) removeWaitResp(seqno int64) (m *forwordMsg) {
+	ck.Lock()
+	m = ck.waitResponse[seqno]
+	if nil != m {
+		delete(ck.waitResponse, seqno)
+		m.setCache(emtpyCache{})
+	}
+	ck.Unlock()
+	return
+}
+
+func (ck *cacheKvnode) dropAllWaitResp() {
+	GetSugar().Infof("-----------dropAllWaitResp---------------------")
+	ck.Lock()
+	for _, v := range ck.waitResponse {
+		delete(ck.waitResponse, v.seqno)
+		v.setCache(emtpyCache{})
+		v.deadlineTimer.stop()
+	}
+	ck.Unlock()
+}
+
+func (ck *cacheKvnode) waittingSendEmpty() (empty bool) {
+	ck.Lock()
+	empty = ck.waittingSend.Len() == 0
+	ck.Unlock()
+	return
+}
+
+type kvnode struct {
+	id      int
+	service string
+	session *flynet.Socket
+	cache   cacheKvnode
+	setID   int
+	gate    *gate
 }
 
 func (n *kvnode) sendForwordMsg(msg *forwordMsg) {
 	if nil != n.session {
 		now := time.Now()
 		if msg.deadline.After(now) {
+			n.cache.add2WaitResp(msg)
 			n.send(now, msg)
-		} else {
-			msg.dropReply()
 		}
-	} else {
-		msg.add(nil, n.waittingSend)
-		if n.waittingSend.Len() == 1 {
-			n.dial()
-		}
+	} else if n.cache.add2Send(msg) == 1 {
+		n.dial()
 	}
 }
 
 func (n *kvnode) send(now time.Time, msg *forwordMsg) {
-	GetSugar().Debugf("send msg to set:%d kvnode:%d store:%d seqno:%d nodeSeqno:%d", msg.store.set.setID, n.id, msg.store.id, msg.oriSeqno, msg.seqno)
+	GetSugar().Debugf("send msg to set:%d kvnode:%d store:%d seqno:%d nodeSeqno:%d", n.setID, n.id, int(msg.store&0xFFFFFFFF), msg.oriSeqno, msg.seqno)
 	binary.BigEndian.PutUint64(msg.bytes[4:], uint64(msg.seqno))
-	binary.BigEndian.PutUint32(msg.bytes[4+8:], uint32(msg.store.id))
+	binary.BigEndian.PutUint32(msg.bytes[4+8:], uint32(msg.store&0xFFFFFFFF))
 	binary.BigEndian.PutUint32(msg.bytes[18:], uint32(msg.deadline.Sub(now)/time.Millisecond))
-	msg.add(&n.waitResponse, nil)
 	n.session.Send(msg.bytes)
 }
 
 func (n *kvnode) paybackWaittingSendToGate() {
-	for v := n.waittingSend.Front(); nil != v; v = n.waittingSend.Front() {
+	n.cache.Lock()
+	for v := n.cache.waittingSend.Front(); nil != v; v = n.cache.waittingSend.Front() {
 		msg := v.Value.(*forwordMsg)
-		msg.removeList()
-		msg.add(nil, n.gate.pendingMsg)
+		msg.listElement = nil
+		msg.setCache(emtpyCache{})
+		msg.dropReply()
+	}
+	n.cache.Unlock()
+}
+
+func (n *kvnode) onResponse(b []byte) {
+	seqno := int64(binary.BigEndian.Uint64(b[cs.SizeLen:]))
+	errCode := int16(binary.BigEndian.Uint16(b[cs.SizeLen+8+2:]))
+	if msg := n.cache.removeWaitResp(seqno); nil != msg {
+		switch errCode {
+		case errcode.Errcode_not_leader:
+			//投递到主队列执行
+			n.gate.callInQueue(1, func() {
+				if s := n.gate.getStore(msg.store); nil != s {
+					s.onErrNotLeader(msg)
+				} else {
+					//store已经被移除，将消息归还到gate.cache
+					n.gate.paybackMsg(msg)
+				}
+			})
+		case errcode.Errcode_route_info_stale, errcode.Errcode_slot_transfering:
+			n.gate.callInQueue(1, func() {
+				n.gate.paybackMsg(msg)
+			})
+		default:
+			//恢复客户端的seqno
+			binary.BigEndian.PutUint64(b[4:], uint64(msg.oriSeqno))
+			msg.reply(b)
+		}
 	}
 }
 
@@ -63,10 +155,11 @@ func (n *kvnode) dial() {
 		})
 		session, err := c.Dial(time.Second * 5)
 		n.gate.callInQueue(1, func() {
-			if n.removed {
+			if !n.gate.checkKvnode(n) {
 				n.paybackWaittingSendToGate()
 				return
 			}
+
 			n.session = session
 			if nil == err {
 				session.SetEncoder(&encoder{})
@@ -75,67 +168,40 @@ func (n *kvnode) dial() {
 				session.SetCloseCallBack(func(sess *flynet.Socket, reason error) {
 					n.gate.callInQueue(1, func() {
 						n.session = nil
-						for _, v := range n.gate.routeInfo.sets {
+						n.cache.dropAllWaitResp()
+						for _, v := range n.gate.sets {
 							for _, vv := range v.stores {
 								if vv.leader == n {
-									c := vv.waittingSend.Len()
 									vv.leader = nil
-									for m := n.waittingSend.Front(); nil != m; m = n.waittingSend.Front() {
-										msg := m.Value.(*forwordMsg)
-										msg.removeList()
-										msg.add(nil, vv.waittingSend)
-									}
-									if c == 0 {
-										vv.queryLeader()
-									}
 								}
 							}
 						}
 					})
 				}).BeginRecv(func(s *flynet.Socket, msg interface{}) {
-					n.gate.callInQueue(1, func() {
-						n.onNodeResp(msg.([]byte))
-					})
+					n.onResponse(msg.([]byte))
 				})
 
 				now := time.Now()
-				for v := n.waittingSend.Front(); nil != v; v = n.waittingSend.Front() {
+
+				n.cache.Lock()
+				for v := n.cache.waittingSend.Front(); nil != v; v = n.cache.waittingSend.Front() {
 					msg := v.Value.(*forwordMsg)
-					msg.removeList()
+					n.cache.waittingSend.Remove(msg.listElement)
+					msg.listElement = nil
 					if msg.deadline.After(now) {
+						n.cache.waitResponse[msg.seqno] = msg
+						msg.dict = &n.cache.waitResponse
+						msg.setCache(&n.cache)
 						n.send(now, msg)
 					} else {
-						msg.dropReply()
+						GetSugar().Infof("--------------no drop here------------------")
+						msg.setCache(emtpyCache{})
 					}
 				}
-			} else {
-				if n.waittingSend.Len() > 0 {
-					n.dial()
-				}
+				n.cache.Unlock()
+			} else if !n.cache.waittingSendEmpty() {
+				n.dial()
 			}
 		})
 	}()
-}
-
-func (n *kvnode) onNodeResp(b []byte) {
-	seqno := int64(binary.BigEndian.Uint64(b[cs.SizeLen:]))
-	errCode := int16(binary.BigEndian.Uint16(b[cs.SizeLen+8+2:]))
-	//GetSugar().Infof("onNodeResp %d %d", seqno, errCode)
-	msg, ok := n.waitResponse[seqno]
-	if ok {
-		msg.removeMap()
-		switch errCode {
-		case errcode.Errcode_not_leader:
-			msg.store.onErrNotLeader(msg)
-		case errcode.Errcode_route_info_stale, errcode.Errcode_slot_transfering:
-			GetSugar().Infof("onForwordError %d oriSeqno:%d slot:%d", errCode, msg.oriSeqno, msg.slot)
-			msg.add(nil, n.gate.pendingMsg)
-		default:
-			//恢复客户端的seqno
-			binary.BigEndian.PutUint64(b[4:], uint64(msg.oriSeqno))
-			msg.reply(b)
-		}
-	} // else {
-	//	GetSugar().Infof("onNodeResp but no context %d %d", seqno, errCode)
-	//}
 }

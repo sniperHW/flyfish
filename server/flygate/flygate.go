@@ -38,302 +38,9 @@ func (this *encoder) EnCode(o interface{}, buff *buffer.Buffer) error {
 }
 
 type set struct {
-	setID     int
-	nodes     map[int]*kvnode
-	stores    map[int]*store
-	routeInfo *routeInfo
-	removed   bool
-}
-
-type routeInfo struct {
-	version     int64
-	sets        map[int]*set
-	slotToStore map[int]*store
-	config      *Config
-	mainQueue   *queue.PriorityQueue
-}
-
-func (r *routeInfo) onQueryRouteInfoResp(gate *gate, resp *sproto.QueryRouteInfoResp) (change bool) {
-
-	GetSugar().Debugf("onQueryRouteInfoResp version:%d", resp.Version)
-	change = r.version != resp.Version
-
-	if change {
-
-		r.version = resp.Version
-
-		for _, v := range resp.Sets {
-			s, ok := r.sets[int(v.SetID)]
-			if ok {
-				for k, _ := range v.Stores {
-					ss := s.stores[int(v.Stores[k])]
-					ss.slots, _ = bitmap.CreateFromJson(v.Slots[k])
-				}
-
-				localKvnodes := []int32{}
-				for _, vv := range s.nodes {
-					localKvnodes = append(localKvnodes, int32(vv.id))
-				}
-
-				respKvnodes := [][]int32{}
-				for k, vv := range v.Kvnodes {
-					respKvnodes = append(respKvnodes, []int32{vv.NodeID, int32(k)})
-				}
-
-				sort.Slice(localKvnodes, func(i, j int) bool {
-					return localKvnodes[i] < localKvnodes[j]
-				})
-
-				sort.Slice(respKvnodes, func(i, j int) bool {
-					return respKvnodes[i][0] < respKvnodes[j][0]
-				})
-
-				add := [][]int32{}
-				remove := []int32{}
-
-				i := 0
-				j := 0
-
-				for i < len(respKvnodes) && j < len(localKvnodes) {
-					if respKvnodes[i][0] == localKvnodes[j] {
-						i++
-						j++
-					} else if respKvnodes[i][0] > localKvnodes[j] {
-						remove = append(remove, localKvnodes[j])
-						j++
-					} else {
-						add = append(add, respKvnodes[i])
-						i++
-					}
-				}
-
-				if len(respKvnodes[i:]) > 0 {
-					add = append(add, respKvnodes[i:]...)
-				}
-
-				if len(localKvnodes[j:]) > 0 {
-					remove = append(remove, localKvnodes[j:]...)
-				}
-
-				for _, vv := range add {
-					n := &kvnode{
-						id:           int(vv[0]),
-						service:      fmt.Sprintf("%s:%d", v.Kvnodes[vv[1]].Host, v.Kvnodes[vv[1]].ServicePort),
-						waittingSend: list.New(),
-						waitResponse: map[int64]*forwordMsg{},
-						//set:          s,
-						config: r.config,
-						gate:   gate,
-					}
-					s.nodes[n.id] = n
-				}
-
-				for _, vv := range remove {
-					n := s.nodes[int(vv)]
-					delete(s.nodes, int(vv))
-					n.removed = true
-					if nil != n.session {
-						n.session.Close(nil, 0)
-					}
-				}
-
-			} else {
-				s := &set{
-					setID:     int(v.SetID),
-					nodes:     map[int]*kvnode{},
-					stores:    map[int]*store{},
-					routeInfo: r,
-				}
-
-				for _, vv := range v.Kvnodes {
-					n := &kvnode{
-						id:           int(vv.NodeID),
-						service:      fmt.Sprintf("%s:%d", vv.Host, vv.ServicePort),
-						waittingSend: list.New(),
-						waitResponse: map[int64]*forwordMsg{},
-						//set:          s,
-						config: r.config,
-						gate:   gate,
-					}
-					s.nodes[n.id] = n
-				}
-
-				for k, vv := range v.Stores {
-					st := &store{
-						id:           int(vv),
-						waittingSend: list.New(),
-						set:          s,
-						config:       r.config,
-						gate:         gate,
-					}
-					st.slots, _ = bitmap.CreateFromJson(v.Slots[k])
-					s.stores[st.id] = st
-				}
-
-				r.sets[s.setID] = s
-			}
-		}
-
-		for _, v := range resp.RemoveSets {
-			if s, ok := r.sets[int(v)]; ok {
-				s.removed = true
-				delete(r.sets, int(v))
-				for _, vv := range s.nodes {
-					vv.removed = true
-					if nil != vv.session {
-						vv.session.Close(nil, 0)
-					}
-				}
-				for _, vv := range s.stores {
-					vv.removed = true
-				}
-			}
-		}
-
-		r.slotToStore = map[int]*store{}
-		for _, v := range r.sets {
-			for _, vv := range v.stores {
-				slots := vv.slots.GetOpenBits()
-				for _, vvv := range slots {
-					r.slotToStore[vvv] = vv
-				}
-			}
-		}
-	}
-	return
-}
-
-type gate struct {
-	config               *Config
-	closed               int32
-	closeCh              chan struct{}
-	listener             *cs.Listener
-	pendingMsg           *list.List //尚无正确路由信息的请求
-	muC                  sync.Mutex
-	clients              map[*flynet.Socket]*flynet.Socket
-	routeInfo            routeInfo
-	mainQueue            *queue.PriorityQueue
-	serviceAddr          string
-	seqCounter           int64
-	pdAddr               []*net.UDPAddr
-	msgPerSecond         *movingAverage.MovingAverage //每秒客户端转发请求量的移动平均值
-	msgRecv              int32
-	totalPendingReq      int64
-	SoftLimitReachedTime int64
-}
-
-func doQueryRouteInfo(pdAddr []*net.UDPAddr, req *sproto.QueryRouteInfo) *sproto.QueryRouteInfoResp {
-	if len(pdAddr) == 0 {
-		GetSugar().Fatalf("PdService is empty")
-		return nil
-	}
-
-	context := snet.MakeUniqueContext()
-	if resp := snet.UdpCall(pdAddr, snet.MakeMessage(context, req), time.Second, func(respCh chan interface{}, r interface{}) {
-		if m, ok := r.(*snet.Message); ok {
-			if resp, ok := m.Msg.(*sproto.QueryRouteInfoResp); ok && context == m.Context {
-				select {
-				case respCh <- resp:
-				default:
-				}
-			}
-		}
-	}); nil != resp {
-		return resp.(*sproto.QueryRouteInfoResp)
-	} else {
-		return nil
-	}
-}
-
-func NewFlyGate(config *Config, service string) (*gate, error) {
-	mainQueue := queue.NewPriorityQueue(2)
-
-	if config.ReqLimit.SoftLimit <= 0 {
-		config.ReqLimit.SoftLimit = 100000
-	}
-
-	if config.ReqLimit.HardLimit <= 0 {
-		config.ReqLimit.HardLimit = 150000
-	}
-
-	if config.ReqLimit.SoftLimitSeconds <= 0 {
-		config.ReqLimit.SoftLimitSeconds = 10
-	}
-
-	g := &gate{
-		config:    config,
-		clients:   map[*flynet.Socket]*flynet.Socket{},
-		mainQueue: mainQueue,
-		routeInfo: routeInfo{
-			config:      config,
-			sets:        map[int]*set{},
-			slotToStore: map[int]*store{},
-			mainQueue:   mainQueue,
-		},
-		pendingMsg:   list.New(),
-		serviceAddr:  service,
-		msgPerSecond: movingAverage.New(5),
-		closeCh:      make(chan struct{}),
-	}
-
-	pdService := strings.Split(config.PdService, ";")
-
-	for _, v := range pdService {
-		if addr, err := net.ResolveUDPAddr("udp", v); nil == err {
-			g.pdAddr = append(g.pdAddr, addr)
-		}
-	}
-
-	if len(g.pdAddr) == 0 {
-		return nil, errors.New("pd is empty")
-	}
-
-	err := g.start()
-
-	g.refreshMsgPerSecond()
-
-	return g, err
-}
-
-func (g *gate) checkReqLimit(c int) bool {
-	conf := g.config.ReqLimit
-
-	if c > conf.HardLimit {
-		return false
-	}
-
-	if c > conf.SoftLimit {
-		nowUnix := time.Now().Unix()
-		if !atomic.CompareAndSwapInt64(&g.SoftLimitReachedTime, 0, nowUnix) {
-			SoftLimitReachedTime := atomic.LoadInt64(&g.SoftLimitReachedTime)
-			if SoftLimitReachedTime > 0 && int(nowUnix-SoftLimitReachedTime) >= conf.SoftLimitSeconds {
-				return false
-			}
-		}
-	} else if SoftLimitReachedTime := atomic.LoadInt64(&g.SoftLimitReachedTime); SoftLimitReachedTime > 0 {
-		atomic.CompareAndSwapInt64(&g.SoftLimitReachedTime, SoftLimitReachedTime, 0)
-	}
-
-	return true
-}
-
-func (g *gate) callInQueue(priority int, fn func()) {
-	g.mainQueue.ForceAppend(priority, fn)
-}
-
-func (g *gate) afterFunc(delay time.Duration, fn func()) *time.Timer {
-	return time.AfterFunc(delay, func() {
-		g.callInQueue(1, fn)
-	})
-}
-
-func (g *gate) refreshMsgPerSecond() {
-	if atomic.LoadInt32(&g.closed) == 0 {
-		msgRecv := atomic.LoadInt32(&g.msgRecv)
-		atomic.AddInt32(&g.msgRecv, -msgRecv)
-		g.msgPerSecond.Add(int(msgRecv))
-		time.AfterFunc(time.Second, g.refreshMsgPerSecond)
-	}
+	setID  int
+	nodes  map[int]*kvnode
+	stores map[int]*store
 }
 
 type replyer struct {
@@ -393,6 +100,104 @@ func (r *replyer) dropReply() {
 	atomic.AddInt64(r.totalPendingReq, -1)
 }
 
+type gate struct {
+	config               *Config
+	closed               int32
+	closeCh              chan struct{}
+	listener             *cs.Listener
+	muC                  sync.Mutex
+	clients              map[*flynet.Socket]*flynet.Socket
+	mainQueue            *queue.PriorityQueue
+	serviceAddr          string
+	seqCounter           int64
+	pdAddr               []*net.UDPAddr
+	msgPerSecond         *movingAverage.MovingAverage //每秒客户端转发请求量的移动平均值
+	msgRecv              int32
+	totalPendingReq      int64
+	SoftLimitReachedTime int64
+	version              int64
+	sets                 map[int]*set
+	slotToStore          map[int]*store
+	cache                cache
+}
+
+func NewFlyGate(config *Config, service string) (*gate, error) {
+	mainQueue := queue.NewPriorityQueue(2)
+
+	if config.ReqLimit.SoftLimit <= 0 {
+		config.ReqLimit.SoftLimit = 100000
+	}
+
+	if config.ReqLimit.HardLimit <= 0 {
+		config.ReqLimit.HardLimit = 150000
+	}
+
+	if config.ReqLimit.SoftLimitSeconds <= 0 {
+		config.ReqLimit.SoftLimitSeconds = 10
+	}
+
+	g := &gate{
+		config:      config,
+		clients:     map[*flynet.Socket]*flynet.Socket{},
+		mainQueue:   mainQueue,
+		sets:        map[int]*set{},
+		slotToStore: map[int]*store{},
+		cache: cache{
+			l: list.New(),
+		},
+		serviceAddr:  service,
+		msgPerSecond: movingAverage.New(5),
+		closeCh:      make(chan struct{}),
+	}
+
+	pdService := strings.Split(config.PdService, ";")
+
+	for _, v := range pdService {
+		if addr, err := net.ResolveUDPAddr("udp", v); nil == err {
+			g.pdAddr = append(g.pdAddr, addr)
+		}
+	}
+
+	if len(g.pdAddr) == 0 {
+		return nil, errors.New("pd is empty")
+	}
+
+	err := g.start()
+
+	g.refreshMsgPerSecond()
+
+	return g, err
+}
+
+func (g *gate) checkKvnode(n *kvnode) bool {
+	if s, ok := g.sets[n.setID]; ok {
+		if _, ok = s.nodes[n.id]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func (g *gate) checkStore(st *store) bool {
+	if s, ok := g.sets[st.setID]; ok {
+		if _, ok = s.stores[st.id]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func (g *gate) getStore(store uint64) *store {
+	setID := int(store >> 32)
+	storeID := int(store & 0xFFFFFFFF)
+	if s, ok := g.sets[setID]; ok {
+		if store, ok := s.stores[storeID]; ok {
+			return store
+		}
+	}
+	return nil
+}
+
 func (g *gate) makeReplyer(session *flynet.Socket, req *forwordMsg) *replyer {
 	replyer := &replyer{
 		session:         session,
@@ -405,6 +210,284 @@ func (g *gate) makeReplyer(session *flynet.Socket, req *forwordMsg) *replyer {
 		replyer.replyErr(req.oriSeqno, req.cmd, errcode.New(errcode.Errcode_retry, "flykv busy,please retry later"))
 		return nil
 	}
+}
+
+func (g *gate) checkReqLimit(c int) bool {
+	conf := g.config.ReqLimit
+
+	if c > conf.HardLimit {
+		return false
+	}
+
+	if c > conf.SoftLimit {
+		nowUnix := time.Now().Unix()
+		if !atomic.CompareAndSwapInt64(&g.SoftLimitReachedTime, 0, nowUnix) {
+			SoftLimitReachedTime := atomic.LoadInt64(&g.SoftLimitReachedTime)
+			if SoftLimitReachedTime > 0 && int(nowUnix-SoftLimitReachedTime) >= conf.SoftLimitSeconds {
+				return false
+			}
+		}
+	} else if SoftLimitReachedTime := atomic.LoadInt64(&g.SoftLimitReachedTime); SoftLimitReachedTime > 0 {
+		atomic.CompareAndSwapInt64(&g.SoftLimitReachedTime, SoftLimitReachedTime, 0)
+	}
+
+	return true
+}
+
+func (g *gate) callInQueue(priority int, fn func()) {
+	g.mainQueue.ForceAppend(priority, fn)
+}
+
+func (g *gate) afterFunc(delay time.Duration, fn func()) *time.Timer {
+	return time.AfterFunc(delay, func() {
+		g.callInQueue(1, fn)
+	})
+}
+
+func (g *gate) refreshMsgPerSecond() {
+	if atomic.LoadInt32(&g.closed) == 0 {
+		msgRecv := atomic.LoadInt32(&g.msgRecv)
+		atomic.AddInt32(&g.msgRecv, -msgRecv)
+		g.msgPerSecond.Add(int(msgRecv))
+		time.AfterFunc(time.Second, g.refreshMsgPerSecond)
+	}
+}
+
+var QueryRouteInfoDuration time.Duration = time.Millisecond * 200
+
+func doQueryRouteInfo(pdAddr []*net.UDPAddr, req *sproto.QueryRouteInfo) *sproto.QueryRouteInfoResp {
+	if len(pdAddr) == 0 {
+		GetSugar().Fatalf("PdService is empty")
+		return nil
+	}
+
+	context := snet.MakeUniqueContext()
+	if resp := snet.UdpCall(pdAddr, snet.MakeMessage(context, req), time.Second, func(respCh chan interface{}, r interface{}) {
+		if m, ok := r.(*snet.Message); ok {
+			if resp, ok := m.Msg.(*sproto.QueryRouteInfoResp); ok && context == m.Context {
+				select {
+				case respCh <- resp:
+				default:
+				}
+			}
+		}
+	}); nil != resp {
+		return resp.(*sproto.QueryRouteInfoResp)
+	} else {
+		return nil
+	}
+}
+
+func (g *gate) onCliMsg(msg *forwordMsg) {
+	s, ok := g.slotToStore[msg.slot]
+	if !ok {
+		g.cache.add(msg)
+	} else {
+		s.onCliMsg(msg)
+	}
+}
+
+func (g *gate) paybackMsg(msg *forwordMsg) {
+	now := time.Now()
+	if msg.deadline.After(now) {
+		g.onCliMsg(msg)
+	} else {
+		msg.dropReply()
+	}
+}
+
+func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
+	if nil == resp {
+		return
+	}
+
+	if g.version == resp.Version {
+		return
+	}
+
+	g.version = resp.Version
+
+	for _, v := range resp.Sets {
+		s, ok := g.sets[int(v.SetID)]
+		if ok {
+			for k, _ := range v.Stores {
+				ss := s.stores[int(v.Stores[k])]
+				ss.slots, _ = bitmap.CreateFromJson(v.Slots[k])
+			}
+
+			localKvnodes := []int32{}
+			for _, vv := range s.nodes {
+				localKvnodes = append(localKvnodes, int32(vv.id))
+			}
+
+			respKvnodes := [][]int32{}
+			for k, vv := range v.Kvnodes {
+				respKvnodes = append(respKvnodes, []int32{vv.NodeID, int32(k)})
+			}
+
+			sort.Slice(localKvnodes, func(i, j int) bool {
+				return localKvnodes[i] < localKvnodes[j]
+			})
+
+			sort.Slice(respKvnodes, func(i, j int) bool {
+				return respKvnodes[i][0] < respKvnodes[j][0]
+			})
+
+			add := [][]int32{}
+			remove := []int32{}
+
+			i := 0
+			j := 0
+
+			for i < len(respKvnodes) && j < len(localKvnodes) {
+				if respKvnodes[i][0] == localKvnodes[j] {
+					i++
+					j++
+				} else if respKvnodes[i][0] > localKvnodes[j] {
+					remove = append(remove, localKvnodes[j])
+					j++
+				} else {
+					add = append(add, respKvnodes[i])
+					i++
+				}
+			}
+
+			if len(respKvnodes[i:]) > 0 {
+				add = append(add, respKvnodes[i:]...)
+			}
+
+			if len(localKvnodes[j:]) > 0 {
+				remove = append(remove, localKvnodes[j:]...)
+			}
+
+			for _, vv := range add {
+				n := &kvnode{
+					id:      int(vv[0]),
+					service: fmt.Sprintf("%s:%d", v.Kvnodes[vv[1]].Host, v.Kvnodes[vv[1]].ServicePort),
+					cache: cacheKvnode{
+						waittingSend: list.New(),
+						waitResponse: map[int64]*forwordMsg{},
+					},
+					setID: int(v.SetID),
+					gate:  g,
+				}
+				s.nodes[n.id] = n
+			}
+
+			for _, vv := range remove {
+				n := s.nodes[int(vv)]
+				delete(s.nodes, int(vv))
+				if nil != n.session {
+					n.session.Close(nil, 0)
+				}
+			}
+
+		} else {
+			s := &set{
+				setID:  int(v.SetID),
+				nodes:  map[int]*kvnode{},
+				stores: map[int]*store{},
+			}
+
+			for _, vv := range v.Kvnodes {
+				n := &kvnode{
+					id:      int(vv.NodeID),
+					service: fmt.Sprintf("%s:%d", vv.Host, vv.ServicePort),
+					cache: cacheKvnode{
+						waittingSend: list.New(),
+						waitResponse: map[int64]*forwordMsg{},
+					},
+					setID: int(v.SetID),
+					gate:  g,
+				}
+				s.nodes[n.id] = n
+			}
+
+			for k, vv := range v.Stores {
+				st := &store{
+					id: int(vv),
+					cache: cache{
+						l: list.New(),
+					},
+					setID: int(v.SetID),
+					gate:  g,
+				}
+				st.slots, _ = bitmap.CreateFromJson(v.Slots[k])
+				s.stores[st.id] = st
+			}
+			g.sets[s.setID] = s
+		}
+	}
+
+	for _, v := range resp.RemoveSets {
+		if s, ok := g.sets[int(v)]; ok {
+			for _, vv := range s.nodes {
+				if nil != vv.session {
+					vv.session.Close(nil, 0)
+				}
+			}
+			for _, vv := range s.stores {
+				//将待转发请求回收
+				for vvv := vv.cache.l.Front(); nil != vvv; vvv = vv.cache.l.Front() {
+					msg := vvv.Value.(*forwordMsg)
+					vv.cache.remove(msg)
+					g.cache.add(msg)
+				}
+			}
+			delete(g.sets, int(v))
+		}
+	}
+
+	g.slotToStore = map[int]*store{}
+	for _, v := range g.sets {
+		for _, vv := range v.stores {
+			slots := vv.slots.GetOpenBits()
+			for _, vvv := range slots {
+				g.slotToStore[vvv] = vv
+			}
+		}
+	}
+
+	//路由更新，尝试处理没有正确路由信息的请求
+	size := g.cache.len()
+	now := time.Now()
+	for i := 0; i < size; i++ {
+		msg := g.cache.l.Front().Value.(*forwordMsg)
+		g.cache.remove(msg)
+		if msg.deadline.After(now) {
+			g.onCliMsg(msg)
+		} else {
+			msg.dropReply()
+		}
+	}
+}
+
+func (g *gate) queryRouteInfo() {
+	req := &sproto.QueryRouteInfo{
+		Version: g.version,
+	}
+
+	for kk, _ := range g.sets {
+		req.Sets = append(req.Sets, int32(kk))
+	}
+
+	go func() {
+		resp := doQueryRouteInfo(g.pdAddr, req)
+		g.callInQueue(1, func() {
+			g.onQueryRouteInfoResp(resp)
+			delay := QueryRouteInfoDuration
+			if g.cache.len() > 0 {
+				delay = time.Millisecond * 50
+			}
+			g.startQueryTimer(delay)
+		})
+	}()
+}
+
+func (g *gate) startQueryTimer(delay time.Duration) {
+	time.AfterFunc(delay, func() {
+		g.queryRouteInfo()
+	})
 }
 
 func (g *gate) startListener() {
@@ -450,76 +533,15 @@ func (g *gate) mainLoop() {
 		case *forwordMsg:
 			msg := v.(*forwordMsg)
 			if msg.slot >= 0 && msg.slot < slot.SlotCount {
-				msg.deadlineTimer = g.afterFunc(msg.deadline.Sub(time.Now()), msg.dropReply)
+				msg.deadlineTimer.set(g.afterFunc(msg.deadline.Sub(time.Now()), msg.dropReply))
 				g.seqCounter++
 				msg.seqno = g.seqCounter
-				s, ok := g.routeInfo.slotToStore[msg.slot]
-				if !ok {
-					GetSugar().Infof("slot%d has no route info", msg.slot)
-					msg.add(nil, g.pendingMsg)
-				} else {
-					s.onCliMsg(msg)
-				}
+				g.onCliMsg(msg)
 			}
 		case func():
 			v.(func())()
 		}
 	}
-}
-
-func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
-	if nil != resp && g.routeInfo.onQueryRouteInfoResp(g, resp) {
-		GetSugar().Infof("Update QueryRouteInfo")
-		//路由更新，尝试处理没有正确路由信息的请求
-		size := g.pendingMsg.Len()
-		v := g.pendingMsg.Front()
-		now := time.Now()
-		for i := 0; i < size; i++ {
-			msg := v.Value.(*forwordMsg)
-			v = v.Next()
-			msg.removeList()
-			if msg.deadline.After(now) {
-				s, ok := g.routeInfo.slotToStore[msg.slot]
-				if !ok {
-					msg.add(nil, g.pendingMsg)
-				} else {
-					s.onCliMsg(msg)
-				}
-			} else {
-				msg.dropReply()
-			}
-		}
-	}
-}
-
-var QueryRouteInfoDuration time.Duration = time.Millisecond * 200
-
-func (g *gate) queryRouteInfo() {
-	req := &sproto.QueryRouteInfo{
-		Version: g.routeInfo.version,
-	}
-
-	for kk, _ := range g.routeInfo.sets {
-		req.Sets = append(req.Sets, int32(kk))
-	}
-
-	go func() {
-		resp := doQueryRouteInfo(g.pdAddr, req)
-		g.callInQueue(1, func() {
-			g.onQueryRouteInfoResp(resp)
-			delay := QueryRouteInfoDuration
-			if g.pendingMsg.Len() > 0 {
-				delay = time.Millisecond * 50
-			}
-			g.startQueryTimer(delay)
-		})
-	}()
-}
-
-func (g *gate) startQueryTimer(delay time.Duration) {
-	time.AfterFunc(delay, func() {
-		g.queryRouteInfo()
-	})
 }
 
 func (g *gate) start() error {
@@ -538,7 +560,7 @@ func (g *gate) start() error {
 	for {
 		resp := doQueryRouteInfo(g.pdAddr, &sproto.QueryRouteInfo{})
 		if nil != resp {
-			g.routeInfo.onQueryRouteInfoResp(g, resp)
+			g.onQueryRouteInfoResp(resp)
 			break
 		}
 	}
