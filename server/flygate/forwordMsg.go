@@ -9,14 +9,14 @@ import (
 )
 
 type cacheI interface {
-	remove(e *forwordMsg)
+	removeMsg(e *forwordMsg)
 }
 
 type cache struct {
 	l *list.List
 }
 
-func (c *cache) remove(m *forwordMsg) {
+func (c *cache) removeMsg(m *forwordMsg) {
 	if nil != m.listElement {
 		c.l.Remove(m.listElement)
 	}
@@ -24,20 +24,20 @@ func (c *cache) remove(m *forwordMsg) {
 	m.clearCache()
 }
 
-func (c *cache) add(m *forwordMsg) int {
+func (c *cache) addMsg(m *forwordMsg) int {
 	m.listElement = c.l.PushBack(m)
 	m.setCache(c)
 	return c.l.Len()
 }
 
-func (c *cache) len() int {
+func (c *cache) lenMsg() int {
 	return c.l.Len()
 }
 
 type emtpyCache struct {
 }
 
-func (ec emtpyCache) remove(m *forwordMsg) {
+func (ec emtpyCache) removeMsg(m *forwordMsg) {
 
 }
 
@@ -97,7 +97,7 @@ func (r *forwordMsg) setCache(c cacheI) {
 
 func (r *forwordMsg) cacheRemove() {
 	if v := r.cache.Load(); nil != v {
-		v.(cachePtr).c.remove(r)
+		v.(cachePtr).c.removeMsg(r)
 	}
 }
 

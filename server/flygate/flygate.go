@@ -23,20 +23,6 @@ import (
 	"time"
 )
 
-type encoder struct {
-}
-
-func (this *encoder) EnCode(o interface{}, buff *buffer.Buffer) error {
-	b, ok := o.([]byte)
-	if !ok {
-		return errors.New("invaild o")
-	}
-
-	buff.AppendBytes(b)
-
-	return nil
-}
-
 type set struct {
 	setID  int
 	nodes  map[int]*kvnode
@@ -101,6 +87,7 @@ func (r *replyer) dropReply() {
 }
 
 type gate struct {
+	cache
 	config               *Config
 	closed               int32
 	closeCh              chan struct{}
@@ -118,7 +105,6 @@ type gate struct {
 	version              int64
 	sets                 map[int]*set
 	slotToStore          map[int]*store
-	cache                cache
 }
 
 func NewFlyGate(config *Config, service string) (*gate, error) {
@@ -281,7 +267,7 @@ func doQueryRouteInfo(pdAddr []*net.UDPAddr, req *sproto.QueryRouteInfo) *sproto
 func (g *gate) onCliMsg(msg *forwordMsg) {
 	s, ok := g.slotToStore[msg.slot]
 	if !ok {
-		g.cache.add(msg)
+		g.addMsg(msg)
 	} else {
 		s.onCliMsg(msg)
 	}
@@ -362,14 +348,12 @@ func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
 
 			for _, vv := range add {
 				n := &kvnode{
-					id:      int(vv[0]),
-					service: fmt.Sprintf("%s:%d", v.Kvnodes[vv[1]].Host, v.Kvnodes[vv[1]].ServicePort),
-					cache: cacheKvnode{
-						waittingSend: list.New(),
-						waitResponse: map[int64]*forwordMsg{},
-					},
-					setID: int(v.SetID),
-					gate:  g,
+					id:           int(vv[0]),
+					service:      fmt.Sprintf("%s:%d", v.Kvnodes[vv[1]].Host, v.Kvnodes[vv[1]].ServicePort),
+					waittingSend: list.New(),
+					waitResponse: map[int64]*forwordMsg{},
+					setID:        int(v.SetID),
+					gate:         g,
 				}
 				s.nodes[n.id] = n
 			}
@@ -391,14 +375,12 @@ func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
 
 			for _, vv := range v.Kvnodes {
 				n := &kvnode{
-					id:      int(vv.NodeID),
-					service: fmt.Sprintf("%s:%d", vv.Host, vv.ServicePort),
-					cache: cacheKvnode{
-						waittingSend: list.New(),
-						waitResponse: map[int64]*forwordMsg{},
-					},
-					setID: int(v.SetID),
-					gate:  g,
+					id:           int(vv.NodeID),
+					service:      fmt.Sprintf("%s:%d", vv.Host, vv.ServicePort),
+					waittingSend: list.New(),
+					waitResponse: map[int64]*forwordMsg{},
+					setID:        int(v.SetID),
+					gate:         g,
 				}
 				s.nodes[n.id] = n
 			}
@@ -428,10 +410,10 @@ func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
 			}
 			for _, vv := range s.stores {
 				//将待转发请求回收
-				for vvv := vv.cache.l.Front(); nil != vvv; vvv = vv.cache.l.Front() {
+				for vvv := vv.l.Front(); nil != vvv; vvv = vv.l.Front() {
 					msg := vvv.Value.(*forwordMsg)
-					vv.cache.remove(msg)
-					g.cache.add(msg)
+					vv.removeMsg(msg)
+					g.addMsg(msg)
 				}
 			}
 			delete(g.sets, int(v))
@@ -449,11 +431,11 @@ func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
 	}
 
 	//路由更新，尝试处理没有正确路由信息的请求
-	size := g.cache.len()
+	size := g.lenMsg()
 	now := time.Now()
 	for i := 0; i < size; i++ {
-		msg := g.cache.l.Front().Value.(*forwordMsg)
-		g.cache.remove(msg)
+		msg := g.l.Front().Value.(*forwordMsg)
+		g.removeMsg(msg)
 		if msg.deadline.After(now) {
 			g.onCliMsg(msg)
 		} else {
@@ -476,7 +458,7 @@ func (g *gate) queryRouteInfo() {
 		g.callInQueue(1, func() {
 			g.onQueryRouteInfoResp(resp)
 			delay := QueryRouteInfoDuration
-			if g.cache.len() > 0 {
+			if g.lenMsg() > 0 {
 				delay = time.Millisecond * 50
 			}
 			g.startQueryTimer(delay)
@@ -495,7 +477,6 @@ func (g *gate) startListener() {
 		g.muC.Lock()
 		g.clients[session] = session
 		g.muC.Unlock()
-		session.SetEncoder(&encoder{})
 		session.SetInBoundProcessor(NewCliReqInboundProcessor())
 		session.SetRecvTimeout(flyproto.PingTime * 10)
 

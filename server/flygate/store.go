@@ -8,19 +8,19 @@ import (
 )
 
 type store struct {
+	cache
 	leaderVersion int64
 	id            int
 	leader        *kvnode
 	slots         *bitmap.Bitmap
 	setID         int
-	cache         cache
 	gate          *gate
 }
 
 func (s *store) onCliMsg(msg *forwordMsg) {
 	msg.store = uint64(s.setID)<<32 + uint64(s.id)
 	if nil == s.leader {
-		if s.cache.add(msg) == 1 {
+		if s.addMsg(msg) == 1 {
 			s.queryLeader()
 		}
 	} else {
@@ -30,9 +30,9 @@ func (s *store) onCliMsg(msg *forwordMsg) {
 }
 
 func (s *store) paybackWaittingSendToGate() {
-	for v := s.cache.l.Front(); nil != v; v = s.cache.l.Front() {
+	for v := s.l.Front(); nil != v; v = s.l.Front() {
 		msg := v.Value.(*forwordMsg)
-		s.cache.remove(msg)
+		s.removeMsg(msg)
 		s.gate.paybackMsg(msg)
 	}
 }
@@ -48,7 +48,7 @@ func (s *store) onErrNotLeader(msg *forwordMsg) {
 
 	if nil == s.leader {
 		//还没有leader,重新投入到待发送队列
-		if s.cache.add(msg) == 1 {
+		if s.addMsg(msg) == 1 {
 			s.queryLeader()
 		}
 	}
@@ -89,10 +89,10 @@ func (s *store) queryLeader() {
 						if leaderNode := set.nodes[leader]; nil != leaderNode {
 							s.leaderVersion++
 							s.leader = leaderNode
-							for v := s.cache.l.Front(); nil != v; v = s.cache.l.Front() {
+							for v := s.l.Front(); nil != v; v = s.l.Front() {
 								msg := v.Value.(*forwordMsg)
 								msg.leaderVersion = s.leaderVersion
-								s.cache.remove(msg)
+								s.removeMsg(msg)
 								leaderNode.sendForwordMsg(msg)
 							}
 						} else {

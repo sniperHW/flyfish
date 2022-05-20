@@ -11,91 +11,103 @@ import (
 	"time"
 )
 
-type cacheKvnode struct {
+type kvnode struct {
 	sync.Mutex
 	waittingSend *list.List //dailing时暂存请求
 	waitResponse map[int64]*forwordMsg
+	id           int
+	service      string
+	session      *flynet.Socket
+	setID        int
+	gate         *gate
 }
 
-func (ck *cacheKvnode) remove(m *forwordMsg) {
-	ck.Lock()
+func (n *kvnode) removeMsg(m *forwordMsg) {
+	n.Lock()
 	if nil != m.listElement {
-		ck.waittingSend.Remove(m.listElement)
+		n.waittingSend.Remove(m.listElement)
 	}
 	m.listElement = nil
 
-	if &ck.waitResponse == m.dict {
-		delete(ck.waitResponse, m.seqno)
+	if &n.waitResponse == m.dict {
+		delete(n.waitResponse, m.seqno)
 		m.dict = nil
 	}
 
 	m.clearCache()
-	ck.Unlock()
+	n.Unlock()
 }
 
-func (ck *cacheKvnode) add2Send(m *forwordMsg) int {
-	ck.Lock()
-	m.listElement = ck.waittingSend.PushBack(m)
-	m.setCache(ck)
-	l := ck.waittingSend.Len()
-	ck.Unlock()
+func (n *kvnode) add2Send(m *forwordMsg) int {
+	n.Lock()
+	m.listElement = n.waittingSend.PushBack(m)
+	m.setCache(n)
+	l := n.waittingSend.Len()
+	n.Unlock()
 	return l
 }
 
-func (ck *cacheKvnode) add2WaitResp(m *forwordMsg) {
-	ck.Lock()
-	ck.waitResponse[m.seqno] = m
-	m.dict = &ck.waitResponse
-	m.setCache(ck)
-	ck.Unlock()
+func (n *kvnode) add2WaitResp(m *forwordMsg) {
+	n.Lock()
+	n.waitResponse[m.seqno] = m
+	m.dict = &n.waitResponse
+	m.setCache(n)
+	n.Unlock()
 }
 
-func (ck *cacheKvnode) removeWaitResp(seqno int64) (m *forwordMsg) {
-	ck.Lock()
-	m = ck.waitResponse[seqno]
+func (n *kvnode) removeWaitResp(seqno int64) (m *forwordMsg) {
+	n.Lock()
+	m = n.waitResponse[seqno]
 	if nil != m {
-		delete(ck.waitResponse, seqno)
+		delete(n.waitResponse, seqno)
 		m.clearCache()
 	}
-	ck.Unlock()
+	n.Unlock()
 	return
 }
 
-func (ck *cacheKvnode) dropAllWaitResp() {
-	GetSugar().Infof("-----------dropAllWaitResp---------------------")
-	ck.Lock()
-	for _, v := range ck.waitResponse {
-		delete(ck.waitResponse, v.seqno)
+func (n *kvnode) dropAllWaitResp() {
+	n.Lock()
+	for _, v := range n.waitResponse {
+		delete(n.waitResponse, v.seqno)
 		v.clearCache()
-		v.deadlineTimer.stop()
+		v.dropReply()
 	}
-	ck.Unlock()
+	n.Unlock()
 }
 
-func (ck *cacheKvnode) waittingSendEmpty() (empty bool) {
-	ck.Lock()
-	empty = ck.waittingSend.Len() == 0
-	ck.Unlock()
+func (n *kvnode) waittingSendEmpty() (empty bool) {
+	n.Lock()
+	empty = n.waittingSend.Len() == 0
+	n.Unlock()
 	return
 }
 
-type kvnode struct {
-	id      int
-	service string
-	session *flynet.Socket
-	cache   cacheKvnode
-	setID   int
-	gate    *gate
+func (n *kvnode) onConnect(now time.Time) {
+	n.Lock()
+	for v := n.waittingSend.Front(); nil != v; v = n.waittingSend.Front() {
+		msg := v.Value.(*forwordMsg)
+		n.waittingSend.Remove(msg.listElement)
+		msg.listElement = nil
+		if msg.deadline.After(now) {
+			n.waitResponse[msg.seqno] = msg
+			msg.dict = &n.waitResponse
+			n.send(now, msg)
+		} else {
+			msg.clearCache()
+		}
+	}
+	n.Unlock()
 }
 
 func (n *kvnode) sendForwordMsg(msg *forwordMsg) {
 	if nil != n.session {
 		now := time.Now()
 		if msg.deadline.After(now) {
-			n.cache.add2WaitResp(msg)
+			n.add2WaitResp(msg)
 			n.send(now, msg)
 		}
-	} else if n.cache.add2Send(msg) == 1 {
+	} else if n.add2Send(msg) == 1 {
 		n.dial()
 	}
 }
@@ -109,20 +121,20 @@ func (n *kvnode) send(now time.Time, msg *forwordMsg) {
 }
 
 func (n *kvnode) paybackWaittingSendToGate() {
-	n.cache.Lock()
-	for v := n.cache.waittingSend.Front(); nil != v; v = n.cache.waittingSend.Front() {
+	n.Lock()
+	for v := n.waittingSend.Front(); nil != v; v = n.waittingSend.Front() {
 		msg := v.Value.(*forwordMsg)
+		n.waittingSend.Remove(msg.listElement)
 		msg.listElement = nil
 		msg.clearCache()
-		msg.dropReply()
 	}
-	n.cache.Unlock()
+	n.Unlock()
 }
 
 func (n *kvnode) onResponse(b []byte) {
 	seqno := int64(binary.BigEndian.Uint64(b[cs.SizeLen:]))
 	errCode := int16(binary.BigEndian.Uint16(b[cs.SizeLen+8+2:]))
-	if msg := n.cache.removeWaitResp(seqno); nil != msg {
+	if msg := n.removeWaitResp(seqno); nil != msg {
 		switch errCode {
 		case errcode.Errcode_not_leader:
 			//投递到主队列执行
@@ -162,13 +174,12 @@ func (n *kvnode) dial() {
 
 			n.session = session
 			if nil == err {
-				session.SetEncoder(&encoder{})
 				session.SetRecvTimeout(flyproto.PingTime * 10)
 				session.SetInBoundProcessor(NewKvnodeRespInboundProcessor())
 				session.SetCloseCallBack(func(sess *flynet.Socket, reason error) {
 					n.gate.callInQueue(1, func() {
 						n.session = nil
-						n.cache.dropAllWaitResp()
+						n.dropAllWaitResp()
 						for _, v := range n.gate.sets {
 							for _, vv := range v.stores {
 								if vv.leader == n {
@@ -181,24 +192,9 @@ func (n *kvnode) dial() {
 					n.onResponse(msg.([]byte))
 				})
 
-				now := time.Now()
+				n.onConnect(time.Now())
 
-				n.cache.Lock()
-				for v := n.cache.waittingSend.Front(); nil != v; v = n.cache.waittingSend.Front() {
-					msg := v.Value.(*forwordMsg)
-					n.cache.waittingSend.Remove(msg.listElement)
-					msg.listElement = nil
-					if msg.deadline.After(now) {
-						n.cache.waitResponse[msg.seqno] = msg
-						msg.dict = &n.cache.waitResponse
-						msg.setCache(&n.cache)
-						n.send(now, msg)
-					} else {
-						msg.clearCache()
-					}
-				}
-				n.cache.Unlock()
-			} else if !n.cache.waittingSendEmpty() {
+			} else if !n.waittingSendEmpty() {
 				n.dial()
 			}
 		})
