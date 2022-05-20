@@ -29,7 +29,7 @@ func (ck *cacheKvnode) remove(m *forwordMsg) {
 		m.dict = nil
 	}
 
-	m.setCache(emtpyCache{})
+	m.clearCache()
 	ck.Unlock()
 }
 
@@ -55,7 +55,7 @@ func (ck *cacheKvnode) removeWaitResp(seqno int64) (m *forwordMsg) {
 	m = ck.waitResponse[seqno]
 	if nil != m {
 		delete(ck.waitResponse, seqno)
-		m.setCache(emtpyCache{})
+		m.clearCache()
 	}
 	ck.Unlock()
 	return
@@ -66,7 +66,7 @@ func (ck *cacheKvnode) dropAllWaitResp() {
 	ck.Lock()
 	for _, v := range ck.waitResponse {
 		delete(ck.waitResponse, v.seqno)
-		v.setCache(emtpyCache{})
+		v.clearCache()
 		v.deadlineTimer.stop()
 	}
 	ck.Unlock()
@@ -113,7 +113,7 @@ func (n *kvnode) paybackWaittingSendToGate() {
 	for v := n.cache.waittingSend.Front(); nil != v; v = n.cache.waittingSend.Front() {
 		msg := v.Value.(*forwordMsg)
 		msg.listElement = nil
-		msg.setCache(emtpyCache{})
+		msg.clearCache()
 		msg.dropReply()
 	}
 	n.cache.Unlock()
@@ -194,8 +194,7 @@ func (n *kvnode) dial() {
 						msg.setCache(&n.cache)
 						n.send(now, msg)
 					} else {
-						GetSugar().Infof("--------------no drop here------------------")
-						msg.setCache(emtpyCache{})
+						msg.clearCache()
 					}
 				}
 				n.cache.Unlock()

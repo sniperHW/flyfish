@@ -21,7 +21,7 @@ func (c *cache) remove(m *forwordMsg) {
 		c.l.Remove(m.listElement)
 	}
 	m.listElement = nil
-	m.setCache(emtpyCache{})
+	m.clearCache()
 }
 
 func (c *cache) add(m *forwordMsg) int {
@@ -82,24 +82,29 @@ type forwordMsg struct {
 	store           uint64 //high32:setid,low32:storeid
 }
 
-type dummyCache struct {
+//atomic.Value无法存实现接口的不同类型，只用将接口类型放在cachePtr中，把cachePtr存进atomic.Value
+type cachePtr struct {
 	c cacheI
 }
 
-func (r *forwordMsg) setCache(c cacheI) {
-	r.cache.Store(dummyCache{c: c})
+func (r *forwordMsg) clearCache() {
+	r.setCache(emtpyCache{})
 }
 
-func (r *forwordMsg) removeCache() {
+func (r *forwordMsg) setCache(c cacheI) {
+	r.cache.Store(cachePtr{c: c})
+}
+
+func (r *forwordMsg) cacheRemove() {
 	if v := r.cache.Load(); nil != v {
-		v.(dummyCache).c.remove(r)
+		v.(cachePtr).c.remove(r)
 	}
 }
 
 func (r *forwordMsg) reply(b []byte) {
 	if atomic.CompareAndSwapInt32(&r.replied, 0, 1) {
 		r.deadlineTimer.stop()
-		r.removeCache()
+		r.cacheRemove()
 		r.replyer.reply(b)
 	}
 }
@@ -107,7 +112,7 @@ func (r *forwordMsg) reply(b []byte) {
 func (r *forwordMsg) replyErr(err errcode.Error) {
 	if atomic.CompareAndSwapInt32(&r.replied, 0, 1) {
 		r.deadlineTimer.stop()
-		r.removeCache()
+		r.cacheRemove()
 		r.replyer.replyErr(r.oriSeqno, r.cmd, err)
 	}
 }
@@ -115,7 +120,7 @@ func (r *forwordMsg) replyErr(err errcode.Error) {
 func (r *forwordMsg) dropReply() {
 	if atomic.CompareAndSwapInt32(&r.replied, 0, 1) {
 		r.deadlineTimer.stop()
-		r.removeCache()
+		r.cacheRemove()
 		r.replyer.dropReply()
 	}
 }
