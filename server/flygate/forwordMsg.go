@@ -8,6 +8,9 @@ import (
 	"time"
 )
 
+/*
+ *  客户端请求在超时和收到kvnode响应前被缓存的容器接口
+ */
 type cacheI interface {
 	removeMsg(e *forwordMsg)
 }
