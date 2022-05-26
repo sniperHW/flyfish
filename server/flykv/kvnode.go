@@ -476,7 +476,7 @@ func (this *kvnode) start() error {
 			return err
 		}
 
-		go this.mutilRaft.Serve([]string{self.URL})
+		go this.mutilRaft.Serve(self.URL)
 
 		this.startListener()
 
@@ -554,7 +554,7 @@ func (this *kvnode) start() error {
 			return err
 		}
 
-		go this.mutilRaft.Serve([]string{fmt.Sprintf("http://%s:%d", resp.ServiceHost, resp.RaftPort)})
+		go this.mutilRaft.Serve(fmt.Sprintf("http://%s:%d", resp.ServiceHost, resp.RaftPort))
 
 		this.startListener()
 

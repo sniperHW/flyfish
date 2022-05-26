@@ -245,7 +245,7 @@ func NewPd(nodeID uint16, cluster int, join bool, config *Config, clusterStr str
 
 	GetSugar().Infof("mutilRaft serve on:%s", self.URL)
 
-	go p.mutilRaft.Serve([]string{self.URL})
+	go p.mutilRaft.Serve(self.URL)
 
 	p.wait.Add(1)
 	go p.serve()

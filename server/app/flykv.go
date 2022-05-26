@@ -19,11 +19,11 @@ func main() {
 	config := flag.String("config", "flykv_config.toml", "config")
 	join := flag.Bool("join", false, "set true if the node is new join node")
 
+	flag.Parse()
+
 	go func() {
 		http.ListenAndServe(*pprof, nil)
 	}()
-
-	flag.Parse()
 
 	conf, err := flykv.LoadConfig(*config)
 

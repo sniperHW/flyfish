@@ -18,11 +18,11 @@ func main() {
 	config := flag.String("config", "flygate_config.toml", "config")
 	service := flag.String("service", "localhost:8110", "ip:port")
 
+	flag.Parse()
+
 	go func() {
 		http.ListenAndServe(*pprof, nil)
 	}()
-
-	flag.Parse()
 
 	conf, err := flygate.LoadConfig(*config)
 

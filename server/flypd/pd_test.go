@@ -8,7 +8,6 @@ import (
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/logger"
-	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/etcd/pkg/idutil"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
 	consoleHttp "github.com/sniperHW/flyfish/server/flypd/console/http"
@@ -454,12 +453,12 @@ func TestAddRemNode(t *testing.T) {
 
 	for {
 		c := consoleHttp.NewClient("localhost:8110")
-		resp, err := c.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+		resp, err := c.Call(&sproto.GetKvStatus{}, &sproto.GetKvStatusResp{})
 		if nil != err {
 			GetSugar().Errorf("%v", err)
 		} else {
 			ok := func() bool {
-				s := resp.(*sproto.GetSetStatusResp).Sets[0]
+				s := resp.(*sproto.GetKvStatusResp).Sets[0]
 				for _, v := range s.Nodes {
 					if int(v.NodeID) == 2 {
 						for _, vv := range v.Stores {
@@ -505,12 +504,12 @@ func TestAddRemNode(t *testing.T) {
 
 	for {
 		c := consoleHttp.NewClient("localhost:8110")
-		resp, err := c.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+		resp, err := c.Call(&sproto.GetKvStatus{}, &sproto.GetKvStatusResp{})
 		if nil != err {
 			GetSugar().Errorf("%v", err)
 		} else {
 			ok := func() bool {
-				s := resp.(*sproto.GetSetStatusResp).Sets[0]
+				s := resp.(*sproto.GetKvStatusResp).Sets[0]
 				for _, v := range s.Nodes {
 					if int(v.NodeID) == 2 {
 						return false
@@ -733,20 +732,19 @@ func TestSlotBlance(t *testing.T) {
 
 	for {
 		c := consoleHttp.NewClient("localhost:8110")
-		resp, err := c.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+		resp, err := c.Call(&sproto.GetKvStatus{}, &sproto.GetKvStatusResp{})
 		if nil != err {
 			GetSugar().Errorf("%v", err)
 		} else {
 			totalSlot := 0
 			ok := func() bool {
-				for _, v := range resp.(*sproto.GetSetStatusResp).Sets {
+				for _, v := range resp.(*sproto.GetKvStatusResp).Sets {
 					for _, vv := range v.Stores {
-						ss, _ := bitmap.CreateFromJson(vv.Slots)
-						slotCount := len(ss.GetOpenBits())
+						slotCount := int(vv.Slotcount)
 						if !(slotCount >= average && slotCount <= average+1) {
 							return false
 						} else {
-							totalSlot += len(ss.GetOpenBits())
+							totalSlot += slotCount
 						}
 					}
 				}
@@ -779,17 +777,16 @@ func TestSlotBlance(t *testing.T) {
 
 	for {
 		c := consoleHttp.NewClient("localhost:8110")
-		resp, err := c.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+		resp, err := c.Call(&sproto.GetKvStatus{}, &sproto.GetKvStatusResp{})
 		if nil != err {
 			GetSugar().Errorf("%v", err)
 		} else {
 			ok := func() bool {
-				for _, v := range resp.(*sproto.GetSetStatusResp).Sets {
+				for _, v := range resp.(*sproto.GetKvStatusResp).Sets {
 					if v.SetID == int32(1) {
 						total := 0
 						for _, vv := range v.Stores {
-							ss, _ := bitmap.CreateFromJson(vv.Slots)
-							total += len(ss.GetOpenBits())
+							total += int(vv.Slotcount)
 						}
 						return total == sslot.SlotCount
 					}

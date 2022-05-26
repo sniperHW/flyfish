@@ -507,7 +507,7 @@ func newKvNode(nodeid uint16, cid int, join bool, cluster string, startok func()
 
 	store.setBecomeLeader(becomeLeader)
 
-	go mutilRaft.Serve([]string{selfUrl})
+	go mutilRaft.Serve(selfUrl)
 
 	return &kvnode{
 		mutilRaft: mutilRaft,

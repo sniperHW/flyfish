@@ -186,9 +186,11 @@ func (p *pd) changeFlyGate(replyer replyer, m *snet.Message) {
 	}
 }
 
-func (p *pd) onGetSetStatus(replyer replyer, m *snet.Message) {
-	resp := &sproto.GetSetStatusResp{
-		Now: time.Now().Unix(),
+func (p *pd) onGetKvStatus(replyer replyer, m *snet.Message) {
+	resp := &sproto.GetKvStatusResp{
+		Now:               time.Now().Unix(),
+		FreeSlotCount:     int32(len(p.pState.SlotTransferMgr.FreeSlots)),
+		TransferSlotCount: int32(len(p.pState.SlotTransferMgr.Transactions) + len(p.pState.SlotTransferMgr.Plan)),
 	}
 
 	for _, v := range p.pState.deployment.sets {
@@ -202,6 +204,7 @@ func (p *pd) onGetSetStatus(replyer replyer, m *snet.Message) {
 			n := &sproto.KvnodeStatus{
 				NodeID:         int32(vv.id),
 				LastReportTime: vv.lastReportTime,
+				Service:        fmt.Sprintf("%s:%d", vv.host, vv.servicePort),
 			}
 
 			for k, vvv := range vv.store {
@@ -213,6 +216,7 @@ func (p *pd) onGetSetStatus(replyer replyer, m *snet.Message) {
 					Progress:    vvv.progress,
 					Halt:        vvv.halt,
 					MetaVersion: vvv.metaVersion,
+					RaftID:      vvv.RaftID,
 				})
 
 				if vvv.isLeader() {
@@ -227,7 +231,7 @@ func (p *pd) onGetSetStatus(replyer replyer, m *snet.Message) {
 		for _, vv := range v.stores {
 			st := &sproto.StoreStatus{
 				StoreID:     int32(vv.id),
-				Slots:       vv.slots.ToJson(),
+				Slotcount:   int32(len(vv.slots.GetOpenBits())),
 				Kvcount:     int32(kvcount[vv.id]),
 				MetaVersion: metaVersion[vv.id],
 			}
@@ -588,11 +592,8 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.SetMarkClear{}, "SetMarkClear", p.onSetMarkClear)
 	p.registerMsgHandler(&sproto.AddNode{}, "AddNode", p.onAddNode)
 	p.registerMsgHandler(&sproto.RemNode{}, "RemNode", p.onRemNode)
-	//p.registerMsgHandler(&sproto.AddLearnerStoreToNode{}, "AddLearnerStoreToNode", p.onAddLearnerStoreToNode)
-	//p.registerMsgHandler(&sproto.PromoteLearnerStore{}, "PromoteLearnerStore", p.onPromoteLearnerStore)
-	//p.registerMsgHandler(&sproto.RemoveNodeStore{}, "RemoveNodeStore", p.onRemoveNodeStore)
 	p.registerMsgHandler(&sproto.GetMeta{}, "GetMeta", p.onGetMeta)
-	p.registerMsgHandler(&sproto.GetSetStatus{}, "GetSetStatus", p.onGetSetStatus)
+	p.registerMsgHandler(&sproto.GetKvStatus{}, "GetKvStatus", p.onGetKvStatus)
 	p.registerMsgHandler(&sproto.MetaAddTable{}, "MetaAddTable", p.onUpdateMetaReq)
 	p.registerMsgHandler(&sproto.MetaAddFields{}, "MetaAddFields", p.onUpdateMetaReq)
 	p.registerMsgHandler(&sproto.MetaRemoveTable{}, "MetaRemoveTable", p.onUpdateMetaReq)

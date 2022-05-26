@@ -330,8 +330,8 @@ func init() {
 	namespace.Register(&sproto.GetMeta{}, uint32(sproto.ServerCmdType_GetMeta))
 	namespace.Register(&sproto.GetMetaResp{}, uint32(sproto.ServerCmdType_GetMetaResp))
 
-	namespace.Register(&sproto.GetSetStatus{}, uint32(sproto.ServerCmdType_GetSetStatus))
-	namespace.Register(&sproto.GetSetStatusResp{}, uint32(sproto.ServerCmdType_GetSetStatusResp))
+	namespace.Register(&sproto.GetKvStatus{}, uint32(sproto.ServerCmdType_GetKvStatus))
+	namespace.Register(&sproto.GetKvStatusResp{}, uint32(sproto.ServerCmdType_GetKvStatusResp))
 
 	namespace.Register(&sproto.MetaAddTable{}, uint32(sproto.ServerCmdType_MetaAddTable))
 	namespace.Register(&sproto.MetaAddTableResp{}, uint32(sproto.ServerCmdType_MetaAddTableResp))

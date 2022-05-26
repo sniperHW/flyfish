@@ -30,8 +30,8 @@ enum ServerCmdType {
   SetMarkClearResp              = 118;
   GetMeta                       = 119;
   GetMetaResp                   = 120;
-  GetSetStatus                  = 121;
-  GetSetStatusResp              = 122;
+  GetKvStatus                   = 121;
+  GetKvStatusResp               = 122;
   MetaAddTable                  = 123;
   MetaAddTableResp              = 124;
   MetaAddFields                 = 125;
@@ -382,13 +382,13 @@ message packetTest {
   optional string message = 1;
 }
 
-message getSetStatus {
+message getKvStatus {
   
 }
 
 message storeStatus {
   optional int32 storeID      = 1;
-  optional bytes slots        = 2;
+  optional int32 slotcount    = 2;
   optional int32 kvcount      = 3;  
   optional int64 metaVersion  = 4;  
 }
@@ -396,18 +396,20 @@ message storeStatus {
 
 message kvnodeStoreStatus {
   optional int32  storeID     = 1;
-  optional int32  type        = 2;
-  optional int32  value       = 3;
-  optional bool   isLeader    = 4;
-  optional uint64 progress    = 5;
-  optional bool   halt        = 6;
-  optional int64  metaVersion = 7;  
+  optional uint64 raftID      = 2;
+  optional int32  type        = 3;
+  optional int32  value       = 4;
+  optional bool   isLeader    = 5;
+  optional uint64 progress    = 6;
+  optional bool   halt        = 7;
+  optional int64  metaVersion = 8;  
 }
 
 message kvnodeStatus {
   optional int32 nodeID  = 1;
   repeated kvnodeStoreStatus stores  = 2;
   optional int64 lastReportTime = 3; 
+  optional string service       = 4;
 }
 
 message setStatus {
@@ -418,10 +420,12 @@ message setStatus {
   repeated kvnodeStatus nodes = 5;
 }
 
-message getSetStatusResp {
-  optional int64     now     = 1;
-  optional int32     kvcount = 2;
-  repeated setStatus sets    = 3;
+message getKvStatusResp {
+  optional int64     now               = 1;
+  optional int32     kvcount           = 2;
+  optional int32     freeSlotCount     = 3;
+  optional int32     transferSlotCount = 4;
+  repeated setStatus sets              = 5;
 }
 
 message storeReportStatus {

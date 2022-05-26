@@ -11,7 +11,6 @@ import (
 	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/logger"
-	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/etcd/pkg/idutil"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
 	flygate "github.com/sniperHW/flyfish/server/flygate"
@@ -539,20 +538,20 @@ func TestFlygate(t *testing.T) {
 		}
 	}
 
-	resp, err = consoleClient.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+	resp, err = consoleClient.Call(&sproto.GetKvStatus{}, &sproto.GetKvStatusResp{})
 	if nil == err {
-		assert.Equal(t, true, resp.(*sproto.GetSetStatusResp).Kvcount > 0)
+		assert.Equal(t, true, resp.(*sproto.GetKvStatusResp).Kvcount > 0)
 	} else {
 		fmt.Println(err)
 	}
 
 	//等待node3至少有一个leader
 	for {
-		resp, err = consoleClient.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+		resp, err = consoleClient.Call(&sproto.GetKvStatus{}, &sproto.GetKvStatusResp{})
 		if ok := func() bool {
 			leaderCount := 0
 			if nil == err {
-				for _, set := range resp.(*sproto.GetSetStatusResp).Sets {
+				for _, set := range resp.(*sproto.GetKvStatusResp).Sets {
 					if set.SetID == int32(1) {
 						for _, n := range set.Nodes {
 							if n.NodeID == int32(3) {
@@ -608,10 +607,10 @@ func TestFlygate(t *testing.T) {
 
 	//等待node3被移除
 	for {
-		resp, err = consoleClient.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+		resp, err = consoleClient.Call(&sproto.GetKvStatus{}, &sproto.GetKvStatusResp{})
 		if nil == err {
 			find := false
-			for _, set := range resp.(*sproto.GetSetStatusResp).Sets {
+			for _, set := range resp.(*sproto.GetKvStatusResp).Sets {
 				if set.SetID == int32(1) {
 					for _, n := range set.Nodes {
 						if n.NodeID == int32(3) {
@@ -711,12 +710,12 @@ func TestFlygate(t *testing.T) {
 		//排空所有kv
 		consoleClient.Call(&sproto.DrainKv{}, &sproto.DrainKvResp{})
 
-		resp, err = consoleClient.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+		resp, err = consoleClient.Call(&sproto.GetKvStatus{}, &sproto.GetKvStatusResp{})
 		if nil == err {
-			if resp.(*sproto.GetSetStatusResp).Kvcount == 0 {
+			if resp.(*sproto.GetKvStatusResp).Kvcount == 0 {
 				break
 			} else {
-				fmt.Printf("total kvcount:%d\n", resp.(*sproto.GetSetStatusResp).Kvcount)
+				fmt.Printf("total kvcount:%d\n", resp.(*sproto.GetKvStatusResp).Kvcount)
 			}
 		} else {
 			fmt.Println(err)
@@ -941,12 +940,12 @@ func TestAddRemoveNode2(t *testing.T) {
 	//等待node3所有store成为voter
 	for {
 		c := consoleHttp.NewClient("localhost:8110")
-		resp, err := c.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+		resp, err := c.Call(&sproto.GetKvStatus{}, &sproto.GetKvStatusResp{})
 		if nil != err {
 			logger.GetSugar().Errorf("%v", err)
 		} else {
 			ok := func() bool {
-				s := resp.(*sproto.GetSetStatusResp).Sets[0]
+				s := resp.(*sproto.GetKvStatusResp).Sets[0]
 				for _, v := range s.Nodes {
 					if int(v.NodeID) == 3 {
 						for _, vv := range v.Stores {
@@ -1093,11 +1092,11 @@ func TestAddSet(t *testing.T) {
 	//等待
 	for {
 		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.GetSetStatus{}),
+			snet.MakeMessage(0, &sproto.GetKvStatus{}),
 			time.Second,
 			func(respCh chan interface{}, r interface{}) {
 				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.GetSetStatusResp); ok {
+					if resp, ok := m.Msg.(*sproto.GetKvStatusResp); ok {
 						select {
 						case respCh <- resp:
 						default:
@@ -1110,22 +1109,15 @@ func TestAddSet(t *testing.T) {
 			slotPerStore := sslot.SlotCount / 3
 
 			ok := true
-			for _, v := range resp.(*sproto.GetSetStatusResp).Sets {
+			for _, v := range resp.(*sproto.GetKvStatusResp).Sets {
 				for _, vv := range v.Stores {
-					slots, _ := bitmap.CreateFromJson(vv.Slots)
-					if len(slots.GetOpenBits()) > slotPerStore+1 {
+					if int(vv.Slotcount) > slotPerStore+1 {
 						ok = false
 					}
 				}
 			}
 
 			if ok {
-				slots1, _ := bitmap.CreateFromJson(resp.(*sproto.GetSetStatusResp).Sets[0].Stores[0].Slots)
-				logger.GetSugar().Infof("%d %v", len(slots1.GetOpenBits()), slots1.GetOpenBits())
-				slots2, _ := bitmap.CreateFromJson(resp.(*sproto.GetSetStatusResp).Sets[1].Stores[0].Slots)
-				logger.GetSugar().Infof("%d %v", len(slots2.GetOpenBits()), slots2.GetOpenBits())
-				slots3, _ := bitmap.CreateFromJson(resp.(*sproto.GetSetStatusResp).Sets[2].Stores[0].Slots)
-				logger.GetSugar().Infof("%d %v", len(slots3.GetOpenBits()), slots3.GetOpenBits())
 				break
 			}
 		}
@@ -1158,11 +1150,11 @@ func TestAddSet(t *testing.T) {
 	//等待
 	for {
 		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.GetSetStatus{}),
+			snet.MakeMessage(0, &sproto.GetKvStatus{}),
 			time.Second,
 			func(respCh chan interface{}, r interface{}) {
 				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.GetSetStatusResp); ok {
+					if resp, ok := m.Msg.(*sproto.GetKvStatusResp); ok {
 						select {
 						case respCh <- resp:
 						default:
@@ -1175,7 +1167,7 @@ func TestAddSet(t *testing.T) {
 			var set1 *sproto.SetStatus
 			var set2 *sproto.SetStatus
 			var set3 *sproto.SetStatus
-			for _, v := range resp.(*sproto.GetSetStatusResp).Sets {
+			for _, v := range resp.(*sproto.GetKvStatusResp).Sets {
 				if v.SetID == 1 {
 					set1 = v
 				} else if v.SetID == 2 {
@@ -1185,13 +1177,11 @@ func TestAddSet(t *testing.T) {
 				}
 			}
 
-			slots1, _ := bitmap.CreateFromJson(set1.Stores[0].Slots)
-			slots2, _ := bitmap.CreateFromJson(set2.Stores[0].Slots)
-			slots3, _ := bitmap.CreateFromJson(set3.Stores[0].Slots)
+			slots1 := int(set1.Stores[0].Slotcount)
+			slots2 := int(set2.Stores[0].Slotcount)
+			slots3 := int(set3.Stores[0].Slotcount)
 
-			if len(slots3.GetOpenBits()) == 0 && len(slots1.GetOpenBits())+len(slots2.GetOpenBits()) == sslot.SlotCount {
-				logger.GetSugar().Infof("%d %v", len(slots1.GetOpenBits()), slots1.GetOpenBits())
-				logger.GetSugar().Infof("%d %v", len(slots2.GetOpenBits()), slots2.GetOpenBits())
+			if slots3 == 0 && slots1+slots2 == sslot.SlotCount {
 				break
 			}
 		}
@@ -1230,10 +1220,10 @@ func TestAddSet(t *testing.T) {
 
 	consoleClient := console.NewClient("localhost:8110")
 	for {
-		resp, err := consoleClient.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+		resp, err := consoleClient.Call(&sproto.GetKvStatus{}, &sproto.GetKvStatusResp{})
 		nodes := []int32{}
 		if nil == err {
-			for _, set := range resp.(*sproto.GetSetStatusResp).Sets {
+			for _, set := range resp.(*sproto.GetKvStatusResp).Sets {
 				for _, n := range set.Nodes {
 					nodes = append(nodes, n.NodeID)
 				}
@@ -1367,11 +1357,11 @@ func TestAddSet2(t *testing.T) {
 	//等待slot平衡
 	for {
 		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.GetSetStatus{}),
+			snet.MakeMessage(0, &sproto.GetKvStatus{}),
 			time.Second,
 			func(respCh chan interface{}, r interface{}) {
 				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.GetSetStatusResp); ok {
+					if resp, ok := m.Msg.(*sproto.GetKvStatusResp); ok {
 						select {
 						case respCh <- resp:
 						default:
@@ -1384,10 +1374,9 @@ func TestAddSet2(t *testing.T) {
 			slotPerStore := sslot.SlotCount / 2
 
 			ok := true
-			for _, v := range resp.(*sproto.GetSetStatusResp).Sets {
+			for _, v := range resp.(*sproto.GetKvStatusResp).Sets {
 				for _, vv := range v.Stores {
-					slots, _ := bitmap.CreateFromJson(vv.Slots)
-					if len(slots.GetOpenBits()) > slotPerStore+1 {
+					if int(vv.Slotcount) > slotPerStore+1 {
 						ok = false
 					}
 				}
@@ -1633,13 +1622,13 @@ func TestStoreBalance(t *testing.T) {
 
 	for {
 		c := consoleHttp.NewClient("localhost:8110")
-		resp, err := c.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+		resp, err := c.Call(&sproto.GetKvStatus{}, &sproto.GetKvStatusResp{})
 		if nil != err {
 			logger.GetSugar().Errorf("%v", err)
 		} else {
 			ok := func() bool {
 				leaderCount := []int{0, 0, 0, 0}
-				for _, v := range resp.(*sproto.GetSetStatusResp).Sets {
+				for _, v := range resp.(*sproto.GetKvStatusResp).Sets {
 					if v.SetID == int32(1) {
 						for _, vv := range v.Nodes {
 							for _, vvv := range vv.Stores {
@@ -1748,12 +1737,12 @@ func TestSuspendResume(t *testing.T) {
 
 	for {
 		c := consoleHttp.NewClient("localhost:8110")
-		resp, err := c.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+		resp, err := c.Call(&sproto.GetKvStatus{}, &sproto.GetKvStatusResp{})
 		if nil != err {
 			logger.GetSugar().Errorf("%v", err)
 		} else {
 			ok := func() bool {
-				s := resp.(*sproto.GetSetStatusResp).Sets[0]
+				s := resp.(*sproto.GetKvStatusResp).Sets[0]
 				for _, v := range s.Nodes {
 					if int(v.NodeID) == 2 {
 						for _, vv := range v.Stores {
@@ -1782,10 +1771,10 @@ func TestSuspendResume(t *testing.T) {
 
 	for {
 		consoleClient.Call(&sproto.CpSuspendStore{SetID: 1, Store: 1}, &sproto.CpSuspendStoreResp{})
-		resp, err := consoleClient.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+		resp, err := consoleClient.Call(&sproto.GetKvStatus{}, &sproto.GetKvStatusResp{})
 		if nil == err {
 			haltStoreCount := 0
-			for _, set := range resp.(*sproto.GetSetStatusResp).Sets {
+			for _, set := range resp.(*sproto.GetKvStatusResp).Sets {
 				for _, n := range set.Nodes {
 					for _, s := range n.Stores {
 						if s.Halt {
@@ -1823,10 +1812,10 @@ func TestSuspendResume(t *testing.T) {
 
 	for {
 		consoleClient.Call(&sproto.CpResumeStore{SetID: 1, Store: 1}, &sproto.CpResumeStoreResp{})
-		resp, err := consoleClient.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+		resp, err := consoleClient.Call(&sproto.GetKvStatus{}, &sproto.GetKvStatusResp{})
 		if nil == err {
 			haltStoreCount := 0
-			for _, set := range resp.(*sproto.GetSetStatusResp).Sets {
+			for _, set := range resp.(*sproto.GetKvStatusResp).Sets {
 				for _, n := range set.Nodes {
 					for _, s := range n.Stores {
 						if s.Halt {
@@ -2238,10 +2227,10 @@ func TestMeta(t *testing.T) {
 	//检查flykv meta版本号一致
 
 	for {
-		resp, _ := consoleClient.Call(&sproto.GetSetStatus{}, &sproto.GetSetStatusResp{})
+		resp, _ := consoleClient.Call(&sproto.GetKvStatus{}, &sproto.GetKvStatusResp{})
 		ok := true
 
-		for _, set := range resp.(*sproto.GetSetStatusResp).Sets {
+		for _, set := range resp.(*sproto.GetKvStatusResp).Sets {
 			for _, v := range set.Stores {
 				fmt.Println(v.StoreID, v.MetaVersion)
 
