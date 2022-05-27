@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/gogo/protobuf/proto"
 	"github.com/jroimartin/gocui"
 	"github.com/sniperHW/flyfish/logger"
 	consoleHttp "github.com/sniperHW/flyfish/server/flypd/console/http"
@@ -11,47 +12,75 @@ import (
 	"log"
 	"net/http"
 	_ "net/http/pprof"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 )
 
-type hintWin struct {
-	wait bool
-	msg  string
-	fn   func()
-}
-
-var (
-	setSelected     int32
-	nodeSelected    int32
-	sets            []*sproto.Set
-	httpcli         *consoleHttp.Client
-	currentMainView string = "sets"
-	showAdd         bool
-	showHelp        bool
-	hint            *hintWin
+const (
+	setsWidth = 15 //sets控件的最大宽度
+	editWidth = 80
 )
 
-func getSelectedSet() (int, *sproto.Set) {
-	for i, v := range sets {
-		if setSelected == v.Id {
+type stackItem struct {
+	view    string
+	onEnter func()
+	onQ     func()
+	msg     string
+}
+
+type app struct {
+	setSelected    int32 //当前选中的setID
+	nodeSelected   int32 //当前选中的nodeID
+	sets           []*sproto.Set
+	httpcli        *consoleHttp.Client
+	activeMainView int
+	mainViews      []string //{"sets","nodes"}
+	stack          []*stackItem
+}
+
+func (a *app) getStackTop() *stackItem {
+	if len(a.stack) > 0 {
+		return a.stack[len(a.stack)-1]
+	} else {
+		return nil
+	}
+}
+
+func (a *app) popStackTop(g *gocui.Gui) {
+	if top := a.getStackTop(); nil != top {
+		g.DeleteView(top.view)
+		a.stack[len(a.stack)-1] = nil
+		a.stack = a.stack[:len(a.stack)-1]
+	}
+}
+
+func (a *app) clearStack(g *gocui.Gui) {
+	for len(a.stack) > 0 {
+		a.popStackTop(g)
+	}
+}
+
+func (a *app) getSelectedSet() (int, *sproto.Set) {
+	for i, v := range a.sets {
+		if a.setSelected == v.Id {
 			return i, v
 		}
 	}
 
-	if len(sets) > 0 {
-		return 0, sets[0]
+	if len(a.sets) > 0 {
+		return 0, a.sets[0]
 	} else {
 		return -1, nil
 	}
 }
 
-func getSelectedNode() (int, *sproto.Node) {
-	if _, s := getSelectedSet(); s != nil {
+func (a *app) getSelectedNode() (int, *sproto.Node) {
+	if _, s := a.getSelectedSet(); s != nil {
 		for i, v := range s.Nodes {
-			if nodeSelected == v.Id {
+			if a.nodeSelected == v.Id {
 				return i, v
 			}
 		}
@@ -68,302 +97,6 @@ func setCurrentViewOnTop(g *gocui.Gui, name string) (*gocui.View, error) {
 		return nil, err
 	}
 	return g.SetViewOnTop(name)
-}
-
-const (
-	setsWidth = 15 //sets控件的最大宽度
-	editWidth = 80
-)
-
-func quit(g *gocui.Gui, v *gocui.View) error {
-	return gocui.ErrQuit
-}
-
-func layout(g *gocui.Gui) error {
-	maxX, maxY := g.Size()
-
-	vSets, err := g.SetView("sets", 0, 0, setsWidth, maxY-1)
-	if nil != err {
-		if err != nil {
-			if err != gocui.ErrUnknownView {
-				panic(err)
-			}
-		}
-		vSets.Title = "sets"
-		vSets.Highlight = true
-		vSets.Wrap = true
-		vSets.SelBgColor = gocui.ColorGreen
-		vSets.SelFgColor = gocui.ColorBlack
-	}
-
-	vSets.Clear()
-	for _, s := range sets {
-		fmt.Fprintf(vSets, "set:%d\n", s.Id)
-	}
-
-	vNode, err := g.SetView("nodes", setsWidth, 0, maxX-1, maxY-1)
-	if nil != err {
-		if err != nil {
-			if err != gocui.ErrUnknownView {
-				panic(err)
-			}
-		}
-		vNode.Title = "nodes"
-		vNode.Highlight = true
-		vNode.Wrap = true
-		vNode.SelBgColor = gocui.ColorGreen
-		vNode.SelFgColor = gocui.ColorBlack
-	}
-	vNode.Clear()
-
-	if i, s := getSelectedSet(); s != nil {
-		vSets.SetCursor(0, i)
-		for _, v := range s.Nodes {
-			fmt.Fprintf(vNode, "node:%d host:%s servicePort:%d raftPort:%d\n", v.Id, v.Host, v.ServicePort, v.RaftPort)
-		}
-
-		if i, n := getSelectedNode(); n != nil {
-			vNode.SetCursor(0, i)
-		} else {
-			vNode.SetCursor(0, 0)
-		}
-
-	} else {
-		vSets.SetCursor(0, 0)
-		vNode.SetCursor(0, 0)
-	}
-
-	g.Cursor = false
-
-	if nil != hint {
-		v, err := g.SetView("hint", (maxX-40)/2, 10, (maxX-40)/2+40, 20)
-		if err != nil {
-			if err != gocui.ErrUnknownView {
-				return err
-			}
-			v.Wrap = true
-		}
-
-		v.Clear()
-
-		if hint.wait {
-			fmt.Fprintln(v, "Waitting response from server...")
-		} else {
-			fmt.Fprintf(v, "%s (press enter to close)", hint.msg)
-		}
-
-		if _, err = setCurrentViewOnTop(g, "hint"); err != nil {
-			return err
-		}
-
-	} else {
-
-		g.DeleteView("hint")
-		if showAdd {
-			v, err := g.SetView("add", (maxX-editWidth)/2, 1, (maxX-editWidth)/2+editWidth, maxY-1)
-			if err != nil {
-				if err != gocui.ErrUnknownView {
-					return err
-				}
-
-				if currentMainView == "sets" {
-					v.Title = "addSet (editable)"
-				} else {
-					v.Title = "addNode (editable)"
-				}
-
-				v.Editable = true
-				v.Wrap = true
-			}
-
-			g.Cursor = true
-
-			if _, err = setCurrentViewOnTop(g, "add"); err != nil {
-				return err
-			}
-		} else {
-			g.DeleteView("add")
-		}
-
-		if showHelp {
-			v, err := g.SetView("help", (maxX-editWidth)/2, 1, (maxX-editWidth)/2+editWidth, maxY-1)
-			if err != nil {
-				if err != gocui.ErrUnknownView {
-					return err
-				}
-
-				v.Title = "help"
-				v.Wrap = true
-			}
-
-			g.Cursor = false
-
-			v.Clear()
-
-			fmt.Fprintln(v, "tab: change view")
-			fmt.Fprintln(v, "ctrl + A: Add Set/Node (Depending on the current view)")
-			fmt.Fprintln(v, "ctrl + O: Confirm Add Set/Node")
-			fmt.Fprintln(v, "ctrl + R: Remove the selected Set/Node (Depending on the current view)")
-			fmt.Fprintln(v, "ctrl + M: Mark Clear the selected Set")
-
-			if _, err = setCurrentViewOnTop(g, "help"); err != nil {
-				return err
-			}
-
-		} else {
-			g.DeleteView("help")
-		}
-
-		if !showAdd && !showHelp {
-			setCurrentViewOnTop(g, currentMainView)
-		}
-	}
-	return nil
-}
-
-func getDepolyment(cli *consoleHttp.Client, g *gocui.Gui) {
-	if r, _ := cli.Call(&sproto.GetDeployment{}, &sproto.GetDeploymentResp{}); r != nil {
-		resp := r.(*sproto.GetDeploymentResp)
-		sort.Slice(resp.Sets, func(l, r int) bool {
-			return resp.Sets[l].Id < resp.Sets[r].Id
-		})
-
-		for _, v := range resp.Sets {
-			sort.Slice(v.Nodes, func(l, r int) bool {
-				return v.Nodes[l].Id < v.Nodes[r].Id
-			})
-		}
-		g.Update(func(g *gocui.Gui) error {
-			sets = resp.Sets
-			return nil
-		})
-	}
-}
-
-func changeMainView(g *gocui.Gui, v *gocui.View) error {
-	if !showAdd && !showHelp && hint == nil {
-		if currentMainView == "sets" {
-			currentMainView = "nodes"
-		} else {
-			currentMainView = "sets"
-		}
-	}
-	return nil
-}
-
-func cursorMovement(d int) func(g *gocui.Gui, v *gocui.View) error {
-	return func(g *gocui.Gui, v *gocui.View) error {
-		if i, s := getSelectedSet(); nil != s {
-			if currentMainView == "sets" {
-				next := i + d
-				if next >= 0 && next < len(sets) {
-					setSelected = sets[next].Id
-					nodeSelected = 0
-					if len(sets[next].Nodes) > 0 {
-						nodeSelected = sets[next].Nodes[0].Id
-					}
-				}
-			} else if currentMainView == "nodes" {
-				if i, n := getSelectedNode(); nil != n {
-					next := i + d
-					if next >= 0 && next < len(s.Nodes) {
-						nodeSelected = s.Nodes[next].Id
-					}
-				}
-			}
-		}
-		return nil
-	}
-}
-
-func onToggleAdd(g *gocui.Gui, v *gocui.View) error {
-	showAdd = !showAdd
-	return nil
-}
-
-func onToggleHelp(g *gocui.Gui, v *gocui.View) error {
-	showHelp = !showHelp
-	return nil
-}
-
-func makeRemNodeReq(v *gocui.View) (*sproto.RemNode, error) {
-	if _, s := getSelectedSet(); s == nil {
-		return nil, errors.New("no set selected")
-	} else {
-		if _, n := getSelectedNode(); n == nil {
-			return nil, errors.New("no node selected")
-		} else {
-			return &sproto.RemNode{
-				SetID:  s.Id,
-				NodeID: n.Id,
-			}, nil
-		}
-	}
-}
-
-func makeRemSetReq(v *gocui.View) (*sproto.RemSet, error) {
-	if _, s := getSelectedSet(); s == nil {
-		return nil, errors.New("no set selected")
-	} else {
-		return &sproto.RemSet{
-			SetID: s.Id,
-		}, nil
-	}
-}
-
-func onToggleRemove(g *gocui.Gui, v *gocui.View) error {
-	if currentMainView == "sets" {
-		hint = &hintWin{}
-		if req, err := makeRemSetReq(v); err == nil {
-			hint.msg = fmt.Sprintf("do you really want to remove set:%d? press enter to Confirm!", req.SetID)
-			hint.fn = func() {
-				go func() {
-					resp, err := httpcli.Call(req, &sproto.RemSetResp{})
-					g.Update(func(g *gocui.Gui) error {
-						hint.wait = false
-						if nil != err {
-							hint.msg = err.Error()
-						} else {
-							if resp.(*sproto.RemSetResp).Ok {
-								hint.msg = "Ok"
-							} else {
-								hint.msg = resp.(*sproto.RemSetResp).Reason
-							}
-						}
-						return nil
-					})
-				}()
-			}
-		} else {
-			hint.msg = err.Error()
-		}
-	} else if currentMainView == "nodes" {
-		hint = &hintWin{}
-		if req, err := makeRemNodeReq(v); err == nil {
-			hint.msg = fmt.Sprintf("do you really want to remove node:%d? press enter to Confirm!", req.NodeID)
-			hint.fn = func() {
-				go func() {
-					resp, err := httpcli.Call(req, &sproto.RemNodeResp{})
-					g.Update(func(g *gocui.Gui) error {
-						hint.wait = false
-						if nil != err {
-							hint.msg = err.Error()
-						} else {
-							if resp.(*sproto.RemNodeResp).Ok {
-								hint.msg = "Ok"
-							} else {
-								hint.msg = resp.(*sproto.RemNodeResp).Reason
-							}
-						}
-						return nil
-					})
-				}()
-			}
-		} else {
-			hint.msg = err.Error()
-		}
-	}
-	return nil
 }
 
 func splitNode(str string) (nodeId int64, host string, servicePort int64, raftPort int64, err error) {
@@ -393,13 +126,13 @@ func splitNode(str string) (nodeId int64, host string, servicePort int64, raftPo
 	return
 }
 
-func makeAddSetReq(v *gocui.View) (*sproto.AddSet, error) {
+func (a *app) makeAddSetReq(v *gocui.View) (*sproto.AddSet, error) {
 	setID := int32(0)
-	for i := 0; i < len(sets); i++ {
-		if sets[i].Id-setID > int32(1) {
+	for i := 0; i < len(a.sets); i++ {
+		if a.sets[i].Id-setID > int32(1) {
 			break
 		} else {
-			setID = sets[i].Id
+			setID = a.sets[i].Id
 		}
 	}
 	setID += int32(1)
@@ -433,8 +166,8 @@ func makeAddSetReq(v *gocui.View) (*sproto.AddSet, error) {
 	}
 }
 
-func makeAddNodeReq(v *gocui.View) (*sproto.AddNode, error) {
-	if _, s := getSelectedSet(); s == nil {
+func (a *app) makeAddNodeReq(v *gocui.View) (*sproto.AddNode, error) {
+	if _, s := a.getSelectedSet(); s == nil {
 		return nil, errors.New("no set selected")
 	} else {
 		buffs := v.ViewBufferLines()
@@ -456,23 +189,57 @@ func makeAddNodeReq(v *gocui.View) (*sproto.AddNode, error) {
 	}
 }
 
-func onToggleConfirm(g *gocui.Gui, v *gocui.View) error {
-	if currentMainView == "sets" {
-		hint = &hintWin{}
-		if req, err := makeAddSetReq(v); err == nil {
-			hint.msg = "press enter to Confirm!"
-			hint.fn = func() {
+func (a *app) onCtrlSpace(g *gocui.Gui, v *gocui.View) error {
+	//只有当栈顶是"add"时才执行
+	logger.GetSugar().Infof("onCtrlSpace")
+	if top := a.getStackTop(); nil != top && top.view == "add" {
+		var req proto.Message
+		var resp proto.Message
+		var err error
+		switch a.mainViews[a.activeMainView] {
+		case "sets":
+			req, err = a.makeAddSetReq(v)
+			resp = &sproto.AddSetResp{}
+		case "nodes":
+			req, err = a.makeAddNodeReq(v)
+			resp = &sproto.AddNodeResp{}
+		default:
+			return errors.New("unknown view")
+		}
+
+		st := &stackItem{
+			view: "confirm",
+			msg:  "press enter to confirm operation!\npress q to cancel!",
+			onQ:  func() { a.popStackTop(g) },
+		}
+		if nil == err {
+			st.onEnter = func() {
+				a.popStackTop(g)
+				st := &stackItem{
+					view: "operation",
+					msg:  "waitting server response...!",
+				}
+				a.stack = append(a.stack, st)
+
 				go func() {
-					resp, err := httpcli.Call(req, &sproto.AddSetResp{})
+					r, err := a.httpcli.Call(req, resp)
 					g.Update(func(g *gocui.Gui) error {
-						hint.wait = false
-						if nil != err {
-							hint.msg = err.Error()
-						} else {
-							if resp.(*sproto.AddSetResp).Ok {
-								hint.msg = "Ok"
+						if top := a.getStackTop(); nil != top && top.view == "operation" {
+							top.onQ = func() {
+								a.popStackTop(g)
+							}
+							if nil != err {
+								top.msg = fmt.Sprintf("error:%s\npress q to close window!\n", err.Error())
 							} else {
-								hint.msg = resp.(*sproto.AddSetResp).Reason
+								vv := reflect.ValueOf(r).Elem()
+								if vv.FieldByName("Ok").Interface().(bool) {
+									top.onQ = func() {
+										a.clearStack(g)
+									}
+									top.msg = "OK!\npress q to close window!"
+								} else {
+									top.msg = fmt.Sprintf("error:%s\npress q to close window!\n", vv.FieldByName("Reason").Interface().(string))
+								}
 							}
 						}
 						return nil
@@ -480,61 +247,222 @@ func onToggleConfirm(g *gocui.Gui, v *gocui.View) error {
 				}()
 			}
 		} else {
-			hint.msg = err.Error()
+			st.msg = fmt.Sprintf("error:%s\npress q to close window!\n", err.Error())
 		}
-	} else if currentMainView == "nodes" {
-		hint = &hintWin{}
-		if req, err := makeAddNodeReq(v); err == nil {
-			hint.msg = "press enter to Confirm!"
-			hint.fn = func() {
-				go func() {
-					resp, err := httpcli.Call(req, &sproto.AddNodeResp{})
-					g.Update(func(g *gocui.Gui) error {
-						hint.wait = false
-						if nil != err {
-							hint.msg = err.Error()
-						} else {
-							if resp.(*sproto.AddNodeResp).Ok {
-								hint.msg = "Ok"
-							} else {
-								hint.msg = resp.(*sproto.AddNodeResp).Reason
-							}
-						}
-						return nil
-					})
-				}()
+		a.stack = append(a.stack, st)
+	}
+	return nil
+}
+
+func (a *app) drawStack(g *gocui.Gui) error {
+	top := a.getStackTop()
+	maxX, maxY := g.Size()
+	for _, s := range a.stack {
+		switch s.view {
+		case "add":
+			v, err := g.SetView(s.view, (maxX-editWidth)/2, 1, (maxX-editWidth)/2+editWidth, maxY-1)
+			if err != nil {
+				if err != gocui.ErrUnknownView {
+					return err
+				}
+
+				if a.mainViews[a.activeMainView] == "sets" {
+					v.Title = "addSet (editable)"
+				} else {
+					v.Title = "addNode (editable)"
+				}
+
+				v.Editable = true
+				v.Wrap = true
 			}
-		} else {
-			hint.msg = err.Error()
+
+			if top == s {
+				g.Cursor = true
+			}
+		default:
+			v, err := g.SetView(s.view, (maxX-40)/2, 10, (maxX-40)/2+40, 20)
+			if err != nil {
+				if err != gocui.ErrUnknownView {
+					return err
+				}
+				v.Wrap = true
+
+				if err := g.SetKeybinding(s.view, 'q', gocui.ModNone, a.onQ); err != nil {
+					log.Panicln(err)
+				}
+
+				if err := g.SetKeybinding(s.view, gocui.KeyEnter, gocui.ModNone, a.onEnter); err != nil {
+					log.Panicln(err)
+				}
+
+			}
+			v.Clear()
+			fmt.Fprintf(v, s.msg)
 		}
 	}
-	return nil
-}
 
-func onToggleMarkClear(g *gocui.Gui, v *gocui.View) error {
-	return nil
-}
-
-func onHintEnter(g *gocui.Gui, v *gocui.View) error {
-	if nil == hint {
-		return
+	if top != nil {
+		if _, err := setCurrentViewOnTop(g, top.view); err != nil {
+			return err
+		}
 	}
 
-	if nil != hint.fn {
-		hint.wait = true
-		hint.fn()
-		hint.fn = nil
+	return nil
+}
+
+func (a *app) layout(g *gocui.Gui) error {
+	maxX, maxY := g.Size()
+
+	//首先显示主视图
+	vSets, err := g.SetView("sets", 0, 0, setsWidth, maxY-1)
+	if nil != err {
+		if err != nil {
+			if err != gocui.ErrUnknownView {
+				panic(err)
+			}
+		}
+		vSets.Title = "sets"
+		vSets.Highlight = true
+		vSets.Wrap = true
+		vSets.SelBgColor = gocui.ColorGreen
+		vSets.SelFgColor = gocui.ColorBlack
+	}
+
+	vSets.Clear()
+	for _, s := range a.sets {
+		fmt.Fprintf(vSets, "set:%d\n", s.Id)
+	}
+
+	vNode, err := g.SetView("nodes", setsWidth, 0, maxX-1, maxY-1)
+	if nil != err {
+		if err != nil {
+			if err != gocui.ErrUnknownView {
+				panic(err)
+			}
+		}
+		vNode.Title = "nodes"
+		vNode.Highlight = true
+		vNode.Wrap = true
+		vNode.SelBgColor = gocui.ColorGreen
+		vNode.SelFgColor = gocui.ColorBlack
+	}
+	vNode.Clear()
+
+	if i, s := a.getSelectedSet(); s != nil {
+		vSets.SetCursor(0, i)
+		for _, v := range s.Nodes {
+			fmt.Fprintf(vNode, "node:%d host:%s servicePort:%d raftPort:%d\n", v.Id, v.Host, v.ServicePort, v.RaftPort)
+		}
+
+		if i, n := a.getSelectedNode(); n != nil {
+			vNode.SetCursor(0, i)
+		} else {
+			vNode.SetCursor(0, 0)
+		}
+
 	} else {
-		hint = nil
-		showAdd = false
+		vSets.SetCursor(0, 0)
+		vNode.SetCursor(0, 0)
+	}
+
+	g.Cursor = false
+
+	if len(a.stack) > 0 {
+		if err = a.drawStack(g); err != nil {
+			return err
+		}
+	} else {
+		if _, err = setCurrentViewOnTop(g, a.mainViews[a.activeMainView]); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (a *app) changeMainView(g *gocui.Gui, v *gocui.View) error {
+	if a.getStackTop() == nil {
+		a.activeMainView = (a.activeMainView + 1) % len(a.mainViews)
 	}
 	return nil
 }
 
-func onOpCancel(g *gocui.Gui, v *gocui.View) error {
-	hint = nil
-	showAdd = false
+func (a *app) cursorMovement(d int) func(g *gocui.Gui, v *gocui.View) error {
+	return func(g *gocui.Gui, v *gocui.View) error {
+		if nil != a.getStackTop() {
+			return nil
+		}
+
+		if i, s := a.getSelectedSet(); nil != s {
+			switch a.mainViews[a.activeMainView] {
+			case "sets":
+				next := i + d
+				if next >= 0 && next < len(a.sets) {
+					a.setSelected = a.sets[next].Id
+					a.nodeSelected = 0
+					if len(a.sets[next].Nodes) > 0 {
+						a.nodeSelected = a.sets[next].Nodes[0].Id
+					}
+				}
+			case "nodes":
+				if i, n := a.getSelectedNode(); nil != n {
+					next := i + d
+					if next >= 0 && next < len(s.Nodes) {
+						a.nodeSelected = s.Nodes[next].Id
+					}
+				}
+			default:
+
+			}
+		}
+		return nil
+	}
+}
+
+func (a *app) getDepolyment(cli *consoleHttp.Client, g *gocui.Gui) {
+	if r, _ := cli.Call(&sproto.GetDeployment{}, &sproto.GetDeploymentResp{}); r != nil {
+		resp := r.(*sproto.GetDeploymentResp)
+		sort.Slice(resp.Sets, func(l, r int) bool {
+			return resp.Sets[l].Id < resp.Sets[r].Id
+		})
+
+		for _, v := range resp.Sets {
+			sort.Slice(v.Nodes, func(l, r int) bool {
+				return v.Nodes[l].Id < v.Nodes[r].Id
+			})
+		}
+		g.Update(func(g *gocui.Gui) error {
+			a.sets = resp.Sets
+			return nil
+		})
+	}
+}
+
+func (a *app) onEnter(g *gocui.Gui, v *gocui.View) error {
+	if top := a.getStackTop(); nil != top && nil != top.onEnter {
+		top.onEnter()
+	}
 	return nil
+}
+
+func (a *app) onQ(g *gocui.Gui, v *gocui.View) error {
+	if top := a.getStackTop(); nil != top && nil != top.onQ {
+		top.onQ()
+	}
+	return nil
+}
+
+func (a *app) onToggleAdd(g *gocui.Gui, v *gocui.View) error {
+	if top := a.getStackTop(); nil == top {
+		a.stack = append(a.stack, &stackItem{view: "add"})
+	} else if top.view == "add" {
+		a.clearStack(g)
+	}
+	return nil
+}
+
+func quit(g *gocui.Gui, v *gocui.View) error {
+	return gocui.ErrQuit
 }
 
 func main() {
@@ -563,17 +491,22 @@ func main() {
 	g.Cursor = false
 	g.SelFgColor = gocui.ColorGreen
 
-	httpcli = consoleHttp.NewClient(*pdservice)
+	httpcli := consoleHttp.NewClient(*pdservice)
 
-	g.SetManagerFunc(layout)
+	a := app{
+		mainViews: []string{"sets", "nodes"},
+		httpcli:   httpcli,
+	}
 
-	go getDepolyment(httpcli, g)
+	g.SetManagerFunc(a.layout)
+
+	go a.getDepolyment(httpcli, g)
 
 	go func() {
 		for {
 			select {
 			case <-time.After(1000 * time.Millisecond):
-				getDepolyment(httpcli, g)
+				a.getDepolyment(httpcli, g)
 			}
 		}
 	}()
@@ -582,65 +515,33 @@ func main() {
 		log.Panicln(err)
 	}
 
-	if err := g.SetKeybinding("", gocui.KeyTab, gocui.ModNone, changeMainView); err != nil {
+	if err := g.SetKeybinding("", gocui.KeyTab, gocui.ModNone, a.changeMainView); err != nil {
 		log.Panicln(err)
 	}
 
-	if err := g.SetKeybinding("sets", gocui.KeyArrowUp, gocui.ModNone, cursorMovement(-1)); err != nil {
+	if err := g.SetKeybinding("", gocui.KeyArrowUp, gocui.ModNone, a.cursorMovement(-1)); err != nil {
 		log.Panicln(err)
 	}
 
-	if err := g.SetKeybinding("sets", gocui.KeyArrowDown, gocui.ModNone, cursorMovement(1)); err != nil {
+	if err := g.SetKeybinding("", gocui.KeyArrowDown, gocui.ModNone, a.cursorMovement(1)); err != nil {
 		log.Panicln(err)
 	}
 
-	if err := g.SetKeybinding("nodes", gocui.KeyArrowUp, gocui.ModNone, cursorMovement(-1)); err != nil {
+	if err := g.SetKeybinding("", gocui.KeyCtrlA, gocui.ModNone, a.onToggleAdd); err != nil {
 		log.Panicln(err)
 	}
 
-	if err := g.SetKeybinding("nodes", gocui.KeyArrowDown, gocui.ModNone, cursorMovement(1)); err != nil {
+	if err := g.SetKeybinding("", gocui.KeyCtrlO, gocui.ModNone, a.onCtrlSpace); err != nil {
 		log.Panicln(err)
 	}
 
-	if err := g.SetKeybinding("sets", gocui.KeyCtrlA, gocui.ModNone, onToggleAdd); err != nil {
-		log.Panicln(err)
-	}
+	//if err := g.SetKeybinding("", gocui.KeyCtrlR, gocui.ModNone, onToggleRemove); err != nil {
+	//	log.Panicln(err)
+	//}
 
-	if err := g.SetKeybinding("sets", gocui.KeyCtrlR, gocui.ModNone, onToggleRemove); err != nil {
+	/*if err := g.SetKeybinding("", gocui.KeyCtrlH, gocui.ModNone, onToggleHelp); err != nil {
 		log.Panicln(err)
-	}
-
-	if err := g.SetKeybinding("nodes", gocui.KeyCtrlA, gocui.ModNone, onToggleAdd); err != nil {
-		log.Panicln(err)
-	}
-
-	if err := g.SetKeybinding("add", gocui.KeyCtrlA, gocui.ModNone, onToggleAdd); err != nil {
-		log.Panicln(err)
-	}
-
-	if err := g.SetKeybinding("nodes", gocui.KeyCtrlR, gocui.ModNone, onToggleRemove); err != nil {
-		log.Panicln(err)
-	}
-
-	if err := g.SetKeybinding("", gocui.KeyCtrlH, gocui.ModNone, onToggleHelp); err != nil {
-		log.Panicln(err)
-	}
-
-	if err := g.SetKeybinding("add", gocui.KeyCtrlO, gocui.ModNone, onToggleConfirm); err != nil {
-		log.Panicln(err)
-	}
-
-	if err := g.SetKeybinding("sets", gocui.KeyCtrlM, gocui.ModNone, onToggleMarkClear); err != nil {
-		log.Panicln(err)
-	}
-
-	if err := g.SetKeybinding("hint", gocui.KeyEnter, gocui.ModNone, onHintEnter); err != nil {
-		log.Panicln(err)
-	}
-
-	if err := g.SetKeybinding("hint", 'q', gocui.ModNone, onOpCancel); err != nil {
-		log.Panicln(err)
-	}
+	}*/
 
 	if err := g.MainLoop(); err != nil && err != gocui.ErrQuit {
 		log.Panicln(err)
