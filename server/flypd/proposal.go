@@ -73,7 +73,7 @@ func (this *ProposalNop) apply(pd *pd) {
 			pd.loadInitMeta()
 		}
 
-		if len(pd.pState.deployment.sets) == 0 {
+		if pd.pState.deployment.version == 0 {
 			pd.loadInitDeployment()
 		} else {
 			//重置slotBalance相关的临时数据

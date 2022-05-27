@@ -56,6 +56,8 @@ enum ServerCmdType {
   CpSuspendStoreResp            = 144;
   CpResumeStore                 = 145;
   CpResumeStoreResp             = 146;
+  GetDeployment                 = 147;
+  GetDeploymentResp             = 148;
 
 
   
@@ -92,13 +94,7 @@ enum ServerCmdType {
   GetFlyGateListResp            = 411;
   ChangeFlyGate                 = 412;
   ChangeFlyGateResp             = 413;
-
-
-  // <-> flybloom
-  BloomAddKey                   = 510;
-  BloomContainKeyReq            = 511;
-  BloomContainKeyResp           = 512;        
-
+    
 
   //for test
   PacketTest                    = 1000;
@@ -562,16 +558,24 @@ message resumeStore {
   optional int32  store = 1;  
 }
 
+message getDeployment {
 
-message bloomAddKey {
-  optional string key = 1;  
 }
 
-message bloomContainKeyReq {
-  optional string key = 1; 
+
+message node {
+  optional int32 id           = 1;
+  optional string host        = 2;
+  optional int32  servicePort = 3;
+  optional int32  raftPort    = 4;
 }
 
-message bloomContainKeyResp {
-  optional string err     = 1;
-  optional bool   contain = 2; 
+message set {
+  optional int32 id           = 1;
+  repeated node  nodes        = 2;    
+}
+
+message  getDeploymentResp {
+  repeated set sets           = 1;
 }   
+

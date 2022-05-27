@@ -585,6 +585,28 @@ func (p *pd) onResumeStore(replyer replyer, m *snet.Message) {
 	}))
 }
 
+func (p *pd) onGetDeployment(replyer replyer, m *snet.Message) {
+	resp := &sproto.GetDeploymentResp{}
+	for _, v := range p.pState.deployment.sets {
+		s := &sproto.Set{
+			Id: int32(v.id),
+		}
+
+		for _, vv := range v.nodes {
+			s.Nodes = append(s.Nodes, &sproto.Node{
+				Id:          int32(vv.id),
+				Host:        vv.host,
+				ServicePort: int32(vv.servicePort),
+				RaftPort:    int32(vv.raftPort),
+			})
+		}
+
+		resp.Sets = append(resp.Sets, s)
+	}
+
+	replyer.reply(snet.MakeMessage(m.Context, resp))
+}
+
 func (p *pd) initMsgHandler() {
 	//for console
 	p.registerMsgHandler(&sproto.AddSet{}, "AddSet", p.onAddSet)
@@ -605,6 +627,7 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.DrainKv{}, "DrainKv", p.onDrainKv)
 	p.registerMsgHandler(&sproto.CpSuspendStore{}, "CpSuspendStore", p.onSuspendStore)
 	p.registerMsgHandler(&sproto.CpResumeStore{}, "CpResumeStore", p.onResumeStore)
+	p.registerMsgHandler(&sproto.GetDeployment{}, "GetDeployment", p.onGetDeployment)
 
 	//servers
 	p.registerMsgHandler(&sproto.IsTransInReadyResp{}, "", p.onSlotTransInReady)

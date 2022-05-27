@@ -369,6 +369,9 @@ func init() {
 	namespace.Register(&sproto.CpResumeStore{}, uint32(sproto.ServerCmdType_CpResumeStore))
 	namespace.Register(&sproto.CpResumeStoreResp{}, uint32(sproto.ServerCmdType_CpResumeStoreResp))
 
+	namespace.Register(&sproto.GetDeployment{}, uint32(sproto.ServerCmdType_GetDeployment))
+	namespace.Register(&sproto.GetDeploymentResp{}, uint32(sproto.ServerCmdType_GetDeploymentResp))
+
 	//flykv <-> pd
 	namespace.Register(&sproto.KvnodeBoot{}, uint32(sproto.ServerCmdType_KvnodeBoot))
 	namespace.Register(&sproto.KvnodeBootResp{}, uint32(sproto.ServerCmdType_KvnodeBootResp))
@@ -412,11 +415,6 @@ func init() {
 
 	namespace.Register(&sproto.ChangeFlyGate{}, uint32(sproto.ServerCmdType_ChangeFlyGate))
 	namespace.Register(&sproto.ChangeFlyGateResp{}, uint32(sproto.ServerCmdType_ChangeFlyGateResp))
-
-	//flybloom
-	namespace.Register(&sproto.BloomAddKey{}, uint32(sproto.ServerCmdType_BloomAddKey))
-	namespace.Register(&sproto.BloomContainKeyReq{}, uint32(sproto.ServerCmdType_BloomContainKeyReq))
-	namespace.Register(&sproto.BloomContainKeyResp{}, uint32(sproto.ServerCmdType_BloomContainKeyResp))
 
 	//for test
 	namespace.Register(&sproto.PacketTest{}, uint32(sproto.ServerCmdType_PacketTest))

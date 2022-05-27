@@ -72,9 +72,23 @@ var g_kvstatus kvstatus
 const (
 	kvstatusHight = 2
 	setsWidth     = 15 //sets控件的最大宽度
-	nodeWidth     = 40
+	nodeWidth     = 30
 	nodeHight     = 6
 )
+
+func (k *kvstatus) getSelected() (int, *set) {
+	for i, v := range k.sets {
+		if v.setID == k.selected {
+			return i, v
+		}
+	}
+
+	if len(k.sets) > 0 {
+		return 0, k.sets[0]
+	} else {
+		return -1, nil
+	}
+}
 
 func (k *kvstatus) show(g *gocui.Gui) {
 	maxX, _ := g.Size()
@@ -118,8 +132,10 @@ func (k *kvstatus) showSets(g *gocui.Gui) {
 		fmt.Fprintf(v, "set:%d\n", s.setID)
 	}
 
-	if len(k.sets) > 0 {
-		k.sets[k.selected].show(g)
+	if _, selected := k.getSelected(); selected != nil {
+		selected.show(g)
+	} else {
+		v.MoveCursor(0, 0, false)
 	}
 }
 
@@ -227,32 +243,23 @@ func (r *replica) clear(g *gocui.Gui) {
 	g.DeleteView(r.id)
 }
 
-func onSelect(g *gocui.Gui, v *gocui.View) error {
-	g.Update(func(g *gocui.Gui) error {
-		var l string
-		var err error
-		_, cy := v.Cursor()
-		if l, err = v.Line(cy); err != nil {
-			l = ""
-		}
-
-		selected := 0
-
-		for k, s := range g_kvstatus.sets {
-			if l == fmt.Sprintf("set:%d", s.setID) {
-				selected = k
+func cursorMovement(d int) func(g *gocui.Gui, v *gocui.View) error {
+	return func(g *gocui.Gui, v *gocui.View) error {
+		if i, selected := g_kvstatus.getSelected(); nil != selected {
+			next := i + d
+			if next >= 0 && next < len(g_kvstatus.sets) {
+				v.MoveCursor(0, d, false)
+				selected.clear(g)
+				g_kvstatus.selected = g_kvstatus.sets[next].setID
 			}
 		}
-
-		g_kvstatus.sets[g_kvstatus.selected].clear(g)
-		g_kvstatus.selected = selected
 		return nil
-	})
-	return nil
+	}
 }
 
 func layout(g *gocui.Gui) error {
 	g_kvstatus.show(g)
+	g.SetCurrentView("sets")
 	return nil
 }
 
@@ -365,8 +372,8 @@ func main() {
 	}
 	defer g.Close()
 
-	g.Cursor = true
-	g.Mouse = true
+	//g.Cursor = false
+	//g.Mouse = true
 
 	httpcli := consoleHttp.NewClient(*pdservice)
 
@@ -387,8 +394,12 @@ func main() {
 		log.Panicln(err)
 	}
 
-	if err := g.SetKeybinding("sets", gocui.MouseLeft, gocui.ModNone, onSelect); err != nil {
-		panic(err)
+	if err := g.SetKeybinding("sets", gocui.KeyArrowUp, gocui.ModNone, cursorMovement(-1)); err != nil {
+		log.Panicln(err)
+	}
+
+	if err := g.SetKeybinding("sets", gocui.KeyArrowDown, gocui.ModNone, cursorMovement(1)); err != nil {
+		log.Panicln(err)
 	}
 
 	if err := g.MainLoop(); err != nil && err != gocui.ErrQuit {

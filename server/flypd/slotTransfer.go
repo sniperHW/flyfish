@@ -78,6 +78,9 @@ func (s *SlotTransferMgr) onSetRemove(pd *pd, ss *set) {
 	GetSugar().Infof("onSetRemove:%d %d", ss.id, len(s.Transactions)+len(s.Plan))
 
 	pd.slotBalance()
+
+	GetSugar().Infof("onSetRemove finish")
+
 }
 
 type SlotTransferPlan struct {
@@ -142,6 +145,11 @@ func (tst *TransSlotTransfer) notify(pd *pd) {
 var CurrentTransferOutCount int = 6
 
 func (p *pd) slotBalance() {
+
+	if len(p.pState.deployment.sets) == 0 {
+		return
+	}
+
 	if len(p.pState.SlotTransferMgr.Plan)+len(p.pState.SlotTransferMgr.Transactions) == 0 {
 		//构建迁移计划
 		markClearStore := []*store{}
@@ -251,6 +259,7 @@ func (p *pd) slotBalance() {
 	}
 
 	if p.isLeader() {
+
 		plan := []*SlotTransferPlan{}
 		for _, v := range p.pState.SlotTransferMgr.Plan {
 			plan = append(plan, v)
@@ -281,7 +290,7 @@ func (p *pd) slotBalance() {
 
 		for _, v := range plan {
 			//无需迁出的计划可以立刻执行，否则需要控制执行数量
-			if v.SetOut < 0 || transferOutCount < CurrentTransferOutCount {
+			if /*v.SetOut < 0 ||*/ transferOutCount < CurrentTransferOutCount {
 				delete(p.pState.SlotTransferMgr.Plan, v.Slot)
 				t := &TransSlotTransfer{
 					SlotTransferPlan: SlotTransferPlan{
@@ -294,9 +303,9 @@ func (p *pd) slotBalance() {
 				}
 				p.pState.SlotTransferMgr.Transactions[v.Slot] = t
 				t.notify(p)
-				if v.SetOut >= 0 {
-					transferOutCount++
-				}
+				//if v.SetOut >= 0 {
+				transferOutCount++
+				//}
 			} else {
 				break
 			}

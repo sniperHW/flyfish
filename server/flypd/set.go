@@ -18,6 +18,7 @@ func (p *ProposalAddSet) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalAddSet) apply(pd *pd) {
+	GetSugar().Infof("onAddSet apply")
 	err := func() error {
 		deploymentJson := pd.pState.deployment.toDeploymentJson()
 		deploymentJson.Version++
@@ -31,6 +32,8 @@ func (p *ProposalAddSet) apply(pd *pd) {
 			return nil
 		}
 	}()
+
+	GetSugar().Infof("onAddSet apply %v", err)
 
 	if nil != p.reply {
 		p.reply(err)
@@ -163,6 +166,7 @@ func (p *pd) onSetMarkClear(replyer replyer, m *snet.Message) {
 }
 
 func (p *pd) onAddSet(replyer replyer, m *snet.Message) {
+	GetSugar().Infof("onAddSet")
 	msg := m.Msg.(*sproto.AddSet)
 	resp := &sproto.AddSetResp{}
 
@@ -210,11 +214,12 @@ func (p *pd) onAddSet(replyer replyer, m *snet.Message) {
 	}()
 
 	if nil != err {
+		GetSugar().Infof("onAddSet %v %v", *msg, err)
 		resp.Ok = false
 		resp.Reason = err.Error()
 		replyer.reply(snet.MakeMessage(m.Context, resp))
 	} else {
-		GetSugar().Debugf("onAddSet %v", *msg)
+		GetSugar().Infof("onAddSet %v %v", *msg, err)
 		p.issueProposal(&ProposalAddSet{
 			Set: set,
 			proposalBase: proposalBase{
