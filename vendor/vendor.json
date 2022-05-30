@@ -95,6 +95,12 @@
 			"revisionTime": "2019-04-26T15:48:59Z"
 		},
 		{
+			"checksumSHA1": "sdcf8X6X4gvJBIGQAPqY0tWsKX4=",
+			"path": "github.com/jroimartin/gocui",
+			"revision": "de100503e6c3afcfd3ed101e7263ada4166f634c",
+			"revisionTime": "2021-08-14T17:11:29Z"
+		},
+		{
 			"checksumSHA1": "t5i8PNelaK4c/t4M+CSa92z5//o=",
 			"path": "github.com/klauspost/compress/flate",
 			"revision": "0309165d87c793703d3d52807ca4325d7ebbb526",
@@ -131,6 +137,12 @@
 			"revisionTime": "2019-08-13T06:55:22Z"
 		},
 		{
+			"checksumSHA1": "iStxwGbp0YS4URzTNUaAcrbA4FE=",
+			"path": "github.com/mattn/go-runewidth",
+			"revision": "f9d555329d964619770ac4d8970acd240ef399c6",
+			"revisionTime": "2022-03-23T02:36:45Z"
+		},
+		{
 			"checksumSHA1": "aodj/cITRyuaZSh84DDhrZjh76U=",
 			"origin": "go.etcd.io/etcd/vendor/github.com/matttproud/golang_protobuf_extensions/pbutil",
 			"path": "github.com/matttproud/golang_protobuf_extensions/pbutil",
@@ -142,6 +154,12 @@
 			"path": "github.com/mitchellh/colorstring",
 			"revision": "d06e56a500db4d08c33db0b79461e7c9beafca2d",
 			"revisionTime": "2019-02-13T21:29:51Z"
+		},
+		{
+			"checksumSHA1": "ucXCUqSfH4C+Vswyn0oHX+5XODg=",
+			"path": "github.com/nsf/termbox-go",
+			"revision": "71f343b9e47a1bccfd85520a997208d61c78f89f",
+			"revisionTime": "2022-02-08T10:12:39Z"
 		},
 		{
 			"checksumSHA1": "LuFv4/jlrmFNnDb/5SCSEPAM9vU=",
@@ -206,10 +224,22 @@
 			"revisionTime": "2019-08-24T19:27:53Z"
 		},
 		{
+			"checksumSHA1": "mQ8AiszzuK2jFhfXQW7/w+37PXQ=",
+			"path": "github.com/rivo/uniseg",
+			"revision": "57c86be7915a626793725fce30bb2f4da513c1a2",
+			"revisionTime": "2021-10-04T05:18:00Z"
+		},
+		{
 			"checksumSHA1": "Je3kynthE7YqgFZGBeCdtcu19E0=",
 			"path": "github.com/schollz/progressbar",
 			"revision": "b6d7f92524db8bd0e2561d75633c84f89cad7264",
 			"revisionTime": "2019-06-04T15:29:10Z"
+		},
+		{
+			"checksumSHA1": "oQNYrES0b6/fRuKy0DCh0l2S8AA=",
+			"path": "github.com/sniperHW/kendynet/golog",
+			"revision": "474ef655aea258bf3c5e61983d8a2ebcd979f338",
+			"revisionTime": "2022-04-08T04:19:21Z"
 		},
 		{
 			"checksumSHA1": "uqTJVsJ/tb7FA5JpHtwlAF0ELCk=",

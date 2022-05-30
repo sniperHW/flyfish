@@ -5,15 +5,12 @@ import (
 	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/jroimartin/gocui"
-	//"github.com/sniperHW/flyfish/server/app/cli/ansicolor"
-	//"github.com/sniperHW/flyfish/server/flypd"
 	consoleHttp "github.com/sniperHW/flyfish/server/flypd/console/http"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"reflect"
 	"sort"
 	"strconv"
 	"strings"
-	//"time"
 )
 
 const (
@@ -139,28 +136,31 @@ func (va *viewAdd) canChangeView() bool {
 }
 
 func (va *viewAdd) keyBinding(g *gocui.Gui) {
-	if err := g.SetKeybinding(va.name(), gocui.KeyCtrlO, gocui.ModNone, va.onCtrlO); err != nil {
+	if err := g.SetKeybinding(va.name(), gocui.KeyCtrlO, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		req, resp, confirmMsg, err := va.depmnt.makeAddReq(v)
+		va.depmnt.showConfirm(g, req, resp, confirmMsg, err)
+		return nil
+	}); err != nil {
 		panic(err)
 	}
 
-	if err := g.SetKeybinding(va.name(), gocui.KeyCtrlA, gocui.ModNone, va.onCtrlA); err != nil {
+	if err := g.SetKeybinding(va.name(), gocui.KeyCtrlA, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		va.depmnt.popStackTop(g)
+		return nil
+	}); err != nil {
+		panic(err)
+	}
+
+	if err := g.SetKeybinding(va.name(), gocui.KeyEsc, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		va.depmnt.popStackTop(g)
+		return nil
+	}); err != nil {
 		panic(err)
 	}
 }
 
 func (va *viewAdd) deleteKeyBinding(g *gocui.Gui) {
 	g.DeleteKeybindings(va.name())
-}
-
-func (va *viewAdd) onCtrlA(g *gocui.Gui, v *gocui.View) error {
-	va.depmnt.popStackTop(g)
-	return nil
-}
-
-func (va *viewAdd) onCtrlO(g *gocui.Gui, v *gocui.View) error {
-	req, resp, confirmMsg, err := va.depmnt.makeAddReq(v)
-	va.depmnt.showConfirm(g, req, resp, confirmMsg, err)
-	return nil
 }
 
 func (d *depmnt) getStackTop() view {
@@ -486,40 +486,40 @@ func (d *depmnt) showConfirm(g *gocui.Gui, req proto.Message, resp proto.Message
 		keys: map[interface{}]func(){},
 	}
 
-	tips.keys['q'] = func() {
+	tips.keys[gocui.KeyEsc] = func() {
 		d.popStackTop(g)
 	}
 
 	if nil != err {
-		tips.msg = fmt.Sprintf("error:%s\npress q to close window!\n", err.Error())
+		tips.msg = fmt.Sprintf("error:%s\npress Esc to close window!\n", err.Error())
 	} else {
-		tips.msg = confirmMsg + "\npress enter to confirm operation!\npress q to cancel!"
-		tips.keys['q'] = func() {
+		tips.msg = confirmMsg + "\nPress Enter to confirm operation!\npress Esc to cancel!"
+		tips.keys[gocui.KeyEsc] = func() {
 			d.popStackTop(g)
 		}
 
 		tips.keys[gocui.KeyEnter] = func() {
 			tips.msg = "waitting server response...!"
 			tips.keys[gocui.KeyEnter] = func() {}
-			tips.keys['q'] = func() {}
+			tips.keys[gocui.KeyEsc] = func() {}
 			go func() {
 				r, err := d.httpcli.Call(req, resp)
 				g.Update(func(g *gocui.Gui) error {
 					if nil != err {
-						tips.msg = fmt.Sprintf("error:%s\npress q to close window!\n", err.Error())
-						tips.keys['q'] = func() {
+						tips.msg = fmt.Sprintf("error:%s\nPress Esc to close window!\n", err.Error())
+						tips.keys[gocui.KeyEsc] = func() {
 							d.popStackTop(g)
 						}
 					} else {
 						vv := reflect.ValueOf(r).Elem()
 						if vv.FieldByName("Ok").Interface().(bool) {
-							tips.msg = "OK!\npress q to close window!"
-							tips.keys['q'] = func() {
+							tips.msg = "OK!\nPress Esc to close window!"
+							tips.keys[gocui.KeyEsc] = func() {
 								d.clearStack(g)
 							}
 						} else {
-							tips.msg = fmt.Sprintf("error:%s\npress q to close window!\n", vv.FieldByName("Reason").Interface().(string))
-							tips.keys['q'] = func() {
+							tips.msg = fmt.Sprintf("error:%s\nPress Esc to close window!\n", vv.FieldByName("Reason").Interface().(string))
+							tips.keys[gocui.KeyEsc] = func() {
 								d.popStackTop(g)
 							}
 						}
@@ -571,9 +571,7 @@ func (d *depmnt) cursorMovement(dd int) func(g *gocui.Gui, v *gocui.View) error 
 }
 
 func (d *depmnt) changeMainView(g *gocui.Gui, v *gocui.View) error {
-	if d.getStackTop() == nil {
-		d.activeMainView = (d.activeMainView + 1) % len(d.mainViews)
-	}
+	d.activeMainView = (d.activeMainView + 1) % len(d.mainViews)
 	return nil
 }
 
@@ -609,13 +607,17 @@ func (d *depmnt) keyBinding(g *gocui.Gui) {
 		panic(err)
 	}
 
-	if err := g.SetKeybinding("", gocui.KeyTab, gocui.ModNone, d.changeMainView); err != nil {
+	if err := g.SetKeybinding("depmnt-sets", gocui.KeyTab, gocui.ModNone, d.changeMainView); err != nil {
 		panic(err)
 	}
+
+	if err := g.SetKeybinding("depmnt-nodes", gocui.KeyTab, gocui.ModNone, d.changeMainView); err != nil {
+		panic(err)
+	}
+
 }
 
 func (d *depmnt) deleteKeyBinding(g *gocui.Gui) {
 	g.DeleteKeybindings("depmnt-sets")
 	g.DeleteKeybindings("depmnt-nodes")
-	g.DeleteKeybinding("", gocui.KeyTab, gocui.ModNone)
 }

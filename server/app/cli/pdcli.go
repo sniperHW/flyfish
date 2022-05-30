@@ -113,6 +113,7 @@ func main() {
 		mainViews: []string{"depmnt-sets", "depmnt-nodes"},
 	})
 
+	g.InputEsc = true
 	g.SetManagerFunc(app.layout)
 
 	app.views[app.actived].onActive(g, httpcli)
@@ -149,6 +150,13 @@ func main() {
 
 	if err := g.SetKeybinding("", gocui.KeyCtrlH, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		app.showHelp = !app.showHelp
+		return nil
+	}); err != nil {
+		log.Panicln(err)
+	}
+
+	if err := g.SetKeybinding("", gocui.KeyEsc, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		app.showHelp = false
 		return nil
 	}); err != nil {
 		log.Panicln(err)
