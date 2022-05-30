@@ -1,39 +1,23 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"github.com/jroimartin/gocui"
-	"github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/server/app/cli/ansicolor"
 	"github.com/sniperHW/flyfish/server/flypd"
 	consoleHttp "github.com/sniperHW/flyfish/server/flypd/console/http"
 	sproto "github.com/sniperHW/flyfish/server/proto"
-	"log"
-	"net/http"
-	_ "net/http/pprof"
 	"sort"
-	"sync/atomic"
 	"time"
 )
 
-func quit(g *gocui.Gui, v *gocui.View) error {
-	return gocui.ErrQuit
+type viewKvstatus struct {
+	kvcount           int
+	freeslotCount     int
+	transferSlotCount int
 }
 
-type idgen struct {
-	counter int64
-}
-
-func (ig *idgen) Next() string {
-	id := atomic.AddInt64(&ig.counter, 1)
-	return fmt.Sprintf("%d", id)
-}
-
-var g_idgen idgen = idgen{}
-
-type replica struct {
-	id          string
+type listKvReplica struct {
 	node        int
 	status      string //leader,voter,learner
 	progress    uint64 //副本同步进度
@@ -44,176 +28,63 @@ type replica struct {
 	service     string
 }
 
-type store struct {
-	id        string
+type listKvStore struct {
 	storeID   int
-	replica   []*replica
+	replica   []*listKvReplica
 	isHalt    bool
 	slotCount int
 	kvcount   int
 }
 
-type set struct {
-	id     string
+type listKvSet struct {
 	setID  int
-	stores []*store
+	stores []*listKvStore
 }
 
-type kvstatus struct {
+type listkv struct {
 	kvcount           int
 	freeslotCount     int
 	transferSlotCount int
 	selected          int
-	sets              []*set
+	sets              []*listKvSet
 }
 
-var g_kvstatus kvstatus
-
 const (
-	kvstatusHight = 2
-	setsWidth     = 15 //sets控件的最大宽度
-	nodeWidth     = 30
-	nodeHight     = 6
+	lkvstatusHight = 2
+	lsetsWidth     = 15 //sets控件的最大宽度
+	lnodeWidth     = 30
+	lnodeHight     = 6
 )
 
-func (k *kvstatus) getSelected() (int, *set) {
-	for i, v := range k.sets {
-		if v.setID == k.selected {
+func (l *listkv) name() string {
+	return "listkv"
+}
+
+func (l *listkv) canChangeView() bool {
+	return true
+}
+
+func (l *listkv) getSelected() (int, *listKvSet) {
+	for i, v := range l.sets {
+		if v.setID == l.selected {
 			return i, v
 		}
 	}
 
-	if len(k.sets) > 0 {
-		return 0, k.sets[0]
+	if len(l.sets) > 0 {
+		return 0, l.sets[0]
 	} else {
 		return -1, nil
 	}
 }
 
-func (k *kvstatus) show(g *gocui.Gui) {
-	maxX, _ := g.Size()
-
-	v, err := g.SetView("kvstatus", 0, 0, maxX-1, kvstatusHight)
-	if nil != err {
-		if err != nil {
-			if err != gocui.ErrUnknownView {
-				panic(err)
-			}
-		}
-		v.Title = "kvstatus"
-		v.Highlight = true
-	}
-
-	v.Clear()
-
-	fmt.Fprintf(v, "kvcount:%d freeslotCount:%d transferSlotCount:%d\n", k.kvcount, k.freeslotCount, k.transferSlotCount)
-
-	k.showSets(g)
-}
-
-func (k *kvstatus) showSets(g *gocui.Gui) {
-	_, maxY := g.Size()
-
-	v, err := g.SetView("sets", 0, kvstatusHight, setsWidth+kvstatusHight, maxY-1)
-	if nil != err {
-		if err != nil {
-			if err != gocui.ErrUnknownView {
-				panic(err)
-			}
-		}
-		v.Title = "sets"
-		v.Highlight = true
-		v.SelBgColor = gocui.ColorGreen
-		v.SelFgColor = gocui.ColorBlack
-	}
-
-	v.Clear()
-	for _, s := range k.sets {
-		fmt.Fprintf(v, "set:%d\n", s.setID)
-	}
-
-	if _, selected := k.getSelected(); selected != nil {
-		selected.show(g)
-	} else {
-		v.MoveCursor(0, 0, false)
-	}
-}
-
-func (s *set) show(g *gocui.Gui) {
-	maxX, maxY := g.Size()
-	v, err := g.SetView(s.id, setsWidth, kvstatusHight, maxX-1, maxY-1)
-	if nil != err {
-		if err != nil {
-			if err != gocui.ErrUnknownView {
-				panic(err)
-			}
-		}
-		v.Title = fmt.Sprintf("set:%d", s.setID)
-		v.Highlight = true
-	}
-
-	yy := kvstatusHight
-	for _, v := range s.stores {
-		yy = v.show(g, yy)
-	}
-}
-
-func (s *set) clear(g *gocui.Gui) {
-	for _, v := range s.stores {
-		v.clear(g)
-	}
-}
-
-func (s *store) clear(g *gocui.Gui) {
-	for _, v := range s.replica {
-		v.clear(g)
-	}
-	g.DeleteView(s.id)
-}
-
-func (s *store) show(g *gocui.Gui, y int) int {
+func (l *listkv) layoutReplica(g *gocui.Gui, set *listKvSet, store *listKvStore, r *listKvReplica, x int, y int) int {
 	begY := y
-	endY := y + nodeHight + 2
-	maxX, _ := g.Size()
-
-	v, err := g.SetView(s.id, setsWidth+1, begY, maxX-2, endY)
-
-	if err != nil {
-		if err != nil {
-			if err != gocui.ErrUnknownView {
-				panic(err)
-			}
-		}
-		v.Title = fmt.Sprintf("store:%d", s.storeID)
-		v.Wrap = true
-	}
-
-	v.Clear()
-	fmt.Fprintf(v, "kvcount:%d slotCount:%d\n", s.kvcount, s.slotCount)
-
-	xx := 25
-	for _, v := range s.replica {
-		xx = v.show(g, xx, begY+2)
-	}
-
-	return endY + 2
-}
-
-func (r *replica) getShowStatus() string {
-	if r.status == "leader" {
-		return ansicolor.FillColor(ansicolor.Red, r.status)
-	} else {
-		return r.status
-	}
-}
-
-func (r *replica) show(g *gocui.Gui, x, y int) int {
-	begY := y
-	endY := y + nodeHight
+	endY := y + lnodeHight
 	begX := x
-	endX := x + nodeWidth
+	endX := x + lnodeWidth
 
-	v, err := g.SetView(r.id, begX, begY, endX, endY)
+	v, err := g.SetView(fmt.Sprintf("set:%d-store:%d-node:%d", set.setID, store.storeID, r.node), begX, begY, endX, endY)
 
 	if err != nil {
 		if err != gocui.ErrUnknownView {
@@ -227,7 +98,11 @@ func (r *replica) show(g *gocui.Gui, x, y int) int {
 	v.Clear()
 	v.Write([]byte(fmt.Sprintf("service:%s\n", r.service)))
 	v.Write([]byte(fmt.Sprintf("raftID:%x\n", r.raftID)))
-	v.Write([]byte(fmt.Sprintf("status:%s\n", r.getShowStatus())))
+	if r.status == "leader" {
+		v.Write([]byte(fmt.Sprintf("status:%s\n", ansicolor.FillColor(ansicolor.Red, r.status))))
+	} else {
+		v.Write([]byte(fmt.Sprintf("status:%s\n", r.status)))
+	}
 	if now-r.lastReport > 60 {
 		v.Write([]byte("progress:~\n"))
 		v.Write([]byte("metaVersion:~\n"))
@@ -239,43 +114,139 @@ func (r *replica) show(g *gocui.Gui, x, y int) int {
 	return endX + 1
 }
 
-func (r *replica) clear(g *gocui.Gui) {
-	g.DeleteView(r.id)
+func (l *listkv) layoutStore(g *gocui.Gui, set *listKvSet) {
+
+	layout := func(store *listKvStore, y int) int {
+		begY := y
+		endY := y + lnodeHight + 2
+		maxX, _ := g.Size()
+
+		v, err := g.SetView(fmt.Sprintf("set:%d-store:%d", set.setID, store.storeID), lsetsWidth+1, begY, maxX-1, endY)
+
+		if err != nil {
+			if err != nil {
+				if err != gocui.ErrUnknownView {
+					panic(err)
+				}
+			}
+			v.Title = fmt.Sprintf("store:%d", store.storeID)
+			v.Wrap = true
+		}
+
+		v.Clear()
+		fmt.Fprintf(v, "kvcount:%d slotCount:%d\n", store.kvcount, store.slotCount)
+
+		xx := 25
+		for _, v := range store.replica {
+			xx = l.layoutReplica(g, set, store, v, xx, begY+2)
+		}
+
+		return endY + 2
+	}
+
+	yy := lkvstatusHight + 1
+
+	for _, v := range set.stores {
+		yy = layout(v, yy)
+	}
 }
 
-func cursorMovement(d int) func(g *gocui.Gui, v *gocui.View) error {
+func (l *listkv) layoutSets(g *gocui.Gui) {
+	_, maxY := g.Size()
+
+	v, err := g.SetView("listkv-sets", 0, lkvstatusHight+1, lsetsWidth, maxY-1)
+	if nil != err {
+		if err != nil {
+			if err != gocui.ErrUnknownView {
+				panic(err)
+			}
+		}
+		v.Title = "sets"
+		v.Highlight = true
+		v.SelBgColor = gocui.ColorGreen
+		v.SelFgColor = gocui.ColorBlack
+		g.SetCurrentView("listkv-sets")
+
+		l.keyBinding(g)
+	}
+
+	v.Clear()
+	for _, s := range l.sets {
+		fmt.Fprintf(v, "set:%d\n", s.setID)
+	}
+
+	if _, selected := l.getSelected(); selected != nil {
+		l.layoutStore(g, selected)
+	} else {
+		v.MoveCursor(0, 0, false)
+	}
+}
+
+func (l *listkv) layout(g *gocui.Gui) {
+	maxX, _ := g.Size()
+
+	v, err := g.SetView("listkv", 0, 0, maxX-1, lkvstatusHight)
+	if nil != err {
+		if err != nil {
+			if err != gocui.ErrUnknownView {
+				panic(err)
+			}
+		}
+		v.Title = "kvstatus"
+		v.Highlight = true
+	}
+
+	v.Clear()
+
+	fmt.Fprintf(v, "kvcount:%d freeslotCount:%d transferSlotCount:%d\n", l.kvcount, l.freeslotCount, l.transferSlotCount)
+
+	l.layoutSets(g)
+}
+
+func (l *listkv) clear(g *gocui.Gui) {
+	for _, s := range l.sets {
+		l.clearSet(g, s)
+	}
+
+	g.DeleteView("listkv-sets")
+	g.DeleteView("listkv")
+	l.deleteKeyBinding(g)
+}
+
+func (l *listkv) clearSet(g *gocui.Gui, set *listKvSet) {
+	for _, st := range set.stores {
+		for _, replica := range st.replica {
+			g.DeleteView(fmt.Sprintf("set:%d-store:%d-node:%d", set.setID, st.storeID, replica.node))
+		}
+		g.DeleteView(fmt.Sprintf("set:%d-store:%d", set.setID, st.storeID))
+	}
+}
+
+func (l *listkv) cursorMovement(d int) func(g *gocui.Gui, v *gocui.View) error {
 	return func(g *gocui.Gui, v *gocui.View) error {
-		if i, selected := g_kvstatus.getSelected(); nil != selected {
+		if i, selected := l.getSelected(); nil != selected {
 			next := i + d
-			if next >= 0 && next < len(g_kvstatus.sets) {
+			if next >= 0 && next < len(l.sets) {
 				v.MoveCursor(0, d, false)
-				selected.clear(g)
-				g_kvstatus.selected = g_kvstatus.sets[next].setID
+				l.clearSet(g, selected)
+				l.selected = l.sets[next].setID
 			}
 		}
 		return nil
 	}
 }
 
-func layout(g *gocui.Gui) error {
-	g_kvstatus.show(g)
-	g.SetCurrentView("sets")
-	return nil
-}
-
-func getKvStatus(cli *consoleHttp.Client, g *gocui.Gui) {
+func (l *listkv) getKvStatus(cli *consoleHttp.Client, g *gocui.Gui) {
 	if r, _ := cli.Call(&sproto.GetKvStatus{}, &sproto.GetKvStatusResp{}); r != nil {
-		var sets []*set
+		var sets []*listKvSet
 		resp := r.(*sproto.GetKvStatusResp)
 		for _, s := range resp.Sets {
-			set := &set{
-				id:    g_idgen.Next(),
+			set := &listKvSet{
 				setID: int(s.SetID),
 			}
 
 			for _, st := range s.GetStores() {
-				store := &store{
-					id:        g_idgen.Next(),
+				store := &listKvStore{
 					storeID:   int(st.StoreID),
 					slotCount: int(st.Slotcount),
 					kvcount:   int(st.Kvcount),
@@ -283,8 +254,7 @@ func getKvStatus(cli *consoleHttp.Client, g *gocui.Gui) {
 				for _, n := range s.Nodes {
 					for _, nodeSt := range n.Stores {
 						if st.StoreID == nodeSt.StoreID {
-							replica := &replica{
-								id:          g_idgen.Next(),
+							replica := &listKvReplica{
 								node:        int(n.NodeID),
 								lastReport:  n.LastReportTime,
 								metaVersion: nodeSt.MetaVersion,
@@ -338,71 +308,39 @@ func getKvStatus(cli *consoleHttp.Client, g *gocui.Gui) {
 		})
 
 		g.Update(func(g *gocui.Gui) error {
-			for _, v := range g.Views() {
-				if !(v.Name() == "sets" || v.Name() == "kvstatus") {
-					g.DeleteView(v.Name())
-				}
+			for _, set := range l.sets {
+				l.clearSet(g, set)
 			}
-			g_kvstatus.kvcount = int(resp.Kvcount)
-			g_kvstatus.freeslotCount = int(resp.FreeSlotCount)
-			g_kvstatus.transferSlotCount = int(resp.TransferSlotCount)
-			g_kvstatus.sets = sets
+			l.kvcount = int(resp.Kvcount)
+			l.freeslotCount = int(resp.FreeSlotCount)
+			l.transferSlotCount = int(resp.TransferSlotCount)
+			l.sets = sets
 			return nil
 		})
 	}
 }
 
-func main() {
+func (l *listkv) onActive(g *gocui.Gui, httpcli *consoleHttp.Client) {
+	g.Highlight = false
+	g.Cursor = false
+	g.SelFgColor = gocui.ColorDefault
+	l.getKvStatus(httpcli, g)
+}
 
-	l := logger.NewZapLogger("listkv.log", "./log", "info", 1024*1024, 14, 14, false)
-
-	logger.InitLogger(l)
-
-	pdservice := flag.String("pdservice", "localhost:8111", "ip1:port1;ip2:port2;...")
-
-	flag.Parse()
-
-	go func() {
-		http.ListenAndServe("localhost:8899", nil)
-	}()
-
-	g, err := gocui.NewGui(gocui.Output256)
-	if err != nil {
-		log.Panicln(err)
-	}
-	defer g.Close()
-
-	//g.Cursor = false
-	//g.Mouse = true
-
-	httpcli := consoleHttp.NewClient(*pdservice)
-
-	g.SetManagerFunc(layout)
-
-	go getKvStatus(httpcli, g)
-
-	go func() {
-		for {
-			select {
-			case <-time.After(1000 * time.Millisecond):
-				getKvStatus(httpcli, g)
-			}
-		}
-	}()
-
-	if err := g.SetKeybinding("", gocui.KeyCtrlC, gocui.ModNone, quit); err != nil {
-		log.Panicln(err)
+func (l *listkv) keyBinding(g *gocui.Gui) {
+	if err := g.SetKeybinding("listkv-sets", gocui.KeyArrowUp, gocui.ModNone, l.cursorMovement(-1)); err != nil {
+		panic(err)
 	}
 
-	if err := g.SetKeybinding("sets", gocui.KeyArrowUp, gocui.ModNone, cursorMovement(-1)); err != nil {
-		log.Panicln(err)
+	if err := g.SetKeybinding("listkv-sets", gocui.KeyArrowDown, gocui.ModNone, l.cursorMovement(1)); err != nil {
+		panic(err)
 	}
+}
 
-	if err := g.SetKeybinding("sets", gocui.KeyArrowDown, gocui.ModNone, cursorMovement(1)); err != nil {
-		log.Panicln(err)
-	}
+func (l *listkv) deleteKeyBinding(g *gocui.Gui) {
+	g.DeleteKeybindings("listkv-sets")
+}
 
-	if err := g.MainLoop(); err != nil && err != gocui.ErrQuit {
-		log.Panicln(err)
-	}
+func (l *listkv) onTimeout(g *gocui.Gui, httpcli *consoleHttp.Client) {
+	l.getKvStatus(httpcli, g)
 }
