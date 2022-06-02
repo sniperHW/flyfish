@@ -110,6 +110,51 @@ func (sm *sceneMeta) Layout(g *gocui.Gui) error {
 	return sm.scene.Layout(g)
 }
 
+func (sm *sceneMeta) help(gui *gocui.Gui) {
+	if sm.scene.Top().Name != "help" {
+		makeHelp(gui, sm.scene, "Ctrl-N change scene\nTab change between Tables and fields\nA add table|field\nR remove table|field")
+	}
+}
+
+func (sm *sceneMeta) makeRemReq() (req proto.Message, resp proto.Message, err error) {
+	switch sm.scene.Bottom().GetActiveView().Name {
+	case "meta-tables":
+		req, err = sm.makeRemTableReq()
+		resp = &sproto.MetaRemoveTableResp{}
+	case "meta-fields":
+		req, err = sm.makeRemFieldsReq()
+		resp = &sproto.MetaRemoveFieldsResp{}
+	}
+	return
+}
+
+func (sm *sceneMeta) makeRemFieldsReq() (*sproto.MetaRemoveFields, error) {
+	if _, t := sm.getSelectedTable(); t == nil {
+		return nil, errors.New("no table selected")
+	} else {
+		if _, f := sm.getSelectedField(); f == nil {
+			return nil, errors.New("no field selected")
+		} else {
+			return &sproto.MetaRemoveFields{
+				Version: sm.metaVersion,
+				Table:   t.Name,
+				Fields:  []string{f.Name},
+			}, nil
+		}
+	}
+}
+
+func (sm *sceneMeta) makeRemTableReq() (*sproto.MetaRemoveTable, error) {
+	if _, t := sm.getSelectedTable(); t == nil {
+		return nil, errors.New("no table selected")
+	} else {
+		return &sproto.MetaRemoveTable{
+			Version: sm.metaVersion,
+			Table:   t.Name,
+		}, nil
+	}
+}
+
 func (sm *sceneMeta) makeAddReq(v *gocui.View) (req proto.Message, resp proto.Message, err error) {
 	switch sm.scene.Bottom().GetActiveView().Name {
 	case "meta-tables":
@@ -387,69 +432,68 @@ func (sm *sceneMeta) createLayer(gui *gocui.Gui) {
 		return nil
 	}
 
-	viewTables.AddKey(gocui.KeyCtrlA, onCltA)
-	viewFields.AddKey(gocui.KeyCtrlA, onCltA)
+	viewTables.AddKey('a', onCltA)
+	viewFields.AddKey('a', onCltA)
 
-	/*
-		onCltR := func(_ *gocui.Gui, _ *gocui.View) error {
-			var hint string
-			switch sd.scene.Bottom().GetActiveView().Name {
-			case "depmnt-sets":
-				if _, set := sd.getSelectedSet(); nil == set {
-					return nil
-				} else {
-					hint = fmt.Sprintf("Do you really want to remove set:%d?", set.Id)
-				}
-			case "depmnt-nodes":
-				if _, node := sd.getSelectedNode(); nil == node {
-					return nil
-				} else {
-					hint = fmt.Sprintf("Do you really want to remove node:%d ?", node.Id)
-				}
+	onCltR := func(_ *gocui.Gui, _ *gocui.View) error {
+		var hint string
+		switch sm.scene.Bottom().GetActiveView().Name {
+		case "meta-tables":
+			if _, t := sm.getSelectedTable(); nil == t {
+				return nil
+			} else {
+				hint = fmt.Sprintf("Do you really want to remove table:%s?", t.Name)
 			}
-
-			ui.MakeMsg(gui, sd.scene, "depmnt-remove-confirm", hint, func() {
-				sd.scene.Pop(gui)
-				req, resp, err := sd.makeRemReq()
-				if nil != err {
-					ui.MakeMsg(gui, sd.scene, "depmnt-rem-error", err.Error(), func() {
-						sd.scene.Pop(gui)
-					}, nil)
-				} else {
-					ui.MakeMsg(gui, sd.scene, "depmnt-rem-wait-response", "Waitting response from server...", nil, nil)
-					go func() {
-						r, err := sd.httpcli.Call(req, resp)
-						gui.Update(func(_ *gocui.Gui) error {
-							sd.scene.Pop(gui)
-							if nil != err {
-								ui.MakeMsg(gui, sd.scene, "depmnt-rem-error", err.Error(), func() {
-									sd.scene.Pop(gui)
-								}, nil)
-							} else {
-								vv := reflect.ValueOf(r).Elem()
-								if vv.FieldByName("Ok").Interface().(bool) {
-									ui.MakeMsg(gui, sd.scene, "depmnt-rem-ok", "remove Ok", func() {
-										sd.scene.Pop(gui)
-									}, nil)
-								} else {
-									ui.MakeMsg(gui, sd.scene, "depmnt-rem-error", vv.FieldByName("Reason").Interface().(string), func() {
-										sd.scene.Pop(gui)
-									}, nil)
-								}
-							}
-							return nil
-						})
-					}()
-				}
-			}, func() {
-				sd.scene.Pop(gui)
-			})
-
-			return nil
+		case "meta-fields":
+			if _, f := sm.getSelectedField(); nil == f {
+				return nil
+			} else {
+				hint = fmt.Sprintf("Do you really want to remove field:%s?", f.Name)
+			}
 		}
 
-		viewSets.AddKey(gocui.KeyCtrlR, onCltR)
-		viewNodes.AddKey(gocui.KeyCtrlR, onCltR)*/
+		ui.MakeMsg(gui, sm.scene, "meta-remove-confirm", hint, func() {
+			sm.scene.Pop(gui)
+			req, resp, err := sm.makeRemReq()
+			if nil != err {
+				ui.MakeMsg(gui, sm.scene, "meta-rem-error", err.Error(), func() {
+					sm.scene.Pop(gui)
+				}, nil)
+			} else {
+				ui.MakeMsg(gui, sm.scene, "meta-rem-wait-response", "Waitting response from server...", nil, nil)
+				go func() {
+					r, err := sm.httpcli.Call(req, resp)
+					gui.Update(func(_ *gocui.Gui) error {
+						sm.scene.Pop(gui)
+						if nil != err {
+							ui.MakeMsg(gui, sm.scene, "meta-rem-error", err.Error(), func() {
+								sm.scene.Pop(gui)
+							}, nil)
+						} else {
+							vv := reflect.ValueOf(r).Elem()
+							if vv.FieldByName("Ok").Interface().(bool) {
+								ui.MakeMsg(gui, sm.scene, "meta-rem-ok", "remove Ok", func() {
+									sm.scene.Pop(gui)
+								}, nil)
+							} else {
+								ui.MakeMsg(gui, sm.scene, "meta-rem-error", vv.FieldByName("Reason").Interface().(string), func() {
+									sm.scene.Pop(gui)
+								}, nil)
+							}
+						}
+						return nil
+					})
+				}()
+			}
+		}, func() {
+			sm.scene.Pop(gui)
+		})
+
+		return nil
+	}
+
+	viewTables.AddKey('r', onCltR)
+	viewFields.AddKey('r', onCltR)
 
 	sm.scene.Push(layer)
 }

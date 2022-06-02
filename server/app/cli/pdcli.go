@@ -24,6 +24,7 @@ type sceneI interface {
 	clear(*gocui.Gui)
 	onActive(*gocui.Gui, *consoleHttp.Client)
 	Layout(*gocui.Gui) error
+	help(*gocui.Gui)
 }
 
 func main() {
@@ -47,7 +48,7 @@ func main() {
 	httpcli := consoleHttp.NewClient(*pdservice)
 
 	var mtx sync.Mutex
-	var actived int = 2
+	var actived int
 	scenes := []sceneI{newListKv(g), newDepmnt(g, httpcli), newMeta(g, httpcli)}
 
 	scenes[actived].onActive(g, httpcli)
@@ -74,7 +75,6 @@ func main() {
 	if err := g.SetKeybinding("", gocui.KeyCtrlN, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		if len(scenes) > 0 {
 			mtx.Lock()
-			//logger.GetSugar().Infof("current %v %v", actived, scenes[actived].canChangeView())
 			if scenes[actived].canChangeView() {
 				scenes[actived].clear(g)
 				actived = (actived + 1) % len(scenes)
@@ -88,6 +88,15 @@ func main() {
 	}
 
 	if err := g.SetKeybinding("", gocui.KeyCtrlC, gocui.ModNone, quit); err != nil {
+		log.Panicln(err)
+	}
+
+	if err := g.SetKeybinding("", gocui.KeyCtrlH, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		if len(scenes) > 0 {
+			scenes[actived].help(g)
+		}
+		return nil
+	}); err != nil {
 		log.Panicln(err)
 	}
 

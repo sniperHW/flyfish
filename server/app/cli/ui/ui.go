@@ -134,6 +134,7 @@ type Layer struct {
 	Name         string
 	Ctx          interface{}
 	BeforeLayout func(*gocui.Gui)
+	AfterLayout  func(*gocui.Gui)
 	views        map[string]*View
 	selectable   []*View
 	actived      int
@@ -219,6 +220,10 @@ func (l *Layer) Layout(g *gocui.Gui) {
 
 	for _, v := range views {
 		v.Layout(g)
+	}
+
+	if l.AfterLayout != nil {
+		l.AfterLayout(g)
 	}
 }
 

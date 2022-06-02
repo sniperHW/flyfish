@@ -64,7 +64,7 @@ func (sc *sceneListKv) getSelected() (int, *set) {
 func (sc *sceneListKv) onActive(g *gocui.Gui, httpcli *consoleHttp.Client) {
 	g.Highlight = false
 	g.Cursor = false
-	g.SelFgColor = gocui.ColorDefault
+	//g.SelFgColor = gocui.ColorDefault
 	sc.getKvStatus(httpcli, g)
 	sc.createLayer(g)
 }
@@ -84,6 +84,12 @@ func (sc *sceneListKv) clear(g *gocui.Gui) {
 
 func (sc *sceneListKv) Layout(g *gocui.Gui) error {
 	return sc.scene.Layout(g)
+}
+
+func (sc *sceneListKv) help(gui *gocui.Gui) {
+	if sc.scene.Top().Name != "help" {
+		makeHelp(gui, sc.scene, "Ctrl-N change scene\n")
+	}
 }
 
 func (sc *sceneListKv) getKvStatus(cli *consoleHttp.Client, g *gocui.Gui) {
@@ -322,6 +328,12 @@ func (sc *sceneListKv) createLayer(gui *gocui.Gui) {
 				sc.viewStoreAndreplica = append(sc.viewStoreAndreplica, vStore)
 				layer.AddView(vStore)
 			}
+		}
+	}
+
+	layer.AfterLayout = func(gui *gocui.Gui) {
+		if sc.scene.Top().Name == "help" {
+			gui.SetViewOnTop("help")
 		}
 	}
 

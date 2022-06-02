@@ -115,6 +115,12 @@ func (sd *sceneDepmnt) makeRemReq() (req proto.Message, resp proto.Message, err 
 	return
 }
 
+func (sd *sceneDepmnt) help(gui *gocui.Gui) {
+	if sd.scene.Top().Name != "help" {
+		makeHelp(gui, sd.scene, "Ctrl-N change scene\nTab change between sets and nodes\nA add set|node\nR remove set|node\nC mark clear set")
+	}
+}
+
 func (sd *sceneDepmnt) makeRemNodeReq() (*sproto.RemNode, error) {
 	if _, s := sd.getSelectedSet(); s == nil {
 		return nil, errors.New("no set selected")
@@ -316,7 +322,7 @@ func (sd *sceneDepmnt) createLayer(gui *gocui.Gui) {
 			Highlight:    true,
 			SelBgColor:   gocui.ColorGreen,
 			SelFgColor:   gocui.ColorBlack,
-			LeftTopX:     setsWidth,
+			LeftTopX:     setsWidth + 1,
 			RightBottomX: maxX - 1,
 			RightBottomY: maxY - 1,
 		},
@@ -394,8 +400,8 @@ func (sd *sceneDepmnt) createLayer(gui *gocui.Gui) {
 		return nil
 	}
 
-	viewSets.AddKey(gocui.KeyCtrlA, onCltA)
-	viewNodes.AddKey(gocui.KeyCtrlA, onCltA)
+	viewSets.AddKey('a', onCltA)
+	viewNodes.AddKey('a', onCltA)
 
 	onCltR := func(_ *gocui.Gui, _ *gocui.View) error {
 		var hint string
@@ -454,8 +460,8 @@ func (sd *sceneDepmnt) createLayer(gui *gocui.Gui) {
 		return nil
 	}
 
-	viewSets.AddKey(gocui.KeyCtrlR, onCltR)
-	viewNodes.AddKey(gocui.KeyCtrlR, onCltR)
+	viewSets.AddKey('r', onCltR)
+	viewNodes.AddKey('r', onCltR)
 
 	sd.scene.Push(layer)
 }
