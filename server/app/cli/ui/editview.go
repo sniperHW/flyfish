@@ -1,25 +1,32 @@
-package main
+package ui
 
 import (
 	"fmt"
 	"github.com/jroimartin/gocui"
-	"github.com/sniperHW/flyfish/server/app/cli/ui"
 )
 
-func makeEdit(g *gocui.Gui, scene *ui.Scene, name string, hint string, onOk func(editView *gocui.View)) {
+func MakeEdit(g *gocui.Gui, scene *Scene, name string, hint string, onOk func(editView *gocui.View)) {
 
 	if nil == onOk {
 		return
 	}
 
-	layer := &ui.Layer{
+	maxX, maxY := g.Size()
+
+	var (
+		width   = maxX / 6
+		height  = maxY / 4
+		btWidth = 8
+	)
+
+	layer := &Layer{
 		Name: fmt.Sprintf("editlayer-%s", name),
 	}
 
-	btnOk := &ui.View{
+	btnOk := &View{
 		Name:       fmt.Sprintf("edit-%s-ok", name),
 		SelectAble: true,
-		Option: ui.UIOption{
+		Option: UIOption{
 			Wrap:      true,
 			Highlight: true,
 			Z:         2,
@@ -30,10 +37,10 @@ func makeEdit(g *gocui.Gui, scene *ui.Scene, name string, hint string, onOk func
 		},
 	}
 
-	btnCancel := &ui.View{
+	btnCancel := &View{
 		Name:       fmt.Sprintf("edit-%s-cancel", name),
 		SelectAble: true,
-		Option: ui.UIOption{
+		Option: UIOption{
 			Wrap:      true,
 			Highlight: true,
 			Z:         2,
@@ -44,10 +51,10 @@ func makeEdit(g *gocui.Gui, scene *ui.Scene, name string, hint string, onOk func
 		},
 	}
 
-	boundView := &ui.View{
+	boundView := &View{
 		Name:  fmt.Sprintf("edit-%s", name),
 		Title: name,
-		Option: ui.UIOption{
+		Option: UIOption{
 			Wrap:      true,
 			Highlight: true,
 		},
@@ -57,10 +64,10 @@ func makeEdit(g *gocui.Gui, scene *ui.Scene, name string, hint string, onOk func
 		},
 	}
 
-	editArea := &ui.View{
+	editArea := &View{
 		Name:       fmt.Sprintf("edit-editarea-%s", name),
 		SelectAble: true,
-		Option: ui.UIOption{
+		Option: UIOption{
 			Cursor:    true,
 			Wrap:      true,
 			Highlight: true,
@@ -69,27 +76,24 @@ func makeEdit(g *gocui.Gui, scene *ui.Scene, name string, hint string, onOk func
 		},
 	}
 
-	maxX, _ := g.Size()
+	boundView.Option.LeftTopX = (maxX / 2) - width
+	boundView.Option.LeftTopY = (maxY / 2) - height
+	boundView.Option.RightBottomX = (maxX / 2) + width
+	boundView.Option.RightBottomY = (maxY / 2) + height
 
-	boundView.Option.LeftTopX = (maxX - 60) / 2
-	boundView.Option.LeftTopY = 5
-	boundView.Option.RightBottomX = (maxX-60)/2 + 60
-
-	editArea.Option.LeftTopX = (maxX - 58) / 2
-	editArea.Option.LeftTopY = boundView.Option.LeftTopY + 4
-	editArea.Option.RightBottomX = (maxX-58)/2 + 58
+	editArea.Option.LeftTopX = (maxX / 2) - width + 1
+	editArea.Option.LeftTopY = boundView.Option.LeftTopY + 5
+	editArea.Option.RightBottomX = (maxX / 2) + width - 1
 	editArea.Option.RightBottomY = editArea.Option.LeftTopY + 10
 
-	boundView.Option.RightBottomY = editArea.Option.RightBottomY + 5
-
-	btnOk.Option.LeftTopX = boundView.Option.LeftTopX + 5
-	btnOk.Option.LeftTopY = editArea.Option.RightBottomY + 1
-	btnOk.Option.RightBottomX = btnOk.Option.LeftTopX + 7
+	btnOk.Option.LeftTopX = maxX/2 - 2 - btWidth
+	btnOk.Option.LeftTopY = editArea.Option.RightBottomY + 2
+	btnOk.Option.RightBottomX = btnOk.Option.LeftTopX + btWidth
 	btnOk.Option.RightBottomY = btnOk.Option.LeftTopY + 2
 
-	btnCancel.Option.LeftTopX = boundView.Option.RightBottomX - 12
-	btnCancel.Option.LeftTopY = editArea.Option.RightBottomY + 1
-	btnCancel.Option.RightBottomX = btnCancel.Option.LeftTopX + 7
+	btnCancel.Option.LeftTopX = maxX/2 + 2
+	btnCancel.Option.LeftTopY = editArea.Option.RightBottomY + 2
+	btnCancel.Option.RightBottomX = btnCancel.Option.LeftTopX + btWidth
 	btnCancel.Option.RightBottomY = btnCancel.Option.LeftTopY + 2
 
 	editArea.AddKey(gocui.KeyTab, func(g *gocui.Gui, vv *gocui.View) error {

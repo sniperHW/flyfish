@@ -1,23 +1,31 @@
-package main
+package ui
 
 import (
 	"fmt"
 	"github.com/jroimartin/gocui"
-	"github.com/sniperHW/flyfish/server/app/cli/ui"
 )
 
-func makeMsg(g *gocui.Gui, scene *ui.Scene, name string, msg string, onOk func(), onCancel func()) {
-	layer := &ui.Layer{
+func MakeMsg(g *gocui.Gui, scene *Scene, name string, msg string, onOk func(), onCancel func()) {
+
+	maxX, maxY := g.Size()
+
+	var (
+		width   = maxX / 8
+		height  = maxY / 10
+		btWidth = 8
+	)
+
+	layer := &Layer{
 		Name: fmt.Sprintf("msg-%s", name),
 	}
 
-	var btnOk *ui.View
-	var btnCancel *ui.View
+	var btnOk *View
+	var btnCancel *View
 
-	boundView := &ui.View{
+	boundView := &View{
 		Name:  fmt.Sprintf("msg-%s", name),
 		Title: "message",
-		Option: ui.UIOption{
+		Option: UIOption{
 			Wrap:      true,
 			Highlight: true,
 		},
@@ -27,17 +35,16 @@ func makeMsg(g *gocui.Gui, scene *ui.Scene, name string, msg string, onOk func()
 		},
 	}
 
-	maxX, _ := g.Size()
-	boundView.Option.LeftTopX = (maxX - 60) / 2
-	boundView.Option.LeftTopY = 5
-	boundView.Option.RightBottomX = (maxX-60)/2 + 60
-	boundView.Option.RightBottomY = 15
+	boundView.Option.LeftTopX = (maxX / 2) - width
+	boundView.Option.LeftTopY = (maxY / 2) - height
+	boundView.Option.RightBottomX = (maxX / 2) + width
+	boundView.Option.RightBottomY = (maxY / 2) + height
 
 	if nil != onOk {
-		btnOk = &ui.View{
+		btnOk = &View{
 			Name:       fmt.Sprintf("msg-%s-ok", name),
 			SelectAble: true,
-			Option: ui.UIOption{
+			Option: UIOption{
 				Wrap:      true,
 				Highlight: true,
 				Z:         2,
@@ -55,10 +62,10 @@ func makeMsg(g *gocui.Gui, scene *ui.Scene, name string, msg string, onOk func()
 	}
 
 	if nil != onCancel {
-		btnCancel = &ui.View{
+		btnCancel = &View{
 			Name:       fmt.Sprintf("msg-%s-cancel", name),
 			SelectAble: true,
-			Option: ui.UIOption{
+			Option: UIOption{
 				Wrap:      true,
 				Highlight: true,
 				Z:         2,
@@ -76,14 +83,14 @@ func makeMsg(g *gocui.Gui, scene *ui.Scene, name string, msg string, onOk func()
 	}
 
 	if nil != onOk && nil != onCancel {
-		btnOk.Option.LeftTopX = boundView.Option.LeftTopX + 5
+		btnOk.Option.LeftTopX = maxX/2 - 2 - btWidth
 		btnOk.Option.LeftTopY = boundView.Option.RightBottomY - 5
-		btnOk.Option.RightBottomX = btnOk.Option.LeftTopX + 5
+		btnOk.Option.RightBottomX = btnOk.Option.LeftTopX + btWidth
 		btnOk.Option.RightBottomY = btnOk.Option.LeftTopY + 2
 
-		btnCancel.Option.LeftTopX = boundView.Option.RightBottomX - 10
+		btnCancel.Option.LeftTopX = maxX/2 + 2
 		btnCancel.Option.LeftTopY = boundView.Option.RightBottomY - 5
-		btnCancel.Option.RightBottomX = btnCancel.Option.LeftTopX + 5
+		btnCancel.Option.RightBottomX = btnCancel.Option.LeftTopX + btWidth
 		btnCancel.Option.RightBottomY = btnCancel.Option.LeftTopY + 2
 
 		btnCancel.AddKey(gocui.KeyTab, func(g *gocui.Gui, vv *gocui.View) error {
@@ -97,14 +104,14 @@ func makeMsg(g *gocui.Gui, scene *ui.Scene, name string, msg string, onOk func()
 		})
 
 	} else if nil != onOk {
-		btnOk.Option.LeftTopX = boundView.Option.LeftTopX + 5
+		btnOk.Option.LeftTopX = maxX/2 - btWidth/2
 		btnOk.Option.LeftTopY = boundView.Option.RightBottomY - 5
-		btnOk.Option.RightBottomX = btnOk.Option.LeftTopX + 5
+		btnOk.Option.RightBottomX = btnOk.Option.LeftTopX + btWidth
 		btnOk.Option.RightBottomY = btnOk.Option.LeftTopY + 2
 	} else if nil != onCancel {
-		btnCancel.Option.LeftTopX = boundView.Option.RightBottomX - 10
+		btnCancel.Option.LeftTopX = maxX/2 - btWidth/2
 		btnCancel.Option.LeftTopY = boundView.Option.RightBottomY - 5
-		btnCancel.Option.RightBottomX = btnCancel.Option.LeftTopX + 5
+		btnCancel.Option.RightBottomX = btnOk.Option.LeftTopX + btWidth
 		btnCancel.Option.RightBottomY = btnCancel.Option.LeftTopY + 2
 	}
 

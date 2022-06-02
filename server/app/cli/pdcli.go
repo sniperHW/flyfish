@@ -47,10 +47,10 @@ func main() {
 	httpcli := consoleHttp.NewClient(*pdservice)
 
 	var mtx sync.Mutex
-	var actived int
-	scenes := []sceneI{newListKv(g), newDepmnt(g, httpcli)}
+	var actived int = 2
+	scenes := []sceneI{newListKv(g), newDepmnt(g, httpcli), newMeta(g, httpcli)}
 
-	scenes[0].onActive(g, httpcli)
+	scenes[actived].onActive(g, httpcli)
 
 	g.SelFgColor = gocui.ColorGreen
 	g.Highlight = true

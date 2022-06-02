@@ -357,31 +357,31 @@ func (sd *sceneDepmnt) createLayer(gui *gocui.Gui) {
 			hint = fmt.Sprintf("node host servicePort raftPort")
 		}
 
-		makeEdit(gui, sd.scene, name, hint, func(editView *gocui.View) {
+		ui.MakeEdit(gui, sd.scene, name, hint, func(editView *gocui.View) {
 			req, resp, err := sd.makeAddReq(editView)
 			if nil != err {
-				makeMsg(gui, sd.scene, "depmnt-add-error", err.Error(), func() {
+				ui.MakeMsg(gui, sd.scene, "depmnt-add-error", err.Error(), func() {
 					sd.scene.Pop(gui)
 				}, nil)
 			} else {
-				makeMsg(gui, sd.scene, "depmnt-add-wait-response", "Waitting response from server...", nil, nil)
+				ui.MakeMsg(gui, sd.scene, "depmnt-add-wait-response", "Waitting response from server...", nil, nil)
 				go func() {
 					r, err := sd.httpcli.Call(req, resp)
 					gui.Update(func(_ *gocui.Gui) error {
 						sd.scene.Pop(gui)
 						if nil != err {
-							makeMsg(gui, sd.scene, "depmnt-add-error", err.Error(), func() {
+							ui.MakeMsg(gui, sd.scene, "depmnt-add-error", err.Error(), func() {
 								sd.scene.Pop(gui)
 							}, nil)
 						} else {
 							vv := reflect.ValueOf(r).Elem()
 							if vv.FieldByName("Ok").Interface().(bool) {
-								makeMsg(gui, sd.scene, "depmnt-add-ok", "add Ok", func() {
+								ui.MakeMsg(gui, sd.scene, "depmnt-add-ok", "add Ok", func() {
 									sd.scene.Pop(gui)
 									sd.scene.Pop(gui)
 								}, nil)
 							} else {
-								makeMsg(gui, sd.scene, "depmnt-add-error", vv.FieldByName("Reason").Interface().(string), func() {
+								ui.MakeMsg(gui, sd.scene, "depmnt-add-error", vv.FieldByName("Reason").Interface().(string), func() {
 									sd.scene.Pop(gui)
 								}, nil)
 							}
@@ -414,31 +414,31 @@ func (sd *sceneDepmnt) createLayer(gui *gocui.Gui) {
 			}
 		}
 
-		makeMsg(gui, sd.scene, "depmnt-remove-confirm", hint, func() {
+		ui.MakeMsg(gui, sd.scene, "depmnt-remove-confirm", hint, func() {
 			sd.scene.Pop(gui)
 			req, resp, err := sd.makeRemReq()
 			if nil != err {
-				makeMsg(gui, sd.scene, "depmnt-rem-error", err.Error(), func() {
+				ui.MakeMsg(gui, sd.scene, "depmnt-rem-error", err.Error(), func() {
 					sd.scene.Pop(gui)
 				}, nil)
 			} else {
-				makeMsg(gui, sd.scene, "depmnt-rem-wait-response", "Waitting response from server...", nil, nil)
+				ui.MakeMsg(gui, sd.scene, "depmnt-rem-wait-response", "Waitting response from server...", nil, nil)
 				go func() {
 					r, err := sd.httpcli.Call(req, resp)
 					gui.Update(func(_ *gocui.Gui) error {
 						sd.scene.Pop(gui)
 						if nil != err {
-							makeMsg(gui, sd.scene, "depmnt-rem-error", err.Error(), func() {
+							ui.MakeMsg(gui, sd.scene, "depmnt-rem-error", err.Error(), func() {
 								sd.scene.Pop(gui)
 							}, nil)
 						} else {
 							vv := reflect.ValueOf(r).Elem()
 							if vv.FieldByName("Ok").Interface().(bool) {
-								makeMsg(gui, sd.scene, "depmnt-rem-ok", "remove Ok", func() {
+								ui.MakeMsg(gui, sd.scene, "depmnt-rem-ok", "remove Ok", func() {
 									sd.scene.Pop(gui)
 								}, nil)
 							} else {
-								makeMsg(gui, sd.scene, "depmnt-rem-error", vv.FieldByName("Reason").Interface().(string), func() {
+								ui.MakeMsg(gui, sd.scene, "depmnt-rem-error", vv.FieldByName("Reason").Interface().(string), func() {
 									sd.scene.Pop(gui)
 								}, nil)
 							}

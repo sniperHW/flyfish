@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/sniperHW/flyfish/proto"
 	"strconv"
-	"strings"
 )
 
 var (
@@ -22,6 +21,31 @@ const (
 	DBState_update = DBState(2)
 	DBState_delete = DBState(3)
 )
+
+var vaildChar [255]bool
+
+func init() {
+	for c := byte('a'); c <= byte('z'); c++ {
+		vaildChar[int(c)] = true
+	}
+
+	for c := byte('A'); c <= byte('Z'); c++ {
+		vaildChar[int(c)] = true
+	}
+
+	for c := byte('0'); c <= byte('9'); c++ {
+		vaildChar[int(c)] = true
+	}
+}
+
+func ContainsInvaildCharacter(s string) bool {
+	for _, v := range s {
+		if !vaildChar[int(v)] {
+			return true
+		}
+	}
+	return false
+}
 
 /*对于string类型如果长度可能超过16384则使用blob,否则在mysql下将会截断*/
 
@@ -149,12 +173,17 @@ func (t *TableDef) Check() error {
 	if t.Name == "" {
 		return errors.New("table name is empty")
 	}
+
+	if ContainsInvaildCharacter(t.Name) {
+		return errors.New("table name contains invalid character")
+	}
+
 	for _, v := range t.Fields {
 		if v.Name == "" {
 			return fmt.Errorf("%s has emtpy filed.Name", t.Name)
 		}
 
-		if strings.HasPrefix(v.Name, "__") {
+		if ContainsInvaildCharacter(v.Name) {
 			return fmt.Errorf("%s has invaild filed.Name:%s", t.Name, v.Name)
 		}
 
