@@ -53,7 +53,7 @@ func MakeEdit(g *gocui.Gui, scene *Scene, name string, hint string, onOk func(ed
 
 	boundView := &View{
 		Name:  fmt.Sprintf("edit-%s", name),
-		Title: CenterPrint(width, name),
+		Title: name,
 		Option: UIOption{
 			Wrap:      true,
 			Highlight: true,

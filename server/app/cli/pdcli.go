@@ -56,7 +56,49 @@ func main() {
 	g.SelFgColor = gocui.ColorGreen
 	g.Highlight = true
 	g.InputEsc = true
+
+	sceneMovement := func(d int) func(_ *gocui.Gui, _ *gocui.View) error {
+		return func(gui *gocui.Gui, v *gocui.View) error {
+			if len(scenes) > 0 {
+				mtx.Lock()
+				next := actived + d
+				if next < 0 {
+					next = 0
+				} else if next >= len(scenes)-1 {
+					next = len(scenes) - 1
+				}
+
+				if next != actived {
+					scenes[actived].clear(g)
+					actived = next
+					scenes[actived].onActive(g, httpcli)
+				}
+				mtx.Unlock()
+			}
+			return nil
+		}
+	}
+
+	arrowBind := false
 	g.SetManagerFunc(func(g *gocui.Gui) error {
+		if scenes[actived].canChangeView() {
+			if !arrowBind {
+				arrowBind = true
+				if err := g.SetKeybinding("", gocui.KeyArrowLeft, gocui.ModNone, sceneMovement(-1)); err != nil {
+					log.Panicln(err)
+				}
+
+				if err := g.SetKeybinding("", gocui.KeyArrowRight, gocui.ModNone, sceneMovement(1)); err != nil {
+					log.Panicln(err)
+				}
+			}
+		} else {
+			if arrowBind {
+				arrowBind = false
+				g.DeleteKeybinding("", gocui.KeyArrowLeft, gocui.ModNone)
+				g.DeleteKeybinding("", gocui.KeyArrowRight, gocui.ModNone)
+			}
+		}
 		scenes[actived].Layout(g)
 		return nil
 	})
@@ -72,39 +114,11 @@ func main() {
 		}
 	}()
 
-	sceneMovement := func(d int) func(_ *gocui.Gui, _ *gocui.View) error {
-		return func(gui *gocui.Gui, v *gocui.View) error {
-			if len(scenes) > 0 {
-				mtx.Lock()
-				if scenes[actived].canChangeView() {
-					scenes[actived].clear(g)
-					actived += d
-					if actived < 0 {
-						actived = len(scenes) - 1
-					} else if actived >= len(scenes) {
-						actived = 0
-					}
-					scenes[actived].onActive(g, httpcli)
-				}
-				mtx.Unlock()
-			}
-			return nil
-		}
-	}
-
-	if err := g.SetKeybinding("", gocui.KeyCtrlN, gocui.ModNone, sceneMovement(1)); err != nil {
-		log.Panicln(err)
-	}
-
-	if err := g.SetKeybinding("", gocui.KeyCtrlP, gocui.ModNone, sceneMovement(-1)); err != nil {
-		log.Panicln(err)
-	}
-
 	if err := g.SetKeybinding("", gocui.KeyCtrlC, gocui.ModNone, quit); err != nil {
 		log.Panicln(err)
 	}
 
-	helpMsg := "Ctrl-N: next scene\nCtrl-P: previous scene\nTab: change view\n"
+	helpMsg := "<-:previous scene\n->: next scene\nTab: change view\n"
 
 	if err := g.SetKeybinding("", gocui.KeyCtrlH, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		if len(scenes) > 0 {
