@@ -24,7 +24,7 @@ func MakeMsg(g *gocui.Gui, scene *Scene, name string, msg string, onOk func(), o
 
 	boundView := &View{
 		Name:  fmt.Sprintf("msg-%s", name),
-		Title: "message",
+		Title: "Message",
 		Option: UIOption{
 			Wrap:      true,
 			Highlight: true,
@@ -51,7 +51,7 @@ func MakeMsg(g *gocui.Gui, scene *Scene, name string, msg string, onOk func(), o
 			},
 			OutPut: func(v *gocui.View) {
 				v.Clear()
-				fmt.Fprintln(v, "Ok")
+				fmt.Fprintln(v, CenterPrint(btWidth, "Ok"))
 			},
 		}
 
@@ -72,7 +72,7 @@ func MakeMsg(g *gocui.Gui, scene *Scene, name string, msg string, onOk func(), o
 			},
 			OutPut: func(v *gocui.View) {
 				v.Clear()
-				fmt.Fprintln(v, "Cancel")
+				fmt.Fprintln(v, CenterPrint(btWidth, "Cancel"))
 			},
 		}
 

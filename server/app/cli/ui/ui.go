@@ -1,9 +1,20 @@
 package ui
 
 import (
+	"fmt"
 	"github.com/jroimartin/gocui"
 	"sort"
+	"strings"
 )
+
+func CenterPrint(width int, s string) string {
+	if len(s) >= width {
+		return s
+	} else {
+		pad := (width-len(s))/2 - 1
+		return fmt.Sprintf("%s%s", strings.Repeat(" ", pad), s)
+	}
+}
 
 func setCurrentViewOnTop(g *gocui.Gui, name string) (*gocui.View, error) {
 	if _, err := g.SetCurrentView(name); err != nil {
@@ -105,6 +116,8 @@ func (v *View) Layout(gui *gocui.Gui) {
 			v.OnViewCreate(gui, vv)
 		}
 	}
+
+	gui.SetViewOnTop(v.Name)
 
 	if nil != v.OutPut {
 		v.OutPut(vv)
@@ -220,10 +233,6 @@ func (l *Layer) Layout(g *gocui.Gui) {
 
 	for _, v := range views {
 		v.Layout(g)
-	}
-
-	if l.AfterLayout != nil {
-		l.AfterLayout(g)
 	}
 }
 

@@ -110,9 +110,9 @@ func (sm *sceneMeta) Layout(g *gocui.Gui) error {
 	return sm.scene.Layout(g)
 }
 
-func (sm *sceneMeta) help(gui *gocui.Gui) {
+func (sm *sceneMeta) help(gui *gocui.Gui, helpMsg string) {
 	if sm.scene.Top().Name != "help" {
-		makeHelp(gui, sm.scene, "Ctrl-N change scene\nTab change between Tables and fields\nA add table|field\nR remove table|field")
+		makeHelp(gui, sm.scene, helpMsg+"A: add table|field\nR: remove table|field")
 	}
 }
 

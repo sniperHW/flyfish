@@ -33,7 +33,7 @@ func MakeEdit(g *gocui.Gui, scene *Scene, name string, hint string, onOk func(ed
 		},
 		OutPut: func(v *gocui.View) {
 			v.Clear()
-			fmt.Fprintln(v, "Ok")
+			fmt.Fprintln(v, CenterPrint(btWidth, "Ok"))
 		},
 	}
 
@@ -47,13 +47,13 @@ func MakeEdit(g *gocui.Gui, scene *Scene, name string, hint string, onOk func(ed
 		},
 		OutPut: func(v *gocui.View) {
 			v.Clear()
-			fmt.Fprintln(v, "Cancel")
+			fmt.Fprintln(v, CenterPrint(btWidth, "Cancel"))
 		},
 	}
 
 	boundView := &View{
 		Name:  fmt.Sprintf("edit-%s", name),
-		Title: name,
+		Title: CenterPrint(width, name),
 		Option: UIOption{
 			Wrap:      true,
 			Highlight: true,

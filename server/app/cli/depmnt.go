@@ -115,9 +115,9 @@ func (sd *sceneDepmnt) makeRemReq() (req proto.Message, resp proto.Message, err 
 	return
 }
 
-func (sd *sceneDepmnt) help(gui *gocui.Gui) {
+func (sd *sceneDepmnt) help(gui *gocui.Gui, helpMsg string) {
 	if sd.scene.Top().Name != "help" {
-		makeHelp(gui, sd.scene, "Ctrl-N change scene\nTab change between sets and nodes\nA add set|node\nR remove set|node\nC mark clear set")
+		makeHelp(gui, sd.scene, helpMsg+"A: add set|node\nR: remove set|node\nC: mark clear set")
 	}
 }
 

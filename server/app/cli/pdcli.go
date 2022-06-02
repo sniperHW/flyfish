@@ -24,7 +24,7 @@ type sceneI interface {
 	clear(*gocui.Gui)
 	onActive(*gocui.Gui, *consoleHttp.Client)
 	Layout(*gocui.Gui) error
-	help(*gocui.Gui)
+	help(*gocui.Gui, string)
 }
 
 func main() {
@@ -72,18 +72,31 @@ func main() {
 		}
 	}()
 
-	if err := g.SetKeybinding("", gocui.KeyCtrlN, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		if len(scenes) > 0 {
-			mtx.Lock()
-			if scenes[actived].canChangeView() {
-				scenes[actived].clear(g)
-				actived = (actived + 1) % len(scenes)
-				scenes[actived].onActive(g, httpcli)
+	sceneMovement := func(d int) func(_ *gocui.Gui, _ *gocui.View) error {
+		return func(gui *gocui.Gui, v *gocui.View) error {
+			if len(scenes) > 0 {
+				mtx.Lock()
+				if scenes[actived].canChangeView() {
+					scenes[actived].clear(g)
+					actived += d
+					if actived < 0 {
+						actived = len(scenes) - 1
+					} else if actived >= len(scenes) {
+						actived = 0
+					}
+					scenes[actived].onActive(g, httpcli)
+				}
+				mtx.Unlock()
 			}
-			mtx.Unlock()
+			return nil
 		}
-		return nil
-	}); err != nil {
+	}
+
+	if err := g.SetKeybinding("", gocui.KeyCtrlN, gocui.ModNone, sceneMovement(1)); err != nil {
+		log.Panicln(err)
+	}
+
+	if err := g.SetKeybinding("", gocui.KeyCtrlP, gocui.ModNone, sceneMovement(-1)); err != nil {
 		log.Panicln(err)
 	}
 
@@ -91,9 +104,11 @@ func main() {
 		log.Panicln(err)
 	}
 
+	helpMsg := "Ctrl-N: next scene\nCtrl-P: previous scene\nTab: change view\n"
+
 	if err := g.SetKeybinding("", gocui.KeyCtrlH, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		if len(scenes) > 0 {
-			scenes[actived].help(g)
+			scenes[actived].help(g, helpMsg)
 		}
 		return nil
 	}); err != nil {

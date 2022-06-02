@@ -10,8 +10,9 @@ func makeHelp(g *gocui.Gui, scene *ui.Scene, msg string) {
 	maxX, maxY := g.Size()
 
 	var (
-		width  = maxX / 8
-		height = maxY / 8
+		width   = maxX / 8
+		height  = maxY / 8
+		btWidth = 8
 	)
 
 	layer := &ui.Layer{
@@ -50,7 +51,7 @@ func makeHelp(g *gocui.Gui, scene *ui.Scene, msg string) {
 		},
 		OutPut: func(v *gocui.View) {
 			v.Clear()
-			fmt.Fprintln(v, "Ok")
+			fmt.Fprintln(v, ui.CenterPrint(btWidth, "Ok"))
 		},
 	}
 

@@ -86,9 +86,9 @@ func (sc *sceneListKv) Layout(g *gocui.Gui) error {
 	return sc.scene.Layout(g)
 }
 
-func (sc *sceneListKv) help(gui *gocui.Gui) {
+func (sc *sceneListKv) help(gui *gocui.Gui, helpMsg string) {
 	if sc.scene.Top().Name != "help" {
-		makeHelp(gui, sc.scene, "Ctrl-N change scene\n")
+		makeHelp(gui, sc.scene, helpMsg)
 	}
 }
 
@@ -328,12 +328,6 @@ func (sc *sceneListKv) createLayer(gui *gocui.Gui) {
 				sc.viewStoreAndreplica = append(sc.viewStoreAndreplica, vStore)
 				layer.AddView(vStore)
 			}
-		}
-	}
-
-	layer.AfterLayout = func(gui *gocui.Gui) {
-		if sc.scene.Top().Name == "help" {
-			gui.SetViewOnTop("help")
 		}
 	}
 
