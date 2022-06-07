@@ -66,7 +66,7 @@ func (n *testKvnode) run() {
 			context := m.(*snet.Message).Context
 			switch msg.(type) {
 			case *sproto.NotifyNodeStoreOp:
-				GetSugar().Infof("on NotifyNodeStoreOp")
+				//GetSugar().Infof("on NotifyNodeStoreOp %v", msg.(*sproto.NotifyNodeStoreOp))
 				n.udp.SendTo(from, snet.MakeMessage(context, &sproto.NodeStoreOpOk{}))
 			case *sproto.NotifySlotTransIn:
 				notify := msg.(*sproto.NotifySlotTransIn)
@@ -451,6 +451,8 @@ func TestAddRemNode(t *testing.T) {
 
 	//等待所有store成为voter
 
+	GetSugar().Infof("wait................")
+
 	for {
 		c := consoleHttp.NewClient("localhost:8110")
 		resp, err := c.Call(&sproto.GetKvStatus{}, &sproto.GetKvStatusResp{})
@@ -463,7 +465,7 @@ func TestAddRemNode(t *testing.T) {
 					if int(v.NodeID) == 2 {
 						for _, vv := range v.Stores {
 
-							if vv.Type != int32(VoterStore) || vv.Value != int32(FlyKvCommited) {
+							if vv.StoreType != int32(VoterStore) {
 								return false
 							}
 						}
@@ -584,7 +586,7 @@ func TestAddRemSet(t *testing.T) {
 	waitCondition(func() bool {
 		ret := make(chan bool, 1)
 		pd.mainque.AppendHighestPriotiryItem(func() {
-			if len(pd.pState.SlotTransferMgr.Plan)+len(pd.pState.SlotTransferMgr.Transactions) == expectCount {
+			if len(pd.SlotTransferMgr.Plan)+len(pd.SlotTransferMgr.Transactions) == expectCount {
 				ret <- true
 			} else {
 				ret <- false
@@ -608,7 +610,7 @@ func TestAddRemSet(t *testing.T) {
 	waitCondition(func() bool {
 		ret := make(chan bool, 1)
 		pd.mainque.AppendHighestPriotiryItem(func() {
-			if len(pd.pState.SlotTransferMgr.Plan)+len(pd.pState.SlotTransferMgr.Transactions) == expectCount {
+			if len(pd.SlotTransferMgr.Plan)+len(pd.SlotTransferMgr.Transactions) == expectCount {
 				ret <- true
 			} else {
 				ret <- false
@@ -640,7 +642,7 @@ func TestAddRemSet(t *testing.T) {
 	waitCondition(func() bool {
 		ret := make(chan bool, 1)
 		pd.mainque.AppendHighestPriotiryItem(func() {
-			if len(pd.pState.SlotTransferMgr.Plan)+len(pd.pState.SlotTransferMgr.Transactions)+len(pd.pState.SlotTransferMgr.FreeSlots) == 0 {
+			if len(pd.SlotTransferMgr.Plan)+len(pd.SlotTransferMgr.Transactions)+len(pd.SlotTransferMgr.FreeSlots) == 0 {
 				ret <- true
 			} else {
 				ret <- false
@@ -664,7 +666,7 @@ func TestAddRemSet(t *testing.T) {
 	waitCondition(func() bool {
 		ret := make(chan bool, 1)
 		pd.mainque.AppendHighestPriotiryItem(func() {
-			if len(pd.pState.SlotTransferMgr.Plan)+len(pd.pState.SlotTransferMgr.Transactions)+len(pd.pState.SlotTransferMgr.FreeSlots) == 0 {
+			if len(pd.SlotTransferMgr.Plan)+len(pd.SlotTransferMgr.Transactions)+len(pd.SlotTransferMgr.FreeSlots) == 0 {
 				ret <- true
 			} else {
 				ret <- false

@@ -1,8 +1,15 @@
 {
-	"Sets":[
-	{"SetID":1,
-	 "KvNodes":[
-	 	{"NodeID":1,"Host":"localhost","ServicePort":9100,"RaftPort":9101}
-	 ]
-	}
-]}
+    "Sets": {
+        "1": {
+            "SetID": 1,
+            "Nodes": {
+                "1": {
+                    "NodeID": 1,
+                    "Host": "localhost",
+                    "ServicePort": 9100,
+                    "RaftPort": 9101
+                }
+            }
+        }
+    }
+}

@@ -16,8 +16,8 @@ type SlotTransferMgr struct {
 	FreeSlots    map[int]bool               //无归属的slot
 }
 
-func (s *SlotTransferMgr) onSetRemove(pd *pd, ss *set) {
-	for _, st := range ss.stores {
+func (s *SlotTransferMgr) onSetRemove(pd *pd, ss *Set) {
+	for _, st := range ss.Stores {
 		for _, b := range st.slots.GetOpenBits() {
 			_, onPlan := s.Plan[b]
 			_, onTransaction := s.Transactions[b]
@@ -29,14 +29,14 @@ func (s *SlotTransferMgr) onSetRemove(pd *pd, ss *set) {
 
 	//清理plan
 	for _, v := range s.Plan {
-		if v.SetIn == ss.id {
+		if v.SetIn == ss.SetID {
 			//被删除set是计划迁入的set
 			if v.SetOut < 0 {
 				//从freeslot迁入，将slot归还给freeslot
 				s.FreeSlots[v.Slot] = true
 			}
 			delete(s.Plan, v.Slot)
-		} else if v.SetOut == ss.id {
+		} else if v.SetOut == ss.SetID {
 			//被删除set是计划迁出set,将slot放入freeslot
 			s.FreeSlots[v.Slot] = true
 			delete(s.Plan, v.Slot)
@@ -46,7 +46,7 @@ func (s *SlotTransferMgr) onSetRemove(pd *pd, ss *set) {
 
 	//清理transaction
 	for _, v := range s.Transactions {
-		if v.SetIn == ss.id {
+		if v.SetIn == ss.SetID {
 			//标记迁入set已经失效
 			v.SetIn = -1
 			if v.SetOut < 0 || v.StoreTransferOutOk {
@@ -61,7 +61,7 @@ func (s *SlotTransferMgr) onSetRemove(pd *pd, ss *set) {
 				delete(s.Transactions, v.Slot)
 			}
 
-		} else if v.SetOut == ss.id {
+		} else if v.SetOut == ss.SetID {
 			if v.SetIn < 0 {
 				//待迁入set已经被移除
 				s.FreeSlots[v.Slot] = true
@@ -75,7 +75,7 @@ func (s *SlotTransferMgr) onSetRemove(pd *pd, ss *set) {
 		}
 	}
 
-	GetSugar().Infof("onSetRemove:%d %d", ss.id, len(s.Transactions)+len(s.Plan))
+	GetSugar().Infof("onSetRemove:%d %d", ss.SetID, len(s.Transactions)+len(s.Plan))
 
 	pd.slotBalance()
 
@@ -100,15 +100,15 @@ type TransSlotTransfer struct {
 }
 
 func (tst *TransSlotTransfer) notify(pd *pd) {
-	if tst != pd.pState.SlotTransferMgr.Transactions[tst.Slot] {
+	if tst != pd.SlotTransferMgr.Transactions[tst.Slot] {
 		return
 	}
 
 	tst.context = snet.MakeUniqueContext() //更新context,后续只接受相应context的应答
 	if tst.SetOut < 0 || tst.StoreTransferOutOk {
-		setIn := pd.pState.deployment.sets[tst.SetIn]
-		for _, v := range setIn.nodes {
-			addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.host, v.servicePort))
+		setIn := pd.Deployment.Sets[tst.SetIn]
+		for _, v := range setIn.Nodes {
+			addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.Host, v.ServicePort))
 			pd.udp.SendTo(addr, snet.MakeMessage(tst.context,
 				&sproto.NotifySlotTransIn{
 					Slot:  int32(tst.Slot),
@@ -116,9 +116,9 @@ func (tst *TransSlotTransfer) notify(pd *pd) {
 				}))
 		}
 	} else if tst.SetIn >= 0 && !tst.ready {
-		setIn := pd.pState.deployment.sets[tst.SetIn]
-		for _, v := range setIn.nodes {
-			addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.host, v.servicePort))
+		setIn := pd.Deployment.Sets[tst.SetIn]
+		for _, v := range setIn.Nodes {
+			addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.Host, v.ServicePort))
 			pd.udp.SendTo(addr, snet.MakeMessage(tst.context,
 				&sproto.IsTransInReady{
 					Store: int32(tst.StoreTransferIn),
@@ -126,9 +126,9 @@ func (tst *TransSlotTransfer) notify(pd *pd) {
 				}))
 		}
 	} else {
-		setOut := pd.pState.deployment.sets[tst.SetOut]
-		for _, v := range setOut.nodes {
-			addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.host, v.servicePort))
+		setOut := pd.Deployment.Sets[tst.SetOut]
+		for _, v := range setOut.Nodes {
+			addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", v.Host, v.ServicePort))
 			pd.udp.SendTo(addr, snet.MakeMessage(tst.context,
 				&sproto.NotifySlotTransOut{
 					Slot:  int32(tst.Slot),
@@ -146,13 +146,11 @@ var CurrentTransferOutCount int = 6
 
 func (p *pd) slotBalance() {
 
-	if len(p.pState.deployment.sets) == 0 {
+	if len(p.Deployment.Sets) == 0 {
 		return
 	}
 
-	if len(p.pState.SlotTransferMgr.Plan)+len(p.pState.SlotTransferMgr.Transactions) == 0 {
-		//构建迁移计划
-		markClearStore := []*store{}
+	if len(p.SlotTransferMgr.Plan)+len(p.SlotTransferMgr.Transactions) == 0 {
 
 		type st struct {
 			setId   int
@@ -161,14 +159,19 @@ func (p *pd) slotBalance() {
 		}
 
 		stores := []*st{}
-		for _, v := range p.pState.deployment.sets {
-			for _, vv := range v.stores {
-				if v.markClear {
-					markClearStore = append(markClearStore, vv)
+		markClearStore := []*st{}
+		for _, v := range p.Deployment.Sets {
+			for _, vv := range v.Stores {
+				if v.MarkClear {
+					markClearStore = append(markClearStore, &st{
+						setId:   v.SetID,
+						storeId: vv.StoreID,
+						slots:   vv.slots.GetOpenBits(),
+					})
 				} else {
 					stores = append(stores, &st{
-						setId:   vv.set.id,
-						storeId: vv.id,
+						setId:   v.SetID,
+						storeId: vv.StoreID,
 						slots:   vv.slots.GetOpenBits(),
 					})
 				}
@@ -193,21 +196,21 @@ func (p *pd) slotBalance() {
 
 		sort.Slice(markClearStore, func(i int, j int) bool {
 			l, r := markClearStore[i], markClearStore[j]
-			if l.set.id < r.set.id {
+			if l.setId < r.setId {
 				return true
-			} else if l.set.id == r.set.id {
-				return l.id < r.id
+			} else if l.setId == r.setId {
+				return l.storeId < r.storeId
 			} else {
 				return false
 			}
 		})
 
-		if len(p.pState.SlotTransferMgr.FreeSlots) > 0 || len(markClearStore) > 0 {
-			for k, _ := range p.pState.SlotTransferMgr.FreeSlots {
+		if len(p.SlotTransferMgr.FreeSlots) > 0 || len(markClearStore) > 0 {
+			for k, _ := range p.SlotTransferMgr.FreeSlots {
 				sortStores()
 				less := stores[0]
 				less.slots = append(less.slots, k)
-				p.pState.SlotTransferMgr.Plan[k] = &SlotTransferPlan{
+				p.SlotTransferMgr.Plan[k] = &SlotTransferPlan{
 					Slot:               k,
 					SetOut:             -1,
 					StoreTransferOut:   -1,
@@ -215,18 +218,18 @@ func (p *pd) slotBalance() {
 					SetIn:              less.setId,
 					StoreTransferIn:    less.storeId,
 				}
-				delete(p.pState.SlotTransferMgr.FreeSlots, k)
+				delete(p.SlotTransferMgr.FreeSlots, k)
 			}
 
 			for _, v := range markClearStore {
-				for _, s := range v.slots.GetOpenBits() {
+				for _, s := range v.slots {
 					sortStores()
 					less := stores[0]
 					less.slots = append(less.slots, s)
-					p.pState.SlotTransferMgr.Plan[s] = &SlotTransferPlan{
+					p.SlotTransferMgr.Plan[s] = &SlotTransferPlan{
 						Slot:             s,
-						SetOut:           v.set.id,
-						StoreTransferOut: v.id,
+						SetOut:           v.setId,
+						StoreTransferOut: v.storeId,
 						SetIn:            less.setId,
 						StoreTransferIn:  less.storeId,
 					}
@@ -247,7 +250,7 @@ func (p *pd) slotBalance() {
 				slot := more.slots[0]
 				more.slots = more.slots[1:]
 				less.slots = append(less.slots, slot)
-				p.pState.SlotTransferMgr.Plan[slot] = &SlotTransferPlan{
+				p.SlotTransferMgr.Plan[slot] = &SlotTransferPlan{
 					Slot:             slot,
 					SetOut:           more.setId,
 					StoreTransferOut: more.storeId,
@@ -261,7 +264,7 @@ func (p *pd) slotBalance() {
 	if p.isLeader() {
 
 		plan := []*SlotTransferPlan{}
-		for _, v := range p.pState.SlotTransferMgr.Plan {
+		for _, v := range p.SlotTransferMgr.Plan {
 			plan = append(plan, v)
 		}
 
@@ -282,16 +285,15 @@ func (p *pd) slotBalance() {
 		//避免大量transferout导致大量slot处于无法服务状态
 		transferOutCount := 0
 
-		for _, v := range p.pState.SlotTransferMgr.Transactions {
+		for _, v := range p.SlotTransferMgr.Transactions {
 			if v.SetOut >= 0 {
 				transferOutCount++
 			}
 		}
 
 		for _, v := range plan {
-			//无需迁出的计划可以立刻执行，否则需要控制执行数量
-			if /*v.SetOut < 0 ||*/ transferOutCount < CurrentTransferOutCount {
-				delete(p.pState.SlotTransferMgr.Plan, v.Slot)
+			if transferOutCount < CurrentTransferOutCount {
+				delete(p.SlotTransferMgr.Plan, v.Slot)
 				t := &TransSlotTransfer{
 					SlotTransferPlan: SlotTransferPlan{
 						Slot:             v.Slot,
@@ -301,11 +303,9 @@ func (p *pd) slotBalance() {
 						StoreTransferIn:  v.StoreTransferIn,
 					},
 				}
-				p.pState.SlotTransferMgr.Transactions[v.Slot] = t
+				p.SlotTransferMgr.Transactions[v.Slot] = t
 				t.notify(p)
-				//if v.SetOut >= 0 {
 				transferOutCount++
-				//}
 			} else {
 				break
 			}
@@ -333,18 +333,19 @@ func (p *ProposalSlotTransOutOk) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalSlotTransOutOk) apply(pd *pd) {
-	if t, ok := pd.pState.SlotTransferMgr.Transactions[p.Slot]; ok {
+	if t, ok := pd.SlotTransferMgr.Transactions[p.Slot]; ok {
 		if !t.StoreTransferOutOk {
 			t.StoreTransferOutOk = true
-			s := pd.pState.deployment.sets[t.SetOut]
-			st := s.stores[t.StoreTransferOut]
-			st.slots.Clear(int(t.Slot))
-			pd.pState.deployment.version++
-			s.version = pd.pState.deployment.version
+			set := pd.Deployment.Sets[t.SetOut]
+			store := set.Stores[t.StoreTransferOut]
+			store.slots.Clear(int(t.Slot))
+			store.Slots = store.slots.ToJson()
+			pd.Deployment.Version++
+			set.Version = pd.Deployment.Version
 			if t.SetIn < 0 {
 				//迁入set已经被删除,将已经迁出的slot放入freeslot
-				delete(pd.pState.SlotTransferMgr.Transactions, p.Slot)
-				pd.pState.SlotTransferMgr.FreeSlots[p.Slot] = true
+				delete(pd.SlotTransferMgr.Transactions, p.Slot)
+				pd.SlotTransferMgr.FreeSlots[p.Slot] = true
 
 				if t.timer != nil {
 					t.timer.Stop()
@@ -375,20 +376,21 @@ func (p *ProposalSlotTransInOk) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalSlotTransInOk) apply(pd *pd) {
-	if t, ok := pd.pState.SlotTransferMgr.Transactions[p.Slot]; ok {
-		delete(pd.pState.SlotTransferMgr.Transactions, p.Slot)
+	if t, ok := pd.SlotTransferMgr.Transactions[p.Slot]; ok {
+		delete(pd.SlotTransferMgr.Transactions, p.Slot)
 		if nil != t.timer {
 			t.timer.Stop()
 		}
 
 		if t.SetIn < 0 {
-			pd.pState.SlotTransferMgr.FreeSlots[p.Slot] = true
+			pd.SlotTransferMgr.FreeSlots[p.Slot] = true
 		} else {
-			s := pd.pState.deployment.sets[t.SetIn]
-			st := s.stores[t.StoreTransferIn]
-			st.slots.Set(int(t.Slot))
-			pd.pState.deployment.version++
-			s.version = pd.pState.deployment.version
+			set := pd.Deployment.Sets[t.SetIn]
+			store := set.Stores[t.StoreTransferIn]
+			store.slots.Set(int(t.Slot))
+			store.Slots = store.slots.ToJson()
+			pd.Deployment.Version++
+			set.Version = pd.Deployment.Version
 		}
 		pd.slotBalance()
 	}
@@ -396,7 +398,7 @@ func (p *ProposalSlotTransInOk) apply(pd *pd) {
 
 func (p *pd) onSlotTransInReady(_ replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.IsTransInReadyResp)
-	if t, ok := p.pState.SlotTransferMgr.Transactions[int(msg.Slot)]; ok && t.context == m.Context {
+	if t, ok := p.SlotTransferMgr.Transactions[int(msg.Slot)]; ok && t.context == m.Context {
 		if msg.Ready && t.ready == false {
 			t.ready = true
 			if t.timer == nil || t.timer.Stop() {
@@ -408,7 +410,7 @@ func (p *pd) onSlotTransInReady(_ replyer, m *snet.Message) {
 
 func (p *pd) onSlotTransOutOk(_ replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.SlotTransOutOk)
-	if t, ok := p.pState.SlotTransferMgr.Transactions[int(msg.Slot)]; ok && t.context == m.Context {
+	if t, ok := p.SlotTransferMgr.Transactions[int(msg.Slot)]; ok && t.context == m.Context {
 		if !t.StoreTransferOutOk {
 			p.issueProposal(&ProposalSlotTransOutOk{
 				Slot: int(msg.Slot),
@@ -419,7 +421,7 @@ func (p *pd) onSlotTransOutOk(_ replyer, m *snet.Message) {
 
 func (p *pd) onSlotTransInOk(_ replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.SlotTransInOk)
-	if t, ok := p.pState.SlotTransferMgr.Transactions[int(msg.Slot)]; ok && t.context == m.Context {
+	if t, ok := p.SlotTransferMgr.Transactions[int(msg.Slot)]; ok && t.context == m.Context {
 		p.issueProposal(&ProposalSlotTransInOk{
 			Slot: int(msg.Slot),
 		})

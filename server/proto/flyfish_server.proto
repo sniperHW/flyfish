@@ -200,7 +200,7 @@ message kvnodeBootResp {
 enum StoreOpType {
   AddLearner = 1;
   PromoteLearner = 2;
-  RemoveStore = 3;
+  RemoveStore = 4;
 }
 
 message notifyNodeStoreOp {
@@ -393,19 +393,18 @@ message storeStatus {
 message kvnodeStoreStatus {
   optional int32  storeID     = 1;
   optional uint64 raftID      = 2;
-  optional int32  type        = 3;
-  optional int32  value       = 4;
-  optional bool   isLeader    = 5;
-  optional uint64 progress    = 6;
-  optional bool   halt        = 7;
-  optional int64  metaVersion = 8;  
+  optional int32  storeType   = 3;
+  optional bool   isLeader    = 4;
+  optional uint64 progress    = 5;
+  optional bool   halt        = 6;
+  optional int64  metaVersion = 7;
+  optional int64  lastReport  = 8;  
 }
 
 message kvnodeStatus {
-  optional int32 nodeID  = 1;
+  optional int32 nodeID              = 1;
   repeated kvnodeStoreStatus stores  = 2;
-  optional int64 lastReportTime = 3; 
-  optional string service       = 4;
+  optional string service            = 3;
 }
 
 message setStatus {

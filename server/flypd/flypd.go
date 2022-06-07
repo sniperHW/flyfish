@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/gogo/protobuf/proto"
-	"github.com/sniperHW/flyfish/db"
+	//"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/pkg/etcd/pkg/idutil"
@@ -14,11 +14,11 @@ import (
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	snet "github.com/sniperHW/flyfish/server/net"
-	sproto "github.com/sniperHW/flyfish/server/proto"
-	"github.com/sniperHW/flyfish/server/slot"
+	//sproto "github.com/sniperHW/flyfish/server/proto"
+	//"github.com/sniperHW/flyfish/server/slot"
 	"net"
 	"net/http"
-	"os"
+	//"os"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -45,6 +45,53 @@ type applicationQueue struct {
 	q *queue.PriorityQueue
 }
 
+type msgHandle struct {
+	isConsoleMsg bool
+	h            func(replyer, *snet.Message)
+}
+
+type msgHandler struct {
+	handles     map[reflect.Type]msgHandle
+	makeHttpReq map[string]func(*http.Request) (*snet.Message, error)
+}
+
+type ProposalConfChange struct {
+	confChangeType raftpb.ConfChangeType
+	url            string //for add
+	clientUrl      string
+	nodeID         uint64
+	processID      uint16
+	reply          func(error)
+}
+
+func (this *ProposalConfChange) GetType() raftpb.ConfChangeType {
+	return this.confChangeType
+}
+
+func (this *ProposalConfChange) GetURL() string {
+	return this.url
+}
+
+func (this *ProposalConfChange) GetClientURL() string {
+	return this.clientUrl
+}
+
+func (this *ProposalConfChange) GetNodeID() uint64 {
+	return this.nodeID
+}
+
+func (this *ProposalConfChange) GetProcessID() uint16 {
+	return this.processID
+}
+
+func (this *ProposalConfChange) IsPromote() bool {
+	return false
+}
+
+func (this *ProposalConfChange) OnError(err error) {
+	this.reply(err)
+}
+
 type flygate struct {
 	service       string
 	msgPerSecond  int
@@ -53,7 +100,6 @@ type flygate struct {
 
 type flygateMgr struct {
 	flygateMap map[string]*flygate
-	mainque    applicationQueue
 }
 
 func (f *flygateMgr) getFlyGate() (ret []string) {
@@ -82,7 +128,7 @@ func isValidTcpService(service string, token string) bool {
 	return false
 }
 
-func (f *flygateMgr) onHeartBeat(gateService string, msgPerSecond int) {
+func (f *flygateMgr) onHeartBeat(p *pd, gateService string, msgPerSecond int) {
 	var g *flygate
 	var ok bool
 
@@ -107,52 +153,13 @@ func (f *flygateMgr) onHeartBeat(gateService string, msgPerSecond int) {
 	var deadlineTimer *time.Timer
 
 	deadlineTimer = time.AfterFunc(time.Second*10, func() {
-		f.mainque.AppendHighestPriotiryItem(func() {
+		p.mainque.AppendHighestPriotiryItem(func() {
 			f.onFlyGateTimeout(gateService, deadlineTimer)
 		})
 	})
 
 	g.deadlineTimer = deadlineTimer
 	g.msgPerSecond = msgPerSecond
-}
-
-type persistenceState struct {
-	Deployment      DeploymentJson
-	SlotTransferMgr SlotTransferMgr
-	Meta            db.DbDef
-	MetaBytes       []byte
-	deployment      deployment
-}
-
-func (p *persistenceState) toJson() ([]byte, error) {
-	p.Deployment = p.deployment.toDeploymentJson()
-	return json.Marshal(&p)
-}
-
-func (p *persistenceState) loadFromJson(pd *pd, j []byte) error {
-	err := json.Unmarshal(j, p)
-
-	if nil != err {
-		return err
-	}
-
-	err = p.deployment.loadFromDeploymentJson(&p.Deployment)
-
-	if nil != err {
-		return err
-	}
-
-	return nil
-}
-
-type msgHandle struct {
-	isConsoleMsg bool
-	h            func(replyer, *snet.Message)
-}
-
-type msgHandler struct {
-	handles     map[reflect.Type]msgHandle
-	makeHttpReq map[string]func(*http.Request) (*snet.Message, error)
 }
 
 type pd struct {
@@ -166,91 +173,13 @@ type pd struct {
 	msgHandler      msgHandler
 	closed          int32
 	wait            sync.WaitGroup
-	flygateMgr      flygateMgr
 	config          *Config
 	service         string
-	pState          persistenceState
-	storeTask       map[uint64]*storeTask
-	metaUpdateQueue *list.List
-	RaftIDGen       *idutil.Generator
-	pendingNodes    map[int]*kvnode
-}
-
-func NewPd(nodeID uint16, cluster int, join bool, config *Config, clusterStr string) (*pd, error) {
-
-	peers, err := raft.SplitPeers(clusterStr)
-
-	if nil != err {
-		return nil, err
-	}
-
-	self, ok := peers[nodeID]
-
-	if !ok {
-		return nil, errors.New("cluster not contain self")
-	}
-
-	mainQueue := applicationQueue{
-		q: queue.NewPriorityQueue(2, 10000),
-	}
-
-	p := &pd{
-		mainque: mainQueue,
-		msgHandler: msgHandler{
-			handles:     map[reflect.Type]msgHandle{},
-			makeHttpReq: map[string]func(*http.Request) (*snet.Message, error){},
-		},
-		flygateMgr: flygateMgr{
-			flygateMap: map[string]*flygate{},
-			mainque:    mainQueue,
-		},
-		config:    config,
-		service:   self.ClientURL,
-		cluster:   cluster,
-		storeTask: map[uint64]*storeTask{},
-		pState: persistenceState{
-			SlotTransferMgr: SlotTransferMgr{
-				Transactions: map[int]*TransSlotTransfer{},
-				Plan:         map[int]*SlotTransferPlan{},
-				FreeSlots:    map[int]bool{},
-			},
-			deployment: deployment{
-				sets: map[int]*set{},
-			},
-		},
-		metaUpdateQueue: list.New(),
-		RaftIDGen:       idutil.NewGenerator(nodeID, time.Now()),
-		pendingNodes:    map[int]*kvnode{},
-	}
-
-	p.initMsgHandler()
-
-	p.mutilRaft = raft.NewMutilRaft()
-
-	p.rn, err = raft.NewInstance(nodeID, cluster, join, p.mutilRaft, p.mainque, peers, raft.RaftInstanceOption{
-		Logdir:        p.config.RaftLogDir,
-		RaftLogPrefix: p.config.RaftLogPrefix,
-	})
-
-	if nil != err {
-		return nil, err
-	}
-
-	if err = p.startUdpService(); nil != err {
-		p.rn.Stop()
-		return nil, err
-	}
-
-	p.startHttpService()
-
-	GetSugar().Infof("mutilRaft serve on:%s", self.URL)
-
-	go p.mutilRaft.Serve(self.URL)
-
-	p.wait.Add(1)
-	go p.serve()
-
-	return p, nil
+	raftIDGen       *idutil.Generator
+	flygateMgr      flygateMgr
+	Deployment      Deployment
+	DbMetaMgr       DbMetaMgr
+	SlotTransferMgr SlotTransferMgr
 }
 
 func (q applicationQueue) AppendHighestPriotiryItem(m interface{}) {
@@ -269,6 +198,15 @@ func (q applicationQueue) close() {
 	q.q.Close()
 }
 
+func (p *pd) getNode(nodeID int32) (*Set, *KvNode) {
+	for _, set := range p.Deployment.Sets {
+		if node, ok := set.Nodes[int(nodeID)]; ok {
+			return set, node
+		}
+	}
+	return nil, nil
+}
+
 func (p *pd) makeReplyFunc(replyer replyer, m *snet.Message, resp proto.Message) func(error) {
 	return func(err error) {
 		v := reflect.ValueOf(resp).Elem()
@@ -282,28 +220,6 @@ func (p *pd) makeReplyFunc(replyer replyer, m *snet.Message, resp proto.Message)
 	}
 }
 
-func (p *pd) storeBalance() {
-	time.AfterFunc(time.Second*1, func() {
-		p.mainque.AppendHighestPriotiryItem(func() {
-			if p.isLeader() {
-				for _, v := range p.pState.deployment.sets {
-					v.storeBalance(p)
-				}
-			}
-			p.storeBalance()
-		})
-	})
-}
-
-func (p *pd) getNode(nodeID int32) *kvnode {
-	for _, v := range p.pState.deployment.sets {
-		if n, ok := v.nodes[int(nodeID)]; ok {
-			return n
-		}
-	}
-	return nil
-}
-
 func (p *pd) isLeader() bool {
 	return atomic.LoadUint64(&p.leader) == p.rn.ID()
 }
@@ -312,83 +228,15 @@ func (p *pd) issueProposal(proposal raft.Proposal) {
 	p.rn.IssueProposal(proposal)
 }
 
-func (p *pd) loadInitDeployment() {
-	GetSugar().Infof("loadInitDeployment")
-	if "" != p.config.InitDepoymentPath {
-		f, err := os.Open(p.config.InitDepoymentPath)
-		if nil == err {
-			var b []byte
-			for {
-				data := make([]byte, 4096)
-				count, err := f.Read(data)
-				if count > 0 {
-					b = append(b, data[:count]...)
-				}
-
-				if nil != err {
-					break
-				}
-			}
-
-			var deploymentJson DeploymentJson
-			var err error
-			if err = json.Unmarshal(b, &deploymentJson); err != nil {
-				GetSugar().Errorf("loadInitDeployment err:%v", err)
+func (p *pd) onMsg(replyer replyer, msg *snet.Message) {
+	if h, ok := p.msgHandler.handles[reflect.TypeOf(msg.Msg)]; ok {
+		if p.config.DisableUdpConsole && h.isConsoleMsg {
+			//禁止udp console接口，如果请求来自udp全部
+			if _, ok := replyer.(*udpReplyer); ok {
 				return
 			}
-
-			if deploymentJson.Version == 0 && len(deploymentJson.Sets) > 0 {
-				deploymentJson.Version = 1
-
-				storeCount := len(deploymentJson.Sets) * StorePerSet
-				var storeBitmaps []*bitmap.Bitmap
-
-				for i := 0; i < storeCount; i++ {
-					storeBitmaps = append(storeBitmaps, bitmap.New(slot.SlotCount))
-				}
-
-				jj := 0
-				for i := 0; i < slot.SlotCount; i++ {
-					storeBitmaps[jj].Set(i)
-					jj = (jj + 1) % storeCount
-				}
-
-				for i, _ := range deploymentJson.Sets {
-
-					set := &deploymentJson.Sets[i]
-					set.Version = 1
-
-					for j := 0; j < StorePerSet; j++ {
-						set.Stores = append(set.Stores, StoreJson{
-							StoreID: j + 1,
-							Slots:   storeBitmaps[i*StorePerSet+j].ToJson(),
-						})
-					}
-
-					for k, _ := range set.KvNodes {
-						set.KvNodes[k].Store = map[int]*FlyKvStoreState{}
-						for j := 0; j < StorePerSet; j++ {
-							set.KvNodes[k].Store[j+1] = &FlyKvStoreState{
-								Type:   VoterStore,
-								Value:  FlyKvCommited,
-								RaftID: p.RaftIDGen.Next(),
-							}
-						}
-					}
-				}
-
-				if err = deploymentJson.check(); nil != err {
-					GetSugar().Errorf("loadInitDeployment err:%v", err)
-					return
-				}
-
-				p.issueProposal(&ProposalInstallDeployment{
-					D: deploymentJson,
-				})
-			}
-		} else {
-			GetSugar().Errorf("loadInitDeployment err:%v", err)
 		}
+		h.h(replyer, msg)
 	}
 }
 
@@ -396,46 +244,28 @@ func (p *pd) onBecomeLeader() {
 	p.issueProposal(&ProposalNop{})
 }
 
-func (p *pd) onLeaderDownToFollower() {
-	for _, v := range p.pState.SlotTransferMgr.Transactions {
-		if nil != v.timer {
-			v.timer.Stop()
-			v.timer = nil
-		}
-	}
-
-	for _, v := range p.storeTask {
-		v.mtx.Lock()
-		if nil != v.timer {
-			v.timer.Stop()
-			v.timer = nil
-		}
-		v.mtx.Unlock()
-	}
-
-	p.storeTask = map[uint64]*storeTask{}
-
-	p.pendingNodes = map[int]*kvnode{}
-
-	for p.metaUpdateQueue.Len() > 0 {
-		op := p.metaUpdateQueue.Remove(p.metaUpdateQueue.Front()).(*metaOpration)
-		if nil != op.m.Msg {
-			switch op.m.Msg.(type) {
-			case *sproto.MetaAddTable:
-				op.replyer.reply(snet.MakeMessage(op.m.Context,
-					&sproto.MetaAddTableResp{
-						Ok:     false,
-						Reason: "down to follower",
-					}))
-			case *sproto.MetaAddFields:
-				op.replyer.reply(snet.MakeMessage(op.m.Context,
-					&sproto.MetaAddFieldsResp{
-						Ok:     false,
-						Reason: "down to follower",
-					}))
+func (p *pd) storeBalance() {
+	time.AfterFunc(time.Second*1, func() {
+		p.mainque.AppendHighestPriotiryItem(func() {
+			if p.isLeader() {
+				for _, set := range p.Deployment.Sets {
+					set.storeBalance(p)
+				}
 			}
+			p.storeBalance()
+		})
+	})
+}
+
+func (p *pd) onLeaderDownToFollower() {
+	for _, v := range p.SlotTransferMgr.Transactions {
+		if nil != v.timer {
+			v.timer.Stop()
+			v.timer = nil
 		}
 	}
+
+	p.DbMetaMgr.clearOpQueue()
 }
 
 func (p *pd) Stop() {
@@ -503,13 +333,6 @@ func (p *pd) processCommited(commited raft.Committed) {
 					err = unmarshal(&ProposalUpdateMeta{})
 				case proposalFlyKvCommited:
 					err = unmarshal(&ProposalFlyKvCommited{})
-				/*case proposalAddLearnerStoreToNode:
-					err = unmarshal(&ProposalAddLearnerStoreToNode{})
-				case proposalPromoteLearnerStore:
-					err = unmarshal(&ProposalPromoteLearnerStore{})
-				case proposalRemoveNodeStore:
-					err = unmarshal(&ProposalRemoveNodeStore{})
-				*/
 				case proposalNop:
 					err = unmarshal(&ProposalNop{})
 				default:
@@ -537,33 +360,7 @@ func (p *pd) processCommited(commited raft.Committed) {
 	}
 }
 
-func (p *pd) processPendingNodes() {
-	if p.isLeader() {
-		if len(p.pendingNodes) > 0 {
-			dict := map[uint64]bool{}
-			for _, v := range p.storeTask {
-				dict[uint64(v.node.id)<<32+uint64(v.store)] = true
-			}
-
-			for _, v := range p.pendingNodes {
-				for k, vv := range v.store {
-					if vv.Type == VoterStore && vv.Value == FlyKvUnCommit && !dict[uint64(v.id)<<32+uint64(k)] {
-						p.startStoreNotifyTask(v, k, vv.RaftID, VoterStore)
-					}
-				}
-			}
-		}
-	}
-
-	time.AfterFunc(time.Second, func() {
-		p.mainque.AppendHighestPriotiryItem(p.processPendingNodes)
-	})
-}
-
 func (p *pd) serve() {
-
-	p.storeBalance()
-
 	go func() {
 		defer func() {
 			p.udp.Close()
@@ -574,8 +371,10 @@ func (p *pd) serve() {
 		}()
 
 		time.AfterFunc(time.Second, func() {
-			p.mainque.AppendHighestPriotiryItem(p.processPendingNodes)
+			p.mainque.AppendHighestPriotiryItem(p.processNodeNotify)
 		})
+
+		p.storeBalance()
 
 		for {
 			_, v := p.mainque.pop()
@@ -617,7 +416,7 @@ func (p *pd) serve() {
 				}
 			case *TransSlotTransfer:
 				if p.leader == p.rn.ID() {
-					if _, ok := p.pState.SlotTransferMgr.Transactions[v.(*TransSlotTransfer).Slot]; ok {
+					if _, ok := p.SlotTransferMgr.Transactions[v.(*TransSlotTransfer).Slot]; ok {
 						v.(*TransSlotTransfer).notify(p)
 					}
 				}
@@ -630,19 +429,101 @@ func (p *pd) serve() {
 }
 
 func (p *pd) getSnapshot() ([]byte, error) {
-	persistenceState, err := p.pState.toJson()
+	snapshot, err := json.Marshal(p)
 	if nil != err {
 		return nil, err
 	}
-	b := make([]byte, 0, 4+len(persistenceState))
+	b := make([]byte, 0, 4+len(snapshot))
 
-	b = buffer.AppendInt32(b, int32(len(persistenceState)))
-	b = buffer.AppendBytes(b, persistenceState)
+	b = buffer.AppendInt32(b, int32(len(snapshot)))
+	b = buffer.AppendBytes(b, snapshot)
 	return b, nil
 }
 
 func (p *pd) recoverFromSnapshot(b []byte) error {
 	reader := buffer.NewReader(b)
-	l := reader.GetInt32()
-	return p.pState.loadFromJson(p, reader.GetBytes(int(l)))
+	if err := json.Unmarshal(reader.GetBytes(int(reader.GetInt32())), p); nil != err {
+		for _, set := range p.Deployment.Sets {
+			for _, store := range set.Stores {
+				store.slots, _ = bitmap.CreateFromJson(store.Slots)
+			}
+		}
+		return err
+	} else {
+		return nil
+	}
+}
+
+func NewPd(nodeID uint16, cluster int, join bool, config *Config, clusterStr string) (*pd, error) {
+
+	peers, err := raft.SplitPeers(clusterStr)
+
+	if nil != err {
+		return nil, err
+	}
+
+	self, ok := peers[nodeID]
+
+	if !ok {
+		return nil, errors.New("cluster not contain self")
+	}
+
+	mainQueue := applicationQueue{
+		q: queue.NewPriorityQueue(2, 10000),
+	}
+
+	p := &pd{
+		mainque: mainQueue,
+		msgHandler: msgHandler{
+			handles:     map[reflect.Type]msgHandle{},
+			makeHttpReq: map[string]func(*http.Request) (*snet.Message, error){},
+		},
+		flygateMgr: flygateMgr{
+			flygateMap: map[string]*flygate{},
+		},
+		config:    config,
+		service:   self.ClientURL,
+		cluster:   cluster,
+		raftIDGen: idutil.NewGenerator(nodeID, time.Now()),
+		Deployment: Deployment{
+			Sets: map[int]*Set{},
+		},
+		DbMetaMgr: DbMetaMgr{
+			opQueue: list.New(),
+		},
+		SlotTransferMgr: SlotTransferMgr{
+			Transactions: map[int]*TransSlotTransfer{},
+			Plan:         map[int]*SlotTransferPlan{},
+			FreeSlots:    map[int]bool{},
+		},
+	}
+
+	p.initMsgHandler()
+
+	p.mutilRaft = raft.NewMutilRaft()
+
+	p.rn, err = raft.NewInstance(nodeID, cluster, join, p.mutilRaft, p.mainque, peers, raft.RaftInstanceOption{
+		Logdir:        p.config.RaftLogDir,
+		RaftLogPrefix: p.config.RaftLogPrefix,
+	})
+
+	if nil != err {
+		return nil, err
+	}
+
+	if err = p.startUdpService(); nil != err {
+		p.rn.Stop()
+		return nil, err
+	}
+
+	p.startHttpService()
+
+	GetSugar().Infof("mutilRaft serve on:%s", self.URL)
+
+	go p.mutilRaft.Serve(self.URL)
+
+	p.wait.Add(1)
+	go p.serve()
+
+	return p, nil
 }

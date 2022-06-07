@@ -112,7 +112,7 @@ func (sc *sceneListKv) getKvStatus(cli *consoleHttp.Client, g *gocui.Gui) {
 						if st.StoreID == nodeSt.StoreID {
 							replica := &replica{
 								node:        int(n.NodeID),
-								lastReport:  n.LastReportTime,
+								lastReport:  nodeSt.LastReport,
 								metaVersion: nodeSt.MetaVersion,
 								halt:        nodeSt.Halt,
 								progress:    nodeSt.Progress,
@@ -123,21 +123,15 @@ func (sc *sceneListKv) getKvStatus(cli *consoleHttp.Client, g *gocui.Gui) {
 							if nodeSt.IsLeader {
 								replica.status = "leader"
 							} else {
-								switch nodeSt.Type {
+								switch nodeSt.StoreType {
 								case int32(flypd.VoterStore):
-									if nodeSt.Value == int32(flypd.FlyKvCommited) {
-										replica.status = "voter"
-									} else {
-										replica.status = "voter(uncommited)"
-									}
-								case int32(flypd.RemoveStore):
+									replica.status = "voter"
+								case int32(flypd.RemovingStore):
 									replica.status = "removing"
 								case int32(flypd.LearnerStore):
-									if nodeSt.Value == int32(flypd.FlyKvCommited) {
-										replica.status = "learner"
-									} else {
-										replica.status = "learner(uncommited)"
-									}
+									replica.status = "learner"
+								case int32(flypd.AddLearnerStore):
+									replica.status = "learner(uncommited)"
 								}
 							}
 							store.replica = append(store.replica, replica)

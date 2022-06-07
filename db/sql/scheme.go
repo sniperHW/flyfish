@@ -140,6 +140,7 @@ func getTableSchemePgSql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
 	if nil != err {
 		return nil, err
 	}
+	defer rows.Close()
 
 	var column_name string
 	var data_type string
@@ -348,6 +349,7 @@ func getTableSchemeMySql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
 	if nil != err {
 		return nil, err
 	}
+	defer rows.Close()
 
 	var column_name string
 	var data_type string
@@ -511,6 +513,7 @@ func clearTableData(dbc *sqlx.DB, table_real_name string) error {
 	return err
 }
 
+/*
 func createBloomFilterMysql(dbc *sqlx.DB) error {
 	str := "CREATE TABLE __bloomfilter__ (`slot` INT NOT NULL,`filter` BLOB,PRIMARY KEY (`slot`))\nENGINE=InnoDB\nDEFAULT CHARSET=gb2312\nCOLLATE=gb2312_chinese_ci;"
 	_, err := dbc.Exec(str)
@@ -584,3 +587,4 @@ func ClearBloomFilter(dbc *sqlx.DB) error {
 	_, err := dbc.Exec("delete from __bloomfilter__;")
 	return err
 }
+*/

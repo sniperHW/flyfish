@@ -1,6 +1,7 @@
 package flypd
 
 import (
+	"container/list"
 	"errors"
 	"fmt"
 	"github.com/sniperHW/flyfish/db"
@@ -16,22 +17,106 @@ type metaOpration struct {
 	m       *snet.Message
 }
 
+type DbMetaMgr struct {
+	DbMeta      db.DbDef
+	dbMetaBytes []byte
+	opQueue     *list.List
+	locked      bool
+}
+
+func (mgr *DbMetaMgr) clearOpQueue() {
+	mgr.locked = false
+	mgr.opQueue = list.New()
+}
+
+func (mgr *DbMetaMgr) lock() {
+	if !mgr.locked {
+		mgr.locked = true
+	}
+}
+
+func (mgr *DbMetaMgr) unlock(pd *pd) {
+	if mgr.locked {
+		mgr.locked = false
+		mgr.doOperation(pd)
+	}
+}
+
+func (mgr *DbMetaMgr) pushOp(pd *pd, op *metaOpration) {
+	mgr.opQueue.PushBack(op)
+	mgr.doOperation(pd)
+}
+
+func (mgr *DbMetaMgr) doOperation(pd *pd) {
+	if mgr.locked {
+		return
+	}
+
+	for front := mgr.opQueue.Front(); nil != front; front = mgr.opQueue.Front() {
+
+		op := mgr.opQueue.Remove(front).(*metaOpration)
+
+		var fn func(replyer replyer, m *snet.Message) bool
+		switch op.m.Msg.(type) {
+		case *sproto.MetaAddTable:
+			fn = pd.onMetaAddTable
+		case *sproto.MetaAddFields:
+			fn = pd.onMetaAddFields
+		case *sproto.MetaRemoveTable:
+			fn = pd.onMetaRemoveTable
+		case *sproto.MetaRemoveFields:
+			fn = pd.onMetaRemoveFields
+		default:
+		}
+
+		if nil != fn && fn(op.replyer, op.m) {
+			mgr.lock()
+			return
+		}
+	}
+}
+
 func (p *pd) onGetMeta(replyer replyer, m *snet.Message) {
 	replyer.reply(snet.MakeMessage(m.Context,
 		&sproto.GetMetaResp{
-			Version: p.pState.Meta.Version,
-			Meta:    p.pState.MetaBytes,
+			Version: p.DbMetaMgr.DbMeta.Version,
+			Meta:    p.DbMetaMgr.dbMetaBytes,
 		}))
+}
+
+type ProposalInitMeta struct {
+	proposalBase
+	pd      *pd
+	MetaDef *db.DbDef
+}
+
+func (p *ProposalInitMeta) Serilize(b []byte) []byte {
+	return serilizeProposal(b, proposalInitMeta, p)
+}
+
+func (p *ProposalInitMeta) OnError(err error) {
+	p.pd.mainque.AppendHighestPriotiryItem(func() {
+		p.pd.DbMetaMgr.unlock(p.pd)
+	})
+}
+
+func (p *ProposalInitMeta) apply(pd *pd) {
+	pd.DbMetaMgr.DbMeta = *p.MetaDef
+	pd.DbMetaMgr.dbMetaBytes, _ = p.MetaDef.ToJson()
+	GetSugar().Infof("ProposalInitMeta apply version:%d", pd.DbMetaMgr.DbMeta.Version)
+	pd.DbMetaMgr.unlock(pd)
 }
 
 func (p *pd) loadInitMeta() {
 	GetSugar().Infof("loadInitMeta:%s", p.config.InitMetaPath)
+
 	dbc, err := sql.SqlOpen(p.config.DBConfig.DBType, p.config.DBConfig.Host, p.config.DBConfig.Port, p.config.DBConfig.DB, p.config.DBConfig.User, p.config.DBConfig.Password)
 	defer dbc.Close()
 	if nil != err {
 		GetSugar().Panic(err)
 	}
 
+	p.DbMetaMgr.lock()
 	if "" != p.config.InitMetaPath {
 		f, err := os.Open(p.config.InitMetaPath)
 		if nil == err {
@@ -53,12 +138,14 @@ func (p *pd) loadInitMeta() {
 				GetSugar().Panic(err)
 			}
 
+			def.Version = 1
+
 			for _, t := range def.TableDefs {
 				tb, err := sql.GetTableScheme(dbc, p.config.DBConfig.DBType, fmt.Sprintf("%s_%d", t.Name, t.DbVersion))
 				if nil != err {
 					GetSugar().Panic(err)
 				} else if nil == tb {
-					t.Version++
+					t.Version = 1
 					//表不存在
 					err = sql.CreateTables(dbc, p.config.DBConfig.DBType, t)
 					if nil != err {
@@ -97,45 +184,19 @@ func (p *pd) loadInitMeta() {
 				}
 			}
 
-			def.Version++
-
-			p.metaUpdateQueue.PushBack(&metaOpration{})
-
 			p.issueProposal(&ProposalInitMeta{
 				MetaDef: def,
 				pd:      p,
 			})
 		}
+	} else {
+		p.issueProposal(&ProposalInitMeta{
+			MetaDef: &db.DbDef{
+				Version: 1,
+			},
+			pd: p,
+		})
 	}
-}
-
-type ProposalInitMeta struct {
-	proposalBase
-	pd      *pd
-	MetaDef *db.DbDef
-}
-
-func (p *ProposalInitMeta) Serilize(b []byte) []byte {
-	return serilizeProposal(b, proposalInitMeta, p)
-}
-
-func (p *ProposalInitMeta) OnError(err error) {
-	p.pd.mainque.AppendHighestPriotiryItem(p.pd.onProposalUpdateMetaReply)
-}
-
-func (p *ProposalInitMeta) apply(pd *pd) {
-	pd.pState.Meta = *p.MetaDef
-	pd.pState.MetaBytes, _ = p.MetaDef.ToJson()
-	GetSugar().Infof("ProposalInitMeta apply version:%d", pd.pState.Meta.Version)
-
-	//for _, v := range pd.pState.Meta.TableDefs {
-	//	GetSugar().Infof("ProposalInitMeta apply tab:%s version:%d", v.Name, v.Version)
-	//}
-
-	if pd.isLeader() {
-		pd.onProposalUpdateMetaReply()
-	}
-
 }
 
 type MetaUpdateType int
@@ -158,7 +219,9 @@ func (p *ProposalUpdateMeta) OnError(err error) {
 	if nil != p.reply {
 		p.reply(err)
 	}
-	p.pd.mainque.AppendHighestPriotiryItem(p.pd.onProposalUpdateMetaReply)
+	p.pd.mainque.AppendHighestPriotiryItem(func() {
+		p.pd.DbMetaMgr.unlock(p.pd)
+	})
 }
 
 func (p *ProposalUpdateMeta) Serilize(b []byte) []byte {
@@ -166,7 +229,7 @@ func (p *ProposalUpdateMeta) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalUpdateMeta) apply(pd *pd) {
-	def := &pd.pState.Meta
+	def := &pd.DbMetaMgr.DbMeta
 	i := 0
 
 	if p.UpdateType != MetaAddTable {
@@ -198,7 +261,7 @@ func (p *ProposalUpdateMeta) apply(pd *pd) {
 		}
 	}
 
-	pd.pState.MetaBytes, _ = def.ToJson()
+	pd.DbMetaMgr.dbMetaBytes, _ = def.ToJson()
 
 	if pd.isLeader() {
 
@@ -206,32 +269,25 @@ func (p *ProposalUpdateMeta) apply(pd *pd) {
 			p.reply(nil)
 		}
 
-		p.pd.onProposalUpdateMetaReply()
-
 		//notify all store leader
-		for _, set := range pd.pState.deployment.sets {
-			for _, node := range set.nodes {
-				for storeID, store := range node.store {
-					if store.isLead {
-						addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.host, node.servicePort))
+		for _, set := range pd.Deployment.Sets {
+			for _, node := range set.Nodes {
+				for storeID, store := range node.Store {
+					if store.isLeader() {
+						addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.Host, node.ServicePort))
 						pd.udp.SendTo(addr, snet.MakeMessage(0,
 							&sproto.NotifyUpdateMeta{
 								Store:   int32(storeID),
-								Version: pd.pState.Meta.Version,
-								Meta:    pd.pState.MetaBytes,
+								Version: pd.DbMetaMgr.DbMeta.Version,
+								Meta:    pd.DbMetaMgr.dbMetaBytes,
 							}))
 					}
 				}
 			}
 		}
-	}
-}
 
-func (p *pd) onProposalUpdateMetaReply() {
-	if p.metaUpdateQueue.Len() > 0 {
-		p.metaUpdateQueue.Remove(p.metaUpdateQueue.Front())
+		pd.DbMetaMgr.unlock(pd)
 	}
-	p.processMetaUpdate()
 }
 
 func (p *pd) onMetaAddTable(replyer replyer, m *snet.Message) bool {
@@ -239,7 +295,7 @@ func (p *pd) onMetaAddTable(replyer replyer, m *snet.Message) bool {
 	var tab *db.TableDef
 	var err error
 
-	def := p.pState.Meta.Clone()
+	def := p.DbMetaMgr.DbMeta.Clone()
 
 	err = func() error {
 
@@ -319,7 +375,7 @@ func (p *pd) onMetaRemoveTable(replyer replyer, m *snet.Message) bool {
 	var tab *db.TableDef
 	var err error
 
-	def := p.pState.Meta.Clone()
+	def := p.DbMetaMgr.DbMeta.Clone()
 
 	err = func() error {
 
@@ -366,7 +422,7 @@ func (p *pd) onMetaAddFields(replyer replyer, m *snet.Message) bool {
 	msg := m.Msg.(*sproto.MetaAddFields)
 	var tab *db.TableDef
 	var err error
-	def := p.pState.Meta.Clone()
+	def := p.DbMetaMgr.DbMeta.Clone()
 	err = func() error {
 		if msg.Version != def.Version {
 			return errors.New("version mismatch")
@@ -447,7 +503,7 @@ func (p *pd) onMetaRemoveFields(replyer replyer, m *snet.Message) bool {
 	var tab *db.TableDef
 	var err error
 
-	def := p.pState.Meta.Clone()
+	def := p.DbMetaMgr.DbMeta.Clone()
 
 	err = func() error {
 
@@ -496,42 +552,11 @@ func (p *pd) onMetaRemoveFields(replyer replyer, m *snet.Message) bool {
 	}
 }
 
-func (p *pd) processMetaUpdate() {
-	if p.metaUpdateQueue.Len() != 1 {
-		return
-	}
-	for p.metaUpdateQueue.Len() > 0 {
-		front := p.metaUpdateQueue.Front()
-		op := front.Value.(*metaOpration)
-		var fn func(replyer replyer, m *snet.Message) bool
-
-		switch op.m.Msg.(type) {
-		case *sproto.MetaAddTable:
-			fn = p.onMetaAddTable
-		case *sproto.MetaAddFields:
-			fn = p.onMetaAddFields
-		case *sproto.MetaRemoveTable:
-			fn = p.onMetaRemoveTable
-		case *sproto.MetaRemoveFields:
-			fn = p.onMetaRemoveFields
-		default:
-		}
-
-		if nil != fn && fn(op.replyer, op.m) {
-			return
-		} else {
-			p.metaUpdateQueue.Remove(p.metaUpdateQueue.Front())
-		}
-
-	}
-}
-
 func (p *pd) onUpdateMetaReq(replyer replyer, m *snet.Message) {
-	p.metaUpdateQueue.PushBack(&metaOpration{
+	p.DbMetaMgr.pushOp(p, &metaOpration{
 		replyer: replyer,
 		m:       m,
 	})
-	p.processMetaUpdate()
 }
 
 func (p *pd) onGetScanTableMeta(replyer replyer, m *snet.Message) {
@@ -540,7 +565,7 @@ func (p *pd) onGetScanTableMeta(replyer replyer, m *snet.Message) {
 
 	var tab *db.TableDef
 
-	for _, v := range p.pState.Meta.TableDefs {
+	for _, v := range p.DbMetaMgr.DbMeta.TableDefs {
 		if v.Name == msg.Table {
 			tab = v
 			break

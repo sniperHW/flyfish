@@ -43,34 +43,20 @@ func (p *pd) registerMsgHandler(msg proto.Message, httpCmd string, handler func(
 	}
 }
 
-func (p *pd) onMsg(replyer replyer, msg *snet.Message) {
-	if h, ok := p.msgHandler.handles[reflect.TypeOf(msg.Msg)]; ok {
-		if p.config.DisableUdpConsole && h.isConsoleMsg {
-			//禁止udp console接口，如果请求来自udp全部
-			if _, ok := replyer.(*udpReplyer); ok {
-				return
-			}
-		}
-		h.h(replyer, msg)
-	}
-}
-
-func buildRaftClusterStr(node *kvnode, storeId int) (raftCluster []string) {
-	for _, n := range node.set.nodes {
-		if v, ok := n.store[storeId]; ok {
-			if v.Type == LearnerStore {
-				if v.Value == FlyKvCommited {
-					raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@learner", n.id, v.RaftID, n.host, n.raftPort, n.host, n.servicePort))
+func buildRaftClusterStr(set *Set, storeId int) (raftCluster []string) {
+	for _, n := range set.Nodes {
+		if v, ok := n.Store[storeId]; ok {
+			switch v.StoreType {
+			case LearnerStore:
+				raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@learner", n.NodeID, v.RaftID, n.Host, n.RaftPort, n.Host, n.ServicePort))
+			case VoterStore:
+				raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@voter", n.NodeID, v.RaftID, n.Host, n.RaftPort, n.Host, n.ServicePort))
+			case RemovingStore:
+				if v.StoreTypeBeforeRemove == LearnerStore {
+					raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@learner", n.NodeID, v.RaftID, n.Host, n.RaftPort, n.Host, n.ServicePort))
+				} else if v.StoreTypeBeforeRemove == VoterStore {
+					raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@voter", n.NodeID, v.RaftID, n.Host, n.RaftPort, n.Host, n.ServicePort))
 				}
-			} else if v.Type == VoterStore {
-				if v.Value == FlyKvCommited {
-					raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@voter", n.id, v.RaftID, n.host, n.raftPort, n.host, n.servicePort))
-				} else {
-					raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@learner", n.id, v.RaftID, n.host, n.raftPort, n.host, n.servicePort))
-				}
-			} else {
-				//remove uncommited
-				raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@learner", n.id, v.RaftID, n.host, n.raftPort, n.host, n.servicePort))
 			}
 		}
 	}
@@ -78,55 +64,51 @@ func buildRaftClusterStr(node *kvnode, storeId int) (raftCluster []string) {
 }
 
 func (p *pd) onKvnodeBoot(replyer replyer, m *snet.Message) {
-	if 0 == p.pState.Meta.Version {
-		GetSugar().Infof("Meta not set")
-		//meta尚未初始化
+
+	msg := m.Msg.(*sproto.KvnodeBoot)
+	set, node := p.getNode(msg.NodeID)
+	if nil == node {
+		replyer.reply(snet.MakeMessage(m.Context,
+			&sproto.KvnodeBootResp{
+				Ok:     false,
+				Reason: fmt.Sprintf("node:%d not in deployment", msg.NodeID),
+			}))
 		return
-	} else {
-		msg := m.Msg.(*sproto.KvnodeBoot)
-		node := p.getNode(msg.NodeID)
-		if nil == node {
-			replyer.reply(snet.MakeMessage(m.Context,
-				&sproto.KvnodeBootResp{
-					Ok:     false,
-					Reason: fmt.Sprintf("node:%d not in deployment", msg.NodeID),
-				}))
-			return
-		}
-
-		resp := &sproto.KvnodeBootResp{
-			Ok:          true,
-			ServiceHost: node.host,
-			SetID:       int32(node.set.id),
-			ServicePort: int32(node.servicePort),
-			RaftPort:    int32(node.raftPort),
-			Meta:        p.pState.MetaBytes,
-		}
-
-		for storeId, st := range node.store {
-			if st.Type == LearnerStore && st.Value == FlyKvUnCommit {
-				continue
-			}
-
-			if raftCluster := buildRaftClusterStr(node, storeId); len(raftCluster) > 0 {
-				GetSugar().Infof("%v", raftCluster)
-				s := &sproto.StoreInfo{
-					Id:          int32(storeId),
-					Slots:       node.set.stores[storeId].slots.ToJson(),
-					RaftCluster: strings.Join(raftCluster, ","),
-					RaftID:      st.RaftID,
-				}
-				resp.Stores = append(resp.Stores, s)
-			}
-		}
-
-		replyer.reply(snet.MakeMessage(m.Context, resp))
 	}
+
+	resp := &sproto.KvnodeBootResp{
+		Ok:          true,
+		ServiceHost: node.Host,
+		SetID:       int32(set.SetID),
+		ServicePort: int32(node.ServicePort),
+		RaftPort:    int32(node.RaftPort),
+		Meta:        p.DbMetaMgr.dbMetaBytes,
+	}
+
+	for storeId, st := range node.Store {
+		if st.StoreType == AddLearnerStore {
+			continue
+		}
+
+		if raftCluster := buildRaftClusterStr(set, storeId); len(raftCluster) > 0 {
+			GetSugar().Infof("%v", raftCluster)
+			s := &sproto.StoreInfo{
+				Id:          int32(storeId),
+				Slots:       set.Stores[storeId].Slots,
+				RaftCluster: strings.Join(raftCluster, ","),
+				RaftID:      st.RaftID,
+			}
+			resp.Stores = append(resp.Stores, s)
+		}
+	}
+
+	replyer.reply(snet.MakeMessage(m.Context, resp))
+
 }
 
 func (p *pd) onQueryRouteInfo(replyer replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.QueryRouteInfo)
-	resp := p.pState.deployment.queryRouteInfo(msg)
+	resp := p.Deployment.queryRouteInfo(msg)
 	replyer.reply(snet.MakeMessage(m.Context, resp))
 }
 
@@ -144,7 +126,7 @@ func (p *pd) onGetFlyGateList(replyer replyer, m *snet.Message) {
 
 func (p *pd) onFlyGateHeartBeat(replyer replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.FlyGateHeartBeat)
-	p.flygateMgr.onHeartBeat(msg.GateService, int(msg.MsgPerSecond))
+	p.flygateMgr.onHeartBeat(p, msg.GateService, int(msg.MsgPerSecond))
 }
 
 func (p *pd) changeFlyGate(replyer replyer, m *snet.Message) {
@@ -189,51 +171,50 @@ func (p *pd) changeFlyGate(replyer replyer, m *snet.Message) {
 func (p *pd) onGetKvStatus(replyer replyer, m *snet.Message) {
 	resp := &sproto.GetKvStatusResp{
 		Now:               time.Now().Unix(),
-		FreeSlotCount:     int32(len(p.pState.SlotTransferMgr.FreeSlots)),
-		TransferSlotCount: int32(len(p.pState.SlotTransferMgr.Transactions) + len(p.pState.SlotTransferMgr.Plan)),
+		FreeSlotCount:     int32(len(p.SlotTransferMgr.FreeSlots)),
+		TransferSlotCount: int32(len(p.SlotTransferMgr.Transactions) + len(p.SlotTransferMgr.Plan)),
 	}
 
-	for _, v := range p.pState.deployment.sets {
+	for _, set := range p.Deployment.Sets {
 		s := &sproto.SetStatus{
-			SetID:     int32(v.id),
-			MarkClear: v.markClear,
+			SetID:     int32(set.SetID),
+			MarkClear: set.MarkClear,
 		}
 		kvcount := map[int]int{}
 		metaVersion := map[int]int64{}
-		for _, vv := range v.nodes {
+		for _, node := range set.Nodes {
 			n := &sproto.KvnodeStatus{
-				NodeID:         int32(vv.id),
-				LastReportTime: vv.lastReportTime,
-				Service:        fmt.Sprintf("%s:%d", vv.host, vv.servicePort),
+				NodeID:  int32(node.NodeID),
+				Service: fmt.Sprintf("%s:%d", node.Host, node.ServicePort),
 			}
 
-			for k, vvv := range vv.store {
+			for k, store := range node.Store {
 				n.Stores = append(n.Stores, &sproto.KvnodeStoreStatus{
 					StoreID:     int32(k),
-					Type:        int32(vvv.Type),
-					Value:       int32(vvv.Value),
-					IsLeader:    vvv.isLeader(),
-					Progress:    vvv.progress,
-					Halt:        vvv.halt,
-					MetaVersion: vvv.metaVersion,
-					RaftID:      vvv.RaftID,
+					StoreType:   int32(store.StoreType),
+					IsLeader:    store.isLeader(),
+					Progress:    store.progress,
+					Halt:        store.halt,
+					MetaVersion: store.metaVersion,
+					RaftID:      store.RaftID,
+					LastReport:  store.lastReport.Unix(),
 				})
 
-				if vvv.isLeader() {
-					kvcount[k] = vvv.kvcount
-					metaVersion[k] = vvv.metaVersion
+				if store.isLeader() {
+					kvcount[k] = store.kvcount
+					metaVersion[k] = store.metaVersion
 				}
 			}
 
 			s.Nodes = append(s.Nodes, n)
 		}
 
-		for _, vv := range v.stores {
+		for _, store := range set.Stores {
 			st := &sproto.StoreStatus{
-				StoreID:     int32(vv.id),
-				Slotcount:   int32(len(vv.slots.GetOpenBits())),
-				Kvcount:     int32(kvcount[vv.id]),
-				MetaVersion: metaVersion[vv.id],
+				StoreID:     int32(store.StoreID),
+				Slotcount:   int32(len(store.slots.GetOpenBits())),
+				Kvcount:     int32(kvcount[store.StoreID]),
+				MetaVersion: metaVersion[store.StoreID],
 			}
 			s.Stores = append(s.Stores, st)
 			s.Kvcount += st.Kvcount
@@ -247,21 +228,19 @@ func (p *pd) onGetKvStatus(replyer replyer, m *snet.Message) {
 
 func (p *pd) onKvnodeReportStatus(replyer replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.KvnodeReportStatus)
-	set := p.pState.deployment.sets[int(msg.SetID)]
+	set := p.Deployment.Sets[int(msg.SetID)]
 	if nil == set {
 		return
 	}
-	node := set.nodes[int(msg.NodeID)]
+	node := set.Nodes[int(msg.NodeID)]
 	if nil == node {
 		return
 	}
 
 	now := time.Now()
 
-	node.lastReportTime = now.Unix()
-
 	for _, v := range msg.Stores {
-		store := node.store[int(v.StoreID)]
+		store := node.Store[int(v.StoreID)]
 		if nil == store || store.RaftID != v.RaftID {
 			return
 		}
@@ -273,13 +252,13 @@ func (p *pd) onKvnodeReportStatus(replyer replyer, m *snet.Message) {
 		store.halt = v.Halt
 		store.metaVersion = v.MetaVersion
 
-		if v.Isleader && v.MetaVersion != p.pState.Meta.Version {
-			addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.host, node.servicePort))
+		if v.Isleader && v.MetaVersion != p.DbMetaMgr.DbMeta.Version {
+			addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.Host, node.ServicePort))
 			p.udp.SendTo(addr, snet.MakeMessage(0,
 				&sproto.NotifyUpdateMeta{
 					Store:   int32(v.StoreID),
-					Version: p.pState.Meta.Version,
-					Meta:    p.pState.MetaBytes,
+					Version: p.DbMetaMgr.DbMeta.Version,
+					Meta:    p.DbMetaMgr.dbMetaBytes,
 				}))
 		}
 	}
@@ -297,8 +276,8 @@ func (p *pd) onKvnodeReportStatus(replyer replyer, m *snet.Message) {
 
 	//检查是否有遗漏的store,有的通知kvnode加载
 	var notify *sproto.NotifyMissingStores
-	for storeId, st := range node.store {
-		if st.Type == LearnerStore && st.Value == FlyKvUnCommit {
+	for storeId, st := range node.Store {
+		if st.StoreType == AddLearnerStore {
 			continue
 		}
 
@@ -308,14 +287,14 @@ func (p *pd) onKvnodeReportStatus(replyer replyer, m *snet.Message) {
 
 			if nil == notify {
 				notify = &sproto.NotifyMissingStores{
-					Meta: p.pState.MetaBytes,
+					Meta: p.DbMetaMgr.dbMetaBytes,
 				}
 			}
 
-			if raftCluster := buildRaftClusterStr(node, storeId); len(raftCluster) > 0 {
+			if raftCluster := buildRaftClusterStr(set, storeId); len(raftCluster) > 0 {
 				s := &sproto.StoreInfo{
 					Id:          int32(storeId),
-					Slots:       node.set.stores[storeId].slots.ToJson(),
+					Slots:       set.Stores[storeId].Slots,
 					RaftCluster: strings.Join(raftCluster, ","),
 					RaftID:      st.RaftID,
 				}
@@ -325,7 +304,7 @@ func (p *pd) onKvnodeReportStatus(replyer replyer, m *snet.Message) {
 	}
 
 	if nil != notify {
-		addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.host, node.servicePort))
+		addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.Host, node.ServicePort))
 		p.udp.SendTo(addr, snet.MakeMessage(0, notify))
 	}
 
@@ -366,47 +345,10 @@ func (p *pd) startUdpService() error {
 	return nil
 }
 
-type ProposalConfChange struct {
-	confChangeType raftpb.ConfChangeType
-	url            string //for add
-	clientUrl      string
-	nodeID         uint64
-	processID      uint16
-	reply          func(error)
-}
-
-func (this *ProposalConfChange) GetType() raftpb.ConfChangeType {
-	return this.confChangeType
-}
-
-func (this *ProposalConfChange) GetURL() string {
-	return this.url
-}
-
-func (this *ProposalConfChange) GetClientURL() string {
-	return this.clientUrl
-}
-
-func (this *ProposalConfChange) GetNodeID() uint64 {
-	return this.nodeID
-}
-
-func (this *ProposalConfChange) GetProcessID() uint16 {
-	return this.processID
-}
-
-func (this *ProposalConfChange) IsPromote() bool {
-	return false
-}
-
-func (this *ProposalConfChange) OnError(err error) {
-	this.reply(err)
-}
-
 func (p *pd) onAddPdNode(replyer replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.AddPdNode)
 
-	raftID := p.RaftIDGen.Next()
+	raftID := p.raftIDGen.Next()
 
 	reply := func(err error) {
 
@@ -485,7 +427,7 @@ func (p *pd) onListPdMembers(replyer replyer, m *snet.Message) {
 
 func (p *pd) onClearDBData(replyer replyer, m *snet.Message) {
 	resp := &sproto.ClearDBDataResp{Ok: true}
-	meta, err := sql.CreateDbMeta(&p.pState.Meta)
+	meta, err := sql.CreateDbMeta(&p.DbMetaMgr.DbMeta)
 	if nil == err {
 		dbc, err := sql.SqlOpen(p.config.DBConfig.DBType, p.config.DBConfig.Host, p.config.DBConfig.Port, p.config.DBConfig.DB, p.config.DBConfig.User, p.config.DBConfig.Password)
 		if nil == err {
@@ -513,11 +455,11 @@ func (p *pd) onClearDBData(replyer replyer, m *snet.Message) {
 }
 
 func (p *pd) onDrainKv(replyer replyer, m *snet.Message) {
-	for _, set := range p.pState.deployment.sets {
-		for _, node := range set.nodes {
-			for id, store := range node.store {
+	for _, set := range p.Deployment.Sets {
+		for _, node := range set.Nodes {
+			for id, store := range node.Store {
 				if store.isLeader() {
-					addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.host, node.servicePort))
+					addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.Host, node.ServicePort))
 					p.udp.SendTo(addr, snet.MakeMessage(0, &sproto.DrainStore{
 						Store: int32(id),
 					}))
@@ -532,7 +474,7 @@ func (p *pd) onDrainKv(replyer replyer, m *snet.Message) {
 
 func (p *pd) onSuspendStore(replyer replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.CpSuspendStore)
-	set := p.pState.deployment.sets[int(msg.SetID)]
+	set := p.Deployment.Sets[int(msg.SetID)]
 	if nil == set {
 		replyer.reply(snet.MakeMessage(m.Context, &sproto.CpSuspendStoreResp{
 			Ok:     false,
@@ -541,10 +483,10 @@ func (p *pd) onSuspendStore(replyer replyer, m *snet.Message) {
 		return
 	}
 
-	for _, node := range set.nodes {
-		for storeId, store := range node.store {
+	for _, node := range set.Nodes {
+		for storeId, store := range node.Store {
 			if storeId == int(msg.Store) && store.isLeader() && !store.halt {
-				addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.host, node.servicePort))
+				addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.Host, node.ServicePort))
 				p.udp.SendTo(addr, snet.MakeMessage(0, &sproto.SuspendStore{
 					Store: int32(storeId),
 				}))
@@ -560,7 +502,7 @@ func (p *pd) onSuspendStore(replyer replyer, m *snet.Message) {
 
 func (p *pd) onResumeStore(replyer replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.CpResumeStore)
-	set := p.pState.deployment.sets[int(msg.SetID)]
+	set := p.Deployment.Sets[int(msg.SetID)]
 	if nil == set {
 		replyer.reply(snet.MakeMessage(m.Context, &sproto.CpResumeStoreResp{
 			Ok:     false,
@@ -569,10 +511,10 @@ func (p *pd) onResumeStore(replyer replyer, m *snet.Message) {
 		return
 	}
 
-	for _, node := range set.nodes {
-		for storeId, store := range node.store {
+	for _, node := range set.Nodes {
+		for storeId, store := range node.Store {
 			if storeId == int(msg.Store) && store.isLeader() && store.halt {
-				addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.host, node.servicePort))
+				addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.Host, node.ServicePort))
 				p.udp.SendTo(addr, snet.MakeMessage(0, &sproto.ResumeStore{
 					Store: int32(storeId),
 				}))
@@ -587,17 +529,17 @@ func (p *pd) onResumeStore(replyer replyer, m *snet.Message) {
 
 func (p *pd) onGetDeployment(replyer replyer, m *snet.Message) {
 	resp := &sproto.GetDeploymentResp{}
-	for _, v := range p.pState.deployment.sets {
+	for _, v := range p.Deployment.Sets {
 		s := &sproto.Set{
-			Id: int32(v.id),
+			Id: int32(v.SetID),
 		}
 
-		for _, vv := range v.nodes {
+		for _, vv := range v.Nodes {
 			s.Nodes = append(s.Nodes, &sproto.Node{
-				Id:          int32(vv.id),
-				Host:        vv.host,
-				ServicePort: int32(vv.servicePort),
-				RaftPort:    int32(vv.raftPort),
+				Id:          int32(vv.NodeID),
+				Host:        vv.Host,
+				ServicePort: int32(vv.ServicePort),
+				RaftPort:    int32(vv.RaftPort),
 			})
 		}
 

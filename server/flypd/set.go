@@ -2,6 +2,7 @@ package flypd
 
 import (
 	"errors"
+	"fmt"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
@@ -10,7 +11,7 @@ import (
 
 type ProposalAddSet struct {
 	proposalBase
-	Set SetJson
+	Set *Set
 }
 
 func (p *ProposalAddSet) Serilize(b []byte) []byte {
@@ -20,17 +21,49 @@ func (p *ProposalAddSet) Serilize(b []byte) []byte {
 func (p *ProposalAddSet) apply(pd *pd) {
 	GetSugar().Infof("onAddSet apply")
 	err := func() error {
-		deploymentJson := pd.pState.deployment.toDeploymentJson()
-		deploymentJson.Version++
-		p.Set.Version = deploymentJson.Version
-		deploymentJson.Sets = append(deploymentJson.Sets, p.Set)
-		if err := deploymentJson.check(); nil != err {
-			return err
-		} else {
-			pd.pState.deployment.loadFromDeploymentJson(&deploymentJson)
-			pd.slotBalance()
-			return nil
+		if _, ok := pd.Deployment.Sets[p.Set.SetID]; ok {
+			return fmt.Errorf("duplicate set %d", p.Set.SetID)
 		}
+
+		nodes := map[int]bool{}
+		services := map[string]bool{}
+		raftServices := map[string]bool{}
+
+		for _, set := range pd.Deployment.Sets {
+			for _, node := range set.Nodes {
+				nodes[node.NodeID] = true
+				services[fmt.Sprintf("%s:%d", node.Host, node.ServicePort)] = true
+				raftServices[fmt.Sprintf("%s:%d", node.Host, node.RaftPort)] = true
+			}
+		}
+
+		for _, v := range p.Set.Nodes {
+			if _, ok := nodes[v.NodeID]; ok {
+				return fmt.Errorf("duplicate node %d", v.NodeID)
+			}
+
+			if _, ok := services[fmt.Sprintf("%s:%d", v.Host, v.ServicePort)]; ok {
+				return fmt.Errorf("duplicate service %s:%d", v.Host, v.ServicePort)
+			}
+
+			if _, ok := raftServices[fmt.Sprintf("%s:%d", v.Host, v.RaftPort)]; ok {
+				return fmt.Errorf("duplicate raftService %s:%d", v.Host, v.RaftPort)
+			}
+		}
+
+		for i := 0; i < StorePerSet; i++ {
+			slots := bitmap.New(slot.SlotCount)
+			p.Set.Stores[i+1] = &Store{
+				StoreID: i + 1,
+				Slots:   slots.ToJson(),
+				slots:   slots,
+			}
+		}
+
+		pd.Deployment.Sets[p.Set.SetID] = p.Set
+		pd.Deployment.Version++
+		pd.slotBalance()
+		return nil
 	}()
 
 	GetSugar().Infof("onAddSet apply %v", err)
@@ -50,15 +83,14 @@ func (p *ProposalRemSet) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalRemSet) apply(pd *pd) {
-
 	var err error
-	s, ok := pd.pState.deployment.sets[int(p.SetID)]
+	set, ok := pd.Deployment.Sets[int(p.SetID)]
 	if !ok {
 		err = errors.New("set not exists")
 	} else {
-		delete(pd.pState.deployment.sets, p.SetID)
-		pd.pState.deployment.version++
-		pd.pState.SlotTransferMgr.onSetRemove(pd, s)
+		delete(pd.Deployment.Sets, p.SetID)
+		pd.Deployment.Version++
+		pd.SlotTransferMgr.onSetRemove(pd, set)
 	}
 
 	if nil != p.reply {
@@ -76,30 +108,25 @@ func (p *ProposalSetMarkClear) Serilize(b []byte) []byte {
 }
 
 func (p *ProposalSetMarkClear) apply(pd *pd) {
-
-	var ok bool
-	var s *set
 	err := func() error {
-		s, ok = pd.pState.deployment.sets[int(p.SetID)]
+		s, ok := pd.Deployment.Sets[int(p.SetID)]
 		if !ok {
 			return errors.New("set not exists")
 		}
 
-		if s.markClear {
+		if s.MarkClear {
 			return errors.New("already mark clear")
 		}
 
-		if len(pd.pState.deployment.sets) == 1 {
+		if len(pd.Deployment.Sets) == 1 {
 			return errors.New("can't mark clear the only set")
 		}
 
-		return nil
-	}()
-
-	if nil == err {
-		s.markClear = true
+		s.MarkClear = true
 		pd.slotBalance()
-	}
+		return nil
+
+	}()
 
 	if nil != p.reply {
 		p.reply(err)
@@ -108,123 +135,57 @@ func (p *ProposalSetMarkClear) apply(pd *pd) {
 
 func (p *pd) onRemSet(replyer replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.RemSet)
-
-	resp := &sproto.RemSetResp{}
-
-	err := func() error {
-		_, ok := p.pState.deployment.sets[int(msg.SetID)]
-		if !ok {
-			return errors.New("set not exists")
-		}
-		return nil
-	}()
-
-	if nil != err {
-		resp.Ok = false
-		resp.Reason = err.Error()
-		replyer.reply(snet.MakeMessage(m.Context, resp))
-	} else {
-		p.issueProposal(&ProposalRemSet{
-			SetID: int(msg.SetID),
-			proposalBase: proposalBase{
-				reply: p.makeReplyFunc(replyer, m, resp),
-			},
-		})
-	}
+	p.issueProposal(&ProposalRemSet{
+		SetID: int(msg.SetID),
+		proposalBase: proposalBase{
+			reply: p.makeReplyFunc(replyer, m, &sproto.RemSetResp{}),
+		},
+	})
 }
 
 func (p *pd) onSetMarkClear(replyer replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.SetMarkClear)
-
-	resp := &sproto.SetMarkClearResp{}
-
-	err := func() error {
-		s, ok := p.pState.deployment.sets[int(msg.SetID)]
-		if !ok {
-			return errors.New("set not exists")
-		}
-
-		if s.markClear {
-			return errors.New("already mark clear")
-		}
-
-		return nil
-	}()
-
-	if nil == err {
-		p.issueProposal(&ProposalSetMarkClear{
-			SetID: int(msg.SetID),
-			proposalBase: proposalBase{
-				reply: p.makeReplyFunc(replyer, m, resp),
-			},
-		})
-	} else {
-		resp.Ok = false
-		resp.Reason = err.Error()
-		replyer.reply(snet.MakeMessage(m.Context, resp))
-	}
+	p.issueProposal(&ProposalSetMarkClear{
+		SetID: int(msg.SetID),
+		proposalBase: proposalBase{
+			reply: p.makeReplyFunc(replyer, m, &sproto.SetMarkClearResp{}),
+		},
+	})
 }
 
 func (p *pd) onAddSet(replyer replyer, m *snet.Message) {
 	GetSugar().Infof("onAddSet")
 	msg := m.Msg.(*sproto.AddSet)
-	resp := &sproto.AddSetResp{}
 
-	set := SetJson{
-		SetID: int(msg.Set.SetID),
+	set := Set{
+		SetID:  int(msg.Set.SetID),
+		Nodes:  map[int]*KvNode{},
+		Stores: map[int]*Store{},
 	}
 
-	err := func() error {
-		if _, ok := p.pState.deployment.sets[int(msg.Set.SetID)]; ok {
-			return errors.New("set already exists")
+	for _, v := range msg.Set.Nodes {
+		set.Nodes[int(v.NodeID)] = &KvNode{
+			NodeID:      int(v.NodeID),
+			Host:        v.Host,
+			ServicePort: int(v.ServicePort),
+			RaftPort:    int(v.RaftPort),
+			Store:       map[int]*NodeStoreState{},
 		}
+	}
 
-		deploymentJson := p.pState.deployment.toDeploymentJson()
-
-		for _, v := range msg.Set.Nodes {
-			set.KvNodes = append(set.KvNodes, KvNodeJson{
-				NodeID:      int(v.NodeID),
-				Host:        v.Host,
-				ServicePort: int(v.ServicePort),
-				RaftPort:    int(v.RaftPort),
-				Store:       map[int]*FlyKvStoreState{},
-			})
-		}
-
-		for i := 0; i < StorePerSet; i++ {
-			set.Stores = append(set.Stores, StoreJson{
-				StoreID: i + 1,
-				Slots:   bitmap.New(slot.SlotCount).ToJson(),
-			})
-		}
-
-		for i, _ := range set.KvNodes {
-			for _, vv := range set.Stores {
-				set.KvNodes[i].Store[vv.StoreID] = &FlyKvStoreState{
-					Type:   VoterStore,
-					Value:  FlyKvCommited,
-					RaftID: p.RaftIDGen.Next(),
-				}
+	for i, _ := range set.Nodes {
+		for _, vv := range set.Stores {
+			set.Nodes[i].Store[vv.StoreID] = &NodeStoreState{
+				StoreType: VoterStore,
+				RaftID:    p.raftIDGen.Next(),
 			}
 		}
-
-		deploymentJson.Sets = append(deploymentJson.Sets, set)
-
-		return deploymentJson.check()
-	}()
-
-	if nil != err {
-		GetSugar().Infof("onAddSet %v %v", *msg, err)
-		resp.Ok = false
-		resp.Reason = err.Error()
-		replyer.reply(snet.MakeMessage(m.Context, resp))
-	} else {
-		GetSugar().Infof("onAddSet %v %v", *msg, err)
-		p.issueProposal(&ProposalAddSet{
-			Set: set,
-			proposalBase: proposalBase{
-				reply: p.makeReplyFunc(replyer, m, resp),
-			},
-		})
 	}
+
+	p.issueProposal(&ProposalAddSet{
+		Set: &set,
+		proposalBase: proposalBase{
+			reply: p.makeReplyFunc(replyer, m, &sproto.AddSetResp{}),
+		},
+	})
 }
