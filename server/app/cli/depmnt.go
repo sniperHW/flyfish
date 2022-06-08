@@ -198,6 +198,12 @@ func (sd *sceneDepmnt) makeAddSetReq(v *gocui.View) (*sproto.AddSet, error) {
 	}
 }
 
+func (sd *sceneDepmnt) makeMarkClearReq(setID int32) (req proto.Message, resp proto.Message, err error) {
+	return &sproto.SetMarkClear{
+		SetID: setID,
+	}, &sproto.SetMarkClearResp{}, nil
+}
+
 func (sd *sceneDepmnt) makeAddNodeReq(v *gocui.View) (*sproto.AddNode, error) {
 	if _, s := sd.getSelectedSet(); s == nil {
 		return nil, errors.New("no set selected")
@@ -294,7 +300,11 @@ func (sd *sceneDepmnt) createLayer(gui *gocui.Gui) {
 			v.SetCursor(0, i)
 			v.Clear()
 			for _, s := range sd.sets {
-				fmt.Fprintf(v, "set:%d\n", s.Id)
+				if s.MarkClear {
+					fmt.Fprintf(v, "set:%d (Markclear)\n", s.Id)
+				} else {
+					fmt.Fprintf(v, "set:%d\n", s.Id)
+				}
 			}
 		},
 		OnViewCreate: func(gui *gocui.Gui, v *gocui.View) {
@@ -351,6 +361,41 @@ func (sd *sceneDepmnt) createLayer(gui *gocui.Gui) {
 		return nil
 	})
 
+	remoteCall := func(name string, hint string, req proto.Message, resp proto.Message, err error) {
+		if nil != err {
+			ui.MakeMsg(gui, sd.scene, fmt.Sprintf("depmnt-%s-error", name), err.Error(), func() {
+				sd.scene.Pop(gui)
+			}, nil)
+		} else {
+			ui.MakeMsg(gui, sd.scene, fmt.Sprintf("depmnt-%s-wait-response", name), "Waitting response from server...", nil, nil)
+			go func() {
+				r, err := sd.httpcli.Call(req, resp)
+				gui.Update(func(_ *gocui.Gui) error {
+					sd.scene.Pop(gui)
+					if nil != err {
+						ui.MakeMsg(gui, sd.scene, fmt.Sprintf("depmnt-%s-error", name), err.Error(), func() {
+							sd.scene.Pop(gui)
+						}, nil)
+					} else {
+						vv := reflect.ValueOf(r).Elem()
+						if vv.FieldByName("Ok").Interface().(bool) {
+							ui.MakeMsg(gui, sd.scene, fmt.Sprintf("depmnt-%s-ok", name), "add Ok", func() {
+								for sd.scene.Len() != 1 {
+									sd.scene.Pop(gui)
+								}
+							}, nil)
+						} else {
+							ui.MakeMsg(gui, sd.scene, fmt.Sprintf("depmnt-%s-error", name), vv.FieldByName("Reason").Interface().(string), func() {
+								sd.scene.Pop(gui)
+							}, nil)
+						}
+					}
+					return nil
+				})
+			}()
+		}
+	}
+
 	onCltA := func(_ *gocui.Gui, _ *gocui.View) error {
 		var name string
 		var hint string
@@ -365,37 +410,7 @@ func (sd *sceneDepmnt) createLayer(gui *gocui.Gui) {
 
 		ui.MakeEdit(gui, sd.scene, name, hint, func(editView *gocui.View) {
 			req, resp, err := sd.makeAddReq(editView)
-			if nil != err {
-				ui.MakeMsg(gui, sd.scene, "depmnt-add-error", err.Error(), func() {
-					sd.scene.Pop(gui)
-				}, nil)
-			} else {
-				ui.MakeMsg(gui, sd.scene, "depmnt-add-wait-response", "Waitting response from server...", nil, nil)
-				go func() {
-					r, err := sd.httpcli.Call(req, resp)
-					gui.Update(func(_ *gocui.Gui) error {
-						sd.scene.Pop(gui)
-						if nil != err {
-							ui.MakeMsg(gui, sd.scene, "depmnt-add-error", err.Error(), func() {
-								sd.scene.Pop(gui)
-							}, nil)
-						} else {
-							vv := reflect.ValueOf(r).Elem()
-							if vv.FieldByName("Ok").Interface().(bool) {
-								ui.MakeMsg(gui, sd.scene, "depmnt-add-ok", "add Ok", func() {
-									sd.scene.Pop(gui)
-									sd.scene.Pop(gui)
-								}, nil)
-							} else {
-								ui.MakeMsg(gui, sd.scene, "depmnt-add-error", vv.FieldByName("Reason").Interface().(string), func() {
-									sd.scene.Pop(gui)
-								}, nil)
-							}
-						}
-						return nil
-					})
-				}()
-			}
+			remoteCall("add", hint, req, resp, err)
 		})
 		return nil
 	}
@@ -423,36 +438,7 @@ func (sd *sceneDepmnt) createLayer(gui *gocui.Gui) {
 		ui.MakeMsg(gui, sd.scene, "depmnt-remove-confirm", hint, func() {
 			sd.scene.Pop(gui)
 			req, resp, err := sd.makeRemReq()
-			if nil != err {
-				ui.MakeMsg(gui, sd.scene, "depmnt-rem-error", err.Error(), func() {
-					sd.scene.Pop(gui)
-				}, nil)
-			} else {
-				ui.MakeMsg(gui, sd.scene, "depmnt-rem-wait-response", "Waitting response from server...", nil, nil)
-				go func() {
-					r, err := sd.httpcli.Call(req, resp)
-					gui.Update(func(_ *gocui.Gui) error {
-						sd.scene.Pop(gui)
-						if nil != err {
-							ui.MakeMsg(gui, sd.scene, "depmnt-rem-error", err.Error(), func() {
-								sd.scene.Pop(gui)
-							}, nil)
-						} else {
-							vv := reflect.ValueOf(r).Elem()
-							if vv.FieldByName("Ok").Interface().(bool) {
-								ui.MakeMsg(gui, sd.scene, "depmnt-rem-ok", "remove Ok", func() {
-									sd.scene.Pop(gui)
-								}, nil)
-							} else {
-								ui.MakeMsg(gui, sd.scene, "depmnt-rem-error", vv.FieldByName("Reason").Interface().(string), func() {
-									sd.scene.Pop(gui)
-								}, nil)
-							}
-						}
-						return nil
-					})
-				}()
-			}
+			remoteCall("rem", hint, req, resp, err)
 		}, func() {
 			sd.scene.Pop(gui)
 		})
@@ -462,6 +448,27 @@ func (sd *sceneDepmnt) createLayer(gui *gocui.Gui) {
 
 	viewSets.AddKey('r', onCltR)
 	viewNodes.AddKey('r', onCltR)
+
+	onMarkclear := func(_ *gocui.Gui, _ *gocui.View) error {
+		var hint string
+		var set *sproto.Set
+		if _, set = sd.getSelectedSet(); nil == set {
+			return nil
+		} else {
+			hint = fmt.Sprintf("Do you really want to Markclear set:%d?", set.Id)
+		}
+
+		ui.MakeMsg(gui, sd.scene, "depmnt-markclear-confirm", hint, func() {
+			sd.scene.Pop(gui)
+			req, resp, err := sd.makeMarkClearReq(set.Id)
+			remoteCall("Markclear", hint, req, resp, err)
+		}, func() {
+			sd.scene.Pop(gui)
+		})
+		return nil
+	}
+
+	viewSets.AddKey('c', onMarkclear)
 
 	sd.scene.Push(layer)
 }

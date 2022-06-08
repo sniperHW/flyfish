@@ -526,7 +526,8 @@ message clearCache {
 }
 
 message clearCacheResp {
-  
+  optional bool  ok       = 1;  
+  optional string reason  = 2;   
 }
 
 message suspendKvStore {
@@ -570,7 +571,8 @@ message node {
 
 message set {
   optional int32 id           = 1;
-  repeated node  nodes        = 2;    
+  repeated node  nodes        = 2;
+  optional bool  markClear    = 3;    
 }
 
 message  getDeploymentResp {

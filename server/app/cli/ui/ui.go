@@ -11,8 +11,11 @@ func CenterPrint(width int, s string) string {
 	if len(s) >= width {
 		return s
 	} else {
-		pad := (width-len(s))/2 - 1
-		return fmt.Sprintf("%s%s", strings.Repeat(" ", pad), s)
+		if pad := (width-len(s))/2 - 1; pad > 0 {
+			return fmt.Sprintf("%s%s", strings.Repeat(" ", pad), s)
+		} else {
+			return s
+		}
 	}
 }
 

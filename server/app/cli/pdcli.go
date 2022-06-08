@@ -49,7 +49,7 @@ func main() {
 
 	var mtx sync.Mutex
 	var actived int
-	scenes := []sceneI{newListKv(g), newDepmnt(g, httpcli), newMeta(g, httpcli)}
+	scenes := []sceneI{newListKv(g, httpcli), newDepmnt(g, httpcli), newMeta(g, httpcli)}
 
 	scenes[actived].onActive(g, httpcli)
 

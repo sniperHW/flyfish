@@ -2,13 +2,15 @@ package main
 
 import (
 	"fmt"
+	"github.com/gogo/protobuf/proto"
 	"github.com/jroimartin/gocui"
-	//"github.com/sniperHW/flyfish/logger"
+	"github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/server/app/cli/ansicolor"
 	"github.com/sniperHW/flyfish/server/app/cli/ui"
 	"github.com/sniperHW/flyfish/server/flypd"
 	consoleHttp "github.com/sniperHW/flyfish/server/flypd/console/http"
 	sproto "github.com/sniperHW/flyfish/server/proto"
+	"reflect"
 	"sort"
 	"time"
 )
@@ -33,8 +35,9 @@ type store struct {
 }
 
 type set struct {
-	setID  int
-	stores []*store
+	setID     int
+	markClear bool
+	stores    []*store
 }
 
 type sceneListKv struct {
@@ -45,6 +48,7 @@ type sceneListKv struct {
 	selected            int
 	sets                []*set
 	viewStoreAndreplica []*ui.View
+	httpcli             *consoleHttp.Client
 }
 
 func (sc *sceneListKv) getSelected() (int, *set) {
@@ -62,7 +66,7 @@ func (sc *sceneListKv) getSelected() (int, *set) {
 }
 
 func (sc *sceneListKv) onActive(g *gocui.Gui, httpcli *consoleHttp.Client) {
-	g.Highlight = false
+	g.Highlight = true
 	g.Cursor = false
 	//g.SelFgColor = gocui.ColorDefault
 	sc.getKvStatus(httpcli, g)
@@ -88,7 +92,7 @@ func (sc *sceneListKv) Layout(g *gocui.Gui) error {
 
 func (sc *sceneListKv) help(gui *gocui.Gui, helpMsg string) {
 	if sc.scene.Top().Name != "help" {
-		makeHelp(gui, sc.scene, helpMsg)
+		makeHelp(gui, sc.scene, helpMsg+"C: show control panncel\nEsc: close control panncel")
 	}
 }
 
@@ -98,7 +102,8 @@ func (sc *sceneListKv) getKvStatus(cli *consoleHttp.Client, g *gocui.Gui) {
 		resp := r.(*sproto.GetKvStatusResp)
 		for _, s := range resp.Sets {
 			set := &set{
-				setID: int(s.SetID),
+				setID:     int(s.SetID),
+				markClear: s.MarkClear,
 			}
 
 			for _, st := range s.GetStores() {
@@ -173,6 +178,214 @@ func (sc *sceneListKv) getKvStatus(cli *consoleHttp.Client, g *gocui.Gui) {
 	}
 }
 
+func (sc *sceneListKv) makeControlPannel(gui *gocui.Gui) {
+	maxX, maxY := gui.Size()
+
+	var (
+		width   = 10
+		height  = 7
+		btWidth = 18
+	)
+
+	layer := &ui.Layer{
+		Name: "listkv-control-pannel",
+	}
+
+	btnSuspendKvStore := &ui.View{
+		Name:       "listkv-control-pannel-suspend",
+		SelectAble: true,
+		Option: ui.UIOption{
+			Wrap:      true,
+			Highlight: true,
+			Z:         2,
+		},
+		OutPut: func(v *gocui.View) {
+			v.Clear()
+			fmt.Fprintln(v, ui.CenterPrint(btWidth, "SuspendKvStore"))
+		},
+	}
+
+	btnResumeKvStore := &ui.View{
+		Name:       "listkv-control-pannel-resume",
+		SelectAble: true,
+		Option: ui.UIOption{
+			Wrap:      true,
+			Highlight: true,
+			Z:         2,
+		},
+		OutPut: func(v *gocui.View) {
+			v.Clear()
+			fmt.Fprintln(v, ui.CenterPrint(btWidth, "ResumeKvStore"))
+		},
+	}
+
+	btnClearKvCache := &ui.View{
+		Name:       "listkv-control-pannel-clearcache",
+		SelectAble: true,
+		Option: ui.UIOption{
+			Wrap:      true,
+			Highlight: true,
+			Z:         2,
+		},
+		OutPut: func(v *gocui.View) {
+			v.Clear()
+			fmt.Fprintln(v, ui.CenterPrint(btWidth, "ClearKvCache"))
+		},
+	}
+
+	btnClearDbdata := &ui.View{
+		Name:       "listkv-control-pannel-clear-dbdata",
+		SelectAble: true,
+		Option: ui.UIOption{
+			Wrap:      true,
+			Highlight: true,
+			Z:         2,
+		},
+		OutPut: func(v *gocui.View) {
+			v.Clear()
+			fmt.Fprintln(v, ui.CenterPrint(btWidth, "ClearDbdata"))
+		},
+	}
+
+	boundView := &ui.View{
+		Name:  "listkv-control-pannel",
+		Title: "Control-Pannel",
+		Option: ui.UIOption{
+			Wrap:      true,
+			Highlight: true,
+		},
+	}
+
+	boundView.Option.LeftTopX = (maxX / 2) - width
+	boundView.Option.LeftTopY = (maxY / 2) - height
+	boundView.Option.RightBottomX = (maxX / 2) + width
+	boundView.Option.RightBottomY = (maxY / 2) + height
+
+	btnSuspendKvStore.Option.LeftTopX = boundView.Option.LeftTopX + 1
+	btnSuspendKvStore.Option.LeftTopY = boundView.Option.LeftTopY + 1
+	btnSuspendKvStore.Option.RightBottomX = btnSuspendKvStore.Option.LeftTopX + btWidth
+	btnSuspendKvStore.Option.RightBottomY = btnSuspendKvStore.Option.LeftTopY + 2
+
+	btnResumeKvStore.Option.LeftTopX = boundView.Option.LeftTopX + 1
+	btnResumeKvStore.Option.LeftTopY = btnSuspendKvStore.Option.RightBottomY + 1
+	btnResumeKvStore.Option.RightBottomX = btnResumeKvStore.Option.LeftTopX + btWidth
+	btnResumeKvStore.Option.RightBottomY = btnResumeKvStore.Option.LeftTopY + 2
+
+	btnClearKvCache.Option.LeftTopX = boundView.Option.LeftTopX + 1
+	btnClearKvCache.Option.LeftTopY = btnResumeKvStore.Option.RightBottomY + 1
+	btnClearKvCache.Option.RightBottomX = btnClearKvCache.Option.LeftTopX + btWidth
+	btnClearKvCache.Option.RightBottomY = btnClearKvCache.Option.LeftTopY + 2
+
+	btnClearDbdata.Option.LeftTopX = boundView.Option.LeftTopX + 1
+	btnClearDbdata.Option.LeftTopY = btnClearKvCache.Option.RightBottomY + 1
+	btnClearDbdata.Option.RightBottomX = btnClearDbdata.Option.LeftTopX + btWidth
+	btnClearDbdata.Option.RightBottomY = btnClearDbdata.Option.LeftTopY + 2
+
+	layer.AddView(boundView)
+	layer.AddView(btnSuspendKvStore)
+	layer.AddView(btnResumeKvStore)
+	layer.AddView(btnClearKvCache)
+	layer.AddView(btnClearDbdata)
+	layer.SetActiveByName(btnSuspendKvStore.Name)
+
+	btnSuspendKvStore.AddKey(gocui.KeyTab, func(g *gocui.Gui, vv *gocui.View) error {
+		layer.ChangeActive()
+		return nil
+	})
+
+	btnSuspendKvStore.AddKey(gocui.KeyEsc, func(g *gocui.Gui, vv *gocui.View) error {
+		sc.scene.Pop(g)
+		return nil
+	})
+
+	btnResumeKvStore.AddKey(gocui.KeyTab, func(g *gocui.Gui, vv *gocui.View) error {
+		layer.ChangeActive()
+		return nil
+	})
+
+	btnResumeKvStore.AddKey(gocui.KeyEsc, func(g *gocui.Gui, vv *gocui.View) error {
+		sc.scene.Pop(g)
+		return nil
+	})
+
+	btnClearKvCache.AddKey(gocui.KeyTab, func(g *gocui.Gui, vv *gocui.View) error {
+		layer.ChangeActive()
+		return nil
+	})
+
+	btnClearKvCache.AddKey(gocui.KeyEsc, func(g *gocui.Gui, vv *gocui.View) error {
+		sc.scene.Pop(g)
+		return nil
+	})
+
+	btnClearDbdata.AddKey(gocui.KeyTab, func(g *gocui.Gui, vv *gocui.View) error {
+		layer.ChangeActive()
+		return nil
+	})
+
+	btnClearDbdata.AddKey(gocui.KeyEsc, func(g *gocui.Gui, vv *gocui.View) error {
+		sc.scene.Pop(g)
+		return nil
+	})
+
+	onBtnEnter := func(name string, makeReq func() (proto.Message, proto.Message), hint string) func(*gocui.Gui, *gocui.View) error {
+		return func(_ *gocui.Gui, _ *gocui.View) error {
+			ui.MakeMsg(gui, sc.scene, fmt.Sprintf("listkv-%s-confirm", name), hint, func() {
+				sc.scene.Pop(gui)
+				req, resp := makeReq()
+
+				ui.MakeMsg(gui, sc.scene, fmt.Sprintf("listkv-%s-wait-response", name), "Waitting response from server...", nil, nil)
+				go func() {
+					r, err := sc.httpcli.Call(req, resp)
+					gui.Update(func(_ *gocui.Gui) error {
+						sc.scene.Pop(gui)
+						if nil != err {
+							ui.MakeMsg(gui, sc.scene, fmt.Sprintf("listkv-%s-error", name), err.Error(), func() {
+								sc.scene.Pop(gui)
+							}, nil)
+						} else {
+							vv := reflect.ValueOf(r).Elem()
+							if vv.FieldByName("Ok").Interface().(bool) {
+								ui.MakeMsg(gui, sc.scene, fmt.Sprintf("listkv-%s-ok", name), "Ok", func() {
+									sc.scene.Pop(gui)
+								}, nil)
+							} else {
+								ui.MakeMsg(gui, sc.scene, fmt.Sprintf("listkv-%s-error", name), vv.FieldByName("Reason").Interface().(string), func() {
+									sc.scene.Pop(gui)
+								}, nil)
+							}
+						}
+						return nil
+					})
+				}()
+			}, func() {
+				sc.scene.Pop(gui)
+			})
+
+			return nil
+		}
+	}
+
+	btnSuspendKvStore.AddKey(gocui.KeyEnter, onBtnEnter("SuspendKvStore", func() (proto.Message, proto.Message) {
+		return &sproto.SuspendKvStore{}, &sproto.SuspendKvStoreResp{}
+	}, "Do you really want to SuspendKvStore?"))
+
+	btnResumeKvStore.AddKey(gocui.KeyEnter, onBtnEnter("ResumeKvStore", func() (proto.Message, proto.Message) {
+		return &sproto.ResumeKvStore{}, &sproto.ResumeKvStoreResp{}
+	}, "Do you really want to ResumeKvStore?"))
+
+	btnClearKvCache.AddKey(gocui.KeyEnter, onBtnEnter("ClearKvCache", func() (proto.Message, proto.Message) {
+		return &sproto.ClearCache{}, &sproto.ClearCacheResp{}
+	}, "Do you really want to btnClearKvCache?"))
+
+	btnClearDbdata.AddKey(gocui.KeyEnter, onBtnEnter("ClearDbdata", func() (proto.Message, proto.Message) {
+		return &sproto.ClearDBData{}, &sproto.ClearDBDataResp{}
+	}, "Do you really want to ClearDbdata?"))
+
+	sc.scene.Push(layer)
+
+}
+
 func (sc *sceneListKv) createLayer(gui *gocui.Gui) {
 	const (
 		kvstatusHight = 2
@@ -205,8 +418,9 @@ func (sc *sceneListKv) createLayer(gui *gocui.Gui) {
 	layer.AddView(viewKvStatus)
 
 	viewSets := &ui.View{
-		Name:  "listkv-sets",
-		Title: "sets",
+		Name:       "listkv-sets",
+		Title:      "sets",
+		SelectAble: true,
 		Option: ui.UIOption{
 			Wrap:         true,
 			Highlight:    true,
@@ -223,7 +437,11 @@ func (sc *sceneListKv) createLayer(gui *gocui.Gui) {
 			}
 			v.Clear()
 			for _, s := range sc.sets {
-				fmt.Fprintf(v, "set:%d\n", s.setID)
+				if s.markClear {
+					fmt.Fprintf(v, "set:%d (Markclear)\n", s.setID)
+				} else {
+					fmt.Fprintf(v, "set:%d\n", s.setID)
+				}
 			}
 		},
 		OnViewCreate: func(gui *gocui.Gui, v *gocui.View) {
@@ -325,12 +543,21 @@ func (sc *sceneListKv) createLayer(gui *gocui.Gui) {
 		}
 	}
 
+	viewSets.AddKey('c', func(gui *gocui.Gui, _ *gocui.View) error {
+		logger.GetSugar().Infof("len:%d", sc.scene.Len())
+		if sc.scene.Len() == 1 {
+			sc.makeControlPannel(gui)
+		}
+		return nil
+	})
+
 	sc.scene.Push(layer)
 }
 
-func newListKv(gui *gocui.Gui) *sceneListKv {
+func newListKv(gui *gocui.Gui, httpcli *consoleHttp.Client) *sceneListKv {
 	s := &sceneListKv{
-		scene: &ui.Scene{Name: "listkv"},
+		scene:   &ui.Scene{Name: "listkv"},
+		httpcli: httpcli,
 	}
 	return s
 }

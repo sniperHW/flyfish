@@ -473,7 +473,7 @@ func (p *pd) onClearCache(replyer replyer, m *snet.Message) {
 		}
 	}
 
-	replyer.reply(snet.MakeMessage(m.Context, &sproto.ClearCacheResp{}))
+	replyer.reply(snet.MakeMessage(m.Context, &sproto.ClearCacheResp{Ok: true}))
 
 }
 
@@ -520,7 +520,8 @@ func (p *pd) onGetDeployment(replyer replyer, m *snet.Message) {
 	resp := &sproto.GetDeploymentResp{}
 	for _, v := range p.Deployment.Sets {
 		s := &sproto.Set{
-			Id: int32(v.SetID),
+			Id:        int32(v.SetID),
+			MarkClear: v.MarkClear,
 		}
 
 		for _, vv := range v.Nodes {
