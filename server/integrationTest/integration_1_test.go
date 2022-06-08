@@ -708,7 +708,7 @@ func TestFlygate(t *testing.T) {
 
 	for {
 		//排空所有kv
-		consoleClient.Call(&sproto.DrainKv{}, &sproto.DrainKvResp{})
+		consoleClient.Call(&sproto.ClearCache{}, &sproto.ClearCacheResp{})
 
 		resp, err = consoleClient.Call(&sproto.GetKvStatus{}, &sproto.GetKvStatusResp{})
 		if nil == err {
@@ -1768,27 +1768,58 @@ func TestSuspendResume(t *testing.T) {
 		}
 	}
 
-	//suspend store1
+	//启动flygate
+	gateConf, _ := flygate.LoadConfigStr(flyGateConfigStr)
+
+	gate1, err := flygate.NewFlyGate(gateConf, "localhost:10110")
+
+	if nil != err {
+		panic(err)
+	}
+
+	for {
+
+		addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
+
+		gate := client.QueryGate([]*net.UDPAddr{addr}, time.Second)
+		if len(gate) > 0 {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
+	c, _ := client.OpenClient(client.ClientConf{PD: []string{"localhost:8110"}})
+
+	for i := 0; i < 100; i++ {
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		name := fmt.Sprintf("sniperHW:%d", i)
+		fields["name"] = name
+		fields["phone"] = []byte("123456789123456789123456789")
+		e := c.Set("users1", name, fields).Exec().ErrCode
+		if nil != e {
+			fmt.Println("set--------------- error:", e)
+		}
+	}
+
 	consoleClient := console.NewClient("localhost:8110")
 
 	fmt.Println("--------------------wait suspend------------------------------")
 
 	for {
-		consoleClient.Call(&sproto.CpSuspendStore{SetID: 1, Store: 1}, &sproto.CpSuspendStoreResp{})
+		consoleClient.Call(&sproto.SuspendKvStore{}, &sproto.SuspendKvStoreResp{})
 		resp, err := consoleClient.Call(&sproto.GetKvStatus{}, &sproto.GetKvStatusResp{})
 		if nil == err {
-			haltStoreCount := 0
-			for _, set := range resp.(*sproto.GetKvStatusResp).Sets {
-				for _, n := range set.Nodes {
-					for _, s := range n.Stores {
-						if s.Halt {
-							haltStoreCount++
+			if func() bool {
+				for _, set := range resp.(*sproto.GetKvStatusResp).Sets {
+					for _, store := range set.Stores {
+						if !store.Halt {
+							return false
 						}
 					}
 				}
-			}
-
-			if haltStoreCount == 2 {
+				return true
+			}() {
 				break
 			} else {
 				time.Sleep(time.Second)
@@ -1796,6 +1827,30 @@ func TestSuspendResume(t *testing.T) {
 		}
 	}
 
+	fmt.Println("--------------------wait clear cache------------------------------")
+
+	for {
+		consoleClient.Call(&sproto.ClearCache{}, &sproto.ClearCacheResp{})
+		resp, err := consoleClient.Call(&sproto.GetKvStatus{}, &sproto.GetKvStatusResp{})
+		if nil == err {
+			if func() bool {
+				for _, set := range resp.(*sproto.GetKvStatusResp).Sets {
+					for _, store := range set.Stores {
+						if store.Kvcount > 0 {
+							return false
+						}
+					}
+				}
+				return true
+			}() {
+				break
+			} else {
+				time.Sleep(time.Second)
+			}
+		}
+	}
+
+	gate1.Stop()
 	node1.Stop()
 	node2.Stop()
 
@@ -1815,24 +1870,24 @@ func TestSuspendResume(t *testing.T) {
 	fmt.Println("--------------------wait resume------------------------------")
 
 	for {
-		consoleClient.Call(&sproto.CpResumeStore{SetID: 1, Store: 1}, &sproto.CpResumeStoreResp{})
+		consoleClient.Call(&sproto.ResumeKvStore{}, &sproto.ResumeKvStoreResp{})
 		resp, err := consoleClient.Call(&sproto.GetKvStatus{}, &sproto.GetKvStatusResp{})
 		if nil == err {
-			haltStoreCount := 0
-			for _, set := range resp.(*sproto.GetKvStatusResp).Sets {
-				for _, n := range set.Nodes {
-					for _, s := range n.Stores {
-						if s.Halt {
-							haltStoreCount++
+			if nil == err {
+				if func() bool {
+					for _, set := range resp.(*sproto.GetKvStatusResp).Sets {
+						for _, store := range set.Stores {
+							if store.Halt {
+								return false
+							}
 						}
 					}
+					return true
+				}() {
+					break
+				} else {
+					time.Sleep(time.Second)
 				}
-			}
-
-			if haltStoreCount == 0 {
-				break
-			} else {
-				time.Sleep(time.Second)
 			}
 		}
 	}

@@ -674,7 +674,7 @@ func (s *kvstore) onNotifyUpdateMeta(from *net.UDPAddr, msg *sproto.NotifyUpdate
 	}
 }
 
-func (s *kvstore) drain() {
+func (s *kvstore) clearCache() {
 	for v := s.kickableList.Front(); nil != v; v = s.kickableList.Front() {
 		s.kick(v.Value.(*kv))
 	}
@@ -693,8 +693,8 @@ func (s *kvstore) onUdpMsg(from *net.UDPAddr, m *snet.Message) {
 			s.onNotifyUpdateMeta(from, m.Msg.(*sproto.NotifyUpdateMeta), m.Context)
 		case *sproto.IsTransInReady:
 			s.onIsTransInReady(from, m.Msg.(*sproto.IsTransInReady), m.Context)
-		case *sproto.DrainStore:
-			s.drain()
+		case *sproto.ClearStoreCache:
+			s.clearCache()
 		case *sproto.SuspendStore:
 			s.rn.IssueProposal(&SuspendProposal{
 				store: s,

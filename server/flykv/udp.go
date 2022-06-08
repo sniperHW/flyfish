@@ -99,8 +99,8 @@ func (this *kvnode) processUdpMsg(from *net.UDPAddr, m *snet.Message) {
 				store = int(m.Msg.(*sproto.NotifyNodeStoreOp).Store)
 			case *sproto.IsTransInReady:
 				store = int(m.Msg.(*sproto.IsTransInReady).Store)
-			case *sproto.DrainStore:
-				store = int(m.Msg.(*sproto.DrainStore).Store)
+			case *sproto.ClearStoreCache:
+				store = int(m.Msg.(*sproto.ClearStoreCache).Store)
 			case *sproto.TrasnferLeader:
 				store = int(m.Msg.(*sproto.TrasnferLeader).StoreID)
 			case *sproto.SuspendStore:

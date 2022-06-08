@@ -184,6 +184,7 @@ func (p *pd) onGetKvStatus(replyer replyer, m *snet.Message) {
 		}
 		kvcount := map[int]int{}
 		metaVersion := map[int]int64{}
+		halt := map[int]bool{}
 		for _, node := range set.Nodes {
 			n := &sproto.KvnodeStatus{
 				NodeID:  int32(node.NodeID),
@@ -205,6 +206,7 @@ func (p *pd) onGetKvStatus(replyer replyer, m *snet.Message) {
 				if store.isLeader() {
 					kvcount[k] = store.kvcount
 					metaVersion[k] = store.metaVersion
+					halt[k] = store.halt
 				}
 			}
 
@@ -216,6 +218,7 @@ func (p *pd) onGetKvStatus(replyer replyer, m *snet.Message) {
 				StoreID:     int32(store.StoreID),
 				Slotcount:   int32(len(store.slots.GetOpenBits())),
 				Kvcount:     int32(kvcount[store.StoreID]),
+				Halt:        halt[store.StoreID],
 				MetaVersion: metaVersion[store.StoreID],
 			}
 			s.Stores = append(s.Stores, st)
@@ -456,13 +459,13 @@ func (p *pd) onClearDBData(replyer replyer, m *snet.Message) {
 
 }
 
-func (p *pd) onDrainKv(replyer replyer, m *snet.Message) {
+func (p *pd) onClearCache(replyer replyer, m *snet.Message) {
 	for _, set := range p.Deployment.Sets {
 		for _, node := range set.Nodes {
 			for id, store := range node.Store {
 				if store.isLeader() {
 					addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.Host, node.ServicePort))
-					p.udp.SendTo(addr, snet.MakeMessage(0, &sproto.DrainStore{
+					p.udp.SendTo(addr, snet.MakeMessage(0, &sproto.ClearStoreCache{
 						Store: int32(id),
 					}))
 				}
@@ -470,61 +473,45 @@ func (p *pd) onDrainKv(replyer replyer, m *snet.Message) {
 		}
 	}
 
-	replyer.reply(snet.MakeMessage(m.Context, &sproto.DrainKvResp{}))
+	replyer.reply(snet.MakeMessage(m.Context, &sproto.ClearCacheResp{}))
 
 }
 
-func (p *pd) onSuspendStore(replyer replyer, m *snet.Message) {
-	msg := m.Msg.(*sproto.CpSuspendStore)
-	set := p.Deployment.Sets[int(msg.SetID)]
-	if nil == set {
-		replyer.reply(snet.MakeMessage(m.Context, &sproto.CpSuspendStoreResp{
-			Ok:     false,
-			Reason: fmt.Sprintf("set:%d not found", msg.SetID),
-		}))
-		return
-	}
-
-	for _, node := range set.Nodes {
-		for storeId, store := range node.Store {
-			if storeId == int(msg.Store) && store.isLeader() && !store.halt {
-				addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.Host, node.ServicePort))
-				p.udp.SendTo(addr, snet.MakeMessage(0, &sproto.SuspendStore{
-					Store: int32(storeId),
-				}))
+func (p *pd) onSuspendKvStore(replyer replyer, m *snet.Message) {
+	for _, set := range p.Deployment.Sets {
+		for _, node := range set.Nodes {
+			for storeId, store := range node.Store {
+				if store.isLeader() {
+					addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.Host, node.ServicePort))
+					p.udp.SendTo(addr, snet.MakeMessage(0, &sproto.SuspendStore{
+						Store: int32(storeId),
+					}))
+				}
 			}
 		}
 	}
 
-	replyer.reply(snet.MakeMessage(m.Context, &sproto.CpSuspendStoreResp{
+	replyer.reply(snet.MakeMessage(m.Context, &sproto.SuspendKvStoreResp{
 		Ok: true,
 	}))
 
 }
 
-func (p *pd) onResumeStore(replyer replyer, m *snet.Message) {
-	msg := m.Msg.(*sproto.CpResumeStore)
-	set := p.Deployment.Sets[int(msg.SetID)]
-	if nil == set {
-		replyer.reply(snet.MakeMessage(m.Context, &sproto.CpResumeStoreResp{
-			Ok:     false,
-			Reason: fmt.Sprintf("set:%d not found", msg.SetID),
-		}))
-		return
-	}
-
-	for _, node := range set.Nodes {
-		for storeId, store := range node.Store {
-			if storeId == int(msg.Store) && store.isLeader() && store.halt {
-				addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.Host, node.ServicePort))
-				p.udp.SendTo(addr, snet.MakeMessage(0, &sproto.ResumeStore{
-					Store: int32(storeId),
-				}))
+func (p *pd) onResumeKvStore(replyer replyer, m *snet.Message) {
+	for _, set := range p.Deployment.Sets {
+		for _, node := range set.Nodes {
+			for storeId, store := range node.Store {
+				if store.isLeader() {
+					addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.Host, node.ServicePort))
+					p.udp.SendTo(addr, snet.MakeMessage(0, &sproto.ResumeStore{
+						Store: int32(storeId),
+					}))
+				}
 			}
 		}
 	}
 
-	replyer.reply(snet.MakeMessage(m.Context, &sproto.CpResumeStoreResp{
+	replyer.reply(snet.MakeMessage(m.Context, &sproto.ResumeKvStoreResp{
 		Ok: true,
 	}))
 }
@@ -568,9 +555,9 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.RemovePdNode{}, "RemovePdNode", p.onRemovePdNode)
 	p.registerMsgHandler(&sproto.ListPdMembers{}, "ListPdMembers", p.onListPdMembers)
 	p.registerMsgHandler(&sproto.ClearDBData{}, "ClearDBData", p.onClearDBData)
-	p.registerMsgHandler(&sproto.DrainKv{}, "DrainKv", p.onDrainKv)
-	p.registerMsgHandler(&sproto.CpSuspendStore{}, "CpSuspendStore", p.onSuspendStore)
-	p.registerMsgHandler(&sproto.CpResumeStore{}, "CpResumeStore", p.onResumeStore)
+	p.registerMsgHandler(&sproto.ClearCache{}, "ClearCache", p.onClearCache)
+	p.registerMsgHandler(&sproto.SuspendKvStore{}, "SuspendKvStore", p.onSuspendKvStore)
+	p.registerMsgHandler(&sproto.ResumeKvStore{}, "ResumeKvStore", p.onResumeKvStore)
 	p.registerMsgHandler(&sproto.GetDeployment{}, "GetDeployment", p.onGetDeployment)
 
 	//servers

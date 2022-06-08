@@ -360,14 +360,14 @@ func init() {
 	namespace.Register(&sproto.ClearDBData{}, uint32(sproto.ServerCmdType_ClearDBData))
 	namespace.Register(&sproto.ClearDBDataResp{}, uint32(sproto.ServerCmdType_ClearDBDataResp))
 
-	namespace.Register(&sproto.DrainKv{}, uint32(sproto.ServerCmdType_DrainKv))
-	namespace.Register(&sproto.DrainKvResp{}, uint32(sproto.ServerCmdType_DrainKvResp))
+	namespace.Register(&sproto.ClearCache{}, uint32(sproto.ServerCmdType_ClearCache))
+	namespace.Register(&sproto.ClearCacheResp{}, uint32(sproto.ServerCmdType_ClearCacheResp))
 
-	namespace.Register(&sproto.CpSuspendStore{}, uint32(sproto.ServerCmdType_CpSuspendStore))
-	namespace.Register(&sproto.CpSuspendStoreResp{}, uint32(sproto.ServerCmdType_CpSuspendStoreResp))
+	namespace.Register(&sproto.SuspendKvStore{}, uint32(sproto.ServerCmdType_SuspendKvStore))
+	namespace.Register(&sproto.SuspendKvStoreResp{}, uint32(sproto.ServerCmdType_SuspendKvStoreResp))
 
-	namespace.Register(&sproto.CpResumeStore{}, uint32(sproto.ServerCmdType_CpResumeStore))
-	namespace.Register(&sproto.CpResumeStoreResp{}, uint32(sproto.ServerCmdType_CpResumeStoreResp))
+	namespace.Register(&sproto.ResumeKvStore{}, uint32(sproto.ServerCmdType_ResumeKvStore))
+	namespace.Register(&sproto.ResumeKvStoreResp{}, uint32(sproto.ServerCmdType_ResumeKvStoreResp))
 
 	namespace.Register(&sproto.GetDeployment{}, uint32(sproto.ServerCmdType_GetDeployment))
 	namespace.Register(&sproto.GetDeploymentResp{}, uint32(sproto.ServerCmdType_GetDeploymentResp))
@@ -396,7 +396,7 @@ func init() {
 
 	namespace.Register(&sproto.TrasnferLeader{}, uint32(sproto.ServerCmdType_TrasnferLeader))
 
-	namespace.Register(&sproto.DrainStore{}, uint32(sproto.ServerCmdType_DrainStore))
+	namespace.Register(&sproto.ClearStoreCache{}, uint32(sproto.ServerCmdType_ClearStoreCache))
 
 	namespace.Register(&sproto.SuspendStore{}, uint32(sproto.ServerCmdType_SuspendStore))
 

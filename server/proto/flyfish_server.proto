@@ -50,12 +50,12 @@ enum ServerCmdType {
   ListPdMembersResp             = 138;
   ClearDBData                   = 139;
   ClearDBDataResp               = 140;
-  DrainKv                       = 141;                   //排空所有缓存的kv
-  DrainKvResp                   = 142;  
-  CpSuspendStore                = 143;
-  CpSuspendStoreResp            = 144;
-  CpResumeStore                 = 145;
-  CpResumeStoreResp             = 146;
+  ClearCache                    = 141;                   //排空所有缓存的kv
+  ClearCacheResp                = 142;  
+  SuspendKvStore                = 143;                   //挂起所有store,挂起后store不再处理客户端请求，直到resume
+  SuspendKvStoreResp            = 144;
+  ResumeKvStore                 = 145;
+  ResumeKvStoreResp             = 146;
   GetDeployment                 = 147;
   GetDeploymentResp             = 148;
 
@@ -75,7 +75,7 @@ enum ServerCmdType {
   NotifyUpdateMeta              = 222;
   KvnodeReportStatus            = 223;
   TrasnferLeader                = 224;
-  DrainStore                    = 225;
+  ClearStoreCache               = 225;
   NotifyMissingStores           = 226;
   SuspendStore                  = 227;
   ResumeStore                   = 228;   
@@ -387,6 +387,7 @@ message storeStatus {
   optional int32 slotcount    = 2;
   optional int32 kvcount      = 3;  
   optional int64 metaVersion  = 4;  
+  optional bool  halt         = 5;
 }
 
 
@@ -507,7 +508,7 @@ message  listPdMembersResp {
   repeated string members = 1;
 }
 
-message drainStore {
+message clearStoreCache {
   optional int32  store   = 1; 
 }
 
@@ -520,31 +521,29 @@ message clearDBDataResp {
   optional string reason  = 2; 
 }
 
-message drainKv {
+message clearCache {
   
 }
 
-message drainKvResp {
+message clearCacheResp {
   
 }
 
-message cpSuspendStore {
-  optional int32  setID = 1;
-  optional int32  store = 2;  
+message suspendKvStore {
+
 }
 
 
-message cpSuspendStoreResp {
+message suspendKvStoreResp {
   optional bool  ok       = 1;  
   optional string reason  = 2;   
 }
 
-message cpResumeStore {
-  optional int32  setID = 1;
-  optional int32  store = 2;    
+message resumeKvStore {
+
 }
 
-message cpResumeStoreResp {
+message resumeKvStoreResp {
   optional bool  ok       = 1;  
   optional string reason  = 2;   
 }
