@@ -76,6 +76,8 @@ func (p *pd) onKvnodeBoot(replyer replyer, m *snet.Message) {
 		return
 	}
 
+	GetSugar().Infof("onKvnodeBoot node:%d stores:%v", msg.NodeID, node.Store)
+
 	resp := &sproto.KvnodeBootResp{
 		Ok:          true,
 		ServiceHost: node.Host,
@@ -86,7 +88,7 @@ func (p *pd) onKvnodeBoot(replyer replyer, m *snet.Message) {
 	}
 
 	for storeId, st := range node.Store {
-		if st.StoreType == AddLearnerStore {
+		if st.StoreType == AddLearnerStore || st.StoreTypeBeforeRemove == AddLearnerStore {
 			continue
 		}
 
@@ -277,7 +279,7 @@ func (p *pd) onKvnodeReportStatus(replyer replyer, m *snet.Message) {
 	//检查是否有遗漏的store,有的通知kvnode加载
 	var notify *sproto.NotifyMissingStores
 	for storeId, st := range node.Store {
-		if st.StoreType == AddLearnerStore {
+		if st.StoreType == AddLearnerStore || st.StoreTypeBeforeRemove == AddLearnerStore {
 			continue
 		}
 

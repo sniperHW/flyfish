@@ -3,19 +3,19 @@
         "1": {
             "SetID": 1,
             "Nodes": {
-                "1": {
+                "11": {
                     "NodeID": 11,
                     "Host": "localhost",
                     "ServicePort": 9101,
                     "RaftPort": 9111
                 },
-                "2": {
+                "12": {
                     "NodeID": 12,
                     "Host": "localhost",
                     "ServicePort": 9102,
                     "RaftPort": 9112
                 },
-                "3": {
+                "13": {
                     "NodeID": 13,
                     "Host": "localhost",
                     "ServicePort": 9103,

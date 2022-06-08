@@ -117,7 +117,9 @@ func (this *kvnode) processUdpMsg(from *net.UDPAddr, m *snet.Message) {
 					from: from,
 					m:    m,
 				})
-			}
+			} // else {
+			//	GetSugar().Infof("store:%d not found %v node:%d", store, this.stores, this.id)
+			//}
 			this.muS.RUnlock()
 		} else {
 			GetSugar().Errorf("invaild udp message from:%s", from.String())

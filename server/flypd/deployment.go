@@ -56,7 +56,7 @@ func (nss *NodeStoreState) isLeader() bool {
 }
 
 func (nss *NodeStoreState) isLearner() bool {
-	return nss.StoreType == LearnerStore
+	return nss.StoreType == LearnerStore || nss.StoreType == AddLearnerStore
 }
 
 type KvNode struct {

@@ -11,18 +11,47 @@ import (
 
 type ProposalAddSet struct {
 	proposalBase
-	Set *Set
+	Msg *sproto.AddSet
 }
 
 func (p *ProposalAddSet) Serilize(b []byte) []byte {
 	return serilizeProposal(b, proposalAddSet, p)
 }
 
+/*
+	set := Set{
+		SetID:  int(msg.Set.SetID),
+		Nodes:  map[int]*KvNode{},
+		Stores: map[int]*Store{},
+	}
+
+	for _, v := range msg.Set.Nodes {
+		set.Nodes[int(v.NodeID)] = &KvNode{
+			NodeID:      int(v.NodeID),
+			Host:        v.Host,
+			ServicePort: int(v.ServicePort),
+			RaftPort:    int(v.RaftPort),
+			Store:       map[int]*NodeStoreState{},
+		}
+	}
+
+	for _, node := range set.Nodes {
+		for _, vv := range set.Stores {
+			node.Store[vv.StoreID] = &NodeStoreState{
+				StoreType: VoterStore,
+				RaftID:    p.raftIDGen.Next(),
+			}
+		}
+	}
+
+	for _
+*/
+
 func (p *ProposalAddSet) apply(pd *pd) {
 	GetSugar().Infof("onAddSet apply")
 	err := func() error {
-		if _, ok := pd.Deployment.Sets[p.Set.SetID]; ok {
-			return fmt.Errorf("duplicate set %d", p.Set.SetID)
+		if _, ok := pd.Deployment.Sets[int(p.Msg.Set.SetID)]; ok {
+			return fmt.Errorf("set already exists")
 		}
 
 		nodes := map[int]bool{}
@@ -37,30 +66,59 @@ func (p *ProposalAddSet) apply(pd *pd) {
 			}
 		}
 
-		for _, v := range p.Set.Nodes {
-			if _, ok := nodes[v.NodeID]; ok {
+		set := &Set{
+			SetID:  int(p.Msg.Set.SetID),
+			Nodes:  map[int]*KvNode{},
+			Stores: map[int]*Store{},
+		}
+
+		for _, v := range p.Msg.Set.Nodes {
+			if _, ok := nodes[int(v.NodeID)]; ok {
 				return fmt.Errorf("duplicate node %d", v.NodeID)
 			}
+
+			nodes[int(v.NodeID)] = true
 
 			if _, ok := services[fmt.Sprintf("%s:%d", v.Host, v.ServicePort)]; ok {
 				return fmt.Errorf("duplicate service %s:%d", v.Host, v.ServicePort)
 			}
 
+			services[fmt.Sprintf("%s:%d", v.Host, v.ServicePort)] = true
+
 			if _, ok := raftServices[fmt.Sprintf("%s:%d", v.Host, v.RaftPort)]; ok {
 				return fmt.Errorf("duplicate raftService %s:%d", v.Host, v.RaftPort)
+			}
+
+			raftServices[fmt.Sprintf("%s:%d", v.Host, v.RaftPort)] = true
+
+			set.Nodes[int(v.NodeID)] = &KvNode{
+				NodeID:      int(v.NodeID),
+				Host:        v.Host,
+				ServicePort: int(v.ServicePort),
+				RaftPort:    int(v.RaftPort),
+				Store:       map[int]*NodeStoreState{},
 			}
 		}
 
 		for i := 0; i < StorePerSet; i++ {
 			slots := bitmap.New(slot.SlotCount)
-			p.Set.Stores[i+1] = &Store{
+			set.Stores[i+1] = &Store{
 				StoreID: i + 1,
 				Slots:   slots.ToJson(),
 				slots:   slots,
 			}
 		}
 
-		pd.Deployment.Sets[p.Set.SetID] = p.Set
+		for _, node := range set.Nodes {
+			for _, vv := range set.Stores {
+				node.Store[vv.StoreID] = &NodeStoreState{
+					StoreType: VoterStore,
+					RaftID:    pd.raftIDGen.Next(),
+				}
+			}
+		}
+
+		pd.Deployment.Sets[set.SetID] = set
 		pd.Deployment.Version++
 		pd.slotBalance()
 		return nil
@@ -155,35 +213,8 @@ func (p *pd) onSetMarkClear(replyer replyer, m *snet.Message) {
 
 func (p *pd) onAddSet(replyer replyer, m *snet.Message) {
 	GetSugar().Infof("onAddSet")
-	msg := m.Msg.(*sproto.AddSet)
-
-	set := Set{
-		SetID:  int(msg.Set.SetID),
-		Nodes:  map[int]*KvNode{},
-		Stores: map[int]*Store{},
-	}
-
-	for _, v := range msg.Set.Nodes {
-		set.Nodes[int(v.NodeID)] = &KvNode{
-			NodeID:      int(v.NodeID),
-			Host:        v.Host,
-			ServicePort: int(v.ServicePort),
-			RaftPort:    int(v.RaftPort),
-			Store:       map[int]*NodeStoreState{},
-		}
-	}
-
-	for i, _ := range set.Nodes {
-		for _, vv := range set.Stores {
-			set.Nodes[i].Store[vv.StoreID] = &NodeStoreState{
-				StoreType: VoterStore,
-				RaftID:    p.raftIDGen.Next(),
-			}
-		}
-	}
-
 	p.issueProposal(&ProposalAddSet{
-		Set: &set,
+		Msg: m.Msg.(*sproto.AddSet),
 		proposalBase: proposalBase{
 			reply: p.makeReplyFunc(replyer, m, &sproto.AddSetResp{}),
 		},

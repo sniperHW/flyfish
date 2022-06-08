@@ -1,13 +1,26 @@
 {
-	"Sets":[
-	{"SetID":1,
-	 "KvNodes":[
-	 	{"NodeID":1,"Host":"localhost","ServicePort":9110,"RaftPort":9111}
-	 ]
-	},
-	{"SetID":2,
-	 "KvNodes":[
-	 	{"NodeID":2,"Host":"localhost","ServicePort":9210,"RaftPort":9211}
-	 ]
-	}
-]}
+    "Sets": {
+        "1": {
+            "SetID": 1,
+            "Nodes": {
+                "1": {
+                    "NodeID": 1,
+                    "Host": "localhost",
+                    "ServicePort": 9110,
+                    "RaftPort": 9111
+                }
+            }
+        },
+        "2": {
+            "SetID": 2,
+            "Nodes": {
+                "2": {
+                    "NodeID": 2,
+                    "Host": "localhost",
+                    "ServicePort": 9210,
+                    "RaftPort": 9211
+                }
+            }
+        }        
+    }
+}

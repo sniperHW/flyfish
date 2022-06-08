@@ -85,7 +85,7 @@ type Socket struct {
 	errorCallback            func(*Socket, error)
 	closeCallBack            func(*Socket, error)
 	inboundCallBack          func(*Socket, interface{})
-	closeReason              error
+	closeReason              atomic.Value //error
 	sendTimeout              int64
 	recvTimeout              int64
 	muW                      sync.Mutex
@@ -205,7 +205,11 @@ func (this *Socket) doclose() {
 			b.Free()
 		}
 		if nil != this.closeCallBack {
-			this.closeCallBack(this, this.closeReason)
+			if closeReason, ok := this.closeReason.Load().(error); ok {
+				this.closeCallBack(this, closeReason)
+			} else {
+				this.closeCallBack(this, nil)
+			}
 		}
 	}
 }
@@ -563,7 +567,9 @@ func (this *Socket) Close(reason error, delay time.Duration) {
 	if atomic.CompareAndSwapInt32(&this.closeOnce, 0, 1) {
 		runtime.SetFinalizer(this, nil)
 		this.setFlag(fclosed)
-		this.closeReason = reason
+		if nil != reason {
+			this.closeReason.Store(reason)
+		}
 
 		if delay > 0 {
 			if this.writeCount() > 0 {

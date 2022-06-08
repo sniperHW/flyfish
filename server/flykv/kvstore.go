@@ -14,7 +14,6 @@ import (
 	"github.com/sniperHW/flyfish/pkg/raft/membership"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
-	"github.com/sniperHW/flyfish/server/flypd"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	sslot "github.com/sniperHW/flyfish/server/slot"
@@ -555,12 +554,12 @@ func (s *kvstore) onRemoveNode(from *net.UDPAddr, raftID uint64, context int64) 
 
 func (s *kvstore) onNotifyNodeStoreOp(from *net.UDPAddr, msg *sproto.NotifyNodeStoreOp, context int64) {
 	if s.isReady() {
-		switch msg.Op {
-		case int32(flypd.LearnerStore):
+		switch sproto.StoreOpType(msg.Op) {
+		case sproto.StoreOpType_AddLearner:
 			s.onAddLearnerNode(from, uint16(msg.NodeID), msg.RaftID, msg.Host, msg.RaftPort, msg.Port, context)
-		case int32(flypd.VoterStore):
+		case sproto.StoreOpType_PromoteLearner:
 			s.onPromoteLearnerNode(from, msg.RaftID, context)
-		case int32(flypd.RemoveStore):
+		case sproto.StoreOpType_RemoveStore:
 			s.onRemoveNode(from, msg.RaftID, context)
 		default:
 			GetSugar().Errorf("onNotifyNodeStoreOp invaild Op:%v", msg.Op)
@@ -697,17 +696,13 @@ func (s *kvstore) onUdpMsg(from *net.UDPAddr, m *snet.Message) {
 		case *sproto.DrainStore:
 			s.drain()
 		case *sproto.SuspendStore:
-			if !s.halt {
-				s.rn.IssueProposal(&SuspendProposal{
-					store: s,
-				})
-			}
+			s.rn.IssueProposal(&SuspendProposal{
+				store: s,
+			})
 		case *sproto.ResumeStore:
-			if s.halt {
-				s.rn.IssueProposal(&ResumeProposal{
-					store: s,
-				})
-			}
+			s.rn.IssueProposal(&ResumeProposal{
+				store: s,
+			})
 		case *sproto.TrasnferLeader:
 			s.rn.TransferLeadership(m.Msg.(*sproto.TrasnferLeader).Transferee)
 		}

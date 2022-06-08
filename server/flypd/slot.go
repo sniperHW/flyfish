@@ -103,7 +103,6 @@ func (tst *TransSlotTransfer) notify(pd *pd) {
 	if tst != pd.SlotTransferMgr.Transactions[tst.Slot] {
 		return
 	}
-
 	tst.context = snet.MakeUniqueContext() //更新context,后续只接受相应context的应答
 	if tst.SetOut < 0 || tst.StoreTransferOutOk {
 		setIn := pd.Deployment.Sets[tst.SetIn]
@@ -310,12 +309,13 @@ func (p *pd) slotBalance() {
 				break
 			}
 		}
+
 	}
 
-	/*if len(p.pState.SlotTransferMgr.Plan)+len(p.pState.SlotTransferMgr.Transactions)+len(p.pState.SlotTransferMgr.FreeSlots) == 0 {
+	/*if len(p.SlotTransferMgr.Plan)+len(p.SlotTransferMgr.Transactions)+len(p.SlotTransferMgr.FreeSlots) == 0 {
 		s := [][]int{}
-		for _, v := range p.pState.deployment.sets {
-			for _, vv := range v.stores {
+		for _, v := range p.Deployment.Sets {
+			for _, vv := range v.Stores {
 				s = append(s, vv.slots.GetOpenBits())
 			}
 		}
@@ -409,6 +409,7 @@ func (p *pd) onSlotTransInReady(_ replyer, m *snet.Message) {
 }
 
 func (p *pd) onSlotTransOutOk(_ replyer, m *snet.Message) {
+
 	msg := m.Msg.(*sproto.SlotTransOutOk)
 	if t, ok := p.SlotTransferMgr.Transactions[int(msg.Slot)]; ok && t.context == m.Context {
 		if !t.StoreTransferOutOk {
@@ -420,6 +421,7 @@ func (p *pd) onSlotTransOutOk(_ replyer, m *snet.Message) {
 }
 
 func (p *pd) onSlotTransInOk(_ replyer, m *snet.Message) {
+
 	msg := m.Msg.(*sproto.SlotTransInOk)
 	if t, ok := p.SlotTransferMgr.Transactions[int(msg.Slot)]; ok && t.context == m.Context {
 		p.issueProposal(&ProposalSlotTransInOk{

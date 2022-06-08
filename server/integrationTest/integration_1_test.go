@@ -949,7 +949,7 @@ func TestAddRemoveNode2(t *testing.T) {
 				for _, v := range s.Nodes {
 					if int(v.NodeID) == 3 {
 						for _, vv := range v.Stores {
-							if vv.Type != int32(flypd.VoterStore) || vv.Value != int32(flypd.FlyKvCommited) {
+							if vv.StoreType != int32(flypd.VoterStore) {
 								return false
 							}
 						}
@@ -1141,8 +1141,12 @@ func TestAddSet(t *testing.T) {
 				}
 			})
 
-		if resp != nil && resp.(*sproto.SetMarkClearResp).Reason == "already mark clear" {
-			break
+		if resp != nil {
+			if resp.(*sproto.SetMarkClearResp).Reason == "already mark clear" {
+				break
+			} else {
+				logger.GetSugar().Infof("%v", resp.(*sproto.SetMarkClearResp).Reason)
+			}
 		}
 		time.Sleep(time.Second)
 	}
@@ -1746,7 +1750,7 @@ func TestSuspendResume(t *testing.T) {
 				for _, v := range s.Nodes {
 					if int(v.NodeID) == 2 {
 						for _, vv := range v.Stores {
-							if vv.Type != int32(flypd.VoterStore) || vv.Value != int32(flypd.FlyKvCommited) {
+							if vv.StoreType != int32(flypd.VoterStore) {
 								return false
 							}
 						}
