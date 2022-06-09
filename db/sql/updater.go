@@ -98,6 +98,9 @@ func getUpdateType(s db.DBState) string {
 	}
 }
 
+var errNewerWriteBackSuccess error = errors.New("a newer writeback success")
+var errRecordNotExist error = errors.New("record not exist")
+
 func (this *updater) exec(v interface{}) {
 
 	switch v.(type) {
@@ -165,14 +168,14 @@ func (this *updater) exec(v interface{}) {
 								var version int64
 								rows.Scan(&version)
 								if abs(version) >= abs(s.Version) {
-									GetSugar().Infof("a newer writeback success,drop old writeback db.version:%d,task.version:%d", version, s.Version)
+									//GetSugar().Errorf("a newer writeback success,drop old writeback db.version:%d,task.version:%d", version, s.Version)
 									//数据库已经有最新的回写
-									return 0, errors.New("a newer writeback success")
+									return version, errNewerWriteBackSuccess
 								} else {
 									return version, nil
 								}
 							} else {
-								return 0, errors.New("record not exist")
+								return 0, errRecordNotExist
 							}
 						}
 					}
@@ -190,14 +193,40 @@ func (this *updater) exec(v interface{}) {
 					} else {
 						GetSugar().Debugf("%s version mismatch last:%d version:%d unikey:%s:%s", getUpdateType(s.State), s.LastWriteBackVersion, s.Version, s.Meta.TableName(), s.Key)
 						//版本号不匹配，再次获取版本号
-						if version, err := loadVersion(); nil != err {
-							task.OnError(err, s.LastWriteBackVersion)
+						version, err := loadVersion()
+						if nil == err {
+							GetSugar().Debugf("%s version mismatch last:%d version:%d,dbversion:%d", getUpdateType(s.State), s.LastWriteBackVersion, s.Version, version)
+							s.LastWriteBackVersion = version
+							needRebuildSql = true
+						} else if err == errRecordNotExist {
+							s.State = db.DBState_insert
+							needRebuildSql = true
+						} else if err == errNewerWriteBackSuccess {
+							/*
+							 * 情况1：old leader执行回写前,新leader已经执行了更新的回写，old leader执行SetLastWriteBackVersion时会因为没有leader ship而失败。
+							 * 情况2：数据库与flyfish数据发生不一致。例如数据库中已经存在数据，切版本号为2.而flyfish认为数据不存在，因此执行创建，版本号为1。发生此情况
+							 * 在SetLastWriteBackVersion中应该记录日志。用数据中的version修正kv.version以及kv.LastWriteBackVersion。出现此情况必然导致数据丢失，
+							 * 修正只能让程序继续正确运行。
+							 */
+							task.SetLastWriteBackVersion(version)
+							break
+						} else {
+							task.OnError(err)
+							break
+						}
+
+						/*if version, err := loadVersion(); nil != err {
+							if err == errNewerWriteBackSuccess {
+								task.SetLastWriteBackVersion(version)
+							} else {
+								task.OnError(err, s.LastWriteBackVersion)
+							}
 							break
 						} else {
 							GetSugar().Debugf("%s version mismatch last:%d version:%d,dbversion:%d", getUpdateType(s.State), s.LastWriteBackVersion, s.Version, version)
 							s.LastWriteBackVersion = version
 							needRebuildSql = true
-						}
+						}*/
 					}
 				} else {
 					GetSugar().Errorf("sqlUpdater exec %s %v", this.sqlExec.b.ToStrUnsafe(), err)
@@ -205,7 +234,7 @@ func (this *updater) exec(v interface{}) {
 						//休眠一秒重试
 						time.Sleep(time.Second)
 					} else {
-						task.OnError(err, s.LastWriteBackVersion)
+						task.OnError(err)
 						break
 					}
 				}

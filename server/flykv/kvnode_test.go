@@ -12,8 +12,8 @@ import (
 	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/logger"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
-	"github.com/sniperHW/flyfish/pkg/raft"
-	"github.com/sniperHW/flyfish/server/flypd"
+	//"github.com/sniperHW/flyfish/pkg/raft"
+	//"github.com/sniperHW/flyfish/server/flypd"
 	"github.com/sniperHW/flyfish/server/mock"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
@@ -135,8 +135,8 @@ func init() {
 
 	sslot.SlotCount = 1820
 
-	raft.SnapshotCount = 100
-	raft.SnapshotCatchUpEntriesN = 100
+	//raft.SnapshotCount = 100
+	//raft.SnapshotCatchUpEntriesN = 100
 
 	go func() {
 		http.ListenAndServe("localhost:6060", nil)
@@ -555,7 +555,7 @@ func Test1Node1Store1(t *testing.T) {
 	//清空所有kv
 	conn, _ := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
 	for {
-		conn.SendTo(addr1, snet.MakeMessage(0, &sproto.DrainStore{
+		conn.SendTo(addr1, snet.MakeMessage(0, &sproto.ClearStoreCache{
 			Store: int32(1),
 		}))
 
@@ -1121,7 +1121,7 @@ func TestAddRemoveNode(t *testing.T) {
 	for {
 		resp := snet.UdpCall([]*net.UDPAddr{addr},
 			snet.MakeMessage(0, &sproto.NotifyNodeStoreOp{
-				Op:       int32(flypd.LearnerStore),
+				Op:       int32(sproto.StoreOpType_AddLearner),
 				NodeID:   int32(2),
 				Host:     "localhost",
 				RaftPort: int32(12378),
@@ -1162,7 +1162,7 @@ func TestAddRemoveNode(t *testing.T) {
 	for {
 		resp := snet.UdpCall([]*net.UDPAddr{addr},
 			snet.MakeMessage(0, &sproto.NotifyNodeStoreOp{
-				Op:     int32(flypd.VoterStore),
+				Op:     int32(sproto.StoreOpType_PromoteLearner),
 				Store:  int32(1),
 				RaftID: uint64(2)<<32 + uint64(1),
 			}),
@@ -1224,7 +1224,7 @@ func TestAddRemoveNode(t *testing.T) {
 	for {
 		resp := snet.UdpCall([]*net.UDPAddr{addr2},
 			snet.MakeMessage(0, &sproto.NotifyNodeStoreOp{
-				Op:     int32(flypd.RemoveStore),
+				Op:     int32(sproto.StoreOpType_RemoveStore),
 				Store:  int32(1),
 				RaftID: uint64(1)<<32 + uint64(1),
 			}),
@@ -1283,7 +1283,7 @@ func TestAddRemoveNode(t *testing.T) {
 	//清空所有kv
 	conn, _ := fnet.NewUdp("localhost:0", snet.Pack, snet.Unpack)
 	for {
-		conn.SendTo(addr2, snet.MakeMessage(0, &sproto.DrainStore{
+		conn.SendTo(addr2, snet.MakeMessage(0, &sproto.ClearStoreCache{
 			Store: int32(1),
 		}))
 

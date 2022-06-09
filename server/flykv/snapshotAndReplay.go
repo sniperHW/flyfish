@@ -114,6 +114,10 @@ func (s *kvstore) replayFromBytes(b []byte) error {
 			p := data.(*LastWriteBackVersionProposal)
 			if kv := s.getkv(sslot.Unikey2Slot(p.kv.uniKey), p.kv.uniKey); nil != kv {
 				kv.lastWriteBackVersion = p.version
+				if abs(p.version) > abs(kv.version) {
+					GetSugar().Errorf("key:%s version fixed", kv.uniKey)
+					kv.version = p.version
+				}
 			}
 		case proposal_snapshot, proposal_kick, proposal_update:
 			p := data.(*kv)

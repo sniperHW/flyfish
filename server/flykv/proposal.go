@@ -497,8 +497,16 @@ func (this *LastWriteBackVersionProposal) Serilize(b []byte) []byte {
 
 func (this *LastWriteBackVersionProposal) apply() {
 	GetSugar().Debugf("LastWriteBackVersionProposal apply %s version:%d %d", this.kv.uniKey, this.version, this.kv.version)
-	if abs(this.version) > abs(this.kv.lastWriteBackVersion) {
-		this.kv.lastWriteBackVersion = this.version
+	//if !(abs(this.version) > abs(this.kv.lastWriteBackVersion) {
+	//this.kv.lastWriteBackVersion = this.version
+	//}
+	this.kv.lastWriteBackVersion = this.version
+	if abs(this.version) > abs(this.kv.version) {
+		/*
+		 * 修正version.此情况发生必然会导致数据的丢失。
+		 */
+		GetSugar().Errorf("key:%s version fixed", this.kv.uniKey)
+		this.kv.version = this.version
 	}
 
 	if f := this.kv.pendingCmd.Front(); nil != f {

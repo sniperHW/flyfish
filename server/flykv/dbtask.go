@@ -154,7 +154,7 @@ func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields 
 	return nil
 }
 
-func (this *dbUpdateTask) OnError(err error, writeBackVersion int64) {
+func (this *dbUpdateTask) OnError(err error) {
 	GetSugar().Errorf("dbUpdateTask OnError uniKey:%s err:%v", this.kv.uniKey, err)
 	this.kv.store.mainQueue.AppendHighestPriotiryItem(func() {
 		if f := this.kv.pendingCmd.Front(); nil != f {
