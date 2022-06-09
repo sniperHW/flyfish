@@ -28,7 +28,6 @@ func (p *pd) registerMsgHandler(msg proto.Message, httpCmd string, handler func(
 		}
 		if "" != httpCmd {
 			p.msgHandler.makeHttpReq[httpCmd] = func(r *http.Request) (*snet.Message, error) {
-				defer r.Body.Close()
 				v, err := ioutil.ReadAll(r.Body)
 				if nil != err {
 					return nil, err
