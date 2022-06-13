@@ -24,15 +24,10 @@ func test(t *testing.T, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta) {
 	assert.Nil(t, err)
 	assert.Equal(t, version, int64(-1))
 
-	//版本号不匹配,不变更
-	version, err = MarkDelete(context.TODO(), dbc, dbtype, tbmeta, "hw", sslot.Unikey2Slot("users1:hw"), 1)
+	//已经被标记删除
+	version, err = MarkDelete(context.TODO(), dbc, dbtype, tbmeta, "hw", sslot.Unikey2Slot("users1:hw"))
 	assert.Nil(t, err)
 	assert.Equal(t, version, int64(-1))
-
-	//版本号匹配，变更，返回的版本号绝对值+1
-	version, err = MarkDelete(context.TODO(), dbc, dbtype, tbmeta, "hw", sslot.Unikey2Slot("users1:hw"), -1)
-	assert.Nil(t, err)
-	assert.Equal(t, version, int64(-2))
 
 	fields := map[string]*proto.Field{}
 	fields["name"] = proto.PackField("name", "hw1")
@@ -60,6 +55,12 @@ func test(t *testing.T, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta) {
 	assert.Nil(t, err)
 	assert.Equal(t, version, int64(3))
 
+	//版本号匹配，变更，返回的版本号绝对值+1
+	fields["age"] = proto.PackField("age", 5)
+	version, err = Set(context.TODO(), dbc, dbtype, tbmeta, "hw1", sslot.Unikey2Slot("users1:hw1"), fields, 3)
+	assert.Nil(t, err)
+	assert.Equal(t, version, int64(4))
+
 	fields["name"] = proto.PackField("name", "hw2")
 	fields["age"] = proto.PackField("age", 2)
 
@@ -85,6 +86,40 @@ func test(t *testing.T, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta) {
 	version, retField, err := CompareAndSet(context.TODO(), dbc, dbtype, tbmeta,
 		"hw2", sslot.Unikey2Slot("users1:hw2"), proto.PackField("age", 2), proto.PackField("age", 3))
 
+	assert.Nil(t, err)
+	assert.Equal(t, version, int64(2))
+	assert.Equal(t, retField.GetInt(), int64(3))
+
+	//compareAndSetNx
+	version, retField, err = CompareAndSetNx(context.TODO(), dbc, dbtype, tbmeta,
+		"hw4", sslot.Unikey2Slot("users1:hw4"), proto.PackField("age", 1), proto.PackField("age", 2))
+	assert.Nil(t, err)
+	assert.Equal(t, version, int64(1))
+	assert.Equal(t, retField.GetInt(), int64(2))
+
+	//compare不匹配
+	version, retField, err = CompareAndSetNx(context.TODO(), dbc, dbtype, tbmeta,
+		"hw4", sslot.Unikey2Slot("users1:hw4"), proto.PackField("age", 1), proto.PackField("age", 3))
+	assert.Equal(t, err, ErrCompareNotEqual)
+	assert.Equal(t, version, int64(1))
+	assert.Equal(t, retField.GetInt(), int64(2))
+
+	//compare匹配
+	version, retField, err = CompareAndSetNx(context.TODO(), dbc, dbtype, tbmeta,
+		"hw4", sslot.Unikey2Slot("users1:hw4"), proto.PackField("age", 2), proto.PackField("age", 3))
+	assert.Nil(t, err)
+	assert.Equal(t, version, int64(2))
+	assert.Equal(t, retField.GetInt(), int64(3))
+
+	//Add
+	version, retField, err = Add(context.TODO(), dbc, dbtype, tbmeta,
+		"hw5", sslot.Unikey2Slot("users1:hw5"), proto.PackField("age", 5))
+	assert.Nil(t, err)
+	assert.Equal(t, version, int64(1))
+	assert.Equal(t, retField.GetInt(), int64(5))
+
+	version, retField, err = Add(context.TODO(), dbc, dbtype, tbmeta,
+		"hw5", sslot.Unikey2Slot("users1:hw5"), proto.PackField("age", -2))
 	assert.Nil(t, err)
 	assert.Equal(t, version, int64(2))
 	assert.Equal(t, retField.GetInt(), int64(3))
