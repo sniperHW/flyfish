@@ -20,14 +20,15 @@ func (this *cmdDel) makeResponse(err errcode.Error, fields map[string]*flyproto.
 		}}
 }
 
-func (this *cmdDel) do(proposal *kvProposal) {
+func (this *cmdDel) do(proposal *kvProposal) *kvProposal {
 	if proposal.kvState == kv_ok {
 		proposal.ptype = proposal_snapshot
 		proposal.version = -(abs(proposal.version) + 1)
-		proposal.cmds = append(proposal.cmds, this)
 		proposal.kvState = kv_no_record
+		return proposal
 	} else {
 		this.reply(Err_record_notexist, nil, this.kv.version)
+		return nil
 	}
 }
 

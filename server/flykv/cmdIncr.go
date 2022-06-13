@@ -28,7 +28,7 @@ func (this *cmdIncr) makeResponse(err errcode.Error, fields map[string]*flyproto
 		}}
 }
 
-func (this *cmdIncr) do(proposal *kvProposal) {
+func (this *cmdIncr) do(proposal *kvProposal) *kvProposal {
 	if proposal.kvState == kv_no_record {
 		proposal.version = abs(proposal.version) + 1
 		proposal.fields = map[string]*flyproto.Field{}
@@ -46,7 +46,7 @@ func (this *cmdIncr) do(proposal *kvProposal) {
 		proposal.fields = map[string]*flyproto.Field{}
 		proposal.fields[this.v.GetName()] = newV
 	}
-	proposal.cmds = append(proposal.cmds, this)
+	return proposal
 }
 
 func (this *cmdIncr) cmdType() flyproto.CmdType {

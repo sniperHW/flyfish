@@ -36,7 +36,7 @@ func (this *cmdSetNx) makeResponse(err errcode.Error, fields map[string]*flyprot
 		Data:  pbdata}
 }
 
-func (this *cmdSetNx) do(proposal *kvProposal) {
+func (this *cmdSetNx) do(proposal *kvProposal) *kvProposal {
 	if proposal.kvState == kv_no_record {
 		proposal.version = abs(proposal.version) + 1
 		proposal.kvState = kv_ok
@@ -46,9 +46,10 @@ func (this *cmdSetNx) do(proposal *kvProposal) {
 		for k, v := range this.fields {
 			proposal.fields[k] = v
 		}
-		proposal.cmds = append(proposal.cmds, this)
+		return proposal
 	} else {
 		this.reply(Err_record_exist, this.kv.fields, this.kv.version)
+		return nil
 	}
 }
 

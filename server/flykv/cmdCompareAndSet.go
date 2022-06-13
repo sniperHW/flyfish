@@ -29,21 +29,23 @@ func (this *cmdCompareAndSet) makeResponse(err errcode.Error, fields map[string]
 		}}
 }
 
-func (this *cmdCompareAndSet) do(proposal *kvProposal) {
+func (this *cmdCompareAndSet) do(proposal *kvProposal) *kvProposal {
 	if proposal.kvState == kv_no_record {
 		this.reply(Err_record_notexist, nil, this.kv.version)
+		return nil
 	} else {
 		oldV := this.kv.getField(this.old.GetName())
 		if !this.old.IsEqual(oldV) {
 			this.reply(Err_cas_not_equal, this.kv.fields, this.kv.version)
+			return nil
 		} else {
 			proposal.version++
 			proposal.fields = map[string]*flyproto.Field{}
 			proposal.fields[this.old.GetName()] = this.new
 			proposal.ptype = proposal_update
-			proposal.cmds = append(proposal.cmds, this)
 		}
 	}
+	return proposal
 }
 
 func (this *cmdCompareAndSet) cmdType() flyproto.CmdType {

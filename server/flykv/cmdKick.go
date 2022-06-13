@@ -19,15 +19,16 @@ func (this *cmdKick) makeResponse(err errcode.Error, fields map[string]*flyproto
 		Data:  &flyproto.KickResp{}}
 }
 
-func (this *cmdKick) do(proposal *kvProposal) {
+func (this *cmdKick) do(proposal *kvProposal) *kvProposal {
 	if this.kv.version == this.kv.lastWriteBackVersion {
 		proposal.ptype = proposal_kick
+		return proposal
 	} else {
 		this.waitVersion = this.kv.version
 		this.kv.updateTask.issueKickDbWriteBack()
 		this.kv.pendingCmd.PushFront(this.getListElement())
+		return nil
 	}
-	proposal.cmds = append(proposal.cmds, this)
 }
 
 func (this *cmdKick) cmdType() flyproto.CmdType {

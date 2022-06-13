@@ -249,20 +249,20 @@ type kvProposal struct {
 	ptype       proposalType
 	fields      map[string]*flyproto.Field
 	version     int64
-	cmds        []cmdI
+	cmd         cmdI
 	kv          *kv
 	dbversion   int64
 	causeByLoad bool
 }
 
 type kvLinearizableRead struct {
-	kv   *kv
-	cmds []cmdI
+	kv  *kv
+	cmd cmdI
 }
 
 func (this *kvProposal) reply(err errcode.Error, fields map[string]*flyproto.Field, version int64) {
-	for _, v := range this.cmds {
-		v.reply(err, fields, version)
+	if nil != this.cmd {
+		this.cmd.reply(err, fields, version)
 	}
 }
 
@@ -344,9 +344,7 @@ func (this *kvProposal) apply() {
 }
 
 func (this *kvLinearizableRead) reply(err errcode.Error, fields map[string]*flyproto.Field, version int64) {
-	for _, v := range this.cmds {
-		v.reply(err, fields, version)
-	}
+	this.cmd.reply(err, fields, version)
 }
 
 func (this *kvLinearizableRead) OnError(err error) {

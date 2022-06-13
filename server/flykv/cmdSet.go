@@ -21,25 +21,29 @@ func (this *cmdSet) makeResponse(err errcode.Error, fields map[string]*flyproto.
 		}}
 }
 
-func (this *cmdSet) do(proposal *kvProposal) {
-	proposal.fields = map[string]*flyproto.Field{}
-	if proposal.kvState == kv_no_record {
-		proposal.version = abs(proposal.version) + 1
-		proposal.kvState = kv_ok
-		proposal.ptype = proposal_snapshot
-		this.meta.FillDefaultValues(this.fields)
+func (this *cmdSet) do(proposal *kvProposal) *kvProposal {
+	if nil != this.version && *this.version != this.kv.version {
+		this.reply(Err_version_mismatch, nil, this.kv.version)
+		return nil
 	} else {
-		proposal.version++
-		if proposal.ptype != proposal_snapshot {
-			proposal.ptype = proposal_update
+		proposal.fields = map[string]*flyproto.Field{}
+		if proposal.kvState == kv_no_record {
+			proposal.version = abs(proposal.version) + 1
+			proposal.kvState = kv_ok
+			proposal.ptype = proposal_snapshot
+			this.meta.FillDefaultValues(this.fields)
+		} else {
+			proposal.version++
+			if proposal.ptype != proposal_snapshot {
+				proposal.ptype = proposal_update
+			}
 		}
-	}
 
-	for k, v := range this.fields {
-		proposal.fields[k] = v
+		for k, v := range this.fields {
+			proposal.fields[k] = v
+		}
+		return proposal
 	}
-
-	proposal.cmds = append(proposal.cmds, this)
 }
 
 func (this *cmdSet) cmdType() flyproto.CmdType {

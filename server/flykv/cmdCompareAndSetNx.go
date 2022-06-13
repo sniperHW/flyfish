@@ -27,7 +27,7 @@ func (this *cmdCompareAndSetNx) makeResponse(err errcode.Error, fields map[strin
 		}}
 }
 
-func (this *cmdCompareAndSetNx) do(proposal *kvProposal) {
+func (this *cmdCompareAndSetNx) do(proposal *kvProposal) *kvProposal {
 	if proposal.kvState == kv_no_record {
 		proposal.version = abs(proposal.version) + 1
 		proposal.fields = map[string]*flyproto.Field{}
@@ -35,19 +35,19 @@ func (this *cmdCompareAndSetNx) do(proposal *kvProposal) {
 		proposal.fields[this.new.GetName()] = this.new
 		proposal.kvState = kv_ok
 		proposal.ptype = proposal_snapshot
-		proposal.cmds = append(proposal.cmds, this)
 	} else {
 		oldV := this.kv.getField(this.old.GetName())
 		if !this.old.IsEqual(oldV) {
 			this.reply(Err_cas_not_equal, this.kv.fields, this.kv.version)
+			return nil
 		} else {
 			proposal.version++
 			proposal.fields = map[string]*flyproto.Field{}
 			proposal.fields[this.old.GetName()] = this.new
 			proposal.ptype = proposal_update
-			proposal.cmds = append(proposal.cmds, this)
 		}
 	}
+	return proposal
 }
 
 func (this *cmdCompareAndSetNx) cmdType() flyproto.CmdType {

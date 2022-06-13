@@ -51,7 +51,7 @@ func (l *List) Len() int {
 	return l.size
 }
 
-func (l *List) Remove(e *Element) {
+func (l *List) Remove(e *Element) interface{} {
 	if l != e.l {
 		panic("l != e.l")
 	}
@@ -63,6 +63,8 @@ func (l *List) Remove(e *Element) {
 	e.nnext = nil
 	e.l = nil
 	l.size--
+
+	return e.Value
 }
 
 func (l *List) PushBack(e *Element) {
