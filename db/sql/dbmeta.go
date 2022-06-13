@@ -250,6 +250,31 @@ func (this *TableMeta) CheckFieldWithVersion(field string, version int64) bool {
 	}
 }
 
+func (this *TableMeta) GetLoadParams(fields []string) (realNames []string, receivers []interface{}, convetors []func(interface{}) interface{}, err error) {
+	realNames = append(realNames, "__version__")
+	receivers = append(receivers, new(int64))
+	convetors = append(convetors, convert_int64)
+	if len(fields) == 0 {
+		for _, f := range this.fieldMetas {
+			realNames = append(realNames, f.GetRealName())
+			receivers = append(receivers, reflect.New(getReceiverType(f.tt)).Interface())
+			convetors = append(convetors, getConvetor(f.tt))
+		}
+	} else {
+		for _, v := range fields {
+			f, ok := this.fieldMetas[v]
+			if !ok {
+				err = fmt.Errorf("fileds %s not define in table:%s", v, this.table)
+				return
+			}
+			realNames = append(realNames, f.GetRealName())
+			receivers = append(receivers, reflect.New(getReceiverType(f.tt)).Interface())
+			convetors = append(convetors, getConvetor(f.tt))
+		}
+	}
+	return
+}
+
 func getReceiverType(tt proto.ValueType) reflect.Type {
 	if tt == proto.ValueType_int {
 		var v int64

@@ -124,6 +124,27 @@ func test(t *testing.T, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta) {
 	assert.Equal(t, version, int64(2))
 	assert.Equal(t, retField.GetInt(), int64(3))
 
+	{
+		version, retFields, err := Load(context.TODO(), dbc, tbmeta, "hw5", []string{"age"})
+		assert.Nil(t, err)
+		assert.Equal(t, version, int64(2))
+		assert.Equal(t, retFields[0].GetInt(), int64(3))
+	}
+
+	{
+		_, _, err := Load(context.TODO(), dbc, tbmeta, "hw6", []string{"age"}, 1)
+		assert.Equal(t, err, ErrRecordNotExist)
+
+		_, _, err = Load(context.TODO(), dbc, tbmeta, "hw5", []string{"age"}, 2)
+		assert.Equal(t, err, ErrRecordNotChange)
+
+		version, retFields, err := Load(context.TODO(), dbc, tbmeta, "hw5", []string{"age"}, 1)
+		assert.Nil(t, err)
+		assert.Equal(t, version, int64(2))
+		assert.Equal(t, retFields[0].GetInt(), int64(3))
+
+	}
+
 }
 
 func TestPgsql(t *testing.T) {
