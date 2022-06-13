@@ -10,6 +10,8 @@ import (
 	"strings"
 )
 
+const MaxStringLen int = 16384
+
 //合法的字段和表名name_versionNo
 func trimVersion(name string) (string, int64, error) {
 	v := strings.Split(name, "_")
@@ -282,7 +284,7 @@ func appendFieldMySql(buff []byte, field *db.FieldDef) ([]byte, error) {
 	case "float":
 		return buffer.AppendString(buff, fmt.Sprintf("FLOAT NOT NULL DEFAULT '%s'", field.GetDefaultValueStr())), nil
 	case "string":
-		return buffer.AppendString(buff, fmt.Sprintf("VARCHAR(16384) NOT NULL DEFAULT '%s'", field.GetDefaultValueStr())), nil
+		return buffer.AppendString(buff, fmt.Sprintf("VARCHAR(%d) NOT NULL DEFAULT '%s'", MaxStringLen, field.GetDefaultValueStr())), nil
 	case "blob":
 		return buffer.AppendString(buff, "BLOB NULL"), nil
 	default:

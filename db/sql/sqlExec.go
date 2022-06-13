@@ -49,7 +49,7 @@ func (this *sqlExec) prepareUpdatePgsql(b *buffer.Buffer, s *db.UpdateState) {
 	for k, v := range s.Fields {
 		if nil == meta.CheckFields(v) {
 			this.args = append(this.args, v.GetValue())
-			b.AppendString(fmt.Sprintf("%s=$%d,", meta.getRealFieldName(k), len(this.args)))
+			b.AppendString(fmt.Sprintf("%s=$%d,", meta.GetRealFieldName(k), len(this.args)))
 		}
 	}
 
@@ -65,7 +65,7 @@ func (this *sqlExec) prepareUpdateMysql(b *buffer.Buffer, s *db.UpdateState) {
 
 	for k, v := range s.Fields {
 		if nil == meta.CheckFields(v) {
-			b.AppendString(fmt.Sprintf("%s=?,", meta.getRealFieldName(k)))
+			b.AppendString(fmt.Sprintf("%s=?,", meta.GetRealFieldName(k)))
 			this.args = append(this.args, v.GetValue())
 		}
 	}

@@ -31,7 +31,7 @@ func NewScanner(tbmeta db.TableMeta, dbc *sqlx.DB, slot int, wantFields []string
 
 	queryFields := []string{"__key__", "__version__"}
 	for _, v := range wantFields {
-		queryFields = append(queryFields, tbmeta.(*TableMeta).getRealFieldName(v))
+		queryFields = append(queryFields, tbmeta.(*TableMeta).GetRealFieldName(v))
 	}
 
 	sqlStr := fmt.Sprintf(selectTemplate, strings.Join(queryFields, ","), tbmeta.(*TableMeta).real_tableName, slot, strings.Join(exclude, "','"))

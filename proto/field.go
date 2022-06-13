@@ -131,6 +131,52 @@ func (m *Field) GetValue() interface{} {
 	}
 }
 
+func (m *Field) GetValueReceiver() interface{} {
+	switch m.V.GetType() {
+	case ValueType_string:
+		return new(string)
+	case ValueType_int:
+		return new(int64)
+	case ValueType_float:
+		return new(float64)
+	case ValueType_blob:
+		return new([]byte)
+	default:
+		return nil
+	}
+}
+
+func convert_string(in interface{}) interface{} {
+	return *(in.(*string))
+}
+
+func convert_int64(in interface{}) interface{} {
+	return *(in.(*int64))
+}
+
+func convert_float(in interface{}) interface{} {
+	return *(in.(*float64))
+}
+
+func convert_blob(in interface{}) interface{} {
+	return *in.(*[]byte)
+}
+
+func (m *Field) GetValueConvtor() func(interface{}) interface{} {
+	switch m.V.GetType() {
+	case ValueType_string:
+		return convert_string
+	case ValueType_int:
+		return convert_int64
+	case ValueType_float:
+		return convert_float
+	case ValueType_blob:
+		return convert_blob
+	default:
+		return nil
+	}
+}
+
 func (m *Field) GetString() string {
 	return m.V.GetString()
 }

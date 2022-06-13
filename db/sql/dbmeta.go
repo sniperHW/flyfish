@@ -55,7 +55,7 @@ func (this *FieldMeta) GetDefaultValue() interface{} {
 	return this.defaultValue
 }
 
-func (this *FieldMeta) getRealName() string {
+func (this *FieldMeta) GetRealName() string {
 	return fmt.Sprintf("%s_%d", this.name, this.tabVersion)
 }
 
@@ -141,9 +141,17 @@ func (t *TableMeta) GetDef() *db.TableDef {
 	return t.tabdef
 }
 
-func (t *TableMeta) getRealFieldName(name string) string {
+func (t *TableMeta) GetRealFieldNames() []string {
+	return t.queryMeta.real_field_names
+}
+
+func (t *TableMeta) GetRealTableName() string {
+	return t.real_tableName
+}
+
+func (t *TableMeta) GetRealFieldName(name string) string {
 	if f := t.fieldMetas[name]; nil != f {
-		return f.getRealName()
+		return f.GetRealName()
 	} else {
 		return ""
 	}
@@ -202,9 +210,15 @@ func (this *TableMeta) CheckFieldMeta(field *proto.Field) error {
 	if !ok {
 		return fmt.Errorf("%s not define in table:%s", field.GetName(), this.table)
 	}
+
 	if m.tt != field.GetType() {
 		return fmt.Errorf("%s has type:%d different with table:%s define type %d", field.GetName(), field.GetType(), this.table, m.tt)
 	}
+
+	if m.tt == proto.ValueType_string && len(field.GetString()) > MaxStringLen {
+		return fmt.Errorf("string value too large")
+	}
+
 	return nil
 }
 
