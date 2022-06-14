@@ -15,6 +15,8 @@ import (
 var ErrRecordNotExist error = errors.New("record not exist")
 var ErrCompareNotEqual error = errors.New("compare not equal")
 var ErrRecordNotChange error = errors.New("record not change")
+var ErrRecordExist error = errors.New("record exist")
+var ErrVersionMismatch error = errors.New("version mismatch")
 
 func txUpdate(ctx context.Context, tx *dbsql.Tx, str string, params []interface{}) (int64, error) {
 	r, err := tx.ExecContext(ctx, str, params...)
@@ -121,7 +123,17 @@ func prepareInsertMysql(params []interface{}, b *buffer.Buffer, tbmeta *sql.Tabl
 }
 
 func prepareMarkDeletePgsql(params []interface{}, b *buffer.Buffer, tbmeta *sql.TableMeta) (*buffer.Buffer, []interface{}) {
-	b, params, _ = prepareInsertPgsql(params, b, tbmeta, map[string]*proto.Field{})
+
+	fields := map[string]*proto.Field{}
+	for _, name := range tbmeta.GetAllFieldsName() {
+		fields[name] = proto.PackField(name, tbmeta.GetDefaultValue(name))
+	}
+
+	b, params, ff := prepareInsertPgsql(params, b, tbmeta, fields)
+
+	for _, v := range ff {
+		b.AppendString(fmt.Sprintf(" %s = $%d,", v[0].(string), v[1].(int)))
+	}
 
 	real_tab_name := tbmeta.GetRealTableName()
 
@@ -130,7 +142,13 @@ func prepareMarkDeletePgsql(params []interface{}, b *buffer.Buffer, tbmeta *sql.
 }
 
 func prepareMarkDeleteMysql(params []interface{}, b *buffer.Buffer, tbmeta *sql.TableMeta) (*buffer.Buffer, []interface{}) {
-	b, params, ff := prepareInsertMysql(params, b, tbmeta, map[string]*proto.Field{})
+
+	fields := map[string]*proto.Field{}
+	for _, name := range tbmeta.GetAllFieldsName() {
+		fields[name] = proto.PackField(name, tbmeta.GetDefaultValue(name))
+	}
+
+	b, params, ff := prepareInsertMysql(params, b, tbmeta, fields)
 
 	for _, v := range ff {
 		b.AppendString(fmt.Sprintf("%s=if(__version__ > 0,?,%s),", v[0].(string), v[0].(string)))
@@ -142,7 +160,7 @@ func prepareMarkDeleteMysql(params []interface{}, b *buffer.Buffer, tbmeta *sql.
 }
 
 func MarkDelete(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta, key string, slot int) (int64, error) {
-	tx, err := dbc.BeginTx(ctx, &dbsql.TxOptions{Isolation: dbsql.LevelRepeatableRead})
+	tx, err := dbc.BeginTx(ctx, &dbsql.TxOptions{Isolation: dbsql.LevelReadCommitted})
 	if nil != err {
 		return 0, err
 	}
@@ -156,7 +174,9 @@ func MarkDelete(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.Ta
 		b, params = prepareMarkDeletePgsql(params, b, tbmeta)
 	}
 
-	if _, err = txUpdate(ctx, tx, b.ToStrUnsafe(), params); err != nil {
+	var rowsAffected int64
+
+	if rowsAffected, err = txUpdate(ctx, tx, b.ToStrUnsafe(), params); err != nil {
 		return 0, err
 	}
 
@@ -165,7 +185,11 @@ func MarkDelete(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.Ta
 	} else if err = tx.Commit(); err != nil {
 		return 0, err
 	} else {
-		return version, nil
+		if version == -1 || rowsAffected == 0 {
+			return version, ErrRecordNotExist
+		} else {
+			return version, nil
+		}
 	}
 }
 
@@ -213,7 +237,7 @@ func prepareSetMySql(params []interface{}, b *buffer.Buffer, tbmeta *sql.TableMe
 
 func Set(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta, key string, slot int, fields map[string]*proto.Field, version ...int64) (int64, error) {
 
-	tx, err := dbc.BeginTx(ctx, &dbsql.TxOptions{Isolation: dbsql.LevelRepeatableRead})
+	tx, err := dbc.BeginTx(ctx, &dbsql.TxOptions{Isolation: dbsql.LevelReadCommitted})
 	if nil != err {
 		return 0, err
 	}
@@ -226,7 +250,9 @@ func Set(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta
 		b, params = prepareSetPgSql(params, b, tbmeta, fields, version...)
 	}
 
-	if _, err = txUpdate(ctx, tx, b.ToStrUnsafe(), params); nil != err {
+	var rowsAffected int64
+
+	if rowsAffected, err = txUpdate(ctx, tx, b.ToStrUnsafe(), params); nil != err {
 		return 0, err
 	}
 
@@ -235,7 +261,11 @@ func Set(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta
 	} else if err = tx.Commit(); err != nil {
 		return 0, err
 	} else {
-		return version, nil
+		if rowsAffected > 0 {
+			return version, nil
+		} else {
+			return version, ErrVersionMismatch
+		}
 	}
 }
 
@@ -265,9 +295,9 @@ func prepareSetNxMySql(params []interface{}, b *buffer.Buffer, tbmeta *sql.Table
 	return b, params
 }
 
-func SetNx(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta, key string, slot int, fields map[string]*proto.Field) (int64, map[string]*proto.Field, error) {
+func SetNx(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta, key string, slot int, fields map[string]*proto.Field) (int64, []*proto.Field, error) {
 
-	tx, err := dbc.BeginTx(ctx, &dbsql.TxOptions{Isolation: dbsql.LevelRepeatableRead})
+	tx, err := dbc.BeginTx(ctx, &dbsql.TxOptions{Isolation: dbsql.LevelReadCommitted})
 	if nil != err {
 		return 0, nil, err
 	}
@@ -297,20 +327,17 @@ func SetNx(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMe
 		} else if err = tx.Commit(); err != nil {
 			return 0, nil, err
 		} else {
-			var retFields map[string]*proto.Field
 			if len(wantFields) > 0 {
-				retFields = map[string]*proto.Field{}
-				for _, v := range wantFields {
-					retFields[v.GetName()] = v
-				}
+				return version, wantFields, ErrRecordExist
+			} else {
+				return version, nil, nil
 			}
-			return version, retFields, nil
 		}
 	}
 }
 
 func CompareAndSet(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta, key string, slot int, old *proto.Field, new *proto.Field) (int64, *proto.Field, error) {
-	tx, err := dbc.BeginTx(ctx, &dbsql.TxOptions{Isolation: dbsql.LevelRepeatableRead})
+	tx, err := dbc.BeginTx(ctx, &dbsql.TxOptions{Isolation: dbsql.LevelReadCommitted})
 	if nil != err {
 		return 0, nil, err
 	}
@@ -340,7 +367,7 @@ func CompareAndSet(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql
 			return 0, nil, err
 		} else if rowsAffected > 0 {
 			return version, retFields[0], nil
-		} else if version != 0 {
+		} else if version > 0 {
 			return version, retFields[0], ErrCompareNotEqual
 		} else {
 			return version, nil, ErrRecordNotExist
@@ -387,7 +414,7 @@ func prepareCompareAndSetNxMySql(params []interface{}, b *buffer.Buffer, tbmeta 
 }
 
 func CompareAndSetNx(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta, key string, slot int, old *proto.Field, new *proto.Field) (int64, *proto.Field, error) {
-	tx, err := dbc.BeginTx(ctx, &dbsql.TxOptions{Isolation: dbsql.LevelRepeatableRead})
+	tx, err := dbc.BeginTx(ctx, &dbsql.TxOptions{Isolation: dbsql.LevelReadCommitted})
 	if nil != err {
 		return 0, nil, err
 	}
@@ -445,7 +472,7 @@ func prepareAddMySql(params []interface{}, b *buffer.Buffer, tbmeta *sql.TableMe
 }
 
 func Add(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta, key string, slot int, addField *proto.Field) (int64, *proto.Field, error) {
-	tx, err := dbc.BeginTx(ctx, &dbsql.TxOptions{Isolation: dbsql.LevelRepeatableRead})
+	tx, err := dbc.BeginTx(ctx, &dbsql.TxOptions{Isolation: dbsql.LevelReadCommitted})
 	if nil != err {
 		return 0, nil, err
 	}
@@ -478,7 +505,7 @@ func Load(ctx context.Context, dbc *sqlx.DB, tbmeta *sql.TableMeta, key string, 
 	var err error
 
 	fieldRealNames := []string{"__version__"}
-	receivers := []interface{}{proto.ValueReceiverFactory(proto.ValueType_int)}
+	receivers := []interface{}{proto.ValueReceiverFactory(proto.ValueType_int)()}
 	convetors := []func(interface{}) interface{}{proto.GetValueConvertor(proto.ValueType_int)}
 
 	if len(wantFields) == 0 {

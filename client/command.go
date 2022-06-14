@@ -443,22 +443,6 @@ func (this *Client) IncrBy(table, key, field string, value int64) *SliceCmd {
 	}
 }
 
-func (this *Client) DecrBy(table, key, field string, value int64) *SliceCmd {
-	unikey := table + ":" + key
-	return &SliceCmd{
-		client: this,
-		unikey: unikey,
-		makeReq: func() *cs.ReqMessage {
-			return &cs.ReqMessage{
-				Seqno:  atomic.AddInt64(&this.seqno, 1),
-				UniKey: unikey,
-				Data: &protocol.DecrByReq{
-					Field: protocol.PackField(field, value),
-				}}
-		},
-	}
-}
-
 func (this *Client) Kick(table, key string) *StatusCmd {
 	unikey := table + ":" + key
 	return &StatusCmd{
@@ -587,22 +571,6 @@ func (this *serverConn) onIncrByResp(c *cmdContext, errCode errcode.Error, resp 
 	return ret
 }
 
-func (this *serverConn) onDecrByResp(c *cmdContext, errCode errcode.Error, resp *protocol.DecrByResp) interface{} {
-
-	ret := &SliceResult{
-		ErrCode: errCode,
-		Version: resp.GetVersion(),
-	}
-
-	if ret.ErrCode == nil {
-		ret.Fields = map[string]*Field{}
-		ret.Fields[resp.GetField().GetName()] = (*Field)(resp.GetField())
-	}
-
-	return ret
-
-}
-
 func (this *serverConn) onKickResp(c *cmdContext, errCode errcode.Error, resp *protocol.KickResp) interface{} {
 	return &StatusResult{
 		ErrCode: errCode,
@@ -650,8 +618,6 @@ func (this *serverConn) onMessage(msg *cs.RespMessage) {
 					ret = this.onDelResp(ctx, msg.Err, msg.Data.(*protocol.DelResp))
 				case protocol.CmdType_IncrBy:
 					ret = this.onIncrByResp(ctx, msg.Err, msg.Data.(*protocol.IncrByResp))
-				case protocol.CmdType_DecrBy:
-					ret = this.onDecrByResp(ctx, msg.Err, msg.Data.(*protocol.DecrByResp))
 				case protocol.CmdType_Kick:
 					ret = this.onKickResp(ctx, msg.Err, msg.Data.(*protocol.KickResp))
 				default:

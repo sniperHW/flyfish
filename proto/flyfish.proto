@@ -17,12 +17,11 @@ enum CmdType {
   Get = 3;
   Del = 4;
   IncrBy = 5;
-  DecrBy = 6;
-  SetNx = 7;
-  CompareAndSet = 8;
-  CompareAndSetNx = 9;
-  Kick = 10;
-  ScanNext = 11;
+  SetNx = 6;
+  CompareAndSet = 7;
+  CompareAndSetNx = 8;
+  Kick = 9;
+  ScanNext = 10;
 }
 
 message loginReq {
@@ -122,20 +121,6 @@ message incr_by_req {
 message incr_by_resp {
   optional int64  version = 1;
   optional field  field   = 2;    
-}
-
-/*
-*  将记录的field.name字段减少field.value,并返回减少后的值(field.value只支持int类型，如果记录不存在会用
-*  记录的默认值初始化记录，int类型默认值为0，并在此基础上减少)  
-*/
-message decr_by_req {
-  optional int64  version = 1[(gogoproto.nullable) = true];
-  required field  field   = 2;  
-}
-
-message decr_by_resp {
-  optional int64  version = 1;  
-  optional field  field   = 2; 
 }
 
 /*

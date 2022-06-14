@@ -34,6 +34,7 @@ test.go
 server/app/test/flygate_config.toml
 server/app/test/flykv_config.toml
 server/app/test/flypd_config.toml
+server/app/flysql_config.toml
 
 server/app/.amp/
 server/app/deployment.json
@@ -41,3 +42,4 @@ server/app/flygate
 server/app/flykv
 server/app/flypd
 server/app/meta.json
+bloomfilter.txt

@@ -209,8 +209,6 @@ func (s *kvstore) makeCmd(keyvalue *kv, req clientRequest) (cmdI, errcode.Error)
 		return s.makeCompareAndSetNx(keyvalue, deadline, req.replyer, req.msg.Seqno, data.(*flyproto.CompareAndSetNxReq))
 	case flyproto.CmdType_IncrBy:
 		return s.makeIncr(keyvalue, deadline, req.replyer, req.msg.Seqno, data.(*flyproto.IncrByReq))
-	case flyproto.CmdType_DecrBy:
-		return s.makeDecr(keyvalue, deadline, req.replyer, req.msg.Seqno, data.(*flyproto.DecrByReq))
 	case flyproto.CmdType_Kick:
 		return s.makeKick(keyvalue, deadline, req.replyer, req.msg.Seqno, data.(*flyproto.KickReq))
 	default:

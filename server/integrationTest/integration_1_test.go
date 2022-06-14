@@ -364,48 +364,6 @@ func testkv(t *testing.T, c *client.Client) {
 
 	}
 
-	fmt.Println("-----------------------------decr----------------------------------")
-
-	{
-
-		r := c.Set("users1", "sniperHW", fields).Exec()
-		assert.Nil(t, r.ErrCode)
-
-		r1 := c.DecrBy("users1", "sniperHW", "age", 2).Exec()
-		assert.Nil(t, r1.ErrCode)
-		assert.Equal(t, r1.Fields["age"].GetInt(), int64(10))
-
-		r2 := c.Del("users1", "sniperHW").Exec()
-		assert.Nil(t, r2.ErrCode)
-
-		r1 = c.DecrBy("users1", "sniperHW", "age", 2).Exec()
-		assert.Nil(t, r1.ErrCode)
-		assert.Equal(t, r1.Fields["age"].GetInt(), int64(-2))
-
-		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
-
-		r2 = c.Del("users1", "sniperHW").Exec()
-		assert.Nil(t, r2.ErrCode)
-
-		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
-
-		r1 = c.DecrBy("users1", "sniperHW", "age", 2).Exec()
-		assert.Nil(t, r1.ErrCode)
-		assert.Equal(t, r1.Fields["age"].GetInt(), int64(-2))
-
-		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
-
-		r1 = c.DecrBy("users1", "sniperHW", "age", 2).Exec()
-		assert.Nil(t, r1.ErrCode)
-		assert.Equal(t, r1.Fields["age"].GetInt(), int64(-4))
-
-		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
-
-		fmt.Println("---------------------------------")
-
-		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
-	}
-
 	fmt.Println("-----------------------------mget----------------------------------")
 
 	{

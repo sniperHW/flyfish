@@ -47,7 +47,7 @@ func Set(c *kclient.Client) bool {
 
 	fields := map[string]interface{}{}
 	fields["age"] = 37
-	fields["phone"] = strings.Repeat("a", 64)
+	fields["phone"] = []byte(strings.Repeat("a", 64))
 	//fields["name"] = "sniperHW"
 	key := fmt.Sprintf("%s:%d", "huangwei", nextID%keyrange)
 	set := c.Set("users1", key, fields)
@@ -104,7 +104,7 @@ func main() {
 
 	bar = progressbar.New(int(total))
 
-	for j := 0; j < 100; j++ {
+	for j := 0; j < 1; j++ {
 		c, _ := kclient.OpenClient(clientCfg)
 		go func() {
 			for {
@@ -137,6 +137,7 @@ func main() {
 		} else if v.err.Code == errcode.Errcode_timeout {
 			timeout++
 		} else {
+			fmt.Println(errcode.GetErrorDesc(v.err))
 			otherErr++
 		}
 

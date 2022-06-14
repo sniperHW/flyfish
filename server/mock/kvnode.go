@@ -684,93 +684,6 @@ func (this *Node) incrBy(session *fnet.Socket, msg *cs.ReqMessage) {
 	}
 }
 
-func (this *Node) decrBy(session *fnet.Socket, msg *cs.ReqMessage) {
-	req := msg.Data.(*flyproto.DecrByReq)
-
-	f := req.GetField()
-
-	if nil == f {
-		session.Send(&cs.RespMessage{
-			Seqno: msg.Seqno,
-			Err:   errcode.New(errcode.Errcode_error, "field not define"),
-			Data:  &flyproto.DecrByResp{Version: req.GetVersion()},
-		})
-		return
-	}
-
-	table, key := splitUniKey(msg.UniKey)
-	m := this.metaMgr.GetTableMeta(table)
-	if nil == m {
-		session.Send(&cs.RespMessage{
-			Seqno: msg.Seqno,
-			Err:   errcode.New(errcode.Errcode_error, "field not define"),
-			Data:  &flyproto.DecrByResp{Version: req.GetVersion()},
-		})
-		return
-	} else if nil != m.CheckFields(f) {
-		session.Send(&cs.RespMessage{
-			Seqno: msg.Seqno,
-			Err:   errcode.New(errcode.Errcode_error, "field not define"),
-			Data:  &flyproto.DecrByResp{Version: req.GetVersion()},
-		})
-		return
-	}
-
-	v, ok := this.store[msg.UniKey]
-
-	if !ok {
-		v = &kv{
-			uniKey:  msg.UniKey,
-			key:     key,
-			table:   table,
-			version: time.Now().UnixNano(),
-			meta:    m,
-			fields:  map[string]*flyproto.Field{},
-		}
-
-		fillDefaultValue(v.meta, &v.fields)
-
-		vv := v.fields[f.GetName()]
-
-		v.fields[f.GetName()] = flyproto.PackField(f.GetName(), vv.GetInt()-f.GetInt())
-
-		v.version++
-
-		this.store[msg.UniKey] = v
-
-		session.Send(&cs.RespMessage{
-			Seqno: msg.Seqno,
-			Data: &flyproto.DecrByResp{Version: v.version,
-				Field: v.fields[f.GetName()]},
-		})
-
-	} else {
-		if !checkVersion(req.Version, v.version) {
-			session.Send(&cs.RespMessage{
-				Seqno: msg.Seqno,
-				Err:   Err_version_mismatch,
-				Data:  &flyproto.DecrByResp{Version: v.version},
-			})
-		} else {
-
-			vv := v.fields[f.GetName()]
-
-			v.fields[f.GetName()] = flyproto.PackField(f.GetName(), vv.GetInt()-f.GetInt())
-
-			v.version++
-
-			this.store[msg.UniKey] = v
-
-			session.Send(&cs.RespMessage{
-				Seqno: msg.Seqno,
-				Data: &flyproto.DecrByResp{Version: v.version,
-					Field: v.fields[f.GetName()]},
-			})
-
-		}
-	}
-}
-
 func (this *Node) kick(session *fnet.Socket, msg *cs.ReqMessage) {
 	session.Send(&cs.RespMessage{
 		Seqno: msg.Seqno,
@@ -789,7 +702,6 @@ func (this *Node) initHandler() *Node {
 	this.Register(flyproto.CmdType_CompareAndSet, this.compareAndSet)
 	this.Register(flyproto.CmdType_CompareAndSetNx, this.compareAndSetNx)
 	this.Register(flyproto.CmdType_IncrBy, this.incrBy)
-	this.Register(flyproto.CmdType_DecrBy, this.decrBy)
 	this.Register(flyproto.CmdType_Kick, this.kick)
 
 	return this

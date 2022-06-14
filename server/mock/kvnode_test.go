@@ -170,70 +170,12 @@ func test(t *testing.T, c *client.Client) {
 			assert.Nil(t, r.ErrCode)
 		}
 
-		//incr/decr
+		//incr
 
 		{
 			r := c.IncrBy("users1", "sniperHW", "age", 1).Exec()
 			assert.Nil(t, r.ErrCode)
 			assert.Equal(t, int64(13), r.Fields["age"].GetInt())
-		}
-
-		{
-			r := c.DecrBy("users1", "sniperHW", "age", 1).Exec()
-			assert.Nil(t, r.ErrCode)
-			assert.Equal(t, int64(12), r.Fields["age"].GetInt())
-		}
-
-		{
-			r := c.Del("users1", "sniperHW").Exec()
-			assert.Nil(t, r.ErrCode)
-		}
-
-		{
-			r := c.IncrBy("users1", "sniperHW", "age", 1).Exec()
-			assert.Nil(t, r.ErrCode)
-			assert.Equal(t, int64(1), r.Fields["age"].GetInt())
-		}
-
-		{
-			r := c.IncrBy("test", "sniperHW", "age", 1, 10).Exec()
-			assert.Equal(t, errcode.Errcode_error, r.ErrCode.Code)
-		}
-
-		{
-			r := c.IncrBy("users1", "sniperHW", "age1", 1, 10).Exec()
-			assert.Equal(t, errcode.Errcode_error, r.ErrCode.Code)
-		}
-
-		{
-			r := c.IncrBy("users1", "sniperHW", "age", 1, 10).Exec()
-			assert.Equal(t, Err_version_mismatch, r.ErrCode)
-		}
-
-		{
-			r := c.Del("users1", "sniperHW").Exec()
-			assert.Nil(t, r.ErrCode)
-		}
-
-		{
-			r := c.DecrBy("test", "sniperHW", "age", 1, 10).Exec()
-			assert.Equal(t, errcode.Errcode_error, r.ErrCode.Code)
-		}
-
-		{
-			r := c.DecrBy("users1", "sniperHW", "age1", 1, 10).Exec()
-			assert.Equal(t, errcode.Errcode_error, r.ErrCode.Code)
-		}
-
-		{
-			r := c.DecrBy("users1", "sniperHW", "age", 1).Exec()
-			assert.Nil(t, r.ErrCode)
-			assert.Equal(t, int64(-1), r.Fields["age"].GetInt())
-		}
-
-		{
-			r := c.DecrBy("users1", "sniperHW", "age", 1, 10).Exec()
-			assert.Equal(t, Err_version_mismatch, r.ErrCode)
 		}
 
 		//compare
