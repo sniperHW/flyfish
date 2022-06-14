@@ -8,7 +8,6 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/proto"
-	"reflect"
 	"strings"
 )
 
@@ -21,10 +20,10 @@ type ScannerRow struct {
 }
 
 type Scanner struct {
-	wantFields    []string
-	field_types   []reflect.Type
-	field_convter []func(interface{}) interface{}
-	rows          *sql.Rows
+	wantFields          []string
+	field_value_convter []func(interface{}) interface{}
+	field_value_creator []func() interface{}
+	rows                *sql.Rows
 }
 
 func NewScanner(tbmeta db.TableMeta, dbc *sqlx.DB, slot int, wantFields []string, exclude []string) (*Scanner, error) {
@@ -47,23 +46,23 @@ func NewScanner(tbmeta db.TableMeta, dbc *sqlx.DB, slot int, wantFields []string
 		rows:       rows,
 	}
 
-	scaner.field_types = append(scaner.field_types, getReceiverType(proto.ValueType_string)) //__key__
-	scaner.field_types = append(scaner.field_types, getReceiverType(proto.ValueType_int))    //__version__
+	scaner.field_value_creator = append(scaner.field_value_creator, proto.ValueReceiverFactory(proto.ValueType_string)) //__key__
+	scaner.field_value_creator = append(scaner.field_value_creator, proto.ValueReceiverFactory(proto.ValueType_int))    //__version__
 
 	fieldMetas := tbmeta.(*TableMeta).fieldMetas
 
 	for _, v := range wantFields {
 		fieldMeta := fieldMetas[v]
-		scaner.field_types = append(scaner.field_types, getReceiverType(fieldMeta.tt))
-		scaner.field_convter = append(scaner.field_convter, getConvetor(fieldMeta.tt))
+		scaner.field_value_creator = append(scaner.field_value_creator, proto.ValueReceiverFactory(fieldMeta.tt))
+		scaner.field_value_convter = append(scaner.field_value_convter, proto.GetValueConvertor(fieldMeta.tt))
 	}
 
 	return scaner, nil
 }
 
 func (sc *Scanner) makeFieldReceiver() (receiver []interface{}) {
-	for _, v := range sc.field_types {
-		receiver = append(receiver, reflect.New(v).Interface())
+	for _, v := range sc.field_value_creator {
+		receiver = append(receiver, v())
 	}
 	return
 }
@@ -80,7 +79,7 @@ func (sc *Scanner) Next(count int) (rows []*ScannerRow, err error) {
 
 			fields := []*proto.Field{}
 			for i := 0; i < len(sc.wantFields); i++ {
-				fields = append(fields, proto.PackField(sc.wantFields[i], sc.field_convter[i](field_receiver[i+2])))
+				fields = append(fields, proto.PackField(sc.wantFields[i], sc.field_value_convter[i](field_receiver[i+2])))
 			}
 			rows = append(rows, &ScannerRow{
 				Key:     *field_receiver[0].(*string),

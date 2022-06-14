@@ -1,21 +1,19 @@
 package sql
 
 import (
-	"errors"
 	"fmt"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/proto"
-	"reflect"
 	"strings"
 	"sync"
 )
 
 //表查询元数据
 type QueryMeta struct {
-	field_names      []string //所有的字段名
-	real_field_names []string
-	field_convter    []func(interface{}) interface{}
-	field_type       []reflect.Type
+	field_names         []string //所有的字段名
+	real_field_names    []string
+	field_value_convter []func(interface{}) interface{}
+	field_value_creator []func() interface{}
 }
 
 func (this *QueryMeta) GetFieldNames() []string {
@@ -25,20 +23,20 @@ func (this *QueryMeta) GetFieldNames() []string {
 func (this *QueryMeta) GetConvetorByName(name string) func(interface{}) interface{} {
 	for i := 0; i < len(this.field_names); i++ {
 		if this.field_names[i] == name {
-			return this.field_convter[i+3]
+			return this.field_value_convter[i+3]
 		}
 	}
 	return nil
 }
 
-func (this *QueryMeta) GetFieldConvter() []func(interface{}) interface{} {
-	return this.field_convter
+func (this *QueryMeta) GetValueConvter() []func(interface{}) interface{} {
+	return this.field_value_convter
 }
 
-func (this *QueryMeta) GetReceiver() []interface{} {
-	receiver := make([]interface{}, len(this.field_type))
-	for i, v := range this.field_type {
-		receiver[i] = reflect.New(v).Interface()
+func (this *QueryMeta) GetValueReceiver() []interface{} {
+	receiver := make([]interface{}, len(this.field_value_creator))
+	for i, v := range this.field_value_creator {
+		receiver[i] = v()
 	}
 	return receiver
 }
@@ -57,6 +55,10 @@ func (this *FieldMeta) GetDefaultValue() interface{} {
 
 func (this *FieldMeta) GetRealName() string {
 	return fmt.Sprintf("%s_%d", this.name, this.tabVersion)
+}
+
+func (this *FieldMeta) Type() proto.ValueType {
+	return this.tt
 }
 
 type DBMeta struct {
@@ -250,79 +252,6 @@ func (this *TableMeta) CheckFieldWithVersion(field string, version int64) bool {
 	}
 }
 
-func (this *TableMeta) GetLoadParams(fields []string) (realNames []string, receivers []interface{}, convetors []func(interface{}) interface{}, err error) {
-	realNames = append(realNames, "__version__")
-	receivers = append(receivers, new(int64))
-	convetors = append(convetors, convert_int64)
-	if len(fields) == 0 {
-		for _, f := range this.fieldMetas {
-			realNames = append(realNames, f.GetRealName())
-			receivers = append(receivers, reflect.New(getReceiverType(f.tt)).Interface())
-			convetors = append(convetors, getConvetor(f.tt))
-		}
-	} else {
-		for _, v := range fields {
-			f, ok := this.fieldMetas[v]
-			if !ok {
-				err = fmt.Errorf("fileds %s not define in table:%s", v, this.table)
-				return
-			}
-			realNames = append(realNames, f.GetRealName())
-			receivers = append(receivers, reflect.New(getReceiverType(f.tt)).Interface())
-			convetors = append(convetors, getConvetor(f.tt))
-		}
-	}
-	return
-}
-
-func getReceiverType(tt proto.ValueType) reflect.Type {
-	if tt == proto.ValueType_int {
-		var v int64
-		return reflect.TypeOf(v)
-	} else if tt == proto.ValueType_float {
-		var v float64
-		return reflect.TypeOf(v)
-	} else if tt == proto.ValueType_string {
-		var v string
-		return reflect.TypeOf(v)
-	} else if tt == proto.ValueType_blob {
-		var v []byte
-		return reflect.TypeOf(v)
-	} else {
-		return nil
-	}
-}
-
-func convert_string(in interface{}) interface{} {
-	return *(in.(*string))
-}
-
-func convert_int64(in interface{}) interface{} {
-	return *(in.(*int64))
-}
-
-func convert_float(in interface{}) interface{} {
-	return *(in.(*float64))
-}
-
-func convert_blob(in interface{}) interface{} {
-	return *in.(*[]byte)
-}
-
-func getConvetor(tt proto.ValueType) func(interface{}) interface{} {
-	if tt == proto.ValueType_int {
-		return convert_int64
-	} else if tt == proto.ValueType_float {
-		return convert_float
-	} else if tt == proto.ValueType_string {
-		return convert_string
-	} else if tt == proto.ValueType_blob {
-		return convert_blob
-	} else {
-		return nil
-	}
-}
-
 func createTableMetas(def *db.DbDef) (map[string]*TableMeta, error) {
 	table_metas := map[string]*TableMeta{}
 	if nil != def {
@@ -334,10 +263,10 @@ func createTableMetas(def *db.DbDef) (map[string]*TableMeta, error) {
 				real_tableName: v.GetRealName(),
 				fieldMetas:     map[string]*FieldMeta{},
 				queryMeta: &QueryMeta{
-					field_names:      []string{},
-					real_field_names: []string{},
-					field_type:       []reflect.Type{},
-					field_convter:    []func(interface{}) interface{}{},
+					field_names:         []string{},
+					real_field_names:    []string{},
+					field_value_creator: []func() interface{}{},
+					field_value_convter: []func(interface{}) interface{}{},
 				},
 				dbdef:  def,
 				tabdef: v,
@@ -345,40 +274,23 @@ func createTableMetas(def *db.DbDef) (map[string]*TableMeta, error) {
 
 			//插入三个默认字段
 			t_meta.queryMeta.real_field_names = append(t_meta.queryMeta.real_field_names, "__key__")
-			t_meta.queryMeta.field_type = append(t_meta.queryMeta.field_type, getReceiverType(proto.ValueType_string))
-			t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter, getConvetor(proto.ValueType_string))
+			t_meta.queryMeta.field_value_creator = append(t_meta.queryMeta.field_value_creator, proto.ValueReceiverFactory(proto.ValueType_string))
+			t_meta.queryMeta.field_value_convter = append(t_meta.queryMeta.field_value_convter, proto.GetValueConvertor(proto.ValueType_string))
 
 			t_meta.queryMeta.real_field_names = append(t_meta.queryMeta.real_field_names, "__version__")
-			t_meta.queryMeta.field_type = append(t_meta.queryMeta.field_type, getReceiverType(proto.ValueType_int))
-			t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter, getConvetor(proto.ValueType_int))
+			t_meta.queryMeta.field_value_creator = append(t_meta.queryMeta.field_value_creator, proto.ValueReceiverFactory(proto.ValueType_int))
+			t_meta.queryMeta.field_value_convter = append(t_meta.queryMeta.field_value_convter, proto.GetValueConvertor(proto.ValueType_int))
 
 			t_meta.queryMeta.real_field_names = append(t_meta.queryMeta.real_field_names, "__slot__")
-			t_meta.queryMeta.field_type = append(t_meta.queryMeta.field_type, getReceiverType(proto.ValueType_int))
-			t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter, getConvetor(proto.ValueType_int))
+			t_meta.queryMeta.field_value_creator = append(t_meta.queryMeta.field_value_creator, proto.ValueReceiverFactory(proto.ValueType_int))
+			t_meta.queryMeta.field_value_convter = append(t_meta.queryMeta.field_value_convter, proto.GetValueConvertor(proto.ValueType_int))
 
 			//处理其它字段
 			for _, vv := range v.Fields {
-				//字段名不允许以__开头
-				if strings.HasPrefix(vv.Name, "__") {
-					return nil, errors.New("has prefix _")
-				}
-
-				ftype := vv.GetProtoType()
-
-				if ftype == proto.ValueType_invaild {
-					return nil, errors.New("unsupport data type")
-				}
-
-				defaultValue := vv.GetDefaultValue()
-
-				if nil == defaultValue {
-					return nil, errors.New("invaild default value")
-				}
-
 				t_meta.fieldMetas[vv.Name] = &FieldMeta{
 					name:         vv.Name,
-					tt:           ftype,
-					defaultValue: defaultValue,
+					tt:           vv.GetProtoType(),
+					defaultValue: vv.GetDefaultValue(),
 					tabVersion:   vv.TabVersion,
 				}
 
@@ -386,16 +298,14 @@ func createTableMetas(def *db.DbDef) (map[string]*TableMeta, error) {
 
 				t_meta.queryMeta.real_field_names = append(t_meta.queryMeta.real_field_names, vv.GetRealName())
 
-				t_meta.queryMeta.field_type = append(t_meta.queryMeta.field_type, getReceiverType(ftype))
+				t_meta.queryMeta.field_value_creator = append(t_meta.queryMeta.field_value_creator, proto.ValueReceiverFactory(vv.GetProtoType()))
 
-				t_meta.queryMeta.field_convter = append(t_meta.queryMeta.field_convter, getConvetor(ftype))
+				t_meta.queryMeta.field_value_convter = append(t_meta.queryMeta.field_value_convter, proto.GetValueConvertor(vv.GetProtoType()))
 			}
 
 			table_metas[v.Name] = t_meta
 
 			t_meta.selectPrefix = fmt.Sprintf("SELECT %s FROM %s where __key__ in(", strings.Join(t_meta.queryMeta.real_field_names, ","), t_meta.real_tableName)
-
-			//t_meta.selectPrefix = fmt.Sprintf("SELECT %s FROM %s where __key__ =", strings.Join(t_meta.queryMeta.real_field_names, ","), t_meta.real_tableName)
 
 			t_meta.insertPrefix = fmt.Sprintf("INSERT INTO %s(%s) VALUES (", t_meta.real_tableName, strings.Join(t_meta.queryMeta.real_field_names, ","))
 

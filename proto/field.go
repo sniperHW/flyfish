@@ -131,19 +131,23 @@ func (m *Field) GetValue() interface{} {
 	}
 }
 
-func (m *Field) GetValueReceiver() interface{} {
-	switch m.V.GetType() {
+func ValueReceiverFactory(tt ValueType) func() interface{} {
+	switch tt {
 	case ValueType_string:
-		return new(string)
+		return func() interface{} { return new(string) }
 	case ValueType_int:
-		return new(int64)
+		return func() interface{} { return new(int64) }
 	case ValueType_float:
-		return new(float64)
+		return func() interface{} { return new(float64) }
 	case ValueType_blob:
-		return new([]byte)
+		return func() interface{} { return new([]byte) }
 	default:
 		return nil
 	}
+}
+
+func (m *Field) GetValueReceiver() interface{} {
+	return ValueReceiverFactory(m.V.GetType())()
 }
 
 func convert_string(in interface{}) interface{} {
@@ -162,8 +166,8 @@ func convert_blob(in interface{}) interface{} {
 	return *in.(*[]byte)
 }
 
-func (m *Field) GetValueConvtor() func(interface{}) interface{} {
-	switch m.V.GetType() {
+func GetValueConvertor(tt ValueType) func(interface{}) interface{} {
+	switch tt {
 	case ValueType_string:
 		return convert_string
 	case ValueType_int:
@@ -175,6 +179,10 @@ func (m *Field) GetValueConvtor() func(interface{}) interface{} {
 	default:
 		return nil
 	}
+}
+
+func (m *Field) GetValueConvertor() func(interface{}) interface{} {
+	return GetValueConvertor(m.V.GetType())
 }
 
 func (m *Field) GetString() string {

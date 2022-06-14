@@ -52,7 +52,7 @@ func txSelect(ctx context.Context, tx *dbsql.Tx, tbmeta *sql.TableMeta, key stri
 		return 0, nil, err
 	default:
 		for i, v := range fields {
-			fields[i] = proto.PackField(v.GetName(), v.GetValueConvtor()(receiver[i+1]))
+			fields[i] = proto.PackField(v.GetName(), v.GetValueConvertor()(receiver[i+1]))
 		}
 
 		return version, fields, nil
@@ -475,9 +475,29 @@ func Add(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta
 func Load(ctx context.Context, dbc *sqlx.DB, tbmeta *sql.TableMeta, key string, wantFields []string, version ...int64) (int64, []*proto.Field, error) {
 	var retVersion int64
 	var retFields []*proto.Field
-	fieldRealNames, receivers, convetors, err := tbmeta.GetLoadParams(wantFields)
-	if nil != err {
-		return 0, nil, err
+	var err error
+
+	fieldRealNames := []string{"__version__"}
+	receivers := []interface{}{proto.ValueReceiverFactory(proto.ValueType_int)}
+	convetors := []func(interface{}) interface{}{proto.GetValueConvertor(proto.ValueType_int)}
+
+	if len(wantFields) == 0 {
+		for _, f := range tbmeta.GetFieldMetas() {
+			fieldRealNames = append(fieldRealNames, f.GetRealName())
+			receivers = append(receivers, proto.ValueReceiverFactory(f.Type())())
+			convetors = append(convetors, proto.GetValueConvertor(f.Type()))
+		}
+	} else {
+		fieldMetas := tbmeta.GetFieldMetas()
+		for _, v := range wantFields {
+			f, ok := fieldMetas[v]
+			if !ok {
+				return 0, nil, fmt.Errorf("fileds %s not define in table:%s", v, tbmeta.TableName())
+			}
+			fieldRealNames = append(fieldRealNames, f.GetRealName())
+			receivers = append(receivers, proto.ValueReceiverFactory(f.Type())())
+			convetors = append(convetors, proto.GetValueConvertor(f.Type()))
+		}
 	}
 
 	queryStr := fmt.Sprintf("select %s from %s where __key__ = '%s'", strings.Join(fieldRealNames, ","), tbmeta.GetRealTableName(), key)

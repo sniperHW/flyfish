@@ -257,7 +257,7 @@ func (p *pd) onKvnodeReportStatus(replyer replyer, m *snet.Message) {
 		store.halt = v.Halt
 		store.metaVersion = v.MetaVersion
 
-		if v.Isleader && v.MetaVersion != p.DbMetaMgr.DbMeta.Version {
+		if v.Isleader && p.DbMetaMgr.DbMeta.Version > v.MetaVersion {
 			addr, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", node.Host, node.ServicePort))
 			p.udp.SendTo(addr, snet.MakeMessage(0,
 				&sproto.NotifyUpdateMeta{

@@ -517,7 +517,6 @@ func (this *kvnode) start() error {
 			resp = this.getKvnodeBootInfo(this.pdAddr)
 			if !resp.Ok {
 				GetSugar().Errorf("getKvnodeBootInfo err:%v", resp.Reason)
-				return errors.New(resp.Reason)
 			} else {
 				break
 			}

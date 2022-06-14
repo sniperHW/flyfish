@@ -147,8 +147,8 @@ func (this *loader) exec() {
 
 			queryMeta := v.meta.GetQueryMeta()
 
-			filed_receiver := queryMeta.GetReceiver()
-			field_convter := queryMeta.GetFieldConvter()
+			filed_receiver := queryMeta.GetValueReceiver()
+			field_convter := queryMeta.GetValueConvter()
 			field_names := queryMeta.GetFieldNames()
 
 			errCode := db.ERR_RecordNotExist
