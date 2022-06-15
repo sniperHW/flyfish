@@ -95,7 +95,7 @@ func test(t *testing.T, c *client.Client) {
 		dbc.Exec("delete from users1_0 where __key__ = 'sniperHW';")
 
 		r1 := c.Del("users1", "sniperHW").Exec()
-		assert.Equal(t, r1.ErrCode.Code, errcode.Errcode_record_notexist)
+		assert.Nil(t, r1.ErrCode)
 
 		fields := map[string]interface{}{}
 		fields["age"] = 12
@@ -141,7 +141,6 @@ func test(t *testing.T, c *client.Client) {
 		for i := 0; i < 10; i++ {
 			c.Set("users1", "sniperHW", fields).AsyncExec(func(r *client.StatusResult) {
 				assert.Nil(t, r.ErrCode)
-				fmt.Println("version-----------", r.Version)
 				wait.Done()
 			})
 		}
@@ -158,7 +157,7 @@ func test(t *testing.T, c *client.Client) {
 		r := c.GetAll("users1", "sniperHW").Exec()
 		assert.Nil(t, r.ErrCode)
 
-		r = c.GetAllWithVersion("users1", "sniperHW", r.Version).Exec()
+		r = c.GetAllWithVersion("users1", "sniperHW", *r.Version).Exec()
 		assert.Equal(t, r.ErrCode.Code, errcode.Errcode_record_unchange)
 
 		r1 := c.Del("users1", "sniperHW").Exec()
@@ -168,7 +167,7 @@ func test(t *testing.T, c *client.Client) {
 		assert.Equal(t, r.ErrCode.Code, errcode.Errcode_record_notexist)
 
 		r3 := c.Del("users1", "sniperHW").Exec()
-		assert.Equal(t, r3.ErrCode.Code, errcode.Errcode_record_notexist)
+		assert.Nil(t, r3.ErrCode)
 	}
 
 	fmt.Println("-----------------------------setNx----------------------------------")

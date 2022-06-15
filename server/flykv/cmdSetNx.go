@@ -46,6 +46,10 @@ func (s *kvstore) makeSetNx(kv *kv, deadline time.Time, replyer *replyer, seqno 
 		fields: map[string]*flyproto.Field{},
 	}
 
+	for _, v := range req.GetFields() {
+		setNx.fields[v.GetName()] = v
+	}
+
 	setNx.cmdBase.init(setNx, kv, replyer, seqno, deadline, func(err errcode.Error, fields map[string]*flyproto.Field, _ int64) *cs.RespMessage {
 		pbdata := &flyproto.SetNxResp{}
 
@@ -67,10 +71,6 @@ func (s *kvstore) makeSetNx(kv *kv, deadline time.Time, replyer *replyer, seqno 
 			Err:   err,
 			Data:  pbdata}
 	})
-
-	for _, v := range req.GetFields() {
-		setNx.fields[v.GetName()] = v
-	}
 
 	return setNx, nil
 }

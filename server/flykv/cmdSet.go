@@ -57,6 +57,10 @@ func (s *kvstore) makeSet(kv *kv, deadline time.Time, replyer *replyer, seqno in
 		fields: map[string]*flyproto.Field{},
 	}
 
+	for _, v := range req.GetFields() {
+		set.fields[v.GetName()] = v
+	}
+
 	set.cmdBase.init(set, kv, replyer, seqno, deadline, func(err errcode.Error, _ map[string]*flyproto.Field, _ int64) *cs.RespMessage {
 		return &cs.RespMessage{
 			Seqno: seqno,
@@ -64,10 +68,6 @@ func (s *kvstore) makeSet(kv *kv, deadline time.Time, replyer *replyer, seqno in
 			Data:  &flyproto.SetResp{},
 		}
 	})
-
-	for _, v := range req.GetFields() {
-		set.fields[v.GetName()] = v
-	}
 
 	return set, nil
 }

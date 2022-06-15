@@ -31,6 +31,12 @@ func (s *kvstore) makeGet(kv *kv, deadline time.Time, replyer *replyer, seqno in
 		},
 	}
 
+	if req.GetAll() {
+		get.wants = kv.meta.GetAllFieldsName()
+	} else {
+		get.wants = req.GetFields()
+	}
+
 	get.cmdBase.init(get, kv, replyer, seqno, deadline, func(err errcode.Error, fields map[string]*flyproto.Field, version int64) *cs.RespMessage {
 		pbdata := &flyproto.GetResp{}
 
@@ -61,15 +67,6 @@ func (s *kvstore) makeGet(kv *kv, deadline time.Time, replyer *replyer, seqno in
 			Err:   err,
 			Data:  pbdata}
 	})
-
-	if req.GetAll() {
-		get.wants = kv.meta.GetAllFieldsName()
-	} else {
-		get.wants = make([]string, 0, len(req.GetFields()))
-		for _, k := range req.GetFields() {
-			get.wants = append(get.wants, k)
-		}
-	}
 
 	return get, nil
 }

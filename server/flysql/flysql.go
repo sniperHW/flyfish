@@ -22,6 +22,7 @@ import (
 	"runtime"
 	//"strings"
 	"context"
+	"github.com/gogo/protobuf/proto"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -330,45 +331,36 @@ func (this *flysql) onGet(key string, tbmeta db.TableMeta, request *request) {
 		wants = tbmeta.GetAllFieldsName()
 	}
 
-	if len(wants) == 0 {
-		request.replyer.reply(&cs.RespMessage{
-			Cmd:   request.msg.Cmd,
-			Seqno: request.msg.Seqno,
-			Err:   errcode.New(errcode.Errcode_error, "fields is empty"),
-		})
+	version, retFields, err := Load(context.TODO(), this.dbc, tbmeta.(*sql.TableMeta), key, wants, req.Version)
+
+	if time.Now().After(request.deadline) {
+		request.replyer.dropReply()
 	} else {
 
-		version, retFields, err := Load(context.TODO(), this.dbc, tbmeta.(*sql.TableMeta), key, wants, req.Version)
-
-		if time.Now().After(request.deadline) {
-			request.replyer.dropReply()
-		} else {
-
-			resp := &cs.RespMessage{
-				Cmd:   request.msg.Cmd,
-				Seqno: request.msg.Seqno,
-			}
-
-			pbdata := &flyproto.GetResp{
-				Version: version,
-			}
-
-			switch {
-			case err == nil:
-				pbdata.Fields = retFields
-			case err == ErrRecordNotExist:
-				resp.Err = errcode.New(errcode.Errcode_record_notexist)
-			case err == ErrRecordNotChange:
-				resp.Err = errcode.New(errcode.Errcode_record_unchange)
-			case err != nil:
-				resp.Err = errcode.New(errcode.Errcode_error, err.Error())
-			}
-
-			resp.Data = pbdata
-
-			request.replyer.reply(resp)
+		resp := &cs.RespMessage{
+			Cmd:   request.msg.Cmd,
+			Seqno: request.msg.Seqno,
 		}
+
+		pbdata := &flyproto.GetResp{}
+
+		switch {
+		case err == nil:
+			pbdata.Fields = retFields
+			pbdata.Version = proto.Int64(version)
+		case err == ErrRecordNotExist:
+			resp.Err = errcode.New(errcode.Errcode_record_notexist)
+		case err == ErrRecordNotChange:
+			resp.Err = errcode.New(errcode.Errcode_record_unchange)
+		case err != nil:
+			resp.Err = errcode.New(errcode.Errcode_error, err.Error())
+		}
+
+		resp.Data = pbdata
+
+		request.replyer.reply(resp)
 	}
+
 }
 
 func (this *flysql) onSet(key string, tbmeta db.TableMeta, request *request) {
@@ -399,7 +391,7 @@ func (this *flysql) onSet(key string, tbmeta db.TableMeta, request *request) {
 			fields[v.GetName()] = v
 		}
 
-		version, err := Set(context.TODO(), this.dbc, this.config.DBConfig.DBType, tbmeta.(*sql.TableMeta), key, sslot.Unikey2Slot(request.msg.UniKey), fields, req.Version)
+		err := Set(context.TODO(), this.dbc, this.config.DBConfig.DBType, tbmeta.(*sql.TableMeta), key, sslot.Unikey2Slot(request.msg.UniKey), fields, req.Version)
 
 		if time.Now().After(request.deadline) {
 			request.replyer.dropReply()
@@ -410,9 +402,7 @@ func (this *flysql) onSet(key string, tbmeta db.TableMeta, request *request) {
 				Seqno: request.msg.Seqno,
 			}
 
-			pbdata := &flyproto.SetResp{
-				Version: version,
-			}
+			pbdata := &flyproto.SetResp{}
 
 			if err == ErrVersionMismatch {
 				resp.Err = errcode.New(errcode.Errcode_version_mismatch)
@@ -456,7 +446,7 @@ func (this *flysql) onSetNx(key string, tbmeta db.TableMeta, request *request) {
 			fields[v.GetName()] = v
 		}
 
-		version, retFields, err := SetNx(context.TODO(), this.dbc, this.config.DBConfig.DBType, tbmeta.(*sql.TableMeta), key, sslot.Unikey2Slot(request.msg.UniKey), fields)
+		retFields, err := SetNx(context.TODO(), this.dbc, this.config.DBConfig.DBType, tbmeta.(*sql.TableMeta), key, sslot.Unikey2Slot(request.msg.UniKey), fields)
 
 		if time.Now().After(request.deadline) {
 			request.replyer.dropReply()
@@ -467,9 +457,7 @@ func (this *flysql) onSetNx(key string, tbmeta db.TableMeta, request *request) {
 				Seqno: request.msg.Seqno,
 			}
 
-			pbdata := &flyproto.SetNxResp{
-				Version: version,
-			}
+			pbdata := &flyproto.SetNxResp{}
 
 			switch {
 			case err == ErrRecordExist:
@@ -488,7 +476,7 @@ func (this *flysql) onSetNx(key string, tbmeta db.TableMeta, request *request) {
 }
 
 func (this *flysql) onDel(key string, tbmeta db.TableMeta, request *request) {
-	version, err := MarkDelete(context.TODO(), this.dbc, this.config.DBConfig.DBType, tbmeta.(*sql.TableMeta), key, sslot.Unikey2Slot(request.msg.UniKey))
+	err := MarkDelete(context.TODO(), this.dbc, this.config.DBConfig.DBType, tbmeta.(*sql.TableMeta), key, sslot.Unikey2Slot(request.msg.UniKey))
 
 	if time.Now().After(request.deadline) {
 		request.replyer.dropReply()
@@ -499,9 +487,7 @@ func (this *flysql) onDel(key string, tbmeta db.TableMeta, request *request) {
 			Seqno: request.msg.Seqno,
 		}
 
-		pbdata := &flyproto.DelResp{
-			Version: version,
-		}
+		pbdata := &flyproto.DelResp{}
 
 		switch {
 		case err == ErrRecordNotExist:
@@ -547,7 +533,7 @@ func (this *flysql) onCompareAndSet(key string, tbmeta db.TableMeta, request *re
 			Err:   err,
 		})
 	} else {
-		version, retField, err := CompareAndSet(context.TODO(), this.dbc, this.config.DBConfig.DBType,
+		retField, err := CompareAndSet(context.TODO(), this.dbc, this.config.DBConfig.DBType,
 			tbmeta.(*sql.TableMeta), key, sslot.Unikey2Slot(request.msg.UniKey),
 			req.Old, req.New)
 
@@ -560,9 +546,7 @@ func (this *flysql) onCompareAndSet(key string, tbmeta db.TableMeta, request *re
 				Seqno: request.msg.Seqno,
 			}
 
-			pbdata := &flyproto.CompareAndSetResp{
-				Version: version,
-			}
+			pbdata := &flyproto.CompareAndSetResp{}
 
 			switch {
 			case err == ErrCompareNotEqual:
@@ -612,7 +596,7 @@ func (this *flysql) onCompareAndSetNx(key string, tbmeta db.TableMeta, request *
 			Err:   err,
 		})
 	} else {
-		version, retField, err := CompareAndSetNx(context.TODO(), this.dbc, this.config.DBConfig.DBType,
+		retField, err := CompareAndSetNx(context.TODO(), this.dbc, this.config.DBConfig.DBType,
 			tbmeta.(*sql.TableMeta), key, sslot.Unikey2Slot(request.msg.UniKey),
 			req.Old, req.New)
 
@@ -625,9 +609,7 @@ func (this *flysql) onCompareAndSetNx(key string, tbmeta db.TableMeta, request *
 				Seqno: request.msg.Seqno,
 			}
 
-			pbdata := &flyproto.CompareAndSetNxResp{
-				Version: version,
-			}
+			pbdata := &flyproto.CompareAndSetNxResp{}
 
 			switch {
 			case err == ErrCompareNotEqual:
@@ -671,7 +653,7 @@ func (this *flysql) onIncrBy(key string, tbmeta db.TableMeta, request *request) 
 			Err:   err,
 		})
 	} else {
-		version, retField, err := Add(context.TODO(), this.dbc, this.config.DBConfig.DBType,
+		retField, err := Add(context.TODO(), this.dbc, this.config.DBConfig.DBType,
 			tbmeta.(*sql.TableMeta), key, sslot.Unikey2Slot(request.msg.UniKey), req.Field)
 
 		if time.Now().After(request.deadline) {
@@ -683,9 +665,7 @@ func (this *flysql) onIncrBy(key string, tbmeta db.TableMeta, request *request) 
 				Seqno: request.msg.Seqno,
 			}
 
-			pbdata := &flyproto.IncrByResp{
-				Version: version,
-			}
+			pbdata := &flyproto.IncrByResp{}
 
 			if err != nil {
 				resp.Err = errcode.New(errcode.Errcode_error, err.Error())

@@ -289,10 +289,7 @@ func test(t *testing.T, c *client.Client) {
 		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r3 := c.Del("users1", "sniperHW").Exec()
-		assert.Equal(t, r3.ErrCode, Err_record_notexist)
-
-		r3 = c.Del("users1", "sniperHW").Exec()
-		assert.Equal(t, r3.ErrCode, Err_record_notexist)
+		assert.Nil(t, r3.ErrCode)
 
 	}
 

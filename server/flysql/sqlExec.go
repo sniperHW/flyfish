@@ -159,12 +159,7 @@ func prepareMarkDeleteMysql(params []interface{}, b *buffer.Buffer, tbmeta *sql.
 	return b, params
 }
 
-func MarkDelete(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta, key string, slot int) (int64, error) {
-	tx, err := dbc.BeginTx(ctx, &dbsql.TxOptions{Isolation: dbsql.LevelReadCommitted})
-	if nil != err {
-		return 0, err
-	}
-
+func MarkDelete(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta, key string, slot int) error {
 	params := []interface{}{key, -1, slot}
 	b := buffer.New()
 
@@ -174,23 +169,9 @@ func MarkDelete(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.Ta
 		b, params = prepareMarkDeletePgsql(params, b, tbmeta)
 	}
 
-	var rowsAffected int64
+	_, err := dbc.ExecContext(ctx, b.ToStrUnsafe(), params...)
 
-	if rowsAffected, err = txUpdate(ctx, tx, b.ToStrUnsafe(), params); err != nil {
-		return 0, err
-	}
-
-	if version, _, err := txSelect(ctx, tx, tbmeta, key, nil); err != nil {
-		return 0, err
-	} else if err = tx.Commit(); err != nil {
-		return 0, err
-	} else {
-		if version == -1 || rowsAffected == 0 {
-			return version, ErrRecordNotExist
-		} else {
-			return version, nil
-		}
-	}
+	return err
 }
 
 func prepareSetPgSql(params []interface{}, b *buffer.Buffer, tbmeta *sql.TableMeta, setFields map[string]*proto.Field, version ...*int64) (*buffer.Buffer, []interface{}) {
@@ -235,13 +216,7 @@ func prepareSetMySql(params []interface{}, b *buffer.Buffer, tbmeta *sql.TableMe
 	return b, params
 }
 
-func Set(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta, key string, slot int, fields map[string]*proto.Field, version ...*int64) (int64, error) {
-
-	tx, err := dbc.BeginTx(ctx, &dbsql.TxOptions{Isolation: dbsql.LevelReadCommitted})
-	if nil != err {
-		return 0, err
-	}
-
+func Set(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta, key string, slot int, fields map[string]*proto.Field, version ...*int64) error {
 	params := []interface{}{key, 1, slot}
 	b := buffer.New()
 	if dbtype == "mysql" {
@@ -250,22 +225,18 @@ func Set(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta
 		b, params = prepareSetPgSql(params, b, tbmeta, fields, version...)
 	}
 
-	var rowsAffected int64
+	r, err := dbc.ExecContext(ctx, b.ToStrUnsafe(), params...)
 
-	if rowsAffected, err = txUpdate(ctx, tx, b.ToStrUnsafe(), params); nil != err {
-		return 0, err
+	if nil != err {
+		return err
 	}
 
-	if version, _, err := txSelect(ctx, tx, tbmeta, key, nil); err != nil {
-		return 0, err
-	} else if err = tx.Commit(); err != nil {
-		return 0, err
+	rowsAffected, _ := r.RowsAffected()
+
+	if rowsAffected > 0 {
+		return nil
 	} else {
-		if rowsAffected > 0 {
-			return version, nil
-		} else {
-			return version, ErrVersionMismatch
-		}
+		return ErrVersionMismatch
 	}
 }
 
@@ -295,13 +266,7 @@ func prepareSetNxMySql(params []interface{}, b *buffer.Buffer, tbmeta *sql.Table
 	return b, params
 }
 
-func SetNx(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta, key string, slot int, fields map[string]*proto.Field) (int64, []*proto.Field, error) {
-
-	tx, err := dbc.BeginTx(ctx, &dbsql.TxOptions{Isolation: dbsql.LevelReadCommitted})
-	if nil != err {
-		return 0, nil, err
-	}
-
+func SetNx(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta, key string, slot int, fields map[string]*proto.Field) ([]*proto.Field, error) {
 	params := []interface{}{key, 1, slot}
 	b := buffer.New()
 	if dbtype == "mysql" {
@@ -310,38 +275,34 @@ func SetNx(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMe
 		b, params = prepareSetNxPgSql(params, b, tbmeta, fields)
 	}
 
-	if rowsAffected, err := txUpdate(ctx, tx, b.ToStrUnsafe(), params); nil != err {
-		return 0, nil, err
-	} else {
+	for {
+		r, err := dbc.ExecContext(ctx, b.ToStrUnsafe(), params...)
 
-		var wantFields []*proto.Field
-
-		if !(rowsAffected > 0) {
-			for _, v := range fields {
-				wantFields = append(wantFields, v)
-			}
+		if nil != err {
+			return nil, err
 		}
 
-		if version, wantFields, err := txSelect(ctx, tx, tbmeta, key, wantFields); err != nil {
-			return 0, nil, err
-		} else if err = tx.Commit(); err != nil {
-			return 0, nil, err
+		rowsAffected, _ := r.RowsAffected()
+
+		if rowsAffected > 0 {
+			return nil, nil
 		} else {
-			if len(wantFields) > 0 {
-				return version, wantFields, ErrRecordExist
-			} else {
-				return version, nil, nil
+			var wantFields []string
+			for k, _ := range fields {
+				wantFields = append(wantFields, k)
+			}
+			_, retFields, err := Load(ctx, dbc, tbmeta, key, wantFields)
+
+			if nil == err {
+				return retFields, ErrRecordExist
+			} else if err != ErrRecordNotExist {
+				return nil, err
 			}
 		}
 	}
 }
 
-func CompareAndSet(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta, key string, slot int, old *proto.Field, new *proto.Field) (int64, *proto.Field, error) {
-	tx, err := dbc.BeginTx(ctx, &dbsql.TxOptions{Isolation: dbsql.LevelReadCommitted})
-	if nil != err {
-		return 0, nil, err
-	}
-
+func CompareAndSet(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta, key string, slot int, old *proto.Field, new *proto.Field) (*proto.Field, error) {
 	params := []interface{}{new.GetValue(), key, old.GetValue()}
 	real_field_name := tbmeta.GetRealFieldName(old.GetName())
 
@@ -357,20 +318,22 @@ func CompareAndSet(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql
 			real_tab_name, real_field_name, real_field_name)
 	}
 
-	if rowsAffected, err := txUpdate(ctx, tx, updateStr, params); nil != err {
-		return 0, nil, err
-	} else {
+	r, err := dbc.ExecContext(ctx, updateStr, params...)
 
-		if version, retFields, err := txSelect(ctx, tx, tbmeta, key, []*proto.Field{new}); err != nil {
-			return 0, nil, err
-		} else if err = tx.Commit(); err != nil {
-			return 0, nil, err
-		} else if rowsAffected > 0 {
-			return version, retFields[0], nil
-		} else if version > 0 {
-			return version, retFields[0], ErrCompareNotEqual
+	if nil != err {
+		return nil, err
+	}
+
+	rowsAffected, _ := r.RowsAffected()
+
+	if rowsAffected > 0 {
+		return nil, nil
+	} else {
+		_, retFields, err := Load(ctx, dbc, tbmeta, key, []string{old.GetName()})
+		if nil == err {
+			return retFields[0], ErrCompareNotEqual
 		} else {
-			return version, nil, ErrRecordNotExist
+			return nil, err
 		}
 	}
 }
@@ -413,12 +376,7 @@ func prepareCompareAndSetNxMySql(params []interface{}, b *buffer.Buffer, tbmeta 
 	return b, params
 }
 
-func CompareAndSetNx(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta, key string, slot int, old *proto.Field, new *proto.Field) (int64, *proto.Field, error) {
-	tx, err := dbc.BeginTx(ctx, &dbsql.TxOptions{Isolation: dbsql.LevelReadCommitted})
-	if nil != err {
-		return 0, nil, err
-	}
-
+func CompareAndSetNx(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta, key string, slot int, old *proto.Field, new *proto.Field) (*proto.Field, error) {
 	params := []interface{}{key, 1, slot}
 	b := buffer.New()
 	if dbtype == "mysql" {
@@ -427,17 +385,25 @@ func CompareAndSetNx(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *s
 		b, params = prepareCompareAndSetNxPgSql(params, b, tbmeta, old, new)
 	}
 
-	if rowsAffected, err := txUpdate(ctx, tx, b.ToStrUnsafe(), params); nil != err {
-		return 0, nil, err
-	} else {
-		if version, retFields, err := txSelect(ctx, tx, tbmeta, key, []*proto.Field{new}); err != nil {
-			return 0, nil, err
-		} else if err = tx.Commit(); err != nil {
-			return 0, nil, err
-		} else if rowsAffected > 0 {
-			return version, retFields[0], nil
+	for {
+
+		r, err := dbc.ExecContext(ctx, b.ToStrUnsafe(), params...)
+
+		if nil != err {
+			return nil, err
+		}
+
+		rowsAffected, _ := r.RowsAffected()
+
+		if rowsAffected > 0 {
+			return nil, nil
 		} else {
-			return version, retFields[0], ErrCompareNotEqual
+			_, retFields, err := Load(ctx, dbc, tbmeta, key, []string{old.GetName()})
+			if nil == err {
+				return retFields[0], ErrCompareNotEqual
+			} else if err != ErrRecordNotExist {
+				return nil, err
+			}
 		}
 	}
 }
@@ -471,10 +437,10 @@ func prepareAddMySql(params []interface{}, b *buffer.Buffer, tbmeta *sql.TableMe
 	return b, params
 }
 
-func Add(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta, key string, slot int, addField *proto.Field) (int64, *proto.Field, error) {
+func Add(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta, key string, slot int, addField *proto.Field) (*proto.Field, error) {
 	tx, err := dbc.BeginTx(ctx, &dbsql.TxOptions{Isolation: dbsql.LevelReadCommitted})
 	if nil != err {
-		return 0, nil, err
+		return nil, err
 	}
 
 	params := []interface{}{key, 1, slot}
@@ -487,14 +453,14 @@ func Add(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta
 	}
 
 	if _, err = txUpdate(ctx, tx, b.ToStrUnsafe(), params); nil != err {
-		return 0, nil, err
+		return nil, err
 	} else {
-		if version, retFields, err := txSelect(ctx, tx, tbmeta, key, []*proto.Field{addField}); err != nil {
-			return 0, nil, err
+		if _, retFields, err := txSelect(ctx, tx, tbmeta, key, []*proto.Field{addField}); err != nil {
+			return nil, err
 		} else if err = tx.Commit(); err != nil {
-			return 0, nil, err
+			return nil, err
 		} else {
-			return version, retFields[0], nil
+			return retFields[0], nil
 		}
 	}
 }
