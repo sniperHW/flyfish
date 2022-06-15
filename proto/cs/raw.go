@@ -13,12 +13,12 @@ import (
 
 const maxpacket_size int = 1024 * 1024 * 100
 
-var key []byte = []byte("feiyu_tech_2022")
+var cipherbyte []byte = []byte("feiyu_tech_2022")
 
 func Send(conn net.Conn, msg proto.Message, deadline time.Time, crypto ...bool) (err error) {
 	data, _ := proto.Marshal(msg)
 	if len(crypto) > 0 && crypto[0] {
-		if data, err = Crypto.AESCBCEncrypt(key, data); nil != err {
+		if data, err = Crypto.AESCBCEncrypt(cipherbyte, data); nil != err {
 			return
 		}
 	}
@@ -55,7 +55,7 @@ func Recv(conn net.Conn, msg proto.Message, deadline time.Time, crypto ...bool) 
 	}
 
 	if len(crypto) > 0 && crypto[0] {
-		if b, err = Crypto.AESCBCDecrypter(key, b); nil != err {
+		if b, err = Crypto.AESCBCDecrypter(cipherbyte, b); nil != err {
 			return err
 		}
 	}

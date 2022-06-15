@@ -83,10 +83,6 @@ type kvnode struct {
 	SoftLimitReachedTime int64
 }
 
-func verifyLogin(loginReq *flyproto.LoginReq) bool {
-	return true
-}
-
 func (this *kvnode) makeReplyer(session *fnet.Socket, req *cs.ReqMessage, checklimit bool) *replyer {
 	c := atomic.AddInt64(&this.totalPendingReq, 1)
 	replyer := &replyer{
@@ -470,7 +466,7 @@ func (this *kvnode) start() error {
 			return err
 		}
 
-		this.listener, err = cs.NewListener("tcp", service, outputBufLimit, verifyLogin)
+		this.listener, err = cs.NewListener("tcp", service, outputBufLimit)
 
 		if nil != err {
 			return err
@@ -546,7 +542,7 @@ func (this *kvnode) start() error {
 
 		service := fmt.Sprintf("%s:%d", resp.ServiceHost, resp.ServicePort)
 
-		this.listener, err = cs.NewListener("tcp", service, outputBufLimit, verifyLogin)
+		this.listener, err = cs.NewListener("tcp", service, outputBufLimit)
 
 		if nil != err {
 			GetSugar().Errorf("NewListener err:%v", err)

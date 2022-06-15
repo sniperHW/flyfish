@@ -1,28 +1,19 @@
 package flysql
 
 import (
-	//"errors"
+	"context"
 	"fmt"
+	"github.com/gogo/protobuf/proto"
 	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/errcode"
-	//"github.com/sniperHW/flyfish/pkg/bitmap"
-	//"github.com/sniperHW/flyfish/pkg/list"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
-	//"github.com/sniperHW/flyfish/pkg/queue"
-	//"github.com/sniperHW/flyfish/pkg/raft"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
-	//snet "github.com/sniperHW/flyfish/server/net"
-	//sproto "github.com/sniperHW/flyfish/server/proto"
 	sslot "github.com/sniperHW/flyfish/server/slot"
-	//"net"
 	"os"
 	"runtime"
-	//"strings"
-	"context"
-	"github.com/gogo/protobuf/proto"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -61,10 +52,6 @@ type flysql struct {
 	requestChan     chan *request
 	totalPendingReq int64
 	meta            db.DBMeta
-}
-
-func verifyLogin(loginReq *flyproto.LoginReq) bool {
-	return true
 }
 
 func (this *flysql) pushRequest(req *cs.ReqMessage, replyer *replyer) {
@@ -267,7 +254,7 @@ func (this *flysql) start(service string) error {
 
 	GetSugar().Infof("%v", this.meta)
 
-	this.listener, err = cs.NewListener("tcp", service, outputBufLimit, verifyLogin)
+	this.listener, err = cs.NewListener("tcp", service, outputBufLimit)
 
 	if nil != err {
 		return err

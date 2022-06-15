@@ -503,10 +503,6 @@ func (g *gate) startListener() {
 	GetSugar().Infof("flygate start on %s", g.serviceAddr)
 }
 
-func verifyLogin(loginReq *flyproto.LoginReq) bool {
-	return true
-}
-
 func (g *gate) mainLoop() {
 	for {
 		_, v := g.mainQueue.Pop()
@@ -532,7 +528,7 @@ func (g *gate) start() error {
 		OutPutLimitSoft:        1024 * 1024 * 10,
 		OutPutLimitSoftSeconds: 10,
 		OutPutLimitHard:        1024 * 1024 * 50,
-	}, verifyLogin)
+	})
 
 	if nil != err {
 		return err

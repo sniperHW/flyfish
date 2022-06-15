@@ -1,6 +1,8 @@
 package cs
 
 import (
+	"github.com/sniperHW/flyfish/logger"
+	Crypto "github.com/sniperHW/flyfish/pkg/crypto"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
 	protocol "github.com/sniperHW/flyfish/proto"
 	"net"
@@ -22,11 +24,10 @@ type Listener struct {
 	l              *net.TCPListener
 	startOnce      int32
 	closeOnce      int32
-	verifyLogin    func(*protocol.LoginReq) bool
 	outputBufLimit flynet.OutputBufLimit
 }
 
-func NewListener(nettype, service string, outputBufLimit flynet.OutputBufLimit, verifyLogin func(*protocol.LoginReq) bool) (*Listener, error) {
+func NewListener(nettype, service string, outputBufLimit flynet.OutputBufLimit) (*Listener, error) {
 	tcpAddr, err := net.ResolveTCPAddr(nettype, service)
 	if err != nil {
 		return nil, err
@@ -36,7 +37,7 @@ func NewListener(nettype, service string, outputBufLimit flynet.OutputBufLimit, 
 	if err != nil {
 		return nil, err
 	}
-	return &Listener{l: l, verifyLogin: verifyLogin, outputBufLimit: outputBufLimit}, nil
+	return &Listener{l: l, outputBufLimit: outputBufLimit}, nil
 }
 
 func (this *Listener) Close() {
@@ -76,17 +77,20 @@ func (this *Listener) Serve(onNewClient func(*flynet.Socket), onScanner ...func(
 							return
 						}
 
-						if loginReq.Address != conn.RemoteAddr().String() {
+						key, err := Crypto.AESCBCDecrypter(cipherbyte, loginReq.Key)
+
+						if nil != err {
+							logger.GetSugar().Errorf("AESCBCDecrypter error:%v", err)
+							conn.Close()
+							return
+						} else if string(key) != conn.RemoteAddr().String() {
+							logger.GetSugar().Errorf("invaild client Key(%s):RemoteAddr(%s)", key, conn.RemoteAddr().String())
 							conn.Close()
 							return
 						}
 
 						loginResp := &protocol.LoginResp{}
-
-						if !this.verifyLogin(loginReq) {
-							loginResp.Ok = false
-							loginResp.Reason = "verify failed"
-						} else if loginReq.Scanner && onscanner == nil {
+						if loginReq.Scanner && onscanner == nil {
 							loginResp.Ok = false
 							loginResp.Reason = "unsupported scanner client"
 						} else {

@@ -27,7 +27,7 @@ enum CmdType {
 message loginReq {
   optional bool   compress = 1; //客户端是否支持压缩
   optional bool   scanner  = 2; //是否scanner连接
-  optional string address  = 3;
+  optional bytes  key      = 3; 
 }
 
 message loginResp {
