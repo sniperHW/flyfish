@@ -172,7 +172,6 @@ func testkv(t *testing.T, c *client.Client) {
 		for i := 0; i < 10; i++ {
 			c.Set("users1", "sniperHW", fields).AsyncExec(func(r *client.StatusResult) {
 				assert.Nil(t, r.ErrCode)
-				fmt.Println("version-----------", r.Version)
 				wait.Done()
 			})
 		}
@@ -188,7 +187,7 @@ func testkv(t *testing.T, c *client.Client) {
 		r := c.GetAll("users1", "sniperHW").Exec()
 		assert.Nil(t, r.ErrCode)
 
-		r = c.GetAllWithVersion("users1", "sniperHW", r.Version).Exec()
+		r = c.GetAllWithVersion("users1", "sniperHW", *r.Version).Exec()
 		assert.Equal(t, r.ErrCode, flykv.Err_record_unchange)
 
 		r1 := c.Del("users1", "sniperHW").Exec()

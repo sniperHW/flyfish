@@ -459,6 +459,7 @@ func test(t *testing.T, c *client.Client) {
 		assert.Nil(t, r1.ErrCode)
 		assert.Equal(t, r1.Fields["age"].GetInt(), int64(4))
 
+		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 	}
 
 }
