@@ -12,13 +12,6 @@ type cmdKick struct {
 	waitVersion int64
 }
 
-func (this *cmdKick) makeResponse(err errcode.Error, fields map[string]*flyproto.Field, version int64) *cs.RespMessage {
-	return &cs.RespMessage{
-		Seqno: this.seqno,
-		Err:   err,
-		Data:  &flyproto.KickResp{}}
-}
-
 func (this *cmdKick) do(proposal *kvProposal) *kvProposal {
 	if this.kv.version == this.kv.lastWriteBackVersion {
 		proposal.ptype = proposal_kick
@@ -39,7 +32,13 @@ func (s *kvstore) makeKick(kv *kv, deadline time.Time, replyer *replyer, seqno i
 
 	kick := &cmdKick{}
 
-	kick.cmdBase.init(kick, kv, replyer, seqno, nil, deadline, kick.makeResponse)
+	kick.cmdBase.init(kick, kv, replyer, seqno, deadline, func(err errcode.Error, _ map[string]*flyproto.Field, _ int64) *cs.RespMessage {
+		return &cs.RespMessage{
+			Seqno: seqno,
+			Err:   err,
+			Data:  &flyproto.KickResp{},
+		}
+	})
 
 	return kick, nil
 }

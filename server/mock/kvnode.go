@@ -7,11 +7,11 @@ import (
 	"github.com/sniperHW/flyfish/errcode"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/queue"
-	"github.com/sniperHW/flyfish/proto"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
 	snet "github.com/sniperHW/flyfish/server/net"
 	//sproto "github.com/sniperHW/flyfish/server/proto"
+	"github.com/golang/protobuf/proto"
 	"sync/atomic"
 	"time"
 )
@@ -86,7 +86,7 @@ type kv struct {
 	table   string
 	version int64
 	meta    db.TableMeta
-	fields  map[string]*proto.Field //字段
+	fields  map[string]*flyproto.Field //字段
 }
 
 type Node struct {
@@ -229,31 +229,20 @@ func checkVersion(v1 *int64, v2 int64) bool {
 }
 
 func (this *Node) del(session *fnet.Socket, msg *cs.ReqMessage) {
-
-	req := msg.Data.(*flyproto.DelReq)
-
-	v, ok := this.store[msg.UniKey]
+	_, ok := this.store[msg.UniKey]
 
 	if !ok {
 		session.Send(&cs.RespMessage{
 			Seqno: msg.Seqno,
 			Err:   Err_record_notexist,
-			Data:  &flyproto.DelResp{Version: req.GetVersion()},
+			Data:  &flyproto.DelResp{},
 		})
 	} else {
-		if !checkVersion(req.Version, v.version) {
-			session.Send(&cs.RespMessage{
-				Seqno: msg.Seqno,
-				Err:   Err_version_mismatch,
-				Data:  &flyproto.DelResp{Version: req.GetVersion()},
-			})
-		} else {
-			delete(this.store, msg.UniKey)
-			session.Send(&cs.RespMessage{
-				Seqno: msg.Seqno,
-				Data:  &flyproto.DelResp{Version: v.version},
-			})
-		}
+		delete(this.store, msg.UniKey)
+		session.Send(&cs.RespMessage{
+			Seqno: msg.Seqno,
+			Data:  &flyproto.DelResp{},
+		})
 	}
 }
 
@@ -267,7 +256,7 @@ func (this *Node) get(session *fnet.Socket, msg *cs.ReqMessage) {
 		session.Send(&cs.RespMessage{
 			Seqno: msg.Seqno,
 			Err:   errcode.New(errcode.Errcode_error, "table not define"),
-			Data:  &flyproto.GetResp{Version: req.GetVersion()},
+			Data:  &flyproto.GetResp{},
 		})
 	} else {
 		v, ok := this.store[msg.UniKey]
@@ -275,13 +264,13 @@ func (this *Node) get(session *fnet.Socket, msg *cs.ReqMessage) {
 			session.Send(&cs.RespMessage{
 				Seqno: msg.Seqno,
 				Err:   Err_record_notexist,
-				Data:  &flyproto.GetResp{Version: req.GetVersion()},
+				Data:  &flyproto.GetResp{},
 			})
 		} else if nil != req.Version && *req.Version == v.version {
 			session.Send(&cs.RespMessage{
 				Seqno: msg.Seqno,
 				Err:   Err_record_unchange,
-				Data:  &flyproto.GetResp{Version: req.GetVersion()},
+				Data:  &flyproto.GetResp{},
 			})
 		} else {
 
@@ -293,7 +282,7 @@ func (this *Node) get(session *fnet.Socket, msg *cs.ReqMessage) {
 
 			session.Send(&cs.RespMessage{
 				Seqno: msg.Seqno,
-				Data:  &flyproto.GetResp{Version: v.version, Fields: fields},
+				Data:  &flyproto.GetResp{Version: proto.Int64(v.version), Fields: fields},
 			})
 		}
 	}
@@ -305,7 +294,7 @@ func (this *Node) set(session *fnet.Socket, msg *cs.ReqMessage) {
 		session.Send(&cs.RespMessage{
 			Seqno: msg.Seqno,
 			Err:   errcode.New(errcode.Errcode_error, "field not define"),
-			Data:  &flyproto.SetResp{Version: req.GetVersion()},
+			Data:  &flyproto.SetResp{},
 		})
 	} else {
 		table, key := splitUniKey(msg.UniKey)
@@ -314,14 +303,14 @@ func (this *Node) set(session *fnet.Socket, msg *cs.ReqMessage) {
 			session.Send(&cs.RespMessage{
 				Seqno: msg.Seqno,
 				Err:   errcode.New(errcode.Errcode_error, "field not define"),
-				Data:  &flyproto.SetResp{Version: req.GetVersion()},
+				Data:  &flyproto.SetResp{},
 			})
 			return
 		} else if nil != m.CheckFields(req.GetFields()...) {
 			session.Send(&cs.RespMessage{
 				Seqno: msg.Seqno,
 				Err:   errcode.New(errcode.Errcode_error, "field not define"),
-				Data:  &flyproto.SetResp{Version: req.GetVersion()},
+				Data:  &flyproto.SetResp{},
 			})
 			return
 		} else {
@@ -344,7 +333,7 @@ func (this *Node) set(session *fnet.Socket, msg *cs.ReqMessage) {
 				session.Send(&cs.RespMessage{
 					Seqno: msg.Seqno,
 					Err:   Err_version_mismatch,
-					Data:  &flyproto.SetResp{Version: v.version},
+					Data:  &flyproto.SetResp{},
 				})
 			} else {
 				v.version++
@@ -356,7 +345,7 @@ func (this *Node) set(session *fnet.Socket, msg *cs.ReqMessage) {
 				this.store[msg.UniKey] = v
 				session.Send(&cs.RespMessage{
 					Seqno: msg.Seqno,
-					Data:  &flyproto.SetResp{Version: v.version},
+					Data:  &flyproto.SetResp{},
 				})
 
 			}
@@ -371,7 +360,7 @@ func (this *Node) setNx(session *fnet.Socket, msg *cs.ReqMessage) {
 		session.Send(&cs.RespMessage{
 			Seqno: msg.Seqno,
 			Err:   errcode.New(errcode.Errcode_error, "field not define"),
-			Data:  &flyproto.SetNxResp{Version: req.GetVersion()},
+			Data:  &flyproto.SetNxResp{},
 		})
 	} else {
 		table, key := splitUniKey(msg.UniKey)
@@ -380,14 +369,14 @@ func (this *Node) setNx(session *fnet.Socket, msg *cs.ReqMessage) {
 			session.Send(&cs.RespMessage{
 				Seqno: msg.Seqno,
 				Err:   errcode.New(errcode.Errcode_error, "field not define"),
-				Data:  &flyproto.SetNxResp{Version: req.GetVersion()},
+				Data:  &flyproto.SetNxResp{},
 			})
 			return
 		} else if nil != m.CheckFields(req.GetFields()...) {
 			session.Send(&cs.RespMessage{
 				Seqno: msg.Seqno,
 				Err:   errcode.New(errcode.Errcode_error, "field not define"),
-				Data:  &flyproto.SetNxResp{Version: req.GetVersion()},
+				Data:  &flyproto.SetNxResp{},
 			})
 			return
 		} else {
@@ -405,8 +394,7 @@ func (this *Node) setNx(session *fnet.Socket, msg *cs.ReqMessage) {
 					Seqno: msg.Seqno,
 					Err:   Err_record_exist,
 					Data: &flyproto.SetNxResp{
-						Version: v.version,
-						Fields:  fields},
+						Fields: fields},
 				})
 
 			} else {
@@ -432,9 +420,7 @@ func (this *Node) setNx(session *fnet.Socket, msg *cs.ReqMessage) {
 
 				session.Send(&cs.RespMessage{
 					Seqno: msg.Seqno,
-					Data: &flyproto.SetNxResp{
-						Version: v.version,
-					},
+					Data:  &flyproto.SetNxResp{},
 				})
 			}
 		}
@@ -449,7 +435,7 @@ func (this *Node) compareAndSet(session *fnet.Socket, msg *cs.ReqMessage) {
 		session.Send(&cs.RespMessage{
 			Seqno: msg.Seqno,
 			Err:   errcode.New(errcode.Errcode_error, "field not define"),
-			Data:  &flyproto.CompareAndSetResp{Version: req.GetVersion()},
+			Data:  &flyproto.CompareAndSetResp{},
 		})
 		return
 	}
@@ -460,50 +446,41 @@ func (this *Node) compareAndSet(session *fnet.Socket, msg *cs.ReqMessage) {
 		session.Send(&cs.RespMessage{
 			Seqno: msg.Seqno,
 			Err:   errcode.New(errcode.Errcode_error, "field not define"),
-			Data:  &flyproto.CompareAndSetResp{Version: req.GetVersion()},
+			Data:  &flyproto.CompareAndSetResp{},
 		})
 		return
 	} else if nil != m.CheckFields(req.GetNew(), req.GetOld()) {
 		session.Send(&cs.RespMessage{
 			Seqno: msg.Seqno,
 			Err:   errcode.New(errcode.Errcode_error, "field not define"),
-			Data:  &flyproto.CompareAndSetResp{Version: req.GetVersion()},
+			Data:  &flyproto.CompareAndSetResp{},
 		})
 		return
 	}
 
 	v, ok := this.store[msg.UniKey]
 	if ok {
-		if !checkVersion(req.Version, v.version) {
+		vv := v.fields[req.GetOld().GetName()]
+		if !req.GetOld().IsEqual(vv) {
 			session.Send(&cs.RespMessage{
 				Seqno: msg.Seqno,
-				Err:   Err_version_mismatch,
-				Data:  &flyproto.CompareAndSetResp{Version: v.version},
+				Err:   Err_cas_not_equal,
+				Data: &flyproto.CompareAndSetResp{
+					Value: vv},
 			})
 		} else {
-			vv := v.fields[req.GetOld().GetName()]
-			if !req.GetOld().IsEqual(vv) {
-				session.Send(&cs.RespMessage{
-					Seqno: msg.Seqno,
-					Err:   Err_cas_not_equal,
-					Data: &flyproto.CompareAndSetResp{Version: v.version,
-						Value: vv},
-				})
-			} else {
-				v.fields[req.GetOld().GetName()] = req.GetNew()
-				v.version++
-				session.Send(&cs.RespMessage{
-					Seqno: msg.Seqno,
-					Data:  &flyproto.CompareAndSetResp{Version: v.version},
-				})
-			}
+			v.fields[req.GetOld().GetName()] = req.GetNew()
+			v.version++
+			session.Send(&cs.RespMessage{
+				Seqno: msg.Seqno,
+				Data:  &flyproto.CompareAndSetResp{},
+			})
 		}
-
 	} else {
 		session.Send(&cs.RespMessage{
 			Seqno: msg.Seqno,
 			Err:   Err_record_notexist,
-			Data:  &flyproto.CompareAndSetResp{Version: req.GetVersion()},
+			Data:  &flyproto.CompareAndSetResp{},
 		})
 	}
 }
@@ -516,7 +493,7 @@ func (this *Node) compareAndSetNx(session *fnet.Socket, msg *cs.ReqMessage) {
 		session.Send(&cs.RespMessage{
 			Seqno: msg.Seqno,
 			Err:   errcode.New(errcode.Errcode_error, "field not define"),
-			Data:  &flyproto.CompareAndSetNxResp{Version: req.GetVersion()},
+			Data:  &flyproto.CompareAndSetNxResp{},
 		})
 		return
 	}
@@ -527,14 +504,14 @@ func (this *Node) compareAndSetNx(session *fnet.Socket, msg *cs.ReqMessage) {
 		session.Send(&cs.RespMessage{
 			Seqno: msg.Seqno,
 			Err:   errcode.New(errcode.Errcode_error, "field not define"),
-			Data:  &flyproto.CompareAndSetNxResp{Version: req.GetVersion()},
+			Data:  &flyproto.CompareAndSetNxResp{},
 		})
 		return
 	} else if nil != m.CheckFields(req.GetNew(), req.GetOld()) {
 		session.Send(&cs.RespMessage{
 			Seqno: msg.Seqno,
 			Err:   errcode.New(errcode.Errcode_error, "field not define"),
-			Data:  &flyproto.CompareAndSetNxResp{Version: req.GetVersion()},
+			Data:  &flyproto.CompareAndSetNxResp{},
 		})
 		return
 	}
@@ -561,38 +538,27 @@ func (this *Node) compareAndSetNx(session *fnet.Socket, msg *cs.ReqMessage) {
 
 		session.Send(&cs.RespMessage{
 			Seqno: msg.Seqno,
-			Data:  &flyproto.CompareAndSetNxResp{Version: v.version},
 		})
 
 	} else {
-
-		if !checkVersion(req.Version, v.version) {
+		vv := v.fields[req.GetOld().GetName()]
+		if !req.GetOld().IsEqual(vv) {
 			session.Send(&cs.RespMessage{
 				Seqno: msg.Seqno,
-				Err:   Err_version_mismatch,
-				Data:  &flyproto.CompareAndSetNxResp{Version: v.version},
+				Err:   Err_cas_not_equal,
+				Data: &flyproto.CompareAndSetNxResp{
+					Value: vv},
 			})
+
 		} else {
-			vv := v.fields[req.GetOld().GetName()]
-			if !req.GetOld().IsEqual(vv) {
-				session.Send(&cs.RespMessage{
-					Seqno: msg.Seqno,
-					Err:   Err_cas_not_equal,
-					Data: &flyproto.CompareAndSetNxResp{Version: v.version,
-						Value: vv},
-				})
+			v.fields[req.GetOld().GetName()] = req.GetNew()
+			v.version++
+			session.Send(&cs.RespMessage{
+				Seqno: msg.Seqno,
+				Data:  &flyproto.CompareAndSetNxResp{},
+			})
 
-			} else {
-				v.fields[req.GetOld().GetName()] = req.GetNew()
-				v.version++
-				session.Send(&cs.RespMessage{
-					Seqno: msg.Seqno,
-					Data:  &flyproto.CompareAndSetNxResp{Version: v.version},
-				})
-
-			}
 		}
-
 	}
 }
 
@@ -606,7 +572,7 @@ func (this *Node) incrBy(session *fnet.Socket, msg *cs.ReqMessage) {
 		session.Send(&cs.RespMessage{
 			Seqno: msg.Seqno,
 			Err:   errcode.New(errcode.Errcode_error, "field not define"),
-			Data:  &flyproto.IncrByResp{Version: req.GetVersion()},
+			Data:  &flyproto.IncrByResp{},
 		})
 		return
 	}
@@ -617,14 +583,14 @@ func (this *Node) incrBy(session *fnet.Socket, msg *cs.ReqMessage) {
 		session.Send(&cs.RespMessage{
 			Seqno: msg.Seqno,
 			Err:   errcode.New(errcode.Errcode_error, "field not define"),
-			Data:  &flyproto.IncrByResp{Version: req.GetVersion()},
+			Data:  &flyproto.IncrByResp{},
 		})
 		return
 	} else if nil != m.CheckFields(f) {
 		session.Send(&cs.RespMessage{
 			Seqno: msg.Seqno,
 			Err:   errcode.New(errcode.Errcode_error, "field not define"),
-			Data:  &flyproto.IncrByResp{Version: req.GetVersion()},
+			Data:  &flyproto.IncrByResp{},
 		})
 		return
 	}
@@ -653,34 +619,26 @@ func (this *Node) incrBy(session *fnet.Socket, msg *cs.ReqMessage) {
 
 		session.Send(&cs.RespMessage{
 			Seqno: msg.Seqno,
-			Data: &flyproto.IncrByResp{Version: v.version,
+			Data: &flyproto.IncrByResp{
 				Field: v.fields[f.GetName()]},
 		})
 
 	} else {
-		if !checkVersion(req.Version, v.version) {
-			session.Send(&cs.RespMessage{
-				Seqno: msg.Seqno,
-				Err:   Err_version_mismatch,
-				Data:  &flyproto.IncrByResp{Version: v.version},
-			})
-		} else {
 
-			vv := v.fields[f.GetName()]
+		vv := v.fields[f.GetName()]
 
-			v.fields[f.GetName()] = flyproto.PackField(f.GetName(), vv.GetInt()+f.GetInt())
+		v.fields[f.GetName()] = flyproto.PackField(f.GetName(), vv.GetInt()+f.GetInt())
 
-			v.version++
+		v.version++
 
-			this.store[msg.UniKey] = v
+		this.store[msg.UniKey] = v
 
-			session.Send(&cs.RespMessage{
-				Seqno: msg.Seqno,
-				Data: &flyproto.IncrByResp{Version: v.version,
-					Field: v.fields[f.GetName()]},
-			})
+		session.Send(&cs.RespMessage{
+			Seqno: msg.Seqno,
+			Data: &flyproto.IncrByResp{
+				Field: v.fields[f.GetName()]},
+		})
 
-		}
 	}
 }
 

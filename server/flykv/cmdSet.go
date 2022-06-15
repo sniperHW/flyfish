@@ -12,18 +12,9 @@ type cmdSet struct {
 	fields map[string]*flyproto.Field
 }
 
-func (this *cmdSet) makeResponse(err errcode.Error, fields map[string]*flyproto.Field, version int64) *cs.RespMessage {
-	return &cs.RespMessage{
-		Seqno: this.seqno,
-		Err:   err,
-		Data: &flyproto.SetResp{
-			Version: version,
-		}}
-}
-
 func (this *cmdSet) do(proposal *kvProposal) *kvProposal {
 	if nil != this.version && *this.version != this.kv.version {
-		this.reply(Err_version_mismatch, nil, this.kv.version)
+		this.reply(Err_version_mismatch, nil, 0)
 		return nil
 	} else {
 		proposal.fields = map[string]*flyproto.Field{}
@@ -60,10 +51,19 @@ func (s *kvstore) makeSet(kv *kv, deadline time.Time, replyer *replyer, seqno in
 	}
 
 	set := &cmdSet{
+		cmdBase: cmdBase{
+			version: req.Version,
+		},
 		fields: map[string]*flyproto.Field{},
 	}
 
-	set.cmdBase.init(set, kv, replyer, seqno, req.Version, deadline, set.makeResponse)
+	set.cmdBase.init(set, kv, replyer, seqno, deadline, func(err errcode.Error, _ map[string]*flyproto.Field, _ int64) *cs.RespMessage {
+		return &cs.RespMessage{
+			Seqno: seqno,
+			Err:   err,
+			Data:  &flyproto.SetResp{},
+		}
+	})
 
 	for _, v := range req.GetFields() {
 		set.fields[v.GetName()] = v

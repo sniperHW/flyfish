@@ -12,30 +12,6 @@ type cmdSetNx struct {
 	fields map[string]*flyproto.Field
 }
 
-func (this *cmdSetNx) makeResponse(err errcode.Error, fields map[string]*flyproto.Field, version int64) *cs.RespMessage {
-	pbdata := &flyproto.SetNxResp{
-		Version: version,
-	}
-
-	if nil != err && err == Err_record_exist {
-		for name, field := range this.fields {
-			if v := fields[name]; nil != v {
-				pbdata.Fields = append(pbdata.Fields, v)
-			} else {
-				/*
-				 * 表格新增加了列，但未设置过，使用默认值
-				 */
-				pbdata.Fields = append(pbdata.Fields, flyproto.PackField(name, this.meta.GetDefaultValue(field.GetName())))
-			}
-		}
-	}
-
-	return &cs.RespMessage{
-		Seqno: this.seqno,
-		Err:   err,
-		Data:  pbdata}
-}
-
 func (this *cmdSetNx) do(proposal *kvProposal) *kvProposal {
 	if proposal.kvState == kv_no_record {
 		proposal.version = abs(proposal.version) + 1
@@ -70,7 +46,27 @@ func (s *kvstore) makeSetNx(kv *kv, deadline time.Time, replyer *replyer, seqno 
 		fields: map[string]*flyproto.Field{},
 	}
 
-	setNx.cmdBase.init(setNx, kv, replyer, seqno, req.Version, deadline, setNx.makeResponse)
+	setNx.cmdBase.init(setNx, kv, replyer, seqno, deadline, func(err errcode.Error, fields map[string]*flyproto.Field, _ int64) *cs.RespMessage {
+		pbdata := &flyproto.SetNxResp{}
+
+		if nil != err && err == Err_record_exist {
+			for name, field := range setNx.fields {
+				if v := fields[name]; nil != v {
+					pbdata.Fields = append(pbdata.Fields, v)
+				} else {
+					/*
+					 * 表格新增加了列，但未设置过，使用默认值
+					 */
+					pbdata.Fields = append(pbdata.Fields, flyproto.PackField(name, setNx.meta.GetDefaultValue(field.GetName())))
+				}
+			}
+		}
+
+		return &cs.RespMessage{
+			Seqno: seqno,
+			Err:   err,
+			Data:  pbdata}
+	})
 
 	for _, v := range req.GetFields() {
 		setNx.fields[v.GetName()] = v

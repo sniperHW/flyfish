@@ -11,15 +11,6 @@ type cmdDel struct {
 	cmdBase
 }
 
-func (this *cmdDel) makeResponse(err errcode.Error, fields map[string]*flyproto.Field, version int64) *cs.RespMessage {
-	return &cs.RespMessage{
-		Seqno: this.seqno,
-		Err:   err,
-		Data: &flyproto.DelResp{
-			Version: version,
-		}}
-}
-
 func (this *cmdDel) do(proposal *kvProposal) *kvProposal {
 	if proposal.kvState == kv_ok {
 		proposal.ptype = proposal_snapshot
@@ -27,7 +18,7 @@ func (this *cmdDel) do(proposal *kvProposal) *kvProposal {
 		proposal.kvState = kv_no_record
 		return proposal
 	} else {
-		this.reply(Err_record_notexist, nil, this.kv.version)
+		this.reply(Err_record_notexist, nil, 0)
 		return nil
 	}
 }
@@ -37,10 +28,13 @@ func (this *cmdDel) cmdType() flyproto.CmdType {
 }
 
 func (s *kvstore) makeDel(kv *kv, deadline time.Time, replyer *replyer, seqno int64, req *flyproto.DelReq) (cmdI, errcode.Error) {
-
 	del := &cmdDel{}
-
-	del.cmdBase.init(del, kv, replyer, seqno, req.Version, deadline, del.makeResponse)
-
+	del.cmdBase.init(del, kv, replyer, seqno, deadline, func(err errcode.Error, _ map[string]*flyproto.Field, _ int64) *cs.RespMessage {
+		return &cs.RespMessage{
+			Seqno: seqno,
+			Err:   err,
+			Data:  &flyproto.DelResp{},
+		}
+	})
 	return del, nil
 }

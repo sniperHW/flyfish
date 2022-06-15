@@ -186,7 +186,7 @@ func (s *kvstore) newkv(slot int, unikey string, key string, table string) (*kv,
 
 func (s *kvstore) kick(kv *kv) {
 	kick := &cmdKick{}
-	kick.cmdBase.init(kick, kv, nil, 0, nil, time.Time{}, nil)
+	kick.cmdBase.init(kick, kv, nil, 0, time.Time{}, nil)
 	kv.pushCmd(kick)
 }
 

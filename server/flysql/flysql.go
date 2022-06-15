@@ -323,10 +323,6 @@ func splitUniKey(unikey string) (table string, key string) {
 }
 
 func (this *flysql) onGet(key string, tbmeta db.TableMeta, request *request) {
-	var version int64
-	var err error
-	var retFields []*flyproto.Field
-
 	req := request.msg.Data.(*flyproto.GetReq)
 
 	wants := req.Fields
@@ -341,11 +337,8 @@ func (this *flysql) onGet(key string, tbmeta db.TableMeta, request *request) {
 			Err:   errcode.New(errcode.Errcode_error, "fields is empty"),
 		})
 	} else {
-		if nil != req.Version {
-			version, retFields, err = Load(context.TODO(), this.dbc, tbmeta.(*sql.TableMeta), key, wants, *req.Version)
-		} else {
-			version, retFields, err = Load(context.TODO(), this.dbc, tbmeta.(*sql.TableMeta), key, wants)
-		}
+
+		version, retFields, err := Load(context.TODO(), this.dbc, tbmeta.(*sql.TableMeta), key, wants, req.Version)
 
 		if time.Now().After(request.deadline) {
 			request.replyer.dropReply()
@@ -406,13 +399,7 @@ func (this *flysql) onSet(key string, tbmeta db.TableMeta, request *request) {
 			fields[v.GetName()] = v
 		}
 
-		var version int64
-		var err error
-		if nil != req.Version {
-			version, err = Set(context.TODO(), this.dbc, this.config.DBConfig.DBType, tbmeta.(*sql.TableMeta), key, sslot.Unikey2Slot(request.msg.UniKey), fields, *req.Version)
-		} else {
-			version, err = Set(context.TODO(), this.dbc, this.config.DBConfig.DBType, tbmeta.(*sql.TableMeta), key, sslot.Unikey2Slot(request.msg.UniKey), fields)
-		}
+		version, err := Set(context.TODO(), this.dbc, this.config.DBConfig.DBType, tbmeta.(*sql.TableMeta), key, sslot.Unikey2Slot(request.msg.UniKey), fields, req.Version)
 
 		if time.Now().After(request.deadline) {
 			request.replyer.dropReply()

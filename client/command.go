@@ -461,7 +461,7 @@ func (this *serverConn) onGetResp(c *cmdContext, errCode errcode.Error, resp *pr
 
 	ret := &SliceResult{
 		ErrCode: errCode,
-		Version: resp.GetVersion(),
+		Version: resp.Version,
 	}
 
 	var err error
@@ -482,7 +482,6 @@ func (this *serverConn) onGetResp(c *cmdContext, errCode errcode.Error, resp *pr
 func (this *serverConn) onSetResp(c *cmdContext, errCode errcode.Error, resp *protocol.SetResp) interface{} {
 	return &StatusResult{
 		ErrCode: errCode,
-		Version: resp.GetVersion(),
 	}
 }
 
@@ -490,12 +489,10 @@ func (this *serverConn) onSetNxResp(c *cmdContext, errCode errcode.Error, resp *
 
 	ret := &SliceResult{
 		ErrCode: errCode,
-		Version: resp.GetVersion(),
 	}
 
-	var err error
-
-	if nil != ret.ErrCode && ret.ErrCode.Code == errcode.Errcode_record_exist {
+	if len(resp.Fields) > 0 {
+		var err error
 		ret.Fields = map[string]*Field{}
 		for _, v := range resp.Fields {
 			ret.Fields[v.GetName()], err = unpackField(v)
@@ -512,11 +509,10 @@ func (this *serverConn) onCompareAndSetResp(c *cmdContext, errCode errcode.Error
 
 	ret := &SliceResult{
 		ErrCode: errCode,
-		Version: resp.GetVersion(),
 	}
 
-	var err error
-	if ret.ErrCode == nil || ret.ErrCode.Code == errcode.Errcode_cas_not_equal {
+	if resp.Value != nil {
+		var err error
 		ret.Fields = map[string]*Field{}
 		ret.Fields[resp.GetValue().GetName()], err = unpackField(resp.GetValue())
 		if nil != err {
@@ -532,11 +528,10 @@ func (this *serverConn) onCompareAndSetNxResp(c *cmdContext, errCode errcode.Err
 
 	ret := &SliceResult{
 		ErrCode: errCode,
-		Version: resp.GetVersion(),
 	}
 
-	var err error
-	if ret.ErrCode == nil || ret.ErrCode.Code == errcode.Errcode_cas_not_equal {
+	if resp.Value != nil {
+		var err error
 		ret.Fields = map[string]*Field{}
 		ret.Fields[resp.GetValue().GetName()], err = unpackField(resp.GetValue())
 		if nil != err {
@@ -552,7 +547,6 @@ func (this *serverConn) onCompareAndSetNxResp(c *cmdContext, errCode errcode.Err
 func (this *serverConn) onDelResp(c *cmdContext, errCode errcode.Error, resp *protocol.DelResp) interface{} {
 	return &StatusResult{
 		ErrCode: errCode,
-		Version: resp.GetVersion(),
 	}
 }
 
@@ -560,10 +554,9 @@ func (this *serverConn) onIncrByResp(c *cmdContext, errCode errcode.Error, resp 
 
 	ret := &SliceResult{
 		ErrCode: errCode,
-		Version: resp.GetVersion(),
 	}
 
-	if ret.ErrCode == nil {
+	if resp.Field != nil {
 		ret.Fields = map[string]*Field{}
 		ret.Fields[resp.GetField().GetName()] = (*Field)(resp.GetField())
 	}

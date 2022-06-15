@@ -1,6 +1,7 @@
 package flykv
 
 import (
+	"github.com/gogo/protobuf/proto"
 	"github.com/sniperHW/flyfish/errcode"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
@@ -10,38 +11,6 @@ import (
 type cmdGet struct {
 	cmdBase
 	wants []string
-}
-
-func (this *cmdGet) makeResponse(err errcode.Error, fields map[string]*flyproto.Field, version int64) *cs.RespMessage {
-	pbdata := &flyproto.GetResp{
-		Version: version,
-	}
-
-	if err == nil {
-		if version > 0 {
-			if this.version != nil && *this.version == version {
-				err = Err_record_unchange
-			} else {
-				for _, name := range this.wants {
-					if v := fields[name]; nil != v {
-						pbdata.Fields = append(pbdata.Fields, v)
-					} else {
-						/*
-						 * 表格新增加了列，但未设置过，使用默认值
-						 */
-						pbdata.Fields = append(pbdata.Fields, flyproto.PackField(name, this.meta.GetDefaultValue(name)))
-					}
-				}
-			}
-		} else {
-			err = Err_record_notexist
-		}
-	}
-
-	return &cs.RespMessage{
-		Seqno: this.seqno,
-		Err:   err,
-		Data:  pbdata}
 }
 
 func (this *cmdGet) cmdType() flyproto.CmdType {
@@ -56,9 +25,42 @@ func (s *kvstore) makeGet(kv *kv, deadline time.Time, replyer *replyer, seqno in
 		}
 	}
 
-	get := &cmdGet{}
+	get := &cmdGet{
+		cmdBase: cmdBase{
+			version: req.Version,
+		},
+	}
 
-	get.cmdBase.init(get, kv, replyer, seqno, req.Version, deadline, get.makeResponse)
+	get.cmdBase.init(get, kv, replyer, seqno, deadline, func(err errcode.Error, fields map[string]*flyproto.Field, version int64) *cs.RespMessage {
+		pbdata := &flyproto.GetResp{}
+
+		if err == nil {
+			if version > 0 {
+				if get.version != nil && *get.version == version {
+					err = Err_record_unchange
+				} else {
+					pbdata.Version = proto.Int64(version)
+					for _, name := range get.wants {
+						if v := fields[name]; nil != v {
+							pbdata.Fields = append(pbdata.Fields, v)
+						} else {
+							/*
+							 * 表格新增加了列，但未设置过，使用默认值
+							 */
+							pbdata.Fields = append(pbdata.Fields, flyproto.PackField(name, get.meta.GetDefaultValue(name)))
+						}
+					}
+				}
+			} else {
+				err = Err_record_notexist
+			}
+		}
+
+		return &cs.RespMessage{
+			Seqno: seqno,
+			Err:   err,
+			Data:  pbdata}
+	})
 
 	if req.GetAll() {
 		get.wants = kv.meta.GetAllFieldsName()

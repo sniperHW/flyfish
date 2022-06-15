@@ -536,7 +536,7 @@ func (m *GetReq) GetAll() bool {
 }
 
 type GetResp struct {
-	Version int64    `protobuf:"varint,1,opt,name=version" json:"version"`
+	Version *int64   `protobuf:"varint,1,opt,name=version" json:"version,omitempty"`
 	Fields  []*Field `protobuf:"bytes,2,rep,name=fields" json:"fields,omitempty"`
 }
 
@@ -573,8 +573,8 @@ func (m *GetResp) XXX_DiscardUnknown() {
 var xxx_messageInfo_GetResp proto.InternalMessageInfo
 
 func (m *GetResp) GetVersion() int64 {
-	if m != nil {
-		return m.Version
+	if m != nil && m.Version != nil {
+		return *m.Version
 	}
 	return 0
 }
@@ -641,7 +641,6 @@ func (m *SetReq) GetFields() []*Field {
 }
 
 type SetResp struct {
-	Version int64 `protobuf:"varint,1,opt,name=version" json:"version"`
 }
 
 func (m *SetResp) Reset()      { *m = SetResp{} }
@@ -676,18 +675,10 @@ func (m *SetResp) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_SetResp proto.InternalMessageInfo
 
-func (m *SetResp) GetVersion() int64 {
-	if m != nil {
-		return m.Version
-	}
-	return 0
-}
-
 //
 //  与set指令类似，只有当记录不存在时才能成功设置
 type SetNxReq struct {
-	Version *int64   `protobuf:"varint,1,opt,name=version" json:"version,omitempty"`
-	Fields  []*Field `protobuf:"bytes,2,rep,name=fields" json:"fields,omitempty"`
+	Fields []*Field `protobuf:"bytes,1,rep,name=fields" json:"fields,omitempty"`
 }
 
 func (m *SetNxReq) Reset()      { *m = SetNxReq{} }
@@ -722,13 +713,6 @@ func (m *SetNxReq) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_SetNxReq proto.InternalMessageInfo
 
-func (m *SetNxReq) GetVersion() int64 {
-	if m != nil && m.Version != nil {
-		return *m.Version
-	}
-	return 0
-}
-
 func (m *SetNxReq) GetFields() []*Field {
 	if m != nil {
 		return m.Fields
@@ -737,8 +721,7 @@ func (m *SetNxReq) GetFields() []*Field {
 }
 
 type SetNxResp struct {
-	Version int64    `protobuf:"varint,1,opt,name=version" json:"version"`
-	Fields  []*Field `protobuf:"bytes,2,rep,name=fields" json:"fields,omitempty"`
+	Fields []*Field `protobuf:"bytes,1,rep,name=fields" json:"fields,omitempty"`
 }
 
 func (m *SetNxResp) Reset()      { *m = SetNxResp{} }
@@ -773,13 +756,6 @@ func (m *SetNxResp) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_SetNxResp proto.InternalMessageInfo
 
-func (m *SetNxResp) GetVersion() int64 {
-	if m != nil {
-		return m.Version
-	}
-	return 0
-}
-
 func (m *SetNxResp) GetFields() []*Field {
 	if m != nil {
 		return m.Fields
@@ -791,8 +767,7 @@ func (m *SetNxResp) GetFields() []*Field {
 //  将记录的field.name字段增加field.value,并返回增加后的值(field.value只支持int类型，如果记录不存在会用
 //  记录的默认值初始化记录，int类型默认值为0，并在此基础上增加)
 type IncrByReq struct {
-	Version *int64 `protobuf:"varint,1,opt,name=version" json:"version,omitempty"`
-	Field   *Field `protobuf:"bytes,2,req,name=field" json:"field,omitempty"`
+	Field *Field `protobuf:"bytes,1,req,name=field" json:"field,omitempty"`
 }
 
 func (m *IncrByReq) Reset()      { *m = IncrByReq{} }
@@ -827,13 +802,6 @@ func (m *IncrByReq) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_IncrByReq proto.InternalMessageInfo
 
-func (m *IncrByReq) GetVersion() int64 {
-	if m != nil && m.Version != nil {
-		return *m.Version
-	}
-	return 0
-}
-
 func (m *IncrByReq) GetField() *Field {
 	if m != nil {
 		return m.Field
@@ -842,8 +810,7 @@ func (m *IncrByReq) GetField() *Field {
 }
 
 type IncrByResp struct {
-	Version int64  `protobuf:"varint,1,opt,name=version" json:"version"`
-	Field   *Field `protobuf:"bytes,2,opt,name=field" json:"field,omitempty"`
+	Field *Field `protobuf:"bytes,1,opt,name=field" json:"field,omitempty"`
 }
 
 func (m *IncrByResp) Reset()      { *m = IncrByResp{} }
@@ -878,13 +845,6 @@ func (m *IncrByResp) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_IncrByResp proto.InternalMessageInfo
 
-func (m *IncrByResp) GetVersion() int64 {
-	if m != nil {
-		return m.Version
-	}
-	return 0
-}
-
 func (m *IncrByResp) GetField() *Field {
 	if m != nil {
 		return m.Field
@@ -896,9 +856,8 @@ func (m *IncrByResp) GetField() *Field {
 //  如果记录存在且old.name的值与old.value相等，将其设定为new.value
 //  如果错误码为ERR_CAS_NOT_EQUAL，返回old.name的当前值。
 type CompareAndSetReq struct {
-	Version *int64 `protobuf:"varint,1,opt,name=version" json:"version,omitempty"`
-	New     *Field `protobuf:"bytes,2,req,name=new" json:"new,omitempty"`
-	Old     *Field `protobuf:"bytes,3,req,name=old" json:"old,omitempty"`
+	Old *Field `protobuf:"bytes,1,req,name=old" json:"old,omitempty"`
+	New *Field `protobuf:"bytes,2,req,name=new" json:"new,omitempty"`
 }
 
 func (m *CompareAndSetReq) Reset()      { *m = CompareAndSetReq{} }
@@ -933,11 +892,11 @@ func (m *CompareAndSetReq) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_CompareAndSetReq proto.InternalMessageInfo
 
-func (m *CompareAndSetReq) GetVersion() int64 {
-	if m != nil && m.Version != nil {
-		return *m.Version
+func (m *CompareAndSetReq) GetOld() *Field {
+	if m != nil {
+		return m.Old
 	}
-	return 0
+	return nil
 }
 
 func (m *CompareAndSetReq) GetNew() *Field {
@@ -947,16 +906,8 @@ func (m *CompareAndSetReq) GetNew() *Field {
 	return nil
 }
 
-func (m *CompareAndSetReq) GetOld() *Field {
-	if m != nil {
-		return m.Old
-	}
-	return nil
-}
-
 type CompareAndSetResp struct {
-	Version int64  `protobuf:"varint,1,opt,name=version" json:"version"`
-	Value   *Field `protobuf:"bytes,2,opt,name=value" json:"value,omitempty"`
+	Value *Field `protobuf:"bytes,1,opt,name=value" json:"value,omitempty"`
 }
 
 func (m *CompareAndSetResp) Reset()      { *m = CompareAndSetResp{} }
@@ -991,13 +942,6 @@ func (m *CompareAndSetResp) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_CompareAndSetResp proto.InternalMessageInfo
 
-func (m *CompareAndSetResp) GetVersion() int64 {
-	if m != nil {
-		return m.Version
-	}
-	return 0
-}
-
 func (m *CompareAndSetResp) GetValue() *Field {
 	if m != nil {
 		return m.Value
@@ -1009,9 +953,8 @@ func (m *CompareAndSetResp) GetValue() *Field {
 //  如果记录不存在，或old.name的值与old.value相等，将其设定为new.value
 //  如果错误码为ERR_CAS_NOT_EQUAL，返回old.name的当前值。(注意:如果记录不存在，old.name以外的字段将被设置为初始值)
 type CompareAndSetNxReq struct {
-	Version *int64 `protobuf:"varint,1,opt,name=version" json:"version,omitempty"`
-	New     *Field `protobuf:"bytes,2,req,name=new" json:"new,omitempty"`
-	Old     *Field `protobuf:"bytes,3,req,name=old" json:"old,omitempty"`
+	Old *Field `protobuf:"bytes,1,req,name=old" json:"old,omitempty"`
+	New *Field `protobuf:"bytes,2,req,name=new" json:"new,omitempty"`
 }
 
 func (m *CompareAndSetNxReq) Reset()      { *m = CompareAndSetNxReq{} }
@@ -1046,11 +989,11 @@ func (m *CompareAndSetNxReq) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_CompareAndSetNxReq proto.InternalMessageInfo
 
-func (m *CompareAndSetNxReq) GetVersion() int64 {
-	if m != nil && m.Version != nil {
-		return *m.Version
+func (m *CompareAndSetNxReq) GetOld() *Field {
+	if m != nil {
+		return m.Old
 	}
-	return 0
+	return nil
 }
 
 func (m *CompareAndSetNxReq) GetNew() *Field {
@@ -1060,16 +1003,8 @@ func (m *CompareAndSetNxReq) GetNew() *Field {
 	return nil
 }
 
-func (m *CompareAndSetNxReq) GetOld() *Field {
-	if m != nil {
-		return m.Old
-	}
-	return nil
-}
-
 type CompareAndSetNxResp struct {
-	Version int64  `protobuf:"varint,1,opt,name=version" json:"version"`
-	Value   *Field `protobuf:"bytes,2,opt,name=value" json:"value,omitempty"`
+	Value *Field `protobuf:"bytes,1,opt,name=value" json:"value,omitempty"`
 }
 
 func (m *CompareAndSetNxResp) Reset()      { *m = CompareAndSetNxResp{} }
@@ -1104,13 +1039,6 @@ func (m *CompareAndSetNxResp) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_CompareAndSetNxResp proto.InternalMessageInfo
 
-func (m *CompareAndSetNxResp) GetVersion() int64 {
-	if m != nil {
-		return m.Version
-	}
-	return 0
-}
-
 func (m *CompareAndSetNxResp) GetValue() *Field {
 	if m != nil {
 		return m.Value
@@ -1120,7 +1048,6 @@ func (m *CompareAndSetNxResp) GetValue() *Field {
 
 //删除命令(只支持删除整个记录，不支持删除记录的字段)
 type DelReq struct {
-	Version *int64 `protobuf:"varint,1,opt,name=version" json:"version,omitempty"`
 }
 
 func (m *DelReq) Reset()      { *m = DelReq{} }
@@ -1155,15 +1082,7 @@ func (m *DelReq) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_DelReq proto.InternalMessageInfo
 
-func (m *DelReq) GetVersion() int64 {
-	if m != nil && m.Version != nil {
-		return *m.Version
-	}
-	return 0
-}
-
 type DelResp struct {
-	Version int64 `protobuf:"varint,1,opt,name=version" json:"version"`
 }
 
 func (m *DelResp) Reset()      { *m = DelResp{} }
@@ -1197,13 +1116,6 @@ func (m *DelResp) XXX_DiscardUnknown() {
 }
 
 var xxx_messageInfo_DelResp proto.InternalMessageInfo
-
-func (m *DelResp) GetVersion() int64 {
-	if m != nil {
-		return m.Version
-	}
-	return 0
-}
 
 type KickReq struct {
 }
@@ -1665,68 +1577,67 @@ func init() {
 func init() { proto.RegisterFile("flyfish.proto", fileDescriptor_178c4910b45e4c52) }
 
 var fileDescriptor_178c4910b45e4c52 = []byte{
-	// 961 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0x56, 0x41, 0x8f, 0xe3, 0x34,
-	0x14, 0xae, 0x93, 0xa6, 0x49, 0x5e, 0x3b, 0x4b, 0xd6, 0x3b, 0x1a, 0xaa, 0x0a, 0x99, 0xca, 0xe2,
-	0xd0, 0x9d, 0xc3, 0xac, 0xb4, 0x27, 0x2e, 0x1c, 0x98, 0x41, 0xc0, 0x6a, 0xa4, 0x61, 0x69, 0x11,
-	0x12, 0x48, 0xa8, 0x4a, 0x1b, 0x4f, 0x09, 0x75, 0xed, 0x6e, 0x92, 0x76, 0xda, 0x13, 0x5c, 0xb8,
-	0xf3, 0x0f, 0xb8, 0xf2, 0x53, 0xe6, 0xc0, 0x61, 0x8e, 0x7b, 0x42, 0x4c, 0xe7, 0xc2, 0x71, 0x7f,
-	0x02, 0xb2, 0x93, 0xb4, 0x0d, 0x9b, 0x65, 0x23, 0xed, 0x9c, 0xea, 0x7e, 0xcf, 0xfe, 0xbe, 0xef,
-	0x3d, 0xc7, 0xcf, 0x86, 0x83, 0x4b, 0xbe, 0xbe, 0x0c, 0xe3, 0x1f, 0x4f, 0xe6, 0x91, 0x4c, 0x24,
-	0xb6, 0xf4, 0x4f, 0xe7, 0x70, 0x22, 0x27, 0x52, 0x0f, 0x9f, 0xa8, 0x51, 0x1a, 0xa4, 0x1c, 0x1c,
-	0x2e, 0x27, 0xa1, 0xe8, 0xb3, 0x17, 0xb8, 0x0b, 0xce, 0x58, 0xce, 0xe6, 0x11, 0x8b, 0xe3, 0x36,
-	0xea, 0xa2, 0x9e, 0x73, 0x5a, 0xbf, 0xfe, 0xeb, 0xc3, 0x5a, 0x7f, 0x8b, 0x62, 0x02, 0x76, 0x3c,
-	0xf6, 0x85, 0x60, 0x51, 0xdb, 0xd8, 0x9b, 0x90, 0x83, 0x2a, 0xee, 0x07, 0x81, 0x26, 0x30, 0xbb,
-	0xa8, 0xe7, 0xe6, 0xf1, 0x0c, 0xa4, 0x3e, 0xb8, 0x99, 0x5a, 0x3c, 0xc7, 0x87, 0x60, 0xc8, 0x69,
-	0x41, 0xc8, 0x90, 0xd3, 0x82, 0x09, 0xa3, 0xd4, 0xc4, 0x07, 0xd0, 0x88, 0x98, 0x1f, 0x4b, 0x51,
-	0xd0, 0xc8, 0x30, 0xfa, 0x3b, 0x02, 0x6b, 0xe9, 0xf3, 0x05, 0xc3, 0xc7, 0x50, 0xff, 0x66, 0x3d,
-	0x67, 0x6d, 0xd4, 0x35, 0x7a, 0x0f, 0x9e, 0x7a, 0x69, 0xc2, 0x27, 0xdf, 0xaa, 0x98, 0xc2, 0xb3,
-	0x75, 0x7a, 0x0e, 0x3e, 0x02, 0xf3, 0x99, 0x48, 0xb4, 0xa0, 0x99, 0x05, 0x14, 0x80, 0x3b, 0x60,
-	0x7d, 0xce, 0xa5, 0x9f, 0x68, 0x29, 0x94, 0x45, 0x52, 0x48, 0xf9, 0x18, 0x24, 0x51, 0x28, 0x26,
-	0xed, 0xfa, 0xbe, 0x8f, 0x14, 0xc3, 0x6d, 0xa8, 0x9f, 0x72, 0x39, 0x6a, 0x5b, 0x5d, 0xd4, 0x6b,
-	0xe5, 0x5a, 0x0a, 0xa1, 0x9f, 0x80, 0x75, 0x19, 0x32, 0x1e, 0xa8, 0x29, 0xc2, 0x9f, 0x31, 0x5d,
-	0x82, 0x7c, 0xb9, 0x46, 0x70, 0x07, 0xd0, 0x52, 0x9b, 0x69, 0x3e, 0x6d, 0x65, 0xbe, 0x75, 0x4e,
-	0x7d, 0xb4, 0xa4, 0x27, 0xe0, 0xcc, 0x43, 0x31, 0x19, 0x46, 0xec, 0x05, 0xa6, 0xe0, 0x26, 0xe1,
-	0x8c, 0xc5, 0x89, 0x3f, 0x9b, 0x6b, 0x9a, 0xdc, 0xfc, 0x0e, 0xa6, 0x4f, 0xc0, 0xcd, 0xe6, 0xc7,
-	0xf3, 0xe2, 0x02, 0xa3, 0x7c, 0xc1, 0x77, 0x60, 0x4f, 0x58, 0xa2, 0xf9, 0x09, 0xd8, 0x4b, 0x16,
-	0xc5, 0xa1, 0x14, 0x7b, 0xec, 0xa8, 0x9f, 0x83, 0xf8, 0x08, 0x1a, 0x3a, 0x15, 0xb5, 0x55, 0x66,
-	0xcf, 0xed, 0x67, 0xff, 0x54, 0x39, 0x7d, 0xce, 0x75, 0xd1, 0xf2, 0xfd, 0x53, 0x00, 0x7d, 0x0e,
-	0x4e, 0x4a, 0x1d, 0xcf, 0xcb, 0xb9, 0x6b, 0x3b, 0xee, 0x8f, 0x0a, 0xdc, 0xbb, 0x42, 0x68, 0x30,
-	0x57, 0xa2, 0x5f, 0x81, 0x1d, 0x57, 0x34, 0x5b, 0x8d, 0xf0, 0x18, 0x9c, 0xb8, 0xa2, 0x45, 0xda,
-	0x07, 0x50, 0x73, 0xc5, 0xea, 0x1e, 0xf5, 0x07, 0xd0, 0xdc, 0x72, 0xde, 0x5b, 0x95, 0xbe, 0x86,
-	0x66, 0x28, 0xc6, 0xd1, 0x70, 0xb4, 0xae, 0xe4, 0x94, 0x66, 0x5f, 0x68, 0xdb, 0xe8, 0x1a, 0xaf,
-	0x71, 0xa6, 0x21, 0xda, 0x87, 0xd6, 0x8e, 0xb2, 0x82, 0xd1, 0x3d, 0x4e, 0xf4, 0x26, 0xce, 0x05,
-	0x3c, 0x52, 0xa7, 0xdc, 0x8f, 0xd8, 0xd0, 0x17, 0xc1, 0xb0, 0xea, 0xc6, 0x12, 0x30, 0x05, 0xbb,
-	0x2a, 0x35, 0xab, 0x02, 0x2a, 0x2e, 0x79, 0xd0, 0x36, 0xcb, 0xe2, 0x92, 0x07, 0xf4, 0x7b, 0x38,
-	0x7c, 0x5d, 0xb6, 0x5a, 0x4a, 0xfa, 0x54, 0x96, 0xa7, 0xa4, 0x43, 0x74, 0x05, 0x47, 0xff, 0xe5,
-	0xae, 0xf8, 0xb9, 0xbc, 0x6b, 0x56, 0x3f, 0xc0, 0xfb, 0xa5, 0xca, 0xf7, 0x94, 0xd8, 0x63, 0xb0,
-	0x03, 0xc6, 0xab, 0x64, 0xa2, 0x8e, 0x54, 0x3a, 0xb5, 0xc2, 0x91, 0x02, 0x70, 0xa6, 0xe1, 0x78,
-	0xaa, 0x78, 0x69, 0x13, 0xdc, 0x6c, 0x1c, 0xcf, 0xe9, 0x97, 0x00, 0xea, 0x96, 0x19, 0xa6, 0xad,
-	0xb3, 0x93, 0x7f, 0x4d, 0xfb, 0xbd, 0x33, 0x6b, 0xab, 0x7b, 0x12, 0x46, 0x99, 0xc4, 0x9f, 0x08,
-	0x9a, 0xd9, 0x85, 0xa5, 0xed, 0x77, 0xc0, 0x4a, 0xfc, 0x11, 0x2f, 0xf6, 0xe1, 0x14, 0x7a, 0x1b,
-	0x97, 0x5a, 0x1b, 0x73, 0x99, 0xa4, 0xd7, 0x5d, 0xde, 0xe6, 0x53, 0x48, 0xc7, 0x12, 0x19, 0x31,
-	0x7d, 0x3d, 0x58, 0xdb, 0x98, 0x82, 0xf0, 0xe3, 0xed, 0xb1, 0xb5, 0xf4, 0xb1, 0x7d, 0x98, 0x95,
-	0x78, 0x97, 0xe2, 0xb6, 0x97, 0x12, 0xb0, 0x55, 0x6f, 0x96, 0x8b, 0xa4, 0xdd, 0xd8, 0xb7, 0x90,
-	0x81, 0xf4, 0x04, 0x5a, 0xbb, 0x6c, 0xd2, 0x0a, 0xb3, 0x28, 0x3a, 0x93, 0x41, 0x9a, 0x50, 0x2e,
-	0x9c, 0x83, 0xf4, 0x1c, 0x0e, 0xb4, 0x8a, 0x60, 0xab, 0x24, 0xcf, 0x7f, 0x2c, 0x17, 0x22, 0x29,
-	0x4c, 0x4f, 0xa1, 0x7d, 0x71, 0xa3, 0x4c, 0xfc, 0x67, 0x30, 0x23, 0x79, 0xa5, 0xfa, 0xfd, 0x94,
-	0xad, 0xf5, 0x4d, 0x9b, 0x17, 0x50, 0x01, 0xc5, 0xf2, 0x19, 0xff, 0xd7, 0xbd, 0xcc, 0x37, 0x77,
-	0x2f, 0x65, 0x30, 0x58, 0xcc, 0x66, 0x6b, 0x5d, 0xc8, 0xfc, 0x3e, 0x49, 0x21, 0xfa, 0x13, 0x3c,
-	0xd8, 0xcf, 0xe6, 0xed, 0xf9, 0xab, 0x5b, 0x57, 0xed, 0x8f, 0xce, 0x27, 0x0f, 0x6a, 0x04, 0x13,
-	0xa8, 0x47, 0xf2, 0x2a, 0xf7, 0x02, 0x99, 0x97, 0x48, 0x5e, 0xf5, 0x35, 0x7e, 0xfc, 0x2b, 0x02,
-	0xfb, 0x6c, 0x16, 0xe8, 0x07, 0x83, 0x03, 0xf5, 0xe7, 0xa1, 0x98, 0x78, 0x08, 0xdb, 0x60, 0x0e,
-	0x58, 0xe2, 0x19, 0x6a, 0xf0, 0x05, 0x4b, 0x3c, 0x53, 0x0d, 0x3e, 0x63, 0xdc, 0xab, 0x63, 0x80,
-	0xc6, 0x33, 0x31, 0x8e, 0x4e, 0xd7, 0x9e, 0x85, 0x5d, 0xb0, 0x06, 0x2c, 0xb9, 0x58, 0x79, 0x0d,
-	0xfc, 0x10, 0x0e, 0xce, 0xd2, 0x93, 0xf9, 0xa9, 0x08, 0xd4, 0x5a, 0x1b, 0x3f, 0x82, 0xf7, 0x0a,
-	0xd0, 0xc5, 0xca, 0x73, 0x94, 0xc6, 0x79, 0x38, 0x9e, 0x7a, 0x2e, 0x6e, 0x81, 0x33, 0x18, 0xfb,
-	0xe2, 0x82, 0xad, 0x12, 0x0f, 0x8e, 0xcf, 0xc1, 0xdd, 0xbe, 0x62, 0x70, 0x13, 0xec, 0x50, 0x2c,
-	0xfd, 0x90, 0x07, 0x5e, 0x4d, 0x29, 0x8b, 0x90, 0x7b, 0x48, 0x29, 0xc7, 0xfa, 0x1d, 0x92, 0xfa,
-	0x0a, 0x85, 0xf2, 0xe5, 0x82, 0x75, 0xa9, 0x5e, 0x2e, 0x5e, 0x5d, 0x51, 0x8f, 0xb8, 0x1c, 0x79,
-	0xd6, 0xe9, 0xc7, 0xd7, 0xb7, 0x04, 0xdd, 0xdc, 0x12, 0xf4, 0xf2, 0x96, 0xd4, 0x5e, 0xdd, 0x12,
-	0xf4, 0xcb, 0x86, 0xa0, 0x3f, 0x36, 0x04, 0x5d, 0x6f, 0x08, 0xba, 0xd9, 0x10, 0xf4, 0xf7, 0x86,
-	0xa0, 0x7f, 0x36, 0xa4, 0xf6, 0x6a, 0x43, 0xd0, 0x6f, 0x77, 0xa4, 0x76, 0x73, 0x47, 0x6a, 0x2f,
-	0xef, 0x48, 0xed, 0xdf, 0x00, 0x00, 0x00, 0xff, 0xff, 0xa2, 0x7a, 0x77, 0xdb, 0x67, 0x0a, 0x00,
-	0x00,
+	// 953 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xa4, 0x55, 0x4f, 0x6f, 0xe3, 0x54,
+	0x10, 0xcf, 0x73, 0xe2, 0x3a, 0x9e, 0xa4, 0x8b, 0xf7, 0x6d, 0x55, 0xa2, 0x08, 0x99, 0xc8, 0xe2,
+	0x10, 0x7a, 0xe8, 0x8a, 0x72, 0x41, 0x48, 0x7b, 0xa0, 0x45, 0xc0, 0xaa, 0x52, 0x59, 0xa5, 0x80,
+	0xe0, 0x14, 0x39, 0xf1, 0x6b, 0x30, 0x71, 0xde, 0xf3, 0xda, 0x6e, 0xfe, 0x9c, 0xe0, 0xc2, 0x9d,
+	0x6f, 0xc0, 0x95, 0x8f, 0xd2, 0x03, 0x87, 0x1e, 0xf7, 0x84, 0x68, 0x7a, 0xe1, 0xb8, 0x1f, 0x01,
+	0xcd, 0xfb, 0x93, 0xc4, 0xbb, 0x29, 0xad, 0xc4, 0x29, 0x2f, 0xbf, 0xf1, 0xcc, 0xef, 0x37, 0xf3,
+	0x66, 0xe6, 0xc1, 0xee, 0x45, 0xb2, 0xb8, 0x88, 0xf3, 0x1f, 0x0f, 0xd3, 0x4c, 0x14, 0x82, 0xda,
+	0xf2, 0xa7, 0xbd, 0x37, 0x12, 0x23, 0x21, 0x8f, 0x4f, 0xf1, 0xa4, 0x8c, 0x41, 0x02, 0xf5, 0x44,
+	0x8c, 0x62, 0xde, 0x63, 0x2f, 0x69, 0x07, 0xea, 0x43, 0x31, 0x49, 0x33, 0x96, 0xe7, 0x2d, 0xd2,
+	0x21, 0xdd, 0xfa, 0x71, 0xed, 0xea, 0xaf, 0xf7, 0x2b, 0xbd, 0x15, 0x4a, 0x7d, 0x70, 0xf2, 0x61,
+	0xc8, 0x39, 0xcb, 0x5a, 0xd6, 0xc6, 0x07, 0x06, 0x44, 0x7b, 0x18, 0x45, 0x32, 0x40, 0xb5, 0x43,
+	0xba, 0xae, 0xb1, 0x6b, 0x30, 0x08, 0xc1, 0xd5, 0x6c, 0x79, 0x4a, 0xf7, 0xc0, 0x12, 0xe3, 0x12,
+	0x91, 0x25, 0xc6, 0x25, 0x11, 0xd6, 0x56, 0x11, 0xef, 0xc1, 0x4e, 0xc6, 0xc2, 0x5c, 0xf0, 0x12,
+	0x87, 0xc6, 0x82, 0xdf, 0x09, 0xd8, 0xd3, 0x30, 0xb9, 0x64, 0xf4, 0x00, 0x6a, 0xdf, 0x2c, 0x52,
+	0xd6, 0x22, 0x1d, 0xab, 0xfb, 0xe8, 0xc8, 0x53, 0x09, 0x1f, 0x7e, 0x87, 0x36, 0xc4, 0xb5, 0x9f,
+	0xfc, 0x86, 0xee, 0x43, 0xf5, 0x39, 0x2f, 0x24, 0x61, 0x55, 0x1b, 0x10, 0xa0, 0x6d, 0xb0, 0xbf,
+	0x48, 0x44, 0x58, 0x48, 0x2a, 0xa2, 0x2d, 0x0a, 0x42, 0x1d, 0xe7, 0x45, 0x16, 0xf3, 0x51, 0xab,
+	0xb6, 0xa9, 0x43, 0x61, 0xb4, 0x05, 0xb5, 0xe3, 0x44, 0x0c, 0x5a, 0x76, 0x87, 0x74, 0x9b, 0x86,
+	0x0b, 0x91, 0xe0, 0x19, 0xd8, 0x17, 0x31, 0x4b, 0x22, 0xfc, 0x84, 0x87, 0x13, 0x26, 0x4b, 0x60,
+	0xdc, 0x25, 0x42, 0xdb, 0x40, 0xa6, 0x52, 0x4c, 0xe3, 0xa8, 0xa9, 0x75, 0xcb, 0x9c, 0x7a, 0x64,
+	0x1a, 0x1c, 0x42, 0x3d, 0x8d, 0xf9, 0xa8, 0x9f, 0xb1, 0x97, 0x34, 0x00, 0xb7, 0x88, 0x27, 0x2c,
+	0x2f, 0xc2, 0x49, 0x2a, 0xc3, 0x18, 0xf1, 0x6b, 0x38, 0x78, 0x0a, 0xae, 0xfe, 0x3e, 0x4f, 0xcb,
+	0x0e, 0xd6, 0x76, 0x87, 0x1f, 0xc0, 0x19, 0xb1, 0x42, 0xc6, 0xf7, 0xc1, 0x99, 0xb2, 0x2c, 0x8f,
+	0x05, 0xdf, 0x88, 0x4e, 0x7a, 0x06, 0xa4, 0xfb, 0xb0, 0x23, 0x53, 0xc1, 0xab, 0xaa, 0x76, 0xdd,
+	0x9e, 0xfe, 0x87, 0xe5, 0x0c, 0x93, 0x44, 0x16, 0xcd, 0xdc, 0x1f, 0x02, 0xc1, 0x0b, 0xa8, 0xab,
+	0xd0, 0x79, 0x7a, 0x6f, 0xec, 0x0f, 0x4a, 0xb1, 0xd7, 0x85, 0x90, 0xa0, 0x61, 0x0a, 0xbe, 0x06,
+	0x27, 0x7f, 0xa0, 0xd8, 0x87, 0x05, 0x04, 0xa8, 0xe7, 0x5a, 0x62, 0x70, 0x04, 0x80, 0x67, 0x3e,
+	0x97, 0xf1, 0xd7, 0xfe, 0xe4, 0x3f, 0xfc, 0x3f, 0x86, 0xc6, 0xca, 0x27, 0x4f, 0x1f, 0xe8, 0xf4,
+	0x11, 0x34, 0x62, 0x3e, 0xcc, 0xfa, 0x83, 0x85, 0xbe, 0x56, 0xd5, 0x21, 0xb2, 0x75, 0xdf, 0xf4,
+	0x51, 0xa6, 0xe0, 0x08, 0x9a, 0x6b, 0x17, 0x79, 0xb3, 0x2b, 0x1f, 0x72, 0x97, 0xcf, 0xb7, 0xf0,
+	0x04, 0xa7, 0x28, 0xcc, 0x58, 0x3f, 0xe4, 0x51, 0x7f, 0x5d, 0xb8, 0xaa, 0xb8, 0x83, 0x0c, 0x0d,
+	0x68, 0xe7, 0x6c, 0xd6, 0xb2, 0xb6, 0xd9, 0x39, 0x9b, 0x05, 0x9f, 0xc2, 0xde, 0xdb, 0x61, 0x95,
+	0x24, 0xd9, 0xb5, 0xdb, 0x25, 0x49, 0x53, 0xf0, 0x3d, 0xec, 0xbf, 0xe9, 0xab, 0xcb, 0xfd, 0x7f,
+	0x55, 0x3d, 0x83, 0x77, 0xb7, 0x46, 0x7e, 0xa0, 0x30, 0x17, 0x9c, 0x88, 0x25, 0xa8, 0x04, 0x5b,
+	0x42, 0x1d, 0xf3, 0x14, 0xcf, 0xe3, 0x78, 0x38, 0x96, 0x78, 0x03, 0x5c, 0x7d, 0xce, 0xd3, 0xe0,
+	0x2b, 0x00, 0xdc, 0x82, 0x7d, 0x35, 0xda, 0xed, 0xcd, 0xdb, 0x30, 0xb3, 0xad, 0xc7, 0x7e, 0xa3,
+	0x4f, 0x37, 0x27, 0xd0, 0x80, 0xc1, 0x9f, 0x04, 0x1a, 0x7a, 0xa1, 0xca, 0x42, 0xb4, 0xc1, 0x2e,
+	0xc2, 0x41, 0x52, 0xde, 0x13, 0x0a, 0xba, 0x2f, 0x16, 0xfa, 0xe6, 0x89, 0x28, 0xd4, 0x3a, 0x36,
+	0x6b, 0x48, 0x41, 0xd2, 0x56, 0x88, 0x8c, 0xc9, 0xf5, 0x65, 0xaf, 0x6c, 0x08, 0xd1, 0x0f, 0x57,
+	0x6d, 0x6b, 0xcb, 0xb6, 0x7d, 0xac, 0x4b, 0xb4, 0x4e, 0x71, 0x35, 0xeb, 0x3e, 0x38, 0xb8, 0x3b,
+	0xc4, 0x65, 0xd1, 0xda, 0xd9, 0x94, 0xa0, 0xc1, 0xe0, 0x10, 0x9a, 0xeb, 0x6c, 0xd4, 0xdc, 0xb3,
+	0x2c, 0x3b, 0x11, 0x91, 0x4a, 0xc8, 0x10, 0x1b, 0x30, 0x38, 0x85, 0x5d, 0xc9, 0xc2, 0xd9, 0xbc,
+	0x30, 0xf9, 0x0f, 0xc5, 0x25, 0x2f, 0x4a, 0x9f, 0x2b, 0x68, 0x93, 0xdc, 0xda, 0x46, 0xfe, 0x33,
+	0x54, 0x33, 0x31, 0xc3, 0x7d, 0x34, 0x66, 0x0b, 0xd9, 0x4b, 0xa6, 0x80, 0x08, 0x94, 0xcb, 0x67,
+	0xbd, 0x5d, 0xbe, 0xf5, 0xf4, 0x56, 0xef, 0x9e, 0x5e, 0x14, 0x18, 0x5d, 0x4e, 0x26, 0x0b, 0x59,
+	0x48, 0xb3, 0xef, 0x14, 0x14, 0xfc, 0x04, 0x8f, 0x36, 0xb3, 0xb9, 0x3f, 0x7f, 0x7c, 0x15, 0xf0,
+	0x7e, 0x64, 0x3e, 0xc6, 0x28, 0x11, 0xea, 0x43, 0x2d, 0x13, 0x33, 0xa3, 0x05, 0xb4, 0x96, 0x4c,
+	0xcc, 0x7a, 0x12, 0x3f, 0xf8, 0x95, 0x80, 0x73, 0x32, 0x89, 0xe4, 0x83, 0x56, 0x87, 0xda, 0x8b,
+	0x98, 0x8f, 0x3c, 0x42, 0x1d, 0xa8, 0x9e, 0xb3, 0xc2, 0xb3, 0xf0, 0xf0, 0x25, 0x2b, 0xbc, 0x2a,
+	0x1e, 0x3e, 0x67, 0x89, 0x57, 0xa3, 0x00, 0x3b, 0xcf, 0xf9, 0x30, 0x3b, 0x5e, 0x78, 0x36, 0x75,
+	0xc1, 0x3e, 0x67, 0xc5, 0xd9, 0xdc, 0xdb, 0xa1, 0x8f, 0x61, 0xf7, 0x44, 0x4d, 0xce, 0x67, 0x3c,
+	0x42, 0x5f, 0x87, 0x3e, 0x81, 0x77, 0x4a, 0xd0, 0xd9, 0xdc, 0xab, 0x23, 0xc7, 0x69, 0x3c, 0x1c,
+	0x7b, 0x2e, 0x6d, 0x42, 0xfd, 0x7c, 0x18, 0xf2, 0x33, 0x36, 0x2f, 0x3c, 0x38, 0x38, 0x05, 0x77,
+	0xf5, 0xca, 0xd2, 0x06, 0x38, 0x31, 0x9f, 0x86, 0x71, 0x12, 0x79, 0x15, 0x64, 0xe6, 0x71, 0xe2,
+	0x11, 0x64, 0xce, 0xe5, 0x3b, 0xa9, 0x74, 0xc5, 0x1c, 0x75, 0xb9, 0x60, 0x5f, 0xe0, 0xcb, 0xea,
+	0xd5, 0x30, 0xf4, 0x20, 0x11, 0x03, 0xcf, 0x3e, 0xfe, 0xe4, 0xea, 0xc6, 0x27, 0xd7, 0x37, 0x3e,
+	0x79, 0x75, 0xe3, 0x57, 0x5e, 0xdf, 0xf8, 0xe4, 0x97, 0xa5, 0x4f, 0xfe, 0x58, 0xfa, 0xe4, 0x6a,
+	0xe9, 0x93, 0xeb, 0xa5, 0x4f, 0xfe, 0x5e, 0xfa, 0xe4, 0x9f, 0xa5, 0x5f, 0x79, 0xbd, 0xf4, 0xc9,
+	0x6f, 0xb7, 0x7e, 0xe5, 0xfa, 0xd6, 0xaf, 0xbc, 0xba, 0xf5, 0x2b, 0xff, 0x06, 0x00, 0x00, 0xff,
+	0xff, 0x15, 0xa3, 0x56, 0x4a, 0x07, 0x09, 0x00, 0x00,
 }
 
 func (x CmdType) String() string {
@@ -1974,7 +1885,13 @@ func (this *GetResp) Equal(that interface{}) bool {
 	} else if this == nil {
 		return false
 	}
-	if this.Version != that1.Version {
+	if this.Version != nil && that1.Version != nil {
+		if *this.Version != *that1.Version {
+			return false
+		}
+	} else if this.Version != nil {
+		return false
+	} else if that1.Version != nil {
 		return false
 	}
 	if len(this.Fields) != len(that1.Fields) {
@@ -2044,9 +1961,6 @@ func (this *SetResp) Equal(that interface{}) bool {
 	} else if this == nil {
 		return false
 	}
-	if this.Version != that1.Version {
-		return false
-	}
 	return true
 }
 func (this *SetNxReq) Equal(that interface{}) bool {
@@ -2066,15 +1980,6 @@ func (this *SetNxReq) Equal(that interface{}) bool {
 	if that1 == nil {
 		return this == nil
 	} else if this == nil {
-		return false
-	}
-	if this.Version != nil && that1.Version != nil {
-		if *this.Version != *that1.Version {
-			return false
-		}
-	} else if this.Version != nil {
-		return false
-	} else if that1.Version != nil {
 		return false
 	}
 	if len(this.Fields) != len(that1.Fields) {
@@ -2106,9 +2011,6 @@ func (this *SetNxResp) Equal(that interface{}) bool {
 	} else if this == nil {
 		return false
 	}
-	if this.Version != that1.Version {
-		return false
-	}
 	if len(this.Fields) != len(that1.Fields) {
 		return false
 	}
@@ -2138,15 +2040,6 @@ func (this *IncrByReq) Equal(that interface{}) bool {
 	} else if this == nil {
 		return false
 	}
-	if this.Version != nil && that1.Version != nil {
-		if *this.Version != *that1.Version {
-			return false
-		}
-	} else if this.Version != nil {
-		return false
-	} else if that1.Version != nil {
-		return false
-	}
 	if !this.Field.Equal(that1.Field) {
 		return false
 	}
@@ -2169,9 +2062,6 @@ func (this *IncrByResp) Equal(that interface{}) bool {
 	if that1 == nil {
 		return this == nil
 	} else if this == nil {
-		return false
-	}
-	if this.Version != that1.Version {
 		return false
 	}
 	if !this.Field.Equal(that1.Field) {
@@ -2198,19 +2088,10 @@ func (this *CompareAndSetReq) Equal(that interface{}) bool {
 	} else if this == nil {
 		return false
 	}
-	if this.Version != nil && that1.Version != nil {
-		if *this.Version != *that1.Version {
-			return false
-		}
-	} else if this.Version != nil {
-		return false
-	} else if that1.Version != nil {
+	if !this.Old.Equal(that1.Old) {
 		return false
 	}
 	if !this.New.Equal(that1.New) {
-		return false
-	}
-	if !this.Old.Equal(that1.Old) {
 		return false
 	}
 	return true
@@ -2232,9 +2113,6 @@ func (this *CompareAndSetResp) Equal(that interface{}) bool {
 	if that1 == nil {
 		return this == nil
 	} else if this == nil {
-		return false
-	}
-	if this.Version != that1.Version {
 		return false
 	}
 	if !this.Value.Equal(that1.Value) {
@@ -2261,19 +2139,10 @@ func (this *CompareAndSetNxReq) Equal(that interface{}) bool {
 	} else if this == nil {
 		return false
 	}
-	if this.Version != nil && that1.Version != nil {
-		if *this.Version != *that1.Version {
-			return false
-		}
-	} else if this.Version != nil {
-		return false
-	} else if that1.Version != nil {
+	if !this.Old.Equal(that1.Old) {
 		return false
 	}
 	if !this.New.Equal(that1.New) {
-		return false
-	}
-	if !this.Old.Equal(that1.Old) {
 		return false
 	}
 	return true
@@ -2295,9 +2164,6 @@ func (this *CompareAndSetNxResp) Equal(that interface{}) bool {
 	if that1 == nil {
 		return this == nil
 	} else if this == nil {
-		return false
-	}
-	if this.Version != that1.Version {
 		return false
 	}
 	if !this.Value.Equal(that1.Value) {
@@ -2324,15 +2190,6 @@ func (this *DelReq) Equal(that interface{}) bool {
 	} else if this == nil {
 		return false
 	}
-	if this.Version != nil && that1.Version != nil {
-		if *this.Version != *that1.Version {
-			return false
-		}
-	} else if this.Version != nil {
-		return false
-	} else if that1.Version != nil {
-		return false
-	}
 	return true
 }
 func (this *DelResp) Equal(that interface{}) bool {
@@ -2352,9 +2209,6 @@ func (this *DelResp) Equal(that interface{}) bool {
 	if that1 == nil {
 		return this == nil
 	} else if this == nil {
-		return false
-	}
-	if this.Version != that1.Version {
 		return false
 	}
 	return true
@@ -2689,7 +2543,9 @@ func (this *GetResp) GoString() string {
 	}
 	s := make([]string, 0, 6)
 	s = append(s, "&proto.GetResp{")
-	s = append(s, "Version: "+fmt.Sprintf("%#v", this.Version)+",\n")
+	if this.Version != nil {
+		s = append(s, "Version: "+valueToGoStringFlyfish(this.Version, "int64")+",\n")
+	}
 	if this.Fields != nil {
 		s = append(s, "Fields: "+fmt.Sprintf("%#v", this.Fields)+",\n")
 	}
@@ -2715,9 +2571,8 @@ func (this *SetResp) GoString() string {
 	if this == nil {
 		return "nil"
 	}
-	s := make([]string, 0, 5)
+	s := make([]string, 0, 4)
 	s = append(s, "&proto.SetResp{")
-	s = append(s, "Version: "+fmt.Sprintf("%#v", this.Version)+",\n")
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
@@ -2725,11 +2580,8 @@ func (this *SetNxReq) GoString() string {
 	if this == nil {
 		return "nil"
 	}
-	s := make([]string, 0, 6)
+	s := make([]string, 0, 5)
 	s = append(s, "&proto.SetNxReq{")
-	if this.Version != nil {
-		s = append(s, "Version: "+valueToGoStringFlyfish(this.Version, "int64")+",\n")
-	}
 	if this.Fields != nil {
 		s = append(s, "Fields: "+fmt.Sprintf("%#v", this.Fields)+",\n")
 	}
@@ -2740,9 +2592,8 @@ func (this *SetNxResp) GoString() string {
 	if this == nil {
 		return "nil"
 	}
-	s := make([]string, 0, 6)
+	s := make([]string, 0, 5)
 	s = append(s, "&proto.SetNxResp{")
-	s = append(s, "Version: "+fmt.Sprintf("%#v", this.Version)+",\n")
 	if this.Fields != nil {
 		s = append(s, "Fields: "+fmt.Sprintf("%#v", this.Fields)+",\n")
 	}
@@ -2753,11 +2604,8 @@ func (this *IncrByReq) GoString() string {
 	if this == nil {
 		return "nil"
 	}
-	s := make([]string, 0, 6)
+	s := make([]string, 0, 5)
 	s = append(s, "&proto.IncrByReq{")
-	if this.Version != nil {
-		s = append(s, "Version: "+valueToGoStringFlyfish(this.Version, "int64")+",\n")
-	}
 	if this.Field != nil {
 		s = append(s, "Field: "+fmt.Sprintf("%#v", this.Field)+",\n")
 	}
@@ -2768,9 +2616,8 @@ func (this *IncrByResp) GoString() string {
 	if this == nil {
 		return "nil"
 	}
-	s := make([]string, 0, 6)
+	s := make([]string, 0, 5)
 	s = append(s, "&proto.IncrByResp{")
-	s = append(s, "Version: "+fmt.Sprintf("%#v", this.Version)+",\n")
 	if this.Field != nil {
 		s = append(s, "Field: "+fmt.Sprintf("%#v", this.Field)+",\n")
 	}
@@ -2781,16 +2628,13 @@ func (this *CompareAndSetReq) GoString() string {
 	if this == nil {
 		return "nil"
 	}
-	s := make([]string, 0, 7)
+	s := make([]string, 0, 6)
 	s = append(s, "&proto.CompareAndSetReq{")
-	if this.Version != nil {
-		s = append(s, "Version: "+valueToGoStringFlyfish(this.Version, "int64")+",\n")
+	if this.Old != nil {
+		s = append(s, "Old: "+fmt.Sprintf("%#v", this.Old)+",\n")
 	}
 	if this.New != nil {
 		s = append(s, "New: "+fmt.Sprintf("%#v", this.New)+",\n")
-	}
-	if this.Old != nil {
-		s = append(s, "Old: "+fmt.Sprintf("%#v", this.Old)+",\n")
 	}
 	s = append(s, "}")
 	return strings.Join(s, "")
@@ -2799,9 +2643,8 @@ func (this *CompareAndSetResp) GoString() string {
 	if this == nil {
 		return "nil"
 	}
-	s := make([]string, 0, 6)
+	s := make([]string, 0, 5)
 	s = append(s, "&proto.CompareAndSetResp{")
-	s = append(s, "Version: "+fmt.Sprintf("%#v", this.Version)+",\n")
 	if this.Value != nil {
 		s = append(s, "Value: "+fmt.Sprintf("%#v", this.Value)+",\n")
 	}
@@ -2812,16 +2655,13 @@ func (this *CompareAndSetNxReq) GoString() string {
 	if this == nil {
 		return "nil"
 	}
-	s := make([]string, 0, 7)
+	s := make([]string, 0, 6)
 	s = append(s, "&proto.CompareAndSetNxReq{")
-	if this.Version != nil {
-		s = append(s, "Version: "+valueToGoStringFlyfish(this.Version, "int64")+",\n")
+	if this.Old != nil {
+		s = append(s, "Old: "+fmt.Sprintf("%#v", this.Old)+",\n")
 	}
 	if this.New != nil {
 		s = append(s, "New: "+fmt.Sprintf("%#v", this.New)+",\n")
-	}
-	if this.Old != nil {
-		s = append(s, "Old: "+fmt.Sprintf("%#v", this.Old)+",\n")
 	}
 	s = append(s, "}")
 	return strings.Join(s, "")
@@ -2830,9 +2670,8 @@ func (this *CompareAndSetNxResp) GoString() string {
 	if this == nil {
 		return "nil"
 	}
-	s := make([]string, 0, 6)
+	s := make([]string, 0, 5)
 	s = append(s, "&proto.CompareAndSetNxResp{")
-	s = append(s, "Version: "+fmt.Sprintf("%#v", this.Version)+",\n")
 	if this.Value != nil {
 		s = append(s, "Value: "+fmt.Sprintf("%#v", this.Value)+",\n")
 	}
@@ -2843,11 +2682,8 @@ func (this *DelReq) GoString() string {
 	if this == nil {
 		return "nil"
 	}
-	s := make([]string, 0, 5)
+	s := make([]string, 0, 4)
 	s = append(s, "&proto.DelReq{")
-	if this.Version != nil {
-		s = append(s, "Version: "+valueToGoStringFlyfish(this.Version, "int64")+",\n")
-	}
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
@@ -2855,9 +2691,8 @@ func (this *DelResp) GoString() string {
 	if this == nil {
 		return "nil"
 	}
-	s := make([]string, 0, 5)
+	s := make([]string, 0, 4)
 	s = append(s, "&proto.DelResp{")
-	s = append(s, "Version: "+fmt.Sprintf("%#v", this.Version)+",\n")
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
@@ -3269,9 +3104,11 @@ func (m *GetResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 			dAtA[i] = 0x12
 		}
 	}
-	i = encodeVarintFlyfish(dAtA, i, uint64(m.Version))
-	i--
-	dAtA[i] = 0x8
+	if m.Version != nil {
+		i = encodeVarintFlyfish(dAtA, i, uint64(*m.Version))
+		i--
+		dAtA[i] = 0x8
+	}
 	return len(dAtA) - i, nil
 }
 
@@ -3337,9 +3174,6 @@ func (m *SetResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	i = encodeVarintFlyfish(dAtA, i, uint64(m.Version))
-	i--
-	dAtA[i] = 0x8
 	return len(dAtA) - i, nil
 }
 
@@ -3374,13 +3208,8 @@ func (m *SetNxReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 				i = encodeVarintFlyfish(dAtA, i, uint64(size))
 			}
 			i--
-			dAtA[i] = 0x12
+			dAtA[i] = 0xa
 		}
-	}
-	if m.Version != nil {
-		i = encodeVarintFlyfish(dAtA, i, uint64(*m.Version))
-		i--
-		dAtA[i] = 0x8
 	}
 	return len(dAtA) - i, nil
 }
@@ -3416,12 +3245,9 @@ func (m *SetNxResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 				i = encodeVarintFlyfish(dAtA, i, uint64(size))
 			}
 			i--
-			dAtA[i] = 0x12
+			dAtA[i] = 0xa
 		}
 	}
-	i = encodeVarintFlyfish(dAtA, i, uint64(m.Version))
-	i--
-	dAtA[i] = 0x8
 	return len(dAtA) - i, nil
 }
 
@@ -3457,12 +3283,7 @@ func (m *IncrByReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 			i = encodeVarintFlyfish(dAtA, i, uint64(size))
 		}
 		i--
-		dAtA[i] = 0x12
-	}
-	if m.Version != nil {
-		i = encodeVarintFlyfish(dAtA, i, uint64(*m.Version))
-		i--
-		dAtA[i] = 0x8
+		dAtA[i] = 0xa
 	}
 	return len(dAtA) - i, nil
 }
@@ -3497,11 +3318,8 @@ func (m *IncrByResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 			i = encodeVarintFlyfish(dAtA, i, uint64(size))
 		}
 		i--
-		dAtA[i] = 0x12
+		dAtA[i] = 0xa
 	}
-	i = encodeVarintFlyfish(dAtA, i, uint64(m.Version))
-	i--
-	dAtA[i] = 0x8
 	return len(dAtA) - i, nil
 }
 
@@ -3525,20 +3343,6 @@ func (m *CompareAndSetReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.Old == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("old")
-	} else {
-		{
-			size, err := m.Old.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintFlyfish(dAtA, i, uint64(size))
-		}
-		i--
-		dAtA[i] = 0x1a
-	}
 	if m.New == nil {
 		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("new")
 	} else {
@@ -3553,10 +3357,19 @@ func (m *CompareAndSetReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x12
 	}
-	if m.Version != nil {
-		i = encodeVarintFlyfish(dAtA, i, uint64(*m.Version))
+	if m.Old == nil {
+		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("old")
+	} else {
+		{
+			size, err := m.Old.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintFlyfish(dAtA, i, uint64(size))
+		}
 		i--
-		dAtA[i] = 0x8
+		dAtA[i] = 0xa
 	}
 	return len(dAtA) - i, nil
 }
@@ -3591,11 +3404,8 @@ func (m *CompareAndSetResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 			i = encodeVarintFlyfish(dAtA, i, uint64(size))
 		}
 		i--
-		dAtA[i] = 0x12
+		dAtA[i] = 0xa
 	}
-	i = encodeVarintFlyfish(dAtA, i, uint64(m.Version))
-	i--
-	dAtA[i] = 0x8
 	return len(dAtA) - i, nil
 }
 
@@ -3619,20 +3429,6 @@ func (m *CompareAndSetNxReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.Old == nil {
-		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("old")
-	} else {
-		{
-			size, err := m.Old.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintFlyfish(dAtA, i, uint64(size))
-		}
-		i--
-		dAtA[i] = 0x1a
-	}
 	if m.New == nil {
 		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("new")
 	} else {
@@ -3647,10 +3443,19 @@ func (m *CompareAndSetNxReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x12
 	}
-	if m.Version != nil {
-		i = encodeVarintFlyfish(dAtA, i, uint64(*m.Version))
+	if m.Old == nil {
+		return 0, github_com_gogo_protobuf_proto.NewRequiredNotSetError("old")
+	} else {
+		{
+			size, err := m.Old.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintFlyfish(dAtA, i, uint64(size))
+		}
 		i--
-		dAtA[i] = 0x8
+		dAtA[i] = 0xa
 	}
 	return len(dAtA) - i, nil
 }
@@ -3685,11 +3490,8 @@ func (m *CompareAndSetNxResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 			i = encodeVarintFlyfish(dAtA, i, uint64(size))
 		}
 		i--
-		dAtA[i] = 0x12
+		dAtA[i] = 0xa
 	}
-	i = encodeVarintFlyfish(dAtA, i, uint64(m.Version))
-	i--
-	dAtA[i] = 0x8
 	return len(dAtA) - i, nil
 }
 
@@ -3713,11 +3515,6 @@ func (m *DelReq) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.Version != nil {
-		i = encodeVarintFlyfish(dAtA, i, uint64(*m.Version))
-		i--
-		dAtA[i] = 0x8
-	}
 	return len(dAtA) - i, nil
 }
 
@@ -3741,9 +3538,6 @@ func (m *DelResp) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	i = encodeVarintFlyfish(dAtA, i, uint64(m.Version))
-	i--
-	dAtA[i] = 0x8
 	return len(dAtA) - i, nil
 }
 
@@ -4148,7 +3942,9 @@ func (m *GetResp) Size() (n int) {
 	}
 	var l int
 	_ = l
-	n += 1 + sovFlyfish(uint64(m.Version))
+	if m.Version != nil {
+		n += 1 + sovFlyfish(uint64(*m.Version))
+	}
 	if len(m.Fields) > 0 {
 		for _, e := range m.Fields {
 			l = e.Size()
@@ -4182,7 +3978,6 @@ func (m *SetResp) Size() (n int) {
 	}
 	var l int
 	_ = l
-	n += 1 + sovFlyfish(uint64(m.Version))
 	return n
 }
 
@@ -4192,9 +3987,6 @@ func (m *SetNxReq) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Version != nil {
-		n += 1 + sovFlyfish(uint64(*m.Version))
-	}
 	if len(m.Fields) > 0 {
 		for _, e := range m.Fields {
 			l = e.Size()
@@ -4210,7 +4002,6 @@ func (m *SetNxResp) Size() (n int) {
 	}
 	var l int
 	_ = l
-	n += 1 + sovFlyfish(uint64(m.Version))
 	if len(m.Fields) > 0 {
 		for _, e := range m.Fields {
 			l = e.Size()
@@ -4226,9 +4017,6 @@ func (m *IncrByReq) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Version != nil {
-		n += 1 + sovFlyfish(uint64(*m.Version))
-	}
 	if m.Field != nil {
 		l = m.Field.Size()
 		n += 1 + l + sovFlyfish(uint64(l))
@@ -4242,7 +4030,6 @@ func (m *IncrByResp) Size() (n int) {
 	}
 	var l int
 	_ = l
-	n += 1 + sovFlyfish(uint64(m.Version))
 	if m.Field != nil {
 		l = m.Field.Size()
 		n += 1 + l + sovFlyfish(uint64(l))
@@ -4256,15 +4043,12 @@ func (m *CompareAndSetReq) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Version != nil {
-		n += 1 + sovFlyfish(uint64(*m.Version))
+	if m.Old != nil {
+		l = m.Old.Size()
+		n += 1 + l + sovFlyfish(uint64(l))
 	}
 	if m.New != nil {
 		l = m.New.Size()
-		n += 1 + l + sovFlyfish(uint64(l))
-	}
-	if m.Old != nil {
-		l = m.Old.Size()
 		n += 1 + l + sovFlyfish(uint64(l))
 	}
 	return n
@@ -4276,7 +4060,6 @@ func (m *CompareAndSetResp) Size() (n int) {
 	}
 	var l int
 	_ = l
-	n += 1 + sovFlyfish(uint64(m.Version))
 	if m.Value != nil {
 		l = m.Value.Size()
 		n += 1 + l + sovFlyfish(uint64(l))
@@ -4290,15 +4073,12 @@ func (m *CompareAndSetNxReq) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Version != nil {
-		n += 1 + sovFlyfish(uint64(*m.Version))
+	if m.Old != nil {
+		l = m.Old.Size()
+		n += 1 + l + sovFlyfish(uint64(l))
 	}
 	if m.New != nil {
 		l = m.New.Size()
-		n += 1 + l + sovFlyfish(uint64(l))
-	}
-	if m.Old != nil {
-		l = m.Old.Size()
 		n += 1 + l + sovFlyfish(uint64(l))
 	}
 	return n
@@ -4310,7 +4090,6 @@ func (m *CompareAndSetNxResp) Size() (n int) {
 	}
 	var l int
 	_ = l
-	n += 1 + sovFlyfish(uint64(m.Version))
 	if m.Value != nil {
 		l = m.Value.Size()
 		n += 1 + l + sovFlyfish(uint64(l))
@@ -4324,9 +4103,6 @@ func (m *DelReq) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Version != nil {
-		n += 1 + sovFlyfish(uint64(*m.Version))
-	}
 	return n
 }
 
@@ -4336,7 +4112,6 @@ func (m *DelResp) Size() (n int) {
 	}
 	var l int
 	_ = l
-	n += 1 + sovFlyfish(uint64(m.Version))
 	return n
 }
 
@@ -4548,7 +4323,7 @@ func (this *GetResp) String() string {
 	}
 	repeatedStringForFields += "}"
 	s := strings.Join([]string{`&GetResp{`,
-		`Version:` + fmt.Sprintf("%v", this.Version) + `,`,
+		`Version:` + valueToStringFlyfish(this.Version) + `,`,
 		`Fields:` + repeatedStringForFields + `,`,
 		`}`,
 	}, "")
@@ -4575,7 +4350,6 @@ func (this *SetResp) String() string {
 		return "nil"
 	}
 	s := strings.Join([]string{`&SetResp{`,
-		`Version:` + fmt.Sprintf("%v", this.Version) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -4590,7 +4364,6 @@ func (this *SetNxReq) String() string {
 	}
 	repeatedStringForFields += "}"
 	s := strings.Join([]string{`&SetNxReq{`,
-		`Version:` + valueToStringFlyfish(this.Version) + `,`,
 		`Fields:` + repeatedStringForFields + `,`,
 		`}`,
 	}, "")
@@ -4606,7 +4379,6 @@ func (this *SetNxResp) String() string {
 	}
 	repeatedStringForFields += "}"
 	s := strings.Join([]string{`&SetNxResp{`,
-		`Version:` + fmt.Sprintf("%v", this.Version) + `,`,
 		`Fields:` + repeatedStringForFields + `,`,
 		`}`,
 	}, "")
@@ -4617,7 +4389,6 @@ func (this *IncrByReq) String() string {
 		return "nil"
 	}
 	s := strings.Join([]string{`&IncrByReq{`,
-		`Version:` + valueToStringFlyfish(this.Version) + `,`,
 		`Field:` + strings.Replace(fmt.Sprintf("%v", this.Field), "Field", "Field", 1) + `,`,
 		`}`,
 	}, "")
@@ -4628,7 +4399,6 @@ func (this *IncrByResp) String() string {
 		return "nil"
 	}
 	s := strings.Join([]string{`&IncrByResp{`,
-		`Version:` + fmt.Sprintf("%v", this.Version) + `,`,
 		`Field:` + strings.Replace(fmt.Sprintf("%v", this.Field), "Field", "Field", 1) + `,`,
 		`}`,
 	}, "")
@@ -4639,9 +4409,8 @@ func (this *CompareAndSetReq) String() string {
 		return "nil"
 	}
 	s := strings.Join([]string{`&CompareAndSetReq{`,
-		`Version:` + valueToStringFlyfish(this.Version) + `,`,
-		`New:` + strings.Replace(fmt.Sprintf("%v", this.New), "Field", "Field", 1) + `,`,
 		`Old:` + strings.Replace(fmt.Sprintf("%v", this.Old), "Field", "Field", 1) + `,`,
+		`New:` + strings.Replace(fmt.Sprintf("%v", this.New), "Field", "Field", 1) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -4651,7 +4420,6 @@ func (this *CompareAndSetResp) String() string {
 		return "nil"
 	}
 	s := strings.Join([]string{`&CompareAndSetResp{`,
-		`Version:` + fmt.Sprintf("%v", this.Version) + `,`,
 		`Value:` + strings.Replace(fmt.Sprintf("%v", this.Value), "Field", "Field", 1) + `,`,
 		`}`,
 	}, "")
@@ -4662,9 +4430,8 @@ func (this *CompareAndSetNxReq) String() string {
 		return "nil"
 	}
 	s := strings.Join([]string{`&CompareAndSetNxReq{`,
-		`Version:` + valueToStringFlyfish(this.Version) + `,`,
-		`New:` + strings.Replace(fmt.Sprintf("%v", this.New), "Field", "Field", 1) + `,`,
 		`Old:` + strings.Replace(fmt.Sprintf("%v", this.Old), "Field", "Field", 1) + `,`,
+		`New:` + strings.Replace(fmt.Sprintf("%v", this.New), "Field", "Field", 1) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -4674,7 +4441,6 @@ func (this *CompareAndSetNxResp) String() string {
 		return "nil"
 	}
 	s := strings.Join([]string{`&CompareAndSetNxResp{`,
-		`Version:` + fmt.Sprintf("%v", this.Version) + `,`,
 		`Value:` + strings.Replace(fmt.Sprintf("%v", this.Value), "Field", "Field", 1) + `,`,
 		`}`,
 	}, "")
@@ -4685,7 +4451,6 @@ func (this *DelReq) String() string {
 		return "nil"
 	}
 	s := strings.Join([]string{`&DelReq{`,
-		`Version:` + valueToStringFlyfish(this.Version) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -4695,7 +4460,6 @@ func (this *DelResp) String() string {
 		return "nil"
 	}
 	s := strings.Join([]string{`&DelResp{`,
-		`Version:` + fmt.Sprintf("%v", this.Version) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -5659,7 +5423,7 @@ func (m *GetResp) Unmarshal(dAtA []byte) error {
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
 			}
-			m.Version = 0
+			var v int64
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowFlyfish
@@ -5669,11 +5433,12 @@ func (m *GetResp) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Version |= int64(b&0x7F) << shift
+				v |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
+			m.Version = &v
 		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Fields", wireType)
@@ -5868,25 +5633,6 @@ func (m *SetResp) Unmarshal(dAtA []byte) error {
 			return fmt.Errorf("proto: set_resp: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
-		case 1:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
-			}
-			m.Version = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowFlyfish
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.Version |= int64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skipFlyfish(dAtA[iNdEx:])
@@ -5941,26 +5687,6 @@ func (m *SetNxReq) Unmarshal(dAtA []byte) error {
 		}
 		switch fieldNum {
 		case 1:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
-			}
-			var v int64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowFlyfish
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				v |= int64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			m.Version = &v
-		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Fields", wireType)
 			}
@@ -6048,25 +5774,6 @@ func (m *SetNxResp) Unmarshal(dAtA []byte) error {
 		}
 		switch fieldNum {
 		case 1:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
-			}
-			m.Version = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowFlyfish
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.Version |= int64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Fields", wireType)
 			}
@@ -6155,26 +5862,6 @@ func (m *IncrByReq) Unmarshal(dAtA []byte) error {
 		}
 		switch fieldNum {
 		case 1:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
-			}
-			var v int64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowFlyfish
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				v |= int64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			m.Version = &v
-		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Field", wireType)
 			}
@@ -6268,25 +5955,6 @@ func (m *IncrByResp) Unmarshal(dAtA []byte) error {
 		}
 		switch fieldNum {
 		case 1:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
-			}
-			m.Version = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowFlyfish
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.Version |= int64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Field", wireType)
 			}
@@ -6377,10 +6045,10 @@ func (m *CompareAndSetReq) Unmarshal(dAtA []byte) error {
 		}
 		switch fieldNum {
 		case 1:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Old", wireType)
 			}
-			var v int64
+			var msglen int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowFlyfish
@@ -6390,12 +6058,29 @@ func (m *CompareAndSetReq) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= int64(b&0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			m.Version = &v
+			if msglen < 0 {
+				return ErrInvalidLengthFlyfish
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfish
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Old == nil {
+				m.Old = &Field{}
+			}
+			if err := m.Old.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+			hasFields[0] |= uint64(0x00000001)
 		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field New", wireType)
@@ -6432,43 +6117,6 @@ func (m *CompareAndSetReq) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-			hasFields[0] |= uint64(0x00000001)
-		case 3:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Old", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowFlyfish
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLengthFlyfish
-			}
-			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLengthFlyfish
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.Old == nil {
-				m.Old = &Field{}
-			}
-			if err := m.Old.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
 			hasFields[0] |= uint64(0x00000002)
 		default:
 			iNdEx = preIndex
@@ -6489,10 +6137,10 @@ func (m *CompareAndSetReq) Unmarshal(dAtA []byte) error {
 		}
 	}
 	if hasFields[0]&uint64(0x00000001) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("new")
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("old")
 	}
 	if hasFields[0]&uint64(0x00000002) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("old")
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("new")
 	}
 
 	if iNdEx > l {
@@ -6530,25 +6178,6 @@ func (m *CompareAndSetResp) Unmarshal(dAtA []byte) error {
 		}
 		switch fieldNum {
 		case 1:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
-			}
-			m.Version = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowFlyfish
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.Version |= int64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Value", wireType)
 			}
@@ -6639,10 +6268,10 @@ func (m *CompareAndSetNxReq) Unmarshal(dAtA []byte) error {
 		}
 		switch fieldNum {
 		case 1:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Old", wireType)
 			}
-			var v int64
+			var msglen int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowFlyfish
@@ -6652,12 +6281,29 @@ func (m *CompareAndSetNxReq) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= int64(b&0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			m.Version = &v
+			if msglen < 0 {
+				return ErrInvalidLengthFlyfish
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthFlyfish
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Old == nil {
+				m.Old = &Field{}
+			}
+			if err := m.Old.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+			hasFields[0] |= uint64(0x00000001)
 		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field New", wireType)
@@ -6694,43 +6340,6 @@ func (m *CompareAndSetNxReq) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-			hasFields[0] |= uint64(0x00000001)
-		case 3:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Old", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowFlyfish
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLengthFlyfish
-			}
-			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLengthFlyfish
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.Old == nil {
-				m.Old = &Field{}
-			}
-			if err := m.Old.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
 			hasFields[0] |= uint64(0x00000002)
 		default:
 			iNdEx = preIndex
@@ -6751,10 +6360,10 @@ func (m *CompareAndSetNxReq) Unmarshal(dAtA []byte) error {
 		}
 	}
 	if hasFields[0]&uint64(0x00000001) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("new")
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("old")
 	}
 	if hasFields[0]&uint64(0x00000002) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("old")
+		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("new")
 	}
 
 	if iNdEx > l {
@@ -6792,25 +6401,6 @@ func (m *CompareAndSetNxResp) Unmarshal(dAtA []byte) error {
 		}
 		switch fieldNum {
 		case 1:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
-			}
-			m.Version = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowFlyfish
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.Version |= int64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Value", wireType)
 			}
@@ -6899,26 +6489,6 @@ func (m *DelReq) Unmarshal(dAtA []byte) error {
 			return fmt.Errorf("proto: del_req: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
-		case 1:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
-			}
-			var v int64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowFlyfish
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				v |= int64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			m.Version = &v
 		default:
 			iNdEx = preIndex
 			skippy, err := skipFlyfish(dAtA[iNdEx:])
@@ -6972,25 +6542,6 @@ func (m *DelResp) Unmarshal(dAtA []byte) error {
 			return fmt.Errorf("proto: del_resp: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
-		case 1:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Version", wireType)
-			}
-			m.Version = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowFlyfish
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.Version |= int64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skipFlyfish(dAtA[iNdEx:])

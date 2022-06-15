@@ -8,7 +8,6 @@ type StatusResult struct {
 	ErrCode errcode.Error
 	Table   string
 	Key     string
-	Version int64
 	ErrStr  string
 	unikey  string
 }
@@ -17,7 +16,7 @@ type SliceResult struct {
 	ErrCode errcode.Error
 	Table   string
 	Key     string
-	Version int64
+	Version *int64
 	Fields  map[string]*Field
 	unikey  string
 }

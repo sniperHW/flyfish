@@ -193,7 +193,7 @@ func MarkDelete(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.Ta
 	}
 }
 
-func prepareSetPgSql(params []interface{}, b *buffer.Buffer, tbmeta *sql.TableMeta, setFields map[string]*proto.Field, version ...int64) (*buffer.Buffer, []interface{}) {
+func prepareSetPgSql(params []interface{}, b *buffer.Buffer, tbmeta *sql.TableMeta, setFields map[string]*proto.Field, version ...*int64) (*buffer.Buffer, []interface{}) {
 	b, params, ff := prepareInsertPgsql(params, b, tbmeta, setFields)
 
 	for _, v := range ff {
@@ -202,8 +202,8 @@ func prepareSetPgSql(params []interface{}, b *buffer.Buffer, tbmeta *sql.TableMe
 
 	real_tab_name := tbmeta.GetRealTableName()
 
-	if len(version) > 0 {
-		params = append(params, version[0])
+	if len(version) > 0 && version[0] != nil {
+		params = append(params, *version[0])
 		b.AppendString(fmt.Sprintf("__version__ = abs(%s.__version__)+1 where %s.__key__ = $1 and %s.__version__=$%d;", real_tab_name, real_tab_name, real_tab_name, len(params)))
 	} else {
 		b.AppendString(fmt.Sprintf(" __version__ = abs(%s.__version__)+1 where %s.__key__ = $1;", real_tab_name, real_tab_name))
@@ -213,13 +213,13 @@ func prepareSetPgSql(params []interface{}, b *buffer.Buffer, tbmeta *sql.TableMe
 
 }
 
-func prepareSetMySql(params []interface{}, b *buffer.Buffer, tbmeta *sql.TableMeta, setFields map[string]*proto.Field, version ...int64) (*buffer.Buffer, []interface{}) {
+func prepareSetMySql(params []interface{}, b *buffer.Buffer, tbmeta *sql.TableMeta, setFields map[string]*proto.Field, version ...*int64) (*buffer.Buffer, []interface{}) {
 	b, params, ff := prepareInsertMysql(params, b, tbmeta, setFields)
 
-	if len(version) > 0 {
+	if len(version) > 0 && version[0] != nil {
 		for _, v := range ff {
 			b.AppendString(fmt.Sprintf("%s=if(__version__ = ?,?,%s),", v[0].(string), v[0].(string)))
-			params = append(params, version[0])
+			params = append(params, *version[0])
 			params = append(params, v[1])
 		}
 		b.AppendString(" __version__ = if(__version__ = ?, abs(__version__)+1,__version__);")
@@ -235,7 +235,7 @@ func prepareSetMySql(params []interface{}, b *buffer.Buffer, tbmeta *sql.TableMe
 	return b, params
 }
 
-func Set(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta, key string, slot int, fields map[string]*proto.Field, version ...int64) (int64, error) {
+func Set(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta, key string, slot int, fields map[string]*proto.Field, version ...*int64) (int64, error) {
 
 	tx, err := dbc.BeginTx(ctx, &dbsql.TxOptions{Isolation: dbsql.LevelReadCommitted})
 	if nil != err {
@@ -499,7 +499,7 @@ func Add(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta
 	}
 }
 
-func Load(ctx context.Context, dbc *sqlx.DB, tbmeta *sql.TableMeta, key string, wantFields []string, version ...int64) (int64, []*proto.Field, error) {
+func Load(ctx context.Context, dbc *sqlx.DB, tbmeta *sql.TableMeta, key string, wantFields []string, version ...*int64) (int64, []*proto.Field, error) {
 	var retVersion int64
 	var retFields []*proto.Field
 	var err error
@@ -529,7 +529,7 @@ func Load(ctx context.Context, dbc *sqlx.DB, tbmeta *sql.TableMeta, key string, 
 
 	queryStr := fmt.Sprintf("select %s from %s where __key__ = '%s'", strings.Join(fieldRealNames, ","), tbmeta.GetRealTableName(), key)
 
-	if len(version) > 0 {
+	if len(version) > 0 && version[0] != nil {
 		err = dbc.QueryRowContext(ctx, fmt.Sprintf("select __version__ from %s where __key__ = '%s';\n", tbmeta.GetRealTableName(), key)).Scan(&retVersion)
 		switch {
 		case err == dbsql.ErrNoRows:
@@ -539,15 +539,15 @@ func Load(ctx context.Context, dbc *sqlx.DB, tbmeta *sql.TableMeta, key string, 
 		case retVersion < 0:
 			return retVersion, nil, ErrRecordNotExist
 		default:
-			queryStr += fmt.Sprintf(" and __version__ != %d", version[0])
+			queryStr += fmt.Sprintf(" and __version__ != %d", *version[0])
 		}
 	}
 
 	err = dbc.QueryRowContext(ctx, queryStr+";").Scan(receivers...)
 	switch {
 	case err == dbsql.ErrNoRows:
-		if len(version) > 0 {
-			return version[0], nil, ErrRecordNotChange
+		if len(version) > 0 && version[0] != nil {
+			return *version[0], nil, ErrRecordNotChange
 		} else {
 			return 0, nil, ErrRecordNotExist
 		}

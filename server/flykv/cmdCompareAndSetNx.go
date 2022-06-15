@@ -13,20 +13,6 @@ type cmdCompareAndSetNx struct {
 	new *flyproto.Field
 }
 
-func (this *cmdCompareAndSetNx) makeResponse(err errcode.Error, fields map[string]*flyproto.Field, version int64) *cs.RespMessage {
-	var v *flyproto.Field
-	if err == Err_cas_not_equal {
-		v = fields[this.old.GetName()]
-	}
-	return &cs.RespMessage{
-		Seqno: this.seqno,
-		Err:   err,
-		Data: &flyproto.CompareAndSetNxResp{
-			Version: version,
-			Value:   v,
-		}}
-}
-
 func (this *cmdCompareAndSetNx) do(proposal *kvProposal) *kvProposal {
 	if proposal.kvState == kv_no_record {
 		proposal.version = abs(proposal.version) + 1
@@ -38,7 +24,7 @@ func (this *cmdCompareAndSetNx) do(proposal *kvProposal) *kvProposal {
 	} else {
 		oldV := this.kv.getField(this.old.GetName())
 		if !this.old.IsEqual(oldV) {
-			this.reply(Err_cas_not_equal, this.kv.fields, this.kv.version)
+			this.reply(Err_cas_not_equal, this.kv.fields, 0)
 			return nil
 		} else {
 			proposal.version++
@@ -76,7 +62,17 @@ func (s *kvstore) makeCompareAndSetNx(kv *kv, deadline time.Time, replyer *reply
 		old: req.Old,
 	}
 
-	compareAndSetNx.cmdBase.init(compareAndSetNx, kv, replyer, seqno, req.Version, deadline, compareAndSetNx.makeResponse)
+	compareAndSetNx.cmdBase.init(compareAndSetNx, kv, replyer, seqno, deadline, func(err errcode.Error, fields map[string]*flyproto.Field, _ int64) *cs.RespMessage {
+		resp := &cs.RespMessage{
+			Seqno: seqno,
+			Err:   err,
+			Data:  &flyproto.CompareAndSetNxResp{},
+		}
+		if err == Err_cas_not_equal {
+			resp.Data.(*flyproto.CompareAndSetNxResp).Value = fields[req.Old.GetName()]
+		}
+		return resp
+	})
 
 	return compareAndSetNx, nil
 }

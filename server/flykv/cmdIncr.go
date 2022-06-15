@@ -12,22 +12,6 @@ type cmdIncr struct {
 	v *flyproto.Field
 }
 
-func (this *cmdIncr) makeResponse(err errcode.Error, fields map[string]*flyproto.Field, version int64) *cs.RespMessage {
-
-	var field *flyproto.Field
-	if err == nil {
-		field = fields[this.v.GetName()]
-	}
-
-	return &cs.RespMessage{
-		Seqno: this.seqno,
-		Err:   err,
-		Data: &flyproto.IncrByResp{
-			Version: version,
-			Field:   field,
-		}}
-}
-
 func (this *cmdIncr) do(proposal *kvProposal) *kvProposal {
 	if proposal.kvState == kv_no_record {
 		proposal.version = abs(proposal.version) + 1
@@ -70,7 +54,20 @@ func (s *kvstore) makeIncr(kv *kv, deadline time.Time, replyer *replyer, seqno i
 		v: req.Field,
 	}
 
-	incr.cmdBase.init(incr, kv, replyer, seqno, req.Version, deadline, incr.makeResponse)
+	incr.cmdBase.init(incr, kv, replyer, seqno, deadline, func(err errcode.Error, fields map[string]*flyproto.Field, _ int64) *cs.RespMessage {
+
+		var field *flyproto.Field
+		if err == nil {
+			field = fields[req.Field.GetName()]
+		}
+
+		return &cs.RespMessage{
+			Seqno: seqno,
+			Err:   err,
+			Data: &flyproto.IncrByResp{
+				Field: field,
+			}}
+	})
 
 	return incr, nil
 }

@@ -31,10 +31,9 @@ type cmdBase struct {
 	meta           db.TableMeta
 }
 
-func (this *cmdBase) init(cmd interface{}, kv *kv, replyer *replyer, seqno int64, version *int64, deadline time.Time, makeResponse MakeResponse) {
+func (this *cmdBase) init(cmd interface{}, kv *kv, replyer *replyer, seqno int64, deadline time.Time, makeResponse MakeResponse) {
 	this.replyer = replyer
 	this.deadline = deadline
-	this.version = version
 	this.seqno = seqno
 	this.fnMakeResponse = makeResponse
 	this.kv = kv

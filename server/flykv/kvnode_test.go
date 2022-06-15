@@ -261,7 +261,6 @@ func test(t *testing.T, c *client.Client) {
 		for i := 0; i < 10; i++ {
 			c.Set("users1", "sniperHW", fields).AsyncExec(func(r *client.StatusResult) {
 				assert.Nil(t, r.ErrCode)
-				fmt.Println("version-----------", r.Version)
 				wait.Done()
 			})
 		}
@@ -278,7 +277,7 @@ func test(t *testing.T, c *client.Client) {
 		r := c.GetAll("users1", "sniperHW").Exec()
 		assert.Nil(t, r.ErrCode)
 
-		r = c.GetAllWithVersion("users1", "sniperHW", r.Version).Exec()
+		r = c.GetAllWithVersion("users1", "sniperHW", *r.Version).Exec()
 		assert.Equal(t, r.ErrCode, Err_record_unchange)
 
 		r1 := c.Del("users1", "sniperHW").Exec()
@@ -487,13 +486,11 @@ func Test1Node1Store1(t *testing.T) {
 
 	r1 := c.Set("users1", "sniperHW", fields).Exec()
 	assert.Nil(t, r1.ErrCode)
-	fmt.Println("version-----------", r1.Version)
 
 	time.Sleep(time.Second)
 
 	r1 = c.Set("users1", "sniperHW", fields).Exec()
 	assert.Nil(t, r1.ErrCode)
-	fmt.Println("version-----------", r1.Version)
 
 	{
 		fields := map[string]interface{}{}
