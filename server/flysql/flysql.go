@@ -113,7 +113,7 @@ func (this *flysql) onClient(session *fnet.Socket) {
 }
 
 func (this *flysql) startListener() {
-	this.listener.Serve(this.onClient, nil)
+	this.listener.Serve(this.onClient, this.onScanner)
 }
 
 func waitCondition(fn func() bool) {

@@ -234,6 +234,35 @@ func test(t *testing.T, c *client.Client) {
 		assert.Equal(t, r1.Fields["age"].GetInt(), int64(0))
 	}
 
+	sc, _ := client.NewScanner(client.ClientConf{
+		ClientType: client.ClientType_FlySql,
+		SoloConf: &client.SoloConf{
+			Service: "localhost:8110",
+		}}, "users1", []string{
+		"name",
+		"age",
+		"phone",
+	})
+
+	count := 0
+
+	for {
+		row, err := sc.Next(time.Now().Add(time.Second * 5))
+
+		if nil != err {
+			panic(err)
+		}
+
+		if nil != row {
+			fmt.Println(row.Key, row.Version, row.Fields["age"].GetInt())
+			count++
+		} else {
+			break
+		}
+	}
+
+	fmt.Println("count", count)
+
 }
 
 func TestFlySql(t *testing.T) {

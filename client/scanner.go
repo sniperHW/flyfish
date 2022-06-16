@@ -43,6 +43,12 @@ type clusterFlykvScanner struct {
 	finish bool
 }
 
+type flySqlScanner struct {
+	service string
+	conn    net.Conn
+	finish  bool
+}
+
 type Scanner struct {
 	scannerImpl   scannerImpl
 	table         string
@@ -95,7 +101,13 @@ func NewScanner(conf ClientConf, Table string, fields []string) (*Scanner, error
 		}
 
 	} else {
+		if nil != conf.ClusterConf {
 
+		} else {
+			sc.scannerImpl = &flySqlScanner{
+				service: conf.SoloConf.Service,
+			}
+		}
 	}
 
 	for _, v := range fields {
@@ -229,7 +241,7 @@ func (st *storeScanner) fetchRows(scanner *Scanner, service string, deadline tim
 
 				var err error
 				for _, vv := range v.Fields {
-					r.Fields[vv.Name], err = unpackField(vv) //(*Field)(vv)
+					r.Fields[vv.Name], err = unpackField(vv)
 					if nil != err {
 						GetSugar().Infof("scan %s filed:%s unpackField error:%v", v.Key, vv.Name, err)
 					}
@@ -274,6 +286,60 @@ func (sc *clusterFlykvScanner) fetchRows(scanner *Scanner, deadline time.Time) (
 	for !sc.finish && len(scanner.rows) == 0 {
 		if nil == sc.conn {
 			if err = sc.connectGate(scanner, deadline); nil != err {
+				return
+			}
+		}
+
+		err = scan.SendScanNextReq(sc.conn, scanner.fetchRowCount, deadline)
+		if nil != err {
+			return
+		}
+
+		var resp *flyproto.ScanNextResp
+
+		resp, err = scan.RecvScanNextResp(sc.conn, deadline)
+
+		if nil != err {
+			return
+		} else if int(resp.ErrCode) != scan.Err_ok {
+			err = scan.ToError(int(resp.ErrCode))
+			return
+		}
+
+		for _, v := range resp.Rows {
+			if !v.Dummy {
+				r := &Row{
+					Key:     v.Key,
+					Version: v.Version,
+					Fields:  map[string]*Field{},
+				}
+				var err error
+				for _, vv := range v.Fields {
+					r.Fields[vv.Name], err = unpackField(vv)
+					if nil != err {
+						GetSugar().Infof("scan %s filed:%s unpackField error:%v", v.Key, vv.Name, err)
+					}
+				}
+				scanner.rows = append(scanner.rows, r)
+			} else {
+				sc.finish = true
+			}
+		}
+	}
+	return
+}
+
+func (sc *flySqlScanner) fetchRows(scanner *Scanner, deadline time.Time) (err error) {
+	defer func() {
+		if (sc.finish || nil != err) && nil != sc.conn {
+			sc.conn.Close()
+			sc.conn = nil
+		}
+	}()
+
+	for !sc.finish && len(scanner.rows) == 0 {
+		if nil == sc.conn {
+			if sc.conn, err = scanner.connectServer(sc.service, nil, 0, deadline); nil != err {
 				return
 			}
 		}
