@@ -252,7 +252,9 @@ func TestFlySql(t *testing.T) {
 
 	time.Sleep(time.Second)
 
-	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:8110"})
+	c, _ := client.OpenClient(client.ClientConf{
+		ClientType: client.ClientType_FlySql,
+		SoloConf:   &client.SoloConf{Service: "localhost:8110"}})
 
 	test(t, c)
 

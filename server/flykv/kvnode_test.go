@@ -474,7 +474,12 @@ func Test1Node1Store1(t *testing.T) {
 
 	node := start1Node(1, newSqlDBBackEnd(), false, config, true)
 
-	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
+	c, _ := client.OpenClient(client.ClientConf{
+		ClientType: client.ClientType_FlyKv,
+		SoloConf: &client.SoloConf{
+			Service:         "localhost:10018",
+			UnikeyPlacement: GetStore,
+		}})
 
 	c.Del("users1", "sniperHW").Exec()
 
@@ -568,7 +573,12 @@ func Test1Node1Store2(t *testing.T) {
 
 	node := start1Node(1, newSqlDBBackEnd(), false, config, true)
 
-	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
+	c, _ := client.OpenClient(client.ClientConf{
+		ClientType: client.ClientType_FlyKv,
+		SoloConf: &client.SoloConf{
+			Service:         "localhost:10018",
+			UnikeyPlacement: GetStore,
+		}})
 
 	test(t, c)
 
@@ -597,7 +607,12 @@ func Test1Node1StoreSnapshot1(t *testing.T) {
 
 	node := start1Node(1, newSqlDBBackEnd(), false, config, true)
 
-	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
+	c, _ := client.OpenClient(client.ClientConf{
+		ClientType: client.ClientType_FlyKv,
+		SoloConf: &client.SoloConf{
+			Service:         "localhost:10018",
+			UnikeyPlacement: GetStore,
+		}})
 
 	for i := 0; i < 100; i++ {
 		fields := map[string]interface{}{}
@@ -676,7 +691,12 @@ func Test1Node1StoreSnapshot2(t *testing.T) {
 
 	node := start1Node(1, newSqlDBBackEnd(), false, config, true)
 
-	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
+	c, _ := client.OpenClient(client.ClientConf{
+		ClientType: client.ClientType_FlyKv,
+		SoloConf: &client.SoloConf{
+			Service:         "localhost:10018",
+			UnikeyPlacement: GetStore,
+		}})
 
 	for i := 0; i < 50; i++ {
 		fields := map[string]interface{}{}
@@ -724,7 +744,12 @@ func TestUseMockDB(t *testing.T) {
 
 	node := start1Node(1, newMockDBBackEnd(nil), false, config, true)
 
-	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
+	c, _ := client.OpenClient(client.ClientConf{
+		ClientType: client.ClientType_FlyKv,
+		SoloConf: &client.SoloConf{
+			Service:         "localhost:10018",
+			UnikeyPlacement: GetStore,
+		}})
 
 	test(t, c)
 
@@ -748,7 +773,12 @@ func TestKick1(t *testing.T) {
 
 	node := start1Node(1, db, false, config, true)
 
-	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
+	c, _ := client.OpenClient(client.ClientConf{
+		ClientType: client.ClientType_FlyKv,
+		SoloConf: &client.SoloConf{
+			Service:         "localhost:10018",
+			UnikeyPlacement: GetStore,
+		}})
 
 	for i := 0; i < 200; i++ {
 		fields := map[string]interface{}{}
@@ -785,7 +815,12 @@ func TestKick2(t *testing.T) {
 
 	node := start1Node(1, db, false, config, true)
 
-	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
+	c, _ := client.OpenClient(client.ClientConf{
+		ClientType: client.ClientType_FlyKv,
+		SoloConf: &client.SoloConf{
+			Service:         "localhost:10018",
+			UnikeyPlacement: GetStore,
+		}})
 
 	for i := 0; i < 200; i++ {
 		fields := map[string]interface{}{}
@@ -820,7 +855,12 @@ func TestLinearizableRead(t *testing.T) {
 
 	node := start1Node(1, newSqlDBBackEnd(), false, config, true)
 
-	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
+	c, _ := client.OpenClient(client.ClientConf{
+		ClientType: client.ClientType_FlyKv,
+		SoloConf: &client.SoloConf{
+			Service:         "localhost:10018",
+			UnikeyPlacement: GetStore,
+		}})
 
 	for i := 0; i < 100; i++ {
 		fields := map[string]interface{}{}
@@ -910,7 +950,12 @@ func TestSlotTransferOut(t *testing.T) {
 
 	outslot := <-ch
 
-	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
+	c, _ := client.OpenClient(client.ClientConf{
+		ClientType: client.ClientType_FlyKv,
+		SoloConf: &client.SoloConf{
+			Service:         "localhost:10018",
+			UnikeyPlacement: GetStore,
+		}})
 
 	for i := 0; i < 256; i++ {
 		fields := map[string]interface{}{}
@@ -1067,7 +1112,12 @@ func TestAddRemoveNode(t *testing.T) {
 
 	node := start1Node(1, newMockDBBackEnd(nil), false, config, true)
 
-	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
+	c, _ := client.OpenClient(client.ClientConf{
+		ClientType: client.ClientType_FlyKv,
+		SoloConf: &client.SoloConf{
+			Service:         "localhost:10018",
+			UnikeyPlacement: GetStore,
+		}})
 
 	test(t, c)
 
@@ -1172,7 +1222,12 @@ func TestAddRemoveNode(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 
-	c, _ = client.OpenClient(client.ClientConf{SoloService: "localhost:10019", UnikeyPlacement: GetStore})
+	c, _ = client.OpenClient(client.ClientConf{
+		ClientType: client.ClientType_FlyKv,
+		SoloConf: &client.SoloConf{
+			Service:         "localhost:10019",
+			UnikeyPlacement: GetStore,
+		}})
 
 	test(t, c)
 
@@ -1213,7 +1268,12 @@ func TestAddRemoveNode(t *testing.T) {
 
 	node2 = start1Node(2, newMockDBBackEnd(db.(*mockBackEnd)), false, config2, true)
 
-	c, _ = client.OpenClient(client.ClientConf{SoloService: "localhost:10019", UnikeyPlacement: GetStore})
+	c, _ = client.OpenClient(client.ClientConf{
+		ClientType: client.ClientType_FlyKv,
+		SoloConf: &client.SoloConf{
+			Service:         "localhost:10019",
+			UnikeyPlacement: GetStore,
+		}})
 
 	for i := 0; i < 50; i++ {
 		fields := map[string]interface{}{}

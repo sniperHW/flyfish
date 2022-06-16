@@ -97,11 +97,21 @@ func main() {
 
 	var clientCfg kclient.ClientConf
 
-	if cfg.Mode == "solo" {
-		clientCfg.SoloService = cfg.Service
-		clientCfg.UnikeyPlacement = slot.MakeUnikeyPlacement(cfg.Stores)
+	if cfg.ClientType == "FlyKv" {
+		clientCfg.ClientType = kclient.ClientType_FlyKv
 	} else {
-		clientCfg.PD = strings.Split(cfg.PD, ";")
+		clientCfg.ClientType = kclient.ClientType_FlySql
+	}
+
+	if cfg.Mode == "solo" {
+		clientCfg.SoloConf = &kclient.SoloConf{
+			Service:         cfg.Service,
+			UnikeyPlacement: slot.MakeUnikeyPlacement(cfg.Stores),
+		}
+	} else {
+		clientCfg.ClusterConf = &kclient.ClusterConf{
+			PD: strings.Split(cfg.PD, ";"),
+		}
 	}
 
 	for j := 0; j < 100; j++ {

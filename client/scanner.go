@@ -21,36 +21,41 @@ type Row struct {
 	Fields  map[string]*Field
 }
 
+type scannerImpl interface {
+	fetchRows(*Scanner, time.Time) error
+}
+
 type storeScanner struct {
 	id    int
 	slots *bitmap.Bitmap
 	conn  net.Conn
 }
 
-type soloScanner struct {
-	soloService string
-	offset      int
-	stores      []*storeScanner
+type soloFlyKvScanner struct {
+	service string
+	offset  int
+	stores  []*storeScanner
 }
 
-type clusterScanner struct {
+type clusterFlykvScanner struct {
 	pdAddr []*net.UDPAddr
 	conn   net.Conn
 	finish bool
 }
 
 type Scanner struct {
-	soloScanner    *soloScanner
-	clusterScanner *clusterScanner
-	table          string
-	fields         []*flyproto.ScanField
-	rows           []*Row
-	fetchRowCount  int
+	scannerImpl   scannerImpl
+	table         string
+	fields        []*flyproto.ScanField
+	rows          []*Row
+	fetchRowCount int
 }
 
 func NewScanner(conf ClientConf, Table string, fields []string) (*Scanner, error) {
-	if "" == conf.SoloService && len(conf.PD) == 0 {
-		return nil, errors.New("cluster mode,but pd empty")
+	if !(conf.ClientType == ClientType_FlyKv || conf.ClientType == ClientType_FlySql) {
+		return nil, errors.New("invaild ClientType")
+	} else if nil == conf.SoloConf && nil == conf.ClusterConf {
+		return nil, errors.New("SoloConf and ClusterConf is nil")
 	}
 
 	sc := &Scanner{table: Table, fetchRowCount: conf.FetchRowCount}
@@ -59,29 +64,38 @@ func NewScanner(conf ClientConf, Table string, fields []string) (*Scanner, error
 		sc.fetchRowCount = 100
 	}
 
-	if "" == conf.SoloService {
-
-		sc.clusterScanner = &clusterScanner{}
-
-		for _, v := range conf.PD {
-			if addr, err := net.ResolveUDPAddr("udp", v); nil == err {
-				sc.clusterScanner.pdAddr = append(sc.clusterScanner.pdAddr, addr)
+	if conf.ClientType == ClientType_FlyKv {
+		if nil != conf.ClusterConf {
+			var pdAddr []*net.UDPAddr
+			for _, v := range conf.ClusterConf.PD {
+				if addr, err := net.ResolveUDPAddr("udp", v); nil == err {
+					pdAddr = append(pdAddr, addr)
+				}
 			}
+
+			sc.scannerImpl = &clusterFlykvScanner{
+				pdAddr: pdAddr,
+			}
+
+		} else {
+
+			scannerImpl := &soloFlyKvScanner{
+				service: conf.SoloConf.Service,
+			}
+
+			st := slot.MakeStoreBitmap(conf.SoloConf.Stores)
+			for i := 0; i < len(conf.SoloConf.Stores); i++ {
+				scannerImpl.stores = append(scannerImpl.stores, &storeScanner{
+					id:    conf.SoloConf.Stores[i],
+					slots: st[i],
+				})
+			}
+			sc.scannerImpl = scannerImpl
+
 		}
-		if len(sc.clusterScanner.pdAddr) == 0 {
-			return nil, errors.New("pd is empty")
-		}
+
 	} else {
-		sc.soloScanner = &soloScanner{
-			soloService: conf.SoloService,
-		}
-		st := slot.MakeStoreBitmap(conf.Stores)
-		for i := 0; i < len(conf.Stores); i++ {
-			sc.soloScanner.stores = append(sc.soloScanner.stores, &storeScanner{
-				id:    conf.Stores[i],
-				slots: st[i],
-			})
-		}
+
 	}
 
 	for _, v := range fields {
@@ -115,11 +129,7 @@ func (sc *Scanner) fetchRows(deadline time.Time) error {
 	if len(sc.rows) > 0 {
 		return nil
 	} else {
-		if nil != sc.soloScanner {
-			return sc.soloScanner.fetchRows(sc, deadline)
-		} else {
-			return sc.clusterScanner.fetchRows(sc, deadline)
-		}
+		return sc.scannerImpl.fetchRows(sc, deadline)
 	}
 }
 
@@ -160,7 +170,7 @@ func (sc *Scanner) connectServer(service string, slots []byte, storeID int, dead
 	}
 }
 
-func (sc *soloScanner) fetchRows(scanner *Scanner, deadline time.Time) (err error) {
+func (sc *soloFlyKvScanner) fetchRows(scanner *Scanner, deadline time.Time) (err error) {
 	for len(scanner.rows) == 0 {
 		if sc.offset >= len(sc.stores) {
 			return
@@ -169,7 +179,7 @@ func (sc *soloScanner) fetchRows(scanner *Scanner, deadline time.Time) (err erro
 		var rows []*Row
 		var finish bool
 		st := sc.stores[sc.offset]
-		rows, finish, err = st.fetchRows(scanner, sc.soloService, deadline)
+		rows, finish, err = st.fetchRows(scanner, sc.service, deadline)
 		if finish {
 			sc.offset++
 		} else {
@@ -235,7 +245,7 @@ func (st *storeScanner) fetchRows(scanner *Scanner, service string, deadline tim
 	return rows, false, nil
 }
 
-func (sc *clusterScanner) connectGate(scanner *Scanner, deadline time.Time) error {
+func (sc *clusterFlykvScanner) connectGate(scanner *Scanner, deadline time.Time) error {
 	var gates []*sproto.Flygate
 	for len(gates) == 0 && time.Now().Before(deadline) {
 		gates = QueryGate(sc.pdAddr, deadline.Sub(time.Now()))
@@ -253,7 +263,7 @@ func (sc *clusterScanner) connectGate(scanner *Scanner, deadline time.Time) erro
 	}
 }
 
-func (sc *clusterScanner) fetchRows(scanner *Scanner, deadline time.Time) (err error) {
+func (sc *clusterFlykvScanner) fetchRows(scanner *Scanner, deadline time.Time) (err error) {
 	defer func() {
 		if (sc.finish || nil != err) && nil != sc.conn {
 			sc.conn.Close()
@@ -293,7 +303,7 @@ func (sc *clusterScanner) fetchRows(scanner *Scanner, deadline time.Time) (err e
 				}
 				var err error
 				for _, vv := range v.Fields {
-					r.Fields[vv.Name], err = unpackField(vv) //(*Field)(vv)
+					r.Fields[vv.Name], err = unpackField(vv)
 					if nil != err {
 						GetSugar().Infof("scan %s filed:%s unpackField error:%v", v.Key, vv.Name, err)
 					}

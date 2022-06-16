@@ -445,7 +445,12 @@ func TestFlygate(t *testing.T) {
 
 	fmt.Println("run client")
 
-	c, _ := client.OpenClient(client.ClientConf{PD: []string{"localhost:8110"}})
+	c, _ := client.OpenClient(client.ClientConf{
+		ClientType: client.ClientType_FlyKv,
+		ClusterConf: &client.ClusterConf{
+			PD: []string{"localhost:8110"},
+		},
+	})
 
 	for i := 0; i < 100; i++ {
 		fields := map[string]interface{}{}
@@ -455,6 +460,8 @@ func TestFlygate(t *testing.T) {
 		fields["phone"] = []byte("123456789123456789123456789")
 		assert.Nil(t, c.Set("users1", name, fields).Exec().ErrCode)
 	}
+
+	fmt.Println("----------------------run client------------------")
 
 	testkv(t, c)
 
@@ -608,7 +615,12 @@ func TestFlygate(t *testing.T) {
 	clientArray := []*client.Client{}
 
 	for j := 0; j < 4; j++ {
-		cc, _ := client.OpenClient(client.ClientConf{PD: []string{"localhost:8110"}})
+		cc, _ := client.OpenClient(client.ClientConf{
+			ClientType: client.ClientType_FlyKv,
+			ClusterConf: &client.ClusterConf{
+				PD: []string{"localhost:8110"},
+			},
+		})
 		clientArray = append(clientArray, cc)
 
 		for i := 0; i < 200; i++ {
@@ -1282,7 +1294,12 @@ func TestAddSet2(t *testing.T) {
 
 	fmt.Println("run client")
 
-	c, _ := client.OpenClient(client.ClientConf{PD: []string{"localhost:8110"}})
+	c, _ := client.OpenClient(client.ClientConf{
+		ClientType: client.ClientType_FlyKv,
+		ClusterConf: &client.ClusterConf{
+			PD: []string{"localhost:8110"},
+		},
+	})
 
 	stopCh := make(chan struct{})
 
@@ -1487,7 +1504,12 @@ func TestStoreBalance(t *testing.T) {
 
 	stoped := int32(0)
 
-	c, _ := client.OpenClient(client.ClientConf{PD: []string{"localhost:8110"}})
+	c, _ := client.OpenClient(client.ClientConf{
+		ClientType: client.ClientType_FlyKv,
+		ClusterConf: &client.ClusterConf{
+			PD: []string{"localhost:8110"},
+		},
+	})
 
 	go func() {
 		for atomic.LoadInt32(&stoped) == 0 {
@@ -1742,7 +1764,12 @@ func TestSuspendResume(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 
-	c, _ := client.OpenClient(client.ClientConf{PD: []string{"localhost:8110"}})
+	c, _ := client.OpenClient(client.ClientConf{
+		ClientType: client.ClientType_FlyKv,
+		ClusterConf: &client.ClusterConf{
+			PD: []string{"localhost:8110"},
+		},
+	})
 
 	for i := 0; i < 100; i++ {
 		fields := map[string]interface{}{}
@@ -1907,7 +1934,12 @@ func TestScan(t *testing.T) {
 
 	fmt.Println("run client")
 
-	c, _ := client.OpenClient(client.ClientConf{PD: []string{"localhost:8110"}})
+	c, _ := client.OpenClient(client.ClientConf{
+		ClientType: client.ClientType_FlyKv,
+		ClusterConf: &client.ClusterConf{
+			PD: []string{"localhost:8110"},
+		},
+	})
 
 	for i := 0; i < 100; i++ {
 		fields := map[string]interface{}{}
@@ -1921,7 +1953,12 @@ func TestScan(t *testing.T) {
 
 	fmt.Println("set ok")
 
-	sc, _ := client.NewScanner(client.ClientConf{PD: []string{"localhost:8110"}}, "users1", []string{"name", "age", "phone"})
+	sc, _ := client.NewScanner(client.ClientConf{
+		ClientType: client.ClientType_FlyKv,
+		ClusterConf: &client.ClusterConf{
+			PD: []string{"localhost:8110"},
+		},
+	}, "users1", []string{"name", "age", "phone"})
 
 	count := 0
 
@@ -1961,7 +1998,12 @@ func TestScan(t *testing.T) {
 
 	fmt.Println("again")
 
-	sc, _ = client.NewScanner(client.ClientConf{PD: []string{"localhost:8110"}}, "users1", []string{"name", "age", "phone"})
+	sc, _ = client.NewScanner(client.ClientConf{
+		ClientType: client.ClientType_FlyKv,
+		ClusterConf: &client.ClusterConf{
+			PD: []string{"localhost:8110"},
+		},
+	}, "users1", []string{"name", "age", "phone"})
 
 	count = 0
 
@@ -2019,7 +2061,12 @@ func TestSolo(t *testing.T) {
 		panic(err)
 	}
 
-	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:8110", UnikeyPlacement: sslot.MakeUnikeyPlacement([]int{1})})
+	c, _ := client.OpenClient(client.ClientConf{
+		ClientType: client.ClientType_FlyKv,
+		SoloConf: &client.SoloConf{
+			Service:         "localhost:8110",
+			UnikeyPlacement: sslot.MakeUnikeyPlacement([]int{1}),
+		}})
 
 	for {
 		r := c.Get("users1", "ak", "name").Exec()
@@ -2038,7 +2085,13 @@ func TestSolo(t *testing.T) {
 		assert.Nil(t, r.ErrCode)
 	}
 
-	sc, _ := client.NewScanner(client.ClientConf{Stores: []int{1}, SoloService: "localhost:8110", UnikeyPlacement: sslot.MakeUnikeyPlacement([]int{1})}, "users1", []string{"name", "age", "phone"})
+	sc, _ := client.NewScanner(client.ClientConf{
+		ClientType: client.ClientType_FlyKv,
+		SoloConf: &client.SoloConf{
+			Service:         "localhost:8110",
+			UnikeyPlacement: sslot.MakeUnikeyPlacement([]int{1}),
+			Stores:          []int{1},
+		}}, "users1", []string{"name", "age", "phone"})
 
 	count := 0
 

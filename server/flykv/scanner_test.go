@@ -25,7 +25,12 @@ func TestScaner(t *testing.T) {
 
 	node := start1Node(1, newSqlDBBackEnd(), false, config, true)
 
-	c, _ := client.OpenClient(client.ClientConf{SoloService: "localhost:10018", UnikeyPlacement: GetStore})
+	c, _ := client.OpenClient(client.ClientConf{
+		ClientType: client.ClientType_FlyKv,
+		SoloConf: &client.SoloConf{
+			Service:         "localhost:10018",
+			UnikeyPlacement: GetStore,
+		}})
 
 	for i := 0; i < 100; i++ {
 		fields := map[string]interface{}{}
@@ -39,7 +44,13 @@ func TestScaner(t *testing.T) {
 
 	fmt.Println("set ok")
 
-	sc, _ := client.NewScanner(client.ClientConf{SoloService: "localhost:10018", Stores: []int{1}}, "users1", []string{
+	sc, _ := client.NewScanner(client.ClientConf{
+		ClientType: client.ClientType_FlyKv,
+		SoloConf: &client.SoloConf{
+			Service:         "localhost:10018",
+			UnikeyPlacement: GetStore,
+			Stores:          []int{1},
+		}}, "users1", []string{
 		"name",
 		"age",
 		"phone",
@@ -72,7 +83,13 @@ func TestScaner(t *testing.T) {
 
 	node = start1Node(1, newSqlDBBackEnd(), false, config, true)
 
-	sc, _ = client.NewScanner(client.ClientConf{SoloService: "localhost:10018", Stores: []int{1}}, "users1", []string{
+	sc, _ = client.NewScanner(client.ClientConf{
+		ClientType: client.ClientType_FlyKv,
+		SoloConf: &client.SoloConf{
+			Service:         "localhost:10018",
+			UnikeyPlacement: GetStore,
+			Stores:          []int{1},
+		}}, "users1", []string{
 		"name",
 		"age",
 		"phone",

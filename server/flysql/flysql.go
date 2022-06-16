@@ -318,12 +318,14 @@ func (this *flysql) onGet(key string, tbmeta db.TableMeta, request *request) {
 		wants = tbmeta.GetAllFieldsName()
 	}
 
+	ctx, cancel := context.WithTimeout(context.TODO(), request.deadline.Sub(time.Now()))
+	defer cancel()
+
 	version, retFields, err := Load(context.TODO(), this.dbc, tbmeta.(*sql.TableMeta), key, wants, req.Version)
-
-	if time.Now().After(request.deadline) {
+	select {
+	case <-ctx.Done():
 		request.replyer.dropReply()
-	} else {
-
+	default:
 		resp := &cs.RespMessage{
 			Cmd:   request.msg.Cmd,
 			Seqno: request.msg.Seqno,
@@ -347,7 +349,6 @@ func (this *flysql) onGet(key string, tbmeta db.TableMeta, request *request) {
 
 		request.replyer.reply(resp)
 	}
-
 }
 
 func (this *flysql) onSet(key string, tbmeta db.TableMeta, request *request) {
@@ -378,12 +379,15 @@ func (this *flysql) onSet(key string, tbmeta db.TableMeta, request *request) {
 			fields[v.GetName()] = v
 		}
 
+		ctx, cancel := context.WithTimeout(context.TODO(), request.deadline.Sub(time.Now()))
+		defer cancel()
+
 		err := Set(context.TODO(), this.dbc, this.config.DBConfig.DBType, tbmeta.(*sql.TableMeta), key, sslot.Unikey2Slot(request.msg.UniKey), fields, req.Version)
 
-		if time.Now().After(request.deadline) {
+		select {
+		case <-ctx.Done():
 			request.replyer.dropReply()
-		} else {
-
+		default:
 			resp := &cs.RespMessage{
 				Cmd:   request.msg.Cmd,
 				Seqno: request.msg.Seqno,
@@ -401,7 +405,6 @@ func (this *flysql) onSet(key string, tbmeta db.TableMeta, request *request) {
 
 			request.replyer.reply(resp)
 		}
-
 	}
 }
 
@@ -433,11 +436,15 @@ func (this *flysql) onSetNx(key string, tbmeta db.TableMeta, request *request) {
 			fields[v.GetName()] = v
 		}
 
+		ctx, cancel := context.WithTimeout(context.TODO(), request.deadline.Sub(time.Now()))
+		defer cancel()
+
 		retFields, err := SetNx(context.TODO(), this.dbc, this.config.DBConfig.DBType, tbmeta.(*sql.TableMeta), key, sslot.Unikey2Slot(request.msg.UniKey), fields)
 
-		if time.Now().After(request.deadline) {
+		select {
+		case <-ctx.Done():
 			request.replyer.dropReply()
-		} else {
+		default:
 
 			resp := &cs.RespMessage{
 				Cmd:   request.msg.Cmd,
@@ -463,11 +470,16 @@ func (this *flysql) onSetNx(key string, tbmeta db.TableMeta, request *request) {
 }
 
 func (this *flysql) onDel(key string, tbmeta db.TableMeta, request *request) {
+
+	ctx, cancel := context.WithTimeout(context.TODO(), request.deadline.Sub(time.Now()))
+	defer cancel()
+
 	err := MarkDelete(context.TODO(), this.dbc, this.config.DBConfig.DBType, tbmeta.(*sql.TableMeta), key, sslot.Unikey2Slot(request.msg.UniKey))
 
-	if time.Now().After(request.deadline) {
+	select {
+	case <-ctx.Done():
 		request.replyer.dropReply()
-	} else {
+	default:
 
 		resp := &cs.RespMessage{
 			Cmd:   request.msg.Cmd,
@@ -520,13 +532,18 @@ func (this *flysql) onCompareAndSet(key string, tbmeta db.TableMeta, request *re
 			Err:   err,
 		})
 	} else {
+
+		ctx, cancel := context.WithTimeout(context.TODO(), request.deadline.Sub(time.Now()))
+		defer cancel()
+
 		retField, err := CompareAndSet(context.TODO(), this.dbc, this.config.DBConfig.DBType,
 			tbmeta.(*sql.TableMeta), key, sslot.Unikey2Slot(request.msg.UniKey),
 			req.Old, req.New)
 
-		if time.Now().After(request.deadline) {
+		select {
+		case <-ctx.Done():
 			request.replyer.dropReply()
-		} else {
+		default:
 
 			resp := &cs.RespMessage{
 				Cmd:   request.msg.Cmd,
@@ -583,14 +600,18 @@ func (this *flysql) onCompareAndSetNx(key string, tbmeta db.TableMeta, request *
 			Err:   err,
 		})
 	} else {
+
+		ctx, cancel := context.WithTimeout(context.TODO(), request.deadline.Sub(time.Now()))
+		defer cancel()
+
 		retField, err := CompareAndSetNx(context.TODO(), this.dbc, this.config.DBConfig.DBType,
 			tbmeta.(*sql.TableMeta), key, sslot.Unikey2Slot(request.msg.UniKey),
 			req.Old, req.New)
 
-		if time.Now().After(request.deadline) {
+		select {
+		case <-ctx.Done():
 			request.replyer.dropReply()
-		} else {
-
+		default:
 			resp := &cs.RespMessage{
 				Cmd:   request.msg.Cmd,
 				Seqno: request.msg.Seqno,
@@ -640,12 +661,17 @@ func (this *flysql) onIncrBy(key string, tbmeta db.TableMeta, request *request) 
 			Err:   err,
 		})
 	} else {
+
+		ctx, cancel := context.WithTimeout(context.TODO(), request.deadline.Sub(time.Now()))
+		defer cancel()
+
 		retField, err := Add(context.TODO(), this.dbc, this.config.DBConfig.DBType,
 			tbmeta.(*sql.TableMeta), key, sslot.Unikey2Slot(request.msg.UniKey), req.Field)
 
-		if time.Now().After(request.deadline) {
+		select {
+		case <-ctx.Done():
 			request.replyer.dropReply()
-		} else {
+		default:
 
 			resp := &cs.RespMessage{
 				Cmd:   request.msg.Cmd,

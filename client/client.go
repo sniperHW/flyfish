@@ -23,8 +23,6 @@ import (
 var ClientTimeout uint32 = 6000 //6sec
 var maxPendingSize int = 10000
 
-//var seqno int64
-
 var outputBufLimit flynet.OutputBufLimit = flynet.OutputBufLimit{
 	OutPutLimitSoft:        cs.MaxPacketSize,
 	OutPutLimitSoftSeconds: 10,
@@ -53,16 +51,30 @@ func Recover() {
 	}
 }
 
+type ClientType int
+
+const (
+	ClientType_FlyKv  = ClientType(1) //请求发往flykv,由缓存来实现数据的读写
+	ClientType_FlySql = ClientType(2) //请求发往flysql,直接交给数据库完成数据读写
+)
+
+type SoloConf struct {
+	Service         string
+	UnikeyPlacement func(string) int //返回unikey所在的store,对于连接proxy的方式无需提供,store字段由proxy填写
+	Stores          []int
+}
+
+type ClusterConf struct {
+	PD []string //pd服务地址
+}
+
 type ClientConf struct {
 	CallbackQueue   EventQueueI //响应回调的事件队列
 	CBEventPriority int         //回调事件优先级
-	//cluster模式
-	PD []string //pd服务地址
-	//solo模式
-	UnikeyPlacement func(string) int //返回unikey所在的store,对于连接proxy的方式无需提供,store字段由proxy填写
-	SoloService     string
-	Stores          []int
-	FetchRowCount   int //scanner一次从服务器获取的最大行数量，如果行数据比较大应将此值设小一点，避免数据包超过大小限制
+	FetchRowCount   int         //scanner一次从服务器获取的最大行数量，如果行数据比较大应将此值设小一点，避免数据包超过大小限制
+	ClientType      ClientType
+	SoloConf        *SoloConf
+	ClusterConf     *ClusterConf
 }
 
 type serverConn struct {
@@ -182,7 +194,7 @@ func (this *serverConn) connect() {
 					 * solo模式只有一个地址，只能一直尝试连接
 					 * cluster模式可能有多个地址，如果当前地址连接不上可以尝试换一个地址，如果无法更换再继续尝试连接
 					 */
-					if this.c.conf.SoloService != "" || !this.c.onConnectFailed(this) {
+					if this.c.conf.SoloConf != nil || !this.c.onConnectFailed(this) {
 						time.Sleep(100 * time.Millisecond)
 						this.c.mu.Lock()
 						if atomic.LoadInt32(this.closed) == 1 || this.pendingSend.Len() == 0 {
@@ -202,18 +214,195 @@ func (this *serverConn) connect() {
 	}
 }
 
+type clusterServiceMgr interface {
+	queryService(*Client) //查询可用服务
+	tryBalance(*Client)
+}
+
+type flykvClusterServiceMgr struct {
+	pdAddr []*net.UDPAddr
+	gates  []*sproto.Flygate
+}
+
+func QueryGate(pd []*net.UDPAddr, timeout time.Duration) (ret []*sproto.Flygate) {
+	context := snet.MakeUniqueContext()
+	if resp := snet.UdpCall(pd, snet.MakeMessage(context, &sproto.GetFlyGateList{}), timeout, func(respCh chan interface{}, r interface{}) {
+		if m, ok := r.(*snet.Message); ok {
+			if resp, ok := m.Msg.(*sproto.GetFlyGateListResp); ok && context == m.Context {
+				select {
+				case respCh <- resp.List:
+				default:
+				}
+			}
+		}
+	}); nil != resp {
+		ret = resp.([]*sproto.Flygate)
+	}
+	return
+}
+
+func (this *flykvClusterServiceMgr) onGates(c *Client, gates []*sproto.Flygate) {
+	c.mu.Lock()
+	localGates := []string{}
+	for k, _ := range c.serverConnMap {
+		localGates = append(localGates, k)
+	}
+
+	sort.Slice(localGates, func(i, j int) bool {
+		return localGates[i] < localGates[j]
+	})
+
+	sort.Slice(gates, func(i, j int) bool {
+		return gates[i].Service < gates[j].Service
+	})
+
+	add := []*sproto.Flygate{}
+	remove := []string{}
+
+	i := 0
+	j := 0
+
+	for i < len(gates) && j < len(localGates) {
+		if gates[i].Service == localGates[j] {
+			i++
+			j++
+		} else if gates[i].Service > localGates[j] {
+			remove = append(remove, localGates[j])
+			j++
+		} else {
+			add = append(add, gates[i])
+			i++
+		}
+	}
+
+	if len(gates[i:]) > 0 {
+		add = append(add, gates[i:]...)
+	}
+
+	if len(localGates[j:]) > 0 {
+		remove = append(remove, localGates[j:]...)
+	}
+
+	for _, v := range add {
+		conn := &serverConn{
+			service:     v.Service,
+			pendingSend: list.New(),
+			waitResp:    map[int64]*cmdContext{},
+			closed:      &c.closed,
+			c:           c,
+		}
+		c.serverConnMap[v.Service] = conn
+	}
+
+	for _, v := range remove {
+		conn := c.serverConnMap[v]
+
+		delete(c.serverConnMap, v)
+
+		if nil != c.usedConn && v == c.usedConn.service {
+			c.usedConn = nil
+		}
+
+		if len(conn.waitResp) == 0 {
+			if nil != conn.session {
+				conn.session.Close(nil, 0)
+			}
+		} else {
+			conn.removed = true
+		}
+	}
+
+	this.gates = gates
+
+	if nil == c.usedConn {
+		c.usedConn = c.serverConnMap[gates[int(rand.Int31())%len(gates)].Service]
+		now := time.Now()
+		for v := c.pendingSend.Front(); v != nil; v = c.pendingSend.Front() {
+			e := c.pendingSend.Remove(v).(*cmdContext)
+			e.listElement = nil
+			e.l = nil
+
+			if nil != c.usedConn.session {
+				c.usedConn.sendReq(e, now)
+			} else {
+				c.usedConn.connect()
+				e.l = c.usedConn.pendingSend
+				e.listElement = c.usedConn.pendingSend.PushBack(e)
+			}
+		}
+	} else {
+		this.tryBalance(c)
+	}
+
+	c.mu.Unlock()
+}
+
+func (this *flykvClusterServiceMgr) tryBalance(c *Client) {
+	var current *sproto.Flygate
+	average := 0
+	for _, v := range this.gates {
+		average += int(v.MsgPerSecond)
+		if v.Service == c.usedConn.service {
+			current = v
+		}
+	}
+	average /= len(this.gates)
+
+	msgSendPerSend := c.msgPerSecond.GetAverage()
+
+	if nil != current && int(current.MsgPerSecond)-msgSendPerSend > average {
+		go func() {
+			req := &sproto.ChangeFlyGate{CurrentGate: current.Service, MsgSendPerSecond: int32(msgSendPerSend)}
+			context := snet.MakeUniqueContext()
+			if resp := snet.UdpCall(this.pdAddr, snet.MakeMessage(context, req), time.Second, func(respCh chan interface{}, r interface{}) {
+				if m, ok := r.(*snet.Message); ok {
+					if resp, ok := m.Msg.(*sproto.ChangeFlyGateResp); ok && context == m.Context {
+						select {
+						case respCh <- resp:
+						default:
+						}
+					}
+				}
+			}); nil != resp {
+				if ret := resp.(*sproto.ChangeFlyGateResp); ret.Ok {
+					c.changeConnection(ret.Service)
+				}
+			}
+		}()
+	}
+}
+
+func (this *flykvClusterServiceMgr) queryService(c *Client) {
+	go func() {
+		gates := QueryGate(this.pdAddr, time.Second)
+
+		if atomic.LoadInt32(&c.closed) == 1 {
+			return
+		}
+
+		timeout := time.Millisecond * 100
+		if len(gates) > 0 {
+			this.onGates(c, gates)
+			timeout = time.Second * 5
+		}
+
+		time.AfterFunc(timeout, func() {
+			this.queryService(c)
+		})
+	}()
+}
+
 type Client struct {
-	mu            sync.Mutex
-	conf          ClientConf
-	closed        int32
-	serverConnMap map[string]*serverConn
-	usedConn      *serverConn
-	pendingSend   *list.List //usedConn==nil时被排队等待发送的请求
-	pdAddr        []*net.UDPAddr
-	msgPerSecond  *movingAverage.MovingAverage
-	msgSend       int32
-	gates         []*sproto.Flygate
-	seqno         int64
+	mu                sync.Mutex
+	conf              ClientConf
+	closed            int32
+	serverConnMap     map[string]*serverConn
+	usedConn          *serverConn
+	pendingSend       *list.List //usedConn==nil时被排队等待发送的请求
+	msgPerSecond      *movingAverage.MovingAverage
+	msgSend           int32
+	seqno             int64
+	clusterServiceMgr clusterServiceMgr
 }
 
 func (this *Client) callcb(ctx *cmdContext, a interface{}) {
@@ -255,23 +444,6 @@ func (this *Client) doCallBack(ctx *cmdContext, a interface{}) {
 			this.callcb(ctx, a)
 		}
 	}
-}
-
-func QueryGate(pd []*net.UDPAddr, timeout time.Duration) (ret []*sproto.Flygate) {
-	context := snet.MakeUniqueContext()
-	if resp := snet.UdpCall(pd, snet.MakeMessage(context, &sproto.GetFlyGateList{}), timeout, func(respCh chan interface{}, r interface{}) {
-		if m, ok := r.(*snet.Message); ok {
-			if resp, ok := m.Msg.(*sproto.GetFlyGateListResp); ok && context == m.Context {
-				select {
-				case respCh <- resp.List:
-				default:
-				}
-			}
-		}
-	}); nil != resp {
-		ret = resp.([]*sproto.Flygate)
-	}
-	return
 }
 
 func (this *Client) onConnectFailed(conn *serverConn) bool {
@@ -347,7 +519,7 @@ func (this *Client) Close() {
 	if atomic.CompareAndSwapInt32(&this.closed, 0, 1) {
 		this.mu.Lock()
 		defer this.mu.Unlock()
-		if "" != this.conf.SoloService {
+		if nil != this.conf.SoloConf {
 			if nil != this.usedConn.session {
 				this.usedConn.session.Close(nil, 0)
 			}
@@ -362,173 +534,20 @@ func (this *Client) Close() {
 	}
 }
 
-func (this *Client) onGates(gates []*sproto.Flygate) {
-	this.mu.Lock()
-	localGates := []string{}
-	for k, _ := range this.serverConnMap {
-		localGates = append(localGates, k)
-	}
-	this.mu.Unlock()
-
-	sort.Slice(localGates, func(i, j int) bool {
-		return localGates[i] < localGates[j]
-	})
-
-	sort.Slice(gates, func(i, j int) bool {
-		return gates[i].Service < gates[j].Service
-	})
-
-	add := []*sproto.Flygate{}
-	remove := []string{}
-
-	i := 0
-	j := 0
-
-	for i < len(gates) && j < len(localGates) {
-		if gates[i].Service == localGates[j] {
-			i++
-			j++
-		} else if gates[i].Service > localGates[j] {
-			remove = append(remove, localGates[j])
-			j++
-		} else {
-			add = append(add, gates[i])
-			i++
-		}
-	}
-
-	if len(gates[i:]) > 0 {
-		add = append(add, gates[i:]...)
-	}
-
-	if len(localGates[j:]) > 0 {
-		remove = append(remove, localGates[j:]...)
-	}
-
-	this.mu.Lock()
-
-	for _, v := range add {
-		conn := &serverConn{
-			service:     v.Service,
-			pendingSend: list.New(),
-			waitResp:    map[int64]*cmdContext{},
-			closed:      &this.closed,
-			c:           this,
-		}
-		this.serverConnMap[v.Service] = conn
-	}
-
-	for _, v := range remove {
-		conn := this.serverConnMap[v]
-
-		delete(this.serverConnMap, v)
-
-		if nil != this.usedConn && v == this.usedConn.service {
-			this.usedConn = nil
-		}
-
-		if len(conn.waitResp) == 0 {
-			if nil != conn.session {
-				conn.session.Close(nil, 0)
-			}
-		} else {
-			conn.removed = true
-		}
-	}
-
-	this.gates = gates
-
-	if nil == this.usedConn {
-		this.usedConn = this.serverConnMap[gates[int(rand.Int31())%len(gates)].Service]
-		now := time.Now()
-		for v := this.pendingSend.Front(); v != nil; v = this.pendingSend.Front() {
-			e := this.pendingSend.Remove(v).(*cmdContext)
-			e.listElement = nil
-			e.l = nil
-
-			if nil != this.usedConn.session {
-				this.usedConn.sendReq(e, now)
-			} else {
-				this.usedConn.connect()
-				e.l = this.usedConn.pendingSend
-				e.listElement = this.usedConn.pendingSend.PushBack(e)
-			}
-		}
-	} else {
-		this.tryGateBalance()
-	}
-
-	this.mu.Unlock()
-}
-
-func (this *Client) changeFlygate(newGate string) {
+func (this *Client) changeConnection(service string) {
 	this.mu.Lock()
 	defer this.mu.Unlock()
-	if nil != this.usedConn && this.usedConn.service == newGate {
+	if nil != this.usedConn && this.usedConn.service == service {
 		return
 	}
 
-	g := this.serverConnMap[newGate]
+	con := this.serverConnMap[service]
 
-	if nil == g {
+	if nil == con {
 		return
 	}
 
-	this.usedConn = g
-}
-
-func (this *Client) tryGateBalance() {
-	var current *sproto.Flygate
-	average := 0
-	for _, v := range this.gates {
-		average += int(v.MsgPerSecond)
-		if v.Service == this.usedConn.service {
-			current = v
-		}
-	}
-	average /= len(this.gates)
-
-	msgSendPerSend := this.msgPerSecond.GetAverage()
-
-	if nil != current && int(current.MsgPerSecond)-msgSendPerSend > average {
-		go func() {
-			req := &sproto.ChangeFlyGate{CurrentGate: current.Service, MsgSendPerSecond: int32(msgSendPerSend)}
-			context := snet.MakeUniqueContext()
-			if resp := snet.UdpCall(this.pdAddr, snet.MakeMessage(context, req), time.Second, func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.ChangeFlyGateResp); ok && context == m.Context {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			}); nil != resp {
-				if ret := resp.(*sproto.ChangeFlyGateResp); ret.Ok {
-					this.changeFlygate(ret.Service)
-				}
-			}
-		}()
-	}
-
-}
-
-func (this *Client) queryRouteInfo() {
-	go func() {
-		gates := QueryGate(this.pdAddr, time.Second)
-
-		if atomic.LoadInt32(&this.closed) == 1 {
-			return
-		}
-
-		timeout := time.Millisecond * 100
-		if len(gates) > 0 {
-			this.onGates(gates)
-			timeout = time.Second * 5
-		}
-
-		time.AfterFunc(timeout, this.queryRouteInfo)
-	}()
+	this.usedConn = con
 }
 
 func (this *Client) refreshMsgPerSecond() {
@@ -541,38 +560,53 @@ func (this *Client) refreshMsgPerSecond() {
 }
 
 func OpenClient(conf ClientConf) (*Client, error) {
-	if "" == conf.SoloService && len(conf.PD) == 0 {
-		return nil, errors.New("cluster mode,but pd empty")
-	} else {
 
+	if !(conf.ClientType == ClientType_FlyKv || conf.ClientType == ClientType_FlySql) {
+		return nil, errors.New("invaild ClientType")
+	} else if nil == conf.SoloConf && nil == conf.ClusterConf {
+		return nil, errors.New("SoloConf and ClusterConf is nil")
+	} else {
 		c := &Client{
 			conf:         conf,
 			msgPerSecond: movingAverage.New(5),
 		}
 
-		if "" != conf.SoloService {
+		if nil != conf.SoloConf {
 			c.usedConn = &serverConn{
-				service:         conf.SoloService,
+				service:         conf.SoloConf.Service,
 				pendingSend:     list.New(),
 				waitResp:        map[int64]*cmdContext{},
-				UnikeyPlacement: conf.UnikeyPlacement,
+				UnikeyPlacement: conf.SoloConf.UnikeyPlacement,
 				closed:          &c.closed,
 				c:               c,
 			}
 		} else {
-			for _, v := range conf.PD {
-				if addr, err := net.ResolveUDPAddr("udp", v); nil == err {
-					c.pdAddr = append(c.pdAddr, addr)
+			if len(conf.ClusterConf.PD) == 0 {
+				return nil, errors.New("PD is empty")
+			} else {
+				var pdAddr []*net.UDPAddr
+
+				for _, v := range conf.ClusterConf.PD {
+					if addr, err := net.ResolveUDPAddr("udp", v); nil == err {
+						pdAddr = append(pdAddr, addr)
+					}
 				}
-			}
 
-			if len(c.pdAddr) == 0 {
-				return nil, errors.New("pd is empty")
-			}
+				if len(pdAddr) == 0 {
+					return nil, errors.New("pd is empty")
+				}
 
-			c.pendingSend = list.New()
-			c.serverConnMap = map[string]*serverConn{}
-			c.queryRouteInfo()
+				if conf.ClientType == ClientType_FlyKv {
+					c.clusterServiceMgr = &flykvClusterServiceMgr{
+						pdAddr: pdAddr,
+					}
+				}
+
+				c.pendingSend = list.New()
+				c.serverConnMap = map[string]*serverConn{}
+
+				c.clusterServiceMgr.queryService(c)
+			}
 		}
 		c.refreshMsgPerSecond()
 		return c, nil

@@ -98,10 +98,6 @@ type Node struct {
 	consoleConn *fnet.Udp
 }
 
-func verifyLogin(loginReq *flyproto.LoginReq) bool {
-	return true
-}
-
 func (this *Node) Register(cmd flyproto.CmdType, h handler) {
 	if _, ok := this.handlers[cmd]; !ok {
 		this.handlers[cmd] = h
@@ -164,7 +160,7 @@ func (this *Node) Start(leader bool, service string, console string, def *db.DbD
 
 	var err error
 
-	if this.listener, err = cs.NewListener("tcp", service, fnet.OutputBufLimit{}, verifyLogin); nil != err {
+	if this.listener, err = cs.NewListener("tcp", service, fnet.OutputBufLimit{}); nil != err {
 		return err
 	}
 
