@@ -103,7 +103,7 @@ func (this *dbUpdateTask) _issueFullDbWriteBack() error {
 	}
 
 	this.state.Version = this.kv.version
-	this.state.LastWriteBackVersion = this.kv.version
+	this.state.LastWriteBackVersion = this.kv.lastWriteBackVersion
 
 	if this.state.State != db.DBState_delete {
 		this.state.Fields = map[string]*flyproto.Field{}
