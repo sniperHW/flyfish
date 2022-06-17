@@ -9,20 +9,27 @@ import (
 )
 
 func (this *dbUpdateTask) SetLastWriteBackVersion(version int64) {
+	//先设置让后面的更新能尽快看到最新值
+	this.setLastWriteBackVersion(version)
 	this.kv.store.rn.IssueProposal(&LastWriteBackVersionProposal{
 		version: version,
 		kv:      this.kv,
 	})
 }
 
-func (this *dbUpdateTask) setLastWriteBackVersion(version int64) /*(old int64)*/ {
+func (this *dbUpdateTask) setLastWriteBackVersion(version int64) {
 	this.Lock()
 	defer this.Unlock()
-	//old = this.state.LastWriteBackVersion
-	this.state.LastWriteBackVersion = version
-
-	GetSugar().Infof("setLastWriteBackVersion %s version:%d", this.kv.uniKey, version)
-
+	/*
+	 * 考虑如下情况,leader db回写成功，并执行SetLastWriteBackVersion。
+	 * 之后丢失leader，所以IssueProposal(LastWriteBackVersionProposal)失败，因此，
+	 * kv.lastWriteBackVersion不会被更新成最新值。之后当前节点再次被选为leader,
+	 * 在issueFullDbWriteBack中将用kv.lastWriteBackVersion再次调用setLastWriteBackVersion
+	 * 此时kv.lastWriteBackVersion是比dbUpdateTask.state.LastWriteBackVersion旧的，应该忽略此次设置
+	 */
+	if abs(version) > abs(this.state.LastWriteBackVersion) {
+		this.state.LastWriteBackVersion = version
+	}
 	return
 }
 

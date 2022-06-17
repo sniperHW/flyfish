@@ -177,7 +177,7 @@ func TestFriends(t *testing.T) {
 
 	fmt.Println(config.WriteBackMode)
 	config.MaxCachePerStore = 100000
-	config.SqlUpdaterCount = 1
+	config.SqlUpdaterCount = 20
 
 	node := start1Node(1, newSqlDBBackEnd(), false, config, true)
 
@@ -254,6 +254,8 @@ func TestFriends(t *testing.T) {
 
 	node.Stop()
 
+	c.Close()
+
 	node = start1Node(1, newSqlDBBackEnd(), false, config, true)
 
 	c, _ = client.OpenClient(client.ClientConf{
@@ -318,4 +320,7 @@ func TestFriends(t *testing.T) {
 	GetSugar().Infof("stop")
 
 	node.Stop()
+
+	c.Close()
+
 }
