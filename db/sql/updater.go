@@ -68,10 +68,12 @@ func (this *updater) Start() {
 					break
 				}
 
+				//beg := time.Now()
 				for i, v := range localList {
 					this.exec(v)
 					localList[i] = nil
 				}
+				//GetSugar().Infof("count:%d,use:%v", len(localList), time.Now().Sub(beg))
 			}
 		}()
 	})
@@ -102,7 +104,6 @@ var errNewerWriteBackSuccess error = errors.New("a newer writeback success")
 var errRecordNotExist error = errors.New("record not exist")
 
 func (this *updater) exec(v interface{}) {
-
 	switch v.(type) {
 	case db.DBUpdateTask:
 		task := v.(db.DBUpdateTask)
@@ -111,6 +112,8 @@ func (this *updater) exec(v interface{}) {
 			task.ClearUpdateStateAndReleaseLock() //释放更新锁定
 		} else {
 			s := task.GetUpdateAndClearUpdateState()
+
+			//GetSugar().Infof("GetUpdateAndClearUpdateState %s  LastWriteBackVersion:%d", task.GetUniKey(), s.LastWriteBackVersion)
 
 			b := buffer.Get()
 			defer b.Free()
@@ -191,11 +194,11 @@ func (this *updater) exec(v interface{}) {
 						task.SetLastWriteBackVersion(s.Version)
 						break
 					} else {
-						GetSugar().Debugf("%s version mismatch last:%d version:%d unikey:%s:%s", getUpdateType(s.State), s.LastWriteBackVersion, s.Version, s.Meta.TableName(), s.Key)
+						GetSugar().Infof("%s version mismatch last:%d version:%d unikey:%s:%s", getUpdateType(s.State), s.LastWriteBackVersion, s.Version, s.Meta.TableName(), s.Key)
 						//版本号不匹配，再次获取版本号
 						version, err := loadVersion()
 						if nil == err {
-							GetSugar().Debugf("%s version mismatch last:%d version:%d,dbversion:%d", getUpdateType(s.State), s.LastWriteBackVersion, s.Version, version)
+							GetSugar().Infof("RebuildSql %s version mismatch last:%d version:%d,dbversion:%d", getUpdateType(s.State), s.LastWriteBackVersion, s.Version, version)
 							s.LastWriteBackVersion = version
 							needRebuildSql = true
 						} else if err == errRecordNotExist {
@@ -214,19 +217,6 @@ func (this *updater) exec(v interface{}) {
 							task.OnError(err)
 							break
 						}
-
-						/*if version, err := loadVersion(); nil != err {
-							if err == errNewerWriteBackSuccess {
-								task.SetLastWriteBackVersion(version)
-							} else {
-								task.OnError(err, s.LastWriteBackVersion)
-							}
-							break
-						} else {
-							GetSugar().Debugf("%s version mismatch last:%d version:%d,dbversion:%d", getUpdateType(s.State), s.LastWriteBackVersion, s.Version, version)
-							s.LastWriteBackVersion = version
-							needRebuildSql = true
-						}*/
 					}
 				} else {
 					GetSugar().Errorf("sqlUpdater exec %s %v", this.sqlExec.b.ToStrUnsafe(), err)

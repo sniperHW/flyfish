@@ -5,6 +5,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/pkg/buffer"
+	"time"
 )
 
 type sqlExec struct {
@@ -180,7 +181,10 @@ func (this *sqlExec) prepareInsertUpdate(b *buffer.Buffer, s *db.UpdateState) {
 }
 
 func (this *sqlExec) exec(dbc *sqlx.DB) (rowsAffected int64, err error) {
+	GetSugar().Debugf("exe args:%d %s", len(this.args), this.b.ToStrUnsafe())
+	beg := time.Now()
 	r, err := dbc.Exec(this.b.ToStrUnsafe(), this.args...)
+	GetSugar().Infof("exec :%s use:%v", this.b.ToStrUnsafe(), time.Now().Sub(beg))
 	if nil == err {
 		rowsAffected, _ = r.RowsAffected()
 	}

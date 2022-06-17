@@ -10,6 +10,7 @@ import (
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/proto"
 	"strings"
+	"time"
 )
 
 var ErrRecordNotExist error = errors.New("record not exist")
@@ -225,7 +226,9 @@ func Set(ctx context.Context, dbc *sqlx.DB, dbtype string, tbmeta *sql.TableMeta
 		b, params = prepareSetPgSql(params, b, tbmeta, fields, version...)
 	}
 
+	beg := time.Now()
 	r, err := dbc.ExecContext(ctx, b.ToStrUnsafe(), params...)
+	GetSugar().Infof("exec %s use:%v", b.ToStrUnsafe(), time.Now().Sub(beg))
 
 	if nil != err {
 		return err

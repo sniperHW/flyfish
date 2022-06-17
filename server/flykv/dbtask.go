@@ -15,11 +15,14 @@ func (this *dbUpdateTask) SetLastWriteBackVersion(version int64) {
 	})
 }
 
-func (this *dbUpdateTask) setLastWriteBackVersion(version int64) (old int64) {
+func (this *dbUpdateTask) setLastWriteBackVersion(version int64) /*(old int64)*/ {
 	this.Lock()
 	defer this.Unlock()
-	old = this.state.LastWriteBackVersion
+	//old = this.state.LastWriteBackVersion
 	this.state.LastWriteBackVersion = version
+
+	GetSugar().Infof("setLastWriteBackVersion %s version:%d", this.kv.uniKey, version)
+
 	return
 }
 
@@ -93,7 +96,7 @@ func (this *dbUpdateTask) _issueFullDbWriteBack() error {
 	}
 
 	this.state.Version = this.kv.version
-	this.state.LastWriteBackVersion = this.state.Version
+	this.state.LastWriteBackVersion = this.kv.version
 
 	if this.state.State != db.DBState_delete {
 		this.state.Fields = map[string]*flyproto.Field{}

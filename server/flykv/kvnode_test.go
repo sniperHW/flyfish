@@ -478,6 +478,9 @@ func Test1Node1Store1(t *testing.T) {
 
 	client.InitLogger(GetLogger())
 
+	config.SqlUpdaterCount = 1
+	config.SqlLoaderCount = 1
+
 	node := start1Node(1, newSqlDBBackEnd(), false, config, true)
 
 	c, _ := client.OpenClient(client.ClientConf{

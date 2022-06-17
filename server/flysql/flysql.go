@@ -276,6 +276,7 @@ func NewFlysql(service string, config *Config) (*flysql, error) {
 	}
 
 	if err := flysql.start(service); nil == err {
+		//_ = runtime.NumCPU()
 		for i := 0; i < runtime.NumCPU()*2; i++ {
 			go func() {
 				for request := range flysql.requestChan {

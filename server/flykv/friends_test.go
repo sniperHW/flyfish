@@ -53,7 +53,7 @@ type opration struct {
 
 func (o *opration) do() {
 
-	fmt.Println("do", o.o1.id, o.o2.id)
+	//fmt.Println("do", o.o1.id, o.o2.id)
 
 	r1 := o.flyfishClient.Get("friends", fmt.Sprintf("%d", o.o1.id), "friends").Exec()
 	r2 := o.flyfishClient.Get("friends", fmt.Sprintf("%d", o.o2.id), "friends").Exec()
@@ -177,6 +177,7 @@ func TestFriends(t *testing.T) {
 
 	fmt.Println(config.WriteBackMode)
 	config.MaxCachePerStore = 100000
+	config.SqlUpdaterCount = 1
 
 	node := start1Node(1, newSqlDBBackEnd(), false, config, true)
 
@@ -187,60 +188,134 @@ func TestFriends(t *testing.T) {
 			UnikeyPlacement: GetStore,
 		}})
 
-	clearUsers1()
-
 	clearFriends()
 
 	for {
-		r := c.GetAll("users1", "sniperHW").Exec()
+		r := c.GetAll("friends", "1").Exec()
 		if nil != r.ErrCode && r.ErrCode.Code == errcode.Errcode_record_notexist {
 			break
 		}
 	}
 
-	rm := &relationsMgr{
-		objects: map[int]*objectFriends{},
-		q:       queue.NewPriorityQueue(1, 10000),
-		ch:      make(chan func(), 10000),
+	var objects1 []int
+	var objects2 []int
+
+	{
+
+		rm := &relationsMgr{
+			objects: map[int]*objectFriends{},
+			q:       queue.NewPriorityQueue(1, 10000),
+			ch:      make(chan func(), 10000),
+		}
+
+		rm.startWorker()
+
+		var wait sync.WaitGroup
+
+		beg := time.Now()
+
+		wait.Add(5000)
+
+		go func() {
+			//添加1000个任务
+			for i := 0; i < 5000; i++ {
+				a := int(rand.Int31() % 5000)
+				b := int(rand.Int31() % 5000)
+				if a == b {
+					b += 5000
+				}
+
+				objects1 = append(objects1, a)
+				objects2 = append(objects2, b)
+
+				rm.addFriend(a, b, c, &wait)
+			}
+
+			for {
+				closed, v := rm.q.Pop()
+				if closed {
+					break
+				} else {
+					v.(func())()
+				}
+			}
+
+		}()
+
+		wait.Wait()
+
+		GetSugar().Infof("use:%v", time.Now().Sub(beg))
+
+		rm.stop()
+
 	}
 
-	rm.startWorker()
+	GetSugar().Infof("stop")
 
-	var wait sync.WaitGroup
+	node.Stop()
 
-	beg := time.Now()
+	node = start1Node(1, newSqlDBBackEnd(), false, config, true)
 
-	wait.Add(1000)
+	c, _ = client.OpenClient(client.ClientConf{
+		ClientType: client.ClientType_FlyKv,
+		SoloConf: &client.SoloConf{
+			Service:         "localhost:10018",
+			UnikeyPlacement: GetStore,
+		}})
 
-	go func() {
-		//添加1000个任务
-		for i := 0; i < 1000; i++ {
-			a := int(rand.Int31() % 1000)
-			b := int(rand.Int31() % 1000)
-			if a == b {
-				b += 1000
-			}
-			rm.addFriend(a, b, c, &wait)
+	for {
+		r := c.GetAll("friends", "1").Exec()
+		if nil == r.ErrCode || r.ErrCode.Code == errcode.Errcode_record_notexist {
+			break
+		}
+	}
+
+	//again,此时flykv已经将数据加载进缓存中，无需再从数据库导入
+
+	{
+
+		rm := &relationsMgr{
+			objects: map[int]*objectFriends{},
+			q:       queue.NewPriorityQueue(1, 10000),
+			ch:      make(chan func(), 10000),
 		}
 
-		for {
-			closed, v := rm.q.Pop()
-			if closed {
-				break
-			} else {
-				v.(func())()
+		rm.startWorker()
+
+		var wait sync.WaitGroup
+
+		beg := time.Now()
+
+		wait.Add(5000)
+
+		go func() {
+			//添加1000个任务
+			for i := 0; i < 5000; i++ {
+				a := objects1[i]
+				b := objects2[i]
+				rm.addFriend(a, b, c, &wait)
 			}
-		}
 
-		fmt.Println("objects", len(rm.objects))
+			for {
+				closed, v := rm.q.Pop()
+				if closed {
+					break
+				} else {
+					v.(func())()
+				}
+			}
 
-	}()
+		}()
 
-	wait.Wait()
+		wait.Wait()
 
-	fmt.Println("use", time.Now().Sub(beg))
+		GetSugar().Infof("use:%v", time.Now().Sub(beg))
 
-	rm.stop()
+		rm.stop()
+
+	}
+
+	GetSugar().Infof("stop")
 
 	node.Stop()
 }
