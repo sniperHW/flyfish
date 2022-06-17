@@ -5,5 +5,9 @@
 	 	{"Name":"name","Type":"string","DefaultValue":""},
 	 	{"Name":"age","Type":"int","DefaultValue":"0"},
 	 	{"Name":"phone","Type":"blob","DefaultValue":""}]
+	},	
+	{"Name":"friends",
+	 "Fields":[
+	 	{"Name":"friends","Type":"blob","DefaultValue":""}]
 	}]
 }

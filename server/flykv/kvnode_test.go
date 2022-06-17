@@ -131,6 +131,8 @@ var dbConf *dbconf
 
 var clearUsers1 func()
 
+var clearFriends func()
+
 func init() {
 
 	sslot.SlotCount = 1820
@@ -163,6 +165,10 @@ func init() {
 
 	clearUsers1 = func() {
 		dbc.Exec("delete from users1_0;")
+	}
+
+	clearFriends = func() {
+		dbc.Exec("delete from friends_0;")
 	}
 }
 

@@ -382,7 +382,7 @@ func (s *kvstore) serve() {
 				}
 			case raft.ReplayOK:
 			case raft.RaftStopOK:
-				GetSugar().Infof("%x RaftStopOK", s.rn.ID())
+				GetSugar().Infof("%x RaftStopOK,kvcount:%d", s.rn.ID(), s.kvcount)
 				return
 			case raftpb.Snapshot:
 				snapshot := v.(raftpb.Snapshot)
