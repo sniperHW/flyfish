@@ -28,15 +28,14 @@ func (this *cmdKick) cmdType() flyproto.CmdType {
 	return flyproto.CmdType_Kick
 }
 
-func (s *kvstore) makeKick(kv *kv, deadline time.Time, replyer *replyer, seqno int64, _ *flyproto.KickReq) (cmdI, errcode.Error) {
+func (s *kvstore) makeKick(kv *kv, deadline time.Time, replyer *replyer, _ *flyproto.KickReq) (cmdI, errcode.Error) {
 
 	kick := &cmdKick{}
 
-	kick.cmdBase.init(kick, kv, replyer, seqno, deadline, func(err errcode.Error, _ map[string]*flyproto.Field, _ int64) *cs.RespMessage {
+	kick.cmdBase.init(kick, kv, replyer, deadline, func(err errcode.Error, _ map[string]*flyproto.Field, _ int64) *cs.RespMessage {
 		return &cs.RespMessage{
-			Seqno: seqno,
-			Err:   err,
-			Data:  &flyproto.KickResp{},
+			Err:  err,
+			Data: &flyproto.KickResp{},
 		}
 	})
 

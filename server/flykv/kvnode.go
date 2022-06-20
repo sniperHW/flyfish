@@ -52,6 +52,7 @@ type replyer struct {
 }
 
 func (r *replyer) reply(resp *cs.RespMessage) {
+	resp.Seqno = r.seqno
 	atomic.AddInt64(r.totalPendingReq, -1)
 	if nil != r.session {
 		r.session.Send(resp)
@@ -94,9 +95,8 @@ func (this *kvnode) makeReplyer(session *fnet.Socket, req *cs.ReqMessage, checkl
 		return replyer
 	} else {
 		replyer.reply(&cs.RespMessage{
-			Cmd:   req.Cmd,
-			Seqno: req.Seqno,
-			Err:   errcode.New(errcode.Errcode_retry, "flykv busy,please retry later"),
+			Cmd: req.Cmd,
+			Err: errcode.New(errcode.Errcode_retry, "flykv busy,please retry later"),
 		})
 		return nil
 	}
@@ -174,9 +174,8 @@ func (this *kvnode) onClient(session *fnet.Socket) {
 				this.muS.RUnlock()
 				if !ok {
 					replyer.reply(&cs.RespMessage{
-						Seqno: msg.Seqno,
-						Cmd:   msg.Cmd,
-						Err:   errcode.New(errcode.Errcode_error, fmt.Sprintf("%s not in current server", msg.UniKey)),
+						Cmd: msg.Cmd,
+						Err: errcode.New(errcode.Errcode_error, fmt.Sprintf("%s not in current server", msg.UniKey)),
 					})
 				} else {
 					store.addCliMessage(clientRequest{

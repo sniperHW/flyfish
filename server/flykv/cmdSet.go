@@ -9,7 +9,8 @@ import (
 
 type cmdSet struct {
 	cmdBase
-	fields map[string]*flyproto.Field
+	version *int64
+	fields  map[string]*flyproto.Field
 }
 
 func (this *cmdSet) do(proposal *kvProposal) *kvProposal {
@@ -41,7 +42,7 @@ func (this *cmdSet) cmdType() flyproto.CmdType {
 	return flyproto.CmdType_Set
 }
 
-func (s *kvstore) makeSet(kv *kv, deadline time.Time, replyer *replyer, seqno int64, req *flyproto.SetReq) (cmdI, errcode.Error) {
+func (s *kvstore) makeSet(kv *kv, deadline time.Time, replyer *replyer, req *flyproto.SetReq) (cmdI, errcode.Error) {
 	if len(req.GetFields()) == 0 {
 		return nil, errcode.New(errcode.Errcode_error, "set fields is empty")
 	}
@@ -51,21 +52,18 @@ func (s *kvstore) makeSet(kv *kv, deadline time.Time, replyer *replyer, seqno in
 	}
 
 	set := &cmdSet{
-		cmdBase: cmdBase{
-			version: req.Version,
-		},
-		fields: map[string]*flyproto.Field{},
+		version: req.Version,
+		fields:  map[string]*flyproto.Field{},
 	}
 
 	for _, v := range req.GetFields() {
 		set.fields[v.GetName()] = v
 	}
 
-	set.cmdBase.init(set, kv, replyer, seqno, deadline, func(err errcode.Error, _ map[string]*flyproto.Field, _ int64) *cs.RespMessage {
+	set.cmdBase.init(set, kv, replyer, deadline, func(err errcode.Error, _ map[string]*flyproto.Field, _ int64) *cs.RespMessage {
 		return &cs.RespMessage{
-			Seqno: seqno,
-			Err:   err,
-			Data:  &flyproto.SetResp{},
+			Err:  err,
+			Data: &flyproto.SetResp{},
 		}
 	})
 

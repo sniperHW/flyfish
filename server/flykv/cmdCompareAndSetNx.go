@@ -40,7 +40,7 @@ func (this *cmdCompareAndSetNx) cmdType() flyproto.CmdType {
 	return flyproto.CmdType_CompareAndSetNx
 }
 
-func (s *kvstore) makeCompareAndSetNx(kv *kv, deadline time.Time, replyer *replyer, seqno int64, req *flyproto.CompareAndSetNxReq) (cmdI, errcode.Error) {
+func (s *kvstore) makeCompareAndSetNx(kv *kv, deadline time.Time, replyer *replyer, req *flyproto.CompareAndSetNxReq) (cmdI, errcode.Error) {
 	if req.New == nil {
 		return nil, errcode.New(errcode.Errcode_error, "new is nil")
 	}
@@ -62,11 +62,10 @@ func (s *kvstore) makeCompareAndSetNx(kv *kv, deadline time.Time, replyer *reply
 		old: req.Old,
 	}
 
-	compareAndSetNx.cmdBase.init(compareAndSetNx, kv, replyer, seqno, deadline, func(err errcode.Error, fields map[string]*flyproto.Field, _ int64) *cs.RespMessage {
+	compareAndSetNx.cmdBase.init(compareAndSetNx, kv, replyer, deadline, func(err errcode.Error, fields map[string]*flyproto.Field, _ int64) *cs.RespMessage {
 		resp := &cs.RespMessage{
-			Seqno: seqno,
-			Err:   err,
-			Data:  &flyproto.CompareAndSetNxResp{},
+			Err:  err,
+			Data: &flyproto.CompareAndSetNxResp{},
 		}
 		if err == Err_cas_not_equal {
 			resp.Data.(*flyproto.CompareAndSetNxResp).Value = fields[req.Old.GetName()]

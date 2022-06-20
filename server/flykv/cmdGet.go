@@ -10,14 +10,15 @@ import (
 
 type cmdGet struct {
 	cmdBase
-	wants []string
+	version *int64
+	wants   []string
 }
 
 func (this *cmdGet) cmdType() flyproto.CmdType {
 	return flyproto.CmdType_Get
 }
 
-func (s *kvstore) makeGet(kv *kv, deadline time.Time, replyer *replyer, seqno int64, req *flyproto.GetReq) (cmdI, errcode.Error) {
+func (s *kvstore) makeGet(kv *kv, deadline time.Time, replyer *replyer, req *flyproto.GetReq) (cmdI, errcode.Error) {
 
 	if !req.GetAll() {
 		if err := kv.meta.CheckFieldsName(req.GetFields()); nil != err {
@@ -26,9 +27,7 @@ func (s *kvstore) makeGet(kv *kv, deadline time.Time, replyer *replyer, seqno in
 	}
 
 	get := &cmdGet{
-		cmdBase: cmdBase{
-			version: req.Version,
-		},
+		version: req.Version,
 	}
 
 	if req.GetAll() {
@@ -37,7 +36,7 @@ func (s *kvstore) makeGet(kv *kv, deadline time.Time, replyer *replyer, seqno in
 		get.wants = req.GetFields()
 	}
 
-	get.cmdBase.init(get, kv, replyer, seqno, deadline, func(err errcode.Error, fields map[string]*flyproto.Field, version int64) *cs.RespMessage {
+	get.cmdBase.init(get, kv, replyer, deadline, func(err errcode.Error, fields map[string]*flyproto.Field, version int64) *cs.RespMessage {
 		pbdata := &flyproto.GetResp{}
 
 		if err == nil {
@@ -63,9 +62,8 @@ func (s *kvstore) makeGet(kv *kv, deadline time.Time, replyer *replyer, seqno in
 		}
 
 		return &cs.RespMessage{
-			Seqno: seqno,
-			Err:   err,
-			Data:  pbdata}
+			Err:  err,
+			Data: pbdata}
 	})
 
 	return get, nil

@@ -27,13 +27,12 @@ func (this *cmdDel) cmdType() flyproto.CmdType {
 	return flyproto.CmdType_Del
 }
 
-func (s *kvstore) makeDel(kv *kv, deadline time.Time, replyer *replyer, seqno int64, req *flyproto.DelReq) (cmdI, errcode.Error) {
+func (s *kvstore) makeDel(kv *kv, deadline time.Time, replyer *replyer, req *flyproto.DelReq) (cmdI, errcode.Error) {
 	del := &cmdDel{}
-	del.cmdBase.init(del, kv, replyer, seqno, deadline, func(err errcode.Error, _ map[string]*flyproto.Field, _ int64) *cs.RespMessage {
+	del.cmdBase.init(del, kv, replyer, deadline, func(err errcode.Error, _ map[string]*flyproto.Field, _ int64) *cs.RespMessage {
 		return &cs.RespMessage{
-			Seqno: seqno,
-			Err:   err,
-			Data:  &flyproto.DelResp{},
+			Err:  err,
+			Data: &flyproto.DelResp{},
 		}
 	})
 	return del, nil

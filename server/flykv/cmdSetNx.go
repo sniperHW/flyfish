@@ -33,7 +33,7 @@ func (this *cmdSetNx) cmdType() flyproto.CmdType {
 	return flyproto.CmdType_SetNx
 }
 
-func (s *kvstore) makeSetNx(kv *kv, deadline time.Time, replyer *replyer, seqno int64, req *flyproto.SetNxReq) (cmdI, errcode.Error) {
+func (s *kvstore) makeSetNx(kv *kv, deadline time.Time, replyer *replyer, req *flyproto.SetNxReq) (cmdI, errcode.Error) {
 	if len(req.GetFields()) == 0 {
 		return nil, errcode.New(errcode.Errcode_error, "setNx fields is empty")
 	}
@@ -50,7 +50,7 @@ func (s *kvstore) makeSetNx(kv *kv, deadline time.Time, replyer *replyer, seqno 
 		setNx.fields[v.GetName()] = v
 	}
 
-	setNx.cmdBase.init(setNx, kv, replyer, seqno, deadline, func(err errcode.Error, fields map[string]*flyproto.Field, _ int64) *cs.RespMessage {
+	setNx.cmdBase.init(setNx, kv, replyer, deadline, func(err errcode.Error, fields map[string]*flyproto.Field, _ int64) *cs.RespMessage {
 		pbdata := &flyproto.SetNxResp{}
 
 		if nil != err && err == Err_record_exist {
@@ -67,9 +67,8 @@ func (s *kvstore) makeSetNx(kv *kv, deadline time.Time, replyer *replyer, seqno 
 		}
 
 		return &cs.RespMessage{
-			Seqno: seqno,
-			Err:   err,
-			Data:  pbdata}
+			Err:  err,
+			Data: pbdata}
 	})
 
 	return setNx, nil

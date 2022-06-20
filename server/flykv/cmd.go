@@ -21,8 +21,6 @@ type MakeResponse func(errcode.Error, map[string]*flyproto.Field, int64) *cs.Res
 
 type cmdBase struct {
 	listElement    list.Element
-	seqno          int64
-	version        *int64
 	replyer        *replyer
 	deadline       time.Time
 	replied        int32
@@ -31,10 +29,9 @@ type cmdBase struct {
 	meta           db.TableMeta
 }
 
-func (this *cmdBase) init(cmd interface{}, kv *kv, replyer *replyer, seqno int64, deadline time.Time, makeResponse MakeResponse) {
+func (this *cmdBase) init(cmd interface{}, kv *kv, replyer *replyer, deadline time.Time, makeResponse MakeResponse) {
 	this.replyer = replyer
 	this.deadline = deadline
-	this.seqno = seqno
 	this.fnMakeResponse = makeResponse
 	this.kv = kv
 	this.meta = kv.meta

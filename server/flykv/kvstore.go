@@ -186,7 +186,7 @@ func (s *kvstore) newkv(slot int, unikey string, key string, table string) (*kv,
 
 func (s *kvstore) kick(kv *kv) {
 	kick := &cmdKick{}
-	kick.cmdBase.init(kick, kv, nil, 0, time.Time{}, nil)
+	kick.cmdBase.init(kick, kv, nil, time.Time{}, nil)
 	kv.pushCmd(kick)
 }
 
@@ -196,21 +196,21 @@ func (s *kvstore) makeCmd(keyvalue *kv, req clientRequest) (cmdI, errcode.Error)
 	deadline := time.Now().Add(time.Duration(req.msg.Timeout) * time.Millisecond)
 	switch cmd {
 	case flyproto.CmdType_Get:
-		return s.makeGet(keyvalue, deadline, req.replyer, req.msg.Seqno, data.(*flyproto.GetReq))
+		return s.makeGet(keyvalue, deadline, req.replyer, data.(*flyproto.GetReq))
 	case flyproto.CmdType_Set:
-		return s.makeSet(keyvalue, deadline, req.replyer, req.msg.Seqno, data.(*flyproto.SetReq))
+		return s.makeSet(keyvalue, deadline, req.replyer, data.(*flyproto.SetReq))
 	case flyproto.CmdType_SetNx:
-		return s.makeSetNx(keyvalue, deadline, req.replyer, req.msg.Seqno, data.(*flyproto.SetNxReq))
+		return s.makeSetNx(keyvalue, deadline, req.replyer, data.(*flyproto.SetNxReq))
 	case flyproto.CmdType_Del:
-		return s.makeDel(keyvalue, deadline, req.replyer, req.msg.Seqno, data.(*flyproto.DelReq))
+		return s.makeDel(keyvalue, deadline, req.replyer, data.(*flyproto.DelReq))
 	case flyproto.CmdType_CompareAndSet:
-		return s.makeCompareAndSet(keyvalue, deadline, req.replyer, req.msg.Seqno, data.(*flyproto.CompareAndSetReq))
+		return s.makeCompareAndSet(keyvalue, deadline, req.replyer, data.(*flyproto.CompareAndSetReq))
 	case flyproto.CmdType_CompareAndSetNx:
-		return s.makeCompareAndSetNx(keyvalue, deadline, req.replyer, req.msg.Seqno, data.(*flyproto.CompareAndSetNxReq))
+		return s.makeCompareAndSetNx(keyvalue, deadline, req.replyer, data.(*flyproto.CompareAndSetNxReq))
 	case flyproto.CmdType_IncrBy:
-		return s.makeIncr(keyvalue, deadline, req.replyer, req.msg.Seqno, data.(*flyproto.IncrByReq))
+		return s.makeIncr(keyvalue, deadline, req.replyer, data.(*flyproto.IncrByReq))
 	case flyproto.CmdType_Kick:
-		return s.makeKick(keyvalue, deadline, req.replyer, req.msg.Seqno, data.(*flyproto.KickReq))
+		return s.makeKick(keyvalue, deadline, req.replyer, data.(*flyproto.KickReq))
 	default:
 	}
 	return nil, errcode.New(errcode.Errcode_error, "invaild cmd type")
@@ -224,8 +224,7 @@ func (s *kvstore) processClientMessage(req clientRequest) {
 	}
 
 	resp := &cs.RespMessage{
-		Cmd:   req.msg.Cmd,
-		Seqno: req.msg.Seqno,
+		Cmd: req.msg.Cmd,
 	}
 
 	var (
