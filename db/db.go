@@ -36,6 +36,9 @@ func init() {
 	for c := byte('0'); c <= byte('9'); c++ {
 		vaildChar[int(c)] = true
 	}
+
+	vaildChar[int(byte('_'))] = true
+
 }
 
 func ContainsInvaildCharacter(s string) bool {
