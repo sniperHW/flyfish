@@ -71,17 +71,6 @@ func unpack(from *net.UDPAddr, key []byte, b []byte) (msg interface{}, err error
 		return
 	}
 
-	//如果发送端没有指定ip地址，地址为[::]所以，不能与from直接比较，只能比较端口
-	lIdx1 := strings.LastIndex(udpmsg.Addr, ":")
-	fromAddr := from.String()
-	lIdx2 := strings.LastIndex(fromAddr, ":")
-
-	if udpmsg.Addr[lIdx1+1:] != fromAddr[lIdx2+1:] {
-		fmt.Println(udpmsg.Addr[lIdx1+1:], fromAddr[lIdx2+1:])
-		err = errors.New("invaild packet2")
-		return
-	}
-
 	var pbmsg proto.Message
 
 	if pbmsg, err = pb.GetNamespace("sproto").Unmarshal(uint32(udpmsg.Cmd), udpmsg.Data); nil == err {
@@ -101,7 +90,6 @@ func pack(conn *net.UDPConn, key []byte, m interface{}) ([]byte, error) {
 	msg := &sproto.UdpMsg{}
 	if _, ok := m.(*Message); ok {
 		msg.Context = m.(*Message).Context
-		msg.Addr = conn.LocalAddr().String()
 	} else {
 		return nil, errors.New("invaild msg type")
 	}

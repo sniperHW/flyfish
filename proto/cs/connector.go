@@ -2,7 +2,7 @@ package cs
 
 import (
 	"fmt"
-	Crypto "github.com/sniperHW/flyfish/pkg/crypto"
+	//Crypto "github.com/sniperHW/flyfish/pkg/crypto"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
 	protocol "github.com/sniperHW/flyfish/proto"
 	"net"
@@ -10,11 +10,11 @@ import (
 )
 
 func SendLoginReq(conn net.Conn, loginReq *protocol.LoginReq, deadline time.Time) error {
-	if key, err := Crypto.AESCBCEncrypt(cipherbyte, []byte(conn.LocalAddr().String())); nil != err {
+	/*if key, err := Crypto.AESCBCEncrypt(cipherbyte, []byte(conn.LocalAddr().String())); nil != err {
 		return err
 	} else {
 		loginReq.Key = key
-	}
+	}*/
 	return Send(conn, loginReq, deadline, true)
 }
 

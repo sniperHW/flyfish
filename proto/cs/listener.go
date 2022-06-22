@@ -2,7 +2,7 @@ package cs
 
 import (
 	"github.com/sniperHW/flyfish/logger"
-	Crypto "github.com/sniperHW/flyfish/pkg/crypto"
+	//Crypto "github.com/sniperHW/flyfish/pkg/crypto"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
 	protocol "github.com/sniperHW/flyfish/proto"
 	"net"
@@ -77,7 +77,7 @@ func (this *Listener) Serve(onNewClient func(*flynet.Socket), onScanner ...func(
 							return
 						}
 
-						key, err := Crypto.AESCBCDecrypter(cipherbyte, loginReq.Key)
+						/*key, err := Crypto.AESCBCDecrypter(cipherbyte, loginReq.Key)
 
 						if nil != err {
 							logger.GetSugar().Errorf("AESCBCDecrypter error:%v", err)
@@ -87,7 +87,7 @@ func (this *Listener) Serve(onNewClient func(*flynet.Socket), onScanner ...func(
 							logger.GetSugar().Errorf("invaild client Key(%s):RemoteAddr(%s)", key, conn.RemoteAddr().String())
 							conn.Close()
 							return
-						}
+						}*/
 
 						loginResp := &protocol.LoginResp{}
 						if loginReq.Scanner && onscanner == nil {
