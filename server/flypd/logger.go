@@ -1,6 +1,7 @@
 package flypd
 
 import (
+	"github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	"go.uber.org/zap"
@@ -11,12 +12,13 @@ var initOnce sync.Once
 var zapLogger *zap.Logger
 var sugaredLogger *zap.SugaredLogger
 
-func InitLogger(logger *zap.Logger) {
+func InitLogger(l *zap.Logger) {
 	initOnce.Do(func() {
-		zapLogger = logger
+		zapLogger = l
 		sugaredLogger = zapLogger.Sugar()
-		raft.InitLogger(logger)
-		net.InitLogger(logger)
+		raft.InitLogger(l)
+		net.InitLogger(l)
+		logger.InitLogger(l)
 	})
 }
 

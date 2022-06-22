@@ -2,6 +2,7 @@ package flykv
 
 import (
 	"github.com/sniperHW/flyfish/db/sql"
+	"github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	"go.uber.org/zap"
@@ -12,13 +13,14 @@ var initOnce sync.Once
 var zapLogger *zap.Logger
 var sugaredLogger *zap.SugaredLogger
 
-func InitLogger(logger *zap.Logger) {
+func InitLogger(l *zap.Logger) {
 	initOnce.Do(func() {
-		zapLogger = logger
+		zapLogger = l
 		sugaredLogger = zapLogger.Sugar()
-		net.InitLogger(logger)
-		raft.InitLogger(logger)
-		sql.InitLogger(logger)
+		net.InitLogger(l)
+		raft.InitLogger(l)
+		sql.InitLogger(l)
+		logger.InitLogger(l)
 	})
 }
 
