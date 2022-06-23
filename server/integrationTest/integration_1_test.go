@@ -741,26 +741,16 @@ func TestAddRemoveNode1(t *testing.T) {
 	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
 
 	for {
-		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.AddNode{
+		resp, _ := snet.UdpCall([]*net.UDPAddr{addr},
+			&sproto.AddNode{
 				SetID:       1,
 				NodeID:      3,
 				Host:        "localhost",
 				ServicePort: 9320,
 				RaftPort:    9321,
-			}),
-			time.Second,
-			func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.AddNodeResp); ok {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			})
-
+			},
+			&sproto.AddNodeResp{},
+			time.Second)
 		if resp != nil && resp.(*sproto.AddNodeResp).Ok {
 			break
 		}
@@ -787,23 +777,13 @@ func TestAddRemoveNode1(t *testing.T) {
 	logger.GetSugar().Infof("remove node")
 
 	for {
-		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.RemNode{
+		resp, _ := snet.UdpCall([]*net.UDPAddr{addr},
+			&sproto.RemNode{
 				SetID:  1,
 				NodeID: 3,
-			}),
-			time.Second,
-			func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.RemNodeResp); ok {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			})
-
+			},
+			&sproto.RemNodeResp{},
+			time.Second)
 		if resp != nil {
 			if resp.(*sproto.RemNodeResp).Reason == "node not found" {
 				break
@@ -861,25 +841,16 @@ func TestAddRemoveNode2(t *testing.T) {
 	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
 
 	for {
-		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.AddNode{
+		resp, _ := snet.UdpCall([]*net.UDPAddr{addr},
+			&sproto.AddNode{
 				SetID:       1,
 				NodeID:      3,
 				Host:        "localhost",
 				ServicePort: 9320,
 				RaftPort:    9321,
-			}),
-			time.Second,
-			func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.AddNodeResp); ok {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			})
+			},
+			&sproto.AddNodeResp{},
+			time.Second)
 
 		if resp != nil && resp.(*sproto.AddNodeResp).Ok {
 			break
@@ -937,23 +908,13 @@ func TestAddRemoveNode2(t *testing.T) {
 	logger.GetSugar().Infof("remove node")
 
 	for {
-		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.RemNode{
+		resp, _ := snet.UdpCall([]*net.UDPAddr{addr},
+			&sproto.RemNode{
 				SetID:  1,
 				NodeID: 3,
-			}),
-			time.Second,
-			func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.RemNodeResp); ok {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			})
-
+			},
+			&sproto.RemNodeResp{},
+			time.Second)
 		if resp != nil {
 			if resp.(*sproto.RemNodeResp).Reason == "node not found" {
 				break
@@ -1005,8 +966,8 @@ func TestAddSet(t *testing.T) {
 	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
 
 	for {
-		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.AddSet{
+		resp, _ := snet.UdpCall([]*net.UDPAddr{addr},
+			&sproto.AddSet{
 				&sproto.DeploymentSet{
 					SetID: 3,
 					Nodes: []*sproto.DeploymentKvnode{
@@ -1018,19 +979,9 @@ func TestAddSet(t *testing.T) {
 						},
 					},
 				},
-			}),
-			time.Second,
-			func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.AddSetResp); ok {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			})
-
+			},
+			&sproto.AddSetResp{},
+			time.Second)
 		if resp != nil && resp.(*sproto.AddSetResp).Reason == "set already exists" {
 			break
 		}
@@ -1057,19 +1008,10 @@ func TestAddSet(t *testing.T) {
 
 	//等待
 	for {
-		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.GetKvStatus{}),
-			time.Second,
-			func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.GetKvStatusResp); ok {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			})
+		resp, _ := snet.UdpCall([]*net.UDPAddr{addr},
+			&sproto.GetKvStatus{},
+			&sproto.GetKvStatusResp{},
+			time.Second)
 
 		if resp != nil {
 			slotPerStore := sslot.SlotCount / 3
@@ -1091,21 +1033,12 @@ func TestAddSet(t *testing.T) {
 	}
 
 	for {
-		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.SetMarkClear{
+		resp, _ := snet.UdpCall([]*net.UDPAddr{addr},
+			&sproto.SetMarkClear{
 				SetID: 3,
-			}),
-			time.Second,
-			func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.SetMarkClearResp); ok {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			})
+			},
+			&sproto.SetMarkClearResp{},
+			time.Second)
 
 		if resp != nil {
 			if resp.(*sproto.SetMarkClearResp).Reason == "already mark clear" {
@@ -1119,19 +1052,10 @@ func TestAddSet(t *testing.T) {
 
 	//等待
 	for {
-		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.GetKvStatus{}),
-			time.Second,
-			func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.GetKvStatusResp); ok {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			})
+		resp, _ := snet.UdpCall([]*net.UDPAddr{addr},
+			&sproto.GetKvStatus{},
+			&sproto.GetKvStatusResp{},
+			time.Second)
 
 		if resp != nil {
 			var set1 *sproto.SetStatus
@@ -1159,21 +1083,12 @@ func TestAddSet(t *testing.T) {
 	}
 
 	for {
-		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.RemSet{
+		resp, _ := snet.UdpCall([]*net.UDPAddr{addr},
+			&sproto.RemSet{
 				SetID: 3,
-			}),
-			time.Second,
-			func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.RemSetResp); ok {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			})
+			},
+			&sproto.RemSetResp{},
+			time.Second)
 
 		if resp != nil && resp.(*sproto.RemSetResp).Reason == "set not exists" {
 			break
@@ -1234,8 +1149,8 @@ func TestAddSet2(t *testing.T) {
 	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
 
 	for {
-		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.AddSet{
+		resp, _ := snet.UdpCall([]*net.UDPAddr{addr},
+			&sproto.AddSet{
 				&sproto.DeploymentSet{
 					SetID: 2,
 					Nodes: []*sproto.DeploymentKvnode{
@@ -1247,18 +1162,9 @@ func TestAddSet2(t *testing.T) {
 						},
 					},
 				},
-			}),
-			time.Second,
-			func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.AddSetResp); ok {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			})
+			},
+			&sproto.AddSetResp{},
+			time.Second)
 
 		if resp != nil && resp.(*sproto.AddSetResp).Reason == "set already exists" {
 			break
@@ -1331,19 +1237,10 @@ func TestAddSet2(t *testing.T) {
 
 	//等待slot平衡
 	for {
-		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.GetKvStatus{}),
-			time.Second,
-			func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.GetKvStatusResp); ok {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			})
+		resp, _ := snet.UdpCall([]*net.UDPAddr{addr},
+			&sproto.GetKvStatus{},
+			&sproto.GetKvStatusResp{},
+			time.Second)
 
 		if resp != nil {
 			slotPerStore := sslot.SlotCount / 2
@@ -1391,21 +1288,12 @@ func TestAddSet2(t *testing.T) {
 	}()
 
 	for {
-		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.SetMarkClear{
+		resp, _ := snet.UdpCall([]*net.UDPAddr{addr},
+			&sproto.SetMarkClear{
 				SetID: 2,
-			}),
-			time.Second,
-			func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.SetMarkClearResp); ok {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			})
+			},
+			&sproto.SetMarkClearResp{},
+			time.Second)
 
 		if resp != nil && resp.(*sproto.SetMarkClearResp).Reason == "already mark clear" {
 			break
@@ -1416,21 +1304,12 @@ func TestAddSet2(t *testing.T) {
 	fmt.Println("-------------rem set---------------------------")
 
 	for {
-		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.RemSet{
+		resp, _ := snet.UdpCall([]*net.UDPAddr{addr},
+			&sproto.RemSet{
 				SetID: 2,
-			}),
-			time.Second,
-			func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.RemSetResp); ok {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			})
+			},
+			&sproto.RemSetResp{},
+			time.Second)
 
 		if resp != nil && resp.(*sproto.RemSetResp).Reason == "set not exists" {
 			atomic.StoreInt32(&storeBalanced, 1)
@@ -1532,25 +1411,16 @@ func TestStoreBalance(t *testing.T) {
 	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
 
 	for {
-		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.AddNode{
+		resp, _ := snet.UdpCall([]*net.UDPAddr{addr},
+			&sproto.AddNode{
 				SetID:       1,
 				NodeID:      2,
 				Host:        "localhost",
 				ServicePort: 9220,
 				RaftPort:    9221,
-			}),
-			time.Second,
-			func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.AddNodeResp); ok {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			})
+			},
+			&sproto.AddNodeResp{},
+			time.Second)
 
 		if resp != nil && resp.(*sproto.AddNodeResp).Ok {
 			break
@@ -1566,25 +1436,16 @@ func TestStoreBalance(t *testing.T) {
 
 	//增加node3
 	for {
-		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.AddNode{
+		resp, _ := snet.UdpCall([]*net.UDPAddr{addr},
+			&sproto.AddNode{
 				SetID:       1,
 				NodeID:      3,
 				Host:        "localhost",
 				ServicePort: 9320,
 				RaftPort:    9321,
-			}),
-			time.Second,
-			func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.AddNodeResp); ok {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			})
+			},
+			&sproto.AddNodeResp{},
+			time.Second)
 
 		if resp != nil && resp.(*sproto.AddNodeResp).Ok {
 			break
@@ -1681,25 +1542,16 @@ func TestSuspendResume(t *testing.T) {
 	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
 
 	for {
-		resp := snet.UdpCall([]*net.UDPAddr{addr},
-			snet.MakeMessage(0, &sproto.AddNode{
+		resp, _ := snet.UdpCall([]*net.UDPAddr{addr},
+			&sproto.AddNode{
 				SetID:       1,
 				NodeID:      2,
 				Host:        "localhost",
 				ServicePort: 9220,
 				RaftPort:    9221,
-			}),
-			time.Second,
-			func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.AddNodeResp); ok {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			})
+			},
+			&sproto.AddNodeResp{},
+			time.Second)
 
 		if resp != nil && resp.(*sproto.AddNodeResp).Ok {
 			break

@@ -232,18 +232,7 @@ func (p *pd) processNodeNotify() {
 						}
 
 						go func(setID int, store *NodeStoreState) {
-							context := snet.MakeUniqueContext()
-							resp := snet.UdpCall(remotes, snet.MakeMessage(context, msg), time.Second*3, func(respCh chan interface{}, r interface{}) {
-								if m, ok := r.(*snet.Message); ok && context == m.Context {
-									if resp, ok := m.Msg.(*sproto.NodeStoreOpOk); ok {
-										select {
-										case respCh <- resp:
-										default:
-										}
-									}
-								}
-							})
-
+							resp, _ := snet.UdpCall(remotes, msg, &sproto.NodeStoreOpOk{}, time.Second*3)
 							if nil != resp {
 								p.issueProposal(&ProposalFlyKvCommited{
 									Set:       setID,

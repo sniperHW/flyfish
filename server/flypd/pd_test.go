@@ -174,10 +174,8 @@ func TestAddRemoveTable(t *testing.T) {
 		})
 
 		for {
-			if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, time.Second); nil != resp {
-				if resp.(*sproto.MetaAddTableResp).Ok {
-					break
-				}
+			if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, &sproto.MetaAddTableResp{}, time.Second); nil != resp {
+				break
 			}
 			time.Sleep(time.Second)
 		}
@@ -191,7 +189,7 @@ func TestAddRemoveTable(t *testing.T) {
 		}
 
 		for {
-			if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, time.Second); nil != resp {
+			if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, &sproto.MetaRemoveTableResp{}, time.Second); nil != resp {
 				if resp.(*sproto.MetaRemoveTableResp).Ok {
 					break
 				}
@@ -214,7 +212,7 @@ func TestAddRemoveTable(t *testing.T) {
 		})
 
 		for {
-			if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, time.Second); nil != resp {
+			if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, &sproto.MetaAddTableResp{}, time.Second); nil != resp {
 				if resp.(*sproto.MetaAddTableResp).Ok {
 					break
 				}
@@ -261,7 +259,7 @@ func TestAddRemoveFields(t *testing.T) {
 		})
 
 		for {
-			if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, time.Second); nil != resp {
+			if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, &sproto.MetaAddFieldsResp{}, time.Second); nil != resp {
 				if resp.(*sproto.MetaAddFieldsResp).Ok {
 					break
 				}
@@ -279,7 +277,7 @@ func TestAddRemoveFields(t *testing.T) {
 		}
 
 		for {
-			if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, time.Second); nil != resp {
+			if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, &sproto.MetaRemoveFieldsResp{}, time.Second); nil != resp {
 				if resp.(*sproto.MetaRemoveFieldsResp).Ok {
 					break
 				}
@@ -301,7 +299,7 @@ func TestAddRemoveFields(t *testing.T) {
 		})
 
 		for {
-			if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, time.Second); nil != resp {
+			if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, &sproto.MetaAddFieldsResp{}, time.Second); nil != resp {
 				if resp.(*sproto.MetaAddFieldsResp).Ok {
 					break
 				} else {
@@ -348,7 +346,7 @@ func TestAddRemovePd(t *testing.T) {
 		}
 
 		for {
-			if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, time.Second); nil != resp {
+			if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, &sproto.AddPdNodeResp{}, time.Second); nil != resp {
 				if resp.(*sproto.AddPdNodeResp).Ok {
 					ret := resp.(*sproto.AddPdNodeResp)
 					raftID2 = ret.RaftID
@@ -364,7 +362,7 @@ func TestAddRemovePd(t *testing.T) {
 	pd2, _ := NewPd(2, cluster, true, conf, raftCluster)
 
 	for {
-		if resp, err := consoleUdp.Call([]string{"localhost:8110", "localhost:8111"}, &sproto.ListPdMembers{}, time.Second); nil != resp {
+		if resp, err := consoleUdp.Call([]string{"localhost:8110", "localhost:8111"}, &sproto.ListPdMembers{}, &sproto.ListPdMembersResp{}, time.Second); nil != resp {
 			assert.Equal(t, 2, len(resp.(*sproto.ListPdMembersResp).Members))
 			GetSugar().Infof("%v", resp.(*sproto.ListPdMembersResp).Members)
 			break
@@ -378,7 +376,7 @@ func TestAddRemovePd(t *testing.T) {
 		if resp, err := consoleUdp.Call([]string{"localhost:8110", "localhost:8111"}, &sproto.RemovePdNode{
 			Id:     2,
 			RaftID: raftID2,
-		}, time.Second); nil != resp && resp.(*sproto.RemovePdNodeResp).Reason == "membership: ID not found" {
+		}, &sproto.RemovePdNodeResp{}, time.Second); nil != resp && resp.(*sproto.RemovePdNodeResp).Reason == "membership: ID not found" {
 			break
 		} else {
 			GetSugar().Errorf("RemovePdNode err:%v %v", err, resp)
@@ -393,7 +391,7 @@ func TestAddRemovePd(t *testing.T) {
 	pd1, _ = NewPd(1, 1, false, conf, fmt.Sprintf("1@%d@http://localhost:18110@localhost:8110@", raftID))
 
 	for {
-		if resp, err := consoleUdp.Call([]string{"localhost:8110", "localhost:8111"}, &sproto.ListPdMembers{}, time.Second); nil != resp {
+		if resp, err := consoleUdp.Call([]string{"localhost:8110", "localhost:8111"}, &sproto.ListPdMembers{}, &sproto.ListPdMembersResp{}, time.Second); nil != resp {
 			assert.Equal(t, 1, len(resp.(*sproto.ListPdMembersResp).Members))
 			GetSugar().Infof("%v", resp.(*sproto.ListPdMembersResp).Members)
 			break
@@ -423,7 +421,7 @@ func TestAddRemNode(t *testing.T) {
 			RaftPort:    9201,
 		}
 
-		if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, time.Second); nil != resp {
+		if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, &sproto.AddNodeResp{}, time.Second); nil != resp {
 			if resp.(*sproto.AddNodeResp).Ok {
 				break
 			} else {
@@ -492,7 +490,7 @@ func TestAddRemNode(t *testing.T) {
 			NodeID: 2,
 		}
 
-		if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, time.Second); nil != resp {
+		if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, &sproto.RemNodeResp{}, time.Second); nil != resp {
 			if resp.(*sproto.RemNodeResp).Ok {
 				break
 			} else if resp.(*sproto.RemNodeResp).Reason == "node not found" {
@@ -571,7 +569,7 @@ func TestAddRemSet(t *testing.T) {
 			},
 		}
 
-		if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, time.Second); nil != resp {
+		if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, &sproto.AddSetResp{}, time.Second); nil != resp {
 			if resp.(*sproto.AddSetResp).Ok {
 				break
 			} else if resp.(*sproto.AddSetResp).Reason == "set already exists" {
@@ -629,7 +627,7 @@ func TestAddRemSet(t *testing.T) {
 			SetID: 2,
 		}
 
-		if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, time.Second); nil != resp {
+		if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, &sproto.RemSetResp{}, time.Second); nil != resp {
 			if resp.(*sproto.RemSetResp).Ok {
 				break
 			} else if resp.(*sproto.RemSetResp).Reason == "set not exists" {
@@ -709,7 +707,7 @@ func TestSlotBlance(t *testing.T) {
 			},
 		}
 
-		if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, time.Second); nil != resp {
+		if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, &sproto.AddSetResp{}, time.Second); nil != resp {
 			if resp.(*sproto.AddSetResp).Ok {
 				break
 			} else if resp.(*sproto.AddSetResp).Reason == "set already exists" {
@@ -767,7 +765,7 @@ func TestSlotBlance(t *testing.T) {
 			SetID: 2,
 		}
 
-		if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, time.Second); nil != resp {
+		if resp, _ := consoleUdp.Call([]string{"localhost:8110"}, req, &sproto.SetMarkClearResp{}, time.Second); nil != resp {
 			if resp.(*sproto.SetMarkClearResp).Ok {
 				break
 			} else if resp.(*sproto.SetMarkClearResp).Reason == "already mark clear" {

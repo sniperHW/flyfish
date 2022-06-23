@@ -225,20 +225,10 @@ type flykvClusterServiceMgr struct {
 }
 
 func QueryGate(pd []*net.UDPAddr, timeout time.Duration) (ret []*sproto.Flygate) {
-	context := snet.MakeUniqueContext()
-	if resp := snet.UdpCall(pd, snet.MakeMessage(context, &sproto.GetFlyGateList{}), timeout, func(respCh chan interface{}, r interface{}) {
-		if m, ok := r.(*snet.Message); ok {
-			if resp, ok := m.Msg.(*sproto.GetFlyGateListResp); ok && context == m.Context {
-				select {
-				case respCh <- resp.List:
-				default:
-				}
-			}
-		}
-	}); nil != resp {
-		ret = resp.([]*sproto.Flygate)
+	if resp, _ := snet.UdpCall(pd, &sproto.GetFlyGateList{}, &sproto.GetFlyGateListResp{}, timeout); nil != resp {
+		ret = resp.(*sproto.GetFlyGateListResp).List
 	}
-	return
+	return ret
 }
 
 func (this *flykvClusterServiceMgr) onGates(c *Client, gates []*sproto.Flygate) {
@@ -353,19 +343,9 @@ func (this *flykvClusterServiceMgr) tryBalance(c *Client) {
 	if nil != current && int(current.MsgPerSecond)-msgSendPerSend > average {
 		go func() {
 			req := &sproto.ChangeFlyGate{CurrentGate: current.Service, MsgSendPerSecond: int32(msgSendPerSend)}
-			context := snet.MakeUniqueContext()
-			if resp := snet.UdpCall(this.pdAddr, snet.MakeMessage(context, req), time.Second, func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.ChangeFlyGateResp); ok && context == m.Context {
-						select {
-						case respCh <- resp:
-						default:
-						}
-					}
-				}
-			}); nil != resp {
-				if ret := resp.(*sproto.ChangeFlyGateResp); ret.Ok {
-					c.changeConnection(ret.Service)
+			if resp, _ := snet.UdpCall(this.pdAddr, req, &sproto.ChangeFlyGateResp{}, time.Second); nil != resp {
+				if resp.(*sproto.ChangeFlyGateResp).Ok {
+					c.changeConnection(resp.(*sproto.ChangeFlyGateResp).Service)
 				}
 			}
 		}()

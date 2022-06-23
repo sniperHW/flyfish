@@ -68,18 +68,8 @@ func (s *store) queryLeader() {
 		if len(nodes) > 0 {
 			go func() {
 				var leader int
-				context := snet.MakeUniqueContext()
-				if resp := snet.UdpCall(nodes, snet.MakeMessage(context, &sproto.QueryLeader{Store: int32(s.id)}), time.Second, func(respCh chan interface{}, r interface{}) {
-					if m, ok := r.(*snet.Message); ok {
-						if resp, ok := m.Msg.(*sproto.QueryLeaderResp); ok && context == m.Context && 0 != resp.Leader {
-							select {
-							case respCh <- int(resp.Leader):
-							default:
-							}
-						}
-					}
-				}); nil != resp {
-					leader = resp.(int)
+				if r, err := snet.UdpCall(nodes, &sproto.QueryLeader{Store: int32(s.id)}, &sproto.QueryLeaderResp{}, time.Second); nil == err {
+					leader = int(r.(*sproto.QueryLeaderResp).Leader)
 				}
 				s.gate.callInQueue(1, func() {
 					if !s.gate.checkStore(s) {

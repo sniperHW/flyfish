@@ -12,8 +12,8 @@ import (
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"net"
 	"reflect"
-	"strings"
-	"sync"
+	//"strings"
+	//"sync"
 	"time"
 )
 
@@ -139,7 +139,7 @@ func Pack(conn *net.UDPConn, m interface{}) ([]byte, error) {
 	return pack(conn, defaultKey, m)
 }
 
-func UdpCall(remotes interface{}, req *Message, timeout time.Duration, onResp func(chan interface{}, interface{})) (ret interface{}) {
+func UdpCall(remotes interface{}, req proto.Message, respType proto.Message, timeout time.Duration) (resp proto.Message, err error) {
 	var remoteAddrs []*net.UDPAddr
 	switch remotes.(type) {
 	case []string:
@@ -156,42 +156,42 @@ func UdpCall(remotes interface{}, req *Message, timeout time.Duration, onResp fu
 		panic("invaild remotes")
 	}
 
-	respCh := make(chan interface{})
-
-	var mu sync.Mutex
+	context := MakeUniqueContext()
+	msg := MakeMessage(context, req)
+	respCh := make(chan proto.Message, len(remoteAddrs))
 	uu := make([]*flynet.Udp, len(remoteAddrs))
-
-	for k, v := range remoteAddrs {
-		go func(i int, addr *net.UDPAddr) {
-			u, err := flynet.NewUdp(fmt.Sprintf(":0"), Pack, Unpack)
-			if nil == err {
-				u.SendTo(addr, req)
-				mu.Lock()
-				uu[i] = u
-				mu.Unlock()
-				_, r, err := u.ReadFrom(make([]byte, 65535))
-				if nil == err {
-					onResp(respCh, r)
+	for i, v := range remoteAddrs {
+		u, err := flynet.NewUdp(fmt.Sprintf(":0"), Pack, Unpack)
+		if nil == err {
+			uu[i] = u
+			addr := v
+			go func() {
+				u.SendTo(addr, msg)
+				if _, r, err := u.ReadFrom(make([]byte, 65535)); nil == err {
+					if m, ok := r.(*Message); ok && m.Context == context {
+						if reflect.TypeOf(m.Msg) == reflect.TypeOf(respType) {
+							respCh <- m.Msg
+						}
+					}
 				}
-			}
-		}(k, v)
+			}()
+		}
 	}
 
 	ticker := time.NewTicker(timeout)
 
 	select {
-	case ret = <-respCh:
+	case resp = <-respCh:
 	case <-ticker.C:
+		err = errors.New("timeout")
 	}
 	ticker.Stop()
 
-	mu.Lock()
 	for _, v := range uu {
 		if nil != v {
 			v.Close()
 		}
 	}
-	mu.Unlock()
 
 	return
 }

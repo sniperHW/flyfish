@@ -62,25 +62,13 @@ func (g *gate) onScanner(conn net.Conn) {
 				return scan.Err_empty_fields
 			}
 
-			var resp *sproto.GetScanTableMetaResp
-
 			//向pd获取table meta
+			var resp *sproto.GetScanTableMetaResp
 			for nil == resp && !time.Now().After(deadline) {
-				context := snet.MakeUniqueContext()
-				if r := snet.UdpCall(g.pdAddr, snet.MakeMessage(context, &sproto.GetScanTableMeta{Table: req.Table}), time.Second, func(respCh chan interface{}, r interface{}) {
-					if m, ok := r.(*snet.Message); ok {
-						if resp, ok := m.Msg.(*sproto.GetScanTableMetaResp); ok && context == m.Context {
-							select {
-							case respCh <- resp:
-							default:
-							}
-						}
-					}
-				}); nil != r {
+				if r, err := snet.UdpCall(g.pdAddr, &sproto.GetScanTableMeta{Table: req.Table}, &sproto.GetScanTableMetaResp{}, time.Second); nil == err {
 					resp = r.(*sproto.GetScanTableMetaResp)
 				}
 			}
-
 			if nil == resp {
 				return scan.Err_timeout
 			} else if resp.TabVersion == -1 {
@@ -163,18 +151,8 @@ func (st *storeScanner) next(sc *scanner, count int, deadline time.Time) (*flypr
 		}
 
 		for 0 == leader && deadline.After(time.Now()) {
-			context := snet.MakeUniqueContext()
-			if resp := snet.UdpCall(nodes, snet.MakeMessage(context, &sproto.QueryLeader{Store: int32(st.id)}), time.Second, func(respCh chan interface{}, r interface{}) {
-				if m, ok := r.(*snet.Message); ok {
-					if resp, ok := m.Msg.(*sproto.QueryLeaderResp); ok && context == m.Context && 0 != resp.Leader {
-						select {
-						case respCh <- int(resp.Leader):
-						default:
-						}
-					}
-				}
-			}); nil != resp {
-				leader = resp.(int)
+			if r, err := snet.UdpCall(nodes, &sproto.QueryLeader{Store: int32(st.id)}, &sproto.QueryLeaderResp{}, time.Second); nil == err {
+				leader = int(r.(*sproto.QueryLeaderResp).Leader)
 			}
 		}
 

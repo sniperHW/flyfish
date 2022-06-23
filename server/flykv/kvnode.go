@@ -322,21 +322,10 @@ func (this *kvnode) Stop() {
 
 func (this *kvnode) getKvnodeBootInfo(pd []*net.UDPAddr) (resp *sproto.KvnodeBootResp) {
 	for {
-		context := snet.MakeUniqueContext()
-		r := snet.UdpCall(pd, snet.MakeMessage(context, &sproto.KvnodeBoot{NodeID: int32(this.id)}), time.Second, func(respCh chan interface{}, r interface{}) {
-			if m, ok := r.(*snet.Message); ok {
-				if resp, ok := m.Msg.(*sproto.KvnodeBootResp); ok && context == m.Context {
-					select {
-					case respCh <- resp:
-					default:
-					}
-				}
-			}
-		})
-
+		r, _ := snet.UdpCall(pd, &sproto.KvnodeBoot{NodeID: int32(this.id)}, &sproto.KvnodeBootResp{}, time.Second)
 		if nil != r {
 			resp = r.(*sproto.KvnodeBootResp)
-			return
+			return resp
 		}
 	}
 }

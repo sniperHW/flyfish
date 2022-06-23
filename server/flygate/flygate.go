@@ -239,7 +239,7 @@ func (g *gate) refreshMsgPerSecond() {
 	}
 }
 
-var QueryRouteInfoDuration time.Duration = time.Millisecond * 200
+var QueryRouteInfoDuration time.Duration = time.Millisecond * 1000
 
 func doQueryRouteInfo(pdAddr []*net.UDPAddr, req *sproto.QueryRouteInfo) *sproto.QueryRouteInfoResp {
 	if len(pdAddr) == 0 {
@@ -247,17 +247,7 @@ func doQueryRouteInfo(pdAddr []*net.UDPAddr, req *sproto.QueryRouteInfo) *sproto
 		return nil
 	}
 
-	context := snet.MakeUniqueContext()
-	if resp := snet.UdpCall(pdAddr, snet.MakeMessage(context, req), time.Second, func(respCh chan interface{}, r interface{}) {
-		if m, ok := r.(*snet.Message); ok {
-			if resp, ok := m.Msg.(*sproto.QueryRouteInfoResp); ok && context == m.Context {
-				select {
-				case respCh <- resp:
-				default:
-				}
-			}
-		}
-	}); nil != resp {
+	if resp, err := snet.UdpCall(pdAddr, req, &sproto.QueryRouteInfoResp{}, time.Second); nil == err {
 		return resp.(*sproto.QueryRouteInfoResp)
 	} else {
 		return nil
