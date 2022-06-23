@@ -2,6 +2,7 @@ package net
 
 import (
 	"net"
+	"time"
 )
 
 type Udp struct {
@@ -30,6 +31,10 @@ func NewUdp(service string, pack func(*net.UDPConn, interface{}) ([]byte, error)
 		pack:    pack,
 		unpack:  unpack,
 	}, nil
+}
+
+func (u *Udp) SetReadDeadline(t time.Time) error {
+	return u.conn.SetReadDeadline(t)
 }
 
 func (u *Udp) SendTo(addr *net.UDPAddr, msg interface{}) error {

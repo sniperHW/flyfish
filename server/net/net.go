@@ -12,8 +12,7 @@ import (
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"net"
 	"reflect"
-	//"strings"
-	//"sync"
+	"sync"
 	"time"
 )
 
@@ -139,6 +138,39 @@ func Pack(conn *net.UDPConn, m interface{}) ([]byte, error) {
 	return pack(conn, defaultKey, m)
 }
 
+var udpPool *sync.Pool = &sync.Pool{
+	New: func() interface{} {
+		u, err := flynet.NewUdp(fmt.Sprintf(":0"), Pack, Unpack)
+		return []interface{}{u, err}
+	},
+}
+
+func getUdp() (*flynet.Udp, error) {
+	v := udpPool.Get()
+	switch v.(type) {
+	case *flynet.Udp:
+		return v.(*flynet.Udp), nil
+	case []interface{}:
+		if v.([]interface{})[0] != nil {
+			return v.([]interface{})[0].(*flynet.Udp), nil
+		} else {
+			return nil, v.([]interface{})[1].(error)
+		}
+	}
+	return nil, errors.New("unknown error")
+}
+
+func isNetTimeout(err error) bool {
+	switch err.(type) {
+	case net.Error:
+		if err.(net.Error).Timeout() {
+			return true
+		}
+	default:
+	}
+	return false
+}
+
 func UdpCall(remotes interface{}, req proto.Message, respType proto.Message, timeout time.Duration) (resp proto.Message, err error) {
 	var remoteAddrs []*net.UDPAddr
 	switch remotes.(type) {
@@ -156,44 +188,37 @@ func UdpCall(remotes interface{}, req proto.Message, respType proto.Message, tim
 		panic("invaild remotes")
 	}
 
-	context := MakeUniqueContext()
-	msg := MakeMessage(context, req)
-	respCh := make(chan proto.Message, len(remoteAddrs))
-	uu := make([]*flynet.Udp, len(remoteAddrs))
-	for i, v := range remoteAddrs {
-		u, err := flynet.NewUdp(fmt.Sprintf(":0"), Pack, Unpack)
-		if nil == err {
-			uu[i] = u
-			addr := v
-			go func() {
-				u.SendTo(addr, msg)
-				if _, r, err := u.ReadFrom(make([]byte, 65535)); nil == err {
-					if m, ok := r.(*Message); ok && m.Context == context {
-						if reflect.TypeOf(m.Msg) == reflect.TypeOf(respType) {
-							respCh <- m.Msg
-						}
-					}
+	udpConn, err := getUdp()
+	if nil != err {
+		return nil, err
+	}
+
+	contexts := map[int64]bool{}
+	for _, v := range remoteAddrs {
+		context := MakeUniqueContext()
+		contexts[context] = true
+		udpConn.SendTo(v, MakeMessage(context, req))
+	}
+
+	udpConn.SetReadDeadline(time.Now().Add(timeout))
+	for {
+		if _, r, err := udpConn.ReadFrom(make([]byte, 65535)); nil == err {
+			if m, ok := r.(*Message); ok && contexts[m.Context] {
+				if reflect.TypeOf(m.Msg) == reflect.TypeOf(respType) {
+					resp = m.Msg
+					udpPool.Put(udpConn)
+					return resp, nil
 				}
-			}()
+			}
+		} else {
+			if isNetTimeout(err) {
+				udpPool.Put(udpConn)
+			} else {
+				udpConn.Close()
+			}
+			return resp, err
 		}
 	}
-
-	ticker := time.NewTicker(timeout)
-
-	select {
-	case resp = <-respCh:
-	case <-ticker.C:
-		err = errors.New("timeout")
-	}
-	ticker.Stop()
-
-	for _, v := range uu {
-		if nil != v {
-			v.Close()
-		}
-	}
-
-	return
 }
 
 //只要分钟级不重复即可
