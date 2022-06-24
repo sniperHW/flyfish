@@ -201,8 +201,9 @@ func UdpCall(remotes interface{}, req proto.Message, respType proto.Message, tim
 	}
 
 	udpConn.SetReadDeadline(time.Now().Add(timeout))
+	recvbuff := make([]byte, 65535)
 	for {
-		if _, r, err := udpConn.ReadFrom(make([]byte, 65535)); nil == err {
+		if _, r, err := udpConn.ReadFrom(recvbuff); nil == err {
 			if m, ok := r.(*Message); ok && contexts[m.Context] {
 				if reflect.TypeOf(m.Msg) == reflect.TypeOf(respType) {
 					resp = m.Msg
