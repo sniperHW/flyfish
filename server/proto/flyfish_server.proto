@@ -92,8 +92,6 @@ enum ServerCmdType {
   //client <-> pd
   GetFlyGateList                = 410;
   GetFlyGateListResp            = 411;
-  ChangeFlyGate                 = 412;
-  ChangeFlyGateResp             = 413;
     
 
   //for test
@@ -293,17 +291,6 @@ message getFlyGateListResp {
 
 message flyGateHeartBeat {
   optional string gateService  = 1;
-  optional int32  msgPerSecond = 2;
-}
-
-message changeFlyGate {
-  optional string currentGate      = 1;
-  optional int32  msgSendPerSecond = 2;
-}
-
-message changeFlyGateResp {
-  optional bool ok        = 1;
-  optional string service = 2;
 }
 
 message metaFiled {

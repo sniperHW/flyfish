@@ -592,7 +592,7 @@ func (this *serverConn) onMessage(msg *cs.RespMessage) {
 		if ok {
 			if resend {
 				time.AfterFunc(resendDelay, func() {
-					this.c.exec(ctx)
+					this.c.reExec(ctx)
 				})
 			} else {
 				var ret interface{}

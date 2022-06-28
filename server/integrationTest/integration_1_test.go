@@ -23,6 +23,8 @@ import (
 	sslot "github.com/sniperHW/flyfish/server/slot"
 	"github.com/stretchr/testify/assert"
 	"net"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"strings"
 	"sync"
@@ -118,6 +120,11 @@ func init() {
 	flygate.InitLogger(l)
 	client.InitLogger(l)
 	logger.InitLogger(l)
+
+	go func() {
+		http.ListenAndServe("localhost:8999", nil)
+	}()
+
 }
 
 type StopAble interface {
@@ -153,15 +160,15 @@ func testkv(t *testing.T, c *client.Client) {
 
 		fields := map[string]interface{}{}
 		fields["age"] = 12
-		fields["name"] = strings.Repeat("a", 4096)
+		fields["phone"] = []byte(strings.Repeat("a", 1024*17))
 
-		assert.Nil(t, c.Set("users1", "sniperHWLargeName", fields).Exec().ErrCode)
+		assert.Nil(t, c.Set("users1", "sniperHWLargePhone", fields).Exec().ErrCode)
 
-		fmt.Println("Get sniperHWLargeName")
-		r := c.GetAll("users1", "sniperHWLargeName").Exec()
+		fmt.Println("Get sniperHWLargePhone")
+		r := c.GetAll("users1", "sniperHWLargePhone").Exec()
 		assert.Nil(t, r.ErrCode)
 
-		assert.Equal(t, r.Fields["name"].GetString(), fields["name"])
+		assert.Equal(t, string(r.Fields["phone"].GetBlob()), string(fields["phone"].([]byte)))
 	}
 
 	fmt.Println("-----------------------------1----------------------------------")
@@ -665,7 +672,8 @@ func TestFlygate(t *testing.T) {
 	atomic.StoreInt32(&stopClient, 1)
 
 	for atomic.LoadInt32(&pendingCount) > 0 {
-
+		time.Sleep(time.Second)
+		//logger.GetSugar().Infof("pendingCount:%d", atomic.LoadInt32(&pendingCount))
 	}
 
 	for _, v := range clientArray {

@@ -94,7 +94,6 @@ func (this *ProposalConfChange) OnError(err error) {
 
 type flygate struct {
 	service       string
-	msgPerSecond  int
 	deadlineTimer *time.Timer
 }
 
@@ -128,7 +127,7 @@ func isValidTcpService(service string, token string) bool {
 	return false
 }
 
-func (f *flygateMgr) onHeartBeat(p *pd, gateService string, msgPerSecond int) {
+func (f *flygateMgr) onHeartBeat(p *pd, gateService string) {
 	var g *flygate
 	var ok bool
 
@@ -159,7 +158,6 @@ func (f *flygateMgr) onHeartBeat(p *pd, gateService string, msgPerSecond int) {
 	})
 
 	g.deadlineTimer = deadlineTimer
-	g.msgPerSecond = msgPerSecond
 }
 
 type pd struct {

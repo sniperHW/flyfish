@@ -11,7 +11,6 @@ import (
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	"io/ioutil"
-	"math"
 	"net"
 	"net/http"
 	"reflect"
@@ -118,8 +117,7 @@ func (p *pd) onGetFlyGateList(replyer replyer, m *snet.Message) {
 	resp := &sproto.GetFlyGateListResp{}
 	for _, v := range p.flygateMgr.flygateMap {
 		resp.List = append(resp.List, &sproto.Flygate{
-			Service:      v.service,
-			MsgPerSecond: int32(v.msgPerSecond),
+			Service: v.service,
 		})
 	}
 
@@ -128,46 +126,7 @@ func (p *pd) onGetFlyGateList(replyer replyer, m *snet.Message) {
 
 func (p *pd) onFlyGateHeartBeat(replyer replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.FlyGateHeartBeat)
-	p.flygateMgr.onHeartBeat(p, msg.GateService, int(msg.MsgPerSecond))
-}
-
-func (p *pd) changeFlyGate(replyer replyer, m *snet.Message) {
-	msg := m.Msg.(*sproto.ChangeFlyGate)
-	currentGate := p.flygateMgr.flygateMap[msg.CurrentGate]
-
-	min := int(math.MaxInt32)
-	var minGate *flygate
-
-	average := 0
-
-	for _, v := range p.flygateMgr.flygateMap {
-		average += v.msgPerSecond
-		if v.msgPerSecond < min {
-			min = v.msgPerSecond
-			minGate = v
-		}
-
-	}
-
-	average = average / len(p.flygateMgr.flygateMap)
-
-	var target *flygate
-
-	msgSendPerSecond := int(msg.MsgSendPerSecond)
-
-	if nil != currentGate && currentGate.msgPerSecond-msgSendPerSecond > average {
-		if float64(minGate.msgPerSecond+msgSendPerSecond)/float64(average) < 1.05 {
-			target = minGate
-		}
-	}
-
-	if nil != target && target != currentGate {
-		target.msgPerSecond += msgSendPerSecond
-		currentGate.msgPerSecond -= msgSendPerSecond
-		replyer.reply(snet.MakeMessage(m.Context, &sproto.ChangeFlyGateResp{Ok: true, Service: target.service}))
-	} else {
-		replyer.reply(snet.MakeMessage(m.Context, &sproto.ChangeFlyGateResp{Ok: false}))
-	}
+	p.flygateMgr.onHeartBeat(p, msg.GateService)
 }
 
 func (p *pd) onGetKvStatus(replyer replyer, m *snet.Message) {
@@ -569,7 +528,6 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.QueryRouteInfo{}, "QueryRouteInfo", p.onQueryRouteInfo)
 	p.registerMsgHandler(&sproto.GetFlyGateList{}, "", p.onGetFlyGateList)
 	p.registerMsgHandler(&sproto.FlyGateHeartBeat{}, "", p.onFlyGateHeartBeat)
-	p.registerMsgHandler(&sproto.ChangeFlyGate{}, "", p.changeFlyGate)
 	p.registerMsgHandler(&sproto.KvnodeReportStatus{}, "", p.onKvnodeReportStatus)
 	p.registerMsgHandler(&sproto.GetScanTableMeta{}, "", p.onGetScanTableMeta)
 

@@ -7,7 +7,6 @@ import (
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/buffer"
-	"github.com/sniperHW/flyfish/pkg/movingAverage"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/pkg/queue"
 	flyproto "github.com/sniperHW/flyfish/proto"
@@ -98,8 +97,6 @@ type gate struct {
 	serviceAddr          string
 	seqCounter           int64
 	pdAddr               []*net.UDPAddr
-	msgPerSecond         *movingAverage.MovingAverage //每秒客户端转发请求量的移动平均值
-	msgRecv              int32
 	totalPendingReq      int64
 	SoftLimitReachedTime int64
 	version              int64
@@ -131,9 +128,8 @@ func NewFlyGate(config *Config, service string) (*gate, error) {
 		cache: cache{
 			l: list.New(),
 		},
-		serviceAddr:  service,
-		msgPerSecond: movingAverage.New(5),
-		closeCh:      make(chan struct{}),
+		serviceAddr: service,
+		closeCh:     make(chan struct{}),
 	}
 
 	pdService := strings.Split(config.PdService, ";")
@@ -149,8 +145,6 @@ func NewFlyGate(config *Config, service string) (*gate, error) {
 	}
 
 	err := g.start()
-
-	g.refreshMsgPerSecond()
 
 	return g, err
 }
@@ -228,15 +222,6 @@ func (g *gate) afterFunc(delay time.Duration, fn func()) *time.Timer {
 	return time.AfterFunc(delay, func() {
 		g.callInQueue(1, fn)
 	})
-}
-
-func (g *gate) refreshMsgPerSecond() {
-	if atomic.LoadInt32(&g.closed) == 0 {
-		msgRecv := atomic.LoadInt32(&g.msgRecv)
-		atomic.AddInt32(&g.msgRecv, -msgRecv)
-		g.msgPerSecond.Add(int(msgRecv))
-		time.AfterFunc(time.Second, g.refreshMsgPerSecond)
-	}
 }
 
 var QueryRouteInfoDuration time.Duration = time.Millisecond * 1000
@@ -481,8 +466,6 @@ func (g *gate) startListener() {
 				//服务关闭不再接受新新的请求
 				return
 			}
-
-			atomic.AddInt32(&g.msgRecv, 1)
 			msg := v.(*forwordMsg)
 			if replyer := g.makeReplyer(session, msg); nil != replyer {
 				msg.replyer = replyer
@@ -539,8 +522,7 @@ func (g *gate) start() error {
 
 		for {
 			msg := &sproto.FlyGateHeartBeat{
-				GateService:  g.serviceAddr,
-				MsgPerSecond: int32(g.msgPerSecond.GetAverage()),
+				GateService: g.serviceAddr,
 			}
 
 			for _, v := range g.pdAddr {
