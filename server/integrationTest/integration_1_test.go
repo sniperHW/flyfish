@@ -9,7 +9,7 @@ import (
 	"github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/db/sql"
-	"github.com/sniperHW/flyfish/errcode"
+	//"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/pkg/etcd/pkg/idutil"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
@@ -44,37 +44,34 @@ type dbconf struct {
 
 var flyKvConfigStr string = `
 
-Mode = "cluster"
+PD                        = "localhost:8110"
 
-SnapshotCurrentCount    = 0
+SnapshotCurrentCount      = 0
 
 SnapshotCount             = 100
 SnapshotCatchUpEntriesN   = 100
 
-MainQueueMaxSize        = 10000
+MainQueueMaxSize          = 10000
 
-MaxCachePerStore        = 100               #每组最大key数量，超过数量将会触发key剔除
+MaxCachePerStore          = 100               #每组最大key数量，超过数量将会触发key剔除
 
-SqlLoadPipeLineSize     = 200                  #sql加载管道线大小
+SqlLoadPipeLineSize       = 200                  #sql加载管道线大小
 
-SqlLoadQueueSize        = 10000                #sql加载请求队列大小，此队列每CacheGroup一个
+SqlLoadQueueSize          = 10000                #sql加载请求队列大小，此队列每CacheGroup一个
 
-SqlLoaderCount          = 5
-SqlUpdaterCount         = 5
+SqlLoaderCount            = 5
+SqlUpdaterCount           = 5
 
-ProposalFlushInterval   = 100
-ReadFlushInterval       = 10 
+ProposalFlushInterval     = 100
+ReadFlushInterval         = 10 
 
-RaftLogDir              = "testRaftLog/flykv"
+RaftLogDir                = "testRaftLog/flykv"
 
-RaftLogPrefix           = "flykv"
+RaftLogPrefix             = "flykv"
 
-LinearizableRead        = true
+LinearizableRead          = true
 
-#WriteBackMode           = "WriteThrough"
-
-[ClusterConfig]
-PD                      = "localhost:8110"
+#WriteBackMode          = "WriteThrough"
 
 [DBConfig]
 DBType        = "%s"
@@ -183,7 +180,7 @@ func testkv(t *testing.T, c *client.Client) {
 			})
 		}
 
-		c.GetAll("users1", "sniperHW").AsyncExec(func(r *client.SliceResult) {
+		c.GetAll("users1", "sniperHW").AsyncExec(func(r *client.GetResult) {
 			assert.Nil(t, r.ErrCode)
 		})
 
@@ -339,14 +336,14 @@ func testkv(t *testing.T, c *client.Client) {
 	{
 		r1 := c.IncrBy("users1", "sniperHW", "age", 2).Exec()
 		assert.Nil(t, r1.ErrCode)
-		assert.Equal(t, r1.Fields["age"].GetInt(), int64(13))
+		assert.Equal(t, r1.Value.GetInt(), int64(13))
 
 		r2 := c.Del("users1", "sniperHW").Exec()
 		assert.Nil(t, r2.ErrCode)
 
 		r1 = c.IncrBy("users1", "sniperHW", "age", 2).Exec()
 		assert.Nil(t, r1.ErrCode)
-		assert.Equal(t, r1.Fields["age"].GetInt(), int64(2))
+		assert.Equal(t, r1.Value.GetInt(), int64(2))
 
 		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
@@ -357,13 +354,13 @@ func testkv(t *testing.T, c *client.Client) {
 
 		r1 = c.IncrBy("users1", "sniperHW", "age", 2).Exec()
 		assert.Nil(t, r1.ErrCode)
-		assert.Equal(t, r1.Fields["age"].GetInt(), int64(2))
+		assert.Equal(t, r1.Value.GetInt(), int64(2))
 
 		assert.Nil(t, c.Kick("users1", "sniperHW").Exec().ErrCode)
 
 		r1 = c.IncrBy("users1", "sniperHW", "age", 2).Exec()
 		assert.Nil(t, r1.ErrCode)
-		assert.Equal(t, r1.Fields["age"].GetInt(), int64(4))
+		assert.Equal(t, r1.Value.GetInt(), int64(4))
 
 	}
 
@@ -453,11 +450,11 @@ func TestFlygate(t *testing.T) {
 	fmt.Println("run client")
 
 	c, _ := client.OpenClient(client.ClientConf{
-		ClientType: client.ClientType_FlyKv,
-		ClusterConf: &client.ClusterConf{
-			PD: []string{"localhost:8110"},
-		},
+		ClientType: client.ClientType_FlyGate,
+		PD:         []string{"localhost:8110"},
 	})
+
+	defer c.Close()
 
 	for i := 0; i < 100; i++ {
 		fields := map[string]interface{}{}
@@ -597,13 +594,18 @@ func TestFlygate(t *testing.T) {
 
 	node3.Stop()
 
+	logger.GetSugar().Infof("---------------------------run again----------------------------")
+
 	for i := 0; i < 100; i++ {
 		fields := map[string]interface{}{}
 		fields["age"] = 12
 		name := fmt.Sprintf("sniperHW:%d", i)
 		fields["name"] = name
 		fields["phone"] = []byte("123456789123456789123456789")
-		assert.Nil(t, c.Set("users1", name, fields).Exec().ErrCode)
+		//assert.Nil(t, c.Set("users1", name, fields).Exec().ErrCode)
+		if nil != c.Set("users1", name, fields).Exec().ErrCode {
+			panic("here")
+		}
 	}
 
 	gate1.Stop()
@@ -623,10 +625,8 @@ func TestFlygate(t *testing.T) {
 
 	for j := 0; j < 4; j++ {
 		cc, _ := client.OpenClient(client.ClientConf{
-			ClientType: client.ClientType_FlyKv,
-			ClusterConf: &client.ClusterConf{
-				PD: []string{"localhost:8110"},
-			},
+			ClientType: client.ClientType_FlyGate,
+			PD:         []string{"localhost:8110"},
 		})
 		clientArray = append(clientArray, cc)
 
@@ -713,6 +713,231 @@ func TestFlygate(t *testing.T) {
 	pd, _ = newPD(t, pdRaftID)
 
 	time.Sleep(time.Second * 2)
+
+	pd.Stop()
+
+}
+
+func TestFlykv(t *testing.T) {
+	sslot.SlotCount = 128
+	flypd.MinReplicaPerSet = 1
+	flypd.StorePerSet = 6
+
+	os.RemoveAll("./testRaftLog")
+
+	clearUsers1()
+
+	pd, _ := newPD(t, 0)
+
+	//启动kvnode
+	var err error
+
+	dbConf := &dbconf{}
+	if _, err = toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
+		panic(err)
+	}
+
+	kvConf, err := flykv.LoadConfigStr(fmt.Sprintf(flyKvConfigStr, dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.Usr, dbConf.Pwd, dbConf.Db))
+
+	if nil != err {
+		panic(err)
+	}
+
+	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	node2, err := flykv.NewKvNode(2, false, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	c, _ := client.OpenClient(client.ClientConf{
+		ClientType: client.ClientType_FlyKv,
+		PD:         []string{"localhost:8110"},
+	})
+
+	defer c.Close()
+
+	logger.GetSugar().Infof("----------------------run client1------------------")
+
+	for i := 0; i < 100; i++ {
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		name := fmt.Sprintf("sniperHW:%d", i)
+		fields["name"] = name
+		fields["phone"] = []byte("123456789123456789123456789")
+		assert.Nil(t, c.Set("users1", name, fields).Exec().ErrCode)
+
+	}
+
+	testkv(t, c)
+
+	consoleClient := console.NewClient("localhost:8110")
+
+	//添加kvnode3
+	resp, err := consoleClient.Call(&sproto.AddNode{
+		SetID:       1,
+		NodeID:      3,
+		Host:        "localhost",
+		ServicePort: 9320,
+		RaftPort:    9321,
+	}, &sproto.AddNodeResp{})
+
+	node3, err := flykv.NewKvNode(3, true, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	//获取路由信息
+	for {
+		time.Sleep(time.Second)
+		resp, err = consoleClient.Call(&sproto.QueryRouteInfo{}, &sproto.QueryRouteInfoResp{})
+		sets := resp.(*sproto.QueryRouteInfoResp).Sets
+		var set1 *sproto.RouteInfoSet
+		for _, v := range sets {
+			if v.SetID == 1 {
+				set1 = v
+			}
+		}
+
+		if nil != set1 && len(set1.Kvnodes) == 2 {
+			break
+		}
+	}
+
+	resp, err = consoleClient.Call(&sproto.GetKvStatus{}, &sproto.GetKvStatusResp{})
+	if nil == err {
+		assert.Equal(t, true, resp.(*sproto.GetKvStatusResp).Kvcount > 0)
+	} else {
+		fmt.Println(err)
+	}
+
+	//等待node3至少有一个leader
+	for {
+		resp, err = consoleClient.Call(&sproto.GetKvStatus{}, &sproto.GetKvStatusResp{})
+		if ok := func() bool {
+			leaderCount := 0
+			if nil == err {
+				for _, set := range resp.(*sproto.GetKvStatusResp).Sets {
+					if set.SetID == int32(1) {
+						for _, n := range set.Nodes {
+							if n.NodeID == int32(3) {
+								for _, s := range n.Stores {
+									if s.IsLeader {
+										leaderCount++
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			return leaderCount == 3
+		}(); ok {
+			break
+		} else {
+			time.Sleep(time.Second)
+		}
+	}
+
+	logger.GetSugar().Infof("----------------------run client2------------------")
+
+	for i := 0; i < 100; i++ {
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		name := fmt.Sprintf("sniperHW:%d", i)
+		fields["name"] = name
+		fields["phone"] = []byte("123456789123456789123456789")
+		assert.Nil(t, c.Set("users1", name, fields).Exec().ErrCode)
+	}
+
+	node1.Stop()
+
+	node2.Stop()
+
+	//start again
+	node1, err = flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	node2, err = flykv.NewKvNode(2, false, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	//删除kvnode3
+	resp, err = consoleClient.Call(&sproto.RemNode{
+		SetID:  1,
+		NodeID: 3,
+	}, &sproto.RemNodeResp{})
+
+	//等待node3被移除
+	for {
+		resp, err = consoleClient.Call(&sproto.GetKvStatus{}, &sproto.GetKvStatusResp{})
+		if nil == err {
+			find := false
+			for _, set := range resp.(*sproto.GetKvStatusResp).Sets {
+				if set.SetID == int32(1) {
+					for _, n := range set.Nodes {
+						if n.NodeID == int32(3) {
+							find = true
+							break
+						}
+					}
+				}
+			}
+
+			if !find {
+				break
+			}
+		}
+	}
+
+	node3.Stop()
+
+	logger.GetSugar().Infof("----------------------run client3------------------")
+
+	for i := 0; i < 100; i++ {
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		name := fmt.Sprintf("sniperHW:%d", i)
+		fields["name"] = name
+		fields["phone"] = []byte("123456789123456789123456789")
+		assert.Nil(t, c.Set("users1", name, fields).Exec().ErrCode)
+	}
+
+	for {
+		//排空所有kv
+		consoleClient.Call(&sproto.ClearCache{}, &sproto.ClearCacheResp{})
+
+		resp, err = consoleClient.Call(&sproto.GetKvStatus{}, &sproto.GetKvStatusResp{})
+		if nil == err {
+			if resp.(*sproto.GetKvStatusResp).Kvcount == 0 {
+				break
+			} else {
+				fmt.Printf("total kvcount:%d\n", resp.(*sproto.GetKvStatusResp).Kvcount)
+			}
+		} else {
+			fmt.Println(err)
+		}
+		time.Sleep(time.Second)
+	}
+
+	//清空所有db数据
+	resp, err = consoleClient.Call(&sproto.ClearDBData{}, &sproto.ClearDBDataResp{})
+	assert.Equal(t, resp.(*sproto.ClearDBDataResp).Ok, true)
+
+	node1.Stop()
+
+	node2.Stop()
 
 	pd.Stop()
 
@@ -1209,11 +1434,11 @@ func TestAddSet2(t *testing.T) {
 	fmt.Println("run client")
 
 	c, _ := client.OpenClient(client.ClientConf{
-		ClientType: client.ClientType_FlyKv,
-		ClusterConf: &client.ClusterConf{
-			PD: []string{"localhost:8110"},
-		},
+		ClientType: client.ClientType_FlyGate,
+		PD:         []string{"localhost:8110"},
 	})
+
+	defer c.Close()
 
 	stopCh := make(chan struct{})
 
@@ -1339,6 +1564,192 @@ func TestAddSet2(t *testing.T) {
 	pd.Stop()
 }
 
+func TestAddSet3(t *testing.T) {
+	sslot.SlotCount = 128
+	flypd.MinReplicaPerSet = 1
+	flypd.StorePerSet = 1
+	flygate.QueryRouteInfoDuration = time.Millisecond * 3 * 1000
+	os.RemoveAll("./testRaftLog")
+	clearUsers1()
+	var err error
+
+	dbConf := &dbconf{}
+	if _, err = toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
+		panic(err)
+	}
+
+	kvConf, err := flykv.LoadConfigStr(fmt.Sprintf(flyKvConfigStr, dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.Usr, dbConf.Pwd, dbConf.Db))
+
+	if nil != err {
+		panic(err)
+	}
+
+	pd, pdRaftID := newPD(t, 0, "./deployment2.json")
+
+	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
+
+	for {
+		resp, _ := snet.UdpCall([]*net.UDPAddr{addr},
+			&sproto.AddSet{
+				&sproto.DeploymentSet{
+					SetID: 2,
+					Nodes: []*sproto.DeploymentKvnode{
+						&sproto.DeploymentKvnode{
+							NodeID:      2,
+							Host:        "localhost",
+							ServicePort: 9211,
+							RaftPort:    9221,
+						},
+					},
+				},
+			},
+			&sproto.AddSetResp{},
+			time.Second)
+
+		if resp != nil && resp.(*sproto.AddSetResp).Reason == "set already exists" {
+			break
+		}
+		time.Sleep(time.Second * 2)
+	}
+
+	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	fmt.Println("run client")
+
+	c, _ := client.OpenClient(client.ClientConf{
+		ClientType: client.ClientType_FlyKv,
+		PD:         []string{"localhost:8110"},
+	})
+
+	defer c.Close()
+
+	stopCh := make(chan struct{})
+
+	var storeBalanced int32
+
+	go func() {
+		defer close(stopCh)
+		for atomic.LoadInt32(&storeBalanced) == 0 {
+			for i := 0; i < 100 && atomic.LoadInt32(&storeBalanced) == 0; i++ {
+				fields := map[string]interface{}{}
+				fields["age"] = 12
+				name := fmt.Sprintf("sniperHW:%d", i)
+				fields["name"] = name
+				fields["phone"] = []byte("123456789123456789123456789")
+				e := c.Set("users1", name, fields).Exec().ErrCode
+				if nil != e {
+					fmt.Println(e)
+				}
+			}
+		}
+		fmt.Println("client break here")
+	}()
+
+	node2, err := flykv.NewKvNode(2, false, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	//等待slot平衡
+	for {
+		resp, _ := snet.UdpCall([]*net.UDPAddr{addr},
+			&sproto.GetKvStatus{},
+			&sproto.GetKvStatusResp{},
+			time.Second)
+
+		if resp != nil {
+			slotPerStore := sslot.SlotCount / 2
+
+			ok := true
+			for _, v := range resp.(*sproto.GetKvStatusResp).Sets {
+				for _, vv := range v.Stores {
+					if int(vv.Slotcount) > slotPerStore+1 {
+						ok = false
+					}
+				}
+			}
+
+			if ok {
+				fmt.Println("balance ok")
+				atomic.StoreInt32(&storeBalanced, 1)
+				break
+			}
+		}
+		time.Sleep(time.Second)
+	}
+
+	<-stopCh
+
+	stopCh = make(chan struct{})
+
+	atomic.StoreInt32(&storeBalanced, 0)
+
+	go func() {
+		defer close(stopCh)
+		for atomic.LoadInt32(&storeBalanced) == 0 {
+			for i := 0; i < 100 && atomic.LoadInt32(&storeBalanced) == 0; i++ {
+				fields := map[string]interface{}{}
+				fields["age"] = 12
+				name := fmt.Sprintf("sniperHW:%d", i)
+				fields["name"] = name
+				fields["phone"] = []byte("123456789123456789123456789")
+				e := c.Set("users1", name, fields).Exec().ErrCode
+				if nil != e {
+					fmt.Println(e)
+				}
+			}
+		}
+		fmt.Println("client break here")
+	}()
+
+	for {
+		resp, _ := snet.UdpCall([]*net.UDPAddr{addr},
+			&sproto.SetMarkClear{
+				SetID: 2,
+			},
+			&sproto.SetMarkClearResp{},
+			time.Second)
+
+		if resp != nil && resp.(*sproto.SetMarkClearResp).Reason == "already mark clear" {
+			break
+		}
+		time.Sleep(time.Second * 2)
+	}
+
+	fmt.Println("-------------rem set---------------------------")
+
+	for {
+		resp, _ := snet.UdpCall([]*net.UDPAddr{addr},
+			&sproto.RemSet{
+				SetID: 2,
+			},
+			&sproto.RemSetResp{},
+			time.Second)
+
+		if resp != nil && resp.(*sproto.RemSetResp).Reason == "set not exists" {
+			atomic.StoreInt32(&storeBalanced, 1)
+			break
+		}
+		time.Sleep(time.Second * 2)
+	}
+
+	<-stopCh
+
+	pd.Stop()
+	node1.Stop()
+	node2.Stop()
+
+	pd, _ = newPD(t, pdRaftID, "./deployment2.json")
+
+	time.Sleep(time.Second * 2)
+	pd.Stop()
+}
+
 func TestStoreBalance(t *testing.T) {
 	sslot.SlotCount = 128
 	flypd.MinReplicaPerSet = 1
@@ -1392,11 +1803,11 @@ func TestStoreBalance(t *testing.T) {
 	stoped := int32(0)
 
 	c, _ := client.OpenClient(client.ClientConf{
-		ClientType: client.ClientType_FlyKv,
-		ClusterConf: &client.ClusterConf{
-			PD: []string{"localhost:8110"},
-		},
+		ClientType: client.ClientType_FlyGate,
+		PD:         []string{"localhost:8110"},
 	})
+
+	defer c.Close()
 
 	go func() {
 		for atomic.LoadInt32(&stoped) == 0 {
@@ -1518,6 +1929,164 @@ func TestStoreBalance(t *testing.T) {
 
 }
 
+func TestStoreBalance2(t *testing.T) {
+	sslot.SlotCount = 128
+	flypd.MinReplicaPerSet = 1
+	flypd.StorePerSet = 3
+	flygate.QueryRouteInfoDuration = time.Millisecond * 3 * 1000
+	os.RemoveAll("./log")
+	os.RemoveAll("./testRaftLog")
+	clearUsers1()
+
+	var err error
+
+	dbConf := &dbconf{}
+	if _, err = toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
+		panic(err)
+	}
+
+	kvConf, err := flykv.LoadConfigStr(fmt.Sprintf(flyKvConfigStr, dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.Usr, dbConf.Pwd, dbConf.Db))
+
+	if nil != err {
+		panic(err)
+	}
+
+	pd, _ := newPD(t, 0, "./deployment2.json")
+
+	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	stoped := int32(0)
+
+	c, _ := client.OpenClient(client.ClientConf{
+		ClientType: client.ClientType_FlyKv,
+		PD:         []string{"localhost:8110"},
+	})
+
+	defer c.Close()
+
+	go func() {
+		for atomic.LoadInt32(&stoped) == 0 {
+			for i := 0; i < 100 && atomic.LoadInt32(&stoped) == 0; i++ {
+				fields := map[string]interface{}{}
+				fields["age"] = 12
+				name := fmt.Sprintf("sniperHW:%d", i)
+				fields["name"] = name
+				fields["phone"] = []byte("123456789123456789123456789")
+				e := c.Set("users1", name, fields).Exec().ErrCode
+				if nil != e {
+					fmt.Println("set--------------- error:", e)
+				}
+			}
+		}
+		fmt.Println("client break here")
+	}()
+
+	//增加node2
+	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
+
+	for {
+		resp, _ := snet.UdpCall([]*net.UDPAddr{addr},
+			&sproto.AddNode{
+				SetID:       1,
+				NodeID:      2,
+				Host:        "localhost",
+				ServicePort: 9220,
+				RaftPort:    9221,
+			},
+			&sproto.AddNodeResp{},
+			time.Second)
+
+		if resp != nil && resp.(*sproto.AddNodeResp).Ok {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
+	node2, err := flykv.NewKvNode(2, true, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	//增加node3
+	for {
+		resp, _ := snet.UdpCall([]*net.UDPAddr{addr},
+			&sproto.AddNode{
+				SetID:       1,
+				NodeID:      3,
+				Host:        "localhost",
+				ServicePort: 9320,
+				RaftPort:    9321,
+			},
+			&sproto.AddNodeResp{},
+			time.Second)
+
+		if resp != nil && resp.(*sproto.AddNodeResp).Ok {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
+	node3, err := flykv.NewKvNode(3, true, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	/////////////////
+
+	for {
+		c := consoleHttp.NewClient("localhost:8110")
+		resp, err := c.Call(&sproto.GetKvStatus{}, &sproto.GetKvStatusResp{})
+		if nil != err {
+			logger.GetSugar().Errorf("%v", err)
+		} else {
+			ok := func() bool {
+				leaderCount := []int{0, 0, 0, 0}
+				for _, v := range resp.(*sproto.GetKvStatusResp).Sets {
+					if v.SetID == int32(1) {
+						for _, vv := range v.Nodes {
+							for _, vvv := range vv.Stores {
+								if vvv.IsLeader {
+									leaderCount[int(vv.NodeID)]++
+								}
+							}
+						}
+					}
+				}
+
+				logger.GetSugar().Infof("leaderCount %v", leaderCount)
+
+				for i := 1; i < len(leaderCount); i++ {
+					if leaderCount[i] != 1 {
+						return false
+					}
+				}
+				return true
+
+			}()
+
+			if ok {
+				break
+			} else {
+				time.Sleep(time.Second)
+			}
+		}
+	}
+
+	atomic.StoreInt32(&stoped, 1)
+
+	node1.Stop()
+	node2.Stop()
+	node3.Stop()
+	pd.Stop()
+
+}
+
 func TestSuspendResume(t *testing.T) {
 	sslot.SlotCount = 128
 	flypd.MinReplicaPerSet = 1
@@ -1625,11 +2194,11 @@ func TestSuspendResume(t *testing.T) {
 	}
 
 	c, _ := client.OpenClient(client.ClientConf{
-		ClientType: client.ClientType_FlyKv,
-		ClusterConf: &client.ClusterConf{
-			PD: []string{"localhost:8110"},
-		},
+		ClientType: client.ClientType_FlyGate,
+		PD:         []string{"localhost:8110"},
 	})
+
+	defer c.Close()
 
 	for i := 0; i < 100; i++ {
 		fields := map[string]interface{}{}
@@ -1738,6 +2307,7 @@ func TestSuspendResume(t *testing.T) {
 	pd.Stop()
 }
 
+/*
 func TestScan(t *testing.T) {
 	sslot.SlotCount = 128
 	flypd.MinReplicaPerSet = 1
@@ -1795,10 +2365,8 @@ func TestScan(t *testing.T) {
 	fmt.Println("run client")
 
 	c, _ := client.OpenClient(client.ClientConf{
-		ClientType: client.ClientType_FlyKv,
-		ClusterConf: &client.ClusterConf{
-			PD: []string{"localhost:8110"},
-		},
+		ClientType: client.ClientType_FlyGate,
+		PD:         []string{"localhost:8110"},
 	})
 
 	for i := 0; i < 100; i++ {
@@ -1814,10 +2382,8 @@ func TestScan(t *testing.T) {
 	fmt.Println("set ok")
 
 	sc, _ := client.NewScanner(client.ClientConf{
-		ClientType: client.ClientType_FlyKv,
-		ClusterConf: &client.ClusterConf{
-			PD: []string{"localhost:8110"},
-		},
+		ClientType: client.ClientType_FlyGate,
+		PD:         []string{"localhost:8110"},
 	}, "users1", []string{"name", "age", "phone"})
 
 	count := 0
@@ -1860,9 +2426,7 @@ func TestScan(t *testing.T) {
 
 	sc, _ = client.NewScanner(client.ClientConf{
 		ClientType: client.ClientType_FlyKv,
-		ClusterConf: &client.ClusterConf{
-			PD: []string{"localhost:8110"},
-		},
+		PD:         []string{"localhost:8110"},
 	}, "users1", []string{"name", "age", "phone"})
 
 	count = 0
@@ -1888,93 +2452,7 @@ func TestScan(t *testing.T) {
 	node2.Stop()
 	gate1.Stop()
 	pd.Stop()
-
-}
-
-func TestSolo(t *testing.T) {
-	sslot.SlotCount = 128
-	flypd.MinReplicaPerSet = 1
-	flypd.StorePerSet = 1
-	os.RemoveAll("./testRaftLog")
-	clearUsers1()
-	var err error
-
-	dbConf := &dbconf{}
-	if _, err = toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
-		panic(err)
-	}
-
-	kvConf, err := flykv.LoadConfigStr(fmt.Sprintf(flyKvConfigStr, dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.Usr, dbConf.Pwd, dbConf.Db))
-
-	if nil != err {
-		panic(err)
-	}
-
-	kvConf.Mode = "solo"
-	kvConf.SoloConfig.RaftUrl = "1@1@http://127.0.0.1:12377@localhost:8110@voter"
-	kvConf.SoloConfig.Stores = []int{1}
-	kvConf.SoloConfig.MetaPath = "meta.json"
-
-	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
-
-	if nil != err {
-		panic(err)
-	}
-
-	c, _ := client.OpenClient(client.ClientConf{
-		ClientType: client.ClientType_FlyKv,
-		SoloConf: &client.SoloConf{
-			Service:         "localhost:8110",
-			UnikeyPlacement: sslot.MakeUnikeyPlacement([]int{1}),
-		}})
-
-	for {
-		r := c.Get("users1", "ak", "name").Exec()
-		if errcode.GetCode(r.ErrCode) == errcode.Errcode_record_notexist {
-			break
-		}
-	}
-
-	for i := 0; i < 100; i++ {
-		fields := map[string]interface{}{}
-		fields["age"] = i
-		name := fmt.Sprintf("sniperHW:%d", i)
-		fields["name"] = name
-		fields["phone"] = []byte("123456789123456789123456789")
-		r := c.Set("users1", name, fields).Exec()
-		assert.Nil(t, r.ErrCode)
-	}
-
-	sc, _ := client.NewScanner(client.ClientConf{
-		ClientType: client.ClientType_FlyKv,
-		SoloConf: &client.SoloConf{
-			Service:         "localhost:8110",
-			UnikeyPlacement: sslot.MakeUnikeyPlacement([]int{1}),
-			Stores:          []int{1},
-		}}, "users1", []string{"name", "age", "phone"})
-
-	count := 0
-
-	for {
-		row, err := sc.Next(time.Now().Add(time.Second * 10))
-
-		if nil != err {
-			panic(err)
-		}
-
-		if nil != row {
-			fmt.Println(row.Key)
-			count++
-		} else {
-			break
-		}
-	}
-
-	fmt.Println("count", count)
-
-	node1.Stop()
-
-}
+}*/
 
 func TestMeta(t *testing.T) {
 	sslot.SlotCount = 128

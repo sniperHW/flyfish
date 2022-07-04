@@ -25,7 +25,7 @@ func LoadConfig(path string) (*Config, error) {
 }
 
 type Config struct {
-	Mode                    string `toml:"Mode"` //"cluster"集群模式,"solo"独立模式
+	PD                      string `toml:"PD"` //pd服务地址用;分隔
 	SnapshotCount           uint64 `toml:"SnapshotCount"`
 	SnapshotCatchUpEntriesN uint64 `toml:"SnapshotCatchUpEntriesN"`
 	SnapshotBytes           uint64 `toml:"SnapshotBytes"`
@@ -48,18 +48,6 @@ type Config struct {
 	LinearizableRead bool `toml:"LinearizableRead"`
 
 	WriteBackMode string `toml:"WriteBackMode"`
-
-	SoloConfig struct {
-		ServiceHost string `toml:"ServiceHost"`
-		ServicePort int    `toml:"ServicePort"`
-		RaftUrl     string `toml:"RaftUrl"`
-		Stores      []int  `toml:"Stores"`
-		MetaPath    string `toml:"MetaPath"`
-	} `toml:"SoloConfig"`
-
-	ClusterConfig struct {
-		PD string `toml:"PD"` //pd服务地址用;分隔
-	} `toml:"ClusterConfig"`
 
 	DBConfig struct {
 		DBType   string `toml:"DBType"`

@@ -29,14 +29,6 @@ func (s *store) onCliMsg(msg *forwordMsg) {
 	}
 }
 
-func (s *store) paybackWaittingSendToGate() {
-	for v := s.l.Front(); nil != v; v = s.l.Front() {
-		msg := v.Value.(*forwordMsg)
-		s.removeMsg(msg)
-		s.gate.paybackMsg(msg)
-	}
-}
-
 func (s *store) onErrNotLeader(msg *forwordMsg) {
 	if nil != s.leader && s.leaderVersion != msg.leaderVersion {
 		//leader已经变更，向新的leader发送
@@ -56,7 +48,7 @@ func (s *store) onErrNotLeader(msg *forwordMsg) {
 
 func (s *store) queryLeader() {
 	if !s.gate.checkStore(s) {
-		s.paybackWaittingSendToGate()
+		return
 	} else {
 
 		set := s.gate.sets[s.setID]
@@ -72,9 +64,7 @@ func (s *store) queryLeader() {
 					leader = int(r.(*sproto.QueryLeaderResp).Leader)
 				}
 				s.gate.callInQueue(1, func() {
-					if !s.gate.checkStore(s) {
-						s.paybackWaittingSendToGate()
-					} else {
+					if s.gate.checkStore(s) {
 						set := s.gate.sets[s.setID]
 						if leaderNode := set.nodes[leader]; nil != leaderNode {
 							s.leaderVersion++
@@ -92,7 +82,7 @@ func (s *store) queryLeader() {
 				})
 			}()
 		} else {
-			s.gate.afterFunc(time.Second, s.queryLeader)
+			s.gate.afterFunc(time.Millisecond*100, s.queryLeader)
 		}
 	}
 }

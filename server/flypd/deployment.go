@@ -223,9 +223,9 @@ func (d Deployment) queryRouteInfo(req *sproto.QueryRouteInfo) *sproto.QueryRout
 					i++
 					j++
 				} else if localSets[i] > req.Sets[j] {
-					resp.RemoveSets = append(resp.RemoveSets, req.Sets[j])
 					j++
 				} else {
+					resp.RemoveSets = append(resp.RemoveSets, req.Sets[j])
 					i++
 				}
 			}
@@ -233,7 +233,6 @@ func (d Deployment) queryRouteInfo(req *sproto.QueryRouteInfo) *sproto.QueryRout
 			if len(req.Sets[j:]) > 0 {
 				resp.RemoveSets = append(resp.RemoveSets, req.Sets[j:]...)
 			}
-
 		}
 	}
 

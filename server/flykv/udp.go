@@ -17,16 +17,12 @@ type udpMsg struct {
 }
 
 func (this *kvnode) isVaildPdAddress(addr *net.UDPAddr) bool {
-	if this.config.Mode == "solo" {
-		return true
-	} else {
-		for _, v := range this.pdAddr {
-			if addr.IP.Equal(v.IP) {
-				return true
-			}
+	for _, v := range this.pdAddr {
+		if addr.IP.Equal(v.IP) {
+			return true
 		}
-		return false
 	}
+	return false
 }
 
 func (this *kvnode) processUdpMsg(from *net.UDPAddr, m *snet.Message) {

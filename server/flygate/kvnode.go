@@ -66,16 +66,6 @@ func (n *kvnode) removeWaitResp(seqno int64) (m *forwordMsg) {
 	return
 }
 
-func (n *kvnode) dropAllWaitResp() {
-	n.Lock()
-	for _, v := range n.waitResponse {
-		delete(n.waitResponse, v.seqno)
-		v.clearCache()
-		v.dropReply()
-	}
-	n.Unlock()
-}
-
 func (n *kvnode) waittingSendEmpty() (empty bool) {
 	n.Lock()
 	empty = n.waittingSend.Len() == 0
@@ -122,13 +112,12 @@ func (n *kvnode) send(now time.Time, msg *forwordMsg) {
 
 func (n *kvnode) paybackWaittingSendToGate() {
 	n.Lock()
+	defer n.Unlock()
 	for v := n.waittingSend.Front(); nil != v; v = n.waittingSend.Front() {
 		msg := v.Value.(*forwordMsg)
 		n.waittingSend.Remove(msg.listElement)
-		msg.listElement = nil
-		msg.clearCache()
+		n.gate.addMsg(msg)
 	}
-	n.Unlock()
 }
 
 func (n *kvnode) onResponse(b []byte) {
@@ -167,35 +156,31 @@ func (n *kvnode) dial() {
 		})
 		session, err := c.Dial(time.Second * 5)
 		n.gate.callInQueue(1, func() {
-			if !n.gate.checkKvnode(n) {
-				n.paybackWaittingSendToGate()
-				return
-			}
-
-			n.session = session
-			if nil == err {
-				session.SetRecvTimeout(flyproto.PingTime * 10)
-				session.SetInBoundProcessor(NewKvnodeRespInboundProcessor())
-				session.SetCloseCallBack(func(sess *flynet.Socket, reason error) {
-					n.gate.callInQueue(1, func() {
-						n.session = nil
-						n.dropAllWaitResp()
-						for _, v := range n.gate.sets {
-							for _, vv := range v.stores {
-								if vv.leader == n {
-									vv.leader = nil
-								}
+			if n.gate.checkKvnode(n) {
+				n.session = session
+				if nil == err {
+					session.SetRecvTimeout(flyproto.PingTime * 10)
+					session.SetInBoundProcessor(NewKvnodeRespInboundProcessor())
+					session.SetCloseCallBack(func(sess *flynet.Socket, reason error) {
+						n.gate.callInQueue(1, func() {
+							n.session = nil
+							n.Lock()
+							for _, v := range n.waitResponse {
+								delete(n.waitResponse, v.seqno)
+								v.clearCache()
+								v.replyErr(errcode.New(errcode.Errcode_error, "lose connection"))
 							}
-						}
+							n.Unlock()
+						})
+					}).BeginRecv(func(s *flynet.Socket, msg interface{}) {
+						n.onResponse(msg.([]byte))
 					})
-				}).BeginRecv(func(s *flynet.Socket, msg interface{}) {
-					n.onResponse(msg.([]byte))
-				})
 
-				n.onConnect(time.Now())
+					n.onConnect(time.Now())
 
-			} else if !n.waittingSendEmpty() {
-				n.dial()
+				} else if !n.waittingSendEmpty() {
+					n.dial()
+				}
 			}
 		})
 	}()

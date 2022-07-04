@@ -151,8 +151,8 @@ func NewFlyGate(config *Config, service string) (*gate, error) {
 
 func (g *gate) checkKvnode(n *kvnode) bool {
 	if s, ok := g.sets[n.setID]; ok {
-		if _, ok = s.nodes[n.id]; ok {
-			return true
+		if node, ok := s.nodes[n.id]; ok {
+			return n == node
 		}
 	}
 	return false
@@ -160,8 +160,8 @@ func (g *gate) checkKvnode(n *kvnode) bool {
 
 func (g *gate) checkStore(st *store) bool {
 	if s, ok := g.sets[st.setID]; ok {
-		if _, ok = s.stores[st.id]; ok {
-			return true
+		if store, ok := s.stores[st.id]; ok {
+			return store == st
 		}
 	}
 	return false
@@ -334,10 +334,18 @@ func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
 			}
 
 			for _, vv := range remove {
-				n := s.nodes[int(vv)]
+				kvnode := s.nodes[int(vv)]
 				delete(s.nodes, int(vv))
-				if nil != n.session {
-					n.session.Close(nil, 0)
+				if nil != kvnode.session {
+					kvnode.session.Close(nil, 0)
+				} else {
+					kvnode.paybackWaittingSendToGate()
+				}
+
+				for _, store := range s.stores {
+					if store.leader == kvnode {
+						store.leader = nil
+					}
 				}
 			}
 
@@ -378,9 +386,12 @@ func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
 
 	for _, v := range resp.RemoveSets {
 		if s, ok := g.sets[int(v)]; ok {
-			for _, vv := range s.nodes {
-				if nil != vv.session {
-					vv.session.Close(nil, 0)
+			delete(g.sets, int(v))
+			for _, kvnode := range s.nodes {
+				if nil != kvnode.session {
+					kvnode.session.Close(nil, 0)
+				} else {
+					kvnode.paybackWaittingSendToGate()
 				}
 			}
 			for _, vv := range s.stores {
@@ -391,7 +402,6 @@ func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
 					g.addMsg(msg)
 				}
 			}
-			delete(g.sets, int(v))
 		}
 	}
 

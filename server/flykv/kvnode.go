@@ -1,7 +1,7 @@
 package flykv
 
 import (
-	"errors"
+	//"errors"
 	"fmt"
 	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/db"
@@ -18,7 +18,7 @@ import (
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	sslot "github.com/sniperHW/flyfish/server/slot"
 	"net"
-	"os"
+	//"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -142,8 +142,6 @@ func (this *kvnode) onClient(session *fnet.Socket) {
 		})
 
 		session.BeginRecv(func(session *fnet.Socket, v interface{}) {
-
-			//GetSugar().Infof("recv msg node:%d %v", this.id, v.(*cs.ReqMessage).Cmd)
 
 			if atomic.LoadInt32(&this.closed) == 1 {
 				GetSugar().Infof("kvnode closed")
@@ -365,208 +363,90 @@ func (this *kvnode) start() error {
 		return err
 	}
 
-	if config.Mode == "solo" {
-		f, err := os.Open(config.SoloConfig.MetaPath)
+	//meta从flypd获取
+
+	pd := strings.Split(config.PD, ";")
+
+	for _, v := range pd {
+		addr, err := net.ResolveUDPAddr("udp", v)
 		if nil != err {
 			return err
+		} else {
+			this.pdAddr = append(this.pdAddr, addr)
 		}
-
-		var b []byte
-		for {
-			data := make([]byte, 4096)
-			n, err := f.Read(data)
-			if n > 0 {
-				b = append(b, data[:n]...)
-			}
-
-			if nil != err {
-				break
-			}
-		}
-
-		dbdef, err := db.MakeDbDefFromJsonString(b)
-		if nil != err {
-			return err
-		}
-
-		for _, t := range dbdef.TableDefs {
-			tb, err := sql.GetTableScheme(this.dbc, dbConfig.DBType, fmt.Sprintf("%s_%d", t.Name, t.DbVersion))
-			if nil != err {
-				return err
-			} else if nil == tb {
-				//表不存在
-				err = sql.CreateTables(this.dbc, dbConfig.DBType, t)
-				if nil != err {
-					return err
-				} else {
-					GetSugar().Infof("create table:%s_%d ok", t.Name, t.DbVersion)
-				}
-			} else {
-				//记录字段的最大版本
-				fields := map[string]*db.FieldDef{}
-				for _, v := range tb.Fields {
-					f := fields[v.Name]
-					if nil == f || f.TabVersion <= v.TabVersion {
-						fields[v.Name] = v
-					}
-				}
-
-				for _, v := range t.Fields {
-					f, ok := fields[v.Name]
-					if !ok {
-						GetSugar().Panicf("table:%s already in db but not match with meta,field:%s not found in db", t.Name, v.Name)
-					}
-
-					if f.Type != v.Type {
-						GetSugar().Panicf("table:%s already in db but not match with meta,field:%s type mismatch with db", t.Name, v.Name)
-					}
-
-					if f.GetDefaultValueStr() != v.GetDefaultValueStr() {
-						GetSugar().Panicf("table:%s already in db but not match with meta,field:%s DefaultValue mismatch with db db.v:%v meta.v:%v", t.Name, v.Name, f.GetDefaultValueStr(), v.GetDefaultValueStr())
-					}
-				}
-			}
-		}
-
-		meta, err = sql.CreateDbMeta(dbdef)
-
-		if nil != err {
-			return err
-		}
-
-		peers, err := raft.SplitPeers(config.SoloConfig.RaftUrl)
-
-		if nil != err {
-			return err
-		}
-
-		self, ok := peers[this.id]
-
-		if !ok {
-			return errors.New("rafturl not contain self")
-		}
-
-		service := self.ClientURL
-
-		err = this.initUdp(service)
-
-		if nil != err {
-			return err
-		}
-
-		this.listener, err = cs.NewListener("tcp", service, outputBufLimit)
-
-		if nil != err {
-			return err
-		}
-
-		go this.mutilRaft.Serve(self.URL)
-
-		this.startListener()
-
-		//添加store
-		if len(config.SoloConfig.Stores) > 0 {
-			storeBitmaps := sslot.MakeStoreBitmap(config.SoloConfig.Stores)
-			for i, v := range config.SoloConfig.Stores {
-				for k, vv := range peers {
-					vv.ID = uint64(vv.ProcessID)<<32 + uint64(v)
-					peers[k] = vv
-				}
-				if err = this.addStore(meta, v, peers, storeBitmaps[i]); nil != err {
-					return err
-				}
-			}
-		}
-
-		GetSugar().Infof("flyfish start:%s", service)
-
-	} else {
-
-		//meta从flypd获取
-
-		pd := strings.Split(config.ClusterConfig.PD, ";")
-
-		for _, v := range pd {
-			addr, err := net.ResolveUDPAddr("udp", v)
-			if nil != err {
-				return err
-			} else {
-				this.pdAddr = append(this.pdAddr, addr)
-			}
-		}
-
-		var resp *sproto.KvnodeBootResp
-
-		for {
-			resp = this.getKvnodeBootInfo(this.pdAddr)
-			if !resp.Ok {
-				GetSugar().Errorf("getKvnodeBootInfo err:%v", resp.Reason)
-			} else {
-				break
-			}
-			time.Sleep(time.Second)
-		}
-
-		this.setID = int(resp.SetID)
-
-		if dbdef, err = db.MakeDbDefFromJsonString(resp.Meta); nil != err {
-			GetSugar().Errorf("CreateDbDefFromJsonString err:%v", err)
-			return err
-		}
-
-		meta, err = sql.CreateDbMeta(dbdef)
-
-		if nil != err {
-			GetSugar().Errorf("CreateDbMeta err:%v", err)
-			return err
-		}
-
-		err = this.initUdp(fmt.Sprintf("%s:%d", resp.ServiceHost, resp.ServicePort))
-
-		if nil != err {
-			GetSugar().Errorf("initUdp err:%v", err)
-			return err
-		}
-
-		service := fmt.Sprintf("%s:%d", resp.ServiceHost, resp.ServicePort)
-
-		this.listener, err = cs.NewListener("tcp", service, outputBufLimit)
-
-		if nil != err {
-			GetSugar().Errorf("NewListener err:%v", err)
-			return err
-		}
-
-		go this.mutilRaft.Serve(fmt.Sprintf("http://%s:%d", resp.ServiceHost, resp.RaftPort))
-
-		this.startListener()
-
-		//cluster模式下membership由pd负责管理,节点每次启动从pd获取
-		for _, v := range resp.Stores {
-			slots, err := bitmap.CreateFromJson(v.Slots)
-
-			if nil != err {
-				GetSugar().Errorf("CreateFromJson err:%v", err)
-				return err
-			}
-
-			peers, err := raft.SplitPeers(v.RaftCluster)
-
-			if nil != err {
-				GetSugar().Errorf("SplitPeers err:%v,origin:%v", err, v.RaftCluster)
-				return err
-			}
-
-			if err = this.addStore(meta, int(v.Id), peers, slots); nil != err {
-				GetSugar().Errorf("addStore err:%v", err)
-				return err
-			}
-		}
-
-		GetSugar().Infof("flyfish start:%s", service)
-
-		go this.reportStatus()
 	}
+
+	var resp *sproto.KvnodeBootResp
+
+	for {
+		resp = this.getKvnodeBootInfo(this.pdAddr)
+		if !resp.Ok {
+			GetSugar().Errorf("getKvnodeBootInfo err:%v", resp.Reason)
+		} else {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
+	this.setID = int(resp.SetID)
+
+	if dbdef, err = db.MakeDbDefFromJsonString(resp.Meta); nil != err {
+		GetSugar().Errorf("CreateDbDefFromJsonString err:%v", err)
+		return err
+	}
+
+	meta, err = sql.CreateDbMeta(dbdef)
+
+	if nil != err {
+		GetSugar().Errorf("CreateDbMeta err:%v", err)
+		return err
+	}
+
+	err = this.initUdp(fmt.Sprintf("%s:%d", resp.ServiceHost, resp.ServicePort))
+
+	if nil != err {
+		GetSugar().Errorf("initUdp err:%v", err)
+		return err
+	}
+
+	service := fmt.Sprintf("%s:%d", resp.ServiceHost, resp.ServicePort)
+
+	this.listener, err = cs.NewListener("tcp", service, outputBufLimit)
+
+	if nil != err {
+		GetSugar().Errorf("NewListener err:%v", err)
+		return err
+	}
+
+	go this.mutilRaft.Serve(fmt.Sprintf("http://%s:%d", resp.ServiceHost, resp.RaftPort))
+
+	this.startListener()
+
+	//cluster模式下membership由pd负责管理,节点每次启动从pd获取
+	for _, v := range resp.Stores {
+		slots, err := bitmap.CreateFromJson(v.Slots)
+
+		if nil != err {
+			GetSugar().Errorf("CreateFromJson err:%v", err)
+			return err
+		}
+
+		peers, err := raft.SplitPeers(v.RaftCluster)
+
+		if nil != err {
+			GetSugar().Errorf("SplitPeers err:%v,origin:%v", err, v.RaftCluster)
+			return err
+		}
+
+		if err = this.addStore(meta, int(v.Id), peers, slots); nil != err {
+			GetSugar().Errorf("addStore err:%v", err)
+			return err
+		}
+	}
+
+	GetSugar().Infof("flyfish start:%s", service)
+
+	go this.reportStatus()
 
 	return err
 }

@@ -1,18 +1,23 @@
 package client
 
+import (
+	"fmt"
+	"runtime"
+)
+
 type MGetCmd struct {
 	priority      int
 	callbackQueue EventQueueI
-	cmds          []*SliceCmd
+	cmds          []*GetCmd
 }
 
-func MGet(cmds ...*SliceCmd) *MGetCmd {
+func MGet(cmds ...*GetCmd) *MGetCmd {
 	return &MGetCmd{
 		cmds: cmds,
 	}
 }
 
-func MGetWithEventQueue(priority int, callbackQueue EventQueueI, cmds ...*SliceCmd) *MGetCmd {
+func MGetWithEventQueue(priority int, callbackQueue EventQueueI, cmds ...*GetCmd) *MGetCmd {
 	return &MGetCmd{
 		callbackQueue: callbackQueue,
 		cmds:          cmds,
@@ -20,41 +25,47 @@ func MGetWithEventQueue(priority int, callbackQueue EventQueueI, cmds ...*SliceC
 	}
 }
 
-func (this *MGetCmd) doCallBack(sync bool, cb func([]*SliceResult), rets []*SliceResult) {
+func (this *MGetCmd) doCallBack(sync bool, cb func([]*GetResult), rets []*GetResult) {
 	if !sync && nil != this.callbackQueue {
 		this.callbackQueue.Post(this.priority, cb, rets)
 	} else {
-		defer Recover()
+		defer func() {
+			if r := recover(); r != nil {
+				buf := make([]byte, 65535)
+				l := runtime.Stack(buf, false)
+				GetSugar().Errorf(formatFileLine("%s\n", fmt.Sprintf("%v: %s", r, buf[:l])))
+			}
+		}()
 		cb(rets)
 	}
 }
 
-func (this *MGetCmd) Exec() []*SliceResult {
-	respChan := make(chan []*SliceResult)
-	this.asyncExec(true, func(r []*SliceResult) {
+func (this *MGetCmd) Exec() []*GetResult {
+	respChan := make(chan []*GetResult)
+	this.asyncExec(true, func(r []*GetResult) {
 		respChan <- r
 	})
 	return <-respChan
 }
 
-func (this *MGetCmd) AsyncExec(cb func([]*SliceResult)) {
+func (this *MGetCmd) AsyncExec(cb func([]*GetResult)) {
 	this.asyncExec(false, cb)
 }
 
-func (this *MGetCmd) asyncExec(sync bool, cb func([]*SliceResult)) {
+func (this *MGetCmd) asyncExec(sync bool, cb func([]*GetResult)) {
 	respCount := 0
 	wantCount := len(this.cmds)
 	die := make(chan struct{})
 	retChan := make(chan func() bool, wantCount)
-	results := make([]*SliceResult, wantCount)
+	results := make([]*GetResult, wantCount)
 
 	for _, v := range this.cmds {
-		v.AsyncExec(func(ret *SliceResult) {
+		v.AsyncExec(func(ret *GetResult) {
 			select {
 			case <-die:
 			case retChan <- func() bool {
 				for k, v := range this.cmds {
-					if v.unikey == ret.unikey {
+					if v.table == ret.Table && v.key == ret.Key {
 						results[k] = ret
 						respCount++
 					}
