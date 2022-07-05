@@ -101,7 +101,6 @@ enum ServerCmdType {
 
 message queryRouteInfo {
   optional int64  version       = 1;  
-  repeated int32  sets          = 2;
 }         
 
 
@@ -119,9 +118,8 @@ message routeInfoSet {
 }
 
 message queryRouteInfoResp {
-  repeated routeInfoSet sets       = 1;
-  repeated int32  removeSets       = 2;
-  optional int64  version          = 3; 
+  optional int64  version          = 1;
+  repeated routeInfoSet sets       = 2; 
 }
 
 

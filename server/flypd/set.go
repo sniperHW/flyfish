@@ -18,35 +18,6 @@ func (p *ProposalAddSet) Serilize(b []byte) []byte {
 	return serilizeProposal(b, proposalAddSet, p)
 }
 
-/*
-	set := Set{
-		SetID:  int(msg.Set.SetID),
-		Nodes:  map[int]*KvNode{},
-		Stores: map[int]*Store{},
-	}
-
-	for _, v := range msg.Set.Nodes {
-		set.Nodes[int(v.NodeID)] = &KvNode{
-			NodeID:      int(v.NodeID),
-			Host:        v.Host,
-			ServicePort: int(v.ServicePort),
-			RaftPort:    int(v.RaftPort),
-			Store:       map[int]*NodeStoreState{},
-		}
-	}
-
-	for _, node := range set.Nodes {
-		for _, vv := range set.Stores {
-			node.Store[vv.StoreID] = &NodeStoreState{
-				StoreType: VoterStore,
-				RaftID:    p.raftIDGen.Next(),
-			}
-		}
-	}
-
-	for _
-*/
-
 func (p *ProposalAddSet) apply(pd *pd) {
 	GetSugar().Infof("onAddSet apply")
 	err := func() error {
@@ -120,6 +91,7 @@ func (p *ProposalAddSet) apply(pd *pd) {
 
 		pd.Deployment.Sets[set.SetID] = set
 		pd.Deployment.Version++
+		set.Version = pd.Deployment.Version
 		pd.slotBalance()
 		return nil
 	}()

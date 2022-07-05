@@ -91,6 +91,9 @@ func (n *kvnode) onConnect(now time.Time) {
 }
 
 func (n *kvnode) sendForwordMsg(msg *forwordMsg) {
+
+	//GetSugar().Infof("sendForwordMsg %d", n.id)
+
 	if nil != n.session {
 		now := time.Now()
 		if msg.deadline.After(now) {
@@ -126,6 +129,7 @@ func (n *kvnode) onResponse(b []byte) {
 	if msg := n.removeWaitResp(seqno); nil != msg {
 		switch errCode {
 		case errcode.Errcode_not_leader:
+
 			//投递到主队列执行
 			n.gate.callInQueue(1, func() {
 				if s := n.gate.getStore(msg.store); nil != s {

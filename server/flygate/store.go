@@ -20,6 +20,7 @@ type store struct {
 func (s *store) onCliMsg(msg *forwordMsg) {
 	msg.store = uint64(s.setID)<<32 + uint64(s.id)
 	if nil == s.leader {
+		//GetSugar().Infof("------------------------------------------onCliMsg store:%d", s.id)
 		if s.addMsg(msg) == 1 {
 			s.queryLeader()
 		}
@@ -56,6 +57,8 @@ func (s *store) queryLeader() {
 		for _, v := range set.nodes {
 			nodes = append(nodes, v.service)
 		}
+
+		//GetSugar().Infof("----------queryLeader----------------- set %d store %d %v", s.setID, s.id, nodes)
 
 		if len(nodes) > 0 {
 			go func() {

@@ -538,6 +538,8 @@ func TestFlygate(t *testing.T) {
 		}
 	}
 
+	logger.GetSugar().Infof("---------------------------------------------------------")
+
 	for i := 0; i < 100; i++ {
 		fields := map[string]interface{}{}
 		fields["age"] = 12

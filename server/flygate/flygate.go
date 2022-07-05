@@ -227,11 +227,6 @@ func (g *gate) afterFunc(delay time.Duration, fn func()) *time.Timer {
 var QueryRouteInfoDuration time.Duration = time.Millisecond * 1000
 
 func doQueryRouteInfo(pdAddr []*net.UDPAddr, req *sproto.QueryRouteInfo) *sproto.QueryRouteInfoResp {
-	if len(pdAddr) == 0 {
-		GetSugar().Fatalf("PdService is empty")
-		return nil
-	}
-
 	if resp, err := snet.UdpCall(pdAddr, req, &sproto.QueryRouteInfoResp{}, time.Second); nil == err {
 		return resp.(*sproto.QueryRouteInfoResp)
 	} else {
@@ -262,145 +257,190 @@ func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
 		return
 	}
 
-	if g.version == resp.Version {
+	if atomic.LoadInt64(&g.version) == resp.Version {
 		return
 	}
 
-	g.version = resp.Version
+	atomic.StoreInt64(&g.version, resp.Version)
 
-	for _, v := range resp.Sets {
-		s, ok := g.sets[int(v.SetID)]
-		if ok {
-			for k, _ := range v.Stores {
-				ss := s.stores[int(v.Stores[k])]
-				ss.slots, _ = bitmap.CreateFromJson(v.Slots[k])
-			}
+	var localSets []*set
 
-			localKvnodes := []int32{}
-			for _, vv := range s.nodes {
-				localKvnodes = append(localKvnodes, int32(vv.id))
-			}
+	for _, v := range g.sets {
+		localSets = append(localSets, v)
+	}
 
-			respKvnodes := [][]int32{}
-			for k, vv := range v.Kvnodes {
-				respKvnodes = append(respKvnodes, []int32{vv.NodeID, int32(k)})
-			}
+	sort.Slice(localSets, func(i, j int) bool {
+		return localSets[i].setID < localSets[j].setID
+	})
 
-			sort.Slice(localKvnodes, func(i, j int) bool {
-				return localKvnodes[i] < localKvnodes[j]
-			})
+	sort.Slice(resp.Sets, func(i, j int) bool {
+		return resp.Sets[i].SetID < resp.Sets[j].SetID
+	})
 
-			sort.Slice(respKvnodes, func(i, j int) bool {
-				return respKvnodes[i][0] < respKvnodes[j][0]
-			})
+	var removeSets []*set
+	var addSets []*sproto.RouteInfoSet
 
-			add := [][]int32{}
-			remove := []int32{}
+	i := 0
+	j := 0
 
-			i := 0
-			j := 0
+	for i < len(localSets) && j < len(resp.Sets) {
+		if localSets[i].setID == int(resp.Sets[j].SetID) {
 
-			for i < len(respKvnodes) && j < len(localKvnodes) {
-				if respKvnodes[i][0] == localKvnodes[j] {
-					i++
-					j++
-				} else if respKvnodes[i][0] > localKvnodes[j] {
-					remove = append(remove, localKvnodes[j])
-					j++
-				} else {
-					add = append(add, respKvnodes[i])
-					i++
-				}
-			}
+			if len(resp.Sets[j].Stores) > 0 {
+				v := resp.Sets[j]
+				s := localSets[i]
 
-			if len(respKvnodes[i:]) > 0 {
-				add = append(add, respKvnodes[i:]...)
-			}
-
-			if len(localKvnodes[j:]) > 0 {
-				remove = append(remove, localKvnodes[j:]...)
-			}
-
-			for _, vv := range add {
-				n := &kvnode{
-					id:           int(vv[0]),
-					service:      fmt.Sprintf("%s:%d", v.Kvnodes[vv[1]].Host, v.Kvnodes[vv[1]].ServicePort),
-					waittingSend: list.New(),
-					waitResponse: map[int64]*forwordMsg{},
-					setID:        int(v.SetID),
-					gate:         g,
-				}
-				s.nodes[n.id] = n
-			}
-
-			for _, vv := range remove {
-				kvnode := s.nodes[int(vv)]
-				delete(s.nodes, int(vv))
-				if nil != kvnode.session {
-					kvnode.session.Close(nil, 0)
-				} else {
-					kvnode.paybackWaittingSendToGate()
+				for k, _ := range v.Stores {
+					ss := s.stores[int(v.Stores[k])]
+					ss.slots, _ = bitmap.CreateFromJson(v.Slots[k])
 				}
 
-				for _, store := range s.stores {
-					if store.leader == kvnode {
-						store.leader = nil
+				localKvnodes := []int32{}
+				for _, vv := range s.nodes {
+					localKvnodes = append(localKvnodes, int32(vv.id))
+				}
+
+				respKvnodes := [][]int32{}
+				for k, vv := range v.Kvnodes {
+					respKvnodes = append(respKvnodes, []int32{vv.NodeID, int32(k)})
+				}
+
+				sort.Slice(localKvnodes, func(i, j int) bool {
+					return localKvnodes[i] < localKvnodes[j]
+				})
+
+				sort.Slice(respKvnodes, func(i, j int) bool {
+					return respKvnodes[i][0] < respKvnodes[j][0]
+				})
+
+				add := [][]int32{}
+				remove := []int32{}
+
+				i := 0
+				j := 0
+
+				for i < len(respKvnodes) && j < len(localKvnodes) {
+					if respKvnodes[i][0] == localKvnodes[j] {
+						i++
+						j++
+					} else if respKvnodes[i][0] > localKvnodes[j] {
+						remove = append(remove, localKvnodes[j])
+						j++
+					} else {
+						add = append(add, respKvnodes[i])
+						i++
+					}
+				}
+
+				if len(respKvnodes[i:]) > 0 {
+					add = append(add, respKvnodes[i:]...)
+				}
+
+				if len(localKvnodes[j:]) > 0 {
+					remove = append(remove, localKvnodes[j:]...)
+				}
+
+				for _, vv := range add {
+					//GetSugar().Infof("----------set:%d add node:%d %s:%d", s.setID, vv[0], v.Kvnodes[vv[1]].Host, v.Kvnodes[vv[1]].ServicePort)
+					n := &kvnode{
+						id:           int(vv[0]),
+						service:      fmt.Sprintf("%s:%d", v.Kvnodes[vv[1]].Host, v.Kvnodes[vv[1]].ServicePort),
+						waittingSend: list.New(),
+						waitResponse: map[int64]*forwordMsg{},
+						setID:        int(v.SetID),
+						gate:         g,
+					}
+					s.nodes[n.id] = n
+				}
+
+				for _, vv := range remove {
+					kvnode := s.nodes[int(vv)]
+					delete(s.nodes, int(vv))
+					if nil != kvnode.session {
+						kvnode.session.Close(nil, 0)
+					} else {
+						kvnode.paybackWaittingSendToGate()
+					}
+
+					for _, store := range s.stores {
+						if store.leader == kvnode {
+							store.leader = nil
+						}
 					}
 				}
 			}
 
+			i++
+			j++
+		} else if localSets[i].setID > int(resp.Sets[j].SetID) {
+			addSets = append(addSets, resp.Sets[j])
+			j++
 		} else {
-			s := &set{
-				setID:  int(v.SetID),
-				nodes:  map[int]*kvnode{},
-				stores: map[int]*store{},
-			}
-
-			for _, vv := range v.Kvnodes {
-				n := &kvnode{
-					id:           int(vv.NodeID),
-					service:      fmt.Sprintf("%s:%d", vv.Host, vv.ServicePort),
-					waittingSend: list.New(),
-					waitResponse: map[int64]*forwordMsg{},
-					setID:        int(v.SetID),
-					gate:         g,
-				}
-				s.nodes[n.id] = n
-			}
-
-			for k, vv := range v.Stores {
-				st := &store{
-					id: int(vv),
-					cache: cache{
-						l: list.New(),
-					},
-					setID: int(v.SetID),
-					gate:  g,
-				}
-				st.slots, _ = bitmap.CreateFromJson(v.Slots[k])
-				s.stores[st.id] = st
-			}
-			g.sets[s.setID] = s
+			removeSets = append(removeSets, localSets[i])
+			i++
 		}
 	}
 
-	for _, v := range resp.RemoveSets {
-		if s, ok := g.sets[int(v)]; ok {
-			delete(g.sets, int(v))
-			for _, kvnode := range s.nodes {
-				if nil != kvnode.session {
-					kvnode.session.Close(nil, 0)
-				} else {
-					kvnode.paybackWaittingSendToGate()
-				}
+	if len(localSets[i:]) > 0 {
+		removeSets = append(removeSets, localSets[i:]...)
+	}
+
+	if len(resp.Sets[j:]) > 0 {
+		addSets = append(addSets, resp.Sets[j:]...)
+	}
+
+	for _, v := range addSets {
+		s := &set{
+			setID:  int(v.SetID),
+			nodes:  map[int]*kvnode{},
+			stores: map[int]*store{},
+		}
+
+		for _, vv := range v.Kvnodes {
+			n := &kvnode{
+				id:           int(vv.NodeID),
+				service:      fmt.Sprintf("%s:%d", vv.Host, vv.ServicePort),
+				waittingSend: list.New(),
+				waitResponse: map[int64]*forwordMsg{},
+				setID:        int(v.SetID),
+				gate:         g,
 			}
-			for _, vv := range s.stores {
-				//将待转发请求回收
-				for vvv := vv.l.Front(); nil != vvv; vvv = vv.l.Front() {
-					msg := vvv.Value.(*forwordMsg)
-					vv.removeMsg(msg)
-					g.addMsg(msg)
-				}
+			s.nodes[n.id] = n
+		}
+
+		for k, vv := range v.Stores {
+			st := &store{
+				id: int(vv),
+				cache: cache{
+					l: list.New(),
+				},
+				setID: int(v.SetID),
+				gate:  g,
+			}
+			st.slots, _ = bitmap.CreateFromJson(v.Slots[k])
+			s.stores[st.id] = st
+		}
+		g.sets[s.setID] = s
+
+		GetSugar().Infof("add set %d %v", s.setID, s.stores)
+
+	}
+
+	for _, s := range removeSets {
+		delete(g.sets, s.setID)
+		for _, kvnode := range s.nodes {
+			if nil != kvnode.session {
+				kvnode.session.Close(nil, 0)
+			} else {
+				kvnode.paybackWaittingSendToGate()
+			}
+		}
+		for _, vv := range s.stores {
+			//将待转发请求回收
+			for vvv := vv.l.Front(); nil != vvv; vvv = vv.l.Front() {
+				msg := vvv.Value.(*forwordMsg)
+				vv.removeMsg(msg)
+				g.addMsg(msg)
 			}
 		}
 	}
@@ -430,30 +470,19 @@ func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
 }
 
 func (g *gate) queryRouteInfo() {
-	req := &sproto.QueryRouteInfo{
-		Version: g.version,
-	}
+	resp := doQueryRouteInfo(g.pdAddr, &sproto.QueryRouteInfo{
+		Version: atomic.LoadInt64(&g.version),
+	})
+	g.callInQueue(1, func() {
+		g.onQueryRouteInfoResp(resp)
+		delay := QueryRouteInfoDuration
+		if g.lenMsg() > 0 {
+			delay = time.Millisecond * 50
+		}
 
-	for kk, _ := range g.sets {
-		req.Sets = append(req.Sets, int32(kk))
-	}
-
-	go func() {
-		resp := doQueryRouteInfo(g.pdAddr, req)
-		g.callInQueue(1, func() {
-			g.onQueryRouteInfoResp(resp)
-			delay := QueryRouteInfoDuration
-			if g.lenMsg() > 0 {
-				delay = time.Millisecond * 50
-			}
-			g.startQueryTimer(delay)
+		time.AfterFunc(delay, func() {
+			g.queryRouteInfo()
 		})
-	}()
-}
-
-func (g *gate) startQueryTimer(delay time.Duration) {
-	time.AfterFunc(delay, func() {
-		g.queryRouteInfo()
 	})
 }
 
@@ -553,7 +582,9 @@ func (g *gate) start() error {
 
 	g.startListener()
 
-	g.startQueryTimer(QueryRouteInfoDuration)
+	time.AfterFunc(QueryRouteInfoDuration, func() {
+		g.queryRouteInfo()
+	})
 
 	return nil
 }

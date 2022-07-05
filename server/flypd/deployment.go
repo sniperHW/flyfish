@@ -182,14 +182,15 @@ func (d Deployment) queryRouteInfo(req *sproto.QueryRouteInfo) *sproto.QueryRout
 	if req.Version >= d.Version {
 		//路由信息没有发生过变更
 	} else {
-		var localSets []int32
 		for _, v := range d.Sets {
-			localSets = append(localSets, int32(v.SetID))
-			if v.Version > req.Version {
-				s := &sproto.RouteInfoSet{
-					SetID: int32(v.SetID),
-				}
 
+			s := &sproto.RouteInfoSet{
+				SetID: int32(v.SetID),
+			}
+
+			resp.Sets = append(resp.Sets, s)
+
+			if v.Version > req.Version {
 				for _, vv := range v.Nodes {
 					s.Kvnodes = append(s.Kvnodes, &sproto.RouteInfoKvNode{
 						NodeID:      int32(vv.NodeID),
@@ -202,36 +203,6 @@ func (d Deployment) queryRouteInfo(req *sproto.QueryRouteInfo) *sproto.QueryRout
 					s.Stores = append(s.Stores, int32(vv.StoreID))
 					s.Slots = append(s.Slots, vv.Slots)
 				}
-				resp.Sets = append(resp.Sets, s)
-			}
-		}
-
-		if len(localSets) > 0 && len(req.Sets) > 0 {
-			sort.Slice(localSets, func(i, j int) bool {
-				return localSets[i] < localSets[j]
-			})
-
-			sort.Slice(req.Sets, func(i, j int) bool {
-				return req.Sets[i] < req.Sets[j]
-			})
-
-			i := 0
-			j := 0
-
-			for i < len(localSets) && j < len(req.Sets) {
-				if localSets[i] == req.Sets[j] {
-					i++
-					j++
-				} else if localSets[i] > req.Sets[j] {
-					j++
-				} else {
-					resp.RemoveSets = append(resp.RemoveSets, req.Sets[j])
-					i++
-				}
-			}
-
-			if len(req.Sets[j:]) > 0 {
-				resp.RemoveSets = append(resp.RemoveSets, req.Sets[j:]...)
 			}
 		}
 	}

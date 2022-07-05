@@ -356,146 +356,187 @@ func (this *clientImplFlykv) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoRes
 
 	this.version = resp.Version
 
-	for _, v := range resp.Sets {
-		s, ok := this.sets[int(v.SetID)]
-		if ok {
-			for k, _ := range v.Stores {
-				ss := s.stores[int(v.Stores[k])]
-				ss.slots, _ = bitmap.CreateFromJson(v.Slots[k])
-			}
+	var localSets []*set
 
-			localKvnodes := []int32{}
-			for _, vv := range s.nodes {
-				localKvnodes = append(localKvnodes, int32(vv.id))
-			}
+	for _, v := range this.sets {
+		localSets = append(localSets, v)
+	}
 
-			respKvnodes := [][]int32{}
-			for k, vv := range v.Kvnodes {
-				respKvnodes = append(respKvnodes, []int32{vv.NodeID, int32(k)})
-			}
+	sort.Slice(localSets, func(i, j int) bool {
+		return localSets[i].setID < localSets[j].setID
+	})
 
-			sort.Slice(localKvnodes, func(i, j int) bool {
-				return localKvnodes[i] < localKvnodes[j]
-			})
+	sort.Slice(resp.Sets, func(i, j int) bool {
+		return resp.Sets[i].SetID < resp.Sets[j].SetID
+	})
 
-			sort.Slice(respKvnodes, func(i, j int) bool {
-				return respKvnodes[i][0] < respKvnodes[j][0]
-			})
+	var removeSets []*set
+	var addSets []*sproto.RouteInfoSet
 
-			add := [][]int32{}
-			remove := []int32{}
+	i := 0
+	j := 0
 
-			i := 0
-			j := 0
+	for i < len(localSets) && j < len(resp.Sets) {
+		if localSets[i].setID == int(resp.Sets[j].SetID) {
+			if len(resp.Sets[j].Stores) > 0 {
 
-			for i < len(respKvnodes) && j < len(localKvnodes) {
-				if respKvnodes[i][0] == localKvnodes[j] {
-					i++
-					j++
-				} else if respKvnodes[i][0] > localKvnodes[j] {
-					remove = append(remove, localKvnodes[j])
-					j++
-				} else {
-					add = append(add, respKvnodes[i])
-					i++
+				v := resp.Sets[j]
+				s := localSets[i]
+
+				for k, _ := range v.Stores {
+					ss := s.stores[int(v.Stores[k])]
+					ss.slots, _ = bitmap.CreateFromJson(v.Slots[k])
 				}
-			}
 
-			if len(respKvnodes[i:]) > 0 {
-				add = append(add, respKvnodes[i:]...)
-			}
-
-			if len(localKvnodes[j:]) > 0 {
-				remove = append(remove, localKvnodes[j:]...)
-			}
-
-			for _, vv := range add {
-				n := &kvnode{
-					id:       int(vv[0]),
-					service:  fmt.Sprintf("%s:%d", v.Kvnodes[vv[1]].Host, v.Kvnodes[vv[1]].ServicePort),
-					waitSend: list.New(),
-					setID:    int(v.SetID),
+				localKvnodes := []int32{}
+				for _, vv := range s.nodes {
+					localKvnodes = append(localKvnodes, int32(vv.id))
 				}
-				s.nodes[n.id] = n
-			}
 
-			for _, vv := range remove {
-				kvnode := s.nodes[int(vv)]
-				delete(s.nodes, int(vv))
-				if nil != kvnode.session {
-					kvnode.session.Close(nil, 0)
-					kvnode.session = nil
-				} else {
-					for v := kvnode.waitSend.Front(); nil != v; v = kvnode.waitSend.Front() {
-						cmd := kvnode.waitSend.Remove(v).(*cmdContext)
-						cmd.l = this.waitSend
-						cmd.listElement = this.waitSend.PushBack(cmd)
+				respKvnodes := [][]int32{}
+				for k, vv := range v.Kvnodes {
+					respKvnodes = append(respKvnodes, []int32{vv.NodeID, int32(k)})
+				}
+
+				sort.Slice(localKvnodes, func(i, j int) bool {
+					return localKvnodes[i] < localKvnodes[j]
+				})
+
+				sort.Slice(respKvnodes, func(i, j int) bool {
+					return respKvnodes[i][0] < respKvnodes[j][0]
+				})
+
+				add := [][]int32{}
+				remove := []int32{}
+
+				i := 0
+				j := 0
+
+				for i < len(respKvnodes) && j < len(localKvnodes) {
+					if respKvnodes[i][0] == localKvnodes[j] {
+						i++
+						j++
+					} else if respKvnodes[i][0] > localKvnodes[j] {
+						remove = append(remove, localKvnodes[j])
+						j++
+					} else {
+						add = append(add, respKvnodes[i])
+						i++
 					}
 				}
 
-				for _, store := range s.stores {
-					if store.leader == kvnode {
-						store.leader = nil
+				if len(respKvnodes[i:]) > 0 {
+					add = append(add, respKvnodes[i:]...)
+				}
+
+				if len(localKvnodes[j:]) > 0 {
+					remove = append(remove, localKvnodes[j:]...)
+				}
+
+				for _, vv := range add {
+					n := &kvnode{
+						id:       int(vv[0]),
+						service:  fmt.Sprintf("%s:%d", v.Kvnodes[vv[1]].Host, v.Kvnodes[vv[1]].ServicePort),
+						waitSend: list.New(),
+						setID:    int(v.SetID),
+					}
+					s.nodes[n.id] = n
+				}
+
+				for _, vv := range remove {
+					kvnode := s.nodes[int(vv)]
+					delete(s.nodes, int(vv))
+					if nil != kvnode.session {
+						kvnode.session.Close(nil, 0)
+						kvnode.session = nil
+					} else {
+						for v := kvnode.waitSend.Front(); nil != v; v = kvnode.waitSend.Front() {
+							cmd := kvnode.waitSend.Remove(v).(*cmdContext)
+							cmd.l = this.waitSend
+							cmd.listElement = this.waitSend.PushBack(cmd)
+						}
+					}
+
+					for _, store := range s.stores {
+						if store.leader == kvnode {
+							store.leader = nil
+						}
 					}
 				}
 			}
 
+			i++
+			j++
+		} else if localSets[i].setID > int(resp.Sets[j].SetID) {
+			addSets = append(addSets, resp.Sets[j])
+			j++
 		} else {
-			s = &set{
-				setID:  int(v.SetID),
-				nodes:  map[int]*kvnode{},
-				stores: map[int]*store{},
-			}
-
-			for _, vv := range v.Kvnodes {
-				n := &kvnode{
-					id:       int(vv.NodeID),
-					service:  fmt.Sprintf("%s:%d", vv.Host, vv.ServicePort),
-					waitSend: list.New(),
-					setID:    int(v.SetID),
-				}
-				s.nodes[n.id] = n
-			}
-
-			for k, vv := range v.Stores {
-				st := &store{
-					id:       int(vv),
-					waitSend: list.New(),
-					setID:    int(v.SetID),
-				}
-				st.slots, _ = bitmap.CreateFromJson(v.Slots[k])
-				s.stores[st.id] = st
-			}
-			this.sets[s.setID] = s
+			removeSets = append(removeSets, localSets[i])
+			i++
 		}
 	}
 
-	for _, v := range resp.RemoveSets {
-		if s, ok := this.sets[int(v)]; ok {
+	if len(localSets[i:]) > 0 {
+		removeSets = append(removeSets, localSets[i:]...)
+	}
 
-			for _, kvnode := range s.nodes {
-				if nil != kvnode.session {
-					kvnode.session.Close(nil, 0)
-					kvnode.session = nil
-				} else {
-					for v := kvnode.waitSend.Front(); nil != v; v = kvnode.waitSend.Front() {
-						cmd := kvnode.waitSend.Remove(v).(*cmdContext)
-						cmd.l = this.waitSend
-						cmd.listElement = this.waitSend.PushBack(cmd)
-					}
-				}
+	if len(resp.Sets[j:]) > 0 {
+		addSets = append(addSets, resp.Sets[j:]...)
+	}
+
+	for _, v := range addSets {
+		s := &set{
+			setID:  int(v.SetID),
+			nodes:  map[int]*kvnode{},
+			stores: map[int]*store{},
+		}
+
+		for _, vv := range v.Kvnodes {
+			n := &kvnode{
+				id:       int(vv.NodeID),
+				service:  fmt.Sprintf("%s:%d", vv.Host, vv.ServicePort),
+				waitSend: list.New(),
+				setID:    int(v.SetID),
 			}
+			s.nodes[n.id] = n
+		}
 
-			for _, store := range s.stores {
-				//将待转发请求回收
-				for v := store.waitSend.Front(); nil != v; v = store.waitSend.Front() {
-					cmd := store.waitSend.Remove(v).(*cmdContext)
+		for k, vv := range v.Stores {
+			st := &store{
+				id:       int(vv),
+				waitSend: list.New(),
+				setID:    int(v.SetID),
+			}
+			st.slots, _ = bitmap.CreateFromJson(v.Slots[k])
+			s.stores[st.id] = st
+		}
+		this.sets[s.setID] = s
+	}
+
+	for _, s := range removeSets {
+
+		for _, kvnode := range s.nodes {
+			if nil != kvnode.session {
+				kvnode.session.Close(nil, 0)
+				kvnode.session = nil
+			} else {
+				for v := kvnode.waitSend.Front(); nil != v; v = kvnode.waitSend.Front() {
+					cmd := kvnode.waitSend.Remove(v).(*cmdContext)
 					cmd.l = this.waitSend
 					cmd.listElement = this.waitSend.PushBack(cmd)
 				}
 			}
-			delete(this.sets, int(v))
 		}
+
+		for _, store := range s.stores {
+			//将待转发请求回收
+			for v := store.waitSend.Front(); nil != v; v = store.waitSend.Front() {
+				cmd := store.waitSend.Remove(v).(*cmdContext)
+				cmd.l = this.waitSend
+				cmd.listElement = this.waitSend.PushBack(cmd)
+			}
+		}
+		delete(this.sets, s.setID)
 	}
 
 	this.slotToStore = map[int]*store{}
@@ -508,7 +549,6 @@ func (this *clientImplFlykv) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoRes
 		}
 	}
 
-	//GetSugar().Infof("onQueryRouteInfoResp %v", this.slotToStore)
 	//路由信息更新,尝试发送waitSend中的Cmd
 	for ele := this.waitSend.Front(); nil != ele; {
 		next := ele.Next()
@@ -523,40 +563,31 @@ func (this *clientImplFlykv) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoRes
 
 func (this *clientImplFlykv) queryRouteInfo(pdAddr []*net.UDPAddr) {
 	this.mu.Lock()
-	defer this.mu.Unlock()
-	if this.closed {
-		return
-	} else {
-		req := &sproto.QueryRouteInfo{
+	closed := this.closed
+	this.mu.Unlock()
+	if !closed {
+		resp := QueryRouteInfo(pdAddr, &sproto.QueryRouteInfo{
 			Version: this.version,
-		}
-
-		for kk, _ := range this.sets {
-			req.Sets = append(req.Sets, int32(kk))
-		}
-
-		go func() {
-			resp := QueryRouteInfo(pdAddr, req)
-			this.mu.Lock()
-			defer this.mu.Unlock()
-			if this.closed {
-				return
-			} else {
-				this.onQueryRouteInfoResp(resp)
-				delay := QueryRouteInfoDuration
-				if this.waitSend.Len() > 0 {
-					delay = time.Millisecond * 50
-				}
-				time.AfterFunc(delay, func() {
-					this.queryRouteInfo(pdAddr)
-				})
+		})
+		this.mu.Lock()
+		defer this.mu.Unlock()
+		if this.closed {
+			return
+		} else {
+			this.onQueryRouteInfoResp(resp)
+			delay := QueryRouteInfoDuration
+			if this.waitSend.Len() > 0 {
+				delay = time.Millisecond * 50
 			}
-		}()
+			time.AfterFunc(delay, func() {
+				this.queryRouteInfo(pdAddr)
+			})
+		}
 	}
 }
 
 func (this *clientImplFlykv) start(pdAddr []*net.UDPAddr) {
-	this.queryRouteInfo(pdAddr)
+	go this.queryRouteInfo(pdAddr)
 }
 
 func (this *clientImplFlykv) close() {
