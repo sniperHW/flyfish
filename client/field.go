@@ -69,7 +69,7 @@ func UnmarshalJsonField(field *Field, obj interface{}) error {
 }
 
 //对大小>=1k的[]byte字段，执行压缩
-func packField(key string, v interface{}) *protocol.Field {
+func PackField(key string, v interface{}) *protocol.Field {
 	switch v.(type) {
 	case []byte:
 		b := v.([]byte)
@@ -88,7 +88,7 @@ func packField(key string, v interface{}) *protocol.Field {
 	}
 }
 
-func unpackField(f *protocol.Field) (*Field, error) {
+func UnpackField(f *protocol.Field) (*Field, error) {
 	var err error
 	if nil != f {
 		switch f.GetValue().(type) {

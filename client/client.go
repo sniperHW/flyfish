@@ -18,9 +18,9 @@ var maxPendingSize int = 10000
 var recvTimeout time.Duration = time.Second * 30
 
 const (
-	ClientType_FlyKv   = ClientType(1) //请求发往flykv
-	ClientType_FlySql  = ClientType(2) //请求发往flysql
-	ClientType_FlyGate = ClientType(3) //请求发往flygate由flygate负责转发
+	FlyKv   = ClientType(1) //请求发往flykv
+	FlySql  = ClientType(2) //请求发往flysql
+	FlyGate = ClientType(3) //请求发往flygate由flygate负责转发
 )
 
 type EventQueueI interface {
@@ -66,7 +66,7 @@ func (this *Client) Close() {
 	this.impl.close()
 }
 
-func OpenClient(conf ClientConf) (*Client, error) {
+func New(conf ClientConf) (*Client, error) {
 	if len(conf.PD) == 0 {
 		return nil, errors.New("PD is empty")
 	}
@@ -83,7 +83,7 @@ func OpenClient(conf ClientConf) (*Client, error) {
 
 	c := &Client{}
 	switch conf.ClientType {
-	case ClientType_FlyGate:
+	case FlyGate:
 		c.impl = &clientImplFlyGate{
 			waitResp:       map[int64]*cmdContext{},
 			waitSend:       list.New(),
@@ -92,7 +92,7 @@ func OpenClient(conf ClientConf) (*Client, error) {
 		}
 		c.impl.start(pdAddr)
 		return c, nil
-	case ClientType_FlyKv:
+	case FlyKv:
 		c.impl = &clientImplFlykv{
 			waitResp:       map[int64]*cmdContext{},
 			waitSend:       list.New(),

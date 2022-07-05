@@ -342,7 +342,7 @@ func (this *Client) Set(table, key string, fields map[string]interface{}, versio
 					}
 
 					for k, v := range fields {
-						pbdata.Fields = append(pbdata.Fields, packField(k, v))
+						pbdata.Fields = append(pbdata.Fields, PackField(k, v))
 					}
 
 					return &cs.ReqMessage{
@@ -369,7 +369,7 @@ func (this *Client) SetNx(table, key string, fields map[string]interface{}) *Val
 					pbdata := &protocol.SetNxReq{}
 
 					for k, v := range fields {
-						pbdata.Fields = append(pbdata.Fields, packField(k, v))
+						pbdata.Fields = append(pbdata.Fields, PackField(k, v))
 					}
 
 					return &cs.ReqMessage{
@@ -398,8 +398,8 @@ func (this *Client) CompareAndSet(table, key, field string, oldV, newV interface
 						Seqno:  atomic.AddInt64(&this.seqno, 1),
 						UniKey: table + ":" + key,
 						Data: &protocol.CompareAndSetReq{
-							New: packField(field, newV),
-							Old: packField(field, oldV),
+							New: PackField(field, newV),
+							Old: PackField(field, oldV),
 						}}
 				},
 			},
@@ -422,8 +422,8 @@ func (this *Client) CompareAndSetNx(table, key, field string, oldV, newV interfa
 						Seqno:  atomic.AddInt64(&this.seqno, 1),
 						UniKey: table + ":" + key,
 						Data: &protocol.CompareAndSetNxReq{
-							New: packField(field, newV),
-							Old: packField(field, oldV),
+							New: PackField(field, newV),
+							Old: PackField(field, oldV),
 						}}
 				},
 			},
@@ -494,7 +494,7 @@ func onGetResp(c *cmdContext, errCode errcode.Error, resp *protocol.GetResp) int
 		var err error
 		ret.Fields = map[string]*Field{}
 		for _, v := range resp.Fields {
-			ret.Fields[v.GetName()], err = unpackField(v)
+			ret.Fields[v.GetName()], err = UnpackField(v)
 			if nil != err {
 				GetSugar().Errorf("onGetResp %s filed:%s:%s unpackField error:%v", c.table, c.key, v.GetName(), err)
 			}
@@ -521,7 +521,7 @@ func onSetNxResp(c *cmdContext, errCode errcode.Error, resp *protocol.SetNxResp)
 	if len(resp.Fields) > 0 {
 		var err error
 		for _, v := range resp.Fields {
-			ret.Value, err = unpackField(v)
+			ret.Value, err = UnpackField(v)
 			if nil != err {
 				GetSugar().Errorf("onSetNxResp %s filed:%s:%s unpackField error:%v", c.table, c.key, v.GetName(), err)
 			} else {
@@ -544,7 +544,7 @@ func onCompareAndSetResp(c *cmdContext, errCode errcode.Error, resp *protocol.Co
 
 	if resp.Value != nil {
 		var err error
-		ret.Value, err = unpackField(resp.GetValue())
+		ret.Value, err = UnpackField(resp.GetValue())
 		if nil != err {
 			GetSugar().Errorf("onCompareAndSetResp %s filed:%s:%s unpackField error:%v", c.table, c.key, resp.GetValue().GetName(), err)
 		}
@@ -564,7 +564,7 @@ func onCompareAndSetNxResp(c *cmdContext, errCode errcode.Error, resp *protocol.
 
 	if resp.Value != nil {
 		var err error
-		ret.Value, err = unpackField(resp.GetValue())
+		ret.Value, err = UnpackField(resp.GetValue())
 		if nil != err {
 			GetSugar().Errorf("onCompareAndSetNxResp %s filed:%s:%s unpackField error:%v", c.table, c.key, resp.GetValue().GetName(), err)
 		}

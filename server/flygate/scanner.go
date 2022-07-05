@@ -17,6 +17,7 @@ import (
 
 type storeScanner struct {
 	id       int
+	set      int
 	slots    *bitmap.Bitmap
 	conn     net.Conn
 	services map[int]string
@@ -100,29 +101,36 @@ func (g *gate) onScanner(conn net.Conn) {
 				}
 			}
 
-			ch := make(chan struct{})
-
-			g.mainQueue.Append(0, func() {
-				for _, v := range g.sets {
-					for _, vv := range v.stores {
-						st := &storeScanner{
-							id:       vv.id,
-							slots:    vv.slots.Clone(),
-							services: map[int]string{},
+			for {
+				ch := make(chan struct{})
+				g.mainQueue.Append(0, func() {
+					for _, v := range g.sets {
+						for _, vv := range v.stores {
+							if len(v.nodes) > 0 {
+								st := &storeScanner{
+									set:      v.setID,
+									id:       vv.id,
+									slots:    vv.slots.Clone(),
+									services: map[int]string{},
+								}
+								for _, vvv := range v.nodes {
+									st.services[vvv.id] = vvv.service
+								}
+								sc.stores = append(sc.stores, st)
+							}
 						}
-						for _, vvv := range v.nodes {
-							st.services[vvv.id] = vvv.service
-						}
-						sc.stores = append(sc.stores, st)
 					}
+					close(ch)
+				})
+				<-ch
+
+				if len(sc.stores) > 0 || time.Now().After(deadline) {
+					break
+				} else {
+					time.Sleep(time.Millisecond * 100)
 				}
-				close(ch)
-			})
-
-			<-ch
-
+			}
 			return scan.Err_ok
-
 		}()
 
 		if time.Now().After(deadline) {
@@ -257,29 +265,58 @@ func (sc *scanner) loop(g *gate, conn net.Conn) {
 					if slots := sc.okSlots.GetCloseBits(); len(slots) > 0 {
 						sc.stores = sc.stores[:0]
 						sc.offset = 0
-						ch := make(chan struct{})
-						g.mainQueue.Append(0, func() {
-							stores := map[int]*store{}
-							for _, v := range slots {
-								if s, ok := g.slotToStore[v]; ok {
-									stores[v] = s
+						for {
+							ch := make(chan struct{})
+							g.mainQueue.Append(0, func() {
+								type pairs struct {
+									set   int
+									slots *bitmap.Bitmap
 								}
+
+								stores := map[int]*pairs{}
+
+								for _, v := range slots {
+									if store, ok := g.slotToStore[v]; ok {
+										p := stores[store.id]
+										if nil == p {
+											p = &pairs{
+												set:   store.setID,
+												slots: bitmap.New(sslot.SlotCount),
+											}
+											stores[store.id] = p
+										}
+										p.slots.Set(v)
+									}
+								}
+
+								for _, vv := range stores {
+									set := g.sets[vv.set]
+									if len(set.nodes) > 0 {
+										st := &storeScanner{
+											id:       vv.set,
+											slots:    vv.slots,
+											services: map[int]string{},
+										}
+
+										for _, vvv := range set.nodes {
+											st.services[vvv.id] = vvv.service
+										}
+										sc.stores = append(sc.stores, st)
+									}
+								}
+								close(ch)
+							})
+							<-ch
+
+							if time.Now().After(deadline) {
+								breakLoop = true
+								break
+							} else if len(sc.stores) > 0 {
+								break
+							} else {
+								time.Sleep(time.Millisecond * 100)
 							}
-							for _, vv := range stores {
-								set := g.sets[vv.setID]
-								st := &storeScanner{
-									id:       vv.id,
-									slots:    vv.slots.Clone(),
-									services: map[int]string{},
-								}
-								for _, vvv := range set.nodes {
-									st.services[vvv.id] = vvv.service
-								}
-								sc.stores = append(sc.stores, st)
-							}
-							close(ch)
-						})
-						<-ch
+						}
 					} else {
 						//加入dummy通告scan结束
 						resp.Rows = append(resp.Rows, scan.MakeDummyRow(scan.DummyScan))

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/sniperHW/flyfish/client"
+	"github.com/sniperHW/flyfish/client/scanner"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/db/sql"
 	//"github.com/sniperHW/flyfish/errcode"
@@ -449,8 +450,8 @@ func TestFlygate(t *testing.T) {
 
 	fmt.Println("run client")
 
-	c, _ := client.OpenClient(client.ClientConf{
-		ClientType: client.ClientType_FlyGate,
+	c, _ := client.New(client.ClientConf{
+		ClientType: client.FlyGate,
 		PD:         []string{"localhost:8110"},
 	})
 
@@ -626,8 +627,8 @@ func TestFlygate(t *testing.T) {
 	clientArray := []*client.Client{}
 
 	for j := 0; j < 4; j++ {
-		cc, _ := client.OpenClient(client.ClientConf{
-			ClientType: client.ClientType_FlyGate,
+		cc, _ := client.New(client.ClientConf{
+			ClientType: client.FlyGate,
 			PD:         []string{"localhost:8110"},
 		})
 		clientArray = append(clientArray, cc)
@@ -757,8 +758,8 @@ func TestFlykv(t *testing.T) {
 		panic(err)
 	}
 
-	c, _ := client.OpenClient(client.ClientConf{
-		ClientType: client.ClientType_FlyKv,
+	c, _ := client.New(client.ClientConf{
+		ClientType: client.FlyKv,
 		PD:         []string{"localhost:8110"},
 	})
 
@@ -1356,10 +1357,9 @@ func TestAddSet(t *testing.T) {
 	}
 
 	pd.Stop()
-
 }
 
-func TestAddSet2(t *testing.T) {
+func testAddSet2(t *testing.T, clientType client.ClientType) {
 	sslot.SlotCount = 128
 	flypd.MinReplicaPerSet = 1
 	flypd.StorePerSet = 1
@@ -1435,8 +1435,8 @@ func TestAddSet2(t *testing.T) {
 
 	fmt.Println("run client")
 
-	c, _ := client.OpenClient(client.ClientConf{
-		ClientType: client.ClientType_FlyGate,
+	c, _ := client.New(client.ClientConf{
+		ClientType: clientType,
 		PD:         []string{"localhost:8110"},
 	})
 
@@ -1564,195 +1564,17 @@ func TestAddSet2(t *testing.T) {
 
 	time.Sleep(time.Second * 2)
 	pd.Stop()
+}
+
+func TestAddSet2Flygate(t *testing.T) {
+	testAddSet2(t, client.FlyGate)
 }
 
 func TestAddSet3(t *testing.T) {
-	sslot.SlotCount = 128
-	flypd.MinReplicaPerSet = 1
-	flypd.StorePerSet = 1
-	flygate.QueryRouteInfoDuration = time.Millisecond * 3 * 1000
-	os.RemoveAll("./testRaftLog")
-	clearUsers1()
-	var err error
-
-	dbConf := &dbconf{}
-	if _, err = toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
-		panic(err)
-	}
-
-	kvConf, err := flykv.LoadConfigStr(fmt.Sprintf(flyKvConfigStr, dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.Usr, dbConf.Pwd, dbConf.Db))
-
-	if nil != err {
-		panic(err)
-	}
-
-	pd, pdRaftID := newPD(t, 0, "./deployment2.json")
-
-	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
-
-	for {
-		resp, _ := snet.UdpCall([]*net.UDPAddr{addr},
-			&sproto.AddSet{
-				&sproto.DeploymentSet{
-					SetID: 2,
-					Nodes: []*sproto.DeploymentKvnode{
-						&sproto.DeploymentKvnode{
-							NodeID:      2,
-							Host:        "localhost",
-							ServicePort: 9211,
-							RaftPort:    9221,
-						},
-					},
-				},
-			},
-			&sproto.AddSetResp{},
-			time.Second)
-
-		if resp != nil && resp.(*sproto.AddSetResp).Reason == "set already exists" {
-			break
-		}
-		time.Sleep(time.Second * 2)
-	}
-
-	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
-
-	if nil != err {
-		panic(err)
-	}
-
-	fmt.Println("run client")
-
-	c, _ := client.OpenClient(client.ClientConf{
-		ClientType: client.ClientType_FlyKv,
-		PD:         []string{"localhost:8110"},
-	})
-
-	defer c.Close()
-
-	stopCh := make(chan struct{})
-
-	var storeBalanced int32
-
-	go func() {
-		defer close(stopCh)
-		for atomic.LoadInt32(&storeBalanced) == 0 {
-			for i := 0; i < 100 && atomic.LoadInt32(&storeBalanced) == 0; i++ {
-				fields := map[string]interface{}{}
-				fields["age"] = 12
-				name := fmt.Sprintf("sniperHW:%d", i)
-				fields["name"] = name
-				fields["phone"] = []byte("123456789123456789123456789")
-				e := c.Set("users1", name, fields).Exec().ErrCode
-				if nil != e {
-					fmt.Println(e)
-				}
-			}
-		}
-		fmt.Println("client break here")
-	}()
-
-	node2, err := flykv.NewKvNode(2, false, kvConf, flykv.NewSqlDB())
-
-	if nil != err {
-		panic(err)
-	}
-
-	//等待slot平衡
-	for {
-		resp, _ := snet.UdpCall([]*net.UDPAddr{addr},
-			&sproto.GetKvStatus{},
-			&sproto.GetKvStatusResp{},
-			time.Second)
-
-		if resp != nil {
-			slotPerStore := sslot.SlotCount / 2
-
-			ok := true
-			for _, v := range resp.(*sproto.GetKvStatusResp).Sets {
-				for _, vv := range v.Stores {
-					if int(vv.Slotcount) > slotPerStore+1 {
-						ok = false
-					}
-				}
-			}
-
-			if ok {
-				fmt.Println("balance ok")
-				atomic.StoreInt32(&storeBalanced, 1)
-				break
-			}
-		}
-		time.Sleep(time.Second)
-	}
-
-	<-stopCh
-
-	stopCh = make(chan struct{})
-
-	atomic.StoreInt32(&storeBalanced, 0)
-
-	go func() {
-		defer close(stopCh)
-		for atomic.LoadInt32(&storeBalanced) == 0 {
-			for i := 0; i < 100 && atomic.LoadInt32(&storeBalanced) == 0; i++ {
-				fields := map[string]interface{}{}
-				fields["age"] = 12
-				name := fmt.Sprintf("sniperHW:%d", i)
-				fields["name"] = name
-				fields["phone"] = []byte("123456789123456789123456789")
-				e := c.Set("users1", name, fields).Exec().ErrCode
-				if nil != e {
-					fmt.Println(e)
-				}
-			}
-		}
-		fmt.Println("client break here")
-	}()
-
-	for {
-		resp, _ := snet.UdpCall([]*net.UDPAddr{addr},
-			&sproto.SetMarkClear{
-				SetID: 2,
-			},
-			&sproto.SetMarkClearResp{},
-			time.Second)
-
-		if resp != nil && resp.(*sproto.SetMarkClearResp).Reason == "already mark clear" {
-			break
-		}
-		time.Sleep(time.Second * 2)
-	}
-
-	fmt.Println("-------------rem set---------------------------")
-
-	for {
-		resp, _ := snet.UdpCall([]*net.UDPAddr{addr},
-			&sproto.RemSet{
-				SetID: 2,
-			},
-			&sproto.RemSetResp{},
-			time.Second)
-
-		if resp != nil && resp.(*sproto.RemSetResp).Reason == "set not exists" {
-			atomic.StoreInt32(&storeBalanced, 1)
-			break
-		}
-		time.Sleep(time.Second * 2)
-	}
-
-	<-stopCh
-
-	pd.Stop()
-	node1.Stop()
-	node2.Stop()
-
-	pd, _ = newPD(t, pdRaftID, "./deployment2.json")
-
-	time.Sleep(time.Second * 2)
-	pd.Stop()
+	testAddSet2(t, client.FlyKv)
 }
 
-func TestStoreBalance(t *testing.T) {
+func testStoreBalance(t *testing.T, clientType client.ClientType) {
 	sslot.SlotCount = 128
 	flypd.MinReplicaPerSet = 1
 	flypd.StorePerSet = 3
@@ -1804,8 +1626,8 @@ func TestStoreBalance(t *testing.T) {
 
 	stoped := int32(0)
 
-	c, _ := client.OpenClient(client.ClientConf{
-		ClientType: client.ClientType_FlyGate,
+	c, _ := client.New(client.ClientConf{
+		ClientType: clientType,
 		PD:         []string{"localhost:8110"},
 	})
 
@@ -1928,165 +1750,14 @@ func TestStoreBalance(t *testing.T) {
 	node2.Stop()
 	node3.Stop()
 	pd.Stop()
-
 }
 
-func TestStoreBalance2(t *testing.T) {
-	sslot.SlotCount = 128
-	flypd.MinReplicaPerSet = 1
-	flypd.StorePerSet = 3
-	flygate.QueryRouteInfoDuration = time.Millisecond * 3 * 1000
-	os.RemoveAll("./log")
-	os.RemoveAll("./testRaftLog")
-	clearUsers1()
+func TestStoreBalanceFlygate(t *testing.T) {
+	testStoreBalance(t, client.FlyGate)
+}
 
-	var err error
-
-	dbConf := &dbconf{}
-	if _, err = toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
-		panic(err)
-	}
-
-	kvConf, err := flykv.LoadConfigStr(fmt.Sprintf(flyKvConfigStr, dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.Usr, dbConf.Pwd, dbConf.Db))
-
-	if nil != err {
-		panic(err)
-	}
-
-	pd, _ := newPD(t, 0, "./deployment2.json")
-
-	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
-
-	if nil != err {
-		panic(err)
-	}
-
-	stoped := int32(0)
-
-	c, _ := client.OpenClient(client.ClientConf{
-		ClientType: client.ClientType_FlyKv,
-		PD:         []string{"localhost:8110"},
-	})
-
-	defer c.Close()
-
-	go func() {
-		for atomic.LoadInt32(&stoped) == 0 {
-			for i := 0; i < 100 && atomic.LoadInt32(&stoped) == 0; i++ {
-				fields := map[string]interface{}{}
-				fields["age"] = 12
-				name := fmt.Sprintf("sniperHW:%d", i)
-				fields["name"] = name
-				fields["phone"] = []byte("123456789123456789123456789")
-				e := c.Set("users1", name, fields).Exec().ErrCode
-				if nil != e {
-					fmt.Println("set--------------- error:", e)
-				}
-			}
-		}
-		fmt.Println("client break here")
-	}()
-
-	//增加node2
-	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
-
-	for {
-		resp, _ := snet.UdpCall([]*net.UDPAddr{addr},
-			&sproto.AddNode{
-				SetID:       1,
-				NodeID:      2,
-				Host:        "localhost",
-				ServicePort: 9220,
-				RaftPort:    9221,
-			},
-			&sproto.AddNodeResp{},
-			time.Second)
-
-		if resp != nil && resp.(*sproto.AddNodeResp).Ok {
-			break
-		}
-		time.Sleep(time.Second)
-	}
-
-	node2, err := flykv.NewKvNode(2, true, kvConf, flykv.NewSqlDB())
-
-	if nil != err {
-		panic(err)
-	}
-
-	//增加node3
-	for {
-		resp, _ := snet.UdpCall([]*net.UDPAddr{addr},
-			&sproto.AddNode{
-				SetID:       1,
-				NodeID:      3,
-				Host:        "localhost",
-				ServicePort: 9320,
-				RaftPort:    9321,
-			},
-			&sproto.AddNodeResp{},
-			time.Second)
-
-		if resp != nil && resp.(*sproto.AddNodeResp).Ok {
-			break
-		}
-		time.Sleep(time.Second)
-	}
-
-	node3, err := flykv.NewKvNode(3, true, kvConf, flykv.NewSqlDB())
-
-	if nil != err {
-		panic(err)
-	}
-
-	/////////////////
-
-	for {
-		c := consoleHttp.NewClient("localhost:8110")
-		resp, err := c.Call(&sproto.GetKvStatus{}, &sproto.GetKvStatusResp{})
-		if nil != err {
-			logger.GetSugar().Errorf("%v", err)
-		} else {
-			ok := func() bool {
-				leaderCount := []int{0, 0, 0, 0}
-				for _, v := range resp.(*sproto.GetKvStatusResp).Sets {
-					if v.SetID == int32(1) {
-						for _, vv := range v.Nodes {
-							for _, vvv := range vv.Stores {
-								if vvv.IsLeader {
-									leaderCount[int(vv.NodeID)]++
-								}
-							}
-						}
-					}
-				}
-
-				logger.GetSugar().Infof("leaderCount %v", leaderCount)
-
-				for i := 1; i < len(leaderCount); i++ {
-					if leaderCount[i] != 1 {
-						return false
-					}
-				}
-				return true
-
-			}()
-
-			if ok {
-				break
-			} else {
-				time.Sleep(time.Second)
-			}
-		}
-	}
-
-	atomic.StoreInt32(&stoped, 1)
-
-	node1.Stop()
-	node2.Stop()
-	node3.Stop()
-	pd.Stop()
-
+func TestStoreBalanceFlykv(t *testing.T) {
+	testStoreBalance(t, client.FlyKv)
 }
 
 func TestSuspendResume(t *testing.T) {
@@ -2195,8 +1866,8 @@ func TestSuspendResume(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 
-	c, _ := client.OpenClient(client.ClientConf{
-		ClientType: client.ClientType_FlyGate,
+	c, _ := client.New(client.ClientConf{
+		ClientType: client.FlyGate,
 		PD:         []string{"localhost:8110"},
 	})
 
@@ -2309,8 +1980,7 @@ func TestSuspendResume(t *testing.T) {
 	pd.Stop()
 }
 
-/*
-func TestScan(t *testing.T) {
+func testScan(t *testing.T, clientType client.ClientType) {
 	sslot.SlotCount = 128
 	flypd.MinReplicaPerSet = 1
 	flypd.StorePerSet = 1
@@ -2366,8 +2036,8 @@ func TestScan(t *testing.T) {
 
 	fmt.Println("run client")
 
-	c, _ := client.OpenClient(client.ClientConf{
-		ClientType: client.ClientType_FlyGate,
+	c, _ := client.New(client.ClientConf{
+		ClientType: clientType,
 		PD:         []string{"localhost:8110"},
 	})
 
@@ -2383,9 +2053,9 @@ func TestScan(t *testing.T) {
 
 	fmt.Println("set ok")
 
-	sc, _ := client.NewScanner(client.ClientConf{
-		ClientType: client.ClientType_FlyGate,
-		PD:         []string{"localhost:8110"},
+	sc, _ := scanner.New(scanner.ScannerConf{
+		ScannerType: scanner.ScannerType(clientType),
+		PD:          []string{"localhost:8110"},
 	}, "users1", []string{"name", "age", "phone"})
 
 	count := 0
@@ -2426,9 +2096,9 @@ func TestScan(t *testing.T) {
 
 	fmt.Println("again")
 
-	sc, _ = client.NewScanner(client.ClientConf{
-		ClientType: client.ClientType_FlyKv,
-		PD:         []string{"localhost:8110"},
+	sc, _ = scanner.New(scanner.ScannerConf{
+		ScannerType: scanner.FlyGate,
+		PD:          []string{"localhost:8110"},
 	}, "users1", []string{"name", "age", "phone"})
 
 	count = 0
@@ -2454,7 +2124,15 @@ func TestScan(t *testing.T) {
 	node2.Stop()
 	gate1.Stop()
 	pd.Stop()
-}*/
+}
+
+func TestScanFlygate(t *testing.T) {
+	testScan(t, client.FlyGate)
+}
+
+func TestScanFlykv(t *testing.T) {
+	testScan(t, client.FlyKv)
+}
 
 func TestMeta(t *testing.T) {
 	sslot.SlotCount = 128
