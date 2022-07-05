@@ -138,27 +138,22 @@ func (p *pd) loadInitMeta() {
 				GetSugar().Panic(err)
 			}
 
-			def.Version = 1
+			missingTable := map[string]*db.TableDef{}
 
 			for _, t := range def.TableDefs {
-				tb, err := sql.GetTableScheme(dbc, p.config.DBConfig.DBType, fmt.Sprintf("%s_%d", t.Name, t.DbVersion))
+				tb, err := sql.GetTableScheme(dbc, p.config.DBConfig.DBType, t.Name)
 				if nil != err {
 					GetSugar().Panic(err)
-				} else if nil == tb {
-					t.Version = 1
-					//表不存在
-					err = sql.CreateTables(dbc, p.config.DBConfig.DBType, t)
-					if nil != err {
-						GetSugar().Panic(err)
-					} else {
-						GetSugar().Infof("create table:%s_%d ok", t.Name, t.DbVersion)
-					}
-				} else {
-					//表在db中已经存在，用db中的信息修正meta
-					t.Version = tb.Version + 1
+				} else if nil != tb {
+
+					t.DbVersion = tb.DbVersion
+
 					//记录字段的最大版本
 					fields := map[string]*db.FieldDef{}
 					for _, v := range tb.Fields {
+						if v.TabVersion > t.Version {
+							t.Version = v.TabVersion
+						}
 						f := fields[v.Name]
 						if nil == f || f.TabVersion <= v.TabVersion {
 							fields[v.Name] = v
@@ -181,7 +176,33 @@ func (p *pd) loadInitMeta() {
 
 						v.TabVersion = f.TabVersion
 					}
+
+					if t.DbVersion > def.Version {
+						def.Version = t.DbVersion
+					}
+				} else {
+					missingTable[t.Name] = t
 				}
+			}
+
+			if def.Version == 0 {
+				def.Version = 1
+			}
+
+			for _, t := range missingTable {
+				t.Version = 1
+				t.DbVersion = def.Version
+				for _, field := range t.Fields {
+					field.TabVersion = t.Version
+				}
+
+				err = sql.CreateTables(dbc, p.config.DBConfig.DBType, t)
+				if nil != err {
+					GetSugar().Panic(err)
+				} else {
+					GetSugar().Infof("create table:%s_%d ok", t.Name, t.DbVersion)
+				}
+
 			}
 
 			p.issueProposal(&ProposalInitMeta{

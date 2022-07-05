@@ -6,6 +6,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/pkg/buffer"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -33,13 +34,14 @@ func trimVersion(name string) (string, int64, error) {
 
 var tableMetaStr = `
 SELECT
+	TABLE_NAME,
     COLUMN_NAME,
     DATA_TYPE,
     COLUMN_DEFAULT
 FROM
     information_schema.COLUMNS
 WHERE
-    TABLE_NAME = '%s'
+    TABLE_NAME like '%s_%%'
 ORDER BY
     TABLE_NAME,
     ORDINAL_POSITION;
@@ -130,134 +132,180 @@ func addFieldsPgSql(dbc *sqlx.DB, tabDef *db.TableDef) error {
 //	return err
 //}
 
-func getTableSchemePgSql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
-	realTabname, version, err := trimVersion(table)
+type table_scheme struct {
+	name            string
+	realTabname     string
+	dbversion       int64
+	column_names    []string
+	column_types    []string
+	column_defaults []*string
+}
 
-	if nil != err {
-		return nil, err
-	}
-
-	var tab *db.TableDef
+func getTableScheme(dbc *sqlx.DB, table string) (*table_scheme, error) {
 	rows, err := dbc.Query(fmt.Sprintf(tableMetaStr, table))
 	if nil != err {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var column_name string
-	var data_type string
-	var column_default *string
-
-	var keyFieldOk bool
-	var versionFieldOk bool
-	var slotFieldOk bool
-
-	getDataType := func(tt string) string {
-		switch tt {
-		case "character varying":
-			return "string"
-		case "bigint":
-			return "int"
-		case "bytea":
-			return "blob"
-		case "double precision":
-			return "float"
-		default:
-			return "unsupported_type"
-		}
-	}
-
-	getDefaultValue := func(tt string, defaultV *string) *string {
-		if tt != "bytea" && nil == defaultV {
-			return nil
-		}
-
-		switch tt {
-		case "character varying":
-			v := (*defaultV)[strings.Index(*defaultV, "'")+1 : strings.LastIndex(*defaultV, "'")]
-			return &v
-		case "bigint":
-			return defaultV
-		case "bytea":
-			defaultV = new(string)
-			return defaultV
-		case "double precision":
-			return defaultV
-		default:
-			return nil
-		}
-	}
+	tables := map[string]*table_scheme{}
 
 	for rows.Next() {
-		if nil == tab {
-			tab = &db.TableDef{
-				Name:      realTabname,
-				DbVersion: version,
-			}
-		}
+		var table_name string
+		var column_name string
+		var columm_type string
+		var column_default *string
 
-		err = rows.Scan(&column_name, &data_type, &column_default)
+		err = rows.Scan(&table_name, &column_name, &columm_type, &column_default)
 		if nil != err {
 			return nil, err
 		}
 
-		switch column_name {
-		case "__key__":
-			if data_type != "character varying" {
-				return nil, fmt.Errorf("table:%s __key__ field is not varchar", realTabname)
-			} else {
-				keyFieldOk = true
-			}
-		case "__version__":
-			if data_type != "bigint" {
-				return nil, fmt.Errorf("table:%s __version__ field is not bigint", realTabname)
-			} else {
-				versionFieldOk = true
-			}
-		case "__slot__":
-			if data_type != "integer" {
-				return nil, fmt.Errorf("table:%s __slot__ field is not integer", realTabname)
-
-			} else {
-				slotFieldOk = true
-			}
-		default:
-			real_field_name, version, err := trimVersion(column_name)
-			if nil != err {
-				return nil, fmt.Errorf("table:%s %s", realTabname, err.Error())
+		if name, dbversion, err := trimVersion(table_name); nil == err {
+			t := tables[table_name]
+			if nil == t {
+				t = &table_scheme{
+					realTabname: table_name,
+					name:        name,
+					dbversion:   dbversion,
+				}
+				tables[table_name] = t
 			}
 
-			defaultValue := getDefaultValue(data_type, column_default)
-			if nil == defaultValue {
-				return nil, fmt.Errorf("table:%s field:%s missing defaultValue", realTabname, real_field_name)
-			}
-
-			field := &db.FieldDef{
-				TabVersion:   version,
-				Name:         real_field_name,
-				Type:         getDataType(data_type),
-				DefaultValue: *defaultValue,
-			}
-
-			tab.Fields = append(tab.Fields, field)
+			t.column_names = append(t.column_names, column_name)
+			t.column_types = append(t.column_types, columm_type)
+			t.column_defaults = append(t.column_defaults, column_default)
 		}
 	}
 
-	if nil != tab {
-		if !keyFieldOk {
-			return nil, fmt.Errorf("table:%s missing __key__", realTabname)
+	if len(tables) == 0 {
+		return nil, nil
+	} else {
+		var tableArray []*table_scheme
+
+		for _, v := range tables {
+			tableArray = append(tableArray, v)
 		}
 
-		if !versionFieldOk {
-			return nil, fmt.Errorf("table:%s missing __version__", realTabname)
-		}
+		//返回版本号最大的
+		sort.Slice(tableArray, func(i, j int) bool {
+			return tableArray[i].dbversion > tableArray[j].dbversion
+		})
 
-		if !slotFieldOk {
-			return nil, fmt.Errorf("table:%s missing __slot__", realTabname)
-		}
+		return tableArray[0], nil
 	}
+}
 
-	return tab, nil
+func getTableSchemePgSql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
+
+	if t, err := getTableScheme(dbc, table); nil == t {
+		return nil, err
+	} else {
+
+		tab := &db.TableDef{
+			Name:      t.name,
+			DbVersion: t.dbversion,
+		}
+
+		var keyFieldOk bool
+		var versionFieldOk bool
+		var slotFieldOk bool
+
+		getDataType := func(tt string) string {
+			switch tt {
+			case "character varying":
+				return "string"
+			case "bigint":
+				return "int"
+			case "bytea":
+				return "blob"
+			case "double precision":
+				return "float"
+			default:
+				return "unsupported_type"
+			}
+		}
+
+		getDefaultValue := func(tt string, defaultV *string) *string {
+			if tt != "bytea" && nil == defaultV {
+				return nil
+			}
+
+			switch tt {
+			case "character varying":
+				v := (*defaultV)[strings.Index(*defaultV, "'")+1 : strings.LastIndex(*defaultV, "'")]
+				return &v
+			case "bigint":
+				return defaultV
+			case "bytea":
+				defaultV = new(string)
+				return defaultV
+			case "double precision":
+				return defaultV
+			default:
+				return nil
+			}
+		}
+
+		for i := 0; i < len(t.column_names); i++ {
+			switch t.column_names[i] {
+			case "__key__":
+				if t.column_types[i] != "character varying" {
+					return nil, fmt.Errorf("table:%s __key__ field is not varchar", t.name)
+				} else {
+					keyFieldOk = true
+				}
+			case "__version__":
+				if t.column_types[i] != "bigint" {
+					return nil, fmt.Errorf("table:%s __version__ field is not bigint", t.name)
+				} else {
+					versionFieldOk = true
+				}
+			case "__slot__":
+				if t.column_types[i] != "integer" {
+					return nil, fmt.Errorf("table:%s __slot__ field is not integer", t.name)
+
+				} else {
+					slotFieldOk = true
+				}
+			default:
+				real_field_name, version, err := trimVersion(t.column_names[i])
+				if nil != err {
+					return nil, fmt.Errorf("table:%s %s", t.name, err.Error())
+				}
+
+				defaultValue := getDefaultValue(t.column_types[i], t.column_defaults[i])
+				if nil == defaultValue {
+					return nil, fmt.Errorf("table:%s field:%s missing defaultValue", t.name, real_field_name)
+				}
+
+				field := &db.FieldDef{
+					TabVersion:   version,
+					Name:         real_field_name,
+					Type:         getDataType(t.column_types[i]),
+					DefaultValue: *defaultValue,
+				}
+
+				tab.Fields = append(tab.Fields, field)
+			}
+		}
+
+		if nil != tab {
+			if !keyFieldOk {
+				return nil, fmt.Errorf("table:%s missing __key__", t.name)
+			}
+
+			if !versionFieldOk {
+				return nil, fmt.Errorf("table:%s missing __version__", t.name)
+			}
+
+			if !slotFieldOk {
+				return nil, fmt.Errorf("table:%s missing __slot__", t.name)
+			}
+		}
+
+		return tab, nil
+	}
 }
 
 /////mysql
@@ -340,118 +388,101 @@ func addFieldsMySql(dbc *sqlx.DB, tabDef *db.TableDef) error {
 //}
 
 func getTableSchemeMySql(dbc *sqlx.DB, table string) (*db.TableDef, error) {
-	realTabname, version, err := trimVersion(table)
-
-	if nil != err {
+	if t, err := getTableScheme(dbc, table); nil == t {
 		return nil, err
+	} else {
+
+		tab := &db.TableDef{
+			Name:      t.name,
+			DbVersion: t.dbversion,
+		}
+
+		var keyFieldOk bool
+		var versionFieldOk bool
+		var slotFieldOk bool
+
+		getDataType := func(tt string) string {
+			switch tt {
+			case "varchar":
+				return "string"
+			case "bigint":
+				return "int"
+			case "blob":
+				return "blob"
+			case "float":
+				return "float"
+			default:
+				return "unsupported_type"
+			}
+		}
+
+		getDefaultValue := func(tt string, defaultV *string) *string {
+			if tt == "blob" {
+				defaultV = new(string)
+			}
+			return defaultV
+		}
+
+		for i := 0; i < len(t.column_names); i++ {
+			switch t.column_names[i] {
+			case "__key__":
+				if t.column_types[i] != "varchar" {
+					return nil, fmt.Errorf("table:%s __key__ field is not varchar", t.name)
+				} else {
+					keyFieldOk = true
+				}
+			case "__version__":
+				if t.column_types[i] != "bigint" {
+					return nil, fmt.Errorf("table:%s __version__ field is not bigint", t.name)
+				} else {
+					versionFieldOk = true
+				}
+			case "__slot__":
+				if t.column_types[i] != "int" {
+					return nil, fmt.Errorf("table:%s __slot__ field is not int", t.name)
+
+				} else {
+					slotFieldOk = true
+				}
+			default:
+				real_field_name, version, err := trimVersion(t.column_names[i])
+				if nil != err {
+					return nil, fmt.Errorf("table:%s %s", t.name, err.Error())
+				}
+
+				defaultValue := getDefaultValue(t.column_types[i], t.column_defaults[i])
+				if nil == defaultValue {
+					return nil, fmt.Errorf("table:%s field:%s missing defaultValue", t.name, real_field_name)
+				}
+
+				field := &db.FieldDef{
+					TabVersion:   version,
+					Name:         real_field_name,
+					Type:         getDataType(t.column_types[i]),
+					DefaultValue: *defaultValue,
+				}
+
+				tab.Fields = append(tab.Fields, field)
+			}
+		}
+
+		if nil != tab {
+			if !keyFieldOk {
+				return nil, fmt.Errorf("table:%s missing __key__", t.name)
+			}
+
+			if !versionFieldOk {
+				return nil, fmt.Errorf("table:%s missing __version__", t.name)
+			}
+
+			if !slotFieldOk {
+				return nil, fmt.Errorf("table:%s missing __slot__", t.name)
+			}
+		}
+
+		return tab, nil
 	}
 
-	var tab *db.TableDef
-	rows, err := dbc.Query(fmt.Sprintf(tableMetaStr, table))
-	if nil != err {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var column_name string
-	var data_type string
-	var column_default *string
-
-	var keyFieldOk bool
-	var versionFieldOk bool
-	var slotFieldOk bool
-
-	getDataType := func(tt string) string {
-		switch tt {
-		case "varchar":
-			return "string"
-		case "bigint":
-			return "int"
-		case "blob":
-			return "blob"
-		case "float":
-			return "float"
-		default:
-			return "unsupported_type"
-		}
-	}
-
-	getDefaultValue := func(tt string, defaultV *string) *string {
-		if tt == "blob" {
-			defaultV = new(string)
-		}
-		return defaultV
-	}
-
-	for rows.Next() {
-		if nil == tab {
-			tab = &db.TableDef{
-				Name:      realTabname,
-				DbVersion: version,
-			}
-		}
-
-		err = rows.Scan(&column_name, &data_type, &column_default)
-		if nil != err {
-			return nil, err
-		}
-
-		switch column_name {
-		case "__key__":
-			if data_type != "varchar" {
-				return nil, fmt.Errorf("table:%s __key__ field is not varchar", realTabname)
-			} else {
-				keyFieldOk = true
-			}
-		case "__version__":
-			if data_type != "bigint" {
-				return nil, fmt.Errorf("table:%s __version__ field is not bigint", realTabname)
-			} else {
-				versionFieldOk = true
-			}
-		case "__slot__":
-			if data_type != "int" {
-				return nil, fmt.Errorf("table:%s __slot__ field is not int", realTabname)
-			} else {
-				slotFieldOk = true
-			}
-		default:
-			real_field_name, version, err := trimVersion(column_name)
-			if nil != err {
-				return nil, fmt.Errorf("table:%s %s", realTabname, err.Error())
-			}
-
-			defaultValue := getDefaultValue(data_type, column_default)
-			if nil == defaultValue {
-				return nil, fmt.Errorf("table:%s field:%s missing defaultValue", realTabname, real_field_name)
-			}
-
-			field := &db.FieldDef{
-				TabVersion:   version,
-				Name:         real_field_name,
-				Type:         getDataType(data_type),
-				DefaultValue: *defaultValue,
-			}
-
-			tab.Fields = append(tab.Fields, field)
-		}
-	}
-
-	if nil != tab {
-		if !keyFieldOk {
-			return nil, fmt.Errorf("table:%s missing __key__", realTabname)
-		}
-
-		if !versionFieldOk {
-			return nil, fmt.Errorf("table:%s missing __version__", realTabname)
-		}
-
-		if !slotFieldOk {
-			return nil, fmt.Errorf("table:%s missing __slot__", realTabname)
-		}
-	}
-
-	return tab, nil
 }
 
 func CreateTables(dbc *sqlx.DB, sqlType string, tabDef ...*db.TableDef) error {
@@ -483,13 +514,16 @@ func GetTableScheme(dbc *sqlx.DB, sqlType string, table_real_name string) (tabde
 		tabdef, err = getTableSchemeMySql(dbc, table_real_name)
 	}
 
-	if nil != tabdef {
-		for _, v := range tabdef.Fields {
-			if v.TabVersion > tabdef.Version {
-				tabdef.Version = v.TabVersion
+	/*
+		if nil != tabdef {
+			for _, v := range tabdef.Fields {
+				if v.TabVersion > tabdef.Version {
+					tabdef.Version = v.TabVersion
+				}
 			}
 		}
-	}
+	*/
+
 	return
 }
 
