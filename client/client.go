@@ -94,6 +94,17 @@ func New(conf ClientConf) (*Client, error) {
 		}
 		c.impl.start(pdAddr)
 		return c, nil
+	case FlySql:
+		c.impl = &clientImplFlySql{
+			impl: impl{
+				waitResp:       map[int64]*cmdContext{},
+				waitSend:       list.New(),
+				notifyQueue:    conf.NotifyQueue,
+				notifyPriority: conf.NotifyPriority,
+			},
+		}
+		c.impl.start(pdAddr)
+		return c, nil
 	case FlyKv:
 		c.impl = &clientImplFlykv{
 			waitResp:       map[int64]*cmdContext{},

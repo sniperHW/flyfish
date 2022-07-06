@@ -42,7 +42,9 @@ func (this *flysql) onScanner(conn net.Conn) {
 		var fields []string
 
 		errCode := func() int {
+			this.muMeta.Lock()
 			tbmeta = this.meta.GetTableMeta(req.Table)
+			this.muMeta.Unlock()
 			for _, v := range req.Fields {
 				if tbmeta.CheckFieldWithVersion(v.Field, v.Version) {
 					fields = append(fields, v.Field)

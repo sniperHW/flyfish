@@ -92,72 +92,61 @@ func (this *ProposalConfChange) OnError(err error) {
 	this.reply(err)
 }
 
-type flygate struct {
+type endpoint struct {
 	service       string
+	metaVersion   int64
 	deadlineTimer *time.Timer
 }
 
-type flygateMgr struct {
-	flygateMap map[string]*flygate
+type endpointMgr struct {
+	dict map[string]*endpoint
 }
 
-func (f *flygateMgr) getFlyGate() (ret []string) {
-	for k, _ := range f.flygateMap {
+func (f *endpointMgr) getEndpoints() (ret []string) {
+	for k, _ := range f.dict {
 		ret = append(ret, k)
 	}
 	return
 }
 
-func (f *flygateMgr) onFlyGateTimeout(gateService string, t *time.Timer) {
-	GetSugar().Infof("%s HeartBeat timeout remove", gateService)
-	if v, ok := f.flygateMap[gateService]; ok && v.deadlineTimer == t {
-		delete(f.flygateMap, gateService)
+func (f *endpointMgr) onTimeout(service string, t *time.Timer) {
+	if v, ok := f.dict[service]; ok && v.deadlineTimer == t {
+		delete(f.dict, service)
 	}
 }
 
-func isValidTcpService(service string, token string) bool {
-	if "" == service {
-		return false
-	}
-
-	if _, err := net.ResolveTCPAddr("tcp", service); nil == err {
-		return true
-	}
-
-	return false
-}
-
-func (f *flygateMgr) onHeartBeat(p *pd, gateService string) {
-	var g *flygate
+func (f *endpointMgr) onHeartBeat(p *pd, service string, metaVersion int64) {
+	var e *endpoint
 	var ok bool
 
-	if g, ok = f.flygateMap[gateService]; ok {
-		g.deadlineTimer.Stop()
+	if e, ok = f.dict[service]; ok {
+		e.deadlineTimer.Stop()
 	} else {
 
-		if "" == gateService {
+		if "" == service {
 			return
 		}
 
-		if _, err := net.ResolveTCPAddr("tcp", gateService); nil != err {
+		if _, err := net.ResolveTCPAddr("tcp", service); nil != err {
 			return
 		}
 
-		g = &flygate{
-			service: gateService,
+		e = &endpoint{
+			service: service,
 		}
-		f.flygateMap[gateService] = g
+		f.dict[service] = e
 	}
 
 	var deadlineTimer *time.Timer
 
 	deadlineTimer = time.AfterFunc(time.Second*10, func() {
 		p.mainque.AppendHighestPriotiryItem(func() {
-			f.onFlyGateTimeout(gateService, deadlineTimer)
+			f.onTimeout(service, deadlineTimer)
 		})
 	})
 
-	g.deadlineTimer = deadlineTimer
+	e.deadlineTimer = deadlineTimer
+	e.metaVersion = metaVersion
 }
 
 type pd struct {
@@ -174,7 +163,8 @@ type pd struct {
 	config          *Config
 	service         string
 	raftIDGen       *idutil.Generator
-	flygateMgr      flygateMgr
+	flygateMgr      endpointMgr
+	flysqlMgr       endpointMgr
 	Deployment      Deployment
 	DbMetaMgr       DbMetaMgr
 	SlotTransferMgr SlotTransferMgr
@@ -476,8 +466,11 @@ func NewPd(nodeID uint16, cluster int, join bool, config *Config, clusterStr str
 			handles:     map[reflect.Type]msgHandle{},
 			makeHttpReq: map[string]func(*http.Request) (*snet.Message, error){},
 		},
-		flygateMgr: flygateMgr{
-			flygateMap: map[string]*flygate{},
+		flygateMgr: endpointMgr{
+			dict: map[string]*endpoint{},
+		},
+		flysqlMgr: endpointMgr{
+			dict: map[string]*endpoint{},
 		},
 		config:    config,
 		service:   self.ClientURL,

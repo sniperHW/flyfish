@@ -2,7 +2,7 @@ package flysql
 
 import (
 	"context"
-	"fmt"
+	//"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/db"
@@ -11,9 +11,12 @@ import (
 	fnet "github.com/sniperHW/flyfish/pkg/net"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
+	snet "github.com/sniperHW/flyfish/server/net"
+	sproto "github.com/sniperHW/flyfish/server/proto"
 	sslot "github.com/sniperHW/flyfish/server/slot"
-	"os"
+	"net"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -51,7 +54,10 @@ type flysql struct {
 	closed          int32
 	requestChan     chan *request
 	totalPendingReq int64
+	muMeta          sync.Mutex
 	meta            db.DBMeta
+	pdAddr          []*net.UDPAddr
+	service         string
 }
 
 func (this *flysql) pushRequest(req *cs.ReqMessage, replyer *replyer) {
@@ -165,10 +171,42 @@ var outputBufLimit fnet.OutputBufLimit = fnet.OutputBufLimit{
 	OutPutLimitHard:        cs.MaxPacketSize * 10,
 }
 
+func (this *flysql) heartbeat() {
+	if atomic.LoadInt32(&this.closed) == 0 {
+		r, _ := snet.UdpCall(this.pdAddr, &sproto.FlySqlHeartBeat{Service: this.service, MetaVersion: this.meta.GetVersion()}, &sproto.FlySqlHeartBeatResp{}, time.Second)
+		if nil != r {
+			if len(r.(*sproto.FlySqlHeartBeatResp).Meta) > 0 {
+				def, _ := db.MakeDbDefFromJsonString(r.(*sproto.FlySqlHeartBeatResp).Meta)
+				if nil == def {
+					if meta, _ := sql.CreateDbMeta(def); nil != meta {
+						this.muMeta.Lock()
+						this.meta = meta
+						this.muMeta.Unlock()
+					}
+				}
+			}
+		}
+		time.AfterFunc(time.Second, this.heartbeat)
+	}
+}
+
 func (this *flysql) start(service string) error {
 	var err error
 
+	this.service = service
+
 	config := this.config
+
+	pd := strings.Split(config.PD, ";")
+
+	for _, v := range pd {
+		addr, err := net.ResolveUDPAddr("udp", v)
+		if nil != err {
+			return err
+		} else {
+			this.pdAddr = append(this.pdAddr, addr)
+		}
+	}
 
 	dbConfig := config.DBConfig
 
@@ -184,75 +222,21 @@ func (this *flysql) start(service string) error {
 		}
 	}()
 
-	f, err := os.Open(config.MetaPath)
-	if nil != err {
-		return err
-	}
-
-	var b []byte
 	for {
-		data := make([]byte, 4096)
-		n, err := f.Read(data)
-		if n > 0 {
-			b = append(b, data[:n]...)
-		}
-
-		if nil != err {
-			break
-		}
-	}
-
-	dbdef, err := db.MakeDbDefFromJsonString(b)
-	if nil != err {
-		return err
-	}
-
-	for _, t := range dbdef.TableDefs {
-		tb, err := sql.GetTableScheme(this.dbc, dbConfig.DBType, fmt.Sprintf("%s_%d", t.Name, t.DbVersion))
-		if nil != err {
-			return err
-		} else if nil == tb {
-			//表不存在
-			err = sql.CreateTables(this.dbc, dbConfig.DBType, t)
+		r, _ := snet.UdpCall(this.pdAddr, &sproto.FlySqlHeartBeat{Service: service}, &sproto.FlySqlHeartBeatResp{}, time.Second)
+		if nil != r {
+			def, err := db.MakeDbDefFromJsonString(r.(*sproto.FlySqlHeartBeatResp).Meta)
+			if nil != def {
+				this.meta, err = sql.CreateDbMeta(def)
+			}
 			if nil != err {
 				return err
-			} else {
-				GetSugar().Infof("create table:%s_%d ok", t.Name, t.DbVersion)
 			}
+			break
 		} else {
-			//记录字段的最大版本
-			fields := map[string]*db.FieldDef{}
-			for _, v := range tb.Fields {
-				f := fields[v.Name]
-				if nil == f || f.TabVersion <= v.TabVersion {
-					fields[v.Name] = v
-				}
-			}
-
-			for _, v := range t.Fields {
-				f, ok := fields[v.Name]
-				if !ok {
-					GetSugar().Panicf("table:%s already in db but not match with meta,field:%s not found in db", t.Name, v.Name)
-				}
-
-				if f.Type != v.Type {
-					GetSugar().Panicf("table:%s already in db but not match with meta,field:%s type mismatch with db", t.Name, v.Name)
-				}
-
-				if f.GetDefaultValueStr() != v.GetDefaultValueStr() {
-					GetSugar().Panicf("table:%s already in db but not match with meta,field:%s DefaultValue mismatch with db db.v:%v meta.v:%v", t.Name, v.Name, f.GetDefaultValueStr(), v.GetDefaultValueStr())
-				}
-			}
+			time.Sleep(time.Second)
 		}
 	}
-
-	this.meta, err = sql.CreateDbMeta(dbdef)
-
-	if nil != err {
-		return err
-	}
-
-	GetSugar().Infof("%v", this.meta)
 
 	this.listener, err = cs.NewListener("tcp", service, outputBufLimit)
 
@@ -261,6 +245,8 @@ func (this *flysql) start(service string) error {
 	}
 
 	this.startListener()
+
+	time.AfterFunc(time.Second, this.heartbeat)
 
 	GetSugar().Infof("flysql start:%s", service)
 
@@ -276,7 +262,6 @@ func NewFlysql(service string, config *Config) (*flysql, error) {
 	}
 
 	if err := flysql.start(service); nil == err {
-		//_ = runtime.NumCPU()
 		for i := 0; i < runtime.NumCPU()*2; i++ {
 			go func() {
 				for request := range flysql.requestChan {
@@ -697,7 +682,9 @@ func (this *flysql) onIncrBy(key string, tbmeta db.TableMeta, request *request) 
 
 func (this *flysql) processRequest(request *request) {
 	table, key := splitUniKey(request.msg.UniKey)
+	this.muMeta.Lock()
 	tbmeta := this.meta.GetTableMeta(table)
+	this.muMeta.Unlock()
 	if nil == tbmeta {
 		request.replyer.reply(&cs.RespMessage{
 			Cmd:   request.msg.Cmd,

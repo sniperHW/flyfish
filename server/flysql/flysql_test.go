@@ -10,6 +10,8 @@ import (
 	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/logger"
+	"github.com/sniperHW/flyfish/pkg/etcd/pkg/idutil"
+	flypd "github.com/sniperHW/flyfish/server/flypd"
 	"github.com/stretchr/testify/assert"
 	"net/http"
 	_ "net/http/pprof"
@@ -29,9 +31,7 @@ type dbconf struct {
 }
 
 var configStr string = `
-
-MetaPath                = "test/meta.json"
-                  	
+PD            = "localhost:9110"    	
 [DBConfig]
 DBType        = "%s"
 Host          = "%s"
@@ -51,6 +51,20 @@ EnableStdout    = true
 MaxAge          = 14
 MaxBackups      = 10
 
+`
+
+var pdConfigStr string = `
+	MainQueueMaxSize = 1000
+	RaftLogDir              = "testRaftLog"
+	RaftLogPrefix           = "flypd"
+	InitMetaPath            = "./test/meta.json"
+	[DBConfig]
+		DBType        = "pgsql"
+		Host          = "localhost"
+		Port          = 5432
+		User	      = "sniper"
+		Password      = "123456"
+		DB            = "test"	
 `
 
 var config *Config
@@ -77,7 +91,6 @@ func init() {
 		panic(err)
 	}
 
-	//清理bloomfilter
 	dbc, err := sql.SqlOpen(dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.DB, dbConf.User, dbConf.Pwd)
 	if nil != err {
 		panic(err)
@@ -86,6 +99,24 @@ func init() {
 	clearUsers1 = func() {
 		dbc.Exec("delete from users1_0;")
 	}
+}
+
+type StopAble interface {
+	Stop()
+}
+
+func newPD() StopAble {
+	conf, _ := flypd.LoadConfigStr(pdConfigStr)
+	conf.DBConfig.DBType = dbConf.DBType
+	conf.DBConfig.Host = dbConf.Host
+	conf.DBConfig.Port = dbConf.Port
+	conf.DBConfig.User = dbConf.User
+	conf.DBConfig.Password = dbConf.Pwd
+	conf.DBConfig.DB = dbConf.DB
+	raftID := idutil.NewGenerator(0, time.Now()).Next()
+	raftCluster := fmt.Sprintf("1@%d@http://localhost:18110@localhost:9110@voter", raftID)
+	pd, _ := flypd.NewPd(1, 1, false, conf, raftCluster)
+	return pd
 }
 
 func test(t *testing.T, c *client.Client) {
@@ -145,7 +176,7 @@ func test(t *testing.T, c *client.Client) {
 			})
 		}
 
-		c.GetAll("users1", "sniperHW").AsyncExec(func(r *client.SliceResult) {
+		c.GetAll("users1", "sniperHW").AsyncExec(func(r *client.GetResult) {
 			assert.Nil(t, r.ErrCode)
 		})
 
@@ -220,48 +251,50 @@ func test(t *testing.T, c *client.Client) {
 	{
 		r1 := c.IncrBy("users1", "sniperHW", "age", 2).Exec()
 		assert.Nil(t, r1.ErrCode)
-		assert.Equal(t, r1.Fields["age"].GetInt(), int64(22))
+		assert.Equal(t, r1.Value.GetInt(), int64(22))
 
 		r2 := c.Del("users1", "sniperHW").Exec()
 		assert.Nil(t, r2.ErrCode)
 
 		r1 = c.IncrBy("users1", "sniperHW", "age", 2).Exec()
 		assert.Nil(t, r1.ErrCode)
-		assert.Equal(t, r1.Fields["age"].GetInt(), int64(2))
+		assert.Equal(t, r1.Value.GetInt(), int64(2))
 
 		r1 = c.IncrBy("users1", "sniperHW", "age", -2).Exec()
 		assert.Nil(t, r1.ErrCode)
-		assert.Equal(t, r1.Fields["age"].GetInt(), int64(0))
+		assert.Equal(t, r1.Value.GetInt(), int64(0))
 	}
 
-	sc, _ := client.NewScanner(client.ClientConf{
-		ClientType: client.ClientType_FlySql,
-		SoloConf: &client.SoloConf{
-			Service: "localhost:8110",
-		}}, "users1", []string{
-		"name",
-		"age",
-		"phone",
-	})
+	/*
+		sc, _ := client.NewScanner(client.ClientConf{
+			ClientType: client.ClientType_FlySql,
+			SoloConf: &client.SoloConf{
+				Service: "localhost:8110",
+			}}, "users1", []string{
+			"name",
+			"age",
+			"phone",
+		})
 
-	count := 0
+		count := 0
 
-	for {
-		row, err := sc.Next(time.Now().Add(time.Second * 5))
+		for {
+			row, err := sc.Next(time.Now().Add(time.Second * 5))
 
-		if nil != err {
-			panic(err)
+			if nil != err {
+				panic(err)
+			}
+
+			if nil != row {
+				fmt.Println(row.Key, row.Version, row.Fields["age"].GetInt())
+				count++
+			} else {
+				break
+			}
 		}
 
-		if nil != row {
-			fmt.Println(row.Key, row.Version, row.Fields["age"].GetInt())
-			count++
-		} else {
-			break
-		}
-	}
-
-	fmt.Println("count", count)
+		fmt.Println("count", count)
+	*/
 
 }
 
@@ -273,6 +306,10 @@ func TestFlySql(t *testing.T) {
 
 	client.InitLogger(GetLogger())
 
+	flypd.InitLogger(GetLogger())
+
+	pd := newPD()
+
 	flysql, err := NewFlysql("localhost:8110", config)
 
 	if nil != err {
@@ -281,12 +318,15 @@ func TestFlySql(t *testing.T) {
 
 	time.Sleep(time.Second)
 
-	c, _ := client.OpenClient(client.ClientConf{
-		ClientType: client.ClientType_FlySql,
-		SoloConf:   &client.SoloConf{Service: "localhost:8110"}})
+	c, _ := client.New(client.ClientConf{
+		ClientType: client.FlySql,
+		PD:         []string{"localhost:9110"},
+	})
 
 	test(t, c)
 
 	flysql.Stop()
+
+	pd.Stop()
 
 }

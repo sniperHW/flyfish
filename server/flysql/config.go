@@ -25,7 +25,8 @@ func LoadConfig(path string) (*Config, error) {
 }
 
 type Config struct {
-	MetaPath string `toml:"MetaPath"`
+	PD string `toml:"PD"` //pd服务地址用;分隔
+
 	DBConfig struct {
 		DBType   string `toml:"DBType"`
 		Host     string `toml:"Host"`

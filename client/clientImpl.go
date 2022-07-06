@@ -310,7 +310,7 @@ func (this *impl) onQueryServiceResp(services []string) (bool, time.Duration) {
 	}
 }
 
-func (this *clientImplFlyGate) close() {
+func (this *impl) close() {
 	this.mu.Lock()
 	defer this.mu.Unlock()
 	if this.closed {

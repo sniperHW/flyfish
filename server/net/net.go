@@ -423,9 +423,16 @@ func init() {
 	namespace.Register(&sproto.GetScanTableMeta{}, uint32(sproto.ServerCmdType_GetScanTableMeta))
 	namespace.Register(&sproto.GetScanTableMetaResp{}, uint32(sproto.ServerCmdType_GetScanTableMetaResp))
 
+	//flysql <-> pd
+	namespace.Register(&sproto.FlySqlHeartBeat{}, uint32(sproto.ServerCmdType_FlySqlHeartBeat))
+	namespace.Register(&sproto.FlySqlHeartBeatResp{}, uint32(sproto.ServerCmdType_FlySqlHeartBeatResp))
+
 	//client <->pd
 	namespace.Register(&sproto.GetFlyGateList{}, uint32(sproto.ServerCmdType_GetFlyGateList))
 	namespace.Register(&sproto.GetFlyGateListResp{}, uint32(sproto.ServerCmdType_GetFlyGateListResp))
+
+	namespace.Register(&sproto.GetFlySqlList{}, uint32(sproto.ServerCmdType_GetFlySqlList))
+	namespace.Register(&sproto.GetFlySqlListResp{}, uint32(sproto.ServerCmdType_GetFlySqlListResp))
 
 	//for test
 	namespace.Register(&sproto.PacketTest{}, uint32(sproto.ServerCmdType_PacketTest))

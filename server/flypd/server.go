@@ -114,17 +114,32 @@ func (p *pd) onQueryRouteInfo(replyer replyer, m *snet.Message) {
 }
 
 func (p *pd) onGetFlyGateList(replyer replyer, m *snet.Message) {
-	resp := &sproto.GetFlyGateListResp{}
-	for _, v := range p.flygateMgr.flygateMap {
-		resp.List = append(resp.List, v.service)
-	}
-
-	replyer.reply(snet.MakeMessage(m.Context, resp))
+	replyer.reply(snet.MakeMessage(m.Context, &sproto.GetFlyGateListResp{
+		List: p.flygateMgr.getEndpoints(),
+	}))
 }
 
 func (p *pd) onFlyGateHeartBeat(replyer replyer, m *snet.Message) {
 	msg := m.Msg.(*sproto.FlyGateHeartBeat)
-	p.flygateMgr.onHeartBeat(p, msg.GateService)
+	p.flygateMgr.onHeartBeat(p, msg.GateService, 0)
+}
+
+func (p *pd) onGetFlySqlList(replyer replyer, m *snet.Message) {
+	replyer.reply(snet.MakeMessage(m.Context, &sproto.GetFlySqlListResp{
+		List: p.flysqlMgr.getEndpoints(),
+	}))
+}
+
+func (p *pd) onFlySqlHeartBeat(replyer replyer, m *snet.Message) {
+	msg := m.Msg.(*sproto.FlySqlHeartBeat)
+	p.flysqlMgr.onHeartBeat(p, msg.Service, msg.MetaVersion)
+	if p.isLeader() {
+		resp := &sproto.FlySqlHeartBeatResp{}
+		if p.DbMetaMgr.DbMeta.Version > msg.MetaVersion {
+			resp.Meta = p.DbMetaMgr.dbMetaBytes
+		}
+		replyer.reply(snet.MakeMessage(m.Context, resp))
+	}
 }
 
 func (p *pd) onGetKvStatus(replyer replyer, m *snet.Message) {
@@ -296,8 +311,15 @@ func (p *pd) startUdpService() error {
 							Yes:     p.isLeader(),
 							Service: p.service,
 						}))
-					} else if p.isLeader() {
-						p.onMsg(&udpReplyer{from: from, pd: p}, msg.(*snet.Message))
+					} else {
+						switch msg.(*snet.Message).Msg.(type) {
+						case *sproto.FlyGateHeartBeat, *sproto.FlySqlHeartBeat:
+							p.onMsg(&udpReplyer{from: from, pd: p}, msg.(*snet.Message))
+						default:
+							if p.isLeader() {
+								p.onMsg(&udpReplyer{from: from, pd: p}, msg.(*snet.Message))
+							}
+						}
 					}
 				})
 			}
@@ -528,5 +550,7 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.FlyGateHeartBeat{}, "", p.onFlyGateHeartBeat)
 	p.registerMsgHandler(&sproto.KvnodeReportStatus{}, "", p.onKvnodeReportStatus)
 	p.registerMsgHandler(&sproto.GetScanTableMeta{}, "", p.onGetScanTableMeta)
+	p.registerMsgHandler(&sproto.GetFlySqlList{}, "", p.onGetFlySqlList)
+	p.registerMsgHandler(&sproto.FlySqlHeartBeat{}, "", p.onFlySqlHeartBeat)
 
 }

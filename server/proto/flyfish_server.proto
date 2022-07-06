@@ -80,7 +80,6 @@ enum ServerCmdType {
   SuspendStore                  = 227;
   ResumeStore                   = 228;   
 
-
   //flygate <-> pd
   QueryRouteInfo                = 310;
   QueryRouteInfoResp            = 311;
@@ -88,11 +87,16 @@ enum ServerCmdType {
   GetScanTableMeta              = 313;
   GetScanTableMetaResp          = 314;
 
+  FlySqlHeartBeat               = 510;
+  FlySqlHeartBeatResp           = 511; 
 
   //client <-> pd
   GetFlyGateList                = 410;
   GetFlyGateListResp            = 411;
-    
+  GetFlySqlList                 = 412;
+  GetFlySqlListResp             = 413;
+ 
+
 
   //for test
   PacketTest                    = 1000;
@@ -192,6 +196,15 @@ message kvnodeBootResp {
   optional bytes  meta         = 8;
 }
 
+message flySqlHeartBeat {
+  optional string service      = 1;
+  optional int64  metaVersion  = 2;  
+}
+
+message flySqlHeartBeatResp {
+  optional bytes  meta         = 1;   
+}
+
 
 enum StoreOpType {
   AddLearner = 1;
@@ -274,10 +287,16 @@ message  setMarkClearResp{
 }
 
 message   getFlyGateList {
-
 }
 
 message getFlyGateListResp {
+  repeated string list        = 1;
+}
+
+message   getFlySqlList {
+}
+
+message getFlySqlListResp {
   repeated string list        = 1;
 }
 
