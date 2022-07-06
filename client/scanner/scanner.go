@@ -139,27 +139,23 @@ func New(conf ScannerConf, Table string, fields []string) (*Scanner, error) {
 	switch conf.ScannerType {
 	case FlyGate:
 		sc.scannerImpl = &scannerFlygate{
-			pdAddr: pdAddr,
+			impl: impl{
+				pdAddr:       pdAddr,
+				queryService: queryFlygate,
+			},
 		}
 	case FlyKv:
 		sc.scannerImpl = &scannerFlykv{
 			pdAddr: pdAddr,
 		}
-	}
-
-	/*if conf.ScannerType == FlyGate {
+	case FlySql:
 		sc.scannerImpl = &scannerFlygate{
-			pdAddr: pdAddr,
+			impl: impl{
+				pdAddr:       pdAddr,
+				queryService: queryFlysql,
+			},
 		}
-	} else {
-		/*if nil != conf.ClusterConf {
-
-		} else {
-			sc.scannerImpl = &flySqlScanner{
-				service: conf.SoloConf.Service,
-			}
-		}* /
-	}*/
+	}
 
 	for _, v := range fields {
 		sc.fields = append(sc.fields, &flyproto.ScanField{

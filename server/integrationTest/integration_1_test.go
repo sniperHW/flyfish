@@ -1,4 +1,4 @@
-//go test -race -coverpkg=github.com/sniperHW/flyfish/server/flygate,github.com/sniperHW/flyfish/server/flypd,github.com/sniperHW/flyfish/server/flykv,github.com/sniperHW/flyfish/client -covermode=atomic -v -coverprofile=coverage.out -run=.
+//go test -race -coverpkg=github.com/sniperHW/flyfish/server/flygate,github.com/sniperHW/flyfish/server/flypd,github.com/sniperHW/flyfish/server/flykv,github.com/sniperHW/flyfish/client,github.com/sniperHW/flyfish/client/scanner -covermode=atomic -v -coverprofile=coverage.out -run=.
 //go tool cover -html=coverage.out
 
 package integrationTest
@@ -10,7 +10,6 @@ import (
 	"github.com/sniperHW/flyfish/client/scanner"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/db/sql"
-	//"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/logger"
 	"github.com/sniperHW/flyfish/pkg/etcd/pkg/idutil"
 	fnet "github.com/sniperHW/flyfish/pkg/net"
@@ -95,13 +94,6 @@ var pdConfigStr string = `
 	RaftLogPrefix           = "flypd"
 	InitDepoymentPath       = "./deployment.json"
 	InitMetaPath            = "./meta.json"
-	[DBConfig]
-		DBType        = "pgsql"
-		Host          = "localhost"
-		Port          = 5432
-		User	      = "sniper"
-		Password      = "123456"
-		DB            = "test"	
 `
 
 var flyGateConfigStr string = `  
@@ -111,6 +103,8 @@ var flyGateConfigStr string = `
 	MaxPendingMsg=20000	
 `
 
+var dbConf *dbconf
+
 func init() {
 	l := logger.NewZapLogger("integrationTest.log", "./log", "Debug", 104857600, 14, 10, true)
 	flypd.InitLogger(l)
@@ -118,6 +112,11 @@ func init() {
 	flygate.InitLogger(l)
 	client.InitLogger(l)
 	logger.InitLogger(l)
+
+	dbConf = &dbconf{}
+	if _, err = toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
+		panic(err)
+	}
 
 	go func() {
 		http.ListenAndServe("localhost:8999", nil)
@@ -131,6 +130,13 @@ type StopAble interface {
 
 func newPD(t *testing.T, raftID uint64, deploymentPath ...string) (StopAble, uint64) {
 	conf, _ := flypd.LoadConfigStr(pdConfigStr)
+
+	conf.DBConfig.DBType = dbConf.DBType
+	conf.DBConfig.Host = dbConf.Host
+	conf.DBConfig.Port = dbConf.Port
+	conf.DBConfig.User = dbConf.User
+	conf.DBConfig.Password = dbConf.Pwd
+	conf.DBConfig.DB = dbConf.DB
 
 	if len(deploymentPath) != 0 {
 		conf.InitDepoymentPath = deploymentPath[0]

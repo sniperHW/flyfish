@@ -70,29 +70,15 @@ func main() {
 
 	kclient.InitLogger(logger.NewZapLogger("client.log", "./log", "debug", 100, 14, 10, true))
 
-	var clientCfg kclient.ClientConf
-
-	if cfg.ClientType == "FlyKv" {
-		clientCfg.ClientType = kclient.ClientType_FlyKv
-	} else {
-		clientCfg.ClientType = kclient.ClientType_FlySql
-	}
-
-	if cfg.Mode == "solo" {
-		clientCfg.SoloConf = &kclient.SoloConf{
-			Service:         cfg.Service,
-			UnikeyPlacement: slot.MakeUnikeyPlacement(cfg.Stores),
-		}
-	} else {
-		clientCfg.ClusterConf = &kclient.ClusterConf{
-			PD: strings.Split(cfg.PD, ";"),
-		}
+	clientCfg := kclient.ClientConf{
+		ClientType: kclient.ClientType(cfg.ClientType),
+		PD:         strings.Split(cfg.PD, ";"),
 	}
 
 	keyrange, _ = strconv.ParseInt(os.Args[1], 10, 32)
 
 	for j := 0; j < 5; j++ {
-		c, _ := kclient.OpenClient(clientCfg)
+		c, _ := kclient.New(clientCfg)
 		for i := 0; i < 50; i++ {
 			Get(c)
 		}

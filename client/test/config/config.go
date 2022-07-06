@@ -25,9 +25,6 @@ func LoadConfig(path string) (*Config, error) {
 }
 
 type Config struct {
-	ClientType string `toml:"ClientType"` //FlyKv or FlySql
-	Mode       string `toml:"Mode"`       //"cluster"集群模式,"solo"独立模式
-	Service    string `toml:"Service"`
-	PD         string `toml:"PD"` //pd服务地址用;分隔
-	Stores     []int  `toml:"Stores"`
+	ClientType int    `toml:"ClientType"` //1:FlyKv 2:FlySql 3:FlyGate
+	PD         string `toml:"PD"`         //pd服务地址用;分隔
 }

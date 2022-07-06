@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/sniperHW/flyfish/client"
+	cscanner "github.com/sniperHW/flyfish/client/scanner"
 	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/logger"
@@ -265,37 +266,29 @@ func test(t *testing.T, c *client.Client) {
 		assert.Equal(t, r1.Value.GetInt(), int64(0))
 	}
 
-	/*
-		sc, _ := client.NewScanner(client.ClientConf{
-			ClientType: client.ClientType_FlySql,
-			SoloConf: &client.SoloConf{
-				Service: "localhost:8110",
-			}}, "users1", []string{
-			"name",
-			"age",
-			"phone",
-		})
+	sc, _ := cscanner.New(cscanner.ScannerConf{
+		ScannerType: cscanner.FlySql,
+		PD:          []string{"localhost:9110"},
+	}, "users1", []string{"name", "age", "phone"})
 
-		count := 0
+	count := 0
 
-		for {
-			row, err := sc.Next(time.Now().Add(time.Second * 5))
+	for {
+		row, err := sc.Next(time.Now().Add(time.Second * 5))
 
-			if nil != err {
-				panic(err)
-			}
-
-			if nil != row {
-				fmt.Println(row.Key, row.Version, row.Fields["age"].GetInt())
-				count++
-			} else {
-				break
-			}
+		if nil != err {
+			panic(err)
 		}
 
-		fmt.Println("count", count)
-	*/
+		if nil != row {
+			fmt.Println(row.Key, row.Version, row.Fields["age"].GetInt())
+			count++
+		} else {
+			break
+		}
+	}
 
+	fmt.Println("count", count)
 }
 
 func TestFlySql(t *testing.T) {

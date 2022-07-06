@@ -1,5 +1,2 @@
-ClientType = "FlyKv"
-Mode = "cluster"   #如果连接单独的flykv填solo,如果连接集群填cluster
-Service ="localhost:8110"
+ClientType = 1 #1:FlyKv 2:FlySql 3:FlyGate
 PD="localhost:8110"
-Stores=[1,2,3,4,5,6]

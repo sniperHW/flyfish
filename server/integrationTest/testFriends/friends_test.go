@@ -7,10 +7,14 @@ import (
 	"container/list"
 	"encoding/json"
 	"fmt"
+	"github.com/BurntSushi/toml"
 	"github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/logger"
+	"github.com/sniperHW/flyfish/pkg/etcd/pkg/idutil"
 	"github.com/sniperHW/flyfish/pkg/queue"
+	flykv "github.com/sniperHW/flyfish/server/flykv"
+	flypd "github.com/sniperHW/flyfish/server/flypd"
 	"math/rand"
 	"os"
 	"runtime"
@@ -18,6 +22,106 @@ import (
 	"testing"
 	"time"
 )
+
+type dbconf struct {
+	DBType string
+	Usr    string
+	Pwd    string
+	DB     string
+	Host   string
+	Port   int
+}
+
+var flyKvConfigStr string = `
+
+PD                        = "localhost:8110"
+
+SnapshotCurrentCount      = 0
+
+SnapshotCount             = 10000
+SnapshotCatchUpEntriesN   = 5000
+
+MainQueueMaxSize          = 10000
+
+MaxCachePerStore          = 10000                #每组最大key数量，超过数量将会触发key剔除
+
+SqlLoadPipeLineSize       = 200                  #sql加载管道线大小
+
+SqlLoadQueueSize          = 10000                #sql加载请求队列大小，此队列每CacheGroup一个
+
+SqlLoaderCount            = 5
+SqlUpdaterCount           = 20
+
+ProposalFlushInterval     = 100
+ReadFlushInterval         = 10 
+
+RaftLogDir                = "testRaftLog/flykv"
+
+RaftLogPrefix             = "flykv"
+
+LinearizableRead          = false
+
+WriteBackMode             = "WriteThrough"
+
+[DBConfig]
+DBType        = "%s"
+Host          = "%s"
+Port          = %d
+User	      = "%s"
+Password      = "%s"
+DB            = "%s"
+
+[StoreReqLimit]
+SoftLimit               = 50000
+HardLimit               = 100000
+SoftLimitSeconds        = 10
+
+`
+
+var pdConfigStr string = `
+	MainQueueMaxSize = 1000
+	RaftLogDir              = "testRaftLog"
+	RaftLogPrefix           = "flypd"
+	InitDepoymentPath       = "./deployment.json"
+	InitMetaPath            = "./meta.json"
+`
+
+var dbConf *dbconf
+
+type StopAble interface {
+	Stop()
+}
+
+func init() {
+	l := logger.NewZapLogger("integrationTest.log", "./log", "Debug", 104857600, 14, 10, true)
+	flypd.InitLogger(l)
+	flykv.InitLogger(l)
+	client.InitLogger(l)
+	logger.InitLogger(l)
+	dbConf = &dbconf{}
+	if _, err := toml.DecodeFile("../test_dbconf.toml", dbConf); nil != err {
+		panic(err)
+	}
+}
+
+func newPD() StopAble {
+	conf, _ := flypd.LoadConfigStr(pdConfigStr)
+
+	conf.DBConfig.DBType = dbConf.DBType
+	conf.DBConfig.Host = dbConf.Host
+	conf.DBConfig.Port = dbConf.Port
+	conf.DBConfig.User = dbConf.Usr
+	conf.DBConfig.Password = dbConf.Pwd
+	conf.DBConfig.DB = dbConf.DB
+
+	raftID := idutil.NewGenerator(0, time.Now()).Next()
+
+	raftCluster := fmt.Sprintf("1@%d@http://localhost:18110@localhost:8110@voter", raftID)
+
+	pd, _ := flypd.NewPd(1, 1, false, conf, raftCluster)
+
+	return pd
+}
 
 type objectFriends struct {
 	id      int
@@ -168,27 +272,27 @@ func (rm *relationsMgr) doOperation(o func()) {
 }
 
 func TestFriends(t *testing.T) {
-	InitLogger(logger.NewZapLogger("testRaft.log", "./log", config.Log.LogLevel, config.Log.MaxLogfileSize, config.Log.MaxAge, config.Log.MaxBackups, config.Log.EnableStdout))
-
 	//先删除所有kv文件
 	os.RemoveAll("./testRaftLog")
 
-	client.InitLogger(GetLogger())
+	kvConf, err := flykv.LoadConfigStr(fmt.Sprintf(flyKvConfigStr, dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.Usr, dbConf.Pwd, dbConf.DB))
 
-	fmt.Println(config.WriteBackMode)
-	config.MaxCachePerStore = 100000
-	config.SqlUpdaterCount = 20
+	if nil != err {
+		panic(err)
+	}
 
-	node := start1Node(1, newSqlDBBackEnd(), false, config, true)
+	pd := newPD()
 
-	c, _ := client.OpenClient(client.ClientConf{
-		ClientType: client.ClientType_FlyKv,
-		SoloConf: &client.SoloConf{
-			Service:         "localhost:10018",
-			UnikeyPlacement: GetStore,
-		}})
+	node, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
 
-	clearFriends()
+	if nil != err {
+		panic(err)
+	}
+
+	c, _ := client.New(client.ClientConf{
+		ClientType: client.FlyKv,
+		PD:         []string{"localhost:8110"},
+	})
 
 	for {
 		r := c.GetAll("friends", "1").Exec()
@@ -244,26 +348,28 @@ func TestFriends(t *testing.T) {
 
 		wait.Wait()
 
-		GetSugar().Infof("use:%v", time.Now().Sub(beg))
+		logger.GetSugar().Infof("use:%v", time.Now().Sub(beg))
 
 		rm.stop()
 
 	}
 
-	GetSugar().Infof("stop")
+	logger.GetSugar().Infof("stop")
 
 	node.Stop()
 
 	c.Close()
 
-	node = start1Node(1, newSqlDBBackEnd(), false, config, true)
+	node, err = flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
 
-	c, _ = client.OpenClient(client.ClientConf{
-		ClientType: client.ClientType_FlyKv,
-		SoloConf: &client.SoloConf{
-			Service:         "localhost:10018",
-			UnikeyPlacement: GetStore,
-		}})
+	if nil != err {
+		panic(err)
+	}
+
+	c, _ = client.New(client.ClientConf{
+		ClientType: client.FlyKv,
+		PD:         []string{"localhost:8110"},
+	})
 
 	for {
 		r := c.GetAll("friends", "1").Exec()
@@ -311,16 +417,18 @@ func TestFriends(t *testing.T) {
 
 		wait.Wait()
 
-		GetSugar().Infof("use:%v", time.Now().Sub(beg))
+		logger.GetSugar().Infof("use:%v", time.Now().Sub(beg))
 
 		rm.stop()
 
 	}
 
-	GetSugar().Infof("stop")
+	logger.GetSugar().Infof("stop")
 
 	node.Stop()
 
 	c.Close()
+
+	pd.Stop()
 
 }

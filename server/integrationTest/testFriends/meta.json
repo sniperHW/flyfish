@@ -1,0 +1,7 @@
+{
+	"TableDefs":[
+	{"Name":"friends",
+	 "Fields":[
+	 	{"Name":"friends","Type":"blob","DefaultValue":""}]
+	}]
+}

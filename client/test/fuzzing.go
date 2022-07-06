@@ -116,13 +116,6 @@ func init() {
 			}, 100},
 		[]interface{}{
 			func(c *kclient.Client, unikey string) {
-				//dec
-				beg := time.Now()
-				r := c.DecrBy("users1", unikey, "age", int64(rand.Int31()%100)).Exec()
-				st.add("dec", time.Now().Sub(beg), r.ErrCode)
-			}, 100},
-		[]interface{}{
-			func(c *kclient.Client, unikey string) {
 				//del
 				beg := time.Now()
 				r := c.Del("users1", unikey).Exec()
@@ -185,18 +178,8 @@ func main() {
 	kclient.InitLogger(logger.NewZapLogger("client.log", "./log", "debug", 100, 14, 10, true))
 
 	clientCfg := kclient.ClientConf{
-		ClientType: kclient.ClientType_FlyKv,
-	}
-
-	if cfg.Mode == "solo" {
-		clientCfg.SoloConf = &kclient.SoloConf{
-			Service:         cfg.Service,
-			UnikeyPlacement: slot.MakeUnikeyPlacement(cfg.Stores),
-		}
-	} else {
-		clientCfg.ClusterConf = &kclient.ClusterConf{
-			PD: strings.Split(cfg.PD, ";"),
-		}
+		ClientType: kclient.ClientType(cfg.ClientType),
+		PD:         strings.Split(cfg.PD, ";"),
 	}
 
 	keyrange, _ := strconv.ParseInt(os.Args[1], 10, 32)

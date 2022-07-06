@@ -10,10 +10,10 @@ import (
 	"time"
 )
 
-type scannerFlygate struct {
+type scannerFlysql struct {
 	impl
 }
 
-func queryFlygate(pdAddr []*net.UDPAddr, deadline time.Time) []string {
-	return client.QueryGate(pdAddr, deadline.Sub(time.Now()))
+func queryFlysql(pdAddr []*net.UDPAddr, deadline time.Time) []string {
+	return client.QueryFlysql(pdAddr, deadline.Sub(time.Now()))
 }

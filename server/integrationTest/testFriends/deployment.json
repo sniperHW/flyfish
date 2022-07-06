@@ -1,0 +1,15 @@
+{
+    "Sets": {
+        "1": {
+            "SetID": 1,
+            "Nodes": {
+                "1": {
+                    "NodeID": 1,
+                    "Host": "localhost",
+                    "ServicePort": 9110,
+                    "RaftPort": 9111
+                }
+            }
+        }       
+    }
+}
