@@ -273,18 +273,12 @@ message  setMarkClearResp{
   optional string reason       = 2;
 }
 
-
-message flygate  {
-  optional string service      = 1;
-  optional int32  msgPerSecond = 2;  
-}
-
 message   getFlyGateList {
 
 }
 
 message getFlyGateListResp {
-  repeated flygate list        = 1;
+  repeated string list        = 1;
 }
 
 message flyGateHeartBeat {

@@ -85,10 +85,12 @@ func New(conf ClientConf) (*Client, error) {
 	switch conf.ClientType {
 	case FlyGate:
 		c.impl = &clientImplFlyGate{
-			waitResp:       map[int64]*cmdContext{},
-			waitSend:       list.New(),
-			notifyQueue:    conf.NotifyQueue,
-			notifyPriority: conf.NotifyPriority,
+			impl: impl{
+				waitResp:       map[int64]*cmdContext{},
+				waitSend:       list.New(),
+				notifyQueue:    conf.NotifyQueue,
+				notifyPriority: conf.NotifyPriority,
+			},
 		}
 		c.impl.start(pdAddr)
 		return c, nil

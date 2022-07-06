@@ -33,6 +33,67 @@ type scanner struct {
 	tableVersion int64
 }
 
+func (sc *scanner) fillStores(g *gate, slots []int) {
+	ch := make(chan struct{})
+	g.mainQueue.Append(0, func() {
+		if len(slots) == 0 {
+			for _, v := range g.sets {
+				for _, vv := range v.stores {
+					if len(v.nodes) > 0 {
+						st := &storeScanner{
+							set:      v.setID,
+							id:       vv.id,
+							slots:    vv.slots.Clone(),
+							services: map[int]string{},
+						}
+						for _, vvv := range v.nodes {
+							st.services[vvv.id] = vvv.service
+						}
+						sc.stores = append(sc.stores, st)
+					}
+				}
+			}
+		} else {
+			type pairs struct {
+				set   int
+				slots *bitmap.Bitmap
+			}
+			stores := map[int]*pairs{}
+			for _, v := range slots {
+				if store, ok := g.slotToStore[v]; ok {
+					p := stores[store.id]
+					if nil == p {
+						p = &pairs{
+							set:   store.setID,
+							slots: bitmap.New(sslot.SlotCount),
+						}
+						stores[store.id] = p
+					}
+					p.slots.Set(v)
+				}
+			}
+
+			for _, vv := range stores {
+				set := g.sets[vv.set]
+				if len(set.nodes) > 0 {
+					st := &storeScanner{
+						id:       vv.set,
+						slots:    vv.slots,
+						services: map[int]string{},
+					}
+
+					for _, vvv := range set.nodes {
+						st.services[vvv.id] = vvv.service
+					}
+					sc.stores = append(sc.stores, st)
+				}
+			}
+		}
+		close(ch)
+	})
+	<-ch
+}
+
 func (g *gate) onScanner(conn net.Conn) {
 	if !g.checkReqLimit(int(atomic.AddInt64(&g.totalPendingReq, 1))) {
 		conn.Close()
@@ -98,36 +159,6 @@ func (g *gate) onScanner(conn net.Conn) {
 					})
 				} else {
 					return scan.Err_invaild_field
-				}
-			}
-
-			for {
-				ch := make(chan struct{})
-				g.mainQueue.Append(0, func() {
-					for _, v := range g.sets {
-						for _, vv := range v.stores {
-							if len(v.nodes) > 0 {
-								st := &storeScanner{
-									set:      v.setID,
-									id:       vv.id,
-									slots:    vv.slots.Clone(),
-									services: map[int]string{},
-								}
-								for _, vvv := range v.nodes {
-									st.services[vvv.id] = vvv.service
-								}
-								sc.stores = append(sc.stores, st)
-							}
-						}
-					}
-					close(ch)
-				})
-				<-ch
-
-				if len(sc.stores) > 0 || time.Now().After(deadline) {
-					break
-				} else {
-					time.Sleep(time.Millisecond * 100)
 				}
 			}
 			return scan.Err_ok
@@ -232,6 +263,17 @@ func (sc *scanner) loop(g *gate, conn net.Conn) {
 
 		deadline := time.Now().Add(time.Duration(req.Timeout))
 
+		for len(sc.stores) == 0 {
+			sc.fillStores(g, sc.okSlots.GetCloseBits())
+			if time.Now().After(deadline) {
+				return
+			} else if len(sc.stores) > 0 {
+				break
+			} else {
+				time.Sleep(time.Millisecond * 100)
+			}
+		}
+
 		resp, err := sc.stores[sc.offset].next(sc, int(req.Count), deadline)
 
 		if nil != err {
@@ -251,8 +293,6 @@ func (sc *scanner) loop(g *gate, conn net.Conn) {
 			resp.Rows = resp.Rows[:len(resp.Rows)-1]
 		}
 
-		breakLoop := false
-
 		if nil != dummy {
 			switch scan.GetDummyType(dummy) {
 			case scan.DummySlot:
@@ -265,62 +305,9 @@ func (sc *scanner) loop(g *gate, conn net.Conn) {
 					if slots := sc.okSlots.GetCloseBits(); len(slots) > 0 {
 						sc.stores = sc.stores[:0]
 						sc.offset = 0
-						for {
-							ch := make(chan struct{})
-							g.mainQueue.Append(0, func() {
-								type pairs struct {
-									set   int
-									slots *bitmap.Bitmap
-								}
-
-								stores := map[int]*pairs{}
-
-								for _, v := range slots {
-									if store, ok := g.slotToStore[v]; ok {
-										p := stores[store.id]
-										if nil == p {
-											p = &pairs{
-												set:   store.setID,
-												slots: bitmap.New(sslot.SlotCount),
-											}
-											stores[store.id] = p
-										}
-										p.slots.Set(v)
-									}
-								}
-
-								for _, vv := range stores {
-									set := g.sets[vv.set]
-									if len(set.nodes) > 0 {
-										st := &storeScanner{
-											id:       vv.set,
-											slots:    vv.slots,
-											services: map[int]string{},
-										}
-
-										for _, vvv := range set.nodes {
-											st.services[vvv.id] = vvv.service
-										}
-										sc.stores = append(sc.stores, st)
-									}
-								}
-								close(ch)
-							})
-							<-ch
-
-							if time.Now().After(deadline) {
-								breakLoop = true
-								break
-							} else if len(sc.stores) > 0 {
-								break
-							} else {
-								time.Sleep(time.Millisecond * 100)
-							}
-						}
 					} else {
 						//加入dummy通告scan结束
 						resp.Rows = append(resp.Rows, scan.MakeDummyRow(scan.DummyScan))
-						breakLoop = true
 					}
 				}
 			default:
@@ -328,7 +315,9 @@ func (sc *scanner) loop(g *gate, conn net.Conn) {
 			}
 		}
 
-		if nil != scan.SendScanNextResp(conn, 0, 0, resp.Rows, time.Now().Add(time.Second)) || breakLoop {
+		if nil != scan.SendScanNextResp(conn, 0, 0, resp.Rows, time.Now().Add(time.Second)) {
+			return
+		} else if len(resp.Rows) > 0 && scan.GetDummyType(resp.Rows[len(resp.Rows)-1]) == scan.DummyScan {
 			return
 		}
 	}

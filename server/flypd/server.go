@@ -116,9 +116,7 @@ func (p *pd) onQueryRouteInfo(replyer replyer, m *snet.Message) {
 func (p *pd) onGetFlyGateList(replyer replyer, m *snet.Message) {
 	resp := &sproto.GetFlyGateListResp{}
 	for _, v := range p.flygateMgr.flygateMap {
-		resp.List = append(resp.List, &sproto.Flygate{
-			Service: v.service,
-		})
+		resp.List = append(resp.List, v.service)
 	}
 
 	replyer.reply(snet.MakeMessage(m.Context, resp))

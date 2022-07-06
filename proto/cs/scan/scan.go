@@ -75,6 +75,8 @@ func GetDummyType(row *flyproto.Row) DummyType {
 		return DummySlot
 	case "DummyStore":
 		return DummyStore
+	case "DummyScan":
+		return DummyScan
 	default:
 		return DummyNone
 	}

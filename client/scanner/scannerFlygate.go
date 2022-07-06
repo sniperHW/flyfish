@@ -5,7 +5,7 @@ import (
 	"github.com/sniperHW/flyfish/client"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs/scan"
-	sproto "github.com/sniperHW/flyfish/server/proto"
+	"math/rand"
 	"net"
 	"time"
 )
@@ -27,7 +27,7 @@ func (sc *scannerFlygate) close() {
 }
 
 func (sc *scannerFlygate) connectFlygate(scanner *Scanner, deadline time.Time) error {
-	var gates []*sproto.Flygate
+	var gates []string
 	for len(gates) == 0 && time.Now().Before(deadline) {
 		gates = client.QueryGate(sc.pdAddr, deadline.Sub(time.Now()))
 	}
@@ -36,7 +36,7 @@ func (sc *scannerFlygate) connectFlygate(scanner *Scanner, deadline time.Time) e
 		return errors.New("no available gate")
 	}
 
-	if conn, err := scanner.connectServer(gates[0].Service, 0, nil, 0, deadline); nil != err {
+	if conn, err := scanner.connectServer(gates[int(rand.Int31())%len(gates)], 0, nil, 0, deadline); nil != err {
 		return err
 	} else {
 		sc.conn = conn
