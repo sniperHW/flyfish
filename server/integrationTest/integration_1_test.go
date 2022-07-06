@@ -39,7 +39,7 @@ type dbconf struct {
 	Port   int
 	Usr    string
 	Pwd    string
-	Db     string
+	DB     string
 }
 
 var flyKvConfigStr string = `
@@ -104,6 +104,7 @@ var flyGateConfigStr string = `
 `
 
 var dbConf *dbconf
+var kvConf *flykv.Config
 
 func init() {
 	l := logger.NewZapLogger("integrationTest.log", "./log", "Debug", 104857600, 14, 10, true)
@@ -113,8 +114,15 @@ func init() {
 	client.InitLogger(l)
 	logger.InitLogger(l)
 
+	var err error
+
 	dbConf = &dbconf{}
 	if _, err = toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
+		panic(err)
+	}
+
+	kvConf, err = flykv.LoadConfigStr(fmt.Sprintf(flyKvConfigStr, dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.Usr, dbConf.Pwd, dbConf.DB))
+	if nil != err {
 		panic(err)
 	}
 
@@ -134,7 +142,7 @@ func newPD(t *testing.T, raftID uint64, deploymentPath ...string) (StopAble, uin
 	conf.DBConfig.DBType = dbConf.DBType
 	conf.DBConfig.Host = dbConf.Host
 	conf.DBConfig.Port = dbConf.Port
-	conf.DBConfig.User = dbConf.User
+	conf.DBConfig.User = dbConf.Usr
 	conf.DBConfig.Password = dbConf.Pwd
 	conf.DBConfig.DB = dbConf.DB
 
@@ -386,7 +394,7 @@ func clearUsers1() {
 	}
 
 	//清理bloomfilter
-	dbc, err := sql.SqlOpen(dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.Db, dbConf.Usr, dbConf.Pwd)
+	dbc, err := sql.SqlOpen(dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.DB, dbConf.Usr, dbConf.Pwd)
 	if nil != err {
 		panic(err)
 	}
@@ -412,12 +420,6 @@ func TestFlygate(t *testing.T) {
 
 	dbConf := &dbconf{}
 	if _, err = toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
-		panic(err)
-	}
-
-	kvConf, err := flykv.LoadConfigStr(fmt.Sprintf(flyKvConfigStr, dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.Usr, dbConf.Pwd, dbConf.Db))
-
-	if nil != err {
 		panic(err)
 	}
 
@@ -746,12 +748,6 @@ func TestFlykv(t *testing.T) {
 		panic(err)
 	}
 
-	kvConf, err := flykv.LoadConfigStr(fmt.Sprintf(flyKvConfigStr, dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.Usr, dbConf.Pwd, dbConf.Db))
-
-	if nil != err {
-		panic(err)
-	}
-
 	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
@@ -962,17 +958,6 @@ func TestAddRemoveNode1(t *testing.T) {
 
 	var err error
 
-	dbConf := &dbconf{}
-	if _, err = toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
-		panic(err)
-	}
-
-	kvConf, err := flykv.LoadConfigStr(fmt.Sprintf(flyKvConfigStr, dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.Usr, dbConf.Pwd, dbConf.Db))
-
-	if nil != err {
-		panic(err)
-	}
-
 	pd, pdRaftID := newPD(t, 0)
 
 	logger.GetSugar().Infof("testAddRemNode")
@@ -1061,17 +1046,6 @@ func TestAddRemoveNode2(t *testing.T) {
 	clearUsers1()
 
 	var err error
-
-	dbConf := &dbconf{}
-	if _, err = toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
-		panic(err)
-	}
-
-	kvConf, err := flykv.LoadConfigStr(fmt.Sprintf(flyKvConfigStr, dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.Usr, dbConf.Pwd, dbConf.Db))
-
-	if nil != err {
-		panic(err)
-	}
 
 	pd, pdRaftID := newPD(t, 0)
 
@@ -1191,17 +1165,6 @@ func TestAddSet(t *testing.T) {
 	clearUsers1()
 
 	var err error
-
-	dbConf := &dbconf{}
-	if _, err = toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
-		panic(err)
-	}
-
-	kvConf, err := flykv.LoadConfigStr(fmt.Sprintf(flyKvConfigStr, dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.Usr, dbConf.Pwd, dbConf.Db))
-
-	if nil != err {
-		panic(err)
-	}
 
 	pd, pdRaftID := newPD(t, 0)
 
@@ -1373,18 +1336,6 @@ func testAddSet2(t *testing.T, clientType client.ClientType) {
 	os.RemoveAll("./testRaftLog")
 	clearUsers1()
 	var err error
-
-	dbConf := &dbconf{}
-	if _, err = toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
-		panic(err)
-	}
-
-	kvConf, err := flykv.LoadConfigStr(fmt.Sprintf(flyKvConfigStr, dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.Usr, dbConf.Pwd, dbConf.Db))
-
-	if nil != err {
-		panic(err)
-	}
-
 	pd, pdRaftID := newPD(t, 0, "./deployment2.json")
 
 	addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
@@ -1591,17 +1542,6 @@ func testStoreBalance(t *testing.T, clientType client.ClientType) {
 
 	var err error
 
-	dbConf := &dbconf{}
-	if _, err = toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
-		panic(err)
-	}
-
-	kvConf, err := flykv.LoadConfigStr(fmt.Sprintf(flyKvConfigStr, dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.Usr, dbConf.Pwd, dbConf.Db))
-
-	if nil != err {
-		panic(err)
-	}
-
 	pd, _ := newPD(t, 0, "./deployment2.json")
 
 	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
@@ -1773,17 +1713,6 @@ func TestSuspendResume(t *testing.T) {
 	os.RemoveAll("./testRaftLog")
 	clearUsers1()
 	var err error
-
-	dbConf := &dbconf{}
-	if _, err = toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
-		panic(err)
-	}
-
-	kvConf, err := flykv.LoadConfigStr(fmt.Sprintf(flyKvConfigStr, dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.Usr, dbConf.Pwd, dbConf.Db))
-
-	if nil != err {
-		panic(err)
-	}
 
 	pd, _ := newPD(t, 0, "./deployment2.json")
 
@@ -1994,17 +1923,6 @@ func testScan(t *testing.T, clientType client.ClientType) {
 	clearUsers1()
 	var err error
 
-	dbConf := &dbconf{}
-	if _, err = toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
-		panic(err)
-	}
-
-	kvConf, err := flykv.LoadConfigStr(fmt.Sprintf(flyKvConfigStr, dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.Usr, dbConf.Pwd, dbConf.Db))
-
-	if nil != err {
-		panic(err)
-	}
-
 	kvConf.WriteBackMode = "WriteThrough"
 
 	pd, _ := newPD(t, 0)
@@ -2149,16 +2067,9 @@ func TestMeta(t *testing.T) {
 	clearUsers1()
 	var err error
 
-	dbConf := &dbconf{}
-	if _, err = toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
-		panic(err)
-	}
-
 	//移除table
 	//先删除table1
-	dbc, err := sql.SqlOpen(dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.Db, dbConf.Usr, dbConf.Pwd)
-
-	fmt.Println(err)
+	dbc, err := sql.SqlOpen(dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.DB, dbConf.Usr, dbConf.Pwd)
 
 	sql.DropTable(dbc, &db.TableDef{
 		Name:      "table2",
@@ -2171,12 +2082,6 @@ func TestMeta(t *testing.T) {
 	})
 
 	pd, pdRaftID := newPD(t, 0, "./deployment2.json")
-
-	kvConf, err := flykv.LoadConfigStr(fmt.Sprintf(flyKvConfigStr, dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.Usr, dbConf.Pwd, dbConf.Db))
-
-	if nil != err {
-		panic(err)
-	}
 
 	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
 
@@ -2200,7 +2105,7 @@ func TestMeta(t *testing.T) {
 		})
 
 		resp, err := consoleClient.Call(req, &sproto.MetaAddTableResp{})
-		fmt.Println(resp, err)
+		logger.GetSugar().Infof("%v %v", resp, err)
 	}
 
 	//remove table
@@ -2211,7 +2116,7 @@ func TestMeta(t *testing.T) {
 		}
 
 		resp, err := consoleClient.Call(req, &sproto.MetaRemoveTableResp{})
-		fmt.Println(resp, err)
+		logger.GetSugar().Infof("%v %v", resp, err)
 
 	}
 
@@ -2229,7 +2134,7 @@ func TestMeta(t *testing.T) {
 		})
 
 		resp, err := consoleClient.Call(req, &sproto.MetaAddTableResp{})
-		fmt.Println(resp, err)
+		logger.GetSugar().Infof("%v %v", resp, err)
 	}
 
 	//add fields
@@ -2246,7 +2151,7 @@ func TestMeta(t *testing.T) {
 		})
 
 		resp, err := consoleClient.Call(req, &sproto.MetaAddFieldsResp{})
-		fmt.Println(resp, err)
+		logger.GetSugar().Infof("%v %v", resp, err)
 	}
 
 	//remove field
@@ -2258,7 +2163,7 @@ func TestMeta(t *testing.T) {
 
 		req.Fields = append(req.Fields, "field2")
 		resp, err := consoleClient.Call(req, &sproto.MetaRemoveFieldsResp{})
-		fmt.Println(resp, err)
+		logger.GetSugar().Infof("%v %v", resp, err)
 	}
 
 	//add field again
@@ -2273,7 +2178,7 @@ func TestMeta(t *testing.T) {
 			Type: "int",
 		})
 		resp, err := consoleClient.Call(req, &sproto.MetaAddFieldsResp{})
-		fmt.Println(resp, err)
+		logger.GetSugar().Infof("%v %v", resp, err)
 	}
 
 	metaVersion := int64(0)

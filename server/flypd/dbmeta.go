@@ -360,10 +360,11 @@ func (p *pd) onMetaAddTable(replyer replyer, m *snet.Message) bool {
 			return err
 		}
 
-		dbtab, err := sql.GetTableScheme(dbc, p.config.DBConfig.DBType, fmt.Sprintf("%s_%d", tab.Name, tab.DbVersion))
+		tableExist, err := sql.IsTableExist(dbc, p.config.DBConfig.DBType, tab.Name, tab.DbVersion)
+
 		if nil != err {
 			return err
-		} else if nil == dbtab {
+		} else if !tableExist {
 			//表不存在
 			return sql.CreateTables(dbc, p.config.DBConfig.DBType, tab)
 		} else {
@@ -483,11 +484,11 @@ func (p *pd) onMetaAddFields(replyer replyer, m *snet.Message) bool {
 			return err
 		}
 
-		dbtab, err := sql.GetTableScheme(dbc, p.config.DBConfig.DBType, fmt.Sprintf("%s_%d", tab.Name, tab.DbVersion))
+		tableExist, err := sql.IsTableExist(dbc, p.config.DBConfig.DBType, tab.Name, tab.DbVersion)
 		if nil != err {
 			return err
-		} else if nil == dbtab {
-			GetSugar().Errorf("table:%s in meta but not in db", tab.Name)
+		} else if !tableExist {
+			GetSugar().Errorf("table:%s:%d in meta but not in db", tab.Name, tab.DbVersion)
 			//表不存在,不应该发生这种情况
 			return sql.CreateTables(dbc, p.config.DBConfig.DBType, tab)
 		} else {

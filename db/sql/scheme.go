@@ -507,24 +507,34 @@ func DropTable(dbc *sqlx.DB, tabDef *db.TableDef) error {
 	return err
 }
 
-func GetTableScheme(dbc *sqlx.DB, sqlType string, table_real_name string) (tabdef *db.TableDef, err error) {
+func GetTableScheme(dbc *sqlx.DB, sqlType string, name string) (tabdef *db.TableDef, err error) {
 	if sqlType == "pgsql" {
-		tabdef, err = getTableSchemePgSql(dbc, table_real_name)
+		tabdef, err = getTableSchemePgSql(dbc, name)
 	} else {
-		tabdef, err = getTableSchemeMySql(dbc, table_real_name)
+		tabdef, err = getTableSchemeMySql(dbc, name)
+	}
+	return
+}
+
+func IsTableExist(dbc *sqlx.DB, sqlType string, name string, version int64) (bool, error) {
+	str := fmt.Sprintf("select count(TABLE_NAME) from information_schema.COLUMNS where TABLE_NAME = '%s_%d'", name, version)
+
+	rows, err := dbc.Query(str)
+	if nil != err {
+		return false, err
+	}
+	defer rows.Close()
+
+	var count int
+
+	for rows.Next() {
+		err = rows.Scan(&count)
+		if nil != err {
+			return false, err
+		}
 	}
 
-	/*
-		if nil != tabdef {
-			for _, v := range tabdef.Fields {
-				if v.TabVersion > tabdef.Version {
-					tabdef.Version = v.TabVersion
-				}
-			}
-		}
-	*/
-
-	return
+	return count > 0, nil
 }
 
 func ClearTableData(dbc *sqlx.DB, meta db.DBMeta, name string) error {

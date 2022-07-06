@@ -3,4 +3,4 @@ Host      = "localhost"
 Port      = 5432
 Usr       = "xxx"
 Pwd       = "xxx"
-Db        = "xxx"
+DB        = "xxx"
