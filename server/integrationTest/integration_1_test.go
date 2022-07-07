@@ -1531,6 +1531,95 @@ func TestAddSet3(t *testing.T) {
 	testAddSet2(t, client.FlyKv)
 }
 
+func testIncrBy(t *testing.T, clientType client.ClientType) {
+	sslot.SlotCount = 128
+	flypd.MinReplicaPerSet = 1
+	flypd.StorePerSet = 3
+	flygate.QueryRouteInfoDuration = time.Millisecond * 3 * 1000
+	os.RemoveAll("./log")
+	os.RemoveAll("./testRaftLog")
+	clearUsers1()
+
+	var err error
+
+	pd, _ := newPD(t, 0, "./deployment2.json")
+
+	SnapshotCountBack := kvConf.SnapshotCount
+	SnapshotCatchUpEntriesNBack := kvConf.SnapshotCatchUpEntriesN
+
+	kvConf.SnapshotCount = 10000
+	kvConf.SnapshotCatchUpEntriesN = 5000
+
+	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	//启动flygate
+	gateConf, _ := flygate.LoadConfigStr(flyGateConfigStr)
+
+	gate1, err := flygate.NewFlyGate(gateConf, "localhost:10110")
+
+	if nil != err {
+		panic(err)
+	}
+
+	c, _ := client.New(client.ClientConf{
+		ClientType: clientType,
+		PD:         []string{"localhost:8110"},
+	})
+
+	defer c.Close()
+
+	fields := map[string]interface{}{}
+	fields["age"] = 0
+	fields["name"] = "sniperHW"
+	fields["phone"] = []byte("")
+	c.Set("users1", "sniperHW", fields).Exec()
+
+	beg := time.Now()
+
+	var wait sync.WaitGroup
+
+	var count int32
+
+	for i := 0; i < 10; i++ {
+		wait.Add(1)
+		go func() {
+			for {
+				if atomic.AddInt32(&count, 1) > 1000 {
+					wait.Done()
+					return
+				} else {
+					r := c.IncrBy("users1", "sniperHW", "age", 1).Exec()
+					logger.GetSugar().Infof("%v", r.Value.GetInt())
+				}
+			}
+		}()
+	}
+
+	wait.Wait()
+
+	logger.GetSugar().Infof("use %v", time.Now().Sub(beg))
+
+	node1.Stop()
+	gate1.Stop()
+	pd.Stop()
+
+	kvConf.SnapshotCount = SnapshotCountBack
+	kvConf.SnapshotCatchUpEntriesN = SnapshotCatchUpEntriesNBack
+
+}
+
+func TestIncrByFlygate(t *testing.T) {
+	testIncrBy(t, client.FlyGate)
+}
+
+func TestIncrByFlykv(t *testing.T) {
+	testIncrBy(t, client.FlyGate)
+}
+
 func testStoreBalance(t *testing.T, clientType client.ClientType) {
 	sslot.SlotCount = 128
 	flypd.MinReplicaPerSet = 1
@@ -1557,17 +1646,6 @@ func testStoreBalance(t *testing.T, clientType client.ClientType) {
 
 	if nil != err {
 		panic(err)
-	}
-
-	for {
-
-		addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
-
-		gate := client.QueryGate([]*net.UDPAddr{addr}, time.Second)
-		if len(gate) > 0 {
-			break
-		}
-		time.Sleep(time.Second)
 	}
 
 	stoped := int32(0)
@@ -1788,17 +1866,6 @@ func TestSuspendResume(t *testing.T) {
 
 	if nil != err {
 		panic(err)
-	}
-
-	for {
-
-		addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
-
-		gate := client.QueryGate([]*net.UDPAddr{addr}, time.Second)
-		if len(gate) > 0 {
-			break
-		}
-		time.Sleep(time.Second)
 	}
 
 	c, _ := client.New(client.ClientConf{
