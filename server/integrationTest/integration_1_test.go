@@ -18,6 +18,7 @@ import (
 	flypd "github.com/sniperHW/flyfish/server/flypd"
 	console "github.com/sniperHW/flyfish/server/flypd/console/http"
 	consoleHttp "github.com/sniperHW/flyfish/server/flypd/console/http"
+	flysql "github.com/sniperHW/flyfish/server/flysql"
 	snet "github.com/sniperHW/flyfish/server/net"
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	sslot "github.com/sniperHW/flyfish/server/slot"
@@ -1509,6 +1510,111 @@ func TestAddSet3(t *testing.T) {
 	testAddSet2(t, client.FlyKv)
 }
 
+func TestIncrFlysql(t *testing.T) {
+
+	var configStr string = `
+PD            = "localhost:8110"    	
+[DBConfig]
+DBType        = "%s"
+Host          = "%s"
+Port          = %d
+User	      = "%s"
+Password      = "%s"
+DB            = "%s"
+
+
+
+[Log]
+MaxLogfileSize  = 104857600 # 100mb
+LogDir          = "log"
+LogPrefix       = "flykv"
+LogLevel        = "info"
+EnableStdout    = true	
+MaxAge          = 14
+MaxBackups      = 10
+
+`
+
+	sslot.SlotCount = 128
+	flypd.MinReplicaPerSet = 1
+	flypd.StorePerSet = 3
+	os.RemoveAll("./log")
+	os.RemoveAll("./testRaftLog")
+	clearUsers1()
+
+	var err error
+
+	pd, _ := newPD(t, 0, "./deployment2.json")
+
+	config, err := flysql.LoadConfigStr(fmt.Sprintf(configStr, dbConf.DBType, dbConf.Host, dbConf.Port, dbConf.Usr, dbConf.Pwd, dbConf.DB))
+
+	if nil != err {
+		panic(err)
+	}
+
+	flysql.InitLogger(logger.GetLogger())
+
+	sqlnode, err := flysql.NewFlysql("localhost:9110", config)
+
+	if nil != err {
+		panic(err)
+	}
+
+	c, _ := client.New(client.ClientConf{
+		ClientType: client.FlySql,
+		PD:         []string{"localhost:8110"},
+		Ordering:   true,
+	})
+
+	defer c.Close()
+
+	fields := map[string]interface{}{}
+	fields["age"] = 0
+	fields["name"] = "sniperHW"
+	fields["phone"] = []byte("")
+	c.Set("users1", "sniperHW", fields).Exec()
+
+	{
+		beg := time.Now()
+
+		var wait sync.WaitGroup
+
+		var count int32
+
+		m := map[int64]bool{}
+		var mu sync.Mutex
+		for i := 0; i < 200; i++ {
+			wait.Add(1)
+			go func() {
+				for {
+					if atomic.AddInt32(&count, 1) > 1000 {
+						wait.Done()
+						return
+					} else {
+						r := c.IncrBy("users1", "sniperHW", "age", 1).Exec()
+						_ = r
+						mu.Lock()
+						m[r.Value.GetInt()] = true
+						mu.Unlock()
+					}
+				}
+			}()
+		}
+
+		wait.Wait()
+
+		mu.Lock()
+		assert.Equal(t, len(m), 1000)
+		mu.Unlock()
+
+		logger.GetSugar().Infof("use %v", time.Now().Sub(beg))
+	}
+
+	sqlnode.Stop()
+	pd.Stop()
+
+}
+
 func testBatch(t *testing.T, clientType client.ClientType) {
 	sslot.SlotCount = 128
 	flypd.MinReplicaPerSet = 1
@@ -1580,7 +1686,6 @@ func testBatch(t *testing.T, clientType client.ClientType) {
 						mu.Lock()
 						m[r.Value.GetInt()] = true
 						mu.Unlock()
-						//logger.GetSugar().Infof("%v", r.Value.GetInt())
 					}
 				}
 			}()

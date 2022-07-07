@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"github.com/gogo/protobuf/proto"
-	//"github.com/sniperHW/flyfish/pkg/buffer"
 	Crypto "github.com/sniperHW/flyfish/pkg/crypto"
 	"io"
 	"net"

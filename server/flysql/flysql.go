@@ -2,7 +2,6 @@ package flysql
 
 import (
 	"context"
-	//"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/jmoiron/sqlx"
 	"github.com/sniperHW/flyfish/db"
@@ -262,7 +261,7 @@ func NewFlysql(service string, config *Config) (*flysql, error) {
 	}
 
 	if err := flysql.start(service); nil == err {
-		for i := 0; i < runtime.NumCPU()*2; i++ {
+		for i := 0; i < runtime.NumCPU(); i++ {
 			go func() {
 				for request := range flysql.requestChan {
 					if time.Now().After(request.deadline) {
