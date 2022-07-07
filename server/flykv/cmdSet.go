@@ -42,6 +42,10 @@ func (this *cmdSet) cmdType() flyproto.CmdType {
 	return flyproto.CmdType_Set
 }
 
+func (this *cmdSet) checkVersion() bool {
+	return this.version != nil
+}
+
 func (s *kvstore) makeSet(kv *kv, deadline time.Time, replyer *replyer, req *flyproto.SetReq) (cmdI, errcode.Error) {
 	if len(req.GetFields()) == 0 {
 		return nil, errcode.New(errcode.Errcode_error, "set fields is empty")

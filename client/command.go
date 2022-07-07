@@ -2,22 +2,14 @@ package client
 
 import (
 	"container/list"
-	//"errors"
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/sniperHW/flyfish/errcode"
-	//flynet "github.com/sniperHW/flyfish/pkg/net"
+	flynet "github.com/sniperHW/flyfish/pkg/net"
 	protocol "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
-	//snet "github.com/sniperHW/flyfish/server/net"
-	//sproto "github.com/sniperHW/flyfish/server/proto"
-	//"math/rand"
-	//"net"
 	"runtime"
-	//"sort"
 	"strings"
-	//"sync"
-	flynet "github.com/sniperHW/flyfish/pkg/net"
 	"sync/atomic"
 	"time"
 )
@@ -26,32 +18,45 @@ import (
  *  对于len > CompressSize的blob字段，compress将消耗大量cpu,为了避免asyncexec大量占用调用
  *  者的cpu,将asynexec交给单独的线程池执行
  */
-
 type asynExecMgr struct {
 	queue chan func()
+	stop  chan struct{}
 }
 
 func (m *asynExecMgr) exec(fn func()) {
-	m.queue <- fn
+	select {
+	case <-m.stop:
+	case m.queue <- fn:
+	}
 }
 
-func newAsynExecMgr() *asynExecMgr {
+func newAsynExecMgr(Ordering bool) *asynExecMgr {
 	m := &asynExecMgr{
-		queue: make(chan func(), 65535),
+		queue: make(chan func(), 4096),
+		stop:  make(chan struct{}),
 	}
 
-	for i := 0; i < runtime.NumCPU(); i++ {
+	var worker int
+	if Ordering {
+		worker = 1
+	} else {
+		worker = runtime.NumCPU()
+	}
+
+	for i := 0; i < worker; i++ {
 		go func() {
-			for v := range m.queue {
-				v()
+			for {
+				select {
+				case <-m.stop:
+					return
+				case v := <-m.queue:
+					v()
+				}
 			}
 		}()
 	}
-
 	return m
 }
-
-var asynExec *asynExecMgr = newAsynExecMgr()
 
 type StatusResult struct {
 	ErrCode errcode.Error
@@ -101,9 +106,7 @@ func (sc *StatusCmd) getErrorResult(e errcode.Error) interface{} {
 
 func (sc *StatusCmd) AsyncExec(cb func(*StatusResult)) {
 	cmd := makeCmdContext(false, sc.table, sc.key, sc.makeReq, sc.getErrorResult, cb)
-	asynExec.exec(func() {
-		sc.client.exec(cmd)
-	})
+	sc.client.exec(cmd)
 }
 
 func (sc *StatusCmd) Exec() *StatusResult {
@@ -111,9 +114,7 @@ func (sc *StatusCmd) Exec() *StatusResult {
 	cmd := makeCmdContext(true, sc.table, sc.key, sc.makeReq, sc.getErrorResult, func(r interface{}) {
 		respChan <- r.(*StatusResult)
 	})
-	asynExec.exec(func() {
-		sc.client.exec(cmd)
-	})
+	sc.client.exec(cmd)
 	return <-respChan
 }
 
@@ -131,9 +132,7 @@ func (gc *GetCmd) getErrorResult(e errcode.Error) interface{} {
 
 func (gc *GetCmd) AsyncExec(cb func(*GetResult)) {
 	cmd := makeCmdContext(false, gc.table, gc.key, gc.makeReq, gc.getErrorResult, cb)
-	asynExec.exec(func() {
-		gc.client.exec(cmd)
-	})
+	gc.client.exec(cmd)
 }
 
 func (gc *GetCmd) Exec() *GetResult {
@@ -141,9 +140,7 @@ func (gc *GetCmd) Exec() *GetResult {
 	cmd := makeCmdContext(true, gc.table, gc.key, gc.makeReq, gc.getErrorResult, func(r interface{}) {
 		respChan <- r.(*GetResult)
 	})
-	asynExec.exec(func() {
-		gc.client.exec(cmd)
-	})
+	gc.client.exec(cmd)
 	return <-respChan
 }
 
@@ -153,9 +150,7 @@ type ValueCmd struct {
 
 func (vc *ValueCmd) AsyncExec(cb func(*ValueResult)) {
 	cmd := makeCmdContext(false, vc.table, vc.key, vc.makeReq, vc.getErrorResult, cb)
-	asynExec.exec(func() {
-		vc.client.exec(cmd)
-	})
+	vc.client.exec(cmd)
 }
 
 func (vc *ValueCmd) Exec() *ValueResult {
@@ -163,9 +158,7 @@ func (vc *ValueCmd) Exec() *ValueResult {
 	cmd := makeCmdContext(true, vc.table, vc.key, vc.makeReq, vc.getErrorResult, func(r interface{}) {
 		respChan <- r.(*ValueResult)
 	})
-	asynExec.exec(func() {
-		vc.client.exec(cmd)
-	})
+	vc.client.exec(cmd)
 	return <-respChan
 }
 

@@ -111,13 +111,49 @@ func (this *kv) clearCmds(err errcode.Error) {
 	}
 }
 
+func (this *kv) popCmd() (ret cmdI) {
+	var batch *batchCmd
+	for c := this.pendingCmd.Front(); nil != c; c = this.pendingCmd.Front() {
+		cmd := this.pendingCmd.Remove(c).(cmdI)
+		if cmd.isTimeout() {
+			cmd.reply(Err_timeout, nil, 0)
+		} else if cmd.checkVersion() {
+			if nil != ret {
+				this.pendingCmd.PushFront(cmd.getListElement())
+			} else {
+				ret = cmd
+			}
+			return
+		} else {
+			switch cmd.cmdType() {
+			case flyproto.CmdType_Get, flyproto.CmdType_Set, flyproto.CmdType_IncrBy:
+				if nil == batch {
+					batch = &batchCmd{cmdtype: cmd.cmdType()}
+					batch.addCmd(cmd)
+					ret = batch
+				} else if batch.cmdType() == cmd.cmdType() {
+					batch.addCmd(cmd)
+				} else {
+					this.pendingCmd.PushFront(cmd.getListElement())
+					return
+				}
+			default:
+				if nil != ret {
+					this.pendingCmd.PushFront(cmd.getListElement())
+				} else {
+					ret = cmd
+				}
+				return
+			}
+		}
+	}
+	return
+}
+
 func (this *kv) processCmd() {
 	if this.store.isLeader() {
-		for c := this.pendingCmd.Front(); nil != c; c = this.pendingCmd.Front() {
-			cmd := this.pendingCmd.Remove(c).(cmdI)
-			if cmd.isTimeout() {
-				cmd.reply(Err_timeout, nil, 0)
-			} else if cmd.cmdType() == flyproto.CmdType_Get {
+		for cmd := this.popCmd(); nil != cmd; cmd = this.popCmd() {
+			if cmd.cmdType() == flyproto.CmdType_Get {
 				if !this.store.kvnode.config.LinearizableRead {
 					//没有开启一致性读，直接返回
 					cmd.reply(nil, this.fields, this.version)
@@ -147,7 +183,6 @@ func (this *kv) processCmd() {
 				}
 			}
 		}
-
 		this.store.addKickable(this)
 	}
 }

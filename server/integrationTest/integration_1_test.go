@@ -445,17 +445,6 @@ func TestFlygate(t *testing.T) {
 		panic(err)
 	}
 
-	for {
-
-		addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
-
-		gate := client.QueryGate([]*net.UDPAddr{addr}, time.Second)
-		if len(gate) > 0 {
-			break
-		}
-		time.Sleep(time.Second)
-	}
-
 	fmt.Println("run client")
 
 	c, _ := client.New(client.ClientConf{
@@ -1379,17 +1368,6 @@ func testAddSet2(t *testing.T, clientType client.ClientType) {
 		panic(err)
 	}
 
-	for {
-
-		addr, _ := net.ResolveUDPAddr("udp", "localhost:8110")
-
-		gate := client.QueryGate([]*net.UDPAddr{addr}, time.Second)
-		if len(gate) > 0 {
-			break
-		}
-		time.Sleep(time.Second)
-	}
-
 	fmt.Println("run client")
 
 	c, _ := client.New(client.ClientConf{
@@ -1531,7 +1509,7 @@ func TestAddSet3(t *testing.T) {
 	testAddSet2(t, client.FlyKv)
 }
 
-func testIncrBy(t *testing.T, clientType client.ClientType) {
+func testBatch(t *testing.T, clientType client.ClientType) {
 	sslot.SlotCount = 128
 	flypd.MinReplicaPerSet = 1
 	flypd.StorePerSet = 3
@@ -1568,6 +1546,7 @@ func testIncrBy(t *testing.T, clientType client.ClientType) {
 	c, _ := client.New(client.ClientConf{
 		ClientType: clientType,
 		PD:         []string{"localhost:8110"},
+		Ordering:   true,
 	})
 
 	defer c.Close()
@@ -1578,30 +1557,63 @@ func testIncrBy(t *testing.T, clientType client.ClientType) {
 	fields["phone"] = []byte("")
 	c.Set("users1", "sniperHW", fields).Exec()
 
-	beg := time.Now()
+	//batch incr
+	{
+		beg := time.Now()
 
-	var wait sync.WaitGroup
+		var wait sync.WaitGroup
 
-	var count int32
+		var count int32
 
-	for i := 0; i < 10; i++ {
-		wait.Add(1)
-		go func() {
-			for {
-				if atomic.AddInt32(&count, 1) > 1000 {
-					wait.Done()
-					return
-				} else {
-					r := c.IncrBy("users1", "sniperHW", "age", 1).Exec()
-					logger.GetSugar().Infof("%v", r.Value.GetInt())
+		m := map[int64]bool{}
+		var mu sync.Mutex
+		for i := 0; i < 100; i++ {
+			wait.Add(1)
+			go func() {
+				for {
+					if atomic.AddInt32(&count, 1) > 1000 {
+						wait.Done()
+						return
+					} else {
+						r := c.IncrBy("users1", "sniperHW", "age", 1).Exec()
+						_ = r
+						mu.Lock()
+						m[r.Value.GetInt()] = true
+						mu.Unlock()
+						//logger.GetSugar().Infof("%v", r.Value.GetInt())
+					}
 				}
-			}
-		}()
+			}()
+		}
+
+		wait.Wait()
+
+		mu.Lock()
+		assert.Equal(t, len(m), 1000)
+		mu.Unlock()
+
+		logger.GetSugar().Infof("use %v", time.Now().Sub(beg))
 	}
 
-	wait.Wait()
+	//batch set
+	{
 
-	logger.GetSugar().Infof("use %v", time.Now().Sub(beg))
+		fields := map[string]interface{}{}
+		var wait sync.WaitGroup
+		for i := 1; i <= 100; i++ {
+			wait.Add(1)
+			fields["age"] = i
+			c.Set("users1", "sniperHW", fields).AsyncExec(func(_ *client.StatusResult) {
+				wait.Done()
+			})
+		}
+		wait.Wait()
+
+		r := c.GetAll("users1", "sniperHW").Exec()
+		assert.Nil(t, r.ErrCode)
+		//Ordering设置为true,保证了命令按顺序发出，因此这个assert必需成立
+		assert.Equal(t, r.Fields["age"].GetInt(), int64(100))
+	}
 
 	node1.Stop()
 	gate1.Stop()
@@ -1609,15 +1621,14 @@ func testIncrBy(t *testing.T, clientType client.ClientType) {
 
 	kvConf.SnapshotCount = SnapshotCountBack
 	kvConf.SnapshotCatchUpEntriesN = SnapshotCatchUpEntriesNBack
-
 }
 
-func TestIncrByFlygate(t *testing.T) {
-	testIncrBy(t, client.FlyGate)
+func TestBatchFlygate(t *testing.T) {
+	testBatch(t, client.FlyGate)
 }
 
-func TestIncrByFlykv(t *testing.T) {
-	testIncrBy(t, client.FlyGate)
+func TestBatchFlykv(t *testing.T) {
+	testBatch(t, client.FlyGate)
 }
 
 func testStoreBalance(t *testing.T, clientType client.ClientType) {

@@ -38,6 +38,7 @@ type ClientConf struct {
 	NotifyPriority int         //回调事件优先级
 	ClientType     ClientType
 	PD             []string
+	Ordering       bool //如果需要单个client按程序顺序发送命令，设置为true
 }
 
 type clientImpl interface {
@@ -47,8 +48,9 @@ type clientImpl interface {
 }
 
 type Client struct {
-	seqno int64
-	impl  clientImpl
+	seqno     int64
+	impl      clientImpl
+	asyncExec *asynExecMgr
 }
 
 type conn struct {
@@ -59,11 +61,14 @@ type conn struct {
 }
 
 func (this *Client) exec(cmd *cmdContext) {
-	this.impl.exec(cmd)
+	this.asyncExec.exec(func() {
+		this.impl.exec(cmd)
+	})
 }
 
 func (this *Client) Close() {
 	this.impl.close()
+	close(this.asyncExec.stop)
 }
 
 func New(conf ClientConf) (*Client, error) {
@@ -81,7 +86,7 @@ func New(conf ClientConf) (*Client, error) {
 		}
 	}
 
-	c := &Client{}
+	c := &Client{asyncExec: newAsynExecMgr(conf.Ordering)}
 	switch conf.ClientType {
 	case FlyGate:
 		c.impl = &clientImplFlyGate{

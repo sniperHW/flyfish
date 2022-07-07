@@ -10,6 +10,7 @@ import (
 type cmdIncr struct {
 	cmdBase
 	v *flyproto.Field
+	r *flyproto.Field
 }
 
 func (this *cmdIncr) do(proposal *kvProposal) *kvProposal {
@@ -22,13 +23,20 @@ func (this *cmdIncr) do(proposal *kvProposal) *kvProposal {
 		oldV := proposal.fields[this.v.GetName()]
 		newV := flyproto.PackField(oldV.GetName(), oldV.GetInt()+this.v.GetInt())
 		proposal.fields[this.v.GetName()] = newV
+		this.r = newV
 	} else {
 		proposal.version++
 		proposal.ptype = proposal_update
-		oldV := this.kv.getField(this.v.GetName())
+		var oldV *flyproto.Field
+		if nil == proposal.fields {
+			proposal.fields = map[string]*flyproto.Field{}
+		}
+		if oldV = proposal.fields[this.v.GetName()]; oldV == nil {
+			oldV = this.kv.getField(this.v.GetName())
+		}
 		newV := flyproto.PackField(oldV.GetName(), oldV.GetInt()+this.v.GetInt())
-		proposal.fields = map[string]*flyproto.Field{}
 		proposal.fields[this.v.GetName()] = newV
+		this.r = newV
 	}
 	return proposal
 }
@@ -58,7 +66,7 @@ func (s *kvstore) makeIncr(kv *kv, deadline time.Time, replyer *replyer, req *fl
 
 		var field *flyproto.Field
 		if err == nil {
-			field = fields[req.Field.GetName()]
+			field = incr.r
 		}
 
 		return &cs.RespMessage{
