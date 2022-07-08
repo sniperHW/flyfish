@@ -21,6 +21,7 @@ const resendDelay time.Duration = time.Millisecond * 100
 var ClientTimeout uint32 = 6000 //6sec
 var maxPendingSize int = 10000
 var recvTimeout time.Duration = time.Second * 30
+var SequenceOrderStep int64 = 1000
 
 const (
 	FlyKv   = ClientType(1) //请求发往flykv
@@ -39,12 +40,11 @@ var outputBufLimit flynet.OutputBufLimit = flynet.OutputBufLimit{
 }
 
 type ClientConf struct {
-	NotifyQueue        EventQueueI //响应回调的事件队列
-	NotifyPriority     int         //回调事件优先级
-	ClientType         ClientType
-	PD                 []string
-	Ordering           bool //如果需要单个client按程序顺序发送命令，设置为true
-	OrderSequenceCount int64
+	NotifyQueue    EventQueueI //响应回调的事件队列
+	NotifyPriority int         //回调事件优先级
+	ClientType     ClientType
+	PD             []string
+	Ordering       bool //如果需要单个client按程序顺序发送命令，设置为true
 }
 
 var getSequenceIDTimeout error = errors.New("getSequenceIDTimeout")
@@ -158,16 +158,11 @@ func New(conf ClientConf) (*Client, error) {
 		}
 	}
 
-	orderSequenceCount := int64(1000)
-
-	if conf.OrderSequenceCount > 0 {
-		orderSequenceCount = conf.OrderSequenceCount
-	}
-
 	c := &Client{
 		asyncExec: newAsynExecMgr(conf.Ordering),
-		sequence:  &sequence{next: 1, ordering: true, orderCount: orderSequenceCount, pdAddr: pdAddr},
+		sequence:  &sequence{next: 1, ordering: true, orderCount: SequenceOrderStep, pdAddr: pdAddr},
 	}
+
 	switch conf.ClientType {
 	case FlyGate:
 		c.impl = &clientImplFlyGate{
