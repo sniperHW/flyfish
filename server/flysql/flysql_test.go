@@ -314,6 +314,7 @@ func TestFlySql(t *testing.T) {
 	c, _ := client.New(client.ClientConf{
 		ClientType: client.FlySql,
 		PD:         []string{"localhost:9110"},
+		Ordering:   true,
 	})
 
 	test(t, c)

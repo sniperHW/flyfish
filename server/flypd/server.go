@@ -518,6 +518,19 @@ func (p *pd) onGetDeployment(replyer replyer, m *snet.Message) {
 	replyer.reply(snet.MakeMessage(m.Context, resp))
 }
 
+func (p *pd) onOrderSequenceID(replyer replyer, m *snet.Message) {
+	Count := m.Msg.(*sproto.OrderSequenceID).Count
+	if Count <= 0 {
+		Count = 10000
+	}
+
+	p.issueProposal(&ProposalOrderSequenceID{
+		Count:   Count,
+		replyer: replyer,
+		context: m.Context,
+	})
+}
+
 func (p *pd) initMsgHandler() {
 	//for console
 	p.registerMsgHandler(&sproto.AddSet{}, "AddSet", p.onAddSet)
@@ -552,5 +565,6 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.GetScanTableMeta{}, "", p.onGetScanTableMeta)
 	p.registerMsgHandler(&sproto.GetFlySqlList{}, "", p.onGetFlySqlList)
 	p.registerMsgHandler(&sproto.FlySqlHeartBeat{}, "", p.onFlySqlHeartBeat)
+	p.registerMsgHandler(&sproto.OrderSequenceID{}, "", p.onOrderSequenceID)
 
 }

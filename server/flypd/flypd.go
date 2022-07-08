@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/gogo/protobuf/proto"
-	//"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/pkg/etcd/pkg/idutil"
@@ -14,11 +13,8 @@ import (
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/pkg/raft"
 	snet "github.com/sniperHW/flyfish/server/net"
-	//sproto "github.com/sniperHW/flyfish/server/proto"
-	//"github.com/sniperHW/flyfish/server/slot"
 	"net"
 	"net/http"
-	//"os"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -168,6 +164,7 @@ type pd struct {
 	Deployment      Deployment
 	DbMetaMgr       DbMetaMgr
 	SlotTransferMgr SlotTransferMgr
+	MaxSequenceID   int64
 }
 
 func (q applicationQueue) AppendHighestPriotiryItem(m interface{}) {
@@ -323,6 +320,8 @@ func (p *pd) processCommited(commited raft.Committed) {
 					err = unmarshal(&ProposalFlyKvCommited{})
 				case proposalNop:
 					err = unmarshal(&ProposalNop{})
+				case proposalOrderSequenceID:
+					err = unmarshal(&ProposalOrderSequenceID{})
 				default:
 					err = errors.New("invaild proposal type")
 				}
@@ -487,6 +486,7 @@ func NewPd(nodeID uint16, cluster int, join bool, config *Config, clusterStr str
 			Plan:         map[int]*SlotTransferPlan{},
 			FreeSlots:    map[int]bool{},
 		},
+		MaxSequenceID: 1,
 	}
 
 	p.initMsgHandler()

@@ -95,7 +95,6 @@ type gate struct {
 	clients              map[*flynet.Socket]*flynet.Socket
 	mainQueue            *queue.PriorityQueue
 	serviceAddr          string
-	seqCounter           int64
 	pdAddr               []*net.UDPAddr
 	totalPendingReq      int64
 	SoftLimitReachedTime int64
@@ -187,7 +186,7 @@ func (g *gate) makeReplyer(session *flynet.Socket, req *forwordMsg) *replyer {
 	if g.checkReqLimit(int(atomic.AddInt64(&g.totalPendingReq, 1))) {
 		return replyer
 	} else {
-		replyer.replyErr(req.oriSeqno, req.cmd, errcode.New(errcode.Errcode_retry, "flykv busy,please retry later"))
+		replyer.replyErr(req.seqno, req.cmd, errcode.New(errcode.Errcode_retry, "flykv busy,please retry later"))
 		return nil
 	}
 }
@@ -523,8 +522,6 @@ func (g *gate) mainLoop() {
 			msg := v.(*forwordMsg)
 			if msg.slot >= 0 && msg.slot < slot.SlotCount {
 				msg.deadlineTimer.set(g.afterFunc(msg.deadline.Sub(time.Now()), msg.dropReply))
-				g.seqCounter++
-				msg.seqno = g.seqCounter
 				g.onCliMsg(msg)
 			}
 		case func():

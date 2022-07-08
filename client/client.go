@@ -5,7 +5,12 @@ import (
 	"errors"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/proto/cs"
+	snet "github.com/sniperHW/flyfish/server/net"
+	sproto "github.com/sniperHW/flyfish/server/proto"
 	"net"
+	"runtime"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -34,11 +39,77 @@ var outputBufLimit flynet.OutputBufLimit = flynet.OutputBufLimit{
 }
 
 type ClientConf struct {
-	NotifyQueue    EventQueueI //响应回调的事件队列
-	NotifyPriority int         //回调事件优先级
-	ClientType     ClientType
-	PD             []string
-	Ordering       bool //如果需要单个client按程序顺序发送命令，设置为true
+	NotifyQueue        EventQueueI //响应回调的事件队列
+	NotifyPriority     int         //回调事件优先级
+	ClientType         ClientType
+	PD                 []string
+	Ordering           bool //如果需要单个client按程序顺序发送命令，设置为true
+	OrderSequenceCount int64
+}
+
+var getSequenceIDTimeout error = errors.New("getSequenceIDTimeout")
+
+type sequence struct {
+	sync.Mutex
+	next       int64
+	max        int64
+	orderCount int64
+	ordering   bool
+	pdAddr     []*net.UDPAddr
+	stoped     int32
+}
+
+func (s *sequence) close() {
+	atomic.StoreInt32(&s.stoped, 1)
+}
+
+func (s *sequence) order() {
+	for atomic.LoadInt32(&s.stoped) == 0 {
+		resp, _ := snet.UdpCall(s.pdAddr,
+			&sproto.OrderSequenceID{
+				Count: s.orderCount,
+			},
+			&sproto.OrderSequenceIDResp{},
+			time.Second)
+		if nil != resp && resp.(*sproto.OrderSequenceIDResp).Ok {
+			s.Lock()
+			s.ordering = false
+			s.max = resp.(*sproto.OrderSequenceIDResp).Max
+			s.Unlock()
+			return
+		} else {
+			time.Sleep(time.Millisecond * 5)
+		}
+	}
+}
+
+func (s *sequence) get(timeout time.Duration) (seqno int64, err error) {
+	var deadline time.Time
+	for {
+		s.Lock()
+		if s.next < s.max {
+			seqno = s.next
+			s.next++
+			if !s.ordering && s.max-s.next < s.orderCount/2 {
+				s.ordering = true
+				go s.order()
+			}
+			s.Unlock()
+			return
+		} else {
+			s.Unlock()
+			if deadline.IsZero() {
+				deadline = time.Now().Add(timeout)
+			} else {
+				if time.Now().After(deadline) {
+					err = getSequenceIDTimeout
+					return
+				}
+			}
+			runtime.Gosched()
+		}
+	}
+	return
 }
 
 type clientImpl interface {
@@ -48,9 +119,9 @@ type clientImpl interface {
 }
 
 type Client struct {
-	seqno     int64
 	impl      clientImpl
 	asyncExec *asynExecMgr
+	sequence  *sequence
 }
 
 type conn struct {
@@ -69,6 +140,7 @@ func (this *Client) exec(cmd *cmdContext) {
 func (this *Client) Close() {
 	this.impl.close()
 	close(this.asyncExec.stop)
+	this.sequence.close()
 }
 
 func New(conf ClientConf) (*Client, error) {
@@ -86,7 +158,16 @@ func New(conf ClientConf) (*Client, error) {
 		}
 	}
 
-	c := &Client{asyncExec: newAsynExecMgr(conf.Ordering)}
+	orderSequenceCount := int64(1000)
+
+	if conf.OrderSequenceCount > 0 {
+		orderSequenceCount = conf.OrderSequenceCount
+	}
+
+	c := &Client{
+		asyncExec: newAsynExecMgr(conf.Ordering),
+		sequence:  &sequence{next: 1, ordering: true, orderCount: orderSequenceCount, pdAddr: pdAddr},
+	}
 	switch conf.ClientType {
 	case FlyGate:
 		c.impl = &clientImplFlyGate{
@@ -97,6 +178,7 @@ func New(conf ClientConf) (*Client, error) {
 				notifyPriority: conf.NotifyPriority,
 			},
 		}
+		go c.sequence.order()
 		c.impl.start(pdAddr)
 		return c, nil
 	case FlySql:
@@ -108,6 +190,7 @@ func New(conf ClientConf) (*Client, error) {
 				notifyPriority: conf.NotifyPriority,
 			},
 		}
+		go c.sequence.order()
 		c.impl.start(pdAddr)
 		return c, nil
 	case FlyKv:
@@ -119,6 +202,7 @@ func New(conf ClientConf) (*Client, error) {
 			sets:           map[int]*set{},
 			slotToStore:    map[int]*store{},
 		}
+		go c.sequence.order()
 		c.impl.start(pdAddr)
 		return c, nil
 	default:

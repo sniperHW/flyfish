@@ -19,7 +19,9 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"runtime"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -817,4 +819,92 @@ func TestSlotBlance(t *testing.T) {
 	}
 
 	pd.Stop()
+}
+
+func TestSequenceID(t *testing.T) {
+	os.RemoveAll("./raftLog")
+
+	raftID := RaftIDGen.Next()
+
+	pd, _ := NewPd(1, 1, false, conf, fmt.Sprintf("1@%d@http://localhost:18110@localhost:8110@", raftID))
+
+	var cur int64 = int64(1)
+	var max int64
+
+	orderCount := int64(1000)
+
+	for {
+		resp, _ := snet.UdpCall([]string{"localhost:8110"},
+			&sproto.OrderSequenceID{
+				Count: orderCount,
+			},
+			&sproto.OrderSequenceIDResp{},
+			time.Second)
+		if nil != resp && resp.(*sproto.OrderSequenceIDResp).Ok {
+			max = resp.(*sproto.OrderSequenceIDResp).Max
+			break
+		} else {
+			time.Sleep(time.Second)
+		}
+	}
+
+	begTime := time.Now()
+	var mu sync.Mutex
+	ordering := false
+
+	stoped := int32(0)
+
+	for i := 0; i < 1000000; i++ {
+		for {
+			mu.Lock()
+			if cur < max {
+				cur++
+				if !ordering && max-cur < orderCount/2 {
+					ordering = true
+					go func() {
+						for atomic.LoadInt32(&stoped) == 0 {
+							resp, _ := snet.UdpCall([]string{"localhost:8110"},
+								&sproto.OrderSequenceID{
+									Count: orderCount,
+								},
+								&sproto.OrderSequenceIDResp{},
+								time.Second)
+							if nil != resp && resp.(*sproto.OrderSequenceIDResp).Ok {
+								mu.Lock()
+								max = resp.(*sproto.OrderSequenceIDResp).Max
+								ordering = false
+								mu.Unlock()
+								return
+							} else {
+								runtime.Gosched()
+							}
+						}
+					}()
+				}
+				mu.Unlock()
+				break
+			} else {
+				mu.Unlock()
+				runtime.Gosched()
+			}
+		}
+	}
+
+	atomic.StoreInt32(&stoped, 1)
+
+	logger.GetSugar().Infof("use %v", time.Now().Sub(begTime))
+	pd.Stop()
+
+	pd, _ = NewPd(1, 1, false, conf, fmt.Sprintf("1@%d@http://localhost:18110@localhost:8110@", raftID))
+
+	for {
+		if pd.isLeader() {
+			break
+		} else {
+			time.Sleep(time.Second)
+		}
+	}
+
+	pd.Stop()
+
 }

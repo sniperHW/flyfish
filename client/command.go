@@ -32,7 +32,7 @@ func (m *asynExecMgr) exec(fn func()) {
 
 func newAsynExecMgr(Ordering bool) *asynExecMgr {
 	m := &asynExecMgr{
-		queue: make(chan func(), 4096),
+		queue: make(chan func(), maxPendingSize),
 		stop:  make(chan struct{}),
 	}
 
@@ -76,22 +76,51 @@ type ValueResult struct {
 	Value *Field
 }
 
-func makeCmdContext(syncCall bool, table string, key string, makeReq func() *cs.ReqMessage, getErrorResult func(errcode.Error) interface{}, cb interface{}) *cmdContext {
+func makeCmdContext(syncCall bool, table string, key string, seqno int64, req proto.Message, getErrorResult func(errcode.Error) interface{}, cb interface{}) *cmdContext {
 	return &cmdContext{
 		key:            key,
 		table:          table,
 		syncCall:       syncCall,
-		req:            makeReq(),
 		cb:             cb,
 		getErrorResult: getErrorResult,
+		req: &cs.ReqMessage{
+			Seqno:  seqno,
+			UniKey: table + ":" + key,
+			Data:   req},
 	}
 }
 
 type cmd struct {
-	client  *Client
-	key     string
-	table   string
-	makeReq func() *cs.ReqMessage
+	client *Client
+	key    string
+	table  string
+	req    proto.Message
+	ctx    atomic.Value
+}
+
+func (c *cmd) exec(syncCall bool, getErrorResult func(errcode.Error) interface{}, cb interface{}) {
+	var cmd *cmdContext
+	v := c.ctx.Load()
+	if nil == v {
+		seqno, err := c.client.sequence.get(time.Second)
+		if nil != err {
+			r := getErrorResult(errcode.New(errcode.Errcode_timeout))
+			switch cb.(type) {
+			case func(*StatusResult):
+				go cb.(func(*StatusResult))(r.(*StatusResult))
+			case func(*GetResult):
+				go cb.(func(*GetResult))(r.(*GetResult))
+			case func(*ValueResult):
+				go cb.(func(*ValueResult))(r.(*ValueResult))
+			}
+		} else {
+			cmd = makeCmdContext(syncCall, c.table, c.key, seqno, c.req, getErrorResult, cb)
+			c.ctx.Store(cmd)
+		}
+	} else {
+		cmd = v.(*cmdContext)
+	}
+	c.client.exec(cmd)
 }
 
 type StatusCmd struct {
@@ -100,21 +129,21 @@ type StatusCmd struct {
 
 func (sc *StatusCmd) getErrorResult(e errcode.Error) interface{} {
 	return &StatusResult{
+		Key:     sc.key,
+		Table:   sc.table,
 		ErrCode: e,
 	}
 }
 
 func (sc *StatusCmd) AsyncExec(cb func(*StatusResult)) {
-	cmd := makeCmdContext(false, sc.table, sc.key, sc.makeReq, sc.getErrorResult, cb)
-	sc.client.exec(cmd)
+	sc.exec(false, sc.getErrorResult, cb)
 }
 
 func (sc *StatusCmd) Exec() *StatusResult {
 	respChan := make(chan *StatusResult)
-	cmd := makeCmdContext(true, sc.table, sc.key, sc.makeReq, sc.getErrorResult, func(r interface{}) {
-		respChan <- r.(*StatusResult)
+	sc.exec(true, sc.getErrorResult, func(r *StatusResult) {
+		respChan <- r
 	})
-	sc.client.exec(cmd)
 	return <-respChan
 }
 
@@ -125,22 +154,22 @@ type GetCmd struct {
 func (gc *GetCmd) getErrorResult(e errcode.Error) interface{} {
 	return &GetResult{
 		StatusResult: StatusResult{
+			Key:     gc.key,
+			Table:   gc.table,
 			ErrCode: e,
 		},
 	}
 }
 
 func (gc *GetCmd) AsyncExec(cb func(*GetResult)) {
-	cmd := makeCmdContext(false, gc.table, gc.key, gc.makeReq, gc.getErrorResult, cb)
-	gc.client.exec(cmd)
+	gc.exec(false, gc.getErrorResult, cb)
 }
 
 func (gc *GetCmd) Exec() *GetResult {
 	respChan := make(chan *GetResult)
-	cmd := makeCmdContext(true, gc.table, gc.key, gc.makeReq, gc.getErrorResult, func(r interface{}) {
-		respChan <- r.(*GetResult)
+	gc.exec(true, gc.getErrorResult, func(r *GetResult) {
+		respChan <- r
 	})
-	gc.client.exec(cmd)
 	return <-respChan
 }
 
@@ -148,26 +177,26 @@ type ValueCmd struct {
 	cmd
 }
 
+func (vc *ValueCmd) getErrorResult(e errcode.Error) interface{} {
+	return &ValueResult{
+		StatusResult: StatusResult{
+			Key:     vc.key,
+			Table:   vc.table,
+			ErrCode: e,
+		},
+	}
+}
+
 func (vc *ValueCmd) AsyncExec(cb func(*ValueResult)) {
-	cmd := makeCmdContext(false, vc.table, vc.key, vc.makeReq, vc.getErrorResult, cb)
-	vc.client.exec(cmd)
+	vc.exec(false, vc.getErrorResult, cb)
 }
 
 func (vc *ValueCmd) Exec() *ValueResult {
 	respChan := make(chan *ValueResult)
-	cmd := makeCmdContext(true, vc.table, vc.key, vc.makeReq, vc.getErrorResult, func(r interface{}) {
-		respChan <- r.(*ValueResult)
+	vc.exec(true, vc.getErrorResult, func(r *ValueResult) {
+		respChan <- r
 	})
-	vc.client.exec(cmd)
 	return <-respChan
-}
-
-func (vc *ValueCmd) getErrorResult(e errcode.Error) interface{} {
-	return &ValueResult{
-		StatusResult: StatusResult{
-			ErrCode: e,
-		},
-	}
 }
 
 type cmdContext struct {
@@ -264,17 +293,7 @@ func (this *Client) get(table, key string, version *int64, fields ...string) *Ge
 				client: this,
 				key:    key,
 				table:  table,
-				makeReq: func() *cs.ReqMessage {
-					return &cs.ReqMessage{
-						Seqno:  atomic.AddInt64(&this.seqno, 1),
-						UniKey: table + ":" + key,
-						Data: &protocol.GetReq{
-							Version: version,
-							Fields:  fields,
-							All:     false,
-						},
-					}
-				},
+				req:    &protocol.GetReq{Version: version, Fields: fields, All: false},
 			},
 		}
 	}
@@ -286,16 +305,7 @@ func (this *Client) getAll(table, key string, version *int64) *GetCmd {
 			client: this,
 			key:    key,
 			table:  table,
-			makeReq: func() *cs.ReqMessage {
-				return &cs.ReqMessage{
-					Seqno:  atomic.AddInt64(&this.seqno, 1),
-					UniKey: table + ":" + key,
-					Data: &protocol.GetReq{
-						Version: version,
-						All:     true,
-					},
-				}
-			},
+			req:    &protocol.GetReq{Version: version, All: true},
 		},
 	}
 
@@ -322,27 +332,23 @@ func (this *Client) Set(table, key string, fields map[string]interface{}, versio
 	if len(fields) == 0 {
 		return nil
 	} else {
+
+		req := &protocol.SetReq{}
+
+		if len(version) > 0 {
+			req.Version = proto.Int64(version[0])
+		}
+
+		for k, v := range fields {
+			req.Fields = append(req.Fields, PackField(k, v))
+		}
+
 		return &StatusCmd{
 			cmd: cmd{
 				client: this,
 				key:    key,
 				table:  table,
-				makeReq: func() *cs.ReqMessage {
-					pbdata := &protocol.SetReq{}
-
-					if len(version) > 0 {
-						pbdata.Version = proto.Int64(version[0])
-					}
-
-					for k, v := range fields {
-						pbdata.Fields = append(pbdata.Fields, PackField(k, v))
-					}
-
-					return &cs.ReqMessage{
-						Seqno:  atomic.AddInt64(&this.seqno, 1),
-						UniKey: table + ":" + key,
-						Data:   pbdata}
-				},
+				req:    req,
 			},
 		}
 	}
@@ -353,23 +359,17 @@ func (this *Client) SetNx(table, key string, fields map[string]interface{}) *Val
 	if len(fields) == 0 {
 		return nil
 	} else {
+		req := &protocol.SetNxReq{}
+		for k, v := range fields {
+			req.Fields = append(req.Fields, PackField(k, v))
+		}
+
 		return &ValueCmd{
 			cmd: cmd{
 				client: this,
 				key:    key,
 				table:  table,
-				makeReq: func() *cs.ReqMessage {
-					pbdata := &protocol.SetNxReq{}
-
-					for k, v := range fields {
-						pbdata.Fields = append(pbdata.Fields, PackField(k, v))
-					}
-
-					return &cs.ReqMessage{
-						Seqno:  atomic.AddInt64(&this.seqno, 1),
-						UniKey: table + ":" + key,
-						Data:   pbdata}
-				},
+				req:    req,
 			},
 		}
 	}
@@ -386,15 +386,7 @@ func (this *Client) CompareAndSet(table, key, field string, oldV, newV interface
 				client: this,
 				key:    key,
 				table:  table,
-				makeReq: func() *cs.ReqMessage {
-					return &cs.ReqMessage{
-						Seqno:  atomic.AddInt64(&this.seqno, 1),
-						UniKey: table + ":" + key,
-						Data: &protocol.CompareAndSetReq{
-							New: PackField(field, newV),
-							Old: PackField(field, oldV),
-						}}
-				},
+				req:    &protocol.CompareAndSetReq{New: PackField(field, newV), Old: PackField(field, oldV)},
 			},
 		}
 	}
@@ -410,15 +402,7 @@ func (this *Client) CompareAndSetNx(table, key, field string, oldV, newV interfa
 				client: this,
 				key:    key,
 				table:  table,
-				makeReq: func() *cs.ReqMessage {
-					return &cs.ReqMessage{
-						Seqno:  atomic.AddInt64(&this.seqno, 1),
-						UniKey: table + ":" + key,
-						Data: &protocol.CompareAndSetNxReq{
-							New: PackField(field, newV),
-							Old: PackField(field, oldV),
-						}}
-				},
+				req:    &protocol.CompareAndSetNxReq{New: PackField(field, newV), Old: PackField(field, oldV)},
 			},
 		}
 	}
@@ -430,12 +414,7 @@ func (this *Client) Del(table, key string) *StatusCmd {
 			client: this,
 			key:    key,
 			table:  table,
-			makeReq: func() *cs.ReqMessage {
-				return &cs.ReqMessage{
-					Seqno:  atomic.AddInt64(&this.seqno, 1),
-					UniKey: table + ":" + key,
-					Data:   &protocol.DelReq{}}
-			},
+			req:    &protocol.DelReq{},
 		},
 	}
 }
@@ -446,14 +425,7 @@ func (this *Client) IncrBy(table, key, field string, value int64) *ValueCmd {
 			client: this,
 			key:    key,
 			table:  table,
-			makeReq: func() *cs.ReqMessage {
-				return &cs.ReqMessage{
-					Seqno:  atomic.AddInt64(&this.seqno, 1),
-					UniKey: table + ":" + key,
-					Data: &protocol.IncrByReq{
-						Field: protocol.PackField(field, value),
-					}}
-			},
+			req:    &protocol.IncrByReq{Field: protocol.PackField(field, value)},
 		},
 	}
 }
@@ -464,12 +436,7 @@ func (this *Client) Kick(table, key string) *StatusCmd {
 			client: this,
 			key:    key,
 			table:  table,
-			makeReq: func() *cs.ReqMessage {
-				return &cs.ReqMessage{
-					Seqno:  atomic.AddInt64(&this.seqno, 1),
-					UniKey: table + ":" + key,
-					Data:   &protocol.KickReq{}}
-			},
+			req:    &protocol.KickReq{},
 		},
 	}
 }

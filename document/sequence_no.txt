@@ -1,0 +1,30 @@
+客户端的每个请求携带唯一sequence number。
+
+Snowflake:
+
+优点：无需协调,各客户端独立生成。
+
+缺点：需要带上节点id，使用相对没有那么方便。
+
+
+通过pd预定号段:
+
+pd记录当前已经预定的最大值max。client向pd预定号段N。pd接到请求后记录oldmax = max,max=max+N。
+
+将[oldmax,max]返回给client。
+
+由pd保证max的持久化。
+
+
+请求有了唯一sequence number可以在服务端做response cache支持client cmd retry。
+
+
+
+
+
+
+
+
+
+
+

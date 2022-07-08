@@ -434,6 +434,9 @@ func init() {
 	namespace.Register(&sproto.GetFlySqlList{}, uint32(sproto.ServerCmdType_GetFlySqlList))
 	namespace.Register(&sproto.GetFlySqlListResp{}, uint32(sproto.ServerCmdType_GetFlySqlListResp))
 
+	namespace.Register(&sproto.OrderSequenceID{}, uint32(sproto.ServerCmdType_OrderSequenceID))
+	namespace.Register(&sproto.OrderSequenceIDResp{}, uint32(sproto.ServerCmdType_OrderSequenceIDResp))
+
 	//for test
 	namespace.Register(&sproto.PacketTest{}, uint32(sproto.ServerCmdType_PacketTest))
 

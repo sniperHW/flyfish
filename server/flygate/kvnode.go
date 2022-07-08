@@ -106,7 +106,7 @@ func (n *kvnode) sendForwordMsg(msg *forwordMsg) {
 }
 
 func (n *kvnode) send(now time.Time, msg *forwordMsg) {
-	GetSugar().Debugf("send msg to set:%d kvnode:%d store:%d seqno:%d nodeSeqno:%d", n.setID, n.id, int(msg.store&0xFFFFFFFF), msg.oriSeqno, msg.seqno)
+	GetSugar().Debugf("send msg to set:%d kvnode:%d store:%d seqno:%d", n.setID, n.id, int(msg.store&0xFFFFFFFF), msg.seqno)
 	binary.BigEndian.PutUint64(msg.bytes[4:], uint64(msg.seqno))
 	binary.BigEndian.PutUint32(msg.bytes[4+8:], uint32(msg.store&0xFFFFFFFF))
 	binary.BigEndian.PutUint32(msg.bytes[18:], uint32(msg.deadline.Sub(now)/time.Millisecond))
@@ -144,8 +144,6 @@ func (n *kvnode) onResponse(b []byte) {
 				n.gate.paybackMsg(msg)
 			})
 		default:
-			//恢复客户端的seqno
-			binary.BigEndian.PutUint64(b[4:], uint64(msg.oriSeqno))
 			msg.reply(b)
 		}
 	}

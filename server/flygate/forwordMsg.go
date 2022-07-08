@@ -68,13 +68,13 @@ func (dt *deadlineTimer) stop() {
 }
 
 type forwordMsg struct {
-	leaderVersion   int64
-	dict            *map[int64]*forwordMsg
-	listElement     *list.Element
-	cache           atomic.Value
-	seqno           int64
-	slot            int
-	oriSeqno        int64 //来自客户端的seqno
+	leaderVersion int64
+	dict          *map[int64]*forwordMsg
+	listElement   *list.Element
+	cache         atomic.Value
+	seqno         int64
+	slot          int
+	//oriSeqno        int64 //来自客户端的seqno
 	cmd             uint16
 	bytes           []byte
 	deadline        time.Time
@@ -116,7 +116,7 @@ func (r *forwordMsg) replyErr(err errcode.Error) {
 	if atomic.CompareAndSwapInt32(&r.replied, 0, 1) {
 		r.deadlineTimer.stop()
 		r.cacheRemove()
-		r.replyer.replyErr(r.oriSeqno, r.cmd, err)
+		r.replyer.replyErr(r.seqno, r.cmd, err)
 	}
 }
 

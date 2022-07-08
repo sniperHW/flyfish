@@ -2,8 +2,9 @@ package flypd
 
 import (
 	"encoding/json"
-	//"errors"
 	"github.com/sniperHW/flyfish/pkg/buffer"
+	snet "github.com/sniperHW/flyfish/server/net"
+	sproto "github.com/sniperHW/flyfish/server/proto"
 )
 
 const (
@@ -19,6 +20,7 @@ const (
 	proposalFlyKvCommited     = 14
 	proposalUpdateMeta        = 17
 	proposalNop               = 18
+	proposalOrderSequenceID   = 19
 )
 
 type proposalBase struct {
@@ -75,5 +77,37 @@ func (this *ProposalNop) apply(pd *pd) {
 		pd.loadInitDeployment()
 	} else {
 		pd.slotBalance()
+	}
+}
+
+type ProposalOrderSequenceID struct {
+	proposalBase
+	Count   int64
+	replyer replyer
+	context int64
+}
+
+func (this *ProposalOrderSequenceID) OnError(err error) {
+	if nil != this.replyer {
+		this.replyer.reply(snet.MakeMessage(this.context, &sproto.OrderSequenceIDResp{
+			Ok:     false,
+			Reason: err.Error(),
+		}))
+	}
+}
+
+func (this *ProposalOrderSequenceID) Serilize(b []byte) []byte {
+	return serilizeProposal(b, proposalOrderSequenceID, this)
+}
+
+func (this *ProposalOrderSequenceID) apply(pd *pd) {
+	//GetSugar().Infof("ProposalOrderSequenceID.apply old:%d new:%d", pd.MaxSequenceID, pd.MaxSequenceID+this.Count)
+	pd.MaxSequenceID += this.Count
+
+	if nil != this.replyer {
+		this.replyer.reply(snet.MakeMessage(this.context, &sproto.OrderSequenceIDResp{
+			Ok:  true,
+			Max: pd.MaxSequenceID,
+		}))
 	}
 }

@@ -95,7 +95,8 @@ enum ServerCmdType {
   GetFlyGateListResp            = 411;
   GetFlySqlList                 = 412;
   GetFlySqlListResp             = 413;
- 
+  OrderSequenceID               = 414;
+  OrderSequenceIDResp           = 415;               
 
 
   //for test
@@ -576,4 +577,16 @@ message set {
 message  getDeploymentResp {
   repeated set sets           = 1;
 }   
+
+message orderSequenceID {
+  optional int64  count       = 1;
+}
+
+message orderSequenceIDResp {
+  optional bool   ok          = 1;  
+  optional string reason      = 2;  
+  optional int64  max         = 3;
+}
+
+
 
