@@ -161,15 +161,19 @@ func (this *impl) exec(cmd *cmdContext) {
 	} else if len(this.waitResp) > maxPendingSize {
 		errCode = errcode.New(errcode.Errcode_retry, "busy please retry later")
 	} else {
-		this.waitResp[cmd.req.Seqno] = cmd
-		cmd.deadline = time.Now().Add(time.Duration(ClientTimeout) * time.Millisecond)
-		cmd.deadlineTimer = time.AfterFunc(time.Duration(ClientTimeout)*time.Millisecond, func() { this.onTimeout(cmd) })
-		avaliableConn := this.getAvaliable()
-		if nil == avaliableConn {
-			cmd.l = this.waitSend
-			cmd.listElement = this.waitSend.PushBack(cmd)
+		timeout := cmd.deadline.Sub(time.Now())
+		if timeout > 0 {
+			this.waitResp[cmd.req.Seqno] = cmd
+			cmd.deadlineTimer = time.AfterFunc(timeout, func() { this.onTimeout(cmd) })
+			avaliableConn := this.getAvaliable()
+			if nil == avaliableConn {
+				cmd.l = this.waitSend
+				cmd.listElement = this.waitSend.PushBack(cmd)
+			} else {
+				this.sendCmd(avaliableConn, cmd)
+			}
 		} else {
-			this.sendCmd(avaliableConn, cmd)
+			errCode = errcode.New(errcode.Errcode_timeout)
 		}
 	}
 	this.mu.Unlock()

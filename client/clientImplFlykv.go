@@ -326,16 +326,20 @@ func (this *clientImplFlykv) exec(cmd *cmdContext) {
 	} else if len(this.waitResp) > maxPendingSize {
 		errCode = errcode.New(errcode.Errcode_retry, "busy please retry later")
 	} else {
-		this.waitResp[cmd.req.Seqno] = cmd
-		cmd.deadline = time.Now().Add(time.Duration(ClientTimeout) * time.Millisecond)
-		cmd.deadlineTimer = time.AfterFunc(time.Duration(ClientTimeout)*time.Millisecond, func() { this.onTimeout(cmd) })
-		cmd.slot = slot.Unikey2Slot(cmd.table + ":" + cmd.key)
-		if store, ok := this.slotToStore[cmd.slot]; ok {
-			this.storeSend(store, cmd)
+		timeout := cmd.deadline.Sub(time.Now())
+		if timeout > 0 {
+			this.waitResp[cmd.req.Seqno] = cmd
+			cmd.deadlineTimer = time.AfterFunc(time.Duration(ClientTimeout)*time.Millisecond, func() { this.onTimeout(cmd) })
+			cmd.slot = slot.Unikey2Slot(cmd.table + ":" + cmd.key)
+			if store, ok := this.slotToStore[cmd.slot]; ok {
+				this.storeSend(store, cmd)
+			} else {
+				//找不到对应store,先存起来，等路由信息更新后再尝试
+				cmd.l = this.waitSend
+				cmd.listElement = this.waitSend.PushBack(cmd)
+			}
 		} else {
-			//找不到对应store,先存起来，等路由信息更新后再尝试
-			cmd.l = this.waitSend
-			cmd.listElement = this.waitSend.PushBack(cmd)
+			errCode = errcode.New(errcode.Errcode_timeout)
 		}
 	}
 	this.mu.Unlock()

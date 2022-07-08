@@ -76,12 +76,13 @@ type ValueResult struct {
 	Value *Field
 }
 
-func makeCmdContext(syncCall bool, table string, key string, seqno int64, req proto.Message, getErrorResult func(errcode.Error) interface{}, cb interface{}) *cmdContext {
+func makeCmdContext(syncCall bool, table string, key string, seqno int64, req proto.Message, deadline time.Time, getErrorResult func(errcode.Error) interface{}, cb interface{}) *cmdContext {
 	return &cmdContext{
 		key:            key,
 		table:          table,
 		syncCall:       syncCall,
 		cb:             cb,
+		deadline:       deadline,
 		getErrorResult: getErrorResult,
 		req: &cs.ReqMessage{
 			Seqno:  seqno,
@@ -95,32 +96,24 @@ type cmd struct {
 	key    string
 	table  string
 	req    proto.Message
-	ctx    atomic.Value
 }
 
 func (c *cmd) exec(syncCall bool, getErrorResult func(errcode.Error) interface{}, cb interface{}) {
-	var cmd *cmdContext
-	v := c.ctx.Load()
-	if nil == v {
-		seqno, err := c.client.sequence.Next(time.Second)
-		if nil != err {
-			r := getErrorResult(errcode.New(errcode.Errcode_timeout))
-			switch cb.(type) {
-			case func(*StatusResult):
-				go cb.(func(*StatusResult))(r.(*StatusResult))
-			case func(*GetResult):
-				go cb.(func(*GetResult))(r.(*GetResult))
-			case func(*ValueResult):
-				go cb.(func(*ValueResult))(r.(*ValueResult))
-			}
-		} else {
-			cmd = makeCmdContext(syncCall, c.table, c.key, seqno, c.req, getErrorResult, cb)
-			c.ctx.Store(cmd)
+	deadline := time.Now().Add(ClientTimeout)
+	seqno, err := c.client.sequence.Next(time.Second)
+	if nil != err {
+		r := getErrorResult(errcode.New(errcode.Errcode_retry, "get seq no timeout,pleasy try again!"))
+		switch cb.(type) {
+		case func(*StatusResult):
+			go cb.(func(*StatusResult))(r.(*StatusResult))
+		case func(*GetResult):
+			go cb.(func(*GetResult))(r.(*GetResult))
+		case func(*ValueResult):
+			go cb.(func(*ValueResult))(r.(*ValueResult))
 		}
 	} else {
-		cmd = v.(*cmdContext)
+		c.client.exec(makeCmdContext(syncCall, c.table, c.key, seqno, c.req, deadline, getErrorResult, cb))
 	}
-	c.client.exec(cmd)
 }
 
 type StatusCmd struct {

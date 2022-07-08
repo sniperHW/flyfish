@@ -18,7 +18,7 @@ type ClientType int
 
 const resendDelay time.Duration = time.Millisecond * 100
 
-var ClientTimeout uint32 = 6000 //6sec
+var ClientTimeout time.Duration = time.Second * 5 //6sec
 var maxPendingSize int = 10000
 var recvTimeout time.Duration = time.Second * 30
 var SequenceOrderStep int64 = 2000
