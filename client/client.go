@@ -21,7 +21,7 @@ const resendDelay time.Duration = time.Millisecond * 100
 var ClientTimeout uint32 = 6000 //6sec
 var maxPendingSize int = 10000
 var recvTimeout time.Duration = time.Second * 30
-var SequenceOrderStep int64 = 1000
+var SequenceOrderStep int64 = 2000
 
 const (
 	FlyKv   = ClientType(1) //请求发往flykv
@@ -51,15 +51,22 @@ var getSequenceIDTimeout error = errors.New("getSequenceIDTimeout")
 
 type sequence struct {
 	sync.Mutex
-	next       int64
-	max        int64
-	orderCount int64
-	ordering   bool
-	pdAddr     []*net.UDPAddr
-	stoped     int32
+	next     int64
+	max      int64
+	step     int64
+	ordering bool
+	pdAddr   []*net.UDPAddr
+	stoped   int32
 }
 
-func (s *sequence) close() {
+func NewSequence(pdAddr []*net.UDPAddr, step int64) *sequence {
+	return &sequence{
+		pdAddr: pdAddr,
+		step:   step,
+	}
+}
+
+func (s *sequence) Close() {
 	atomic.StoreInt32(&s.stoped, 1)
 }
 
@@ -67,7 +74,7 @@ func (s *sequence) order() {
 	for atomic.LoadInt32(&s.stoped) == 0 {
 		resp, _ := snet.UdpCall(s.pdAddr,
 			&sproto.OrderSequenceID{
-				Count: s.orderCount,
+				Count: s.step,
 			},
 			&sproto.OrderSequenceIDResp{},
 			time.Second)
@@ -75,6 +82,9 @@ func (s *sequence) order() {
 			s.Lock()
 			s.ordering = false
 			s.max = resp.(*sproto.OrderSequenceIDResp).Max
+			if s.next == 0 {
+				s.next = s.max - s.step
+			}
 			s.Unlock()
 			return
 		} else {
@@ -83,20 +93,24 @@ func (s *sequence) order() {
 	}
 }
 
-func (s *sequence) get(timeout time.Duration) (seqno int64, err error) {
+func (s *sequence) Next(timeout time.Duration) (seqno int64, err error) {
 	var deadline time.Time
 	for {
 		s.Lock()
 		if s.next < s.max {
 			seqno = s.next
 			s.next++
-			if !s.ordering && s.max-s.next < s.orderCount/2 {
+			if !s.ordering && s.max-s.next < s.step/2 {
 				s.ordering = true
 				go s.order()
 			}
 			s.Unlock()
 			return
 		} else {
+			if !s.ordering {
+				s.ordering = true
+				go s.order()
+			}
 			s.Unlock()
 			if deadline.IsZero() {
 				deadline = time.Now().Add(timeout)
@@ -140,7 +154,7 @@ func (this *Client) exec(cmd *cmdContext) {
 func (this *Client) Close() {
 	this.impl.close()
 	close(this.asyncExec.stop)
-	this.sequence.close()
+	this.sequence.Close()
 }
 
 func New(conf ClientConf) (*Client, error) {
@@ -160,7 +174,7 @@ func New(conf ClientConf) (*Client, error) {
 
 	c := &Client{
 		asyncExec: newAsynExecMgr(conf.Ordering),
-		sequence:  &sequence{next: 1, ordering: true, orderCount: SequenceOrderStep, pdAddr: pdAddr},
+		sequence:  NewSequence(pdAddr, SequenceOrderStep),
 	}
 
 	switch conf.ClientType {
@@ -173,7 +187,6 @@ func New(conf ClientConf) (*Client, error) {
 				notifyPriority: conf.NotifyPriority,
 			},
 		}
-		go c.sequence.order()
 		c.impl.start(pdAddr)
 		return c, nil
 	case FlySql:
@@ -185,7 +198,6 @@ func New(conf ClientConf) (*Client, error) {
 				notifyPriority: conf.NotifyPriority,
 			},
 		}
-		go c.sequence.order()
 		c.impl.start(pdAddr)
 		return c, nil
 	case FlyKv:
@@ -197,7 +209,6 @@ func New(conf ClientConf) (*Client, error) {
 			sets:           map[int]*set{},
 			slotToStore:    map[int]*store{},
 		}
-		go c.sequence.order()
 		c.impl.start(pdAddr)
 		return c, nil
 	default:

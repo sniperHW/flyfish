@@ -5,6 +5,7 @@ package flypd
 
 import (
 	"fmt"
+	flyfishclient "github.com/sniperHW/flyfish/client"
 	"github.com/sniperHW/flyfish/db"
 	"github.com/sniperHW/flyfish/db/sql"
 	"github.com/sniperHW/flyfish/logger"
@@ -16,12 +17,11 @@ import (
 	sproto "github.com/sniperHW/flyfish/server/proto"
 	sslot "github.com/sniperHW/flyfish/server/slot"
 	"github.com/stretchr/testify/assert"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"runtime"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -828,71 +828,69 @@ func TestSequenceID(t *testing.T) {
 
 	pd, _ := NewPd(1, 1, false, conf, fmt.Sprintf("1@%d@http://localhost:18110@localhost:8110@", raftID))
 
-	var cur int64 = int64(1)
-	var max int64
+	var pdAddr []*net.UDPAddr
 
-	orderCount := int64(1000)
-
-	for {
-		resp, _ := snet.UdpCall([]string{"localhost:8110"},
-			&sproto.OrderSequenceID{
-				Count: orderCount,
-			},
-			&sproto.OrderSequenceIDResp{},
-			time.Second)
-		if nil != resp && resp.(*sproto.OrderSequenceIDResp).Ok {
-			max = resp.(*sproto.OrderSequenceIDResp).Max
-			break
-		} else {
-			time.Sleep(time.Second)
-		}
+	if addr, err := net.ResolveUDPAddr("udp", "localhost:8110"); nil == err {
+		pdAddr = append(pdAddr, addr)
+	} else {
+		panic(err)
 	}
 
-	begTime := time.Now()
-	var mu sync.Mutex
-	ordering := false
+	{
+		s := flyfishclient.NewSequence(pdAddr, 2000)
+		m := map[int64]bool{}
+		a := []int64{}
+		for i := 0; i < 1999; i++ {
+			next, _ := s.Next(time.Second * 6)
+			m[next] = true
+			a = append(a, next)
+		}
+		assert.Equal(t, len(m), 1999)
+		assert.Equal(t, int64(1), a[0])
+		assert.Equal(t, int64(1999), a[1998])
+		s.Close()
+	}
 
-	stoped := int32(0)
+	{
+		s := flyfishclient.NewSequence(pdAddr, 2000)
+		next, _ := s.Next(time.Second * 6)
+		//前面的测试会order 2次，因此现在从4001开始
+		assert.Equal(t, next, int64(4001))
+		begTime := time.Now()
+		for i := 0; i < 1000000; i++ {
+			_, _ = s.Next(time.Second * 6)
+		}
+		logger.GetSugar().Infof("use %v", time.Now().Sub(begTime))
+		next, _ = s.Next(time.Second * 6)
+		assert.Equal(t, next, int64(1004002))
+		s.Close()
+	}
 
-	for i := 0; i < 1000000; i++ {
-		for {
-			mu.Lock()
-			if cur < max {
-				cur++
-				if !ordering && max-cur < orderCount/2 {
-					ordering = true
-					go func() {
-						for atomic.LoadInt32(&stoped) == 0 {
-							resp, _ := snet.UdpCall([]string{"localhost:8110"},
-								&sproto.OrderSequenceID{
-									Count: orderCount,
-								},
-								&sproto.OrderSequenceIDResp{},
-								time.Second)
-							if nil != resp && resp.(*sproto.OrderSequenceIDResp).Ok {
-								mu.Lock()
-								max = resp.(*sproto.OrderSequenceIDResp).Max
-								ordering = false
-								mu.Unlock()
-								return
-							} else {
-								runtime.Gosched()
-							}
-						}
-					}()
+	{
+		var mu sync.Mutex
+		var wait sync.WaitGroup
+		m := map[int64]bool{}
+		s := flyfishclient.NewSequence(pdAddr, 2000)
+		begTime := time.Now()
+		for i := 0; i < 4; i++ {
+			wait.Add(1)
+			go func() {
+				for i := 0; i < 100000; i++ {
+					next, _ := s.Next(time.Second * 6)
+					mu.Lock()
+					m[next] = true
+					mu.Unlock()
 				}
-				mu.Unlock()
-				break
-			} else {
-				mu.Unlock()
-				runtime.Gosched()
-			}
+				wait.Done()
+			}()
 		}
+		wait.Wait()
+		logger.GetSugar().Infof("use %v", time.Now().Sub(begTime))
+		//确保没有发生重复
+		assert.Equal(t, len(m), 400000)
+		s.Close()
 	}
 
-	atomic.StoreInt32(&stoped, 1)
-
-	logger.GetSugar().Infof("use %v", time.Now().Sub(begTime))
 	pd.Stop()
 
 	pd, _ = NewPd(1, 1, false, conf, fmt.Sprintf("1@%d@http://localhost:18110@localhost:8110@", raftID))

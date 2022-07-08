@@ -102,7 +102,7 @@ func (c *cmd) exec(syncCall bool, getErrorResult func(errcode.Error) interface{}
 	var cmd *cmdContext
 	v := c.ctx.Load()
 	if nil == v {
-		seqno, err := c.client.sequence.get(time.Second)
+		seqno, err := c.client.sequence.Next(time.Second)
 		if nil != err {
 			r := getErrorResult(errcode.New(errcode.Errcode_timeout))
 			switch cb.(type) {
