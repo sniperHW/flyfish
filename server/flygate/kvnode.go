@@ -47,17 +47,20 @@ func (n *kvnode) add2Send(m *forwordMsg) int {
 	return l
 }
 
-func (n *kvnode) add2WaitResp(m *forwordMsg) bool {
+func (n *kvnode) add2WaitResp(m *forwordMsg) (ret bool) {
 	n.Lock()
 	if v := n.waitResponse[m.seqno]; nil != v {
 		delete(n.waitResponse, m.seqno)
 		v.clearCache()
 		v.dropReply()
+	} else {
+		ret = true
 	}
 	n.waitResponse[m.seqno] = m
 	m.dict = &n.waitResponse
 	m.setCache(n)
 	n.Unlock()
+	return
 }
 
 func (n *kvnode) removeWaitResp(seqno int64) (m *forwordMsg) {
