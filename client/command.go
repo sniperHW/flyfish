@@ -88,6 +88,7 @@ func makeCmdContext(syncCall bool, table string, key string, req proto.Message, 
 		cb:             cb,
 		deadline:       deadline,
 		getErrorResult: getErrorResult,
+		slot:           -1,
 		req: &cs.ReqMessage{
 			UniKey: table + ":" + key,
 			Data:   req},

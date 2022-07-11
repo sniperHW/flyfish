@@ -76,31 +76,6 @@ func (this *clientImplFlykv) checkStore(st *store) bool {
 	return false
 }
 
-func (this *clientImplFlykv) sendAgain(cmd *cmdContext) {
-	this.mu.Lock()
-	if nil != this.waitResp[cmd.req.Seqno] {
-		if atomic.LoadInt32(&this.closed) == 1 {
-			delete(this.waitResp, cmd.req.Seqno)
-			cmd.stopTimer()
-			this.mu.Unlock()
-			cmd.doCallBack(this.notifyQueue, this.notifyPriority, cmd.getErrorResult(errcode.New(errcode.Errcode_error, "client closed")), func() {
-				atomic.AddInt64(&this.pendingCount, -1)
-			})
-		} else {
-			if store, ok := this.slotToStore[cmd.slot]; ok {
-				this.storeSend(store, cmd, time.Now())
-			} else {
-				//找不到对应store,先存起来，等路由信息更新后再尝试
-				cmd.l = this.waitSend
-				cmd.listElement = this.waitSend.PushBack(cmd)
-			}
-			this.mu.Unlock()
-		}
-	} else {
-		this.mu.Unlock()
-	}
-}
-
 func (this *clientImplFlykv) onErrNotLeader(store *store, cmd *cmdContext) {
 	if nil != store.leader && store.leaderVersion != cmd.leaderVersion {
 		//leader已经变更，向新的leader发送
@@ -148,30 +123,7 @@ func (this *clientImplFlykv) onResponse(msg *cs.RespMessage) {
 				delete(this.waitResp, msg.Seqno)
 				ctx.stopTimer()
 				this.mu.Unlock()
-				var ret interface{}
-				switch cmd {
-				case protocol.CmdType_Get:
-					ret = onGetResp(ctx, msg.Err, msg.Data.(*protocol.GetResp))
-				case protocol.CmdType_Set:
-					ret = onSetResp(ctx, msg.Err, msg.Data.(*protocol.SetResp))
-				case protocol.CmdType_SetNx:
-					ret = onSetNxResp(ctx, msg.Err, msg.Data.(*protocol.SetNxResp))
-				case protocol.CmdType_CompareAndSet:
-					ret = onCompareAndSetResp(ctx, msg.Err, msg.Data.(*protocol.CompareAndSetResp))
-				case protocol.CmdType_CompareAndSetNx:
-					ret = onCompareAndSetNxResp(ctx, msg.Err, msg.Data.(*protocol.CompareAndSetNxResp))
-				case protocol.CmdType_Del:
-					ret = onDelResp(ctx, msg.Err, msg.Data.(*protocol.DelResp))
-				case protocol.CmdType_IncrBy:
-					ret = onIncrByResp(ctx, msg.Err, msg.Data.(*protocol.IncrByResp))
-				case protocol.CmdType_Kick:
-					ret = onKickResp(ctx, msg.Err, msg.Data.(*protocol.KickResp))
-				default:
-					ret = ctx.getErrorResult(errcode.New(errcode.Errcode_error, "invaild response"))
-				}
-				ctx.doCallBack(this.notifyQueue, this.notifyPriority, ret, func() {
-					atomic.AddInt64(&this.pendingCount, -1)
-				})
+				this.clientImplBase.onResponse(msg, ctx)
 			}
 		}
 	}
@@ -310,7 +262,9 @@ func (this *clientImplFlykv) storeSend(store *store, cmd *cmdContext, now time.T
 }
 
 func (this *clientImplFlykv) send(cmd *cmdContext, now time.Time) {
-	cmd.slot = slot.Unikey2Slot(cmd.table + ":" + cmd.key)
+	if cmd.slot == -1 {
+		cmd.slot = slot.Unikey2Slot(cmd.table + ":" + cmd.key)
+	}
 	if store, ok := this.slotToStore[cmd.slot]; ok {
 		this.storeSend(store, cmd, now)
 	} else {

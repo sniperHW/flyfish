@@ -120,25 +120,6 @@ func (this *impl) sendCmd(conn *conn, cmd *cmdContext, now time.Time) {
 	}
 }
 
-func (this *impl) sendAgain(cmd *cmdContext) {
-	this.mu.Lock()
-	if nil != this.waitResp[cmd.req.Seqno] {
-		if atomic.LoadInt32(&this.closed) == 1 {
-			delete(this.waitResp, cmd.req.Seqno)
-			cmd.stopTimer()
-			this.mu.Unlock()
-			cmd.doCallBack(this.notifyQueue, this.notifyPriority, cmd.getErrorResult(errcode.New(errcode.Errcode_error, "client closed")), func() {
-				atomic.AddInt64(&this.pendingCount, -1)
-			})
-		} else {
-			this.send(cmd, time.Now())
-			this.mu.Unlock()
-		}
-	} else {
-		this.mu.Unlock()
-	}
-}
-
 func (this *impl) send(cmd *cmdContext, now time.Time) {
 	if avaliableConn := this.getAvaliable(); nil != avaliableConn {
 		this.sendCmd(avaliableConn, cmd, now)
@@ -169,30 +150,7 @@ func (this *impl) onResponse(msg *cs.RespMessage) {
 					this.sendAgain(ctx)
 				})
 			} else {
-				var ret interface{}
-				switch cmd {
-				case protocol.CmdType_Get:
-					ret = onGetResp(ctx, msg.Err, msg.Data.(*protocol.GetResp))
-				case protocol.CmdType_Set:
-					ret = onSetResp(ctx, msg.Err, msg.Data.(*protocol.SetResp))
-				case protocol.CmdType_SetNx:
-					ret = onSetNxResp(ctx, msg.Err, msg.Data.(*protocol.SetNxResp))
-				case protocol.CmdType_CompareAndSet:
-					ret = onCompareAndSetResp(ctx, msg.Err, msg.Data.(*protocol.CompareAndSetResp))
-				case protocol.CmdType_CompareAndSetNx:
-					ret = onCompareAndSetNxResp(ctx, msg.Err, msg.Data.(*protocol.CompareAndSetNxResp))
-				case protocol.CmdType_Del:
-					ret = onDelResp(ctx, msg.Err, msg.Data.(*protocol.DelResp))
-				case protocol.CmdType_IncrBy:
-					ret = onIncrByResp(ctx, msg.Err, msg.Data.(*protocol.IncrByResp))
-				case protocol.CmdType_Kick:
-					ret = onKickResp(ctx, msg.Err, msg.Data.(*protocol.KickResp))
-				default:
-					ret = ctx.getErrorResult(errcode.New(errcode.Errcode_error, "invaild response"))
-				}
-				ctx.doCallBack(this.notifyQueue, this.notifyPriority, ret, func() {
-					atomic.AddInt64(&this.pendingCount, -1)
-				})
+				this.clientImplBase.onResponse(msg, ctx)
 			}
 		}
 	}
