@@ -47,8 +47,13 @@ func (n *kvnode) add2Send(m *forwordMsg) int {
 	return l
 }
 
-func (n *kvnode) add2WaitResp(m *forwordMsg) {
+func (n *kvnode) add2WaitResp(m *forwordMsg) bool {
 	n.Lock()
+	if v := n.waitResponse[m.seqno]; nil != v {
+		delete(n.waitResponse, m.seqno)
+		v.clearCache()
+		v.dropReply()
+	}
 	n.waitResponse[m.seqno] = m
 	m.dict = &n.waitResponse
 	m.setCache(n)
@@ -80,9 +85,15 @@ func (n *kvnode) onConnect(now time.Time) {
 		n.waittingSend.Remove(msg.listElement)
 		msg.listElement = nil
 		if msg.deadline.After(now) {
+			if v := n.waitResponse[msg.seqno]; nil != v {
+				delete(n.waitResponse, msg.seqno)
+				v.clearCache()
+				v.dropReply()
+			} else {
+				n.send(now, msg)
+			}
 			n.waitResponse[msg.seqno] = msg
 			msg.dict = &n.waitResponse
-			n.send(now, msg)
 		} else {
 			msg.clearCache()
 		}
@@ -91,13 +102,9 @@ func (n *kvnode) onConnect(now time.Time) {
 }
 
 func (n *kvnode) sendForwordMsg(msg *forwordMsg) {
-
-	//GetSugar().Infof("sendForwordMsg %d", n.id)
-
 	if nil != n.session {
 		now := time.Now()
-		if msg.deadline.After(now) {
-			n.add2WaitResp(msg)
+		if msg.deadline.After(now) && n.add2WaitResp(msg) {
 			n.send(now, msg)
 		}
 	} else if n.add2Send(msg) == 1 {
