@@ -836,8 +836,10 @@ func TestSequenceID(t *testing.T) {
 		panic(err)
 	}
 
+	flyfishclient.InitLogger(logger.GetLogger())
+
 	{
-		s := flyfishclient.NewSequence(pdAddr, 2000)
+		s := flyfishclient.NewSequence(pdAddr, 1000)
 		m := map[int64]bool{}
 		a := []int64{}
 		for i := 0; i < 1999; i++ {
@@ -852,17 +854,17 @@ func TestSequenceID(t *testing.T) {
 	}
 
 	{
-		s := flyfishclient.NewSequence(pdAddr, 2000)
+		s := flyfishclient.NewSequence(pdAddr, 1000)
 		next, _ := s.Next(time.Second * 6)
-		//前面的测试会order 2次，因此现在从4001开始
-		assert.Equal(t, next, int64(4001))
+		//前面的测试会order 2次，因此现在从3001开始
+		assert.Equal(t, next, int64(3001))
 		begTime := time.Now()
 		for i := 0; i < 1000000; i++ {
 			_, _ = s.Next(time.Second * 6)
 		}
 		logger.GetSugar().Infof("use %v", time.Now().Sub(begTime))
 		next, _ = s.Next(time.Second * 6)
-		assert.Equal(t, next, int64(1004002))
+		assert.Equal(t, next, int64(1003002))
 		s.Close()
 	}
 
@@ -870,9 +872,9 @@ func TestSequenceID(t *testing.T) {
 		var mu sync.Mutex
 		var wait sync.WaitGroup
 		m := map[int64]bool{}
-		s := flyfishclient.NewSequence(pdAddr, 2000)
 		begTime := time.Now()
 		for i := 0; i < 4; i++ {
+			s := flyfishclient.NewSequence(pdAddr, 1000)
 			wait.Add(1)
 			go func() {
 				for i := 0; i < 100000; i++ {
@@ -882,13 +884,13 @@ func TestSequenceID(t *testing.T) {
 					mu.Unlock()
 				}
 				wait.Done()
+				s.Close()
 			}()
 		}
 		wait.Wait()
 		logger.GetSugar().Infof("use %v", time.Now().Sub(begTime))
 		//确保没有发生重复
 		assert.Equal(t, len(m), 400000)
-		s.Close()
 	}
 
 	pd.Stop()

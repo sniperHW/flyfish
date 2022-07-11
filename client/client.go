@@ -3,6 +3,7 @@ package client
 import (
 	"container/list"
 	"errors"
+	"github.com/sniperHW/flyfish/errcode"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
 	"github.com/sniperHW/flyfish/proto/cs"
 	snet "github.com/sniperHW/flyfish/server/net"
@@ -19,9 +20,9 @@ type ClientType int
 const resendDelay time.Duration = time.Millisecond * 100
 
 var ClientTimeout time.Duration = time.Second * 5 //6sec
-var maxPendingSize int = 10000
+var maxPendingSize int64 = 10000
 var recvTimeout time.Duration = time.Second * 30
-var SequenceOrderStep int64 = 2000
+var SequenceOrderStep int64 = 1000
 
 const (
 	FlyKv   = ClientType(1) //请求发往flykv
@@ -49,10 +50,21 @@ type ClientConf struct {
 
 var getSequenceIDTimeout error = errors.New("getSequenceIDTimeout")
 
+type idbuffer struct {
+	next int64
+	max  int64
+}
+
+func (b *idbuffer) nextID() (id int64, free int64) {
+	id = b.next
+	b.next++
+	free = b.max - b.next
+	return
+}
+
 type sequence struct {
 	sync.Mutex
-	next     int64
-	max      int64
+	buffer   []*idbuffer
 	step     int64
 	ordering bool
 	pdAddr   []*net.UDPAddr
@@ -80,11 +92,15 @@ func (s *sequence) order() {
 			time.Second)
 		if nil != resp && resp.(*sproto.OrderSequenceIDResp).Ok {
 			s.Lock()
-			s.ordering = false
-			s.max = resp.(*sproto.OrderSequenceIDResp).Max
-			if s.next == 0 {
-				s.next = s.max - s.step
+			buffer := &idbuffer{
+				max:  resp.(*sproto.OrderSequenceIDResp).Max,
+				next: resp.(*sproto.OrderSequenceIDResp).Max - s.step,
 			}
+			if buffer.next == 0 {
+				buffer.next = 1
+			}
+			s.buffer = append(s.buffer, buffer)
+			s.ordering = false
 			s.Unlock()
 			return
 		} else {
@@ -93,49 +109,46 @@ func (s *sequence) order() {
 	}
 }
 
+func (s *sequence) next() int64 {
+	s.Lock()
+	defer s.Unlock()
+	var id, freeCount int64
+	if len(s.buffer) > 0 {
+		if id, freeCount = s.buffer[0].nextID(); freeCount == 0 {
+			//当前buffer已经用光，切换到后续buffer(如果有)
+			for i := 1; i < len(s.buffer); i++ {
+				s.buffer[i-1] = s.buffer[i]
+			}
+			s.buffer[len(s.buffer)-1] = nil
+			s.buffer = s.buffer[:len(s.buffer)-1]
+		}
+	}
+	if !s.ordering && len(s.buffer) < 2 {
+		s.ordering = true
+		go s.order()
+	}
+	return id
+}
+
 func (s *sequence) Next(timeout time.Duration) (seqno int64, err error) {
 	var deadline time.Time
 	for {
-		s.Lock()
-		if s.next < s.max {
-			seqno = s.next
-			s.next++
-			if !s.ordering && s.max-s.next < s.step/2 {
-				s.ordering = true
-				go s.order()
-			}
-			s.Unlock()
-			return
+		if id := s.next(); id > 0 {
+			seqno = id
+			break
 		} else {
-			if !s.ordering {
-				s.ordering = true
-				go s.order()
-			}
-			s.Unlock()
 			if deadline.IsZero() {
 				deadline = time.Now().Add(timeout)
 			} else {
 				if time.Now().After(deadline) {
 					err = getSequenceIDTimeout
-					return
+					break
 				}
 			}
 			runtime.Gosched()
 		}
 	}
 	return
-}
-
-type clientImpl interface {
-	exec(*cmdContext)
-	close()
-	start([]*net.UDPAddr)
-}
-
-type Client struct {
-	impl      clientImpl
-	asyncExec *asynExecMgr
-	sequence  *sequence
 }
 
 type conn struct {
@@ -145,16 +158,91 @@ type conn struct {
 	removed  bool
 }
 
-func (this *Client) exec(cmd *cmdContext) {
-	this.asyncExec.exec(func() {
-		this.impl.exec(cmd)
+type clientImpl interface {
+	exec(*cmdContext)
+	close()
+	start([]*net.UDPAddr)
+}
+
+type clientImplBase struct {
+	mu             sync.Mutex
+	closed         int32
+	waitResp       map[int64]*cmdContext
+	waitSend       *list.List  //len(avaliableConns)==0时被排队等待发送的请求
+	notifyQueue    EventQueueI //响应回调的事件队列
+	notifyPriority int         //回调事件优先级
+	pendingCount   int64
+	asyncExec      *asynExecMgr
+	sequence       *sequence
+	funcSend       func(*cmdContext, time.Time)
+}
+
+func (this *clientImplBase) onTimeout(cmd *cmdContext) {
+	cmd.doCallBack(this.notifyQueue, this.notifyPriority, cmd.getErrorResult(errcode.New(errcode.Errcode_timeout, "timeout")), func() {
+		atomic.AddInt64(&this.pendingCount, -1)
+		this.mu.Lock()
+		cmd.stopTimer()
+		delete(this.waitResp, cmd.req.Seqno)
+		if nil != cmd.listElement {
+			cmd.l.Remove(cmd.listElement)
+		}
+		this.mu.Unlock()
 	})
+}
+
+func (this *clientImplBase) execError(cmd *cmdContext, errCode errcode.Error) {
+	cmd.doCallBack(this.notifyQueue, this.notifyPriority, cmd.getErrorResult(errCode), func() {
+		atomic.AddInt64(&this.pendingCount, -1)
+	})
+}
+
+func (this *clientImplBase) exec(cmd *cmdContext) {
+	pendingCount := atomic.AddInt64(&this.pendingCount, 1)
+	if atomic.LoadInt32(&this.closed) == 1 {
+		go this.execError(cmd, errcode.New(errcode.Errcode_error, "client closed"))
+	} else if pendingCount > maxPendingSize {
+		go this.execError(cmd, errcode.New(errcode.Errcode_retry, "busy please retry later"))
+	} else {
+		this.asyncExec.exec(func() {
+			if timeout := cmd.deadline.Sub(time.Now()); timeout > 0 {
+				seqno, err := this.sequence.Next(timeout)
+				if nil != err {
+					this.execError(cmd, errcode.New(errcode.Errcode_error, "get seqno failed"))
+				} else {
+					now := time.Now()
+					if timeout = cmd.deadline.Sub(now); timeout > 0 {
+						this.mu.Lock()
+						cmd.req.Seqno = seqno
+						this.waitResp[cmd.req.Seqno] = cmd
+						cmd.deadlineTimer = time.AfterFunc(timeout, func() { this.onTimeout(cmd) })
+						this.funcSend(cmd, now)
+						this.mu.Unlock()
+					} else {
+						this.execError(cmd, errcode.New(errcode.Errcode_timeout))
+					}
+				}
+			} else {
+				this.execError(cmd, errcode.New(errcode.Errcode_timeout))
+			}
+		})
+	}
+}
+
+func (this *clientImplBase) close() {
+	this.sequence.Close()
+	this.asyncExec.close()
+}
+
+type Client struct {
+	impl clientImpl
+}
+
+func (this *Client) exec(cmd *cmdContext) {
+	this.impl.exec(cmd)
 }
 
 func (this *Client) Close() {
 	this.impl.close()
-	close(this.asyncExec.stop)
-	this.sequence.Close()
 }
 
 func New(conf ClientConf) (*Client, error) {
@@ -172,46 +260,48 @@ func New(conf ClientConf) (*Client, error) {
 		}
 	}
 
-	c := &Client{
-		asyncExec: newAsynExecMgr(conf.Ordering),
-		sequence:  NewSequence(pdAddr, SequenceOrderStep),
+	c := &Client{}
+	asyncExec := newAsynExecMgr(conf.Ordering)
+	sequence := NewSequence(pdAddr, SequenceOrderStep)
+
+	base := clientImplBase{
+		waitResp:       map[int64]*cmdContext{},
+		waitSend:       list.New(),
+		notifyQueue:    conf.NotifyQueue,
+		notifyPriority: conf.NotifyPriority,
+		asyncExec:      asyncExec,
+		sequence:       sequence,
 	}
 
 	switch conf.ClientType {
 	case FlyGate:
-		c.impl = &clientImplFlyGate{
+		impl := &clientImplFlyGate{
 			impl: impl{
-				waitResp:       map[int64]*cmdContext{},
-				waitSend:       list.New(),
-				notifyQueue:    conf.NotifyQueue,
-				notifyPriority: conf.NotifyPriority,
+				clientImplBase: base,
 			},
 		}
-		c.impl.start(pdAddr)
-		return c, nil
+		impl.funcSend = impl.send
+		c.impl = impl
 	case FlySql:
-		c.impl = &clientImplFlySql{
+		impl := &clientImplFlySql{
 			impl: impl{
-				waitResp:       map[int64]*cmdContext{},
-				waitSend:       list.New(),
-				notifyQueue:    conf.NotifyQueue,
-				notifyPriority: conf.NotifyPriority,
+				clientImplBase: base,
 			},
 		}
-		c.impl.start(pdAddr)
-		return c, nil
+		impl.funcSend = impl.send
+		c.impl = impl
 	case FlyKv:
-		c.impl = &clientImplFlykv{
-			waitResp:       map[int64]*cmdContext{},
-			waitSend:       list.New(),
-			notifyQueue:    conf.NotifyQueue,
-			notifyPriority: conf.NotifyPriority,
+		impl := &clientImplFlykv{
 			sets:           map[int]*set{},
 			slotToStore:    map[int]*store{},
+			clientImplBase: base,
 		}
-		c.impl.start(pdAddr)
-		return c, nil
+		impl.funcSend = impl.send
+		c.impl = impl
 	default:
 		return nil, errors.New("invaild ClientType")
 	}
+
+	c.impl.start(pdAddr)
+	return c, nil
 }

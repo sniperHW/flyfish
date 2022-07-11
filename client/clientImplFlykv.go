@@ -13,7 +13,7 @@ import (
 	"github.com/sniperHW/flyfish/server/slot"
 	"net"
 	"sort"
-	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -52,15 +52,10 @@ type set struct {
 
 //向pd获取路由信息，请求直接发往flykv
 type clientImplFlykv struct {
-	mu             sync.Mutex
-	closed         bool
-	waitResp       map[int64]*cmdContext
-	waitSend       *list.List  //len(avaliableConns)==0时被排队等待发送的请求
-	notifyQueue    EventQueueI //响应回调的事件队列
-	notifyPriority int         //回调事件优先级
-	version        int64
-	sets           map[int]*set
-	slotToStore    map[int]*store
+	clientImplBase
+	version     int64
+	sets        map[int]*set
+	slotToStore map[int]*store
 }
 
 func (this *clientImplFlykv) checkKvnode(n *kvnode) bool {
@@ -84,14 +79,16 @@ func (this *clientImplFlykv) checkStore(st *store) bool {
 func (this *clientImplFlykv) sendAgain(cmd *cmdContext) {
 	this.mu.Lock()
 	if nil != this.waitResp[cmd.req.Seqno] {
-		if this.closed {
+		if atomic.LoadInt32(&this.closed) == 1 {
 			delete(this.waitResp, cmd.req.Seqno)
 			cmd.stopTimer()
 			this.mu.Unlock()
-			cmd.doCallBack(this.notifyQueue, this.notifyPriority, cmd.getErrorResult(errcode.New(errcode.Errcode_error, "client closed")), nil)
+			cmd.doCallBack(this.notifyQueue, this.notifyPriority, cmd.getErrorResult(errcode.New(errcode.Errcode_error, "client closed")), func() {
+				atomic.AddInt64(&this.pendingCount, -1)
+			})
 		} else {
 			if store, ok := this.slotToStore[cmd.slot]; ok {
-				this.storeSend(store, cmd)
+				this.storeSend(store, cmd, time.Now())
 			} else {
 				//找不到对应store,先存起来，等路由信息更新后再尝试
 				cmd.l = this.waitSend
@@ -108,7 +105,7 @@ func (this *clientImplFlykv) onErrNotLeader(store *store, cmd *cmdContext) {
 	if nil != store.leader && store.leaderVersion != cmd.leaderVersion {
 		//leader已经变更，向新的leader发送
 		cmd.leaderVersion = store.leaderVersion
-		this.kvnodeSend(store.leader, cmd)
+		this.kvnodeSend(store.leader, cmd, time.Now())
 	} else if nil != store.leader && store.leaderVersion == cmd.leaderVersion {
 		store.leader = nil
 	}
@@ -172,7 +169,9 @@ func (this *clientImplFlykv) onResponse(msg *cs.RespMessage) {
 				default:
 					ret = ctx.getErrorResult(errcode.New(errcode.Errcode_error, "invaild response"))
 				}
-				ctx.doCallBack(this.notifyQueue, this.notifyPriority, ret, nil)
+				ctx.doCallBack(this.notifyQueue, this.notifyPriority, ret, func() {
+					atomic.AddInt64(&this.pendingCount, -1)
+				})
 			}
 		}
 	}
@@ -188,7 +187,7 @@ func (this *clientImplFlykv) connectKvnode(kvnode *kvnode) {
 		session, err := c.Dial(time.Second * 5)
 		this.mu.Lock()
 		defer this.mu.Unlock()
-		if this.closed || !this.checkKvnode(kvnode) {
+		if atomic.LoadInt32(&this.closed) == 1 || !this.checkKvnode(kvnode) {
 			return
 		} else {
 			if nil == err {
@@ -211,15 +210,18 @@ func (this *clientImplFlykv) connectKvnode(kvnode *kvnode) {
 					this.mu.Unlock()
 					err := errcode.New(errcode.Errcode_error, "lose connection")
 					for _, v := range ctxs {
-						v.doCallBack(this.notifyQueue, this.notifyPriority, v.getErrorResult(err), nil)
+						v.doCallBack(this.notifyQueue, this.notifyPriority, v.getErrorResult(err), func() {
+							atomic.AddInt64(&this.pendingCount, -1)
+						})
 					}
 				}).BeginRecv(func(s *flynet.Socket, msg interface{}) {
 					this.onResponse(msg.(*cs.RespMessage))
 				})
 
+				now := time.Now()
 				for v := kvnode.waitSend.Front(); nil != v; v = kvnode.waitSend.Front() {
 					cmd := kvnode.waitSend.Remove(v).(*cmdContext)
-					this.kvnodeSend(kvnode, cmd)
+					this.kvnodeSend(kvnode, cmd, now)
 				}
 			} else if kvnode.waitSend.Len() > 0 {
 				time.AfterFunc(time.Second, func() { this.connectKvnode(kvnode) })
@@ -228,11 +230,11 @@ func (this *clientImplFlykv) connectKvnode(kvnode *kvnode) {
 	}()
 }
 
-func (this *clientImplFlykv) kvnodeSend(kvnode *kvnode, cmd *cmdContext) {
+func (this *clientImplFlykv) kvnodeSend(kvnode *kvnode, cmd *cmdContext, now time.Time) {
 	if nil != kvnode.session {
 		cmd.l = nil
 		cmd.listElement = nil
-		if cmd.req.Timeout = uint32(cmd.deadline.Sub(time.Now()) / time.Millisecond); cmd.req.Timeout > 0 {
+		if cmd.req.Timeout = uint32(cmd.deadline.Sub(now) / time.Millisecond); cmd.req.Timeout > 0 {
 			cmd.session = kvnode.session
 			kvnode.session.Send(cmd.req)
 		}
@@ -246,7 +248,7 @@ func (this *clientImplFlykv) kvnodeSend(kvnode *kvnode, cmd *cmdContext) {
 }
 
 func (this *clientImplFlykv) queryLeader(store *store) {
-	if !this.closed && this.checkStore(store) {
+	if atomic.LoadInt32(&this.closed) == 0 && this.checkStore(store) {
 		set := this.sets[store.setID]
 		nodes := []string{}
 		for _, v := range set.nodes {
@@ -262,13 +264,14 @@ func (this *clientImplFlykv) queryLeader(store *store) {
 				this.mu.Lock()
 				if this.checkStore(store) {
 					set := this.sets[store.setID]
+					now := time.Now()
 					if leaderNode := set.nodes[leader]; nil != leaderNode {
 						store.leaderVersion++
 						store.leader = leaderNode
 						for v := store.waitSend.Front(); nil != v; v = store.waitSend.Front() {
 							cmd := store.waitSend.Remove(v).(*cmdContext)
 							cmd.leaderVersion = store.leaderVersion
-							this.kvnodeSend(leaderNode, cmd)
+							this.kvnodeSend(leaderNode, cmd, now)
 						}
 					} else {
 						time.AfterFunc(time.Millisecond*100, func() {
@@ -291,7 +294,7 @@ func (this *clientImplFlykv) queryLeader(store *store) {
 	}
 }
 
-func (this *clientImplFlykv) storeSend(store *store, cmd *cmdContext) {
+func (this *clientImplFlykv) storeSend(store *store, cmd *cmdContext, now time.Time) {
 	cmd.store = uint64(store.setID)<<32 + uint64(store.id)
 	cmd.req.Store = store.id
 	if nil == store.leader {
@@ -302,50 +305,18 @@ func (this *clientImplFlykv) storeSend(store *store, cmd *cmdContext) {
 		}
 	} else {
 		cmd.leaderVersion = store.leaderVersion
-		this.kvnodeSend(store.leader, cmd)
+		this.kvnodeSend(store.leader, cmd, now)
 	}
 }
 
-func (this *clientImplFlykv) onTimeout(cmd *cmdContext) {
-	cmd.doCallBack(this.notifyQueue, this.notifyPriority, cmd.getErrorResult(errcode.New(errcode.Errcode_timeout, "timeout")), func() {
-		this.mu.Lock()
-		cmd.stopTimer()
-		delete(this.waitResp, cmd.req.Seqno)
-		if nil != cmd.listElement {
-			cmd.l.Remove(cmd.listElement)
-		}
-		this.mu.Unlock()
-	})
-}
-
-func (this *clientImplFlykv) exec(cmd *cmdContext) {
-	var errCode errcode.Error
-	this.mu.Lock()
-	if this.closed {
-		errCode = errcode.New(errcode.Errcode_error, "client closed")
-	} else if len(this.waitResp) > maxPendingSize {
-		errCode = errcode.New(errcode.Errcode_retry, "busy please retry later")
+func (this *clientImplFlykv) send(cmd *cmdContext, now time.Time) {
+	cmd.slot = slot.Unikey2Slot(cmd.table + ":" + cmd.key)
+	if store, ok := this.slotToStore[cmd.slot]; ok {
+		this.storeSend(store, cmd, now)
 	} else {
-		timeout := cmd.deadline.Sub(time.Now())
-		if timeout > 0 {
-			this.waitResp[cmd.req.Seqno] = cmd
-			cmd.deadlineTimer = time.AfterFunc(time.Duration(ClientTimeout)*time.Millisecond, func() { this.onTimeout(cmd) })
-			cmd.slot = slot.Unikey2Slot(cmd.table + ":" + cmd.key)
-			if store, ok := this.slotToStore[cmd.slot]; ok {
-				this.storeSend(store, cmd)
-			} else {
-				//找不到对应store,先存起来，等路由信息更新后再尝试
-				cmd.l = this.waitSend
-				cmd.listElement = this.waitSend.PushBack(cmd)
-			}
-		} else {
-			errCode = errcode.New(errcode.Errcode_timeout)
-		}
-	}
-	this.mu.Unlock()
-
-	if nil != errCode {
-		cmd.doCallBack(this.notifyQueue, this.notifyPriority, cmd.getErrorResult(errCode), nil)
+		//找不到对应store,先存起来，等路由信息更新后再尝试
+		cmd.l = this.waitSend
+		cmd.listElement = this.waitSend.PushBack(cmd)
 	}
 }
 
@@ -553,31 +524,29 @@ func (this *clientImplFlykv) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoRes
 		}
 	}
 
+	now := time.Now()
 	//路由信息更新,尝试发送waitSend中的Cmd
 	for ele := this.waitSend.Front(); nil != ele; {
 		next := ele.Next()
 		cmd := ele.Value.(*cmdContext)
 		if store, ok := this.slotToStore[cmd.slot]; ok {
 			this.waitSend.Remove(ele)
-			this.storeSend(store, cmd)
+			this.storeSend(store, cmd, now)
 		}
 		ele = next
 	}
 }
 
 func (this *clientImplFlykv) queryRouteInfo(pdAddr []*net.UDPAddr) {
-	this.mu.Lock()
-	closed := this.closed
-	this.mu.Unlock()
-	if !closed {
+	if atomic.LoadInt32(&this.closed) == 0 {
 		resp := QueryRouteInfo(pdAddr, &sproto.QueryRouteInfo{
 			Version: this.version,
 		})
-		this.mu.Lock()
-		defer this.mu.Unlock()
-		if this.closed {
+		if atomic.LoadInt32(&this.closed) == 1 {
 			return
 		} else {
+			this.mu.Lock()
+			defer this.mu.Unlock()
 			this.onQueryRouteInfoResp(resp)
 			delay := QueryRouteInfoDuration
 			if this.waitSend.Len() > 0 {
@@ -595,12 +564,9 @@ func (this *clientImplFlykv) start(pdAddr []*net.UDPAddr) {
 }
 
 func (this *clientImplFlykv) close() {
-	this.mu.Lock()
-	defer this.mu.Unlock()
-	if this.closed {
-		return
-	} else {
-		this.closed = true
+	if atomic.CompareAndSwapInt32(&this.closed, 0, 1) {
+		this.mu.Lock()
+		defer this.mu.Unlock()
 		for _, set := range this.sets {
 			for _, kvnode := range set.nodes {
 				if nil != kvnode.session {

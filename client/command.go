@@ -23,6 +23,10 @@ type asynExecMgr struct {
 	stop  chan struct{}
 }
 
+func (m *asynExecMgr) close() {
+	close(m.stop)
+}
+
 func (m *asynExecMgr) exec(fn func()) {
 	select {
 	case <-m.stop:
@@ -76,7 +80,7 @@ type ValueResult struct {
 	Value *Field
 }
 
-func makeCmdContext(syncCall bool, table string, key string, seqno int64, req proto.Message, deadline time.Time, getErrorResult func(errcode.Error) interface{}, cb interface{}) *cmdContext {
+func makeCmdContext(syncCall bool, table string, key string, req proto.Message, deadline time.Time, getErrorResult func(errcode.Error) interface{}, cb interface{}) *cmdContext {
 	return &cmdContext{
 		key:            key,
 		table:          table,
@@ -85,7 +89,6 @@ func makeCmdContext(syncCall bool, table string, key string, seqno int64, req pr
 		deadline:       deadline,
 		getErrorResult: getErrorResult,
 		req: &cs.ReqMessage{
-			Seqno:  seqno,
 			UniKey: table + ":" + key,
 			Data:   req},
 	}
@@ -99,21 +102,7 @@ type cmd struct {
 }
 
 func (c *cmd) exec(syncCall bool, getErrorResult func(errcode.Error) interface{}, cb interface{}) {
-	deadline := time.Now().Add(ClientTimeout)
-	seqno, err := c.client.sequence.Next(time.Second)
-	if nil != err {
-		r := getErrorResult(errcode.New(errcode.Errcode_retry, "get seq no timeout,pleasy try again!"))
-		switch cb.(type) {
-		case func(*StatusResult):
-			go cb.(func(*StatusResult))(r.(*StatusResult))
-		case func(*GetResult):
-			go cb.(func(*GetResult))(r.(*GetResult))
-		case func(*ValueResult):
-			go cb.(func(*ValueResult))(r.(*ValueResult))
-		}
-	} else {
-		c.client.exec(makeCmdContext(syncCall, c.table, c.key, seqno, c.req, deadline, getErrorResult, cb))
-	}
+	c.client.exec(makeCmdContext(syncCall, c.table, c.key, c.req, time.Now().Add(ClientTimeout), getErrorResult, cb))
 }
 
 type StatusCmd struct {

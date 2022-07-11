@@ -8,18 +8,13 @@ import (
 	"github.com/sniperHW/flyfish/proto/cs"
 	"math/rand"
 	"sort"
-	"sync"
+	"sync/atomic"
 	"time"
 )
 
 type impl struct {
-	mu             sync.Mutex
-	closed         bool
-	waitResp       map[int64]*cmdContext
-	waitSend       *list.List //len(avaliableConns)==0时被排队等待发送的请求
+	clientImplBase
 	avaliableConns []*conn
-	notifyQueue    EventQueueI //响应回调的事件队列
-	notifyPriority int         //回调事件优先级
 }
 
 func (this *impl) getAvaliable() *conn {
@@ -33,7 +28,7 @@ func (this *impl) getAvaliable() *conn {
 func (this *impl) connect(conn *conn) {
 	session, err := cs.NewConnector("tcp", conn.service, outputBufLimit).Dial(time.Second * 1)
 	this.mu.Lock()
-	if this.closed {
+	if atomic.LoadInt32(&this.closed) == 1 {
 		cmds := []*cmdContext{}
 		for v := conn.waitSend.Front(); v != nil; v = conn.waitSend.Front() {
 			cmd := conn.waitSend.Remove(v).(*cmdContext)
@@ -47,7 +42,9 @@ func (this *impl) connect(conn *conn) {
 		this.mu.Unlock()
 		err := errcode.New(errcode.Errcode_error, "client closed")
 		for _, c := range cmds {
-			c.doCallBack(this.notifyQueue, this.notifyPriority, c.getErrorResult(err), nil)
+			c.doCallBack(this.notifyQueue, this.notifyPriority, c.getErrorResult(err), func() {
+				atomic.AddInt64(&this.pendingCount, -1)
+			})
 		}
 	} else if nil == err {
 		conn.session = session
@@ -69,27 +66,31 @@ func (this *impl) connect(conn *conn) {
 			this.mu.Unlock()
 			err := errcode.New(errcode.Errcode_error, "lose connection")
 			for _, v := range ctxs {
-				v.doCallBack(this.notifyQueue, this.notifyPriority, v.getErrorResult(err), nil)
+				v.doCallBack(this.notifyQueue, this.notifyPriority, v.getErrorResult(err), func() {
+					atomic.AddInt64(&this.pendingCount, -1)
+				})
 			}
 		}).BeginRecv(func(s *flynet.Socket, msg interface{}) {
 			this.onResponse(msg.(*cs.RespMessage))
 		})
+		now := time.Now()
 		//发送被排队的请求
 		for v := conn.waitSend.Front(); v != nil; v = conn.waitSend.Front() {
 			cmd := conn.waitSend.Remove(v).(*cmdContext)
 			cmd.listElement = nil
 			cmd.l = nil
-			this.sendCmd(conn, cmd)
+			this.sendCmd(conn, cmd, now)
 		}
 		this.mu.Unlock()
 	} else if conn.removed {
 		//当前服务已经被移除，尝试通过其它可用服务发送请求
+		now := time.Now()
 		for v := conn.waitSend.Front(); v != nil; v = conn.waitSend.Front() {
 			cmd := conn.waitSend.Remove(v).(*cmdContext)
 			cmd.listElement = nil
 			cmd.l = nil
 			if avaliableConn := this.getAvaliable(); nil != avaliableConn {
-				this.sendCmd(avaliableConn, cmd)
+				this.sendCmd(avaliableConn, cmd, now)
 			} else {
 				cmd.l = this.waitSend
 				cmd.listElement = this.waitSend.PushBack(cmd)
@@ -104,9 +105,9 @@ func (this *impl) connect(conn *conn) {
 	}
 }
 
-func (this *impl) sendCmd(conn *conn, cmd *cmdContext) {
+func (this *impl) sendCmd(conn *conn, cmd *cmdContext, now time.Time) {
 	if nil != conn.session {
-		if cmd.req.Timeout = uint32(cmd.deadline.Sub(time.Now()) / time.Millisecond); cmd.req.Timeout > 0 {
+		if cmd.req.Timeout = uint32(cmd.deadline.Sub(now) / time.Millisecond); cmd.req.Timeout > 0 {
 			cmd.session = conn.session
 			conn.session.Send(cmd.req)
 		}
@@ -122,18 +123,15 @@ func (this *impl) sendCmd(conn *conn, cmd *cmdContext) {
 func (this *impl) sendAgain(cmd *cmdContext) {
 	this.mu.Lock()
 	if nil != this.waitResp[cmd.req.Seqno] {
-		if this.closed {
+		if atomic.LoadInt32(&this.closed) == 1 {
 			delete(this.waitResp, cmd.req.Seqno)
 			cmd.stopTimer()
 			this.mu.Unlock()
-			cmd.doCallBack(this.notifyQueue, this.notifyPriority, cmd.getErrorResult(errcode.New(errcode.Errcode_error, "client closed")), nil)
+			cmd.doCallBack(this.notifyQueue, this.notifyPriority, cmd.getErrorResult(errcode.New(errcode.Errcode_error, "client closed")), func() {
+				atomic.AddInt64(&this.pendingCount, -1)
+			})
 		} else {
-			if avaliableConn := this.getAvaliable(); nil != avaliableConn {
-				this.sendCmd(avaliableConn, cmd)
-			} else {
-				cmd.l = this.waitSend
-				cmd.listElement = this.waitSend.PushBack(cmd)
-			}
+			this.send(cmd, time.Now())
 			this.mu.Unlock()
 		}
 	} else {
@@ -141,44 +139,12 @@ func (this *impl) sendAgain(cmd *cmdContext) {
 	}
 }
 
-func (this *impl) onTimeout(cmd *cmdContext) {
-	cmd.doCallBack(this.notifyQueue, this.notifyPriority, cmd.getErrorResult(errcode.New(errcode.Errcode_timeout, "timeout")), func() {
-		this.mu.Lock()
-		cmd.stopTimer()
-		delete(this.waitResp, cmd.req.Seqno)
-		if nil != cmd.listElement {
-			cmd.l.Remove(cmd.listElement)
-		}
-		this.mu.Unlock()
-	})
-}
-
-func (this *impl) exec(cmd *cmdContext) {
-	var errCode errcode.Error
-	this.mu.Lock()
-	if this.closed {
-		errCode = errcode.New(errcode.Errcode_error, "client closed")
-	} else if len(this.waitResp) > maxPendingSize {
-		errCode = errcode.New(errcode.Errcode_retry, "busy please retry later")
+func (this *impl) send(cmd *cmdContext, now time.Time) {
+	if avaliableConn := this.getAvaliable(); nil != avaliableConn {
+		this.sendCmd(avaliableConn, cmd, now)
 	} else {
-		timeout := cmd.deadline.Sub(time.Now())
-		if timeout > 0 {
-			this.waitResp[cmd.req.Seqno] = cmd
-			cmd.deadlineTimer = time.AfterFunc(timeout, func() { this.onTimeout(cmd) })
-			avaliableConn := this.getAvaliable()
-			if nil == avaliableConn {
-				cmd.l = this.waitSend
-				cmd.listElement = this.waitSend.PushBack(cmd)
-			} else {
-				this.sendCmd(avaliableConn, cmd)
-			}
-		} else {
-			errCode = errcode.New(errcode.Errcode_timeout)
-		}
-	}
-	this.mu.Unlock()
-	if nil != errCode {
-		cmd.doCallBack(this.notifyQueue, this.notifyPriority, cmd.getErrorResult(errCode), nil)
+		cmd.l = this.waitSend
+		cmd.listElement = this.waitSend.PushBack(cmd)
 	}
 }
 
@@ -224,18 +190,21 @@ func (this *impl) onResponse(msg *cs.RespMessage) {
 				default:
 					ret = ctx.getErrorResult(errcode.New(errcode.Errcode_error, "invaild response"))
 				}
-				ctx.doCallBack(this.notifyQueue, this.notifyPriority, ret, nil)
+				ctx.doCallBack(this.notifyQueue, this.notifyPriority, ret, func() {
+					atomic.AddInt64(&this.pendingCount, -1)
+				})
 			}
 		}
 	}
 }
 
 func (this *impl) onQueryServiceResp(services []string) (bool, time.Duration) {
-	this.mu.Lock()
-	defer this.mu.Unlock()
-	if this.closed {
+	if atomic.LoadInt32(&this.closed) == 1 {
 		return true, 0
 	}
+
+	this.mu.Lock()
+	defer this.mu.Unlock()
 
 	localServices := []string{}
 	for _, c := range this.avaliableConns {
@@ -296,12 +265,13 @@ func (this *impl) onQueryServiceResp(services []string) (bool, time.Duration) {
 		}
 	}
 
+	now := time.Now()
 	for v := this.waitSend.Front(); v != nil; v = this.waitSend.Front() {
 		if avaliableConn := this.getAvaliable(); nil != avaliableConn {
 			cmd := this.waitSend.Remove(v).(*cmdContext)
 			cmd.listElement = nil
 			cmd.l = nil
-			this.sendCmd(avaliableConn, cmd)
+			this.sendCmd(avaliableConn, cmd, now)
 		} else {
 			break
 		}
@@ -315,12 +285,10 @@ func (this *impl) onQueryServiceResp(services []string) (bool, time.Duration) {
 }
 
 func (this *impl) close() {
-	this.mu.Lock()
-	defer this.mu.Unlock()
-	if this.closed {
-		return
-	} else {
-		this.closed = true
+	if atomic.CompareAndSwapInt32(&this.closed, 0, 1) {
+		this.mu.Lock()
+		defer this.mu.Unlock()
+		this.clientImplBase.close()
 		for _, v := range this.avaliableConns {
 			if nil != v.session {
 				v.session.Close(nil, 0)
