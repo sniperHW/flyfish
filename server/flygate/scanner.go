@@ -34,68 +34,66 @@ type scanner struct {
 }
 
 func (sc *scanner) fillStores(g *gate, slots []int) {
-	ch := make(chan struct{})
-	g.mainQueue.Append(0, func() {
-		if len(slots) == 0 {
-			for _, v := range g.sets {
-				for _, vv := range v.stores {
-					if len(v.nodes) > 0 {
-						st := &storeScanner{
-							set:      v.setID,
-							id:       vv.id,
-							slots:    vv.slots.Clone(),
-							services: map[int]string{},
-						}
-						for _, vvv := range v.nodes {
-							st.services[vvv.id] = vvv.service
-						}
-						sc.stores = append(sc.stores, st)
-					}
-				}
-			}
-		} else {
-			type pairs struct {
-				set   int
-				slots *bitmap.Bitmap
-			}
-			stores := map[int]*pairs{}
-			for _, v := range slots {
-				if store, ok := g.slotToStore[v]; ok {
-					p := stores[store.id]
-					if nil == p {
-						p = &pairs{
-							set:   store.setID,
-							slots: bitmap.New(sslot.SlotCount),
-						}
-						stores[store.id] = p
-					}
-					p.slots.Set(v)
-				}
-			}
-
-			for _, vv := range stores {
-				set := g.sets[vv.set]
-				if len(set.nodes) > 0 {
+	g.Lock()
+	defer g.Unlock()
+	if len(slots) == 0 {
+		for _, v := range g.sets {
+			for _, vv := range v.stores {
+				if len(v.nodes) > 0 {
 					st := &storeScanner{
-						id:       vv.set,
-						slots:    vv.slots,
+						set:      v.setID,
+						id:       vv.id,
+						slots:    vv.slots.Clone(),
 						services: map[int]string{},
 					}
-
-					for _, vvv := range set.nodes {
+					for _, vvv := range v.nodes {
 						st.services[vvv.id] = vvv.service
 					}
 					sc.stores = append(sc.stores, st)
 				}
 			}
 		}
-		close(ch)
-	})
-	<-ch
+	} else {
+		type pairs struct {
+			set   int
+			slots *bitmap.Bitmap
+		}
+		stores := map[int]*pairs{}
+		for _, v := range slots {
+			if store, ok := g.slotToStore[v]; ok {
+				p := stores[store.id]
+				if nil == p {
+					p = &pairs{
+						set:   store.setID,
+						slots: bitmap.New(sslot.SlotCount),
+					}
+					stores[store.id] = p
+				}
+				p.slots.Set(v)
+			}
+		}
+
+		for _, vv := range stores {
+			set := g.sets[vv.set]
+			if len(set.nodes) > 0 {
+				st := &storeScanner{
+					id:       vv.set,
+					slots:    vv.slots,
+					services: map[int]string{},
+				}
+
+				for _, vvv := range set.nodes {
+					st.services[vvv.id] = vvv.service
+				}
+				sc.stores = append(sc.stores, st)
+			}
+		}
+	}
 }
 
 func (g *gate) onScanner(conn net.Conn) {
-	if !g.checkReqLimit(int(atomic.AddInt64(&g.totalPendingReq, 1))) {
+	if atomic.AddInt32(&g.scannerCount, 1) > int32(g.config.MaxScannerCount) {
+		atomic.AddInt32(&g.scannerCount, -1)
 		conn.Close()
 		return
 	}
@@ -104,7 +102,7 @@ func (g *gate) onScanner(conn net.Conn) {
 		startScan := false
 		defer func() {
 			if !startScan {
-				atomic.AddInt64(&g.totalPendingReq, -1)
+				atomic.AddInt32(&g.scannerCount, -1)
 			}
 		}()
 
@@ -252,7 +250,7 @@ func (st *storeScanner) next(sc *scanner, count int, deadline time.Time) (*flypr
 func (sc *scanner) loop(g *gate, conn net.Conn) {
 	defer func() {
 		conn.Close()
-		atomic.AddInt64(&g.totalPendingReq, -1)
+		atomic.AddInt32(&g.scannerCount, -1)
 	}()
 
 	for {

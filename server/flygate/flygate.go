@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/pkg/bitmap"
-	"github.com/sniperHW/flyfish/pkg/buffer"
 	flynet "github.com/sniperHW/flyfish/pkg/net"
-	"github.com/sniperHW/flyfish/pkg/queue"
 	flyproto "github.com/sniperHW/flyfish/proto"
 	"github.com/sniperHW/flyfish/proto/cs"
 	snet "github.com/sniperHW/flyfish/server/net"
@@ -28,124 +26,95 @@ type set struct {
 	stores map[int]*store
 }
 
-type replyer struct {
-	session         *flynet.Socket
-	totalPendingReq *int64
+type containerElementList struct {
+	listElement *list.Element
+	c           container
 }
 
-func (r *replyer) reply(resp []byte) {
-	atomic.AddInt64(r.totalPendingReq, -1)
-	r.session.Send(resp)
+func (e *containerElementList) remove() {
+	e.c.remove(e)
 }
 
-func (r *replyer) replyErr(seqno int64, cmd uint16, err errcode.Error) {
-	var sizeOfErrDesc int
+func (e *containerElementList) container() container {
+	return e.c
+}
 
-	if nil != err && err.Code != 0 {
-		sizeOfErrDesc = len(err.Desc)
-		if sizeOfErrDesc > 0xFF {
-			//描述超长，直接丢弃
-			sizeOfErrDesc = cs.SizeErrDescLen
-		} else {
-			sizeOfErrDesc += cs.SizeErrDescLen
+type containerList struct {
+	l *list.List
+}
+
+func (c *containerList) add(r *request) {
+	e := &containerElementList{c: c}
+	e.listElement = c.l.PushBack(r)
+	r.containerElements = append(r.containerElements, e)
+}
+
+func (c *containerList) remove(e containerElement) {
+	if el, ok := e.(*containerElementList); ok {
+		request := c.l.Remove(el.listElement).(*request)
+		for i, v := range request.containerElements {
+			if v == e {
+				request.containerElements[i] = request.containerElements[len(request.containerElements)-1]
+				request.containerElements = request.containerElements[:len(request.containerElements)-1]
+				break
+			}
 		}
 	}
-
-	payloadLen := cs.SizeSeqNo + cs.SizeCmd + cs.SizeErrCode + sizeOfErrDesc + cs.SizeCompress
-	totalLen := cs.SizeLen + payloadLen
-	if uint64(totalLen) > cs.MaxPacketSize {
-		return
-	}
-
-	b := make([]byte, 0, totalLen)
-
-	//写payload大小
-	b = buffer.AppendUint32(b, uint32(payloadLen))
-	//seqno
-	b = buffer.AppendInt64(b, seqno)
-	//cmd
-	b = buffer.AppendUint16(b, cmd)
-	//err
-	b = buffer.AppendInt16(b, errcode.GetCode(err))
-
-	if sizeOfErrDesc > 0 {
-		b = buffer.AppendUint16(b, uint16(sizeOfErrDesc-cs.SizeErrDescLen))
-		if sizeOfErrDesc > cs.SizeErrDescLen {
-			b = buffer.AppendString(b, err.Desc)
-		}
-	}
-
-	b = buffer.AppendByte(b, byte(0))
-
-	r.reply(b)
-
 }
 
-func (r *replyer) dropReply() {
-	atomic.AddInt64(r.totalPendingReq, -1)
+type containerElementMap struct {
+	request *request
+	c       container
+}
+
+func (e *containerElementMap) remove() {
+	e.c.remove(e)
+}
+
+func (e *containerElementMap) container() container {
+	return e.c
+}
+
+type containerMap struct {
+	m map[int64]*request
+}
+
+func (c *containerMap) add(r *request) {
+	e := &containerElementMap{request: r, c: c}
+	c.m[r.seqno] = r
+	r.containerElements = append(r.containerElements, e)
+}
+
+func (c *containerMap) remove(e containerElement) {
+	if em, ok := e.(*containerElementMap); ok {
+		request := em.request
+		delete(c.m, request.seqno)
+		for i, v := range request.containerElements {
+			if v == e {
+				request.containerElements[i] = request.containerElements[len(request.containerElements)-1]
+				request.containerElements = request.containerElements[:len(request.containerElements)-1]
+				break
+			}
+		}
+	}
 }
 
 type gate struct {
-	cache
+	sync.Mutex
 	config               *Config
 	closed               int32
 	closeCh              chan struct{}
 	listener             *cs.Listener
-	muC                  sync.Mutex
 	clients              map[*flynet.Socket]*flynet.Socket
-	mainQueue            *queue.PriorityQueue
 	serviceAddr          string
 	pdAddr               []*net.UDPAddr
-	totalPendingReq      int64
 	SoftLimitReachedTime int64
 	version              int64
 	sets                 map[int]*set
 	slotToStore          map[int]*store
-}
-
-func NewFlyGate(config *Config, service string) (*gate, error) {
-	mainQueue := queue.NewPriorityQueue(2)
-
-	if config.ReqLimit.SoftLimit <= 0 {
-		config.ReqLimit.SoftLimit = 100000
-	}
-
-	if config.ReqLimit.HardLimit <= 0 {
-		config.ReqLimit.HardLimit = 150000
-	}
-
-	if config.ReqLimit.SoftLimitSeconds <= 0 {
-		config.ReqLimit.SoftLimitSeconds = 10
-	}
-
-	g := &gate{
-		config:      config,
-		clients:     map[*flynet.Socket]*flynet.Socket{},
-		mainQueue:   mainQueue,
-		sets:        map[int]*set{},
-		slotToStore: map[int]*store{},
-		cache: cache{
-			l: list.New(),
-		},
-		serviceAddr: service,
-		closeCh:     make(chan struct{}),
-	}
-
-	pdService := strings.Split(config.PdService, ";")
-
-	for _, v := range pdService {
-		if addr, err := net.ResolveUDPAddr("udp", v); nil == err {
-			g.pdAddr = append(g.pdAddr, addr)
-		}
-	}
-
-	if len(g.pdAddr) == 0 {
-		return nil, errors.New("pd is empty")
-	}
-
-	err := g.start()
-
-	return g, err
+	waitResp             containerMap
+	waitSend             containerList
+	scannerCount         int32
 }
 
 func (g *gate) checkKvnode(n *kvnode) bool {
@@ -177,20 +146,6 @@ func (g *gate) getStore(store uint64) *store {
 	return nil
 }
 
-func (g *gate) makeReplyer(session *flynet.Socket, req *forwordMsg) *replyer {
-	replyer := &replyer{
-		session:         session,
-		totalPendingReq: &g.totalPendingReq,
-	}
-
-	if g.checkReqLimit(int(atomic.AddInt64(&g.totalPendingReq, 1))) {
-		return replyer
-	} else {
-		replyer.replyErr(req.seqno, req.cmd, errcode.New(errcode.Errcode_retry, "flykv busy,please retry later"))
-		return nil
-	}
-}
-
 func (g *gate) checkReqLimit(c int) bool {
 	conf := g.config.ReqLimit
 
@@ -213,14 +168,57 @@ func (g *gate) checkReqLimit(c int) bool {
 	return true
 }
 
-func (g *gate) callInQueue(priority int, fn func()) {
-	g.mainQueue.ForceAppend(priority, fn)
-}
+func (g *gate) startListener() {
+	g.listener.Serve(func(session *flynet.Socket) {
+		g.Lock()
+		g.clients[session] = session
+		g.Unlock()
+		session.SetInBoundProcessor(NewCliReqInboundProcessor())
+		session.SetRecvTimeout(flyproto.PingTime * 10)
 
-func (g *gate) afterFunc(delay time.Duration, fn func()) *time.Timer {
-	return time.AfterFunc(delay, func() {
-		g.callInQueue(1, fn)
-	})
+		session.SetCloseCallBack(func(session *flynet.Socket, reason error) {
+			g.Lock()
+			delete(g.clients, session)
+			g.Unlock()
+		})
+
+		session.BeginRecv(func(session *flynet.Socket, v interface{}) {
+			if atomic.LoadInt32(&g.closed) == 1 {
+				//服务关闭不再接受新新的请求
+				return
+			}
+			if v.(*request).slot >= 0 && v.(*request).slot < slot.SlotCount {
+				g.Lock()
+				var req *request
+				if g.checkReqLimit(len(g.waitResp.m) + 1) {
+					if req = g.waitResp.m[v.(*request).seqno]; nil != req {
+						//相同seqno的请求已经存在，只reply最后的请求
+						req.from = session
+					} else {
+						req = v.(*request)
+						req.from = session
+						req.deadlineTimer = time.AfterFunc(req.deadline.Sub(time.Now()), func() {
+							g.Lock()
+							req.dropReply()
+							g.Unlock()
+						})
+						g.waitResp.add(req)
+						store, ok := g.slotToStore[req.slot]
+						if !ok {
+							g.waitSend.add(req)
+						} else {
+							g.storeSend(store, req, time.Now())
+						}
+					}
+				} else {
+					req = v.(*request)
+					session.Send(makeErrResponse(req.seqno, req.cmd(), errcode.New(errcode.Errcode_retry, "flykv busy,please retry later")))
+				}
+				g.Unlock()
+			}
+		})
+	}, g.onScanner)
+	GetSugar().Infof("flygate start on %s", g.serviceAddr)
 }
 
 var QueryRouteInfoDuration time.Duration = time.Millisecond * 1000
@@ -233,36 +231,21 @@ func doQueryRouteInfo(pdAddr []*net.UDPAddr, req *sproto.QueryRouteInfo) *sproto
 	}
 }
 
-func (g *gate) onCliMsg(msg *forwordMsg) {
-	s, ok := g.slotToStore[msg.slot]
-	if !ok {
-		g.addMsg(msg)
-	} else {
-		s.onCliMsg(msg)
-	}
-}
-
-func (g *gate) paybackMsg(msg *forwordMsg) {
-	now := time.Now()
-	if msg.deadline.After(now) {
-		g.onCliMsg(msg)
-	} else {
-		msg.dropReply()
-	}
-}
-
-func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
+func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) time.Duration {
 	if nil == resp {
-		return
+		return QueryRouteInfoDuration
 	}
 
 	if atomic.LoadInt64(&g.version) == resp.Version {
-		return
+		return QueryRouteInfoDuration
 	}
 
 	atomic.StoreInt64(&g.version, resp.Version)
 
 	var localSets []*set
+
+	g.Lock()
+	defer g.Unlock()
 
 	for _, v := range g.sets {
 		localSets = append(localSets, v)
@@ -340,14 +323,12 @@ func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
 				}
 
 				for _, vv := range add {
-					//GetSugar().Infof("----------set:%d add node:%d %s:%d", s.setID, vv[0], v.Kvnodes[vv[1]].Host, v.Kvnodes[vv[1]].ServicePort)
 					n := &kvnode{
-						id:           int(vv[0]),
-						service:      fmt.Sprintf("%s:%d", v.Kvnodes[vv[1]].Host, v.Kvnodes[vv[1]].ServicePort),
-						waittingSend: list.New(),
-						waitResponse: map[int64]*forwordMsg{},
-						setID:        int(v.SetID),
-						gate:         g,
+						id:       int(vv[0]),
+						service:  fmt.Sprintf("%s:%d", v.Kvnodes[vv[1]].Host, v.Kvnodes[vv[1]].ServicePort),
+						waitSend: containerList{l: list.New()},
+						waitResp: containerMap{m: map[int64]*request{}},
+						setID:    int(v.SetID),
 					}
 					s.nodes[n.id] = n
 				}
@@ -358,7 +339,11 @@ func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
 					if nil != kvnode.session {
 						kvnode.session.Close(nil, 0)
 					} else {
-						kvnode.paybackWaittingSendToGate()
+						for v := kvnode.waitSend.l.Front(); nil != v; v = kvnode.waitSend.l.Front() {
+							request := v.Value.(*request)
+							request.remove(&kvnode.waitSend)
+							g.waitSend.add(request)
+						}
 					}
 
 					for _, store := range s.stores {
@@ -397,24 +382,20 @@ func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
 
 		for _, vv := range v.Kvnodes {
 			n := &kvnode{
-				id:           int(vv.NodeID),
-				service:      fmt.Sprintf("%s:%d", vv.Host, vv.ServicePort),
-				waittingSend: list.New(),
-				waitResponse: map[int64]*forwordMsg{},
-				setID:        int(v.SetID),
-				gate:         g,
+				id:       int(vv.NodeID),
+				service:  fmt.Sprintf("%s:%d", vv.Host, vv.ServicePort),
+				waitSend: containerList{l: list.New()},
+				waitResp: containerMap{m: map[int64]*request{}},
+				setID:    int(v.SetID),
 			}
 			s.nodes[n.id] = n
 		}
 
 		for k, vv := range v.Stores {
 			st := &store{
-				id: int(vv),
-				cache: cache{
-					l: list.New(),
-				},
-				setID: int(v.SetID),
-				gate:  g,
+				id:       int(vv),
+				waitSend: containerList{l: list.New()},
+				setID:    int(v.SetID),
 			}
 			st.slots, _ = bitmap.CreateFromJson(v.Slots[k])
 			s.stores[st.id] = st
@@ -431,40 +412,55 @@ func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) {
 			if nil != kvnode.session {
 				kvnode.session.Close(nil, 0)
 			} else {
-				kvnode.paybackWaittingSendToGate()
+				for v := kvnode.waitSend.l.Front(); nil != v; v = kvnode.waitSend.l.Front() {
+					request := v.Value.(*request)
+					request.remove(&kvnode.waitSend)
+					g.waitSend.add(request)
+				}
 			}
 		}
-		for _, vv := range s.stores {
+		for _, store := range s.stores {
 			//将待转发请求回收
-			for vvv := vv.l.Front(); nil != vvv; vvv = vv.l.Front() {
-				msg := vvv.Value.(*forwordMsg)
-				vv.removeMsg(msg)
-				g.addMsg(msg)
+			for v := store.waitSend.l.Front(); nil != v; v = store.waitSend.l.Front() {
+				request := v.Value.(*request)
+				request.remove(&store.waitSend)
+				g.waitSend.add(request)
 			}
 		}
 	}
 
 	g.slotToStore = map[int]*store{}
-	for _, v := range g.sets {
-		for _, vv := range v.stores {
-			slots := vv.slots.GetOpenBits()
+	for _, set := range g.sets {
+		for _, store := range set.stores {
+			slots := store.slots.GetOpenBits()
 			for _, vvv := range slots {
-				g.slotToStore[vvv] = vv
+				g.slotToStore[vvv] = store
 			}
 		}
 	}
 
 	//路由更新，尝试处理没有正确路由信息的请求
-	size := g.lenMsg()
 	now := time.Now()
-	for i := 0; i < size; i++ {
-		msg := g.l.Front().Value.(*forwordMsg)
-		g.removeMsg(msg)
-		if msg.deadline.After(now) {
-			g.onCliMsg(msg)
+	cur := g.waitSend.l.Front()
+	for nil != cur {
+		request := cur.Value.(*request)
+		next := cur.Next()
+		if request.deadline.After(now) {
+			if store, ok := g.slotToStore[request.slot]; ok {
+				request.remove(&g.waitSend)
+				g.storeSend(store, request, now)
+			}
 		} else {
-			msg.dropReply()
+			request.dropReply()
+			request.remove(&g.waitSend)
 		}
+		cur = next
+	}
+
+	if g.waitSend.l.Len() > 0 {
+		return time.Millisecond * 50
+	} else {
+		return QueryRouteInfoDuration
 	}
 }
 
@@ -472,62 +468,56 @@ func (g *gate) queryRouteInfo() {
 	resp := doQueryRouteInfo(g.pdAddr, &sproto.QueryRouteInfo{
 		Version: atomic.LoadInt64(&g.version),
 	})
-	g.callInQueue(1, func() {
-		g.onQueryRouteInfoResp(resp)
-		delay := QueryRouteInfoDuration
-		if g.lenMsg() > 0 {
-			delay = time.Millisecond * 50
-		}
 
-		time.AfterFunc(delay, func() {
-			g.queryRouteInfo()
-		})
-	})
+	if atomic.LoadInt32(&g.closed) == 0 {
+		time.AfterFunc(g.onQueryRouteInfoResp(resp), g.queryRouteInfo)
+	}
 }
 
-func (g *gate) startListener() {
-	g.listener.Serve(func(session *flynet.Socket) {
-		g.muC.Lock()
-		g.clients[session] = session
-		g.muC.Unlock()
-		session.SetInBoundProcessor(NewCliReqInboundProcessor())
-		session.SetRecvTimeout(flyproto.PingTime * 10)
+func NewFlyGate(config *Config, service string) (*gate, error) {
 
-		session.SetCloseCallBack(func(session *flynet.Socket, reason error) {
-			g.muC.Lock()
-			delete(g.clients, session)
-			g.muC.Unlock()
-		})
+	if config.ReqLimit.SoftLimit <= 0 {
+		config.ReqLimit.SoftLimit = 100000
+	}
 
-		session.BeginRecv(func(session *flynet.Socket, v interface{}) {
-			if atomic.LoadInt32(&g.closed) == 1 {
-				//服务关闭不再接受新新的请求
-				return
-			}
-			msg := v.(*forwordMsg)
-			if replyer := g.makeReplyer(session, msg); nil != replyer {
-				msg.replyer = replyer
-				g.mainQueue.ForceAppend(0, msg)
-			}
-		})
-	}, g.onScanner)
-	GetSugar().Infof("flygate start on %s", g.serviceAddr)
-}
+	if config.ReqLimit.HardLimit <= 0 {
+		config.ReqLimit.HardLimit = 150000
+	}
 
-func (g *gate) mainLoop() {
-	for {
-		_, v := g.mainQueue.Pop()
-		switch v.(type) {
-		case *forwordMsg:
-			msg := v.(*forwordMsg)
-			if msg.slot >= 0 && msg.slot < slot.SlotCount {
-				msg.deadlineTimer.set(g.afterFunc(msg.deadline.Sub(time.Now()), msg.dropReply))
-				g.onCliMsg(msg)
-			}
-		case func():
-			v.(func())()
+	if config.ReqLimit.SoftLimitSeconds <= 0 {
+		config.ReqLimit.SoftLimitSeconds = 10
+	}
+
+	if config.MaxScannerCount <= 0 {
+		config.MaxScannerCount = 100
+	}
+
+	g := &gate{
+		config:      config,
+		clients:     map[*flynet.Socket]*flynet.Socket{},
+		sets:        map[int]*set{},
+		slotToStore: map[int]*store{},
+		serviceAddr: service,
+		closeCh:     make(chan struct{}),
+		waitSend:    containerList{l: list.New()},
+		waitResp:    containerMap{m: map[int64]*request{}},
+	}
+
+	pdService := strings.Split(config.PdService, ";")
+
+	for _, v := range pdService {
+		if addr, err := net.ResolveUDPAddr("udp", v); nil == err {
+			g.pdAddr = append(g.pdAddr, addr)
 		}
 	}
+
+	if len(g.pdAddr) == 0 {
+		return nil, errors.New("pd is empty")
+	}
+
+	err := g.start()
+
+	return g, err
 }
 
 func (g *gate) start() error {
@@ -575,8 +565,6 @@ func (g *gate) start() error {
 		}
 	}()
 
-	go g.mainLoop()
-
 	g.startListener()
 
 	time.AfterFunc(QueryRouteInfoDuration, func() {
@@ -586,25 +574,21 @@ func (g *gate) start() error {
 	return nil
 }
 
-func (g *gate) checkCondition(notiyCh chan struct{}, fn func() bool) {
-	g.callInQueue(1, func() {
-		if fn() {
-			select {
-			case notiyCh <- struct{}{}:
-			default:
-			}
-		} else {
-			go func() {
-				time.Sleep(time.Millisecond * 100)
-				g.checkCondition(notiyCh, fn)
-			}()
-		}
-	})
-}
-
-func (g *gate) waitCondition(fn func() bool) {
+func waitCondition(fn func() bool) {
 	waitCh := make(chan struct{})
-	g.checkCondition(waitCh, fn)
+	go func() {
+		for {
+			if fn() {
+				select {
+				case waitCh <- struct{}{}:
+				default:
+				}
+				break
+			} else {
+				time.Sleep(time.Millisecond * 100)
+			}
+		}
+	}()
 	<-waitCh
 }
 
@@ -616,23 +600,26 @@ func (g *gate) Stop() {
 		close(g.closeCh)
 
 		//等待所有消息处理完
-		g.waitCondition(func() bool {
-			return atomic.LoadInt64(&g.totalPendingReq) == 0
+		waitCondition(func() bool {
+			g.Lock()
+			defer g.Unlock()
+			return len(g.waitResp.m) == 0
 		})
 
-		g.muC.Lock()
+		g.Lock()
 		for _, v := range g.clients {
 			go v.Close(nil, time.Second*5)
 		}
-		g.muC.Unlock()
+		g.Unlock()
 
-		g.waitCondition(func() bool {
-			g.muC.Lock()
-			defer g.muC.Unlock()
+		waitCondition(func() bool {
+			g.Lock()
+			defer g.Unlock()
 			return len(g.clients) == 0
 		})
 
-		g.mainQueue.Close()
-
+		waitCondition(func() bool {
+			return atomic.LoadInt32(&g.scannerCount) == 0
+		})
 	}
 }
