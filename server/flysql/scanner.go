@@ -16,84 +16,67 @@ type scanner struct {
 	wantFields []string
 	tbmeta     db.TableMeta
 	slot       int
-	scanner    *sql.Scanner
+	sqlsc      *sql.Scanner
 	conn       net.Conn
 }
 
 func (this *flysql) onScanner(conn net.Conn) {
-	if atomic.AddInt32(&this.scannerCount, 1) > int32(this.config.MaxScannerCount) {
-		atomic.AddInt32(&this.scannerCount, -1)
-		conn.Close()
-		return
-	}
-
 	go func() {
-		startScan := false
-		defer func() {
-			if !startScan {
-				atomic.AddInt32(&this.scannerCount, -1)
+		sc := func() *scanner {
+			if atomic.AddInt32(&this.scannerCount, 1) > int32(this.config.MaxScannerCount) {
+				return nil
 			}
-		}()
 
-		req, err := scan.RecvScannerReq(conn, time.Now().Add(time.Second*5))
-		if nil != err {
-			conn.Close()
-			return
-		}
+			req, err := scan.RecvScannerReq(conn, time.Now().Add(time.Second*5))
+			if nil != err {
+				return nil
+			}
 
-		deadline := time.Now().Add(time.Duration(req.Timeout))
+			deadline := time.Now().Add(time.Duration(req.Timeout))
 
-		var tbmeta db.TableMeta
-		var fields []string
+			var tbmeta db.TableMeta
+			var fields []string
 
-		errCode := func() int {
-			this.muMeta.Lock()
-			tbmeta = this.meta.GetTableMeta(req.Table)
-			this.muMeta.Unlock()
-			for _, v := range req.Fields {
-				if tbmeta.CheckFieldWithVersion(v.Field, v.Version) {
-					fields = append(fields, v.Field)
-				} else {
-					//字段不存在，或删除后又添加，已经不符合请求要求的版本
-					return scan.Err_invaild_field
+			errCode := func() int {
+				this.muMeta.Lock()
+				tbmeta = this.meta.GetTableMeta(req.Table)
+				this.muMeta.Unlock()
+				for _, v := range req.Fields {
+					if tbmeta.CheckFieldWithVersion(v.Field, v.Version) {
+						fields = append(fields, v.Field)
+					} else {
+						//字段不存在，或删除后又添加，已经不符合请求要求的版本
+						return scan.Err_invaild_field
+					}
+				}
+				return scan.Err_ok
+			}()
+
+			if time.Now().After(deadline) {
+				return nil
+			} else if err = scan.SendScannerResp(conn, scan.Err_ok, time.Now().Add(time.Second)); nil != err || errCode != scan.Err_ok {
+				return nil
+			} else {
+				return &scanner{
+					wantFields: fields,
+					tbmeta:     tbmeta,
 				}
 			}
-			return scan.Err_ok
 		}()
 
-		if time.Now().After(deadline) {
-			conn.Close()
-			return
+		if nil != sc {
+			sc.loop(this, conn)
+			if nil != sc.sqlsc {
+				sc.sqlsc.Close()
+			}
 		}
 
-		if errCode != scan.Err_ok {
-			scan.SendScannerResp(conn, errCode, time.Now().Add(time.Second))
-			conn.Close()
-			return
-		}
-
-		scanner := &scanner{
-			wantFields: fields,
-			tbmeta:     tbmeta,
-		}
-
-		if err = scan.SendScannerResp(conn, scan.Err_ok, time.Now().Add(time.Second)); nil != err {
-			conn.Close()
-		} else {
-			startScan = true
-			go scanner.loop(this, conn)
-		}
+		conn.Close()
+		atomic.AddInt32(&this.scannerCount, -1)
 	}()
 }
 
 func (sc *scanner) loop(flysql *flysql, conn net.Conn) {
-	defer func() {
-		conn.Close()
-		if nil != sc.scanner {
-			sc.scanner.Close()
-		}
-		atomic.AddInt32(&flysql.scannerCount, -1)
-	}()
 	for {
 		req, err := scan.RecvScanNextReq(conn, time.Now().Add(scan.RecvScanNextReqTimeout))
 		if nil != err {
@@ -133,8 +116,8 @@ func (sc *scanner) next(flysql *flysql, conn net.Conn, count int, deadline time.
 
 	var err error
 
-	if nil == sc.scanner {
-		sc.scanner, err = sql.NewScanner(sc.tbmeta, flysql.dbc, sc.slot, sc.wantFields, nil)
+	if nil == sc.sqlsc {
+		sc.sqlsc, err = sql.NewScanner(sc.tbmeta, flysql.dbc, sc.slot, sc.wantFields, nil)
 		if nil != err {
 			resp.ErrCode = int32(scan.Err_db)
 			return
@@ -143,7 +126,7 @@ func (sc *scanner) next(flysql *flysql, conn net.Conn, count int, deadline time.
 
 	var r []*sql.ScannerRow
 
-	if r, err = sc.scanner.Next(count); nil != err {
+	if r, err = sc.sqlsc.Next(count); nil != err {
 		resp.ErrCode = int32(scan.Err_db)
 		return
 	} else {
@@ -161,8 +144,8 @@ func (sc *scanner) next(flysql *flysql, conn net.Conn, count int, deadline time.
 	if len(r) == 0 {
 		//当前slot遍历完毕，递增slot
 		sc.slot++
-		sc.scanner.Close()
-		sc.scanner = nil
+		sc.sqlsc.Close()
+		sc.sqlsc = nil
 	}
 
 	return

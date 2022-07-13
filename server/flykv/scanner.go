@@ -36,117 +36,105 @@ type scanner struct {
 }
 
 func (this *kvnode) onScanner(conn net.Conn) {
-	if atomic.AddInt32(&this.scannerCount, 1) > int32(this.config.MaxScannerCount) {
+	go func() {
+		sc := func() *scanner {
+			if atomic.AddInt32(&this.scannerCount, 1) > int32(this.config.MaxScannerCount) {
+				return nil
+			}
+
+			req, err := scan.RecvScannerReq(conn, time.Now().Add(time.Second*5))
+			if nil != err {
+				return nil
+			}
+
+			deadline := time.Now().Add(time.Duration(req.Timeout))
+
+			var store *kvstore
+			var ok bool
+			var tbmeta db.TableMeta
+
+			this.muS.RLock()
+			store, ok = this.stores[int(req.Store)]
+			this.muS.RUnlock()
+
+			var wantSlots *bitmap.Bitmap
+			var fields []string
+
+			errCode := func() int {
+				if !ok {
+					return scan.Err_invaild_store
+				} else if !store.isReady() {
+					return scan.Err_store_not_ready
+				}
+
+				tbmeta = store.meta.GetTableMeta(req.Table)
+
+				if nil == tbmeta || tbmeta.GetDef().DbVersion != req.Version {
+					//表不存在，或删除后又添加，已经不符合请求要求的版本
+					return scan.Err_invaild_table
+				}
+
+				for _, v := range req.Fields {
+					if tbmeta.CheckFieldWithVersion(v.Field, v.Version) {
+						fields = append(fields, v.Field)
+					} else {
+						//字段不存在，或删除后又添加，已经不符合请求要求的版本
+						return scan.Err_invaild_field
+					}
+				}
+
+				if wantSlots, err = bitmap.CreateFromJson(req.Slots); nil != err {
+					return scan.Err_unpack
+				}
+
+				return scan.Err_ok
+
+			}()
+
+			if time.Now().After(deadline) {
+				return nil
+			} else if errCode != scan.Err_ok {
+				scan.SendScannerResp(conn, errCode, time.Now().Add(time.Second))
+				return nil
+			}
+
+			scanner := &scanner{
+				wantFields: fields,
+				tbmeta:     tbmeta,
+				table:      req.Table,
+			}
+
+			ch := make(chan struct{})
+
+			store.mainQueue.q.Append(0, func() {
+				for _, v := range wantSlots.GetOpenBits() {
+					if store.slots[v] != nil {
+						scanner.makeCachekvs(v, store.slots[v].kvMap)
+					}
+				}
+				close(ch)
+			})
+
+			<-ch
+
+			if err = scan.SendScannerResp(conn, scan.Err_ok, time.Now().Add(time.Second)); nil != err {
+				return nil
+			} else {
+				return scanner
+			}
+		}()
+
+		if nil != sc {
+			sc.loop(this, conn)
+		}
+
 		atomic.AddInt32(&this.scannerCount, -1)
 		conn.Close()
-		return
-	}
 
-	go func() {
-		startScan := false
-		defer func() {
-			if !startScan {
-				atomic.AddInt32(&this.scannerCount, -1)
-			}
-		}()
-
-		req, err := scan.RecvScannerReq(conn, time.Now().Add(time.Second*5))
-		if nil != err {
-			conn.Close()
-			return
-		}
-
-		deadline := time.Now().Add(time.Duration(req.Timeout))
-
-		var store *kvstore
-		var ok bool
-		var tbmeta db.TableMeta
-
-		this.muS.RLock()
-		store, ok = this.stores[int(req.Store)]
-		this.muS.RUnlock()
-
-		var wantSlots *bitmap.Bitmap
-		var fields []string
-
-		errCode := func() int {
-			if !ok {
-				return scan.Err_invaild_store
-			} else if !store.isReady() {
-				return scan.Err_store_not_ready
-			}
-
-			tbmeta = store.meta.GetTableMeta(req.Table)
-
-			if nil == tbmeta || tbmeta.GetDef().DbVersion != req.Version {
-				//表不存在，或删除后又添加，已经不符合请求要求的版本
-				return scan.Err_invaild_table
-			}
-
-			for _, v := range req.Fields {
-				if tbmeta.CheckFieldWithVersion(v.Field, v.Version) {
-					fields = append(fields, v.Field)
-				} else {
-					//字段不存在，或删除后又添加，已经不符合请求要求的版本
-					return scan.Err_invaild_field
-				}
-			}
-
-			if wantSlots, err = bitmap.CreateFromJson(req.Slots); nil != err {
-				return scan.Err_unpack
-			}
-
-			return scan.Err_ok
-
-		}()
-
-		if time.Now().After(deadline) {
-			conn.Close()
-			return
-		}
-
-		if errCode != scan.Err_ok {
-			scan.SendScannerResp(conn, errCode, time.Now().Add(time.Second))
-			conn.Close()
-			return
-		}
-
-		scanner := &scanner{
-			wantFields: fields,
-			tbmeta:     tbmeta,
-			table:      req.Table,
-		}
-
-		ch := make(chan struct{})
-
-		store.mainQueue.q.Append(0, func() {
-			for _, v := range wantSlots.GetOpenBits() {
-				if store.slots[v] != nil {
-					scanner.makeCachekvs(v, store.slots[v].kvMap)
-				}
-			}
-			close(ch)
-		})
-
-		<-ch
-
-		if err = scan.SendScannerResp(conn, scan.Err_ok, time.Now().Add(time.Second)); nil != err {
-			conn.Close()
-		} else {
-			startScan = true
-			go scanner.loop(this, conn)
-		}
 	}()
 }
 
 func (sc *scanner) loop(kvnode *kvnode, conn net.Conn) {
-	defer func() {
-		conn.Close()
-		if nil != sc.scanner {
-			sc.scanner.Close()
-		}
-		atomic.AddInt32(&kvnode.scannerCount, -1)
-	}()
 	for {
 		req, err := scan.RecvScanNextReq(conn, time.Now().Add(scan.RecvScanNextReqTimeout))
 		if nil != err {

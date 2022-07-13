@@ -92,90 +92,82 @@ func (sc *scanner) fillStores(g *gate, slots []int) {
 }
 
 func (g *gate) onScanner(conn net.Conn) {
-	if atomic.AddInt32(&g.scannerCount, 1) > int32(g.config.MaxScannerCount) {
-		atomic.AddInt32(&g.scannerCount, -1)
-		conn.Close()
-		return
-	}
 
 	go func() {
-		startScan := false
-		defer func() {
-			if !startScan {
-				atomic.AddInt32(&g.scannerCount, -1)
-			}
-		}()
-
-		req, err := scan.RecvScannerReq(conn, time.Now().Add(time.Second*5))
-		if nil != err {
-			GetSugar().Infof("RecvScannerReq error:%v", err)
-			conn.Close()
-			return
-		}
-
-		var sc *scanner
-
-		deadline := time.Now().Add(time.Duration(req.Timeout))
-
-		errCode := func() int {
-			if len(req.Fields) == 0 {
-				return scan.Err_empty_fields
+		sc := func() *scanner {
+			if atomic.AddInt32(&g.scannerCount, 1) > int32(g.config.MaxScannerCount) {
+				return nil
 			}
 
-			//向pd获取table meta
-			var resp *sproto.GetScanTableMetaResp
-			for nil == resp && !time.Now().After(deadline) {
-				if r, err := snet.UdpCall(g.pdAddr, &sproto.GetScanTableMeta{Table: req.Table}, &sproto.GetScanTableMetaResp{}, time.Second); nil == err {
-					resp = r.(*sproto.GetScanTableMetaResp)
+			req, err := scan.RecvScannerReq(conn, time.Now().Add(time.Second*5))
+			if nil != err {
+				return nil
+			}
+
+			deadline := time.Now().Add(time.Duration(req.Timeout))
+
+			var sc *scanner
+
+			errCode := func() int {
+				if len(req.Fields) == 0 {
+					return scan.Err_empty_fields
 				}
-			}
-			if nil == resp {
-				return scan.Err_timeout
-			} else if resp.TabVersion == -1 {
-				return scan.Err_invaild_table
-			}
 
-			sc = &scanner{
-				okSlots:      bitmap.New(sslot.SlotCount),
-				table:        req.Table,
-				tableVersion: resp.TabVersion,
-			}
-
-			for _, v := range req.Fields {
-				version := int64(-1)
-				for _, vv := range resp.Fields {
-					if v.Field == vv.Field {
-						version = vv.Version
-						break
+				//向pd获取table meta
+				var resp *sproto.GetScanTableMetaResp
+				for nil == resp && !time.Now().After(deadline) {
+					if r, err := snet.UdpCall(g.pdAddr, &sproto.GetScanTableMeta{Table: req.Table}, &sproto.GetScanTableMetaResp{}, time.Second); nil == err {
+						resp = r.(*sproto.GetScanTableMetaResp)
 					}
 				}
-
-				if version >= 0 {
-					sc.wantFields = append(sc.wantFields, &flyproto.ScanField{
-						Field:   v.Field,
-						Version: version,
-					})
-				} else {
-					return scan.Err_invaild_field
+				if nil == resp {
+					return scan.Err_timeout
+				} else if resp.TabVersion == -1 {
+					return scan.Err_invaild_table
 				}
+
+				sc = &scanner{
+					okSlots:      bitmap.New(sslot.SlotCount),
+					table:        req.Table,
+					tableVersion: resp.TabVersion,
+				}
+
+				for _, v := range req.Fields {
+					version := int64(-1)
+					for _, vv := range resp.Fields {
+						if v.Field == vv.Field {
+							version = vv.Version
+							break
+						}
+					}
+
+					if version >= 0 {
+						sc.wantFields = append(sc.wantFields, &flyproto.ScanField{
+							Field:   v.Field,
+							Version: version,
+						})
+					} else {
+						return scan.Err_invaild_field
+					}
+				}
+				return scan.Err_ok
+			}()
+
+			if time.Now().After(deadline) {
+				return nil
+			} else if err = scan.SendScannerResp(conn, errCode, time.Now().Add(time.Second)); nil != err || errCode != scan.Err_ok {
+				return nil
+			} else {
+				return sc
 			}
-			return scan.Err_ok
 		}()
 
-		if time.Now().After(deadline) {
-			conn.Close()
-		} else {
-			err = scan.SendScannerResp(conn, errCode, time.Now().Add(time.Second))
-			if nil != err {
-				GetSugar().Infof("SendScannerResp error:%v", err)
-				conn.Close()
-			} else if errCode == scan.Err_ok {
-				startScan = true
-				go sc.loop(g, conn)
-			} else {
-				conn.Close()
-			}
+		if nil != sc {
+			sc.loop(g, conn)
 		}
+
+		atomic.AddInt32(&g.scannerCount, -1)
+		conn.Close()
 	}()
 }
 
@@ -248,11 +240,6 @@ func (st *storeScanner) next(sc *scanner, count int, deadline time.Time) (*flypr
 }
 
 func (sc *scanner) loop(g *gate, conn net.Conn) {
-	defer func() {
-		conn.Close()
-		atomic.AddInt32(&g.scannerCount, -1)
-	}()
-
 	for {
 		req, err := scan.RecvScanNextReq(conn, time.Now().Add(scan.RecvScanNextReqTimeout))
 		if nil != err {
