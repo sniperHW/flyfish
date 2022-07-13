@@ -19,7 +19,7 @@ func (this *cmdGet) cmdType() flyproto.CmdType {
 }
 
 func (this *cmdGet) checkVersion() bool {
-	return this.version != nil
+	return false
 }
 
 func (s *kvstore) makeGet(kv *kv, deadline time.Time, replyer *replyer, req *flyproto.GetReq) (cmdI, errcode.Error) {
