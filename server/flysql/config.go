@@ -25,9 +25,9 @@ func LoadConfig(path string) (*Config, error) {
 }
 
 type Config struct {
-	PD string `toml:"PD"` //pd服务地址用;分隔
-
-	DBConfig struct {
+	PD              string `toml:"PD"` //pd服务地址用;分隔
+	MaxScannerCount int    `toml:"MaxScannerCount"`
+	DBConfig        struct {
 		DBType   string `toml:"DBType"`
 		Host     string `toml:"Host"`
 		Port     int    `toml:"Port"`

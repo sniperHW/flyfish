@@ -57,6 +57,7 @@ type flysql struct {
 	meta            db.DBMeta
 	pdAddr          []*net.UDPAddr
 	service         string
+	scannerCount    int32
 }
 
 func (this *flysql) pushRequest(req *cs.ReqMessage, replyer *replyer) {
@@ -258,6 +259,10 @@ func NewFlysql(service string, config *Config) (*flysql, error) {
 		clients:     map[*fnet.Socket]struct{}{},
 		config:      config,
 		requestChan: make(chan *request, 10000),
+	}
+
+	if config.MaxScannerCount <= 0 {
+		config.MaxScannerCount = 100
 	}
 
 	if err := flysql.start(service); nil == err {

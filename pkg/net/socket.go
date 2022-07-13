@@ -594,7 +594,7 @@ func (this *Socket) Close(reason error, delay time.Duration) {
 		this.conn.Close()
 		this.sendCh.close()
 		if atomic.LoadInt64(&this.rwCounter) == 0 {
-			this.doclose()
+			go this.doclose()
 		}
 	}
 }

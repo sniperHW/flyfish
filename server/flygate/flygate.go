@@ -327,8 +327,8 @@ func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) time.Durati
 						id:       int(vv[0]),
 						service:  fmt.Sprintf("%s:%d", v.Kvnodes[vv[1]].Host, v.Kvnodes[vv[1]].ServicePort),
 						waitSend: containerList{l: list.New()},
-						waitResp: containerMap{m: map[int64]*request{}},
-						setID:    int(v.SetID),
+						//waitResp: containerList{l: list.New()},
+						setID: int(v.SetID),
 					}
 					s.nodes[n.id] = n
 				}
@@ -385,8 +385,8 @@ func (g *gate) onQueryRouteInfoResp(resp *sproto.QueryRouteInfoResp) time.Durati
 				id:       int(vv.NodeID),
 				service:  fmt.Sprintf("%s:%d", vv.Host, vv.ServicePort),
 				waitSend: containerList{l: list.New()},
-				waitResp: containerMap{m: map[int64]*request{}},
-				setID:    int(v.SetID),
+				//waitResp: containerList{l: list.New()},
+				setID: int(v.SetID),
 			}
 			s.nodes[n.id] = n
 		}

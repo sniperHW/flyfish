@@ -21,12 +21,17 @@ type scanner struct {
 }
 
 func (this *flysql) onScanner(conn net.Conn) {
-	atomic.AddInt64(&this.totalPendingReq, 1)
+	if atomic.AddInt32(&this.scannerCount, 1) > int32(this.config.MaxScannerCount) {
+		atomic.AddInt32(&this.scannerCount, -1)
+		conn.Close()
+		return
+	}
+
 	go func() {
 		startScan := false
 		defer func() {
 			if !startScan {
-				atomic.AddInt64(&this.totalPendingReq, -1)
+				atomic.AddInt32(&this.scannerCount, -1)
 			}
 		}()
 
@@ -87,7 +92,7 @@ func (sc *scanner) loop(flysql *flysql, conn net.Conn) {
 		if nil != sc.scanner {
 			sc.scanner.Close()
 		}
-		atomic.AddInt64(&flysql.totalPendingReq, -1)
+		atomic.AddInt32(&flysql.scannerCount, -1)
 	}()
 	for {
 		req, err := scan.RecvScanNextReq(conn, time.Now().Add(scan.RecvScanNextReqTimeout))

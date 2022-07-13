@@ -81,6 +81,7 @@ type kvnode struct {
 	pdAddr               []*net.UDPAddr
 	writeBackMode        writeBackMode
 	totalPendingReq      int64
+	scannerCount         int32
 	SoftLimitReachedTime int64
 }
 
@@ -292,6 +293,10 @@ func (this *kvnode) Stop() {
 			this.muC.Lock()
 			defer this.muC.Unlock()
 			return len(this.clients) == 0
+		})
+
+		waitCondition(func() bool {
+			return atomic.LoadInt32(&this.scannerCount) == 0
 		})
 
 		this.muS.RLock()
@@ -510,6 +515,10 @@ func NewKvNode(id uint16, join bool, config *Config, db dbI) (*kvnode, error) {
 
 	if config.ReqLimit.SoftLimitSeconds <= 0 {
 		config.ReqLimit.SoftLimitSeconds = 10
+	}
+
+	if config.MaxScannerCount <= 0 {
+		config.MaxScannerCount = 100
 	}
 
 	node := &kvnode{

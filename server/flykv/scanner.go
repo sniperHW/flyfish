@@ -36,7 +36,8 @@ type scanner struct {
 }
 
 func (this *kvnode) onScanner(conn net.Conn) {
-	if !this.checkReqLimit(int(atomic.AddInt64(&this.totalPendingReq, 1))) {
+	if atomic.AddInt32(&this.scannerCount, 1) > int32(this.config.MaxScannerCount) {
+		atomic.AddInt32(&this.scannerCount, -1)
 		conn.Close()
 		return
 	}
@@ -45,7 +46,7 @@ func (this *kvnode) onScanner(conn net.Conn) {
 		startScan := false
 		defer func() {
 			if !startScan {
-				atomic.AddInt64(&this.totalPendingReq, -1)
+				atomic.AddInt32(&this.scannerCount, -1)
 			}
 		}()
 
@@ -144,7 +145,7 @@ func (sc *scanner) loop(kvnode *kvnode, conn net.Conn) {
 		if nil != sc.scanner {
 			sc.scanner.Close()
 		}
-		atomic.AddInt64(&kvnode.totalPendingReq, -1)
+		atomic.AddInt32(&kvnode.scannerCount, -1)
 	}()
 	for {
 		req, err := scan.RecvScanNextReq(conn, time.Now().Add(scan.RecvScanNextReqTimeout))

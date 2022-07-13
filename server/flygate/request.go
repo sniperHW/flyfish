@@ -28,6 +28,7 @@ type request struct {
 	deadlineTimer     *time.Timer
 	replied           int32
 	from              *flynet.Socket
+	to                *flynet.Socket
 	containerElements []containerElement
 	leaderVersion     int64
 	store             uint64 //high32:setid,low32:storeid

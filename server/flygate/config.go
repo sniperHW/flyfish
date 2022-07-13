@@ -26,7 +26,7 @@ func LoadConfig(path string) (*Config, error) {
 
 type Config struct {
 	PdService       string `toml:"PdService"` //pd服务以；分割
-	MaxScannerCount int
+	MaxScannerCount int    `toml:"MaxScannerCount"`
 	ReqLimit        struct {
 		SoftLimit        int `toml:"SoftLimit"`
 		HardLimit        int `toml:"HardLimit"`

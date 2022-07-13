@@ -15,7 +15,6 @@ type kvnode struct {
 	service  string
 	session  *flynet.Socket
 	setID    int
-	waitResp containerMap
 	waitSend containerList
 }
 
@@ -23,13 +22,13 @@ func (n *kvnode) send(now time.Time, request *request) {
 	binary.BigEndian.PutUint64(request.bytes[4:], uint64(request.seqno))
 	binary.BigEndian.PutUint32(request.bytes[4+8:], uint32(request.store&0xFFFFFFFF))
 	binary.BigEndian.PutUint32(request.bytes[18:], uint32(request.deadline.Sub(now)/time.Millisecond))
+	request.to = n.session
 	n.session.Send(request.bytes)
 }
 
 func (g *gate) nodeSend(node *kvnode, request *request, now time.Time) {
 	if request.deadline.After(now) {
 		if nil != node.session {
-			node.waitResp.add(request)
 			node.send(now, request)
 		} else {
 			node.waitSend.add(request)
@@ -59,8 +58,10 @@ func (g *gate) connectNode(node *kvnode) {
 					g.Lock()
 					defer g.Unlock()
 					node.session = nil
-					for _, v := range node.waitResp.m {
-						v.replyErr(errcode.New(errcode.Errcode_error, "lose connection"))
+					for _, v := range g.waitResp.m {
+						if v.to == sess {
+							v.replyErr(errcode.New(errcode.Errcode_error, "lose connection"))
+						}
 					}
 				}).BeginRecv(func(s *flynet.Socket, msg interface{}) {
 					g.onResponse(node, msg.([]byte))
@@ -85,8 +86,7 @@ func (g *gate) onResponse(node *kvnode, b []byte) {
 	errCode := int16(binary.BigEndian.Uint16(b[cs.SizeLen+8+2:]))
 	g.Lock()
 	defer g.Unlock()
-	if request := node.waitResp.m[seqno]; nil != request {
-		request.remove(&node.waitResp)
+	if request := g.waitResp.m[seqno]; nil != request {
 		switch errCode {
 		case errcode.Errcode_not_leader:
 			if store := g.getStore(request.store); nil != store {

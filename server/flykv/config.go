@@ -30,6 +30,7 @@ type Config struct {
 	SnapshotCatchUpEntriesN uint64 `toml:"SnapshotCatchUpEntriesN"`
 	SnapshotBytes           uint64 `toml:"SnapshotBytes"`
 	MaxBatchCount           int    `toml:"MaxBatchCount"`
+	MaxScannerCount         int    `toml:"MaxBatchCount"`
 
 	RaftLogDir string `toml:"RaftLogDir"` //raft日志存放目录
 
