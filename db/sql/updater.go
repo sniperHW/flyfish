@@ -10,7 +10,6 @@ import (
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"net"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -30,13 +29,12 @@ func isRetryError(err error) bool {
 }
 
 type updater struct {
-	dbc       *sqlx.DB
-	count     int
-	que       *queue.ArrayQueue
-	waitGroup *sync.WaitGroup
-	stoped    int32
-	startOnce sync.Once
-	sqlExec   sqlExec
+	dbc *sqlx.DB
+	//count     int
+	que *queue.ArrayQueue
+	//waitGroup *sync.WaitGroup
+	//startOnce sync.Once
+	sqlExec sqlExec
 }
 
 func (this *updater) IssueUpdateTask(t db.DBUpdateTask) error {
@@ -44,39 +42,7 @@ func (this *updater) IssueUpdateTask(t db.DBUpdateTask) error {
 }
 
 func (this *updater) Stop() {
-	if atomic.CompareAndSwapInt32(&this.stoped, 0, 1) {
-		this.que.Close()
-	}
-}
-
-func (this *updater) Start() {
-	this.startOnce.Do(func() {
-		if nil != this.waitGroup {
-			this.waitGroup.Add(1)
-		}
-		go func() {
-			if nil != this.waitGroup {
-				defer this.waitGroup.Done()
-			}
-			localList := make([]interface{}, 0, 200)
-			closed := false
-			for {
-
-				localList, closed = this.que.Pop(localList)
-				size := len(localList)
-				if closed && size == 0 {
-					break
-				}
-
-				//beg := time.Now()
-				for i, v := range localList {
-					this.exec(v)
-					localList[i] = nil
-				}
-				//GetSugar().Infof("count:%d,use:%v", len(localList), time.Now().Sub(beg))
-			}
-		}()
-	})
+	this.que.Close()
 }
 
 func abs(v int64) int64 {
@@ -107,29 +73,21 @@ func (this *updater) exec(v interface{}) {
 	switch v.(type) {
 	case db.DBUpdateTask:
 		task := v.(db.DBUpdateTask)
-		//检查是否还持有更新租约
-		if !task.CheckUpdateLease() {
-			task.ClearUpdateStateAndReleaseLock() //释放更新锁定
+		if !task.HasPermission() {
+			task.UpdateCallback(0, db.Err_NoPermission)
 		} else {
-			s := task.GetUpdateAndClearUpdateState()
-
-			//GetSugar().Infof("GetUpdateAndClearUpdateState %s  LastWriteBackVersion:%d", task.GetUniKey(), s.LastWriteBackVersion)
-
+			s := task.GetUpdateState()
 			b := buffer.Get()
 			defer b.Free()
-
 			needRebuildSql := true
-
 			for {
-
-				if !task.CheckUpdateLease() {
-					task.ClearUpdateStateAndReleaseLock()
+				if !task.HasPermission() {
+					task.UpdateCallback(0, db.Err_NoPermission)
 					return
 				}
 
 				if needRebuildSql {
 					b.Reset()
-
 					//构造更新语句
 					switch s.State {
 					case db.DBState_insert:
@@ -139,13 +97,7 @@ func (this *updater) exec(v interface{}) {
 					case db.DBState_delete:
 						this.sqlExec.prepareMarkDelete(b, &s)
 					default:
-						GetSugar().Errorf("invaild dbstate %s %d", task.GetUniKey(), s.State)
-						if task.Dirty() && task.CheckUpdateLease() {
-							//再次发生变更,插入队列继续执行
-							this.que.ForceAppend(task)
-						} else {
-							task.ReleaseLock()
-						}
+						task.UpdateCallback(0, db.Err_InvaildDbState)
 						return
 					}
 				}
@@ -153,8 +105,8 @@ func (this *updater) exec(v interface{}) {
 				loadVersion := func() (int64, error) {
 					meta := s.Meta.(*TableMeta)
 					for {
-						if !task.CheckUpdateLease() {
-							return 0, errors.New("no lease")
+						if !task.HasPermission() {
+							return 0, db.Err_NoPermission
 						}
 
 						rows, err := this.dbc.Query(fmt.Sprintf("select __version__ from %s where __key__ = '%s' for update;", meta.real_tableName, s.Key))
@@ -191,8 +143,8 @@ func (this *updater) exec(v interface{}) {
 					if rowsAffected > 0 {
 						GetSugar().Debugf("%s ok last:%d version:%d unikey:%s:%s", getUpdateType(s.State), s.LastWriteBackVersion, s.Version, s.Meta.TableName(), s.Key)
 						//回写成功
-						task.SetLastWriteBackVersion(s.Version)
-						break
+						task.UpdateCallback(s.Version, nil)
+						return
 					} else {
 						GetSugar().Infof("%s version mismatch last:%d version:%d unikey:%s:%s", getUpdateType(s.State), s.LastWriteBackVersion, s.Version, s.Meta.TableName(), s.Key)
 						//版本号不匹配，再次获取版本号
@@ -211,11 +163,11 @@ func (this *updater) exec(v interface{}) {
 							 * 在SetLastWriteBackVersion中应该记录日志。用数据中的version修正kv.version以及kv.LastWriteBackVersion。出现此情况必然导致数据丢失，
 							 * 修正只能让程序继续正确运行。
 							 */
-							task.SetLastWriteBackVersion(version)
-							break
+							task.UpdateCallback(version, nil)
+							return
 						} else {
-							task.OnError(err)
-							break
+							task.UpdateCallback(0, err)
+							return
 						}
 					}
 				} else {
@@ -224,29 +176,43 @@ func (this *updater) exec(v interface{}) {
 						//休眠一秒重试
 						time.Sleep(time.Second)
 					} else {
-						task.OnError(err)
-						break
+						task.UpdateCallback(0, err)
+						return
 					}
 				}
-			}
-
-			if task.Dirty() && task.CheckUpdateLease() {
-				//再次发生变更,插入队列继续执行
-				this.que.ForceAppend(task)
-			} else {
-				task.ReleaseLock()
 			}
 		}
 	}
 }
 
 func NewUpdater(dbc *sqlx.DB, sqlType string, waitGroup *sync.WaitGroup) *updater {
-	return &updater{
-		que:       queue.NewArrayQueue(),
-		dbc:       dbc,
-		waitGroup: waitGroup,
+	u := &updater{
+		que: queue.NewArrayQueue(),
+		dbc: dbc,
 		sqlExec: sqlExec{
 			sqlType: sqlType,
 		},
 	}
+	if nil != waitGroup {
+		waitGroup.Add(1)
+	}
+	go func() {
+		localList := make([]interface{}, 0, 200)
+		closed := false
+		for {
+			localList, closed = u.que.Pop(localList)
+			size := len(localList)
+			if closed && size == 0 {
+				break
+			}
+			for i, v := range localList {
+				u.exec(v)
+				localList[i] = nil
+			}
+		}
+		if nil != waitGroup {
+			waitGroup.Done()
+		}
+	}()
+	return u
 }

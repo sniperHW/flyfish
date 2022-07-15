@@ -8,8 +8,6 @@ import (
 	"github.com/sniperHW/flyfish/pkg/queue"
 	"github.com/sniperHW/flyfish/proto"
 	"reflect"
-	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -38,8 +36,6 @@ type loader struct {
 	max        int
 	dbc        *sqlx.DB
 	que        *queue.ArrayQueue
-	stoponce   int32
-	startOnce  sync.Once
 }
 
 func (this *loader) IssueLoadTask(t db.DBLoadTask) error {
@@ -47,33 +43,7 @@ func (this *loader) IssueLoadTask(t db.DBLoadTask) error {
 }
 
 func (this *loader) Stop() {
-	if atomic.CompareAndSwapInt32(&this.stoponce, 0, 1) {
-		this.que.Close()
-	}
-}
-
-func (this *loader) Start() {
-	this.startOnce.Do(func() {
-		go func() {
-			localList := make([]interface{}, 0, 200)
-			closed := false
-			for {
-
-				localList, closed = this.que.Pop(localList)
-				size := len(localList)
-				if closed && size == 0 {
-					break
-				}
-
-				for i, v := range localList {
-					this.append(v)
-					localList[i] = nil
-				}
-
-				this.exec()
-			}
-		}()
-	})
+	this.que.Close()
 }
 
 func (this *loader) append(v interface{}) {
@@ -192,10 +162,32 @@ func (this *loader) exec() {
 }
 
 func NewLoader(dbc *sqlx.DB, maxbatchSize int, quesize int) *loader {
-	return &loader{
+	l := &loader{
 		queryGroup: map[string]*query{},
 		max:        maxbatchSize,
 		que:        queue.NewArrayQueue(quesize),
 		dbc:        dbc,
 	}
+
+	go func() {
+		localList := make([]interface{}, 0, 200)
+		closed := false
+		for {
+
+			localList, closed = l.que.Pop(localList)
+			size := len(localList)
+			if closed && size == 0 {
+				break
+			}
+
+			for i, v := range localList {
+				l.append(v)
+				localList[i] = nil
+			}
+
+			l.exec()
+		}
+	}()
+
+	return l
 }

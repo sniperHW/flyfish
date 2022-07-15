@@ -8,15 +8,6 @@ import (
 	"sync/atomic"
 )
 
-func (this *dbUpdateTask) SetLastWriteBackVersion(version int64) {
-	//先设置让后面的更新能尽快看到最新值
-	this.setLastWriteBackVersion(version)
-	this.kv.store.rn.IssueProposal(&LastWriteBackVersionProposal{
-		version: version,
-		kv:      this.kv,
-	})
-}
-
 func (this *dbUpdateTask) setLastWriteBackVersion(version int64) {
 	this.Lock()
 	defer this.Unlock()
@@ -33,33 +24,47 @@ func (this *dbUpdateTask) setLastWriteBackVersion(version int64) {
 	return
 }
 
-func (this *dbUpdateTask) CheckUpdateLease() bool {
+func (this *dbUpdateTask) HasPermission() bool {
 	return this.kv.store.isLeader()
 }
 
-func (this *dbUpdateTask) ReleaseLock() {
+func (this *dbUpdateTask) UpdateCallback(version int64, err error) {
 	this.Lock()
 	defer this.Unlock()
-	this.doing = false
-	atomic.AddInt32(&this.kv.store.dbWriteBackCount, -1)
+	switch err {
+	case nil:
+		this.state.LastWriteBackVersion = version
+		this.kv.store.rn.IssueProposal(&LastWriteBackVersionProposal{
+			version: version,
+			kv:      this.kv,
+		})
+	case db.Err_NoPermission:
+		this.doing = false
+		atomic.AddInt32(&this.kv.store.dbWriteBackCount, -1)
+		return
+	default:
+		GetSugar().Errorf("dbUpdateTask OnError uniKey:%s err:%v", this.kv.uniKey, err)
+		this.kv.store.mainQueue.AppendHighestPriotiryItem(func() {
+			if f := this.kv.pendingCmd.Front(); nil != f {
+				if cmdkick, ok := f.Value.(*cmdKick); ok {
+					//如果有等待回写后执行的kick，需要清理一下
+					cmdkick.reply(errcode.New(errcode.Errcode_error, err.Error()), nil, this.kv.version)
+					this.kv.pendingCmd.Remove(f)
+					this.kv.processCmd()
+				}
+			}
+		})
+	}
+
+	if this.state.State != db.DBState_none {
+		this.kv.store.db.issueUpdate(this)
+	} else {
+		this.doing = false
+		atomic.AddInt32(&this.kv.store.dbWriteBackCount, -1)
+	}
 }
 
-func (this *dbUpdateTask) Dirty() bool {
-	this.Lock()
-	defer this.Unlock()
-	return this.state.State != db.DBState_none
-}
-
-func (this *dbUpdateTask) ClearUpdateStateAndReleaseLock() {
-	this.Lock()
-	defer this.Unlock()
-	this.doing = false
-	this.state.State = db.DBState_none
-	this.state.Fields = nil
-	atomic.AddInt32(&this.kv.store.dbWriteBackCount, -1)
-}
-
-func (this *dbUpdateTask) GetUpdateAndClearUpdateState() (updateState db.UpdateState) {
+func (this *dbUpdateTask) GetUpdateState() (updateState db.UpdateState) {
 	this.Lock()
 	defer this.Unlock()
 	updateState = this.state
@@ -162,20 +167,6 @@ func (this *dbUpdateTask) updateState(dbstate db.DBState, version int64, fields 
 	}
 
 	return nil
-}
-
-func (this *dbUpdateTask) OnError(err error) {
-	GetSugar().Errorf("dbUpdateTask OnError uniKey:%s err:%v", this.kv.uniKey, err)
-	this.kv.store.mainQueue.AppendHighestPriotiryItem(func() {
-		if f := this.kv.pendingCmd.Front(); nil != f {
-			if cmdkick, ok := f.Value.(*cmdKick); ok {
-				//如果有等待回写后执行的kick，需要清理一下
-				cmdkick.reply(errcode.New(errcode.Errcode_error, err.Error()), nil, this.kv.version)
-				this.kv.pendingCmd.Remove(f)
-				this.kv.processCmd()
-			}
-		}
-	})
 }
 
 func (this *dbLoadTask) GetTable() string {

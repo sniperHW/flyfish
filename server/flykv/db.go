@@ -28,15 +28,11 @@ func NewSqlDB() *sqlDB {
 
 func (d *sqlDB) start(config *Config, dbc *sqlx.DB) error {
 	for i := 0; i < config.SqlLoaderCount; i++ {
-		l := sql.NewLoader(dbc, 200, 5000)
-		d.loaders = append(d.loaders, l)
-		l.Start()
+		d.loaders = append(d.loaders, sql.NewLoader(dbc, 200, 5000))
 	}
 
 	for i := 0; i < config.SqlUpdaterCount; i++ {
-		w := sql.NewUpdater(dbc, config.DBConfig.DBType, &d.wait)
-		d.updaters = append(d.updaters, w)
-		w.Start()
+		d.updaters = append(d.updaters, sql.NewUpdater(dbc, config.DBConfig.DBType, &d.wait))
 	}
 
 	return nil

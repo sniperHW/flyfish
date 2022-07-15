@@ -11,6 +11,8 @@ import (
 var (
 	ERR_DbError        = errors.New("db error")
 	ERR_RecordNotExist = errors.New("record not exist")
+	Err_NoPermission   = errors.New("no update Permission")
+	Err_InvaildDbState = errors.New("InvaildDbState")
 )
 
 type DBState byte
@@ -333,55 +335,17 @@ type UpdateState struct {
 
 type DBLoader interface {
 	IssueLoadTask(DBLoadTask) error
-	Start()
 	Stop()
 }
 
 type DBUpdater interface {
 	IssueUpdateTask(DBUpdateTask) error
-	Start()
 	Stop()
 }
 
-/*
-updateTask实现
-
-
-应用层产生更新后
-
-为task设置正确的DBState，将需要更新的字段添加到task的Fields中
-
-检查task的Lock标记，如果未锁定，表明回写任务没有在执行，设置Lock标记并将task提交到updater。
-
-在updater真正执行之前，task可能因为多次的变更而改变更新状态，updater会以执行时的实际状态产生更新语句。
-
-
-updater线程
-
-从执行队列取出task
-
-调用task.GetUpdateAndClearUpdateState 获取变更状态,同时将变更状态重置为空（不释放Lock）
-
-updater使用更新状态产生sql语句并执行。
-
-sql执行完毕
-
-调用task.Dirty以检查在执行期间task是否再次发生变更
-
-如果是则把task再次投入到执行队列
-
-否则,释放Lock
-
-
-*/
-
 type DBUpdateTask interface {
-	CheckUpdateLease() bool //返回是否持有更新租约，如果返回false将不能执行update
-	ReleaseLock()           //解除更新锁
-	Dirty() bool            //是否脏的
-	ClearUpdateStateAndReleaseLock()
-	GetUpdateAndClearUpdateState() UpdateState //获取脏状态同时将其清理
+	HasPermission() bool         //如果返回false将不能执行update
+	GetUpdateState() UpdateState //获取脏状态同时将其清理
+	UpdateCallback(int64, error) //如果没有错误，返回最新写入数据库的版本号
 	GetUniKey() string
-	SetLastWriteBackVersion(int64)
-	OnError(error)
 }

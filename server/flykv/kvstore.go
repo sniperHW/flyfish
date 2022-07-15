@@ -428,12 +428,6 @@ func (s *kvstore) issueFullDbWriteBack() {
 				if meta := s.meta.CheckTableMeta(vv.meta); meta != nil {
 					vv.meta = meta
 				}
-				/*
-				   2022-06-17 18:03:52.169	info	sql/updater.go:197	update version mismatch last:2 version:2 unikey:friends:2388
-				   2022-06-17 18:03:52.171	info	sql/updater.go:201	RebuildSql update version mismatch last:2 version:2,dbversion:1
-				   2022-06-17 18:03:52.191	info	flykv/kvstore.go:441	WriteBackAll kv:1 kvcount:4324
-				*/
-
 				vv.updateTask.setLastWriteBackVersion(vv.lastWriteBackVersion)
 				if s.kvnode.writeBackMode == write_through && vv.lastWriteBackVersion != vv.version {
 					GetSugar().Infof("issueFullDbWriteBack %s %d %d", vv.uniKey, vv.lastWriteBackVersion, vv.version)
