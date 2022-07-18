@@ -121,9 +121,9 @@ func releaseProposeBuff(b []byte) {
 }
 
 func (rc *RaftInstance) propose(batchProposal []Proposal) {
-	t := &raftTask{
-		id:    rc.reqIDGen.Next(),
-		other: batchProposal,
+	t := &pendingPropose{
+		id:        rc.reqIDGen.Next(),
+		proposals: batchProposal,
 	}
 
 	buff := getProposeBuff()
@@ -140,10 +140,10 @@ func (rc *RaftInstance) propose(batchProposal []Proposal) {
 
 	releaseProposeBuff(buff)
 
-	rc.proposalMgr.addToDict(t)
+	rc.pendingProposeMgr.add(t)
 
 	if err := rc.node.Propose(context.TODO(), b); nil != err {
-		if nil != rc.proposalMgr.getAndRemoveByID(t.id) {
+		if nil != rc.pendingProposeMgr.remove(t.id) {
 			for _, v := range batchProposal {
 				v.OnError(err)
 			}

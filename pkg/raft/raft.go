@@ -3,7 +3,6 @@ package raft
 import (
 	"container/list"
 	"context"
-	//"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -44,73 +43,74 @@ type ApplicationQueue interface {
 	AppendHighestPriotiryItem(interface{})
 }
 
-const (
-	raftTask_proposal         = 1
-	raftTask_confchange       = 2
-	raftTask_linearizableread = 3
-)
-
-type raftTask struct {
-	listE *list.Element
-	tt    int
-	id    uint64
-	other interface{}
-	//for LinearizableRead use only
-	ptrridx *uint64
-	ridx    uint64
-	timer   *time.Timer
+type pendingPropose struct {
+	id        uint64
+	proposals []Proposal
 }
 
-type raftTaskMgr struct {
+type pendingProposeMgr struct {
 	sync.Mutex
-	l    *list.List
-	dict map[uint64]*raftTask
+	dict map[uint64]*pendingPropose
 }
 
-func (this *raftTaskMgr) addToDict(t *raftTask) {
+func (this *pendingProposeMgr) add(p *pendingPropose) {
 	this.Lock()
 	defer this.Unlock()
-	this.dict[t.id] = t
-	GetSugar().Debugf("raftTaskMgr add %d", t.id)
+	this.dict[p.id] = p
 }
 
-func (this *raftTaskMgr) addToDictAndList(t *raftTask) {
+func (this *pendingProposeMgr) remove(id uint64) *pendingPropose {
 	this.Lock()
 	defer this.Unlock()
-	t.listE = this.l.PushBack(t)
-	this.dict[t.id] = t
-	GetSugar().Debugf("raftTaskMgr add %d", t.id)
-}
-
-func (this *raftTaskMgr) getAndRemoveByID(id uint64) *raftTask {
-	this.Lock()
-	defer this.Unlock()
-	t, ok := this.dict[id]
-	if ok {
-		GetSugar().Debugf("raftTaskMgr getAndRemoveByID %d", t.id)
-		if nil != t.listE {
-			this.l.Remove(t.listE)
-		}
-		delete(this.dict, t.id)
-		return t
+	if p, ok := this.dict[id]; ok {
+		delete(this.dict, id)
+		return p
 	} else {
 		return nil
 	}
 }
 
-func (this *raftTaskMgr) onLeaderDownToFollower() {
+func (this *pendingProposeMgr) onLeaderDownToFollower() {
 	this.Lock()
-	this.l = list.New()
-	dict := this.dict
-	this.dict = map[uint64]*raftTask{}
-	this.Unlock()
-	for _, v := range dict {
-		switch v.other.(type) {
-		case []Proposal:
-			for _, vv := range v.other.([]Proposal) {
-				vv.OnError(ErrLeaderDownToFollower)
-			}
+	for _, v := range this.dict {
+		delete(this.dict, v.id)
+		for _, vv := range v.proposals {
+			vv.OnError(ErrLeaderDownToFollower)
 		}
+	}
+	this.Unlock()
+}
+
+type pendingRead struct {
+	id    uint64
+	reads []LinearizableRead
+	listE *list.Element
+	ridx  *uint64
+	timer *time.Timer
+}
+
+type pendingReadMgr struct {
+	sync.Mutex
+	l    *list.List
+	dict map[uint64]*pendingRead
+}
+
+func (this *pendingReadMgr) add(p *pendingRead) {
+	this.Lock()
+	defer this.Unlock()
+	p.listE = this.l.PushBack(p)
+	this.dict[p.id] = p
+}
+
+func (this *pendingReadMgr) remove(id uint64) *pendingRead {
+	this.Lock()
+	defer this.Unlock()
+	if p, ok := this.dict[id]; ok {
+		this.l.Remove(p.listE)
+		delete(this.dict, id)
+		return p
+	} else {
+		return nil
 	}
 }
 
@@ -128,42 +128,43 @@ type RaftInstanceOption struct {
 	MaxBatchCount           int
 	Logdir                  string
 	RaftLogPrefix           string
+	GetSnapshotData         func(uint64, uint64) ([]byte, error)
 }
 
 type RaftInstance struct {
-	inflightSnapshots   int64
-	snapshotIndex       uint64
-	appliedIndex        uint64
-	lastIndex           uint64 // index of log at start
-	stoponce            int32
-	proposePipeline     *queue.ArrayQueue
-	readPipeline        *queue.ArrayQueue
-	commitC             ApplicationQueue
-	waitStop            sync.WaitGroup
-	id                  uint64 // raft instanceID
-	lead                uint64
-	join                bool   // node is joining an existing cluster
-	waldir              string // path to WAL directory
-	snapdir             string // path to snapshot directory
-	confState           raftpb.ConfState
-	node                raft.Node
-	raftStorage         *raft.MemoryStorage
-	wal                 *wal.WAL
-	snapshotter         *snap.Snapshotter
-	snapshotCh          chan interface{}
-	snapshotting        int32 //当前是否正在做快照
-	transport           *rafthttp.Transport
-	stopc               chan struct{} // signals proposal channel closed
-	stopping            chan struct{}
-	proposalMgr         raftTaskMgr
-	linearizableReadMgr raftTaskMgr
-	mutilRaft           *MutilRaft
-	softState           raft.SoftState
-	mb                  *membership.MemberShip
-	w                   wait.Wait
-	reqIDGen            *idutil.Generator
-	proposalSize        uint64 //自上次快照以来,proposal总的字节大小
-	option              RaftInstanceOption
+	inflightSnapshots int64
+	snapshotIndex     uint64
+	appliedIndex      uint64
+	lastIndex         uint64 // index of log at start
+	stoponce          int32
+	proposePipeline   *queue.ArrayQueue
+	readPipeline      *queue.ArrayQueue
+	commitC           ApplicationQueue
+	waitStop          sync.WaitGroup
+	id                uint64 // raft instanceID
+	lead              uint64
+	join              bool   // node is joining an existing cluster
+	waldir            string // path to WAL directory
+	snapdir           string // path to snapshot directory
+	confState         raftpb.ConfState
+	node              raft.Node
+	raftStorage       *raft.MemoryStorage
+	wal               *wal.WAL
+	snapshotter       *snap.Snapshotter
+	snapshotCh        chan interface{}
+	snapshotting      int32 //当前是否正在做快照
+	transport         *rafthttp.Transport
+	stopc             chan struct{} // signals proposal channel closed
+	stopping          chan struct{}
+	pendingProposeMgr pendingProposeMgr
+	pendingReadMgr    pendingReadMgr
+	mutilRaft         *MutilRaft
+	softState         raft.SoftState
+	mb                *membership.MemberShip
+	w                 wait.Wait
+	reqIDGen          *idutil.Generator
+	proposalSize      uint64 //自上次快照以来,proposal总的字节大小
+	option            RaftInstanceOption
 }
 
 func readWALNames(dirpath string) []string {
@@ -315,8 +316,8 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 			rc.proposalSize += uint64(len(committed.Data))
 
 			if rc.isLeader() {
-				if t := rc.proposalMgr.getAndRemoveByID(index); nil != t {
-					committed.Proposals = t.other.([]Proposal)
+				if t := rc.pendingProposeMgr.remove(index); nil != t {
+					committed.Proposals = t.proposals
 					GetSugar().Debugf("entrie %d with Proposal", index)
 				}
 			}
@@ -436,7 +437,10 @@ func (rc *RaftInstance) processMessages(ms []raftpb.Message) []raftpb.Message {
 				} else {
 					//use sendsnap to send the snapshot
 					ms[i].Snapshot.Metadata.ConfState = rc.confState
-					rc.sendSnapshot(ms[i])
+					if err := rc.sendSnapshot(ms[i]); nil != err {
+						GetSugar().Errorf("%s sendSnapshot error:%v", types.ID(rc.id).String(), err)
+						atomic.AddInt64(&rc.inflightSnapshots, -1)
+					}
 				}
 			}
 			ms[i].To = 0
@@ -491,7 +495,7 @@ func (rc *RaftInstance) serveChannels() {
 					if oldSoftState.RaftState == raft.StateLeader {
 						if rc.softState.RaftState != raft.StateLeader {
 							GetSugar().Infof("(%s) down to follower", types.ID(rc.id).String())
-							rc.proposalMgr.onLeaderDownToFollower()
+							rc.pendingProposeMgr.onLeaderDownToFollower()
 						}
 					} else if rc.softState.RaftState == raft.StateLeader {
 						GetSugar().Infof("(%s) becomeLeader", types.ID(rc.id).String())
@@ -533,12 +537,12 @@ func (rc *RaftInstance) serveChannels() {
 
 			rc.publishEntries(rc.entriesToApply(rd.CommittedEntries))
 
-			rc.linearizableReadMgr.Lock()
+			rc.pendingReadMgr.Lock()
 			if len(rd.ReadStates) != 0 {
 				rc.processReadStates(rd.ReadStates)
 			}
 			rc.checkLinearizableRead()
-			rc.linearizableReadMgr.Unlock()
+			rc.pendingReadMgr.Unlock()
 
 			rc.node.Advance()
 
@@ -681,17 +685,7 @@ func (rc *RaftInstance) replayWAL(haveWAL bool) (*wal.WAL, error) {
 		rc.raftStorage.SetHardState(st)
 
 		if snap != nil {
-
-			//rc.transport.RemoveAllPeers()
-
 			rc.recoverMemberShipFromSnapshot(snap)
-
-			//for _, v := range rc.mb.Members() {
-			//	if uint64(v.ID) != rc.id {
-			//		rc.transport.AddPeer(types.ID(v.ID), v.PeerURLs)
-			//	}
-			//}
-
 			rc.commitC.AppendHighestPriotiryItem(*snap)
 		}
 
@@ -701,7 +695,6 @@ func (rc *RaftInstance) replayWAL(haveWAL bool) (*wal.WAL, error) {
 		if len(ents) > 0 {
 			rc.lastIndex = ents[len(ents)-1].Index
 		} else {
-			GetSugar().Info("ReplayOK 2")
 			rc.commitC.AppendHighestPriotiryItem(ReplayOK{})
 		}
 		return w, nil
@@ -957,13 +950,12 @@ func NewInstance(processID uint16, cluster int, join bool, mutilRaft *MutilRaft,
 		stopc:      make(chan struct{}),
 		stopping:   make(chan struct{}),
 		snapshotCh: make(chan interface{}, 1),
-		proposalMgr: raftTaskMgr{
-			l:    list.New(),
-			dict: map[uint64]*raftTask{},
+		pendingProposeMgr: pendingProposeMgr{
+			dict: map[uint64]*pendingPropose{},
 		},
-		linearizableReadMgr: raftTaskMgr{
+		pendingReadMgr: pendingReadMgr{
 			l:    list.New(),
-			dict: map[uint64]*raftTask{},
+			dict: map[uint64]*pendingRead{},
 		},
 		mutilRaft:       mutilRaft,
 		proposePipeline: queue.NewArrayQueue(10000),

@@ -13,16 +13,14 @@ type LinearizableRead interface {
 }
 
 func (rc *RaftInstance) checkLinearizableRead() {
-	for e := rc.linearizableReadMgr.l.Front(); e != nil; e = rc.linearizableReadMgr.l.Front() {
-		v := e.Value.(*raftTask)
-		if nil == v.ptrridx {
-			break
-		} else if rc.appliedIndex < v.ridx {
+	for e := rc.pendingReadMgr.l.Front(); e != nil; e = rc.pendingReadMgr.l.Front() {
+		v := e.Value.(*pendingRead)
+		if nil == v.ridx || rc.appliedIndex < (*v.ridx) {
 			break
 		} else {
-			rc.commitC.AppendHighestPriotiryItem(v.other.([]LinearizableRead))
-			delete(rc.linearizableReadMgr.dict, v.id)
-			rc.linearizableReadMgr.l.Remove(v.listE)
+			rc.commitC.AppendHighestPriotiryItem(v.reads)
+			delete(rc.pendingReadMgr.dict, v.id)
+			rc.pendingReadMgr.l.Remove(v.listE)
 		}
 	}
 }
@@ -30,15 +28,15 @@ func (rc *RaftInstance) checkLinearizableRead() {
 func (rc *RaftInstance) processReadStates(readStates []raft.ReadState) {
 	for _, rs := range readStates {
 		index := binary.BigEndian.Uint64(rs.RequestCtx)
-		v, ok := rc.linearizableReadMgr.dict[index]
+		v, ok := rc.pendingReadMgr.dict[index]
 		if ok && v.timer.Stop() {
-			if rc.appliedIndex < v.ridx {
-				v.ridx = rs.Index
-				v.ptrridx = &v.ridx
+			if rc.appliedIndex < rs.Index {
+				v.ridx = new(uint64)
+				*v.ridx = rs.Index
 			} else {
-				rc.commitC.AppendHighestPriotiryItem(v.other.([]LinearizableRead))
-				delete(rc.linearizableReadMgr.dict, v.id)
-				rc.linearizableReadMgr.l.Remove(v.listE)
+				rc.commitC.AppendHighestPriotiryItem(v.reads)
+				delete(rc.pendingReadMgr.dict, v.id)
+				rc.pendingReadMgr.l.Remove(v.listE)
 			}
 		}
 	}
@@ -46,26 +44,26 @@ func (rc *RaftInstance) processReadStates(readStates []raft.ReadState) {
 
 func (rc *RaftInstance) linearizableRead(batchRead []LinearizableRead) {
 
-	t := &raftTask{
+	t := &pendingRead{
 		id:    rc.reqIDGen.Next(),
-		other: batchRead,
+		reads: batchRead,
 	}
 
 	ctxToSend := make([]byte, 8)
 	binary.BigEndian.PutUint64(ctxToSend, t.id)
 
 	t.timer = time.AfterFunc(ReadTimeout, func() {
-		if nil != rc.linearizableReadMgr.getAndRemoveByID(t.id) {
+		if nil != rc.pendingReadMgr.remove(t.id) {
 			for _, v := range batchRead {
 				v.OnError(ErrTimeout)
 			}
 		}
 	})
 
-	rc.linearizableReadMgr.addToDictAndList(t)
+	rc.pendingReadMgr.add(t)
 
 	if err := rc.node.ReadIndex(context.TODO(), ctxToSend); nil != err {
-		if nil != rc.linearizableReadMgr.getAndRemoveByID(t.id) && t.timer.Stop() {
+		if nil != rc.pendingReadMgr.remove(t.id) && t.timer.Stop() {
 			for _, v := range batchRead {
 				v.OnError(err)
 			}

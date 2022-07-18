@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 	"io"
 	//"sort"
+	"encoding/binary"
 	"sync/atomic"
 	"time"
 )
@@ -139,6 +140,21 @@ func (rc *RaftInstance) saveSnap(snap raftpb.Snapshot) error {
 	return rc.wal.ReleaseLockTo(snap.Metadata.Index)
 }
 
+func (rc *RaftInstance) getSnapshotData(term uint64, index uint64, snapbytes []byte) ([]byte, error) {
+	if nil != rc.option.GetSnapshotData {
+		if snapshotData, err := rc.option.GetSnapshotData(term, index); nil != err {
+			return nil, err
+		} else {
+			//将membership添加到snapshotData尾部
+			mbLen := int(binary.BigEndian.Uint32(snapbytes[len(snapbytes)-4:]))
+			snapshotData = append(snapshotData, snapbytes[len(snapbytes)-4-mbLen:]...)
+			return snapshotData, nil
+		}
+	} else {
+		return snapbytes, nil
+	}
+}
+
 func (rc *RaftInstance) loadSnapshot(haveWAL bool) (*raftpb.Snapshot, error) {
 	var snapshot *raftpb.Snapshot
 	var err error
@@ -150,15 +166,17 @@ func (rc *RaftInstance) loadSnapshot(haveWAL bool) (*raftpb.Snapshot, error) {
 			return nil, err
 		}
 		snapshot, err = rc.snapshotter.LoadNewestAvailable(walSnaps)
-
 	} else {
 		snapshot, err = rc.snapshotter.Load()
 	}
 
 	if err != nil && err != snap.ErrNoSnapshot {
 		return nil, err
+	} else if nil != snapshot {
+		snapshot.Data, err = rc.getSnapshotData(snapshot.Metadata.Term, snapshot.Metadata.Index, snapshot.Data)
+		return snapshot, err
 	} else {
-		return snapshot, nil
+		return nil, nil
 	}
 }
 
@@ -233,17 +251,26 @@ func newSnapshotReaderCloser(data []byte) io.ReadCloser {
 	return pr
 }
 
-func (rc *RaftInstance) sendSnapshot(m raftpb.Message) {
-	data := make([]byte, len(m.Snapshot.Data))
-
-	copy(data, m.Snapshot.Data)
+func (rc *RaftInstance) sendSnapshot(m raftpb.Message) error {
+	/*var data []byte
+	if nil != rc.option.GetSnapshotData {
+		var err error
+		if data, err = rc.getSnapshotData(m.Snapshot.Metadata.Term, m.Snapshot.Metadata.Index, m.Snapshot.Data); nil != err {
+			return err
+		}
+	} else {
+		data = make([]byte, len(m.Snapshot.Data))
+		copy(data, m.Snapshot.Data)
+	}*/
+	data, err := rc.getSnapshotData(m.Snapshot.Metadata.Term, m.Snapshot.Metadata.Index, m.Snapshot.Data)
+	if nil != err {
+		return err
+	}
 
 	pr := newSnapshotReaderCloser(data)
-
 	snapMsg := *snap.NewMessage(m, pr, int64(len(data)))
 
 	go func() {
-
 		now := time.Now()
 		rc.transport.SendSnapshot(snapMsg)
 
@@ -276,4 +303,5 @@ func (rc *RaftInstance) sendSnapshot(m raftpb.Message) {
 			return
 		}
 	}()
+	return nil
 }
