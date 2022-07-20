@@ -6,7 +6,6 @@ import (
 )
 
 const (
-	ReadTimeout                     = time.Second * 5
 	MaxInFlightMsgSnap        int64 = 16
 	ReleaseDelayAfterSnapshot       = 30 * time.Second
 	ReadyPercent                    = 0.95

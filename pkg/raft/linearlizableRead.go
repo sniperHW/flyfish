@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft"
@@ -12,86 +13,127 @@ type LinearizableRead interface {
 	OnError(error)
 }
 
-func (rc *RaftInstance) checkLinearizableRead() {
-	for e := rc.pendingReadMgr.l.Front(); e != nil; e = rc.pendingReadMgr.l.Front() {
-		v := e.Value.(*pendingRead)
-		if nil == v.ridx || rc.appliedIndex < (*v.ridx) {
-			break
-		} else {
-			rc.commitC.AppendHighestPriotiryItem(v.reads)
-			delete(rc.pendingReadMgr.dict, v.id)
-			rc.pendingReadMgr.l.Remove(v.listE)
+func (rc *RaftInstance) linearizableReadLoop() {
+	var rs raft.ReadState
+
+	for {
+		ctxToSend := make([]byte, 8)
+		id1 := rc.reqIDGen.Next()
+		binary.BigEndian.PutUint64(ctxToSend, id1)
+		leaderChangedNotifier := rc.LeaderChangedNotify()
+		select {
+		case <-leaderChangedNotifier:
+			continue
+		case <-rc.readwaitc:
+		case <-rc.stopping:
+			return
 		}
+
+		// as a single loop is can unlock multiple reads, it is not very useful
+		// to propagate the trace from Txn or Range.
+		nextnr := newNotifier()
+
+		rc.readMu.Lock()
+		nr := rc.readNotifier
+		rc.readNotifier = nextnr
+		rc.readMu.Unlock()
+
+		cctx, cancel := context.WithTimeout(context.Background(), rc.option.ReadTimeout)
+		if err := rc.node.ReadIndex(cctx, ctxToSend); err != nil {
+			cancel()
+			if err == raft.ErrStopped {
+				return
+			}
+			nr.notify(err)
+			continue
+		}
+		cancel()
+
+		var (
+			timeout bool
+			done    bool
+		)
+		for !timeout && !done {
+			select {
+			case rs = <-rc.readStateC:
+				done = bytes.Equal(rs.RequestCtx, ctxToSend)
+			case <-leaderChangedNotifier:
+				timeout = true
+				// return a retryable error.
+				nr.notify(ErrLeaderChange)
+			case <-time.After(rc.option.ReadTimeout):
+				nr.notify(ErrTimeout)
+				timeout = true
+			case <-rc.stopping:
+				return
+			}
+		}
+		if !done {
+			continue
+		}
+
+		index := rs.Index
+
+		ai := rc.GetApplyIndex()
+		if ai < index {
+			select {
+			case <-rc.applyWait.Wait(index):
+			case <-rc.stopping:
+				return
+			}
+		}
+		// unblock all l-reads requested at indices before rs.Index
+		nr.notify(nil)
 	}
 }
 
-func (rc *RaftInstance) processReadStates(readStates []raft.ReadState) {
-	for _, rs := range readStates {
-		index := binary.BigEndian.Uint64(rs.RequestCtx)
-		v, ok := rc.pendingReadMgr.dict[index]
-		if ok && v.timer.Stop() {
-			if rc.appliedIndex < rs.Index {
-				v.ridx = new(uint64)
-				*v.ridx = rs.Index
-			} else {
-				rc.commitC.AppendHighestPriotiryItem(v.reads)
-				delete(rc.pendingReadMgr.dict, v.id)
-				rc.pendingReadMgr.l.Remove(v.listE)
-			}
-		}
-	}
-}
+func (rc *RaftInstance) linearizableReadNotify() error {
 
-func (rc *RaftInstance) linearizableRead(batchRead []LinearizableRead) {
+	rc.readMu.RLock()
+	nc := rc.readNotifier
+	rc.readMu.RUnlock()
 
-	t := &pendingRead{
-		id:    rc.reqIDGen.Next(),
-		reads: batchRead,
+	// signal linearizable loop for current notify if it hasn't been already
+	select {
+	case rc.readwaitc <- struct{}{}:
+	default:
 	}
 
-	ctxToSend := make([]byte, 8)
-	binary.BigEndian.PutUint64(ctxToSend, t.id)
-
-	t.timer = time.AfterFunc(ReadTimeout, func() {
-		if nil != rc.pendingReadMgr.remove(t.id) {
-			for _, v := range batchRead {
-				v.OnError(ErrTimeout)
-			}
-		}
-	})
-
-	rc.pendingReadMgr.add(t)
-
-	if err := rc.node.ReadIndex(context.TODO(), ctxToSend); nil != err {
-		if nil != rc.pendingReadMgr.remove(t.id) && t.timer.Stop() {
-			for _, v := range batchRead {
-				v.OnError(err)
-			}
-		}
+	// wait for read state notification
+	select {
+	case <-nc.c:
+		return nc.err
+	case <-rc.stopping:
+		return ErrStopped
 	}
 }
 
 func (rc *RaftInstance) runReadPipeline() {
 	rc.waitStop.Add(1)
 	go func() {
-
 		defer rc.waitStop.Done()
-
 		localList := []interface{}{}
 		closed := false
 		for {
 			if localList, closed = rc.readPipeline.Pop(localList); closed {
 				return
 			}
-
+			err := rc.linearizableReadNotify()
 			batch := make([]LinearizableRead, 0, len(localList))
-
 			for k, vv := range localList {
 				batch = append(batch, vv.(LinearizableRead))
 				localList[k] = nil
 			}
 
-			rc.linearizableRead(batch)
+			go func() {
+				if nil == err {
+					rc.commitC.AppendHighestPriotiryItem(batch)
+				} else {
+					for _, v := range batch {
+						v.OnError(err)
+					}
+				}
+			}()
 		}
 	}()
 }

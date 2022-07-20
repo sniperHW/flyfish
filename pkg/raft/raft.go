@@ -1,7 +1,6 @@
 package raft
 
 import (
-	"container/list"
 	"context"
 	"encoding/json"
 	"errors"
@@ -81,39 +80,6 @@ func (this *pendingProposeMgr) onLeaderDownToFollower() {
 	this.Unlock()
 }
 
-type pendingRead struct {
-	id    uint64
-	reads []LinearizableRead
-	listE *list.Element
-	ridx  *uint64
-	timer *time.Timer
-}
-
-type pendingReadMgr struct {
-	sync.Mutex
-	l    *list.List
-	dict map[uint64]*pendingRead
-}
-
-func (this *pendingReadMgr) add(p *pendingRead) {
-	this.Lock()
-	defer this.Unlock()
-	p.listE = this.l.PushBack(p)
-	this.dict[p.id] = p
-}
-
-func (this *pendingReadMgr) remove(id uint64) *pendingRead {
-	this.Lock()
-	defer this.Unlock()
-	if p, ok := this.dict[id]; ok {
-		this.l.Remove(p.listE)
-		delete(this.dict, id)
-		return p
-	} else {
-		return nil
-	}
-}
-
 const (
 	defaultSnapshotCount           uint64 = 10000
 	defaultSnapshotCatchUpEntriesN uint64 = 5000
@@ -129,6 +95,23 @@ type RaftInstanceOption struct {
 	Logdir                  string
 	RaftLogPrefix           string
 	GetSnapshotData         func(uint64, uint64) ([]byte, error)
+	ReadTimeout             time.Duration
+}
+
+type notifier struct {
+	c   chan struct{}
+	err error
+}
+
+func newNotifier() *notifier {
+	return &notifier{
+		c: make(chan struct{}),
+	}
+}
+
+func (nc *notifier) notify(err error) {
+	nc.err = err
+	close(nc.c)
 }
 
 type RaftInstance struct {
@@ -157,14 +140,28 @@ type RaftInstance struct {
 	stopc             chan struct{} // signals proposal channel closed
 	stopping          chan struct{}
 	pendingProposeMgr pendingProposeMgr
-	pendingReadMgr    pendingReadMgr
 	mutilRaft         *MutilRaft
-	softState         raft.SoftState
-	mb                *membership.MemberShip
-	w                 wait.Wait
-	reqIDGen          *idutil.Generator
-	proposalSize      uint64 //自上次快照以来,proposal总的字节大小
-	option            RaftInstanceOption
+	//softState         raft.SoftState
+	mb           *membership.MemberShip
+	w            wait.Wait
+	reqIDGen     *idutil.Generator
+	proposalSize uint64 //自上次快照以来,proposal总的字节大小
+	option       RaftInstanceOption
+	applyWait    WaitTime
+
+	// leaderChanged is used to notify the linearizable read loop to drop the old read requests.
+	leaderChanged   chan struct{}
+	leaderChangedMu sync.RWMutex
+
+	readMu sync.RWMutex
+	// read routine notifies etcd server that it waits for reading by sending an empty struct to
+	// readwaitC
+	readwaitc chan struct{}
+	// readNotifier is used to notify the read routine that it can process the request
+	// when there is no error
+	readNotifier *notifier
+
+	readStateC chan raft.ReadState
 }
 
 func readWALNames(dirpath string) []string {
@@ -210,6 +207,12 @@ func searchIndex(names []string, index uint64) (int, bool) {
 		}
 	}
 	return -1, false
+}
+
+func (rc *RaftInstance) LeaderChangedNotify() <-chan struct{} {
+	rc.leaderChangedMu.RLock()
+	defer rc.leaderChangedMu.RUnlock()
+	return rc.leaderChanged
 }
 
 func (rc *RaftInstance) Snapshotting() bool {
@@ -307,8 +310,6 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 			reader := buffer.NewReader(e.Data)
 			index := reader.GetUint64()
 
-			GetSugar().Debugf("entrie %d", index)
-
 			committed = &Committed{
 				Data: e.Data[8:],
 			}
@@ -318,7 +319,6 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 			if rc.isLeader() {
 				if t := rc.pendingProposeMgr.remove(index); nil != t {
 					committed.Proposals = t.proposals
-					GetSugar().Debugf("entrie %d with Proposal", index)
 				}
 			}
 
@@ -412,6 +412,8 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 			rc.commitC.AppendHighestPriotiryItem(ReplayOK{})
 		}
 	}
+
+	rc.applyWait.Trigger(atomic.LoadUint64(&rc.appliedIndex))
 }
 
 func (rc *RaftInstance) processMessages(ms []raftpb.Message) []raftpb.Message {
@@ -450,6 +452,9 @@ func (rc *RaftInstance) processMessages(ms []raftpb.Message) []raftpb.Message {
 }
 
 func (rc *RaftInstance) serveChannels() {
+
+	internalTimeout := time.Second
+
 	snap, err := rc.raftStorage.Snapshot()
 	if err != nil {
 		panic(err)
@@ -470,6 +475,7 @@ func (rc *RaftInstance) serveChannels() {
 
 	rc.runProposePipeline()
 	rc.runReadPipeline()
+	go rc.linearizableReadLoop()
 
 	go func() {
 		rc.waitStop.Wait()
@@ -478,8 +484,6 @@ func (rc *RaftInstance) serveChannels() {
 	}()
 
 	// event loop on raft state machine updates
-
-	islead := false
 	for {
 		select {
 		case <-ticker.C:
@@ -488,24 +492,39 @@ func (rc *RaftInstance) serveChannels() {
 		// store raft entries to wal, then publish over commit channel
 		case rd := <-rc.node.Ready():
 			if rd.SoftState != nil {
-				if !(rc.softState.Lead == rd.SoftState.Lead && rc.softState.RaftState == rd.SoftState.RaftState) {
-					oldSoftState := rc.softState
-					rc.softState = *rd.SoftState
-					atomic.StoreUint64(&rc.lead, rc.softState.Lead)
-					if oldSoftState.RaftState == raft.StateLeader {
-						if rc.softState.RaftState != raft.StateLeader {
-							GetSugar().Infof("(%s) down to follower", types.ID(rc.id).String())
-							rc.pendingProposeMgr.onLeaderDownToFollower()
-						}
-					} else if rc.softState.RaftState == raft.StateLeader {
-						GetSugar().Infof("(%s) becomeLeader", types.ID(rc.id).String())
-					}
+				newLeader := rd.SoftState.Lead != raft.None && rc.lead != rd.SoftState.Lead
+				oldLead := rc.lead
 
-					if oldSoftState.Lead != rc.softState.Lead {
-						rc.commitC.AppendHighestPriotiryItem(LeaderChange{Leader: rc.softState.Lead})
-					}
+				if oldLead == rc.id && rd.SoftState.Lead != rc.id {
+					GetSugar().Infof("(%s) down to follower", types.ID(rc.id).String())
+					rc.pendingProposeMgr.onLeaderDownToFollower()
+				} else if rd.SoftState.Lead == rc.id && oldLead != rc.id {
+					GetSugar().Infof("(%s) becomeLeader", types.ID(rc.id).String())
+				}
 
-					islead = rd.RaftState == raft.StateLeader
+				if oldLead != rd.SoftState.Lead {
+					atomic.StoreUint64(&rc.lead, rd.SoftState.Lead)
+					rc.commitC.AppendHighestPriotiryItem(LeaderChange{Leader: rd.SoftState.Lead})
+				}
+
+				if newLeader {
+					rc.leaderChangedMu.Lock()
+					lc := rc.leaderChanged
+					rc.leaderChanged = make(chan struct{})
+					close(lc)
+					rc.leaderChangedMu.Unlock()
+				}
+
+				islead = rd.RaftState == raft.StateLeader
+			}
+
+			//islead := rc.id == rc.lead
+
+			if len(rd.ReadStates) != 0 {
+				select {
+				case rc.readStateC <- rd.ReadStates[len(rd.ReadStates)-1]:
+				case <-time.After(internalTimeout):
+					GetSugar().Warnf("timed out sending read state")
 				}
 			}
 
@@ -531,18 +550,11 @@ func (rc *RaftInstance) serveChannels() {
 
 			rc.raftStorage.Append(rd.Entries)
 
+			rc.publishEntries(rc.entriesToApply(rd.CommittedEntries))
+
 			if !islead {
 				rc.transport.Send(rc.processMessages(rd.Messages))
 			}
-
-			rc.publishEntries(rc.entriesToApply(rd.CommittedEntries))
-
-			rc.pendingReadMgr.Lock()
-			if len(rd.ReadStates) != 0 {
-				rc.processReadStates(rd.ReadStates)
-			}
-			rc.checkLinearizableRead()
-			rc.pendingReadMgr.Unlock()
 
 			rc.node.Advance()
 
@@ -937,8 +949,12 @@ func NewInstance(processID uint16, cluster int, join bool, mutilRaft *MutilRaft,
 		option.SnapshotBytes = defaultSnapshotBytes
 	}
 
-	if option.MaxBatchCount == 0 {
+	if option.MaxBatchCount <= 0 {
 		option.MaxBatchCount = defaultMaxBatchCount
+	}
+
+	if option.ReadTimeout <= 0 {
+		option.ReadTimeout = time.Second * 2
 	}
 
 	rc := &RaftInstance{
@@ -953,15 +969,16 @@ func NewInstance(processID uint16, cluster int, join bool, mutilRaft *MutilRaft,
 		pendingProposeMgr: pendingProposeMgr{
 			dict: map[uint64]*pendingPropose{},
 		},
-		pendingReadMgr: pendingReadMgr{
-			l:    list.New(),
-			dict: map[uint64]*pendingRead{},
-		},
 		mutilRaft:       mutilRaft,
-		proposePipeline: queue.NewArrayQueue(10000),
-		readPipeline:    queue.NewArrayQueue(10000),
+		proposePipeline: queue.NewArrayQueue(1024),
+		readPipeline:    queue.NewArrayQueue(1024),
 		w:               wait.New(),
 		reqIDGen:        idutil.NewGenerator(processID, time.Now()),
+		applyWait:       NewTimeList(),
+		readwaitc:       make(chan struct{}, 1),
+		readNotifier:    newNotifier(),
+		leaderChanged:   make(chan struct{}),
+		readStateC:      make(chan raft.ReadState, 1),
 	}
 
 	rloger := raftLogger{

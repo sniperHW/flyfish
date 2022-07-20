@@ -560,7 +560,6 @@ func TestSingleNode(t *testing.T) {
 		node.store.Set("sniperHW", "sniperHW")
 		r, _ := node.store.Get("sniperHW")
 		assert.Equal(t, r, "sniperHW")
-
 		time.Sleep(time.Second)
 
 		node.stop()

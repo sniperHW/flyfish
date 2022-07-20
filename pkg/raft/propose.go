@@ -163,13 +163,10 @@ func (rc *RaftInstance) runProposePipeline() {
 		localList := []interface{}{}
 		var closed bool
 		for {
-
 			if localList, closed = rc.proposePipeline.Pop(localList); closed {
 				return
 			}
-
 			for {
-
 				var batch []Proposal
 				if len(localList) <= rc.option.MaxBatchCount {
 					batch = make([]Proposal, 0, len(localList))

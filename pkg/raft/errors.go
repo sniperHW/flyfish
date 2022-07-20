@@ -15,6 +15,7 @@ var (
 	ErrProposalDropped       = errors.New("raft proposal dropped")
 	ErrTimeoutLeaderTransfer = errors.New("request timed out, leader transfer took too long")
 	ErrBadLeaderTransferee   = errors.New("bad leader transferee")
+	ErrLeaderChange          = errors.New("leader change")
 
 	//ErrUnknownMethod              = errors.New("flyfish: unknown method")
 	//ErrCanceled                   = errors.New("flyfish: request cancelled")
