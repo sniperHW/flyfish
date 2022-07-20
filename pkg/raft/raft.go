@@ -483,6 +483,8 @@ func (rc *RaftInstance) serveChannels() {
 		close(rc.stopc)
 	}()
 
+	islead := false
+
 	// event loop on raft state machine updates
 	for {
 		select {
