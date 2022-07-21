@@ -3,7 +3,7 @@ package raft
 import (
 	"context"
 	"encoding/json"
-	"errors"
+	//"errors"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
@@ -179,16 +179,16 @@ func (rc *RaftInstance) runProposePipeline() {
 					batch = append(batch, vv.(Proposal))
 					localList[k] = nil
 					if len(batch) == cap(batch) {
-						if !rc.isLeader() {
-							for _, v := range batch {
-								v.OnError(errors.New("not leader"))
-							}
-						} else {
-							rc.propose(batch)
-							if k != len(localList)-1 {
-								batch = make([]Proposal, 0, len(localList)-1-k)
-							}
+						//if !rc.isLeader() {
+						//	for _, v := range batch {
+						//		v.OnError(errors.New("not leader"))
+						//	}
+						//} else {
+						rc.propose(batch)
+						if k != len(localList)-1 {
+							batch = make([]Proposal, 0, len(localList)-1-k)
 						}
+						//}
 					}
 				}
 
