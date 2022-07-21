@@ -84,6 +84,7 @@ func (p *pd) onKvnodeBoot(replyer replyer, m *snet.Message) {
 		ServicePort: int32(node.ServicePort),
 		RaftPort:    int32(node.RaftPort),
 		Meta:        p.DbMetaMgr.dbMetaBytes,
+		Join:        node.Join,
 	}
 
 	for storeId, st := range node.Store {

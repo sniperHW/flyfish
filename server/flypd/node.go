@@ -116,6 +116,7 @@ func (p *ProposalAddNode) apply(pd *pd) {
 			ServicePort: int(p.Msg.ServicePort),
 			RaftPort:    int(p.Msg.RaftPort),
 			Store:       map[int]*NodeStoreState{},
+			Join:        true,
 		}
 
 		for i := 0; i < StorePerSet; i++ {

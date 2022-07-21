@@ -195,6 +195,7 @@ message kvnodeBootResp {
   optional int32  raftPort     = 6;   
   repeated storeInfo stores    = 7;
   optional bytes  meta         = 8;
+  optional bool   join         = 9;
 }
 
 message flySqlHeartBeat {

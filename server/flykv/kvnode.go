@@ -77,12 +77,12 @@ type kvnode struct {
 	mutilRaft            *raft.MutilRaft
 	closed               int32
 	udpConn              *fnet.Udp
-	join                 bool
 	pdAddr               []*net.UDPAddr
 	writeBackMode        writeBackMode
 	totalPendingReq      int64
 	scannerCount         int32
 	SoftLimitReachedTime int64
+	join                 bool
 }
 
 func (this *kvnode) makeReplyer(session *fnet.Socket, req *cs.ReqMessage, checklimit bool) *replyer {
@@ -394,6 +394,7 @@ func (this *kvnode) start() error {
 	}
 
 	this.setID = int(resp.SetID)
+	this.join = resp.Join
 
 	if dbdef, err = db.MakeDbDefFromJsonString(resp.Meta); nil != err {
 		GetSugar().Errorf("CreateDbDefFromJsonString err:%v", err)
@@ -504,7 +505,7 @@ func (this *kvnode) reportStatus() {
 
 }
 
-func NewKvNode(id uint16, join bool, config *Config, db dbI) (*kvnode, error) {
+func NewKvNode(id uint16, config *Config, db dbI) (*kvnode, error) {
 	if config.ReqLimit.SoftLimit <= 0 {
 		config.ReqLimit.SoftLimit = 100000
 	}
@@ -528,7 +529,6 @@ func NewKvNode(id uint16, join bool, config *Config, db dbI) (*kvnode, error) {
 		stores:    map[int]*kvstore{},
 		db:        db,
 		config:    config,
-		join:      join,
 	}
 
 	if config.WriteBackMode == "WriteThrough" {

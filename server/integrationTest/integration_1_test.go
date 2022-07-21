@@ -424,13 +424,13 @@ func TestFlygate(t *testing.T) {
 		panic(err)
 	}
 
-	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+	node1, err := flykv.NewKvNode(1, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
 	}
 
-	node2, err := flykv.NewKvNode(2, false, kvConf, flykv.NewSqlDB())
+	node2, err := flykv.NewKvNode(2, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
@@ -479,7 +479,7 @@ func TestFlygate(t *testing.T) {
 		RaftPort:    9321,
 	}, &sproto.AddNodeResp{})
 
-	node3, err := flykv.NewKvNode(3, true, kvConf, flykv.NewSqlDB())
+	node3, err := flykv.NewKvNode(3, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
@@ -553,13 +553,13 @@ func TestFlygate(t *testing.T) {
 	node2.Stop()
 
 	//start again
-	node1, err = flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+	node1, err = flykv.NewKvNode(1, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
 	}
 
-	node2, err = flykv.NewKvNode(2, false, kvConf, flykv.NewSqlDB())
+	node2, err = flykv.NewKvNode(2, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
@@ -738,13 +738,13 @@ func TestFlykv(t *testing.T) {
 		panic(err)
 	}
 
-	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+	node1, err := flykv.NewKvNode(1, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
 	}
 
-	node2, err := flykv.NewKvNode(2, false, kvConf, flykv.NewSqlDB())
+	node2, err := flykv.NewKvNode(2, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
@@ -782,7 +782,7 @@ func TestFlykv(t *testing.T) {
 		RaftPort:    9321,
 	}, &sproto.AddNodeResp{})
 
-	node3, err := flykv.NewKvNode(3, true, kvConf, flykv.NewSqlDB())
+	node3, err := flykv.NewKvNode(3, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
@@ -856,13 +856,13 @@ func TestFlykv(t *testing.T) {
 	node2.Stop()
 
 	//start again
-	node1, err = flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+	node1, err = flykv.NewKvNode(1, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
 	}
 
-	node2, err = flykv.NewKvNode(2, false, kvConf, flykv.NewSqlDB())
+	node2, err = flykv.NewKvNode(2, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
@@ -976,7 +976,7 @@ func TestAddRemoveNode1(t *testing.T) {
 
 	logger.GetSugar().Infof("start node1")
 
-	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+	node1, err := flykv.NewKvNode(1, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
@@ -984,7 +984,7 @@ func TestAddRemoveNode1(t *testing.T) {
 
 	logger.GetSugar().Infof("start node2")
 
-	node3, err := flykv.NewKvNode(3, true, kvConf, flykv.NewSqlDB())
+	node3, err := flykv.NewKvNode(3, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
@@ -1066,7 +1066,7 @@ func TestAddRemoveNode2(t *testing.T) {
 
 	logger.GetSugar().Infof("start node1")
 
-	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+	node1, err := flykv.NewKvNode(1, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
@@ -1074,7 +1074,7 @@ func TestAddRemoveNode2(t *testing.T) {
 
 	logger.GetSugar().Infof("start node2")
 
-	node3, err := flykv.NewKvNode(3, true, kvConf, flykv.NewSqlDB())
+	node3, err := flykv.NewKvNode(3, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
@@ -1183,19 +1183,19 @@ func TestAddSet(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 
-	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+	node1, err := flykv.NewKvNode(1, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
 	}
 
-	node2, err := flykv.NewKvNode(2, false, kvConf, flykv.NewSqlDB())
+	node2, err := flykv.NewKvNode(2, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
 	}
 
-	node3, err := flykv.NewKvNode(3, false, kvConf, flykv.NewSqlDB())
+	node3, err := flykv.NewKvNode(3, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
@@ -1354,7 +1354,7 @@ func testAddSet2(t *testing.T, clientType client.ClientType) {
 		time.Sleep(time.Second * 2)
 	}
 
-	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+	node1, err := flykv.NewKvNode(1, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
@@ -1400,7 +1400,7 @@ func testAddSet2(t *testing.T, clientType client.ClientType) {
 		fmt.Println("client break here")
 	}()
 
-	node2, err := flykv.NewKvNode(2, false, kvConf, flykv.NewSqlDB())
+	node2, err := flykv.NewKvNode(2, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
@@ -1634,7 +1634,7 @@ func testBatch(t *testing.T, clientType client.ClientType) {
 	kvConf.SnapshotCount = 10000
 	kvConf.SnapshotCatchUpEntriesN = 5000
 
-	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+	node1, err := flykv.NewKvNode(1, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
@@ -1749,7 +1749,7 @@ func testStoreBalance(t *testing.T, clientType client.ClientType) {
 
 	pd, _ := newPD(t, 0, "./deployment2.json")
 
-	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+	node1, err := flykv.NewKvNode(1, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
@@ -1811,7 +1811,7 @@ func testStoreBalance(t *testing.T, clientType client.ClientType) {
 		time.Sleep(time.Second)
 	}
 
-	node2, err := flykv.NewKvNode(2, true, kvConf, flykv.NewSqlDB())
+	node2, err := flykv.NewKvNode(2, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
@@ -1836,7 +1836,7 @@ func testStoreBalance(t *testing.T, clientType client.ClientType) {
 		time.Sleep(time.Second)
 	}
 
-	node3, err := flykv.NewKvNode(3, true, kvConf, flykv.NewSqlDB())
+	node3, err := flykv.NewKvNode(3, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
@@ -1910,7 +1910,7 @@ func TestSuspendResume(t *testing.T) {
 
 	pd, _ := newPD(t, 0, "./deployment2.json")
 
-	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+	node1, err := flykv.NewKvNode(1, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
@@ -1938,7 +1938,7 @@ func TestSuspendResume(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 
-	node2, err := flykv.NewKvNode(2, true, kvConf, flykv.NewSqlDB())
+	node2, err := flykv.NewKvNode(2, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
@@ -2055,13 +2055,13 @@ func TestSuspendResume(t *testing.T) {
 	node1.Stop()
 	node2.Stop()
 
-	node1, err = flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+	node1, err = flykv.NewKvNode(1, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
 	}
 
-	node2, err = flykv.NewKvNode(2, false, kvConf, flykv.NewSqlDB())
+	node2, err = flykv.NewKvNode(2, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
@@ -2110,13 +2110,13 @@ func testScan(t *testing.T, clientType client.ClientType) {
 
 	pd, _ := newPD(t, 0)
 
-	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+	node1, err := flykv.NewKvNode(1, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
 	}
 
-	node2, err := flykv.NewKvNode(2, false, kvConf, flykv.NewSqlDB())
+	node2, err := flykv.NewKvNode(2, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
@@ -2189,13 +2189,13 @@ func testScan(t *testing.T, clientType client.ClientType) {
 
 	os.RemoveAll("./testRaftLog/flykv")
 
-	node1, err = flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+	node1, err = flykv.NewKvNode(1, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
 	}
 
-	node2, err = flykv.NewKvNode(2, false, kvConf, flykv.NewSqlDB())
+	node2, err = flykv.NewKvNode(2, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
@@ -2266,7 +2266,7 @@ func TestMeta(t *testing.T) {
 
 	pd, pdRaftID := newPD(t, 0, "./deployment2.json")
 
-	node1, err := flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+	node1, err := flykv.NewKvNode(1, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)
@@ -2383,7 +2383,7 @@ func TestMeta(t *testing.T) {
 
 	pd, _ = newPD(t, pdRaftID)
 
-	node1, err = flykv.NewKvNode(1, false, kvConf, flykv.NewSqlDB())
+	node1, err = flykv.NewKvNode(1, kvConf, flykv.NewSqlDB())
 
 	if nil != err {
 		panic(err)

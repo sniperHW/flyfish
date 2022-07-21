@@ -65,6 +65,7 @@ type KvNode struct {
 	ServicePort int
 	RaftPort    int
 	Store       map[int]*NodeStoreState
+	Join        bool //后添加的节点
 }
 
 func (n *KvNode) isLearner(store int) bool {
