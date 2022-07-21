@@ -130,7 +130,7 @@ func (this *RespEncoder) EnCode(o interface{}, buff *buffer.Buffer) error {
 
 	if nil != m.Data {
 		if pbbytes, cmd, err = this.pbSpace.Marshal(m.Data); err != nil {
-			return nil
+			return err
 		}
 	}
 

@@ -316,10 +316,8 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 
 			rc.proposalSize += uint64(len(committed.Data))
 
-			if rc.isLeader() {
-				if t := rc.pendingProposeMgr.remove(index); nil != t {
-					committed.Proposals = t.proposals
-				}
+			if t := rc.pendingProposeMgr.remove(index); nil != t {
+				committed.Proposals = t.proposals
 			}
 
 		case raftpb.EntryConfChange:

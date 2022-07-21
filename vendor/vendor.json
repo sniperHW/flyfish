@@ -391,36 +391,6 @@
 			"revision": ""
 		},
 		{
-			"checksumSHA1": "FaaMFr6zOY2icsh6UYPyXzPQffE=",
-			"path": "go.uber.org/zap",
-			"revision": ""
-		},
-		{
-			"checksumSHA1": "eC/XVln77aRfE/VocbN0NWdlRdg=",
-			"path": "go.uber.org/zap/buffer",
-			"revision": ""
-		},
-		{
-			"checksumSHA1": "MuxOAtZEsJitlWBzhmpm2vGiHok=",
-			"path": "go.uber.org/zap/internal/bufferpool",
-			"revision": ""
-		},
-		{
-			"checksumSHA1": "uC0L9eCSAYcCWNC8udJk/t1vvIU=",
-			"path": "go.uber.org/zap/internal/color",
-			"revision": ""
-		},
-		{
-			"checksumSHA1": "b80CJExrVpXu3SA1iCQ6uLqTn2c=",
-			"path": "go.uber.org/zap/internal/exit",
-			"revision": ""
-		},
-		{
-			"checksumSHA1": "XYqOwXtEzGU1vN7VEMRttpROO+s=",
-			"path": "go.uber.org/zap/zapcore",
-			"revision": ""
-		},
-		{
 			"checksumSHA1": "GtamqiJoL7PGHsN454AoffBFMa8=",
 			"origin": "go.etcd.io/etcd/vendor/golang.org/x/net/context",
 			"path": "golang.org/x/net/context",

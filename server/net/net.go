@@ -32,7 +32,7 @@ var compressSize = 4096
 
 var defaultKey []byte = []byte("feiyu_tech_2021")
 
-func unpack(from *net.UDPAddr, key []byte, b []byte) (msg interface{}, err error) {
+func unpack(key []byte, b []byte) (msg interface{}, err error) {
 	if len(b) < 2 {
 		err = errors.New("invaild packet")
 		return
@@ -81,11 +81,11 @@ func unpack(from *net.UDPAddr, key []byte, b []byte) (msg interface{}, err error
 	return
 }
 
-func Unpack(from *net.UDPAddr, b []byte) (msg interface{}, err error) {
-	return unpack(from, defaultKey, b)
+func Unpack(b []byte) (msg interface{}, err error) {
+	return unpack(defaultKey, b)
 }
 
-func pack(conn *net.UDPConn, key []byte, m interface{}) ([]byte, error) {
+func pack(key []byte, m interface{}) ([]byte, error) {
 	msg := &sproto.UdpMsg{}
 	if _, ok := m.(*Message); ok {
 		msg.Context = m.(*Message).Context
@@ -134,8 +134,8 @@ func pack(conn *net.UDPConn, key []byte, m interface{}) ([]byte, error) {
 	}
 }
 
-func Pack(conn *net.UDPConn, m interface{}) ([]byte, error) {
-	return pack(conn, defaultKey, m)
+func Pack(m interface{}) ([]byte, error) {
+	return pack(defaultKey, m)
 }
 
 var udpPool *sync.Pool = &sync.Pool{
