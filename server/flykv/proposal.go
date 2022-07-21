@@ -351,7 +351,6 @@ func (this *kvLinearizableRead) OnError(err error) {
 	GetSugar().Errorf("kvLinearizableRead OnError:%v", err)
 	this.reply(errcode.New(errcode.Errcode_error, err.Error()), nil, this.kv.version)
 	this.kv.store.mainQueue.AppendHighestPriotiryItem(func() {
-		this.kv.clearCmds(errcode.New(errcode.Errcode_error, err.Error()))
 		this.kv.processCmd()
 	})
 }
