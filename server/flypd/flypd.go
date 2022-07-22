@@ -226,7 +226,7 @@ func (p *pd) onMsg(replyer replyer, msg *snet.Message) {
 }
 
 func (p *pd) onBecomeLeader() {
-	p.issueProposal(&ProposalNop{})
+	p.issueProposal(&ProposalNop{pd: p})
 }
 
 func (p *pd) storeBalance() {

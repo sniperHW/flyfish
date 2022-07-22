@@ -10,6 +10,7 @@ const (
 	ReleaseDelayAfterSnapshot       = 30 * time.Second
 	ReadyPercent                    = 0.95
 	HealthInterval                  = 5 * time.Second
+	ProposeTimeout                  = 5 * time.Second
 )
 
 var (

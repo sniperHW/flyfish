@@ -53,10 +53,14 @@ func serilizeProposal(b []byte, tt int, p interface{}) []byte {
 
 type ProposalNop struct {
 	proposalBase
+	pd *pd
 }
 
 func (this *ProposalNop) OnError(err error) {
 	GetSugar().Errorf("proposalNop error:%v", err)
+	if this.pd.isLeader() {
+		this.pd.issueProposal(&ProposalNop{pd: this.pd})
+	}
 }
 
 func (this *ProposalNop) Serilize(b []byte) []byte {

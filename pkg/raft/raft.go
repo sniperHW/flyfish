@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"container/list"
 	"context"
 	"encoding/json"
 	"errors"
@@ -43,19 +44,23 @@ type ApplicationQueue interface {
 }
 
 type pendingPropose struct {
-	id        uint64
-	proposals []Proposal
+	id          uint64
+	proposals   []Proposal
+	deadline    time.Time
+	listElement *list.Element
 }
 
 type pendingProposeMgr struct {
 	sync.Mutex
 	dict map[uint64]*pendingPropose
+	l    *list.List
 }
 
 func (this *pendingProposeMgr) add(p *pendingPropose) {
 	this.Lock()
 	defer this.Unlock()
 	this.dict[p.id] = p
+	p.listElement = this.l.PushBack(p)
 }
 
 func (this *pendingProposeMgr) remove(id uint64) *pendingPropose {
@@ -63,21 +68,31 @@ func (this *pendingProposeMgr) remove(id uint64) *pendingPropose {
 	defer this.Unlock()
 	if p, ok := this.dict[id]; ok {
 		delete(this.dict, id)
+		this.l.Remove(p.listElement)
 		return p
 	} else {
 		return nil
 	}
 }
 
-func (this *pendingProposeMgr) onLeaderDownToFollower() {
+func (this *pendingProposeMgr) checkTimeout(now time.Time) {
+	var timeouts []*pendingPropose
 	this.Lock()
-	for _, v := range this.dict {
-		delete(this.dict, v.id)
-		for _, vv := range v.proposals {
-			vv.OnError(ErrLeaderDownToFollower)
+	for front := this.l.Front(); nil != front; front = this.l.Front() {
+		if now.Before(front.Value.(*pendingPropose).deadline) {
+			break
+		} else {
+			e := this.l.Remove(front).(*pendingPropose)
+			delete(this.dict, e.id)
+			timeouts = append(timeouts, e)
 		}
 	}
 	this.Unlock()
+	for _, v := range timeouts {
+		for _, vv := range v.proposals {
+			vv.OnError(ErrTimeout)
+		}
+	}
 }
 
 const (
@@ -141,13 +156,12 @@ type RaftInstance struct {
 	stopping          chan struct{}
 	pendingProposeMgr pendingProposeMgr
 	mutilRaft         *MutilRaft
-	//softState         raft.SoftState
-	mb           *membership.MemberShip
-	w            wait.Wait
-	reqIDGen     *idutil.Generator
-	proposalSize uint64 //自上次快照以来,proposal总的字节大小
-	option       RaftInstanceOption
-	applyWait    WaitTime
+	mb                *membership.MemberShip
+	w                 wait.Wait
+	reqIDGen          *idutil.Generator
+	proposalSize      uint64 //自上次快照以来,proposal总的字节大小
+	option            RaftInstanceOption
+	applyWait         WaitTime
 
 	// leaderChanged is used to notify the linearizable read loop to drop the old read requests.
 	leaderChanged   chan struct{}
@@ -488,7 +502,7 @@ func (rc *RaftInstance) serveChannels() {
 		select {
 		case <-ticker.C:
 			rc.node.Tick()
-
+			rc.pendingProposeMgr.checkTimeout(time.Now())
 		// store raft entries to wal, then publish over commit channel
 		case rd := <-rc.node.Ready():
 			if rd.SoftState != nil {
@@ -497,7 +511,6 @@ func (rc *RaftInstance) serveChannels() {
 
 				if oldLead == rc.id && rd.SoftState.Lead != rc.id {
 					GetSugar().Infof("(%s) down to follower", types.ID(rc.id).String())
-					rc.pendingProposeMgr.onLeaderDownToFollower()
 				} else if rd.SoftState.Lead == rc.id && oldLead != rc.id {
 					GetSugar().Infof("(%s) becomeLeader", types.ID(rc.id).String())
 				}
@@ -968,6 +981,7 @@ func NewInstance(processID uint16, cluster int, join bool, mutilRaft *MutilRaft,
 		snapshotCh: make(chan interface{}, 1),
 		pendingProposeMgr: pendingProposeMgr{
 			dict: map[uint64]*pendingPropose{},
+			l:    list.New(),
 		},
 		mutilRaft:       mutilRaft,
 		proposePipeline: queue.NewArrayQueue(1024),

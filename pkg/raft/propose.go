@@ -3,7 +3,6 @@ package raft
 import (
 	"context"
 	"encoding/json"
-	//"errors"
 	"github.com/sniperHW/flyfish/pkg/buffer"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft"
 	"github.com/sniperHW/flyfish/pkg/etcd/raft/raftpb"
@@ -122,11 +121,6 @@ func releaseProposeBuff(b []byte) {
 }
 
 func (rc *RaftInstance) propose(batchProposal []Proposal) {
-	t := &pendingPropose{
-		id:        rc.reqIDGen.Next(),
-		proposals: batchProposal,
-	}
-
 	buff := getProposeBuff()
 
 	for _, v := range batchProposal {
@@ -134,6 +128,12 @@ func (rc *RaftInstance) propose(batchProposal []Proposal) {
 	}
 
 	buff = batchProposal[len(batchProposal)-1].OnMergeFinish(buff)
+
+	t := &pendingPropose{
+		id:        rc.reqIDGen.Next(),
+		proposals: batchProposal,
+		deadline:  time.Now().Add(ProposeTimeout),
+	}
 
 	b := make([]byte, 0, len(buff)+8)
 	b = buffer.AppendUint64(b, t.id)

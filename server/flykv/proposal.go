@@ -426,6 +426,9 @@ type proposalNop struct {
 
 func (this *proposalNop) OnError(err error) {
 	GetSugar().Errorf("proposalNop error:%v", err)
+	if this.store.isLeader() {
+		this.store.rn.IssueProposal(&proposalNop{store: this.store})
+	}
 }
 
 func (this *proposalNop) Serilize(b []byte) []byte {

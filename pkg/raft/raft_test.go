@@ -598,7 +598,6 @@ func TestSingleNode(t *testing.T) {
 	}
 
 	{
-
 		//start again
 		startOkCh := make(chan struct{})
 
