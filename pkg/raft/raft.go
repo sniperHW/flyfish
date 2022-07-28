@@ -355,10 +355,10 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 				case raftpb.ConfChangeAddNode, raftpb.ConfChangeAddLearnerNode:
 					if !pc.IsPromote {
 						m := membership.Member{
-							ID:         types.ID(cc.NodeID),
-							PeerURLs:   []string{pc.Url},
-							ClientURLs: []string{pc.ClientUrl},
-							ProcessID:  pc.ProcessID,
+							ID:        types.ID(cc.NodeID),
+							PeerURL:   pc.Url,
+							ClientURL: pc.ClientUrl,
+							ProcessID: pc.ProcessID,
 						}
 
 						if cc.Type == raftpb.ConfChangeAddNode {
@@ -390,7 +390,7 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 						rc.transport.RemovePeer(types.ID(cc.NodeID))
 						rc.transport.AddPeer(types.ID(cc.NodeID), []string{pc.Url})
 					}
-					rc.mb.UpdateURL(types.ID(cc.NodeID), []string{pc.Url}, []string{pc.ClientUrl})
+					rc.mb.UpdateURL(types.ID(cc.NodeID), pc.Url, pc.ClientUrl)
 				}
 
 				rc.commitC.AppendHighestPriotiryItem(ConfChange{
@@ -768,9 +768,9 @@ func (rc *RaftInstance) GetRaftCluster() string {
 	var tmp []string
 	for _, v := range rc.mb.Members() {
 		if v.IsLearner {
-			tmp = append(tmp, fmt.Sprintf("%d@%d@%s@%s@learner", v.ProcessID, uint64(v.ID), v.PeerURLs[0], v.ClientURLs[0]))
+			tmp = append(tmp, fmt.Sprintf("%d@%d@%s@%s@learner", v.ProcessID, uint64(v.ID), v.PeerURL, v.ClientURL))
 		} else {
-			tmp = append(tmp, fmt.Sprintf("%d@%d@%s@%s@voter", v.ProcessID, uint64(v.ID), v.PeerURLs[0], v.ClientURLs[0]))
+			tmp = append(tmp, fmt.Sprintf("%d@%d@%s@%s@voter", v.ProcessID, uint64(v.ID), v.PeerURL, v.ClientURL))
 		}
 	}
 
@@ -896,12 +896,26 @@ func (rc *RaftInstance) Members() (membs []Member) {
 		membs = append(membs, Member{
 			ProcessID: v.ProcessID,
 			ID:        uint64(v.ID),
-			URL:       v.PeerURLs[0],
-			ClientURL: v.ClientURLs[0],
+			URL:       v.PeerURL,
+			ClientURL: v.ClientURL,
 			IsLearner: v.IsLearner,
 		})
 	}
 	return
+}
+
+/*
+ * 强制变更URL
+ * 在某些情况下一个副本所在机器无法启动，导致raft无法工作(例如双voter，因为一个voter挂了，confchange也无法执行)
+ * 可以将副本拷贝到另外的机器用新的URL重启副本，此时需要强制修改URL让正常的副本可以跟恢复的副本通信,之后再走confchange永久变更重启副本的地址
+ */
+func (rc *RaftInstance) ModifyMemberPeer(id uint64, RaftURL string) bool {
+	if types.ID(rc.id) != types.ID(id) && rc.mb.IsMemberExist(types.ID(id)) {
+		rc.transport.RemovePeer(types.ID(id))
+		rc.transport.AddPeer(types.ID(id), []string{RaftURL})
+		return true
+	}
+	return false
 }
 
 type Member struct {
@@ -1093,7 +1107,7 @@ func NewInstance(processID uint16, cluster int, join bool, mutilRaft *MutilRaft,
 	} else {
 		for _, v := range mb {
 			if uint64(v.ID) != rc.id {
-				rc.transport.AddPeer(types.ID(v.ID), v.PeerURLs)
+				rc.transport.AddPeer(types.ID(v.ID), []string{v.PeerURL})
 			}
 		}
 	}

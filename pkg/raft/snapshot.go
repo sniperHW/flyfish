@@ -218,7 +218,7 @@ func (rc *RaftInstance) publishSnapshot(snap raftpb.Snapshot) {
 
 	for _, v := range rc.mb.Members() {
 		if uint64(v.ID) != rc.id {
-			rc.transport.AddPeer(types.ID(v.ID), v.PeerURLs)
+			rc.transport.AddPeer(types.ID(v.ID), []string{v.PeerURL})
 		}
 	}
 	// trigger kvstore to load snapshot
@@ -252,16 +252,6 @@ func newSnapshotReaderCloser(data []byte) io.ReadCloser {
 }
 
 func (rc *RaftInstance) sendSnapshot(m raftpb.Message) error {
-	/*var data []byte
-	if nil != rc.option.GetSnapshotData {
-		var err error
-		if data, err = rc.getSnapshotData(m.Snapshot.Metadata.Term, m.Snapshot.Metadata.Index, m.Snapshot.Data); nil != err {
-			return err
-		}
-	} else {
-		data = make([]byte, len(m.Snapshot.Data))
-		copy(data, m.Snapshot.Data)
-	}*/
 	data, err := rc.getSnapshotData(m.Snapshot.Metadata.Term, m.Snapshot.Metadata.Index, m.Snapshot.Data)
 	if nil != err {
 		return err

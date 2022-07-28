@@ -635,7 +635,7 @@ func TestSingleNode(t *testing.T) {
 
 }
 
-func TestUpdateUrl(t *testing.T) {
+func TestUpdateUrl1(t *testing.T) {
 	os.RemoveAll("./log")
 	SnapshotCount = 100
 	SnapshotCatchUpEntriesN = 100
@@ -704,6 +704,100 @@ func TestUpdateUrl(t *testing.T) {
 
 	node1.stop()
 
+}
+
+func TestUpdateUrl2(t *testing.T) {
+	os.RemoveAll("./log")
+	SnapshotCount = 100
+	SnapshotCatchUpEntriesN = 100
+	raftID1 := RaftIDGen.Next()
+
+	cluster := fmt.Sprintf("1@%d@http://127.0.0.1:22378@http://127.0.0.1:22378@", raftID1)
+
+	var node1 *kvnode
+
+	node1 = newKvNode(1, 1, false, cluster, nil, func() {})
+
+	node1.store.Set("sniperHW:1", "sniperHW:1")
+
+	node1.stop()
+
+	//使用新的服务地址重启副本
+	cluster = fmt.Sprintf("1@%d@http://127.0.0.1:22379@http://127.0.0.1:22379@", raftID1)
+
+	node1 = newKvNode(1, 1, false, cluster, nil, func() {})
+
+	node1.stop()
+}
+
+func TestUpdateUrl3(t *testing.T) {
+	os.RemoveAll("./log")
+	SnapshotCount = 100
+	SnapshotCatchUpEntriesN = 100
+	raftID1 := RaftIDGen.Next()
+	raftID2 := RaftIDGen.Next()
+
+	cluster := fmt.Sprintf("1@%d@http://127.0.0.1:22378@http://127.0.0.1:22378@", raftID1)
+
+	var node1 *kvnode
+
+	node1 = newKvNode(1, 1, false, cluster, nil, func() {})
+
+	var err error
+
+	for {
+		err = node1.store.AddLearner(2, raftID2, "http://127.0.0.1:22379")
+		if nil == err {
+			break
+		} else {
+			time.Sleep(time.Second)
+		}
+	}
+
+	fmt.Println("AddLearner ok")
+
+	//启动learner
+
+	var node2 *kvnode
+
+	cluster = fmt.Sprintf("1@%d@http://127.0.0.1:22378@http://127.0.0.1:22378@,2@%d@http://127.0.0.1:22379@http://127.0.0.1:22379@", raftID1, raftID2)
+
+	node2 = newKvNode(2, 1, true, cluster, nil, func() {})
+
+	fmt.Println("promote")
+
+	GetSugar().Info("startOkCh4")
+
+	for nil != node1.rn.IsLearnerReady(raftID2) {
+		fmt.Println("wait for learner ready")
+		time.Sleep(time.Second)
+	}
+
+	err = node1.store.PromoteLearner(raftID2)
+	assert.Nil(t, err)
+
+	node2.stop()
+
+	//在新地址启动
+	cluster = fmt.Sprintf("1@%d@http://127.0.0.1:22378@http://127.0.0.1:22378@,2@%d@http://127.0.0.1:22380@http://127.0.0.1:22380@", raftID1, raftID2)
+
+	node2 = newKvNode(2, 1, false, cluster, nil, func() {})
+
+	//临时变更连接地址，使得集群恢复正常
+	node1.rn.ModifyMemberPeer(raftID1, "http://127.0.0.1:22380")
+
+	//通过confchange永久变更成员url
+	for {
+		err = node1.store.UpdateURL(raftID2, "http://127.0.0.1:22380")
+		if nil == err {
+			break
+		} else {
+			time.Sleep(time.Second)
+		}
+	}
+
+	node1.stop()
+	node2.stop()
 }
 
 func TestCluster(t *testing.T) {

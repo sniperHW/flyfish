@@ -5,28 +5,28 @@ import (
 )
 
 type Member struct {
-	ID         types.ID `json:"id"`
-	ProcessID  uint16   `json:"ProcessID"`
-	PeerURLs   []string `json:"peerURLs"`
-	ClientURLs []string `json:"clientURLs,omitempty"`
-	IsLearner  bool     `json:"isLearner,omitempty"`
+	ID        types.ID `json:"id"`
+	ProcessID uint16   `json:"ProcessID"`
+	PeerURL   string   `json:"peerURL"`
+	ClientURL string   `json:"clientURL,omitempty"`
+	IsLearner bool     `json:"isLearner,omitempty"`
 }
 
-func NewMember(processID uint16, id types.ID, peerURLs types.URLs, clientURLs types.URLs) *Member {
-	return newMember(processID, id, peerURLs, clientURLs, false)
+func NewMember(processID uint16, id types.ID, peerURL string, clientURL string) *Member {
+	return newMember(processID, id, peerURL, clientURL, false)
 }
 
-func NewMemberAsLearner(processID uint16, id types.ID, peerURLs types.URLs, clientURLs types.URLs) *Member {
-	return newMember(processID, id, peerURLs, clientURLs, true)
+func NewMemberAsLearner(processID uint16, id types.ID, peerURL string, clientURL string) *Member {
+	return newMember(processID, id, peerURL, clientURL, true)
 }
 
-func newMember(processID uint16, id types.ID, peerURLs types.URLs, clientURLs types.URLs, isLearner bool) *Member {
+func newMember(processID uint16, id types.ID, peerURL string, clientURL string, isLearner bool) *Member {
 	return &Member{
-		ProcessID:  processID,
-		ID:         id,
-		PeerURLs:   peerURLs.StringSlice(),
-		IsLearner:  isLearner,
-		ClientURLs: clientURLs.StringSlice(),
+		ProcessID: processID,
+		ID:        id,
+		PeerURL:   peerURL, //peerURLs.StringSlice(),
+		IsLearner: isLearner,
+		ClientURL: clientURL, //clientURLs.StringSlice(),
 	}
 }
 
@@ -38,8 +38,11 @@ func (m *Member) Clone() *Member {
 		ID:        m.ID,
 		IsLearner: m.IsLearner,
 		ProcessID: m.ProcessID,
+		PeerURL:   m.PeerURL,
+		ClientURL: m.ClientURL,
 	}
-	if m.PeerURLs != nil {
+
+	/*if m.PeerURLs != nil {
 		mm.PeerURLs = make([]string, len(m.PeerURLs))
 		copy(mm.PeerURLs, m.PeerURLs)
 	}
@@ -47,7 +50,7 @@ func (m *Member) Clone() *Member {
 	if m.ClientURLs != nil {
 		mm.ClientURLs = make([]string, len(m.ClientURLs))
 		copy(mm.ClientURLs, m.ClientURLs)
-	}
+	}*/
 
 	return mm
 }
@@ -64,6 +67,6 @@ type MembersByPeerURLs []*Member
 
 func (ms MembersByPeerURLs) Len() int { return len(ms) }
 func (ms MembersByPeerURLs) Less(i, j int) bool {
-	return ms[i].PeerURLs[0] < ms[j].PeerURLs[0]
+	return ms[i].PeerURL < ms[j].PeerURL
 }
 func (ms MembersByPeerURLs) Swap(i, j int) { ms[i], ms[j] = ms[j], ms[i] }

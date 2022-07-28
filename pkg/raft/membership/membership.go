@@ -175,7 +175,7 @@ func (c *MemberShip) AddMember(id types.ID, isLearner bool, m *Member) *Member {
 		zap.String("cluster-id", c.cid.String()),
 		zap.String("local-member-id", c.localID.String()),
 		zap.String("added-peer-id", m.ID.String()),
-		zap.Strings("added-peer-peer-urls", m.PeerURLs),
+		zap.String("added-peer-peer-url", m.PeerURL),
 	)
 
 	return m
@@ -199,11 +199,11 @@ func (c *MemberShip) RemoveMember(id types.ID) {
 		zap.String("cluster-id", c.cid.String()),
 		zap.String("local-member-id", c.localID.String()),
 		zap.String("removed-remote-peer-id", id.String()),
-		zap.Strings("removed-remote-peer-urls", m.PeerURLs),
+		zap.String("removed-remote-peer-url", m.PeerURL),
 	)
 }
 
-func (c *MemberShip) UpdateURL(id types.ID, PeerURLs []string, ClientURLs []string) {
+func (c *MemberShip) UpdateURL(id types.ID, PeerURL string, ClientURL string) {
 	c.Lock()
 	defer c.Unlock()
 	m, ok := c.members[id]
@@ -211,8 +211,8 @@ func (c *MemberShip) UpdateURL(id types.ID, PeerURLs []string, ClientURLs []stri
 		c.lg.Panic("UpdateUrl error")
 	}
 
-	m.PeerURLs = PeerURLs
-	m.ClientURLs = ClientURLs
+	m.PeerURL = PeerURL
+	m.ClientURL = ClientURL
 }
 
 // PromoteMember marks the member's IsLearner RaftAttributes to false.
@@ -259,9 +259,7 @@ func (c *MemberShip) ValidateConfigurationChange(cc *ConfChangeContext) error {
 			urls := make(map[string]bool)
 			processIDs := make(map[uint16]bool)
 			for _, m := range members {
-				for _, u := range m.PeerURLs {
-					urls[u] = true
-				}
+				urls[m.PeerURL] = true
 				processIDs[m.ProcessID] = true
 			}
 
@@ -298,11 +296,8 @@ func (c *MemberShip) ValidateConfigurationChange(cc *ConfChangeContext) error {
 			if m.ID == id {
 				continue
 			}
-			for _, u := range m.PeerURLs {
-				urls[u] = true
-			}
+			urls[m.PeerURL] = true
 		}
-
 		if urls[cc.Url] {
 			return ErrPeerURLexists
 		}
