@@ -620,15 +620,11 @@ func (rc *RaftInstance) ReportSnapshot(id uint64, status raft.SnapshotStatus) {
 }
 
 func (rc *RaftInstance) IssueLinearizableRead(r LinearizableRead) {
-	if err := rc.readPipeline.ForceAppend(r); nil != err {
-		r.OnError(err)
-	}
+	rc.readPipeline.ForceAppend(r)
 }
 
 func (rc *RaftInstance) IssueProposal(p Proposal) {
-	if err := rc.proposePipeline.ForceAppend(p); nil != err {
-		p.OnError(err)
-	}
+	rc.proposePipeline.ForceAppend(p)
 }
 
 func (rc *RaftInstance) IssueConfChange(p ProposalConfChange) {
