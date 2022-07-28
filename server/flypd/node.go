@@ -12,10 +12,11 @@ import (
 
 type ProposalFlyKvCommited struct {
 	proposalBase
-	Set       int
-	Node      int
-	Store     int
-	StoreType StoreType
+	Set   int
+	Node  int
+	Store int
+	Op    int32
+	//StoreType StoreType
 }
 
 func (p *ProposalFlyKvCommited) Serilize(b []byte) []byte {
@@ -39,20 +40,18 @@ func (p *ProposalFlyKvCommited) apply(pd *pd) {
 		return
 	}
 
-	if p.StoreType == store.StoreType {
-		switch p.StoreType {
-		case AddLearnerStore:
-			store.StoreType = LearnerStore
-		case LearnerStore:
-			store.StoreType = VoterStore
-		case RemovingStore:
-			delete(node.Store, p.Store)
-			if len(node.Store) == 0 {
-				delete(set.Nodes, p.Node)
-			}
-			pd.Deployment.Version++
-			set.Version = pd.Deployment.Version
+	switch sproto.StoreOpType(p.Op) {
+	case sproto.StoreOpType_AddLearner:
+		store.Joinning = false
+	case sproto.StoreOpType_PromoteLearner:
+		store.StoreType = Voter
+	case sproto.StoreOpType_RemoveStore:
+		delete(node.Store, p.Store)
+		if len(node.Store) == 0 {
+			delete(set.Nodes, p.Node)
 		}
+		pd.Deployment.Version++
+		set.Version = pd.Deployment.Version
 	}
 }
 
@@ -121,8 +120,9 @@ func (p *ProposalAddNode) apply(pd *pd) {
 
 		for i := 0; i < StorePerSet; i++ {
 			n.Store[i+1] = &NodeStoreState{
-				StoreType: AddLearnerStore,
+				StoreType: Learner,
 				RaftID:    p.RaftIDS[i],
+				Joinning:  true,
 			}
 		}
 		set.Nodes[int(p.Msg.NodeID)] = n
@@ -172,7 +172,7 @@ func (p *ProposalRemNode) apply(pd *pd) {
 		}
 
 		for _, v := range node.Store {
-			if v.StoreType == RemovingStore {
+			if v.Removing {
 				return errors.New("node is removing")
 			}
 		}
@@ -186,8 +186,7 @@ func (p *ProposalRemNode) apply(pd *pd) {
 
 	if nil == err {
 		for _, v := range node.Store {
-			v.StoreTypeBeforeRemove = v.StoreType
-			v.StoreType = RemovingStore
+			v.Removing = true
 		}
 	}
 
@@ -210,18 +209,22 @@ func (p *pd) processNodeNotify() {
 		for _, set := range p.Deployment.Sets {
 			for _, node := range set.Nodes {
 				for storeID, store := range node.Store {
-					if store.StoreType != VoterStore && atomic.CompareAndSwapInt32(&store.notifying, 0, 1) {
+					if (store.Removing || store.StoreType == Learner) && atomic.CompareAndSwapInt32(&store.notifying, 0, 1) {
 						msg := &sproto.NotifyNodeStoreOp{
 							NodeID: int32(node.NodeID),
 							Store:  int32(storeID),
-							Op:     int32(store.StoreType),
 							RaftID: store.RaftID,
 						}
 
-						if store.StoreType == AddLearnerStore {
+						if store.Joinning {
 							msg.Host = node.Host
 							msg.RaftPort = int32(node.RaftPort)
 							msg.Port = int32(node.ServicePort)
+							msg.Op = int32(sproto.StoreOpType_AddLearner)
+						} else if store.StoreType == Learner {
+							msg.Op = int32(sproto.StoreOpType_PromoteLearner)
+						} else {
+							msg.Op = int32(sproto.StoreOpType_RemoveStore)
 						}
 
 						var remotes []string
@@ -236,10 +239,10 @@ func (p *pd) processNodeNotify() {
 							resp, _ := snet.UdpCall(remotes, msg, &sproto.NodeStoreOpOk{}, time.Second*3)
 							if nil != resp {
 								p.issueProposal(&ProposalFlyKvCommited{
-									Set:       setID,
-									Node:      int(msg.NodeID),
-									Store:     int(msg.Store),
-									StoreType: StoreType(msg.Op),
+									Set:   setID,
+									Node:  int(msg.NodeID),
+									Store: int(msg.Store),
+									Op:    msg.Op,
 								})
 							}
 

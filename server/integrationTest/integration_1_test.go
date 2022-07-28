@@ -1092,7 +1092,7 @@ func TestAddRemoveNode2(t *testing.T) {
 				for _, v := range s.Nodes {
 					if int(v.NodeID) == 3 {
 						for _, vv := range v.Stores {
-							if vv.StoreType != int32(flypd.VoterStore) {
+							if vv.StoreType != int32(flypd.Voter) {
 								return false
 							}
 						}
@@ -1957,7 +1957,7 @@ func TestSuspendResume(t *testing.T) {
 				for _, v := range s.Nodes {
 					if int(v.NodeID) == 2 {
 						for _, vv := range v.Stores {
-							if vv.StoreType != int32(flypd.VoterStore) {
+							if vv.StoreType != int32(flypd.Voter) {
 								return false
 							}
 						}

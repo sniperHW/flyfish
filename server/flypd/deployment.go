@@ -18,24 +18,30 @@ var MinReplicaPerSet int = 1 //最少副本数
 
 type StoreType uint16
 
-const (
+/*const (
 	AddLearnerStore = StoreType(1)
 	LearnerStore    = StoreType(2)
 	VoterStore      = StoreType(3)
 	RemovingStore   = StoreType(4)
+)*/
+
+const (
+	Learner = StoreType(1)
+	Voter   = StoreType(2)
 )
 
 type NodeStoreState struct {
-	StoreType             StoreType
-	RaftID                uint64
-	isLead                bool
-	StoreTypeBeforeRemove StoreType
-	kvcount               int
-	lastReport            time.Time
-	progress              uint64
-	metaVersion           int64
-	notifying             int32
-	halt                  bool
+	StoreType   StoreType
+	Joinning    bool //store正在加入raftgroup
+	Removing    bool //store正在从raftgroup移除
+	RaftID      uint64
+	isLead      bool
+	kvcount     int
+	lastReport  time.Time
+	progress    uint64
+	metaVersion int64
+	notifying   int32
+	halt        bool
 }
 
 func (nss *NodeStoreState) isActive() bool {
@@ -56,7 +62,7 @@ func (nss *NodeStoreState) isLeader() bool {
 }
 
 func (nss *NodeStoreState) isLearner() bool {
-	return nss.StoreType == LearnerStore || nss.StoreType == AddLearnerStore
+	return nss.StoreType == Learner || nss.Joinning
 }
 
 type KvNode struct {
@@ -89,7 +95,7 @@ func (n *KvNode) leaderCount() (leaderCount int) {
 
 func (n *KvNode) canTransferLeader(store int) bool {
 	s, ok := n.Store[store]
-	return ok && s.StoreType == VoterStore
+	return ok && s.StoreType == Voter
 }
 
 func (n *KvNode) getRaftID(store int) uint64 {
@@ -335,7 +341,7 @@ func (p *pd) loadInitDeployment() {
 						node.Store = map[int]*NodeStoreState{}
 						for j := 0; j < StorePerSet; j++ {
 							node.Store[j+1] = &NodeStoreState{
-								StoreType: VoterStore,
+								StoreType: Voter,
 								RaftID:    p.raftIDGen.Next(),
 							}
 						}

@@ -44,18 +44,12 @@ func (p *pd) registerMsgHandler(msg proto.Message, httpCmd string, handler func(
 
 func buildRaftClusterStr(set *Set, storeId int) (raftCluster []string) {
 	for _, n := range set.Nodes {
-		if v, ok := n.Store[storeId]; ok {
+		if v, ok := n.Store[storeId]; ok && !v.Joinning {
 			switch v.StoreType {
-			case LearnerStore:
+			case Learner:
 				raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@learner", n.NodeID, v.RaftID, n.Host, n.RaftPort, n.Host, n.ServicePort))
-			case VoterStore:
+			case Voter:
 				raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@voter", n.NodeID, v.RaftID, n.Host, n.RaftPort, n.Host, n.ServicePort))
-			case RemovingStore:
-				if v.StoreTypeBeforeRemove == LearnerStore {
-					raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@learner", n.NodeID, v.RaftID, n.Host, n.RaftPort, n.Host, n.ServicePort))
-				} else if v.StoreTypeBeforeRemove == VoterStore {
-					raftCluster = append(raftCluster, fmt.Sprintf("%d@%d@http://%s:%d@%s:%d@voter", n.NodeID, v.RaftID, n.Host, n.RaftPort, n.Host, n.ServicePort))
-				}
 			}
 		}
 	}
@@ -88,7 +82,7 @@ func (p *pd) onKvnodeBoot(replyer replyer, m *snet.Message) {
 	}
 
 	for storeId, st := range node.Store {
-		if st.StoreType == AddLearnerStore || st.StoreTypeBeforeRemove == AddLearnerStore {
+		if st.Joinning {
 			continue
 		}
 
@@ -255,7 +249,7 @@ func (p *pd) onKvnodeReportStatus(replyer replyer, m *snet.Message) {
 	//检查是否有遗漏的store,有的通知kvnode加载
 	var notify *sproto.NotifyMissingStores
 	for storeId, st := range node.Store {
-		if st.StoreType == AddLearnerStore || st.StoreTypeBeforeRemove == AddLearnerStore {
+		if st.Joinning {
 			continue
 		}
 

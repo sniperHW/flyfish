@@ -83,7 +83,7 @@ func (p *ProposalAddSet) apply(pd *pd) {
 		for _, node := range set.Nodes {
 			for _, vv := range set.Stores {
 				node.Store[vv.StoreID] = &NodeStoreState{
-					StoreType: VoterStore,
+					StoreType: Voter,
 					RaftID:    pd.raftIDGen.Next(),
 				}
 			}
