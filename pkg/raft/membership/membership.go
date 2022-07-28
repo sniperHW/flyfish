@@ -203,6 +203,18 @@ func (c *MemberShip) RemoveMember(id types.ID) {
 	)
 }
 
+func (c *MemberShip) UpdateURL(id types.ID, PeerURLs []string, ClientURLs []string) {
+	c.Lock()
+	defer c.Unlock()
+	m, ok := c.members[id]
+	if !ok {
+		c.lg.Panic("UpdateUrl error")
+	}
+
+	m.PeerURLs = PeerURLs
+	m.ClientURLs = ClientURLs
+}
+
 // PromoteMember marks the member's IsLearner RaftAttributes to false.
 func (c *MemberShip) PromoteMember(id types.ID) {
 	c.Lock()
@@ -277,24 +289,23 @@ func (c *MemberShip) ValidateConfigurationChange(cc *ConfChangeContext) error {
 		if members[id] == nil {
 			return ErrIDNotFound
 		}
-	/*case raftpb.ConfChangeUpdateNode:
-	if members[id] == nil {
-		return ErrIDNotFound
-	}
-	urls := make(map[string]bool)
-	for _, m := range members {
-		if m.ID == id {
-			continue
+	case raftpb.ConfChangeUpdateNode:
+		if members[id] == nil {
+			return ErrIDNotFound
 		}
-		for _, u := range m.PeerURLs {
-			urls[u] = true
+		urls := make(map[string]bool)
+		for _, m := range members {
+			if m.ID == id {
+				continue
+			}
+			for _, u := range m.PeerURLs {
+				urls[u] = true
+			}
 		}
-	}
 
-	if urls[cc.Url] {
-		return ErrPeerURLexists
-	}
-	*/
+		if urls[cc.Url] {
+			return ErrPeerURLexists
+		}
 	default:
 		c.lg.Panic("unknown ConfChange type", zap.String("type", cc.ConfChangeType.String()))
 	}

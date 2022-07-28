@@ -294,6 +294,23 @@ func (s *kvstore) PromoteLearner(id uint64) error {
 
 }
 
+func (s *kvstore) UpdateURL(id uint64, rafturl string) error {
+	if err := s.rn.IsLearnerReady(id); nil != err {
+		return err
+	}
+
+	o := TestConfChange{
+		confChangeType: raftpb.ConfChangeUpdateNode,
+		nodeID:         id,
+		ch:             make(chan error, 1),
+		url:            rafturl,
+	}
+
+	s.rn.IssueConfChange(o)
+
+	return <-o.ch
+}
+
 func (s *kvstore) RemoveMember(id uint64) error {
 	if err := s.rn.MayRemoveMember(types.ID(id)); nil != err {
 		return err
@@ -615,6 +632,77 @@ func TestSingleNode(t *testing.T) {
 
 		node.stop()
 	}
+
+}
+
+func TestUpdateUrl(t *testing.T) {
+	os.RemoveAll("./log")
+	SnapshotCount = 100
+	SnapshotCatchUpEntriesN = 100
+	raftID1 := RaftIDGen.Next()
+	raftID2 := RaftIDGen.Next()
+
+	cluster := fmt.Sprintf("1@%d@http://127.0.0.1:22378@http://127.0.0.1:22378@", raftID1)
+
+	var node1 *kvnode
+
+	node1 = newKvNode(1, 1, false, cluster, nil, func() {})
+
+	var err error
+
+	for {
+		err = node1.store.AddLearner(2, raftID2, "http://127.0.0.1:22379")
+		if nil == err {
+			break
+		} else {
+			time.Sleep(time.Second)
+		}
+	}
+
+	fmt.Println("AddLearner ok")
+
+	//启动learner
+
+	var node2 *kvnode
+
+	cluster = fmt.Sprintf("1@%d@http://127.0.0.1:22378@http://127.0.0.1:22378@,2@%d@http://127.0.0.1:22379@http://127.0.0.1:22379@", raftID1, raftID2)
+
+	node2 = newKvNode(2, 1, true, cluster, nil, func() {})
+
+	time.Sleep(time.Second * 5)
+
+	node2.stop()
+
+	//变更url
+	for {
+		err = node1.store.UpdateURL(raftID2, "http://127.0.0.1:22380")
+		if nil == err {
+			break
+		} else {
+			time.Sleep(time.Second)
+		}
+	}
+
+	fmt.Println("UpdateURL ok")
+
+	cluster = fmt.Sprintf("1@%d@http://127.0.0.1:22378@http://127.0.0.1:22378@,2@%d@http://127.0.0.1:22380@http://127.0.0.1:22380@", raftID1, raftID2)
+
+	node2 = newKvNode(2, 1, true, cluster, nil, func() {})
+
+	for i := 0; i < 100; i++ {
+		node1.store.Set(fmt.Sprintf("sniperHW:%d", i), fmt.Sprintf("sniperHW:%d", i))
+	}
+
+	for {
+		v, _ := node2.store.Get("sniperHW:99")
+		if "" != v {
+			break
+		}
+	}
+
+	node2.stop()
+
+	node1.stop()
 
 }
 

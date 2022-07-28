@@ -384,6 +384,13 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 						rc.transport.RemovePeer(types.ID(cc.NodeID))
 					}
 					rc.mb.RemoveMember(types.ID(cc.NodeID))
+				case raftpb.ConfChangeUpdateNode:
+					GetSugar().Infof("%s ConfChangeUpdateNode %s", types.ID(rc.id).String(), types.ID(cc.NodeID).String())
+					if types.ID(rc.id) != types.ID(cc.NodeID) {
+						rc.transport.RemovePeer(types.ID(cc.NodeID))
+						rc.transport.AddPeer(types.ID(cc.NodeID), []string{pc.Url})
+					}
+					rc.mb.UpdateURL(types.ID(cc.NodeID), []string{pc.Url}, []string{pc.ClientUrl})
 				}
 
 				rc.commitC.AppendHighestPriotiryItem(ConfChange{
