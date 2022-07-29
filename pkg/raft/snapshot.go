@@ -192,6 +192,13 @@ func (rc *RaftInstance) recoverMemberShipFromSnapshot(snap *raftpb.Snapshot) {
 		panic(err)
 	}
 
+	/*for _, v := range rc.mb.Members() {
+		if types.ID(rc.id) == types.ID(v.ID) && (rc.mbSelf.URL != v.PeerURL || rc.mbSelf.ClientURL != v.ClientURL) {
+			GetSugar().Infof("%s URL mismatch update to %s %s", types.ID(rc.id).String(), rc.mbSelf.URL, rc.mbSelf.ClientURL)
+			rc.mb.UpdateURL(types.ID(v.ID), rc.mbSelf.URL, rc.mbSelf.ClientURL)
+		}
+	}*/
+
 	//丢弃membership相关数据
 	snap.Data = snap.Data[:dataLen-4-l]
 }
@@ -252,6 +259,16 @@ func newSnapshotReaderCloser(data []byte) io.ReadCloser {
 }
 
 func (rc *RaftInstance) sendSnapshot(m raftpb.Message) error {
+	/*var data []byte
+	if nil != rc.option.GetSnapshotData {
+		var err error
+		if data, err = rc.getSnapshotData(m.Snapshot.Metadata.Term, m.Snapshot.Metadata.Index, m.Snapshot.Data); nil != err {
+			return err
+		}
+	} else {
+		data = make([]byte, len(m.Snapshot.Data))
+		copy(data, m.Snapshot.Data)
+	}*/
 	data, err := rc.getSnapshotData(m.Snapshot.Metadata.Term, m.Snapshot.Metadata.Index, m.Snapshot.Data)
 	if nil != err {
 		return err

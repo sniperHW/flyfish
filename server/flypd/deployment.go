@@ -34,6 +34,7 @@ type NodeStoreState struct {
 	StoreType   StoreType
 	Joinning    bool //store正在加入raftgroup
 	Removing    bool //store正在从raftgroup移除
+	UpdateURL   bool //store需要更新url
 	RaftID      uint64
 	isLead      bool
 	kvcount     int

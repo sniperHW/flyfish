@@ -468,6 +468,32 @@ func (s *kvstore) onLeaderDownToFollower() {
 	s.slotsTransferOut = map[int]bool{}
 }
 
+func (s *kvstore) onUpdateURL(from *net.UDPAddr, raftID uint64, host string, raftPort int32, port int32, context int64) {
+	reply := func(err error) {
+		if nil == err {
+			s.kvnode.udpConn.SendTo(from, snet.MakeMessage(context, &sproto.NodeStoreOpOk{}))
+		} else {
+			switch err {
+			case membership.ErrIDNotFound, membership.ErrPeerURLexists:
+				//pd做了控制，不应该出现这些错误
+				GetSugar().Errorf("onUpdateURL error node:%d store:%d err:%v", s.kvnode.id, s.shard, err)
+			default:
+				return
+			}
+		}
+	}
+
+	s.rn.ModifyMemberPeer(raftID, fmt.Sprintf("http://%s:%d", host, raftPort))
+
+	s.rn.IssueConfChange(&ProposalConfChange{
+		confChangeType: raftpb.ConfChangeUpdateNode,
+		url:            fmt.Sprintf("http://%s:%d", host, raftPort),
+		clientUrl:      fmt.Sprintf("http://%s:%d", host, port),
+		nodeID:         raftID,
+		reply:          reply,
+	})
+}
+
 //将nodeID作为learner加入当前store的raft配置
 func (s *kvstore) onAddLearnerNode(from *net.UDPAddr, processID uint16, raftID uint64, host string, raftPort int32, port int32, context int64) {
 	reply := func(err error) {
@@ -559,6 +585,8 @@ func (s *kvstore) onNotifyNodeStoreOp(from *net.UDPAddr, msg *sproto.NotifyNodeS
 			s.onPromoteLearnerNode(from, msg.RaftID, context)
 		case sproto.StoreOpType_RemoveStore:
 			s.onRemoveNode(from, msg.RaftID, context)
+		case sproto.StoreOpType_UpdateURL:
+			s.onUpdateURL(from, msg.RaftID, msg.Host, msg.RaftPort, msg.Port, context)
 		default:
 			GetSugar().Errorf("onNotifyNodeStoreOp invaild Op:%v", msg.Op)
 		}

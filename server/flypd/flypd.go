@@ -322,6 +322,8 @@ func (p *pd) processCommited(commited raft.Committed) {
 					err = unmarshal(&ProposalNop{})
 				case proposalOrderSequenceID:
 					err = unmarshal(&ProposalOrderSequenceID{})
+				case proposalUpdateNodeURL:
+					err = unmarshal(&ProposalUpdateNodeURL{})
 				default:
 					err = errors.New("invaild proposal type")
 				}

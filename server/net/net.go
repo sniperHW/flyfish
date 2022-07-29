@@ -386,6 +386,9 @@ func init() {
 	namespace.Register(&sproto.GetDeployment{}, uint32(sproto.ServerCmdType_GetDeployment))
 	namespace.Register(&sproto.GetDeploymentResp{}, uint32(sproto.ServerCmdType_GetDeploymentResp))
 
+	namespace.Register(&sproto.UpdateNodeURL{}, uint32(sproto.ServerCmdType_UpdateNodeURL))
+	namespace.Register(&sproto.UpdateNodeURLResp{}, uint32(sproto.ServerCmdType_UpdateNodeURLResp))
+
 	//flykv <-> pd
 	namespace.Register(&sproto.KvnodeBoot{}, uint32(sproto.ServerCmdType_KvnodeBoot))
 	namespace.Register(&sproto.KvnodeBootResp{}, uint32(sproto.ServerCmdType_KvnodeBootResp))

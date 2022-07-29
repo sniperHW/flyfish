@@ -21,6 +21,7 @@ const (
 	proposalUpdateMeta        = 17
 	proposalNop               = 18
 	proposalOrderSequenceID   = 19
+	proposalUpdateNodeURL     = 20
 )
 
 type proposalBase struct {

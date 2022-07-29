@@ -19,6 +19,27 @@ slot平衡条件：任一store的slot数量不大于slot.SlotCount/setCount * St
 slot balance优先处理标记为clear的set。
 
 
+flykv副本故障
+
+
+1）副本短时间内无法重启，但数据文件可以拷贝
+
+
+关键副本故障导致raftgroup无法服务
+
+唯一副本故障：在pd中直接修改故障flykv实例的服务地址，将数据文件拷贝到新的节点，重启flykv实例。
+
+副本故障导致无法形成多数集：
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -157,11 +157,12 @@ type RaftInstance struct {
 	pendingProposeMgr pendingProposeMgr
 	mutilRaft         *MutilRaft
 	mb                *membership.MemberShip
-	w                 wait.Wait
-	reqIDGen          *idutil.Generator
-	proposalSize      uint64 //自上次快照以来,proposal总的字节大小
-	option            RaftInstanceOption
-	applyWait         WaitTime
+	//mbSelf            *Member
+	w            wait.Wait
+	reqIDGen     *idutil.Generator
+	proposalSize uint64 //自上次快照以来,proposal总的字节大小
+	option       RaftInstanceOption
+	applyWait    WaitTime
 
 	// leaderChanged is used to notify the linearizable read loop to drop the old read requests.
 	leaderChanged   chan struct{}
@@ -346,11 +347,17 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 			if err = json.Unmarshal(cc.Context, &pc); nil != err {
 				GetSugar().Panicf("Unmarshal proposalConfChange error:%v", err)
 			}
-
 			cc.Type = pc.ConfChangeType
-
 			if err = rc.mb.ValidateConfigurationChange(&pc); nil == err {
 				rc.confState = *rc.node.ApplyConfChange(cc)
+				/*if types.ID(rc.id) == types.ID(cc.NodeID) {
+					if rc.mbSelf.URL != pc.Url {
+						pc.Url = rc.mbSelf.URL
+					}
+					if rc.mbSelf.ClientURL != pc.ClientUrl {
+						pc.ClientUrl = rc.mbSelf.ClientURL
+					}
+				}*/
 				switch cc.Type {
 				case raftpb.ConfChangeAddNode, raftpb.ConfChangeAddLearnerNode:
 					if !pc.IsPromote {
@@ -385,7 +392,7 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 					}
 					rc.mb.RemoveMember(types.ID(cc.NodeID))
 				case raftpb.ConfChangeUpdateNode:
-					GetSugar().Infof("%s ConfChangeUpdateNode %s", types.ID(rc.id).String(), types.ID(cc.NodeID).String())
+					GetSugar().Infof("%s ConfChangeUpdateNode %s %s %s", types.ID(rc.id).String(), types.ID(cc.NodeID).String(), pc.Url, pc.ClientUrl)
 					if types.ID(rc.id) != types.ID(cc.NodeID) {
 						rc.transport.RemovePeer(types.ID(cc.NodeID))
 						rc.transport.AddPeer(types.ID(cc.NodeID), []string{pc.Url})
@@ -537,8 +544,6 @@ func (rc *RaftInstance) serveChannels() {
 
 				islead = rd.RaftState == raft.StateLeader
 			}
-
-			//islead := rc.id == rc.lead
 
 			if len(rd.ReadStates) != 0 {
 				select {
@@ -988,8 +993,9 @@ func NewInstance(processID uint16, cluster int, join bool, mutilRaft *MutilRaft,
 	}
 
 	rc := &RaftInstance{
-		commitC:    commitC,
-		id:         mbSelf.ID,
+		commitC: commitC,
+		id:      mbSelf.ID,
+		//mbSelf:     &mbSelf,
 		option:     option,
 		waldir:     fmt.Sprintf("%s/%s-%d-%d-%x-wal", option.Logdir, option.RaftLogPrefix, processID, cluster, mbSelf.ID),
 		snapdir:    fmt.Sprintf("%s/%s-%d-%d-%x-snap", option.Logdir, option.RaftLogPrefix, processID, cluster, mbSelf.ID),

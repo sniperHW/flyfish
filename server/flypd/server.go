@@ -547,6 +547,7 @@ func (p *pd) initMsgHandler() {
 	p.registerMsgHandler(&sproto.SuspendKvStore{}, "SuspendKvStore", p.onSuspendKvStore)
 	p.registerMsgHandler(&sproto.ResumeKvStore{}, "ResumeKvStore", p.onResumeKvStore)
 	p.registerMsgHandler(&sproto.GetDeployment{}, "GetDeployment", p.onGetDeployment)
+	p.registerMsgHandler(&sproto.UpdateNodeURL{}, "UpdateNodeURL", p.onUpdateURL)
 
 	//servers
 	p.registerMsgHandler(&sproto.IsTransInReadyResp{}, "", p.onSlotTransInReady)

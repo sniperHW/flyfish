@@ -405,6 +405,205 @@ func clearUsers1() {
 	dbc.Close()
 }
 
+func TestUpdateNodeURL1(t *testing.T) {
+	sslot.SlotCount = 128
+	flypd.MinReplicaPerSet = 1
+	flypd.StorePerSet = 1
+
+	os.RemoveAll("./testRaftLog")
+
+	clearUsers1()
+
+	pd, pdRaftID := newPD(t, 0, "./deployment2.json")
+
+	//启动kvnode
+	var err error
+
+	dbConf := &dbconf{}
+	if _, err = toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
+		panic(err)
+	}
+
+	node1, err := flykv.NewKvNode(1, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	node1.Stop()
+
+	consoleClient := console.NewClient("localhost:8110")
+	//update url
+	for {
+		resp, err := consoleClient.Call(&sproto.UpdateNodeURL{
+			SetID:       1,
+			NodeID:      1,
+			Host:        "localhost",
+			ServicePort: 19110,
+			RaftPort:    19111,
+		}, &sproto.UpdateNodeURLResp{})
+
+		if nil == err && resp.(*sproto.UpdateNodeURLResp).Ok {
+			break
+		} else {
+			time.Sleep(time.Second)
+		}
+	}
+
+	//再次启动
+
+	logger.GetSugar().Infof("start kvnode again")
+
+	node1, err = flykv.NewKvNode(1, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	time.Sleep(time.Second * 5)
+
+	node1.Stop()
+	pd.Stop()
+
+	pd, _ = newPD(t, pdRaftID, "./deployment2.json")
+	time.Sleep(time.Second * 5)
+	pd.Stop()
+}
+
+func TestUpdateNodeURL2(t *testing.T) {
+	sslot.SlotCount = 128
+	flypd.MinReplicaPerSet = 1
+	flypd.StorePerSet = 1
+
+	os.RemoveAll("./testRaftLog")
+
+	clearUsers1()
+
+	pd, _ := newPD(t, 0, "./deployment2.json")
+
+	//启动kvnode
+	var err error
+
+	dbConf := &dbconf{}
+	if _, err = toml.DecodeFile("test_dbconf.toml", dbConf); nil != err {
+		panic(err)
+	}
+
+	node1, err := flykv.NewKvNode(1, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	consoleClient := console.NewClient("localhost:8110")
+
+	//添加kvnode2
+	resp, err := consoleClient.Call(&sproto.AddNode{
+		SetID:       1,
+		NodeID:      2,
+		Host:        "localhost",
+		ServicePort: 9220,
+		RaftPort:    9221,
+	}, &sproto.AddNodeResp{})
+
+	node2, err := flykv.NewKvNode(2, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	//等待node2成为voter
+	for {
+		resp, err = consoleClient.Call(&sproto.GetKvStatus{}, &sproto.GetKvStatusResp{})
+		if ok := func() bool {
+			if nil == err {
+				for _, set := range resp.(*sproto.GetKvStatusResp).Sets {
+					if set.SetID == int32(1) {
+						for _, n := range set.Nodes {
+							if n.NodeID == int32(2) {
+								for _, s := range n.Stores {
+									if s.StoreType == int32(flypd.Voter) {
+										return true
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			return false
+		}(); ok {
+			break
+		} else {
+			time.Sleep(time.Second)
+		}
+	}
+
+	node2.Stop()
+
+	//update url
+	for {
+		resp, err := consoleClient.Call(&sproto.UpdateNodeURL{
+			SetID:       1,
+			NodeID:      2,
+			Host:        "localhost",
+			ServicePort: 19220,
+			RaftPort:    19221,
+		}, &sproto.UpdateNodeURLResp{})
+
+		if nil == err && resp.(*sproto.UpdateNodeURLResp).Ok {
+			break
+		} else {
+			time.Sleep(time.Second)
+		}
+	}
+
+	logger.GetSugar().Infof("-------------------------------start kvnode again-----------------------------------------------------")
+
+	//模拟在新的节点重新启动
+	node2, err = flykv.NewKvNode(2, kvConf, flykv.NewSqlDB())
+
+	if nil != err {
+		panic(err)
+	}
+
+	//启动flygate
+
+	gateConf, _ := flygate.LoadConfigStr(flyGateConfigStr)
+
+	gate1, err := flygate.NewFlyGate(gateConf, "localhost:10110")
+
+	if nil != err {
+		panic(err)
+	}
+
+	fmt.Println("run client")
+
+	c, _ := client.New(client.ClientConf{
+		ClientType: client.FlyGate,
+		PD:         []string{"localhost:8110"},
+	})
+
+	defer c.Close()
+
+	for i := 0; i < 100; i++ {
+		fields := map[string]interface{}{}
+		fields["age"] = 12
+		name := fmt.Sprintf("sniperHW:%d", i)
+		fields["name"] = name
+		fields["phone"] = []byte("123456789123456789123456789")
+		assert.Nil(t, c.Set("users1", name, fields).Exec().ErrCode)
+	}
+
+	gate1.Stop()
+
+	node1.Stop()
+
+	node2.Stop()
+
+	pd.Stop()
+}
+
 func TestFlygate(t *testing.T) {
 	sslot.SlotCount = 128
 	flypd.MinReplicaPerSet = 1

@@ -58,7 +58,8 @@ enum ServerCmdType {
   ResumeKvStoreResp             = 146;
   GetDeployment                 = 147;
   GetDeploymentResp             = 148;
-
+  UpdateNodeURL                 = 149;
+  UpdateNodeURLResp             = 150;
 
   
   //kvnode <-> pd
@@ -175,6 +176,20 @@ message remNodeResp  {
 }
 
 
+message updateNodeURL {
+  optional int32  setID       = 1;
+  optional int32  nodeID      = 2;
+  optional string host        = 3;
+  optional int32  servicePort = 4;
+  optional int32  raftPort    = 5; 
+}
+
+message updateNodeURLResp {
+  optional bool ok            = 1;
+  optional string reason      = 2; 
+}
+
+
 message kvnodeBoot {
   optional int32  nodeID      = 1;
 }
@@ -211,7 +226,8 @@ message flySqlHeartBeatResp {
 enum StoreOpType {
   AddLearner = 1;
   PromoteLearner = 2;
-  RemoveStore = 4;
+  RemoveStore = 3;
+  UpdateURL   = 4;
 }
 
 message notifyNodeStoreOp {
