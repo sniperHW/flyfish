@@ -376,11 +376,10 @@ func (p *pd) serve() {
 				p.processCommited(v.(raft.Committed))
 			case []raft.LinearizableRead:
 			case raft.ProposalConfChange:
-				v.(*ProposalConfChange).reply(nil)
-			case raft.ConfChange:
-				c := v.(raft.ConfChange)
-				if c.CCType == raftpb.ConfChangeRemoveNode && c.NodeID == p.rn.ID() {
-					GetSugar().Infof("%x Remove from cluster", p.rn.ID())
+				cfgChange := v.(*ProposalConfChange)
+				cfgChange.reply(nil)
+				if cfgChange.GetType() == raftpb.ConfChangeRemoveNode && p.rn.ID() == cfgChange.GetNodeID() {
+					GetSugar().Infof("%x RemoveFromCluster", p.rn.ID())
 					p.rn.Stop()
 				}
 			case raft.ReplayOK:

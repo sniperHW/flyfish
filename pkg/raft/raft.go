@@ -400,11 +400,11 @@ func (rc *RaftInstance) publishEntries(ents []raftpb.Entry) {
 					rc.mb.UpdateURL(types.ID(cc.NodeID), pc.Url, pc.ClientUrl)
 				}
 
-				rc.commitC.AppendHighestPriotiryItem(ConfChange{
-					CCType:  cc.Type,
-					NodeID:  cc.NodeID,
-					RaftUrl: pc.Url,
-				})
+				//rc.commitC.AppendHighestPriotiryItem(ConfChange{
+				//	CCType:  cc.Type,
+				//	NodeID:  cc.NodeID,
+				//	RaftUrl: pc.Url,
+				//})
 
 			} else {
 				GetSugar().Errorf("%s %s ValidateConfigurationChange IsPromote:%v %s err:%v", types.ID(rc.id).String(), cc.Type.String(), pc.IsPromote, types.ID(cc.NodeID).String(), err)

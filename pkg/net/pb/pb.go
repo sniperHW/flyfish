@@ -41,6 +41,15 @@ func (this *Namespace) GetNameByID(id uint32) string {
 }
 */
 
+func (this *Namespace) GetID(msg proto.Message) (uint32, error) {
+	id, ok := this.nameToID[reflect.TypeOf(msg).String()]
+	if ok {
+		return id, nil
+	} else {
+		return 0, fmt.Errorf("proto not found")
+	}
+}
+
 //根据名字注册实例(注意函数非线程安全，需要在初始化阶段完成所有消息的Register)
 func (this *Namespace) Register(msg proto.Message, id uint32) error {
 	tt := reflect.TypeOf(msg)

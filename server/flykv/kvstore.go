@@ -370,14 +370,11 @@ func (s *kvstore) serve() {
 			case []raft.LinearizableRead:
 				s.processLinearizableRead(v.([]raft.LinearizableRead))
 			case raft.ProposalConfChange:
-				s.processConfChange(v.(*ProposalConfChange))
-			case raft.ConfChange:
-				c := v.(raft.ConfChange)
-				if c.CCType == raftpb.ConfChangeRemoveNode {
-					if s.rn.ID() == c.NodeID {
-						GetSugar().Infof("%x RemoveFromCluster", s.rn.ID())
-						s.stop()
-					}
+				cfgChange := v.(*ProposalConfChange)
+				s.processConfChange(cfgChange)
+				if cfgChange.GetType() == raftpb.ConfChangeRemoveNode && s.rn.ID() == cfgChange.GetNodeID() {
+					GetSugar().Infof("%x RemoveFromCluster", s.rn.ID())
+					s.stop()
 				}
 			case raft.ReplayOK:
 			case raft.RaftStopOK:
@@ -571,8 +568,8 @@ func (s *kvstore) onRemoveNode(from *net.UDPAddr, raftID uint64, context int64) 
 			nodeID:         raftID,
 			reply:          reply,
 		})
-	} else {
-		reply(err)
+	} else if err == membership.ErrIDNotFound {
+		reply(nil)
 	}
 }
 
