@@ -249,7 +249,7 @@ func (this *impl) close() {
 		this.clientImplBase.close()
 		for _, v := range this.avaliableConns {
 			if nil != v.session {
-				v.session.Close(nil, 0)
+				go v.session.Close(nil, 0)
 				v.session = nil
 			}
 		}

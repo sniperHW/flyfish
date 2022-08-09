@@ -524,7 +524,7 @@ func (this *clientImplFlykv) close() {
 		for _, set := range this.sets {
 			for _, kvnode := range set.nodes {
 				if nil != kvnode.session {
-					kvnode.session.Close(nil, 0)
+					go kvnode.session.Close(nil, 0)
 					kvnode.session = nil
 				}
 			}
