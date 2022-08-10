@@ -993,9 +993,8 @@ func NewInstance(processID uint16, cluster int, join bool, mutilRaft *MutilRaft,
 	}
 
 	rc := &RaftInstance{
-		commitC: commitC,
-		id:      mbSelf.ID,
-		//mbSelf:     &mbSelf,
+		commitC:    commitC,
+		id:         mbSelf.ID,
 		option:     option,
 		waldir:     fmt.Sprintf("%s/%s-%d-%d-%x-wal", option.Logdir, option.RaftLogPrefix, processID, cluster, mbSelf.ID),
 		snapdir:    fmt.Sprintf("%s/%s-%d-%d-%x-snap", option.Logdir, option.RaftLogPrefix, processID, cluster, mbSelf.ID),
@@ -1027,12 +1026,12 @@ func NewInstance(processID uint16, cluster int, join bool, mutilRaft *MutilRaft,
 	var err error
 
 	if err = fileutil.TouchDirAll(rc.snapdir); err != nil {
-		return nil, fmt.Errorf("cannot access snapdir: %v ", err)
+		return nil, fmt.Errorf("cannot access snapdir: %s %v ", rc.snapdir, err)
 	}
 
-	if err = fileutil.TouchDirAll(option.Logdir); err != nil {
-		return nil, fmt.Errorf("cannot access logdir: %v ", err)
-	}
+	//if err = fileutil.TouchDirAll(rc.waldir); err != nil {
+	//	return nil, fmt.Errorf("cannot access waldir: %s %v ", rc.waldir, err)
+	//}
 
 	rc.snapshotter = snap.New(GetLogger(), rc.snapdir)
 
