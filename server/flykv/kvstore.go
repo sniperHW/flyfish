@@ -485,7 +485,7 @@ func (s *kvstore) onUpdateURL(from *net.UDPAddr, raftID uint64, host string, raf
 	s.rn.IssueConfChange(&ProposalConfChange{
 		confChangeType: raftpb.ConfChangeUpdateNode,
 		url:            fmt.Sprintf("http://%s:%d", host, raftPort),
-		clientUrl:      fmt.Sprintf("http://%s:%d", host, port),
+		clientUrl:      fmt.Sprintf("%s:%d", host, port),
 		nodeID:         raftID,
 		reply:          reply,
 	})
@@ -512,7 +512,7 @@ func (s *kvstore) onAddLearnerNode(from *net.UDPAddr, processID uint16, raftID u
 	s.rn.IssueConfChange(&ProposalConfChange{
 		confChangeType: raftpb.ConfChangeAddLearnerNode,
 		url:            fmt.Sprintf("http://%s:%d", host, raftPort),
-		clientUrl:      fmt.Sprintf("http://%s:%d", host, port),
+		clientUrl:      fmt.Sprintf("%s:%d", host, port),
 		nodeID:         raftID,
 		processID:      processID,
 		reply:          reply,
