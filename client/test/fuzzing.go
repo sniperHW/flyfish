@@ -187,7 +187,7 @@ func main() {
 	st.reset()
 
 	for j := 0; j < 10; j++ {
-		c, _ := kclient.OpenClient(clientCfg)
+		c, _ := kclient.New(clientCfg)
 		for i := 0; i < 500; i++ {
 			go func() {
 				for {

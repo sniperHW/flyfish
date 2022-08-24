@@ -101,14 +101,14 @@ func main() {
 	}
 
 	for j := 0; j < 100; j++ {
-		c, _ := kclient.OpenClient(clientCfg)
+		c, _ := kclient.New(clientCfg)
 		for i := 0; i < 10; i++ {
 			Set(c)
 		}
 	}
 
 	for j := 0; j < 50; j++ {
-		c, _ := kclient.OpenClient(clientCfg)
+		c, _ := kclient.New(clientCfg)
 		for i := 0; i < 20; i++ {
 			Get(c)
 		}

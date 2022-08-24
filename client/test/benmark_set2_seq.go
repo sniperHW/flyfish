@@ -101,7 +101,7 @@ func main() {
 	bar = progressbar.New(int(total))
 
 	for j := 0; j < 1; j++ {
-		c, _ := kclient.OpenClient(clientCfg)
+		c, _ := kclient.New(clientCfg)
 		go func() {
 			for {
 				for i := 0; i < 50; i++ {

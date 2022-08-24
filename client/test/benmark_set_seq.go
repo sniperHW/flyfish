@@ -84,7 +84,7 @@ func main() {
 	}
 
 	for j := 0; j < 1; j++ {
-		c, _ := kclient.OpenClient(clientCfg)
+		c, _ := kclient.New(clientCfg)
 		for i := 0; i < 10; i++ {
 			Set(c)
 		}

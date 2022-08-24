@@ -6,7 +6,7 @@ import (
 	"github.com/sniperHW/flyfish/client/test/config"
 	"github.com/sniperHW/flyfish/errcode"
 	"github.com/sniperHW/flyfish/logger"
-	"github.com/sniperHW/flyfish/server/slot"
+	//"github.com/sniperHW/flyfish/server/slot"
 	"math/rand"
 	"os"
 	"strconv"
@@ -83,8 +83,8 @@ func main() {
 	}
 
 	for j := 0; j < 100; j++ {
-		c, _ := kclient.OpenClient(clientCfg)
-		for i := 0; i < 10; i++ {
+		c, _ := kclient.New(clientCfg)
+		for i := 0; i < 50; i++ {
 			Set(c)
 		}
 	}
